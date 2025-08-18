@@ -28,6 +28,24 @@ public class JobScheduler
         _jobs = _db.GetCollection<Job>("jobs");
         // ensure index on JobGuid for fast lookups
         _jobs.EnsureIndex(x => x.JobGuid);
+        // Reset orphaned InProgress jobs at startup
+        ResetOrphanedJobs();
+    }
+
+    private void ResetOrphanedJobs()
+    {
+        var inProgressJobs = _jobs.Find(x => x.Status == JobStatus.InProgress).ToList();
+
+        foreach (var job in inProgressJobs)
+        {
+            job.Status = JobStatus.Pending;
+            job.AssignedAgent = null;
+            job.RetryCount =0;
+            job.NextAttemptAt = DateTime.UtcNow;
+
+            _jobs.Update(job);
+            Console.WriteLine($"Recovered job {job.JobGuid}, reset to Pending.");
+        }
     }
 
     public void RegisterWorker(byte[] identity, string workerId)
@@ -229,7 +247,7 @@ public class JobScheduler
     {
         var now = DateTime.UtcNow;
         //used to be just JobStatus.Pending, but now  doing any job that wasn't marked as Done
-        var pendingJobs = _jobs.Find(x => x.Status != JobStatus.Done && (x.NextAttemptAt == null || x.NextAttemptAt <= now)).ToList();
+        var pendingJobs = _jobs.Find(x => x.Status == JobStatus.Pending && (x.NextAttemptAt == null || x.NextAttemptAt <= now)).ToList();
         if (!pendingJobs.Any())
         {
             Console.WriteLine("No pending jobs ready for requeue.");
