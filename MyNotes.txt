@@ -1,0 +1,2 @@
+﻿TickerQ and ZeroMQ for scheduling and messagebus communications
+Need to have the messagebus save to LiteDB for persistant storage
