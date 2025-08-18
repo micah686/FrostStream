@@ -7,27 +7,26 @@ using FrostStream.Shared;
 using NetMQ;
 using NetMQ.Sockets;
 
-namespace FrostStream.Worker
+namespace FrostStream.Worker;
+
+internal static class Heartbeat
 {
-    internal static class Heartbeat
+    internal static void HeartbeatLoop(DealerSocket socket, CancellationToken token, string workerId)
     {
-        internal static void HeartbeatLoop(DealerSocket socket, CancellationToken token, string workerId)
+        while (!token.IsCancellationRequested)
         {
-            while (!token.IsCancellationRequested)
+            try
             {
-                try
-                {
-                    var hb = new WireMessage(ControlCommand.Ready, Guid.Empty, WorkerId:workerId);
-                    socket.SendMultipartMessage(hb.ToNetMQMessage());
-                    Console.WriteLine($"Worker {workerId} sent heartbeat.");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Worker {workerId} heartbeat error: {ex.Message}");
-                }
-                var delay = TimeSpan.FromMinutes(1);
-                Task.Delay(delay, token).Wait(token);
+                var hb = new WireMessage(ControlCommand.Ready, Guid.Empty, WorkerId:workerId);
+                socket.SendMultipartMessage(hb.ToNetMQMessage());
+                Console.WriteLine($"Worker {workerId} sent heartbeat.");
             }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Worker {workerId} heartbeat error: {ex.Message}");
+            }
+            var delay = TimeSpan.FromMinutes(1);
+            Task.Delay(delay, token).Wait(token);
         }
     }
 }

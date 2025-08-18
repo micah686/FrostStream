@@ -9,7 +9,7 @@ class Program
     static void Main(string[] args)
     {
         var agentId = args.Length > 0 ? args[0] : Guid.NewGuid().ToString();
-        var ws = new WorkerSample(agentId);
+        var worker = new Worker(agentId);
         Console.Title = $"ContentCitadel Agent - {agentId}";
 
         Console.WriteLine($"Starting ContentCitadel Agent with ID: {agentId}");
@@ -20,10 +20,6 @@ class Program
             e.Cancel = true;
         };
 
-        ws.Run();
+        worker.Run();
     }
-
-
-    
-
 }

@@ -4,12 +4,12 @@ using NetMQ.Sockets;
 
 namespace FrostStream.Worker;
 
-public class WorkerSample
+internal class Worker
 {
     private readonly string _workerId;
     private readonly CancellationTokenSource _cts = new();
 
-    public WorkerSample(string workerId)
+    public Worker(string workerId)
     {
         _workerId = workerId;
     }
@@ -35,14 +35,14 @@ public class WorkerSample
             {
                 Console.WriteLine($"Worker {_workerId} got job {wire.JobId}");
                 DoHeavyWork(wire.Payload);
-                
+
                 // Send progress
                 socket.SendMultipartMessage(WireMessage.CreateWithJson(ControlCommand.ProgressUpdate, wire.JobId, _workerId, new { progress = 50 }).ToNetMQMessage());
 
                 // Send payload to databridge
                 //socket.SendMultipartMessage(WireMessage.CreateWithJson(ControlCommand.PayloadToDataBridge, wire.JobId, workerId, new { data = "hello" }).ToNetMQMessage());
             }
-            
+
             //Tell broker I'm ready
             socket.SendMultipartMessage(new WireMessage(ControlCommand.JobDone, wire.JobId, _workerId).ToNetMQMessage());
             EnsureRegistered(socket);
