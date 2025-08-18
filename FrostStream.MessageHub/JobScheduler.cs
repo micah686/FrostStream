@@ -187,6 +187,13 @@ public class JobScheduler
             _jobs.Update(job);
             Console.WriteLine($"Job {jobId} marked as Done by worker {workerId}");
         }
+        if (_workers.TryGetValue(workerId, out var state))
+        {
+            // Free up worker for next job
+            state.CurrentJob = null;
+            //Update LastSeen to "now" = worker just finished a job
+            state.LastSeen = DateTime.UtcNow;
+        }
     }
 
     public bool TryGetWorkerIdentity(string workerId, out byte[] identity)
@@ -246,31 +253,27 @@ public class JobScheduler
     public void RequeueJobs(RouterSocket workers)
     {
         var now = DateTime.UtcNow;
-        //used to be just JobStatus.Pending, but now  doing any job that wasn't marked as Done
-        var pendingJobs = _jobs.Find(x => x.Status == JobStatus.Pending && (x.NextAttemptAt == null || x.NextAttemptAt <= now)).ToList();
+        var pendingJobs = _jobs.Find(x => x.Status == JobStatus.Pending &&
+                                          (x.NextAttemptAt == null || x.NextAttemptAt <= now))
+                               .ToList();
+
         if (!pendingJobs.Any())
-        {
-            Console.WriteLine("No pending jobs ready for requeue.");
             return;
-        }
 
-        Console.WriteLine($"Attempting to requeue {pendingJobs.Count} job(s).");
-
+        // get idle workers
         var idleWorkers = _workers
             .Where(kv => kv.Value.CurrentJob == null)
             .OrderBy(kv => kv.Value.LastSeen)
             .ToList();
 
+
         foreach (var job in pendingJobs)
         {
             if (!idleWorkers.Any())
-            {
-                Console.WriteLine("No idle workers left; stopping requeue attempts.");
                 break;
-            }
 
-            var selected = idleWorkers.First();
-            AssignJobToWorker(job, selected.Key, selected.Value.Identity, workers);
+            var worker = idleWorkers.First();
+            AssignJobToWorker(job, worker.Key, worker.Value.Identity, workers);
             idleWorkers.RemoveAt(0);
         }
     }
