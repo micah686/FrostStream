@@ -1,17 +1,16 @@
-﻿# Content Citadel
+﻿# FrostStream
 
 ### Services:
 - Agent
 - CoreAPI
 - DataBridge
+- MessageBus
 
 ### Agent:
 Runs the yt-dlp tool, ffmpeg, extracts emotes, metadata.  
 May be multiple Agents, are managed by a scheduler/poller  
-
 ## Core API:
 Main logic/core of the app  
-Schedules/polls background workers  
 Acts as the main gateway  
 does auth/routing/CORS/rate limiting/health checks,...  
 Does checks for profiles/account management
@@ -20,6 +19,10 @@ does optional emails/notifications
 ## DataBridge:
 Manages any storage and DB access.
 Caching and so forth happens here
+
+## MessageBus
+Main broker for messages.
+Also handles queueing jobs
 
 ## Models:
 Contains the DTOs of the project. no actual logic here
