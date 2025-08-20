@@ -30,8 +30,5 @@ namespace FrostStream.Shared.Models.Checked
         public int? LikeCount { get; set; }
         public int? DislikeCount { get; set; }
         public bool? IsFavorited { get; set; }
-
-        [Column(TypeName = "jsonb")]
-        public string RawJson { get; set; }        // original raw comment dict (optional)
     }
 }

@@ -18,7 +18,5 @@ namespace FrostStream.Shared.Models.Checked
         public string Url { get; set; }            // url (if remote)
         public string Data { get; set; }           // data (base64 or raw) if the extractor provided contents
         public string Name { get; set; }           // name
-        [Column(TypeName = "jsonb")]
-        public string RawJson { get; set; }        // original subformat descriptor
     }
 }

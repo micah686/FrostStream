@@ -33,10 +33,6 @@ namespace FrostStream.Shared.Models.Checked
 
         // Timestamps for when we last synced this channel info
         public DateTime LastUpdatedUtc { get; set; } = DateTime.UtcNow;
-
-        // Optional: store raw JSON from extractor
-        [Column(TypeName = "jsonb")]
-        public string RawInfoJson { get; set; }
     }
 
 }

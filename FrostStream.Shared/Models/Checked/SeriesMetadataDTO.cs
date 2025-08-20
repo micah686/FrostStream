@@ -21,10 +21,6 @@ namespace FrostStream.Shared.Models.Checked
         public string EpisodeTitle { get; set; }
         public int? EpisodeNumber { get; set; }
         public string EpisodeId { get; set; }
-
-        // Optional: raw JSON from extractor
-        [Column(TypeName = "jsonb")]
-        public string RawInfoJson { get; set; }
     }
 
 }

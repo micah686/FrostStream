@@ -17,6 +17,9 @@ namespace FrostStream.Shared.Models.Checked
         [Required]
         public string VideoId { get; set; }
 
+        [Required]
+        public string Provider { get; set; } // e.g., "YouTube", "Vimeo", etc.
+
         // Basic metadata
         public string Title { get; set; }
         public string AltTitle { get; set; }
@@ -47,7 +50,7 @@ namespace FrostStream.Shared.Models.Checked
         public long? DislikeCount { get; set; }
         public long? RepostCount { get; set; }
         public double? AverageRating { get; set; }
-        public int? CommentCount { get; set; }
+        public long? CommentCount { get; set; }
 
         public int? AgeLimit { get; set; }
         public TimeSpan? Duration { get; set; }
@@ -69,8 +72,6 @@ namespace FrostStream.Shared.Models.Checked
         public string CategoriesCsv { get; set; }
         public string TagsCsv { get; set; }
 
-        [Column(TypeName = "jsonb")]
-        public string RawInfoJson { get; set; }
 
         // Navigation collections
         public virtual List<FormatDTO> Formats { get; set; } = new();

@@ -21,7 +21,5 @@ namespace FrostStream.Shared.Models.Checked
         public int? Height { get; set; }
         public string Resolution { get; set; } // deprecated format but still present sometimes
         public long? Filesize { get; set; }
-        [Column(TypeName = "jsonb")]
-        public string HttpHeadersJson { get; set; }
     }
 }

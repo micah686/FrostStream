@@ -51,23 +51,5 @@ namespace FrostStream.Shared.Models.Checked
         public int? SourcePreference { get; set; }
         public string Language { get; set; }
         public int? LanguagePreference { get; set; }
-
-        // misc: store nested fields as JSONB if needed
-        [Column(TypeName = "jsonb")]
-        public string HttpHeadersJson { get; set; }
-        [Column(TypeName = "jsonb")]
-        public string FragmentsJson { get; set; }        // list of fragments
-        [Column(TypeName = "jsonb")]
-        public string DownloaderOptionsJson { get; set; }
-        [Column(TypeName = "jsonb")]
-        public string HlsAesJson { get; set; }
-
-        // RTMP specific (optional)
-        public string RtmpPageUrl { get; set; }
-        public string RtmpApp { get; set; }
-        public string RtmpPlayPath { get; set; }
-        public string RtmpTcUrl { get; set; }
-        public string RtmpFlashVersion { get; set; }
-        public bool? RtmpLive { get; set; }
     }
 }

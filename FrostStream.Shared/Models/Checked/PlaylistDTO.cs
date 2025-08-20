@@ -15,8 +15,7 @@ namespace FrostStream.Shared.Models.Checked
         public string PlaylistId { get; set; }   // external playlist id
         public string Title { get; set; }
         public int? PlaylistCount { get; set; }
-        [Column(TypeName = "jsonb")]
-        public string RawJson { get; set; }
+
         public virtual List<PlaylistEntryDTO> Entries { get; set; } = new();
     }
     public class PlaylistEntryDTO
@@ -26,7 +25,6 @@ namespace FrostStream.Shared.Models.Checked
         public string PlaylistId { get; set; }   // external playlist id (string)
         public string VideoId { get; set; }      // video id in playlist
         public string Title { get; set; }
-        [Column(TypeName = "jsonb")]
-        public string RawJson { get; set; }
+
     }
 }
