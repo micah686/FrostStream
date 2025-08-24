@@ -3,16 +3,13 @@
 class Program
 {
     
-    internal static readonly string DATA_PATH = Path.Combine(Directory.GetCurrentDirectory(), "data");
-    internal static readonly string TOOLS_PATH = Path.Combine(DATA_PATH, "tools");
-    internal static readonly string DOWNLOAD_PATH = Path.Combine(DATA_PATH, "downloads");
     static async Task Main(string[] args)
     {
-        var agentId = args.Length > 0 ? args[0] : Guid.NewGuid().ToString();
-        var worker = new Worker(agentId);
-        Console.Title = $"ContentCitadel Agent - {agentId}";
+        
+        var worker = new Worker(Globals.WorkerId.ToString());
+        Console.Title = $"ContentCitadel Agent - {Globals.WorkerId}";
 
-        Console.WriteLine($"Starting ContentCitadel Agent with ID: {agentId}");
+        Console.WriteLine($"Starting ContentCitadel Agent with ID: {Globals.WorkerId}");
 
         Console.CancelKeyPress += (s, e) =>
         {

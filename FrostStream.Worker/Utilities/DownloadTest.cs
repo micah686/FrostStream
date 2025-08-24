@@ -19,7 +19,7 @@ internal class DownloadTest
         try
         {
             await dlService.DownloadVideo(url, null, null);
-            var downloadDir = Path.Combine(Program.DOWNLOAD_PATH, jobId, "youtube");
+            var downloadDir = Path.Combine(Globals.DOWNLOAD_PATH, jobId, "youtube");
             var infoJsonFile = Directory.GetFiles(downloadDir, "*.info.json").FirstOrDefault();
             if (infoJsonFile == null)
             {

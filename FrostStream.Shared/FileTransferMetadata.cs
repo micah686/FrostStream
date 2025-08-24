@@ -8,6 +8,7 @@ namespace FrostStream.Shared
 {
     public class FileTransferMetadata
     {
+        public Guid JobId { get; set; }
         public string FileName { get; set; }
         public ulong TotalSizeBytes { get; set; }
         public ulong Hash { get; set; }

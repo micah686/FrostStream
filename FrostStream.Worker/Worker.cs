@@ -24,7 +24,7 @@ internal class Worker
         EnsureRegistered(socket);
 
         // Start background heartbeat task
-        Task.Run(() => Heartbeat.HeartbeatLoop(socket, _cts.Token, _workerId));
+        Task.Run(() => HeartbeatLoop(socket, _cts.Token, _workerId));
 
         while (true)
         {
@@ -92,5 +92,24 @@ internal class Worker
             Thread.Sleep(2000);
         }
         Console.WriteLine($"Finished heavy work for payload: {payloadString}");
+    }
+
+    private static void HeartbeatLoop(DealerSocket socket, CancellationToken token, string workerId)
+    {
+        while (!token.IsCancellationRequested)
+        {
+            try
+            {
+                var hb = new WireMessage(ControlCommand.Ready, Guid.Empty, WorkerId: workerId);
+                socket.SendMultipartMessage(hb.ToNetMQMessage());
+                Console.WriteLine($"Worker {workerId} sent heartbeat.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Worker {workerId} heartbeat error: {ex.Message}");
+            }
+            var delay = TimeSpan.FromMinutes(1);
+            Task.Delay(delay, token).Wait(token);
+        }
     }
 }

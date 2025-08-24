@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using YoutubeDLSharp.Options;
 
-namespace FrostStream.Worker;
+namespace FrostStream.Worker.Utilities;
 
 internal class AgentOptionSets
 {

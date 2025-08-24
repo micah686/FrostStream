@@ -32,9 +32,9 @@ public class DownloadService
 
 
     #region Internal Fields/Functions
-    private static readonly string _ytdlpPath = Path.Combine(Program.TOOLS_PATH, Utils.YtDlpBinaryName);
-    private static readonly string _ffmpegPath = Path.Combine(Program.TOOLS_PATH, Utils.FfmpegBinaryName);
-    private static readonly string _ffprobePath = Path.Combine(Program.TOOLS_PATH, Utils.FfprobeBinaryName);
+    private static readonly string _ytdlpPath = Path.Combine(Globals.TOOLS_PATH, Utils.YtDlpBinaryName);
+    private static readonly string _ffmpegPath = Path.Combine(Globals.TOOLS_PATH, Utils.FfmpegBinaryName);
+    private static readonly string _ffprobePath = Path.Combine(Globals.TOOLS_PATH, Utils.FfprobeBinaryName);
 
     public YoutubeDL CreateYtDlpInstance(string jobIdName)
     {
@@ -43,7 +43,7 @@ public class DownloadService
             YoutubeDLPath =_ytdlpPath,
             FFmpegPath = _ffmpegPath,
             OutputFileTemplate = $"{jobIdName}/%(extractor)s_[%(id)s]_%(upload_date)s.%(ext)s",
-            OutputFolder = Path.Combine(Program.DOWNLOAD_PATH, jobIdName)
+            OutputFolder = Path.Combine(Globals.DOWNLOAD_PATH, jobIdName)
         };
         return ytdl;
     }
