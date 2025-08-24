@@ -97,12 +97,21 @@ public class Broker: IDisposable
                 if (_databridgeIdentity != null)
                     SendTo(databridge, _databridgeIdentity, wire);
                 break;
+            case ControlCommand.TransferLeaseRequest:
+                if (_databridgeIdentity != null)
+                    SendTo(databridge, _databridgeIdentity, wire);
+                break;
 
             // ---- DataBridge -> Worker ----
             case ControlCommand.PayloadAck:
             case ControlCommand.PayloadNack:
                 if (wire.WorkerId != null && _scheduler.TryGetWorkerIdentity(wire.WorkerId, out var workerId))
                     SendTo(workers, workerId, wire);
+                break;
+            case ControlCommand.TransferGranted:
+            case ControlCommand.TransferDenied:
+                if (wire.WorkerId != null && _scheduler.TryGetWorkerIdentity(wire.WorkerId, out var leaseWorker))
+                    SendTo(workers, leaseWorker, wire);
                 break;
 
             // ---- Service-level (WebAPI <-> Broker) ----

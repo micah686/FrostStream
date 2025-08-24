@@ -1,11 +1,13 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.IO.Hashing;
-using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using FrostStream.Shared;
+using NetMQ;
+using NetMQ.Sockets;
 using Newtonsoft.Json;
 using WatsonTcp;
 
@@ -13,9 +15,33 @@ namespace FrostStream.Worker.DataTransfer
 {
     internal class WorkerDataTransfer
     {
-        public async Task TransferData()
+        public async Task TransferData(DealerSocket brokerSocket)
         {
-            string filePath = @"C:\Users\Micah\Downloads\qBittorrentPortable\Data\Downloads\the-nvidia-ai-gpu-black-market-investigating-smuggling-corruption-governments\THE NVIDIA AI GPU BLACK MARKET ｜ Investigating Smuggling, Corruption, & Governments [1H3xQaf7BFI].ia.mp4";
+            // Acquire lease from DataBridge via the existing broker connection
+            bool leaseGranted = false;
+            while (!leaseGranted)
+            {
+                var req = new WireMessage(ControlCommand.TransferLeaseRequest, Guid.Empty, Globals.WorkerId.ToString());
+                brokerSocket.SendMultipartMessage(req.ToNetMQMessage());
+                NetMQMessage? msg = null;
+                if (brokerSocket.TryReceiveMultipartMessage(TimeSpan.FromSeconds(5), ref msg))
+                {
+                    var wire = WireMessage.FromNetMQMessage(msg);
+                    if (wire.Command == ControlCommand.TransferGranted)
+                    {
+                        leaseGranted = true;
+                        break;
+                    }
+                    else if (wire.Command == ControlCommand.TransferDenied)
+                    {
+                        var delay = Random.Shared.Next(10, 31);
+                        Console.WriteLine($"Lease denied, retrying in {delay}s");
+                        await Task.Delay(TimeSpan.FromSeconds(delay));
+                    }
+                }
+            }
+
+            string filePath = "sample.mp4";
             if (!File.Exists(filePath))
             {
                 Console.WriteLine("File not found: " + filePath);
@@ -31,7 +57,7 @@ namespace FrostStream.Worker.DataTransfer
             client.Settings.Guid = Globals.WorkerId;
             client.Events.MessageReceived += (s, e) =>
             {
-                Console.WriteLine("Message from server: " + System.Text.Encoding.UTF8.GetString(e.Data));
+                Console.WriteLine("Message from server: " + Encoding.UTF8.GetString(e.Data));
             };
             client.Events.ServerConnected += (s, e) =>
             {
@@ -70,8 +96,6 @@ namespace FrostStream.Worker.DataTransfer
             await SendJson(client, ftu);
 
             await SendFile(client, filePath);
-
-            
         }
 
         private async Task SendJson(WatsonTcpClient client, FileTransferMetadata transferMetadata)
@@ -118,7 +142,7 @@ namespace FrostStream.Worker.DataTransfer
             long totalSize = fi.Length;
             int chunkSize = 1024 * 1024; // 1 MB
             long sentBytes = 0;
-            
+
             // Start sending file chunks
             byte[] buffer = new byte[chunkSize];
             var sw = Stopwatch.StartNew();
@@ -129,17 +153,17 @@ namespace FrostStream.Worker.DataTransfer
                 {
                     byte[] chunk = new byte[bytesRead];
                     Array.Copy(buffer, chunk, bytesRead);
-                    if(fs.Position == fs.Length)
+                    if (fs.Position == fs.Length)
                     {
                         var meta = new Dictionary<string, object>();
-                        meta?.Add(TransferMessage.File_EOF.ToString(), true);
+                        meta.Add(TransferMessage.File_EOF.ToString(), true);
                         await client.SendAsync(chunk, meta);
                     }
                     else
                     {
                         await client.SendAsync(chunk);
                     }
-                   
+
                     sentBytes += bytesRead;
                     double seconds = sw.Elapsed.TotalSeconds;
                     double speed = sentBytes / (1024.0 * 1024.0) / seconds;
@@ -165,16 +189,13 @@ namespace FrostStream.Worker.DataTransfer
             int bytesRead;
             while ((bytesRead = await fileStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
             {
-                // Append the chunk to the hash
                 xxHash.Append(buffer.AsSpan(0, bytesRead));
 
                 totalBytesRead += bytesRead;
 
-                // Report progress if callback provided
                 progress?.Report((double)totalBytesRead / fileSize * 100);
             }
 
-            // Get the final hash value
             return xxHash.GetCurrentHashAsUInt64();
         }
     }

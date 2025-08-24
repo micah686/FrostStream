@@ -1,6 +1,7 @@
 ﻿using FrostStream.Shared;
 using NetMQ;
 using NetMQ.Sockets;
+using FrostStream.Worker.DataTransfer;
 
 namespace FrostStream.Worker;
 
@@ -39,8 +40,9 @@ internal class Worker
                 // Send progress
                 socket.SendMultipartMessage(WireMessage.CreateWithJson(ControlCommand.ProgressUpdate, wire.JobId, _workerId, new { progress = 50 }).ToNetMQMessage());
 
-                // Send payload to databridge
-                //socket.SendMultipartMessage(WireMessage.CreateWithJson(ControlCommand.PayloadToDataBridge, wire.JobId, workerId, new { data = "hello" }).ToNetMQMessage());
+                // Send payload to databridge via existing broker connection
+                var wdt = new WorkerDataTransfer();
+                wdt.TransferData(socket).GetAwaiter().GetResult();
             }
 
             //Tell broker I'm ready

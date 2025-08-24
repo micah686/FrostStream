@@ -17,6 +17,12 @@ namespace FrostStream.DataBridge
         static long receivedBytes = 0;
         static WatsonTcpServer server;
         ConcurrentDictionary<Guid, TransferState> _transfers = new();
+        private readonly TransferLeaseManager _leaseManager;
+
+        public DataReciever(TransferLeaseManager leaseManager)
+        {
+            _leaseManager = leaseManager;
+        }
 
         public async Task ReceiveData()
         {
@@ -30,6 +36,7 @@ namespace FrostStream.DataBridge
             server.Events.ClientDisconnected += (s, e) =>
             {
                 Console.WriteLine("Client disconnected");
+                _leaseManager.ReleaseLease(e.Client.Guid);
             };
             server.Events.MessageReceived += MessageReceived;
             
@@ -41,6 +48,7 @@ namespace FrostStream.DataBridge
 
         void MessageReceived(object sender, MessageReceivedEventArgs e)
         {
+            _leaseManager.UpdateActivity(e.Client.Guid);
             if (e.Metadata != null && e.Metadata.ContainsKey(TransferMessage.MetaData.ToString()))
             {
                 if(_transfers[e.Client.Guid].JsonMetaDataStream == null)
@@ -86,6 +94,7 @@ namespace FrostStream.DataBridge
                     Console.WriteLine("Video transfer complete. Closing file.");
                     _transfers[e.Client.Guid].MediaStream.Dispose();
                     _transfers[e.Client.Guid].MediaStream = null;
+                    _leaseManager.ReleaseLease(e.Client.Guid);
                 }
             }
         }

@@ -18,7 +18,10 @@ public enum ControlCommand : byte
     PayloadToDataBridge,
     PayloadAck, // DataBridge -> Worker ACK
     PayloadNack, // DataBridge -> Worker NACK
-    
+    TransferLeaseRequest, // Worker asks DataBridge for lease
+    TransferGranted,     // DataBridge grants lease
+    TransferDenied,      // DataBridge denies lease
+
     // Internal Broker Commands / Other service comms
     ServiceRequest,
     ServiceReply

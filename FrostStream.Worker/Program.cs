@@ -2,10 +2,10 @@
 
 class Program
 {
-    
-    static async Task Main(string[] args)
+
+    static void Main(string[] args)
     {
-        
+
         var worker = new Worker(Globals.WorkerId.ToString());
         Console.Title = $"ContentCitadel Agent - {Globals.WorkerId}";
 
@@ -17,8 +17,6 @@ class Program
             e.Cancel = true;
         };
 
-        //worker.Run();
-        var wdt = new DataTransfer.WorkerDataTransfer();
-        await wdt.TransferData();
+        worker.Run();
     }
 }
