@@ -13,8 +13,11 @@ public enum ControlCommand : byte
     CancelJob,
     ProgressUpdate,
     JobDone,
-    
-    // Worker -> DataBridge Commands
+
+    // Worker <-> DataBridge Commands
+    TransferReserve,
+    TransferGranted,
+    TransferDenied,
     PayloadToDataBridge,
     PayloadAck, // DataBridge -> Worker ACK
     PayloadNack, // DataBridge -> Worker NACK
