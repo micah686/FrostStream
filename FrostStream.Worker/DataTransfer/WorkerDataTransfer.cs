@@ -28,6 +28,7 @@ namespace FrostStream.Worker.DataTransfer
             long sentBytes = 0;
 
             var client = new WatsonTcpClient("127.0.0.1", 9000);
+            client.Settings.Guid = Globals.WorkerId;
             client.Events.MessageReceived += (s, e) =>
             {
                 Console.WriteLine("Message from server: " + System.Text.Encoding.UTF8.GetString(e.Data));

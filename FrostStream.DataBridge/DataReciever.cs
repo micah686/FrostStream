@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -18,6 +19,7 @@ namespace FrostStream.DataBridge
         static WatsonTcpServer server;
         static MemoryStream jsonStream = new MemoryStream();
         static FileStream videoStream;
+        ConcurrentDictionary<Guid, TransferState> _transfers = new();
 
         public async Task ReceiveData()
         {
@@ -25,6 +27,7 @@ namespace FrostStream.DataBridge
             server.Events.ClientConnected += (s, e) =>
             {
                 Console.WriteLine("Client connected: " + e.Client.ToString());
+                _transfers.TryAdd(e.Client.Guid, new TransferState());
             };
 
             server.Events.ClientDisconnected += (s, e) =>
@@ -40,12 +43,15 @@ namespace FrostStream.DataBridge
             Console.ReadLine();
         }
 
-        static void MessageReceived(object sender, MessageReceivedEventArgs e)
+        void MessageReceived(object sender, MessageReceivedEventArgs e)
         {
             if (e.Metadata != null && e.Metadata.ContainsKey(TransferMessage.MetaData.ToString()))
             {
+                if(_transfers[e.Client.Guid].JsonMetaDataStream == null)
+                    _transfers[e.Client.Guid].JsonMetaDataStream = new MemoryStream();
                 // JSON transfer
                 jsonStream.Write(e.Data, 0, e.Data.Length);
+                _transfers[e.Client.Guid].JsonMetaDataStream.Write(e.Data, 0, e.Data.Length);
                 Console.WriteLine($"Received JSON chunk ({e.Data.Length} bytes).");
 
                 // Check for EOF
@@ -54,15 +60,21 @@ namespace FrostStream.DataBridge
                     Console.WriteLine("JSON transfer complete. Deserializing...");
 
                     jsonStream.Position = 0;
+                    _transfers[e.Client.Guid].JsonMetaDataStream.Position = 0;
                     using var reader = new StreamReader(jsonStream, Encoding.UTF8);
                     string jsonString = reader.ReadToEnd();
+
+                    using var reader2 = new StreamReader(_transfers[e.Client.Guid].JsonMetaDataStream, Encoding.UTF8);
+                    string jsonString2 = reader2.ReadToEnd();
 
                     // Reset MemoryStream for future use
                     jsonStream.Dispose();
                     jsonStream = new MemoryStream();
+                    _transfers[e.Client.Guid].JsonMetaDataStream.Dispose();
 
                     // Deserialize into your object
                     FileTransferMetadata metaData = JsonConvert.DeserializeObject<FileTransferMetadata>(jsonString);
+                    FileTransferMetadata metaData2 = JsonConvert.DeserializeObject<FileTransferMetadata>(jsonString2);
                     totalSize = (long)metaData.TotalSizeBytes;
 
                     Console.WriteLine($"Deserialized TransferMetaData: {JsonConvert.SerializeObject(metaData)}");
@@ -87,7 +99,11 @@ namespace FrostStream.DataBridge
                 }
             }
         }
-
         
+    }
+
+    internal class TransferState
+    {
+        public MemoryStream JsonMetaDataStream { get; set; }
     }
 }
