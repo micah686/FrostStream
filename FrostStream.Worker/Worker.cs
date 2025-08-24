@@ -1,6 +1,8 @@
-﻿using FrostStream.Shared;
+using FrostStream.Shared;
+using FrostStream.Worker.DataTransfer;
 using NetMQ;
 using NetMQ.Sockets;
+using System.IO;
 
 namespace FrostStream.Worker;
 
@@ -20,10 +22,7 @@ internal class Worker
         socket.Options.Identity = System.Text.Encoding.UTF8.GetBytes(_workerId);
         socket.Connect("tcp://localhost:5555");
 
-        // Tell broker I'm ready & Make sure broker has accepted our Ready before doing anything
         EnsureRegistered(socket);
-
-        // Start background heartbeat task
         Task.Run(() => HeartbeatLoop(socket, _cts.Token, _workerId));
 
         while (true)
@@ -36,14 +35,16 @@ internal class Worker
                 Console.WriteLine($"Worker {_workerId} got job {wire.JobId}");
                 DoHeavyWork(wire.Payload);
 
-                // Send progress
                 socket.SendMultipartMessage(WireMessage.CreateWithJson(ControlCommand.ProgressUpdate, wire.JobId, _workerId, new { progress = 50 }).ToNetMQMessage());
 
-                // Send payload to databridge
-                //socket.SendMultipartMessage(WireMessage.CreateWithJson(ControlCommand.PayloadToDataBridge, wire.JobId, workerId, new { data = "hello" }).ToNetMQMessage());
+                var transfer = new WorkerDataTransfer();
+                var sample = Path.Combine(Globals.DOWNLOAD_PATH, "upload.bin");
+                if (File.Exists(sample))
+                    transfer.TransferData(socket, wire.JobId, _workerId, sample).GetAwaiter().GetResult();
+                else
+                    Console.WriteLine($"Sample file '{sample}' not found, skipping transfer.");
             }
 
-            //Tell broker I'm ready
             socket.SendMultipartMessage(new WireMessage(ControlCommand.JobDone, wire.JobId, _workerId).ToNetMQMessage());
             EnsureRegistered(socket);
         }
@@ -79,16 +80,13 @@ internal class Worker
         }
     }
 
-
     private void DoHeavyWork(byte[] payload)
     {
         var payloadString = System.Text.Encoding.UTF8.GetString(payload);
         Console.WriteLine($"Starting heavy work on payload: {payloadString}");
-        // Example: 5 steps, 2s each
         for (int i = 0; i < 5; i++)
         {
             Console.WriteLine($"Working... step {i + 1}/5");
-
             Thread.Sleep(2000);
         }
         Console.WriteLine($"Finished heavy work for payload: {payloadString}");

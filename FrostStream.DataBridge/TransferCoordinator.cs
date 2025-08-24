@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using FrostStream.Shared;
 
 namespace FrostStream.DataBridge;
 
@@ -38,11 +39,11 @@ public sealed class TransferCoordinator
     {
         // enforce per‑worker limit
         if (_byWorker.GetOrAdd(workerId, _ => 0) >= _perWorkerLimit)
-            return TransferReply.Denied(jobId, RetryAfter());
+            return new TransferDenied(jobId, RetryAfter());
 
         // deny if all slots are in use
         if (!_slots.Wait(0))
-            return TransferReply.Denied(jobId, RetryAfter());
+            return new TransferDenied(jobId, RetryAfter());
 
         var lease = new Lease
         {
@@ -56,7 +57,7 @@ public sealed class TransferCoordinator
         _leases[lease.LeaseId] = lease;
         _byWorker[workerId]++;
 
-        return TransferReply.Granted(jobId, lease.LeaseId, lease.ExpiresAtUtc);
+        return new TransferGranted(jobId, lease.LeaseId, lease.ExpiresAtUtc, 9000);
     }
 
     /// <summary>
@@ -133,30 +134,3 @@ public sealed class TransferCoordinator
         public void MarkStreamingStarted() => StreamingStarted = true;
     }
 }
-
-/// <summary>
-/// Base reply for transfer‑reservation requests.
-/// </summary>
-public abstract record TransferReply(Guid JobId)
-{
-    public static TransferReply Granted(Guid jobId, Guid leaseId, DateTime expiresAtUtc)
-        => new TransferGranted(jobId, leaseId, expiresAtUtc);
-
-    public static TransferReply Denied(Guid jobId, int retryAfterSec)
-        => new TransferDenied(jobId, retryAfterSec);
-}
-
-/// <summary>
-/// Reply indicating a transfer slot has been granted.
-/// </summary>
-public sealed record TransferGranted(Guid JobId, Guid LeaseId, DateTime ExpiresAtUtc) : TransferReply(JobId);
-
-/// <summary>
-/// Reply indicating a transfer slot has been denied; the caller should wait the specified seconds and retry.
-/// </summary>
-public sealed record TransferDenied(Guid JobId, int RetryAfterSeconds) : TransferReply(JobId);
-
-/// <summary>
-/// Request to reserve a transfer slot.
-/// </summary>
-public record TransferRequest(Guid JobId, string WorkerId, long SizeBytes);

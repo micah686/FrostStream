@@ -93,12 +93,18 @@ public class Broker: IDisposable
                 break;
 
             // ---- Worker -> DataBridge ----
+            case ControlCommand.TransferReserve:
+                if (_databridgeIdentity != null)
+                    SendTo(databridge, _databridgeIdentity, wire);
+                break;
             case ControlCommand.PayloadToDataBridge:
                 if (_databridgeIdentity != null)
                     SendTo(databridge, _databridgeIdentity, wire);
                 break;
 
             // ---- DataBridge -> Worker ----
+            case ControlCommand.TransferGranted:
+            case ControlCommand.TransferDenied:
             case ControlCommand.PayloadAck:
             case ControlCommand.PayloadNack:
                 if (wire.WorkerId != null && _scheduler.TryGetWorkerIdentity(wire.WorkerId, out var workerId))
