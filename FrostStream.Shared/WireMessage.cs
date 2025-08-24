@@ -15,9 +15,6 @@ public enum ControlCommand : byte
     JobDone,
 
     // Worker <-> DataBridge Commands
-    TransferReserve,
-    TransferGranted,
-    TransferDenied,
     PayloadToDataBridge,
     PayloadAck, // DataBridge -> Worker ACK
     PayloadNack, // DataBridge -> Worker NACK
