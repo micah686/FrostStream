@@ -50,7 +50,6 @@ namespace FrostStream.DataBridge
                 if(_transfers[e.Client.Guid].JsonMetaDataStream == null)
                     _transfers[e.Client.Guid].JsonMetaDataStream = new MemoryStream();
                 // JSON transfer
-                jsonStream.Write(e.Data, 0, e.Data.Length);
                 _transfers[e.Client.Guid].JsonMetaDataStream.Write(e.Data, 0, e.Data.Length);
                 Console.WriteLine($"Received JSON chunk ({e.Data.Length} bytes).");
 
@@ -59,43 +58,38 @@ namespace FrostStream.DataBridge
                 {
                     Console.WriteLine("JSON transfer complete. Deserializing...");
 
-                    jsonStream.Position = 0;
                     _transfers[e.Client.Guid].JsonMetaDataStream.Position = 0;
-                    using var reader = new StreamReader(jsonStream, Encoding.UTF8);
-                    string jsonString = reader.ReadToEnd();
 
                     using var reader2 = new StreamReader(_transfers[e.Client.Guid].JsonMetaDataStream, Encoding.UTF8);
                     string jsonString2 = reader2.ReadToEnd();
 
                     // Reset MemoryStream for future use
-                    jsonStream.Dispose();
-                    jsonStream = new MemoryStream();
                     _transfers[e.Client.Guid].JsonMetaDataStream.Dispose();
 
                     // Deserialize into your object
-                    FileTransferMetadata metaData = JsonConvert.DeserializeObject<FileTransferMetadata>(jsonString);
                     FileTransferMetadata metaData2 = JsonConvert.DeserializeObject<FileTransferMetadata>(jsonString2);
-                    totalSize = (long)metaData.TotalSizeBytes;
+                    totalSize = (long)metaData2.TotalSizeBytes;
 
-                    Console.WriteLine($"Deserialized TransferMetaData: {JsonConvert.SerializeObject(metaData)}");
+                    Console.WriteLine($"Deserialized TransferMetaData: {JsonConvert.SerializeObject(metaData2)}");
                 }
             }
             else
             {
+
                 // Video transfer
-                if (videoStream == null)
+                if (_transfers[e.Client.Guid].MediaStream == null)
                 {
-                    videoStream = new FileStream("received_bigvideo.mp4", FileMode.Create, FileAccess.Write);
+                    _transfers[e.Client.Guid].MediaStream = new FileStream("received_bigvideo.mp4", FileMode.Create, FileAccess.Write);
                 }
 
-                videoStream.Write(e.Data, 0, e.Data.Length);
+                _transfers[e.Client.Guid].MediaStream.Write(e.Data, 0, e.Data.Length);
                 receivedBytes += e.Data.Length;
                 Console.WriteLine($"Received {receivedBytes}/{totalSize} bytes ({(receivedBytes * 100.0 / totalSize):F2}%)");
                 if (e.Metadata != null && e.Metadata.ContainsKey(TransferMessage.File_EOF.ToString()))
                 {
                     Console.WriteLine("Video transfer complete. Closing file.");
-                    videoStream.Dispose();
-                    videoStream = null;
+                    _transfers[e.Client.Guid].MediaStream.Dispose();
+                    _transfers[e.Client.Guid].MediaStream = null;
                 }
             }
         }
@@ -105,5 +99,6 @@ namespace FrostStream.DataBridge
     internal class TransferState
     {
         public MemoryStream JsonMetaDataStream { get; set; }
+        public FileStream MediaStream { get; set; }
     }
 }
