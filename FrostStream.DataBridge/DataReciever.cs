@@ -13,12 +13,9 @@ namespace FrostStream.DataBridge
 {
     internal class DataReciever
     {
-        static string outputFile;
         static long totalSize;
         static long receivedBytes = 0;
         static WatsonTcpServer server;
-        static MemoryStream jsonStream = new MemoryStream();
-        static FileStream videoStream;
         ConcurrentDictionary<Guid, TransferState> _transfers = new();
 
         public async Task ReceiveData()
@@ -33,7 +30,6 @@ namespace FrostStream.DataBridge
             server.Events.ClientDisconnected += (s, e) =>
             {
                 Console.WriteLine("Client disconnected");
-                videoStream?.Close();
             };
             server.Events.MessageReceived += MessageReceived;
             
@@ -83,8 +79,8 @@ namespace FrostStream.DataBridge
                 }
 
                 _transfers[e.Client.Guid].MediaStream.Write(e.Data, 0, e.Data.Length);
-                receivedBytes += e.Data.Length;
-                Console.WriteLine($"Received {receivedBytes}/{totalSize} bytes ({(receivedBytes * 100.0 / totalSize):F2}%)");
+                _transfers[e.Client.Guid].ReceivedBytes += (ulong)e.Data.Length;
+                Console.WriteLine($"Received {_transfers[e.Client.Guid].ReceivedBytes}/{totalSize} bytes ({(_transfers[e.Client.Guid].ReceivedBytes * 100.0 / totalSize):F2}%)");
                 if (e.Metadata != null && e.Metadata.ContainsKey(TransferMessage.File_EOF.ToString()))
                 {
                     Console.WriteLine("Video transfer complete. Closing file.");
@@ -100,5 +96,6 @@ namespace FrostStream.DataBridge
     {
         public MemoryStream JsonMetaDataStream { get; set; }
         public FileStream MediaStream { get; set; }
+        public ulong ReceivedBytes { get; set; }
     }
 }
