@@ -1,0 +1,167 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO.Hashing;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using FrostStream.Shared;
+using Newtonsoft.Json;
+using WatsonTcp;
+
+namespace FrostStream.Worker.DataTransfer
+{
+    internal class WorkerDataTransfer
+    {
+        public async Task TransferData()
+        {
+            string filePath = @"C:\Users\Micah\Downloads\qBittorrentPortable\Data\Downloads\the-nvidia-ai-gpu-black-market-investigating-smuggling-corruption-governments\THE NVIDIA AI GPU BLACK MARKET ｜ Investigating Smuggling, Corruption, & Governments [1H3xQaf7BFI].ia.mp4";
+            if (!File.Exists(filePath))
+            {
+                Console.WriteLine("File not found: " + filePath);
+                return;
+            }
+
+            FileInfo fi = new FileInfo(filePath);
+            long totalSize = fi.Length;
+            int chunkSize = 1024 * 1024; // 1 MB
+            long sentBytes = 0;
+
+            var client = new WatsonTcpClient("127.0.0.1", 9000);
+            client.Events.MessageReceived += (s, e) =>
+            {
+                Console.WriteLine("Message from server: " + System.Text.Encoding.UTF8.GetString(e.Data));
+            };
+            client.Events.ServerConnected += (s, e) =>
+            {
+                Console.WriteLine("Connected to server.");
+            };
+            bool connected = false;
+
+            // Retry connection logic
+            int[] retryIntervals = { 1000, 5000, 10000, 15000, 20000, 25000, 30000 }; //1 sec to 30 sec, 5 second increments
+            foreach (int interval in retryIntervals)
+            {
+                try
+                {
+                    client.Connect();
+                    connected = true;
+                    break;
+                }
+                catch
+                {
+                    Thread.Sleep(interval);
+                }
+            }
+            if (!connected) return;
+
+            
+            var ftu = new Shared.FileTransferMetadata
+            {
+                FileName = fi.Name,
+                TotalSizeBytes = (ulong)totalSize,
+                Hash = 123456 // Placeholder for hash value
+            };
+            await SendJson(client, ftu);
+
+            await SendFile(client, filePath);
+
+
+            
+        }
+
+        private async Task SendJson(WatsonTcpClient client, FileTransferMetadata transferMetadata)
+        {
+            var json = JsonConvert.SerializeObject(transferMetadata);
+            byte[] jsonBytes = Encoding.UTF8.GetBytes(json);
+
+            int chunkSize = 1024 * 1024; // 1MB
+            int offset = 0;
+
+            while (offset < jsonBytes.Length)
+            {
+                int remaining = jsonBytes.Length - offset;
+                int size = Math.Min(chunkSize, remaining);
+                byte[] chunk = new byte[size];
+                Array.Copy(jsonBytes, offset, chunk, 0, size);
+                offset += size;
+
+                var meta = new Dictionary<string, object>
+                {
+                    { "metadata", true }
+                };
+
+                // Mark last chunk
+                if (offset >= jsonBytes.Length)
+                {
+                    meta.Add("eof", true);
+                }
+
+                await client.SendAsync(chunk, meta);
+            }
+
+            Console.WriteLine("JSON metadata sent from memory.");
+        }
+
+        private async Task SendFile(WatsonTcpClient client, string filePath)
+        {
+            if (!File.Exists(filePath))
+            {
+                Console.WriteLine("File not found: " + filePath);
+                return;
+            }
+            FileInfo fi = new FileInfo(filePath);
+            long totalSize = fi.Length;
+            int chunkSize = 1024 * 1024; // 1 MB
+            long sentBytes = 0;
+            
+            // Start sending file chunks
+            byte[] buffer = new byte[chunkSize];
+            var sw = Stopwatch.StartNew();
+            using (FileStream fs = new FileStream(filePath, FileMode.Open, FileAccess.Read))
+            {
+                int bytesRead;
+                while ((bytesRead = await fs.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                {
+                    byte[] chunk = new byte[bytesRead];
+                    Array.Copy(buffer, chunk, bytesRead);
+                    await client.SendAsync(chunk);
+                    sentBytes += bytesRead;
+                    double seconds = sw.Elapsed.TotalSeconds;
+                    double speed = sentBytes / (1024.0 * 1024.0) / seconds;
+                    Console.WriteLine($"Sent {sentBytes}/{totalSize} bytes ({(sentBytes * 100.0 / totalSize):F2}%) at {speed:F2} MB/s");
+                }
+            }
+            Console.WriteLine("File transfer completed.");
+        }
+
+        public static async Task<ulong> ComputeXxHash3Async(string filePath, IProgress<double>? progress = null)
+        {
+            if (!File.Exists(filePath))
+                throw new FileNotFoundException($"File not found: {filePath}");
+
+            int bufferSize = 1024 * 1024; // 1MB chunks
+            var xxHash = new XxHash3();
+            using var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize);
+
+            var buffer = new byte[bufferSize];
+            long totalBytesRead = 0;
+            long fileSize = fileStream.Length;
+
+            int bytesRead;
+            while ((bytesRead = await fileStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+            {
+                // Append the chunk to the hash
+                xxHash.Append(buffer.AsSpan(0, bytesRead));
+
+                totalBytesRead += bytesRead;
+
+                // Report progress if callback provided
+                progress?.Report((double)totalBytesRead / fileSize * 100);
+            }
+
+            // Get the final hash value
+            return xxHash.GetCurrentHashAsUInt64();
+        }
+    }
+}
