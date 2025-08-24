@@ -33,42 +33,7 @@ namespace FrostStream.DataBridge
                 videoStream?.Close();
             };
             server.Events.MessageReceived += MessageReceived;
-
-            //server.Events.MessageReceived += (s, e) =>
-            //{
-
-            //    // Metadata available in e.Metadata
-            //    if (e.Metadata != null && e.Metadata.ContainsKey("filename"))
-            //    {
-            //        e.Metadata.TryGetValue("filename", out var fname);
-            //        var je = fname as JsonElement?;
-            //        var data = je?.ValueKind;
-
-            //        outputFile = TryGetString(e.Metadata, "filename");
-            //        totalSize = TryGetInt64(e.Metadata, "filesize");
-
-
-            //        //outputFile = e.Metadata["filename"].ToString();                
-            //        //totalSize = Convert.ToInt64(e.Metadata["filesize"]);
-
-            //        Console.WriteLine($"Receiving file: {outputFile} ({totalSize} bytes)");
-            //        fs = new FileStream(outputFile, FileMode.Create, FileAccess.Write);
-            //    }
-
-            //    if( e.Metadata != null && e.Metadata.ContainsKey("metadata") && e.Data?.Length >0)
-            //    {
-            //        e.Metadata.TryGetValue("metadata", out var meta);
-            //        var je = meta as JsonElement?;
-                   
-            //    }
-
-            //    if (fs != null && e.Data?.Length > 0)
-            //    {
-            //        fs.Write(e.Data, 0, e.Data.Length);
-            //        receivedBytes += e.Data.Length;
-            //        Console.WriteLine($"Received {receivedBytes}/{totalSize} bytes ({(receivedBytes * 100.0 / totalSize):F2}%)");
-            //    }
-            //};
+            
 
             server.Start();
             Console.WriteLine("Receiver started. Press ENTER to quit.");
@@ -77,14 +42,14 @@ namespace FrostStream.DataBridge
 
         static void MessageReceived(object sender, MessageReceivedEventArgs e)
         {
-            if (e.Metadata != null && e.Metadata.ContainsKey("metadata"))
+            if (e.Metadata != null && e.Metadata.ContainsKey(TransferMessage.MetaData.ToString()))
             {
                 // JSON transfer
                 jsonStream.Write(e.Data, 0, e.Data.Length);
                 Console.WriteLine($"Received JSON chunk ({e.Data.Length} bytes).");
 
                 // Check for EOF
-                if (e.Metadata.ContainsKey("eof"))
+                if (e.Metadata.ContainsKey(TransferMessage.MetaData_EOF.ToString()))
                 {
                     Console.WriteLine("JSON transfer complete. Deserializing...");
 
@@ -114,53 +79,15 @@ namespace FrostStream.DataBridge
                 videoStream.Write(e.Data, 0, e.Data.Length);
                 receivedBytes += e.Data.Length;
                 Console.WriteLine($"Received {receivedBytes}/{totalSize} bytes ({(receivedBytes * 100.0 / totalSize):F2}%)");
+                if (e.Metadata != null && e.Metadata.ContainsKey(TransferMessage.File_EOF.ToString()))
+                {
+                    Console.WriteLine("Video transfer complete. Closing file.");
+                    videoStream.Dispose();
+                    videoStream = null;
+                }
             }
         }
 
-        static string? TryGetString(Dictionary<string, object> md, string key)
-        {
-            if (!md.TryGetValue(key, out var val) || val is null) return null;
-
-            if (val is string s) return s;
-
-            if (val is JsonElement je)
-            {
-                if (je.ValueKind == JsonValueKind.String) return je.GetString();
-                // Fallback: number -> string
-                if (je.ValueKind == JsonValueKind.Number) return je.GetRawText();
-            }
-
-            // Last resort: ToString()
-            return val.ToString();
-        }
-
-        static long TryGetInt64(Dictionary<string, object> md, string key)
-        {
-            if (!md.TryGetValue(key, out var val) || val is null) return -1;
-
-            switch (val)
-            {
-                case long l: return l;
-                case int i: return i;
-                case string s when long.TryParse(s, out var parsed): return parsed;
-                case JsonElement je:
-                    if (je.ValueKind == JsonValueKind.Number)
-                    {
-                        // If it's too large for Int64 this will throw – which is fine here.
-                        if (je.TryGetInt64(out var n)) return n;
-                        // If the number is encoded as a raw json number but TryGetInt64 failed
-                        // (e.g., floating), try string path:
-                        if (long.TryParse(je.GetRawText(), out var viaRaw)) return viaRaw;
-                    }
-                    if (je.ValueKind == JsonValueKind.String && long.TryParse(je.GetString(), out var viaStr))
-                        return viaStr;
-                    break;
-            }
-
-            // Fallback, best-effort parse
-            if (long.TryParse(val.ToString(), out var last)) return last;
-
-            return -1;
-        }
+        
     }
 }

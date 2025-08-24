@@ -55,17 +55,20 @@ namespace FrostStream.Worker.DataTransfer
             }
             if (!connected) return;
 
-            
+            var xxHash = await ComputeXxHash3Async(filePath, new Progress<double>(p =>
+            {
+                Console.WriteLine($"Hashing progress: {p:F2}%");
+            }));
+
             var ftu = new Shared.FileTransferMetadata
             {
                 FileName = fi.Name,
                 TotalSizeBytes = (ulong)totalSize,
-                Hash = 123456 // Placeholder for hash value
+                Hash = xxHash // Placeholder for hash value
             };
             await SendJson(client, ftu);
 
             await SendFile(client, filePath);
-
 
             
         }
@@ -88,13 +91,13 @@ namespace FrostStream.Worker.DataTransfer
 
                 var meta = new Dictionary<string, object>
                 {
-                    { "metadata", true }
+                    { TransferMessage.MetaData.ToString(), true }
                 };
 
                 // Mark last chunk
                 if (offset >= jsonBytes.Length)
                 {
-                    meta.Add("eof", true);
+                    meta.Add(TransferMessage.MetaData_EOF.ToString(), true);
                 }
 
                 await client.SendAsync(chunk, meta);
@@ -125,7 +128,17 @@ namespace FrostStream.Worker.DataTransfer
                 {
                     byte[] chunk = new byte[bytesRead];
                     Array.Copy(buffer, chunk, bytesRead);
-                    await client.SendAsync(chunk);
+                    if(fs.Position == fs.Length)
+                    {
+                        var meta = new Dictionary<string, object>();
+                        meta?.Add(TransferMessage.File_EOF.ToString(), true);
+                        await client.SendAsync(chunk, meta);
+                    }
+                    else
+                    {
+                        await client.SendAsync(chunk);
+                    }
+                   
                     sentBytes += bytesRead;
                     double seconds = sw.Elapsed.TotalSeconds;
                     double speed = sentBytes / (1024.0 * 1024.0) / seconds;

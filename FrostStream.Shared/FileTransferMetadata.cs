@@ -12,4 +12,11 @@ namespace FrostStream.Shared
         public ulong TotalSizeBytes { get; set; }
         public ulong Hash { get; set; }
     }
+
+    public enum TransferMessage
+    {
+        MetaData,
+        MetaData_EOF,
+        File_EOF
+    }
 }
