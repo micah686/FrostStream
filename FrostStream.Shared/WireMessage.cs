@@ -1,4 +1,9 @@
-﻿using System.Text.Json;
+﻿using System;
+using System.Buffers;
+using System.Text;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using NetMQ;
 
 namespace FrostStream.Shared;
@@ -18,107 +23,166 @@ public enum ControlCommand : byte
     PayloadToDataBridge,
     PayloadAck, // DataBridge -> Worker ACK
     PayloadNack, // DataBridge -> Worker NACK
-    
+
     // Internal Broker Commands / Other service comms
     ServiceRequest,
     ServiceReply
 }
 
-public sealed record WireMessage(
-    ControlCommand Command,
-    Guid JobId,
-    string? WorkerId = null,
-    byte[] Payload = null,
-    Guid CorrelationId = default)
+public enum ServiceType : byte
 {
-    // Init‑only property – no need for a separate field.
-    public byte[] Payload { get; init; } =
-        Payload ?? [];
+    None,
+    Broker,
+    WebApi,
+    DataBridge,
+    Worker
+}
 
-    /// <summary>
-    /// Factory that serializes an arbitrary POCO into the payload
-    /// as UTF‑8 JSON bytes.
-    /// </summary>
-    public static WireMessage CreateWithJson<T>(
-        ControlCommand command,
-        Guid jobId,
-        string? workerId = null,
-        T jsonData = default!,
-        Guid correlationId = default)
-    {
-        var payload = jsonData != null
-            ? JsonSerializer.SerializeToUtf8Bytes(jsonData)
-            : [];
+public enum PayloadType
+{
+    String,
+    Json,
+    RawBytes
+}
 
-        return new WireMessage(
-            Command: command,
-            JobId: jobId,
-            WorkerId: workerId,
-            Payload: payload,
-            CorrelationId: correlationId == Guid.Empty ? Guid.NewGuid() : correlationId);
-    }
+public sealed class MessageHeader
+{
+    public byte Version { get; init; } = 1;
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public ControlCommand Command { get; init; }
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public ServiceType Source { get; set; }
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public ServiceType Target { get; set; }
+    public DateTime Timestamp { get; init; } = DateTime.UtcNow;
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public PayloadType PayloadType { get; set; }
+    public bool RequiresAck { get; set; } = false;
+    public Guid MessageId { get; init; } = Guid.NewGuid();
+    public Guid CorrelationId { get; init; } = Guid.NewGuid();
+    public Guid CausationId { get; set; }
 
-    // NetMQ serialization
+    // Optional, used only from Worker.
+    public Guid JobId { get; init; }
+    public string? WorkerId { get; init; }
+}
+
+public sealed record WireMessage2(MessageHeader Header, byte[]? Payload = null)
+{
+    // Optional: You can add a constructor if needed
+    public WireMessage2() : this(new MessageHeader()) { }
+
     public NetMQMessage ToNetMQMessage(byte[]? destinationIdentity = null)
     {
         var msg = new NetMQMessage();
-        // The first frame is the destination identity, used by ROUTER sockets.
-        // If it's null, we're sending from a client that doesn't specify the destination (e.g., worker sending to broker).
-        // The broker will add the identity when forwarding.
+
+        // Append destination identity if provided
         if (destinationIdentity != null)
         {
             msg.Append(destinationIdentity);
         }
-        msg.AppendEmptyFrame();  // Required for ROUTER routing
-        msg.Append([(byte)Command]);
-        msg.Append(JobId.ToString());
-        msg.Append(WorkerId ?? string.Empty);
-        msg.Append(CorrelationId.ToString());
-        msg.Append(Payload);
+
+        msg.AppendEmptyFrame(); // Required for ROUTER routing
+
+        // Serialize header using System.Text.Json
+        var options = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            WriteIndented = false,
+            Converters = { new JsonStringEnumConverter() },
+            // Ensure DateTime is serialized in UTC
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        };
+
+        var headerJson = JsonSerializer.Serialize(Header, options);
+        msg.Append(headerJson, Encoding.UTF8);
+
+        // Append payload if present
+        if (Payload != null && Payload.Length > 0)
+        {
+            msg.Append(Payload);
+        }
+
         return msg;
     }
 
-    // NetMQ deserialization
-    public static WireMessage FromNetMQMessage(NetMQMessage msg)
+    public static WireMessage2 FromNetMQMessage(NetMQMessage msg)
     {
-        // This assumes the message has the structure:
-        // [optional identity frame]
-        // [empty frame]
-        // [command]
-        // [jobId]
-        // [workerId]
-        // [correlationId]
-        // [payload]
-
-        // Find the empty frame to start processing from the correct position
-        int start = 0;
+        // Find the empty frame (delimiter)
+        int delimIndex = -1;
         for (int i = 0; i < msg.FrameCount; i++)
         {
             if (msg[i].IsEmpty)
             {
-                start = i + 1;
+                delimIndex = i;
                 break;
             }
         }
-        
-        if (msg.FrameCount < start + 4)
+
+        if (delimIndex < 0 || msg.FrameCount < delimIndex + 2)
+            throw new ArgumentException("Invalid message framing (delimiter/header missing).");
+
+        int headerIndex = delimIndex + 1;
+        string headerJson = msg[headerIndex].ConvertToString(Encoding.UTF8);
+
+        var options = new JsonSerializerOptions
         {
-            throw new ArgumentException("Invalid message format: not enough frames.");
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() },
+            ReadCommentHandling = JsonCommentHandling.Skip
+        };
+
+        var header = JsonSerializer.Deserialize<MessageHeader>(headerJson, options)
+            ?? throw new InvalidOperationException("Failed to deserialize header.");
+
+        byte[]? payload = null;
+        int payloadIndex = headerIndex + 1;
+        if (msg.FrameCount > payloadIndex)
+        {
+            payload = msg[payloadIndex].ToByteArray();
         }
-        
-        return new WireMessage(
-            Command: (ControlCommand)msg[start++].Buffer[0],
-            JobId: Guid.TryParse(msg[start++].ConvertToString(), out var jobId)? jobId : Guid.Empty,
-            WorkerId: msg[start++].ConvertToString(),
-            CorrelationId: Guid.TryParse(msg[start++].ConvertToString(), out var corrId) ? corrId : Guid.Empty,
-            Payload: msg[start].ToByteArray()
-        );
+
+        return new WireMessage2(header, payload);
     }
 
-    /// <summary>
-    /// Deserializes the JSON payload into an instance of T.
-    /// Returns default(T) if the payload is empty or cannot be parsed.
-    /// </summary>
-    public T GetJsonPayload<T>() =>
-        Payload.Length > 0 ? JsonSerializer.Deserialize<T>(Payload)! : default!;
+    public string? GetPayloadAsString()
+    {
+        if (Payload == null || Payload.Length == 0)
+            return null;
+
+        if (Header.PayloadType == PayloadType.RawBytes)
+            throw new InvalidOperationException("Invalid Payload Type: Cannot convert RawBytes to string.");
+
+        return Encoding.UTF8.GetString(Payload);
+    }
+
+    public T GetPayloadAsJson<T>()
+    {
+        if (Header.PayloadType == PayloadType.RawBytes)
+            throw new InvalidOperationException("Invalid Payload Type: Cannot deserialize RawBytes as JSON.");
+
+        var json = GetPayloadAsString();
+        if (string.IsNullOrEmpty(json))
+            throw new InvalidOperationException("No payload data present.");
+
+        try
+        {
+            return JsonSerializer.Deserialize<T>(json, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })
+                ?? throw new InvalidOperationException("Deserialized JSON was null.");
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException("Unable to deserialize payload as the specified type.", ex);
+        }
+    }
+
+    public byte[] GetPayloadAsBytes()
+    {
+        if (Payload == null || Payload.Length == 0)
+            throw new InvalidOperationException("No payload data present.");
+
+        return Payload;
+    }
+
+    public bool HasPayload => Payload is { Length: > 0 };
 }
