@@ -49,17 +49,30 @@ public sealed class MessageHeader
 {
     public byte Version { get; init; } = 1;
     [JsonConverter(typeof(JsonStringEnumConverter))]
-    public ControlCommand Command { get; init; }
+    public required ControlCommand Command { get; init; }
     [JsonConverter(typeof(JsonStringEnumConverter))]
-    public ServiceType Source { get; set; }
+    public required ServiceType Source { get; set; }
     [JsonConverter(typeof(JsonStringEnumConverter))]
-    public ServiceType Target { get; set; }
+    public required ServiceType Target { get; set; }
+    public required  PayloadType PayloadType { get; set; }
+    public required string ServiceName { get; set; }
     public DateTime Timestamp { get; init; } = DateTime.UtcNow;
-    [JsonConverter(typeof(JsonStringEnumConverter))]
-    public PayloadType PayloadType { get; set; }
+    [JsonConverter(typeof(JsonStringEnumConverter))]    
+    /// <summary>
+    /// Requires an acknowledgment (Ack) response from the recipient.
+    /// </summary>
     public bool RequiresAck { get; set; } = false;
-    public Guid MessageId { get; init; } = Guid.NewGuid();
+    /// <summary>
+    /// Unique identifier for this message instance.
+    /// </summary>
+    public Guid MessageId { get; } = new Guid();
+    /// <summary>
+    /// per conversation (request ↔ response/acks; progress updates reusing same ID)
+    /// </summary>
     public Guid CorrelationId { get; init; } = Guid.NewGuid();
+    /// <summary>
+    /// set to the MessageId of the message that caused this one (useful for chains)
+    /// </summary>
     public Guid CausationId { get; set; }
 
     // Optional, used only from Worker.
@@ -67,19 +80,21 @@ public sealed class MessageHeader
     public string? WorkerId { get; init; }
 }
 
-public sealed record WireMessage2(MessageHeader Header, byte[]? Payload = null)
+//[Identity*] [EmptyFrame] [HeaderJson] [Payload?]
+public sealed record WireMessage(MessageHeader Header, byte[]? Payload = null, byte[]? Identity = null)
 {
     // Optional: You can add a constructor if needed
-    public WireMessage2() : this(new MessageHeader()) { }
+    //public WireMessage() : this(new MessageHeader()) { }
 
     public NetMQMessage ToNetMQMessage(byte[]? destinationIdentity = null)
     {
         var msg = new NetMQMessage();
 
-        // Append destination identity if provided
-        if (destinationIdentity != null)
+        // Append destination identity if provided (overrides stored one if given)
+        var finalIdentity = destinationIdentity ?? Identity;
+        if (finalIdentity != null)
         {
-            msg.Append(destinationIdentity);
+            msg.Append(finalIdentity);
         }
 
         msg.AppendEmptyFrame(); // Required for ROUTER routing
@@ -106,23 +121,25 @@ public sealed record WireMessage2(MessageHeader Header, byte[]? Payload = null)
         return msg;
     }
 
-    public static WireMessage2 FromNetMQMessage(NetMQMessage msg)
+    public static WireMessage FromNetMQMessage(NetMQMessage msg)
     {
+        if (msg is null) throw new ArgumentNullException(nameof(msg));
+        if (msg.FrameCount == 0) throw new ArgumentException("Empty NetMQMessage.", nameof(msg));
         // Find the empty frame (delimiter)
-        int delimIndex = -1;
+        int emptyAt = -1;
         for (int i = 0; i < msg.FrameCount; i++)
         {
             if (msg[i].IsEmpty)
             {
-                delimIndex = i;
+                emptyAt = i;
                 break;
             }
         }
 
-        if (delimIndex < 0 || msg.FrameCount < delimIndex + 2)
+        if (emptyAt < 0 || msg.FrameCount < emptyAt + 2)
             throw new ArgumentException("Invalid message framing (delimiter/header missing).");
 
-        int headerIndex = delimIndex + 1;
+        int headerIndex = emptyAt + 1;
         string headerJson = msg[headerIndex].ConvertToString(Encoding.UTF8);
 
         var options = new JsonSerializerOptions
@@ -132,6 +149,7 @@ public sealed record WireMessage2(MessageHeader Header, byte[]? Payload = null)
             ReadCommentHandling = JsonCommentHandling.Skip
         };
 
+        // Must have header after empty frame
         var header = JsonSerializer.Deserialize<MessageHeader>(headerJson, options)
             ?? throw new InvalidOperationException("Failed to deserialize header.");
 
@@ -142,7 +160,7 @@ public sealed record WireMessage2(MessageHeader Header, byte[]? Payload = null)
             payload = msg[payloadIndex].ToByteArray();
         }
 
-        return new WireMessage2(header, payload);
+        return new WireMessage(header, payload);
     }
 
     public string? GetPayloadAsString()
@@ -185,4 +203,9 @@ public sealed record WireMessage2(MessageHeader Header, byte[]? Payload = null)
     }
 
     public bool HasPayload => Payload is { Length: > 0 };
+
+    public byte[]? GetIdentityBytes()
+    {
+        return Identity is null ? null : (byte[])Identity.Clone();
+    }
 }
