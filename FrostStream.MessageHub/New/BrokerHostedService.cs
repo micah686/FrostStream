@@ -27,8 +27,6 @@ namespace FrostStream.MessageHub.New
         private readonly ILogger<BrokerHostedService> _log;
         private readonly ServiceRegistry _registry;
         private readonly BrokerOptions _opts;
-        // Optional perf cache: identityKey (Base64) -> identity bytes
-        private readonly ConcurrentDictionary<string, byte[]> _idBytesCache = new();
 
         private RouterSocket? _router;
         private NetMQPoller? _poller;
@@ -141,7 +139,7 @@ namespace FrostStream.MessageHub.New
                     // Presence: upsert + friendly name (if any)
                     if (string.IsNullOrEmpty(wm.Header.ServiceName))
                         throw new NullReferenceException("Failed to read service name");
-                    _registry.Upsert(identityKey, wm.Header.Source, wm.Header.ServiceName);
+                    _registry.Upsert(wm.Header.ServiceName, wm.Header.Source, identityBytes);
 
                     if (wm.Header.Target == ServiceType.Broker)
                     {
@@ -169,42 +167,7 @@ namespace FrostStream.MessageHub.New
                     ReplyJson(router, replyToBytes, incoming, ControlCommand.ServiceReply,
                         JsonSerializer.Serialize(new { ok = true, code = "heartbeat-ok" }));
                     break;
-
-                case ControlCommand.ServiceRequest:
-                    // Optional query payload: {"query":"list","type":"Worker"}
-                    try
-                    {
-                        string? query = null, typeStr = null;
-                        if (incoming.HasPayload && incoming.Header.PayloadType != PayloadType.RawBytes)
-                        {
-                            using var doc = JsonDocument.Parse(incoming.GetPayloadAsString() ?? "{}");
-                            if (doc.RootElement.TryGetProperty("query", out var q)) query = q.GetString();
-                            if (doc.RootElement.TryGetProperty("type", out var t)) typeStr = t.GetString();
-                        }
-
-                        if (string.Equals(query, "list", StringComparison.OrdinalIgnoreCase) &&
-                            Enum.TryParse<ServiceType>(typeStr, true, out var tFilter))
-                        {
-                            var list = _registry.GetByType(tFilter)
-                                .Select(r => new { r.Name, r.LastSeenUtc })
-                                .ToArray();
-
-                            ReplyJson(router, replyToBytes, incoming, ControlCommand.ServiceReply,
-                                JsonSerializer.Serialize(new { ok = true, services = list }));
-                        }
-                        else
-                        {
-                            ReplyJson(router, replyToBytes, incoming, ControlCommand.ServiceReply,
-                                JsonSerializer.Serialize(new { ok = true, code = "service-request-ok" }));
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        ReplyJson(router, replyToBytes, incoming, ControlCommand.ServiceReply,
-                            JsonSerializer.Serialize(new { ok = false, error = ex.Message }));
-                    }
-                    break;
-
+                
                 default:
                     ReplyJson(router, replyToBytes, incoming, ControlCommand.ServiceReply,
                         JsonSerializer.Serialize(new { ok = false, code = "unknown-broker-command" }));
@@ -215,55 +178,63 @@ namespace FrostStream.MessageHub.New
         // Route to target or NACK if unroutable
         private void Forward(RouterSocket router, byte[] senderIdentity, string senderKey, WireMessage incoming)
         {
-            var targetType = incoming.Header.Target;
-            var stickyName = incoming.Header.Target == ServiceType.Worker ? incoming.Header.WorkerId : null;
-
             
+            
+            var target = incoming.Header.Target;
+            var services = _registry.GetByType(target);
 
+            ServiceRecord? record = null;
 
-            var dest = _chooser.Choose(_registry, targetType, stickyName);
-            if (dest is null)
+            switch (target)
             {
-                Nack(router, senderIdentity, incoming,
-                    $"No online service for target '{targetType}'");
-                return;
+                case ServiceType.WebApi:
+                case ServiceType.DataBridge:
+                    if (services.Count == 0)
+                        throw new NullReferenceException($"Failed to find service for {target}");
+                    if (services.Count >= 1)
+                        throw new InvalidOperationException($"Multiple {target}s services is not supported");
+                    //1 record
+                    record = services[0];
+                    break;
+                case ServiceType.Broker:
+                    break;
+                case ServiceType.None:
+                    break;
+                case ServiceType.Worker:
+                    if (services.Count == 0)
+                        throw new NullReferenceException($"Failed to find service for {target}");
+                    //Do processing to get the right worker(LRU)
+                    //need to get friendly name
+                    break;
+                default:
+                    break;
             }
 
-            var destIdentity = GetIdentityBytes(dest.IdentityKey);
-            if (destIdentity is null)
+            if(record == null )
+                throw new NullReferenceException("Failed to find service");
+            if(record.Identity is null || record.Identity.Length == 0)
+                Nack(router, senderIdentity, incoming,
+                    $"Destination '{record.FriendlyName}' has no ROUTER identity yet");
+            else
             {
-                // In case registry has a record that we've never cached (unlikely), decode now
                 try
                 {
-                    destIdentity = Convert.FromBase64String(dest.IdentityKey);
-                    _idBytesCache[dest.IdentityKey] = destIdentity;
+                    var outMsg = incoming.ToNetMQMessage(record.Identity);
+                    router.SendMultipartMessage(outMsg);
                 }
-                catch
+                catch (HostUnreachableException)
                 {
+                    // Identity went stale; remove and NACK
+                    //_registry.Remove(record.FriendlyName);
                     Nack(router, senderIdentity, incoming,
-                        $"Invalid destination identity for '{dest.Name}'");
-                    return;
+                        $"Destination '{record.FriendlyName}' unreachable");
+                }
+                catch (Exception ex)
+                {
+                    Nack(router, senderIdentity, incoming, ex.Message);
                 }
             }
 
-            try
-            {
-                var outMsg = incoming.ToNetMQMessage(destIdentity);
-                router.SendMultipartMessage(outMsg);
-            }
-            catch (HostUnreachableException)
-            {
-                // Destination vanished → prune and NACK
-                _registry.Remove(dest.IdentityKey);
-                _idBytesCache.TryRemove(dest.IdentityKey, out _);
-
-                Nack(router, senderIdentity, incoming,
-                    $"Destination '{dest.Name}' unreachable");
-            }
-            catch (Exception ex)
-            {
-                Nack(router, senderIdentity, incoming, ex.Message);
-            }
         }
 
         private static void ReplyJson(RouterSocket router, byte[] replyTo, WireMessage cause,
@@ -308,14 +279,6 @@ namespace FrostStream.MessageHub.New
             try
             {
                 var removed = _registry.PruneStale(_opts.PresenceTtl);
-
-                // Clean stale identities from the small cache too.
-                foreach (var key in _idBytesCache.Keys)
-                {
-                    if (!_registry.TryGet(key, out _))
-                        _idBytesCache.TryRemove(key, out _);
-                }
-
                 if (removed > 0)
                     _log.LogDebug("Pruned {Removed} stale services.", removed);
             }
@@ -325,19 +288,7 @@ namespace FrostStream.MessageHub.New
             }
         }
 
-        private byte[]? GetIdentityBytes(string identityKey)
-        {
-            if (_idBytesCache.TryGetValue(identityKey, out var cached))
-                return cached;
-
-            try
-            {
-                var bytes = Convert.FromBase64String(identityKey);
-                _idBytesCache[identityKey] = bytes;
-                return bytes;
-            }
-            catch { return null; }
-        }
+        
 
     }
 }
