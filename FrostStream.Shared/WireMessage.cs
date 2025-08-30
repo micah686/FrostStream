@@ -57,7 +57,6 @@ public sealed class MessageHeader
     public required PayloadType PayloadType { get; set; }
     public required string ServiceName { get; set; }
     public DateTime Timestamp { get; init; } = DateTime.UtcNow;
-    [JsonConverter(typeof(JsonStringEnumConverter))]
     /// <summary>
     /// Requires an acknowledgment (Ack) response from the recipient.
     /// </summary>

@@ -143,22 +143,6 @@ namespace FrostStream.MessageHub.New
             return false;
         }
 
-        /// <summary>
-        /// Prune any service not seen since (UtcNow - ttl).
-        /// Returns the number of removed records.
-        /// </summary>
-        public int PruneStale(TimeSpan ttl)
-        {
-            var cutoff = DateTime.UtcNow - ttl;
-            var removed = 0;
-
-            foreach (var kvp in _byName)
-            {
-                if (kvp.Value.LastSeenUtc < cutoff && _byName.TryRemove(kvp.Key, out _))
-                    removed++;
-            }
-            return removed;
-        }
 
         /// <summary>Count (for metrics/tests).</summary>
         public int Count => _byName.Count;
