@@ -278,11 +278,27 @@ namespace FrostStream.MessageHub.New
         // Route to target or NACK if unroutable
         private void Forward(RouterSocket router, byte[] senderIdentity, string senderKey, WireMessage incoming)
         {
-            
-            
             var target = incoming.Header.Target;
-            var services = _registry.GetByType(target);
 
+            // Job-related messages should go through the scheduler rather than direct routing
+            if (target == ServiceType.Worker)
+            {
+                switch (incoming.Header.Command)
+                {
+                    case ControlCommand.JobDispatch:
+                        _scheduler.AssignJob(incoming, SendToWorker);
+                        break;
+                    case ControlCommand.CancelJob:
+                        _scheduler.CancelJob(incoming.Header.JobId);
+                        break;
+                    default:
+                        _log.LogWarning("Unsupported worker command {Command}", incoming.Header.Command);
+                        break;
+                }
+                return;
+            }
+
+            var services = _registry.GetByType(target);
             ServiceRecord? record = null;
 
             switch (target)
@@ -293,26 +309,17 @@ namespace FrostStream.MessageHub.New
                         throw new NullReferenceException($"Failed to find service for {target}");
                     if (services.Count >= 1)
                         throw new InvalidOperationException($"Multiple {target}s services is not supported");
-                    //1 record
                     record = services[0];
                     break;
                 case ServiceType.Broker:
-                    break;
                 case ServiceType.None:
-                    break;
-                case ServiceType.Worker:
-                    if (services.Count == 0)
-                        throw new NullReferenceException($"Failed to find service for {target}");
-                    //Do processing to get the right worker(LRU)
-                    //need to get friendly name
-                    break;
                 default:
                     break;
             }
 
-            if(record == null )
+            if (record == null)
                 throw new NullReferenceException("Failed to find service");
-            if(record.Identity is null || record.Identity.Length == 0)
+            if (record.Identity is null || record.Identity.Length == 0)
                 Nack(router, senderIdentity, incoming,
                     $"Destination '{record.ServiceName}' has no ROUTER identity yet");
             else
@@ -333,7 +340,6 @@ namespace FrostStream.MessageHub.New
                     Nack(router, senderIdentity, incoming, ex.Message);
                 }
             }
-
         }
 
         private static void ReplyJson(RouterSocket router, byte[] replyTo, WireMessage cause,
