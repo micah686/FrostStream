@@ -153,13 +153,67 @@ namespace FrostStream.MessageHub.New
                         throw new NullReferenceException("Failed to read service name");
                     _registry.Upsert(wm.Header.ServiceName, wm.Header.Source, identityBytes);
 
-                    if (wm.Header.Target == ServiceType.Broker)
+                    switch (wm.Header.Command)
                     {
-                        HandleBrokerDirected(router, identityBytes, identityKey, wm);
-                    }
-                    else
-                    {
-                        Forward(router, identityBytes, identityKey, wm);
+                        case ControlCommand.JobDispatch:
+                            // WebAPI -> Broker job request; let the scheduler assign/dispatch.
+                            _scheduler.AssignJob(wm, SendToWorker);
+                            break;
+
+                        case ControlCommand.Ready:
+                            {
+                                var workerId = wm.Header.WorkerId ?? wm.Header.ServiceName;
+                                if (!string.IsNullOrEmpty(workerId))
+                                {
+                                    _scheduler.RegisterWorker(workerId);
+
+                                    var ackHeader = new MessageHeader
+                                    {
+                                        Command = ControlCommand.ReadyAck,
+                                        ServiceName = "Broker",
+                                        Source = ServiceType.Broker,
+                                        Target = ServiceType.Worker,
+                                        PayloadType = PayloadType.RawBytes,
+                                        RequiresAck = false,
+                                        CausationId = wm.Header.MessageId,
+                                        CorrelationId = wm.Header.CorrelationId,
+                                        JobId = wm.Header.JobId,
+                                        WorkerId = workerId
+                                    };
+                                    var ack = new WireMessage(ackHeader);
+                                    router.SendMultipartMessage(ack.ToNetMQMessage(identityBytes));
+                                }
+                                break;
+                            }
+
+                        case ControlCommand.JobDone:
+                            {
+                                var workerId = wm.Header.WorkerId ?? wm.Header.ServiceName;
+                                if (!string.IsNullOrEmpty(workerId))
+                                    _scheduler.MarkJobDone(wm.Header.JobId, workerId);
+                                Forward(router, identityBytes, identityKey, wm);
+                                break;
+                            }
+
+                        case ControlCommand.ProgressUpdate:
+                            {
+                                var workerId = wm.Header.WorkerId ?? wm.Header.ServiceName;
+                                if (!string.IsNullOrEmpty(workerId))
+                                    _scheduler.RecordHeartbeat(workerId);
+                                Forward(router, identityBytes, identityKey, wm);
+                                break;
+                            }
+
+                        default:
+                            if (wm.Header.Target == ServiceType.Broker)
+                            {
+                                HandleBrokerDirected(router, identityBytes, identityKey, wm);
+                            }
+                            else
+                            {
+                                Forward(router, identityBytes, identityKey, wm);
+                            }
+                            break;
                     }
                 }
                 catch (Exception ex)
