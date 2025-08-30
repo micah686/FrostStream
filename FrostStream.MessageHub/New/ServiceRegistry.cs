@@ -12,7 +12,7 @@ using Microsoft.Extensions.Hosting;
 namespace FrostStream.MessageHub.New
 {
     public sealed record ServiceRecord(
-        string FriendlyName,     // e.g., "worker-abc", "WebApi", "DataBridge"
+        string ServiceName,     // e.g., "worker-abc", "WebApi", "DataBridge"
         ServiceType Type,        // Logical service type
         byte[]? Identity,        // ROUTER identity bytes (nullable)
         DateTime LastSeenUtc     // Last heartbeat or message seen

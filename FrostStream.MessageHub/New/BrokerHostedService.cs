@@ -19,27 +19,29 @@ namespace FrostStream.MessageHub.New
         public int SendHighWatermark { get; set; } = 10000;// max allowed messages in memory before NetMQ starts dropping/blocking
         public int ReceiveHighWatermark { get; set; } = 10000; // max allowed messages in memory before NetMQ starts dropping/blocking
         public TimeSpan Linger { get; set; } = TimeSpan.Zero; //how long it will try to deliver messages after Close() is called
-        public TimeSpan PruneInterval { get; set; } = TimeSpan.FromMinutes(1);
-        public TimeSpan PresenceTtl { get; set; } = TimeSpan.FromMinutes(5);
     }
     internal class BrokerHostedService : IHostedService
     {
         private readonly ILogger<BrokerHostedService> _log;
         private readonly ServiceRegistry _registry;
         private readonly BrokerOptions _opts;
+        // >>> Inject the scheduler (plain singleton, not a hosted service)
+        private readonly JobScheduler _scheduler;
 
         private RouterSocket? _router;
         private NetMQPoller? _poller;
-        private NetMQTimer? _pruneTimer;
         private Task? _loopTask;
         private readonly CancellationTokenSource _cts = new();
+        private NetMQTimer? _schedulerTimer;
 
         public BrokerHostedService(
             ILogger<BrokerHostedService> log,
-            ServiceRegistry registry)
+            ServiceRegistry registry,
+            JobScheduler scheduler)
         {
             _log = log;
             _registry = registry;
+            _scheduler = scheduler;
             _opts = new BrokerOptions(); // wire up IOptions<BrokerOptions> if you prefer
         }
 
@@ -101,9 +103,19 @@ namespace FrostStream.MessageHub.New
 
             _poller = new NetMQPoller { _router };
 
-            _pruneTimer = new NetMQTimer(_opts.PruneInterval);
-            _pruneTimer.Elapsed += (_, __) => Prune();
-            _poller.Add(_pruneTimer);
+
+            // If you had a prune timer before, remove it and let ServiceRegistryCleanup handle pruning.
+
+            // >>> Add a scheduler tick on the NetMQ thread
+            _schedulerTimer = new NetMQTimer(TimeSpan.FromSeconds(5));      // >>>
+            _schedulerTimer.Elapsed += (_, __) =>                           // >>>
+            {                                                               // >>>
+                // 1) Reconcile with ServiceRegistry membership (handles workers evicted by cleanup)
+                _scheduler.ReconcileRegistryAndRequeue();                   // >>>
+                // 2) Attempt to dispatch due pending jobs to idle workers
+                _scheduler.RequeueDueJobs(SendToWorker);                    // >>>
+            };                                                              // >>>
+            _poller.Add(_schedulerTimer);
 
             try
             {
@@ -156,7 +168,41 @@ namespace FrostStream.MessageHub.New
                 }
             }
         }
-        
+
+        // =========================================================================
+        // Delegate that the scheduler uses to actually send to a worker
+        // (Runs on the same NetMQ thread as the router/poller.)
+        // =========================================================================
+        private bool SendToWorker(string workerId, WireMessage message)
+        {
+            if (_router is null) return false;
+
+            // Resolve identity fresh from ServiceRegistry each time
+            if (!_registry.TryGetIdentity(workerId, out var identity) || identity.Length == 0)
+            {
+                _log.LogWarning("Cannot send to {WorkerId}: no identity in registry.", workerId);
+                return false;
+            }
+
+            try
+            {
+                _router.SendMultipartMessage(message.ToNetMQMessage(identity));
+                _log.LogDebug("Sent {Command} to {WorkerId}.", message.Header.Command, workerId);
+                return true;
+            }
+            catch (HostUnreachableException)
+            {
+                // With ServiceRegistryCleanup in place, do NOT remove here; just log.
+                _log.LogWarning("Worker {WorkerId} unreachable; will rely on cleanup to evict.", workerId);
+                return false;
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Error sending to {WorkerId}.", workerId);
+                return false;
+            }
+        }
+
 
         // Commands directed at the broker (heartbeats, queries, etc.)
         private void HandleBrokerDirected(RouterSocket router, byte[] replyToBytes, string replyToKey, WireMessage incoming)
@@ -214,7 +260,7 @@ namespace FrostStream.MessageHub.New
                 throw new NullReferenceException("Failed to find service");
             if(record.Identity is null || record.Identity.Length == 0)
                 Nack(router, senderIdentity, incoming,
-                    $"Destination '{record.FriendlyName}' has no ROUTER identity yet");
+                    $"Destination '{record.ServiceName}' has no ROUTER identity yet");
             else
             {
                 try
@@ -224,10 +270,9 @@ namespace FrostStream.MessageHub.New
                 }
                 catch (HostUnreachableException)
                 {
-                    // Identity went stale; remove and NACK
-                    //_registry.Remove(record.FriendlyName);
+                    // Identity went stale; NACK
                     Nack(router, senderIdentity, incoming,
-                        $"Destination '{record.FriendlyName}' unreachable");
+                        $"Destination '{record.ServiceName}' unreachable");
                 }
                 catch (Exception ex)
                 {
@@ -271,24 +316,6 @@ namespace FrostStream.MessageHub.New
             ReplyJson(router, replyTo, cause, ControlCommand.PayloadNack, payload);
         }
 
-        // ————————————————————————————————————————————————————————————————————————
-        // Housekeeping
-        // ————————————————————————————————————————————————————————————————————————
-        private void Prune()
-        {
-            try
-            {
-                var removed = _registry.PruneStale(_opts.PresenceTtl);
-                if (removed > 0)
-                    _log.LogDebug("Pruned {Removed} stale services.", removed);
-            }
-            catch (Exception ex)
-            {
-                _log.LogWarning(ex, "Error during prune.");
-            }
-        }
-
         
-
     }
 }

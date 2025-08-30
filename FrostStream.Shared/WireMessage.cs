@@ -54,10 +54,10 @@ public sealed class MessageHeader
     public required ServiceType Source { get; set; }
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public required ServiceType Target { get; set; }
-    public required  PayloadType PayloadType { get; set; }
+    public required PayloadType PayloadType { get; set; }
     public required string ServiceName { get; set; }
     public DateTime Timestamp { get; init; } = DateTime.UtcNow;
-    [JsonConverter(typeof(JsonStringEnumConverter))]    
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     /// <summary>
     /// Requires an acknowledgment (Ack) response from the recipient.
     /// </summary>
@@ -65,7 +65,7 @@ public sealed class MessageHeader
     /// <summary>
     /// Unique identifier for this message instance.
     /// </summary>
-    public Guid MessageId { get; } = new Guid();
+    public Guid MessageId { get; } = Guid.NewGuid();
     /// <summary>
     /// per conversation (request ↔ response/acks; progress updates reusing same ID)
     /// </summary>
@@ -139,6 +139,13 @@ public sealed record WireMessage(MessageHeader Header, byte[]? Payload = null, b
         if (emptyAt < 0 || msg.FrameCount < emptyAt + 2)
             throw new ArgumentException("Invalid message framing (delimiter/header missing).");
 
+        // Capture the first identity frame if present (single ROUTER identity expected)
+        byte[]? identity = null;
+        if (emptyAt >= 1)
+        {
+            identity = msg[0].ToByteArray();
+        }
+
         int headerIndex = emptyAt + 1;
         string headerJson = msg[headerIndex].ConvertToString(Encoding.UTF8);
 
@@ -149,7 +156,6 @@ public sealed record WireMessage(MessageHeader Header, byte[]? Payload = null, b
             ReadCommentHandling = JsonCommentHandling.Skip
         };
 
-        // Must have header after empty frame
         var header = JsonSerializer.Deserialize<MessageHeader>(headerJson, options)
             ?? throw new InvalidOperationException("Failed to deserialize header.");
 
@@ -160,7 +166,8 @@ public sealed record WireMessage(MessageHeader Header, byte[]? Payload = null, b
             payload = msg[payloadIndex].ToByteArray();
         }
 
-        return new WireMessage(header, payload);
+        // Include identity here
+        return new WireMessage(header, payload, identity);
     }
 
     public string? GetPayloadAsString()
