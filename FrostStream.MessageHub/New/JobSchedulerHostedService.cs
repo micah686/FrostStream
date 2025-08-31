@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading;
@@ -136,6 +136,7 @@ namespace FrostStream.MessageHub.New
                 {
                     JobGuid = jobMsg.Header.JobId,
                     Payload = Convert.ToBase64String(jobMsg.Payload ?? Array.Empty<byte>()),
+                    PayloadType = jobMsg.Header.PayloadType,
                     Status = JobStatus.Pending,
                     AssignedAgent = null,
                     CreatedAt = DateTime.UtcNow,
@@ -153,6 +154,7 @@ namespace FrostStream.MessageHub.New
             {
                 JobGuid = jobMsg.Header.JobId,
                 Payload = Convert.ToBase64String(jobMsg.Payload ?? Array.Empty<byte>()),
+                PayloadType = jobMsg.Header.PayloadType,
                 Status = JobStatus.InProgress,
                 AssignedAgent = workerId,
                 CreatedAt = DateTime.UtcNow,
@@ -319,14 +321,14 @@ namespace FrostStream.MessageHub.New
                 var workerId = idle[0].Key;
                 idle.RemoveAt(0);
 
-                // Build dispatch wire message; when persisted, payload is base64; default to RawBytes on resend.
+                // Build dispatch wire message; when persisted, payload is base64, so convert back to bytes.
                 var hdr = new MessageHeader
                 {
                     Command = ControlCommand.JobDispatch,
                     ServiceName = "Broker",
                     Source = ServiceType.Broker,
                     Target = ServiceType.Worker,
-                    PayloadType = PayloadType.RawBytes, // stored payload was serialized as bytes
+                    PayloadType = job.PayloadType, // use original payload type
                     RequiresAck = false,
                     CorrelationId = Guid.NewGuid(),
                     JobId = job.JobGuid,

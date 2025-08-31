@@ -1,10 +1,13 @@
-﻿namespace FrostStream.Shared.Models;
+namespace FrostStream.Shared.Models;
+
+using FrostStream.Shared;
 
 public class Job
 {
     public int Id { get; set; } // LiteDB auto-increment
     public Guid JobGuid { get; set; } = Guid.Empty; // stable external GUID
     public string Payload { get; set; }
+    public PayloadType PayloadType { get; set; } = PayloadType.RawBytes;
     public JobStatus Status { get; set; } // Pending, InProgress, Done, Failed
     public string AssignedAgent { get; set; }
     public int RetryCount { get; set; } = 0;
