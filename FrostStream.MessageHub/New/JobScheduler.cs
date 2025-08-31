@@ -186,8 +186,17 @@ namespace FrostStream.MessageHub.New
 
                 job.Status = JobStatus.Pending;
                 job.AssignedAgent = null;
-                job.RetryCount = 1;
-                job.NextAttemptAt = DateTime.UtcNow.AddSeconds(Math.Pow(2, job.RetryCount) * 5);
+                job.RetryCount++;
+                if (job.RetryCount > job.MaxRetries)
+                {
+                    job.Status = JobStatus.Failed;
+                    job.NextAttemptAt = null;
+                    _log.LogError("Job {JobId} exceeded max retries {MaxRetries}; marking failed.", job.JobGuid, job.MaxRetries);
+                }
+                else
+                {
+                    job.NextAttemptAt = DateTime.UtcNow.AddSeconds(Math.Pow(2, job.RetryCount) * 5);
+                }
                 _jobs.Update(job);
 
                 _workers[workerId].CurrentJob = null;
@@ -352,7 +361,16 @@ namespace FrostStream.MessageHub.New
                     job.Status = JobStatus.Pending;
                     job.AssignedAgent = null;
                     job.RetryCount++;
-                    job.NextAttemptAt = DateTime.UtcNow.AddSeconds(Math.Pow(2, job.RetryCount) * 5);
+                    if (job.RetryCount > job.MaxRetries)
+                    {
+                        job.Status = JobStatus.Failed;
+                        job.NextAttemptAt = null;
+                        _log.LogError("Job {JobId} exceeded max retries {MaxRetries}; marking failed.", job.JobGuid, job.MaxRetries);
+                    }
+                    else
+                    {
+                        job.NextAttemptAt = DateTime.UtcNow.AddSeconds(Math.Pow(2, job.RetryCount) * 5);
+                    }
                     _jobs.Update(job);
 
                     _workers[workerId].CurrentJob = null;
