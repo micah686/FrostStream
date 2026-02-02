@@ -7,8 +7,4 @@
         <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     </PropertyGroup>
 
-    <ItemGroup>
-      <ProjectReference Include="..\..\..\..\FlySwattr.NATS\FlySwattr.NATS\FlySwattr.NATS.csproj" />
-    </ItemGroup>
-
 </Project>
