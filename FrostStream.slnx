@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/Startup/">
+    <Project Path="AppHost/AppHost.csproj" />
+    <Project Path="ServiceDefaults/ServiceDefaults.csproj" />
+  </Folder>
+  <Project Path="DataBridge/DataBridge.csproj" />
+  <Project Path="MediaProcessor/MediaProcessor.csproj" />
+  <Project Path="Scheduler/Scheduler.csproj" />
+  <Project Path="Shared/Shared.csproj" />
+  <Project Path="WebAPI/WebAPI.csproj" />
+  <Project Path="Worker/Worker.csproj" />
+</Solution>
