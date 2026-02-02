@@ -1,0 +1,3 @@
+[submodule "FlySwattr.NATS"]
+	path = FlySwattr.NATS
+	url = https://github.com/micah686/FlySwattr.NATS
