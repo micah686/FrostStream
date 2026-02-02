@@ -8,7 +8,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <Folder Include="Extensions\" />
+      <ProjectReference Include="..\..\..\..\FlySwattr.NATS\FlySwattr.NATS\FlySwattr.NATS.csproj" />
     </ItemGroup>
 
 </Project>
