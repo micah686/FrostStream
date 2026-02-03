@@ -1,13 +1,13 @@
 <Solution>
   <Folder Name="/Modules/">
-    <Project Path="../../FlySwattr.NATS/FlySwattr.NATS.Abstractions/FlySwattr.NATS.Abstractions.csproj" />
-    <Project Path="../../FlySwattr.NATS/FlySwattr.NATS.Caching/FlySwattr.NATS.Caching.csproj" />
-    <Project Path="../../FlySwattr.NATS/FlySwattr.NATS.Core/FlySwattr.NATS.Core.csproj" />
-    <Project Path="../../FlySwattr.NATS/FlySwattr.NATS.DistributedLock/FlySwattr.NATS.DistributedLock.csproj" />
-    <Project Path="../../FlySwattr.NATS/FlySwattr.NATS.Hosting/FlySwattr.NATS.Hosting.csproj" />
-    <Project Path="../../FlySwattr.NATS/FlySwattr.NATS.Resilience/FlySwattr.NATS.Resilience.csproj" />
-    <Project Path="../../FlySwattr.NATS/FlySwattr.NATS.Topology/FlySwattr.NATS.Topology.csproj" />
-    <Project Path="../../FlySwattr.NATS/FlySwattr.NATS/FlySwattr.NATS.csproj" />
+    <Project Path="Modules/FlySwattr.NATS/FlySwattr.NATS.Abstractions/FlySwattr.NATS.Abstractions.csproj" />
+    <Project Path="Modules/FlySwattr.NATS/FlySwattr.NATS.Caching/FlySwattr.NATS.Caching.csproj" />
+    <Project Path="Modules/FlySwattr.NATS/FlySwattr.NATS.Core/FlySwattr.NATS.Core.csproj" />
+    <Project Path="Modules/FlySwattr.NATS/FlySwattr.NATS.DistributedLock/FlySwattr.NATS.DistributedLock.csproj" />
+    <Project Path="Modules/FlySwattr.NATS/FlySwattr.NATS.Hosting/FlySwattr.NATS.Hosting.csproj" />
+    <Project Path="Modules/FlySwattr.NATS/FlySwattr.NATS.Resilience/FlySwattr.NATS.Resilience.csproj" />
+    <Project Path="Modules/FlySwattr.NATS/FlySwattr.NATS.Topology/FlySwattr.NATS.Topology.csproj" />
+    <Project Path="Modules/FlySwattr.NATS/FlySwattr.NATS/FlySwattr.NATS.csproj" />
   </Folder>
   <Folder Name="/Services/">
     <Project Path="Services/DataBridge/DataBridge.csproj" />
