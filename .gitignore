@@ -46,6 +46,12 @@ src/.idea/**
 # *.iml
 # *.ipr
 
+# Video files
+*.mp4
+*.MP4
+*.mkv
+*.MKV
+
 # CMake
 cmake-build-*/
 

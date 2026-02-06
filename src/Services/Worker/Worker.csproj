@@ -14,6 +14,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\..\Modules\FlySwattr.NATS\FlySwattr.NATS\FlySwattr.NATS.csproj" />
       <ProjectReference Include="..\..\ServiceDefaults\ServiceDefaults.csproj" />
       <ProjectReference Include="..\Shared\Shared.csproj" />
     </ItemGroup>
