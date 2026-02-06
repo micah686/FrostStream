@@ -1,5 +1,4 @@
-﻿using System.Threading.Tasks;
-using FlySwattr.NATS.Extensions;
+﻿using FlySwattr.NATS.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Hosting.Internal;
@@ -26,7 +25,9 @@ class Program
             o.SuppressStatusMessages = false;
         });
 
+        builder.Services.AddHostedService<JobProcessingService>();
+
         var app = builder.Build();
-        await app.RunAsync();  // waits until Ctrl+C or SIGTERM, then calls StopAsync() gracefully
+        await app.RunAsync(); // waits until Ctrl+C or SIGTERM, then calls StopAsync() gracefully
     }
 }

@@ -18,6 +18,8 @@ class Program
             opts.Core.Url = builder.Configuration["NATS:Url"] ?? "nats://localhost:4222";
         });
 
+        builder.Services.AddHostedService<DataBridgeService>();
+
         // Force ConsoleLifetime so Ctrl+C / SIGTERM triggers StopAsync on hosted services
         builder.Services.AddSingleton<IHostLifetime, ConsoleLifetime>();
         builder.Services.Configure<ConsoleLifetimeOptions>(o =>
