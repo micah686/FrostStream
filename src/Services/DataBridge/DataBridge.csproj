@@ -14,4 +14,24 @@
       <ProjectReference Include="..\Shared\Shared.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Content Include="appsettings.json">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
+      <Content Include="appsettings.Development.json">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="13.1.0" />
+      <PackageReference Include="FluentMigrator" Version="8.0.1" />
+      <PackageReference Include="FluentMigrator.Runner.Core" Version="8.0.1" />
+      <PackageReference Include="FluentMigrator.Runner.Postgres" Version="8.0.1" />
+<!--      <PackageReference Include="FluentMigrator" Version="8.0.1" />-->
+<!--      <PackageReference Include="FluentMigrator.Runner" Version="8.0.1" />-->
+<!--      <PackageReference Include="FluentMigrator.Runner.Postgres" Version="8.0.1" />-->
+      <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
+    </ItemGroup>
+
 </Project>

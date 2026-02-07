@@ -30,9 +30,13 @@ var postgres = builder.AddPostgres("postgres")
 var database = postgres.AddDatabase("froststreamdb");
 
 // projects
+builder.AddProject<Projects.DataBridge>("databridge")
+    .WithReference(database).WaitFor(database)
+    .WithReference(nats).WaitFor(nats);
+
 // builder.AddProject<Projects.WebAPI>("webapi")
 //     .WithReference(database).WaitFor(database)
-//     .WithReference(nats).WaitFor(nats); 
+//     .WithReference(nats).WaitFor(nats);
 //
 // builder.AddProject<Projects.Worker>("worker");
 //
