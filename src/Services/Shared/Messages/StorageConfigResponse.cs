@@ -2,6 +2,7 @@ namespace Shared.Messages;
 
 /// <summary>
 /// Response from DataBridge to Worker with storage configuration.
+/// Carries a FluentStorage connection string and optional sub-path for the job.
 /// </summary>
 public record StorageConfigResponse
 {
@@ -11,17 +12,12 @@ public record StorageConfigResponse
     public required StorageMethod Method { get; init; }
 
     /// <summary>
-    /// For LocalStaging: the shared staging directory path.
+    /// FluentStorage connection string for the storage provider.
     /// </summary>
-    public string? StagingPath { get; init; }
+    public required string ConnectionString { get; init; }
 
     /// <summary>
-    /// For ObjectStore: the bucket name to use.
+    /// Sub-path within the storage for this job (e.g., remote directory, object prefix).
     /// </summary>
-    public string? ObjectStoreBucket { get; init; }
-
-    /// <summary>
-    /// For DirectExternal: the presigned URL or endpoint.
-    /// </summary>
-    public string? ExternalEndpoint { get; init; }
+    public string? RemotePath { get; init; }
 }

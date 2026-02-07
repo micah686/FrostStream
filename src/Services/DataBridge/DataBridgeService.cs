@@ -72,16 +72,17 @@ public class DataBridgeService : BackgroundService
         _logger.LogInformation("Received storage config request for job {JobId} from worker {WorkerId}",
             request.JobId, request.WorkerId);
 
-        // For now, always return LocalStaging method
+        // For now, always return PosixLocal method with a disk:// connection string.
         // Future: Could be dynamic based on job type, file size, configuration, etc.
+        var fullStagingPath = Path.GetFullPath(StagingPath);
         var response = new StorageConfigResponse
         {
-            Method = StorageMethod.LocalStaging,
-            StagingPath = Path.GetFullPath(StagingPath)
+            Method = StorageMethod.PosixLocal,
+            ConnectionString = $"disk://path={fullStagingPath}"
         };
 
-        _logger.LogInformation("Responding to job {JobId} with storage method {Method}, staging path: {Path}",
-            request.JobId, response.Method, response.StagingPath);
+        _logger.LogInformation("Responding to job {JobId} with storage method {Method}, connection: {Connection}",
+            request.JobId, response.Method, response.ConnectionString);
 
         await context.RespondAsync(response);
     }

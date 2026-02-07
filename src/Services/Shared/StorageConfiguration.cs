@@ -2,7 +2,7 @@ namespace Shared;
 
 /// <summary>
 /// Represents a storage configuration retrieved from the database.
-/// This is a placeholder model that will be populated by DataBridge from PostgreSQL.
+/// Uses FluentStorage connection strings to provide a unified interface across providers.
 /// </summary>
 public record StorageConfiguration
 {
@@ -17,24 +17,76 @@ public record StorageConfiguration
     public required StorageMethod Method { get; init; }
 
     /// <summary>
-    /// For LocalStaging: the shared staging directory path.
-    /// </summary>
-    public string? StagingPath { get; init; }
-
-    /// <summary>
-    /// For ObjectStore: the bucket name to use.
-    /// </summary>
-    public string? ObjectStoreBucket { get; init; }
-
-    /// <summary>
-    /// For DirectExternal: the presigned URL or endpoint.
-    /// </summary>
-    public string? ExternalEndpoint { get; init; }
-
-    /// <summary>
     /// Optional description for this configuration.
     /// </summary>
     public string? Description { get; init; }
+
+    /// <summary>
+    /// Connection string for FluentStorage (e.g., "disk://path=/mnt/nfs",
+    /// "ftp://host=...;user=...;password=...", "aws.s3://keyId=...;key=...;bucket=...").
+    /// </summary>
+    public required string ConnectionString { get; init; }
+
+    // --- PosixLocal fields ---
+
+    /// <summary>
+    /// For PosixLocal: the directory path (local, NFS mount point, or SMB mount point).
+    /// </summary>
+    public string? DirectoryPath { get; init; }
+
+    // --- StreamingNetwork fields ---
+
+    /// <summary>
+    /// For StreamingNetwork: the host to connect to.
+    /// </summary>
+    public string? Host { get; init; }
+
+    /// <summary>
+    /// For StreamingNetwork: the port to connect on.
+    /// </summary>
+    public int? Port { get; init; }
+
+    /// <summary>
+    /// For StreamingNetwork: the username for authentication.
+    /// </summary>
+    public string? Username { get; init; }
+
+    /// <summary>
+    /// For StreamingNetwork: the password for authentication.
+    /// </summary>
+    public string? Password { get; init; }
+
+    /// <summary>
+    /// For StreamingNetwork: the remote path to write to.
+    /// </summary>
+    public string? RemotePath { get; init; }
+
+    // --- ObjectStorage fields ---
+
+    /// <summary>
+    /// For ObjectStorage: the bucket/container name.
+    /// </summary>
+    public string? BucketName { get; init; }
+
+    /// <summary>
+    /// For ObjectStorage: the cloud region.
+    /// </summary>
+    public string? Region { get; init; }
+
+    /// <summary>
+    /// For ObjectStorage: the access key ID.
+    /// </summary>
+    public string? AccessKeyId { get; init; }
+
+    /// <summary>
+    /// For ObjectStorage: the secret access key.
+    /// </summary>
+    public string? SecretAccessKey { get; init; }
+
+    /// <summary>
+    /// For ObjectStorage: the service URL (for S3-compatible providers like MinIO).
+    /// </summary>
+    public string? ServiceUrl { get; init; }
 
     /// <summary>
     /// Example configurations for development/testing.
@@ -42,35 +94,46 @@ public record StorageConfiguration
     /// </summary>
     public static class Examples
     {
-        public static StorageConfiguration Default => new()
+        public static StorageConfiguration LocalDisk => new()
         {
             Key = "default",
-            Method = StorageMethod.LocalStaging,
-            StagingPath = "/tmp/staging",
+            Method = StorageMethod.PosixLocal,
+            ConnectionString = "disk://path=/tmp/staging",
+            DirectoryPath = "/tmp/staging",
             Description = "Default local staging for co-located services"
         };
 
-        public static StorageConfiguration HighBandwidth => new()
+        public static StorageConfiguration NfsMount => new()
         {
-            Key = "high-bandwidth",
-            Method = StorageMethod.DirectStreaming,
-            Description = "Direct streaming for high-bandwidth connections"
+            Key = "nfs-share",
+            Method = StorageMethod.PosixLocal,
+            ConnectionString = "disk://path=/mnt/nfs/staging",
+            DirectoryPath = "/mnt/nfs/staging",
+            Description = "NFS-mounted shared storage"
         };
 
-        public static StorageConfiguration Resilient => new()
+        public static StorageConfiguration Sftp => new()
         {
-            Key = "resilient",
-            Method = StorageMethod.ObjectStore,
-            ObjectStoreBucket = "job-transfers",
-            Description = "NATS Object Store for ephemeral workers requiring reliability"
+            Key = "sftp-remote",
+            Method = StorageMethod.StreamingNetwork,
+            ConnectionString = "sftp://host=sftp.example.com;user=upload;password=secret",
+            Host = "sftp.example.com",
+            Username = "upload",
+            Password = "secret",
+            RemotePath = "/uploads",
+            Description = "SFTP remote server for file transfers"
         };
 
-        public static StorageConfiguration External => new()
+        public static StorageConfiguration S3 => new()
         {
-            Key = "external-s3",
-            Method = StorageMethod.DirectExternal,
-            ExternalEndpoint = "s3://my-bucket/uploads",
-            Description = "Direct S3 upload for scale and external destinations"
+            Key = "aws-s3",
+            Method = StorageMethod.ObjectStorage,
+            ConnectionString = "aws.s3://keyId=AKIA...;key=secret;bucket=job-transfers;region=us-east-1",
+            BucketName = "job-transfers",
+            Region = "us-east-1",
+            AccessKeyId = "AKIA...",
+            SecretAccessKey = "secret",
+            Description = "AWS S3 object storage for scale"
         };
     }
 }

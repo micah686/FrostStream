@@ -1,4 +1,5 @@
-﻿using FlySwattr.NATS.Extensions;
+﻿using FluentStorage;
+using FlySwattr.NATS.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Hosting.Internal;
@@ -21,15 +22,21 @@ class Program
         builder.Services.AddSingleton<IHostLifetime, ConsoleLifetime>();
         builder.Services.Configure<ConsoleLifetimeOptions>(o =>
         {
-            // set true to hide “Application started/stopped” messages
+            // set true to hide "Application started/stopped" messages
             o.SuppressStatusMessages = false;
         });
 
+        // Register FluentStorage provider modules
+        StorageFactory.Modules.UseFtpStorage();
+        StorageFactory.Modules.UseSftpStorage();
+        StorageFactory.Modules.UseAwsStorage();
+        StorageFactory.Modules.UseAzureBlobStorage();
+        StorageFactory.Modules.UseGoogleCloudStorage();
+
         // Register storage handlers
-        builder.Services.AddSingleton<Storage.IStorageHandler, Storage.LocalStagingHandler>();
-        builder.Services.AddSingleton<Storage.IStorageHandler, Storage.DirectStreamingHandler>();
-        builder.Services.AddSingleton<Storage.IStorageHandler, Storage.ObjectStoreHandler>();
-        builder.Services.AddSingleton<Storage.IStorageHandler, Storage.DirectExternalHandler>();
+        builder.Services.AddSingleton<Storage.IStorageHandler, Storage.PosixLocalHandler>();
+        builder.Services.AddSingleton<Storage.IStorageHandler, Storage.StreamingNetworkHandler>();
+        builder.Services.AddSingleton<Storage.IStorageHandler, Storage.ObjectStorageHandler>();
         builder.Services.AddSingleton<Storage.StorageHandlerFactory>();
 
         builder.Services.AddHostedService<JobProcessingService>();

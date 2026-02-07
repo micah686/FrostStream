@@ -6,23 +6,18 @@ namespace Shared;
 public enum StorageMethod
 {
     /// <summary>
-    /// Local staging via shared filesystem (e.g., Docker volume, K8s emptyDir).
-    /// Worker stages file locally, DataBridge picks it up from the shared path.
+    /// POSIX-compatible local storage: local filesystem, NFS mounts, SMB/CIFS mounts.
+    /// All accessed as a directory on the filesystem.
     /// </summary>
-    LocalStaging,
+    PosixLocal,
 
     /// <summary>
-    /// Direct streaming via NATS Object Store or chunked messages.
+    /// Streaming network storage: FTP, FTPS, SFTP.
     /// </summary>
-    DirectStreaming,
+    StreamingNetwork,
 
     /// <summary>
-    /// NATS Object Store for larger files with built-in chunking.
+    /// Object storage: S3, Azure Blob, GCS, MinIO, and other blob stores.
     /// </summary>
-    ObjectStore,
-
-    /// <summary>
-    /// Direct upload to external storage (S3, Azure Blob, etc.) with URL signaling.
-    /// </summary>
-    DirectExternal
+    ObjectStorage
 }
