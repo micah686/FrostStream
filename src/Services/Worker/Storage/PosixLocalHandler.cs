@@ -1,6 +1,5 @@
-using System.Security.Cryptography;
+using System.IO.Hashing;
 using FluentStorage;
-using FlySwattr.NATS.Abstractions;
 using Microsoft.Extensions.Logging;
 using Shared;
 using Shared.Messages;
@@ -9,22 +8,20 @@ namespace Worker.Storage;
 
 /// <summary>
 /// Handles file transfer via POSIX-compatible local storage (local filesystem, NFS mounts, SMB/CIFS mounts).
-/// Uses FluentStorage's DirectoryFiles provider to write to any directory-accessible path.
+/// Computes XxHash128 while writing to avoid a second read pass.
 /// </summary>
 public class PosixLocalHandler : IStorageHandler
 {
-    private readonly IMessageBus _messageBus;
     private readonly ILogger<PosixLocalHandler> _logger;
 
-    public PosixLocalHandler(IMessageBus messageBus, ILogger<PosixLocalHandler> logger)
+    public PosixLocalHandler(ILogger<PosixLocalHandler> logger)
     {
-        _messageBus = messageBus;
         _logger = logger;
     }
 
     public StorageMethod SupportedMethod => StorageMethod.PosixLocal;
 
-    public async Task HandleAsync(
+    public async Task<StorageResult> HandleAsync(
         ProcessJobRequest job,
         StorageConfigResponse config,
         string workerId,
@@ -32,73 +29,47 @@ public class PosixLocalHandler : IStorageHandler
         CancellationToken ct)
     {
         if (string.IsNullOrEmpty(config.ConnectionString))
-        {
-            _logger.LogError("Job {JobId}: PosixLocal requires a connection string", job.JobId);
-            return;
-        }
+            throw new InvalidOperationException($"Job {job.JobId}: PosixLocal requires a connection string");
 
         if (!File.Exists(sourceVideoPath))
-        {
-            _logger.LogError("Job {JobId}: Source video file not found at {Path}", job.JobId, sourceVideoPath);
-            return;
-        }
+            throw new FileNotFoundException($"Job {job.JobId}: Source video file not found at {sourceVideoPath}");
 
-        // Parse the directory path from the connection string (disk://path=/some/dir)
         using var storage = StorageFactory.Blobs.FromConnectionString(config.ConnectionString);
 
-        var tempFileName = $"{job.JobId}.part";
-        var finalFileName = $"{job.JobId}.ready";
+        var stagedFileName = $"{job.JobId}.part";
 
-        _logger.LogInformation("Job {JobId}: Staging file via PosixLocal storage", job.JobId);
+        _logger.LogInformation("Job {JobId}: Staging file via PosixLocal storage as {FileName}", job.JobId, stagedFileName);
 
-        // Write to temp name first
+        // Write to .part file while computing XxHash128 incrementally
+        var hash = new XxHash128();
+        long fileSize = 0;
+        var buffer = new byte[81920];
+
         await using (var sourceStream = File.OpenRead(sourceVideoPath))
+        await using (var memoryStream = new MemoryStream())
         {
-            await storage.WriteAsync(tempFileName, sourceStream, false, ct);
-        }
-
-        // Calculate checksum from the written file
-        var checksum = await CalculateChecksumAsync(sourceVideoPath, ct);
-        var fileSize = new FileInfo(sourceVideoPath).Length;
-
-        // Rename to final name (atomic on local/NFS)
-        // FluentStorage doesn't have a rename, so we re-write and delete temp
-        await using (var sourceStream = await storage.OpenReadAsync(tempFileName, ct))
-        {
-            if (sourceStream != null)
+            int bytesRead;
+            while ((bytesRead = await sourceStream.ReadAsync(buffer, ct)) > 0)
             {
-                await storage.WriteAsync(finalFileName, sourceStream, false, ct);
+                hash.Append(buffer.AsSpan(0, bytesRead));
+                await memoryStream.WriteAsync(buffer.AsMemory(0, bytesRead), ct);
+                fileSize += bytesRead;
             }
+
+            memoryStream.Position = 0;
+            await storage.WriteAsync(stagedFileName, memoryStream, false, ct);
         }
-        await storage.DeleteAsync(new[] { tempFileName }, ct);
 
-        _logger.LogInformation("Job {JobId}: File staged successfully as {FileName}, checksum: {Checksum}",
-            job.JobId, finalFileName, checksum);
+        var xxHash = Convert.ToHexString(hash.GetCurrentHash()).ToLowerInvariant();
 
-        // Build the full local path for the FileStagedEvent
-        // Extract directory from connection string for the event
         var remotePath = config.RemotePath ?? "";
         var stagedPath = string.IsNullOrEmpty(remotePath)
-            ? finalFileName
-            : Path.Combine(remotePath, finalFileName);
+            ? stagedFileName
+            : Path.Combine(remotePath, stagedFileName);
 
-        await _messageBus.PublishAsync(Subjects.FileStaged, new FileStagedEvent
-        {
-            JobId = job.JobId,
-            LocalPath = stagedPath,
-            FinalDestination = job.DestinationPath,
-            Checksum = checksum,
-            FileSizeBytes = fileSize,
-            WorkerId = workerId
-        }, ct);
+        _logger.LogInformation("Job {JobId}: File staged as {Path}, XxHash128: {Hash}, Size: {Size} bytes",
+            job.JobId, stagedPath, xxHash, fileSize);
 
-        _logger.LogInformation("Job {JobId}: Published FileStagedEvent to DataBridge", job.JobId);
-    }
-
-    private static async Task<string> CalculateChecksumAsync(string filePath, CancellationToken ct)
-    {
-        await using var stream = File.OpenRead(filePath);
-        var hash = await SHA256.HashDataAsync(stream, ct);
-        return Convert.ToHexString(hash).ToLowerInvariant();
+        return new StorageResult(stagedPath, xxHash, fileSize);
     }
 }

@@ -1,6 +1,7 @@
 ﻿using System.Threading.Tasks;
 using DataBridge.Data;
 using FluentMigrator.Runner;
+using FluentStorage;
 using FlySwattr.NATS.Extensions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -44,6 +45,13 @@ class Program
         {
             opts.Core.Url = builder.Configuration["NATS:Url"] ?? "nats://localhost:4222";
         });
+
+        // Register FluentStorage provider modules
+        StorageFactory.Modules.UseFtpStorage();
+        StorageFactory.Modules.UseSftpStorage();
+        StorageFactory.Modules.UseAwsStorage();
+        StorageFactory.Modules.UseAzureBlobStorage();
+        StorageFactory.Modules.UseGoogleCloudStorage();
 
         builder.Services.AddHostedService<DataBridgeService>();
 

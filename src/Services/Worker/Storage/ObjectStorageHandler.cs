@@ -1,6 +1,5 @@
-using System.Security.Cryptography;
+using System.IO.Hashing;
 using FluentStorage;
-using FlySwattr.NATS.Abstractions;
 using Microsoft.Extensions.Logging;
 using Shared;
 using Shared.Messages;
@@ -9,23 +8,20 @@ namespace Worker.Storage;
 
 /// <summary>
 /// Handles file transfer via object storage (S3, Azure Blob, GCS, MinIO, etc.).
-/// Uses FluentStorage's AWS/Azure/GCP providers via connection string.
-/// Requires FluentStorage.AWS, FluentStorage.Azure.Blobs, and FluentStorage.GCP modules to be registered at startup.
+/// Computes XxHash128 while writing to avoid a second read pass.
 /// </summary>
 public class ObjectStorageHandler : IStorageHandler
 {
-    private readonly IMessageBus _messageBus;
     private readonly ILogger<ObjectStorageHandler> _logger;
 
-    public ObjectStorageHandler(IMessageBus messageBus, ILogger<ObjectStorageHandler> logger)
+    public ObjectStorageHandler(ILogger<ObjectStorageHandler> logger)
     {
-        _messageBus = messageBus;
         _logger = logger;
     }
 
     public StorageMethod SupportedMethod => StorageMethod.ObjectStorage;
 
-    public async Task HandleAsync(
+    public async Task<StorageResult> HandleAsync(
         ProcessJobRequest job,
         StorageConfigResponse config,
         string workerId,
@@ -33,57 +29,46 @@ public class ObjectStorageHandler : IStorageHandler
         CancellationToken ct)
     {
         if (string.IsNullOrEmpty(config.ConnectionString))
-        {
-            _logger.LogError("Job {JobId}: ObjectStorage requires a connection string", job.JobId);
-            return;
-        }
+            throw new InvalidOperationException($"Job {job.JobId}: ObjectStorage requires a connection string");
 
         if (!File.Exists(sourceVideoPath))
-        {
-            _logger.LogError("Job {JobId}: Source video file not found at {Path}", job.JobId, sourceVideoPath);
-            return;
-        }
+            throw new FileNotFoundException($"Job {job.JobId}: Source video file not found at {sourceVideoPath}");
 
         using var storage = StorageFactory.Blobs.FromConnectionString(config.ConnectionString);
 
         var remotePath = config.RemotePath ?? "";
-        var objectKey = $"{job.JobId}{Path.GetExtension(sourceVideoPath)}";
+        var stagedFileName = $"{job.JobId}.part";
         var fullPath = string.IsNullOrEmpty(remotePath)
-            ? objectKey
-            : $"{remotePath.TrimEnd('/')}/{objectKey}";
+            ? stagedFileName
+            : $"{remotePath.TrimEnd('/')}/{stagedFileName}";
 
         _logger.LogInformation("Job {JobId}: Uploading file via ObjectStorage to {Path}", job.JobId, fullPath);
 
-        // Calculate checksum before upload
-        var checksum = await CalculateChecksumAsync(sourceVideoPath, ct);
-        var fileSize = new FileInfo(sourceVideoPath).Length;
+        // Upload file while computing XxHash128 incrementally
+        var hash = new XxHash128();
+        long fileSize = 0;
+        var buffer = new byte[81920];
 
-        // Upload the file
         await using (var sourceStream = File.OpenRead(sourceVideoPath))
+        await using (var memoryStream = new MemoryStream())
         {
-            await storage.WriteAsync(fullPath, sourceStream, false, ct);
+            int bytesRead;
+            while ((bytesRead = await sourceStream.ReadAsync(buffer, ct)) > 0)
+            {
+                hash.Append(buffer.AsSpan(0, bytesRead));
+                await memoryStream.WriteAsync(buffer.AsMemory(0, bytesRead), ct);
+                fileSize += bytesRead;
+            }
+
+            memoryStream.Position = 0;
+            await storage.WriteAsync(fullPath, memoryStream, false, ct);
         }
 
-        _logger.LogInformation("Job {JobId}: File uploaded successfully to {Path}, checksum: {Checksum}",
-            job.JobId, fullPath, checksum);
+        var xxHash = Convert.ToHexString(hash.GetCurrentHash()).ToLowerInvariant();
 
-        await _messageBus.PublishAsync(Subjects.FileStaged, new FileStagedEvent
-        {
-            JobId = job.JobId,
-            LocalPath = fullPath,
-            FinalDestination = job.DestinationPath,
-            Checksum = checksum,
-            FileSizeBytes = fileSize,
-            WorkerId = workerId
-        }, ct);
+        _logger.LogInformation("Job {JobId}: File uploaded as {Path}, XxHash128: {Hash}, Size: {Size} bytes",
+            job.JobId, fullPath, xxHash, fileSize);
 
-        _logger.LogInformation("Job {JobId}: Published FileStagedEvent to DataBridge", job.JobId);
-    }
-
-    private static async Task<string> CalculateChecksumAsync(string filePath, CancellationToken ct)
-    {
-        await using var stream = File.OpenRead(filePath);
-        var hash = await SHA256.HashDataAsync(stream, ct);
-        return Convert.ToHexString(hash).ToLowerInvariant();
+        return new StorageResult(fullPath, xxHash, fileSize);
     }
 }

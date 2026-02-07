@@ -11,6 +11,10 @@ public class Movie
     public int ReleaseYear { get; set; }
     public int DurationMinutes { get; set; }
     public required string FilePath { get; set; }
+    public string? XxHash { get; set; }
+    public long FileSizeBytes { get; set; }
+    public bool Verified { get; set; }
+    public string? StorageConnectionString { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 

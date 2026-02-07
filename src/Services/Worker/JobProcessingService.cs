@@ -88,9 +88,30 @@ public class JobProcessingService : BackgroundService
 
             // Use the factory to get the appropriate handler
             var handler = _storageHandlerFactory.GetHandler(storageConfig.Method);
-            await handler.HandleAsync(job, storageConfig, _workerId, SourceVideoPath, ct);
+            var result = await handler.HandleAsync(job, storageConfig, _workerId, SourceVideoPath, ct);
 
-            _logger.LogInformation("Job {JobId}: Completed successfully", job.JobId);
+            // Generate random movie metadata
+            var random = Random.Shared;
+            var titles = new[] { "Cosmic Dawn", "Silent Meridian", "The Last Horizon", "Neon Pulse", "Fractured Light", "Iron Cascade", "Whispers of Andromeda", "The Obsidian Gate" };
+            var descriptions = new[] { "A thrilling sci-fi adventure.", "An epic drama set in the future.", "A mystery that spans galaxies.", "A tale of survival and hope." };
+
+            var ingestedEvent = new FileIngestedEvent
+            {
+                JobId = job.JobId,
+                StagedPath = result.StagedPath,
+                XxHash = result.XxHash,
+                FileSizeBytes = result.FileSizeBytes,
+                StorageConnectionString = storageConfig.ConnectionString,
+                WorkerId = _workerId,
+                Title = $"{titles[random.Next(titles.Length)]} ({job.JobId[..8]})",
+                Description = descriptions[random.Next(descriptions.Length)],
+                ReleaseYear = random.Next(1980, 2027),
+                DurationMinutes = random.Next(80, 200)
+            };
+
+            await _messageBus.PublishAsync(Subjects.FileIngested, ingestedEvent, ct);
+
+            _logger.LogInformation("Job {JobId}: Published FileIngestedEvent, XxHash128: {Hash}", job.JobId, result.XxHash);
         }
         catch (OperationCanceledException)
         {

@@ -38,6 +38,22 @@ public class MovieConfiguration : IEntityTypeConfiguration<Movie>
             .IsRequired()
             .HasMaxLength(1000);
 
+        builder.Property(m => m.XxHash)
+            .HasColumnName("xx_hash")
+            .HasMaxLength(64);
+
+        builder.Property(m => m.FileSizeBytes)
+            .HasColumnName("file_size_bytes")
+            .IsRequired();
+
+        builder.Property(m => m.Verified)
+            .HasColumnName("verified")
+            .IsRequired();
+
+        builder.Property(m => m.StorageConnectionString)
+            .HasColumnName("storage_connection_string")
+            .HasMaxLength(2000);
+
         builder.Property(m => m.CreatedAt)
             .HasColumnName("created_at")
             .IsRequired();
@@ -49,6 +65,7 @@ public class MovieConfiguration : IEntityTypeConfiguration<Movie>
         // Indexes
         builder.HasIndex(m => m.Title);
         builder.HasIndex(m => m.ReleaseYear);
+        builder.HasIndex(m => m.Verified);
 
         // One-to-many relationship with Subtitles
         builder.HasMany(m => m.Subtitles)

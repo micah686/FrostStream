@@ -32,6 +32,7 @@ public class Program
         app.UseAuthorization();
 
         app.MapJobEndpoints();
+        app.MapMovieEndpoints();
 
         app.Run();
     }

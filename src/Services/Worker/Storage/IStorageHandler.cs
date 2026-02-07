@@ -4,6 +4,11 @@ using Shared.Messages;
 namespace Worker.Storage;
 
 /// <summary>
+/// Result of a storage handler writing a file, including the computed hash and file size.
+/// </summary>
+public record StorageResult(string StagedPath, string XxHash, long FileSizeBytes);
+
+/// <summary>
 /// Interface for handling file transfers using different storage methods.
 /// Each implementation handles a specific <see cref="StorageMethod"/>.
 /// </summary>
@@ -16,13 +21,9 @@ public interface IStorageHandler
 
     /// <summary>
     /// Handles file transfer for the specified job using this storage method.
+    /// Returns a <see cref="StorageResult"/> with the staged path, hash, and file size.
     /// </summary>
-    /// <param name="job">The job request containing job details.</param>
-    /// <param name="config">Storage configuration from DataBridge.</param>
-    /// <param name="workerId">The worker's unique identifier.</param>
-    /// <param name="sourceVideoPath">Path to the source video file.</param>
-    /// <param name="ct">Cancellation token.</param>
-    Task HandleAsync(
+    Task<StorageResult> HandleAsync(
         ProcessJobRequest job,
         StorageConfigResponse config,
         string workerId,

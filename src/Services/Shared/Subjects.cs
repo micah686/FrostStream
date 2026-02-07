@@ -18,7 +18,17 @@ public static class Subjects
     public const string StorageConfig = "databridge.storage.config";
 
     /// <summary>
-    /// Subject for signaling that a file has been staged and is ready.
+    /// Subject for signaling that a file has been ingested and is ready for verification.
     /// </summary>
-    public const string FileStaged = "databridge.file.staged";
+    public const string FileIngested = "databridge.file.ingested";
+
+    /// <summary>
+    /// Subject for querying movies from DataBridge. Uses request/reply pattern.
+    /// </summary>
+    public const string MovieQuery = "databridge.movie.query";
+
+    /// <summary>
+    /// Subject for getting a single movie by ID from DataBridge. Uses request/reply pattern.
+    /// </summary>
+    public const string MovieGet = "databridge.movie.get";
 }

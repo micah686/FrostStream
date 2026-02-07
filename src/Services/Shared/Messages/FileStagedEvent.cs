@@ -1,9 +1,9 @@
 namespace Shared.Messages;
 
 /// <summary>
-/// Event published by Worker when a file has been staged and is ready for DataBridge to process.
+/// Event published by Worker when a file has been ingested and is ready for DataBridge to verify and commit.
 /// </summary>
-public record FileStagedEvent
+public record FileIngestedEvent
 {
     /// <summary>
     /// The job ID this file belongs to.
@@ -11,19 +11,14 @@ public record FileStagedEvent
     public required string JobId { get; init; }
 
     /// <summary>
-    /// The local path where the file is staged (in shared volume).
+    /// The staged file path (e.g., "{jobId}.part") relative to storage root.
     /// </summary>
-    public required string LocalPath { get; init; }
+    public required string StagedPath { get; init; }
 
     /// <summary>
-    /// The final destination path where the file should be moved/uploaded.
+    /// XxHash128 hex string computed during write.
     /// </summary>
-    public required string FinalDestination { get; init; }
-
-    /// <summary>
-    /// SHA256 checksum of the staged file for integrity verification.
-    /// </summary>
-    public required string Checksum { get; init; }
+    public required string XxHash { get; init; }
 
     /// <summary>
     /// Size of the file in bytes.
@@ -31,12 +26,37 @@ public record FileStagedEvent
     public required long FileSizeBytes { get; init; }
 
     /// <summary>
-    /// Worker that staged this file.
+    /// FluentStorage connection string so DataBridge can reach the file.
+    /// </summary>
+    public required string StorageConnectionString { get; init; }
+
+    /// <summary>
+    /// Worker that ingested this file.
     /// </summary>
     public required string WorkerId { get; init; }
 
     /// <summary>
-    /// Timestamp when staging completed.
+    /// Movie title.
     /// </summary>
-    public DateTimeOffset StagedAt { get; init; } = DateTimeOffset.UtcNow;
+    public required string Title { get; init; }
+
+    /// <summary>
+    /// Movie description.
+    /// </summary>
+    public string? Description { get; init; }
+
+    /// <summary>
+    /// Movie release year.
+    /// </summary>
+    public required int ReleaseYear { get; init; }
+
+    /// <summary>
+    /// Movie duration in minutes.
+    /// </summary>
+    public required int DurationMinutes { get; init; }
+
+    /// <summary>
+    /// Timestamp when ingestion completed.
+    /// </summary>
+    public DateTimeOffset IngestedAt { get; init; } = DateTimeOffset.UtcNow;
 }
