@@ -1,10 +1,10 @@
-using System.Security.Cryptography;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Shared;
 using Shared.Messages;
+using Worker.Storage;
 
 namespace Worker;
 
@@ -17,6 +17,7 @@ public class JobProcessingService : BackgroundService
     private readonly IMessageBus _messageBus;
     private readonly ILogger<JobProcessingService> _logger;
     private readonly IConfiguration _configuration;
+    private readonly StorageHandlerFactory _storageHandlerFactory;
     private readonly string _workerId;
 
     // Path to the source video file, configurable via Worker:SourceVideoPath
@@ -25,11 +26,13 @@ public class JobProcessingService : BackgroundService
     public JobProcessingService(
         IMessageBus messageBus,
         ILogger<JobProcessingService> logger,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        StorageHandlerFactory storageHandlerFactory)
     {
         _messageBus = messageBus;
         _logger = logger;
         _configuration = configuration;
+        _storageHandlerFactory = storageHandlerFactory;
         _workerId = $"worker-{Environment.MachineName}-{Guid.NewGuid():N}"[..32];
     }
 
@@ -83,20 +86,9 @@ public class JobProcessingService : BackgroundService
             _logger.LogInformation("Job {JobId}: DataBridge returned storage method: {Method}",
                 job.JobId, storageConfig.Method);
 
-            // Handle based on storage method
-            switch (storageConfig.Method)
-            {
-                case StorageMethod.LocalStaging:
-                    await HandleLocalStagingAsync(job, storageConfig, ct);
-                    break;
-
-                case StorageMethod.DirectStreaming:
-                case StorageMethod.ObjectStore:
-                case StorageMethod.DirectExternal:
-                    _logger.LogWarning("Job {JobId}: Storage method {Method} not yet implemented",
-                        job.JobId, storageConfig.Method);
-                    break;
-            }
+            // Use the factory to get the appropriate handler
+            var handler = _storageHandlerFactory.GetHandler(storageConfig.Method);
+            await handler.HandleAsync(job, storageConfig, _workerId, SourceVideoPath, ct);
 
             _logger.LogInformation("Job {JobId}: Completed successfully", job.JobId);
         }
@@ -104,70 +96,13 @@ public class JobProcessingService : BackgroundService
         {
             _logger.LogWarning("Job {JobId}: Processing was cancelled", job.JobId);
         }
+        catch (NotImplementedException ex)
+        {
+            _logger.LogWarning("Job {JobId}: {Message}", job.JobId, ex.Message);
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Job {JobId}: Processing failed", job.JobId);
         }
-    }
-
-    private async Task HandleLocalStagingAsync(ProcessJobRequest job, StorageConfigResponse config, CancellationToken ct)
-    {
-        if (string.IsNullOrEmpty(config.StagingPath))
-        {
-            _logger.LogError("Job {JobId}: LocalStaging requires a staging path", job.JobId);
-            return;
-        }
-
-        var tempPath = Path.Combine(config.StagingPath, $"{job.JobId}.part");
-        var finalStagingPath = Path.Combine(config.StagingPath, $"{job.JobId}.ready");
-
-        _logger.LogInformation("Job {JobId}: Staging file to {TempPath}", job.JobId, tempPath);
-
-        // Ensure staging directory exists
-        Directory.CreateDirectory(config.StagingPath);
-
-        // Copy file to staging area (in real scenario, this would be downloading/processing)
-        // Here we copy the local video.mp4 to simulate the worker producing output
-        if (!File.Exists(SourceVideoPath))
-        {
-            _logger.LogError("Job {JobId}: Source video file not found at {Path}", job.JobId, SourceVideoPath);
-            return;
-        }
-
-        await using (var sourceStream = File.OpenRead(SourceVideoPath))
-        await using (var destStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
-        {
-            await sourceStream.CopyToAsync(destStream, ct);
-        }
-
-        // Calculate checksum
-        var checksum = await CalculateChecksumAsync(tempPath, ct);
-        var fileSize = new FileInfo(tempPath).Length;
-
-        // Atomic rename signals completion (prevents DataBridge from reading incomplete file)
-        File.Move(tempPath, finalStagingPath);
-
-        _logger.LogInformation("Job {JobId}: File staged successfully at {Path}, checksum: {Checksum}",
-            job.JobId, finalStagingPath, checksum);
-
-        // Signal DataBridge that file is ready
-        await _messageBus.PublishAsync(Subjects.FileStaged, new FileStagedEvent
-        {
-            JobId = job.JobId,
-            LocalPath = finalStagingPath,
-            FinalDestination = job.DestinationPath,
-            Checksum = checksum,
-            FileSizeBytes = fileSize,
-            WorkerId = _workerId
-        }, ct);
-
-        _logger.LogInformation("Job {JobId}: Published FileStagedEvent to DataBridge", job.JobId);
-    }
-
-    private static async Task<string> CalculateChecksumAsync(string filePath, CancellationToken ct)
-    {
-        await using var stream = File.OpenRead(filePath);
-        var hash = await SHA256.HashDataAsync(stream, ct);
-        return Convert.ToHexString(hash).ToLowerInvariant();
     }
 }

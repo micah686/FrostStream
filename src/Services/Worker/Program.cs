@@ -25,6 +25,13 @@ class Program
             o.SuppressStatusMessages = false;
         });
 
+        // Register storage handlers
+        builder.Services.AddSingleton<Storage.IStorageHandler, Storage.LocalStagingHandler>();
+        builder.Services.AddSingleton<Storage.IStorageHandler, Storage.DirectStreamingHandler>();
+        builder.Services.AddSingleton<Storage.IStorageHandler, Storage.ObjectStoreHandler>();
+        builder.Services.AddSingleton<Storage.IStorageHandler, Storage.DirectExternalHandler>();
+        builder.Services.AddSingleton<Storage.StorageHandlerFactory>();
+
         builder.Services.AddHostedService<JobProcessingService>();
 
         var app = builder.Build();
