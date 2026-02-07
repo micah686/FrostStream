@@ -13,6 +13,12 @@ namespace DataBridge;
 
 /// <summary>
 /// Background service that handles storage configuration requests and file staging events.
+///
+/// Horizontally scalable: Multiple instances can run concurrently using NATS queue groups.
+/// - Storage config requests are load-balanced across instances (queue: databridge-config)
+/// - File staged events are distributed to ensure only ONE instance handles each file (queue: databridge-processors)
+///
+/// This prevents race conditions when multiple DataBridges try to move the same file.
 /// </summary>
 public class DataBridgeService : BackgroundService
 {
@@ -45,21 +51,26 @@ public class DataBridgeService : BackgroundService
         Directory.CreateDirectory(FinalDestinationBase);
 
         // Subscribe to storage configuration requests (request/reply pattern)
+        // Queue group enables load balancing across multiple DataBridge instances
         await _messageBus.SubscribeAsync<StorageConfigRequest>(
             Subjects.StorageConfig,
             HandleStorageConfigRequestAsync,
+            queueGroup: "databridge-config",
             cancellationToken: stoppingToken);
 
-        _logger.LogInformation("DataBridge subscribed to {Subject} for storage config requests",
+        _logger.LogInformation("DataBridge subscribed to {Subject} (queue: databridge-config) for storage config requests",
             Subjects.StorageConfig);
 
         // Subscribe to file staged events
+        // Queue group ensures only ONE DataBridge instance handles each file event,
+        // preventing race conditions when moving files from staging to final destination
         await _messageBus.SubscribeAsync<FileStagedEvent>(
             Subjects.FileStaged,
             HandleFileStagedEventAsync,
+            queueGroup: "databridge-processors",
             cancellationToken: stoppingToken);
 
-        _logger.LogInformation("DataBridge subscribed to {Subject} for file staged events",
+        _logger.LogInformation("DataBridge subscribed to {Subject} (queue: databridge-processors) for file staged events",
             Subjects.FileStaged);
 
         // Keep the service running
