@@ -1,28 +1,7 @@
-@WebAPI_HostAddress = http://localhost:5123
+@WebAPI_HostAddress = http://localhost:5041
 
-### Submit a job for processing
-POST {{WebAPI_HostAddress}}/api/jobs
-Content-Type: application/json
-
-{
-  "sourcePath": "video.mp4",
-  "destinationPath": "towa_video.mp4"
-}
-
-### Submit a job with only destination (uses default source)
-POST {{WebAPI_HostAddress}}/api/jobs
-Content-Type: application/json
-
-{
-  "destinationPath": "my_processed_video.mp4"
-}
-
-### Submit a job with defaults (auto-generated destination)
-POST {{WebAPI_HostAddress}}/api/jobs
-Content-Type: application/json
-
-{}
-
-### Get job status (placeholder - not yet implemented)
-GET {{WebAPI_HostAddress}}/api/jobs/abc123
+### Process File Request
+POST {{WebAPI_HostAddress}}/api/files/process?filename=test-video.mp4&storageKey=storage-abc-123
 Accept: application/json
+
+###

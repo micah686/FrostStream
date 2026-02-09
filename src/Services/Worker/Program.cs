@@ -3,6 +3,7 @@ using FlySwattr.NATS.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Hosting.Internal;
+using Worker.Handlers;
 
 
 namespace Worker;
@@ -34,6 +35,8 @@ class Program
         StorageFactory.Modules.UseAzureBlobStorage();
         StorageFactory.Modules.UseGoogleCloudStorage();
 
+        // Register file processing handler
+        builder.Services.AddHostedService<FileProcessHandler>();
 
 
         var app = builder.Build();
