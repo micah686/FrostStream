@@ -52,8 +52,7 @@ class Program
         StorageFactory.Modules.UseAwsStorage();
         StorageFactory.Modules.UseAzureBlobStorage();
         StorageFactory.Modules.UseGoogleCloudStorage();
-
-        builder.Services.AddHostedService<DataBridgeService>();
+        
 
         // Force ConsoleLifetime so Ctrl+C / SIGTERM triggers StopAsync on hosted services
         builder.Services.AddSingleton<IHostLifetime, ConsoleLifetime>();
@@ -62,6 +61,9 @@ class Program
             // set true to hide "Application started/stopped" messages
             o.SuppressStatusMessages = false;
         });
+
+        // Register storage config request handler
+        builder.Services.AddHostedService<StorageConfigRequestHandler>();
 
         var app = builder.Build();
 

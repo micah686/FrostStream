@@ -13,4 +13,8 @@
       <PackageReference Include="System.IO.Hashing" Version="9.0.5" />
     </ItemGroup>
 
+    <ItemGroup>
+      <ProjectReference Include="..\..\Modules\FlySwattr.NATS\FlySwattr.NATS.Abstractions\FlySwattr.NATS.Abstractions.csproj" />
+    </ItemGroup>
+
 </Project>

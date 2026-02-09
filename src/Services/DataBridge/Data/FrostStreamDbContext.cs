@@ -13,6 +13,7 @@ public class FrostStreamDbContext : DbContext
     public DbSet<User> Users => Set<User>();
     public DbSet<Movie> Movies => Set<Movie>();
     public DbSet<Subtitle> Subtitles => Set<Subtitle>();
+    public DbSet<StorageConfigEntity> StorageConfigs => Set<StorageConfigEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

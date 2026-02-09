@@ -1,17 +1,12 @@
 namespace Shared.Messages;
 
 /// <summary>
-/// Request from Worker to DataBridge asking which storage method to use.
+/// Request from a service to DataBridge asking for storage configuration.
 /// </summary>
 public record StorageConfigRequest
 {
     /// <summary>
-    /// The job ID this request is for.
+    /// The storage key to look up (e.g., "default", "premium-tier").
     /// </summary>
-    public required string JobId { get; init; }
-
-    /// <summary>
-    /// Worker identifier making the request.
-    /// </summary>
-    public required string WorkerId { get; init; }
+    public required string StorageKey { get; init; }
 }
