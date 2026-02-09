@@ -24,8 +24,8 @@ public static class FileEndpoints
             CancellationToken cancellationToken) =>
         {
             var request = new FileProcessRequest(filename, storageKey);
-            await messageBus.PublishAsync(Subjects.ProcessFile, request, cancellationToken);
-            return Results.Accepted(value: new { message = "File processing request queued", filename, storageKey });
+            await messageBus.PublishAsync(Subjects.DownloadFile, request, cancellationToken);
+            return Results.Accepted(value: new { message = "Download File request queued", filename, storageKey });
         })
         .WithName("ProcessFile")
         .WithSummary("Queue a file for processing by a worker");

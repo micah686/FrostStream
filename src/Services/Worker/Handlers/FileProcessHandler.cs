@@ -26,10 +26,10 @@ public class FileProcessHandler : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("FileProcessHandler starting, subscribing to {Subject} with queue group {QueueGroup}",
-            Subjects.ProcessFile, QueueGroup);
+            Subjects.DownloadFile, QueueGroup);
 
         await _messageBus.SubscribeAsync<FileProcessRequest>(
-            Subjects.ProcessFile,
+            Subjects.DownloadFile,
             async ctx =>
             {
                 var request = ctx.Message;
