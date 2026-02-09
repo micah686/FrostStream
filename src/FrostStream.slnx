@@ -21,5 +21,6 @@
     <Project Path="AppHost/AppHost.csproj" />
   </Folder>
   <Project Path="ServiceDefaults/ServiceDefaults.csproj" />
+  <Project Path="VideoServeLocalTest/VideoServeLocalTest.csproj" />
 
 </Solution>

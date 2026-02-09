@@ -51,6 +51,7 @@ src/.idea/**
 *.MP4
 *.mkv
 *.MKV
+*.info.json
 
 # CMake
 cmake-build-*/
