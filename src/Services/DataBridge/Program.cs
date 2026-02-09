@@ -61,9 +61,7 @@ class Program
             // set true to hide "Application started/stopped" messages
             o.SuppressStatusMessages = false;
         });
-
-        // Register storage config request handler
-        builder.Services.AddHostedService<StorageConfigRequestHandler>();
+        
 
         var app = builder.Build();
 

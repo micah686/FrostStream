@@ -1,5 +1,5 @@
 using FlySwattr.NATS.Extensions;
-using WebAPI;
+
 
 public class Program
 {
@@ -30,9 +30,7 @@ public class Program
         app.UseHttpsRedirection();
 
         app.UseAuthorization();
-
-        app.MapJobEndpoints();
-        app.MapMovieEndpoints();
+        
 
         app.Run();
     }

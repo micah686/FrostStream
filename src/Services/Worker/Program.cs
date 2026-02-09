@@ -3,7 +3,7 @@ using FlySwattr.NATS.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Hosting.Internal;
-using Shared.Storage;
+
 
 namespace Worker;
 
@@ -34,9 +34,7 @@ class Program
         StorageFactory.Modules.UseAzureBlobStorage();
         StorageFactory.Modules.UseGoogleCloudStorage();
 
-        // Register storage handlers
-        builder.Services.AddSingleton<IStorageConfigClient, NatsStorageConfigClient>();
-        builder.Services.AddSingleton<IStorageProvider, FluentStorageProvider>();
+
 
         var app = builder.Build();
         await app.RunAsync(); // waits until Ctrl+C or SIGTERM, then calls StopAsync() gracefully
