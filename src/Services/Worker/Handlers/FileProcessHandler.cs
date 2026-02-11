@@ -28,7 +28,7 @@ public class FileProcessHandler : BackgroundService
         _logger.LogInformation("FileProcessHandler starting, subscribing to {Subject} with queue group {QueueGroup}",
             Subjects.DownloadFile, QueueGroup);
 
-        await _messageBus.SubscribeAsync<FileProcessRequest>(
+        await _messageBus.SubscribeAsync<FileDownloadRequest>(
             Subjects.DownloadFile,
             async ctx =>
             {

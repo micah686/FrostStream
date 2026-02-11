@@ -23,7 +23,7 @@ public static class FileEndpoints
             IMessageBus messageBus,
             CancellationToken cancellationToken) =>
         {
-            var request = new FileProcessRequest(filename, storageKey);
+            var request = new FileDownloadRequest(filename, storageKey);
             await messageBus.PublishAsync(Subjects.DownloadFile, request, cancellationToken);
             return Results.Accepted(value: new { message = "Download File request queued", filename, storageKey });
         })
