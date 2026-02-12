@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Shared.Entities;
 
 namespace DataBridge.Data;
 
@@ -9,7 +10,7 @@ public class FrostStreamDbContext : DbContext
     {
     }
 
-    
+    public DbSet<StorageConfigEntity> StorageConfigs { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
