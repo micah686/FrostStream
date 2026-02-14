@@ -28,13 +28,6 @@ class Program
             o.SuppressStatusMessages = false;
         });
 
-        // Register FluentStorage provider modules
-        StorageFactory.Modules.UseFtpStorage();
-        StorageFactory.Modules.UseSftpStorage();
-        StorageFactory.Modules.UseAwsStorage();
-        StorageFactory.Modules.UseAzureBlobStorage();
-        StorageFactory.Modules.UseGoogleCloudStorage();
-
         // Register file processing handler
         builder.Services.AddHostedService<FileProcessHandler>();
 

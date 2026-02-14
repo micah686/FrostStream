@@ -8,12 +8,6 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="FluentStorage" Version="6.0.2" />
-      <PackageReference Include="FluentStorage.FTP" Version="6.0.2" />
-      <PackageReference Include="FluentStorage.SFTP" Version="6.0.0" />
-      <PackageReference Include="FluentStorage.AWS" Version="6.0.2" />
-      <PackageReference Include="FluentStorage.Azure.Blobs" Version="6.0.2" />
-      <PackageReference Include="FluentStorage.GCP" Version="6.0.0" />
       <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.2" />
       <PackageReference Include="System.IO.Hashing" Version="9.0.5" />
     </ItemGroup>
