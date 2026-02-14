@@ -2,7 +2,7 @@
 using DataBridge.Data;
 using DataBridge.Handlers;
 using FluentMigrator.Runner;
-using FluentStorage;
+
 using FlySwattr.NATS.Extensions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -53,12 +53,7 @@ class Program
 
         builder.Services.AddHostedService<StorageConfigRequestHandler>();
 
-        // Register FluentStorage provider modules
-        StorageFactory.Modules.UseFtpStorage();
-        StorageFactory.Modules.UseSftpStorage();
-        StorageFactory.Modules.UseAwsStorage();
-        StorageFactory.Modules.UseAzureBlobStorage();
-        StorageFactory.Modules.UseGoogleCloudStorage();
+
         
 
         // Force ConsoleLifetime so Ctrl+C / SIGTERM triggers StopAsync on hosted services
