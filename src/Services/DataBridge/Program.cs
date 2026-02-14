@@ -42,9 +42,13 @@ class Program
                 .ScanIn(typeof(Program).Assembly).For.Migrations())
             .AddLogging(lb => lb.AddFluentMigratorConsole());
 
+        var natsUrl = builder.Configuration.GetConnectionString("nats")
+            ?? builder.Configuration["NATS:Url"]
+            ?? "nats://localhost:4222";
+
         builder.Services.AddEnterpriseNATSMessaging(opts =>
         {
-            opts.Core.Url = builder.Configuration["NATS:Url"] ?? "nats://localhost:4222";
+            opts.Core.Url = natsUrl;
         });
 
         builder.Services.AddHostedService<StorageConfigRequestHandler>();
