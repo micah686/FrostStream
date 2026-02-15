@@ -51,6 +51,7 @@ src/.idea/**
 *.MP4
 *.mkv
 *.MKV
+*.webm
 *.info.json
 
 # CMake
