@@ -20,11 +20,12 @@ public static class FileEndpoints
         group.MapPost("/process", async (
             string filename,
             string storageKey,
-            IMessageBus messageBus,
+            IJetStreamPublisher publisher,
             CancellationToken cancellationToken) =>
         {
             var request = new FileDownloadRequest(filename, storageKey);
-            await messageBus.PublishAsync(Subjects.DownloadFile, request, cancellationToken);
+            var messageId = $"download-{filename}-{storageKey}";
+            await publisher.PublishAsync(Subjects.DownloadFile, request, messageId, cancellationToken: cancellationToken);
             return Results.Accepted(value: new { message = "Download File request queued", filename, storageKey });
         })
         .WithName("ProcessFile")

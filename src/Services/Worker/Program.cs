@@ -1,10 +1,12 @@
-﻿using FluentStorage;
 using FlySwattr.NATS.Extensions;
+using FlySwattr.NATS.Hosting.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Hosting.Internal;
+using Shared;
+using Shared.Messages;
+using Shared.Topology;
 using Worker.Handlers;
-
 
 namespace Worker;
 
@@ -28,9 +30,13 @@ class Program
             o.SuppressStatusMessages = false;
         });
 
-        // Register file processing handler
-        builder.Services.AddHostedService<FileProcessHandler>();
-
+        // Register topology and map the file-processors consumer to its handler
+        builder.Services.AddNatsTopologyWithConsumers<JobsTopology>(topology =>
+        {
+            topology.MapConsumer<FileDownloadRequest>(
+                Consumers.FileProcessors,
+                FileProcessHandler.HandleAsync);
+        });
 
         var app = builder.Build();
         await app.RunAsync(); // waits until Ctrl+C or SIGTERM, then calls StopAsync() gracefully

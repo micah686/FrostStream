@@ -1,4 +1,6 @@
 using FlySwattr.NATS.Extensions;
+using FlySwattr.NATS.Topology.Extensions;
+using Shared.Topology;
 using WebAPI.Endpoints;
 
 public class Program
@@ -15,6 +17,8 @@ public class Program
         {
             opts.Core.Url = builder.Configuration["NATS:Url"] ?? "nats://localhost:4222";
         });
+
+        builder.Services.AddNatsTopologySource<JobsTopology>();
 
         // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
         builder.Services.AddOpenApi();
