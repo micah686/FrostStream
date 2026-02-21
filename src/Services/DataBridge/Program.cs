@@ -1,6 +1,7 @@
 ﻿using System.Threading.Tasks;
 using DataBridge.Data;
 using DataBridge.Handlers;
+using DataBridge.Services;
 using FluentMigrator.Runner;
 
 using FlySwattr.NATS.Extensions;
@@ -56,6 +57,7 @@ class Program
         builder.Services.AddHostedService<VideoCommitHandler>();
         builder.Services.AddHostedService<JobFailHandler>();
         builder.Services.AddHostedService<JobStatusHandler>();
+        builder.Services.AddHostedService<OrphanSweeperService>();
 
         // Force ConsoleLifetime so Ctrl+C / SIGTERM triggers StopAsync on hosted services
         builder.Services.AddSingleton<IHostLifetime, ConsoleLifetime>();

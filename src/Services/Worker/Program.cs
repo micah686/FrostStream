@@ -7,6 +7,7 @@ using Shared;
 using Shared.Messages;
 using Shared.Topology;
 using Worker.Handlers;
+using Worker.Services;
 
 namespace Worker;
 
@@ -30,15 +31,49 @@ class Program
             o.SuppressStatusMessages = false;
         });
 
-        // Register topology and map the file-processors consumer to its handler
+        // Register worker services
+        builder.Services.AddSingleton<YtDlpService>();
+        builder.Services.AddSingleton<FileProcessHandler>();
+
+        // Register topology and map the file-processors consumer to its handler.
+        // The handler lambda captures the service collection — at runtime the
+        // TopologyConsumerHostedService has its own IServiceProvider, so we use
+        // a deferred resolution via the hosting infrastructure.  Because
+        // AddNatsTopologyWithConsumers stores the delegate for later execution
+        // (after Build), we capture a service-provider accessor via another
+        // singleton that the lambda can close over.
+        ServiceProviderAccessor? accessor = null;
+        builder.Services.AddSingleton(sp =>
+        {
+            accessor = new ServiceProviderAccessor(sp);
+            return accessor;
+        });
+
         builder.Services.AddNatsTopologyWithConsumers<JobsTopology>(topology =>
         {
             topology.MapConsumer<FileDownloadRequest>(
                 Consumers.FileProcessors,
-                FileProcessHandler.HandleAsync);
+                async context =>
+                {
+                    // accessor will have been populated by the time this runs
+                    var handler = accessor!.ServiceProvider.GetRequiredService<FileProcessHandler>();
+                    await handler.HandleAsync(context);
+                });
         });
 
         var app = builder.Build();
+
+        // Eagerly resolve the accessor so the lambda has a valid reference
+        app.Services.GetRequiredService<ServiceProviderAccessor>();
+
         await app.RunAsync(); // waits until Ctrl+C or SIGTERM, then calls StopAsync() gracefully
+    }
+
+    /// <summary>
+    /// Simple holder to provide deferred IServiceProvider access in MapConsumer lambdas.
+    /// </summary>
+    private sealed class ServiceProviderAccessor(IServiceProvider serviceProvider)
+    {
+        public IServiceProvider ServiceProvider { get; } = serviceProvider;
     }
 }
