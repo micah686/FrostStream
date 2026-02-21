@@ -14,4 +14,10 @@ public static class Subjects
     /// Subject for storage config request/reply, handled by DataBridge.
     /// </summary>
     public const string StorageConfig = "froststream.config.storage";
+
+    public const string JobStart = "databridge.job.start";
+    public const string VideoCommit = "databridge.video.commit";
+    public const string JobFail = "databridge.job.fail";
+    public const string JobStatus = "databridge.job.status";
+    public const string JobLinkComplete = "databridge.job.link_complete";
 }

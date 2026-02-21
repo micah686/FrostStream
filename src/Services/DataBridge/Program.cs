@@ -52,9 +52,10 @@ class Program
         });
 
         builder.Services.AddHostedService<StorageConfigRequestHandler>();
-
-
-        
+        builder.Services.AddHostedService<JobStartHandler>();
+        builder.Services.AddHostedService<VideoCommitHandler>();
+        builder.Services.AddHostedService<JobFailHandler>();
+        builder.Services.AddHostedService<JobStatusHandler>();
 
         // Force ConsoleLifetime so Ctrl+C / SIGTERM triggers StopAsync on hosted services
         builder.Services.AddSingleton<IHostLifetime, ConsoleLifetime>();

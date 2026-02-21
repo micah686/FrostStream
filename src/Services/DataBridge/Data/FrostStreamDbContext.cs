@@ -11,7 +11,10 @@ public class FrostStreamDbContext : DbContext
     }
 
     public DbSet<StorageConfigEntity> StorageConfigs { get; set; }
-
+    public DbSet<Job> Jobs { get; set; }
+    public DbSet<JobTracker> JobTrackers { get; set; }
+    public DbSet<VideoInfo> VideoInfos { get; set; }
+    public DbSet<VideoVersion> VideoVersions { get; set; }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
