@@ -12,6 +12,13 @@ builder.WebHost.ConfigureKestrel(o =>
 
 builder.Services.AddRouting(o => o.LowercaseUrls = true);
 
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o =>
+{
+    o.ValueLengthLimit = int.MaxValue;
+    o.MultipartBodyLengthLimit = long.MaxValue;
+    o.MultipartHeadersLengthLimit = int.MaxValue;
+});
+
 var app = builder.Build();
 
 var cfg = app.Configuration.GetSection("VideoHost");
@@ -32,6 +39,7 @@ Directory.CreateDirectory(Path.Combine(rootPath, "videos"));
 var contentTypeProvider = new FileExtensionContentTypeProvider();
 contentTypeProvider.Mappings.TryAdd(".m3u8", "application/vnd.apple.mpegurl");
 contentTypeProvider.Mappings.TryAdd(".ts", "video/mp2t");
+contentTypeProvider.Mappings.TryAdd(".vtt", "text/vtt");
 
 // ---------------- Helpers ----------------
 static bool IsSafeId(string id)
@@ -48,6 +56,7 @@ string VideoDir(string id) => Path.Combine(rootPath, "videos", id);
 string InfoJsonPath(string id) => Path.Combine(VideoDir(id), $"{id}.info.json");
 string FilesDir(string id) => Path.Combine(VideoDir(id), "files");
 string HlsDir(string id) => Path.Combine(VideoDir(id), "hls");
+string SubsDir(string id) => Path.Combine(VideoDir(id), "subs");
 
 static string CombineUrl(string baseUrl, string path)
 {
@@ -148,19 +157,27 @@ app.MapPost("/api/videos/{id}/import", async (HttpRequest request, string id) =>
 
     var overwrite = string.Equals(request.Query["overwrite"], "true", StringComparison.OrdinalIgnoreCase);
 
-    var form = await request.ReadFormAsync();
+    var form = await request.ReadFormAsync(new Microsoft.AspNetCore.Http.Features.FormOptions
+    {
+        ValueLengthLimit = int.MaxValue,
+        MultipartBodyLengthLimit = long.MaxValue,
+        MultipartHeadersLengthLimit = int.MaxValue
+    });
 
     var fileUploads = form.Files.Where(f => string.Equals(f.Name, "files", StringComparison.OrdinalIgnoreCase)).ToList();
+    var subUploads = form.Files.Where(f => string.Equals(f.Name, "subtitles", StringComparison.OrdinalIgnoreCase)).ToList();
     var infoUpload = form.Files.FirstOrDefault(f => string.Equals(f.Name, "infoJson", StringComparison.OrdinalIgnoreCase));
 
-    if (fileUploads.Count == 0 && infoUpload is null)
-        return Results.BadRequest(new { error = "Provide at least one 'files' upload and/or an 'infoJson' upload." });
+    if (fileUploads.Count == 0 && subUploads.Count == 0 && infoUpload is null)
+        return Results.BadRequest(new { error = "Provide at least one 'files' upload, 'subtitles' upload, and/or an 'infoJson' upload." });
 
     var vdir = VideoDir(id);
     var filesDir = FilesDir(id);
+    var subsDir = SubsDir(id);
 
     Directory.CreateDirectory(vdir);
     Directory.CreateDirectory(filesDir);
+    Directory.CreateDirectory(subsDir);
 
     var saved = new List<object>();
 
@@ -183,6 +200,28 @@ app.MapPost("/api/videos/{id}/import", async (HttpRequest request, string id) =>
             name = safeName,
             bytes = new FileInfo(destPath).Length,
             url = CombineUrl(baseUrl, $"/api/videos/{id}/file/{Uri.EscapeDataString(safeName)}")
+        });
+    }
+
+    // Save subtitle files
+    foreach (var f in subUploads)
+    {
+        var safeName = Path.GetFileName(f.FileName);
+        if (string.IsNullOrWhiteSpace(safeName)) continue;
+
+        var destPath = Path.Combine(subsDir, safeName);
+        if (File.Exists(destPath) && !overwrite)
+            return Results.Conflict(new { error = $"Subtitle already exists: {safeName}. Use ?overwrite=true to replace." });
+
+        await using var fs = File.Create(destPath);
+        await f.CopyToAsync(fs);
+
+        saved.Add(new
+        {
+            kind = "subtitle",
+            name = safeName,
+            bytes = new FileInfo(destPath).Length,
+            url = CombineUrl(baseUrl, $"/api/videos/{id}/subs/{Uri.EscapeDataString(safeName)}")
         });
     }
 
@@ -231,6 +270,19 @@ app.MapGet("/api/videos/{id}/file/{fileName}", (string id, string fileName) =>
     fileName = Path.GetFileName(fileName);
 
     var path = Path.Combine(FilesDir(id), fileName);
+    if (!File.Exists(path)) return Results.NotFound();
+
+    TryGetContentType(contentTypeProvider, path, out var ct);
+    return Results.File(path, ct, enableRangeProcessing: true);
+});
+
+// Stream a subtitle file
+app.MapGet("/api/videos/{id}/subs/{fileName}", (string id, string fileName) =>
+{
+    if (!IsSafeId(id)) return Results.BadRequest(new { error = "Invalid id" });
+    fileName = Path.GetFileName(fileName);
+
+    var path = Path.Combine(SubsDir(id), fileName);
     if (!File.Exists(path)) return Results.NotFound();
 
     TryGetContentType(contentTypeProvider, path, out var ct);
@@ -396,6 +448,20 @@ app.MapGet("/watch/{id}", async (string id) =>
         sb.AppendLine($"<p><a href=\"{System.Net.WebUtility.HtmlEncode(infoUrl)}\">{System.Net.WebUtility.HtmlEncode(infoUrl)}</a></p>");
     }
 
+    var subs = Directory.Exists(SubsDir(id)) ? Directory.EnumerateFiles(SubsDir(id)).ToList() : new List<string>();
+    if (subs.Count > 0)
+    {
+        sb.AppendLine("<p>Subtitles:</p>");
+        sb.AppendLine("<ul>");
+        foreach (var subPath in subs)
+        {
+            var subName = Path.GetFileName(subPath);
+            var subUrl = CombineUrl(baseUrl, $"/api/videos/{id}/subs/{Uri.EscapeDataString(subName)}");
+            sb.AppendLine($"<li><a href=\"{System.Net.WebUtility.HtmlEncode(subUrl)}\">{System.Net.WebUtility.HtmlEncode(subName)}</a></li>");
+        }
+        sb.AppendLine("</ul>");
+    }
+
     sb.AppendLine("<p>Formats:</p>");
     sb.AppendLine($"<p><a href=\"{CombineUrl(baseUrl, $"/api/videos/{id}/formats")}\">/api/videos/{id}/formats</a></p>");
     sb.AppendLine("<p><a href=\"/ui\">Upload/import more</a></p>");
@@ -446,6 +512,11 @@ app.MapGet("/ui", () =>
         <label>Video file(s):</label><br/>
         <input id="files" type="file" multiple style="width: 100%;" />
         <div class="muted">Tip: include “720p” in the filename if you want the formats API to guess height.</div>
+      </div>
+
+      <div class="row">
+        <label>Subtitles (optional, e.g. .vtt):</label><br/>
+        <input id="subs" type="file" multiple accept=".vtt,.srt,.ass,.ttml,.json" style="width: 100%;" />
       </div>
 
       <div class="row">
@@ -505,16 +576,18 @@ document.getElementById('btn').addEventListener('click', () => {
   if (!id) { alert('Enter an id'); return; }
 
   const files = document.getElementById('files').files;
+  const subs = document.getElementById('subs').files;
   const info = document.getElementById('info').files[0] || null;
   const overwrite = document.getElementById('overwrite').checked;
 
-  if ((!files || files.length === 0) && !info) {
-    alert('Pick at least one video file and/or an info.json');
+  if ((!files || files.length === 0) && (!subs || subs.length === 0) && !info) {
+    alert('Pick at least one video file, subtitle file, and/or an info.json');
     return;
   }
 
   const fd = new FormData();
   if (files) for (const f of files) fd.append('files', f, f.name);
+  if (subs) for (const f of subs) fd.append('subtitles', f, f.name);
   if (info) fd.append('infoJson', info, info.name);
 
   const url = '/api/videos/' + encodeURIComponent(id) + '/import' + (overwrite ? '?overwrite=true' : '');
