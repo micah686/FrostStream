@@ -47,17 +47,45 @@ public class JobStartHandler : BackgroundService
 
                 if (existingTracker != null)
                 {
-                    _logger.LogInformation("Idempotency key {Key} already exists. Skipping download for JobId {JobId}.", request.IdempotencyKey, request.JobId);
-                    
-                    // Create Job but mark as existing or pending link
-                    var job = new Job
+                    if (existingTracker.JobId == request.JobId)
+                    {
+                        // Same message redelivered by NATS after a failure
+                        if (existingTracker.Job?.Status == "Failed")
+                        {
+                            _logger.LogInformation("Retrying failed job {JobId} (attempt {Attempt}).", request.JobId, existingTracker.Job.RetryCount + 1);
+
+                            // Reset state for retry — RetryCount was already incremented by JobFailHandler
+                            existingTracker.Job.Status = "Processing";
+                            existingTracker.Job.ErrorMsg = null;
+                            existingTracker.StoragePath = null;
+                            existingTracker.FileHash = null;
+                            existingTracker.CompletedAt = null;
+                            existingTracker.ErrorDetails = null;
+                            existingTracker.UpdatedAt = DateTime.UtcNow;
+                            existingTracker.ExpiresAt = DateTime.UtcNow.AddDays(1);
+                            await db.SaveChangesAsync(stoppingToken);
+
+                            await context.RespondAsync(new JobStartResponse(Proceed: true, Reason: null), stoppingToken);
+                        }
+                        else
+                        {
+                            // Still processing or already completed — ignore duplicate delivery
+                            _logger.LogWarning("Duplicate delivery for JobId {JobId} with status {Status}. Ignoring.", request.JobId, existingTracker.Job?.Status);
+                            await context.RespondAsync(new JobStartResponse(Proceed: false, Reason: "DuplicateDelivery"), stoppingToken);
+                        }
+                        return;
+                    }
+
+                    // Different job requesting the same content — create a PendingLink record
+                    _logger.LogInformation("Idempotency key {Key} already exists. Creating PendingLink for JobId {JobId}.", request.IdempotencyKey, request.JobId);
+                    var pendingJob = new Job
                     {
                         JobId = request.JobId,
                         Url = request.VideoUrl,
                         Status = "PendingLink",
                         StorageKey = request.StorageKey
                     };
-                    db.Jobs.Add(job);
+                    db.Jobs.Add(pendingJob);
                     await db.SaveChangesAsync(stoppingToken);
 
                     await context.RespondAsync(new JobStartResponse(Proceed: false, Reason: "AlreadyExists"), stoppingToken);
@@ -72,7 +100,7 @@ public class JobStartHandler : BackgroundService
                     Status = "Processing",
                     StorageKey = request.StorageKey
                 };
-                
+
                 var newTracker = new JobTracker
                 {
                     Id = Guid.NewGuid(),

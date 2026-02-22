@@ -10,4 +10,5 @@ public record JobLinkCompleteRequest(Guid JobId, Guid ExistingVersionId);
 // Responses
 public record JobStartResponse(bool Proceed, string? Reason);
 public record VideoCommitResponse(bool Success, string? ErrorMessage);
+public record JobFailResponse(bool Success);
 public record JobStatusResponse(string Status, string? ErrorMessage, int RetryCount, string? StorageKey);

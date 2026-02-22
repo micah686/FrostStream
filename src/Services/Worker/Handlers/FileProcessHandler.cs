@@ -177,7 +177,7 @@ public class FileProcessHandler
             // Notify DataBridge of job failure
             try
             {
-                await _messageBus.RequestAsync<JobFailRequest, object>(
+                await _messageBus.RequestAsync<JobFailRequest, JobFailResponse>(
                     Subjects.JobFail,
                     new JobFailRequest(jobId, ex.Message, ex.StackTrace),
                     NatsTimeout);

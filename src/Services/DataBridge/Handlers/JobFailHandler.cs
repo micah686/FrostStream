@@ -44,16 +44,20 @@ public class JobFailHandler : BackgroundService
                 {
                     job.Status = "Failed";
                     job.ErrorMsg = request.ErrorMessage;
-                    
+                    job.RetryCount++;
+
                     var tracker = await db.JobTrackers.FirstOrDefaultAsync(t => t.JobId == request.JobId, stoppingToken);
                     if (tracker != null)
                     {
                         tracker.ErrorDetails = request.ErrorDetails;
+                        tracker.RetryCount++;
                         tracker.UpdatedAt = DateTime.UtcNow;
                     }
 
                     await db.SaveChangesAsync(stoppingToken);
                 }
+
+                await context.RespondAsync(new JobFailResponse(Success: true), stoppingToken);
             },
             queueGroup: "databridge-jobs",
             cancellationToken: stoppingToken);
