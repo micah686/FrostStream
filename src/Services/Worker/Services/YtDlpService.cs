@@ -1,8 +1,10 @@
-using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
+using YoutubeDLSharp;
+using YoutubeDLSharp.Metadata;
+using YoutubeDLSharp.Options;
 
 namespace Worker.Services;
 
@@ -39,18 +41,21 @@ public class YtDlpService
 
     /// <summary>
     /// Fetches metadata for a video URL without downloading.
-    /// Runs: yt-dlp --dump-json {url}
     /// </summary>
     public async Task<YtDlpMetadata> FetchMetadataAsync(string videoUrl, CancellationToken ct = default)
     {
         _logger.LogInformation("Fetching metadata for {Url}", videoUrl);
 
-        var (exitCode, stdout, stderr) = await RunProcessAsync("yt-dlp", $"--dump-json \"{videoUrl}\"", ct);
+        var ytDl = new YoutubeDL();
+        var result = await ytDl.RunVideoDataFetch(videoUrl,
+            overrideOptions: new OptionSet { NoPlaylist = true },
+            ct: ct);
 
-        if (exitCode != 0)
-            throw new InvalidOperationException($"yt-dlp --dump-json failed (exit {exitCode}): {stderr}");
+        if (!result.Success)
+            throw new InvalidOperationException(
+                $"yt-dlp metadata fetch failed: {string.Join("; ", result.ErrorOutput)}");
 
-        return ParseMetadata(stdout);
+        return MapToMetadata(result.Data);
     }
 
     /// <summary>
@@ -59,41 +64,31 @@ public class YtDlpService
     public async Task<YtDlpDownloadResult> DownloadAsync(string videoUrl, string outputDir, CancellationToken ct = default)
     {
         Directory.CreateDirectory(outputDir);
-
-        // First fetch metadata
         var metadata = await FetchMetadataAsync(videoUrl, ct);
 
-        // Download the video file
-        var outputTemplate = Path.Combine(outputDir, "%(id)s.%(ext)s");
         _logger.LogInformation("Downloading video {Id} to {OutputDir}", metadata.Id, outputDir);
 
-        var (exitCode, stdout, stderr) = await RunProcessAsync(
-            "yt-dlp",
-            $"-o \"{outputTemplate}\" --no-playlist \"{videoUrl}\"",
-            ct);
-
-        if (exitCode != 0)
-            throw new InvalidOperationException($"yt-dlp download failed (exit {exitCode}): {stderr}");
-
-        // Find the downloaded file (yt-dlp may choose different extensions)
-        var downloadedFile = Directory.GetFiles(outputDir)
-            .FirstOrDefault(f => Path.GetFileNameWithoutExtension(f) == metadata.Id);
-
-        if (downloadedFile == null)
+        var ytDl = new YoutubeDL
         {
-            // Fallback: pick the first (and likely only) file
-            downloadedFile = Directory.GetFiles(outputDir).FirstOrDefault();
-        }
+            OutputFolder = outputDir,
+            OutputFileTemplate = "%(id)s.%(ext)s"
+        };
 
-        if (downloadedFile == null)
-            throw new FileNotFoundException($"No downloaded file found in {outputDir}");
+        var result = await ytDl.RunVideoDownload(videoUrl,
+            overrideOptions: new OptionSet { NoPlaylist = true },
+            ct: ct);
 
-        _logger.LogInformation("Downloaded file: {FilePath}", downloadedFile);
+        if (!result.Success)
+            throw new InvalidOperationException(
+                $"yt-dlp download failed: {string.Join("; ", result.ErrorOutput)}");
 
-        // Compute SHA256 hash
-        var fileHash = await ComputeFileHashAsync(downloadedFile, ct);
+        var filePath = result.Data
+            ?? throw new FileNotFoundException($"yt-dlp produced no output file for {videoUrl}");
 
-        return new YtDlpDownloadResult(metadata, downloadedFile, fileHash);
+        _logger.LogInformation("Downloaded file: {FilePath}", filePath);
+
+        var fileHash = await ComputeFileHashAsync(filePath, ct);
+        return new YtDlpDownloadResult(metadata, filePath, fileHash);
     }
 
     /// <summary>
@@ -106,36 +101,20 @@ public class YtDlpService
         return Convert.ToHexStringLower(hash);
     }
 
-    private static YtDlpMetadata ParseMetadata(string json)
+    private static YtDlpMetadata MapToMetadata(VideoData data)
     {
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
+        var sourceLastModified = data.ModifiedTimestamp ?? data.UploadDate;
+        if (sourceLastModified.HasValue)
+            sourceLastModified = DateTime.SpecifyKind(sourceLastModified.Value, DateTimeKind.Utc);
 
-        var id = root.GetProperty("id").GetString() ?? throw new InvalidOperationException("Missing 'id' in yt-dlp output");
+        var rawJson = JsonConvert.SerializeObject(data);
 
-        // yt-dlp uses "extractor_key" or "extractor" for the platform
-        var platform = root.TryGetProperty("extractor_key", out var extractorKey)
-            ? extractorKey.GetString()?.ToLowerInvariant() ?? "unknown"
-            : root.TryGetProperty("extractor", out var extractor)
-                ? extractor.GetString()?.ToLowerInvariant() ?? "unknown"
-                : "unknown";
-
-        var title = root.TryGetProperty("title", out var titleEl) ? titleEl.GetString() ?? "untitled" : "untitled";
-
-        // yt-dlp may provide "modified_date" or "upload_date"
-        DateTime? sourceLastModified = null;
-        if (root.TryGetProperty("modified_date", out var modDate) && modDate.ValueKind == JsonValueKind.String)
-        {
-            if (DateTime.TryParseExact(modDate.GetString(), "yyyyMMdd", null, System.Globalization.DateTimeStyles.None, out var parsed))
-                sourceLastModified = DateTime.SpecifyKind(parsed, DateTimeKind.Utc);
-        }
-        else if (root.TryGetProperty("upload_date", out var uploadDate) && uploadDate.ValueKind == JsonValueKind.String)
-        {
-            if (DateTime.TryParseExact(uploadDate.GetString(), "yyyyMMdd", null, System.Globalization.DateTimeStyles.None, out var parsed))
-                sourceLastModified = DateTime.SpecifyKind(parsed, DateTimeKind.Utc);
-        }
-
-        return new YtDlpMetadata(id, platform, title, sourceLastModified, json);
+        return new YtDlpMetadata(
+            Id:                 data.ID ?? throw new InvalidOperationException("yt-dlp returned no video ID"),
+            Platform:           (data.ExtractorKey ?? data.Extractor ?? "unknown").ToLowerInvariant(),
+            Title:              data.Title ?? "untitled",
+            SourceLastModified: sourceLastModified,
+            RawJson:            rawJson);
     }
 
     private static async Task<string> ComputeFileHashAsync(string filePath, CancellationToken ct)
@@ -143,36 +122,5 @@ public class YtDlpService
         using var stream = File.OpenRead(filePath);
         var hash = await SHA256.HashDataAsync(stream, ct);
         return Convert.ToHexStringLower(hash);
-    }
-
-    private async Task<(int ExitCode, string StdOut, string StdErr)> RunProcessAsync(
-        string fileName, string arguments, CancellationToken ct)
-    {
-        _logger.LogDebug("Running: {FileName} {Arguments}", fileName, arguments);
-
-        using var process = new Process();
-        process.StartInfo = new ProcessStartInfo
-        {
-            FileName = fileName,
-            Arguments = arguments,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        process.Start();
-
-        // Read stdout and stderr concurrently to avoid deadlocks
-        var stdoutTask = process.StandardOutput.ReadToEndAsync(ct);
-        var stderrTask = process.StandardError.ReadToEndAsync(ct);
-
-        await process.WaitForExitAsync(ct);
-        var stdout = await stdoutTask;
-        var stderr = await stderrTask;
-
-        _logger.LogDebug("Process exited with code {ExitCode}", process.ExitCode);
-
-        return (process.ExitCode, stdout, stderr);
     }
 }
