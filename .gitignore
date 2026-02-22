@@ -54,6 +54,8 @@ src/.idea/**
 *.webm
 *.info.json
 
+src/VideoServeLocalTest/data/*
+
 # CMake
 cmake-build-*/
 
