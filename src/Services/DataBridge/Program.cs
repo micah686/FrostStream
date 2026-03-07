@@ -54,7 +54,9 @@ class Program
 
         builder.Services.AddHostedService<StorageConfigRequestHandler>();
         builder.Services.AddHostedService<JobStartHandler>();
+        builder.Services.AddHostedService<JobProgressHandler>();
         builder.Services.AddHostedService<VideoCommitHandler>();
+        builder.Services.AddHostedService<JobLinkCompleteHandler>();
         builder.Services.AddHostedService<JobFailHandler>();
         builder.Services.AddHostedService<JobStatusHandler>();
         builder.Services.AddHostedService<OrphanSweeperService>();

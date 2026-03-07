@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Shared.Jobs;
 
 namespace Shared.Entities;
 
@@ -13,7 +14,7 @@ public class Job
 
     [Required]
     [MaxLength(50)]
-    public string Status { get; set; } = "Pending";
+    public string Status { get; set; } = JobStatus.Pending.ToStorageValue();
 
     public string? ErrorMsg { get; set; }
 

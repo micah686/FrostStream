@@ -6,6 +6,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Retry;
+using Shared.Jobs;
 using Shared.Messages;
 using Shared.Storage;
 
@@ -13,7 +14,7 @@ namespace DataBridge.Services;
 
 /// <summary>
 /// Background service that periodically scans for orphaned jobs — jobs stuck in
-/// a non-terminal state (e.g., "Processing", "Downloading") for more than a
+/// a non-terminal state (e.g., "Processing", "UploadedPendingCommit") for more than a
 /// configurable threshold (default 72 hours).
 ///
 /// For each orphaned job, it:
@@ -33,7 +34,11 @@ public class OrphanSweeperService : BackgroundService
     private static readonly TimeSpan OrphanThreshold = TimeSpan.FromHours(72);
 
     /// <summary>Non-terminal statuses that indicate potentially orphaned work.</summary>
-    private static readonly string[] StuckStatuses = ["Processing", "Downloading"];
+    private static readonly string[] StuckStatuses =
+    [
+        JobStatus.Processing.ToStorageValue(),
+        JobStatus.UploadedPendingCommit.ToStorageValue()
+    ];
 
     private readonly ResiliencePipeline _resiliencePipeline;
 
@@ -151,7 +156,7 @@ public class OrphanSweeperService : BackgroundService
         // Step 2: Mark the job as Failed
         if (tracker.Job != null)
         {
-            tracker.Job.Status = "Failed";
+            JobStateMachine.Transition(tracker.Job, JobStatus.Failed);
             tracker.Job.ErrorMsg = $"Job orphaned — stuck for over {OrphanThreshold.TotalHours} hours. Cleaned up by sweeper.";
         }
 
@@ -184,11 +189,10 @@ public class OrphanSweeperService : BackgroundService
 
             var storage = FluentStorageProvider.CreateStorage(storageCfg);
 
-            // Check if the file exists (best effort)
+            // H3: use direct object existence check instead of listing the full store.
             var exists = await _resiliencePipeline.ExecuteAsync(async token =>
             {
-                var blobs = await storage.ListAsync(folderPath: null, cancellationToken: token);
-                return blobs?.Any(b => b.FullPath == tracker.StoragePath) ?? false;
+                return await storage.ExistsAsync(tracker.StoragePath!, token);
             }, ct);
 
             if (exists)

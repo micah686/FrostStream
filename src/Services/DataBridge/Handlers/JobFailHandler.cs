@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Shared;
+using Shared.Jobs;
 using Shared.Messages;
 
 namespace DataBridge.Handlers;
@@ -42,7 +43,18 @@ public class JobFailHandler : BackgroundService
                 var job = await db.Jobs.FirstOrDefaultAsync(j => j.JobId == request.JobId, stoppingToken);
                 if (job != null)
                 {
-                    job.Status = "Failed";
+                    var currentStatus = JobStatusCodec.Parse(job.Status);
+                    if (currentStatus == JobStatus.Completed)
+                    {
+                        _logger.LogWarning(
+                            "Ignoring JobFail for already completed JobId {JobId}. Error: {Error}",
+                            request.JobId,
+                            request.ErrorMessage);
+                        await context.RespondAsync(new JobFailResponse(Success: true), stoppingToken);
+                        return;
+                    }
+
+                    JobStateMachine.Transition(job, JobStatus.Failed);
                     job.ErrorMsg = request.ErrorMessage;
                     job.RetryCount++;
 

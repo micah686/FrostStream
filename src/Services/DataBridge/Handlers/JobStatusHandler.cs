@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Shared;
+using Shared.Jobs;
 using Shared.Messages;
 
 namespace DataBridge.Handlers;
@@ -39,7 +40,9 @@ public class JobStatusHandler : BackgroundService
                 var job = await db.Jobs.AsNoTracking().FirstOrDefaultAsync(j => j.JobId == context.Message.JobId, stoppingToken);
                 if (job == null)
                 {
-                    await context.RespondAsync(new JobStatusResponse("NotFound", "Job not found in database", 0, null), stoppingToken);
+                    await context.RespondAsync(
+                        new JobStatusResponse(JobStatus.NotFound.ToStorageValue(), "Job not found in database", 0, null),
+                        stoppingToken);
                     return;
                 }
 

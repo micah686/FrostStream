@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Retry;
 using Shared;
+using Shared.Jobs;
 using Shared.Messages;
 using Shared.Storage;
 using Worker.Services;
@@ -22,6 +23,7 @@ public class FileProcessHandler
     private readonly ResiliencePipeline _resiliencePipeline;
 
     private static readonly TimeSpan NatsTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan InProgressHeartbeatInterval = TimeSpan.FromSeconds(10);
 
     public FileProcessHandler(
         IMessageBus messageBus,
@@ -78,21 +80,22 @@ public class FileProcessHandler
 
             if (startResponse == null)
             {
-                _logger.LogError("DataBridge returned null for job.start (JobId: {JobId})", jobId);
-                await context.NackAsync(delay: TimeSpan.FromSeconds(30));
-                return;
+                throw new InvalidOperationException(
+                    $"DataBridge returned null for job.start (JobId: {jobId})");
             }
 
             if (!startResponse.Proceed)
             {
                 _logger.LogInformation("DataBridge says skip for JobId: {JobId}. Reason: {Reason}",
                     jobId, startResponse.Reason);
-                await context.AckAsync();
                 return;
             }
 
             // ── Phase 3: Download the video file locally ────────────────────
-            var downloadResult = await _ytDlp.DownloadAsync(request.Url, dataDir);
+            var downloadResult = await ExecuteWithInProgressHeartbeatsAsync(
+                context,
+                phase: "download",
+                () => _ytDlp.DownloadAsync(request.Url, dataDir));
 
             _logger.LogInformation("Downloaded video {VideoId}: {FilePath} (hash: {Hash})",
                 downloadResult.Metadata.Id, downloadResult.LocalFilePath, downloadResult.FileHash);
@@ -125,6 +128,9 @@ public class FileProcessHandler
 
             _logger.LogInformation("Upload complete for {Path}", uploadedBlobPath);
 
+            // Explicit saga transition: artifact is uploaded, awaiting DB commit.
+            await MarkUploadedPendingCommitAsync(jobId, uploadedBlobPath, downloadResult.FileHash);
+
             // ── Phase 6: Atomic commit via DataBridge ────────────────────────
             var commitResponse = await _resiliencePipeline.ExecuteAsync(async token =>
             {
@@ -153,12 +159,23 @@ public class FileProcessHandler
 
             // ── Cleanup local temp files ────────────────────────────────────
             CleanupLocalData(dataDir);
-
-            await context.AckAsync();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to process download for JobId: {JobId}", jobId);
+
+            // C2: if commit state is uncertain, query DataBridge before compensating storage.
+            if (uploadedBlobPath != null)
+            {
+                if (await IsCommitAlreadyCompletedAsync(jobId))
+                {
+                    _logger.LogWarning(
+                        "Detected completed commit for JobId {JobId} after exception path. Skipping rollback and JobFail.",
+                        jobId);
+                    CleanupLocalData(dataDir);
+                    return;
+                }
+            }
 
             // ── Compensating transaction: rollback uploaded file ─────────────
             if (storage != null && uploadedBlobPath != null)
@@ -189,9 +206,146 @@ public class FileProcessHandler
 
             // Cleanup local temp files
             CleanupLocalData(dataDir);
+            throw;
+        }
+    }
 
-            // Nak with delay so it can be retried
-            await context.NackAsync(delay: TimeSpan.FromSeconds(60));
+    private async Task MarkUploadedPendingCommitAsync(Guid jobId, string storagePath, string fileHash)
+    {
+        var response = await _messageBus.RequestAsync<JobProgressRequest, JobProgressResponse>(
+            Subjects.JobProgress,
+            new JobProgressRequest(
+                jobId,
+                JobStatus.UploadedPendingCommit.ToStorageValue(),
+                storagePath,
+                fileHash),
+            NatsTimeout);
+
+        if (response == null || !response.Success)
+        {
+            var error = response?.ErrorMessage ?? "null response";
+            throw new InvalidOperationException(
+                $"Failed to mark job as UploadedPendingCommit for JobId {jobId}: {error}");
+        }
+    }
+
+    private async Task<JobStatus?> TryGetCurrentJobStatusAsync(Guid jobId)
+    {
+        try
+        {
+            var response = await _messageBus.RequestAsync<JobStatusRequest, JobStatusResponse>(
+                Subjects.JobStatus,
+                new JobStatusRequest(jobId),
+                NatsTimeout);
+
+            return response == null
+                ? null
+                : JobStatusCodec.Parse(response.Status);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Failed to query current job status for JobId {JobId} during compensation check.",
+                jobId);
+            return null;
+        }
+    }
+
+    private async Task<bool> IsCommitAlreadyCompletedAsync(Guid jobId)
+    {
+        const int maxAttempts = 3;
+
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            var status = await TryGetCurrentJobStatusAsync(jobId);
+            if (status == JobStatus.Completed)
+            {
+                return true;
+            }
+
+            if (attempt == maxAttempts)
+            {
+                return false;
+            }
+
+            if (status is JobStatus.UploadedPendingCommit or JobStatus.Processing)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(2));
+                continue;
+            }
+
+            return false;
+        }
+
+        return false;
+    }
+
+    private async Task<T> ExecuteWithInProgressHeartbeatsAsync<T>(
+        IJsMessageContext<FileDownloadRequest> context,
+        string phase,
+        Func<Task<T>> operation)
+    {
+        await TrySendInProgressHeartbeatAsync(context, phase);
+
+        using var heartbeatCts = new CancellationTokenSource();
+        var heartbeatTask = RunHeartbeatLoopAsync(context, phase, heartbeatCts.Token);
+
+        try
+        {
+            return await operation();
+        }
+        finally
+        {
+            heartbeatCts.Cancel();
+            try
+            {
+                await heartbeatTask;
+            }
+            catch (OperationCanceledException) when (heartbeatCts.IsCancellationRequested)
+            {
+            }
+        }
+    }
+
+    private async Task RunHeartbeatLoopAsync(
+        IJsMessageContext<FileDownloadRequest> context,
+        string phase,
+        CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(InProgressHeartbeatInterval);
+
+        try
+        {
+            while (await timer.WaitForNextTickAsync(cancellationToken))
+            {
+                await TrySendInProgressHeartbeatAsync(context, phase, cancellationToken);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+    }
+
+    private async Task TrySendInProgressHeartbeatAsync(
+        IJsMessageContext<FileDownloadRequest> context,
+        string phase,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await context.InProgressAsync(cancellationToken);
+            _logger.LogDebug("Sent in-progress heartbeat for JobId: {JobId} during {Phase}",
+                context.Message.JobId, phase);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Failed to send in-progress heartbeat for JobId: {JobId} during {Phase}",
+                context.Message.JobId,
+                phase);
         }
     }
 

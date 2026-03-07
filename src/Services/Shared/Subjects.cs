@@ -16,6 +16,7 @@ public static class Subjects
     public const string StorageConfig = "froststream.config.storage";
 
     public const string JobStart = "databridge.job.start";
+    public const string JobProgress = "databridge.job.progress";
     public const string VideoCommit = "databridge.video.commit";
     public const string JobFail = "databridge.job.fail";
     public const string JobStatus = "databridge.job.status";
