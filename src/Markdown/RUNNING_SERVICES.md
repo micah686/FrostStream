@@ -1,160 +1,147 @@
 # Running FrostStream Services
 
-This guide explains how to run the Worker, DataBridge, and WebAPI services to process video files through NATS messaging.
+This guide matches the current video-archive pipeline:
+
+1. `POST /api/videos/download` queues a `FileDownloadRequest`
+2. `Worker` fetches metadata with `yt-dlp`, downloads the media, uploads it to storage, and asks DataBridge to commit metadata
+3. `DataBridge` stores job state, video metadata, versions, duplicate-link relationships, and storage configuration
+4. `GET /api/videos/{jobId}` returns the current saga phase and any pending-link details
 
 ## Prerequisites
 
-- NATS server running on `localhost:4222`
-- .NET 10 SDK installed
-- A `video.mp4` file in the Worker directory (or configure `Worker:SourceVideoPath`)
+- .NET 10 SDK
+- `yt-dlp` available in `PATH` on the machine running `Worker`
+- Docker Desktop or another local container runtime if you want to use Aspire AppHost
+- For manual startup: reachable NATS and PostgreSQL instances
 
-## Architecture Overview
+## Preferred: Run Everything Through AppHost
 
-```
-┌─────────┐      NATS       ┌─────────┐      NATS       ┌────────────┐
-│ WebAPI  │ ──────────────► │ Worker  │ ◄─────────────► │ DataBridge │
-│         │  jobs.process   │ (1..N)  │  storage.config │            │
-└─────────┘                 └─────────┘  file.staged    └────────────┘
-                                  │                            │
-                                  ▼                            ▼
-                            video.mp4                 testing_data/completed/
+`AppHost` now orchestrates `DataBridge`, `Worker`, and `WebAPI` together with NATS and PostgreSQL.
+
+```bash
+cd /home/micah/RiderProjects/FrostStream
+DOTNET_ENVIRONMENT=Development dotnet run --project src/AppHost/AppHost.csproj
 ```
 
-## Starting the Services
+What AppHost starts:
 
-Open three terminal windows and run each service from the `src/Services` directory.
+- `nats` with JetStream enabled
+- `postgres` and the `froststreamdb` database
+- `databridge`
+- `worker`
+- `webapi`
 
-### Terminal 1: Start DataBridge
+Open the Aspire dashboard from the URL shown in the console to find the `webapi` endpoint for requests.
+
+## Manual Startup
+
+Use this path if you already have NATS and PostgreSQL running outside Aspire.
+
+### Terminal 1: DataBridge
 
 ```bash
 cd src/Services/DataBridge
-dotnet runCan
+dotnet run
 ```
 
-### Terminal 2: Start Worker
+### Terminal 2: Worker
 
 ```bash
 cd src/Services/Worker
 dotnet run
 ```
 
-### Terminal 3: Start WebAPI
+### Terminal 3: WebAPI
 
 ```bash
 cd src/Services/WebAPI
-dotnet run --urls "http://localhost:5123"
+dotnet run
 ```
 
-## Sending a Job Request
+Default development URL from `launchSettings.json`:
 
-Once all services are running, send a POST request to the WebAPI to trigger video processing.
+- `http://localhost:5041`
 
-### Using curl
+## Storage Configuration
+
+Migration `001_CreateStorageConfigsTable` seeds one working storage target:
+
+- `storageKey: default`
+- method: `PosixLocal`
+- path: `/tmp/froststream`
+
+That means the simplest valid request body uses `"storageKey": "default"`.
+
+## Queue a Download
 
 ```bash
-# Basic request with custom destination filename
-curl -X POST http://localhost:5123/api/jobs \
+curl -X POST http://localhost:5041/api/videos/download \
   -H "Content-Type: application/json" \
-  -d '{"destinationPath": "my_output.mp4"}'
-
-# Full request with source and destination
-curl -X POST http://localhost:5123/api/jobs \
-  -H "Content-Type: application/json" \
-  -d '{"sourcePath": "video.mp4", "destinationPath": "processed_video.mp4"}'
-
-# Minimal request (uses defaults)
-curl -X POST http://localhost:5123/api/jobs \
-  -H "Content-Type: application/json" \
-  -d '{}'
+  -d '{
+    "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    "storageKey": "default"
+  }'
 ```
 
-### Using the .http file (Rider/VS Code)
+Expected response:
 
-Open `WebAPI/WebAPI.http` and click "Send Request" on any of the examples.
-
-## What Happens
-
-1. **WebAPI** receives the request and publishes a `ProcessJobRequest` to NATS subject `jobs.process`
-2. **Worker** picks up the job (queue group ensures only one worker handles each job)
-3. **Worker** simulates 5 seconds of processing work
-4. **Worker** requests storage configuration from DataBridge via NATS request/reply
-5. **DataBridge** responds with `LocalStaging` method and the staging path
-6. **Worker** copies `video.mp4` to the staging folder with `.part` extension
-7. **Worker** atomically renames `.part` to `.ready` (signals completion)
-8. **Worker** publishes `FileStagedEvent` with file path and SHA256 checksum
-9. **DataBridge** receives the event and moves the file to `testing_data/completed/`
-
-## Output Location
-
-Processed files appear in:
-```
-src/Services/testing_data/completed/
+```json
+{
+  "message": "Download video request queued",
+  "jobId": "<guid>",
+  "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+  "storageKey": "default"
+}
 ```
 
-## Verifying the Output
+## Check Job Status
 
 ```bash
-# Check the completed folder
-ls -la src/Services/testing_data/completed/
-
-# View Worker logs
-tail -f /tmp/worker.log
-
-# View DataBridge logs
-tail -f /tmp/databridge.log
+curl http://localhost:5041/api/videos/<jobId>
 ```
 
-## Running Multiple Workers
+The status response now includes:
 
-To test load balancing, start additional Worker instances in separate terminals:
+- `status`: stored job status enum value
+- `phase`: higher-level saga phase such as `Downloading`, `Committing`, `Linking`, `Completed`, or `Failed`
+- `subStatus`: human-readable detail for the current state
+- `storagePath` and `fileHash` when an artifact has already been uploaded
+- `pendingLink` details when the request was deduplicated against an existing source job
+
+Common states:
+
+- `Processing`: worker is fetching metadata or downloading
+- `UploadedPendingCommit`: artifact uploaded, DataBridge commit is still in-flight or being reconciled
+- `PendingLink`: duplicate request is waiting on another source job to finish
+- `Completed`: metadata commit succeeded or duplicate-link resolution completed
+- `Failed`: terminal failure recorded by DataBridge
+
+## Where Files Land
+
+With the seeded `default` storage config, uploaded artifacts are written under:
+
+```text
+/tmp/froststream/
+```
+
+A typical object path looks like:
+
+```text
+<platform>/<videoId>/v<sha256>.<ext>
+```
+
+## Notes on Reliability
+
+The current worker keeps JetStream heartbeats alive during long download, upload, and commit phases.
+If commit outcome is uncertain, the worker leaves the uploaded artifact in place and retries reconciliation instead of deleting first.
+
+## Scaling Locally
+
+You can start multiple worker processes to share the durable `file-processors` workload:
 
 ```bash
-# Terminal 4: Second worker
 cd src/Services/Worker
 dotnet run
-
-# Terminal 5: Third worker (etc.)
-cd src/Services/Worker
-dotnet run
 ```
 
-Each worker joins the `workers` queue group, so jobs are distributed across available workers.
-
-## Running Multiple DataBridge Instances (Horizontal Scaling)
-
-**NEW:** DataBridge now supports horizontal scaling using NATS queue groups!
-
-You can run multiple DataBridge instances for high availability and increased throughput:
-
-```bash
-# Terminal 6: Second DataBridge instance
-cd src/Services/DataBridge
-dotnet run
-
-# Terminal 7: Third DataBridge instance (etc.)
-cd src/Services/DataBridge
-dotnet run
-```
-
-Queue groups ensure:
-- Storage config requests are load-balanced across instances
-- File staged events are distributed - only ONE instance handles each file
-- No race conditions when moving files
-
-See [SCALING_GUIDE.md](SCALING_GUIDE.md) for detailed scaling strategies and Kubernetes deployment examples.
-
-## Configuration
-
-### Worker
-- `Worker:SourceVideoPath` - Path to source video (default: `video.mp4`)
-
-### DataBridge
-- `DataBridge:StagingPath` - Shared staging directory (default: `../testing_data`)
-- `DataBridge:FinalDestination` - Output directory (default: `../testing_data/completed`)
-
-### NATS
-- `NATS:Url` - NATS server URL (default: `nats://localhost:4222`)
-
-## Stopping Services
-
-Press `Ctrl+C` in each terminal to gracefully stop the services.
+Run that in multiple terminals, then use the same `POST /api/videos/download` endpoint. For the current queue-group layout and scaling notes, see `src/Markdown/SCALING_GUIDE.md`.

@@ -57,7 +57,9 @@ Migrations use the `[Migration(X)]` attribute for versioning:
 - Numbers must be unique across all migrations
 
 **Current migrations:**
-- `001_InitialSchema.cs` - Migration 1
+- `001_CreateStorageConfigsTable.cs` - Migration 1
+- `002_CreateInitialVersionedSchema.cs` - Migration 2
+- `003_AddPendingJobLinksTable.cs` - Migration 3
 
 ### 3. Run the Migration
 

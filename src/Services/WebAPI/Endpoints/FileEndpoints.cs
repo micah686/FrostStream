@@ -4,6 +4,8 @@ using Shared.Messages;
 
 namespace WebAPI.Endpoints;
 
+public sealed record DownloadVideoRequest(string Url, string StorageKey);
+
 /// <summary>
 /// File processing API endpoints.
 /// </summary>
@@ -17,20 +19,12 @@ public static class FileEndpoints
         var group = app.MapGroup("/api/videos")
             .WithTags("Videos");
 
-        group.MapPost("/download", async (
-            string url,
-            string storageKey,
-            IJetStreamPublisher publisher,
-            CancellationToken cancellationToken) =>
-        {
-            var jobId = Guid.NewGuid();
-            var request = new FileDownloadRequest(jobId, url, storageKey);
-            var messageId = $"download-{jobId}";
-            await publisher.PublishAsync(Subjects.DownloadFile, request, messageId, cancellationToken: cancellationToken);
-            return Results.Accepted($"/api/videos/{jobId}", new { message = "Download Video request queued", jobId, url, storageKey });
-        })
+        group.MapPost("/download", QueueDownloadAsync)
         .WithName("DownloadVideo")
-        .WithSummary("Queue a video for downloading by a worker");
+        .WithSummary("Queue a video for downloading by a worker")
+        .Accepts<DownloadVideoRequest>("application/json")
+        .Produces(StatusCodes.Status202Accepted)
+        .ProducesValidationProblem();
 
         group.MapGet("/{jobId:guid}", async (
             Guid jobId,
@@ -61,5 +55,53 @@ public static class FileEndpoints
         })
         .WithName("GetVideoJobStatus")
         .WithSummary("Gets the status of a video download job");
+    }
+
+    private static async Task<IResult> QueueDownloadAsync(
+        DownloadVideoRequest request,
+        IJetStreamPublisher publisher,
+        CancellationToken cancellationToken)
+    {
+        var validationErrors = ValidateDownloadRequest(request);
+        if (validationErrors != null)
+        {
+            return TypedResults.ValidationProblem(validationErrors);
+        }
+
+        var jobId = Guid.NewGuid();
+        var downloadRequest = new FileDownloadRequest(jobId, request.Url, request.StorageKey);
+        var messageId = $"download-{jobId}";
+        await publisher.PublishAsync(Subjects.DownloadFile, downloadRequest, messageId, cancellationToken: cancellationToken);
+
+        return TypedResults.Accepted($"/api/videos/{jobId}", new
+        {
+            message = "Download video request queued",
+            jobId,
+            request.Url,
+            request.StorageKey
+        });
+    }
+
+    private static Dictionary<string, string[]>? ValidateDownloadRequest(DownloadVideoRequest request)
+    {
+        var errors = new Dictionary<string, string[]>();
+
+        if (string.IsNullOrWhiteSpace(request.Url)
+            || !Uri.TryCreate(request.Url, UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            errors["url"] = ["Provide an absolute http/https URL."];
+        }
+
+        if (string.IsNullOrWhiteSpace(request.StorageKey))
+        {
+            errors["storageKey"] = ["Storage key is required."];
+        }
+        else if (request.StorageKey.Length > 100)
+        {
+            errors["storageKey"] = ["Storage key must be 100 characters or fewer."];
+        }
+
+        return errors.Count == 0 ? null : errors;
     }
 }

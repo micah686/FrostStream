@@ -1,312 +1,146 @@
-# Entity Framework Core + FluentMigrator Setup - Complete
+# FrostStream Database and Migration Notes
 
-This document provides an overview of the Entity Framework Core and FluentMigrator setup for the FrostStream project.
+This document reflects the current `DataBridge` schema and migration flow.
 
-## 📁 Project Structure
+## Overview
 
-```
-FrostStream/
-├── src/
-│   ├── AppHost/
-│   │   └── AppHost.cs                      # Aspire orchestration (DataBridge registered)
-│   ├── Services/
-│   │   ├── Shared/
-│   │   │   ├── Entities/                   # ✅ POCO entities (shared across services)
-│   │   │   │   ├── User.cs
-│   │   │   │   ├── Movie.cs
-│   │   │   │   └── Subtitle.cs
-│   │   │   └── Shared.csproj
-│   │   └── DataBridge/
-│   │       ├── Data/                       # ✅ DbContext & configurations
-│   │       │   ├── FrostStreamDbContext.cs
-│   │       │   └── Configurations/
-│   │       │       ├── UserConfiguration.cs
-│   │       │       ├── MovieConfiguration.cs
-│   │       │       └── SubtitleConfiguration.cs
-│   │       ├── Migrations/                 # ✅ FluentMigrator migrations
-│   │       │   └── FluentMigrator/
-│   │       │       └── 001_InitialSchema.cs
-│   │       ├── Program.cs                  # ✅ EF Core + FluentMigrator + Aspire integration
-│   │       ├── appsettings.json            # ✅ Fallback connection string
-│   │       ├── MIGRATIONS.md               # ✅ Migration commands reference
-│   │       ├── README_EF_SETUP.md          # This file
-│   │       └── DataBridge.csproj
-```
+`DataBridge` owns the persistent saga state for FrostStream. It runs FluentMigrator on startup and stores:
 
-## 🗃️ Database Schema
+- storage configuration lookup data
+- submitted jobs and retry counters
+- per-job tracking state such as uploaded storage path and file hash
+- deduplicated video metadata and committed versions
+- pending-link records for duplicate requests that should complete when another source job commits
 
-### Tables Created:
-- **users** - User profiles and authentication
-- **movies** - Movie metadata and file references
-- **subtitles** - Subtitle files linked to movies
-- **user_favorite_movies** - Many-to-many join table
+## Current Migrations
 
-### Relationships:
-- User ↔ Movie (many-to-many via favorites)
-- Movie → Subtitle (one-to-many, cascade delete)
+- `001_CreateStorageConfigsTable`
+- `002_CreateInitialVersionedSchema`
+- `003_AddPendingJobLinksTable`
 
-### Naming Convention:
-- Tables: lowercase with underscores (`user_favorite_movies`)
-- Columns: lowercase with underscores (`created_at`)
+Migrations run automatically every time `DataBridge` starts.
 
-## 🔌 Connection String Priority
+## Main Tables
 
-The application automatically uses connection strings in this order:
+### `storage_configs`
 
-### 1. **Aspire (Recommended for Development)**
-When running via the AppHost, the connection string is automatically injected:
-```bash
-dotnet run --project src/AppHost
-```
-The Postgres container will be started automatically via Aspire.
+Storage targets keyed by `storageKey`. Migration `001` seeds a default local target:
 
-### 2. **appsettings.json**
-If not running via Aspire, it falls back to `appsettings.json`:
 ```json
-"ConnectionStrings": {
-  "froststreamdb": "Host=localhost;Port=5432;Database=froststreamdb;Username=postgres;Password=postgres"
+{
+  "key": "default",
+  "method": "PosixLocal",
+  "parameters": { "path": "/tmp/froststream" }
 }
 ```
 
-### 3. **Default Localhost**
-Built-in fallback connection string for local development.
+### `jobs`
 
-## 📦 NuGet Packages Installed
+One row per API request / worker job.
 
-### DataBridge.csproj:
-- `Microsoft.EntityFrameworkCore` (via Aspire package)
-- `Npgsql.EntityFrameworkCore.PostgreSQL` (10.0.0) - Postgres provider for EF Core
-- `Aspire.Npgsql.EntityFrameworkCore.PostgreSQL` (13.1.0) - Aspire integration
-- `FluentMigrator` (6.3.0) - Migration framework
-- `FluentMigrator.Runner` (6.3.0) - Migration runner
-- `FluentMigrator.Runner.Postgres` (6.3.0) - PostgreSQL support for FluentMigrator
+Important columns:
 
-### Shared.csproj:
-- `Microsoft.EntityFrameworkCore` (10.0.1) - For entity annotations
+- `job_id`
+- `url`
+- `status`
+- `error_msg`
+- `retry_count`
+- `storage_key`
 
-### Migration Strategy:
-- **FluentMigrator** - Used for database migrations (schema changes)
-- **EF Core** - Used for data access (DbContext, LINQ queries)
+### `state_tracking`
 
-## 🚀 Quick Start
+One row per job for operational saga state.
 
-### 1. Start the Application (Migrations Run Automatically)
+Important columns:
 
-**Option A: Using Aspire (Recommended)**
+- `job_id`
+- `idempotency_key` (unique)
+- `video_id`
+- `storage_path`
+- `file_hash`
+- `updated_at`
+- `completed_at`
+- `error_details`
+
+### `video_info`
+
+Deduplicated source metadata keyed by the same idempotency domain used by the worker.
+
+### `video_versions`
+
+Committed storage artifacts. `idempotency_key` is unique here as well, which is what enables idempotent commit reconciliation.
+
+### `pending_job_links`
+
+Tracks duplicate requests that should complete by linking to another job's committed version.
+
+Important columns:
+
+- `pending_job_id`
+- `source_job_id`
+- `existing_version_id`
+- `video_id`
+- `created_at`
+- `completed_at`
+
+## Relationship Summary
+
+- `jobs` 1:1 `state_tracking`
+- `video_info` 1:N `video_versions`
+- `state_tracking.video_id` -> `video_info.id`
+- `pending_job_links.pending_job_id` -> `jobs.job_id`
+- `pending_job_links.source_job_id` -> `jobs.job_id`
+- `pending_job_links.existing_version_id` -> `video_versions.id`
+
+## Running with AppHost
+
+Recommended for development:
+
 ```bash
-cd src/AppHost
-dotnet run
+cd /home/micah/RiderProjects/FrostStream
+dotnet run --project src/AppHost/AppHost.csproj
 ```
-This will:
-- Start PostgreSQL container
-- Start DataBridge service
-- Automatically run FluentMigrator migrations on startup
-- Inject the connection string from Aspire
 
-**Option B: Using Local Postgres**
-Make sure Postgres is running locally, then:
+This starts PostgreSQL, NATS, DataBridge, Worker, and WebAPI together.
+
+## Running DataBridge Only
+
+If PostgreSQL and NATS are already available:
+
 ```bash
 cd src/Services/DataBridge
 dotnet run
 ```
-Migrations will run automatically on application startup.
 
-### 2. Verify Setup
-Check that the tables were created:
+Connection-string precedence:
+
+1. Aspire-injected connection string when launched from `AppHost`
+2. `appsettings.json` / `appsettings.Development.json`
+3. Built-in localhost fallback in `Program.cs`
+
+## Quick Inspection Queries
+
 ```sql
--- Connect to PostgreSQL
-psql -U postgres -d froststreamdb
-
--- List tables
-\dt
-
--- You should see:
--- users, movies, subtitles, user_favorite_movies, versioninfo (FluentMigrator tracking)
+SELECT job_id, status, retry_count, storage_key
+FROM jobs
+ORDER BY job_id DESC
+LIMIT 20;
 ```
 
-## 🛠️ Common Tasks
-
-### Add a New Entity
-1. Create the entity class in `Shared/Entities/`
-2. Create a configuration in `DataBridge/Data/Configurations/`
-3. Add a `DbSet` property to `FrostStreamDbContext`
-4. Create a FluentMigrator migration in `Migrations/FluentMigrator/`:
-   ```csharp
-   using FluentMigrator;
-
-   namespace DataBridge.Migrations.FluentMigrator;
-
-   [Migration(2)] // Increment the version number
-   public class AddNewEntity : Migration
-   {
-       public override void Up()
-       {
-           Create.Table("new_entity")
-               .WithColumn("id").AsGuid().PrimaryKey()
-               .WithColumn("name").AsString(200).NotNullable();
-       }
-
-       public override void Down()
-       {
-           Delete.Table("new_entity");
-       }
-   }
-   ```
-5. Run the application - migrations apply automatically on startup
-
-### Modify an Existing Entity
-1. Update the entity class in `Shared/Entities/`
-2. Update the EF configuration if needed (for query mapping)
-3. Create a FluentMigrator migration:
-   ```csharp
-   [Migration(3)]
-   public class UpdateEntityColumn : Migration
-   {
-       public override void Up()
-       {
-           Alter.Table("existing_entity")
-               .AddColumn("new_column").AsString(100).Nullable();
-       }
-
-       public override void Down()
-       {
-           Delete.Column("new_column").FromTable("existing_entity");
-       }
-   }
-   ```
-4. Run the application to apply changes
-
-### Manual Migration Commands (Optional)
-
-**Migrate to latest version:**
-```bash
-dotnet fm migrate -p postgres -c "Host=localhost;Database=froststreamdb;Username=postgres;Password=postgres" -a ./bin/Debug/net10.0/DataBridge.dll
+```sql
+SELECT job_id, idempotency_key, storage_path, file_hash, updated_at, completed_at
+FROM state_tracking
+ORDER BY updated_at DESC
+LIMIT 20;
 ```
 
-**Rollback one migration:**
-```bash
-dotnet fm rollback -p postgres -c "connection-string" -a ./bin/Debug/net10.0/DataBridge.dll --steps 1
+```sql
+SELECT pending_job_id, source_job_id, existing_version_id, completed_at
+FROM pending_job_links
+ORDER BY created_at DESC
+LIMIT 20;
 ```
 
-**List all migrations:**
-```bash
-dotnet fm list migrations -p postgres -c "connection-string" -a ./bin/Debug/net10.0/DataBridge.dll
-```
+## Migration Commands
 
-### Reset Database (Development Only)
-```bash
-# Drop and recreate database in psql
-psql -U postgres -c "DROP DATABASE froststreamdb;"
-psql -U postgres -c "CREATE DATABASE froststreamdb;"
-
-# Restart the application to run migrations
-dotnet run
-```
-
-## 📝 Code Examples
-
-### Using the DbContext in DataBridgeService
-```csharp
-public class DataBridgeService : BackgroundService
-{
-    private readonly IServiceProvider _serviceProvider;
-
-    public DataBridgeService(IServiceProvider serviceProvider)
-    {
-        _serviceProvider = serviceProvider;
-    }
-
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        // Create a scope for DI
-        using var scope = _serviceProvider.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<FrostStreamDbContext>();
-
-        // Example: Add a user
-        var user = new User
-        {
-            Username = "testuser",
-            Email = "test@example.com",
-            CreatedAt = DateTime.UtcNow
-        };
-
-        dbContext.Users.Add(user);
-        await dbContext.SaveChangesAsync(stoppingToken);
-    }
-}
-```
-
-### Querying Data
-```csharp
-// Get all movies with their subtitles
-var movies = await dbContext.Movies
-    .Include(m => m.Subtitles)
-    .ToListAsync();
-
-// Get a user's favorite movies
-var user = await dbContext.Users
-    .Include(u => u.FavoriteMovies)
-    .FirstOrDefaultAsync(u => u.Username == "testuser");
-```
-
-## 🔍 Troubleshooting
-
-### "Build failed" during migration
-```bash
-dotnet build
-```
-Make sure the project builds successfully first.
-
-### Migrations not running
-- Check the `versioninfo` table in the database to see which migrations have been applied
-- Ensure your migration class has a unique `[Migration(X)]` attribute
-- Check application logs for FluentMigrator output
-
-### Connection refused to Postgres
-- If using Aspire: Make sure AppHost is running
-- If using local Postgres: Make sure Postgres service is running
-  ```bash
-  sudo systemctl status postgresql
-  ```
-
-### Migration version conflicts
-If you see "duplicate migration version" errors:
-```bash
-# Check what's in the database
-psql -U postgres -d froststreamdb -c "SELECT * FROM versioninfo;"
-
-# Manually remove conflicting version if needed (DEV ONLY)
-psql -U postgres -d froststreamdb -c "DELETE FROM versioninfo WHERE version = X;"
-```
-
-### Trust relationship error (SSL)
-Add to your connection string:
-```
-;Trust Server Certificate=true
-```
-
-## 📚 Additional Resources
-
-- [FluentMigrator Documentation](https://fluentmigrator.github.io/)
-- [FluentMigrator GitHub](https://github.com/fluentmigrator/fluentmigrator)
-- [EF Core Documentation](https://learn.microsoft.com/en-us/ef/core/) (for data access)
-- [Npgsql EF Core Provider](https://www.npgsql.org/efcore/)
-- [.NET Aspire Documentation](https://learn.microsoft.com/en-us/dotnet/aspire/)
-
-## ✅ What's Next?
-
-1. ✅ Migrations are already created and run automatically on startup
-2. Start building your DataBridge service to handle database operations
-3. Expose database operations via NATS messages (already configured)
-4. Add new migrations as your schema evolves
-
-## 🎯 Why FluentMigrator?
-
-**Advantages over EF Core Migrations:**
-- **Code-first migrations** with fluent API for better readability
-- **Version control** - Explicit migration numbering and version tracking
-- **Rollback support** - Easy to roll back migrations in production
-- **Database-agnostic** - Easier to support multiple databases
-- **No design-time dependencies** - Migrations run at runtime, no need for EF tools
-- **Better CI/CD integration** - Migrations can be part of deployment process
-- **More control** - Fine-grained control over SQL generation and execution
+Most development work should use automatic startup migrations. If you need manual migration commands, use `src/Markdown/MIGRATIONS.md`.

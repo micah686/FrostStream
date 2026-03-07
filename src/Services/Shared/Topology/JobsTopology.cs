@@ -26,7 +26,7 @@ public class JobsTopology : ITopologySource
             DurableName = ConsumerName.From(Consumers.FileProcessors),
             FilterSubject = Subjects.DownloadFile,
             AckPolicy = AckPolicy.Explicit,
-            AckWait = TimeSpan.FromSeconds(30),
+            AckWait = TimeSpan.FromMinutes(5),
             MaxDeliver = 5
         }
     ];

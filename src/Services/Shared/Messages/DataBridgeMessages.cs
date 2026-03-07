@@ -13,4 +13,25 @@ public record JobStartResponse(bool Proceed, string? Reason);
 public record JobProgressResponse(bool Success, string? ErrorMessage);
 public record VideoCommitResponse(bool Success, string? ErrorMessage);
 public record JobFailResponse(bool Success);
-public record JobStatusResponse(string Status, string? ErrorMessage, int RetryCount, string? StorageKey);
+public record JobPendingLinkInfo(
+    Guid SourceJobId,
+    string? SourceJobStatus,
+    Guid? ExistingVersionId,
+    Guid? VideoId,
+    DateTime CreatedAt,
+    DateTime? CompletedAt);
+
+public record JobStatusResponse(
+    Guid JobId,
+    string Status,
+    string Phase,
+    string? SubStatus,
+    string? ErrorMessage,
+    int RetryCount,
+    string? StorageKey,
+    string? StoragePath,
+    string? FileHash,
+    Guid? VideoId,
+    DateTime? UpdatedAt,
+    DateTime? CompletedAt,
+    JobPendingLinkInfo? PendingLink);

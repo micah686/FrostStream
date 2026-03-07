@@ -1,285 +1,81 @@
 # FrostStream Scaling Guide
 
-This guide explains how to horizontally scale the Worker and DataBridge services using NATS queue groups.
+This guide reflects the current message topology and queue-group layout.
 
-## Architecture Overview
+## Current Pipeline
 
-```
-┌─────────┐      NATS       ┌─────────────────────────┐
-│ WebAPI  │ ──────────────► │ Workers (queue: workers)│
-│         │  jobs.process   │   Instance 1            │
-└─────────┘                 │   Instance 2            │
-                            │   Instance N...         │
-                            └─────────────────────────┘
-                                       │
-                                       ▼ (request/reply + events)
-                            ┌──────────────────────────────────┐
-                            │ DataBridge (queue groups)        │
-                            │   Instance 1 (config + files)    │
-                            │   Instance 2 (config + files)    │
-                            │   Instance N...                  │
-                            └──────────────────────────────────┘
+```text
+WebAPI
+  -> POST /api/videos/download
+  -> publish froststream.job.download.file
+
+Worker (1..N)
+  -> durable consumer: file-processors
+  -> request/reply with DataBridge for job state, storage config, commit, fail, status
+
+DataBridge (1..N)
+  -> queue groups for request/reply handlers
+  -> PostgreSQL for durable saga state
 ```
 
-## Queue Groups Explained
+## Queue Groups in Use
 
-**NATS queue groups** ensure that when a message is published to a subject, **only one subscriber in the queue group receives it**. This enables:
-
-1. **Load balancing** - Work is distributed across available instances
-2. **High availability** - If one instance dies, others continue processing
-3. **Race condition prevention** - Critical operations (like file moves) happen exactly once
-
-### Current Queue Groups
-
-| Service | Subject | Queue Group | Purpose |
-|---------|---------|-------------|---------|
-| Worker | `jobs.process` | `workers` | Distribute job processing across worker instances |
-| DataBridge | `databridge.storage.config` | `databridge-config` | Load balance storage config requests |
-| DataBridge | `databridge.file.staged` | `databridge-processors` | Ensure only ONE instance moves each file |
+| Service | Subject / Consumer | Queue Group / Durable | Purpose |
+|---|---|---|---|
+| Worker | `froststream.job.download.file` | durable `file-processors` | distribute queued download jobs across workers |
+| DataBridge | `froststream.config.storage` | `databridge-config` | load-balance storage config lookups |
+| DataBridge | `databridge.job.start` | `databridge-jobs` | reserve / deduplicate job work |
+| DataBridge | `databridge.job.progress` | `databridge-jobs` | track saga progress |
+| DataBridge | `databridge.video.commit` | `databridge-jobs` | idempotent metadata + version commit |
+| DataBridge | `databridge.job.fail` | `databridge-jobs` | mark terminal failures |
+| DataBridge | `databridge.job.status` | `databridge-jobs` | serve status queries |
+| DataBridge | `databridge.job.link_complete` | `databridge-jobs` | resolve duplicate pending-link jobs |
 
 ## Scaling Workers
 
-Workers are stateless and designed for horizontal scaling.
+Workers are stateless apart from the temp download directory and can be replicated horizontally.
 
-### Running Multiple Workers Locally
+Local example:
 
 ```bash
-# Terminal 1: Worker instance 1
-cd src/Services/Worker
-dotnet run
-
-# Terminal 2: Worker instance 2
-cd src/Services/Worker
-dotnet run
-
-# Terminal 3: Worker instance 3
 cd src/Services/Worker
 dotnet run
 ```
 
-Each worker:
-- Gets a unique `WorkerId` (GUID)
-- Joins the `workers` queue group
-- NATS distributes jobs across all available workers
+Run that in multiple terminals. Each instance joins the same durable consumer and receives different jobs.
 
-### Kubernetes Deployment
+## Scaling DataBridge
 
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: froststream-worker
-spec:
-  replicas: 5  # Scale to 5 workers
-  selector:
-    matchLabels:
-      app: worker
-  template:
-    metadata:
-      labels:
-        app: worker
-    spec:
-      containers:
-      - name: worker
-        image: froststream-worker:latest
-        env:
-        - name: NATS__Url
-          value: "nats://nats-service:4222"
-        - name: Worker__SourceVideoPath
-          value: "/data/video.mp4"
-        volumeMounts:
-        - name: shared-staging
-          mountPath: /staging
-      volumes:
-      - name: shared-staging
-        persistentVolumeClaim:
-          claimName: nfs-staging-pvc
-```
+DataBridge handlers use queue groups, so multiple instances can safely share NATS request/reply traffic while all of them point at the same PostgreSQL database.
 
-Scale up/down dynamically:
-```bash
-kubectl scale deployment froststream-worker --replicas=10
-```
-
-## Scaling DataBridge (NEW!)
-
-**Before:** DataBridge was a singleton - only one instance could safely run.
-
-**After:** With NATS queue groups, multiple DataBridge instances can run concurrently without race conditions!
-
-### Running Multiple DataBridge Instances Locally
+Local example:
 
 ```bash
-# Terminal 1: DataBridge instance 1
-cd src/Services/DataBridge
-dotnet run
-
-# Terminal 2: DataBridge instance 2
-cd src/Services/DataBridge
-dotnet run
-
-# Terminal 3: DataBridge instance 3
 cd src/Services/DataBridge
 dotnet run
 ```
 
-**What happens:**
-- Storage config requests are load-balanced across all instances
-- File staged events are distributed - only ONE instance handles each file move
-- No race conditions when moving files from staging to final destination
+Run additional copies in separate terminals after the first instance is healthy.
 
-### Kubernetes Deployment
+## Operational Notes
 
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: froststream-databridge
-spec:
-  replicas: 3  # Run 3 instances for HA and throughput
-  selector:
-    matchLabels:
-      app: databridge
-  template:
-    metadata:
-      labels:
-        app: databridge
-    spec:
-      containers:
-      - name: databridge
-        image: froststream-databridge:latest
-        env:
-        - name: NATS__Url
-          value: "nats://nats-service:4222"
-        - name: DataBridge__StagingPath
-          value: "/staging"
-        - name: DataBridge__FinalDestination
-          value: "/output"
-        volumeMounts:
-        - name: shared-staging
-          mountPath: /staging
-        - name: output-storage
-          mountPath: /output
-      volumes:
-      - name: shared-staging
-        persistentVolumeClaim:
-          claimName: nfs-staging-pvc
-      - name: output-storage
-        persistentVolumeClaim:
-          claimName: nfs-output-pvc
-```
+- `AckWait` for the worker consumer is `5 minutes`
+- the worker sends JetStream `InProgress` heartbeats during download, upload, and commit phases
+- `VideoCommit` is idempotent by `idempotency_key`
+- duplicate requests can resolve through `pending_job_links`
+- commit-uncertain retries keep uploaded blobs intact and reissue commit instead of compensating immediately
 
-## Testing Horizontal Scaling
+## Recommended Dev Topology
 
-### Test 1: Load Balancing Workers
+- `WebAPI`: 1 instance
+- `Worker`: 1-3 instances depending on test load
+- `DataBridge`: 1-2 instances
+- `PostgreSQL`: 1 shared instance
+- `NATS`: 1 shared JetStream-enabled instance
 
-1. Start 3 Worker instances
-2. Start 1 DataBridge instance
-3. Send 10 jobs rapidly:
+## Recommended Production Direction
 
-```bash
-for i in {1..10}; do
-  curl -X POST http://localhost:5123/api/jobs \
-    -H "Content-Type: application/json" \
-    -d "{\"destinationPath\": \"output_$i.mp4\"}"
-  sleep 0.5
-done
-```
-
-**Expected:** Jobs are distributed across the 3 workers (check logs for `Worker <guid> picked up job`)
-
-### Test 2: DataBridge High Availability
-
-1. Start 3 DataBridge instances
-2. Start 1 Worker instance
-3. Send 5 jobs
-4. **While jobs are processing**, kill one DataBridge instance (Ctrl+C)
-5. Observe: Remaining DataBridge instances continue processing without interruption
-
-### Test 3: Race Condition Prevention
-
-1. Start 2 DataBridge instances with verbose logging
-2. Start 1 Worker instance
-3. Send 1 job
-
-**Expected:**
-- Both DataBridges receive the storage config request, but only ONE responds
-- When the file is staged, only ONE DataBridge moves the file
-- Check `testing_data/completed/` - file should appear exactly once
-
-## Performance Recommendations
-
-### Development
-```
-Workers: 1-2 instances
-DataBridge: 1-2 instances
-```
-
-### Production (Small)
-```
-Workers: 5-10 instances
-DataBridge: 3 instances (HA + moderate throughput)
-```
-
-### Production (Large)
-```
-Workers: 20-50 instances
-DataBridge: 5-10 instances
-NATS: 3-node cluster
-```
-
-### Production (Cloud-Native with S3)
-```
-Workers: 100+ instances (or serverless)
-DataBridge: 10-20 instances (just DB updates, no file moves)
-Storage: ObjectStorage (S3/Azure/GCS)
-```
-
-## Monitoring Scaling
-
-### Check Queue Group Distribution
-
-```bash
-# Install nats CLI
-go install github.com/nats-io/natscli/nats@latest
-
-# Monitor the workers queue group
-nats sub "jobs.process" --queue=workers
-
-# Monitor the databridge-processors queue group
-nats sub "databridge.file.staged" --queue=databridge-processors
-```
-
-### Metrics to Track
-
-1. **Queue depth** - How many jobs are pending?
-2. **Processing time** - How long does each job take?
-3. **Instance count** - How many workers/databridges are active?
-4. **Error rate** - Are jobs failing?
-
-## Troubleshooting
-
-### Problem: Jobs aren't distributed evenly
-
-**Cause:** All workers have the same queue group name (this is correct!)
-
-**Solution:** This is expected behavior. NATS distributes based on availability, not round-robin. If you want to see distribution, send jobs faster than workers can process them.
-
-### Problem: Files are missing or duplicated
-
-**Cause:** DataBridge instances aren't using queue groups
-
-**Solution:** Verify `queueGroup: "databridge-processors"` is set in the FileStagedEvent subscription.
-
-### Problem: Multiple DataBridges try to move the same file
-
-**Cause:** Queue group not configured properly
-
-**Solution:** Check logs for `queue: databridge-processors` in the subscription message. If missing, update to latest code.
-
-## Future Enhancements
-
-1. **Auto-scaling** - Scale workers based on NATS queue depth
-2. **Geographic distribution** - Workers in multiple regions
-3. **Storage-specific scaling** - Different DataBridge pools for different storage methods
-4. **Serverless workers** - AWS Lambda, Cloud Run for burst workloads
+- scale `Worker` based on download / upload throughput
+- scale `DataBridge` based on request/reply load and DB capacity
+- keep PostgreSQL highly available before scaling the stateless services aggressively
+- add dashboards around `UploadedPendingCommit`, `PendingLink`, retry count, and compensation metrics

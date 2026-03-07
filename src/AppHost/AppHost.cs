@@ -34,12 +34,10 @@ builder.AddProject<Projects.DataBridge>("databridge")
     .WithReference(database).WaitFor(database)
     .WithReference(nats).WaitFor(nats);
 
-// builder.AddProject<Projects.WebAPI>("webapi")
-//     .WithReference(database).WaitFor(database)
-//     .WithReference(nats).WaitFor(nats);
-//
-// builder.AddProject<Projects.Worker>("worker");
-//
-// builder.AddProject<Projects.ControlPlane>("controlplane");
+builder.AddProject<Projects.WebAPI>("webapi")
+    .WithReference(nats).WaitFor(nats);
+
+builder.AddProject<Projects.Worker>("worker")
+    .WithReference(nats).WaitFor(nats);
 
 builder.Build().Run();

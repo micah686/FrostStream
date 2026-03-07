@@ -16,6 +16,8 @@
 
     <ItemGroup>
       <ProjectReference Include="..\Services\DataBridge\DataBridge.csproj" />
+      <ProjectReference Include="..\Services\WebAPI\WebAPI.csproj" />
+      <ProjectReference Include="..\Services\Worker\Worker.csproj" />
     </ItemGroup>
 
 </Project>

@@ -36,6 +36,7 @@ public class Program
         app.UseAuthorization();
 
         app.MapFileEndpoints();
+        app.MapDefaultEndpoints();
 
         app.Run();
     }

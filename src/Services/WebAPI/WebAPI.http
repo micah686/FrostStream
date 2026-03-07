@@ -1,7 +1,18 @@
 @WebAPI_HostAddress = http://localhost:5041
+@VideoUrl = https://www.youtube.com/watch?v=dQw4w9WgXcQ
+@StorageKey = default
+@JobId = 00000000-0000-0000-0000-000000000000
 
-### Process File Request
-POST {{WebAPI_HostAddress}}/api/files/process?filename=test-video.mp4&storageKey=storage-abc-123
+### Queue a video download
+POST {{WebAPI_HostAddress}}/api/videos/download
+Content-Type: application/json
 Accept: application/json
 
-###
+{
+  "url": "{{VideoUrl}}",
+  "storageKey": "{{StorageKey}}"
+}
+
+### Get job status
+GET {{WebAPI_HostAddress}}/api/videos/{{JobId}}
+Accept: application/json
