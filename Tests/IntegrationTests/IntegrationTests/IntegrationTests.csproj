@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.0" />
+        <PackageReference Include="Shouldly" Version="4.3.0" />
+        <PackageReference Include="TUnit" Version="1.8.1" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\..\src\Modules\FlySwattr.NATS\FlySwattr.NATS.Abstractions\FlySwattr.NATS.Abstractions.csproj" />
+        <ProjectReference Include="..\..\..\src\Services\DataBridge\DataBridge.csproj" />
+        <ProjectReference Include="..\..\..\src\Services\Shared\Shared.csproj" />
+    </ItemGroup>
+
+</Project>
