@@ -34,7 +34,10 @@ class Program
         });
 
         // Register download service (interface allows swapping implementations)
-        builder.Services.AddSingleton<IDownloadService, YtDlpDownloadService>();
+        // Both interfaces are implemented by YtDlpDownloadService and share the same instance
+        builder.Services.AddSingleton<YtDlpDownloadService>();
+        builder.Services.AddSingleton<IDownloadService>(sp => sp.GetRequiredService<YtDlpDownloadService>());
+        builder.Services.AddSingleton<IIdempotencyKeyGenerator>(sp => sp.GetRequiredService<YtDlpDownloadService>());
         
         // Register worker services
         builder.Services.AddSingleton<FileProcessHandler>();

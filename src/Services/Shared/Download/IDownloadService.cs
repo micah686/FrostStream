@@ -1,5 +1,3 @@
-using Shared.Models;
-
 namespace Shared.Download;
 
 /// <summary>
@@ -91,7 +89,8 @@ public record DownloadOptions
     public string? CookiesFilePath { get; init; }
 
     /// <summary>
-    /// Additional platform-specific options.
+    /// Additional engine-specific options.
+    /// These are passed through to the underlying download engine.
     /// </summary>
     public Dictionary<string, string>? AdditionalOptions { get; init; }
 }
@@ -162,6 +161,7 @@ public enum DownloadState
 
 /// <summary>
 /// Result of a successful media download.
+/// This is the engine-agnostic result type that all implementations must return.
 /// </summary>
 public record DownloadResult
 {
@@ -181,12 +181,34 @@ public record DownloadResult
     public required long FileSize { get; init; }
 
     /// <summary>
-    /// Metadata for the downloaded media.
+    /// Unique identifier for the media (platform-specific).
     /// </summary>
-    public required MediaMetadata Metadata { get; init; }
+    public required string MediaId { get; init; }
 
     /// <summary>
-    /// Path to the metadata file (info.json) if saved.
+    /// Platform identifier (e.g., "youtube", "vimeo", "soundcloud").
+    /// </summary>
+    public required string Platform { get; init; }
+
+    /// <summary>
+    /// Title of the media.
+    /// </summary>
+    public required string Title { get; init; }
+
+    /// <summary>
+    /// When the media was last modified on the source platform.
+    /// Used for idempotency checks.
+    /// </summary>
+    public DateTime? SourceLastModified { get; init; }
+
+    /// <summary>
+    /// Raw metadata from the download engine.
+    /// This is engine-specific JSON that can be stored for reference.
+    /// </summary>
+    public string? RawMetadata { get; init; }
+
+    /// <summary>
+    /// Path to the metadata file if saved separately.
     /// </summary>
     public string? MetadataFilePath { get; init; }
 
@@ -196,12 +218,12 @@ public record DownloadResult
     public IReadOnlyList<string>? SubtitleFilePaths { get; init; }
 
     /// <summary>
-    /// Actual quality that was downloaded.
+    /// Actual video height that was downloaded (null for audio-only).
     /// </summary>
     public int? ActualHeight { get; init; }
 
     /// <summary>
-    /// Actual audio bitrate that was downloaded.
+    /// Actual audio bitrate that was downloaded in kbps.
     /// </summary>
     public int? ActualAudioBitrate { get; init; }
 
@@ -219,22 +241,28 @@ public record DownloadResult
     /// Duration of the media (if available).
     /// </summary>
     public TimeSpan? Duration { get; init; }
+
+    /// <summary>
+    /// The original URL that was downloaded.
+    /// </summary>
+    public required string OriginalUrl { get; init; }
 }
 
 /// <summary>
-/// Metadata for downloaded media.
+/// Metadata for media fetched without downloading.
+/// This is the engine-agnostic metadata type that all implementations must return.
 /// </summary>
 public record MediaMetadata
 {
     /// <summary>
+    /// Unique identifier for the media (platform-specific).
+    /// </summary>
+    public required string MediaId { get; init; }
+
+    /// <summary>
     /// Platform identifier (e.g., "youtube", "vimeo", "soundcloud").
     /// </summary>
     public required string Platform { get; init; }
-
-    /// <summary>
-    /// Unique identifier on the platform.
-    /// </summary>
-    public required string Id { get; init; }
 
     /// <summary>
     /// Title of the media.
@@ -267,19 +295,26 @@ public record MediaMetadata
     public DateTime? UploadDate { get; init; }
 
     /// <summary>
-    /// Last modified date from the source.
+    /// When the media was last modified on the source platform.
+    /// Used for idempotency checks.
     /// </summary>
     public DateTime? SourceLastModified { get; init; }
 
     /// <summary>
-    /// Raw metadata JSON from the platform.
+    /// Raw metadata from the download engine.
+    /// This is engine-specific JSON that can be stored for reference.
     /// </summary>
-    public string? RawJson { get; init; }
+    public string? RawMetadata { get; init; }
 
     /// <summary>
     /// Tags/categories for the media.
     /// </summary>
     public IReadOnlyList<string>? Tags { get; init; }
+
+    /// <summary>
+    /// Expected duration of the media (if known).
+    /// </summary>
+    public TimeSpan? Duration { get; init; }
 }
 
 /// <summary>
@@ -302,7 +337,11 @@ public class MetadataException : Exception
 
 /// <summary>
 /// Service interface for downloading media from various platforms.
-/// Implementations can wrap yt-dlp, youtube-dl, or other download engines.
+/// Implementations can wrap yt-dlp, youtube-dl, gallery-dl, or any other download engine.
+/// 
+/// This interface is intentionally generic - it doesn't expose any engine-specific types.
+/// Each implementation is responsible for mapping their internal data structures to the
+/// standard <see cref="MediaMetadata"/> and <see cref="DownloadResult"/> types.
 /// </summary>
 public interface IDownloadService
 {
@@ -311,7 +350,7 @@ public interface IDownloadService
     /// </summary>
     /// <param name="url">The URL of the media.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The media metadata.</returns>
+    /// <returns>The media metadata in engine-agnostic format.</returns>
     /// <exception cref="MetadataException">Thrown when metadata cannot be retrieved.</exception>
     Task<MediaMetadata> FetchMetadataAsync(string url, CancellationToken cancellationToken = default);
 
@@ -322,7 +361,7 @@ public interface IDownloadService
     /// <param name="options">Download options (null for defaults).</param>
     /// <param name="progress">Optional progress callback.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The download result.</returns>
+    /// <returns>The download result in engine-agnostic format.</returns>
     /// <exception cref="DownloadException">Thrown when the download fails.</exception>
     Task<DownloadResult> DownloadAsync(
         string url,
@@ -346,4 +385,28 @@ public interface IDownloadService
     /// Gets the version of the underlying download engine.
     /// </summary>
     Task<string> GetVersionAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Interface for services that can compute idempotency keys.
+/// This allows the Worker to compute consistent idempotency keys
+/// regardless of which download service implementation is used.
+/// </summary>
+public interface IIdempotencyKeyGenerator
+{
+    /// <summary>
+    /// Computes an idempotency key for a download request.
+    /// The key should be deterministic based on:
+    /// - The media URL
+    /// - The storage configuration
+    /// - The source's last modified date (if available)
+    /// 
+    /// This ensures that re-downloading the same content with the same
+    /// configuration results in the same idempotency key.
+    /// </summary>
+    /// <param name="mediaUrl">The URL of the media.</param>
+    /// <param name="storageKey">The storage configuration key.</param>
+    /// <param name="sourceLastModified">When the source was last modified.</param>
+    /// <returns>A deterministic idempotency key.</returns>
+    string ComputeIdempotencyKey(string mediaUrl, string storageKey, DateTime? sourceLastModified);
 }

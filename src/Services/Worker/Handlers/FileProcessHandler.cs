@@ -39,6 +39,7 @@ public class FileProcessHandler
     private readonly IMessageBus _messageBus;
     private readonly IJetStreamPublisher _progressPublisher;
     private readonly IDownloadService _downloadService;
+    private readonly IIdempotencyKeyGenerator _idempotencyGenerator;
     private readonly ILogger<FileProcessHandler> _logger;
     private readonly ResiliencePipeline _resiliencePipeline;
     private readonly IJobCoordinationClient _jobClient;
@@ -53,12 +54,14 @@ public class FileProcessHandler
         IMessageBus messageBus,
         IJetStreamPublisher progressPublisher,
         IDownloadService downloadService,
+        IIdempotencyKeyGenerator idempotencyGenerator,
         ILogger<FileProcessHandler> logger,
         IJobCoordinationClient jobClient)
     {
         _messageBus = messageBus;
         _progressPublisher = progressPublisher;
         _downloadService = downloadService;
+        _idempotencyGenerator = idempotencyGenerator;
         _logger = logger;
         _jobClient = jobClient;
 
@@ -110,7 +113,7 @@ public class FileProcessHandler
                 jobId,
                 () => _downloadService.FetchMetadataAsync(request.Url));
 
-            idempotencyKey = YtDlpDownloadService.ComputeIdempotencyKey(
+            idempotencyKey = _idempotencyGenerator.ComputeIdempotencyKey(
                 request.Url, request.StorageKey, metadata.SourceLastModified);
 
             sagaActivity?.SetTag("idempotency.key", idempotencyKey);
@@ -118,7 +121,7 @@ public class FileProcessHandler
             sagaActivity?.SetTag("video.source_last_modified", metadata.SourceLastModified?.ToString("O"));
 
             _logger.LogInformation("Computed IdempotencyKey: {Key} for video {VideoId} ({Platform})",
-                idempotencyKey, metadata.Id, metadata.Platform);
+                idempotencyKey, metadata.MediaId, metadata.Platform);
 
             // ── Phase 2: Idempotency & state tracking check via DataBridge ──
             var startResponse = await ExecuteObservedPhaseAsync(
@@ -155,7 +158,7 @@ public class FileProcessHandler
                         downloadProgress)));
 
             _logger.LogInformation("Downloaded video {VideoId}: {FilePath} (hash: {Hash})",
-                downloadResult.Metadata.Id, downloadResult.FilePath, downloadResult.FileHash);
+                downloadResult.MediaId, downloadResult.FilePath, downloadResult.FileHash);
 
             // ── Phase 4: Get storage config from DataBridge ─────────────────
             var storageCfg = await ExecuteObservedPhaseAsync(
@@ -180,7 +183,7 @@ public class FileProcessHandler
             sagaActivity?.SetTag("media.quality", detectedQuality.ToString());
             
             uploadedBlobPath = StoragePathBuilder.BuildMediaPath(
-                metadata.Platform, metadata.Id, downloadResult.FileHash, Path.GetExtension(downloadResult.FilePath), mediaType, detectedQuality);
+                metadata.Platform, metadata.MediaId, downloadResult.FileHash, Path.GetExtension(downloadResult.FilePath), mediaType, detectedQuality);
 
             _logger.LogInformation("Uploading to storage path: {Path}", uploadedBlobPath);
 
@@ -229,9 +232,9 @@ public class FileProcessHandler
                                     StorageKey: request.StorageKey,
                                     StoragePath: uploadedBlobPath,
                                     FileHash: downloadResult.FileHash,
-                                    MetadataJson: downloadResult.Metadata.RawJson ?? "{}",
-                                    Platform: downloadResult.Metadata.Platform,
-                                    SourceLastModified: downloadResult.Metadata.SourceLastModified,
+                                    MetadataJson: downloadResult.RawMetadata ?? "{}",
+                                    Platform: downloadResult.Platform,
+                                    SourceLastModified: downloadResult.SourceLastModified,
                                     MediaType: mediaType,
                                     Quality: detectedQuality,
                                     VariantType: VideoVariantType.Original,
@@ -406,7 +409,7 @@ public class FileProcessHandler
                                     StorageKey: request.StorageKey,
                                     StoragePath: statusResponse.StoragePath!,
                                     FileHash: statusResponse.FileHash!,
-                                    MetadataJson: metadata.RawJson,
+                                    MetadataJson: metadata.RawMetadata ?? "{}",
                                     Platform: metadata.Platform,
                                     SourceLastModified: metadata.SourceLastModified,
                                     MediaType: existingMediaType,

@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -15,9 +14,10 @@ using DownloadState = Shared.Download.DownloadState;
 namespace Worker.Services;
 
 /// <summary>
-/// Implementation of <see cref="IDownloadService"/> that wraps yt-dlp via YoutubeDLSharp.
+/// Implementation of <see cref="IDownloadService"/> and <see cref="IIdempotencyKeyGenerator"/>
+/// that wraps yt-dlp via YoutubeDLSharp.
 /// </summary>
-public class YtDlpDownloadService : IDownloadService
+public class YtDlpDownloadService : IDownloadService, IIdempotencyKeyGenerator
 {
     private readonly ILogger<YtDlpDownloadService> _logger;
     private readonly string _ytDlpPath;
@@ -49,6 +49,7 @@ public class YtDlpDownloadService : IDownloadService
                 throw new MetadataException($"yt-dlp metadata fetch failed: {errorMsg}");
             }
 
+            // Map yt-dlp specific type to generic MediaMetadata
             return MapToMediaMetadata(result.Data, url);
         }
         catch (OperationCanceledException)
@@ -103,10 +104,6 @@ public class YtDlpDownloadService : IDownloadService
                 Format = formatSelector,
             };
 
-            // Apply throttling if specified
-            // Note: Bandwidth throttling would require custom command line args
-            // options.ThrottleBytesPerSecond can be used with AdditionalOptions
-
             // Apply proxy if specified
             if (!string.IsNullOrEmpty(options.ProxyUrl))
             {
@@ -119,12 +116,11 @@ public class YtDlpDownloadService : IDownloadService
                 optionSet.Cookies = options.CookiesFilePath;
             }
 
-            // Note: AdditionalOptions support would need investigation of CustomOptions API
+            // Note: Bandwidth throttling and additional options would need
+            // to be passed through CustomOptions if the library supports it.
+            // For now, these are placeholders for future implementation.
 
-            // Start progress polling if callback provided
-            using var progressCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            Task? progressTask = null;
-            
+            // Start progress reporting
             if (progress != null)
             {
                 progress.Report(new DownloadProgress
@@ -133,22 +129,12 @@ public class YtDlpDownloadService : IDownloadService
                     BytesDownloaded = 0,
                     StatusMessage = "Starting download..."
                 });
-                
-                progressTask = RunProgressPollingAsync(
-                    outputDir, metadata.Id, metadata.Platform, progress, progressCts.Token);
             }
 
             // Execute download
             var result = await ytDl.RunVideoDownload(url,
                 overrideOptions: optionSet,
                 ct: cancellationToken);
-
-            // Stop progress polling
-            progressCts.Cancel();
-            if (progressTask != null)
-            {
-                try { await progressTask; } catch (OperationCanceledException) { }
-            }
 
             if (!result.Success)
             {
@@ -169,7 +155,7 @@ public class YtDlpDownloadService : IDownloadService
             
             // Parse info.json for detailed metadata
             var (actualHeight, actualBitrate, videoCodec, audioCodec, duration) = 
-                await ParseDownloadedMetadataAsync(outputDir, metadata.Id, cancellationToken);
+                await ParseDownloadedMetadataAsync(outputDir, metadata.MediaId, cancellationToken);
 
             // Report completion
             progress?.Report(new DownloadProgress
@@ -180,18 +166,24 @@ public class YtDlpDownloadService : IDownloadService
                 StatusMessage = "Download completed"
             });
 
+            // Map to generic DownloadResult
             return new DownloadResult
             {
                 FilePath = filePath,
                 FileHash = fileHash,
                 FileSize = fileInfo.Length,
-                Metadata = metadata,
-                MetadataFilePath = Path.Combine(outputDir, $"{metadata.Id}.info.json"),
+                MediaId = metadata.MediaId,
+                Platform = metadata.Platform,
+                Title = metadata.Title,
+                SourceLastModified = metadata.SourceLastModified,
+                RawMetadata = metadata.RawMetadata,
+                MetadataFilePath = Path.Combine(outputDir, $"{metadata.MediaId}.info.json"),
                 ActualHeight = actualHeight,
                 ActualAudioBitrate = actualBitrate,
                 VideoCodec = videoCodec,
                 AudioCodec = audioCodec,
-                Duration = duration
+                Duration = duration ?? metadata.Duration,
+                OriginalUrl = url
             };
         }
         catch (OperationCanceledException)
@@ -239,8 +231,15 @@ public class YtDlpDownloadService : IDownloadService
     public Task<string> GetVersionAsync(CancellationToken cancellationToken = default)
     {
         // yt-dlp version is determined by the binary path/version installed
-        // This could be enhanced to actually run "yt-dlp --version" if needed
         return Task.FromResult(_ytDlpPath);
+    }
+
+    /// <inheritdoc />
+    public string ComputeIdempotencyKey(string mediaUrl, string storageKey, DateTime? sourceLastModified)
+    {
+        var input = $"{mediaUrl}|{storageKey}|{sourceLastModified?.ToString("O") ?? "null"}";
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(input));
+        return Convert.ToHexStringLower(hash);
     }
 
     private YoutubeDL CreateYoutubeDL()
@@ -251,15 +250,26 @@ public class YtDlpDownloadService : IDownloadService
         };
     }
 
+    /// <summary>
+    /// Maps yt-dlp specific VideoData to generic MediaMetadata.
+    /// This is where the engine-specific to generic mapping happens.
+    /// </summary>
     private static MediaMetadata MapToMediaMetadata(VideoData data, string originalUrl)
     {
         var sourceLastModified = data.ModifiedTimestamp ?? data.UploadDate;
         if (sourceLastModified.HasValue)
             sourceLastModified = DateTime.SpecifyKind(sourceLastModified.Value, DateTimeKind.Utc);
 
+        // Try to extract duration
+        TimeSpan? duration = null;
+        if (data.Duration.HasValue && data.Duration.Value > 0)
+        {
+            duration = TimeSpan.FromSeconds(data.Duration.Value);
+        }
+
         return new MediaMetadata
         {
-            Id = data.ID ?? throw new MetadataException("yt-dlp returned no video ID"),
+            MediaId = data.ID ?? throw new MetadataException("yt-dlp returned no video ID"),
             Platform = (data.ExtractorKey ?? data.Extractor ?? "unknown").ToLowerInvariant(),
             Title = data.Title ?? "untitled",
             Description = data.Description,
@@ -268,8 +278,9 @@ public class YtDlpDownloadService : IDownloadService
             OriginalUrl = originalUrl,
             UploadDate = data.UploadDate,
             SourceLastModified = sourceLastModified,
-            RawJson = JsonConvert.SerializeObject(data),
-            Tags = data.Tags?.ToList()
+            RawMetadata = JsonConvert.SerializeObject(data),
+            Tags = data.Tags?.ToList(),
+            Duration = duration
         };
     }
 
@@ -305,11 +316,11 @@ public class YtDlpDownloadService : IDownloadService
     }
 
     private async Task<(int? Height, int? Bitrate, string? VideoCodec, string? AudioCodec, TimeSpan? Duration)> 
-        ParseDownloadedMetadataAsync(string outputDir, string videoId, CancellationToken cancellationToken)
+        ParseDownloadedMetadataAsync(string outputDir, string mediaId, CancellationToken cancellationToken)
     {
         try
         {
-            var infoJsonPath = Path.Combine(outputDir, $"{videoId}.info.json");
+            var infoJsonPath = Path.Combine(outputDir, $"{mediaId}.info.json");
             if (!File.Exists(infoJsonPath))
                 return (null, null, null, null, null);
 
@@ -330,57 +341,8 @@ public class YtDlpDownloadService : IDownloadService
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "Failed to parse downloaded metadata for {VideoId}", videoId);
+            _logger.LogDebug(ex, "Failed to parse downloaded metadata for {MediaId}", mediaId);
             return (null, null, null, null, null);
-        }
-    }
-
-    private async Task RunProgressPollingAsync(
-        string outputDir,
-        string videoId,
-        string platform,
-        IProgress<DownloadProgress> progress,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            long lastReportedSize = 0;
-            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(2));
-
-            while (await timer.WaitForNextTickAsync(cancellationToken))
-            {
-                // Look for partial/downloading files
-                var files = Directory.GetFiles(outputDir, $"{videoId}*", SearchOption.TopDirectoryOnly);
-                
-                var targetFile = files
-                    .Where(f => !f.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
-                    .Select(f => new FileInfo(f))
-                    .OrderByDescending(f => f.Length)
-                    .FirstOrDefault();
-
-                if (targetFile != null)
-                {
-                    var currentSize = targetFile.Length;
-                    if (currentSize > lastReportedSize)
-                    {
-                        lastReportedSize = currentSize;
-                        progress.Report(new DownloadProgress
-                        {
-                            State = DownloadState.Downloading,
-                            BytesDownloaded = currentSize,
-                            StatusMessage = $"Downloading {platform} content..."
-                        });
-                    }
-                }
-            }
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            // Expected when download completes
-        }
-        catch (Exception ex)
-        {
-            _logger.LogDebug(ex, "Progress polling encountered an error");
         }
     }
 
@@ -388,14 +350,6 @@ public class YtDlpDownloadService : IDownloadService
     {
         await using var stream = File.OpenRead(filePath);
         var hash = await SHA256.HashDataAsync(stream, cancellationToken);
-        return Convert.ToHexStringLower(hash);
-    }
-
-    /// <summary>
-    public static string ComputeIdempotencyKey(string videoUrl, string storageKey, DateTime? sourceLastModified)
-    {
-        var input = $"{videoUrl}|{storageKey}|{sourceLastModified?.ToString("O") ?? "null"}";
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(input));
         return Convert.ToHexStringLower(hash);
     }
 }
