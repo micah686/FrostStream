@@ -1,10 +1,13 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using FluentStorage.Blobs;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.Extensions.Logging;
 using Polly;
 using Shared;
+using Shared.Entities;
 using Shared.Jobs;
 using Shared.Messages;
 using Shared.Models;
@@ -167,9 +170,13 @@ public class FileProcessHandler
 
             storage = FluentStorageProvider.CreateStorage(storageCfg);
 
-            // ── Phase 5: Upload to storage ──────────────────────────────────
-            uploadedBlobPath = StoragePathBuilder.BuildVideoPath(
-                metadata, downloadResult.FileHash, downloadResult.LocalFilePath);
+            // ── Phase 5: Detect media type and quality, then upload to storage ──────────────────────────────────
+            var (mediaType, detectedQuality) = await DetectMediaTypeAndQualityAsync(downloadResult.LocalFilePath);
+            sagaActivity?.SetTag("media.type", mediaType.ToString());
+            sagaActivity?.SetTag("media.quality", detectedQuality.ToString());
+            
+            uploadedBlobPath = StoragePathBuilder.BuildMediaPath(
+                metadata, downloadResult.FileHash, downloadResult.LocalFilePath, mediaType, detectedQuality);
 
             _logger.LogInformation("Uploading to storage path: {Path}", uploadedBlobPath);
 
@@ -213,14 +220,20 @@ public class FileProcessHandler
                         {
                             return await _jobClient.CommitVideoAsync(
                                 new VideoCommitRequest(
-                                    jobId,
-                                    idempotencyKey,
-                                    request.StorageKey,
-                                    uploadedBlobPath,
-                                    downloadResult.FileHash,
-                                    downloadResult.Metadata.RawJson,
-                                    downloadResult.Metadata.Platform,
-                                    downloadResult.Metadata.SourceLastModified),
+                                    JobId: jobId,
+                                    IdempotencyKey: idempotencyKey,
+                                    StorageKey: request.StorageKey,
+                                    StoragePath: uploadedBlobPath,
+                                    FileHash: downloadResult.FileHash,
+                                    MetadataJson: downloadResult.Metadata.RawJson,
+                                    Platform: downloadResult.Metadata.Platform,
+                                    SourceLastModified: downloadResult.Metadata.SourceLastModified,
+                                    MediaType: mediaType,
+                                    Quality: detectedQuality,
+                                    VariantType: VideoVariantType.Original,
+                                    SourceVersionId: null,
+                                    Codec: null,
+                                    FileSize: downloadResult.FileSize),
                                 token);
                         })));
             }
@@ -376,16 +389,28 @@ public class FileProcessHandler
                         phase: "reconcile-commit",
                         async () => await _resiliencePipeline.ExecuteAsync(async token =>
                         {
+                            // For reconciliation, parse quality from existing storage path
+                            var existingPathInfo = StoragePathBuilder.ParsePath(statusResponse.StoragePath!);
+                            var existingQuality = existingPathInfo?.Quality ?? Quality.Unknown;
+                            // Infer media type from file extension for reconciliation
+                            var existingMediaType = InferMediaTypeFromPath(statusResponse.StoragePath!);
+                            
                             return await _jobClient.CommitVideoAsync(
                                 new VideoCommitRequest(
-                                    jobId,
-                                    idempotencyKey,
-                                    request.StorageKey,
-                                    statusResponse.StoragePath!,
-                                    statusResponse.FileHash!,
-                                    metadata.RawJson,
-                                    metadata.Platform,
-                                    metadata.SourceLastModified),
+                                    JobId: jobId,
+                                    IdempotencyKey: idempotencyKey,
+                                    StorageKey: request.StorageKey,
+                                    StoragePath: statusResponse.StoragePath!,
+                                    FileHash: statusResponse.FileHash!,
+                                    MetadataJson: metadata.RawJson,
+                                    Platform: metadata.Platform,
+                                    SourceLastModified: metadata.SourceLastModified,
+                                    MediaType: existingMediaType,
+                                    Quality: existingQuality,
+                                    VariantType: existingPathInfo?.VariantType ?? VideoVariantType.Original,
+                                    SourceVersionId: null,
+                                    Codec: null,
+                                    FileSize: 0), // Size unknown for reconciliation
                                 token);
                         })));
 
@@ -638,5 +663,206 @@ public class FileProcessHandler
             : base(message, innerException)
         {
         }
+    }
+
+    /// <summary>
+    /// Detects media type and quality from yt-dlp metadata.
+    /// Returns (MediaType, Quality) tuple.
+    /// </summary>
+    private static async Task<(MediaType MediaType, Quality Quality)> DetectMediaTypeAndQualityAsync(string filePath)
+    {
+        try
+        {
+            // Look for the info.json file that yt-dlp creates
+            var directory = Path.GetDirectoryName(filePath);
+            var fileNameWithoutExt = Path.GetFileNameWithoutExtension(filePath);
+            var infoJsonPath = Path.Combine(directory!, $"{fileNameWithoutExt}.info.json");
+
+            if (File.Exists(infoJsonPath))
+            {
+                var json = await File.ReadAllTextAsync(infoJsonPath);
+                using var doc = JsonDocument.Parse(json);
+                
+                // Determine media type
+                var mediaType = DetectMediaType(doc.RootElement);
+                
+                // Detect quality based on media type
+                var quality = mediaType switch
+                {
+                    MediaType.Video => DetectVideoQuality(doc.RootElement, filePath),
+                    MediaType.Audio => DetectAudioQuality(doc.RootElement),
+                    _ => Quality.Unknown
+                };
+                
+                return (mediaType, quality);
+            }
+
+            // Fallback: try to detect from filename
+            return DetectFromFilename(filePath);
+        }
+        catch
+        {
+            // Best effort - return unknown if detection fails
+            return (MediaType.Unknown, Quality.Unknown);
+        }
+    }
+
+    private static MediaType DetectMediaType(JsonElement root)
+    {
+        // Check for vcodec/nostreams to determine if it's audio-only
+        if (root.TryGetProperty("vcodec", out var vcodec) && 
+            vcodec.ValueKind == JsonValueKind.String)
+        {
+            var vcodecStr = vcodec.GetString();
+            // "none" means audio-only
+            if (vcodecStr == "none")
+                return MediaType.Audio;
+        }
+        
+        // Check height/width - if present, it's likely video
+        if (root.TryGetProperty("height", out var height) && height.ValueKind == JsonValueKind.Number)
+            return MediaType.Video;
+        if (root.TryGetProperty("width", out var width) && width.ValueKind == JsonValueKind.Number)
+            return MediaType.Video;
+        
+        // Check format note for audio indicators
+        if (root.TryGetProperty("format_note", out var formatNote) && 
+            formatNote.ValueKind == JsonValueKind.String)
+        {
+            var note = formatNote.GetString()?.ToLowerInvariant() ?? "";
+            if (note.Contains("audio") || note.Contains("drc"))
+                return MediaType.Audio;
+        }
+        
+        // Default to video if we can't determine (most common case)
+        return MediaType.Video;
+    }
+
+    private static Quality DetectVideoQuality(JsonElement root, string filePath)
+    {
+        // Try to get height from metadata
+        if (root.TryGetProperty("height", out var heightElement) && 
+            heightElement.ValueKind == JsonValueKind.Number)
+        {
+            return MapHeightToQuality(heightElement.GetInt32());
+        }
+        
+        // Try format note which might contain resolution
+        if (root.TryGetProperty("format_note", out var formatNoteElement) &&
+            formatNoteElement.ValueKind == JsonValueKind.String)
+        {
+            var formatNote = formatNoteElement.GetString();
+            var match = Regex.Match(formatNote ?? "", @"(\d+)p?", RegexOptions.IgnoreCase);
+            if (match.Success && int.TryParse(match.Groups[1].Value, out var height))
+            {
+                return MapHeightToQuality(height);
+            }
+        }
+
+        // Fallback: try to extract from filename
+        var fileName = Path.GetFileNameWithoutExtension(filePath);
+        var heightMatch = Regex.Match(fileName, @"\[?(\d+)p\]?");
+        if (heightMatch.Success && int.TryParse(heightMatch.Groups[1].Value, out var fileHeight))
+        {
+            return MapHeightToQuality(fileHeight);
+        }
+
+        return Quality.Unknown;
+    }
+
+    private static Quality DetectAudioQuality(JsonElement root)
+    {
+        // Try to get abr (audio bitrate) first
+        if (root.TryGetProperty("abr", out var abrElement) && 
+            abrElement.ValueKind == JsonValueKind.Number)
+        {
+            return MapBitrateToQuality(abrElement.GetInt32());
+        }
+        
+        // Try tbr (total bitrate) as fallback for audio-only
+        if (root.TryGetProperty("tbr", out var tbrElement) && 
+            tbrElement.ValueKind == JsonValueKind.Number)
+        {
+            return MapBitrateToQuality((int)tbrElement.GetDouble());
+        }
+        
+        // Try format note for bitrate hints
+        if (root.TryGetProperty("format_note", out var formatNoteElement) &&
+            formatNoteElement.ValueKind == JsonValueKind.String)
+        {
+            var formatNote = formatNoteElement.GetString();
+            var match = Regex.Match(formatNote ?? "", @"(\d+)k", RegexOptions.IgnoreCase);
+            if (match.Success && int.TryParse(match.Groups[1].Value, out var bitrate))
+            {
+                return MapBitrateToQuality(bitrate);
+            }
+        }
+
+        return Quality.Unknown;
+    }
+
+    private static (MediaType MediaType, Quality Quality) DetectFromFilename(string filePath)
+    {
+        var fileName = Path.GetFileNameWithoutExtension(filePath);
+        var extension = Path.GetExtension(filePath).ToLowerInvariant();
+        
+        // Audio file extensions
+        var audioExtensions = new[] { ".mp3", ".m4a", ".aac", ".ogg", ".opus", ".flac", ".wav", ".wma" };
+        
+        if (audioExtensions.Contains(extension))
+        {
+            // Try to extract bitrate from filename
+            var bitrateMatch = Regex.Match(fileName, @"(\d+)k", RegexOptions.IgnoreCase);
+            if (bitrateMatch.Success && int.TryParse(bitrateMatch.Groups[1].Value, out var bitrate))
+            {
+                return (MediaType.Audio, MapBitrateToQuality(bitrate));
+            }
+            return (MediaType.Audio, Quality.Unknown);
+        }
+        
+        // Video file extensions or default
+        var heightMatch = Regex.Match(fileName, @"\[?(\d+)p\]?");
+        if (heightMatch.Success && int.TryParse(heightMatch.Groups[1].Value, out var height))
+        {
+            return (MediaType.Video, MapHeightToQuality(height));
+        }
+        
+        return (MediaType.Video, Quality.Unknown);
+    }
+
+    private static Quality MapHeightToQuality(int height)
+    {
+        return height switch
+        {
+            <= 480 => Quality.P480,
+            <= 720 => Quality.P720,
+            <= 1080 => Quality.P1080,
+            <= 1440 => Quality.P1440,
+            <= 2160 => Quality.P4K,
+            _ => Quality.P8K
+        };
+    }
+
+    private static Quality MapBitrateToQuality(int bitrateKbps)
+    {
+        return bitrateKbps switch
+        {
+            <= 128 => Quality.K128,
+            <= 192 => Quality.K192,
+            <= 256 => Quality.K256,
+            _ => Quality.K320
+        };
+    }
+
+    /// <summary>
+    /// Infers media type from file path based on extension.
+    /// Used for reconciliation when original metadata is unavailable.
+    /// </summary>
+    private static MediaType InferMediaTypeFromPath(string storagePath)
+    {
+        var extension = Path.GetExtension(storagePath).ToLowerInvariant();
+        var audioExtensions = new[] { ".mp3", ".m4a", ".aac", ".ogg", ".opus", ".flac", ".wav", ".wma" };
+        
+        return audioExtensions.Contains(extension) ? MediaType.Audio : MediaType.Video;
     }
 }

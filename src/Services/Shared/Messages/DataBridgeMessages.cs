@@ -1,9 +1,29 @@
+using Shared.Entities;
+
 namespace Shared.Messages;
 
 // Requests
 public record JobStartRequest(Guid JobId, string IdempotencyKey, string StorageKey, string VideoUrl);
 public record JobProgressRequest(Guid JobId, string Status, string? StoragePath, string? FileHash);
-public record VideoCommitRequest(Guid JobId, string IdempotencyKey, string StorageKey, string StoragePath, string FileHash, string MetadataJson, string Platform, DateTime? SourceLastModified);
+
+/// <summary>
+/// Request to commit a video with versioned storage support.
+/// </summary>
+public record VideoCommitRequest(
+    Guid JobId,
+    string IdempotencyKey,
+    string StorageKey,
+    string StoragePath,
+    string FileHash,
+    string MetadataJson,
+    string Platform,
+    DateTime? SourceLastModified,
+    MediaType MediaType = MediaType.Unknown,
+    Quality Quality = Quality.Unknown,
+    VideoVariantType VariantType = VideoVariantType.Original,
+    Guid? SourceVersionId = null,
+    string? Codec = null,
+    long FileSize = 0);
 public record JobFailRequest(Guid JobId, string ErrorMessage, string? ErrorDetails);
 public record JobStatusRequest(Guid JobId);
 public record JobLinkCompleteRequest(Guid JobId, Guid ExistingVersionId);

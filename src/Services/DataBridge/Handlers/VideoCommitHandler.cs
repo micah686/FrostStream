@@ -89,7 +89,13 @@ public class VideoCommitHandler : MessageHandlerBase<VideoCommitRequest, VideoCo
                 FileHash = request.FileHash,
                 StorageKey = request.StorageKey,
                 StoragePath = request.StoragePath,
-                VersionNum = maxVersion + 1
+                VersionNum = maxVersion + 1,
+                MediaType = request.MediaType,
+                VariantType = request.VariantType,
+                Quality = request.Quality,
+                SourceVersionId = request.SourceVersionId,
+                Codec = request.Codec,
+                FileSize = request.FileSize
             };
             db.VideoVersions.Add(videoVersion);
 
