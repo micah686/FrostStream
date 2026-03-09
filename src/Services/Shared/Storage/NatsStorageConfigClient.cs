@@ -17,7 +17,7 @@ public class NatsStorageConfigClient : IStorageConfigClient
         var response = await _messageBus.RequestAsync<StorageConfigRequest, StorageConfigResponse>(
             Subjects.StorageConfig,
             new StorageConfigRequest(storageKey),
-            TimeSpan.FromSeconds(10),
+            NatsTimeoutConstants.ShortRequestTimeout,
             cancellationToken);
 
         return response ?? new StorageConfigResponse(

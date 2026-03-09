@@ -10,6 +10,7 @@
     <ItemGroup>
       <PackageReference Include="FluentStorage" Version="6.0.2" />
       <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.0" />
+      <PackageReference Include="Polly.Core" Version="8.6.5" />
       <PackageReference Include="System.IO.Hashing" Version="9.0.5" />
     </ItemGroup>
 

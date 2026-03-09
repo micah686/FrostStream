@@ -14,13 +14,6 @@ public class NatsJobCoordinationClient : IJobCoordinationClient
     private readonly ILogger<NatsJobCoordinationClient> _logger;
     private readonly TimeSpan _defaultTimeout;
 
-    // Subject constants - centralized here to decouple from Worker
-    private const string JobStartSubject = "databridge.job.start";
-    private const string JobProgressSubject = "databridge.job.progress";
-    private const string VideoCommitSubject = "databridge.video.commit";
-    private const string JobFailSubject = "databridge.job.fail";
-    private const string JobStatusSubject = "databridge.job.status";
-
     public NatsJobCoordinationClient(
         IMessageBus messageBus,
         ILogger<NatsJobCoordinationClient> logger,
@@ -28,7 +21,7 @@ public class NatsJobCoordinationClient : IJobCoordinationClient
     {
         _messageBus = messageBus ?? throw new ArgumentNullException(nameof(messageBus));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _defaultTimeout = defaultTimeout ?? TimeSpan.FromSeconds(30);
+        _defaultTimeout = defaultTimeout ?? NatsTimeoutConstants.DefaultRequestTimeout;
     }
 
     public async Task<JobStartResponse> StartJobAsync(JobStartRequest request, CancellationToken ct)
@@ -37,7 +30,7 @@ public class NatsJobCoordinationClient : IJobCoordinationClient
             request.JobId, request.IdempotencyKey);
 
         var response = await _messageBus.RequestAsync<JobStartRequest, JobStartResponse>(
-            JobStartSubject,
+            Subjects.JobStart,
             request,
             _defaultTimeout,
             ct);
@@ -53,7 +46,7 @@ public class NatsJobCoordinationClient : IJobCoordinationClient
     public async Task<JobProgressResponse> ReportProgressAsync(JobProgressRequest request, CancellationToken ct)
     {
         var response = await _messageBus.RequestAsync<JobProgressRequest, JobProgressResponse>(
-            JobProgressSubject,
+            Subjects.JobProgress,
             request,
             _defaultTimeout,
             ct);
@@ -71,7 +64,7 @@ public class NatsJobCoordinationClient : IJobCoordinationClient
         _logger.LogDebug("Committing video for job {JobId}", request.JobId);
 
         var response = await _messageBus.RequestAsync<VideoCommitRequest, VideoCommitResponse>(
-            VideoCommitSubject,
+            Subjects.VideoCommit,
             request,
             _defaultTimeout,
             ct);
@@ -84,7 +77,7 @@ public class NatsJobCoordinationClient : IJobCoordinationClient
         try
         {
             await _messageBus.RequestAsync<JobFailRequest, JobFailResponse>(
-                JobFailSubject,
+                Subjects.JobFail,
                 request,
                 _defaultTimeout,
                 ct);
@@ -101,7 +94,7 @@ public class NatsJobCoordinationClient : IJobCoordinationClient
         try
         {
             return await _messageBus.RequestAsync<JobStatusRequest, JobStatusResponse>(
-                JobStatusSubject,
+                Subjects.JobStatus,
                 new JobStatusRequest(jobId),
                 _defaultTimeout,
                 ct);

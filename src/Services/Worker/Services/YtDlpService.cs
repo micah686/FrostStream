@@ -2,30 +2,12 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using Shared.Models;
 using YoutubeDLSharp;
 using YoutubeDLSharp.Metadata;
 using YoutubeDLSharp.Options;
 
 namespace Worker.Services;
-
-/// <summary>
-/// Result of a yt-dlp metadata fetch (--dump-json).
-/// </summary>
-public record YtDlpMetadata(
-    string Id,
-    string Platform,
-    string Title,
-    DateTime? SourceLastModified,
-    string RawJson);
-
-/// <summary>
-/// Result of a full yt-dlp download.
-/// </summary>
-public record YtDlpDownloadResult(
-    YtDlpMetadata Metadata,
-    string LocalFilePath,
-    string FileHash,
-    long FileSize);
 
 /// <summary>
 /// Wraps the yt-dlp command-line executable for fetching metadata and downloading videos.

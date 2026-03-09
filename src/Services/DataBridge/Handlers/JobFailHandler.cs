@@ -1,8 +1,6 @@
 using DataBridge.Data;
-using FlySwattr.NATS.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Shared;
 using Shared.Jobs;
@@ -10,68 +8,57 @@ using Shared.Messages;
 
 namespace DataBridge.Handlers;
 
-public class JobFailHandler : BackgroundService
+public class JobFailHandler : MessageHandlerBase<JobFailRequest, JobFailResponse>
 {
-    private readonly IMessageBus _messageBus;
-    private readonly IServiceScopeFactory _scopeFactory;
-    private readonly ILogger<JobFailHandler> _logger;
-
     public JobFailHandler(
-        IMessageBus messageBus,
+        FlySwattr.NATS.Abstractions.IMessageBus messageBus,
         IServiceScopeFactory scopeFactory,
         ILogger<JobFailHandler> logger)
+        : base(messageBus, scopeFactory, logger)
     {
-        _messageBus = messageBus;
-        _scopeFactory = scopeFactory;
-        _logger = logger;
     }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override string Subject => Subjects.JobFail;
+
+    protected override async Task<JobFailResponse> HandleRequestAsync(
+        FrostStreamDbContext db,
+        JobFailRequest request,
+        CancellationToken cancellationToken)
     {
-        _logger.LogInformation("JobFailHandler subscribing to {Subject}", Subjects.JobFail);
-
-        await _messageBus.SubscribeAsync<JobFailRequest>(
-            Subjects.JobFail,
-            async context =>
+        var job = await db.Jobs.FirstOrDefaultAsync(j => j.JobId == request.JobId, cancellationToken);
+        if (job != null)
+        {
+            var currentStatus = JobStatusCodec.Parse(job.Status);
+            if (currentStatus == JobStatus.Completed)
             {
-                var request = context.Message;
-                _logger.LogInformation("Received JobFail for JobId: {JobId}", request.JobId);
+                Logger.LogWarning(
+                    "Ignoring JobFail for already completed JobId {JobId}. Error: {Error}",
+                    request.JobId,
+                    request.ErrorMessage);
+                return new JobFailResponse(Success: true);
+            }
 
-                using var scope = _scopeFactory.CreateScope();
-                var db = scope.ServiceProvider.GetRequiredService<FrostStreamDbContext>();
+            JobStateMachine.Transition(job, JobStatus.Failed);
+            job.ErrorMsg = request.ErrorMessage;
+            job.RetryCount++;
 
-                var job = await db.Jobs.FirstOrDefaultAsync(j => j.JobId == request.JobId, stoppingToken);
-                if (job != null)
-                {
-                    var currentStatus = JobStatusCodec.Parse(job.Status);
-                    if (currentStatus == JobStatus.Completed)
-                    {
-                        _logger.LogWarning(
-                            "Ignoring JobFail for already completed JobId {JobId}. Error: {Error}",
-                            request.JobId,
-                            request.ErrorMessage);
-                        await context.RespondAsync(new JobFailResponse(Success: true), stoppingToken);
-                        return;
-                    }
+            var tracker = await db.JobTrackers.FirstOrDefaultAsync(t => t.JobId == request.JobId, cancellationToken);
+            if (tracker != null)
+            {
+                tracker.ErrorDetails = request.ErrorDetails;
+                tracker.RetryCount++;
+                tracker.UpdatedAt = DateTime.UtcNow;
+            }
 
-                    JobStateMachine.Transition(job, JobStatus.Failed);
-                    job.ErrorMsg = request.ErrorMessage;
-                    job.RetryCount++;
+            await db.SaveChangesAsync(cancellationToken);
+        }
 
-                    var tracker = await db.JobTrackers.FirstOrDefaultAsync(t => t.JobId == request.JobId, stoppingToken);
-                    if (tracker != null)
-                    {
-                        tracker.ErrorDetails = request.ErrorDetails;
-                        tracker.RetryCount++;
-                        tracker.UpdatedAt = DateTime.UtcNow;
-                    }
+        return new JobFailResponse(Success: true);
+    }
 
-                    await db.SaveChangesAsync(stoppingToken);
-                }
-
-                await context.RespondAsync(new JobFailResponse(Success: true), stoppingToken);
-            },
-            queueGroup: "databridge-jobs",
-            cancellationToken: stoppingToken);
+    protected override JobFailResponse CreateErrorResponse(Exception exception)
+    {
+        // Even on error, return success to acknowledge receipt
+        return new JobFailResponse(Success: true);
     }
 }

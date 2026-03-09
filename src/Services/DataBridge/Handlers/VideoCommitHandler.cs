@@ -1,8 +1,6 @@
 using DataBridge.Data;
-using FlySwattr.NATS.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Shared;
 using Shared.Entities;
@@ -11,87 +9,52 @@ using Shared.Messages;
 
 namespace DataBridge.Handlers;
 
-public class VideoCommitHandler : BackgroundService
+public class VideoCommitHandler : MessageHandlerBase<VideoCommitRequest, VideoCommitResponse>
 {
-    private readonly IMessageBus _messageBus;
-    private readonly IServiceScopeFactory _scopeFactory;
-    private readonly ILogger<VideoCommitHandler> _logger;
-
     public VideoCommitHandler(
-        IMessageBus messageBus,
+        FlySwattr.NATS.Abstractions.IMessageBus messageBus,
         IServiceScopeFactory scopeFactory,
         ILogger<VideoCommitHandler> logger)
+        : base(messageBus, scopeFactory, logger)
     {
-        _messageBus = messageBus;
-        _scopeFactory = scopeFactory;
-        _logger = logger;
     }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override string Subject => Subjects.VideoCommit;
+
+    protected override async Task<VideoCommitResponse> HandleRequestAsync(
+        FrostStreamDbContext db,
+        VideoCommitRequest request,
+        CancellationToken cancellationToken)
     {
-        _logger.LogInformation("VideoCommitHandler subscribing to {Subject}", Subjects.VideoCommit);
-
-        await _messageBus.SubscribeAsync<VideoCommitRequest>(
-            Subjects.VideoCommit,
-            async context =>
-            {
-                var request = context.Message;
-                _logger.LogInformation("Received VideoCommit for JobId: {JobId}", request.JobId);
-
-                try
-                {
-                    var versionId = await CommitVideoAsync(request, stoppingToken);
-                    if (versionId == null)
-                    {
-                        await context.RespondAsync(new VideoCommitResponse(false, "JobTracker not found"), stoppingToken);
-                        return;
-                    }
-
-                    await TryPublishLinkCompletionAsync(request.JobId, versionId.Value, stoppingToken);
-                    await context.RespondAsync(new VideoCommitResponse(true, null), stoppingToken);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to commit video for JobId: {JobId}", request.JobId);
-                    await context.RespondAsync(new VideoCommitResponse(false, ex.Message), stoppingToken);
-                }
-            },
-            queueGroup: "databridge-jobs",
-            cancellationToken: stoppingToken);
-    }
-
-    private async Task<Guid?> CommitVideoAsync(VideoCommitRequest request, CancellationToken ct)
-    {
-        using var scope = _scopeFactory.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<FrostStreamDbContext>();
-
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 
         try
         {
             var tracker = await db.JobTrackers
                 .Include(t => t.Job)
-                .FirstOrDefaultAsync(t => t.JobId == request.JobId, ct);
+                .FirstOrDefaultAsync(t => t.JobId == request.JobId, cancellationToken);
 
             if (tracker?.Job == null)
             {
-                return null;
+                return new VideoCommitResponse(false, "JobTracker not found");
             }
 
             // C2: Idempotent commit behavior.
             var existingVersion = await db.VideoVersions.AsNoTracking()
-                .FirstOrDefaultAsync(v => v.IdempotencyKey == request.IdempotencyKey, ct);
+                .FirstOrDefaultAsync(v => v.IdempotencyKey == request.IdempotencyKey, cancellationToken);
 
             if (existingVersion != null)
             {
                 ApplyCommittedState(tracker, existingVersion);
-                await db.SaveChangesAsync(ct);
-                await transaction.CommitAsync(ct);
-                return existingVersion.Id;
+                await db.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                
+                await TryPublishLinkCompletionAsync(request.JobId, existingVersion.Id, cancellationToken);
+                return new VideoCommitResponse(true, null);
             }
 
             var videoInfo = await db.VideoInfos
-                .FirstOrDefaultAsync(v => v.IdempotencyKey == request.IdempotencyKey, ct);
+                .FirstOrDefaultAsync(v => v.IdempotencyKey == request.IdempotencyKey, cancellationToken);
 
             if (videoInfo == null)
             {
@@ -116,7 +79,7 @@ public class VideoCommitHandler : BackgroundService
 
             var maxVersion = await db.VideoVersions
                 .Where(v => v.VideoId == videoInfo.Id)
-                .MaxAsync(v => (int?)v.VersionNum, ct) ?? 0;
+                .MaxAsync(v => (int?)v.VersionNum, cancellationToken) ?? 0;
 
             var videoVersion = new VideoVersion
             {
@@ -132,38 +95,53 @@ public class VideoCommitHandler : BackgroundService
 
             ApplyCommittedState(tracker, videoVersion);
 
-            await db.SaveChangesAsync(ct);
-            await transaction.CommitAsync(ct);
-            return videoVersion.Id;
+            await db.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            
+            await TryPublishLinkCompletionAsync(request.JobId, videoVersion.Id, cancellationToken);
+            return new VideoCommitResponse(true, null);
         }
         catch (DbUpdateException ex) when (DbExceptionHelpers.IsUniqueViolation(ex))
         {
-            _logger.LogWarning(ex,
+            Logger.LogWarning(ex,
                 "VideoCommit unique constraint race for JobId {JobId}, IdempotencyKey {IdempotencyKey}. Reconciling as committed.",
                 request.JobId, request.IdempotencyKey);
 
-            await transaction.RollbackAsync(ct);
-            return await ReconcileCommittedStateAsync(request.JobId, request.IdempotencyKey, ct);
+            await transaction.RollbackAsync(cancellationToken);
+            var versionId = await ReconcileCommittedStateAsync(request.JobId, request.IdempotencyKey, cancellationToken);
+            
+            if (versionId != null)
+            {
+                await TryPublishLinkCompletionAsync(request.JobId, versionId.Value, cancellationToken);
+                return new VideoCommitResponse(true, null);
+            }
+            
+            return new VideoCommitResponse(false, "Failed to reconcile committed state");
         }
         catch
         {
-            await transaction.RollbackAsync(ct);
+            await transaction.RollbackAsync(cancellationToken);
             throw;
         }
+    }
+
+    protected override VideoCommitResponse CreateErrorResponse(Exception exception)
+    {
+        return new VideoCommitResponse(false, exception.Message);
     }
 
     private async Task<Guid?> ReconcileCommittedStateAsync(
         Guid jobId,
         string idempotencyKey,
-        CancellationToken ct)
+        CancellationToken cancellationToken)
     {
-        using var scope = _scopeFactory.CreateScope();
+        using var scope = ScopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<FrostStreamDbContext>();
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 
         var tracker = await db.JobTrackers
             .Include(t => t.Job)
-            .FirstOrDefaultAsync(t => t.JobId == jobId, ct);
+            .FirstOrDefaultAsync(t => t.JobId == jobId, cancellationToken);
 
         if (tracker?.Job == null)
         {
@@ -171,7 +149,7 @@ public class VideoCommitHandler : BackgroundService
         }
 
         var existingVersion = await db.VideoVersions.AsNoTracking()
-            .FirstOrDefaultAsync(v => v.IdempotencyKey == idempotencyKey, ct);
+            .FirstOrDefaultAsync(v => v.IdempotencyKey == idempotencyKey, cancellationToken);
 
         if (existingVersion == null)
         {
@@ -179,8 +157,8 @@ public class VideoCommitHandler : BackgroundService
         }
 
         ApplyCommittedState(tracker, existingVersion);
-        await db.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
+        await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return existingVersion.Id;
     }
 
@@ -204,18 +182,18 @@ public class VideoCommitHandler : BackgroundService
         }
     }
 
-    private async Task TryPublishLinkCompletionAsync(Guid sourceJobId, Guid existingVersionId, CancellationToken ct)
+    private async Task TryPublishLinkCompletionAsync(Guid sourceJobId, Guid existingVersionId, CancellationToken cancellationToken)
     {
         try
         {
-            await _messageBus.PublishAsync(
+            await MessageBus.PublishAsync(
                 Subjects.JobLinkComplete,
                 new JobLinkCompleteRequest(sourceJobId, existingVersionId),
-                ct);
+                cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex,
+            Logger.LogWarning(ex,
                 "Failed to publish JobLinkComplete for source JobId {JobId} and version {VersionId}.",
                 sourceJobId, existingVersionId);
         }

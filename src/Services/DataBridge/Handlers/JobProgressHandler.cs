@@ -1,8 +1,6 @@
 using DataBridge.Data;
-using FlySwattr.NATS.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Shared;
 using Shared.Jobs;
@@ -10,77 +8,65 @@ using Shared.Messages;
 
 namespace DataBridge.Handlers;
 
-public class JobProgressHandler : BackgroundService
+public class JobProgressHandler : MessageHandlerBase<JobProgressRequest, JobProgressResponse>
 {
-    private readonly IMessageBus _messageBus;
-    private readonly IServiceScopeFactory _scopeFactory;
-    private readonly ILogger<JobProgressHandler> _logger;
-
     public JobProgressHandler(
-        IMessageBus messageBus,
+        FlySwattr.NATS.Abstractions.IMessageBus messageBus,
         IServiceScopeFactory scopeFactory,
         ILogger<JobProgressHandler> logger)
+        : base(messageBus, scopeFactory, logger)
     {
-        _messageBus = messageBus;
-        _scopeFactory = scopeFactory;
-        _logger = logger;
     }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override string Subject => Subjects.JobProgress;
+
+    protected override async Task<JobProgressResponse> HandleRequestAsync(
+        FrostStreamDbContext db,
+        JobProgressRequest request,
+        CancellationToken cancellationToken)
     {
-        _logger.LogInformation("JobProgressHandler subscribing to {Subject}", Subjects.JobProgress);
+        var tracker = await db.JobTrackers
+            .Include(t => t.Job)
+            .FirstOrDefaultAsync(t => t.JobId == request.JobId, cancellationToken);
 
-        await _messageBus.SubscribeAsync<JobProgressRequest>(
-            Subjects.JobProgress,
-            async context =>
-            {
-                var request = context.Message;
-                using var scope = _scopeFactory.CreateScope();
-                var db = scope.ServiceProvider.GetRequiredService<FrostStreamDbContext>();
+        if (tracker?.Job == null)
+        {
+            return new JobProgressResponse(false, "JobTracker not found");
+        }
 
-                var tracker = await db.JobTrackers
-                    .Include(t => t.Job)
-                    .FirstOrDefaultAsync(t => t.JobId == request.JobId, stoppingToken);
+        var targetStatus = JobStatusCodec.Parse(request.Status);
+        if (targetStatus == JobStatus.Unknown || targetStatus == JobStatus.NotFound)
+        {
+            return new JobProgressResponse(false, $"Unsupported status: {request.Status}");
+        }
 
-                if (tracker?.Job == null)
-                {
-                    await context.RespondAsync(new JobProgressResponse(false, "JobTracker not found"), stoppingToken);
-                    return;
-                }
+        try
+        {
+            JobStateMachine.Transition(tracker.Job, targetStatus);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new JobProgressResponse(false, ex.Message);
+        }
 
-                var targetStatus = JobStatusCodec.Parse(request.Status);
-                if (targetStatus == JobStatus.Unknown || targetStatus == JobStatus.NotFound)
-                {
-                    await context.RespondAsync(new JobProgressResponse(false, $"Unsupported status: {request.Status}"), stoppingToken);
-                    return;
-                }
+        if (!string.IsNullOrWhiteSpace(request.StoragePath))
+        {
+            tracker.StoragePath = request.StoragePath;
+        }
 
-                try
-                {
-                    JobStateMachine.Transition(tracker.Job, targetStatus);
-                }
-                catch (InvalidOperationException ex)
-                {
-                    await context.RespondAsync(new JobProgressResponse(false, ex.Message), stoppingToken);
-                    return;
-                }
+        if (!string.IsNullOrWhiteSpace(request.FileHash))
+        {
+            tracker.FileHash = request.FileHash;
+        }
 
-                if (!string.IsNullOrWhiteSpace(request.StoragePath))
-                {
-                    tracker.StoragePath = request.StoragePath;
-                }
+        tracker.UpdatedAt = DateTime.UtcNow;
 
-                if (!string.IsNullOrWhiteSpace(request.FileHash))
-                {
-                    tracker.FileHash = request.FileHash;
-                }
+        await db.SaveChangesAsync(cancellationToken);
+        return new JobProgressResponse(true, null);
+    }
 
-                tracker.UpdatedAt = DateTime.UtcNow;
-
-                await db.SaveChangesAsync(stoppingToken);
-                await context.RespondAsync(new JobProgressResponse(true, null), stoppingToken);
-            },
-            queueGroup: "databridge-jobs",
-            cancellationToken: stoppingToken);
+    protected override JobProgressResponse CreateErrorResponse(Exception exception)
+    {
+        return new JobProgressResponse(false, exception.Message);
     }
 }

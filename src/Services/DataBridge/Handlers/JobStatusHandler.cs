@@ -1,8 +1,6 @@
 using DataBridge.Data;
-using FlySwattr.NATS.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Shared;
 using Shared.Jobs;
@@ -10,94 +8,94 @@ using Shared.Messages;
 
 namespace DataBridge.Handlers;
 
-public class JobStatusHandler : BackgroundService
+public class JobStatusHandler : MessageHandlerBase<JobStatusRequest, JobStatusResponse>
 {
-    private readonly IMessageBus _messageBus;
-    private readonly IServiceScopeFactory _scopeFactory;
-    private readonly ILogger<JobStatusHandler> _logger;
-
     public JobStatusHandler(
-        IMessageBus messageBus,
+        FlySwattr.NATS.Abstractions.IMessageBus messageBus,
         IServiceScopeFactory scopeFactory,
         ILogger<JobStatusHandler> logger)
+        : base(messageBus, scopeFactory, logger)
     {
-        _messageBus = messageBus;
-        _scopeFactory = scopeFactory;
-        _logger = logger;
     }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override string Subject => Subjects.JobStatus;
+
+    protected override async Task<JobStatusResponse> HandleRequestAsync(
+        FrostStreamDbContext db,
+        JobStatusRequest request,
+        CancellationToken cancellationToken)
     {
-        _logger.LogInformation("JobStatusHandler subscribing to {Subject}", Subjects.JobStatus);
+        var job = await db.Jobs.AsNoTracking()
+            .FirstOrDefaultAsync(j => j.JobId == request.JobId, cancellationToken);
 
-        await _messageBus.SubscribeAsync<JobStatusRequest>(
-            Subjects.JobStatus,
-            async context =>
-            {
-                using var scope = _scopeFactory.CreateScope();
-                var db = scope.ServiceProvider.GetRequiredService<FrostStreamDbContext>();
+        if (job == null)
+        {
+            return new JobStatusResponse(
+                request.JobId,
+                JobStatus.NotFound.ToStorageValue(),
+                Phase: "NotFound",
+                SubStatus: "Job not found in database.",
+                ErrorMessage: "Job not found in database",
+                RetryCount: 0,
+                StorageKey: null,
+                StoragePath: null,
+                FileHash: null,
+                VideoId: null,
+                UpdatedAt: null,
+                CompletedAt: null,
+                PendingLink: null);
+        }
 
-                var job = await db.Jobs.AsNoTracking()
-                    .FirstOrDefaultAsync(j => j.JobId == context.Message.JobId, stoppingToken);
+        var tracker = await db.JobTrackers.AsNoTracking()
+            .FirstOrDefaultAsync(t => t.JobId == job.JobId, cancellationToken);
 
-                if (job == null)
-                {
-                    await context.RespondAsync(
-                        new JobStatusResponse(
-                            context.Message.JobId,
-                            JobStatus.NotFound.ToStorageValue(),
-                            Phase: "NotFound",
-                            SubStatus: "Job not found in database.",
-                            ErrorMessage: "Job not found in database",
-                            RetryCount: 0,
-                            StorageKey: null,
-                            StoragePath: null,
-                            FileHash: null,
-                            VideoId: null,
-                            UpdatedAt: null,
-                            CompletedAt: null,
-                            PendingLink: null),
-                        stoppingToken);
-                    return;
-                }
+        var pendingLink = await db.PendingJobLinks.AsNoTracking()
+            .Include(l => l.SourceJob)
+            .FirstOrDefaultAsync(l => l.PendingJobId == job.JobId, cancellationToken);
 
-                var tracker = await db.JobTrackers.AsNoTracking()
-                    .FirstOrDefaultAsync(t => t.JobId == job.JobId, stoppingToken);
+        var status = JobStatusCodec.Parse(job.Status);
+        var linkInfo = pendingLink == null
+            ? null
+            : new JobPendingLinkInfo(
+                pendingLink.SourceJobId,
+                pendingLink.SourceJob?.Status,
+                pendingLink.ExistingVersionId,
+                pendingLink.VideoId,
+                pendingLink.CreatedAt,
+                pendingLink.CompletedAt);
 
-                var pendingLink = await db.PendingJobLinks.AsNoTracking()
-                    .Include(l => l.SourceJob)
-                    .FirstOrDefaultAsync(l => l.PendingJobId == job.JobId, stoppingToken);
+        return new JobStatusResponse(
+            JobId: job.JobId,
+            Status: job.Status,
+            Phase: MapPhase(status),
+            SubStatus: BuildSubStatus(status, tracker, pendingLink),
+            ErrorMessage: job.ErrorMsg,
+            RetryCount: job.RetryCount,
+            StorageKey: job.StorageKey,
+            StoragePath: tracker?.StoragePath,
+            FileHash: tracker?.FileHash,
+            VideoId: tracker?.VideoId ?? pendingLink?.VideoId,
+            UpdatedAt: tracker?.UpdatedAt ?? pendingLink?.CreatedAt,
+            CompletedAt: tracker?.CompletedAt ?? pendingLink?.CompletedAt,
+            PendingLink: linkInfo);
+    }
 
-                var status = JobStatusCodec.Parse(job.Status);
-                var linkInfo = pendingLink == null
-                    ? null
-                    : new JobPendingLinkInfo(
-                        pendingLink.SourceJobId,
-                        pendingLink.SourceJob?.Status,
-                        pendingLink.ExistingVersionId,
-                        pendingLink.VideoId,
-                        pendingLink.CreatedAt,
-                        pendingLink.CompletedAt);
-
-                var response = new JobStatusResponse(
-                    JobId: job.JobId,
-                    Status: job.Status,
-                    Phase: MapPhase(status),
-                    SubStatus: BuildSubStatus(status, tracker, pendingLink),
-                    ErrorMessage: job.ErrorMsg,
-                    RetryCount: job.RetryCount,
-                    StorageKey: job.StorageKey,
-                    StoragePath: tracker?.StoragePath,
-                    FileHash: tracker?.FileHash,
-                    VideoId: tracker?.VideoId ?? pendingLink?.VideoId,
-                    UpdatedAt: tracker?.UpdatedAt ?? pendingLink?.CreatedAt,
-                    CompletedAt: tracker?.CompletedAt ?? pendingLink?.CompletedAt,
-                    PendingLink: linkInfo);
-
-                await context.RespondAsync(response, stoppingToken);
-            },
-            queueGroup: "databridge-jobs",
-            cancellationToken: stoppingToken);
+    protected override JobStatusResponse CreateErrorResponse(Exception exception)
+    {
+        return new JobStatusResponse(
+            Guid.Empty,
+            JobStatus.Unknown.ToStorageValue(),
+            Phase: "Error",
+            SubStatus: $"Error retrieving status: {exception.Message}",
+            ErrorMessage: exception.Message,
+            RetryCount: 0,
+            StorageKey: null,
+            StoragePath: null,
+            FileHash: null,
+            VideoId: null,
+            UpdatedAt: null,
+            CompletedAt: null,
+            PendingLink: null);
     }
 
     private static string MapPhase(JobStatus status) =>

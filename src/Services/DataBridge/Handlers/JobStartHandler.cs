@@ -1,8 +1,6 @@
 using DataBridge.Data;
-using FlySwattr.NATS.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Shared;
 using Shared.Entities;
@@ -11,56 +9,31 @@ using Shared.Messages;
 
 namespace DataBridge.Handlers;
 
-public class JobStartHandler : BackgroundService
+public class JobStartHandler : MessageHandlerBase<JobStartRequest, JobStartResponse>
 {
-    private readonly IMessageBus _messageBus;
-    private readonly IServiceScopeFactory _scopeFactory;
-    private readonly ILogger<JobStartHandler> _logger;
-
     public JobStartHandler(
-        IMessageBus messageBus,
+        FlySwattr.NATS.Abstractions.IMessageBus messageBus,
         IServiceScopeFactory scopeFactory,
         ILogger<JobStartHandler> logger)
+        : base(messageBus, scopeFactory, logger)
     {
-        _messageBus = messageBus;
-        _scopeFactory = scopeFactory;
-        _logger = logger;
     }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        _logger.LogInformation("JobStartHandler subscribing to {Subject}", Subjects.JobStart);
+    protected override string Subject => Subjects.JobStart;
 
-        await _messageBus.SubscribeAsync<JobStartRequest>(
-            Subjects.JobStart,
-            async context =>
-            {
-                var request = context.Message;
-                _logger.LogInformation("Received JobStart for JobId: {JobId}", request.JobId);
-
-                using var scope = _scopeFactory.CreateScope();
-                var db = scope.ServiceProvider.GetRequiredService<FrostStreamDbContext>();
-
-                var response = await HandleJobStartAsync(db, request, stoppingToken);
-                await context.RespondAsync(response, stoppingToken);
-            },
-            queueGroup: "databridge-jobs",
-            cancellationToken: stoppingToken);
-    }
-
-    private async Task<JobStartResponse> HandleJobStartAsync(
+    protected override async Task<JobStartResponse> HandleRequestAsync(
         FrostStreamDbContext db,
         JobStartRequest request,
-        CancellationToken ct)
+        CancellationToken cancellationToken)
     {
         // Fast path: idempotency key already reserved.
         var existingTracker = await db.JobTrackers
             .Include(t => t.Job)
-            .FirstOrDefaultAsync(t => t.IdempotencyKey == request.IdempotencyKey, ct);
+            .FirstOrDefaultAsync(t => t.IdempotencyKey == request.IdempotencyKey, cancellationToken);
 
         if (existingTracker != null)
         {
-            return await HandleExistingIdempotencyAsync(db, request, existingTracker, ct);
+            return await HandleExistingIdempotencyAsync(db, request, existingTracker, cancellationToken);
         }
 
         var now = DateTime.UtcNow;
@@ -88,14 +61,14 @@ public class JobStartHandler : BackgroundService
 
         try
         {
-            await db.SaveChangesAsync(ct);
+            await db.SaveChangesAsync(cancellationToken);
             return new JobStartResponse(Proceed: true, Reason: null);
         }
         catch (DbUpdateException ex) when (DbExceptionHelpers.IsUniqueViolation(ex))
         {
             // H2: concurrent identical submissions can race between read and insert.
             // Re-query and return deterministic response instead of bubbling constraint errors.
-            _logger.LogWarning(ex,
+            Logger.LogWarning(ex,
                 "JobStart unique constraint race for JobId {JobId}, IdempotencyKey {IdempotencyKey}",
                 request.JobId, request.IdempotencyKey);
 
@@ -103,15 +76,15 @@ public class JobStartHandler : BackgroundService
 
             var racedTracker = await db.JobTrackers
                 .Include(t => t.Job)
-                .FirstOrDefaultAsync(t => t.IdempotencyKey == request.IdempotencyKey, ct);
+                .FirstOrDefaultAsync(t => t.IdempotencyKey == request.IdempotencyKey, cancellationToken);
 
             if (racedTracker != null)
             {
-                return await HandleExistingIdempotencyAsync(db, request, racedTracker, ct);
+                return await HandleExistingIdempotencyAsync(db, request, racedTracker, cancellationToken);
             }
 
             var existingJob = await db.Jobs.AsNoTracking()
-                .FirstOrDefaultAsync(j => j.JobId == request.JobId, ct);
+                .FirstOrDefaultAsync(j => j.JobId == request.JobId, cancellationToken);
 
             if (existingJob != null)
             {
@@ -122,17 +95,22 @@ public class JobStartHandler : BackgroundService
         }
     }
 
+    protected override JobStartResponse CreateErrorResponse(Exception exception)
+    {
+        return new JobStartResponse(Proceed: false, Reason: exception.Message);
+    }
+
     private async Task<JobStartResponse> HandleExistingIdempotencyAsync(
         FrostStreamDbContext db,
         JobStartRequest request,
         JobTracker existingTracker,
-        CancellationToken ct)
+        CancellationToken cancellationToken)
     {
         if (existingTracker.JobId == request.JobId)
         {
             if (existingTracker.Job == null)
             {
-                _logger.LogWarning(
+                Logger.LogWarning(
                     "Tracker exists without Job row for JobId {JobId}. Treating as duplicate delivery.",
                     request.JobId);
                 return new JobStartResponse(Proceed: false, Reason: "DuplicateDelivery");
@@ -141,7 +119,7 @@ public class JobStartHandler : BackgroundService
             var currentStatus = JobStatusCodec.Parse(existingTracker.Job.Status);
             if (currentStatus == JobStatus.Failed)
             {
-                _logger.LogInformation(
+                Logger.LogInformation(
                     "Retrying failed job {JobId} (attempt {Attempt}).",
                     request.JobId, existingTracker.Job.RetryCount + 1);
 
@@ -154,17 +132,17 @@ public class JobStartHandler : BackgroundService
                 existingTracker.UpdatedAt = DateTime.UtcNow;
                 existingTracker.ExpiresAt = DateTime.UtcNow.AddDays(1);
 
-                await db.SaveChangesAsync(ct);
+                await db.SaveChangesAsync(cancellationToken);
                 return new JobStartResponse(Proceed: true, Reason: null);
             }
 
-            _logger.LogWarning(
+            Logger.LogWarning(
                 "Duplicate delivery for JobId {JobId} with status {Status}. Ignoring.",
                 request.JobId, existingTracker.Job.Status);
             return new JobStartResponse(Proceed: false, Reason: "DuplicateDelivery");
         }
 
-        await CreateOrUpdatePendingLinkAsync(db, request, existingTracker, ct);
+        await CreateOrUpdatePendingLinkAsync(db, request, existingTracker, cancellationToken);
         return new JobStartResponse(Proceed: false, Reason: "AlreadyExists");
     }
 
@@ -172,9 +150,9 @@ public class JobStartHandler : BackgroundService
         FrostStreamDbContext db,
         JobStartRequest request,
         JobTracker sourceTracker,
-        CancellationToken ct)
+        CancellationToken cancellationToken)
     {
-        _logger.LogInformation(
+        Logger.LogInformation(
             "Idempotency key {Key} already exists. Linking JobId {JobId} to source JobId {SourceJobId}.",
             request.IdempotencyKey,
             request.JobId,
@@ -182,7 +160,7 @@ public class JobStartHandler : BackgroundService
 
         var now = DateTime.UtcNow;
 
-        var pendingJob = await db.Jobs.FirstOrDefaultAsync(j => j.JobId == request.JobId, ct);
+        var pendingJob = await db.Jobs.FirstOrDefaultAsync(j => j.JobId == request.JobId, cancellationToken);
         if (pendingJob == null)
         {
             pendingJob = new Job
@@ -202,7 +180,7 @@ public class JobStartHandler : BackgroundService
 
         var pendingLink = await db.PendingJobLinks
             .Include(l => l.PendingJob)
-            .FirstOrDefaultAsync(l => l.PendingJobId == request.JobId, ct);
+            .FirstOrDefaultAsync(l => l.PendingJobId == request.JobId, cancellationToken);
 
         if (pendingLink == null)
         {
@@ -224,7 +202,7 @@ public class JobStartHandler : BackgroundService
 
         // If the source is already committed, resolve the link immediately.
         var existingVersion = await db.VideoVersions.AsNoTracking()
-            .FirstOrDefaultAsync(v => v.IdempotencyKey == request.IdempotencyKey, ct);
+            .FirstOrDefaultAsync(v => v.IdempotencyKey == request.IdempotencyKey, cancellationToken);
 
         if (existingVersion != null)
         {
@@ -247,11 +225,11 @@ public class JobStartHandler : BackgroundService
 
         try
         {
-            await db.SaveChangesAsync(ct);
+            await db.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateException ex) when (DbExceptionHelpers.IsUniqueViolation(ex))
         {
-            _logger.LogWarning(ex,
+            Logger.LogWarning(ex,
                 "Pending link upsert raced for JobId {JobId}, IdempotencyKey {IdempotencyKey}",
                 request.JobId, request.IdempotencyKey);
         }

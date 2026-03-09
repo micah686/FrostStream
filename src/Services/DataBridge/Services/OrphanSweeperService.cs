@@ -5,9 +5,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Polly;
-using Polly.Retry;
+using Shared;
 using Shared.Jobs;
 using Shared.Messages;
+using Shared.Resilience;
 using Shared.Storage;
 
 namespace DataBridge.Services;
@@ -49,19 +50,7 @@ public class OrphanSweeperService : BackgroundService
         _scopeFactory = scopeFactory;
         _logger = logger;
 
-        _resiliencePipeline = new ResiliencePipelineBuilder()
-            .AddRetry(new RetryStrategyOptions
-            {
-                MaxRetryAttempts = 2,
-                BackoffType = DelayBackoffType.Exponential,
-                Delay = TimeSpan.FromSeconds(5),
-                ShouldHandle = new PredicateBuilder()
-                    .Handle<IOException>()
-                    .Handle<TimeoutException>()
-                    .Handle<HttpRequestException>()
-            })
-            .AddTimeout(TimeSpan.FromMinutes(2))
-            .Build();
+        _resiliencePipeline = ResiliencePipelineFactory.CreateLightweightPipeline();
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -176,7 +165,7 @@ public class OrphanSweeperService : BackgroundService
             var storageCfg = await messageBus.RequestAsync<StorageConfigRequest, StorageConfigResponse>(
                 Shared.Subjects.StorageConfig,
                 new StorageConfigRequest(tracker.StorageKey),
-                TimeSpan.FromSeconds(10),
+                NatsTimeoutConstants.ShortRequestTimeout,
                 ct);
 
             if (storageCfg == null || !storageCfg.Found)

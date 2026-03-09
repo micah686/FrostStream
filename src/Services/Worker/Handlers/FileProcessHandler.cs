@@ -4,10 +4,11 @@ using FluentStorage.Blobs;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.Extensions.Logging;
 using Polly;
-using Polly.Retry;
 using Shared;
 using Shared.Jobs;
 using Shared.Messages;
+using Shared.Models;
+using Shared.Resilience;
 using Shared.Storage;
 using Worker.Services;
 
@@ -39,8 +40,8 @@ public class FileProcessHandler
     private readonly ResiliencePipeline _resiliencePipeline;
     private readonly IJobCoordinationClient _jobClient;
 
-    private static readonly TimeSpan NatsTimeout = TimeSpan.FromSeconds(30);
-    private static readonly TimeSpan InProgressHeartbeatInterval = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan NatsTimeout = NatsTimeoutConstants.DefaultRequestTimeout;
+    private static readonly TimeSpan InProgressHeartbeatInterval = NatsTimeoutConstants.InProgressHeartbeatInterval;
 
     // Unique worker instance ID for logging and progress tracking
     private static readonly Guid WorkerInstanceId = Guid.NewGuid();
@@ -58,20 +59,8 @@ public class FileProcessHandler
         _logger = logger;
         _jobClient = jobClient;
 
-        // Polly retry pipeline for transient network errors on storage & NATS operations
-        _resiliencePipeline = new ResiliencePipelineBuilder()
-            .AddRetry(new RetryStrategyOptions
-            {
-                MaxRetryAttempts = 3,
-                BackoffType = DelayBackoffType.Exponential,
-                Delay = TimeSpan.FromSeconds(2),
-                ShouldHandle = new PredicateBuilder()
-                    .Handle<IOException>()
-                    .Handle<TimeoutException>()
-                    .Handle<HttpRequestException>()
-            })
-            .AddTimeout(TimeSpan.FromMinutes(10))
-            .Build();
+        // Resilience pipeline for transient network errors on storage & NATS operations
+        _resiliencePipeline = ResiliencePipelineFactory.CreateStoragePipeline();
     }
 
     public async Task HandleAsync(IJsMessageContext<FileDownloadRequest> context)
@@ -179,8 +168,8 @@ public class FileProcessHandler
             storage = FluentStorageProvider.CreateStorage(storageCfg);
 
             // ── Phase 5: Upload to storage ──────────────────────────────────
-            var extension = Path.GetExtension(downloadResult.LocalFilePath);
-            uploadedBlobPath = $"{metadata.Platform}/{metadata.Id}/v{downloadResult.FileHash}{extension}";
+            uploadedBlobPath = StoragePathBuilder.BuildVideoPath(
+                metadata, downloadResult.FileHash, downloadResult.LocalFilePath);
 
             _logger.LogInformation("Uploading to storage path: {Path}", uploadedBlobPath);
 

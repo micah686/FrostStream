@@ -29,9 +29,6 @@
       <PackageReference Include="FluentMigrator" Version="8.0.1" />
       <PackageReference Include="FluentMigrator.Runner.Core" Version="8.0.1" />
       <PackageReference Include="FluentMigrator.Runner.Postgres" Version="8.0.1" />
-<!--      <PackageReference Include="FluentMigrator" Version="8.0.1" />-->
-<!--      <PackageReference Include="FluentMigrator.Runner" Version="8.0.1" />-->
-<!--      <PackageReference Include="FluentMigrator.Runner.Postgres" Version="8.0.1" />-->
       <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
       <PackageReference Include="FluentStorage" Version="6.0.2" />
       <PackageReference Include="Polly.Core" Version="8.6.5" />
