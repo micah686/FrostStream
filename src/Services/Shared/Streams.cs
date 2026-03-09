@@ -9,6 +9,16 @@ public static class Streams
     /// Stream for all job-related subjects (froststream.job.>).
     /// </summary>
     public const string Jobs = "froststream-jobs";
+
+    /// <summary>
+    /// Stream for dead letter queue entries.
+    /// </summary>
+    public const string DeadLetter = "froststream-dlq";
+
+    /// <summary>
+    /// Stream for job progress updates (user-facing).
+    /// </summary>
+    public const string Progress = "froststream-progress";
 }
 
 /// <summary>

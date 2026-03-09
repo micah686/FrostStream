@@ -1,7 +1,13 @@
 using FlySwattr.NATS.Extensions;
 using FlySwattr.NATS.Topology.Extensions;
+using Microsoft.EntityFrameworkCore;
+using Shared.Storage;
 using Shared.Topology;
 using WebAPI.Endpoints;
+using WebAPI.HealthChecks;
+using WebAPI.Middleware;
+
+namespace WebAPI;
 
 public class Program
 {
@@ -18,6 +24,13 @@ public class Program
             opts.Core.Url = builder.Configuration["NATS:Url"] ?? "nats://localhost:4222";
         });
 
+        // Register storage config client for health checks
+        builder.Services.AddSingleton<IStorageConfigClient, NatsStorageConfigClient>();
+
+        // Add enhanced health checks including storage
+        builder.Services.AddHealthChecks()
+            .AddCheck<StorageHealthCheck>("storage", tags: ["ready", "storage"]);
+
         builder.Services.AddNatsTopologySource<JobsTopology>();
 
         // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
@@ -32,6 +45,9 @@ public class Program
         }
 
         app.UseHttpsRedirection();
+
+        // Add correlation ID middleware for distributed tracing
+        app.UseCorrelationId();
 
         app.UseAuthorization();
 

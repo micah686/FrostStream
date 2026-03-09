@@ -5,6 +5,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Hosting.Internal;
 using Shared;
 using Shared.Messages;
+using Shared.Storage;
 using Shared.Topology;
 using Worker.Handlers;
 using Worker.Services;
@@ -34,6 +35,12 @@ class Program
         // Register worker services
         builder.Services.AddSingleton<YtDlpService>();
         builder.Services.AddSingleton<FileProcessHandler>();
+
+        // Register job coordination client (decouples Worker from DataBridge subjects)
+        builder.Services.AddSingleton<IJobCoordinationClient, NatsJobCoordinationClient>();
+
+        // Register temp cleanup service
+        builder.Services.AddHostedService<WorkerCleanupService>();
 
         // Register topology and map the file-processors consumer to its handler.
         // The handler lambda captures the service collection — at runtime the

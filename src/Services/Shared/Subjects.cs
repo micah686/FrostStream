@@ -21,4 +21,14 @@ public static class Subjects
     public const string JobFail = "databridge.job.fail";
     public const string JobStatus = "databridge.job.status";
     public const string JobLinkComplete = "databridge.job.link_complete";
+
+    /// <summary>
+    /// Subject for dead letter queue messages.
+    /// </summary>
+    public const string DeadLetter = "froststream.dlq.entry";
+
+    /// <summary>
+    /// Subject for job progress updates (user-facing progress stream).
+    /// </summary>
+    public const string JobProgressStream = "froststream.job.progress.stream";
 }

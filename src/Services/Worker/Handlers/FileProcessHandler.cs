@@ -16,6 +16,7 @@ namespace Worker.Handlers;
 /// <summary>
 /// Handles file download requests from the JetStream file-processors consumer.
 /// Implements the full Saga pattern: yt-dlp → idempotency check → download → upload → commit → (rollback on failure).
+/// Includes correlation ID propagation, progress tracking, and enhanced compensation verification.
 /// </summary>
 public class FileProcessHandler
 {
@@ -32,21 +33,30 @@ public class FileProcessHandler
         SagaMeter.CreateCounter<long>("froststream.saga.compensation.total");
 
     private readonly IMessageBus _messageBus;
+    private readonly IJetStreamPublisher _progressPublisher;
     private readonly YtDlpService _ytDlp;
     private readonly ILogger<FileProcessHandler> _logger;
     private readonly ResiliencePipeline _resiliencePipeline;
+    private readonly IJobCoordinationClient _jobClient;
 
     private static readonly TimeSpan NatsTimeout = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan InProgressHeartbeatInterval = TimeSpan.FromSeconds(10);
 
+    // Unique worker instance ID for logging and progress tracking
+    private static readonly Guid WorkerInstanceId = Guid.NewGuid();
+
     public FileProcessHandler(
         IMessageBus messageBus,
+        IJetStreamPublisher progressPublisher,
         YtDlpService ytDlp,
-        ILogger<FileProcessHandler> logger)
+        ILogger<FileProcessHandler> logger,
+        IJobCoordinationClient jobClient)
     {
         _messageBus = messageBus;
+        _progressPublisher = progressPublisher;
         _ytDlp = ytDlp;
         _logger = logger;
+        _jobClient = jobClient;
 
         // Polly retry pipeline for transient network errors on storage & NATS operations
         _resiliencePipeline = new ResiliencePipelineBuilder()
@@ -69,13 +79,18 @@ public class FileProcessHandler
         var request = context.Message;
         var jobId = request.JobId;
 
+        // Extract correlation ID from message headers or generate new one
+        var correlationId = context.Headers.Headers.GetValueOrDefault("X-Correlation-Id") ?? Guid.NewGuid().ToString("N");
+
         using var logScope = _logger.BeginScope(new Dictionary<string, object?>
         {
             ["JobId"] = jobId,
             ["StorageKey"] = request.StorageKey,
             ["DeliveryAttempt"] = context.NumDelivered,
             ["JetStreamSequence"] = context.Sequence,
-            ["Redelivered"] = context.Redelivered
+            ["Redelivered"] = context.Redelivered,
+            ["CorrelationId"] = correlationId,
+            ["WorkerId"] = WorkerInstanceId
         });
 
         using var sagaActivity = SagaActivitySource.StartActivity("froststream.worker.process", ActivityKind.Consumer);
@@ -84,6 +99,8 @@ public class FileProcessHandler
         sagaActivity?.SetTag("video.url", request.Url);
         sagaActivity?.SetTag("messaging.redelivered", context.Redelivered);
         sagaActivity?.SetTag("messaging.delivery_attempt", context.NumDelivered);
+        sagaActivity?.SetTag("correlation.id", correlationId);
+        sagaActivity?.SetTag("worker.id", WorkerInstanceId);
 
         _logger.LogInformation("Processing download request for JobId: {JobId}, Url: {Url}, StorageKey: {StorageKey}",
             jobId, request.Url, request.StorageKey);
@@ -91,7 +108,6 @@ public class FileProcessHandler
         string? uploadedBlobPath = null;
         IBlobStorage? storage = null;
         string? idempotencyKey = null;
-        bool commitOutcomeUncertain = false;
         var dataDir = Path.Combine(Path.GetTempPath(), "froststream", "data", jobId.ToString());
 
         try
@@ -116,16 +132,9 @@ public class FileProcessHandler
             var startResponse = await ExecuteObservedPhaseAsync(
                 "job_start",
                 jobId,
-                () => _messageBus.RequestAsync<JobStartRequest, JobStartResponse>(
-                    Subjects.JobStart,
+                () => _jobClient.StartJobAsync(
                     new JobStartRequest(jobId, idempotencyKey, request.StorageKey, request.Url),
-                    NatsTimeout));
-
-            if (startResponse == null)
-            {
-                throw new InvalidOperationException(
-                    $"DataBridge returned null for job.start (JobId: {jobId})");
-            }
+                    CancellationToken.None));
 
             if (!startResponse.Proceed)
             {
@@ -140,7 +149,14 @@ public class FileProcessHandler
                 () => ExecuteWithInProgressHeartbeatsAsync(
                     context,
                     phase: "download",
-                    () => _ytDlp.DownloadAsync(request.Url, dataDir)));
+                    operation: () => _ytDlp.DownloadAsync(request.Url, dataDir, async (bytesDownloaded, totalBytes) =>
+                    {
+                        await PublishProgressAsync(jobId, "downloading", bytesDownloaded, totalBytes, correlationId);
+                    }),
+                    progressCallback: async (bytesDownloaded, totalBytes) =>
+                    {
+                        await PublishProgressAsync(jobId, "downloading", bytesDownloaded, totalBytes, correlationId);
+                    }));
 
             _logger.LogInformation("Downloaded video {VideoId}: {FilePath} (hash: {Hash})",
                 downloadResult.Metadata.Id, downloadResult.LocalFilePath, downloadResult.FileHash);
@@ -174,7 +190,7 @@ public class FileProcessHandler
                 () => ExecuteWithInProgressHeartbeatsAsync(
                     context,
                     phase: "upload",
-                    async () =>
+                    operation: async () =>
                     {
                         await _resiliencePipeline.ExecuteAsync(async token =>
                         {
@@ -182,6 +198,9 @@ public class FileProcessHandler
                             await storage.WriteAsync(uploadedBlobPath, fs, cancellationToken: token);
                         });
                     }));
+
+            // Publish final upload progress
+            await PublishProgressAsync(jobId, "uploading", downloadResult.FileSize, downloadResult.FileSize, correlationId);
 
             _logger.LogInformation("Upload complete for {Path}", uploadedBlobPath);
 
@@ -203,8 +222,7 @@ public class FileProcessHandler
                         phase: "commit",
                         async () => await _resiliencePipeline.ExecuteAsync(async token =>
                         {
-                            return await _messageBus.RequestAsync<VideoCommitRequest, VideoCommitResponse>(
-                                Subjects.VideoCommit,
+                            return await _jobClient.CommitVideoAsync(
                                 new VideoCommitRequest(
                                     jobId,
                                     idempotencyKey,
@@ -214,19 +232,44 @@ public class FileProcessHandler
                                     downloadResult.Metadata.RawJson,
                                     downloadResult.Metadata.Platform,
                                     downloadResult.Metadata.SourceLastModified),
-                                NatsTimeout,
                                 token);
                         })));
             }
-            catch
+            catch (Exception ex)
             {
-                commitOutcomeUncertain = true;
+                // Simplified commit uncertainty handling: query status before compensating
+                _logger.LogWarning(ex, "Commit phase failed for JobId {JobId}, checking if commit succeeded", jobId);
+
+                var currentStatus = await _jobClient.GetStatusAsync(jobId, CancellationToken.None);
+                var parsedStatus = currentStatus == null
+                    ? JobStatus.Unknown
+                    : JobStatusCodec.Parse(currentStatus.Status);
+
+                if (parsedStatus == JobStatus.Completed)
+                {
+                    _logger.LogInformation("Job {JobId} already completed, no compensation needed", jobId);
+                    CleanupLocalData(dataDir);
+                    return;
+                }
+
+                // If we can't determine status, retry later
+                if (currentStatus == null)
+                {
+                    throw new RetryLaterException($"Cannot determine status for Job {jobId}", ex);
+                }
+
+                // Status is not completed, safe to compensate
+                await CompensateAsync(storage, uploadedBlobPath, jobId);
                 throw;
             }
 
             if (commitResponse == null || !commitResponse.Success)
             {
                 var errorMsg = commitResponse?.ErrorMessage ?? "null response";
+
+                // Try to compensate since commit failed
+                await CompensateAsync(storage, uploadedBlobPath, jobId);
+
                 throw new InvalidOperationException($"DataBridge rejected commit: {errorMsg}");
             }
 
@@ -248,58 +291,18 @@ public class FileProcessHandler
 
             _logger.LogError(ex, "Failed to process download for JobId: {JobId}", jobId);
 
-            // If commit outcome is uncertain, prefer retry + reconciliation over destructive compensation.
-            if (uploadedBlobPath != null && commitOutcomeUncertain)
-            {
-                var currentStatus = await TryGetJobStatusAsync(jobId);
-                var parsedStatus = currentStatus == null
-                    ? JobStatus.Unknown
-                    : JobStatusCodec.Parse(currentStatus.Status);
-
-                if (parsedStatus == JobStatus.Completed)
-                {
-                    _logger.LogWarning(
-                        "Detected completed commit for JobId {JobId} after exception path. Skipping rollback and JobFail.",
-                        jobId);
-                    CleanupLocalData(dataDir);
-                    return;
-                }
-
-                if (currentStatus == null || parsedStatus == JobStatus.UploadedPendingCommit)
-                {
-                    throw new RetryLaterException(
-                        $"Commit outcome is uncertain for JobId {jobId}. Deferring compensation until retry can reconcile.",
-                        ex);
-                }
-            }
-
-            // ── Compensating transaction: rollback uploaded file ─────────────
+            // Compensate if we have uploaded something
             if (storage != null && uploadedBlobPath != null)
             {
-                try
-                {
-                    _logger.LogWarning("Rolling back: deleting uploaded blob {Path}", uploadedBlobPath);
-                    await storage.DeleteAsync(new[] { uploadedBlobPath });
-                    CompensationCounter.Add(1,
-                        new KeyValuePair<string, object?>("action", "delete_blob"),
-                        new KeyValuePair<string, object?>("outcome", "success"));
-                }
-                catch (Exception rollbackEx)
-                {
-                    CompensationCounter.Add(1,
-                        new KeyValuePair<string, object?>("action", "delete_blob"),
-                        new KeyValuePair<string, object?>("outcome", "error"));
-                    _logger.LogError(rollbackEx, "Failed to rollback uploaded blob {Path}", uploadedBlobPath);
-                }
+                await CompensateAsync(storage, uploadedBlobPath, jobId);
             }
 
             // Notify DataBridge of job failure
             try
             {
-                await _messageBus.RequestAsync<JobFailRequest, JobFailResponse>(
-                    Subjects.JobFail,
+                await _jobClient.ReportFailureAsync(
                     new JobFailRequest(jobId, ex.Message, ex.StackTrace),
-                    NatsTimeout);
+                    CancellationToken.None);
             }
             catch (Exception failEx)
             {
@@ -312,6 +315,43 @@ public class FileProcessHandler
         }
     }
 
+    /// <summary>
+    /// Enhanced compensation with verification that blob was actually deleted.
+    /// </summary>
+    private async Task CompensateAsync(IBlobStorage storage, string uploadedBlobPath, Guid jobId)
+    {
+        try
+        {
+            _logger.LogWarning("Rolling back: deleting uploaded blob {Path}", uploadedBlobPath);
+
+            await storage.DeleteAsync(new[] { uploadedBlobPath });
+
+            // Verify deletion succeeded
+            var stillExists = await storage.ExistsAsync(uploadedBlobPath);
+            if (stillExists)
+            {
+                _logger.LogError("Compensation verification failed: blob still exists at {Path}", uploadedBlobPath);
+                CompensationCounter.Add(1,
+                    new KeyValuePair<string, object?>("action", "delete_blob"),
+                    new KeyValuePair<string, object?>("outcome", "verification_failed"));
+            }
+            else
+            {
+                _logger.LogInformation("Compensation successful: deleted blob at {Path}", uploadedBlobPath);
+                CompensationCounter.Add(1,
+                    new KeyValuePair<string, object?>("action", "delete_blob"),
+                    new KeyValuePair<string, object?>("outcome", "success"));
+            }
+        }
+        catch (Exception rollbackEx)
+        {
+            CompensationCounter.Add(1,
+                new KeyValuePair<string, object?>("action", "delete_blob"),
+                new KeyValuePair<string, object?>("outcome", "error"));
+            _logger.LogError(rollbackEx, "Failed to rollback uploaded blob {Path}", uploadedBlobPath);
+        }
+    }
+
     private async Task HandleExistingJobStateAsync(
         IJsMessageContext<FileDownloadRequest> context,
         FileDownloadRequest request,
@@ -320,7 +360,7 @@ public class FileProcessHandler
         string? reason,
         Guid jobId)
     {
-        var statusResponse = await TryGetJobStatusAsync(jobId);
+        var statusResponse = await _jobClient.GetStatusAsync(jobId, CancellationToken.None);
         if (statusResponse == null)
         {
             throw new RetryLaterException(
@@ -347,8 +387,7 @@ public class FileProcessHandler
                         phase: "reconcile-commit",
                         async () => await _resiliencePipeline.ExecuteAsync(async token =>
                         {
-                            return await _messageBus.RequestAsync<VideoCommitRequest, VideoCommitResponse>(
-                                Subjects.VideoCommit,
+                            return await _jobClient.CommitVideoAsync(
                                 new VideoCommitRequest(
                                     jobId,
                                     idempotencyKey,
@@ -358,7 +397,6 @@ public class FileProcessHandler
                                     metadata.RawJson,
                                     metadata.Platform,
                                     metadata.SourceLastModified),
-                                NatsTimeout,
                                 token);
                         })));
 
@@ -391,14 +429,13 @@ public class FileProcessHandler
 
     private async Task MarkUploadedPendingCommitAsync(Guid jobId, string storagePath, string fileHash)
     {
-        var response = await _messageBus.RequestAsync<JobProgressRequest, JobProgressResponse>(
-            Subjects.JobProgress,
+        var response = await _jobClient.ReportProgressAsync(
             new JobProgressRequest(
                 jobId,
                 JobStatus.UploadedPendingCommit.ToStorageValue(),
                 storagePath,
                 fileHash),
-            NatsTimeout);
+            CancellationToken.None);
 
         if (response == null || !response.Success)
         {
@@ -408,28 +445,11 @@ public class FileProcessHandler
         }
     }
 
-    private async Task<JobStatusResponse?> TryGetJobStatusAsync(Guid jobId)
-    {
-        try
-        {
-            return await _messageBus.RequestAsync<JobStatusRequest, JobStatusResponse>(
-                Subjects.JobStatus,
-                new JobStatusRequest(jobId),
-                NatsTimeout);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex,
-                "Failed to query current job status for JobId {JobId} during compensation check.",
-                jobId);
-            return null;
-        }
-    }
-
     private async Task<T> ExecuteWithInProgressHeartbeatsAsync<T>(
         IJsMessageContext<FileDownloadRequest> context,
         string phase,
-        Func<Task<T>> operation)
+        Func<Task<T>> operation,
+        Func<long, long?, Task>? progressCallback = null)
     {
         await TrySendInProgressHeartbeatAsync(context, phase);
 
@@ -561,6 +581,44 @@ public class FileProcessHandler
                 "Failed to send in-progress heartbeat for JobId: {JobId} during {Phase}",
                 context.Message.JobId,
                 phase);
+        }
+    }
+
+    /// <summary>
+    /// Publishes progress update to the progress stream for UI/consumers.
+    /// </summary>
+    private async Task PublishProgressAsync(
+        Guid jobId,
+        string phase,
+        long bytesProcessed,
+        long? totalBytes,
+        string correlationId)
+    {
+        try
+        {
+            var percentage = totalBytes.HasValue && totalBytes.Value > 0
+                ? (int)((bytesProcessed * 100) / totalBytes.Value)
+                : (int?)null;
+
+            var progress = new JobProgressMessage
+            {
+                JobId = jobId,
+                Phase = phase,
+                BytesProcessed = bytesProcessed,
+                TotalBytes = totalBytes,
+                Percentage = percentage,
+                WorkerId = WorkerInstanceId,
+                Timestamp = DateTime.UtcNow,
+                CorrelationId = correlationId
+            };
+
+            var messageId = $"progress-{jobId}-{DateTime.UtcNow:O}";
+            await _progressPublisher.PublishAsync(Subjects.JobProgressStream, progress, messageId);
+        }
+        catch (Exception ex)
+        {
+            // Progress publishing is best-effort, don't fail the job
+            _logger.LogDebug(ex, "Failed to publish progress for JobId: {JobId}", jobId);
         }
     }
 

@@ -31,7 +31,7 @@ public class OrphanSweeperService : BackgroundService
     private static readonly TimeSpan SweepInterval = TimeSpan.FromHours(1);
 
     /// <summary>How long a job can be stuck before it's considered orphaned.</summary>
-    private static readonly TimeSpan OrphanThreshold = TimeSpan.FromHours(72);
+    private static readonly TimeSpan OrphanThreshold = TimeSpan.FromHours(24);
 
     /// <summary>Non-terminal statuses that indicate potentially orphaned work.</summary>
     private static readonly string[] StuckStatuses =

@@ -1,4 +1,4 @@
-﻿using System.Threading.Tasks;
+using System.Threading.Tasks;
 using DataBridge.Data;
 using DataBridge.Handlers;
 using DataBridge.Services;
@@ -52,6 +52,10 @@ class Program
             opts.Core.Url = natsUrl;
         });
 
+        // Add health checks
+        builder.Services.AddHealthChecks()
+            .AddDbContextCheck<FrostStreamDbContext>(tags: ["ready", "database"]);
+
         builder.Services.AddHostedService<StorageConfigRequestHandler>();
         builder.Services.AddHostedService<JobStartHandler>();
         builder.Services.AddHostedService<JobProgressHandler>();
@@ -59,7 +63,10 @@ class Program
         builder.Services.AddHostedService<JobLinkCompleteHandler>();
         builder.Services.AddHostedService<JobFailHandler>();
         builder.Services.AddHostedService<JobStatusHandler>();
+
+        // Orphan sweepers - DB-side (stuck jobs) and storage-side (orphaned files)
         builder.Services.AddHostedService<OrphanSweeperService>();
+        builder.Services.AddHostedService<StorageOrphanSweeper>();
 
         // Force ConsoleLifetime so Ctrl+C / SIGTERM triggers StopAsync on hosted services
         builder.Services.AddSingleton<IHostLifetime, ConsoleLifetime>();

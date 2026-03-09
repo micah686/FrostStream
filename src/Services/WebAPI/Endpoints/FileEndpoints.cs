@@ -1,6 +1,7 @@
 using FlySwattr.NATS.Abstractions;
 using Shared;
 using Shared.Messages;
+using WebAPI.Middleware;
 
 namespace WebAPI.Endpoints;
 
@@ -14,7 +15,7 @@ public static class FileEndpoints
     /// <summary>
     /// Maps file processing endpoints to the application.
     /// </summary>
-    public static void MapFileEndpoints(this WebApplication app)
+    public static void MapFileEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/videos")
             .WithTags("Videos");
@@ -60,6 +61,7 @@ public static class FileEndpoints
     private static async Task<IResult> QueueDownloadAsync(
         DownloadVideoRequest request,
         IJetStreamPublisher publisher,
+        HttpContext httpContext,
         CancellationToken cancellationToken)
     {
         var validationErrors = ValidateDownloadRequest(request);
@@ -69,16 +71,32 @@ public static class FileEndpoints
         }
 
         var jobId = Guid.NewGuid();
+        var correlationId = httpContext.GetCorrelationId() ?? Guid.NewGuid().ToString("N");
+
         var downloadRequest = new FileDownloadRequest(jobId, request.Url, request.StorageKey);
         var messageId = $"download-{jobId}";
-        await publisher.PublishAsync(Subjects.DownloadFile, downloadRequest, messageId, cancellationToken: cancellationToken);
+
+        // Create headers with correlation ID
+        var headers = new MessageHeaders(new Dictionary<string, string>
+        {
+            ["X-Correlation-Id"] = correlationId,
+            ["X-Timestamp"] = DateTime.UtcNow.ToString("O")
+        });
+
+        await publisher.PublishAsync(
+            Subjects.DownloadFile,
+            downloadRequest,
+            messageId,
+            headers: headers,
+            cancellationToken: cancellationToken);
 
         return TypedResults.Accepted($"/api/videos/{jobId}", new
         {
             message = "Download video request queued",
             jobId,
             request.Url,
-            request.StorageKey
+            request.StorageKey,
+            correlationId
         });
     }
 
