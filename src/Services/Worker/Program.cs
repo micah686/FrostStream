@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Hosting.Internal;
 using Shared;
+using Shared.Download;
 using Shared.Messages;
 using Shared.Storage;
 using Shared.Topology;
@@ -32,8 +33,10 @@ class Program
             o.SuppressStatusMessages = false;
         });
 
+        // Register download service (interface allows swapping implementations)
+        builder.Services.AddSingleton<IDownloadService, YtDlpDownloadService>();
+        
         // Register worker services
-        builder.Services.AddSingleton<YtDlpService>();
         builder.Services.AddSingleton<FileProcessHandler>();
 
         // Register job coordination client (decouples Worker from DataBridge subjects)

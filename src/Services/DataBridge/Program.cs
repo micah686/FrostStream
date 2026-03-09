@@ -3,7 +3,7 @@ using DataBridge.Data;
 using DataBridge.Handlers;
 using DataBridge.Services;
 using FluentMigrator.Runner;
-
+using FlySwattr.NATS.Abstractions;
 using FlySwattr.NATS.Extensions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -52,6 +52,9 @@ class Program
             opts.Core.Url = natsUrl;
         });
 
+        // Register database-backed DLQ store (overrides NATS KV store)
+        builder.Services.AddScoped<IDlqStore, DbDlqStore>();
+
         // Add health checks
         builder.Services.AddHealthChecks()
             .AddDbContextCheck<FrostStreamDbContext>(tags: ["ready", "database"]);
@@ -63,6 +66,9 @@ class Program
         builder.Services.AddHostedService<JobLinkCompleteHandler>();
         builder.Services.AddHostedService<JobFailHandler>();
         builder.Services.AddHostedService<JobStatusHandler>();
+        
+        // DLQ persistence handler - stores DLQ messages to PostgreSQL
+        builder.Services.AddHostedService<DlqPersistenceHandler>();
 
         // Orphan sweepers - DB-side (stuck jobs) and storage-side (orphaned files)
         builder.Services.AddHostedService<OrphanSweeperService>();

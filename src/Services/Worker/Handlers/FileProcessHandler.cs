@@ -7,10 +7,10 @@ using FlySwattr.NATS.Abstractions;
 using Microsoft.Extensions.Logging;
 using Polly;
 using Shared;
+using Shared.Download;
 using Shared.Entities;
 using Shared.Jobs;
 using Shared.Messages;
-using Shared.Models;
 using Shared.Resilience;
 using Shared.Storage;
 using Worker.Services;
@@ -38,7 +38,7 @@ public class FileProcessHandler
 
     private readonly IMessageBus _messageBus;
     private readonly IJetStreamPublisher _progressPublisher;
-    private readonly YtDlpService _ytDlp;
+    private readonly IDownloadService _downloadService;
     private readonly ILogger<FileProcessHandler> _logger;
     private readonly ResiliencePipeline _resiliencePipeline;
     private readonly IJobCoordinationClient _jobClient;
@@ -52,13 +52,13 @@ public class FileProcessHandler
     public FileProcessHandler(
         IMessageBus messageBus,
         IJetStreamPublisher progressPublisher,
-        YtDlpService ytDlp,
+        IDownloadService downloadService,
         ILogger<FileProcessHandler> logger,
         IJobCoordinationClient jobClient)
     {
         _messageBus = messageBus;
         _progressPublisher = progressPublisher;
-        _ytDlp = ytDlp;
+        _downloadService = downloadService;
         _logger = logger;
         _jobClient = jobClient;
 
@@ -108,9 +108,9 @@ public class FileProcessHandler
             var metadata = await ExecuteObservedPhaseAsync(
                 "metadata",
                 jobId,
-                () => _ytDlp.FetchMetadataAsync(request.Url));
+                () => _downloadService.FetchMetadataAsync(request.Url));
 
-            idempotencyKey = YtDlpService.ComputeIdempotencyKey(
+            idempotencyKey = YtDlpDownloadService.ComputeIdempotencyKey(
                 request.Url, request.StorageKey, metadata.SourceLastModified);
 
             sagaActivity?.SetTag("idempotency.key", idempotencyKey);
@@ -135,23 +135,27 @@ public class FileProcessHandler
             }
 
             // ── Phase 3: Download the video file locally ────────────────────
+            var downloadProgress = new Progress<DownloadProgress>(progress =>
+            {
+                if (progress.TotalBytes.HasValue)
+                {
+                    _ = PublishProgressAsync(jobId, "downloading", progress.BytesDownloaded, progress.TotalBytes, correlationId);
+                }
+            });
+            
             var downloadResult = await ExecuteObservedPhaseAsync(
                 "download",
                 jobId,
                 () => ExecuteWithInProgressHeartbeatsAsync(
                     context,
                     phase: "download",
-                    operation: () => _ytDlp.DownloadAsync(request.Url, dataDir, async (bytesDownloaded, totalBytes) =>
-                    {
-                        await PublishProgressAsync(jobId, "downloading", bytesDownloaded, totalBytes, correlationId);
-                    }),
-                    progressCallback: async (bytesDownloaded, totalBytes) =>
-                    {
-                        await PublishProgressAsync(jobId, "downloading", bytesDownloaded, totalBytes, correlationId);
-                    }));
+                    operation: () => _downloadService.DownloadAsync(
+                        request.Url,
+                        new DownloadOptions { OutputDirectory = dataDir },
+                        downloadProgress)));
 
             _logger.LogInformation("Downloaded video {VideoId}: {FilePath} (hash: {Hash})",
-                downloadResult.Metadata.Id, downloadResult.LocalFilePath, downloadResult.FileHash);
+                downloadResult.Metadata.Id, downloadResult.FilePath, downloadResult.FileHash);
 
             // ── Phase 4: Get storage config from DataBridge ─────────────────
             var storageCfg = await ExecuteObservedPhaseAsync(
@@ -171,12 +175,12 @@ public class FileProcessHandler
             storage = FluentStorageProvider.CreateStorage(storageCfg);
 
             // ── Phase 5: Detect media type and quality, then upload to storage ──────────────────────────────────
-            var (mediaType, detectedQuality) = await DetectMediaTypeAndQualityAsync(downloadResult.LocalFilePath);
+            var (mediaType, detectedQuality) = await DetectMediaTypeAndQualityAsync(downloadResult.FilePath);
             sagaActivity?.SetTag("media.type", mediaType.ToString());
             sagaActivity?.SetTag("media.quality", detectedQuality.ToString());
             
             uploadedBlobPath = StoragePathBuilder.BuildMediaPath(
-                metadata, downloadResult.FileHash, downloadResult.LocalFilePath, mediaType, detectedQuality);
+                metadata.Platform, metadata.Id, downloadResult.FileHash, Path.GetExtension(downloadResult.FilePath), mediaType, detectedQuality);
 
             _logger.LogInformation("Uploading to storage path: {Path}", uploadedBlobPath);
 
@@ -190,7 +194,7 @@ public class FileProcessHandler
                     {
                         await _resiliencePipeline.ExecuteAsync(async token =>
                         {
-                            await using var fs = File.OpenRead(downloadResult.LocalFilePath);
+                            await using var fs = File.OpenRead(downloadResult.FilePath);
                             await storage.WriteAsync(uploadedBlobPath, fs, cancellationToken: token);
                         });
                     }));
@@ -225,7 +229,7 @@ public class FileProcessHandler
                                     StorageKey: request.StorageKey,
                                     StoragePath: uploadedBlobPath,
                                     FileHash: downloadResult.FileHash,
-                                    MetadataJson: downloadResult.Metadata.RawJson,
+                                    MetadataJson: downloadResult.Metadata.RawJson ?? "{}",
                                     Platform: downloadResult.Metadata.Platform,
                                     SourceLastModified: downloadResult.Metadata.SourceLastModified,
                                     MediaType: mediaType,
@@ -357,7 +361,7 @@ public class FileProcessHandler
     private async Task HandleExistingJobStateAsync(
         IJsMessageContext<FileDownloadRequest> context,
         FileDownloadRequest request,
-        YtDlpMetadata metadata,
+        MediaMetadata metadata,
         string idempotencyKey,
         string? reason,
         Guid jobId)
