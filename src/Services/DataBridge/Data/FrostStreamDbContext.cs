@@ -15,6 +15,7 @@ public class FrostStreamDbContext : DbContext
     public DbSet<JobTracker> JobTrackers { get; set; }
     public DbSet<VideoInfo> VideoInfos { get; set; }
     public DbSet<VideoVersion> VideoVersions { get; set; }
+    public DbSet<MediaFormat> MediaFormats { get; set; }
     public DbSet<PendingJobLink> PendingJobLinks { get; set; }
     public DbSet<DlqEntry> DlqEntries { get; set; }
     protected override void OnModelCreating(ModelBuilder modelBuilder)

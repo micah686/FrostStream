@@ -90,14 +90,33 @@ public class VideoCommitHandler : MessageHandlerBase<VideoCommitRequest, VideoCo
                 StorageKey = request.StorageKey,
                 StoragePath = request.StoragePath,
                 VersionNum = maxVersion + 1,
-                MediaType = request.MediaType,
-                VariantType = request.VariantType,
-                Quality = request.Quality,
-                SourceVersionId = request.SourceVersionId,
-                Codec = request.Codec,
-                FileSize = request.FileSize
+                SourceVersionId = request.SourceVersionId
             };
             db.VideoVersions.Add(videoVersion);
+
+            // Create MediaFormat record if format info is provided
+            if (request.FormatInfo != null)
+            {
+                var mediaFormat = new MediaFormat
+                {
+                    VideoVersionId = videoVersion.Id,
+                    FileSize = request.FormatInfo.FileSize,
+                    AverageBitRate = request.FormatInfo.AverageBitRate,
+                    AudioBitrate = request.FormatInfo.AudioBitrate,
+                    AudioSamplingRate = request.FormatInfo.AudioSamplingRate,
+                    AudioChannels = request.FormatInfo.AudioChannels,
+                    AudioCodec = request.FormatInfo.AudioCodec,
+                    Width = request.FormatInfo.Width,
+                    Height = request.FormatInfo.Height,
+                    AspectRatio = request.FormatInfo.AspectRatio,
+                    VideoBitrate = request.FormatInfo.VideoBitrate,
+                    FrameRate = request.FormatInfo.FrameRate,
+                    VideoCodec = request.FormatInfo.VideoCodec,
+                    DynamicRange = request.FormatInfo.DynamicRange,
+                    FriendlyVideoResolution = request.FormatInfo.FriendlyVideoResolution
+                };
+                db.MediaFormats.Add(mediaFormat);
+            }
 
             ApplyCommittedState(tracker, videoVersion);
 

@@ -12,10 +12,6 @@ public class VideoVersionConfiguration : IEntityTypeConfiguration<VideoVersion>
 
         builder.HasIndex(x => x.IdempotencyKey).IsUnique();
 
-        // Index for efficient querying by media type and quality
-        builder.HasIndex(x => new { x.VideoId, x.MediaType, x.Quality })
-            .HasDatabaseName("ix_video_versions_media_quality");
-
         // Index for source version lookups (for transcoded variants)
         builder.HasIndex(x => x.SourceVersionId)
             .HasDatabaseName("ix_video_versions_source_version_id");
@@ -23,15 +19,5 @@ public class VideoVersionConfiguration : IEntityTypeConfiguration<VideoVersion>
         builder.HasOne(x => x.VideoInfo)
             .WithMany(x => x.Versions)
             .HasForeignKey(x => x.VideoId);
-
-        // Configure enum conversions
-        builder.Property(x => x.MediaType)
-            .HasConversion<int>();
-
-        builder.Property(x => x.VariantType)
-            .HasConversion<int>();
-
-        builder.Property(x => x.Quality)
-            .HasConversion<int>();
     }
 }

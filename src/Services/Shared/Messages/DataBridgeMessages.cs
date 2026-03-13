@@ -7,6 +7,25 @@ public record JobStartRequest(Guid JobId, string IdempotencyKey, string StorageK
 public record JobProgressRequest(Guid JobId, string Status, string? StoragePath, string? FileHash);
 
 /// <summary>
+/// Technical media format information for video commit.
+/// </summary>
+public record MediaFormatInfo(
+    long FileSize,
+    double? AverageBitRate = null,
+    double? AudioBitrate = null,
+    double? AudioSamplingRate = null,
+    short? AudioChannels = null,
+    string? AudioCodec = null,
+    int? Width = null,
+    int? Height = null,
+    string? AspectRatio = null,
+    double? VideoBitrate = null,
+    float? FrameRate = null,
+    string? VideoCodec = null,
+    string? DynamicRange = null,
+    string? FriendlyVideoResolution = null);
+
+/// <summary>
 /// Request to commit a video with versioned storage support.
 /// </summary>
 public record VideoCommitRequest(
@@ -18,12 +37,12 @@ public record VideoCommitRequest(
     string MetadataJson,
     string Platform,
     DateTime? SourceLastModified,
-    MediaType MediaType = MediaType.Unknown,
-    Quality Quality = Quality.Unknown,
+    MediaType MediaType,
+    Quality Quality,
     VideoVariantType VariantType = VideoVariantType.Original,
     Guid? SourceVersionId = null,
-    string? Codec = null,
-    long FileSize = 0);
+    MediaFormatInfo? FormatInfo = null);
+
 public record JobFailRequest(Guid JobId, string ErrorMessage, string? ErrorDetails);
 public record JobStatusRequest(Guid JobId);
 public record JobLinkCompleteRequest(Guid JobId, Guid ExistingVersionId);

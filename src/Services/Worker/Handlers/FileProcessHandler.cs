@@ -239,8 +239,7 @@ public class FileProcessHandler
                                     Quality: detectedQuality,
                                     VariantType: VideoVariantType.Original,
                                     SourceVersionId: null,
-                                    Codec: null,
-                                    FileSize: downloadResult.FileSize),
+                                    FormatInfo: formatInfo),
                                 token);
                         })));
             }
@@ -402,6 +401,10 @@ public class FileProcessHandler
                             // Infer media type from file extension for reconciliation
                             var existingMediaType = InferMediaTypeFromPath(statusResponse.StoragePath!);
                             
+                            var reconcileFormatInfo = new MediaFormatInfo(
+                                FileSize: 0, // Size unknown for reconciliation
+                                FriendlyVideoResolution: QualityToResolutionString(existingQuality));
+                            
                             return await _jobClient.CommitVideoAsync(
                                 new VideoCommitRequest(
                                     JobId: jobId,
@@ -416,8 +419,7 @@ public class FileProcessHandler
                                     Quality: existingQuality,
                                     VariantType: existingPathInfo?.VariantType ?? VideoVariantType.Original,
                                     SourceVersionId: null,
-                                    Codec: null,
-                                    FileSize: 0), // Size unknown for reconciliation
+                                    FormatInfo: reconcileFormatInfo),
                                 token);
                         })));
 
@@ -871,5 +873,67 @@ public class FileProcessHandler
         var audioExtensions = new[] { ".mp3", ".m4a", ".aac", ".ogg", ".opus", ".flac", ".wav", ".wma" };
         
         return audioExtensions.Contains(extension) ? MediaType.Audio : MediaType.Video;
+    }
+
+    /// <summary>
+    /// Creates MediaFormatInfo from download result and detected media properties.
+    /// </summary>
+    private static MediaFormatInfo CreateMediaFormatInfo(
+        DownloadResult downloadResult,
+        MediaType mediaType,
+        Quality quality)
+    {
+        int? width = null;
+        int? height = null;
+        string? friendlyResolution = null;
+
+        if (mediaType == MediaType.Video)
+        {
+            (width, height, friendlyResolution) = QualityToDimensions(quality);
+        }
+
+        return new MediaFormatInfo(
+            FileSize: downloadResult.FileSize,
+            Width: width,
+            Height: height,
+            FriendlyVideoResolution: friendlyResolution);
+    }
+
+    /// <summary>
+    /// Converts Quality enum to width, height, and friendly resolution string.
+    /// </summary>
+    private static (int? Width, int? Height, string? Resolution) QualityToDimensions(Quality quality)
+    {
+        return quality switch
+        {
+            Quality.P480 => (854, 480, "480p"),
+            Quality.P720 => (1280, 720, "720p"),
+            Quality.P1080 => (1920, 1080, "1080p"),
+            Quality.P1440 => (2560, 1440, "1440p"),
+            Quality.P4K => (3840, 2160, "4K"),
+            Quality.P8K => (7680, 4320, "8K"),
+            _ => (null, null, null)
+        };
+    }
+
+    /// <summary>
+    /// Converts Quality enum to resolution string.
+    /// </summary>
+    private static string? QualityToResolutionString(Quality quality)
+    {
+        return quality switch
+        {
+            Quality.P480 => "480p",
+            Quality.P720 => "720p",
+            Quality.P1080 => "1080p",
+            Quality.P1440 => "1440p",
+            Quality.P4K => "4K",
+            Quality.P8K => "8K",
+            Quality.K128 => "128k",
+            Quality.K192 => "192k",
+            Quality.K256 => "256k",
+            Quality.K320 => "320k",
+            _ => null
+        };
     }
 }

@@ -24,7 +24,7 @@ var natsDashboard = builder
     .WithReference(nats);
 
 var postgres = builder.AddPostgres("postgres")
-    //.WithPgAdmin() // Optional: adds a pgAdmin container for database management
+    .WithPgAdmin() // Optional: adds a pgAdmin container for database management
     .WithDataVolume(); // Persists data between runs
 // Add the database
 var database = postgres.AddDatabase("froststreamdb");

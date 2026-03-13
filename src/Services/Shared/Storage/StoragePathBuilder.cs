@@ -64,12 +64,14 @@ public static class StoragePathBuilder
     /// <param name="fileHash">The hash of the transcoded file content</param>
     /// <param name="extension">The file extension including the dot</param>
     /// <param name="targetQuality">Target quality for the transcoded variant</param>
+    /// <param name="mediaType">Type of media being transcoded (Video or Audio)</param>
     /// <param name="codec">Optional codec identifier (e.g., "h265", "av1", "opus")</param>
     public static string BuildTranscodedPath(
         VideoVersion sourceVersion,
         string fileHash,
         string extension,
         Quality targetQuality,
+        MediaType mediaType,
         string? codec = null)
     {
         // Extract platform and mediaId from the source path
@@ -79,7 +81,7 @@ public static class StoragePathBuilder
 
         var platform = pathParts[0];
         var mediaId = pathParts[1];
-        var qualityFolder = FormatQualityFolder(sourceVersion.MediaType, targetQuality);
+        var qualityFolder = FormatQualityFolder(mediaType, targetQuality);
         
         // Include codec in folder name if specified
         var hashFolder = codec != null 
