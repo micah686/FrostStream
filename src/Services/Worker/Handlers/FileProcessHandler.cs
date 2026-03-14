@@ -214,6 +214,8 @@ public class FileProcessHandler
                 () => MarkUploadedPendingCommitAsync(jobId, uploadedBlobPath, downloadResult.FileHash));
 
             // ── Phase 6: Atomic commit via DataBridge ────────────────────────
+            var formatInfo = CreateMediaFormatInfo(downloadResult, mediaType, detectedQuality);
+            
             VideoCommitResponse? commitResponse;
             try
             {

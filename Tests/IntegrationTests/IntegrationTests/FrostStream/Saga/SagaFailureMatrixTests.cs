@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Shared;
+using Shared.Entities;
 using Shared.Jobs;
 using Shared.Messages;
 using Shouldly;
@@ -30,7 +31,9 @@ public class SagaFailureMatrixTests
             "hash-a",
             "{\"title\":\"test-video\"}",
             "youtube",
-            now);
+            now,
+            MediaType.Video,
+            Quality.P720);
 
         var start = await harness.RequestAsync<JobStartRequest, JobStartResponse>(
             Subjects.JobStart,
@@ -114,7 +117,9 @@ public class SagaFailureMatrixTests
                 "hash-b",
                 "{\"title\":\"test-video\"}",
                 "youtube",
-                DateTime.UtcNow));
+                DateTime.UtcNow,
+                MediaType.Video,
+                Quality.P720));
         failedCommit.ShouldNotBeNull();
         failedCommit.Success.ShouldBeFalse();
 
@@ -233,7 +238,9 @@ public class SagaFailureMatrixTests
                 "hash-c",
                 "{\"title\":\"test-video\"}",
                 "youtube",
-                DateTime.UtcNow));
+                DateTime.UtcNow,
+                MediaType.Video,
+                Quality.P720));
         commit.ShouldNotBeNull();
         commit.Success.ShouldBeTrue();
 

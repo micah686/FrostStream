@@ -1,4 +1,5 @@
 using FluentMigrator;
+using System.Data;
 
 namespace DataBridge.Migrations.FluentMigrator;
 
