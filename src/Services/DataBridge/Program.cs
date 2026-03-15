@@ -5,10 +5,12 @@ using DataBridge.Services;
 using FluentMigrator.Runner;
 using FlySwattr.NATS.Abstractions;
 using FlySwattr.NATS.Extensions;
+using FlySwattr.NATS.Topology.Extensions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Hosting.Internal;
+using Shared.Topology;
 
 namespace DataBridge;
 
@@ -52,12 +54,14 @@ class Program
             opts.Core.Url = natsUrl;
         });
 
+        // Register topology source so streams are provisioned
+        builder.Services.AddNatsTopologySource<JobsTopology>();
+
         // Register database-backed DLQ store (overrides NATS KV store)
         builder.Services.AddScoped<IDlqStore, DbDlqStore>();
 
-        // Add health checks
-        builder.Services.AddHealthChecks()
-            .AddDbContextCheck<FrostStreamDbContext>(tags: ["ready", "database"]);
+        // Note: Health check for FrostStreamDbContext is automatically registered
+        // by AddNpgsqlDbContext() from Aspire.Npgsql.EntityFrameworkCore.PostgreSQL
 
         builder.Services.AddHostedService<StorageConfigRequestHandler>();
         builder.Services.AddHostedService<JobStartHandler>();

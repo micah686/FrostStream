@@ -39,9 +39,9 @@ public class DlqPersistenceHandler : BackgroundService
         await dbContext.Database.CanConnectAsync(stoppingToken);
 
         // Create a consumer on the DLQ stream
-        // Note: Stream name for DLQ should match the topology configuration
+        // Uses the stream name defined in JobsTopology (froststream-dlq)
         await consumer.ConsumeAsync<DlqMessage>(
-            StreamName.From("FS_DLQ"),
+            StreamName.From(Streams.DeadLetter),
             SubjectName.From(Subjects.DeadLetter),
             async (context) =>
             {
