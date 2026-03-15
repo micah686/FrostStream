@@ -29,6 +29,10 @@ var postgres = builder.AddPostgres("postgres")
 // Add the database
 var database = postgres.AddDatabase("froststreamdb");
 
+//ClickHouse (For live-chat)
+var clickhouse = builder.AddClickHouse("clickhouse");
+var clickhousedb = clickhouse.AddDatabase("clickhousedb");
+
 // projects
 builder.AddProject<Projects.DataBridge>("databridge")
     .WithReference(database).WaitFor(database)
