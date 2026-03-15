@@ -1,6 +1,7 @@
 using FlySwattr.NATS.Extensions;
 using FlySwattr.NATS.Topology.Extensions;
 using Microsoft.EntityFrameworkCore;
+using Scalar.AspNetCore;
 using Shared.Storage;
 using Shared.Topology;
 using WebAPI.Endpoints;
@@ -21,7 +22,9 @@ public class Program
 
         builder.Services.AddEnterpriseNATSMessaging(opts =>
         {
-            opts.Core.Url = builder.Configuration["NATS:Url"] ?? "nats://localhost:4222";
+            opts.Core.Url = builder.Configuration.GetConnectionString("nats")
+                            ?? builder.Configuration["NATS:Url"]
+                            ?? "nats://localhost:4222";
         });
 
         // Register storage config client for health checks
@@ -39,10 +42,11 @@ public class Program
         var app = builder.Build();
 
         // Configure the HTTP request pipeline.
-        if (app.Environment.IsDevelopment())
-        {
+        // if (app.Environment.IsDevelopment())
+        // {
             app.MapOpenApi();
-        }
+            app.MapScalarApiReference();
+        //}
 
         app.UseHttpsRedirection();
 
