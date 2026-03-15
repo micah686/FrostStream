@@ -6,6 +6,7 @@ using FluentMigrator.Runner;
 using FlySwattr.NATS.Abstractions;
 using FlySwattr.NATS.Extensions;
 using FlySwattr.NATS.Topology.Extensions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -30,6 +31,9 @@ class Program
             connectionName: "froststreamdb",
             configureDbContextOptions: options =>
             {
+                // Use snake_case naming convention to match FluentMigrator schema
+                options.UseSnakeCaseNamingConvention();
+
                 // Additional EF Core options can be configured here if needed
                 // e.g., options.EnableSensitiveDataLogging() for development
             });

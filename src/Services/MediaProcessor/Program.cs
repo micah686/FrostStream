@@ -1,5 +1,6 @@
 ﻿using System.Threading.Tasks;
 using FlySwattr.NATS.Extensions;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Hosting.Internal;
@@ -15,7 +16,9 @@ class Program
 
         builder.Services.AddEnterpriseNATSMessaging(opts =>
         {
-            opts.Core.Url = builder.Configuration["NATS:Url"] ?? "nats://localhost:4222";
+            opts.Core.Url = builder.Configuration.GetConnectionString("nats")
+                            ?? builder.Configuration["NATS:Url"]
+                            ?? "nats://localhost:4222";
         });
 
         // Force ConsoleLifetime so Ctrl+C / SIGTERM triggers StopAsync on hosted services
