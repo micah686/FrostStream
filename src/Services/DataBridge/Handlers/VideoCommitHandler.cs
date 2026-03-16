@@ -26,105 +26,102 @@ public class VideoCommitHandler : MessageHandlerBase<VideoCommitRequest, VideoCo
         VideoCommitRequest request,
         CancellationToken cancellationToken)
     {
-        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        // Note: Manual transactions disabled due to NpgsqlRetryingExecutionStrategy incompatibility.
+        // EF Core's SaveChangesAsync already wraps operations in transactions.
+        // The idempotency check and unique constraint handling provide retry safety.
+
+        var tracker = await db.JobTrackers
+            .Include(t => t.Job)
+            .FirstOrDefaultAsync(t => t.JobId == request.JobId, cancellationToken);
+
+        if (tracker?.Job == null)
+        {
+            return new VideoCommitResponse(false, "JobTracker not found");
+        }
+
+        // C2: Idempotent commit behavior.
+        var existingVersion = await db.VideoVersions.AsNoTracking()
+            .FirstOrDefaultAsync(v => v.IdempotencyKey == request.IdempotencyKey, cancellationToken);
+
+        if (existingVersion != null)
+        {
+            ApplyCommittedState(tracker, existingVersion);
+            await db.SaveChangesAsync(cancellationToken);
+
+            await TryPublishLinkCompletionAsync(request.JobId, existingVersion.Id, cancellationToken);
+            return new VideoCommitResponse(true, null);
+        }
+
+        var videoInfo = await db.VideoInfos
+            .FirstOrDefaultAsync(v => v.IdempotencyKey == request.IdempotencyKey, cancellationToken);
+
+        if (videoInfo == null)
+        {
+            videoInfo = new VideoInfo
+            {
+                Id = Guid.NewGuid(),
+                VideoUrl = tracker.Job.Url,
+                Platform = request.Platform,
+                SourceLastModified = request.SourceLastModified,
+                CreatedAt = DateTime.UtcNow,
+                MetadataJson = request.MetadataJson,
+                IdempotencyKey = request.IdempotencyKey,
+                IsDirty = false
+            };
+            db.VideoInfos.Add(videoInfo);
+        }
+        else
+        {
+            videoInfo.IsDirty = false;
+            videoInfo.MetadataJson = request.MetadataJson;
+        }
+
+        var maxVersion = await db.VideoVersions
+            .Where(v => v.VideoId == videoInfo.Id)
+            .MaxAsync(v => (int?)v.VersionNum, cancellationToken) ?? 0;
+
+        var videoVersion = new VideoVersion
+        {
+            Id = Guid.NewGuid(),
+            VideoId = videoInfo.Id,
+            IdempotencyKey = request.IdempotencyKey,
+            FileHash = request.FileHash,
+            StorageKey = request.StorageKey,
+            StoragePath = request.StoragePath,
+            VersionNum = maxVersion + 1,
+            SourceVersionId = request.SourceVersionId
+        };
+        db.VideoVersions.Add(videoVersion);
+
+        // Create MediaFormat record if format info is provided
+        if (request.FormatInfo != null)
+        {
+            var mediaFormat = new MediaFormat
+            {
+                VideoVersionId = videoVersion.Id,
+                FileSize = request.FormatInfo.FileSize,
+                AverageBitRate = request.FormatInfo.AverageBitRate,
+                AudioBitrate = request.FormatInfo.AudioBitrate,
+                AudioSamplingRate = request.FormatInfo.AudioSamplingRate,
+                AudioChannels = request.FormatInfo.AudioChannels,
+                AudioCodec = request.FormatInfo.AudioCodec,
+                Width = request.FormatInfo.Width,
+                Height = request.FormatInfo.Height,
+                AspectRatio = request.FormatInfo.AspectRatio,
+                VideoBitrate = request.FormatInfo.VideoBitrate,
+                FrameRate = request.FormatInfo.FrameRate,
+                VideoCodec = request.FormatInfo.VideoCodec,
+                DynamicRange = request.FormatInfo.DynamicRange,
+                FriendlyVideoResolution = request.FormatInfo.FriendlyVideoResolution
+            };
+            db.MediaFormats.Add(mediaFormat);
+        }
+
+        ApplyCommittedState(tracker, videoVersion);
 
         try
         {
-            var tracker = await db.JobTrackers
-                .Include(t => t.Job)
-                .FirstOrDefaultAsync(t => t.JobId == request.JobId, cancellationToken);
-
-            if (tracker?.Job == null)
-            {
-                return new VideoCommitResponse(false, "JobTracker not found");
-            }
-
-            // C2: Idempotent commit behavior.
-            var existingVersion = await db.VideoVersions.AsNoTracking()
-                .FirstOrDefaultAsync(v => v.IdempotencyKey == request.IdempotencyKey, cancellationToken);
-
-            if (existingVersion != null)
-            {
-                ApplyCommittedState(tracker, existingVersion);
-                await db.SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
-                
-                await TryPublishLinkCompletionAsync(request.JobId, existingVersion.Id, cancellationToken);
-                return new VideoCommitResponse(true, null);
-            }
-
-            var videoInfo = await db.VideoInfos
-                .FirstOrDefaultAsync(v => v.IdempotencyKey == request.IdempotencyKey, cancellationToken);
-
-            if (videoInfo == null)
-            {
-                videoInfo = new VideoInfo
-                {
-                    Id = Guid.NewGuid(),
-                    VideoUrl = tracker.Job.Url,
-                    Platform = request.Platform,
-                    SourceLastModified = request.SourceLastModified,
-                    CreatedAt = DateTime.UtcNow,
-                    MetadataJson = request.MetadataJson,
-                    IdempotencyKey = request.IdempotencyKey,
-                    IsDirty = false
-                };
-                db.VideoInfos.Add(videoInfo);
-            }
-            else
-            {
-                videoInfo.IsDirty = false;
-                videoInfo.MetadataJson = request.MetadataJson;
-            }
-
-            var maxVersion = await db.VideoVersions
-                .Where(v => v.VideoId == videoInfo.Id)
-                .MaxAsync(v => (int?)v.VersionNum, cancellationToken) ?? 0;
-
-            var videoVersion = new VideoVersion
-            {
-                Id = Guid.NewGuid(),
-                VideoId = videoInfo.Id,
-                IdempotencyKey = request.IdempotencyKey,
-                FileHash = request.FileHash,
-                StorageKey = request.StorageKey,
-                StoragePath = request.StoragePath,
-                VersionNum = maxVersion + 1,
-                SourceVersionId = request.SourceVersionId
-            };
-            db.VideoVersions.Add(videoVersion);
-
-            // Create MediaFormat record if format info is provided
-            if (request.FormatInfo != null)
-            {
-                var mediaFormat = new MediaFormat
-                {
-                    VideoVersionId = videoVersion.Id,
-                    FileSize = request.FormatInfo.FileSize,
-                    AverageBitRate = request.FormatInfo.AverageBitRate,
-                    AudioBitrate = request.FormatInfo.AudioBitrate,
-                    AudioSamplingRate = request.FormatInfo.AudioSamplingRate,
-                    AudioChannels = request.FormatInfo.AudioChannels,
-                    AudioCodec = request.FormatInfo.AudioCodec,
-                    Width = request.FormatInfo.Width,
-                    Height = request.FormatInfo.Height,
-                    AspectRatio = request.FormatInfo.AspectRatio,
-                    VideoBitrate = request.FormatInfo.VideoBitrate,
-                    FrameRate = request.FormatInfo.FrameRate,
-                    VideoCodec = request.FormatInfo.VideoCodec,
-                    DynamicRange = request.FormatInfo.DynamicRange,
-                    FriendlyVideoResolution = request.FormatInfo.FriendlyVideoResolution
-                };
-                db.MediaFormats.Add(mediaFormat);
-            }
-
-            ApplyCommittedState(tracker, videoVersion);
-
             await db.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-            
-            await TryPublishLinkCompletionAsync(request.JobId, videoVersion.Id, cancellationToken);
-            return new VideoCommitResponse(true, null);
         }
         catch (DbUpdateException ex) when (DbExceptionHelpers.IsUniqueViolation(ex))
         {
@@ -132,22 +129,19 @@ public class VideoCommitHandler : MessageHandlerBase<VideoCommitRequest, VideoCo
                 "VideoCommit unique constraint race for JobId {JobId}, IdempotencyKey {IdempotencyKey}. Reconciling as committed.",
                 request.JobId, request.IdempotencyKey);
 
-            await transaction.RollbackAsync(cancellationToken);
             var versionId = await ReconcileCommittedStateAsync(request.JobId, request.IdempotencyKey, cancellationToken);
-            
+
             if (versionId != null)
             {
                 await TryPublishLinkCompletionAsync(request.JobId, versionId.Value, cancellationToken);
                 return new VideoCommitResponse(true, null);
             }
-            
+
             return new VideoCommitResponse(false, "Failed to reconcile committed state");
         }
-        catch
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            throw;
-        }
+
+        await TryPublishLinkCompletionAsync(request.JobId, videoVersion.Id, cancellationToken);
+        return new VideoCommitResponse(true, null);
     }
 
     protected override VideoCommitResponse CreateErrorResponse(Exception exception)
@@ -162,7 +156,6 @@ public class VideoCommitHandler : MessageHandlerBase<VideoCommitRequest, VideoCo
     {
         using var scope = ScopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<FrostStreamDbContext>();
-        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 
         var tracker = await db.JobTrackers
             .Include(t => t.Job)
@@ -183,7 +176,6 @@ public class VideoCommitHandler : MessageHandlerBase<VideoCommitRequest, VideoCo
 
         ApplyCommittedState(tracker, existingVersion);
         await db.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
         return existingVersion.Id;
     }
 
