@@ -50,6 +50,9 @@ class Program
 
         // Register temp cleanup service
         builder.Services.AddHostedService<WorkerCleanupService>();
+        
+        // Register startup service (download initial binaries,...)
+        builder.Services.AddHostedService<StartupService>();
 
         // Register topology and map the file-processors consumer to its handler.
         // The handler lambda captures the service collection — at runtime the
