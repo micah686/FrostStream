@@ -41,11 +41,29 @@ public record VideoCommitRequest(
     Quality Quality,
     VideoVariantType VariantType = VideoVariantType.Original,
     Guid? SourceVersionId = null,
-    MediaFormatInfo? FormatInfo = null);
+    MediaFormatInfo? FormatInfo = null,
+    int VersionNum = 0);
 
 public record JobFailRequest(Guid JobId, string ErrorMessage, string? ErrorDetails);
 public record JobStatusRequest(Guid JobId);
 public record JobLinkCompleteRequest(Guid JobId, Guid ExistingVersionId);
+
+/// <summary>
+/// Request to get the next version number for a media item.
+/// Used to reserve version numbers before upload for path construction.
+/// </summary>
+public record GetNextVersionRequest(
+    string Platform,
+    string MediaId,
+    string IdempotencyKey);
+
+/// <summary>
+/// Response containing the reserved version number.
+/// </summary>
+public record GetNextVersionResponse(
+    bool Success,
+    int VersionNum,
+    string? ErrorMessage = null);
 
 // Responses
 public record JobStartResponse(bool Proceed, string? Reason);

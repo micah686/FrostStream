@@ -137,7 +137,26 @@ public class FileProcessHandler
                 return;
             }
 
-            // ── Phase 3: Download the video file locally ────────────────────
+            // ── Phase 3: Reserve version number for storage path ────────────
+            var versionResponse = await ExecuteObservedPhaseAsync(
+                "reserve_version",
+                jobId,
+                () => _messageBus.RequestAsync<GetNextVersionRequest, GetNextVersionResponse>(
+                    Subjects.GetNextVersion,
+                    new GetNextVersionRequest(metadata.Platform, metadata.MediaId, idempotencyKey),
+                    NatsTimeout));
+
+            if (versionResponse == null || !versionResponse.Success)
+            {
+                throw new InvalidOperationException(
+                    $"Failed to reserve version number: {versionResponse?.ErrorMessage ?? "null response"}");
+            }
+
+            var reservedVersion = versionResponse.VersionNum;
+            sagaActivity?.SetTag("video.reserved_version", reservedVersion);
+            _logger.LogInformation("Reserved version {VersionNum} for JobId: {JobId}", reservedVersion, jobId);
+
+            // ── Phase 4: Download the video file locally ────────────────────
             var downloadProgress = new Progress<DownloadProgress>(progress =>
             {
                 if (progress.TotalBytes.HasValue)
@@ -160,7 +179,7 @@ public class FileProcessHandler
             _logger.LogInformation("Downloaded video {VideoId}: {FilePath} (hash: {Hash})",
                 downloadResult.MediaId, downloadResult.FilePath, downloadResult.FileHash);
 
-            // ── Phase 4: Get storage config from DataBridge ─────────────────
+            // ── Phase 5: Get storage config from DataBridge ─────────────────
             var storageCfg = await ExecuteObservedPhaseAsync(
                 "storage_config",
                 jobId,
@@ -177,13 +196,13 @@ public class FileProcessHandler
 
             storage = FluentStorageProvider.CreateStorage(storageCfg);
 
-            // ── Phase 5: Detect media type and quality, then upload to storage ──────────────────────────────────
+            // ── Phase 6: Detect media type and quality, then upload to storage ──────────────────────────────────
             var (mediaType, detectedQuality) = await DetectMediaTypeAndQualityAsync(downloadResult.FilePath);
             sagaActivity?.SetTag("media.type", mediaType.ToString());
             sagaActivity?.SetTag("media.quality", detectedQuality.ToString());
             
             uploadedBlobPath = StoragePathBuilder.BuildMediaPath(
-                metadata.Platform, metadata.MediaId, downloadResult.FileHash, Path.GetExtension(downloadResult.FilePath), mediaType, detectedQuality);
+                metadata.Platform, metadata.MediaId, downloadResult.FileHash, Path.GetExtension(downloadResult.FilePath), reservedVersion);
 
             _logger.LogInformation("Uploading to storage path: {Path}", uploadedBlobPath);
 
@@ -213,7 +232,7 @@ public class FileProcessHandler
                 jobId,
                 () => MarkUploadedPendingCommitAsync(jobId, uploadedBlobPath, downloadResult.FileHash));
 
-            // ── Phase 6: Atomic commit via DataBridge ────────────────────────
+            // ── Phase 7: Atomic commit via DataBridge ────────────────────────
             var formatInfo = CreateMediaFormatInfo(downloadResult, mediaType, detectedQuality);
             
             VideoCommitResponse? commitResponse;
@@ -241,7 +260,8 @@ public class FileProcessHandler
                                     Quality: detectedQuality,
                                     VariantType: VideoVariantType.Original,
                                     SourceVersionId: null,
-                                    FormatInfo: formatInfo),
+                                    FormatInfo: formatInfo,
+                                    VersionNum: reservedVersion),
                                 token);
                         })));
             }
@@ -397,15 +417,16 @@ public class FileProcessHandler
                         phase: "reconcile-commit",
                         async () => await _resiliencePipeline.ExecuteAsync(async token =>
                         {
-                            // For reconciliation, parse quality from existing storage path
+                            // For reconciliation, parse version from existing storage path
                             var existingPathInfo = StoragePathBuilder.ParsePath(statusResponse.StoragePath!);
-                            var existingQuality = existingPathInfo?.Quality ?? Quality.Unknown;
+                            var existingVersion = existingPathInfo?.VersionNum ?? 0;
                             // Infer media type from file extension for reconciliation
                             var existingMediaType = InferMediaTypeFromPath(statusResponse.StoragePath!);
                             
+                            // Use unknown quality for reconciliation since it's not in the path
                             var reconcileFormatInfo = new MediaFormatInfo(
                                 FileSize: 0, // Size unknown for reconciliation
-                                FriendlyVideoResolution: QualityToResolutionString(existingQuality));
+                                FriendlyVideoResolution: null);
                             
                             return await _jobClient.CommitVideoAsync(
                                 new VideoCommitRequest(
@@ -418,10 +439,11 @@ public class FileProcessHandler
                                     Platform: metadata.Platform,
                                     SourceLastModified: metadata.SourceLastModified,
                                     MediaType: existingMediaType,
-                                    Quality: existingQuality,
-                                    VariantType: existingPathInfo?.VariantType ?? VideoVariantType.Original,
+                                    Quality: Quality.Unknown,
+                                    VariantType: VideoVariantType.Original,
                                     SourceVersionId: null,
-                                    FormatInfo: reconcileFormatInfo),
+                                    FormatInfo: reconcileFormatInfo,
+                                    VersionNum: existingVersion),
                                 token);
                         })));
 

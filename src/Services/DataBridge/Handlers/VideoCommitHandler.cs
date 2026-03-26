@@ -76,9 +76,19 @@ public class VideoCommitHandler : MessageHandlerBase<VideoCommitRequest, VideoCo
             videoInfo.MetadataJson = request.MetadataJson;
         }
 
+        // Validate the requested version number
         var maxVersion = await db.VideoVersions
             .Where(v => v.VideoId == videoInfo.Id)
             .MaxAsync(v => (int?)v.VersionNum, cancellationToken) ?? 0;
+
+        var expectedVersion = maxVersion + 1;
+        if (request.VersionNum != expectedVersion)
+        {
+            Logger.LogWarning(
+                "Version mismatch for JobId {JobId}: requested {RequestedVersion}, expected {ExpectedVersion}",
+                request.JobId, request.VersionNum, expectedVersion);
+            return new VideoCommitResponse(false, $"Version mismatch: requested {request.VersionNum}, expected {expectedVersion}");
+        }
 
         var videoVersion = new VideoVersion
         {
@@ -88,7 +98,7 @@ public class VideoCommitHandler : MessageHandlerBase<VideoCommitRequest, VideoCo
             FileHash = request.FileHash,
             StorageKey = request.StorageKey,
             StoragePath = request.StoragePath,
-            VersionNum = maxVersion + 1,
+            VersionNum = request.VersionNum,
             SourceVersionId = request.SourceVersionId
         };
         db.VideoVersions.Add(videoVersion);

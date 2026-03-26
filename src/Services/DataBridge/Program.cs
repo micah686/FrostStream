@@ -71,6 +71,7 @@ class Program
         builder.Services.AddHostedService<JobStartHandler>();
         builder.Services.AddHostedService<JobProgressHandler>();
         builder.Services.AddHostedService<VideoCommitHandler>();
+        builder.Services.AddHostedService<GetNextVersionHandler>();
         builder.Services.AddHostedService<JobLinkCompleteHandler>();
         builder.Services.AddHostedService<JobFailHandler>();
         builder.Services.AddHostedService<JobStatusHandler>();
