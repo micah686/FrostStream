@@ -202,7 +202,7 @@ public class FileProcessHandler
             sagaActivity?.SetTag("media.quality", detectedQuality.ToString());
             
             uploadedBlobPath = StoragePathBuilder.BuildMediaPath(
-                metadata.Platform, metadata.MediaId, downloadResult.FileHash, Path.GetExtension(downloadResult.FilePath), reservedVersion);
+                metadata.Platform, metadata.MediaId, metadata.OriginalUrl, downloadResult.FileHash, Path.GetExtension(downloadResult.FilePath), reservedVersion);
 
             _logger.LogInformation("Uploading to storage path: {Path}", uploadedBlobPath);
 

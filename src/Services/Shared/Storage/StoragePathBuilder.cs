@@ -1,3 +1,4 @@
+using System.IO.Hashing;
 using Shared.Entities;
 using Shared.Models;
 
@@ -21,11 +22,15 @@ public static class StoragePathBuilder
     public static string BuildMediaPath(
         string platform,
         string mediaId,
+        string originalUrl,
         string fileHash,
         string extension,
         int version)
     {
-        return $"{platform}/{mediaId}/v{version}/{fileHash}{extension}";
+        {
+            var hashedUrl = XxHash64.HashToUInt64(System.Text.Encoding.UTF8.GetBytes(originalUrl));
+            return $"{platform}/{hashedUrl}/v{version}/{mediaId}_{fileHash}{extension}";
+        }
     }
 
     /// <summary>
