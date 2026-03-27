@@ -54,9 +54,9 @@ public class JobProgressHandler : MessageHandlerBase<JobProgressRequest, JobProg
             tracker.StoragePath = request.StoragePath;
         }
 
-        if (!string.IsNullOrWhiteSpace(request.FileHash))
+        if (request.FileHash.HasValue)
         {
-            tracker.FileHash = request.FileHash;
+            tracker.FileHash = request.FileHash.Value;
         }
 
         tracker.UpdatedAt = DateTime.UtcNow;

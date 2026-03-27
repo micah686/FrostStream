@@ -16,5 +16,5 @@ public record YtDlpMetadata(
 public record YtDlpDownloadResult(
     YtDlpMetadata Metadata,
     string LocalFilePath,
-    string FileHash,
+    ulong FileHash,
     long FileSize);

@@ -37,7 +37,7 @@ public class CreateInitialVersionedSchema : Migration
             .WithColumn("idempotency_key").AsString(255).NotNullable()
             .WithColumn("storage_key").AsString(100).NotNullable()
             .WithColumn("storage_path").AsString().Nullable()
-            .WithColumn("file_hash").AsString(64).Nullable()
+            .WithColumn("file_hash").AsDecimal(20, 0).Nullable()
             .WithColumn("updated_at").AsDateTime().NotNullable()
             .WithColumn("completed_at").AsDateTime().Nullable()
             .WithColumn("expires_at").AsDateTime().NotNullable()
@@ -56,7 +56,7 @@ public class CreateInitialVersionedSchema : Migration
             .WithColumn("id").AsGuid().PrimaryKey()
             .WithColumn("video_id").AsGuid().NotNullable().ForeignKey("video_info", "id")
             .WithColumn("idempotency_key").AsString(255).NotNullable()
-            .WithColumn("file_hash").AsString(64).NotNullable()
+            .WithColumn("file_hash").AsDecimal(20, 0).NotNullable()
             .WithColumn("storage_key").AsString(100).NotNullable()
             .WithColumn("storage_path").AsString().NotNullable()
             .WithColumn("version_num").AsInt32().NotNullable();

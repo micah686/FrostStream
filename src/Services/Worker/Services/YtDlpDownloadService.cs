@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using System.Security.Cryptography;
+using System.IO.Hashing;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -238,8 +238,7 @@ public class YtDlpDownloadService : IDownloadService, IIdempotencyKeyGenerator
     public string ComputeIdempotencyKey(string mediaUrl, string storageKey, DateTime? sourceLastModified)
     {
         var input = $"{mediaUrl}|{storageKey}|{sourceLastModified?.ToString("O") ?? "null"}";
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(input));
-        return Convert.ToHexStringLower(hash);
+        return XxHash64.HashToUInt64(Encoding.UTF8.GetBytes(input)).ToString();
     }
 
     private YoutubeDL CreateYoutubeDL()
@@ -346,10 +345,11 @@ public class YtDlpDownloadService : IDownloadService, IIdempotencyKeyGenerator
         }
     }
 
-    private static async Task<string> ComputeFileHashAsync(string filePath, CancellationToken cancellationToken)
+    private static async Task<ulong> ComputeFileHashAsync(string filePath, CancellationToken cancellationToken)
     {
+        var xxHash = new XxHash64();
         await using var stream = File.OpenRead(filePath);
-        var hash = await SHA256.HashDataAsync(stream, cancellationToken);
-        return Convert.ToHexStringLower(hash);
+        await xxHash.AppendAsync(stream, cancellationToken);
+        return xxHash.GetCurrentHashAsUInt64();
     }
 }

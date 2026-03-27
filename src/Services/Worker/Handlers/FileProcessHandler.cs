@@ -400,7 +400,7 @@ public class FileProcessHandler
         var status = JobStatusCodec.Parse(statusResponse.Status);
         if (status == JobStatus.UploadedPendingCommit
             && !string.IsNullOrWhiteSpace(statusResponse.StoragePath)
-            && !string.IsNullOrWhiteSpace(statusResponse.FileHash))
+            && statusResponse.FileHash.HasValue)
         {
             _logger.LogWarning(
                 "JobId {JobId} redelivered while awaiting commit. Reissuing VideoCommit for {StoragePath}.",
@@ -434,7 +434,7 @@ public class FileProcessHandler
                                     IdempotencyKey: idempotencyKey,
                                     StorageKey: request.StorageKey,
                                     StoragePath: statusResponse.StoragePath!,
-                                    FileHash: statusResponse.FileHash!,
+                                    FileHash: statusResponse.FileHash!.Value,
                                     MetadataJson: metadata.RawMetadata ?? "{}",
                                     Platform: metadata.Platform,
                                     SourceLastModified: metadata.SourceLastModified,
@@ -474,7 +474,7 @@ public class FileProcessHandler
             statusResponse.SubStatus);
     }
 
-    private async Task MarkUploadedPendingCommitAsync(Guid jobId, string storagePath, string fileHash)
+    private async Task MarkUploadedPendingCommitAsync(Guid jobId, string storagePath, ulong fileHash)
     {
         var response = await _jobClient.ReportProgressAsync(
             new JobProgressRequest(

@@ -15,8 +15,7 @@ public class VideoVersion
     public string IdempotencyKey { get; set; } = null!;
 
     [Required]
-    [MaxLength(64)]
-    public string FileHash { get; set; } = null!;
+    public ulong FileHash { get; set; }
 
     [Required]
     [MaxLength(100)]

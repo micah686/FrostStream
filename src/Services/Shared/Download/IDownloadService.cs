@@ -171,9 +171,9 @@ public record DownloadResult
     public required string FilePath { get; init; }
 
     /// <summary>
-    /// SHA256 hash of the file content.
+    /// xxHash64 hash of the file content.
     /// </summary>
-    public required string FileHash { get; init; }
+    public required ulong FileHash { get; init; }
 
     /// <summary>
     /// File size in bytes.

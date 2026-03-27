@@ -16,14 +16,14 @@ public static class StoragePathBuilder
     /// </summary>
     /// <param name="platform">The platform identifier (e.g., "youtube", "vimeo")</param>
     /// <param name="mediaId">The unique media identifier from the platform</param>
-    /// <param name="fileHash">The hash of the file content</param>
+    /// <param name="fileHash">The xxHash64 hash of the file content</param>
     /// <param name="extension">The file extension including the dot (e.g., ".mp4", ".mp3")</param>
     /// <param name="version">The version number (integer, starting from 1)</param>
     public static string BuildMediaPath(
         string platform,
         string mediaId,
         string originalUrl,
-        string fileHash,
+        ulong fileHash,
         string extension,
         int version)
     {
@@ -38,12 +38,12 @@ public static class StoragePathBuilder
     /// Format: {platform}/{mediaId}/v{version}/{fileHash}{extension}
     /// </summary>
     /// <param name="sourceVersion">The source version being transcoded</param>
-    /// <param name="fileHash">The hash of the transcoded file content</param>
+    /// <param name="fileHash">The xxHash64 hash of the transcoded file content</param>
     /// <param name="extension">The file extension including the dot</param>
     /// <param name="targetVersion">The target version number for the transcoded variant</param>
     public static string BuildTranscodedPath(
         VideoVersion sourceVersion,
-        string fileHash,
+        ulong fileHash,
         string extension,
         int targetVersion)
     {
@@ -81,7 +81,13 @@ public static class StoragePathBuilder
 
             // Extract file hash from filename (without extension)
             var fileName = parts.Length > 3 ? parts[^1] : Path.GetFileName(storagePath);
-            var fileHash = Path.GetFileNameWithoutExtension(fileName);
+            var fileHashStr = Path.GetFileNameWithoutExtension(fileName);
+
+            // Try to parse the hash portion (after mediaId_) as ulong
+            var underscoreIdx = fileHashStr.IndexOf('_');
+            var hashPart = underscoreIdx >= 0 ? fileHashStr[(underscoreIdx + 1)..] : fileHashStr;
+            if (!ulong.TryParse(hashPart, out var fileHash))
+                return null;
 
             return new StoragePathInfo(platform, mediaId, versionNum, fileHash);
         }
@@ -99,4 +105,4 @@ public record StoragePathInfo(
     string Platform,
     string MediaId,
     int VersionNum,
-    string FileHash);
+    ulong FileHash);

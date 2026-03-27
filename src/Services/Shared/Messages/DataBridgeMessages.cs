@@ -4,7 +4,7 @@ namespace Shared.Messages;
 
 // Requests
 public record JobStartRequest(Guid JobId, string IdempotencyKey, string StorageKey, string VideoUrl);
-public record JobProgressRequest(Guid JobId, string Status, string? StoragePath, string? FileHash);
+public record JobProgressRequest(Guid JobId, string Status, string? StoragePath, ulong? FileHash);
 
 /// <summary>
 /// Technical media format information for video commit.
@@ -33,7 +33,7 @@ public record VideoCommitRequest(
     string IdempotencyKey,
     string StorageKey,
     string StoragePath,
-    string FileHash,
+    ulong FileHash,
     string MetadataJson,
     string Platform,
     DateTime? SourceLastModified,
@@ -87,7 +87,7 @@ public record JobStatusResponse(
     int RetryCount,
     string? StorageKey,
     string? StoragePath,
-    string? FileHash,
+    ulong? FileHash,
     Guid? VideoId,
     DateTime? UpdatedAt,
     DateTime? CompletedAt,

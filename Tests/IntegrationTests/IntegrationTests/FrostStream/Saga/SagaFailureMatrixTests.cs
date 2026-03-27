@@ -28,7 +28,7 @@ public class SagaFailureMatrixTests
             idempotencyKey,
             "archive",
             "youtube/test-video/vhash-a.mp4",
-            "hash-a",
+            1234567890123UL,
             "{\"title\":\"test-video\"}",
             "youtube",
             now,
@@ -102,7 +102,7 @@ public class SagaFailureMatrixTests
                 jobId,
                 JobStatus.UploadedPendingCommit.ToStorageValue(),
                 "youtube/test-video/vhash-b.mp4",
-                "hash-b"));
+                2345678901234UL));
         progress.ShouldNotBeNull();
         progress.Success.ShouldBeTrue();
 
@@ -114,7 +114,7 @@ public class SagaFailureMatrixTests
                 idempotencyKey,
                 "archive",
                 null!,
-                "hash-b",
+                2345678901234UL,
                 "{\"title\":\"test-video\"}",
                 "youtube",
                 DateTime.UtcNow,
@@ -224,7 +224,7 @@ public class SagaFailureMatrixTests
                 sourceJobId,
                 JobStatus.UploadedPendingCommit.ToStorageValue(),
                 "youtube/test-video/vhash-c.mp4",
-                "hash-c"));
+                3456789012345UL));
         progress.ShouldNotBeNull();
         progress.Success.ShouldBeTrue();
 
@@ -235,7 +235,7 @@ public class SagaFailureMatrixTests
                 idempotencyKey,
                 "archive",
                 "youtube/test-video/vhash-c.mp4",
-                "hash-c",
+                3456789012345UL,
                 "{\"title\":\"test-video\"}",
                 "youtube",
                 DateTime.UtcNow,

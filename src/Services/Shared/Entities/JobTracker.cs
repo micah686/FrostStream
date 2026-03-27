@@ -23,8 +23,7 @@ public class JobTracker
 
     public string? StoragePath { get; set; }
 
-    [MaxLength(64)]
-    public string? FileHash { get; set; }
+    public ulong? FileHash { get; set; }
 
     public DateTime UpdatedAt { get; set; }
 
