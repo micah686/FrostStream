@@ -126,6 +126,8 @@ static async Task<(string? title, string? description, string? thumbnail)> ReadS
 
 // ---------------- Routes ----------------
 
+app.MapGet("/", () => "Local Video Server is Running");
+
 // Health
 app.MapGet("/health", () => Results.Ok(new { ok = true }));
 

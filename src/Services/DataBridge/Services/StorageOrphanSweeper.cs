@@ -97,15 +97,16 @@ public class StorageOrphanSweeper : BackgroundService
         }, ct);
 
         var orphansFound = 0;
-        foreach (var obj in storageObjects)
+        foreach (Blob? obj in storageObjects)
         {
+            if(obj.IsFolder)continue;
             // Skip already quarantined files
             if (obj.FullPath.StartsWith("_orphans/", StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
 
-            if (!dbPaths.Contains(obj.FullPath))
+            if (!dbPaths.Contains(obj.FullPath.TrimStart('/'))) //trim start / so paths match
             {
                 orphansFound++;
                 await HandleOrphanedObjectAsync(storage, obj, ct);
