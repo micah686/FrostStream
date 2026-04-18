@@ -1,17 +1,6 @@
-using System.Threading.Tasks;
-using DataBridge.Data;
-using DataBridge.Handlers;
-using DataBridge.Services;
-using FluentMigrator.Runner;
-using FlySwattr.NATS.Abstractions;
-using FlySwattr.NATS.Extensions;
-using FlySwattr.NATS.Topology.Extensions;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Hosting.Internal;
-using Shared.Topology;
 
 namespace DataBridge;
 
@@ -22,67 +11,7 @@ class Program
         var builder = Host.CreateApplicationBuilder(args);
         builder.AddServiceDefaults();
 
-        // Configure PostgreSQL with EF Core
-        // This will automatically use:
-        // 1. Aspire-injected connection string (if running via AppHost)
-        // 2. Connection string from appsettings.json (if available)
-        // 3. Default localhost connection (as fallback)
-        builder.AddNpgsqlDbContext<FrostStreamDbContext>(
-            connectionName: "froststreamdb",
-            configureDbContextOptions: options =>
-            {
-                // Use snake_case naming convention to match FluentMigrator schema
-                options.UseSnakeCaseNamingConvention();
-
-                // Additional EF Core options can be configured here if needed
-                // e.g., options.EnableSensitiveDataLogging() for development
-            });
-
-        // Configure FluentMigrator
-        var connectionString = builder.Configuration.GetConnectionString("froststreamdb")
-            ?? "Host=localhost;Port=5432;Database=froststreamdb;Username=postgres;Password=postgres";
-
-        builder.Services.AddFluentMigratorCore()
-            .ConfigureRunner(rb => rb
-                .AddPostgres()
-                .WithGlobalConnectionString(connectionString)
-                .ScanIn(typeof(Program).Assembly).For.Migrations())
-            .AddLogging(lb => lb.AddFluentMigratorConsole());
-
-        var natsUrl = builder.Configuration.GetConnectionString("nats")
-            ?? builder.Configuration["NATS:Url"]
-            ?? "nats://localhost:4222";
-
-        builder.Services.AddEnterpriseNATSMessaging(opts =>
-        {
-            opts.Core.Url = natsUrl;
-        });
-
-        // Register topology source so streams are provisioned
-        builder.Services.AddNatsTopologySource<JobsTopology>();
-
-        // Register database-backed DLQ store (overrides NATS KV store)
-        builder.Services.AddScoped<IDlqStore, DbDlqStore>();
-
-        // Note: Health check for FrostStreamDbContext is automatically registered
-        // by AddNpgsqlDbContext() from Aspire.Npgsql.EntityFrameworkCore.PostgreSQL
-
-        builder.Services.AddHostedService<StorageConfigRequestHandler>();
-        builder.Services.AddHostedService<JobStartHandler>();
-        builder.Services.AddHostedService<JobProgressHandler>();
-        builder.Services.AddHostedService<VideoCommitHandler>();
-        builder.Services.AddHostedService<GetNextVersionHandler>();
-        builder.Services.AddHostedService<JobLinkCompleteHandler>();
-        builder.Services.AddHostedService<JobFailHandler>();
-        builder.Services.AddHostedService<JobStatusHandler>();
         
-        // DLQ persistence handler - stores DLQ messages to PostgreSQL
-        builder.Services.AddHostedService<DlqPersistenceHandler>();
-
-        // Orphan sweepers - DB-side (stuck jobs) and storage-side (orphaned files)
-        builder.Services.AddHostedService<OrphanSweeperService>();
-        builder.Services.AddHostedService<StorageOrphanSweeper>();
-
         // Force ConsoleLifetime so Ctrl+C / SIGTERM triggers StopAsync on hosted services
         builder.Services.AddSingleton<IHostLifetime, ConsoleLifetime>();
         builder.Services.Configure<ConsoleLifetimeOptions>(o =>
@@ -93,13 +22,6 @@ class Program
         
 
         var app = builder.Build();
-
-        // Run migrations on startup
-        using (var scope = app.Services.CreateScope())
-        {
-            var runner = scope.ServiceProvider.GetRequiredService<IMigrationRunner>();
-            runner.MigrateUp();
-        }
 
         await app.RunAsync();  // waits until Ctrl+C or SIGTERM, then calls StopAsync() gracefully
     }
