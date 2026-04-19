@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using NodaTime;
 using Shared;
 using Shared.Messaging;
 
@@ -73,7 +74,7 @@ public sealed class StorageCreateConsumerService(
                 Method = message.Method,
                 Parameters = message.Parameters,
                 Description = message.Description,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = new Instant()
             });
 
             await dbContext.SaveChangesAsync();

@@ -1,3 +1,5 @@
+using NodaTime;
+
 namespace Shared.Messaging;
 
 public sealed class CreateStorageMessage
@@ -6,5 +8,5 @@ public sealed class CreateStorageMessage
     public StorageMethod Method { get; init; }
     public required string Parameters { get; init; }
     public string? Description { get; init; }
-    public DateTime RequestedAtUtc { get; init; }
+    public Instant RequestedAtUtc { get; init; }
 }

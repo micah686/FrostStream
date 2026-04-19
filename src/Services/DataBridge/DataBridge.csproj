@@ -25,16 +25,17 @@
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="13.1.0" />
+      <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="13.2.2" />
       <PackageReference Include="FluentMigrator" Version="8.0.1" />
       <PackageReference Include="FluentMigrator.Runner.Core" Version="8.0.1" />
       <PackageReference Include="FluentMigrator.Runner.Postgres" Version="8.0.1" />
-      <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
-      <PackageReference Include="EFCore.NamingConventions" Version="10.0.0-*" />
-      <PackageReference Include="FluentStorage" Version="6.0.2" />
-      <PackageReference Include="Polly.Core" Version="8.6.5" />
+      <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1" />
+      <PackageReference Include="EFCore.NamingConventions" Version="10.0.1" />
+      <PackageReference Include="FluentStorage" Version="6.0.3" />
+      <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime" Version="10.0.1" />
+      <PackageReference Include="Polly.Core" Version="8.6.6" />
 
-      <PackageReference Include="System.IO.Hashing" Version="9.0.5" />
+      <PackageReference Include="System.IO.Hashing" Version="10.0.6" />
     </ItemGroup>
 
 </Project>

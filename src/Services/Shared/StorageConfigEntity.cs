@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.EntityFrameworkCore;
+using NodaTime;
 
 namespace Shared;
 
@@ -9,12 +10,12 @@ public class StorageConfigEntity
 {
     [Key]
     [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-    public int Id { get; set; }
+    public int Id { get; init; }
     
     [Required]
     [StringLength(100, MinimumLength = 2)]
     [RegularExpression("^[a-z0-9-]{2,100}$")]
-    public required string Key { get; set; }
+    public required string Key { get; init; }
 
     public StorageMethod Method { get; set; }
 
@@ -31,7 +32,7 @@ public class StorageConfigEntity
     [StringLength(500)]
     public string? Description { get; set; }
 
-    public DateTime CreatedAt { get; set; }
+    public Instant CreatedAt { get; init; }
 
     public DateTime? UpdatedAt { get; set; }
 }
