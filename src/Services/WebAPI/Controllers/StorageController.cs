@@ -1,7 +1,9 @@
 using System.Collections.Concurrent;
 using System.ComponentModel.DataAnnotations;
+using FlySwattr.NATS.Abstractions;
 using Microsoft.AspNetCore.Mvc;
 using Shared;
+using Shared.Messaging;
 
 namespace WebAPI.Controllers;
 
@@ -12,6 +14,14 @@ public class StorageController : ControllerBase
     // Temporary in-memory data store until integrated with DataBridge.
     private static readonly ConcurrentDictionary<int, StorageConfigEntity> StorageItems = new();
     private static int _nextId = 2;
+    private readonly IMessageBus _messageBus;
+    private readonly ILogger<StorageController> _logger;
+
+    public StorageController(IMessageBus messageBus, ILogger<StorageController> logger)
+    {
+        _messageBus = messageBus;
+        _logger = logger;
+    }
 
     static StorageController()
     {
@@ -27,7 +37,7 @@ public class StorageController : ControllerBase
     }
 
     [HttpPost("create")]
-    public ActionResult<StorageConfigEntity> CreateStorage([FromBody] CreateStorageRequest request)
+    public async Task<ActionResult<StorageConfigEntity>> CreateStorage([FromBody] CreateStorageRequest request, CancellationToken cancellationToken)
     {
         var id = Interlocked.Increment(ref _nextId);
         var now = DateTime.UtcNow;
@@ -48,7 +58,32 @@ public class StorageController : ControllerBase
             return Conflict($"Storage key '{entity.Key}' already exists.");
         }
 
-        StorageItems.TryAdd(id, entity);
+        if (!StorageItems.TryAdd(id, entity))
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError, "Unable to create storage entry.");
+        }
+
+        try
+        {
+            await _messageBus.PublishAsync(
+                StorageSubjects.CreateStorage,
+                new CreateStorageMessage
+                {
+                    Key = entity.Key,
+                    Method = entity.Method,
+                    Parameters = entity.Parameters,
+                    Description = entity.Description,
+                    RequestedAtUtc = now
+                },
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            StorageItems.TryRemove(id, out _);
+            _logger.LogError(ex, "Failed publishing create-storage message for key '{StorageKey}'", entity.Key);
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to publish storage create message.");
+        }
+        
         return CreatedAtAction(nameof(GetStorage), new { id }, entity);
     }
 

@@ -1,3 +1,4 @@
+using FlySwattr.NATS.Extensions;
 using Scalar.AspNetCore;
 
 namespace WebAPI;
@@ -12,6 +13,21 @@ public class Program
         // Add services to the container.
         builder.Services.AddAuthorization();
         builder.Services.AddControllers();
+        
+        //var natsUrl = builder.Configuration["NATS:Url"] ?? "nats://localhost:4222";
+        builder.Services.AddEnterpriseNATSMessaging(options =>
+        {
+            options.Core.Url = builder.Configuration.GetConnectionString("nats")
+                               ?? builder.Configuration["NATS:Url"]
+                               ?? "nats://localhost:4222";
+            //options.Core.Url = natsUrl;
+            options.EnableTopologyProvisioning = false;
+            options.EnablePayloadOffloading = false;
+            options.EnableResilience = false;
+            options.EnableCaching = false;
+            options.EnableDistributedLock = false;
+            options.EnableDlqAdvisoryListener = false;
+        });
 
         
         // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
