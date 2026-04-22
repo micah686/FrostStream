@@ -26,7 +26,10 @@ class Program
         var natsAuth = BuildNatsAuth(builder.Configuration);
 
         builder.Services.AddDbContext<DataBridgeDbContext>(options =>
-            options.UseNpgsql(connectionString).UseSnakeCaseNamingConvention());
+            options.UseNpgsql(
+                    connectionString,
+                    npgsqlOptions => npgsqlOptions.UseNodaTime())
+                .UseSnakeCaseNamingConvention());
 
         builder.Services
             .AddFluentMigratorCore()

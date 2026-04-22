@@ -45,8 +45,7 @@ public class StorageController : ControllerBase
             Method = request.Method,
             Parameters = request.Parameters,
             Description = request.Description,
-            CreatedAt = new Instant(),
-            UpdatedAt = null
+            LastUpdated = null
         };
 
         // if (StorageItems.Values.Any(x => x.Key.Equals(entity.Key, StringComparison.OrdinalIgnoreCase)))
@@ -65,7 +64,7 @@ public class StorageController : ControllerBase
                     Method = entity.Method,
                     Parameters = entity.Parameters,
                     Description = entity.Description,
-                    RequestedAtUtc = new Instant()
+                    RequestedAtUtc = SystemClock.Instance.GetCurrentInstant()
                 },
                 cancellationToken);
         }
@@ -95,7 +94,7 @@ public class StorageController : ControllerBase
         // existing.Method = request.Method;
         // existing.Parameters = request.Parameters;
         // existing.Description = request.Description;
-        // existing.UpdatedAt = DateTime.UtcNow;
+        // existing.LastUpdated = SystemClock.Instance.GetCurrentInstant();
         //
         // return Ok(existing);
         return Ok();

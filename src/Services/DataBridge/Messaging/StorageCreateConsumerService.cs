@@ -73,8 +73,7 @@ public sealed class StorageCreateConsumerService(
                 Key = message.Key,
                 Method = message.Method,
                 Parameters = message.Parameters,
-                Description = message.Description,
-                CreatedAt = new Instant()
+                Description = message.Description
             });
 
             await dbContext.SaveChangesAsync();

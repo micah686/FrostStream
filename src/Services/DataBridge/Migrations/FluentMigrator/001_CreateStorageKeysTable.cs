@@ -14,8 +14,8 @@ public sealed class M001_CreateStorageKeysTable : Migration
             .WithColumn("method").AsInt32().NotNullable()
             .WithColumn("parameters").AsCustom("jsonb").NotNullable()
             .WithColumn("description").AsString(500).Nullable()
-            .WithColumn("created_at").AsDateTime().NotNullable().WithDefault(SystemMethods.CurrentUTCDateTime)
-            .WithColumn("updated_at").AsDateTime().Nullable();
+            .WithColumn("created_at").AsCustom("timestamp with time zone").NotNullable().WithDefaultValue(SystemMethods.CurrentUTCDateTime)
+            .WithColumn("last_updated").AsCustom("timestamp with time zone").Nullable();
 
         Create.UniqueConstraint("uq_storage_keys_key")
             .OnTable("storage_keys")

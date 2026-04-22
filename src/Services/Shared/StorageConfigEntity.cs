@@ -32,7 +32,7 @@ public class StorageConfigEntity
     [StringLength(500)]
     public string? Description { get; set; }
 
-    public Instant CreatedAt { get; init; }
+    public Instant CreatedAt { get; private set; } = SystemClock.Instance.GetCurrentInstant();
 
-    public DateTime? UpdatedAt { get; set; }
+    public Instant? LastUpdated { get; set; }
 }

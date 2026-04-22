@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using NodaTime;
 using Shared;
 
 namespace DataBridge.Data;
@@ -51,10 +52,13 @@ public sealed class DataBridgeDbContext(DbContextOptions<DataBridgeDbContext> op
 
         storageConfig.Property(x => x.CreatedAt)
             .HasColumnName("created_at")
+            .HasColumnType("timestamp with time zone")
             .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .ValueGeneratedOnAdd()
             .IsRequired();
 
-        storageConfig.Property(x => x.UpdatedAt)
-            .HasColumnName("updated_at");
+        storageConfig.Property(x => x.LastUpdated)
+            .HasColumnName("last_updated")
+            .HasColumnType("timestamp with time zone");
     }
 }
