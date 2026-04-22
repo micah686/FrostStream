@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.ComponentModel.DataAnnotations;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.AspNetCore.Mvc;
@@ -38,7 +37,6 @@ public class StorageController : ControllerBase
     [HttpPost("create")]
     public async Task<ActionResult<StorageConfigEntity>> CreateStorage([FromBody] CreateStorageRequest request, CancellationToken cancellationToken)
     {
-
         var entity = new StorageConfigEntity
         {
             Key = request.Key,
@@ -47,6 +45,17 @@ public class StorageController : ControllerBase
             Description = request.Description,
             LastUpdated = null
         };
+
+        var parameterErrors = entity.ValidateTypedParameters();
+        if (parameterErrors.Count > 0)
+        {
+            foreach (var error in parameterErrors)
+            {
+                ModelState.AddModelError(nameof(request.Parameters), error);
+            }
+
+            return ValidationProblem(ModelState);
+        }
 
         // if (StorageItems.Values.Any(x => x.Key.Equals(entity.Key, StringComparison.OrdinalIgnoreCase)))
         // {
@@ -81,6 +90,24 @@ public class StorageController : ControllerBase
     [HttpPut("update/{id:int}")]
     public ActionResult<StorageConfigEntity> UpdateStorage(int id, [FromBody] UpdateStorageRequest request)
     {
+        var entity = new StorageConfigEntity
+        {
+            Key = request.Key,
+            Method = request.Method,
+            Parameters = request.Parameters
+        };
+
+        var parameterErrors = entity.ValidateTypedParameters();
+        if (parameterErrors.Count > 0)
+        {
+            foreach (var error in parameterErrors)
+            {
+                ModelState.AddModelError(nameof(request.Parameters), error);
+            }
+
+            return ValidationProblem(ModelState);
+        }
+
         // if (!StorageItems.TryGetValue(id, out var existing))
         // {
         //     return NotFound();

@@ -29,10 +29,25 @@ public class StorageConfigEntity
     [Required]
     public required string Parameters { get; set; }
 
+    [NotMapped]
+    public StorageParametersBase? TypedParameters
+    {
+        get
+        {
+            StorageParametersSerializer.TryDeserialize(Method, Parameters, out var parsed, out _);
+            return parsed;
+        }
+    }
+
     [StringLength(500)]
     public string? Description { get; set; }
 
     public Instant CreatedAt { get; private set; } = SystemClock.Instance.GetCurrentInstant();
 
     public Instant? LastUpdated { get; set; }
+
+    public IReadOnlyList<string> ValidateTypedParameters()
+    {
+        return StorageParametersSerializer.Validate(Method, Parameters);
+    }
 }

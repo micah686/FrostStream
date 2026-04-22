@@ -4,7 +4,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using NodaTime;
 using Shared;
 using Shared.Messaging;
 
@@ -65,6 +64,16 @@ public sealed class StorageCreateConsumerService(
                 logger.LogInformation(
                     "Storage key '{StorageKey}' already exists. Skipping NATS create message.",
                     message.Key);
+                return;
+            }
+
+            var parameterErrors = StorageParametersSerializer.Validate(message.Method, message.Parameters);
+            if (parameterErrors.Count > 0)
+            {
+                logger.LogWarning(
+                    "Storage key '{StorageKey}' has invalid parameters payload: {Errors}",
+                    message.Key,
+                    string.Join("; ", parameterErrors));
                 return;
             }
 
