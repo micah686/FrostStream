@@ -1,4 +1,4 @@
-namespace Shared;
+namespace Shared.Storage;
 
 /// <summary>
 /// Defines the available storage methods for file transfer.

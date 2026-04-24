@@ -6,7 +6,9 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NodaTime;
 using Shared;
+using Shared.Database;
 using Shared.Messaging;
+using Shared.Storage;
 
 namespace DataBridge.Messaging;
 
@@ -108,13 +110,29 @@ public sealed class StorageCrudConsumerService(
                 return;
             }
 
+            StorageParametersSerializer.TryDeserialize(
+                message.Method,
+                message.Parameters,
+                out var typedParameters,
+                out _);
+            if (typedParameters is null)
+            {
+                await context.RespondAsync(new StorageOperationResponseMessage
+                {
+                    Success = false,
+                    ErrorCode = "validation",
+                    ErrorMessage = "Invalid parameters JSON."
+                });
+                return;
+            }
+
             var entity = new StorageConfigEntity
             {
                 Key = message.Key,
                 Method = message.Method,
-                Parameters = message.Parameters,
                 Description = message.Description
             };
+            entity.ApplyTypedParameters(typedParameters);
 
             dbContext.StorageConfigs.Add(entity);
             await dbContext.SaveChangesAsync();
@@ -140,7 +158,7 @@ public sealed class StorageCrudConsumerService(
 
         try
         {
-            var entity = await dbContext.StorageConfigs
+            var entity = await StorageConfigsWithDetails(dbContext)
                 .SingleOrDefaultAsync(x => x.Key == message.Key);
 
             if (entity is null)
@@ -191,11 +209,29 @@ public sealed class StorageCrudConsumerService(
                 return;
             }
 
+            StorageParametersSerializer.TryDeserialize(
+                message.Method,
+                message.Parameters,
+                out var typedParameters,
+                out _);
+            if (typedParameters is null)
+            {
+                await context.RespondAsync(new StorageOperationResponseMessage
+                {
+                    Success = false,
+                    ErrorCode = "validation",
+                    ErrorMessage = "Invalid parameters JSON."
+                });
+                return;
+            }
+
+            RemoveExistingParameters(dbContext, entity);
+
             entity.Key = message.Key;
             entity.Method = message.Method;
-            entity.Parameters = message.Parameters;
             entity.Description = message.Description;
             entity.LastUpdated = SystemClock.Instance.GetCurrentInstant();
+            entity.ApplyTypedParameters(typedParameters);
 
             await dbContext.SaveChangesAsync();
 
@@ -219,24 +255,14 @@ public sealed class StorageCrudConsumerService(
 
         try
         {
-            var items = await dbContext.StorageConfigs
+            var items = await StorageConfigsWithDetails(dbContext)
                 .OrderBy(x => x.Id)
-                .Select(x => new StorageConfigDto
-                {
-                    Id = x.Id,
-                    Key = x.Key,
-                    Method = x.Method,
-                    Parameters = x.Parameters,
-                    Description = x.Description,
-                    CreatedAt = x.CreatedAt,
-                    LastUpdated = x.LastUpdated
-                })
                 .ToArrayAsync();
 
             await context.RespondAsync(new StorageOperationResponseMessage
             {
                 Success = true,
-                Items = items
+                Items = items.Select(Map).ToArray()
             });
         }
         catch (Exception ex)
@@ -253,7 +279,7 @@ public sealed class StorageCrudConsumerService(
 
         try
         {
-            var entity = await dbContext.StorageConfigs
+            var entity = await StorageConfigsWithDetails(dbContext)
                 .SingleOrDefaultAsync(x => x.Key == context.Message.Key);
 
             if (entity is null)
@@ -287,7 +313,7 @@ public sealed class StorageCrudConsumerService(
 
         try
         {
-            var entity = await dbContext.StorageConfigs
+            var entity = await StorageConfigsWithDetails(dbContext)
                 .SingleOrDefaultAsync(x => x.Key == context.Message.Key);
 
             if (entity is null)
@@ -339,6 +365,35 @@ public sealed class StorageCrudConsumerService(
             CreatedAt = entity.CreatedAt,
             LastUpdated = entity.LastUpdated
         };
+    }
+
+    private static IQueryable<StorageConfigEntity> StorageConfigsWithDetails(DataBridgeDbContext dbContext)
+    {
+        return dbContext.StorageConfigs
+            .Include(x => x.Local)
+            .Include(x => x.Network)
+            .Include(x => x.Object);
+    }
+
+    private static void RemoveExistingParameters(DataBridgeDbContext dbContext, StorageConfigEntity entity)
+    {
+        if (entity.Local is not null)
+        {
+            dbContext.StorageLocalConfigs.Remove(entity.Local);
+            entity.Local = null;
+        }
+
+        if (entity.Network is not null)
+        {
+            dbContext.StorageNetworkConfigs.Remove(entity.Network);
+            entity.Network = null;
+        }
+
+        if (entity.Object is not null)
+        {
+            dbContext.StorageObjectConfigs.Remove(entity.Object);
+            entity.Object = null;
+        }
     }
 
     private static Task RespondInternalErrorAsync<T>(IMessageContext<T> context)

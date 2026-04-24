@@ -3,6 +3,7 @@ using FlySwattr.NATS.Abstractions;
 using Microsoft.AspNetCore.Mvc;
 using Shared;
 using Shared.Messaging;
+using Shared.Storage;
 
 namespace WebAPI.Controllers;
 

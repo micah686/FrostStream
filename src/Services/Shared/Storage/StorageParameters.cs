@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 
-namespace Shared;
+namespace Shared.Storage;
 
 public abstract class StorageParametersBase : IValidatableObject
 {
@@ -130,7 +130,8 @@ public static class StorageParametersSerializer
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
-        PropertyNameCaseInsensitive = true
+        PropertyNameCaseInsensitive = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
     public static bool TryDeserialize(
@@ -185,5 +186,25 @@ public static class StorageParametersSerializer
         Validator.TryValidateObject(parsed!, validationContext, results, validateAllProperties: true);
 
         return results.Select(x => x.ErrorMessage ?? "Invalid parameters value.").ToArray();
+    }
+
+    public static string Serialize(StorageMethod method, StorageParametersBase parameters)
+    {
+        var expectedType = method switch
+        {
+            StorageMethod.PosixLocal => typeof(PosixLocalStorageParameters),
+            StorageMethod.StreamingNetwork => typeof(StreamingNetworkStorageParameters),
+            StorageMethod.ObjectStorage => typeof(ObjectStorageParameters),
+            _ => throw new ArgumentOutOfRangeException(nameof(method), method, "Unsupported storage method.")
+        };
+
+        if (!expectedType.IsInstanceOfType(parameters))
+        {
+            throw new ArgumentException(
+                $"Parameters type '{parameters.GetType().Name}' does not match method '{method}'.",
+                nameof(parameters));
+        }
+
+        return JsonSerializer.Serialize(parameters, expectedType, JsonOptions);
     }
 }

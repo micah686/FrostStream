@@ -1,4 +1,6 @@
 using FlySwattr.NATS.Extensions;
+using NodaTime;
+using NodaTime.Serialization.SystemTextJson;
 using Scalar.AspNetCore;
 
 namespace WebAPI;
@@ -12,7 +14,12 @@ public class Program
 
         // Add services to the container.
         builder.Services.AddAuthorization();
-        builder.Services.AddControllers();
+        builder.Services
+            .AddControllers()
+            .AddJsonOptions(options =>
+            {
+                options.JsonSerializerOptions.ConfigureForNodaTime(DateTimeZoneProviders.Tzdb);
+            });
         
         //var natsUrl = builder.Configuration["NATS:Url"] ?? "nats://localhost:4222";
         builder.Services.AddEnterpriseNATSMessaging(options =>
