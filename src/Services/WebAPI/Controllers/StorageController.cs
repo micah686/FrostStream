@@ -21,7 +21,7 @@ public class StorageController : ControllerBase
     }
 
     [HttpPost("create")]
-    public async Task<ActionResult<StorageConfigDto>> CreateStorage([FromBody] CreateStorageRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> CreateStorage([FromBody] CreateStorageRequest request, CancellationToken cancellationToken)
     {
         var parameterErrors = StorageParametersSerializer.Validate(request.Method, request.Parameters);
         if (parameterErrors.Count > 0)
@@ -55,12 +55,7 @@ public class StorageController : ControllerBase
             return MapErrorResponse(response);
         }
 
-        if (response.Entity is null)
-        {
-            return StatusCode(StatusCodes.Status502BadGateway, "Storage service returned an invalid create response.");
-        }
-
-        return CreatedAtAction(nameof(GetStorage), new { key = response.Entity.Key }, response.Entity);
+        return Ok();
     }
 
     [HttpPut("update/{key}")]

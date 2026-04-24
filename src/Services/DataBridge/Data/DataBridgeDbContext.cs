@@ -38,7 +38,8 @@ public sealed class DataBridgeDbContext(DbContextOptions<DataBridgeDbContext> op
 
         storageConfig.Property(x => x.Method)
             .HasColumnName("method")
-            .HasConversion<int>()
+            .HasMaxLength(50)
+            .HasConversion<string>()
             .IsRequired();
 
         storageConfig.Property(x => x.Parameters)
