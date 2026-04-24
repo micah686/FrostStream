@@ -15,7 +15,7 @@ public class StorageConfigEntity
     [Required]
     [StringLength(100, MinimumLength = 2)]
     [RegularExpression("^[a-z0-9-]{2,100}$")]
-    public required string Key { get; init; }
+    public required string Key { get; set; }
 
     public StorageMethod Method { get; set; }
 

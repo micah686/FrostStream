@@ -1,7 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.AspNetCore.Mvc;
-using NodaTime;
 using Shared;
 using Shared.Messaging;
 
@@ -11,7 +10,7 @@ namespace WebAPI.Controllers;
 [Route("api/[controller]")]
 public class StorageController : ControllerBase
 {
-    
+    private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);
     private readonly IMessageBus _messageBus;
     private readonly ILogger<StorageController> _logger;
 
@@ -21,32 +20,10 @@ public class StorageController : ControllerBase
         _logger = logger;
     }
 
-    // static StorageController()
-    // {
-    //     StorageItems.TryAdd(1, new StorageConfigEntity
-    //     {
-    //         Id = 1,
-    //         Key = "default",
-    //         Method = StorageMethod.PosixLocal,
-    //         Parameters = "{\"path\":\"./data/\"}",
-    //         Description = "Fallback/Default Local Storage",
-    //         CreatedAt = new Instant()
-    //     });
-    // }
-
     [HttpPost("create")]
-    public async Task<ActionResult<StorageConfigEntity>> CreateStorage([FromBody] CreateStorageRequest request, CancellationToken cancellationToken)
+    public async Task<ActionResult<StorageConfigDto>> CreateStorage([FromBody] CreateStorageRequest request, CancellationToken cancellationToken)
     {
-        var entity = new StorageConfigEntity
-        {
-            Key = request.Key,
-            Method = request.Method,
-            Parameters = request.Parameters,
-            Description = request.Description,
-            LastUpdated = null
-        };
-
-        var parameterErrors = entity.ValidateTypedParameters();
+        var parameterErrors = StorageParametersSerializer.Validate(request.Method, request.Parameters);
         if (parameterErrors.Count > 0)
         {
             foreach (var error in parameterErrors)
@@ -57,109 +34,176 @@ public class StorageController : ControllerBase
             return ValidationProblem(ModelState);
         }
 
-        // if (StorageItems.Values.Any(x => x.Key.Equals(entity.Key, StringComparison.OrdinalIgnoreCase)))
-        // {
-        //     return Conflict($"Storage key '{entity.Key}' already exists.");
-        // }
-        
+        var response = await SendRequestAsync(
+            StorageSubjects.CreateStorage,
+            new StorageCreateRequestMessage
+            {
+                Key = request.Key,
+                Method = request.Method,
+                Parameters = request.Parameters,
+                Description = request.Description
+            },
+            cancellationToken);
 
+        if (response is null)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to process storage create request.");
+        }
+
+        if (!response.Success)
+        {
+            return MapErrorResponse(response);
+        }
+
+        if (response.Entity is null)
+        {
+            return StatusCode(StatusCodes.Status502BadGateway, "Storage service returned an invalid create response.");
+        }
+
+        return CreatedAtAction(nameof(GetStorage), new { key = response.Entity.Key }, response.Entity);
+    }
+
+    [HttpPut("update/{key}")]
+    public async Task<ActionResult<StorageConfigDto>> UpdateStorage(string key, [FromBody] UpdateStorageRequest request, CancellationToken cancellationToken)
+    {
+        var parameterErrors = StorageParametersSerializer.Validate(request.Method, request.Parameters);
+        if (parameterErrors.Count > 0)
+        {
+            foreach (var error in parameterErrors)
+            {
+                ModelState.AddModelError(nameof(request.Parameters), error);
+            }
+
+            return ValidationProblem(ModelState);
+        }
+
+        var response = await SendRequestAsync(
+            StorageSubjects.UpdateStorage,
+            new StorageUpdateRequestMessage
+            {
+                Key = key,
+                Method = request.Method,
+                Parameters = request.Parameters,
+                Description = request.Description
+            },
+            cancellationToken);
+
+        if (response is null)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to process storage update request.");
+        }
+
+        if (!response.Success)
+        {
+            return MapErrorResponse(response);
+        }
+
+        if (response.Entity is null)
+        {
+            return StatusCode(StatusCodes.Status502BadGateway, "Storage service returned an invalid update response.");
+        }
+
+        return Ok(response.Entity);
+    }
+
+    [HttpGet("list")]
+    public async Task<ActionResult<IReadOnlyCollection<StorageConfigDto>>> ListStorage(CancellationToken cancellationToken)
+    {
+        var response = await SendRequestAsync(
+            StorageSubjects.ListStorage,
+            new StorageListRequestMessage(),
+            cancellationToken);
+
+        if (response is null)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to process storage list request.");
+        }
+
+        if (!response.Success)
+        {
+            return MapErrorResponse(response);
+        }
+
+        return Ok(response.Items ?? Array.Empty<StorageConfigDto>());
+    }
+
+    [HttpDelete("delete/{key}")]
+    public async Task<IActionResult> DeleteStorage(string key, CancellationToken cancellationToken)
+    {
+        var response = await SendRequestAsync(
+            StorageSubjects.DeleteStorage,
+            new StorageDeleteRequestMessage { Key = key },
+            cancellationToken);
+
+        if (response is null)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to process storage delete request.");
+        }
+
+        if (!response.Success)
+        {
+            return MapErrorResponse(response);
+        }
+
+        return NoContent();
+    }
+
+    [HttpGet("{key}")]
+    public async Task<ActionResult<StorageConfigDto>> GetStorage(string key, CancellationToken cancellationToken)
+    {
+        var response = await SendRequestAsync(
+            StorageSubjects.GetStorage,
+            new StorageGetRequestMessage { Key = key },
+            cancellationToken);
+
+        if (response is null)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to process storage get request.");
+        }
+
+        if (!response.Success)
+        {
+            return MapErrorResponse(response);
+        }
+
+        if (response.Entity is null)
+        {
+            return StatusCode(StatusCodes.Status502BadGateway, "Storage service returned an invalid get response.");
+        }
+
+        return Ok(response.Entity);
+    }
+
+    private async Task<StorageOperationResponseMessage?> SendRequestAsync<TRequest>(
+        string subject,
+        TRequest request,
+        CancellationToken cancellationToken)
+    {
         try
         {
-            await _messageBus.PublishAsync(
-                StorageSubjects.CreateStorage,
-                new CreateStorageMessage
-                {
-                    Key = entity.Key,
-                    Method = entity.Method,
-                    Parameters = entity.Parameters,
-                    Description = entity.Description,
-                    RequestedAtUtc = SystemClock.Instance.GetCurrentInstant()
-                },
+            return await _messageBus.RequestAsync<TRequest, StorageOperationResponseMessage>(
+                subject,
+                request,
+                RequestTimeout,
                 cancellationToken);
         }
         catch (Exception ex)
         {
-            
-            _logger.LogError(ex, "Failed publishing create-storage message for key '{StorageKey}'", entity.Key);
-            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to publish storage create message.");
+            _logger.LogError(ex, "Failed processing storage request on subject '{Subject}'", subject);
+            return null;
         }
-        
-        return CreatedAtAction(nameof(GetStorage), entity);
     }
 
-    [HttpPut("update/{id:int}")]
-    public ActionResult<StorageConfigEntity> UpdateStorage(int id, [FromBody] UpdateStorageRequest request)
+    private ActionResult MapErrorResponse(StorageOperationResponseMessage response)
     {
-        var entity = new StorageConfigEntity
+        return response.ErrorCode switch
         {
-            Key = request.Key,
-            Method = request.Method,
-            Parameters = request.Parameters
+            "not_found" => NotFound(response.ErrorMessage),
+            "conflict" => Conflict(response.ErrorMessage),
+            "validation" => BadRequest(response.ErrorMessage),
+            "forbidden" => StatusCode(StatusCodes.Status403Forbidden, response.ErrorMessage),
+            _ => StatusCode(StatusCodes.Status500InternalServerError, response.ErrorMessage ?? "Storage request failed.")
         };
-
-        var parameterErrors = entity.ValidateTypedParameters();
-        if (parameterErrors.Count > 0)
-        {
-            foreach (var error in parameterErrors)
-            {
-                ModelState.AddModelError(nameof(request.Parameters), error);
-            }
-
-            return ValidationProblem(ModelState);
-        }
-
-        // if (!StorageItems.TryGetValue(id, out var existing))
-        // {
-        //     return NotFound();
-        // }
-        //
-        // if (StorageItems.Values.Any(x => x.Id != id && x.Key.Equals(request.Key, StringComparison.OrdinalIgnoreCase)))
-        // {
-        //     return Conflict($"Storage key '{request.Key}' already exists.");
-        // }
-        
-        // existing.Method = request.Method;
-        // existing.Parameters = request.Parameters;
-        // existing.Description = request.Description;
-        // existing.LastUpdated = SystemClock.Instance.GetCurrentInstant();
-        //
-        // return Ok(existing);
-        return Ok();
-    }
-
-    [HttpGet("list")]
-    public ActionResult<IReadOnlyCollection<StorageConfigEntity>> ListStorage()
-    {
-        // var result = StorageItems.Values
-        //     .OrderBy(x => x.Id)
-        //     .ToArray();
-        //
-        // return Ok(result);
-        return Ok();
-    }
-
-    [HttpDelete("delete/{id:int}")]
-    public IActionResult DeleteStorage(int id)
-    {
-        // if (!StorageItems.TryRemove(id, out _))
-        // {
-        //     return NotFound();
-        // }
-        //
-        // return NoContent();
-        return NoContent();
-    }
-
-    [HttpGet("{id:int}")]
-    public ActionResult<StorageConfigEntity> GetStorage(int id)
-    {
-        // if (!StorageItems.TryGetValue(id, out var item))
-        // {
-        //     return NotFound();
-        // }
-        //
-        // return Ok(item);
-        return Ok(null);
     }
 }
 
@@ -182,10 +226,10 @@ public sealed class CreateStorageRequest
 
 public sealed class UpdateStorageRequest
 {
-    [Required]
-    [StringLength(100, MinimumLength = 2)]
-    [RegularExpression("^[a-z0-9-]{2,100}$")]
-    public required string Key { get; init; }
+    // [Required]
+    // [StringLength(100, MinimumLength = 2)]
+    // [RegularExpression("^[a-z0-9-]{2,100}$")]
+    // public required string Key { get; init; }
 
     [Required]
     public StorageMethod Method { get; init; }

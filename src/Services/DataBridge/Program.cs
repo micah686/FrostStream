@@ -49,7 +49,7 @@ class Program
             options.EnableDistributedLock = false;
             options.EnableDlqAdvisoryListener = false;
         });
-        builder.Services.AddHostedService<StorageCreateConsumerService>();
+        builder.Services.AddHostedService<StorageCrudConsumerService>();
 
         // Force ConsoleLifetime so Ctrl+C / SIGTERM triggers StopAsync on hosted services
         builder.Services.AddSingleton<IHostLifetime, ConsoleLifetime>();
