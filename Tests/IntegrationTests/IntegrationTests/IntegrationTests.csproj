@@ -23,4 +23,9 @@
         <ProjectReference Include="..\..\..\src\Services\WebAPI\WebAPI.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Folder Include="Infrastructure\" />
+      <Folder Include="Storage\" />
+    </ItemGroup>
+
 </Project>

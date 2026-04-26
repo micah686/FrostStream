@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
@@ -20,6 +20,10 @@
 
     <ItemGroup>
         <ProjectReference Include="..\..\src\Services\WebAPI\WebAPI.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Storage\" />
     </ItemGroup>
 
 </Project>
