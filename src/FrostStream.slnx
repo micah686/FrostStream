@@ -21,8 +21,8 @@
     <Project Path="AppHost/AppHost.csproj" />
   </Folder>
   <Folder Name="/Tests/">
-    <Project Path="../Tests/IntegrationTests/IntegrationTests/IntegrationTests.csproj" />
-    <Project Path="../Tests/UnitTests/UnitTests.csproj" />
+    <Project Path="Tests/IntegrationTests/IntegrationTests/IntegrationTests.csproj" />
+    <Project Path="Tests/UnitTests/UnitTests.csproj" />
   </Folder>
   <Project Path="ServiceDefaults/ServiceDefaults.csproj" />
   <Project Path="VideoServeLocalTest/VideoServeLocalTest.csproj" />
