@@ -12,7 +12,7 @@ public sealed class StorageConfigDto
     public Instant CreatedAt { get; init; }
     public Instant? LastUpdated { get; init; }
     public PosixLocalStorageParameters? Local { get; init; }
-    public StreamingNetworkStorageParameters? Streaming { get; init; }
+    public StreamingNetworkStorageParameters? Network { get; init; }
     public ObjectStorageParameters? Object { get; init; }
 }
 

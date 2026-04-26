@@ -31,8 +31,8 @@ public static class FluentStorageProvider
 
         return method switch
         {
-            StorageMethod.PosixLocal => BuildDiskConnectionString((PosixLocalStorageParameters)parameters),
-            StorageMethod.StreamingNetwork => BuildNetworkConnectionString((StreamingNetworkStorageParameters)parameters),
+            StorageMethod.Local => BuildDiskConnectionString((PosixLocalStorageParameters)parameters),
+            StorageMethod.Network => BuildNetworkConnectionString((StreamingNetworkStorageParameters)parameters),
             StorageMethod.ObjectStorage => BuildObjectStorageConnectionString((ObjectStorageParameters)parameters),
             _ => throw new ArgumentOutOfRangeException(nameof(method), method, "Unsupported storage method")
         };

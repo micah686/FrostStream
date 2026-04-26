@@ -25,24 +25,24 @@ public sealed class PosixLocalStorageParameters : StorageParametersBase
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum LocalStorageProtocol
 {
-    Local,
+    Local
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum NetworkStorageProtocol
+{
+    Ftp,
+    Ftps,
+    Sftp,
     Nfs,
     Smb,
     Cifs
 }
 
-[JsonConverter(typeof(JsonStringEnumConverter))]
-public enum StreamingStorageProtocol
-{
-    Ftp,
-    Ftps,
-    Sftp
-}
-
 public sealed class StreamingNetworkStorageParameters : StorageParametersBase
 {
     [Required]
-    public StreamingStorageProtocol Protocol { get; init; }
+    public NetworkStorageProtocol Protocol { get; init; }
 
     [Required]
     [MinLength(1)]
@@ -168,8 +168,8 @@ public static class StorageParametersSerializer
         {
             parameters = method switch
             {
-                StorageMethod.PosixLocal => JsonSerializer.Deserialize<PosixLocalStorageParameters>(json, JsonOptions),
-                StorageMethod.StreamingNetwork => JsonSerializer.Deserialize<StreamingNetworkStorageParameters>(json, JsonOptions),
+                StorageMethod.Local => JsonSerializer.Deserialize<PosixLocalStorageParameters>(json, JsonOptions),
+                StorageMethod.Network => JsonSerializer.Deserialize<StreamingNetworkStorageParameters>(json, JsonOptions),
                 StorageMethod.ObjectStorage => JsonSerializer.Deserialize<ObjectStorageParameters>(json, JsonOptions),
                 _ => null
             };
@@ -215,8 +215,8 @@ public static class StorageParametersSerializer
     {
         var expectedType = method switch
         {
-            StorageMethod.PosixLocal => typeof(PosixLocalStorageParameters),
-            StorageMethod.StreamingNetwork => typeof(StreamingNetworkStorageParameters),
+            StorageMethod.Local => typeof(PosixLocalStorageParameters),
+            StorageMethod.Network => typeof(StreamingNetworkStorageParameters),
             StorageMethod.ObjectStorage => typeof(ObjectStorageParameters),
             _ => throw new ArgumentOutOfRangeException(nameof(method), method, "Unsupported storage method.")
         };

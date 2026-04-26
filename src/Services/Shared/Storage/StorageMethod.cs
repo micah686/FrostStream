@@ -6,15 +6,15 @@ namespace Shared.Storage;
 public enum StorageMethod
 {
     /// <summary>
-    /// POSIX-compatible local storage: local filesystem, NFS mounts, SMB/CIFS mounts.
+    /// Local storage: local filesystem.
     /// All accessed as a directory on the filesystem.
     /// </summary>
-    PosixLocal,
+    Local,
 
     /// <summary>
-    /// Streaming network storage: FTP, FTPS, SFTP.
+    /// Streaming network storage: FTP, FTPS, SFTP, NFS mounts, SMB/CIFS mounts.
     /// </summary>
-    StreamingNetwork,
+    Network,
 
     /// <summary>
     /// Object storage: S3, Azure Blob, GCS, MinIO, and other blob stores.

@@ -40,12 +40,12 @@ public class StorageConfigEntity
         {
             return Method switch
             {
-                StorageMethod.PosixLocal when Local is not null => new PosixLocalStorageParameters
+                StorageMethod.Local when Local is not null => new PosixLocalStorageParameters
                 {
                     Protocol = Local.Protocol,
                     Path = Local.Path
                 },
-                StorageMethod.StreamingNetwork when Network is not null => new StreamingNetworkStorageParameters
+                StorageMethod.Network when Network is not null => new StreamingNetworkStorageParameters
                 {
                     Protocol = Network.Protocol,
                     Host = Network.Host,
@@ -96,7 +96,7 @@ public class StorageConfigEntity
         switch (parameters)
         {
             case PosixLocalStorageParameters local:
-                Method = StorageMethod.PosixLocal;
+                Method = StorageMethod.Local;
                 Local = new StorageLocalConfigEntity
                 {
                     Protocol = local.Protocol,
@@ -105,7 +105,7 @@ public class StorageConfigEntity
                 break;
 
             case StreamingNetworkStorageParameters network:
-                Method = StorageMethod.StreamingNetwork;
+                Method = StorageMethod.Network;
                 Network = new StorageNetworkConfigEntity
                 {
                     Protocol = network.Protocol,
@@ -161,7 +161,7 @@ public sealed class StorageNetworkConfigEntity
     [DatabaseGenerated(DatabaseGeneratedOption.None)]
     public int StorageKeyId { get; set; }
 
-    public StreamingStorageProtocol Protocol { get; set; }
+    public NetworkStorageProtocol Protocol { get; set; }
 
     [Required]
     [MinLength(1)]

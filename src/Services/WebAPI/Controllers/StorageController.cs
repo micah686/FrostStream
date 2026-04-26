@@ -41,7 +41,7 @@ public class StorageController : ControllerBase
             },
             cancellationToken);
 
-        return MapTypedStorageResponse(response, MapLocalResponse, StorageMethod.PosixLocal);
+        return MapTypedStorageResponse(response, MapLocalResponse, StorageMethod.Local);
     }
 
     [HttpPut("local/update/{key}")]
@@ -64,16 +64,16 @@ public class StorageController : ControllerBase
             },
             cancellationToken);
 
-        return MapTypedStorageResponse(response, MapLocalResponse, StorageMethod.PosixLocal);
+        return MapTypedStorageResponse(response, MapLocalResponse, StorageMethod.Local);
     }
 
-    [HttpPost("streaming/create")]
-    public async Task<ActionResult<StreamingStorageConfigResponse>> CreateStreamingStorage(
-        [FromBody] StreamingStorageUpsertRequest request,
+    [HttpPost("network/create")]
+    public async Task<ActionResult<NetworkStorageConfigResponse>> CreateNetworkStorage(
+        [FromBody] NetworkStorageUpsertRequest request,
         CancellationToken cancellationToken)
     {
         var response = await SendRequestAsync(
-            StorageSubjects.CreateStreamingStorage,
+            StorageSubjects.CreateNetworkStorage,
             new StorageCreateStreamingRequestMessage
             {
                 Key = request.Key,
@@ -92,17 +92,17 @@ public class StorageController : ControllerBase
             },
             cancellationToken);
 
-        return MapTypedStorageResponse(response, MapStreamingResponse, StorageMethod.StreamingNetwork);
+        return MapTypedStorageResponse(response, MapNetworkResponse, StorageMethod.Network);
     }
 
-    [HttpPut("streaming/update/{key}")]
-    public async Task<ActionResult<StreamingStorageConfigResponse>> UpdateStreamingStorage(
+    [HttpPut("network/update/{key}")]
+    public async Task<ActionResult<NetworkStorageConfigResponse>> UpdateNetworkStorage(
         string key,
-        [FromBody] StreamingStorageUpdateRequest request,
+        [FromBody] NetworkStorageUpdateRequest request,
         CancellationToken cancellationToken)
     {
         var response = await SendRequestAsync(
-            StorageSubjects.UpdateStreamingStorage,
+            StorageSubjects.UpdateNetworkStorage,
             new StorageUpdateStreamingRequestMessage
             {
                 Key = key,
@@ -121,7 +121,7 @@ public class StorageController : ControllerBase
             },
             cancellationToken);
 
-        return MapTypedStorageResponse(response, MapStreamingResponse, StorageMethod.StreamingNetwork);
+        return MapTypedStorageResponse(response, MapNetworkResponse, StorageMethod.Network);
     }
 
     [HttpPost("object/create")]
@@ -321,26 +321,26 @@ public class StorageController : ControllerBase
         };
     }
 
-    private static StreamingStorageConfigResponse MapStreamingResponse(StorageConfigDto storage)
+    private static NetworkStorageConfigResponse MapNetworkResponse(StorageConfigDto storage)
     {
-        var streaming = storage.Streaming
-            ?? throw new InvalidOperationException("Storage response does not contain streaming parameters.");
+        var network = storage.Network
+            ?? throw new InvalidOperationException("Storage response does not contain network parameters.");
 
-        return new StreamingStorageConfigResponse
+        return new NetworkStorageConfigResponse
         {
             Id = storage.Id,
             Key = storage.Key,
             Description = storage.Description,
             CreatedAt = storage.CreatedAt,
             LastUpdated = storage.LastUpdated,
-            Protocol = streaming.Protocol,
-            Host = streaming.Host,
-            Port = streaming.Port,
-            Username = streaming.Username,
-            Password = streaming.Password,
-            PrivateKey = streaming.PrivateKey,
-            PublicKey = streaming.PublicKey,
-            BasePath = streaming.BasePath
+            Protocol = network.Protocol,
+            Host = network.Host,
+            Port = network.Port,
+            Username = network.Username,
+            Password = network.Password,
+            PrivateKey = network.PrivateKey,
+            PublicKey = network.PublicKey,
+            BasePath = network.BasePath
         };
     }
 
@@ -425,10 +425,10 @@ public sealed class LocalStorageUpdateRequest : StorageUpdateRequestBase, IValid
     }
 }
 
-public sealed class StreamingStorageUpsertRequest : StorageUpsertRequestBase, IValidatableObject
+public sealed class NetworkStorageUpsertRequest : StorageUpsertRequestBase, IValidatableObject
 {
     [Required]
-    public StreamingStorageProtocol Protocol { get; init; }
+    public NetworkStorageProtocol Protocol { get; init; }
 
     [Required]
     [MinLength(1)]
@@ -459,10 +459,10 @@ public sealed class StreamingStorageUpsertRequest : StorageUpsertRequestBase, IV
     }
 }
 
-public sealed class StreamingStorageUpdateRequest : StorageUpdateRequestBase, IValidatableObject
+public sealed class NetworkStorageUpdateRequest : StorageUpdateRequestBase, IValidatableObject
 {
     [Required]
-    public StreamingStorageProtocol Protocol { get; init; }
+    public NetworkStorageProtocol Protocol { get; init; }
 
     [Required]
     [MinLength(1)]
@@ -572,9 +572,9 @@ public sealed class LocalStorageConfigResponse : StorageConfigResponseBase
     public required string Path { get; init; }
 }
 
-public sealed class StreamingStorageConfigResponse : StorageConfigResponseBase
+public sealed class NetworkStorageConfigResponse : StorageConfigResponseBase
 {
-    public StreamingStorageProtocol Protocol { get; init; }
+    public NetworkStorageProtocol Protocol { get; init; }
     public required string Host { get; init; }
     public int? Port { get; init; }
     public string? Username { get; init; }

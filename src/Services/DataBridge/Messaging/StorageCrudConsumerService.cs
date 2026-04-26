@@ -29,7 +29,7 @@ public sealed class StorageCrudConsumerService(
             cancellationToken: stoppingToken));
 
         _subscriptions.Add(await messageBus.SubscribeAsync<StorageCreateStreamingRequestMessage>(
-            StorageSubjects.CreateStreamingStorage,
+            StorageSubjects.CreateNetworkStorage,
             HandleCreateStreamingStorageAsync,
             queueGroup: "databridge-storage",
             cancellationToken: stoppingToken));
@@ -47,7 +47,7 @@ public sealed class StorageCrudConsumerService(
             cancellationToken: stoppingToken));
 
         _subscriptions.Add(await messageBus.SubscribeAsync<StorageUpdateStreamingRequestMessage>(
-            StorageSubjects.UpdateStreamingStorage,
+            StorageSubjects.UpdateNetworkStorage,
             HandleUpdateStreamingStorageAsync,
             queueGroup: "databridge-storage",
             cancellationToken: stoppingToken));
@@ -396,7 +396,7 @@ public sealed class StorageCrudConsumerService(
                 Protocol = entity.Local.Protocol,
                 Path = entity.Local.Path
             },
-            Streaming = entity.Network is null ? null : new StreamingNetworkStorageParameters
+            Network = entity.Network is null ? null : new StreamingNetworkStorageParameters
             {
                 Protocol = entity.Network.Protocol,
                 Host = entity.Network.Host,

@@ -49,10 +49,10 @@ public sealed class NatsStorageConfigClient(IMessageBus messageBus) : IStorageCo
             Method: response.Entity.Method,
             Parameters: response.Entity.Method switch
             {
-                StorageMethod.PosixLocal when response.Entity.Local is not null
+                StorageMethod.Local when response.Entity.Local is not null
                     => StorageParametersSerializer.Serialize(response.Entity.Method, response.Entity.Local),
-                StorageMethod.StreamingNetwork when response.Entity.Streaming is not null
-                    => StorageParametersSerializer.Serialize(response.Entity.Method, response.Entity.Streaming),
+                StorageMethod.Network when response.Entity.Network is not null
+                    => StorageParametersSerializer.Serialize(response.Entity.Method, response.Entity.Network),
                 StorageMethod.ObjectStorage when response.Entity.Object is not null
                     => StorageParametersSerializer.Serialize(response.Entity.Method, response.Entity.Object),
                 _ => null
