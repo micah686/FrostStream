@@ -204,6 +204,66 @@ public class StorageControllerTests
         objectResult!.StatusCode.ShouldBe(500);
     }
 
+    [Test]
+    public async Task CreateStorage_ValidSftpParameters_ReturnsOk()
+    {
+        _messageBus
+            .RequestAsync<StorageCreateRequestMessage, StorageOperationResponseMessage>(
+                Arg.Any<string>(), Arg.Any<StorageCreateRequestMessage>(),
+                Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>())
+            .Returns(new StorageOperationResponseMessage { Success = true });
+
+        var result = await _controller.CreateStorage(
+            new CreateStorageRequest { Key = "sftp-storage", Method = StorageMethod.StreamingNetwork, Parameters = ValidSftpJson },
+            CancellationToken.None);
+
+        result.ShouldBeOfType<OkResult>();
+    }
+
+    [Test]
+    public async Task CreateStorage_InvalidSftpParameters_UsernameWithoutCredential_ReturnsBadRequest()
+    {
+        // username set but neither password nor privateKey — fails StreamingNetworkStorageParameters.Validate
+        var noCredentialJson = """{"protocol":2,"host":"sftp.example.com","username":"user"}""";
+
+        var result = await _controller.CreateStorage(
+            new CreateStorageRequest { Key = "sftp-storage", Method = StorageMethod.StreamingNetwork, Parameters = noCredentialJson },
+            CancellationToken.None);
+
+        var objectResult = result.ShouldBeAssignableTo<ObjectResult>();
+        objectResult!.StatusCode.ShouldBe(400);
+    }
+
+    [Test]
+    public async Task CreateStorage_ValidS3Parameters_ReturnsOk()
+    {
+        _messageBus
+            .RequestAsync<StorageCreateRequestMessage, StorageOperationResponseMessage>(
+                Arg.Any<string>(), Arg.Any<StorageCreateRequestMessage>(),
+                Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>())
+            .Returns(new StorageOperationResponseMessage { Success = true });
+
+        var result = await _controller.CreateStorage(
+            new CreateStorageRequest { Key = "s3-storage", Method = StorageMethod.ObjectStorage, Parameters = ValidS3Json },
+            CancellationToken.None);
+
+        result.ShouldBeOfType<OkResult>();
+    }
+
+    [Test]
+    public async Task CreateStorage_InvalidS3Parameters_MissingRegion_ReturnsBadRequest()
+    {
+        // AwsS3 requires region — omitting it fails ObjectStorageParameters.Validate
+        var noRegionJson = """{"provider":0,"container":"my-bucket","useDefaultCredentials":true}""";
+
+        var result = await _controller.CreateStorage(
+            new CreateStorageRequest { Key = "s3-storage", Method = StorageMethod.ObjectStorage, Parameters = noRegionJson },
+            CancellationToken.None);
+
+        var objectResult = result.ShouldBeAssignableTo<ObjectResult>();
+        objectResult!.StatusCode.ShouldBe(400);
+    }
+
     // ── UpdateStorage ──────────────────────────────────────────────────────────
 
     [Test]
