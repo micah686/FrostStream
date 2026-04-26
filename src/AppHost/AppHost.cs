@@ -45,9 +45,11 @@ var postgres = builder.AddPostgres("postgres")
 // Add the database
 var database = postgres.AddDatabase("froststreamdb");
 
+
 //ClickHouse (For live-chat)
-var clickhouse = builder.AddClickHouse("clickhouse");
-var clickhousedb = clickhouse.AddDatabase("clickhousedb");
+// Enable one we are getting to the point of implementing live-chat
+// var clickhouse = builder.AddClickHouse("clickhouse");
+// var clickhousedb = clickhouse.AddDatabase("clickhousedb");
 
 // OpenBAO secret store (Vault-API-compatible). Runs in dev mode with a deterministic
 // root token so services can authenticate without an unseal step. Production deployments

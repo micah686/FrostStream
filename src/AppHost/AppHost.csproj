@@ -23,4 +23,8 @@
       <ProjectReference Include="..\Services\Worker\Worker.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Folder Include="configs\nats\certs\" />
+    </ItemGroup>
+
 </Project>
