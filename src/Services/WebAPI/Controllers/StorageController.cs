@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.AspNetCore.Mvc;
+using NodaTime;
 using Shared;
 using Shared.Messaging;
 using Shared.Storage;
@@ -21,85 +22,163 @@ public class StorageController : ControllerBase
         _logger = logger;
     }
 
-    [HttpPost("create")]
-    public async Task<IActionResult> CreateStorage([FromBody] CreateStorageRequest request, CancellationToken cancellationToken)
+    [HttpPost("local/create")]
+    public async Task<ActionResult<LocalStorageConfigResponse>> CreateLocalStorage(
+        [FromBody] LocalStorageUpsertRequest request,
+        CancellationToken cancellationToken)
     {
-        var parameterErrors = StorageParametersSerializer.Validate(request.Method, request.Parameters);
-        if (parameterErrors.Count > 0)
-        {
-            foreach (var error in parameterErrors)
-            {
-                ModelState.AddModelError(nameof(request.Parameters), error);
-            }
-
-            return ValidationProblem(ModelState);
-        }
-
         var response = await SendRequestAsync(
-            StorageSubjects.CreateStorage,
-            new StorageCreateRequestMessage
+            StorageSubjects.CreateLocalStorage,
+            new StorageCreateLocalRequestMessage
             {
                 Key = request.Key,
-                Method = request.Method,
-                Parameters = request.Parameters,
-                Description = request.Description
+                Description = request.Description,
+                Parameters = new PosixLocalStorageParameters
+                {
+                    Protocol = request.Protocol,
+                    Path = request.Path
+                }
             },
             cancellationToken);
 
-        if (response is null)
-        {
-            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to process storage create request.");
-        }
-
-        if (!response.Success)
-        {
-            return MapErrorResponse(response);
-        }
-
-        return Ok();
+        return MapTypedStorageResponse(response, MapLocalResponse, StorageMethod.PosixLocal);
     }
 
-    [HttpPut("update/{key}")]
-    public async Task<ActionResult<StorageConfigDto>> UpdateStorage(string key, [FromBody] UpdateStorageRequest request, CancellationToken cancellationToken)
+    [HttpPut("local/update/{key}")]
+    public async Task<ActionResult<LocalStorageConfigResponse>> UpdateLocalStorage(
+        string key,
+        [FromBody] LocalStorageUpdateRequest request,
+        CancellationToken cancellationToken)
     {
-        var parameterErrors = StorageParametersSerializer.Validate(request.Method, request.Parameters);
-        if (parameterErrors.Count > 0)
-        {
-            foreach (var error in parameterErrors)
-            {
-                ModelState.AddModelError(nameof(request.Parameters), error);
-            }
-
-            return ValidationProblem(ModelState);
-        }
-
         var response = await SendRequestAsync(
-            StorageSubjects.UpdateStorage,
-            new StorageUpdateRequestMessage
+            StorageSubjects.UpdateLocalStorage,
+            new StorageUpdateLocalRequestMessage
             {
                 Key = key,
-                Method = request.Method,
-                Parameters = request.Parameters,
-                Description = request.Description
+                Description = request.Description,
+                Parameters = new PosixLocalStorageParameters
+                {
+                    Protocol = request.Protocol,
+                    Path = request.Path
+                }
             },
             cancellationToken);
 
-        if (response is null)
-        {
-            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to process storage update request.");
-        }
+        return MapTypedStorageResponse(response, MapLocalResponse, StorageMethod.PosixLocal);
+    }
 
-        if (!response.Success)
-        {
-            return MapErrorResponse(response);
-        }
+    [HttpPost("streaming/create")]
+    public async Task<ActionResult<StreamingStorageConfigResponse>> CreateStreamingStorage(
+        [FromBody] StreamingStorageUpsertRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await SendRequestAsync(
+            StorageSubjects.CreateStreamingStorage,
+            new StorageCreateStreamingRequestMessage
+            {
+                Key = request.Key,
+                Description = request.Description,
+                Parameters = new StreamingNetworkStorageParameters
+                {
+                    Protocol = request.Protocol,
+                    Host = request.Host,
+                    Port = request.Port,
+                    Username = request.Username,
+                    Password = request.Password,
+                    PrivateKey = request.PrivateKey,
+                    PublicKey = request.PublicKey,
+                    BasePath = request.BasePath
+                }
+            },
+            cancellationToken);
 
-        if (response.Entity is null)
-        {
-            return StatusCode(StatusCodes.Status502BadGateway, "Storage service returned an invalid update response.");
-        }
+        return MapTypedStorageResponse(response, MapStreamingResponse, StorageMethod.StreamingNetwork);
+    }
 
-        return Ok(response.Entity);
+    [HttpPut("streaming/update/{key}")]
+    public async Task<ActionResult<StreamingStorageConfigResponse>> UpdateStreamingStorage(
+        string key,
+        [FromBody] StreamingStorageUpdateRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await SendRequestAsync(
+            StorageSubjects.UpdateStreamingStorage,
+            new StorageUpdateStreamingRequestMessage
+            {
+                Key = key,
+                Description = request.Description,
+                Parameters = new StreamingNetworkStorageParameters
+                {
+                    Protocol = request.Protocol,
+                    Host = request.Host,
+                    Port = request.Port,
+                    Username = request.Username,
+                    Password = request.Password,
+                    PrivateKey = request.PrivateKey,
+                    PublicKey = request.PublicKey,
+                    BasePath = request.BasePath
+                }
+            },
+            cancellationToken);
+
+        return MapTypedStorageResponse(response, MapStreamingResponse, StorageMethod.StreamingNetwork);
+    }
+
+    [HttpPost("object/create")]
+    public async Task<ActionResult<ObjectStorageConfigResponse>> CreateObjectStorage(
+        [FromBody] ObjectStorageUpsertRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await SendRequestAsync(
+            StorageSubjects.CreateObjectStorage,
+            new StorageCreateObjectRequestMessage
+            {
+                Key = request.Key,
+                Description = request.Description,
+                Parameters = new ObjectStorageParameters
+                {
+                    Provider = request.Provider,
+                    Container = request.Container,
+                    Region = request.Region,
+                    Endpoint = request.Endpoint,
+                    BasePath = request.BasePath,
+                    AccessKeyId = request.AccessKeyId,
+                    SecretKey = request.SecretKey,
+                    UseDefaultCredentials = request.UseDefaultCredentials
+                }
+            },
+            cancellationToken);
+
+        return MapTypedStorageResponse(response, MapObjectResponse, StorageMethod.ObjectStorage);
+    }
+
+    [HttpPut("object/update/{key}")]
+    public async Task<ActionResult<ObjectStorageConfigResponse>> UpdateObjectStorage(
+        string key,
+        [FromBody] ObjectStorageUpdateRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await SendRequestAsync(
+            StorageSubjects.UpdateObjectStorage,
+            new StorageUpdateObjectRequestMessage
+            {
+                Key = key,
+                Description = request.Description,
+                Parameters = new ObjectStorageParameters
+                {
+                    Provider = request.Provider,
+                    Container = request.Container,
+                    Region = request.Region,
+                    Endpoint = request.Endpoint,
+                    BasePath = request.BasePath,
+                    AccessKeyId = request.AccessKeyId,
+                    SecretKey = request.SecretKey,
+                    UseDefaultCredentials = request.UseDefaultCredentials
+                }
+            },
+            cancellationToken);
+
+        return MapTypedStorageResponse(response, MapObjectResponse, StorageMethod.ObjectStorage);
     }
 
     [HttpGet("list")]
@@ -190,6 +269,29 @@ public class StorageController : ControllerBase
         }
     }
 
+    private ActionResult<TResponse> MapTypedStorageResponse<TResponse>(
+        StorageOperationResponseMessage? response,
+        Func<StorageConfigDto, TResponse> map,
+        StorageMethod expectedMethod)
+    {
+        if (response is null)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to process storage request.");
+        }
+
+        if (!response.Success)
+        {
+            return MapErrorResponse(response);
+        }
+
+        if (response.Entity is null || response.Entity.Method != expectedMethod)
+        {
+            return StatusCode(StatusCodes.Status502BadGateway, "Storage service returned an invalid response.");
+        }
+
+        return Ok(map(response.Entity));
+    }
+
     private ActionResult MapErrorResponse(StorageOperationResponseMessage response)
     {
         return response.ErrorCode switch
@@ -201,38 +303,295 @@ public class StorageController : ControllerBase
             _ => StatusCode(StatusCodes.Status500InternalServerError, response.ErrorMessage ?? "Storage request failed.")
         };
     }
+
+    private static LocalStorageConfigResponse MapLocalResponse(StorageConfigDto storage)
+    {
+        var local = storage.Local
+            ?? throw new InvalidOperationException("Storage response does not contain local parameters.");
+
+        return new LocalStorageConfigResponse
+        {
+            Id = storage.Id,
+            Key = storage.Key,
+            Description = storage.Description,
+            CreatedAt = storage.CreatedAt,
+            LastUpdated = storage.LastUpdated,
+            Protocol = local.Protocol,
+            Path = local.Path
+        };
+    }
+
+    private static StreamingStorageConfigResponse MapStreamingResponse(StorageConfigDto storage)
+    {
+        var streaming = storage.Streaming
+            ?? throw new InvalidOperationException("Storage response does not contain streaming parameters.");
+
+        return new StreamingStorageConfigResponse
+        {
+            Id = storage.Id,
+            Key = storage.Key,
+            Description = storage.Description,
+            CreatedAt = storage.CreatedAt,
+            LastUpdated = storage.LastUpdated,
+            Protocol = streaming.Protocol,
+            Host = streaming.Host,
+            Port = streaming.Port,
+            Username = streaming.Username,
+            Password = streaming.Password,
+            PrivateKey = streaming.PrivateKey,
+            PublicKey = streaming.PublicKey,
+            BasePath = streaming.BasePath
+        };
+    }
+
+    private static ObjectStorageConfigResponse MapObjectResponse(StorageConfigDto storage)
+    {
+        var @object = storage.Object
+            ?? throw new InvalidOperationException("Storage response does not contain object parameters.");
+
+        return new ObjectStorageConfigResponse
+        {
+            Id = storage.Id,
+            Key = storage.Key,
+            Description = storage.Description,
+            CreatedAt = storage.CreatedAt,
+            LastUpdated = storage.LastUpdated,
+            Provider = @object.Provider,
+            Container = @object.Container,
+            Region = @object.Region,
+            Endpoint = @object.Endpoint,
+            BasePath = @object.BasePath,
+            AccessKeyId = @object.AccessKeyId,
+            SecretKey = @object.SecretKey,
+            UseDefaultCredentials = @object.UseDefaultCredentials
+        };
+    }
 }
 
-public sealed class CreateStorageRequest
+public abstract class StorageUpsertRequestBase
 {
     [Required]
     [StringLength(100, MinimumLength = 2)]
     [RegularExpression("^[a-z0-9-]{2,100}$")]
     public required string Key { get; init; }
 
-    [Required]
-    public StorageMethod Method { get; init; }
-
-    [Required]
-    public required string Parameters { get; init; }
-
     [StringLength(500)]
     public string? Description { get; init; }
 }
 
-public sealed class UpdateStorageRequest
+public abstract class StorageUpdateRequestBase
 {
-    // [Required]
-    // [StringLength(100, MinimumLength = 2)]
-    // [RegularExpression("^[a-z0-9-]{2,100}$")]
-    // public required string Key { get; init; }
-
-    [Required]
-    public StorageMethod Method { get; init; }
-
-    [Required]
-    public required string Parameters { get; init; }
-
     [StringLength(500)]
     public string? Description { get; init; }
+}
+
+public sealed class LocalStorageUpsertRequest : StorageUpsertRequestBase, IValidatableObject
+{
+    [Required]
+    public LocalStorageProtocol Protocol { get; init; }
+
+    [Required]
+    [MinLength(1)]
+    public required string Path { get; init; }
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        return StorageParametersSerializer.Validate(new PosixLocalStorageParameters
+        {
+            Protocol = Protocol,
+            Path = Path
+        })
+            .Select(error => new ValidationResult(error, [nameof(Path)]));
+    }
+}
+
+public sealed class LocalStorageUpdateRequest : StorageUpdateRequestBase, IValidatableObject
+{
+    [Required]
+    public LocalStorageProtocol Protocol { get; init; }
+
+    [Required]
+    [MinLength(1)]
+    public required string Path { get; init; }
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        return StorageParametersSerializer.Validate(new PosixLocalStorageParameters
+        {
+            Protocol = Protocol,
+            Path = Path
+        })
+            .Select(error => new ValidationResult(error, [nameof(Path)]));
+    }
+}
+
+public sealed class StreamingStorageUpsertRequest : StorageUpsertRequestBase, IValidatableObject
+{
+    [Required]
+    public StreamingStorageProtocol Protocol { get; init; }
+
+    [Required]
+    [MinLength(1)]
+    public required string Host { get; init; }
+
+    [Range(1, 65535)]
+    public int? Port { get; init; }
+
+    public string? Username { get; init; }
+    public string? Password { get; init; }
+    public string? PrivateKey { get; init; }
+    public string? PublicKey { get; init; }
+    public string? BasePath { get; init; }
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        return StorageParametersSerializer.Validate(new StreamingNetworkStorageParameters
+        {
+            Protocol = Protocol,
+            Host = Host,
+            Port = Port,
+            Username = Username,
+            Password = Password,
+            PrivateKey = PrivateKey,
+            PublicKey = PublicKey,
+            BasePath = BasePath
+        }).Select(error => new ValidationResult(error));
+    }
+}
+
+public sealed class StreamingStorageUpdateRequest : StorageUpdateRequestBase, IValidatableObject
+{
+    [Required]
+    public StreamingStorageProtocol Protocol { get; init; }
+
+    [Required]
+    [MinLength(1)]
+    public required string Host { get; init; }
+
+    [Range(1, 65535)]
+    public int? Port { get; init; }
+
+    public string? Username { get; init; }
+    public string? Password { get; init; }
+    public string? PrivateKey { get; init; }
+    public string? PublicKey { get; init; }
+    public string? BasePath { get; init; }
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        return StorageParametersSerializer.Validate(new StreamingNetworkStorageParameters
+        {
+            Protocol = Protocol,
+            Host = Host,
+            Port = Port,
+            Username = Username,
+            Password = Password,
+            PrivateKey = PrivateKey,
+            PublicKey = PublicKey,
+            BasePath = BasePath
+        }).Select(error => new ValidationResult(error));
+    }
+}
+
+public sealed class ObjectStorageUpsertRequest : StorageUpsertRequestBase, IValidatableObject
+{
+    [Required]
+    public ObjectStorageProtocol Provider { get; init; }
+
+    [Required]
+    [MinLength(1)]
+    public required string Container { get; init; }
+
+    public string? Region { get; init; }
+    public string? Endpoint { get; init; }
+    public string? BasePath { get; init; }
+    public string? AccessKeyId { get; init; }
+    public string? SecretKey { get; init; }
+    public bool UseDefaultCredentials { get; init; } = true;
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        return StorageParametersSerializer.Validate(new ObjectStorageParameters
+        {
+            Provider = Provider,
+            Container = Container,
+            Region = Region,
+            Endpoint = Endpoint,
+            BasePath = BasePath,
+            AccessKeyId = AccessKeyId,
+            SecretKey = SecretKey,
+            UseDefaultCredentials = UseDefaultCredentials
+        }).Select(error => new ValidationResult(error));
+    }
+}
+
+public sealed class ObjectStorageUpdateRequest : StorageUpdateRequestBase, IValidatableObject
+{
+    [Required]
+    public ObjectStorageProtocol Provider { get; init; }
+
+    [Required]
+    [MinLength(1)]
+    public required string Container { get; init; }
+
+    public string? Region { get; init; }
+    public string? Endpoint { get; init; }
+    public string? BasePath { get; init; }
+    public string? AccessKeyId { get; init; }
+    public string? SecretKey { get; init; }
+    public bool UseDefaultCredentials { get; init; } = true;
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        return StorageParametersSerializer.Validate(new ObjectStorageParameters
+        {
+            Provider = Provider,
+            Container = Container,
+            Region = Region,
+            Endpoint = Endpoint,
+            BasePath = BasePath,
+            AccessKeyId = AccessKeyId,
+            SecretKey = SecretKey,
+            UseDefaultCredentials = UseDefaultCredentials
+        }).Select(error => new ValidationResult(error));
+    }
+}
+
+public abstract class StorageConfigResponseBase
+{
+    public int Id { get; init; }
+    public required string Key { get; init; }
+    public string? Description { get; init; }
+    public Instant CreatedAt { get; init; }
+    public Instant? LastUpdated { get; init; }
+}
+
+public sealed class LocalStorageConfigResponse : StorageConfigResponseBase
+{
+    public LocalStorageProtocol Protocol { get; init; }
+    public required string Path { get; init; }
+}
+
+public sealed class StreamingStorageConfigResponse : StorageConfigResponseBase
+{
+    public StreamingStorageProtocol Protocol { get; init; }
+    public required string Host { get; init; }
+    public int? Port { get; init; }
+    public string? Username { get; init; }
+    public string? Password { get; init; }
+    public string? PrivateKey { get; init; }
+    public string? PublicKey { get; init; }
+    public string? BasePath { get; init; }
+}
+
+public sealed class ObjectStorageConfigResponse : StorageConfigResponseBase
+{
+    public ObjectStorageProtocol Provider { get; init; }
+    public required string Container { get; init; }
+    public string? Region { get; init; }
+    public string? Endpoint { get; init; }
+    public string? BasePath { get; init; }
+    public string? AccessKeyId { get; init; }
+    public string? SecretKey { get; init; }
+    public bool UseDefaultCredentials { get; init; }
 }

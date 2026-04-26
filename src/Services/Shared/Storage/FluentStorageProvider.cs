@@ -66,12 +66,10 @@ public static class FluentStorageProvider
     {
         return parameters.Provider switch
         {
-            ObjectStorageProvider.AwsS3 => BuildS3ConnectionString(parameters),
-            ObjectStorageProvider.MinIo => BuildS3ConnectionString(parameters),
-            ObjectStorageProvider.AzureBlob => BuildAzureConnectionString(parameters),
-            ObjectStorageProvider.GoogleCloudStorage => BuildGcsConnectionString(parameters),
-            ObjectStorageProvider.Other => throw new ArgumentException(
-                "ObjectStorage provider 'Other' cannot be mapped to a FluentStorage connection string."),
+            ObjectStorageProtocol.S3 => BuildS3ConnectionString(parameters),
+            ObjectStorageProtocol.MinIo => BuildS3ConnectionString(parameters),
+            ObjectStorageProtocol.AzureBlob => BuildAzureConnectionString(parameters),
+            ObjectStorageProtocol.Gcs => BuildGcsConnectionString(parameters),
             _ => throw new ArgumentOutOfRangeException(nameof(parameters.Provider), parameters.Provider, "Unsupported object storage provider")
         };
     }

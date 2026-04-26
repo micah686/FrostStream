@@ -2,6 +2,7 @@ using FlySwattr.NATS.Extensions;
 using NodaTime;
 using NodaTime.Serialization.SystemTextJson;
 using Scalar.AspNetCore;
+using System.Text.Json.Serialization;
 
 namespace WebAPI;
 
@@ -19,6 +20,7 @@ public class Program
             .AddJsonOptions(options =>
             {
                 options.JsonSerializerOptions.ConfigureForNodaTime(DateTimeZoneProviders.Tzdb);
+                options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
             });
         
         //var natsUrl = builder.Configuration["NATS:Url"] ?? "nats://localhost:4222";

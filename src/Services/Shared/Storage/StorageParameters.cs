@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Shared.Storage;
 
@@ -14,11 +15,24 @@ public abstract class StorageParametersBase : IValidatableObject
 public sealed class PosixLocalStorageParameters : StorageParametersBase
 {
     [Required]
+    public LocalStorageProtocol Protocol { get; init; }
+
+    [Required]
     [MinLength(1)]
     public required string Path { get; init; }
 }
 
-public enum StreamingProtocol
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum LocalStorageProtocol
+{
+    Local,
+    Nfs,
+    Smb,
+    Cifs
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum StreamingStorageProtocol
 {
     Ftp,
     Ftps,
@@ -28,7 +42,7 @@ public enum StreamingProtocol
 public sealed class StreamingNetworkStorageParameters : StorageParametersBase
 {
     [Required]
-    public StreamingProtocol Protocol { get; init; }
+    public StreamingStorageProtocol Protocol { get; init; }
 
     [Required]
     [MinLength(1)]
@@ -72,19 +86,19 @@ public sealed class StreamingNetworkStorageParameters : StorageParametersBase
     }
 }
 
-public enum ObjectStorageProvider
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum ObjectStorageProtocol
 {
-    AwsS3,
+    S3,
     AzureBlob,
-    GoogleCloudStorage,
+    Gcs,
     MinIo,
-    Other
 }
 
 public sealed class ObjectStorageParameters : StorageParametersBase
 {
     [Required]
-    public ObjectStorageProvider Provider { get; init; }
+    public ObjectStorageProtocol Provider { get; init; }
 
     [Required]
     [MinLength(1)]
@@ -109,11 +123,11 @@ public sealed class ObjectStorageParameters : StorageParametersBase
                 [nameof(AccessKeyId), nameof(SecretKey)]);
         }
 
-        if ((Provider is ObjectStorageProvider.AwsS3 or ObjectStorageProvider.MinIo) &&
+        if ((Provider is ObjectStorageProtocol.S3 or ObjectStorageProtocol.MinIo) &&
             string.IsNullOrWhiteSpace(Region))
         {
             yield return new ValidationResult(
-                "region is required for AwsS3 and MinIo.",
+                "region is required for S3 and MinIo.",
                 [nameof(Region)]);
         }
 
@@ -131,7 +145,8 @@ public static class StorageParametersSerializer
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Converters = { new JsonStringEnumConverter() }
     };
 
     public static bool TryDeserialize(
@@ -185,6 +200,14 @@ public static class StorageParametersSerializer
         var validationContext = new ValidationContext(parsed!);
         Validator.TryValidateObject(parsed!, validationContext, results, validateAllProperties: true);
 
+        return results.Select(x => x.ErrorMessage ?? "Invalid parameters value.").ToArray();
+    }
+
+    public static IReadOnlyList<string> Validate(StorageParametersBase parameters)
+    {
+        var results = new List<ValidationResult>();
+        var validationContext = new ValidationContext(parameters);
+        Validator.TryValidateObject(parameters, validationContext, results, validateAllProperties: true);
         return results.Select(x => x.ErrorMessage ?? "Invalid parameters value.").ToArray();
     }
 

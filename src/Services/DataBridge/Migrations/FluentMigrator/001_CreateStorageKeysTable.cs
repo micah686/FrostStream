@@ -23,11 +23,12 @@ public sealed class M001_CreateStorageKeysTable : Migration
 
         Create.Table("storage_keys_local")
             .WithColumn("storage_key_id").AsInt32().PrimaryKey()
+            .WithColumn("protocol").AsInt32().NotNullable()
             .WithColumn("path").AsString(2048).NotNullable();
 
         Create.Table("storage_keys_network")
             .WithColumn("storage_key_id").AsInt32().PrimaryKey()
-            .WithColumn("protocol").AsString(20).NotNullable()
+            .WithColumn("protocol").AsInt32().NotNullable()
             .WithColumn("host").AsString(255).NotNullable()
             .WithColumn("port").AsInt32().Nullable()
             .WithColumn("username").AsString(255).Nullable()
@@ -38,7 +39,7 @@ public sealed class M001_CreateStorageKeysTable : Migration
 
         Create.Table("storage_keys_object")
             .WithColumn("storage_key_id").AsInt32().PrimaryKey()
-            .WithColumn("provider").AsString(50).NotNullable()
+            .WithColumn("provider").AsInt32().NotNullable()
             .WithColumn("container").AsString(255).NotNullable()
             .WithColumn("region").AsString(255).Nullable()
             .WithColumn("endpoint").AsString(2048).Nullable()
@@ -72,8 +73,8 @@ public sealed class M001_CreateStorageKeysTable : Migration
 
         Execute.Sql(
             """
-            INSERT INTO storage_keys_local (storage_key_id, path)
-            SELECT id, './data/'
+            INSERT INTO storage_keys_local (storage_key_id, protocol, path)
+            SELECT id, 0, './data/'
             FROM storage_keys
             WHERE key = 'default';
             """);

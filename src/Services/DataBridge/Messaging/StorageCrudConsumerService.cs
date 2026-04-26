@@ -22,15 +22,39 @@ public sealed class StorageCrudConsumerService(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _subscriptions.Add(await messageBus.SubscribeAsync<StorageCreateRequestMessage>(
-            StorageSubjects.CreateStorage,
-            HandleCreateStorageAsync,
+        _subscriptions.Add(await messageBus.SubscribeAsync<StorageCreateLocalRequestMessage>(
+            StorageSubjects.CreateLocalStorage,
+            HandleCreateLocalStorageAsync,
             queueGroup: "databridge-storage",
             cancellationToken: stoppingToken));
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<StorageUpdateRequestMessage>(
-            StorageSubjects.UpdateStorage,
-            HandleUpdateStorageAsync,
+        _subscriptions.Add(await messageBus.SubscribeAsync<StorageCreateStreamingRequestMessage>(
+            StorageSubjects.CreateStreamingStorage,
+            HandleCreateStreamingStorageAsync,
+            queueGroup: "databridge-storage",
+            cancellationToken: stoppingToken));
+
+        _subscriptions.Add(await messageBus.SubscribeAsync<StorageCreateObjectRequestMessage>(
+            StorageSubjects.CreateObjectStorage,
+            HandleCreateObjectStorageAsync,
+            queueGroup: "databridge-storage",
+            cancellationToken: stoppingToken));
+
+        _subscriptions.Add(await messageBus.SubscribeAsync<StorageUpdateLocalRequestMessage>(
+            StorageSubjects.UpdateLocalStorage,
+            HandleUpdateLocalStorageAsync,
+            queueGroup: "databridge-storage",
+            cancellationToken: stoppingToken));
+
+        _subscriptions.Add(await messageBus.SubscribeAsync<StorageUpdateStreamingRequestMessage>(
+            StorageSubjects.UpdateStreamingStorage,
+            HandleUpdateStreamingStorageAsync,
+            queueGroup: "databridge-storage",
+            cancellationToken: stoppingToken));
+
+        _subscriptions.Add(await messageBus.SubscribeAsync<StorageUpdateObjectRequestMessage>(
+            StorageSubjects.UpdateObjectStorage,
+            HandleUpdateObjectStorageAsync,
             queueGroup: "databridge-storage",
             cancellationToken: stoppingToken));
 
@@ -76,7 +100,26 @@ public sealed class StorageCrudConsumerService(
         await base.StopAsync(cancellationToken);
     }
 
-    private async Task HandleCreateStorageAsync(IMessageContext<StorageCreateRequestMessage> context)
+    private Task HandleCreateLocalStorageAsync(IMessageContext<StorageCreateLocalRequestMessage> context)
+    {
+        return HandleCreateStorageAsync(context, context.Message.Parameters, context.Message.Description);
+    }
+
+    private Task HandleCreateStreamingStorageAsync(IMessageContext<StorageCreateStreamingRequestMessage> context)
+    {
+        return HandleCreateStorageAsync(context, context.Message.Parameters, context.Message.Description);
+    }
+
+    private Task HandleCreateObjectStorageAsync(IMessageContext<StorageCreateObjectRequestMessage> context)
+    {
+        return HandleCreateStorageAsync(context, context.Message.Parameters, context.Message.Description);
+    }
+
+    private async Task HandleCreateStorageAsync<T>(
+        IMessageContext<T> context,
+        StorageParametersBase typedParameters,
+        string? description)
+        where T : class
     {
         var message = context.Message;
         using var scope = scopeFactory.CreateScope();
@@ -85,7 +128,7 @@ public sealed class StorageCrudConsumerService(
         try
         {
             var alreadyExists = await dbContext.StorageConfigs
-                .AnyAsync(x => x.Key == message.Key);
+                .AnyAsync(x => x.Key == GetStorageKey(message));
 
             if (alreadyExists)
             {
@@ -93,12 +136,12 @@ public sealed class StorageCrudConsumerService(
                 {
                     Success = false,
                     ErrorCode = "conflict",
-                    ErrorMessage = $"Storage key '{message.Key}' already exists."
+                    ErrorMessage = $"Storage key '{GetStorageKey(message)}' already exists."
                 });
                 return;
             }
 
-            var parameterErrors = StorageParametersSerializer.Validate(message.Method, message.Parameters);
+            var parameterErrors = StorageParametersSerializer.Validate(typedParameters);
             if (parameterErrors.Count > 0)
             {
                 await context.RespondAsync(new StorageOperationResponseMessage
@@ -110,27 +153,10 @@ public sealed class StorageCrudConsumerService(
                 return;
             }
 
-            StorageParametersSerializer.TryDeserialize(
-                message.Method,
-                message.Parameters,
-                out var typedParameters,
-                out _);
-            if (typedParameters is null)
-            {
-                await context.RespondAsync(new StorageOperationResponseMessage
-                {
-                    Success = false,
-                    ErrorCode = "validation",
-                    ErrorMessage = "Invalid parameters JSON."
-                });
-                return;
-            }
-
             var entity = new StorageConfigEntity
             {
-                Key = message.Key,
-                Method = message.Method,
-                Description = message.Description
+                Key = GetStorageKey(message),
+                Description = description
             };
             entity.ApplyTypedParameters(typedParameters);
 
@@ -145,12 +171,31 @@ public sealed class StorageCrudConsumerService(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed handling storage create message for key '{StorageKey}'", message.Key);
+            logger.LogError(ex, "Failed handling storage create message for key '{StorageKey}'", GetStorageKey(message));
             await RespondInternalErrorAsync(context);
         }
     }
 
-    private async Task HandleUpdateStorageAsync(IMessageContext<StorageUpdateRequestMessage> context)
+    private Task HandleUpdateLocalStorageAsync(IMessageContext<StorageUpdateLocalRequestMessage> context)
+    {
+        return HandleUpdateStorageAsync(context, context.Message.Parameters, context.Message.Description);
+    }
+
+    private Task HandleUpdateStreamingStorageAsync(IMessageContext<StorageUpdateStreamingRequestMessage> context)
+    {
+        return HandleUpdateStorageAsync(context, context.Message.Parameters, context.Message.Description);
+    }
+
+    private Task HandleUpdateObjectStorageAsync(IMessageContext<StorageUpdateObjectRequestMessage> context)
+    {
+        return HandleUpdateStorageAsync(context, context.Message.Parameters, context.Message.Description);
+    }
+
+    private async Task HandleUpdateStorageAsync<T>(
+        IMessageContext<T> context,
+        StorageParametersBase typedParameters,
+        string? description)
+        where T : class
     {
         var message = context.Message;
         using var scope = scopeFactory.CreateScope();
@@ -159,7 +204,7 @@ public sealed class StorageCrudConsumerService(
         try
         {
             var entity = await StorageConfigsWithDetails(dbContext)
-                .SingleOrDefaultAsync(x => x.Key == message.Key);
+                .SingleOrDefaultAsync(x => x.Key == GetStorageKey(message));
 
             if (entity is null)
             {
@@ -167,7 +212,7 @@ public sealed class StorageCrudConsumerService(
                 {
                     Success = false,
                     ErrorCode = "not_found",
-                    ErrorMessage = $"Storage key '{message.Key}' was not found."
+                    ErrorMessage = $"Storage key '{GetStorageKey(message)}' was not found."
                 });
                 return;
             }
@@ -184,7 +229,7 @@ public sealed class StorageCrudConsumerService(
             }
 
             var duplicateKey = await dbContext.StorageConfigs
-                .AnyAsync(x => x.Id != entity.Id && x.Key == message.Key);
+                .AnyAsync(x => x.Id != entity.Id && x.Key == GetStorageKey(message));
 
             if (duplicateKey)
             {
@@ -192,12 +237,12 @@ public sealed class StorageCrudConsumerService(
                 {
                     Success = false,
                     ErrorCode = "conflict",
-                    ErrorMessage = $"Storage key '{message.Key}' already exists."
+                    ErrorMessage = $"Storage key '{GetStorageKey(message)}' already exists."
                 });
                 return;
             }
 
-            var parameterErrors = StorageParametersSerializer.Validate(message.Method, message.Parameters);
+            var parameterErrors = StorageParametersSerializer.Validate(typedParameters);
             if (parameterErrors.Count > 0)
             {
                 await context.RespondAsync(new StorageOperationResponseMessage
@@ -209,27 +254,10 @@ public sealed class StorageCrudConsumerService(
                 return;
             }
 
-            StorageParametersSerializer.TryDeserialize(
-                message.Method,
-                message.Parameters,
-                out var typedParameters,
-                out _);
-            if (typedParameters is null)
-            {
-                await context.RespondAsync(new StorageOperationResponseMessage
-                {
-                    Success = false,
-                    ErrorCode = "validation",
-                    ErrorMessage = "Invalid parameters JSON."
-                });
-                return;
-            }
-
             RemoveExistingParameters(dbContext, entity);
 
-            entity.Key = message.Key;
-            entity.Method = message.Method;
-            entity.Description = message.Description;
+            entity.Key = GetStorageKey(message);
+            entity.Description = description;
             entity.LastUpdated = SystemClock.Instance.GetCurrentInstant();
             entity.ApplyTypedParameters(typedParameters);
 
@@ -243,7 +271,7 @@ public sealed class StorageCrudConsumerService(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed handling storage update message for key '{Key}'", message.Key);
+            logger.LogError(ex, "Failed handling storage update message for key '{Key}'", GetStorageKey(message));
             await RespondInternalErrorAsync(context);
         }
     }
@@ -360,10 +388,53 @@ public sealed class StorageCrudConsumerService(
             Id = entity.Id,
             Key = entity.Key,
             Method = entity.Method,
-            Parameters = entity.Parameters,
             Description = entity.Description,
             CreatedAt = entity.CreatedAt,
-            LastUpdated = entity.LastUpdated
+            LastUpdated = entity.LastUpdated,
+            Local = entity.Local is null ? null : new PosixLocalStorageParameters
+            {
+                Protocol = entity.Local.Protocol,
+                Path = entity.Local.Path
+            },
+            Streaming = entity.Network is null ? null : new StreamingNetworkStorageParameters
+            {
+                Protocol = entity.Network.Protocol,
+                Host = entity.Network.Host,
+                Port = entity.Network.Port,
+                Username = entity.Network.Username,
+                Password = entity.Network.Password,
+                PrivateKey = entity.Network.PrivateKey,
+                PublicKey = entity.Network.PublicKey,
+                BasePath = entity.Network.BasePath
+            },
+            Object = entity.Object is null ? null : new ObjectStorageParameters
+            {
+                Provider = entity.Object.Provider,
+                Container = entity.Object.Container,
+                Region = entity.Object.Region,
+                Endpoint = entity.Object.Endpoint,
+                BasePath = entity.Object.BasePath,
+                AccessKeyId = entity.Object.AccessKeyId,
+                SecretKey = entity.Object.SecretKey,
+                UseDefaultCredentials = entity.Object.UseDefaultCredentials
+            }
+        };
+    }
+
+    private static string GetStorageKey<T>(T message)
+        where T : class
+    {
+        return message switch
+        {
+            StorageCreateLocalRequestMessage local => local.Key,
+            StorageCreateStreamingRequestMessage streaming => streaming.Key,
+            StorageCreateObjectRequestMessage @object => @object.Key,
+            StorageUpdateLocalRequestMessage local => local.Key,
+            StorageUpdateStreamingRequestMessage streaming => streaming.Key,
+            StorageUpdateObjectRequestMessage @object => @object.Key,
+            StorageGetRequestMessage get => get.Key,
+            StorageDeleteRequestMessage delete => delete.Key,
+            _ => throw new ArgumentException($"Unsupported storage message type: {typeof(T).Name}", nameof(message))
         };
     }
 

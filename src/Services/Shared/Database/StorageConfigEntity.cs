@@ -42,6 +42,7 @@ public class StorageConfigEntity
             {
                 StorageMethod.PosixLocal when Local is not null => new PosixLocalStorageParameters
                 {
+                    Protocol = Local.Protocol,
                     Path = Local.Path
                 },
                 StorageMethod.StreamingNetwork when Network is not null => new StreamingNetworkStorageParameters
@@ -98,6 +99,7 @@ public class StorageConfigEntity
                 Method = StorageMethod.PosixLocal;
                 Local = new StorageLocalConfigEntity
                 {
+                    Protocol = local.Protocol,
                     Path = local.Path
                 };
                 break;
@@ -144,6 +146,8 @@ public sealed class StorageLocalConfigEntity
     [DatabaseGenerated(DatabaseGeneratedOption.None)]
     public int StorageKeyId { get; set; }
 
+    public LocalStorageProtocol Protocol { get; set; }
+
     [Required]
     [MinLength(1)]
     public required string Path { get; set; }
@@ -157,7 +161,7 @@ public sealed class StorageNetworkConfigEntity
     [DatabaseGenerated(DatabaseGeneratedOption.None)]
     public int StorageKeyId { get; set; }
 
-    public StreamingProtocol Protocol { get; set; }
+    public StreamingStorageProtocol Protocol { get; set; }
 
     [Required]
     [MinLength(1)]
@@ -185,7 +189,7 @@ public sealed class StorageObjectConfigEntity
     [DatabaseGenerated(DatabaseGeneratedOption.None)]
     public int StorageKeyId { get; set; }
 
-    public ObjectStorageProvider Provider { get; set; }
+    public ObjectStorageProtocol Provider { get; set; }
 
     [Required]
     [MinLength(1)]

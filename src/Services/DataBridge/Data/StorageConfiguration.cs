@@ -63,6 +63,7 @@ public sealed class StorageLocalConfiguration : IEntityTypeConfiguration<Storage
         builder.ToTable("storage_keys_local");
         builder.HasKey(x => x.StorageKeyId);
         builder.Property(x => x.StorageKeyId).HasColumnName("storage_key_id").ValueGeneratedNever();
+        builder.Property(x => x.Protocol).HasColumnName("protocol").HasConversion<int>().IsRequired();
         builder.Property(x => x.Path).HasColumnName("path").HasMaxLength(2048).IsRequired();
         builder.HasOne(x => x.StorageConfig)
             .WithOne(x => x.Local)
@@ -78,7 +79,7 @@ public sealed class StorageNetworkConfiguration : IEntityTypeConfiguration<Stora
         builder.ToTable("storage_keys_network");
         builder.HasKey(x => x.StorageKeyId);
         builder.Property(x => x.StorageKeyId).HasColumnName("storage_key_id").ValueGeneratedNever();
-        builder.Property(x => x.Protocol).HasColumnName("protocol").HasMaxLength(20).HasConversion<string>().IsRequired();
+        builder.Property(x => x.Protocol).HasColumnName("protocol").HasConversion<int>().IsRequired();
         builder.Property(x => x.Host).HasColumnName("host").HasMaxLength(255).IsRequired();
         builder.Property(x => x.Port).HasColumnName("port");
         builder.Property(x => x.Username).HasColumnName("username").HasMaxLength(255);
@@ -100,7 +101,7 @@ public sealed class StorageObjectConfiguration : IEntityTypeConfiguration<Storag
         builder.ToTable("storage_keys_object");
         builder.HasKey(x => x.StorageKeyId);
         builder.Property(x => x.StorageKeyId).HasColumnName("storage_key_id").ValueGeneratedNever();
-        builder.Property(x => x.Provider).HasColumnName("provider").HasMaxLength(50).HasConversion<string>().IsRequired();
+        builder.Property(x => x.Provider).HasColumnName("provider").HasConversion<int>().IsRequired();
         builder.Property(x => x.Container).HasColumnName("container").HasMaxLength(255).IsRequired();
         builder.Property(x => x.Region).HasColumnName("region").HasMaxLength(255);
         builder.Property(x => x.Endpoint).HasColumnName("endpoint").HasMaxLength(2048);

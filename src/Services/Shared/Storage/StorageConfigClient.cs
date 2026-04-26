@@ -47,7 +47,16 @@ public sealed class NatsStorageConfigClient(IMessageBus messageBus) : IStorageCo
             Found: true,
             Key: response.Entity.Key,
             Method: response.Entity.Method,
-            Parameters: response.Entity.Parameters,
+            Parameters: response.Entity.Method switch
+            {
+                StorageMethod.PosixLocal when response.Entity.Local is not null
+                    => StorageParametersSerializer.Serialize(response.Entity.Method, response.Entity.Local),
+                StorageMethod.StreamingNetwork when response.Entity.Streaming is not null
+                    => StorageParametersSerializer.Serialize(response.Entity.Method, response.Entity.Streaming),
+                StorageMethod.ObjectStorage when response.Entity.Object is not null
+                    => StorageParametersSerializer.Serialize(response.Entity.Method, response.Entity.Object),
+                _ => null
+            },
             Description: response.Entity.Description);
     }
 }
