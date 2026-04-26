@@ -347,6 +347,8 @@ public static class StorageParametersSerializer
             : JsonSerializer.Serialize(parameters, expectedType, JsonOptions);
     }
 
+    internal static JsonSerializerOptions Options => JsonOptions;
+
     private static ObjectStorageParametersBase? DeserializeObjectStorageParameters(string json)
     {
         return JsonSerializer.Deserialize<ObjectStorageParametersBase>(json, JsonOptions);

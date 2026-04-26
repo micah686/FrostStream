@@ -1,6 +1,5 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using NodaTime;
 using Shared.Storage;
@@ -39,57 +38,45 @@ public class StorageConfigEntity
     public StorageGoogleCloudStorageObjectConfigEntity? ObjectGoogleCloudStorage { get; set; }
 
     [NotMapped]
-    public StorageParametersBase? TypedParameters
+    public StorageParametersStoredBase? StoredParameters
     {
         get
         {
             return Method switch
             {
-                StorageMethod.Local when Local is not null => new PosixLocalStorageParameters
+                StorageMethod.Local when Local is not null => new PosixLocalStorageStored
                 {
                     Protocol = Local.Protocol,
                     Path = Local.Path
                 },
-                StorageMethod.Network when Network is not null => new StreamingNetworkStorageParameters
+                StorageMethod.Network when Network is not null => new StreamingNetworkStorageStored
                 {
                     Protocol = Network.Protocol,
                     Host = Network.Host,
                     Port = Network.Port,
                     Username = Network.Username,
-                    Password = Network.Password,
-                    PrivateKey = Network.PrivateKey,
-                    PublicKey = Network.PublicKey,
                     BasePath = Network.BasePath
                 },
-                StorageMethod.ObjectStorage when ObjectS3Compatible is not null => new S3CompatibleObjectStorageParameters
+                StorageMethod.ObjectStorage when ObjectS3Compatible is not null => new S3CompatibleObjectStorageStored
                 {
                     Provider = ObjectS3Compatible.Provider,
                     BucketName = ObjectS3Compatible.BucketName,
                     Region = ObjectS3Compatible.Region,
                     Endpoint = ObjectS3Compatible.Endpoint,
-                    AccessKeyId = ObjectS3Compatible.AccessKeyId,
-                    SecretKeyId = ObjectS3Compatible.SecretKeyId,
-                    SessionTokenSecretId = ObjectS3Compatible.SessionTokenSecretId,
+                    HasSessionToken = ObjectS3Compatible.HasSessionToken,
                     ForcePathStyle = ObjectS3Compatible.ForcePathStyle,
                     UseSsl = ObjectS3Compatible.UseSsl
                 },
-                StorageMethod.ObjectStorage when ObjectAzureBlob is not null => new AzureBlobObjectStorageParameters
+                StorageMethod.ObjectStorage when ObjectAzureBlob is not null => new AzureBlobObjectStorageStored
                 {
                     CredentialMode = ObjectAzureBlob.CredentialMode,
                     ContainerName = ObjectAzureBlob.ContainerName,
-                    AzureAccountName = ObjectAzureBlob.AzureAccountName,
-                    AzureAccountKeySecretId = ObjectAzureBlob.AzureAccountKeySecretId,
-                    AzureConnectionStringSecretId = ObjectAzureBlob.AzureConnectionStringSecretId,
-                    AzureSasUrlSecretId = ObjectAzureBlob.AzureSasUrlSecretId
+                    AzureAccountName = ObjectAzureBlob.AzureAccountName
                 },
-                StorageMethod.ObjectStorage when ObjectGoogleCloudStorage is not null => new GoogleCloudStorageObjectStorageParameters
+                StorageMethod.ObjectStorage when ObjectGoogleCloudStorage is not null => new GoogleCloudStorageObjectStorageStored
                 {
                     BucketName = ObjectGoogleCloudStorage.BucketName,
                     CredentialMode = ObjectGoogleCloudStorage.CredentialMode,
-                    GcpCredentialsJson = string.IsNullOrWhiteSpace(ObjectGoogleCloudStorage.GcpCredentialsJson)
-                        ? null
-                        : JsonDocument.Parse(ObjectGoogleCloudStorage.GcpCredentialsJson).RootElement.Clone(),
-                    GcpCredentialsJsonIsBase64Encoded = ObjectGoogleCloudStorage.GcpCredentialsJsonIsBase64Encoded,
                     GcpCredentialsFilePath = ObjectGoogleCloudStorage.GcpCredentialsFilePath,
                     GcpProjectId = ObjectGoogleCloudStorage.GcpProjectId
                 },
@@ -98,22 +85,7 @@ public class StorageConfigEntity
         }
     }
 
-    [NotMapped]
-    public string Parameters
-    {
-        get
-        {
-            var typed = TypedParameters;
-            if (typed is null)
-            {
-                return "{}";
-            }
-
-            return StorageParametersSerializer.Serialize(Method, typed);
-        }
-    }
-
-    public void ApplyTypedParameters(StorageParametersBase parameters)
+    public void ApplyStoredParameters(StorageParametersStoredBase parameters)
     {
         Local = null;
         Network = null;
@@ -123,7 +95,7 @@ public class StorageConfigEntity
 
         switch (parameters)
         {
-            case PosixLocalStorageParameters local:
+            case PosixLocalStorageStored local:
                 Method = StorageMethod.Local;
                 Local = new StorageLocalConfigEntity
                 {
@@ -132,7 +104,7 @@ public class StorageConfigEntity
                 };
                 break;
 
-            case StreamingNetworkStorageParameters network:
+            case StreamingNetworkStorageStored network:
                 Method = StorageMethod.Network;
                 Network = new StorageNetworkConfigEntity
                 {
@@ -140,52 +112,42 @@ public class StorageConfigEntity
                     Host = network.Host,
                     Port = network.Port,
                     Username = network.Username,
-                    Password = network.Password,
-                    PrivateKey = network.PrivateKey,
-                    PublicKey = network.PublicKey,
                     BasePath = network.BasePath
                 };
                 break;
 
-            case S3CompatibleObjectStorageParameters @object:
+            case S3CompatibleObjectStorageStored s3:
                 Method = StorageMethod.ObjectStorage;
                 ObjectS3Compatible = new StorageS3CompatibleObjectConfigEntity
                 {
-                    Provider = @object.Provider,
-                    BucketName = @object.BucketName,
-                    Region = @object.Region,
-                    Endpoint = @object.Endpoint,
-                    AccessKeyId = @object.AccessKeyId,
-                    SecretKeyId = @object.SecretKeyId,
-                    SessionTokenSecretId = @object.SessionTokenSecretId,
-                    ForcePathStyle = @object.ForcePathStyle,
-                    UseSsl = @object.UseSsl
+                    Provider = s3.Provider,
+                    BucketName = s3.BucketName,
+                    Region = s3.Region,
+                    Endpoint = s3.Endpoint,
+                    HasSessionToken = s3.HasSessionToken,
+                    ForcePathStyle = s3.ForcePathStyle,
+                    UseSsl = s3.UseSsl
                 };
                 break;
 
-            case AzureBlobObjectStorageParameters @object:
+            case AzureBlobObjectStorageStored azure:
                 Method = StorageMethod.ObjectStorage;
                 ObjectAzureBlob = new StorageAzureBlobObjectConfigEntity
                 {
-                    CredentialMode = @object.CredentialMode,
-                    ContainerName = @object.ContainerName,
-                    AzureAccountName = @object.AzureAccountName,
-                    AzureAccountKeySecretId = @object.AzureAccountKeySecretId,
-                    AzureConnectionStringSecretId = @object.AzureConnectionStringSecretId,
-                    AzureSasUrlSecretId = @object.AzureSasUrlSecretId
+                    CredentialMode = azure.CredentialMode,
+                    ContainerName = azure.ContainerName,
+                    AzureAccountName = azure.AzureAccountName
                 };
                 break;
 
-            case GoogleCloudStorageObjectStorageParameters @object:
+            case GoogleCloudStorageObjectStorageStored gcs:
                 Method = StorageMethod.ObjectStorage;
                 ObjectGoogleCloudStorage = new StorageGoogleCloudStorageObjectConfigEntity
                 {
-                    BucketName = @object.BucketName,
-                    CredentialMode = @object.CredentialMode,
-                    GcpCredentialsJson = @object.GcpCredentialsJson?.GetRawText(),
-                    GcpCredentialsJsonIsBase64Encoded = @object.GcpCredentialsJsonIsBase64Encoded,
-                    GcpCredentialsFilePath = @object.GcpCredentialsFilePath,
-                    GcpProjectId = @object.GcpProjectId
+                    BucketName = gcs.BucketName,
+                    CredentialMode = gcs.CredentialMode,
+                    GcpCredentialsFilePath = gcs.GcpCredentialsFilePath,
+                    GcpProjectId = gcs.GcpProjectId
                 };
                 break;
 
@@ -227,12 +189,6 @@ public sealed class StorageNetworkConfigEntity
 
     public string? Username { get; set; }
 
-    public string? Password { get; set; }
-
-    public string? PrivateKey { get; set; }
-
-    public string? PublicKey { get; set; }
-
     public string? BasePath { get; set; }
 
     public StorageConfigEntity StorageConfig { get; set; } = null!;
@@ -254,15 +210,7 @@ public sealed class StorageS3CompatibleObjectConfigEntity
 
     public string? Endpoint { get; set; }
 
-    [Required]
-    [MinLength(1)]
-    public required string AccessKeyId { get; set; }
-
-    [Required]
-    [MinLength(1)]
-    public required string SecretKeyId { get; set; }
-
-    public string? SessionTokenSecretId { get; set; }
+    public bool HasSessionToken { get; set; }
 
     public bool ForcePathStyle { get; set; }
 
@@ -283,12 +231,6 @@ public sealed class StorageAzureBlobObjectConfigEntity
 
     public string? AzureAccountName { get; set; }
 
-    public string? AzureAccountKeySecretId { get; set; }
-
-    public string? AzureConnectionStringSecretId { get; set; }
-
-    public string? AzureSasUrlSecretId { get; set; }
-
     public StorageConfigEntity StorageConfig { get; set; } = null!;
 }
 
@@ -303,10 +245,6 @@ public sealed class StorageGoogleCloudStorageObjectConfigEntity
     public required string BucketName { get; set; }
 
     public GoogleCloudStorageCredentialMode CredentialMode { get; set; }
-
-    public string? GcpCredentialsJson { get; set; }
-
-    public bool GcpCredentialsJsonIsBase64Encoded { get; set; }
 
     public string? GcpCredentialsFilePath { get; set; }
 

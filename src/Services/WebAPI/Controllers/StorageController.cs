@@ -446,9 +446,6 @@ public class StorageController : ControllerBase
             Host = network.Host,
             Port = network.Port,
             Username = network.Username,
-            Password = network.Password,
-            PrivateKey = network.PrivateKey,
-            PublicKey = network.PublicKey,
             BasePath = network.BasePath
         };
     }
@@ -469,9 +466,7 @@ public class StorageController : ControllerBase
             BucketName = @object.BucketName,
             Region = @object.Region,
             Endpoint = @object.Endpoint,
-            AccessKeyId = @object.AccessKeyId,
-            SecretKeyId = @object.SecretKeyId,
-            SessionTokenSecretId = @object.SessionTokenSecretId,
+            HasSessionToken = @object.HasSessionToken,
             ForcePathStyle = @object.ForcePathStyle,
             UseSsl = @object.UseSsl
         };
@@ -491,10 +486,7 @@ public class StorageController : ControllerBase
             LastUpdated = storage.LastUpdated,
             CredentialMode = @object.CredentialMode,
             ContainerName = @object.ContainerName,
-            AzureAccountName = @object.AzureAccountName,
-            AzureAccountKeySecretId = @object.AzureAccountKeySecretId,
-            AzureConnectionStringSecretId = @object.AzureConnectionStringSecretId,
-            AzureSasUrlSecretId = @object.AzureSasUrlSecretId
+            AzureAccountName = @object.AzureAccountName
         };
     }
 
@@ -512,8 +504,6 @@ public class StorageController : ControllerBase
             LastUpdated = storage.LastUpdated,
             BucketName = @object.BucketName,
             CredentialMode = @object.CredentialMode,
-            GcpCredentialsJson = @object.GcpCredentialsJson,
-            GcpCredentialsJsonIsBase64Encoded = @object.GcpCredentialsJsonIsBase64Encoded,
             GcpCredentialsFilePath = @object.GcpCredentialsFilePath,
             GcpProjectId = @object.GcpProjectId
         };
@@ -848,9 +838,6 @@ public sealed class NetworkStorageConfigResponse : StorageConfigResponseBase
     public required string Host { get; init; }
     public int? Port { get; init; }
     public string? Username { get; init; }
-    public string? Password { get; init; }
-    public string? PrivateKey { get; init; }
-    public string? PublicKey { get; init; }
     public string? BasePath { get; init; }
 }
 
@@ -860,9 +847,7 @@ public sealed class S3CompatibleObjectStorageConfigResponse : StorageConfigRespo
     public required string BucketName { get; init; }
     public string? Region { get; init; }
     public string? Endpoint { get; init; }
-    public string? AccessKeyId { get; init; }
-    public string? SecretKeyId { get; init; }
-    public string? SessionTokenSecretId { get; init; }
+    public bool HasSessionToken { get; init; }
     public bool ForcePathStyle { get; init; }
     public bool? UseSsl { get; init; }
 }
@@ -872,17 +857,12 @@ public sealed class AzureBlobObjectStorageConfigResponse : StorageConfigResponse
     public AzureBlobCredentialMode CredentialMode { get; init; }
     public string? ContainerName { get; init; }
     public string? AzureAccountName { get; init; }
-    public string? AzureAccountKeySecretId { get; init; }
-    public string? AzureConnectionStringSecretId { get; init; }
-    public string? AzureSasUrlSecretId { get; init; }
 }
 
 public sealed class GoogleCloudStorageObjectStorageConfigResponse : StorageConfigResponseBase
 {
     public required string BucketName { get; init; }
     public GoogleCloudStorageCredentialMode CredentialMode { get; init; }
-    public JsonElement? GcpCredentialsJson { get; init; }
-    public bool GcpCredentialsJsonIsBase64Encoded { get; init; }
     public string? GcpCredentialsFilePath { get; init; }
     public string? GcpProjectId { get; init; }
 }

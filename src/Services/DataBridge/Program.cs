@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Hosting.Internal;
 using NATS.Client.Core;
+using Shared.Secrets;
 using Shared.Storage;
 
 namespace DataBridge;
@@ -56,6 +57,7 @@ class Program
             options.EnableDistributedLock = false;
             options.EnableDlqAdvisoryListener = false;
         });
+        builder.Services.AddOpenBaoSecretStore(builder.Configuration);
         builder.Services.AddHostedService<StorageCrudConsumerService>();
 
         // Force ConsoleLifetime so Ctrl+C / SIGTERM triggers StopAsync on hosted services

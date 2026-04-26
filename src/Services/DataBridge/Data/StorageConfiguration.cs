@@ -1,7 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using Shared.Storage;
-using Shared;
 using Shared.Database;
 
 namespace DataBridge.Data;
@@ -84,9 +82,6 @@ public sealed class StorageNetworkConfiguration : IEntityTypeConfiguration<Stora
         builder.Property(x => x.Host).HasColumnName("host").HasMaxLength(255).IsRequired();
         builder.Property(x => x.Port).HasColumnName("port");
         builder.Property(x => x.Username).HasColumnName("username").HasMaxLength(255);
-        builder.Property(x => x.Password).HasColumnName("password").HasMaxLength(2048);
-        builder.Property(x => x.PrivateKey).HasColumnName("private_key").HasMaxLength(8192);
-        builder.Property(x => x.PublicKey).HasColumnName("public_key").HasMaxLength(8192);
         builder.Property(x => x.BasePath).HasColumnName("base_path").HasMaxLength(2048);
         builder.HasOne(x => x.StorageConfig)
             .WithOne(x => x.Network)
@@ -106,9 +101,7 @@ public sealed class StorageS3CompatibleObjectConfiguration : IEntityTypeConfigur
         builder.Property(x => x.BucketName).HasColumnName("bucket_name").HasMaxLength(255).IsRequired();
         builder.Property(x => x.Region).HasColumnName("region").HasMaxLength(255);
         builder.Property(x => x.Endpoint).HasColumnName("endpoint").HasMaxLength(2048);
-        builder.Property(x => x.AccessKeyId).HasColumnName("access_key_id").HasMaxLength(512).IsRequired();
-        builder.Property(x => x.SecretKeyId).HasColumnName("secret_key_id").HasMaxLength(2048).IsRequired();
-        builder.Property(x => x.SessionTokenSecretId).HasColumnName("session_token_secret_id").HasMaxLength(2048);
+        builder.Property(x => x.HasSessionToken).HasColumnName("has_session_token").IsRequired();
         builder.Property(x => x.ForcePathStyle).HasColumnName("force_path_style").IsRequired();
         builder.Property(x => x.UseSsl).HasColumnName("use_ssl");
         builder.HasOne(x => x.StorageConfig)
@@ -128,9 +121,6 @@ public sealed class StorageAzureBlobObjectConfiguration : IEntityTypeConfigurati
         builder.Property(x => x.CredentialMode).HasColumnName("credential_mode").HasColumnType("azure_blob_credential_mode").IsRequired();
         builder.Property(x => x.ContainerName).HasColumnName("container_name").HasMaxLength(255);
         builder.Property(x => x.AzureAccountName).HasColumnName("azure_account_name").HasMaxLength(255);
-        builder.Property(x => x.AzureAccountKeySecretId).HasColumnName("azure_account_key_secret_id").HasMaxLength(2048);
-        builder.Property(x => x.AzureConnectionStringSecretId).HasColumnName("azure_connection_string_secret_id").HasMaxLength(4096);
-        builder.Property(x => x.AzureSasUrlSecretId).HasColumnName("azure_sas_url_secret_id").HasMaxLength(4096);
         builder.HasOne(x => x.StorageConfig)
             .WithOne(x => x.ObjectAzureBlob)
             .HasForeignKey<StorageAzureBlobObjectConfigEntity>(x => x.StorageKeyId)
@@ -147,8 +137,6 @@ public sealed class StorageGoogleCloudStorageObjectConfiguration : IEntityTypeCo
         builder.Property(x => x.StorageKeyId).HasColumnName("storage_key_id").ValueGeneratedNever();
         builder.Property(x => x.BucketName).HasColumnName("bucket_name").HasMaxLength(255).IsRequired();
         builder.Property(x => x.CredentialMode).HasColumnName("credential_mode").HasColumnType("google_cloud_storage_credential_mode").IsRequired();
-        builder.Property(x => x.GcpCredentialsJson).HasColumnName("gcp_credentials_json").HasColumnType("jsonb");
-        builder.Property(x => x.GcpCredentialsJsonIsBase64Encoded).HasColumnName("gcp_credentials_json_is_base64_encoded").IsRequired();
         builder.Property(x => x.GcpCredentialsFilePath).HasColumnName("gcp_credentials_file_path").HasMaxLength(2048);
         builder.Property(x => x.GcpProjectId).HasColumnName("gcp_project_id").HasMaxLength(255);
         builder.HasOne(x => x.StorageConfig)

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Hosting.Internal;
+using Shared.Secrets;
 using Worker.Services;
 
 namespace Worker;
@@ -21,6 +22,10 @@ class Program
         });
 
         
+        builder.Services.AddOpenBaoSecretStore(builder.Configuration);
+        // AddFrostStreamStorage() requires NATS to be wired into this service first;
+        // hook it in here once Worker actually consumes IBlobStorageProvider.
+
         // Register startup service (download initial binaries,...)
         builder.Services.AddHostedService<StartupService>();
         

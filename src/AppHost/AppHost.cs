@@ -49,15 +49,37 @@ var database = postgres.AddDatabase("froststreamdb");
 var clickhouse = builder.AddClickHouse("clickhouse");
 var clickhousedb = clickhouse.AddDatabase("clickhousedb");
 
+// OpenBAO secret store (Vault-API-compatible). Runs in dev mode with a deterministic
+// root token so services can authenticate without an unseal step. Production deployments
+// should switch to AppRole + a properly-initialised cluster.
+const string baoDevRootToken = "froststream-dev-root";
+var openbao = builder
+    .AddContainer("openbao", "openbao/openbao", "latest")
+    .WithHttpEndpoint(port: 8200, targetPort: 8200, name: "http")
+    .WithEnvironment("BAO_DEV_ROOT_TOKEN_ID", baoDevRootToken)
+    .WithEnvironment("BAO_DEV_LISTEN_ADDRESS", "0.0.0.0:8200")
+    .WithArgs("server", "-dev", "-dev-root-token-id", baoDevRootToken);
+
+var openbaoEndpoint = openbao.GetEndpoint("http");
+
 // projects
 builder.AddProject<Projects.DataBridge>("databridge")
     .WithReference(database).WaitFor(database)
-    .WithReference(nats).WaitFor(nats);
+    .WithReference(nats).WaitFor(nats)
+    .WithEnvironment("OpenBao__Address", openbaoEndpoint)
+    .WithEnvironment("OpenBao__Token", baoDevRootToken)
+    .WaitFor(openbao);
 
 builder.AddProject<Projects.WebAPI>("webapi")
-    .WithReference(nats).WaitFor(nats);
+    .WithReference(nats).WaitFor(nats)
+    .WithEnvironment("OpenBao__Address", openbaoEndpoint)
+    .WithEnvironment("OpenBao__Token", baoDevRootToken)
+    .WaitFor(openbao);
 
 builder.AddProject<Projects.Worker>("worker")
-    .WithReference(nats).WaitFor(nats);
+    .WithReference(nats).WaitFor(nats)
+    .WithEnvironment("OpenBao__Address", openbaoEndpoint)
+    .WithEnvironment("OpenBao__Token", baoDevRootToken)
+    .WaitFor(openbao);
 
 builder.Build().Run();

@@ -1,14 +1,13 @@
 using DataBridge.Data;
-using System.Text.Json;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NodaTime;
-using Shared;
 using Shared.Database;
 using Shared.Messaging;
+using Shared.Secrets;
 using Shared.Storage;
 
 namespace DataBridge.Messaging;
@@ -16,6 +15,7 @@ namespace DataBridge.Messaging;
 public sealed class StorageCrudConsumerService(
     IMessageBus messageBus,
     IServiceScopeFactory scopeFactory,
+    ISecretStore secretStore,
     ILogger<StorageCrudConsumerService> logger) : BackgroundService
 {
     private const string DefaultStorageKey = "default";
@@ -127,43 +127,43 @@ public sealed class StorageCrudConsumerService(
 
     private Task HandleCreateLocalStorageAsync(IMessageContext<StorageCreateLocalRequestMessage> context)
     {
-        return HandleCreateStorageAsync(context, context.Message.Parameters, context.Message.Description);
+        return HandleCreateStorageAsync(context, context.Message.Key, context.Message.Parameters, context.Message.Description);
     }
 
     private Task HandleCreateStreamingStorageAsync(IMessageContext<StorageCreateStreamingRequestMessage> context)
     {
-        return HandleCreateStorageAsync(context, context.Message.Parameters, context.Message.Description);
+        return HandleCreateStorageAsync(context, context.Message.Key, context.Message.Parameters, context.Message.Description);
     }
 
     private Task HandleCreateS3CompatibleObjectStorageAsync(IMessageContext<StorageCreateS3CompatibleObjectRequestMessage> context)
     {
-        return HandleCreateStorageAsync(context, context.Message.Parameters, context.Message.Description);
+        return HandleCreateStorageAsync(context, context.Message.Key, context.Message.Parameters, context.Message.Description);
     }
 
     private Task HandleCreateAzureBlobObjectStorageAsync(IMessageContext<StorageCreateAzureBlobObjectRequestMessage> context)
     {
-        return HandleCreateStorageAsync(context, context.Message.Parameters, context.Message.Description);
+        return HandleCreateStorageAsync(context, context.Message.Key, context.Message.Parameters, context.Message.Description);
     }
 
     private Task HandleCreateGoogleCloudStorageObjectStorageAsync(IMessageContext<StorageCreateGoogleCloudStorageObjectRequestMessage> context)
     {
-        return HandleCreateStorageAsync(context, context.Message.Parameters, context.Message.Description);
+        return HandleCreateStorageAsync(context, context.Message.Key, context.Message.Parameters, context.Message.Description);
     }
 
     private async Task HandleCreateStorageAsync<T>(
         IMessageContext<T> context,
+        string storageKey,
         StorageParametersBase typedParameters,
         string? description)
         where T : class
     {
-        var message = context.Message;
         using var scope = scopeFactory.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<DataBridgeDbContext>();
 
         try
         {
             var alreadyExists = await dbContext.StorageConfigs
-                .AnyAsync(x => x.Key == GetStorageKey(message));
+                .AnyAsync(x => x.Key == storageKey);
 
             if (alreadyExists)
             {
@@ -171,7 +171,7 @@ public sealed class StorageCrudConsumerService(
                 {
                     Success = false,
                     ErrorCode = "conflict",
-                    ErrorMessage = $"Storage key '{GetStorageKey(message)}' already exists."
+                    ErrorMessage = $"Storage key '{storageKey}' already exists."
                 });
                 return;
             }
@@ -188,15 +188,38 @@ public sealed class StorageCrudConsumerService(
                 return;
             }
 
+            var (secrets, stored) = StorageSecretSplitter.Split(typedParameters);
+
+            // Vault-write before DB-write so "DB row exists ⇒ Vault path exists" holds.
+            // Best-effort cleanup if DB write fails afterward.
+            if (secrets.Count > 0)
+            {
+                await secretStore.WriteAsync(SecretPaths.ForStorage(storageKey), secrets)
+                    .ConfigureAwait(false);
+            }
+
             var entity = new StorageConfigEntity
             {
-                Key = GetStorageKey(message),
+                Key = storageKey,
                 Description = description
             };
-            entity.ApplyTypedParameters(typedParameters);
+            entity.ApplyStoredParameters(stored);
 
-            dbContext.StorageConfigs.Add(entity);
-            await dbContext.SaveChangesAsync();
+            try
+            {
+                dbContext.StorageConfigs.Add(entity);
+                await dbContext.SaveChangesAsync();
+            }
+            catch
+            {
+                if (secrets.Count > 0)
+                {
+                    await SafeDeleteSecretAsync(storageKey).ConfigureAwait(false);
+                }
+                throw;
+            }
+
+            await PublishChangedAsync(storageKey, StorageConfigChangeKind.Created).ConfigureAwait(false);
 
             await context.RespondAsync(new StorageOperationResponseMessage
             {
@@ -206,50 +229,50 @@ public sealed class StorageCrudConsumerService(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed handling storage create message for key '{StorageKey}'", GetStorageKey(message));
+            logger.LogError(ex, "Failed handling storage create message for key '{StorageKey}'", storageKey);
             await RespondInternalErrorAsync(context);
         }
     }
 
     private Task HandleUpdateLocalStorageAsync(IMessageContext<StorageUpdateLocalRequestMessage> context)
     {
-        return HandleUpdateStorageAsync(context, context.Message.Parameters, context.Message.Description);
+        return HandleUpdateStorageAsync(context, context.Message.Key, context.Message.Parameters, context.Message.Description);
     }
 
     private Task HandleUpdateStreamingStorageAsync(IMessageContext<StorageUpdateStreamingRequestMessage> context)
     {
-        return HandleUpdateStorageAsync(context, context.Message.Parameters, context.Message.Description);
+        return HandleUpdateStorageAsync(context, context.Message.Key, context.Message.Parameters, context.Message.Description);
     }
 
     private Task HandleUpdateS3CompatibleObjectStorageAsync(IMessageContext<StorageUpdateS3CompatibleObjectRequestMessage> context)
     {
-        return HandleUpdateStorageAsync(context, context.Message.Parameters, context.Message.Description);
+        return HandleUpdateStorageAsync(context, context.Message.Key, context.Message.Parameters, context.Message.Description);
     }
 
     private Task HandleUpdateAzureBlobObjectStorageAsync(IMessageContext<StorageUpdateAzureBlobObjectRequestMessage> context)
     {
-        return HandleUpdateStorageAsync(context, context.Message.Parameters, context.Message.Description);
+        return HandleUpdateStorageAsync(context, context.Message.Key, context.Message.Parameters, context.Message.Description);
     }
 
     private Task HandleUpdateGoogleCloudStorageObjectStorageAsync(IMessageContext<StorageUpdateGoogleCloudStorageObjectRequestMessage> context)
     {
-        return HandleUpdateStorageAsync(context, context.Message.Parameters, context.Message.Description);
+        return HandleUpdateStorageAsync(context, context.Message.Key, context.Message.Parameters, context.Message.Description);
     }
 
     private async Task HandleUpdateStorageAsync<T>(
         IMessageContext<T> context,
+        string storageKey,
         StorageParametersBase typedParameters,
         string? description)
         where T : class
     {
-        var message = context.Message;
         using var scope = scopeFactory.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<DataBridgeDbContext>();
 
         try
         {
             var entity = await StorageConfigsWithDetails(dbContext)
-                .SingleOrDefaultAsync(x => x.Key == GetStorageKey(message));
+                .SingleOrDefaultAsync(x => x.Key == storageKey);
 
             if (entity is null)
             {
@@ -257,7 +280,7 @@ public sealed class StorageCrudConsumerService(
                 {
                     Success = false,
                     ErrorCode = "not_found",
-                    ErrorMessage = $"Storage key '{GetStorageKey(message)}' was not found."
+                    ErrorMessage = $"Storage key '{storageKey}' was not found."
                 });
                 return;
             }
@@ -273,20 +296,6 @@ public sealed class StorageCrudConsumerService(
                 return;
             }
 
-            var duplicateKey = await dbContext.StorageConfigs
-                .AnyAsync(x => x.Id != entity.Id && x.Key == GetStorageKey(message));
-
-            if (duplicateKey)
-            {
-                await context.RespondAsync(new StorageOperationResponseMessage
-                {
-                    Success = false,
-                    ErrorCode = "conflict",
-                    ErrorMessage = $"Storage key '{GetStorageKey(message)}' already exists."
-                });
-                return;
-            }
-
             var parameterErrors = StorageParametersSerializer.Validate(typedParameters);
             if (parameterErrors.Count > 0)
             {
@@ -299,14 +308,31 @@ public sealed class StorageCrudConsumerService(
                 return;
             }
 
+            var (secrets, stored) = StorageSecretSplitter.Split(typedParameters);
+
+            // Update Vault first so any reader that arrives mid-update sees a coherent state.
+            if (secrets.Count > 0)
+            {
+                await secretStore.WriteAsync(SecretPaths.ForStorage(storageKey), secrets)
+                    .ConfigureAwait(false);
+            }
+            else
+            {
+                // Nothing sensitive supplied this round — clear the existing secret bundle so old
+                // values don't linger after a switch (e.g. password → key-based auth).
+                await SafeDeleteSecretAsync(storageKey).ConfigureAwait(false);
+            }
+
             RemoveExistingParameters(dbContext, entity);
 
-            entity.Key = GetStorageKey(message);
+            entity.Key = storageKey;
             entity.Description = description;
             entity.LastUpdated = SystemClock.Instance.GetCurrentInstant();
-            entity.ApplyTypedParameters(typedParameters);
+            entity.ApplyStoredParameters(stored);
 
             await dbContext.SaveChangesAsync();
+
+            await PublishChangedAsync(storageKey, StorageConfigChangeKind.Updated).ConfigureAwait(false);
 
             await context.RespondAsync(new StorageOperationResponseMessage
             {
@@ -316,7 +342,7 @@ public sealed class StorageCrudConsumerService(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed handling storage update message for key '{Key}'", GetStorageKey(message));
+            logger.LogError(ex, "Failed handling storage update message for key '{Key}'", storageKey);
             await RespondInternalErrorAsync(context);
         }
     }
@@ -414,6 +440,11 @@ public sealed class StorageCrudConsumerService(
             dbContext.StorageConfigs.Remove(entity);
             await dbContext.SaveChangesAsync();
 
+            // DB row is the source of truth; orphan secrets in Vault are tolerable but log on failure.
+            await SafeDeleteSecretAsync(context.Message.Key).ConfigureAwait(false);
+
+            await PublishChangedAsync(context.Message.Key, StorageConfigChangeKind.Deleted).ConfigureAwait(false);
+
             await context.RespondAsync(new StorageOperationResponseMessage
             {
                 Success = true
@@ -426,8 +457,35 @@ public sealed class StorageCrudConsumerService(
         }
     }
 
+    private async Task SafeDeleteSecretAsync(string storageKey)
+    {
+        try
+        {
+            await secretStore.DeleteAsync(SecretPaths.ForStorage(storageKey)).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed deleting secrets at path for storage key '{StorageKey}'; orphan may remain.", storageKey);
+        }
+    }
+
+    private async Task PublishChangedAsync(string storageKey, StorageConfigChangeKind change)
+    {
+        try
+        {
+            await messageBus.PublishAsync(
+                StorageSubjects.StorageConfigChanged,
+                new StorageConfigChangedMessage { Key = storageKey, Change = change });
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed publishing StorageConfigChanged for key '{StorageKey}'", storageKey);
+        }
+    }
+
     private static StorageConfigDto Map(StorageConfigEntity entity)
     {
+        var stored = entity.StoredParameters;
         return new StorageConfigDto
         {
             Id = entity.Id,
@@ -436,75 +494,11 @@ public sealed class StorageCrudConsumerService(
             Description = entity.Description,
             CreatedAt = entity.CreatedAt,
             LastUpdated = entity.LastUpdated,
-            Local = entity.Local is null ? null : new PosixLocalStorageParameters
-            {
-                Protocol = entity.Local.Protocol,
-                Path = entity.Local.Path
-            },
-            Network = entity.Network is null ? null : new StreamingNetworkStorageParameters
-            {
-                Protocol = entity.Network.Protocol,
-                Host = entity.Network.Host,
-                Port = entity.Network.Port,
-                Username = entity.Network.Username,
-                Password = entity.Network.Password,
-                PrivateKey = entity.Network.PrivateKey,
-                PublicKey = entity.Network.PublicKey,
-                BasePath = entity.Network.BasePath
-            },
-            ObjectS3Compatible = entity.ObjectS3Compatible is null ? null : new S3CompatibleObjectStorageParameters
-            {
-                Provider = entity.ObjectS3Compatible.Provider,
-                BucketName = entity.ObjectS3Compatible.BucketName,
-                Region = entity.ObjectS3Compatible.Region,
-                Endpoint = entity.ObjectS3Compatible.Endpoint,
-                AccessKeyId = entity.ObjectS3Compatible.AccessKeyId!,
-                SecretKeyId = entity.ObjectS3Compatible.SecretKeyId!,
-                SessionTokenSecretId = entity.ObjectS3Compatible.SessionTokenSecretId,
-                ForcePathStyle = entity.ObjectS3Compatible.ForcePathStyle,
-                UseSsl = entity.ObjectS3Compatible.UseSsl
-            },
-            ObjectAzureBlob = entity.ObjectAzureBlob is null ? null : new AzureBlobObjectStorageParameters
-            {
-                CredentialMode = entity.ObjectAzureBlob.CredentialMode,
-                ContainerName = entity.ObjectAzureBlob.ContainerName,
-                AzureAccountName = entity.ObjectAzureBlob.AzureAccountName,
-                AzureAccountKeySecretId = entity.ObjectAzureBlob.AzureAccountKeySecretId,
-                AzureConnectionStringSecretId = entity.ObjectAzureBlob.AzureConnectionStringSecretId,
-                AzureSasUrlSecretId = entity.ObjectAzureBlob.AzureSasUrlSecretId
-            },
-            ObjectGoogleCloudStorage = entity.ObjectGoogleCloudStorage is null ? null : new GoogleCloudStorageObjectStorageParameters
-            {
-                BucketName = entity.ObjectGoogleCloudStorage.BucketName,
-                CredentialMode = entity.ObjectGoogleCloudStorage.CredentialMode,
-                GcpCredentialsJson = string.IsNullOrWhiteSpace(entity.ObjectGoogleCloudStorage.GcpCredentialsJson)
-                    ? null
-                    : JsonDocument.Parse(entity.ObjectGoogleCloudStorage.GcpCredentialsJson).RootElement.Clone(),
-                GcpCredentialsJsonIsBase64Encoded = entity.ObjectGoogleCloudStorage.GcpCredentialsJsonIsBase64Encoded,
-                GcpCredentialsFilePath = entity.ObjectGoogleCloudStorage.GcpCredentialsFilePath,
-                GcpProjectId = entity.ObjectGoogleCloudStorage.GcpProjectId
-            }
-        };
-    }
-
-    private static string GetStorageKey<T>(T message)
-        where T : class
-    {
-        return message switch
-        {
-            StorageCreateLocalRequestMessage local => local.Key,
-            StorageCreateStreamingRequestMessage streaming => streaming.Key,
-            StorageCreateS3CompatibleObjectRequestMessage @object => @object.Key,
-            StorageCreateAzureBlobObjectRequestMessage @object => @object.Key,
-            StorageCreateGoogleCloudStorageObjectRequestMessage @object => @object.Key,
-            StorageUpdateLocalRequestMessage local => local.Key,
-            StorageUpdateStreamingRequestMessage streaming => streaming.Key,
-            StorageUpdateS3CompatibleObjectRequestMessage @object => @object.Key,
-            StorageUpdateAzureBlobObjectRequestMessage @object => @object.Key,
-            StorageUpdateGoogleCloudStorageObjectRequestMessage @object => @object.Key,
-            StorageGetRequestMessage get => get.Key,
-            StorageDeleteRequestMessage delete => delete.Key,
-            _ => throw new ArgumentException($"Unsupported storage message type: {typeof(T).Name}", nameof(message))
+            Local = stored as PosixLocalStorageStored,
+            Network = stored as StreamingNetworkStorageStored,
+            ObjectS3Compatible = stored as S3CompatibleObjectStorageStored,
+            ObjectAzureBlob = stored as AzureBlobObjectStorageStored,
+            ObjectGoogleCloudStorage = stored as GoogleCloudStorageObjectStorageStored
         };
     }
 

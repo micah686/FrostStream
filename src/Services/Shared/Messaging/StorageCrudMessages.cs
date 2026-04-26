@@ -11,11 +11,11 @@ public sealed class StorageConfigDto
     public string? Description { get; init; }
     public Instant CreatedAt { get; init; }
     public Instant? LastUpdated { get; init; }
-    public PosixLocalStorageParameters? Local { get; init; }
-    public StreamingNetworkStorageParameters? Network { get; init; }
-    public S3CompatibleObjectStorageParameters? ObjectS3Compatible { get; init; }
-    public AzureBlobObjectStorageParameters? ObjectAzureBlob { get; init; }
-    public GoogleCloudStorageObjectStorageParameters? ObjectGoogleCloudStorage { get; init; }
+    public PosixLocalStorageStored? Local { get; init; }
+    public StreamingNetworkStorageStored? Network { get; init; }
+    public S3CompatibleObjectStorageStored? ObjectS3Compatible { get; init; }
+    public AzureBlobObjectStorageStored? ObjectAzureBlob { get; init; }
+    public GoogleCloudStorageObjectStorageStored? ObjectGoogleCloudStorage { get; init; }
 }
 
 public sealed class StorageCreateLocalRequestMessage
@@ -107,4 +107,17 @@ public sealed class StorageOperationResponseMessage
     public string? ErrorMessage { get; init; }
     public StorageConfigDto? Entity { get; init; }
     public IReadOnlyList<StorageConfigDto>? Items { get; init; }
+}
+
+public sealed class StorageConfigChangedMessage
+{
+    public required string Key { get; init; }
+    public required StorageConfigChangeKind Change { get; init; }
+}
+
+public enum StorageConfigChangeKind
+{
+    Created,
+    Updated,
+    Deleted
 }

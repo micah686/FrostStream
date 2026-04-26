@@ -15,4 +15,5 @@ public static class StorageSubjects
     public const string ListStorage = "storage.list";
     public const string GetStorage = "storage.get";
     public const string DeleteStorage = "storage.delete";
+    public const string StorageConfigChanged = "storage.changed";
 }
