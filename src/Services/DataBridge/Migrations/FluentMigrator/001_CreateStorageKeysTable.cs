@@ -7,6 +7,10 @@ public sealed class M001_CreateStorageKeysTable : Migration
 {
     public override void Up()
     {
+        Execute.Sql("CREATE TYPE local_storage_protocol AS ENUM ('local');");
+        Execute.Sql("CREATE TYPE network_storage_protocol AS ENUM ('ftp', 'ftps', 'sftp', 'nfs', 'smb', 'cifs');");
+        Execute.Sql("CREATE TYPE object_storage_protocol AS ENUM ('s3', 'azure_blob', 'gcs', 'min_io');");
+
         Create.Table("storage_keys")
             .WithColumn("id").AsInt32().PrimaryKey().Identity()
             .WithColumn("key").AsString(100).NotNullable()
@@ -23,12 +27,12 @@ public sealed class M001_CreateStorageKeysTable : Migration
 
         Create.Table("storage_keys_local")
             .WithColumn("storage_key_id").AsInt32().PrimaryKey()
-            .WithColumn("protocol").AsInt32().NotNullable()
+            .WithColumn("protocol").AsCustom("local_storage_protocol").NotNullable()
             .WithColumn("path").AsString(2048).NotNullable();
 
         Create.Table("storage_keys_network")
             .WithColumn("storage_key_id").AsInt32().PrimaryKey()
-            .WithColumn("protocol").AsInt32().NotNullable()
+            .WithColumn("protocol").AsCustom("network_storage_protocol").NotNullable()
             .WithColumn("host").AsString(255).NotNullable()
             .WithColumn("port").AsInt32().Nullable()
             .WithColumn("username").AsString(255).Nullable()
@@ -39,7 +43,7 @@ public sealed class M001_CreateStorageKeysTable : Migration
 
         Create.Table("storage_keys_object")
             .WithColumn("storage_key_id").AsInt32().PrimaryKey()
-            .WithColumn("provider").AsInt32().NotNullable()
+            .WithColumn("provider").AsCustom("object_storage_protocol").NotNullable()
             .WithColumn("container").AsString(255).NotNullable()
             .WithColumn("region").AsString(255).Nullable()
             .WithColumn("endpoint").AsString(2048).Nullable()
@@ -74,7 +78,7 @@ public sealed class M001_CreateStorageKeysTable : Migration
         Execute.Sql(
             """
             INSERT INTO storage_keys_local (storage_key_id, protocol, path)
-            SELECT id, 0, './data/'
+            SELECT id, 'local'::local_storage_protocol, './data/'
             FROM storage_keys
             WHERE key = 'default';
             """);
@@ -86,5 +90,8 @@ public sealed class M001_CreateStorageKeysTable : Migration
         Delete.Table("storage_keys_network");
         Delete.Table("storage_keys_local");
         Delete.Table("storage_keys");
+        Execute.Sql("DROP TYPE object_storage_protocol;");
+        Execute.Sql("DROP TYPE network_storage_protocol;");
+        Execute.Sql("DROP TYPE local_storage_protocol;");
     }
 }

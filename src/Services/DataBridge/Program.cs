@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Hosting.Internal;
 using NATS.Client.Core;
+using Shared.Storage;
 
 namespace DataBridge;
 
@@ -28,7 +29,11 @@ class Program
         builder.Services.AddDbContext<DataBridgeDbContext>(options =>
             options.UseNpgsql(
                     connectionString,
-                    npgsqlOptions => npgsqlOptions.UseNodaTime())
+                    npgsqlOptions => npgsqlOptions
+                        .UseNodaTime()
+                        .MapEnum<LocalStorageProtocol>("local_storage_protocol")
+                        .MapEnum<NetworkStorageProtocol>("network_storage_protocol")
+                        .MapEnum<ObjectStorageProtocol>("object_storage_protocol"))
                 .UseSnakeCaseNamingConvention());
 
         builder.Services
