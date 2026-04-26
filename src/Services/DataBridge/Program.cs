@@ -33,7 +33,9 @@ class Program
                         .UseNodaTime()
                         .MapEnum<LocalStorageProtocol>("local_storage_protocol")
                         .MapEnum<NetworkStorageProtocol>("network_storage_protocol")
-                        .MapEnum<ObjectStorageProtocol>("object_storage_protocol"))
+                        .MapEnum<S3CompatibleObjectStorageProvider>("s3_compatible_object_storage_provider")
+                        .MapEnum<AzureBlobCredentialMode>("azure_blob_credential_mode")
+                        .MapEnum<GoogleCloudStorageCredentialMode>("google_cloud_storage_credential_mode"))
                 .UseSnakeCaseNamingConvention());
 
         builder.Services

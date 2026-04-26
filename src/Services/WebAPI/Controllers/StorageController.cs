@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.AspNetCore.Mvc;
 using NodaTime;
@@ -124,61 +125,169 @@ public class StorageController : ControllerBase
         return MapTypedStorageResponse(response, MapNetworkResponse, StorageMethod.Network);
     }
 
-    [HttpPost("object/create")]
-    public async Task<ActionResult<ObjectStorageConfigResponse>> CreateObjectStorage(
-        [FromBody] ObjectStorageUpsertRequest request,
+    [HttpPost("object/s3-compatible/create")]
+    public async Task<ActionResult<S3CompatibleObjectStorageConfigResponse>> CreateS3CompatibleObjectStorage(
+        [FromBody] S3CompatibleObjectStorageUpsertRequest request,
         CancellationToken cancellationToken)
     {
         var response = await SendRequestAsync(
-            StorageSubjects.CreateObjectStorage,
-            new StorageCreateObjectRequestMessage
+            StorageSubjects.CreateS3CompatibleObjectStorage,
+            new StorageCreateS3CompatibleObjectRequestMessage
             {
                 Key = request.Key,
                 Description = request.Description,
-                Parameters = new ObjectStorageParameters
+                Parameters = new S3CompatibleObjectStorageParameters
                 {
                     Provider = request.Provider,
-                    Container = request.Container,
+                    BucketName = request.BucketName,
                     Region = request.Region,
                     Endpoint = request.Endpoint,
-                    BasePath = request.BasePath,
                     AccessKeyId = request.AccessKeyId,
-                    SecretKey = request.SecretKey,
-                    UseDefaultCredentials = request.UseDefaultCredentials
+                    SecretKeyId = request.SecretKeyId,
+                    SessionTokenSecretId = request.SessionTokenSecretId,
+                    ForcePathStyle = request.ForcePathStyle,
+                    UseSsl = request.UseSsl
                 }
             },
             cancellationToken);
 
-        return MapTypedStorageResponse(response, MapObjectResponse, StorageMethod.ObjectStorage);
+        return MapTypedStorageResponse(response, MapS3CompatibleObjectResponse, StorageMethod.ObjectStorage);
     }
 
-    [HttpPut("object/update/{key}")]
-    public async Task<ActionResult<ObjectStorageConfigResponse>> UpdateObjectStorage(
+    [HttpPut("object/s3-compatible/update/{key}")]
+    public async Task<ActionResult<S3CompatibleObjectStorageConfigResponse>> UpdateS3CompatibleObjectStorage(
         string key,
-        [FromBody] ObjectStorageUpdateRequest request,
+        [FromBody] S3CompatibleObjectStorageUpdateRequest request,
         CancellationToken cancellationToken)
     {
         var response = await SendRequestAsync(
-            StorageSubjects.UpdateObjectStorage,
-            new StorageUpdateObjectRequestMessage
+            StorageSubjects.UpdateS3CompatibleObjectStorage,
+            new StorageUpdateS3CompatibleObjectRequestMessage
             {
                 Key = key,
                 Description = request.Description,
-                Parameters = new ObjectStorageParameters
+                Parameters = new S3CompatibleObjectStorageParameters
                 {
                     Provider = request.Provider,
-                    Container = request.Container,
+                    BucketName = request.BucketName,
                     Region = request.Region,
                     Endpoint = request.Endpoint,
-                    BasePath = request.BasePath,
                     AccessKeyId = request.AccessKeyId,
-                    SecretKey = request.SecretKey,
-                    UseDefaultCredentials = request.UseDefaultCredentials
+                    SecretKeyId = request.SecretKeyId,
+                    SessionTokenSecretId = request.SessionTokenSecretId,
+                    ForcePathStyle = request.ForcePathStyle,
+                    UseSsl = request.UseSsl
                 }
             },
             cancellationToken);
 
-        return MapTypedStorageResponse(response, MapObjectResponse, StorageMethod.ObjectStorage);
+        return MapTypedStorageResponse(response, MapS3CompatibleObjectResponse, StorageMethod.ObjectStorage);
+    }
+
+    [HttpPost("object/azure-blob/create")]
+    public async Task<ActionResult<AzureBlobObjectStorageConfigResponse>> CreateAzureBlobObjectStorage(
+        [FromBody] AzureBlobObjectStorageUpsertRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await SendRequestAsync(
+            StorageSubjects.CreateAzureBlobObjectStorage,
+            new StorageCreateAzureBlobObjectRequestMessage
+            {
+                Key = request.Key,
+                Description = request.Description,
+                Parameters = new AzureBlobObjectStorageParameters
+                {
+                    CredentialMode = request.CredentialMode,
+                    ContainerName = request.ContainerName,
+                    AzureAccountName = request.AzureAccountName,
+                    AzureAccountKeySecretId = request.AzureAccountKeySecretId,
+                    AzureConnectionStringSecretId = request.AzureConnectionStringSecretId,
+                    AzureSasUrlSecretId = request.AzureSasUrlSecretId
+                }
+            },
+            cancellationToken);
+
+        return MapTypedStorageResponse(response, MapAzureBlobObjectResponse, StorageMethod.ObjectStorage);
+    }
+
+    [HttpPut("object/azure-blob/update/{key}")]
+    public async Task<ActionResult<AzureBlobObjectStorageConfigResponse>> UpdateAzureBlobObjectStorage(
+        string key,
+        [FromBody] AzureBlobObjectStorageUpdateRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await SendRequestAsync(
+            StorageSubjects.UpdateAzureBlobObjectStorage,
+            new StorageUpdateAzureBlobObjectRequestMessage
+            {
+                Key = key,
+                Description = request.Description,
+                Parameters = new AzureBlobObjectStorageParameters
+                {
+                    CredentialMode = request.CredentialMode,
+                    ContainerName = request.ContainerName,
+                    AzureAccountName = request.AzureAccountName,
+                    AzureAccountKeySecretId = request.AzureAccountKeySecretId,
+                    AzureConnectionStringSecretId = request.AzureConnectionStringSecretId,
+                    AzureSasUrlSecretId = request.AzureSasUrlSecretId
+                }
+            },
+            cancellationToken);
+
+        return MapTypedStorageResponse(response, MapAzureBlobObjectResponse, StorageMethod.ObjectStorage);
+    }
+
+    [HttpPost("object/google-cloud-storage/create")]
+    public async Task<ActionResult<GoogleCloudStorageObjectStorageConfigResponse>> CreateGoogleCloudStorageObjectStorage(
+        [FromBody] GoogleCloudStorageObjectStorageUpsertRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await SendRequestAsync(
+            StorageSubjects.CreateGoogleCloudStorageObjectStorage,
+            new StorageCreateGoogleCloudStorageObjectRequestMessage
+            {
+                Key = request.Key,
+                Description = request.Description,
+                Parameters = new GoogleCloudStorageObjectStorageParameters
+                {
+                    BucketName = request.BucketName,
+                    CredentialMode = request.CredentialMode,
+                    GcpCredentialsJson = request.GcpCredentialsJson,
+                    GcpCredentialsJsonIsBase64Encoded = request.GcpCredentialsJsonIsBase64Encoded,
+                    GcpCredentialsFilePath = request.GcpCredentialsFilePath,
+                    GcpProjectId = request.GcpProjectId
+                }
+            },
+            cancellationToken);
+
+        return MapTypedStorageResponse(response, MapGoogleCloudStorageObjectResponse, StorageMethod.ObjectStorage);
+    }
+
+    [HttpPut("object/google-cloud-storage/update/{key}")]
+    public async Task<ActionResult<GoogleCloudStorageObjectStorageConfigResponse>> UpdateGoogleCloudStorageObjectStorage(
+        string key,
+        [FromBody] GoogleCloudStorageObjectStorageUpdateRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await SendRequestAsync(
+            StorageSubjects.UpdateGoogleCloudStorageObjectStorage,
+            new StorageUpdateGoogleCloudStorageObjectRequestMessage
+            {
+                Key = key,
+                Description = request.Description,
+                Parameters = new GoogleCloudStorageObjectStorageParameters
+                {
+                    BucketName = request.BucketName,
+                    CredentialMode = request.CredentialMode,
+                    GcpCredentialsJson = request.GcpCredentialsJson,
+                    GcpCredentialsJsonIsBase64Encoded = request.GcpCredentialsJsonIsBase64Encoded,
+                    GcpCredentialsFilePath = request.GcpCredentialsFilePath,
+                    GcpProjectId = request.GcpProjectId
+                }
+            },
+            cancellationToken);
+
+        return MapTypedStorageResponse(response, MapGoogleCloudStorageObjectResponse, StorageMethod.ObjectStorage);
     }
 
     [HttpGet("list")]
@@ -344,12 +453,12 @@ public class StorageController : ControllerBase
         };
     }
 
-    private static ObjectStorageConfigResponse MapObjectResponse(StorageConfigDto storage)
+    private static S3CompatibleObjectStorageConfigResponse MapS3CompatibleObjectResponse(StorageConfigDto storage)
     {
-        var @object = storage.Object
-            ?? throw new InvalidOperationException("Storage response does not contain object parameters.");
+        var @object = storage.ObjectS3Compatible
+            ?? throw new InvalidOperationException("Storage response does not contain S3-compatible object parameters.");
 
-        return new ObjectStorageConfigResponse
+        return new S3CompatibleObjectStorageConfigResponse
         {
             Id = storage.Id,
             Key = storage.Key,
@@ -357,13 +466,56 @@ public class StorageController : ControllerBase
             CreatedAt = storage.CreatedAt,
             LastUpdated = storage.LastUpdated,
             Provider = @object.Provider,
-            Container = @object.Container,
+            BucketName = @object.BucketName,
             Region = @object.Region,
             Endpoint = @object.Endpoint,
-            BasePath = @object.BasePath,
             AccessKeyId = @object.AccessKeyId,
-            SecretKey = @object.SecretKey,
-            UseDefaultCredentials = @object.UseDefaultCredentials
+            SecretKeyId = @object.SecretKeyId,
+            SessionTokenSecretId = @object.SessionTokenSecretId,
+            ForcePathStyle = @object.ForcePathStyle,
+            UseSsl = @object.UseSsl
+        };
+    }
+
+    private static AzureBlobObjectStorageConfigResponse MapAzureBlobObjectResponse(StorageConfigDto storage)
+    {
+        var @object = storage.ObjectAzureBlob
+            ?? throw new InvalidOperationException("Storage response does not contain Azure Blob object parameters.");
+
+        return new AzureBlobObjectStorageConfigResponse
+        {
+            Id = storage.Id,
+            Key = storage.Key,
+            Description = storage.Description,
+            CreatedAt = storage.CreatedAt,
+            LastUpdated = storage.LastUpdated,
+            CredentialMode = @object.CredentialMode,
+            ContainerName = @object.ContainerName,
+            AzureAccountName = @object.AzureAccountName,
+            AzureAccountKeySecretId = @object.AzureAccountKeySecretId,
+            AzureConnectionStringSecretId = @object.AzureConnectionStringSecretId,
+            AzureSasUrlSecretId = @object.AzureSasUrlSecretId
+        };
+    }
+
+    private static GoogleCloudStorageObjectStorageConfigResponse MapGoogleCloudStorageObjectResponse(StorageConfigDto storage)
+    {
+        var @object = storage.ObjectGoogleCloudStorage
+            ?? throw new InvalidOperationException("Storage response does not contain Google Cloud Storage object parameters.");
+
+        return new GoogleCloudStorageObjectStorageConfigResponse
+        {
+            Id = storage.Id,
+            Key = storage.Key,
+            Description = storage.Description,
+            CreatedAt = storage.CreatedAt,
+            LastUpdated = storage.LastUpdated,
+            BucketName = @object.BucketName,
+            CredentialMode = @object.CredentialMode,
+            GcpCredentialsJson = @object.GcpCredentialsJson,
+            GcpCredentialsJsonIsBase64Encoded = @object.GcpCredentialsJsonIsBase64Encoded,
+            GcpCredentialsFilePath = @object.GcpCredentialsFilePath,
+            GcpProjectId = @object.GcpProjectId
         };
     }
 }
@@ -493,66 +645,184 @@ public sealed class NetworkStorageUpdateRequest : StorageUpdateRequestBase, IVal
     }
 }
 
-public sealed class ObjectStorageUpsertRequest : StorageUpsertRequestBase, IValidatableObject
+public sealed class S3CompatibleObjectStorageUpsertRequest : StorageUpsertRequestBase, IValidatableObject
 {
     [Required]
-    public ObjectStorageProtocol Provider { get; init; }
+    public S3CompatibleObjectStorageProvider Provider { get; init; }
 
     [Required]
     [MinLength(1)]
-    public required string Container { get; init; }
+    public required string BucketName { get; init; }
 
     public string? Region { get; init; }
     public string? Endpoint { get; init; }
-    public string? BasePath { get; init; }
-    public string? AccessKeyId { get; init; }
-    public string? SecretKey { get; init; }
-    public bool UseDefaultCredentials { get; init; } = true;
+    [Required]
+    [MinLength(1)]
+    public required string AccessKeyId { get; init; }
+    [Required]
+    [MinLength(1)]
+    public required string SecretKeyId { get; init; }
+    public string? SessionTokenSecretId { get; init; }
+    public bool ForcePathStyle { get; init; }
+    public bool? UseSsl { get; init; }
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
-        return StorageParametersSerializer.Validate(new ObjectStorageParameters
+        return StorageParametersSerializer.Validate(new S3CompatibleObjectStorageParameters
         {
             Provider = Provider,
-            Container = Container,
+            BucketName = BucketName,
             Region = Region,
             Endpoint = Endpoint,
-            BasePath = BasePath,
             AccessKeyId = AccessKeyId,
-            SecretKey = SecretKey,
-            UseDefaultCredentials = UseDefaultCredentials
+            SecretKeyId = SecretKeyId,
+            SessionTokenSecretId = SessionTokenSecretId,
+            ForcePathStyle = ForcePathStyle,
+            UseSsl = UseSsl
         }).Select(error => new ValidationResult(error));
     }
 }
 
-public sealed class ObjectStorageUpdateRequest : StorageUpdateRequestBase, IValidatableObject
+public sealed class S3CompatibleObjectStorageUpdateRequest : StorageUpdateRequestBase, IValidatableObject
 {
     [Required]
-    public ObjectStorageProtocol Provider { get; init; }
+    public S3CompatibleObjectStorageProvider Provider { get; init; }
 
     [Required]
     [MinLength(1)]
-    public required string Container { get; init; }
+    public required string BucketName { get; init; }
 
     public string? Region { get; init; }
     public string? Endpoint { get; init; }
-    public string? BasePath { get; init; }
-    public string? AccessKeyId { get; init; }
-    public string? SecretKey { get; init; }
-    public bool UseDefaultCredentials { get; init; } = true;
+    [Required]
+    [MinLength(1)]
+    public required string AccessKeyId { get; init; }
+    [Required]
+    [MinLength(1)]
+    public required string SecretKeyId { get; init; }
+    public string? SessionTokenSecretId { get; init; }
+    public bool ForcePathStyle { get; init; }
+    public bool? UseSsl { get; init; }
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
-        return StorageParametersSerializer.Validate(new ObjectStorageParameters
+        return StorageParametersSerializer.Validate(new S3CompatibleObjectStorageParameters
         {
             Provider = Provider,
-            Container = Container,
+            BucketName = BucketName,
             Region = Region,
             Endpoint = Endpoint,
-            BasePath = BasePath,
             AccessKeyId = AccessKeyId,
-            SecretKey = SecretKey,
-            UseDefaultCredentials = UseDefaultCredentials
+            SecretKeyId = SecretKeyId,
+            SessionTokenSecretId = SessionTokenSecretId,
+            ForcePathStyle = ForcePathStyle,
+            UseSsl = UseSsl
+        }).Select(error => new ValidationResult(error));
+    }
+}
+
+public sealed class AzureBlobObjectStorageUpsertRequest : StorageUpsertRequestBase, IValidatableObject
+{
+    [Required]
+    public AzureBlobCredentialMode CredentialMode { get; init; }
+
+    public string? ContainerName { get; init; }
+    public string? AzureAccountName { get; init; }
+    public string? AzureAccountKeySecretId { get; init; }
+    public string? AzureConnectionStringSecretId { get; init; }
+    public string? AzureSasUrlSecretId { get; init; }
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        return StorageParametersSerializer.Validate(new AzureBlobObjectStorageParameters
+        {
+            CredentialMode = CredentialMode,
+            ContainerName = ContainerName,
+            AzureAccountName = AzureAccountName,
+            AzureAccountKeySecretId = AzureAccountKeySecretId,
+            AzureConnectionStringSecretId = AzureConnectionStringSecretId,
+            AzureSasUrlSecretId = AzureSasUrlSecretId
+        }).Select(error => new ValidationResult(error));
+    }
+}
+
+public sealed class AzureBlobObjectStorageUpdateRequest : StorageUpdateRequestBase, IValidatableObject
+{
+    [Required]
+    public AzureBlobCredentialMode CredentialMode { get; init; }
+
+    public string? ContainerName { get; init; }
+    public string? AzureAccountName { get; init; }
+    public string? AzureAccountKeySecretId { get; init; }
+    public string? AzureConnectionStringSecretId { get; init; }
+    public string? AzureSasUrlSecretId { get; init; }
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        return StorageParametersSerializer.Validate(new AzureBlobObjectStorageParameters
+        {
+            CredentialMode = CredentialMode,
+            ContainerName = ContainerName,
+            AzureAccountName = AzureAccountName,
+            AzureAccountKeySecretId = AzureAccountKeySecretId,
+            AzureConnectionStringSecretId = AzureConnectionStringSecretId,
+            AzureSasUrlSecretId = AzureSasUrlSecretId
+        }).Select(error => new ValidationResult(error));
+    }
+}
+
+public sealed class GoogleCloudStorageObjectStorageUpsertRequest : StorageUpsertRequestBase, IValidatableObject
+{
+    [Required]
+    [MinLength(1)]
+    public required string BucketName { get; init; }
+
+    [Required]
+    public GoogleCloudStorageCredentialMode CredentialMode { get; init; }
+
+    public JsonElement? GcpCredentialsJson { get; init; }
+    public bool GcpCredentialsJsonIsBase64Encoded { get; init; }
+    public string? GcpCredentialsFilePath { get; init; }
+    public string? GcpProjectId { get; init; }
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        return StorageParametersSerializer.Validate(new GoogleCloudStorageObjectStorageParameters
+        {
+            BucketName = BucketName,
+            CredentialMode = CredentialMode,
+            GcpCredentialsJson = GcpCredentialsJson,
+            GcpCredentialsJsonIsBase64Encoded = GcpCredentialsJsonIsBase64Encoded,
+            GcpCredentialsFilePath = GcpCredentialsFilePath,
+            GcpProjectId = GcpProjectId
+        }).Select(error => new ValidationResult(error));
+    }
+}
+
+public sealed class GoogleCloudStorageObjectStorageUpdateRequest : StorageUpdateRequestBase, IValidatableObject
+{
+    [Required]
+    [MinLength(1)]
+    public required string BucketName { get; init; }
+
+    [Required]
+    public GoogleCloudStorageCredentialMode CredentialMode { get; init; }
+
+    public JsonElement? GcpCredentialsJson { get; init; }
+    public bool GcpCredentialsJsonIsBase64Encoded { get; init; }
+    public string? GcpCredentialsFilePath { get; init; }
+    public string? GcpProjectId { get; init; }
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        return StorageParametersSerializer.Validate(new GoogleCloudStorageObjectStorageParameters
+        {
+            BucketName = BucketName,
+            CredentialMode = CredentialMode,
+            GcpCredentialsJson = GcpCredentialsJson,
+            GcpCredentialsJsonIsBase64Encoded = GcpCredentialsJsonIsBase64Encoded,
+            GcpCredentialsFilePath = GcpCredentialsFilePath,
+            GcpProjectId = GcpProjectId
         }).Select(error => new ValidationResult(error));
     }
 }
@@ -584,14 +854,35 @@ public sealed class NetworkStorageConfigResponse : StorageConfigResponseBase
     public string? BasePath { get; init; }
 }
 
-public sealed class ObjectStorageConfigResponse : StorageConfigResponseBase
+public sealed class S3CompatibleObjectStorageConfigResponse : StorageConfigResponseBase
 {
-    public ObjectStorageProtocol Provider { get; init; }
-    public required string Container { get; init; }
+    public S3CompatibleObjectStorageProvider Provider { get; init; }
+    public required string BucketName { get; init; }
     public string? Region { get; init; }
     public string? Endpoint { get; init; }
-    public string? BasePath { get; init; }
     public string? AccessKeyId { get; init; }
-    public string? SecretKey { get; init; }
-    public bool UseDefaultCredentials { get; init; }
+    public string? SecretKeyId { get; init; }
+    public string? SessionTokenSecretId { get; init; }
+    public bool ForcePathStyle { get; init; }
+    public bool? UseSsl { get; init; }
+}
+
+public sealed class AzureBlobObjectStorageConfigResponse : StorageConfigResponseBase
+{
+    public AzureBlobCredentialMode CredentialMode { get; init; }
+    public string? ContainerName { get; init; }
+    public string? AzureAccountName { get; init; }
+    public string? AzureAccountKeySecretId { get; init; }
+    public string? AzureConnectionStringSecretId { get; init; }
+    public string? AzureSasUrlSecretId { get; init; }
+}
+
+public sealed class GoogleCloudStorageObjectStorageConfigResponse : StorageConfigResponseBase
+{
+    public required string BucketName { get; init; }
+    public GoogleCloudStorageCredentialMode CredentialMode { get; init; }
+    public JsonElement? GcpCredentialsJson { get; init; }
+    public bool GcpCredentialsJsonIsBase64Encoded { get; init; }
+    public string? GcpCredentialsFilePath { get; init; }
+    public string? GcpProjectId { get; init; }
 }

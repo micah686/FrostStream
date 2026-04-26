@@ -1,4 +1,5 @@
 using DataBridge.Data;
+using System.Text.Json;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -34,9 +35,21 @@ public sealed class StorageCrudConsumerService(
             queueGroup: "databridge-storage",
             cancellationToken: stoppingToken));
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<StorageCreateObjectRequestMessage>(
-            StorageSubjects.CreateObjectStorage,
-            HandleCreateObjectStorageAsync,
+        _subscriptions.Add(await messageBus.SubscribeAsync<StorageCreateS3CompatibleObjectRequestMessage>(
+            StorageSubjects.CreateS3CompatibleObjectStorage,
+            HandleCreateS3CompatibleObjectStorageAsync,
+            queueGroup: "databridge-storage",
+            cancellationToken: stoppingToken));
+
+        _subscriptions.Add(await messageBus.SubscribeAsync<StorageCreateAzureBlobObjectRequestMessage>(
+            StorageSubjects.CreateAzureBlobObjectStorage,
+            HandleCreateAzureBlobObjectStorageAsync,
+            queueGroup: "databridge-storage",
+            cancellationToken: stoppingToken));
+
+        _subscriptions.Add(await messageBus.SubscribeAsync<StorageCreateGoogleCloudStorageObjectRequestMessage>(
+            StorageSubjects.CreateGoogleCloudStorageObjectStorage,
+            HandleCreateGoogleCloudStorageObjectStorageAsync,
             queueGroup: "databridge-storage",
             cancellationToken: stoppingToken));
 
@@ -52,9 +65,21 @@ public sealed class StorageCrudConsumerService(
             queueGroup: "databridge-storage",
             cancellationToken: stoppingToken));
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<StorageUpdateObjectRequestMessage>(
-            StorageSubjects.UpdateObjectStorage,
-            HandleUpdateObjectStorageAsync,
+        _subscriptions.Add(await messageBus.SubscribeAsync<StorageUpdateS3CompatibleObjectRequestMessage>(
+            StorageSubjects.UpdateS3CompatibleObjectStorage,
+            HandleUpdateS3CompatibleObjectStorageAsync,
+            queueGroup: "databridge-storage",
+            cancellationToken: stoppingToken));
+
+        _subscriptions.Add(await messageBus.SubscribeAsync<StorageUpdateAzureBlobObjectRequestMessage>(
+            StorageSubjects.UpdateAzureBlobObjectStorage,
+            HandleUpdateAzureBlobObjectStorageAsync,
+            queueGroup: "databridge-storage",
+            cancellationToken: stoppingToken));
+
+        _subscriptions.Add(await messageBus.SubscribeAsync<StorageUpdateGoogleCloudStorageObjectRequestMessage>(
+            StorageSubjects.UpdateGoogleCloudStorageObjectStorage,
+            HandleUpdateGoogleCloudStorageObjectStorageAsync,
             queueGroup: "databridge-storage",
             cancellationToken: stoppingToken));
 
@@ -110,7 +135,17 @@ public sealed class StorageCrudConsumerService(
         return HandleCreateStorageAsync(context, context.Message.Parameters, context.Message.Description);
     }
 
-    private Task HandleCreateObjectStorageAsync(IMessageContext<StorageCreateObjectRequestMessage> context)
+    private Task HandleCreateS3CompatibleObjectStorageAsync(IMessageContext<StorageCreateS3CompatibleObjectRequestMessage> context)
+    {
+        return HandleCreateStorageAsync(context, context.Message.Parameters, context.Message.Description);
+    }
+
+    private Task HandleCreateAzureBlobObjectStorageAsync(IMessageContext<StorageCreateAzureBlobObjectRequestMessage> context)
+    {
+        return HandleCreateStorageAsync(context, context.Message.Parameters, context.Message.Description);
+    }
+
+    private Task HandleCreateGoogleCloudStorageObjectStorageAsync(IMessageContext<StorageCreateGoogleCloudStorageObjectRequestMessage> context)
     {
         return HandleCreateStorageAsync(context, context.Message.Parameters, context.Message.Description);
     }
@@ -186,7 +221,17 @@ public sealed class StorageCrudConsumerService(
         return HandleUpdateStorageAsync(context, context.Message.Parameters, context.Message.Description);
     }
 
-    private Task HandleUpdateObjectStorageAsync(IMessageContext<StorageUpdateObjectRequestMessage> context)
+    private Task HandleUpdateS3CompatibleObjectStorageAsync(IMessageContext<StorageUpdateS3CompatibleObjectRequestMessage> context)
+    {
+        return HandleUpdateStorageAsync(context, context.Message.Parameters, context.Message.Description);
+    }
+
+    private Task HandleUpdateAzureBlobObjectStorageAsync(IMessageContext<StorageUpdateAzureBlobObjectRequestMessage> context)
+    {
+        return HandleUpdateStorageAsync(context, context.Message.Parameters, context.Message.Description);
+    }
+
+    private Task HandleUpdateGoogleCloudStorageObjectStorageAsync(IMessageContext<StorageUpdateGoogleCloudStorageObjectRequestMessage> context)
     {
         return HandleUpdateStorageAsync(context, context.Message.Parameters, context.Message.Description);
     }
@@ -407,16 +452,37 @@ public sealed class StorageCrudConsumerService(
                 PublicKey = entity.Network.PublicKey,
                 BasePath = entity.Network.BasePath
             },
-            Object = entity.Object is null ? null : new ObjectStorageParameters
+            ObjectS3Compatible = entity.ObjectS3Compatible is null ? null : new S3CompatibleObjectStorageParameters
             {
-                Provider = entity.Object.Provider,
-                Container = entity.Object.Container,
-                Region = entity.Object.Region,
-                Endpoint = entity.Object.Endpoint,
-                BasePath = entity.Object.BasePath,
-                AccessKeyId = entity.Object.AccessKeyId,
-                SecretKey = entity.Object.SecretKey,
-                UseDefaultCredentials = entity.Object.UseDefaultCredentials
+                Provider = entity.ObjectS3Compatible.Provider,
+                BucketName = entity.ObjectS3Compatible.BucketName,
+                Region = entity.ObjectS3Compatible.Region,
+                Endpoint = entity.ObjectS3Compatible.Endpoint,
+                AccessKeyId = entity.ObjectS3Compatible.AccessKeyId!,
+                SecretKeyId = entity.ObjectS3Compatible.SecretKeyId!,
+                SessionTokenSecretId = entity.ObjectS3Compatible.SessionTokenSecretId,
+                ForcePathStyle = entity.ObjectS3Compatible.ForcePathStyle,
+                UseSsl = entity.ObjectS3Compatible.UseSsl
+            },
+            ObjectAzureBlob = entity.ObjectAzureBlob is null ? null : new AzureBlobObjectStorageParameters
+            {
+                CredentialMode = entity.ObjectAzureBlob.CredentialMode,
+                ContainerName = entity.ObjectAzureBlob.ContainerName,
+                AzureAccountName = entity.ObjectAzureBlob.AzureAccountName,
+                AzureAccountKeySecretId = entity.ObjectAzureBlob.AzureAccountKeySecretId,
+                AzureConnectionStringSecretId = entity.ObjectAzureBlob.AzureConnectionStringSecretId,
+                AzureSasUrlSecretId = entity.ObjectAzureBlob.AzureSasUrlSecretId
+            },
+            ObjectGoogleCloudStorage = entity.ObjectGoogleCloudStorage is null ? null : new GoogleCloudStorageObjectStorageParameters
+            {
+                BucketName = entity.ObjectGoogleCloudStorage.BucketName,
+                CredentialMode = entity.ObjectGoogleCloudStorage.CredentialMode,
+                GcpCredentialsJson = string.IsNullOrWhiteSpace(entity.ObjectGoogleCloudStorage.GcpCredentialsJson)
+                    ? null
+                    : JsonDocument.Parse(entity.ObjectGoogleCloudStorage.GcpCredentialsJson).RootElement.Clone(),
+                GcpCredentialsJsonIsBase64Encoded = entity.ObjectGoogleCloudStorage.GcpCredentialsJsonIsBase64Encoded,
+                GcpCredentialsFilePath = entity.ObjectGoogleCloudStorage.GcpCredentialsFilePath,
+                GcpProjectId = entity.ObjectGoogleCloudStorage.GcpProjectId
             }
         };
     }
@@ -428,10 +494,14 @@ public sealed class StorageCrudConsumerService(
         {
             StorageCreateLocalRequestMessage local => local.Key,
             StorageCreateStreamingRequestMessage streaming => streaming.Key,
-            StorageCreateObjectRequestMessage @object => @object.Key,
+            StorageCreateS3CompatibleObjectRequestMessage @object => @object.Key,
+            StorageCreateAzureBlobObjectRequestMessage @object => @object.Key,
+            StorageCreateGoogleCloudStorageObjectRequestMessage @object => @object.Key,
             StorageUpdateLocalRequestMessage local => local.Key,
             StorageUpdateStreamingRequestMessage streaming => streaming.Key,
-            StorageUpdateObjectRequestMessage @object => @object.Key,
+            StorageUpdateS3CompatibleObjectRequestMessage @object => @object.Key,
+            StorageUpdateAzureBlobObjectRequestMessage @object => @object.Key,
+            StorageUpdateGoogleCloudStorageObjectRequestMessage @object => @object.Key,
             StorageGetRequestMessage get => get.Key,
             StorageDeleteRequestMessage delete => delete.Key,
             _ => throw new ArgumentException($"Unsupported storage message type: {typeof(T).Name}", nameof(message))
@@ -443,7 +513,9 @@ public sealed class StorageCrudConsumerService(
         return dbContext.StorageConfigs
             .Include(x => x.Local)
             .Include(x => x.Network)
-            .Include(x => x.Object);
+            .Include(x => x.ObjectS3Compatible)
+            .Include(x => x.ObjectAzureBlob)
+            .Include(x => x.ObjectGoogleCloudStorage);
     }
 
     private static void RemoveExistingParameters(DataBridgeDbContext dbContext, StorageConfigEntity entity)
@@ -460,10 +532,22 @@ public sealed class StorageCrudConsumerService(
             entity.Network = null;
         }
 
-        if (entity.Object is not null)
+        if (entity.ObjectS3Compatible is not null)
         {
-            dbContext.StorageObjectConfigs.Remove(entity.Object);
-            entity.Object = null;
+            dbContext.StorageS3CompatibleObjectConfigs.Remove(entity.ObjectS3Compatible);
+            entity.ObjectS3Compatible = null;
+        }
+
+        if (entity.ObjectAzureBlob is not null)
+        {
+            dbContext.StorageAzureBlobObjectConfigs.Remove(entity.ObjectAzureBlob);
+            entity.ObjectAzureBlob = null;
+        }
+
+        if (entity.ObjectGoogleCloudStorage is not null)
+        {
+            dbContext.StorageGoogleCloudStorageObjectConfigs.Remove(entity.ObjectGoogleCloudStorage);
+            entity.ObjectGoogleCloudStorage = null;
         }
     }
 

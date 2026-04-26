@@ -1,5 +1,7 @@
 using FluentStorage;
 using FluentStorage.Blobs;
+using System.Text;
+using System.Text.Json;
 
 namespace Shared.Storage;
 
@@ -33,7 +35,7 @@ public static class FluentStorageProvider
         {
             StorageMethod.Local => BuildDiskConnectionString((PosixLocalStorageParameters)parameters),
             StorageMethod.Network => BuildNetworkConnectionString((StreamingNetworkStorageParameters)parameters),
-            StorageMethod.ObjectStorage => BuildObjectStorageConnectionString((ObjectStorageParameters)parameters),
+            StorageMethod.ObjectStorage => BuildObjectStorageConnectionString((ObjectStorageParametersBase)parameters),
             _ => throw new ArgumentOutOfRangeException(nameof(method), method, "Unsupported storage method")
         };
     }
@@ -62,62 +64,136 @@ public static class FluentStorageProvider
         return $"{protocol}://{string.Join(";", parts)}";
     }
 
-    private static string BuildObjectStorageConnectionString(ObjectStorageParameters parameters)
+    private static string BuildObjectStorageConnectionString(ObjectStorageParametersBase parameters)
     {
-        return parameters.Provider switch
+        return parameters switch
         {
-            ObjectStorageProtocol.S3 => BuildS3ConnectionString(parameters),
-            ObjectStorageProtocol.MinIo => BuildS3ConnectionString(parameters),
-            ObjectStorageProtocol.AzureBlob => BuildAzureConnectionString(parameters),
-            ObjectStorageProtocol.Gcs => BuildGcsConnectionString(parameters),
-            _ => throw new ArgumentOutOfRangeException(nameof(parameters.Provider), parameters.Provider, "Unsupported object storage provider")
+            S3CompatibleObjectStorageParameters s3 => BuildS3ConnectionString(s3),
+            AzureBlobObjectStorageParameters azure => BuildAzureConnectionString(azure),
+            GoogleCloudStorageObjectStorageParameters gcs => BuildGcsConnectionString(gcs),
+            _ => throw new ArgumentOutOfRangeException(nameof(parameters), parameters.GetType().Name, "Unsupported object storage provider")
         };
     }
 
-    private static string BuildS3ConnectionString(ObjectStorageParameters parameters)
+    private static string BuildS3ConnectionString(S3CompatibleObjectStorageParameters parameters)
     {
         var parts = new List<string>();
 
-        AddIfPresent(parts, "bucket", parameters.Container);
+        AddIfPresent(parts, "bucket", parameters.BucketName);
         AddIfPresent(parts, "region", parameters.Region);
         AddIfPresent(parts, "keyId", parameters.AccessKeyId);
-        AddIfPresent(parts, "key", parameters.SecretKey);
+        AddIfPresent(parts, "key", parameters.SecretKeyId);
         AddIfPresent(parts, "serviceUrl", parameters.Endpoint);
-        AddIfPresent(parts, "path", parameters.BasePath);
+
+        if (parameters.ForcePathStyle)
+        {
+            parts.Add("forcePathStyle=true");
+        }
+
+        if (parameters.UseSsl is not null)
+        {
+            parts.Add($"useSsl={parameters.UseSsl.Value.ToString().ToLowerInvariant()}");
+        }
 
         return $"aws.s3://{string.Join(";", parts)}";
     }
 
-    private static string BuildAzureConnectionString(ObjectStorageParameters parameters)
+    private static string BuildAzureConnectionString(AzureBlobObjectStorageParameters parameters)
+    {
+        return parameters.CredentialMode switch
+        {
+            AzureBlobCredentialMode.AccountKey => BuildAzureAccountKeyConnectionString(parameters),
+            AzureBlobCredentialMode.ConnectionString => BuildAzureConnectionStringFromSecret(parameters),
+            AzureBlobCredentialMode.SasUrl => BuildAzureSasConnectionString(parameters),
+            _ => throw new ArgumentOutOfRangeException(nameof(parameters.CredentialMode), parameters.CredentialMode, "Unsupported Azure Blob credential mode")
+        };
+    }
+
+    private static string BuildAzureAccountKeyConnectionString(AzureBlobObjectStorageParameters parameters)
     {
         var parts = new List<string>();
 
-        AddIfPresent(parts, "container", parameters.Container);
-        AddIfPresent(parts, "path", parameters.BasePath);
-        AddIfPresent(parts, "endpoint", parameters.Endpoint);
-
-        if (!parameters.UseDefaultCredentials)
-        {
-            AddIfPresent(parts, "account", parameters.AccessKeyId);
-            AddIfPresent(parts, "key", parameters.SecretKey);
-        }
+        AddIfPresent(parts, "container", parameters.ContainerName);
+        AddIfPresent(parts, "account", parameters.AzureAccountName);
+        AddIfPresent(parts, "key", parameters.AzureAccountKeySecretId);
 
         return $"azure.blob://{string.Join(";", parts)}";
     }
 
-    private static string BuildGcsConnectionString(ObjectStorageParameters parameters)
+    private static string BuildAzureConnectionStringFromSecret(AzureBlobObjectStorageParameters parameters)
     {
         var parts = new List<string>();
 
-        AddIfPresent(parts, "bucket", parameters.Container);
-        AddIfPresent(parts, "path", parameters.BasePath);
+        AddIfPresent(parts, "container", parameters.ContainerName);
+        AddIfPresent(parts, "connectionString", parameters.AzureConnectionStringSecretId);
 
-        if (!parameters.UseDefaultCredentials)
+        return $"azure.blob://{string.Join(";", parts)}";
+    }
+
+    private static string BuildAzureSasConnectionString(AzureBlobObjectStorageParameters parameters)
+    {
+        var parts = new List<string>();
+
+        AddIfPresent(parts, "container", parameters.ContainerName);
+        AddIfPresent(parts, "sasUrl", parameters.AzureSasUrlSecretId);
+
+        return $"azure.blob://{string.Join(";", parts)}";
+    }
+
+    private static string BuildGcsConnectionString(GoogleCloudStorageObjectStorageParameters parameters)
+    {
+        var parts = new List<string>();
+
+        AddIfPresent(parts, "bucket", parameters.BucketName);
+        AddIfPresent(parts, "projectId", parameters.GcpProjectId);
+
+        switch (parameters.CredentialMode)
         {
-            AddIfPresent(parts, "cred", parameters.SecretKey);
+            case GoogleCloudStorageCredentialMode.CredentialsJson:
+                if (parameters.GcpCredentialsJson is not null)
+                {
+                    parts.Add($"cred={GetGoogleCredentialsJson(parameters)}");
+                }
+                break;
+
+            case GoogleCloudStorageCredentialMode.CredentialsFilePath:
+                AddIfPresent(parts, "credFile", parameters.GcpCredentialsFilePath);
+                break;
+
+            case GoogleCloudStorageCredentialMode.WorkloadIdentity:
+                parts.Add("auth=workloadIdentity");
+                break;
+
+            case GoogleCloudStorageCredentialMode.DefaultCredentials:
+                parts.Add("auth=defaultCredentials");
+                break;
         }
 
         return $"google.storage://{string.Join(";", parts)}";
+    }
+
+    private static string GetGoogleCredentialsJson(GoogleCloudStorageObjectStorageParameters parameters)
+    {
+        if (parameters.GcpCredentialsJson is null)
+        {
+            throw new InvalidOperationException("GCP credentials JSON is required.");
+        }
+
+        if (parameters.GcpCredentialsJsonIsBase64Encoded)
+        {
+            var encoded = parameters.GcpCredentialsJson.Value.ValueKind == JsonValueKind.String
+                ? parameters.GcpCredentialsJson.Value.GetString()
+                : parameters.GcpCredentialsJson.Value.GetRawText();
+
+            if (string.IsNullOrWhiteSpace(encoded))
+            {
+                throw new InvalidOperationException("Base64-encoded GCP credentials JSON is empty.");
+            }
+
+            return Encoding.UTF8.GetString(Convert.FromBase64String(encoded));
+        }
+
+        return parameters.GcpCredentialsJson.Value.GetRawText();
     }
 
     private static void AddIfPresent(ICollection<string> parts, string key, string? value)

@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using NodaTime;
 using Shared.Storage;
@@ -31,7 +32,11 @@ public class StorageConfigEntity
 
     public StorageNetworkConfigEntity? Network { get; set; }
 
-    public StorageObjectConfigEntity? Object { get; set; }
+    public StorageS3CompatibleObjectConfigEntity? ObjectS3Compatible { get; set; }
+
+    public StorageAzureBlobObjectConfigEntity? ObjectAzureBlob { get; set; }
+
+    public StorageGoogleCloudStorageObjectConfigEntity? ObjectGoogleCloudStorage { get; set; }
 
     [NotMapped]
     public StorageParametersBase? TypedParameters
@@ -56,16 +61,37 @@ public class StorageConfigEntity
                     PublicKey = Network.PublicKey,
                     BasePath = Network.BasePath
                 },
-                StorageMethod.ObjectStorage when Object is not null => new ObjectStorageParameters
+                StorageMethod.ObjectStorage when ObjectS3Compatible is not null => new S3CompatibleObjectStorageParameters
                 {
-                    Provider = Object.Provider,
-                    Container = Object.Container,
-                    Region = Object.Region,
-                    Endpoint = Object.Endpoint,
-                    BasePath = Object.BasePath,
-                    AccessKeyId = Object.AccessKeyId,
-                    SecretKey = Object.SecretKey,
-                    UseDefaultCredentials = Object.UseDefaultCredentials
+                    Provider = ObjectS3Compatible.Provider,
+                    BucketName = ObjectS3Compatible.BucketName,
+                    Region = ObjectS3Compatible.Region,
+                    Endpoint = ObjectS3Compatible.Endpoint,
+                    AccessKeyId = ObjectS3Compatible.AccessKeyId,
+                    SecretKeyId = ObjectS3Compatible.SecretKeyId,
+                    SessionTokenSecretId = ObjectS3Compatible.SessionTokenSecretId,
+                    ForcePathStyle = ObjectS3Compatible.ForcePathStyle,
+                    UseSsl = ObjectS3Compatible.UseSsl
+                },
+                StorageMethod.ObjectStorage when ObjectAzureBlob is not null => new AzureBlobObjectStorageParameters
+                {
+                    CredentialMode = ObjectAzureBlob.CredentialMode,
+                    ContainerName = ObjectAzureBlob.ContainerName,
+                    AzureAccountName = ObjectAzureBlob.AzureAccountName,
+                    AzureAccountKeySecretId = ObjectAzureBlob.AzureAccountKeySecretId,
+                    AzureConnectionStringSecretId = ObjectAzureBlob.AzureConnectionStringSecretId,
+                    AzureSasUrlSecretId = ObjectAzureBlob.AzureSasUrlSecretId
+                },
+                StorageMethod.ObjectStorage when ObjectGoogleCloudStorage is not null => new GoogleCloudStorageObjectStorageParameters
+                {
+                    BucketName = ObjectGoogleCloudStorage.BucketName,
+                    CredentialMode = ObjectGoogleCloudStorage.CredentialMode,
+                    GcpCredentialsJson = string.IsNullOrWhiteSpace(ObjectGoogleCloudStorage.GcpCredentialsJson)
+                        ? null
+                        : JsonDocument.Parse(ObjectGoogleCloudStorage.GcpCredentialsJson).RootElement.Clone(),
+                    GcpCredentialsJsonIsBase64Encoded = ObjectGoogleCloudStorage.GcpCredentialsJsonIsBase64Encoded,
+                    GcpCredentialsFilePath = ObjectGoogleCloudStorage.GcpCredentialsFilePath,
+                    GcpProjectId = ObjectGoogleCloudStorage.GcpProjectId
                 },
                 _ => null
             };
@@ -91,7 +117,9 @@ public class StorageConfigEntity
     {
         Local = null;
         Network = null;
-        Object = null;
+        ObjectS3Compatible = null;
+        ObjectAzureBlob = null;
+        ObjectGoogleCloudStorage = null;
 
         switch (parameters)
         {
@@ -119,18 +147,45 @@ public class StorageConfigEntity
                 };
                 break;
 
-            case ObjectStorageParameters @object:
+            case S3CompatibleObjectStorageParameters @object:
                 Method = StorageMethod.ObjectStorage;
-                Object = new StorageObjectConfigEntity
+                ObjectS3Compatible = new StorageS3CompatibleObjectConfigEntity
                 {
                     Provider = @object.Provider,
-                    Container = @object.Container,
+                    BucketName = @object.BucketName,
                     Region = @object.Region,
                     Endpoint = @object.Endpoint,
-                    BasePath = @object.BasePath,
                     AccessKeyId = @object.AccessKeyId,
-                    SecretKey = @object.SecretKey,
-                    UseDefaultCredentials = @object.UseDefaultCredentials
+                    SecretKeyId = @object.SecretKeyId,
+                    SessionTokenSecretId = @object.SessionTokenSecretId,
+                    ForcePathStyle = @object.ForcePathStyle,
+                    UseSsl = @object.UseSsl
+                };
+                break;
+
+            case AzureBlobObjectStorageParameters @object:
+                Method = StorageMethod.ObjectStorage;
+                ObjectAzureBlob = new StorageAzureBlobObjectConfigEntity
+                {
+                    CredentialMode = @object.CredentialMode,
+                    ContainerName = @object.ContainerName,
+                    AzureAccountName = @object.AzureAccountName,
+                    AzureAccountKeySecretId = @object.AzureAccountKeySecretId,
+                    AzureConnectionStringSecretId = @object.AzureConnectionStringSecretId,
+                    AzureSasUrlSecretId = @object.AzureSasUrlSecretId
+                };
+                break;
+
+            case GoogleCloudStorageObjectStorageParameters @object:
+                Method = StorageMethod.ObjectStorage;
+                ObjectGoogleCloudStorage = new StorageGoogleCloudStorageObjectConfigEntity
+                {
+                    BucketName = @object.BucketName,
+                    CredentialMode = @object.CredentialMode,
+                    GcpCredentialsJson = @object.GcpCredentialsJson?.GetRawText(),
+                    GcpCredentialsJsonIsBase64Encoded = @object.GcpCredentialsJsonIsBase64Encoded,
+                    GcpCredentialsFilePath = @object.GcpCredentialsFilePath,
+                    GcpProjectId = @object.GcpProjectId
                 };
                 break;
 
@@ -183,29 +238,79 @@ public sealed class StorageNetworkConfigEntity
     public StorageConfigEntity StorageConfig { get; set; } = null!;
 }
 
-public sealed class StorageObjectConfigEntity
+public sealed class StorageS3CompatibleObjectConfigEntity
 {
     [Key]
     [DatabaseGenerated(DatabaseGeneratedOption.None)]
     public int StorageKeyId { get; set; }
 
-    public ObjectStorageProtocol Provider { get; set; }
+    public S3CompatibleObjectStorageProvider Provider { get; set; }
 
     [Required]
     [MinLength(1)]
-    public required string Container { get; set; }
+    public required string BucketName { get; set; }
 
     public string? Region { get; set; }
 
     public string? Endpoint { get; set; }
 
-    public string? BasePath { get; set; }
+    [Required]
+    [MinLength(1)]
+    public required string AccessKeyId { get; set; }
 
-    public string? AccessKeyId { get; set; }
+    [Required]
+    [MinLength(1)]
+    public required string SecretKeyId { get; set; }
 
-    public string? SecretKey { get; set; }
+    public string? SessionTokenSecretId { get; set; }
 
-    public bool UseDefaultCredentials { get; set; } = true;
+    public bool ForcePathStyle { get; set; }
+
+    public bool? UseSsl { get; set; }
+
+    public StorageConfigEntity StorageConfig { get; set; } = null!;
+}
+
+public sealed class StorageAzureBlobObjectConfigEntity
+{
+    [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.None)]
+    public int StorageKeyId { get; set; }
+
+    public AzureBlobCredentialMode CredentialMode { get; set; }
+
+    public string? ContainerName { get; set; }
+
+    public string? AzureAccountName { get; set; }
+
+    public string? AzureAccountKeySecretId { get; set; }
+
+    public string? AzureConnectionStringSecretId { get; set; }
+
+    public string? AzureSasUrlSecretId { get; set; }
+
+    public StorageConfigEntity StorageConfig { get; set; } = null!;
+}
+
+public sealed class StorageGoogleCloudStorageObjectConfigEntity
+{
+    [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.None)]
+    public int StorageKeyId { get; set; }
+
+    [Required]
+    [MinLength(1)]
+    public required string BucketName { get; set; }
+
+    public GoogleCloudStorageCredentialMode CredentialMode { get; set; }
+
+    public string? GcpCredentialsJson { get; set; }
+
+    public bool GcpCredentialsJsonIsBase64Encoded { get; set; }
+
+    public string? GcpCredentialsFilePath { get; set; }
+
+    public string? GcpProjectId { get; set; }
 
     public StorageConfigEntity StorageConfig { get; set; } = null!;
 }

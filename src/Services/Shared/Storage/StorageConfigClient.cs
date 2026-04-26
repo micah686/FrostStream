@@ -53,8 +53,12 @@ public sealed class NatsStorageConfigClient(IMessageBus messageBus) : IStorageCo
                     => StorageParametersSerializer.Serialize(response.Entity.Method, response.Entity.Local),
                 StorageMethod.Network when response.Entity.Network is not null
                     => StorageParametersSerializer.Serialize(response.Entity.Method, response.Entity.Network),
-                StorageMethod.ObjectStorage when response.Entity.Object is not null
-                    => StorageParametersSerializer.Serialize(response.Entity.Method, response.Entity.Object),
+                StorageMethod.ObjectStorage when response.Entity.ObjectS3Compatible is not null
+                    => StorageParametersSerializer.Serialize(response.Entity.Method, response.Entity.ObjectS3Compatible),
+                StorageMethod.ObjectStorage when response.Entity.ObjectAzureBlob is not null
+                    => StorageParametersSerializer.Serialize(response.Entity.Method, response.Entity.ObjectAzureBlob),
+                StorageMethod.ObjectStorage when response.Entity.ObjectGoogleCloudStorage is not null
+                    => StorageParametersSerializer.Serialize(response.Entity.Method, response.Entity.ObjectGoogleCloudStorage),
                 _ => null
             },
             Description: response.Entity.Description);

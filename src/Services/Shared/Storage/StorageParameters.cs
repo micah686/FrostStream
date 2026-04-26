@@ -87,55 +87,169 @@ public sealed class StreamingNetworkStorageParameters : StorageParametersBase
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
-public enum ObjectStorageProtocol
+public enum S3CompatibleObjectStorageProvider
 {
-    S3,
-    AzureBlob,
-    Gcs,
+    AwsS3,
     MinIo,
+    DigitalOceanSpaces
 }
 
-public sealed class ObjectStorageParameters : StorageParametersBase
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum AzureBlobCredentialMode
+{
+    AccountKey,
+    ConnectionString,
+    SasUrl
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum GoogleCloudStorageCredentialMode
+{
+    CredentialsJson,
+    CredentialsFilePath,
+    WorkloadIdentity,
+    DefaultCredentials
+}
+
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
+[JsonDerivedType(typeof(S3CompatibleObjectStorageParameters), typeDiscriminator: "s3Compatible")]
+[JsonDerivedType(typeof(AzureBlobObjectStorageParameters), typeDiscriminator: "azureBlob")]
+[JsonDerivedType(typeof(GoogleCloudStorageObjectStorageParameters), typeDiscriminator: "googleCloudStorage")]
+public abstract class ObjectStorageParametersBase : StorageParametersBase
+{
+}
+
+public sealed class S3CompatibleObjectStorageParameters : ObjectStorageParametersBase
 {
     [Required]
-    public ObjectStorageProtocol Provider { get; init; }
+    public S3CompatibleObjectStorageProvider Provider { get; init; }
 
     [Required]
     [MinLength(1)]
-    public required string Container { get; init; }
+    public required string BucketName { get; init; }
 
     public string? Region { get; init; }
     public string? Endpoint { get; init; }
-    public string? BasePath { get; init; }
-    public string? AccessKeyId { get; init; }
-    public string? SecretKey { get; init; }
-    public bool UseDefaultCredentials { get; init; } = true;
+
+    [Required]
+    [MinLength(1)]
+    public required string AccessKeyId { get; init; }
+
+    [Required]
+    [MinLength(1)]
+    public required string SecretKeyId { get; init; }
+
+    public string? SessionTokenSecretId { get; init; }
+    public bool ForcePathStyle { get; init; }
+    public bool? UseSsl { get; init; }
 
     public override IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
-        var hasAccessKeyId = !string.IsNullOrWhiteSpace(AccessKeyId);
-        var hasSecretKey = !string.IsNullOrWhiteSpace(SecretKey);
-
-        if (hasAccessKeyId != hasSecretKey)
-        {
-            yield return new ValidationResult(
-                "accessKeyId and secretKey must be provided together.",
-                [nameof(AccessKeyId), nameof(SecretKey)]);
-        }
-
-        if ((Provider is ObjectStorageProtocol.S3 or ObjectStorageProtocol.MinIo) &&
+        if ((Provider is S3CompatibleObjectStorageProvider.AwsS3 or S3CompatibleObjectStorageProvider.DigitalOceanSpaces) &&
             string.IsNullOrWhiteSpace(Region))
         {
             yield return new ValidationResult(
-                "region is required for S3 and MinIo.",
+                "region is required for AwsS3 and DigitalOceanSpaces.",
                 [nameof(Region)]);
         }
 
-        if (!UseDefaultCredentials && !hasAccessKeyId)
+        if (Provider == S3CompatibleObjectStorageProvider.MinIo &&
+            string.IsNullOrWhiteSpace(Endpoint))
         {
             yield return new ValidationResult(
-                "Set accessKeyId/secretKey or enable useDefaultCredentials.",
-                [nameof(UseDefaultCredentials), nameof(AccessKeyId), nameof(SecretKey)]);
+                "endpoint is required for MinIo.",
+                [nameof(Endpoint)]);
+        }
+    }
+}
+
+public sealed class AzureBlobObjectStorageParameters : ObjectStorageParametersBase
+{
+    [Required]
+    public AzureBlobCredentialMode CredentialMode { get; init; }
+
+    public string? ContainerName { get; init; }
+    public string? AzureAccountName { get; init; }
+    public string? AzureAccountKeySecretId { get; init; }
+    public string? AzureConnectionStringSecretId { get; init; }
+    public string? AzureSasUrlSecretId { get; init; }
+
+    public override IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        switch (CredentialMode)
+        {
+            case AzureBlobCredentialMode.AccountKey:
+                if (string.IsNullOrWhiteSpace(AzureAccountName))
+                {
+                    yield return new ValidationResult(
+                        "azureAccountName is required when credentialMode is AccountKey.",
+                        [nameof(AzureAccountName)]);
+                }
+
+                if (string.IsNullOrWhiteSpace(AzureAccountKeySecretId))
+                {
+                    yield return new ValidationResult(
+                        "azureAccountKeySecretId is required when credentialMode is AccountKey.",
+                        [nameof(AzureAccountKeySecretId)]);
+                }
+                break;
+
+            case AzureBlobCredentialMode.ConnectionString:
+                if (string.IsNullOrWhiteSpace(AzureConnectionStringSecretId))
+                {
+                    yield return new ValidationResult(
+                        "azureConnectionStringSecretId is required when credentialMode is ConnectionString.",
+                        [nameof(AzureConnectionStringSecretId)]);
+                }
+                break;
+
+            case AzureBlobCredentialMode.SasUrl:
+                if (string.IsNullOrWhiteSpace(AzureSasUrlSecretId))
+                {
+                    yield return new ValidationResult(
+                        "azureSasUrlSecretId is required when credentialMode is SasUrl.",
+                        [nameof(AzureSasUrlSecretId)]);
+                }
+                break;
+        }
+    }
+}
+
+public sealed class GoogleCloudStorageObjectStorageParameters : ObjectStorageParametersBase
+{
+    [Required]
+    [MinLength(1)]
+    public required string BucketName { get; init; }
+
+    [Required]
+    public GoogleCloudStorageCredentialMode CredentialMode { get; init; }
+
+    public JsonElement? GcpCredentialsJson { get; init; }
+    public bool GcpCredentialsJsonIsBase64Encoded { get; init; }
+    public string? GcpCredentialsFilePath { get; init; }
+    public string? GcpProjectId { get; init; }
+
+    public override IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        switch (CredentialMode)
+        {
+            case GoogleCloudStorageCredentialMode.CredentialsJson:
+                if (GcpCredentialsJson is null)
+                {
+                    yield return new ValidationResult(
+                        "gcpCredentialsJson is required when credentialMode is CredentialsJson.",
+                        [nameof(GcpCredentialsJson)]);
+                }
+                break;
+
+            case GoogleCloudStorageCredentialMode.CredentialsFilePath:
+                if (string.IsNullOrWhiteSpace(GcpCredentialsFilePath))
+                {
+                    yield return new ValidationResult(
+                        "gcpCredentialsFilePath is required when credentialMode is CredentialsFilePath.",
+                        [nameof(GcpCredentialsFilePath)]);
+                }
+                break;
         }
     }
 }
@@ -170,7 +284,7 @@ public static class StorageParametersSerializer
             {
                 StorageMethod.Local => JsonSerializer.Deserialize<PosixLocalStorageParameters>(json, JsonOptions),
                 StorageMethod.Network => JsonSerializer.Deserialize<StreamingNetworkStorageParameters>(json, JsonOptions),
-                StorageMethod.ObjectStorage => JsonSerializer.Deserialize<ObjectStorageParameters>(json, JsonOptions),
+                StorageMethod.ObjectStorage => DeserializeObjectStorageParameters(json),
                 _ => null
             };
 
@@ -217,7 +331,7 @@ public static class StorageParametersSerializer
         {
             StorageMethod.Local => typeof(PosixLocalStorageParameters),
             StorageMethod.Network => typeof(StreamingNetworkStorageParameters),
-            StorageMethod.ObjectStorage => typeof(ObjectStorageParameters),
+            StorageMethod.ObjectStorage => typeof(ObjectStorageParametersBase),
             _ => throw new ArgumentOutOfRangeException(nameof(method), method, "Unsupported storage method.")
         };
 
@@ -228,6 +342,13 @@ public static class StorageParametersSerializer
                 nameof(parameters));
         }
 
-        return JsonSerializer.Serialize(parameters, expectedType, JsonOptions);
+        return method == StorageMethod.ObjectStorage
+            ? JsonSerializer.Serialize((ObjectStorageParametersBase)parameters, expectedType, JsonOptions)
+            : JsonSerializer.Serialize(parameters, expectedType, JsonOptions);
+    }
+
+    private static ObjectStorageParametersBase? DeserializeObjectStorageParameters(string json)
+    {
+        return JsonSerializer.Deserialize<ObjectStorageParametersBase>(json, JsonOptions);
     }
 }

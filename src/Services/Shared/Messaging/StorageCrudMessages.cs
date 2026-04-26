@@ -13,7 +13,9 @@ public sealed class StorageConfigDto
     public Instant? LastUpdated { get; init; }
     public PosixLocalStorageParameters? Local { get; init; }
     public StreamingNetworkStorageParameters? Network { get; init; }
-    public ObjectStorageParameters? Object { get; init; }
+    public S3CompatibleObjectStorageParameters? ObjectS3Compatible { get; init; }
+    public AzureBlobObjectStorageParameters? ObjectAzureBlob { get; init; }
+    public GoogleCloudStorageObjectStorageParameters? ObjectGoogleCloudStorage { get; init; }
 }
 
 public sealed class StorageCreateLocalRequestMessage
@@ -30,10 +32,24 @@ public sealed class StorageCreateStreamingRequestMessage
     public string? Description { get; init; }
 }
 
-public sealed class StorageCreateObjectRequestMessage
+public sealed class StorageCreateS3CompatibleObjectRequestMessage
 {
     public required string Key { get; init; }
-    public required ObjectStorageParameters Parameters { get; init; }
+    public required S3CompatibleObjectStorageParameters Parameters { get; init; }
+    public string? Description { get; init; }
+}
+
+public sealed class StorageCreateAzureBlobObjectRequestMessage
+{
+    public required string Key { get; init; }
+    public required AzureBlobObjectStorageParameters Parameters { get; init; }
+    public string? Description { get; init; }
+}
+
+public sealed class StorageCreateGoogleCloudStorageObjectRequestMessage
+{
+    public required string Key { get; init; }
+    public required GoogleCloudStorageObjectStorageParameters Parameters { get; init; }
     public string? Description { get; init; }
 }
 
@@ -51,10 +67,24 @@ public sealed class StorageUpdateStreamingRequestMessage
     public string? Description { get; init; }
 }
 
-public sealed class StorageUpdateObjectRequestMessage
+public sealed class StorageUpdateS3CompatibleObjectRequestMessage
 {
     public required string Key { get; init; }
-    public required ObjectStorageParameters Parameters { get; init; }
+    public required S3CompatibleObjectStorageParameters Parameters { get; init; }
+    public string? Description { get; init; }
+}
+
+public sealed class StorageUpdateAzureBlobObjectRequestMessage
+{
+    public required string Key { get; init; }
+    public required AzureBlobObjectStorageParameters Parameters { get; init; }
+    public string? Description { get; init; }
+}
+
+public sealed class StorageUpdateGoogleCloudStorageObjectRequestMessage
+{
+    public required string Key { get; init; }
+    public required GoogleCloudStorageObjectStorageParameters Parameters { get; init; }
     public string? Description { get; init; }
 }
 

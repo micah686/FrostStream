@@ -95,24 +95,65 @@ public sealed class StorageNetworkConfiguration : IEntityTypeConfiguration<Stora
     }
 }
 
-public sealed class StorageObjectConfiguration : IEntityTypeConfiguration<StorageObjectConfigEntity>
+public sealed class StorageS3CompatibleObjectConfiguration : IEntityTypeConfiguration<StorageS3CompatibleObjectConfigEntity>
 {
-    public void Configure(EntityTypeBuilder<StorageObjectConfigEntity> builder)
+    public void Configure(EntityTypeBuilder<StorageS3CompatibleObjectConfigEntity> builder)
     {
-        builder.ToTable("storage_keys_object");
+        builder.ToTable("storage_keys_object_s3_compatible");
         builder.HasKey(x => x.StorageKeyId);
         builder.Property(x => x.StorageKeyId).HasColumnName("storage_key_id").ValueGeneratedNever();
-        builder.Property(x => x.Provider).HasColumnName("provider").HasColumnType("object_storage_protocol").IsRequired();
-        builder.Property(x => x.Container).HasColumnName("container").HasMaxLength(255).IsRequired();
+        builder.Property(x => x.Provider).HasColumnName("provider").HasColumnType("s3_compatible_object_storage_provider").IsRequired();
+        builder.Property(x => x.BucketName).HasColumnName("bucket_name").HasMaxLength(255).IsRequired();
         builder.Property(x => x.Region).HasColumnName("region").HasMaxLength(255);
         builder.Property(x => x.Endpoint).HasColumnName("endpoint").HasMaxLength(2048);
-        builder.Property(x => x.BasePath).HasColumnName("base_path").HasMaxLength(2048);
-        builder.Property(x => x.AccessKeyId).HasColumnName("access_key_id").HasMaxLength(512);
-        builder.Property(x => x.SecretKey).HasColumnName("secret_key").HasMaxLength(2048);
-        builder.Property(x => x.UseDefaultCredentials).HasColumnName("use_default_credentials").IsRequired();
+        builder.Property(x => x.AccessKeyId).HasColumnName("access_key_id").HasMaxLength(512).IsRequired();
+        builder.Property(x => x.SecretKeyId).HasColumnName("secret_key_id").HasMaxLength(2048).IsRequired();
+        builder.Property(x => x.SessionTokenSecretId).HasColumnName("session_token_secret_id").HasMaxLength(2048);
+        builder.Property(x => x.ForcePathStyle).HasColumnName("force_path_style").IsRequired();
+        builder.Property(x => x.UseSsl).HasColumnName("use_ssl");
         builder.HasOne(x => x.StorageConfig)
-            .WithOne(x => x.Object)
-            .HasForeignKey<StorageObjectConfigEntity>(x => x.StorageKeyId)
+            .WithOne(x => x.ObjectS3Compatible)
+            .HasForeignKey<StorageS3CompatibleObjectConfigEntity>(x => x.StorageKeyId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public sealed class StorageAzureBlobObjectConfiguration : IEntityTypeConfiguration<StorageAzureBlobObjectConfigEntity>
+{
+    public void Configure(EntityTypeBuilder<StorageAzureBlobObjectConfigEntity> builder)
+    {
+        builder.ToTable("storage_keys_object_azure_blob");
+        builder.HasKey(x => x.StorageKeyId);
+        builder.Property(x => x.StorageKeyId).HasColumnName("storage_key_id").ValueGeneratedNever();
+        builder.Property(x => x.CredentialMode).HasColumnName("credential_mode").HasColumnType("azure_blob_credential_mode").IsRequired();
+        builder.Property(x => x.ContainerName).HasColumnName("container_name").HasMaxLength(255);
+        builder.Property(x => x.AzureAccountName).HasColumnName("azure_account_name").HasMaxLength(255);
+        builder.Property(x => x.AzureAccountKeySecretId).HasColumnName("azure_account_key_secret_id").HasMaxLength(2048);
+        builder.Property(x => x.AzureConnectionStringSecretId).HasColumnName("azure_connection_string_secret_id").HasMaxLength(4096);
+        builder.Property(x => x.AzureSasUrlSecretId).HasColumnName("azure_sas_url_secret_id").HasMaxLength(4096);
+        builder.HasOne(x => x.StorageConfig)
+            .WithOne(x => x.ObjectAzureBlob)
+            .HasForeignKey<StorageAzureBlobObjectConfigEntity>(x => x.StorageKeyId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public sealed class StorageGoogleCloudStorageObjectConfiguration : IEntityTypeConfiguration<StorageGoogleCloudStorageObjectConfigEntity>
+{
+    public void Configure(EntityTypeBuilder<StorageGoogleCloudStorageObjectConfigEntity> builder)
+    {
+        builder.ToTable("storage_keys_object_google_cloud_storage");
+        builder.HasKey(x => x.StorageKeyId);
+        builder.Property(x => x.StorageKeyId).HasColumnName("storage_key_id").ValueGeneratedNever();
+        builder.Property(x => x.BucketName).HasColumnName("bucket_name").HasMaxLength(255).IsRequired();
+        builder.Property(x => x.CredentialMode).HasColumnName("credential_mode").HasColumnType("google_cloud_storage_credential_mode").IsRequired();
+        builder.Property(x => x.GcpCredentialsJson).HasColumnName("gcp_credentials_json").HasColumnType("jsonb");
+        builder.Property(x => x.GcpCredentialsJsonIsBase64Encoded).HasColumnName("gcp_credentials_json_is_base64_encoded").IsRequired();
+        builder.Property(x => x.GcpCredentialsFilePath).HasColumnName("gcp_credentials_file_path").HasMaxLength(2048);
+        builder.Property(x => x.GcpProjectId).HasColumnName("gcp_project_id").HasMaxLength(255);
+        builder.HasOne(x => x.StorageConfig)
+            .WithOne(x => x.ObjectGoogleCloudStorage)
+            .HasForeignKey<StorageGoogleCloudStorageObjectConfigEntity>(x => x.StorageKeyId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 }
