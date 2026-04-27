@@ -13,6 +13,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Hosting.Internal;
 using NATS.Client.Core;
 using NodaTime;
+using Npgsql;
 using Shared.Messaging;
 using Shared.Secrets;
 using Shared.Storage;
@@ -70,10 +71,19 @@ class Program
         builder.Services.AddNatsTopologySource<DownloadTopology>();
         builder.Services.AddOpenBaoSecretStore(builder.Configuration);
 
-        // Cleipnir owns its own tables; prefix them with "cleipnir_" so they don't collide
-        // with FluentMigrator-managed tables in the same database.
+        // Isolate Cleipnir's runtime tables in their own Postgres schema. Cleipnir's
+        // PostgresSql store only exposes `tablePrefix`, not a schema option, so we route
+        // its DDL/DML into the `cleipnir` schema via Npgsql's Search Path. The schema
+        // itself is created by FluentMigrator (M004_CreateCleipnirSchema) which runs
+        // before the host starts, so by the time AddFlows resolves its store the schema
+        // already exists.
+        var cleipnirConnectionString = new NpgsqlConnectionStringBuilder(connectionString)
+        {
+            SearchPath = "cleipnir,public"
+        }.ConnectionString;
+
         builder.Services.AddFlows(c => c
-            .UsePostgresStore(connectionString, tablePrefix: "cleipnir_")
+            .UsePostgresStore(cleipnirConnectionString)
             .RegisterFlowsAutomatically());
 
         builder.Services.AddSingleton<IClock>(SystemClock.Instance);
