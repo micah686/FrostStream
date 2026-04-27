@@ -4,6 +4,7 @@ using Cleipnir.Flows.PostgresSql;
 using DataBridge.Data;
 using DataBridge.Messaging;
 using FlySwattr.NATS.Extensions;
+using FlySwattr.NATS.Topology.Extensions;
 using FluentMigrator.Runner;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -57,13 +58,16 @@ class Program
         {
             options.Core.Url = natsUrl;
             options.Core.NatsAuth = natsAuth;
-            options.EnableTopologyProvisioning = false;
+            // Provisions every ITopologySource registered below at startup.
+            options.EnableTopologyProvisioning = true;
             options.EnablePayloadOffloading = false;
             options.EnableResilience = false;
             options.EnableCaching = false;
             options.EnableDistributedLock = false;
             options.EnableDlqAdvisoryListener = false;
         });
+
+        builder.Services.AddNatsTopologySource<DownloadTopology>();
         builder.Services.AddOpenBaoSecretStore(builder.Configuration);
 
         // Cleipnir owns its own tables; prefix them with "cleipnir_" so they don't collide

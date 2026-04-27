@@ -23,6 +23,8 @@ public class Program
                 options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
             });
         
+        builder.Services.AddSingleton<IClock>(SystemClock.Instance);
+
         //var natsUrl = builder.Configuration["NATS:Url"] ?? "nats://localhost:4222";
         builder.Services.AddEnterpriseNATSMessaging(options =>
         {
