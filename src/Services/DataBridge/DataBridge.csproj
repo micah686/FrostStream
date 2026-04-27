@@ -26,6 +26,8 @@
 
     <ItemGroup>
       <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="13.2.4" />
+      <PackageReference Include="Cleipnir.Flows" Version="4.2.5" />
+      <PackageReference Include="Cleipnir.Flows.PostgresSql" Version="4.2.5" />
       <PackageReference Include="FluentMigrator" Version="8.0.1" />
       <PackageReference Include="FluentMigrator.Runner.Core" Version="8.0.1" />
       <PackageReference Include="FluentMigrator.Runner.Postgres" Version="8.0.1" />

@@ -1,3 +1,6 @@
+using Cleipnir.Flows;
+using Cleipnir.Flows.AspNet;
+using Cleipnir.Flows.PostgresSql;
 using DataBridge.Data;
 using DataBridge.Messaging;
 using FlySwattr.NATS.Extensions;
@@ -8,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Hosting.Internal;
 using NATS.Client.Core;
+using Shared.Messaging;
 using Shared.Secrets;
 using Shared.Storage;
 
@@ -36,7 +40,9 @@ class Program
                         .MapEnum<NetworkStorageProtocol>("network_storage_protocol")
                         .MapEnum<S3CompatibleObjectStorageProvider>("s3_compatible_object_storage_provider")
                         .MapEnum<AzureBlobCredentialMode>("azure_blob_credential_mode")
-                        .MapEnum<GoogleCloudStorageCredentialMode>("google_cloud_storage_credential_mode"))
+                        .MapEnum<GoogleCloudStorageCredentialMode>("google_cloud_storage_credential_mode")
+                        .MapEnum<DownloadJobState>("download_job_state")
+                        .MapEnum<FailureKind>("failure_kind"))
                 .UseSnakeCaseNamingConvention());
 
         builder.Services
@@ -58,6 +64,13 @@ class Program
             options.EnableDlqAdvisoryListener = false;
         });
         builder.Services.AddOpenBaoSecretStore(builder.Configuration);
+
+        // Cleipnir owns its own tables; prefix them with "cleipnir_" so they don't collide
+        // with FluentMigrator-managed tables in the same database.
+        builder.Services.AddFlows(c => c
+            .UsePostgresStore(connectionString, tablePrefix: "cleipnir_")
+            .RegisterFlowsAutomatically());
+
         builder.Services.AddHostedService<StorageCrudConsumerService>();
 
         // Force ConsoleLifetime so Ctrl+C / SIGTERM triggers StopAsync on hosted services

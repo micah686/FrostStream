@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Shared.Database;
+using Shared.Messaging;
 using Shared.Storage;
 
 namespace DataBridge.Data;
@@ -13,6 +14,11 @@ public sealed class DataBridgeDbContext(DbContextOptions<DataBridgeDbContext> op
     public DbSet<StorageAzureBlobObjectConfigEntity> StorageAzureBlobObjectConfigs => Set<StorageAzureBlobObjectConfigEntity>();
     public DbSet<StorageGoogleCloudStorageObjectConfigEntity> StorageGoogleCloudStorageObjectConfigs => Set<StorageGoogleCloudStorageObjectConfigEntity>();
 
+    public DbSet<DownloadJobEntity> DownloadJobs => Set<DownloadJobEntity>();
+    public DbSet<DownloadJobHistoryEntity> DownloadJobHistory => Set<DownloadJobHistoryEntity>();
+    public DbSet<FailedDownloadJobEntity> FailedDownloadJobs => Set<FailedDownloadJobEntity>();
+    public DbSet<ProcessedMessageEntity> ProcessedMessages => Set<ProcessedMessageEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasPostgresEnum<LocalStorageProtocol>("local_storage_protocol");
@@ -20,6 +26,8 @@ public sealed class DataBridgeDbContext(DbContextOptions<DataBridgeDbContext> op
         modelBuilder.HasPostgresEnum<S3CompatibleObjectStorageProvider>("s3_compatible_object_storage_provider");
         modelBuilder.HasPostgresEnum<AzureBlobCredentialMode>("azure_blob_credential_mode");
         modelBuilder.HasPostgresEnum<GoogleCloudStorageCredentialMode>("google_cloud_storage_credential_mode");
+        modelBuilder.HasPostgresEnum<DownloadJobState>("download_job_state");
+        modelBuilder.HasPostgresEnum<FailureKind>("failure_kind");
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(DataBridgeDbContext).Assembly);
         base.OnModelCreating(modelBuilder);
     }
