@@ -26,7 +26,7 @@ var nats = builder
 
 var jwt = Environment.GetEnvironmentVariable("JWT_SECRET") ?? Guid.NewGuid().ToString();
 var natsUi = builder
-    .AddContainer("nats-ui", "klinux/nats-ui:0.3.7")
+    .AddContainer("nats-ui", "klinux/nats-ui:0.4.0")
     .WithHttpEndpoint(port: 8080, targetPort: 8080, name: "http")
     .WithEnvironment("PORT", "8080")
     .WithEnvironment("BASE_URL", "http://localhost:8080")
