@@ -9,13 +9,14 @@ namespace WebAPI.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 public class DownloadsController(
-    IMessageBus messageBus,
+    IJetStreamPublisher publisher,
     IClock clock,
     ILogger<DownloadsController> logger) : ControllerBase
 {
     /// <summary>
-    /// Submits a new download/archive job. Publishes <see cref="DownloadRequested"/> to NATS;
-    /// DataBridge consumes it and starts a Cleipnir flow keyed by the returned <c>JobId</c>.
+    /// Submits a new download/archive job. Publishes <see cref="DownloadRequested"/> to JetStream;
+    /// DataBridge consumes it from <c>FROSTSTREAM_DOWNLOAD</c> and starts a Cleipnir flow keyed
+    /// by the returned <c>JobId</c>.
     /// </summary>
     [HttpPost]
     public async Task<ActionResult<DownloadRequestResponse>> Submit(
@@ -43,7 +44,11 @@ public class DownloadsController(
 
         try
         {
-            await messageBus.PublishAsync(DownloadSubjects.DownloadRequested, message, cancellationToken);
+            await publisher.PublishAsync(
+                DownloadSubjects.DownloadRequested,
+                message,
+                messageId: messageId.ToString("N"),
+                cancellationToken: cancellationToken);
         }
         catch (Exception ex)
         {

@@ -7,81 +7,92 @@ using Shared.Messaging;
 namespace Worker.Services;
 
 /// <summary>
-/// Worker-side consumer for the download flow's commands. Each handler currently
-/// simulates the side effect with a 1-second delay and emits the matching success
-/// event. Swap each <see cref="Task.Delay(int)"/> for the real yt-dlp /
-/// <c>IBlobStorageProvider</c> calls when ready.
+/// Worker-side JetStream consumer for the download flow's commands. Each handler currently
+/// simulates the side effect with a 1-second delay and emits the matching success event.
+/// Swap each <see cref="Task.Delay(int)"/> for the real yt-dlp / <c>IBlobStorageProvider</c>
+/// calls when ready.
 ///
-/// Modelled on <c>StorageCrudConsumerService</c> in DataBridge — same queue group
-/// pattern, same subscription disposal semantics.
+/// Consumer durables and the FROSTSTREAM_DOWNLOAD stream are provisioned by
+/// <see cref="DownloadTopology"/>; both DataBridge and Worker register it, so whichever
+/// service starts first creates them.
+///
+/// === DEDUPE CAVEAT — READ BEFORE REPLACING THE STUBS ===
+/// Every result-event constructor below uses <c>MessageId = Guid.NewGuid()</c>. That is OK
+/// for the stub (the side effect is a no-op delay), but it is NOT safe for the real
+/// implementation because JetStream is at-least-once:
+///
+///   1. Worker pulls command C, runs the side effect (e.g. yt-dlp succeeds).
+///   2. Worker publishes the result event with a fresh Guid, then crashes/times-out
+///      before <c>AckAsync()</c>.
+///   3. JetStream redelivers C; Worker runs the side effect again (yt-dlp re-downloads,
+///      or storage uploads twice), and publishes a SECOND result event with another
+///      fresh Guid.
+///
+/// Today, DataBridge's <c>processed_messages</c> dedupe filters by <c>MessageId</c> — but
+/// because each redelivery generates a new Guid, both events pass that check and both reach
+/// Cleipnir. Cleipnir's secondary dedupe by <c>OperationKey</c> catches it (we use
+/// <c>$"{cmd.OperationKey}/result"</c> which is stable across redeliveries), so the flow
+/// itself doesn't double-advance — but the side effect ran twice and storage may have
+/// double-billed bytes.
+///
+/// === HOW TO FIX WHEN YOU REPLACE THE STUBS ===
+/// Derive the result event's <c>MessageId</c> deterministically from the command so a
+/// redelivered command produces the same event identity:
+///
+///   var resultMessageId = DeterministicGuid.Create(cmd.MessageId, "/result");
+///
+/// (Any stable hash → Guid will do — e.g. SHA-256 of <c>cmd.MessageId.ToString("N") + "/result"</c>
+/// folded to 16 bytes, or <c>System.IO.Hashing.XxHash128</c> over the same input since the
+/// project already pulls in <c>System.IO.Hashing</c>.) Then:
+///
+///   • The JetStream <c>Nats-Msg-Id</c> header set by <see cref="Publish{T}"/> becomes stable,
+///     so JetStream's own 2-minute dedupe window suppresses the duplicate publish on the
+///     server side.
+///   • DataBridge's <c>processed_messages</c> row gets the same MessageId on the second
+///     delivery and dedupes correctly.
+///   • Cleipnir's <c>OperationKey</c> dedupe stays as the third line of defense.
+///
+/// Also: in the real impl, run the side effect inside a per-command idempotency guard
+/// (Worker-local KV or a local SQLite ledger) so yt-dlp / storage upload don't actually
+/// re-execute on redelivery — only the result publish + ack should re-run.
 /// </summary>
 public sealed class DownloadCommandsConsumerService(
-    IMessageBus messageBus,
+    IJetStreamConsumer consumer,
+    IJetStreamPublisher publisher,
     IClock clock,
     ILogger<DownloadCommandsConsumerService> logger) : BackgroundService
 {
-    private const string QueueGroup = "workers";
+    private static readonly StreamName Stream = StreamName.From(DownloadTopology.StreamNameValue);
     private static readonly TimeSpan StubLatency = TimeSpan.FromSeconds(1);
 
-    private readonly List<ISubscription> _subscriptions = [];
-
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _subscriptions.Add(await messageBus.SubscribeAsync<FetchMetadataCommand>(
-            DownloadSubjects.FetchMetadataCommand,
-            HandleFetchMetadataAsync,
-            queueGroup: QueueGroup,
-            cancellationToken: stoppingToken));
-
-        _subscriptions.Add(await messageBus.SubscribeAsync<DownloadVideoCommand>(
-            DownloadSubjects.DownloadVideoCommand,
-            HandleDownloadVideoAsync,
-            queueGroup: QueueGroup,
-            cancellationToken: stoppingToken));
-
-        _subscriptions.Add(await messageBus.SubscribeAsync<UploadObjectCommand>(
-            DownloadSubjects.UploadObjectCommand,
-            HandleUploadObjectAsync,
-            queueGroup: QueueGroup,
-            cancellationToken: stoppingToken));
-
-        _subscriptions.Add(await messageBus.SubscribeAsync<DeleteTempFileCommand>(
-            DownloadSubjects.DeleteTempFileCommand,
-            HandleDeleteTempFileAsync,
-            queueGroup: QueueGroup,
-            cancellationToken: stoppingToken));
-
-        _subscriptions.Add(await messageBus.SubscribeAsync<DeleteUploadedObjectCommand>(
-            DownloadSubjects.DeleteUploadedObjectCommand,
-            HandleDeleteUploadedObjectAsync,
-            queueGroup: QueueGroup,
-            cancellationToken: stoppingToken));
-
-        logger.LogInformation("Subscribed to {Count} download command subjects.", _subscriptions.Count);
-
-        try
+        var consumers = new[]
         {
-            await Task.Delay(Timeout.Infinite, stoppingToken);
-        }
-        catch (OperationCanceledException)
-        {
-            // graceful shutdown
-        }
+            Consume<FetchMetadataCommand>(DownloadTopology.WorkerFetchMetadataConsumer, HandleFetchMetadataAsync, stoppingToken),
+            Consume<DownloadVideoCommand>(DownloadTopology.WorkerDownloadVideoConsumer, HandleDownloadVideoAsync, stoppingToken),
+            Consume<UploadObjectCommand>(DownloadTopology.WorkerUploadObjectConsumer, HandleUploadObjectAsync, stoppingToken),
+            Consume<DeleteTempFileCommand>(DownloadTopology.WorkerDeleteTempFileConsumer, HandleDeleteTempFileAsync, stoppingToken),
+            Consume<DeleteUploadedObjectCommand>(DownloadTopology.WorkerDeleteUploadedObjectConsumer, HandleDeleteUploadedObjectAsync, stoppingToken),
+        };
+
+        logger.LogInformation("Subscribed to {Count} download command consumers on stream {Stream}.", consumers.Length, Stream.Value);
+        return Task.WhenAll(consumers);
     }
 
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        foreach (var subscription in _subscriptions)
-        {
-            await subscription.StopAsync(cancellationToken);
-            await subscription.DisposeAsync();
-        }
+    private Task Consume<TCommand>(
+        string consumerName,
+        Func<IJsMessageContext<TCommand>, Task> handler,
+        CancellationToken stoppingToken)
+        where TCommand : class, IFlowMessage
+        => consumer.ConsumePullAsync<TCommand>(
+            stream: Stream,
+            consumer: ConsumerName.From(consumerName),
+            handler: handler,
+            options: null,
+            cancellationToken: stoppingToken);
 
-        _subscriptions.Clear();
-        await base.StopAsync(cancellationToken);
-    }
-
-    private async Task HandleFetchMetadataAsync(IMessageContext<FetchMetadataCommand> context)
+    private async Task HandleFetchMetadataAsync(IJsMessageContext<FetchMetadataCommand> context)
     {
         var cmd = context.Message;
 
@@ -91,11 +102,13 @@ public sealed class DownloadCommandsConsumerService(
             //       (title, uploader, provider id, raw json).
             await Task.Delay(StubLatency);
 
-            await messageBus.PublishAsync(DownloadSubjects.MetadataFetched, new MetadataFetched
+            await Publish(DownloadSubjects.MetadataFetched, new MetadataFetched
             {
                 JobId = cmd.JobId,
                 CorrelationId = cmd.CorrelationId,
                 CausationId = cmd.MessageId,
+                // Stub-only: see class-level "DEDUPE CAVEAT" before replacing with real impl.
+                // The real impl must derive MessageId deterministically from cmd.MessageId.
                 MessageId = Guid.NewGuid(),
                 OperationKey = $"{cmd.OperationKey}/result",
                 OccurredAt = clock.GetCurrentInstant(),
@@ -107,15 +120,18 @@ public sealed class DownloadCommandsConsumerService(
                 Uploader = "Stub Uploader",
                 RawMetadataJson = null
             });
+            await context.AckAsync();
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "FetchMetadata stub failed for JobId {JobId}", cmd.JobId);
             await PublishMetadataFailedAsync(cmd, ex);
+            // Failure event published successfully → ack so we don't redeliver the command.
+            await context.AckAsync();
         }
     }
 
-    private async Task HandleDownloadVideoAsync(IMessageContext<DownloadVideoCommand> context)
+    private async Task HandleDownloadVideoAsync(IJsMessageContext<DownloadVideoCommand> context)
     {
         var cmd = context.Message;
 
@@ -125,7 +141,7 @@ public sealed class DownloadCommandsConsumerService(
             //       and compute XxHash128 over the resulting file.
             await Task.Delay(StubLatency);
 
-            await messageBus.PublishAsync(DownloadSubjects.DownloadCompleted, new DownloadCompleted
+            await Publish(DownloadSubjects.DownloadCompleted, new DownloadCompleted
             {
                 JobId = cmd.JobId,
                 CorrelationId = cmd.CorrelationId,
@@ -140,15 +156,17 @@ public sealed class DownloadCommandsConsumerService(
                 ContentHashXxh128 = null,
                 ContentType = "application/octet-stream"
             });
+            await context.AckAsync();
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "DownloadVideo stub failed for JobId {JobId}", cmd.JobId);
             await PublishDownloadFailedAsync(cmd, ex);
+            await context.AckAsync();
         }
     }
 
-    private async Task HandleUploadObjectAsync(IMessageContext<UploadObjectCommand> context)
+    private async Task HandleUploadObjectAsync(IJsMessageContext<UploadObjectCommand> context)
     {
         var cmd = context.Message;
 
@@ -158,7 +176,7 @@ public sealed class DownloadCommandsConsumerService(
             //       into the resulting backend; capture the final ObjectKey/StorageVersion.
             await Task.Delay(StubLatency);
 
-            await messageBus.PublishAsync(DownloadSubjects.UploadCompleted, new UploadCompleted
+            await Publish(DownloadSubjects.UploadCompleted, new UploadCompleted
             {
                 JobId = cmd.JobId,
                 CorrelationId = cmd.CorrelationId,
@@ -174,15 +192,17 @@ public sealed class DownloadCommandsConsumerService(
                 ContentHashXxh128 = null,
                 ContentLengthBytes = null
             });
+            await context.AckAsync();
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "UploadObject stub failed for JobId {JobId}", cmd.JobId);
             await PublishUploadFailedAsync(cmd, ex);
+            await context.AckAsync();
         }
     }
 
-    private async Task HandleDeleteTempFileAsync(IMessageContext<DeleteTempFileCommand> context)
+    private async Task HandleDeleteTempFileAsync(IJsMessageContext<DeleteTempFileCommand> context)
     {
         var cmd = context.Message;
 
@@ -191,7 +211,7 @@ public sealed class DownloadCommandsConsumerService(
             // TODO: delete cmd.TempFileRef from worker-local storage.
             await Task.Delay(StubLatency);
 
-            await messageBus.PublishAsync(DownloadSubjects.TempFileDeleted, new TempFileDeleted
+            await Publish(DownloadSubjects.TempFileDeleted, new TempFileDeleted
             {
                 JobId = cmd.JobId,
                 CorrelationId = cmd.CorrelationId,
@@ -202,11 +222,12 @@ public sealed class DownloadCommandsConsumerService(
                 Attempt = cmd.Attempt,
                 TempFileRef = cmd.TempFileRef
             });
+            await context.AckAsync();
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "DeleteTempFile stub failed for JobId {JobId}", cmd.JobId);
-            await messageBus.PublishAsync(DownloadSubjects.TempFileDeleteFailed, new TempFileDeleteFailed
+            await Publish(DownloadSubjects.TempFileDeleteFailed, new TempFileDeleteFailed
             {
                 JobId = cmd.JobId,
                 CorrelationId = cmd.CorrelationId,
@@ -219,10 +240,11 @@ public sealed class DownloadCommandsConsumerService(
                 FailureKind = FailureKind.Transient,
                 ErrorMessage = ex.Message
             });
+            await context.AckAsync();
         }
     }
 
-    private async Task HandleDeleteUploadedObjectAsync(IMessageContext<DeleteUploadedObjectCommand> context)
+    private async Task HandleDeleteUploadedObjectAsync(IJsMessageContext<DeleteUploadedObjectCommand> context)
     {
         var cmd = context.Message;
 
@@ -232,7 +254,7 @@ public sealed class DownloadCommandsConsumerService(
             //       via IBlobStorageProvider.
             await Task.Delay(StubLatency);
 
-            await messageBus.PublishAsync(DownloadSubjects.UploadedObjectDeleted, new UploadedObjectDeleted
+            await Publish(DownloadSubjects.UploadedObjectDeleted, new UploadedObjectDeleted
             {
                 JobId = cmd.JobId,
                 CorrelationId = cmd.CorrelationId,
@@ -245,11 +267,12 @@ public sealed class DownloadCommandsConsumerService(
                 ObjectKey = cmd.ObjectKey,
                 StorageVersion = cmd.StorageVersion
             });
+            await context.AckAsync();
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "DeleteUploadedObject stub failed for JobId {JobId}", cmd.JobId);
-            await messageBus.PublishAsync(DownloadSubjects.UploadedObjectDeleteFailed, new UploadedObjectDeleteFailed
+            await Publish(DownloadSubjects.UploadedObjectDeleteFailed, new UploadedObjectDeleteFailed
             {
                 JobId = cmd.JobId,
                 CorrelationId = cmd.CorrelationId,
@@ -264,11 +287,15 @@ public sealed class DownloadCommandsConsumerService(
                 FailureKind = FailureKind.Transient,
                 ErrorMessage = ex.Message
             });
+            await context.AckAsync();
         }
     }
 
+    private Task Publish<T>(string subject, T message) where T : IFlowMessage
+        => publisher.PublishAsync(subject, message, messageId: message.MessageId.ToString("N"));
+
     private Task PublishMetadataFailedAsync(FetchMetadataCommand cmd, Exception ex)
-        => messageBus.PublishAsync(DownloadSubjects.MetadataFetchFailed, new MetadataFetchFailed
+        => Publish(DownloadSubjects.MetadataFetchFailed, new MetadataFetchFailed
         {
             JobId = cmd.JobId,
             CorrelationId = cmd.CorrelationId,
@@ -282,7 +309,7 @@ public sealed class DownloadCommandsConsumerService(
         });
 
     private Task PublishDownloadFailedAsync(DownloadVideoCommand cmd, Exception ex)
-        => messageBus.PublishAsync(DownloadSubjects.DownloadFailed, new DownloadFailed
+        => Publish(DownloadSubjects.DownloadFailed, new DownloadFailed
         {
             JobId = cmd.JobId,
             CorrelationId = cmd.CorrelationId,
@@ -296,7 +323,7 @@ public sealed class DownloadCommandsConsumerService(
         });
 
     private Task PublishUploadFailedAsync(UploadObjectCommand cmd, Exception ex)
-        => messageBus.PublishAsync(DownloadSubjects.UploadFailed, new UploadFailed
+        => Publish(DownloadSubjects.UploadFailed, new UploadFailed
         {
             JobId = cmd.JobId,
             CorrelationId = cmd.CorrelationId,

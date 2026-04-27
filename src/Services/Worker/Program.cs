@@ -1,10 +1,12 @@
 using FlySwattr.NATS.Extensions;
+using FlySwattr.NATS.Topology.Extensions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Hosting.Internal;
 using NATS.Client.Core;
 using NodaTime;
+using Shared.Messaging;
 using Shared.Secrets;
 using Worker.Services;
 
@@ -34,13 +36,17 @@ class Program
         {
             options.Core.Url = natsUrl;
             options.Core.NatsAuth = natsAuth;
-            options.EnableTopologyProvisioning = false;
+            // Provisions every ITopologySource registered below (idempotent — DataBridge
+            // registers the same source, so whichever service starts first wins).
+            options.EnableTopologyProvisioning = true;
             options.EnablePayloadOffloading = false;
             options.EnableResilience = false;
             options.EnableCaching = false;
             options.EnableDistributedLock = false;
             options.EnableDlqAdvisoryListener = false;
         });
+
+        builder.Services.AddNatsTopologySource<DownloadTopology>();
 
         builder.Services.AddSingleton<IClock>(SystemClock.Instance);
         builder.Services.AddOpenBaoSecretStore(builder.Configuration);
