@@ -11,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Hosting.Internal;
 using NATS.Client.Core;
+using NodaTime;
 using Shared.Messaging;
 using Shared.Secrets;
 using Shared.Storage;
@@ -71,7 +72,12 @@ class Program
             .UsePostgresStore(connectionString, tablePrefix: "cleipnir_")
             .RegisterFlowsAutomatically());
 
+        builder.Services.AddSingleton<IClock>(SystemClock.Instance);
+        builder.Services.AddScoped<IDownloadJobsRepository, DownloadJobsRepository>();
+
         builder.Services.AddHostedService<StorageCrudConsumerService>();
+        builder.Services.AddHostedService<DownloadRequestedIngressService>();
+        builder.Services.AddHostedService<DownloadEventsConsumerService>();
 
         // Force ConsoleLifetime so Ctrl+C / SIGTERM triggers StopAsync on hosted services
         builder.Services.AddSingleton<IHostLifetime, ConsoleLifetime>();
