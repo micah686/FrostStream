@@ -6,6 +6,8 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+        <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+        <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
     </PropertyGroup>
 
     <ItemGroup>
@@ -13,13 +15,16 @@
     </ItemGroup>
 
     <ItemGroup>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.7" />
         <PackageReference Include="NSubstitute" Version="5.3.0" />
         <PackageReference Include="Shouldly" Version="4.3.0" />
         <PackageReference Include="TUnit" Version="1.40.0" />
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\src\Services\WebAPI\WebAPI.csproj" />
+        <ProjectReference Include="..\..\Services\DataBridge\DataBridge.csproj" />
+        <ProjectReference Include="..\..\Services\Shared\Shared.csproj" />
+        <ProjectReference Include="..\..\Services\WebAPI\WebAPI.csproj" />
     </ItemGroup>
 
     <ItemGroup>
