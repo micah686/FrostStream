@@ -9,6 +9,10 @@
     <Project Path="Modules/FlySwattr.NATS/FlySwattr.NATS.Topology/FlySwattr.NATS.Topology.csproj" />
     <Project Path="Modules/FlySwattr.NATS/FlySwattr.NATS/FlySwattr.NATS.csproj" />
   </Folder>
+  <Folder Name="/Modules/FlySwattr.NATS/" />
+  <Folder Name="/Modules/YtDlpSharpLib/">
+    <Project Path="Modules/YtDlpSharpLib/YtDlpSharpLib/YtDlpSharpLib.csproj" />
+  </Folder>
   <Folder Name="/Services/">
     <Project Path="Services/DataBridge/DataBridge.csproj" />
     <Project Path="Services/MediaProcessor/MediaProcessor.csproj" />

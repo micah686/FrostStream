@@ -1,3 +1,6 @@
 [submodule "src/Modules/FlySwattr.NATS"]
 	path = src/Modules/FlySwattr.NATS
 	url = https://github.com/micah686/FlySwattr.NATS
+[submodule "src/Modules/YtDlpSharpLib"]
+	path = src/Modules/YtDlpSharpLib
+	url = https://github.com/micah686/YtDlpSharpLib.git
