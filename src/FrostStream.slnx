@@ -1,5 +1,5 @@
 <Solution>
-  <Folder Name="/Modules/">
+  <Folder Name="/Modules/FlySwattr.NATS/" >
     <Project Path="Modules/FlySwattr.NATS/FlySwattr.NATS.Abstractions/FlySwattr.NATS.Abstractions.csproj" />
     <Project Path="Modules/FlySwattr.NATS/FlySwattr.NATS.Caching/FlySwattr.NATS.Caching.csproj" />
     <Project Path="Modules/FlySwattr.NATS/FlySwattr.NATS.Core/FlySwattr.NATS.Core.csproj" />
@@ -9,7 +9,6 @@
     <Project Path="Modules/FlySwattr.NATS/FlySwattr.NATS.Topology/FlySwattr.NATS.Topology.csproj" />
     <Project Path="Modules/FlySwattr.NATS/FlySwattr.NATS/FlySwattr.NATS.csproj" />
   </Folder>
-  <Folder Name="/Modules/FlySwattr.NATS/" />
   <Folder Name="/Modules/YtDlpSharpLib/">
     <Project Path="Modules/YtDlpSharpLib/YtDlpSharpLib/YtDlpSharpLib.csproj" />
   </Folder>
