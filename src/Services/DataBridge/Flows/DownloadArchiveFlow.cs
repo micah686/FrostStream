@@ -29,6 +29,16 @@ public class DownloadArchiveFlow(
         var metadata = await RunMetadataStep(request, jobInstance);
         if (metadata is null) return;
 
+        var sourceVersion = await Capture(() => RepoCall(r =>
+            r.RegisterSourceVersionAsync(metadata, request.ForceDownload)));
+        if (sourceVersion.AlreadyDownloaded)
+        {
+            await Capture(() => RepoCall(r => r.MarkAlreadyDownloadedAsync(
+                jobId,
+                sourceVersion.LatestContentHashXxh128)));
+            return;
+        }
+
         // STEP 2: download ----------------------------------------------------
         await Capture(() => Update(jobId, DownloadJobState.DownloadPending));
         var downloaded = await RunDownloadStep(request, metadata, jobInstance);
@@ -279,5 +289,12 @@ public class DownloadArchiveFlow(
         using var scope = scopeFactory.CreateScope();
         var jobs = scope.ServiceProvider.GetRequiredService<IDownloadJobsRepository>();
         await action(jobs);
+    }
+
+    private async Task<T> RepoCall<T>(Func<IDownloadJobsRepository, Task<T>> action)
+    {
+        using var scope = scopeFactory.CreateScope();
+        var jobs = scope.ServiceProvider.GetRequiredService<IDownloadJobsRepository>();
+        return await action(jobs);
     }
 }

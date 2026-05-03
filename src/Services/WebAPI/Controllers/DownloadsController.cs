@@ -39,7 +39,8 @@ public class DownloadsController(
             SourceUrl = request.SourceUrl,
             RequestedBy = request.RequestedBy,
             StorageKey = request.StorageKey,
-            Tags = request.Tags
+            Tags = request.Tags,
+            ForceDownload = request.ForceDownload
         };
 
         try
@@ -76,6 +77,8 @@ public sealed class DownloadRequest
     public string? StorageKey { get; init; }
 
     public IReadOnlyList<string>? Tags { get; init; }
+
+    public bool ForceDownload { get; init; }
 }
 
 public sealed record DownloadRequestResponse(Guid JobId, Guid CorrelationId);

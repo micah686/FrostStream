@@ -24,6 +24,7 @@ public sealed class DownloadJobConfiguration : IEntityTypeConfiguration<Download
         builder.Property(x => x.RequestedBy).HasColumnName("requested_by").HasMaxLength(255);
         builder.Property(x => x.StorageKey).HasColumnName("storage_key").HasMaxLength(100);
         builder.Property(x => x.ArchiveKey).HasColumnName("archive_key").HasMaxLength(512);
+        builder.Property(x => x.SourceMetadataHash).HasColumnName("source_metadata_hash").HasMaxLength(64);
 
         builder.Property(x => x.AttemptMetadata).HasColumnName("attempt_metadata").IsRequired();
         builder.Property(x => x.AttemptDownload).HasColumnName("attempt_download").IsRequired();
@@ -69,6 +70,9 @@ public sealed class DownloadJobConfiguration : IEntityTypeConfiguration<Download
 
         builder.HasIndex(x => x.ArchiveKey)
             .HasDatabaseName("ix_download_jobs_archive_key");
+
+        builder.HasIndex(x => x.SourceMetadataHash)
+            .HasDatabaseName("ix_download_jobs_source_metadata_hash");
     }
 }
 
@@ -160,5 +164,70 @@ public sealed class ProcessedMessageConfiguration : IEntityTypeConfiguration<Pro
 
         builder.HasIndex(x => x.JobId).HasDatabaseName("ix_processed_messages_job_id");
         builder.HasIndex(x => x.OperationKey).HasDatabaseName("ix_processed_messages_operation_key");
+    }
+}
+
+public sealed class MediaSourceVersionConfiguration : IEntityTypeConfiguration<MediaSourceVersionEntity>
+{
+    public void Configure(EntityTypeBuilder<MediaSourceVersionEntity> builder)
+    {
+        builder.ToTable("media_source_versions");
+
+        builder.HasKey(x => x.Id);
+
+        builder.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
+        builder.Property(x => x.SourceMetadataHash)
+            .HasColumnName("source_metadata_hash")
+            .HasMaxLength(64)
+            .IsRequired();
+        builder.Property(x => x.Provider).HasColumnName("provider").HasMaxLength(255);
+        builder.Property(x => x.SourceMediaId).HasColumnName("source_media_id").HasMaxLength(512);
+        builder.Property(x => x.SourceLastModified)
+            .HasColumnName("source_last_modified")
+            .HasColumnType("timestamp with time zone");
+        builder.Property(x => x.LatestContentHashXxh128)
+            .HasColumnName("latest_content_hash_xxh128")
+            .HasMaxLength(64);
+        builder.Property(x => x.LatestJobId).HasColumnName("latest_job_id");
+
+        builder.HasIndex(x => x.SourceMetadataHash)
+            .IsUnique()
+            .HasDatabaseName("ux_media_source_versions_source_metadata_hash");
+
+        builder.HasIndex(x => x.LatestContentHashXxh128)
+            .HasDatabaseName("ix_media_source_versions_latest_content_hash_xxh128");
+
+        builder.HasOne<MediaContentIdVersionEntity>()
+            .WithMany()
+            .HasForeignKey(x => x.LatestContentHashXxh128)
+            .HasPrincipalKey(x => x.ContentHashXxh128)
+            .HasConstraintName("fk_media_source_versions_latest_content_hash_xxh128")
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasOne<DownloadJobEntity>()
+            .WithMany()
+            .HasForeignKey(x => x.LatestJobId)
+            .HasConstraintName("fk_media_source_versions_latest_job_id")
+            .OnDelete(DeleteBehavior.SetNull);
+    }
+}
+
+public sealed class MediaContentIdVersionConfiguration : IEntityTypeConfiguration<MediaContentIdVersionEntity>
+{
+    public void Configure(EntityTypeBuilder<MediaContentIdVersionEntity> builder)
+    {
+        builder.ToTable("media_content_id_versions");
+
+        builder.HasKey(x => x.ContentHashXxh128);
+
+        builder.Property(x => x.ContentHashXxh128)
+            .HasColumnName("content_hash_xxh128")
+            .HasMaxLength(64)
+            .ValueGeneratedNever();
+        builder.Property(x => x.StorageKey).HasColumnName("storage_key").HasMaxLength(100).IsRequired();
+        builder.Property(x => x.Path).HasColumnName("path").HasMaxLength(2048).IsRequired();
+
+        builder.HasIndex(x => new { x.StorageKey, x.Path })
+            .HasDatabaseName("ix_media_content_id_versions_storage_key_path");
     }
 }

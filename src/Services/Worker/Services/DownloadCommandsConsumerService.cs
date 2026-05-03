@@ -1,8 +1,10 @@
 using System.Text.Json;
+using System.Globalization;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NodaTime;
+using Shared.Media;
 using Shared.Messaging;
 using YtDlpSharpLib;
 using YtDlpSharpLib.Exceptions;
@@ -116,9 +118,14 @@ public sealed class DownloadCommandsConsumerService(
             var provider = !string.IsNullOrWhiteSpace(info.Extractor)
                 ? info.Extractor
                 : info.ExtractorKey;
-            var sourceVideoId = info.Id ?? info.DisplayId;
-            var archiveKey = !string.IsNullOrWhiteSpace(provider) && !string.IsNullOrWhiteSpace(sourceVideoId)
-                ? $"{provider}/{sourceVideoId}"
+            var sourceMediaId = info.Id ?? info.DisplayId;
+            var sourceLastModified = ResolveSourceLastModified(info);
+            var sourceMetadataHash = MediaSourceIdentity.TryCreateSourceMetadataHash(
+                provider,
+                sourceMediaId,
+                sourceLastModified);
+            var archiveKey = !string.IsNullOrWhiteSpace(sourceMetadataHash)
+                ? $"source/{sourceMetadataHash}"
                 : cmd.JobId.ToString("N");
 
             await Publish(DownloadSubjects.MetadataFetched, new MetadataFetched
@@ -132,7 +139,9 @@ public sealed class DownloadCommandsConsumerService(
                 Attempt = cmd.Attempt,
                 ArchiveKey = archiveKey,
                 Provider = provider,
-                SourceVideoId = sourceVideoId,
+                SourceMediaId = sourceMediaId,
+                SourceLastModified = sourceLastModified,
+                SourceMetadataHash = sourceMetadataHash,
                 Title = info.Title ?? info.FullTitle,
                 Uploader = info.Uploader ?? info.Channel,
             });
@@ -319,6 +328,25 @@ public sealed class DownloadCommandsConsumerService(
 
     private Task Publish<T>(string subject, T message) where T : IFlowMessage
         => publisher.PublishAsync(subject, message, messageId: message.MessageId.ToString("N"));
+
+    private static Instant? ResolveSourceLastModified(VideoInfo info)
+    {
+        if (info.ModifiedTimestamp is { } modifiedTimestamp)
+            return Instant.FromUnixTimeSeconds(modifiedTimestamp);
+
+        if (string.IsNullOrWhiteSpace(info.ModifiedDate))
+            return null;
+
+        var formats = new[] { "yyyyMMdd", "yyyy-MM-dd" };
+        return DateOnly.TryParseExact(
+            info.ModifiedDate,
+            formats,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.None,
+            out var modifiedDate)
+            ? Instant.FromDateTimeOffset(new DateTimeOffset(modifiedDate.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero))
+            : null;
+    }
 
     private Task PublishMetadataFailedAsync(FetchMetadataCommand cmd, Exception ex, FailureKind failureKind)
         => Publish(DownloadSubjects.MetadataFetchFailed, new MetadataFetchFailed

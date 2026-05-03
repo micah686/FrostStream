@@ -19,6 +19,8 @@ public class DownloadJobEntity
 
     public string? ArchiveKey { get; set; }
 
+    public string? SourceMetadataHash { get; set; }
+
     public int AttemptMetadata { get; set; }
 
     public int AttemptDownload { get; set; }
@@ -97,4 +99,30 @@ public class ProcessedMessageEntity
     public Guid JobId { get; set; }
 
     public Instant ProcessedAt { get; private set; } = SystemClock.Instance.GetCurrentInstant();
+}
+
+public class MediaSourceVersionEntity
+{
+    public long Id { get; set; }
+
+    public required string SourceMetadataHash { get; set; }
+
+    public string? Provider { get; set; }
+
+    public string? SourceMediaId { get; set; }
+
+    public Instant? SourceLastModified { get; set; }
+
+    public string? LatestContentHashXxh128 { get; set; }
+
+    public Guid? LatestJobId { get; set; }
+}
+
+public class MediaContentIdVersionEntity
+{
+    public required string ContentHashXxh128 { get; set; }
+
+    public required string StorageKey { get; set; }
+
+    public required string Path { get; set; }
 }

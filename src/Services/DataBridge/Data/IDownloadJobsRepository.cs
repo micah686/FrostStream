@@ -19,6 +19,10 @@ public interface IDownloadJobsRepository
 
     Task ApplyMetadataAsync(Guid jobId, MetadataFetched evt, CancellationToken ct = default);
 
+    Task<SourceVersionDecision> RegisterSourceVersionAsync(MetadataFetched evt, bool forceDownload, CancellationToken ct = default);
+
+    Task MarkAlreadyDownloadedAsync(Guid jobId, string? latestContentHashXxh128, CancellationToken ct = default);
+
     Task ApplyDownloadCompletedAsync(Guid jobId, DownloadCompleted evt, CancellationToken ct = default);
 
     Task CommitUploadAsync(Guid jobId, UploadCompleted evt, CancellationToken ct = default);
@@ -33,3 +37,8 @@ public interface IDownloadJobsRepository
 
     Task RecordTerminalFailureAsync(Guid jobId, FailureKind kind, string? code, string message, DownloadJobState terminalState, string? lastPayloadJson, CancellationToken ct = default);
 }
+
+public sealed record SourceVersionDecision(
+    bool AlreadyDownloaded,
+    string? LatestContentHashXxh128,
+    Guid? LatestJobId);

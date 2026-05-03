@@ -88,7 +88,9 @@ public enum DownloadJobState
     /// <summary>Last attempt failed permanently (source removed, geo-block, auth failure); will not retry.</summary>
     FailedPermanent = 11,
     /// <summary>Retry budget exhausted; routed to the DLQ and requires manual intervention.</summary>
-    DeadLettered = 12
+    DeadLettered = 12,
+    /// <summary>Metadata matched a previously completed source version; download was skipped.</summary>
+    AlreadyDownloaded = 13
 }
 
 /// <summary>
@@ -150,6 +152,12 @@ public sealed record DownloadRequested : IFlowMessage
 
     /// <summary>Free-form tags to attach to the resulting movie row (collections, genre hints, etc.).</summary>
     public IReadOnlyList<string>? Tags { get; init; }
+
+    /// <summary>
+    /// When true, bypasses source-metadata duplicate fast-fail and continues to download bytes
+    /// so hosts that replace media under the same source metadata can be revalidated.
+    /// </summary>
+    public bool ForceDownload { get; init; }
 }
 
 /// <summary>
@@ -198,17 +206,17 @@ public sealed record MetadataFetched : IFlowMessage
     /// <inheritdoc />
     public required int Attempt { get; init; }
 
-    /// <summary>
-    /// Provider-specific id for the source video (e.g. YouTube video id <c>"dQw4w9WgXcQ"</c>).
-    /// Null when the extractor did not surface one — falls back to <see cref="JobId"/>-derived keys.
-    /// </summary>
-    public string? SourceVideoId { get; init; }
+    /// <summary>Deterministic XxHash128 over provider + source media id + source last-modified.</summary>
+    public string? SourceMetadataHash { get; init; }
 
-    /// <summary>
-    /// yt-dlp extractor name (e.g. <c>"youtube"</c>, <c>"twitch:vod"</c>). Combined with
-    /// <see cref="SourceVideoId"/> it forms the cross-flow dedupe key for "is this the same logical video?".
-    /// </summary>
+    /// <summary>Provider-specific source media id (e.g. YouTube video id <c>"dQw4w9WgXcQ"</c>).</summary>
+    public string? SourceMediaId { get; init; }
+
+    /// <summary>yt-dlp extractor/provider name (e.g. <c>"youtube"</c>, <c>"twitch:vod"</c>).</summary>
     public string? Provider { get; init; }
+
+    /// <summary>Source-reported last-modified instant, when available from metadata.</summary>
+    public Instant? SourceLastModified { get; init; }
 
     /// <summary>Display title from the source. Used for movie naming; not a stable identifier.</summary>
     public string? Title { get; init; }

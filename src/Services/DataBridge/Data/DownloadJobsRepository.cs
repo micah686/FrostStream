@@ -48,7 +48,7 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
         var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
         job.State = state;
         job.UpdatedAt = clock.GetCurrentInstant();
-        if (state == DownloadJobState.Completed)
+        if (state is DownloadJobState.Completed or DownloadJobState.AlreadyDownloaded)
             job.CompletedAt = job.UpdatedAt;
         await db.SaveChangesAsync(ct);
     }
@@ -57,8 +57,64 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
     {
         var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
         job.ArchiveKey = evt.ArchiveKey;
+        job.SourceMetadataHash = NormalizeHash(evt.SourceMetadataHash);
         job.State = DownloadJobState.MetadataResolved;
         job.UpdatedAt = clock.GetCurrentInstant();
+        await db.SaveChangesAsync(ct);
+    }
+
+    public async Task<SourceVersionDecision> RegisterSourceVersionAsync(MetadataFetched evt, bool forceDownload, CancellationToken ct = default)
+    {
+        var sourceMetadataHash = NormalizeHash(evt.SourceMetadataHash);
+        if (sourceMetadataHash is null)
+            return new SourceVersionDecision(false, null, null);
+
+        var source = await db.MediaSourceVersions
+            .FirstOrDefaultAsync(x => x.SourceMetadataHash == sourceMetadataHash, ct);
+
+        if (source is null)
+        {
+            source = new MediaSourceVersionEntity
+            {
+                SourceMetadataHash = sourceMetadataHash,
+                Provider = NormalizeOptional(evt.Provider),
+                SourceMediaId = NormalizeOptional(evt.SourceMediaId),
+                SourceLastModified = evt.SourceLastModified
+            };
+            db.MediaSourceVersions.Add(source);
+        }
+        else
+        {
+            source.Provider = NormalizeOptional(evt.Provider) ?? source.Provider;
+            source.SourceMediaId = NormalizeOptional(evt.SourceMediaId) ?? source.SourceMediaId;
+            source.SourceLastModified = evt.SourceLastModified ?? source.SourceLastModified;
+        }
+
+        await db.SaveChangesAsync(ct);
+
+        var alreadyDownloaded = !forceDownload && !string.IsNullOrWhiteSpace(source.LatestContentHashXxh128);
+        return new SourceVersionDecision(
+            alreadyDownloaded,
+            NormalizeHash(source.LatestContentHashXxh128),
+            source.LatestJobId);
+    }
+
+    public async Task MarkAlreadyDownloadedAsync(Guid jobId, string? latestContentHashXxh128, CancellationToken ct = default)
+    {
+        var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
+        var contentHash = NormalizeHash(latestContentHashXxh128);
+        var content = contentHash is null
+            ? null
+            : await db.MediaContentIdVersions
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.ContentHashXxh128 == contentHash, ct);
+
+        job.State = DownloadJobState.AlreadyDownloaded;
+        job.ContentHashXxh128 = contentHash;
+        job.StorageKey = content?.StorageKey ?? job.StorageKey;
+        job.ObjectKey = content?.Path ?? job.ObjectKey;
+        job.UpdatedAt = clock.GetCurrentInstant();
+        job.CompletedAt = job.UpdatedAt;
         await db.SaveChangesAsync(ct);
     }
 
@@ -80,12 +136,54 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
         var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
         job.ObjectKey = evt.ObjectKey;
         job.StorageVersion = evt.StorageVersion;
-        if (!string.IsNullOrEmpty(evt.ContentHashXxh128))
-            job.ContentHashXxh128 = evt.ContentHashXxh128;
+        var contentHash = NormalizeHash(evt.ContentHashXxh128);
+        if (contentHash is not null)
+            job.ContentHashXxh128 = contentHash;
         if (evt.ContentLengthBytes is { } len)
             job.FileSizeBytes = len;
         job.State = DownloadJobState.Uploaded;
         job.UpdatedAt = clock.GetCurrentInstant();
+
+        if (contentHash is not null)
+        {
+            var content = await db.MediaContentIdVersions
+                .FirstOrDefaultAsync(x => x.ContentHashXxh128 == contentHash, ct);
+            if (content is null)
+            {
+                db.MediaContentIdVersions.Add(new MediaContentIdVersionEntity
+                {
+                    ContentHashXxh128 = contentHash,
+                    StorageKey = evt.StorageKey,
+                    Path = evt.ObjectKey
+                });
+            }
+            else
+            {
+                content.StorageKey = evt.StorageKey;
+                content.Path = evt.ObjectKey;
+            }
+
+            if (NormalizeHash(job.SourceMetadataHash) is { } sourceMetadataHash)
+            {
+                var source = await db.MediaSourceVersions
+                    .FirstOrDefaultAsync(x => x.SourceMetadataHash == sourceMetadataHash, ct);
+                if (source is null)
+                {
+                    db.MediaSourceVersions.Add(new MediaSourceVersionEntity
+                    {
+                        SourceMetadataHash = sourceMetadataHash,
+                        LatestContentHashXxh128 = contentHash,
+                        LatestJobId = jobId
+                    });
+                }
+                else
+                {
+                    source.LatestContentHashXxh128 = contentHash;
+                    source.LatestJobId = jobId;
+                }
+            }
+        }
+
         await db.SaveChangesAsync(ct);
     }
 
@@ -152,4 +250,14 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
 
         await db.SaveChangesAsync(ct);
     }
+
+    private static string? NormalizeHash(string? value)
+        => string.IsNullOrWhiteSpace(value)
+            ? null
+            : value.Trim().ToLowerInvariant();
+
+    private static string? NormalizeOptional(string? value)
+        => string.IsNullOrWhiteSpace(value)
+            ? null
+            : value.Trim();
 }
