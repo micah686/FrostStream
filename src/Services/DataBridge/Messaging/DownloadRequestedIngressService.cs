@@ -1,3 +1,4 @@
+using Cleipnir.ResilientFunctions.Domain.Exceptions;
 using DataBridge.Data;
 using DataBridge.Flows;
 using FlySwattr.NATS.Abstractions;
@@ -54,9 +55,21 @@ public sealed class DownloadRequestedIngressService(
                 nameof(DownloadRequested),
                 payloadJson: null);
 
+            // The first invocation normally suspends while waiting for Worker events.
+            // Treat that as a successful handoff to Cleipnir, not as a NATS failure.
+            //TODO: check this. We want to make sure that dupe jobs aren't being accepted
             // flows.Run is safe to call again for an existing instance id — Cleipnir
             // recognises the duplicate and no-ops.
-            await flows.Run(request.JobId.ToString("N"), request);
+            try
+            {
+                await flows.Run(request.JobId.ToString("N"), request);
+            }
+            catch (InvocationSuspendedException)
+            {
+                logger.LogWarning(
+                    "DownloadArchiveFlow suspended after start for JobId {JobId}; acknowledging DownloadRequested.",
+                    request.JobId);
+            }
 
             await jobs.MarkMessageProcessedAsync(request.MessageId, request.OperationKey, request.JobId);
 

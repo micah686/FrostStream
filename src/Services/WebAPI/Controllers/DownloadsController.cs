@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.AspNetCore.Mvc;
@@ -38,7 +39,7 @@ public class DownloadsController(
             Attempt = 1,
             SourceUrl = request.SourceUrl,
             RequestedBy = request.RequestedBy,
-            StorageKey = request.StorageKey,
+            StorageKey = string.IsNullOrWhiteSpace(request.StorageKey) ? "default" : request.StorageKey,
             Tags = request.Tags,
             ForceDownload = request.ForceDownload
         };
@@ -71,14 +72,16 @@ public sealed class DownloadRequest
     [Required]
     [Url]
     public required string SourceUrl { get; init; }
+    
+    [DefaultValue("default")]
+    public required string StorageKey { get; init; }
 
-    public string? RequestedBy { get; init; }
-
-    public required string? StorageKey { get; init; }
-
-    public IReadOnlyList<string>? Tags { get; init; }
-
+    [DefaultValue(false)]
     public bool ForceDownload { get; init; } = false;
+    
+    public string? RequestedBy { get; init; }
+    
+    public IReadOnlyList<string>? Tags { get; init; }
 }
 
 public sealed record DownloadRequestResponse(Guid JobId, Guid CorrelationId);
