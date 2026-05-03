@@ -145,6 +145,7 @@ public class DownloadArchiveFlow(
                 OccurredAt = clock.GetCurrentInstant(),
                 Attempt = attempt,
                 SourceUrl = request.SourceUrl,
+                StorageKey = request.StorageKey ?? "default",
                 ArchiveKey = metadata.ArchiveKey
             };
             await Capture(() => Publish(DownloadSubjects.DownloadVideoCommand, cmd));

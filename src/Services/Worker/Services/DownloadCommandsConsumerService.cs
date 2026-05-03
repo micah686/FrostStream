@@ -69,12 +69,14 @@ namespace Worker.Services;
 public sealed class DownloadCommandsConsumerService(
     IJetStreamConsumer consumer,
     IJetStreamPublisher publisher,
+    IMessageBus messageBus,
     IYtDlpClient ytDlp,
     IBlobStorageProvider blobStorageProvider,
     IClock clock,
     ILogger<DownloadCommandsConsumerService> logger) : BackgroundService
 {
     private static readonly StreamName Stream = StreamName.From(DownloadTopology.StreamNameValue);
+    private static readonly TimeSpan DataBridgeRequestTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan StubLatency = TimeSpan.FromSeconds(1);
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
@@ -195,6 +197,20 @@ public sealed class DownloadCommandsConsumerService(
                 throw new FileNotFoundException("yt-dlp completed but the temp file was not found.", tempFileRef);
 
             var contentHash = await ComputeXxHash128Async(tempFileRef);
+            if (await ContentVersionExistsAsync(contentHash, cmd.StorageKey))
+            {
+                logger.LogInformation(
+                    "DownloadVideo produced content that already exists for JobId {JobId} ContentHash {ContentHashXxh128} StorageKey {StorageKey}",
+                    cmd.JobId, contentHash, cmd.StorageKey);
+                await PublishDownloadFailedAsync(
+                    cmd,
+                    FailureKind.Permanent,
+                    "CONTENT_ALREADY_STORED",
+                    $"Content hash '{contentHash}' already exists for storage key '{cmd.StorageKey}'.",
+                    tempFileRef);
+                await context.AckAsync();
+                return;
+            }
 
             await Publish(DownloadSubjects.DownloadCompleted, new DownloadCompleted
             {
@@ -373,6 +389,27 @@ public sealed class DownloadCommandsConsumerService(
     private Task Publish<T>(string subject, T message) where T : IFlowMessage
         => publisher.PublishAsync(subject, message, messageId: message.MessageId.ToString("N"));
 
+    private async Task<bool> ContentVersionExistsAsync(string contentHashXxh128, string storageKey)
+    {
+        var response = await messageBus.RequestAsync<ContentVersionExistsRequest, ContentVersionExistsResponse>(
+            DownloadSubjects.ContentVersionExistsQuery,
+            new ContentVersionExistsRequest
+            {
+                ContentHashXxh128 = contentHashXxh128,
+                StorageKey = storageKey
+            },
+            DataBridgeRequestTimeout);
+
+        if (response is null)
+            throw new InvalidOperationException("DataBridge content-version lookup timed out.");
+
+        if (!response.Success)
+            throw new InvalidOperationException(
+                $"DataBridge content-version lookup failed: {response.ErrorMessage ?? response.ErrorCode ?? "unknown error"}");
+
+        return response.Exists;
+    }
+
     private static Instant? ResolveSourceLastModified(VideoInfo info)
     {
         if (info.ModifiedTimestamp is { } modifiedTimestamp)
@@ -411,6 +448,14 @@ public sealed class DownloadCommandsConsumerService(
         Exception ex,
         FailureKind failureKind,
         string? tempFileRef)
+        => PublishDownloadFailedAsync(cmd, failureKind, null, DescribeException(ex), tempFileRef);
+
+    private Task PublishDownloadFailedAsync(
+        DownloadVideoCommand cmd,
+        FailureKind failureKind,
+        string? errorCode,
+        string errorMessage,
+        string? tempFileRef)
         => Publish(DownloadSubjects.DownloadFailed, new DownloadFailed
         {
             JobId = cmd.JobId,
@@ -421,7 +466,8 @@ public sealed class DownloadCommandsConsumerService(
             OccurredAt = clock.GetCurrentInstant(),
             Attempt = cmd.Attempt,
             FailureKind = failureKind,
-            ErrorMessage = DescribeException(ex),
+            ErrorCode = errorCode,
+            ErrorMessage = errorMessage,
             TempFileRef = tempFileRef
         });
 

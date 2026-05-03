@@ -288,6 +288,12 @@ public sealed record DownloadVideoCommand : IFlowMessage
     public required string SourceUrl { get; init; }
 
     /// <summary>
+    /// Target FluentStorage backend key. Used after hashing to ask DataBridge whether the
+    /// content is already registered for the destination backend.
+    /// </summary>
+    public required string StorageKey { get; init; }
+
+    /// <summary>
     /// Archive identifier from <see cref="MetadataFetched.ArchiveKey"/>; the worker uses it to
     /// namespace its temp directory.
     /// </summary>
@@ -370,6 +376,24 @@ public sealed record DownloadFailed : IFlowMessage
 
     /// <summary>Path to any partial bytes left on disk; cleanup compensation will target it. Null when nothing was written.</summary>
     public string? TempFileRef { get; init; }
+}
+
+/// <summary>
+/// Worker-to-DataBridge query for content-addressed dedupe. DataBridge owns the database
+/// lookup and replies over core NATS.
+/// </summary>
+public sealed record ContentVersionExistsRequest
+{
+    public required string ContentHashXxh128 { get; init; }
+    public required string StorageKey { get; init; }
+}
+
+public sealed record ContentVersionExistsResponse
+{
+    public bool Success { get; init; }
+    public bool Exists { get; init; }
+    public string? ErrorCode { get; init; }
+    public string? ErrorMessage { get; init; }
 }
 
 /// <summary>
