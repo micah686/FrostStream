@@ -74,11 +74,11 @@ public sealed class DownloadRequest
 
     public string? RequestedBy { get; init; }
 
-    public string? StorageKey { get; init; }
+    public required string? StorageKey { get; init; }
 
     public IReadOnlyList<string>? Tags { get; init; }
 
-    public bool ForceDownload { get; init; }
+    public bool ForceDownload { get; init; } = false;
 }
 
 public sealed record DownloadRequestResponse(Guid JobId, Guid CorrelationId);

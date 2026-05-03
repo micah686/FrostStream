@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using NodaTime;
 using Shared.Media;
 using Shared.Messaging;
+using Shared.Storage;
 using YtDlpSharpLib;
 using YtDlpSharpLib.Downloads;
 using YtDlpSharpLib.Exceptions;
@@ -69,6 +70,7 @@ public sealed class DownloadCommandsConsumerService(
     IJetStreamConsumer consumer,
     IJetStreamPublisher publisher,
     IYtDlpClient ytDlp,
+    IBlobStorageProvider blobStorageProvider,
     IClock clock,
     ILogger<DownloadCommandsConsumerService> logger) : BackgroundService
 {
@@ -233,32 +235,43 @@ public sealed class DownloadCommandsConsumerService(
 
         try
         {
-            // TODO: resolve cmd.StorageKey via IBlobStorageProvider and upload cmd.TempFileRef
-            //       into the resulting backend; capture the final ObjectKey/StorageVersion.
-            await Task.Delay(StubLatency);
+            var fileInfo = new FileInfo(cmd.TempFileRef);
+            if (!fileInfo.Exists)
+                throw new FileNotFoundException("Temp file to upload was not found.", cmd.TempFileRef);
+
+            var objectKey = BuildObjectKey(cmd);
+            var contentHash = await ComputeXxHash128Async(fileInfo.FullName);
+            var storage = await blobStorageProvider.GetAsync(cmd.StorageKey);
+
+            await using (var stream = File.OpenRead(fileInfo.FullName))
+            {
+                await storage.WriteAsync(objectKey, stream, append: false);
+            }
 
             await Publish(DownloadSubjects.UploadCompleted, new UploadCompleted
             {
                 JobId = cmd.JobId,
                 CorrelationId = cmd.CorrelationId,
                 CausationId = cmd.MessageId,
-                MessageId = Guid.NewGuid(),
+                MessageId = DeterministicGuid.Create(cmd.MessageId, "/result"),
                 OperationKey = $"{cmd.OperationKey}/result",
                 OccurredAt = clock.GetCurrentInstant(),
                 Attempt = cmd.Attempt,
                 TempFileRef = cmd.TempFileRef,
                 StorageKey = cmd.StorageKey,
-                ObjectKey = $"archives/{cmd.ArchiveKey}/video.bin",
+                ObjectKey = objectKey,
                 StorageVersion = null,
-                ContentHashXxh128 = null,
-                ContentLengthBytes = null
+                ContentHashXxh128 = contentHash,
+                ContentLengthBytes = fileInfo.Length
             });
             await context.AckAsync();
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "UploadObject stub failed for JobId {JobId}", cmd.JobId);
-            await PublishUploadFailedAsync(cmd, ex);
+            logger.LogError(ex,
+                "UploadObject failed for JobId {JobId} StorageKey {StorageKey} TempFileRef {TempFileRef}",
+                cmd.JobId, cmd.StorageKey, cmd.TempFileRef);
+            await PublishUploadFailedAsync(cmd, ex, UploadFailureKind(ex));
             await context.AckAsync();
         }
     }
@@ -407,17 +420,17 @@ public sealed class DownloadCommandsConsumerService(
             TempFileRef = tempFileRef
         });
 
-    private Task PublishUploadFailedAsync(UploadObjectCommand cmd, Exception ex)
+    private Task PublishUploadFailedAsync(UploadObjectCommand cmd, Exception ex, FailureKind failureKind)
         => Publish(DownloadSubjects.UploadFailed, new UploadFailed
         {
             JobId = cmd.JobId,
             CorrelationId = cmd.CorrelationId,
             CausationId = cmd.MessageId,
-            MessageId = Guid.NewGuid(),
+            MessageId = DeterministicGuid.Create(cmd.MessageId, "/failed"),
             OperationKey = $"{cmd.OperationKey}/failed",
             OccurredAt = clock.GetCurrentInstant(),
             Attempt = cmd.Attempt,
-            FailureKind = FailureKind.Transient,
+            FailureKind = failureKind,
             ErrorMessage = ex.Message,
             TempFileRef = cmd.TempFileRef
         });
@@ -518,6 +531,35 @@ public sealed class DownloadCommandsConsumerService(
             _ => "application/octet-stream"
         };
 
+    private static string BuildObjectKey(UploadObjectCommand cmd)
+        => string.Join(
+            '/',
+            "archives",
+            ToSafeObjectPath(cmd.ArchiveKey),
+            ToSafeObjectFileName(cmd.TempFileRef));
+
+    private static string ToSafeObjectPath(string value)
+    {
+        var normalized = value.Replace('\\', '/');
+        var segments = normalized
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(ToSafePathComponent)
+            .Where(segment => !string.IsNullOrWhiteSpace(segment));
+
+        var path = string.Join('/', segments);
+        return string.IsNullOrWhiteSpace(path) ? "archive" : path;
+    }
+
+    private static string ToSafeObjectFileName(string tempFileRef)
+    {
+        var fileName = Path.GetFileName(tempFileRef);
+        if (string.IsNullOrWhiteSpace(fileName))
+            return "video.bin";
+
+        var safe = ToSafePathComponent(fileName);
+        return string.IsNullOrWhiteSpace(safe) ? "video.bin" : safe;
+    }
+
     private static string ToSafePathComponent(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -537,5 +579,10 @@ public sealed class DownloadCommandsConsumerService(
         => ex is YtDlpProcessException { LastStderrLines: { Length: > 0 } stderr }
             ? stderr
             : ex.Message;
+
+    private static FailureKind UploadFailureKind(Exception ex)
+        => ex is FileNotFoundException or DirectoryNotFoundException
+            ? FailureKind.Permanent
+            : FailureKind.Transient;
 #endregion
 }

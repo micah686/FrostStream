@@ -9,6 +9,7 @@ using NATS.Client.Core;
 using NodaTime;
 using Shared.Messaging;
 using Shared.Secrets;
+using Shared.Storage;
 using Worker.Services;
 using YtDlpSharpLib;
 using YtDlpSharpLib.Process;
@@ -54,8 +55,7 @@ class Program
 
         builder.Services.AddSingleton<IClock>(SystemClock.Instance);
         builder.Services.AddOpenBaoSecretStore(builder.Configuration);
-        // AddFrostStreamStorage() requires NATS to be wired into this service first;
-        // hook it in here once Worker actually consumes IBlobStorageProvider.
+        builder.Services.AddFrostStreamStorage();
 
         // yt-dlp wiring. The binary downloader writes into <BaseDirectory>/tools and the
         // client points at the predicted absolute paths so the first invocation finds them
