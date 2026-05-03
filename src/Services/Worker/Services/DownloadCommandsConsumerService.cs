@@ -282,15 +282,14 @@ public sealed class DownloadCommandsConsumerService(
 
         try
         {
-            // TODO: delete cmd.TempFileRef from worker-local storage.
-            await Task.Delay(StubLatency);
+            DeleteTempFileRef(cmd.TempFileRef);
 
             await Publish(DownloadSubjects.TempFileDeleted, new TempFileDeleted
             {
                 JobId = cmd.JobId,
                 CorrelationId = cmd.CorrelationId,
                 CausationId = cmd.MessageId,
-                MessageId = Guid.NewGuid(),
+                MessageId = DeterministicGuid.Create(cmd.MessageId, "/result"),
                 OperationKey = $"{cmd.OperationKey}/result",
                 OccurredAt = clock.GetCurrentInstant(),
                 Attempt = cmd.Attempt,
@@ -300,18 +299,20 @@ public sealed class DownloadCommandsConsumerService(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "DeleteTempFile stub failed for JobId {JobId}", cmd.JobId);
+            logger.LogError(ex,
+                "DeleteTempFile failed for JobId {JobId} TempFileRef {TempFileRef}",
+                cmd.JobId, cmd.TempFileRef);
             await Publish(DownloadSubjects.TempFileDeleteFailed, new TempFileDeleteFailed
             {
                 JobId = cmd.JobId,
                 CorrelationId = cmd.CorrelationId,
                 CausationId = cmd.MessageId,
-                MessageId = Guid.NewGuid(),
+                MessageId = DeterministicGuid.Create(cmd.MessageId, "/failed"),
                 OperationKey = $"{cmd.OperationKey}/failed",
                 OccurredAt = clock.GetCurrentInstant(),
                 Attempt = cmd.Attempt,
                 TempFileRef = cmd.TempFileRef,
-                FailureKind = FailureKind.Transient,
+                FailureKind = DeleteFailureKind(ex),
                 ErrorMessage = ex.Message
             });
             await context.AckAsync();
@@ -324,16 +325,18 @@ public sealed class DownloadCommandsConsumerService(
 
         try
         {
-            // TODO: delete (cmd.StorageKey, cmd.ObjectKey, cmd.StorageVersion) from final storage
-            //       via IBlobStorageProvider.
-            await Task.Delay(StubLatency);
+            if (string.IsNullOrWhiteSpace(cmd.ObjectKey))
+                throw new ArgumentException("Object key is required.", nameof(cmd.ObjectKey));
+
+            var storage = await blobStorageProvider.GetAsync(cmd.StorageKey);
+            await storage.DeleteAsync([cmd.ObjectKey]);
 
             await Publish(DownloadSubjects.UploadedObjectDeleted, new UploadedObjectDeleted
             {
                 JobId = cmd.JobId,
                 CorrelationId = cmd.CorrelationId,
                 CausationId = cmd.MessageId,
-                MessageId = Guid.NewGuid(),
+                MessageId = DeterministicGuid.Create(cmd.MessageId, "/result"),
                 OperationKey = $"{cmd.OperationKey}/result",
                 OccurredAt = clock.GetCurrentInstant(),
                 Attempt = cmd.Attempt,
@@ -345,20 +348,22 @@ public sealed class DownloadCommandsConsumerService(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "DeleteUploadedObject stub failed for JobId {JobId}", cmd.JobId);
+            logger.LogError(ex,
+                "DeleteUploadedObject failed for JobId {JobId} StorageKey {StorageKey} ObjectKey {ObjectKey}",
+                cmd.JobId, cmd.StorageKey, cmd.ObjectKey);
             await Publish(DownloadSubjects.UploadedObjectDeleteFailed, new UploadedObjectDeleteFailed
             {
                 JobId = cmd.JobId,
                 CorrelationId = cmd.CorrelationId,
                 CausationId = cmd.MessageId,
-                MessageId = Guid.NewGuid(),
+                MessageId = DeterministicGuid.Create(cmd.MessageId, "/failed"),
                 OperationKey = $"{cmd.OperationKey}/failed",
                 OccurredAt = clock.GetCurrentInstant(),
                 Attempt = cmd.Attempt,
                 StorageKey = cmd.StorageKey,
                 ObjectKey = cmd.ObjectKey,
                 StorageVersion = cmd.StorageVersion,
-                FailureKind = FailureKind.Transient,
+                FailureKind = DeleteFailureKind(ex),
                 ErrorMessage = ex.Message
             });
             await context.AckAsync();
@@ -575,6 +580,57 @@ public sealed class DownloadCommandsConsumerService(
         return safe.Length <= 80 ? safe : safe[..80];
     }
 
+    private static void DeleteTempFileRef(string tempFileRef)
+    {
+        if (string.IsNullOrWhiteSpace(tempFileRef))
+            throw new ArgumentException("Temp file ref is required.", nameof(tempFileRef));
+
+        var fullPath = Path.GetFullPath(tempFileRef);
+        var root = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "froststream"));
+        if (!IsWithinDirectory(fullPath, root))
+            throw new ArgumentException("Temp file ref is outside the FrostStream temp directory.", nameof(tempFileRef));
+
+        if (File.Exists(fullPath))
+        {
+            File.Delete(fullPath);
+            DeleteEmptyTempParents(Path.GetDirectoryName(fullPath));
+            return;
+        }
+
+        if (Directory.Exists(fullPath))
+        {
+            Directory.Delete(fullPath, recursive: true);
+            DeleteEmptyTempParents(Path.GetDirectoryName(fullPath));
+        }
+    }
+
+    private static void DeleteEmptyTempParents(string? startDirectory)
+    {
+        var root = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "froststream", "downloads"));
+        var current = string.IsNullOrWhiteSpace(startDirectory)
+            ? null
+            : Path.GetFullPath(startDirectory);
+
+        while (current is not null
+               && IsWithinDirectory(current, root)
+               && !string.Equals(current, root, StringComparison.Ordinal))
+        {
+            if (Directory.EnumerateFileSystemEntries(current).Any())
+                return;
+
+            Directory.Delete(current);
+            current = Path.GetDirectoryName(current);
+        }
+    }
+
+    private static bool IsWithinDirectory(string path, string root)
+    {
+        var relative = Path.GetRelativePath(root, path);
+        return relative != "."
+               && !relative.StartsWith("..", StringComparison.Ordinal)
+               && !Path.IsPathRooted(relative);
+    }
+
     private static string DescribeException(Exception ex)
         => ex is YtDlpProcessException { LastStderrLines: { Length: > 0 } stderr }
             ? stderr
@@ -582,6 +638,11 @@ public sealed class DownloadCommandsConsumerService(
 
     private static FailureKind UploadFailureKind(Exception ex)
         => ex is FileNotFoundException or DirectoryNotFoundException
+            ? FailureKind.Permanent
+            : FailureKind.Transient;
+
+    private static FailureKind DeleteFailureKind(Exception ex)
+        => ex is ArgumentException
             ? FailureKind.Permanent
             : FailureKind.Transient;
 #endregion
