@@ -1,3 +1,5 @@
+using System.Buffers;
+using System.IO.Hashing;
 using System.Text.Json;
 using System.Globalization;
 using FlySwattr.NATS.Abstractions;
@@ -7,25 +9,26 @@ using NodaTime;
 using Shared.Media;
 using Shared.Messaging;
 using YtDlpSharpLib;
+using YtDlpSharpLib.Downloads;
 using YtDlpSharpLib.Exceptions;
 using YtDlpSharpLib.Models;
+using YtDlpSharpLib.Options;
 
 namespace Worker.Services;
 
 /// <summary>
-/// Worker-side JetStream consumer for the download flow's commands. Each handler currently
-/// simulates the side effect with a 1-second delay and emits the matching success event.
-/// Swap each <see cref="Task.Delay(int)"/> for the real yt-dlp / <c>IBlobStorageProvider</c>
-/// calls when ready.
+/// Worker-side JetStream consumer for the download flow's commands. Handlers that have not
+/// been wired to their real dependencies yet still simulate the side effect with a 1-second
+/// delay and emit the matching success event.
 ///
 /// Consumer durables and the FROSTSTREAM_DOWNLOAD stream are provisioned by
 /// <see cref="DownloadTopology"/>; both DataBridge and Worker register it, so whichever
 /// service starts first creates them.
 ///
-/// === DEDUPE CAVEAT — READ BEFORE REPLACING THE STUBS ===
-/// Every result-event constructor below uses <c>MessageId = Guid.NewGuid()</c>. That is OK
-/// for the stub (the side effect is a no-op delay), but it is NOT safe for the real
-/// implementation because JetStream is at-least-once:
+/// === DEDUPE CAVEAT — READ BEFORE REPLACING THE REMAINING STUBS ===
+/// Some remaining stubbed result-event constructors below still use
+/// <c>MessageId = Guid.NewGuid()</c>. That is OK for those stubs (the side effect is a no-op
+/// delay), but it is NOT safe for the real implementation because JetStream is at-least-once:
 ///
 ///   1. Worker pulls command C, runs the side effect (e.g. yt-dlp succeeds).
 ///   2. Worker publishes the result event with a fresh Guid, then crashes/times-out
@@ -169,34 +172,57 @@ public sealed class DownloadCommandsConsumerService(
     private async Task HandleDownloadVideoAsync(IJsMessageContext<DownloadVideoCommand> context)
     {
         var cmd = context.Message;
+        var tempDirectory = GetDownloadTempDirectory(cmd);
+        string? tempFileRef = null;
 
         try
         {
-            // TODO: run yt-dlp against cmd.SourceUrl, write to a worker-local temp directory,
-            //       and compute XxHash128 over the resulting file.
-            await Task.Delay(StubLatency);
+            Directory.CreateDirectory(tempDirectory);
+
+            await ytDlp.DownloadAsync(
+                cmd.SourceUrl,
+                tempDirectory,
+                CreateDownloadOptions(),
+                progress: null);
+
+            tempFileRef = FindDownloadedVideoFile(tempDirectory)
+                          ?? throw new InvalidOperationException("yt-dlp completed without producing a media file.");
+
+            var fileInfo = new FileInfo(tempFileRef);
+            if (!fileInfo.Exists)
+                throw new FileNotFoundException("yt-dlp completed but the temp file was not found.", tempFileRef);
+
+            var contentHash = await ComputeXxHash128Async(tempFileRef);
 
             await Publish(DownloadSubjects.DownloadCompleted, new DownloadCompleted
             {
                 JobId = cmd.JobId,
                 CorrelationId = cmd.CorrelationId,
                 CausationId = cmd.MessageId,
-                MessageId = Guid.NewGuid(),
+                MessageId = DeterministicGuid.Create(cmd.MessageId, "/result"),
                 OperationKey = $"{cmd.OperationKey}/result",
                 OccurredAt = clock.GetCurrentInstant(),
                 Attempt = cmd.Attempt,
-                TempFileRef = $"/tmp/froststream/{cmd.JobId:N}/video.bin",
-                FileName = "video.bin",
-                FileSizeBytes = 0,
-                ContentHashXxh128 = null,
-                ContentType = "application/octet-stream"
+                TempFileRef = tempFileRef,
+                FileName = fileInfo.Name,
+                FileSizeBytes = fileInfo.Length,
+                ContentHashXxh128 = contentHash,
+                ContentType = InferContentType(fileInfo.Name)
             });
+            await context.AckAsync();
+        }
+        catch (YtDlpUnavailableException ex)
+        {
+            logger.LogWarning(ex,
+                "DownloadVideo: source unavailable for JobId {JobId} URL {SourceUrl}",
+                cmd.JobId, cmd.SourceUrl);
+            await PublishDownloadFailedAsync(cmd, ex, FailureKind.Permanent, tempFileRef ?? FindDownloadedVideoFile(tempDirectory));
             await context.AckAsync();
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "DownloadVideo stub failed for JobId {JobId}", cmd.JobId);
-            await PublishDownloadFailedAsync(cmd, ex);
+            logger.LogError(ex, "DownloadVideo failed for JobId {JobId} URL {SourceUrl}", cmd.JobId, cmd.SourceUrl);
+            await PublishDownloadFailedAsync(cmd, ex, FailureKind.Transient, tempFileRef ?? FindDownloadedVideoFile(tempDirectory));
             await context.AckAsync();
         }
     }
@@ -362,18 +388,23 @@ public sealed class DownloadCommandsConsumerService(
             ErrorMessage = ex.Message
         });
 
-    private Task PublishDownloadFailedAsync(DownloadVideoCommand cmd, Exception ex)
+    private Task PublishDownloadFailedAsync(
+        DownloadVideoCommand cmd,
+        Exception ex,
+        FailureKind failureKind,
+        string? tempFileRef)
         => Publish(DownloadSubjects.DownloadFailed, new DownloadFailed
         {
             JobId = cmd.JobId,
             CorrelationId = cmd.CorrelationId,
             CausationId = cmd.MessageId,
-            MessageId = Guid.NewGuid(),
+            MessageId = DeterministicGuid.Create(cmd.MessageId, "/failed"),
             OperationKey = $"{cmd.OperationKey}/failed",
             OccurredAt = clock.GetCurrentInstant(),
             Attempt = cmd.Attempt,
-            FailureKind = FailureKind.Transient,
-            ErrorMessage = ex.Message
+            FailureKind = failureKind,
+            ErrorMessage = DescribeException(ex),
+            TempFileRef = tempFileRef
         });
 
     private Task PublishUploadFailedAsync(UploadObjectCommand cmd, Exception ex)
@@ -390,4 +421,121 @@ public sealed class DownloadCommandsConsumerService(
             ErrorMessage = ex.Message,
             TempFileRef = cmd.TempFileRef
         });
+
+    
+    #region Helpers
+    private static DownloadOptions CreateDownloadOptions()
+        => new()
+        {
+            AbortOnError = true,
+            OutputTemplate = "video.%(ext)s",
+            OverwriteFiles = true,
+            RestrictFilenames = true,
+            YtDlp = new YtDlpOptions
+            {
+                VideoSelection = new YtDlpVideoSelectionOptions
+                {
+                    NoPlaylist = true
+                },
+                Filesystem = new YtDlpFilesystemOptions
+                {
+                    NoPart = true
+                },
+                PostProcessing = new YtDlpPostProcessingOptions
+                {
+                    FfmpegLocation = GetFfmpegLocation()
+                },
+                VerbositySimulation = new YtDlpVerbositySimulationOptions
+                {
+                    Newline = true
+                }
+            }
+        };
+
+    private static string GetDownloadTempDirectory(DownloadVideoCommand cmd)
+        => Path.Combine(
+            Path.GetTempPath(),
+            "froststream",
+            "downloads",
+            ToSafePathComponent(cmd.ArchiveKey),
+            cmd.JobId.ToString("N"),
+            $"attempt-{cmd.Attempt.ToString(CultureInfo.InvariantCulture)}");
+
+    private static string? GetFfmpegLocation()
+    {
+        var toolsDirectory = Path.Combine(AppContext.BaseDirectory, "tools");
+        return Directory.Exists(toolsDirectory) ? toolsDirectory : null;
+    }
+
+    private static string? FindDownloadedVideoFile(string tempDirectory)
+        => Directory.Exists(tempDirectory)
+            ? Directory.EnumerateFiles(tempDirectory, "video.*", SearchOption.TopDirectoryOnly)
+                .Where(path => !Path.GetFileName(path).EndsWith(".ytdl", StringComparison.OrdinalIgnoreCase))
+                .Select(path => new FileInfo(path))
+                .Where(file => file.Exists && file.Length > 0)
+                .OrderByDescending(file => file.LastWriteTimeUtc)
+                .Select(file => file.FullName)
+                .FirstOrDefault()
+            : null;
+
+    private static async Task<string> ComputeXxHash128Async(string path)
+    {
+        var hasher = new XxHash128();
+        var buffer = ArrayPool<byte>.Shared.Rent(1024 * 1024);
+
+        try
+        {
+            await using var stream = File.OpenRead(path);
+            int read;
+            while ((read = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length))) > 0)
+            {
+                hasher.Append(buffer.AsSpan(0, read));
+            }
+
+            Span<byte> hash = stackalloc byte[16];
+            hasher.GetCurrentHash(hash);
+            return Convert.ToHexString(hash).ToLowerInvariant();
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    private static string InferContentType(string fileName)
+        => Path.GetExtension(fileName).ToLowerInvariant() switch
+        {
+            ".mp4" or ".m4v" => "video/mp4",
+            ".webm" => "video/webm",
+            ".mkv" => "video/x-matroska",
+            ".mov" => "video/quicktime",
+            ".avi" => "video/x-msvideo",
+            ".flv" => "video/x-flv",
+            ".wmv" => "video/x-ms-wmv",
+            ".mpg" or ".mpeg" => "video/mpeg",
+            ".ts" or ".m2ts" => "video/mp2t",
+            ".ogv" or ".ogg" => "video/ogg",
+            _ => "application/octet-stream"
+        };
+
+    private static string ToSafePathComponent(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "archive";
+
+        var chars = value.Trim()
+            .Select(c => char.IsLetterOrDigit(c) || c is '-' or '_' or '.' ? c : '-')
+            .ToArray();
+        var safe = new string(chars).Trim('-', '.');
+        if (safe.Length == 0)
+            return "archive";
+
+        return safe.Length <= 80 ? safe : safe[..80];
+    }
+
+    private static string DescribeException(Exception ex)
+        => ex is YtDlpProcessException { LastStderrLines: { Length: > 0 } stderr }
+            ? stderr
+            : ex.Message;
+#endregion
 }
