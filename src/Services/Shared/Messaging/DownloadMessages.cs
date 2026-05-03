@@ -83,7 +83,6 @@ public sealed record MetadataFetched : IFlowMessage
     public string? Title { get; init; }
     public string? Uploader { get; init; }
     public required string ArchiveKey { get; init; }
-    public string? RawMetadataJson { get; init; }
 }
 
 public sealed record MetadataFetchFailed : IFlowMessage

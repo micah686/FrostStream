@@ -2,6 +2,7 @@ using FlySwattr.NATS.Extensions;
 using FlySwattr.NATS.Topology.Extensions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Hosting.Internal;
 using NATS.Client.Core;
@@ -9,6 +10,9 @@ using NodaTime;
 using Shared.Messaging;
 using Shared.Secrets;
 using Worker.Services;
+using YtDlpSharpLib;
+using YtDlpSharpLib.Process;
+using YtDlpSharpLib.Rendering;
 
 namespace Worker;
 
@@ -53,11 +57,41 @@ class Program
         // AddFrostStreamStorage() requires NATS to be wired into this service first;
         // hook it in here once Worker actually consumes IBlobStorageProvider.
 
-        // Register startup service (download initial binaries,...)
+        // yt-dlp wiring. The binary downloader writes into <BaseDirectory>/tools and the
+        // client points at the predicted absolute paths so the first invocation finds them
+        // (StartupService runs first as a plain IHostedService and blocks host startup until
+        // the downloads are complete). YtDlpClientOptions and YtDlpBinaryDownloaderOptions are
+        // init-only records, so we bypass the AddYtDlpClient/AddYtDlpBinaryDownloader helpers
+        // and register the services directly with prebuilt options instances.
+        var toolsDirectory = Path.Combine(AppContext.BaseDirectory, "tools");
+        Directory.CreateDirectory(toolsDirectory);
+
+        var binaryDownloaderOptions = new YtDlpSharpLib.Provisioning.YtDlpBinaryDownloaderOptions
+        {
+            DefaultDirectory = toolsDirectory,
+        };
+        builder.Services.AddSingleton<YtDlpSharpLib.Provisioning.IYtDlpBinaryDownloader>(_ =>
+            new YtDlpSharpLib.Provisioning.YtDlpBinaryDownloader(binaryDownloaderOptions));
+
+        var ytDlpClientOptions = new YtDlpClientOptions
+        {
+            YtDlpExecutablePath = Path.Combine(toolsDirectory, YtDlpPaths.YtDlpFileName),
+            FfmpegExecutablePath = Path.Combine(toolsDirectory, YtDlpPaths.FfmpegFileName),
+        };
+        builder.Services.TryAddSingleton(TimeProvider.System);
+        builder.Services.TryAddSingleton<IYtDlpArgumentRenderer, YtDlpArgumentRenderer>();
+        builder.Services.TryAddSingleton<IYtDlpProcessFactory, YtDlpProcessFactory>();
+        builder.Services.TryAddSingleton<IYtDlpClient>(sp => new YtDlpClient(
+            ytDlpClientOptions,
+            sp.GetRequiredService<IYtDlpProcessFactory>(),
+            sp.GetRequiredService<IYtDlpArgumentRenderer>(),
+            sp.GetRequiredService<TimeProvider>()));
+
+        // Register startup service (downloads yt-dlp/ffmpeg/ffprobe binaries before any
+        // BackgroundService starts).
         builder.Services.AddHostedService<StartupService>();
 
-        // Stub command consumers for the download flow. Replace each handler's Task.Delay
-        // with the real yt-dlp / IBlobStorageProvider implementation when ready.
+        // Command consumers for the download flow.
         builder.Services.AddHostedService<DownloadCommandsConsumerService>();
 
         var app = builder.Build();

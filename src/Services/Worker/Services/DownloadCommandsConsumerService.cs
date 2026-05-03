@@ -1,8 +1,12 @@
+using System.Text.Json;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NodaTime;
 using Shared.Messaging;
+using YtDlpSharpLib;
+using YtDlpSharpLib.Exceptions;
+using YtDlpSharpLib.Models;
 
 namespace Worker.Services;
 
@@ -59,6 +63,7 @@ namespace Worker.Services;
 public sealed class DownloadCommandsConsumerService(
     IJetStreamConsumer consumer,
     IJetStreamPublisher publisher,
+    IYtDlpClient ytDlp,
     IClock clock,
     ILogger<DownloadCommandsConsumerService> logger) : BackgroundService
 {
@@ -98,34 +103,55 @@ public sealed class DownloadCommandsConsumerService(
 
         try
         {
-            // TODO: invoke yt-dlp via YoutubeDLSharp to extract source metadata
-            //       (title, uploader, provider id, raw json).
-            await Task.Delay(StubLatency);
+            var metadataResult = await ytDlp.TryGetVideoInfoAsync(cmd.SourceUrl);
+            if (!metadataResult.Success || metadataResult.Data is not { } info)
+            {
+                throw new YtDlpProcessException(
+                    $"yt-dlp metadata fetch failed for {cmd.SourceUrl}",
+                    command: null,
+                    exitCode: null,
+                    lastStderrLines: metadataResult.ErrorOutput);
+            }
+
+            var provider = !string.IsNullOrWhiteSpace(info.Extractor)
+                ? info.Extractor
+                : info.ExtractorKey;
+            var sourceVideoId = info.Id ?? info.DisplayId;
+            var archiveKey = !string.IsNullOrWhiteSpace(provider) && !string.IsNullOrWhiteSpace(sourceVideoId)
+                ? $"{provider}/{sourceVideoId}"
+                : cmd.JobId.ToString("N");
 
             await Publish(DownloadSubjects.MetadataFetched, new MetadataFetched
             {
                 JobId = cmd.JobId,
                 CorrelationId = cmd.CorrelationId,
                 CausationId = cmd.MessageId,
-                // Stub-only: see class-level "DEDUPE CAVEAT" before replacing with real impl.
-                // The real impl must derive MessageId deterministically from cmd.MessageId.
-                MessageId = Guid.NewGuid(),
+                MessageId = DeterministicGuid.Create(cmd.MessageId, "/result"),
                 OperationKey = $"{cmd.OperationKey}/result",
                 OccurredAt = clock.GetCurrentInstant(),
                 Attempt = cmd.Attempt,
-                ArchiveKey = $"stub:{cmd.JobId:N}",
-                Provider = "stub",
-                SourceVideoId = cmd.JobId.ToString("N"),
-                Title = "Stub Title",
-                Uploader = "Stub Uploader",
-                RawMetadataJson = null
+                ArchiveKey = archiveKey,
+                Provider = provider,
+                SourceVideoId = sourceVideoId,
+                Title = info.Title ?? info.FullTitle,
+                Uploader = info.Uploader ?? info.Channel,
             });
+            await context.AckAsync();
+        }
+        catch (YtDlpUnavailableException ex)
+        {
+            logger.LogWarning(ex,
+                "FetchMetadata: source unavailable for JobId {JobId} URL {SourceUrl}",
+                cmd.JobId, cmd.SourceUrl);
+            await PublishMetadataFailedAsync(cmd, ex, FailureKind.Permanent);
             await context.AckAsync();
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "FetchMetadata stub failed for JobId {JobId}", cmd.JobId);
-            await PublishMetadataFailedAsync(cmd, ex);
+            logger.LogError(ex,
+                "FetchMetadata failed for JobId {JobId} URL {SourceUrl}",
+                cmd.JobId, cmd.SourceUrl);
+            await PublishMetadataFailedAsync(cmd, ex, FailureKind.Transient);
             // Failure event published successfully → ack so we don't redeliver the command.
             await context.AckAsync();
         }
@@ -294,17 +320,17 @@ public sealed class DownloadCommandsConsumerService(
     private Task Publish<T>(string subject, T message) where T : IFlowMessage
         => publisher.PublishAsync(subject, message, messageId: message.MessageId.ToString("N"));
 
-    private Task PublishMetadataFailedAsync(FetchMetadataCommand cmd, Exception ex)
+    private Task PublishMetadataFailedAsync(FetchMetadataCommand cmd, Exception ex, FailureKind failureKind)
         => Publish(DownloadSubjects.MetadataFetchFailed, new MetadataFetchFailed
         {
             JobId = cmd.JobId,
             CorrelationId = cmd.CorrelationId,
             CausationId = cmd.MessageId,
-            MessageId = Guid.NewGuid(),
+            MessageId = DeterministicGuid.Create(cmd.MessageId, "/failed"),
             OperationKey = $"{cmd.OperationKey}/failed",
             OccurredAt = clock.GetCurrentInstant(),
             Attempt = cmd.Attempt,
-            FailureKind = FailureKind.Transient,
+            FailureKind = failureKind,
             ErrorMessage = ex.Message
         });
 

@@ -1,36 +1,39 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using System.IO;
-using YoutubeDLSharp;
-using YoutubeDLSharp.Metadata;
-using YoutubeDLSharp.Options;
+using YtDlpSharpLib.Provisioning;
 
 namespace Worker.Services;
 
-public class StartupService(ILogger<StartupService> logger) : BackgroundService
+/// <summary>
+/// Plain <see cref="IHostedService"/> (not <see cref="BackgroundService"/>) so its
+/// <see cref="StartAsync"/> blocks the host startup until yt-dlp/ffmpeg/ffprobe are on disk.
+/// Registered before <see cref="DownloadCommandsConsumerService"/> so consumers cannot pull
+/// commands until the binaries are ready.
+/// </summary>
+public sealed class StartupService(
+    IYtDlpBinaryDownloader downloader,
+    ILogger<StartupService> logger) : IHostedService
 {
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    public async Task StartAsync(CancellationToken cancellationToken)
     {
-        logger.LogInformation("Setting up worker...");
-        await SetupWorkerAsync();
-        logger.LogInformation("Worker setup complete.");
+        logger.LogInformation("Provisioning yt-dlp/ffmpeg/ffprobe binaries...");
+
+        var result = await downloader.DownloadAllAsync(
+            new BinaryDownloadOptions
+            {
+                SkipExisting = true,
+                DownloadYtDlp = true,
+                DownloadFfmpeg = true,
+                DownloadFfprobe = true,
+                DownloadDeno = false,
+            },
+            progress: null,
+            ct: cancellationToken);
+
+        logger.LogInformation(
+            "Binaries ready: yt-dlp={YtDlpPath} ffmpeg={FfmpegPath} ffprobe={FfprobePath}",
+            result.YtDlpPath, result.FfmpegPath, result.FfprobePath);
     }
 
-    private async Task SetupWorkerAsync()
-    {
-        try
-        {
-            Directory.CreateDirectory("tools");
-            var ytDl = new YoutubeDL();
-            logger.LogDebug("Downloading binaries...");
-            await Utils.DownloadBinaries(true, "tools", true);
-            logger.LogDebug("Binaries downloaded.");
-            return;
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine(e.Message);
-            throw;
-        }
-    }
+    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }
