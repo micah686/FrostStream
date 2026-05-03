@@ -1,12 +1,10 @@
 using System.Buffers;
 using System.IO.Hashing;
-using System.Text.Json;
 using System.Globalization;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NodaTime;
-using Shared.Media;
 using Shared.Messaging;
 using Shared.Storage;
 using YtDlpSharpLib;
@@ -18,66 +16,27 @@ using YtDlpSharpLib.Options;
 namespace Worker.Services;
 
 /// <summary>
-/// Worker-side JetStream consumer for the download flow's commands. Handlers that have not
-/// been wired to their real dependencies yet still simulate the side effect with a 1-second
-/// delay and emit the matching success event.
+/// Worker-side JetStream consumer for the download flow's commands. The worker no longer
+/// constructs storage paths or talks to DataBridge mid-stream — DataBridge does all routing
+/// and dedupe, and the worker just executes the IO it's told to.
 ///
 /// Consumer durables and the FROSTSTREAM_DOWNLOAD stream are provisioned by
 /// <see cref="DownloadTopology"/>; both DataBridge and Worker register it, so whichever
 /// service starts first creates them.
 ///
-/// === DEDUPE CAVEAT — READ BEFORE REPLACING THE REMAINING STUBS ===
-/// Some remaining stubbed result-event constructors below still use
-/// <c>MessageId = Guid.NewGuid()</c>. That is OK for those stubs (the side effect is a no-op
-/// delay), but it is NOT safe for the real implementation because JetStream is at-least-once:
-///
-///   1. Worker pulls command C, runs the side effect (e.g. yt-dlp succeeds).
-///   2. Worker publishes the result event with a fresh Guid, then crashes/times-out
-///      before <c>AckAsync()</c>.
-///   3. JetStream redelivers C; Worker runs the side effect again (yt-dlp re-downloads,
-///      or storage uploads twice), and publishes a SECOND result event with another
-///      fresh Guid.
-///
-/// Today, DataBridge's <c>processed_messages</c> dedupe filters by <c>MessageId</c> — but
-/// because each redelivery generates a new Guid, both events pass that check and both reach
-/// Cleipnir. Cleipnir's secondary dedupe by <c>OperationKey</c> catches it (we use
-/// <c>$"{cmd.OperationKey}/result"</c> which is stable across redeliveries), so the flow
-/// itself doesn't double-advance — but the side effect ran twice and storage may have
-/// double-billed bytes.
-///
-/// === HOW TO FIX WHEN YOU REPLACE THE STUBS ===
-/// Derive the result event's <c>MessageId</c> deterministically from the command so a
-/// redelivered command produces the same event identity:
-///
-///   var resultMessageId = DeterministicGuid.Create(cmd.MessageId, "/result");
-///
-/// (Any stable hash → Guid will do — e.g. SHA-256 of <c>cmd.MessageId.ToString("N") + "/result"</c>
-/// folded to 16 bytes, or <c>System.IO.Hashing.XxHash128</c> over the same input since the
-/// project already pulls in <c>System.IO.Hashing</c>.) Then:
-///
-///   • The JetStream <c>Nats-Msg-Id</c> header set by <see cref="Publish{T}"/> becomes stable,
-///     so JetStream's own 2-minute dedupe window suppresses the duplicate publish on the
-///     server side.
-///   • DataBridge's <c>processed_messages</c> row gets the same MessageId on the second
-///     delivery and dedupes correctly.
-///   • Cleipnir's <c>OperationKey</c> dedupe stays as the third line of defense.
-///
-/// Also: in the real impl, run the side effect inside a per-command idempotency guard
-/// (Worker-local KV or a local SQLite ledger) so yt-dlp / storage upload don't actually
-/// re-execute on redelivery — only the result publish + ack should re-run.
+/// Result-event MessageIds are derived deterministically via
+/// <see cref="DeterministicGuid.Create"/> so JetStream redelivery doesn't produce duplicate
+/// downstream events.
 /// </summary>
 public sealed class DownloadCommandsConsumerService(
     IJetStreamConsumer consumer,
     IJetStreamPublisher publisher,
-    IMessageBus messageBus,
     IYtDlpClient ytDlp,
     IBlobStorageProvider blobStorageProvider,
     IClock clock,
     ILogger<DownloadCommandsConsumerService> logger) : BackgroundService
 {
     private static readonly StreamName Stream = StreamName.From(DownloadTopology.StreamNameValue);
-    private static readonly TimeSpan DataBridgeRequestTimeout = TimeSpan.FromSeconds(10);
-    private static readonly TimeSpan StubLatency = TimeSpan.FromSeconds(1);
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -127,13 +86,6 @@ public sealed class DownloadCommandsConsumerService(
                 : info.ExtractorKey;
             var sourceMediaId = info.Id ?? info.DisplayId;
             var sourceLastModified = ResolveSourceLastModified(info);
-            var sourceMetadataHash = MediaSourceIdentity.TryCreateSourceMetadataHash(
-                provider,
-                sourceMediaId,
-                sourceLastModified);
-            var archiveKey = !string.IsNullOrWhiteSpace(sourceMetadataHash)
-                ? $"source/{sourceMetadataHash}"
-                : cmd.JobId.ToString("N");
 
             await Publish(DownloadSubjects.MetadataFetched, new MetadataFetched
             {
@@ -144,11 +96,9 @@ public sealed class DownloadCommandsConsumerService(
                 OperationKey = $"{cmd.OperationKey}/result",
                 OccurredAt = clock.GetCurrentInstant(),
                 Attempt = cmd.Attempt,
-                ArchiveKey = archiveKey,
                 Provider = provider,
                 SourceMediaId = sourceMediaId,
                 SourceLastModified = sourceLastModified,
-                SourceMetadataHash = sourceMetadataHash,
                 Title = info.Title ?? info.FullTitle,
                 Uploader = info.Uploader ?? info.Channel,
             });
@@ -168,7 +118,6 @@ public sealed class DownloadCommandsConsumerService(
                 "FetchMetadata failed for JobId {JobId} URL {SourceUrl}",
                 cmd.JobId, cmd.SourceUrl);
             await PublishMetadataFailedAsync(cmd, ex, FailureKind.Transient);
-            // Failure event published successfully → ack so we don't redeliver the command.
             await context.AckAsync();
         }
     }
@@ -197,20 +146,6 @@ public sealed class DownloadCommandsConsumerService(
                 throw new FileNotFoundException("yt-dlp completed but the temp file was not found.", tempFileRef);
 
             var contentHash = await ComputeXxHash128Async(tempFileRef);
-            if (await ContentVersionExistsAsync(contentHash, cmd.StorageKey))
-            {
-                logger.LogInformation(
-                    "DownloadVideo produced content that already exists for JobId {JobId} ContentHash {ContentHashXxh128} StorageKey {StorageKey}",
-                    cmd.JobId, contentHash, cmd.StorageKey);
-                await PublishDownloadFailedAsync(
-                    cmd,
-                    FailureKind.Permanent,
-                    "CONTENT_ALREADY_STORED",
-                    $"Content hash '{contentHash}' already exists for storage key '{cmd.StorageKey}'.",
-                    tempFileRef);
-                await context.AckAsync();
-                return;
-            }
 
             await Publish(DownloadSubjects.DownloadCompleted, new DownloadCompleted
             {
@@ -224,8 +159,7 @@ public sealed class DownloadCommandsConsumerService(
                 TempFileRef = tempFileRef,
                 FileName = fileInfo.Name,
                 FileSizeBytes = fileInfo.Length,
-                ContentHashXxh128 = contentHash,
-                ContentType = InferContentType(fileInfo.Name)
+                ContentHashXxh128 = contentHash
             });
             await context.AckAsync();
         }
@@ -255,13 +189,11 @@ public sealed class DownloadCommandsConsumerService(
             if (!fileInfo.Exists)
                 throw new FileNotFoundException("Temp file to upload was not found.", cmd.TempFileRef);
 
-            var objectKey = BuildObjectKey(cmd);
-            var contentHash = await ComputeXxHash128Async(fileInfo.FullName);
             var storage = await blobStorageProvider.GetAsync(cmd.StorageKey);
 
             await using (var stream = File.OpenRead(fileInfo.FullName))
             {
-                await storage.WriteAsync(objectKey, stream, append: false);
+                await storage.WriteAsync(cmd.StoragePath, stream, append: false);
             }
 
             await Publish(DownloadSubjects.UploadCompleted, new UploadCompleted
@@ -275,9 +207,9 @@ public sealed class DownloadCommandsConsumerService(
                 Attempt = cmd.Attempt,
                 TempFileRef = cmd.TempFileRef,
                 StorageKey = cmd.StorageKey,
-                ObjectKey = objectKey,
+                StoragePath = cmd.StoragePath,
                 StorageVersion = null,
-                ContentHashXxh128 = contentHash,
+                ContentHashXxh128 = cmd.ContentHashXxh128,
                 ContentLengthBytes = fileInfo.Length
             });
             await context.AckAsync();
@@ -285,8 +217,8 @@ public sealed class DownloadCommandsConsumerService(
         catch (Exception ex)
         {
             logger.LogError(ex,
-                "UploadObject failed for JobId {JobId} StorageKey {StorageKey} TempFileRef {TempFileRef}",
-                cmd.JobId, cmd.StorageKey, cmd.TempFileRef);
+                "UploadObject failed for JobId {JobId} StorageKey {StorageKey} StoragePath {StoragePath}",
+                cmd.JobId, cmd.StorageKey, cmd.StoragePath);
             await PublishUploadFailedAsync(cmd, ex, UploadFailureKind(ex));
             await context.AckAsync();
         }
@@ -341,11 +273,11 @@ public sealed class DownloadCommandsConsumerService(
 
         try
         {
-            if (string.IsNullOrWhiteSpace(cmd.ObjectKey))
-                throw new ArgumentException("Object key is required.", nameof(cmd.ObjectKey));
+            if (string.IsNullOrWhiteSpace(cmd.StoragePath))
+                throw new ArgumentException("Storage path is required.", nameof(cmd.StoragePath));
 
             var storage = await blobStorageProvider.GetAsync(cmd.StorageKey);
-            await storage.DeleteAsync([cmd.ObjectKey]);
+            await storage.DeleteAsync([cmd.StoragePath]);
 
             await Publish(DownloadSubjects.UploadedObjectDeleted, new UploadedObjectDeleted
             {
@@ -357,7 +289,7 @@ public sealed class DownloadCommandsConsumerService(
                 OccurredAt = clock.GetCurrentInstant(),
                 Attempt = cmd.Attempt,
                 StorageKey = cmd.StorageKey,
-                ObjectKey = cmd.ObjectKey,
+                StoragePath = cmd.StoragePath,
                 StorageVersion = cmd.StorageVersion
             });
             await context.AckAsync();
@@ -365,8 +297,8 @@ public sealed class DownloadCommandsConsumerService(
         catch (Exception ex)
         {
             logger.LogError(ex,
-                "DeleteUploadedObject failed for JobId {JobId} StorageKey {StorageKey} ObjectKey {ObjectKey}",
-                cmd.JobId, cmd.StorageKey, cmd.ObjectKey);
+                "DeleteUploadedObject failed for JobId {JobId} StorageKey {StorageKey} StoragePath {StoragePath}",
+                cmd.JobId, cmd.StorageKey, cmd.StoragePath);
             await Publish(DownloadSubjects.UploadedObjectDeleteFailed, new UploadedObjectDeleteFailed
             {
                 JobId = cmd.JobId,
@@ -377,7 +309,7 @@ public sealed class DownloadCommandsConsumerService(
                 OccurredAt = clock.GetCurrentInstant(),
                 Attempt = cmd.Attempt,
                 StorageKey = cmd.StorageKey,
-                ObjectKey = cmd.ObjectKey,
+                StoragePath = cmd.StoragePath,
                 StorageVersion = cmd.StorageVersion,
                 FailureKind = DeleteFailureKind(ex),
                 ErrorMessage = ex.Message
@@ -388,27 +320,6 @@ public sealed class DownloadCommandsConsumerService(
 
     private Task Publish<T>(string subject, T message) where T : IFlowMessage
         => publisher.PublishAsync(subject, message, messageId: message.MessageId.ToString("N"));
-
-    private async Task<bool> ContentVersionExistsAsync(string contentHashXxh128, string storageKey)
-    {
-        var response = await messageBus.RequestAsync<ContentVersionExistsRequest, ContentVersionExistsResponse>(
-            DownloadSubjects.ContentVersionExistsQuery,
-            new ContentVersionExistsRequest
-            {
-                ContentHashXxh128 = contentHashXxh128,
-                StorageKey = storageKey
-            },
-            DataBridgeRequestTimeout);
-
-        if (response is null)
-            throw new InvalidOperationException("DataBridge content-version lookup timed out.");
-
-        if (!response.Success)
-            throw new InvalidOperationException(
-                $"DataBridge content-version lookup failed: {response.ErrorMessage ?? response.ErrorCode ?? "unknown error"}");
-
-        return response.Exists;
-    }
 
     private static Instant? ResolveSourceLastModified(VideoInfo info)
     {
@@ -448,14 +359,6 @@ public sealed class DownloadCommandsConsumerService(
         Exception ex,
         FailureKind failureKind,
         string? tempFileRef)
-        => PublishDownloadFailedAsync(cmd, failureKind, null, DescribeException(ex), tempFileRef);
-
-    private Task PublishDownloadFailedAsync(
-        DownloadVideoCommand cmd,
-        FailureKind failureKind,
-        string? errorCode,
-        string errorMessage,
-        string? tempFileRef)
         => Publish(DownloadSubjects.DownloadFailed, new DownloadFailed
         {
             JobId = cmd.JobId,
@@ -466,8 +369,8 @@ public sealed class DownloadCommandsConsumerService(
             OccurredAt = clock.GetCurrentInstant(),
             Attempt = cmd.Attempt,
             FailureKind = failureKind,
-            ErrorCode = errorCode,
-            ErrorMessage = errorMessage,
+            ErrorCode = null,
+            ErrorMessage = DescribeException(ex),
             TempFileRef = tempFileRef
         });
 
@@ -486,7 +389,7 @@ public sealed class DownloadCommandsConsumerService(
             TempFileRef = cmd.TempFileRef
         });
 
-    
+
     #region Helpers
     private static DownloadOptions CreateDownloadOptions()
         => new()
@@ -521,7 +424,6 @@ public sealed class DownloadCommandsConsumerService(
             Path.GetTempPath(),
             "froststream",
             "downloads",
-            ToSafePathComponent(cmd.ArchiveKey),
             cmd.JobId.ToString("N"),
             $"attempt-{cmd.Attempt.ToString(CultureInfo.InvariantCulture)}");
 
@@ -564,66 +466,6 @@ public sealed class DownloadCommandsConsumerService(
         {
             ArrayPool<byte>.Shared.Return(buffer);
         }
-    }
-
-    private static string InferContentType(string fileName)
-        => Path.GetExtension(fileName).ToLowerInvariant() switch
-        {
-            ".mp4" or ".m4v" => "video/mp4",
-            ".webm" => "video/webm",
-            ".mkv" => "video/x-matroska",
-            ".mov" => "video/quicktime",
-            ".avi" => "video/x-msvideo",
-            ".flv" => "video/x-flv",
-            ".wmv" => "video/x-ms-wmv",
-            ".mpg" or ".mpeg" => "video/mpeg",
-            ".ts" or ".m2ts" => "video/mp2t",
-            ".ogv" or ".ogg" => "video/ogg",
-            _ => "application/octet-stream"
-        };
-
-    private static string BuildObjectKey(UploadObjectCommand cmd)
-        => string.Join(
-            '/',
-            "archives",
-            ToSafeObjectPath(cmd.ArchiveKey),
-            ToSafeObjectFileName(cmd.TempFileRef));
-
-    private static string ToSafeObjectPath(string value)
-    {
-        var normalized = value.Replace('\\', '/');
-        var segments = normalized
-            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(ToSafePathComponent)
-            .Where(segment => !string.IsNullOrWhiteSpace(segment));
-
-        var path = string.Join('/', segments);
-        return string.IsNullOrWhiteSpace(path) ? "archive" : path;
-    }
-
-    private static string ToSafeObjectFileName(string tempFileRef)
-    {
-        var fileName = Path.GetFileName(tempFileRef);
-        if (string.IsNullOrWhiteSpace(fileName))
-            return "video.bin";
-
-        var safe = ToSafePathComponent(fileName);
-        return string.IsNullOrWhiteSpace(safe) ? "video.bin" : safe;
-    }
-
-    private static string ToSafePathComponent(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return "archive";
-
-        var chars = value.Trim()
-            .Select(c => char.IsLetterOrDigit(c) || c is '-' or '_' or '.' ? c : '-')
-            .ToArray();
-        var safe = new string(chars).Trim('-', '.');
-        if (safe.Length == 0)
-            return "archive";
-
-        return safe.Length <= 80 ? safe : safe[..80];
     }
 
     private static void DeleteTempFileRef(string tempFileRef)
@@ -691,5 +533,5 @@ public sealed class DownloadCommandsConsumerService(
         => ex is ArgumentException
             ? FailureKind.Permanent
             : FailureKind.Transient;
-#endregion
+    #endregion
 }

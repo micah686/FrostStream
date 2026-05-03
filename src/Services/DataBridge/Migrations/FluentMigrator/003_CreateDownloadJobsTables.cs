@@ -24,16 +24,12 @@ public sealed class M003_CreateDownloadJobsTables : Migration
             .WithColumn("source_url").AsString(4096).NotNullable()
             .WithColumn("requested_by").AsString(255).Nullable()
             .WithColumn("storage_key").AsString(100).Nullable()
-            .WithColumn("archive_key").AsString(512).Nullable()
             .WithColumn("attempt_metadata").AsInt32().NotNullable().WithDefaultValue(0)
             .WithColumn("attempt_download").AsInt32().NotNullable().WithDefaultValue(0)
             .WithColumn("attempt_upload").AsInt32().NotNullable().WithDefaultValue(0)
             .WithColumn("temp_file_ref").AsString(2048).Nullable()
-            .WithColumn("file_name").AsString(1024).Nullable()
             .WithColumn("file_size_bytes").AsInt64().Nullable()
             .WithColumn("content_hash_xxh128").AsString(64).Nullable()
-            .WithColumn("content_type").AsString(255).Nullable()
-            .WithColumn("object_key").AsString(2048).Nullable()
             .WithColumn("storage_version").AsString(255).Nullable()
             .WithColumn("failure_kind").AsCustom("failure_kind").Nullable()
             .WithColumn("failure_code").AsString(255).Nullable()
@@ -50,10 +46,6 @@ public sealed class M003_CreateDownloadJobsTables : Migration
         Create.Index("ix_download_jobs_correlation_id")
             .OnTable("download_jobs")
             .OnColumn("correlation_id").Ascending();
-
-        Create.Index("ix_download_jobs_archive_key")
-            .OnTable("download_jobs")
-            .OnColumn("archive_key").Ascending();
 
         Create.Table("download_job_history")
             .WithColumn("id").AsInt64().PrimaryKey().Identity()
@@ -111,7 +103,6 @@ public sealed class M003_CreateDownloadJobsTables : Migration
         Delete.ForeignKey("fk_download_job_history_job_id").OnTable("download_job_history");
         Delete.Table("download_job_history");
 
-        Delete.Index("ix_download_jobs_archive_key").OnTable("download_jobs");
         Delete.Index("ix_download_jobs_correlation_id").OnTable("download_jobs");
         Delete.Index("ix_download_jobs_state_updated_at").OnTable("download_jobs");
         Delete.Table("download_jobs");

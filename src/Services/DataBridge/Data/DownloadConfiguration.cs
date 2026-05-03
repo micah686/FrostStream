@@ -23,19 +23,14 @@ public sealed class DownloadJobConfiguration : IEntityTypeConfiguration<Download
         builder.Property(x => x.SourceUrl).HasColumnName("source_url").HasMaxLength(4096).IsRequired();
         builder.Property(x => x.RequestedBy).HasColumnName("requested_by").HasMaxLength(255);
         builder.Property(x => x.StorageKey).HasColumnName("storage_key").HasMaxLength(100);
-        builder.Property(x => x.ArchiveKey).HasColumnName("archive_key").HasMaxLength(512);
-        builder.Property(x => x.SourceMetadataHash).HasColumnName("source_metadata_hash").HasMaxLength(64);
 
         builder.Property(x => x.AttemptMetadata).HasColumnName("attempt_metadata").IsRequired();
         builder.Property(x => x.AttemptDownload).HasColumnName("attempt_download").IsRequired();
         builder.Property(x => x.AttemptUpload).HasColumnName("attempt_upload").IsRequired();
 
         builder.Property(x => x.TempFileRef).HasColumnName("temp_file_ref").HasMaxLength(2048);
-        builder.Property(x => x.FileName).HasColumnName("file_name").HasMaxLength(1024);
         builder.Property(x => x.FileSizeBytes).HasColumnName("file_size_bytes");
         builder.Property(x => x.ContentHashXxh128).HasColumnName("content_hash_xxh128").HasMaxLength(64);
-        builder.Property(x => x.ContentType).HasColumnName("content_type").HasMaxLength(255);
-        builder.Property(x => x.ObjectKey).HasColumnName("object_key").HasMaxLength(2048);
         builder.Property(x => x.StorageVersion).HasColumnName("storage_version").HasMaxLength(255);
 
         builder.Property(x => x.FailureKind)
@@ -67,12 +62,6 @@ public sealed class DownloadJobConfiguration : IEntityTypeConfiguration<Download
 
         builder.HasIndex(x => x.CorrelationId)
             .HasDatabaseName("ix_download_jobs_correlation_id");
-
-        builder.HasIndex(x => x.ArchiveKey)
-            .HasDatabaseName("ix_download_jobs_archive_key");
-
-        builder.HasIndex(x => x.SourceMetadataHash)
-            .HasDatabaseName("ix_download_jobs_source_metadata_hash");
     }
 }
 
@@ -176,33 +165,19 @@ public sealed class MediaSourceVersionConfiguration : IEntityTypeConfiguration<M
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
-        builder.Property(x => x.SourceMetadataHash)
-            .HasColumnName("source_metadata_hash")
-            .HasMaxLength(64)
-            .IsRequired();
         builder.Property(x => x.Provider).HasColumnName("provider").HasMaxLength(255);
         builder.Property(x => x.SourceMediaId).HasColumnName("source_media_id").HasMaxLength(512);
         builder.Property(x => x.SourceLastModified)
             .HasColumnName("source_last_modified")
             .HasColumnType("timestamp with time zone");
-        builder.Property(x => x.LatestContentHashXxh128)
-            .HasColumnName("latest_content_hash_xxh128")
-            .HasMaxLength(64);
+        builder.Property(x => x.MediaGuid).HasColumnName("media_guid").IsRequired();
         builder.Property(x => x.LatestJobId).HasColumnName("latest_job_id");
 
-        builder.HasIndex(x => x.SourceMetadataHash)
-            .IsUnique()
-            .HasDatabaseName("ux_media_source_versions_source_metadata_hash");
+        builder.HasIndex(x => new { x.Provider, x.SourceMediaId })
+            .HasDatabaseName("ix_media_source_versions_provider_source_media_id");
 
-        builder.HasIndex(x => x.LatestContentHashXxh128)
-            .HasDatabaseName("ix_media_source_versions_latest_content_hash_xxh128");
-
-        builder.HasOne<MediaContentIdVersionEntity>()
-            .WithMany()
-            .HasForeignKey(x => x.LatestContentHashXxh128)
-            .HasPrincipalKey(x => x.ContentHashXxh128)
-            .HasConstraintName("fk_media_source_versions_latest_content_hash_xxh128")
-            .OnDelete(DeleteBehavior.SetNull);
+        builder.HasIndex(x => x.MediaGuid)
+            .HasDatabaseName("ix_media_source_versions_media_guid");
 
         builder.HasOne<DownloadJobEntity>()
             .WithMany()
@@ -218,16 +193,24 @@ public sealed class MediaContentIdVersionConfiguration : IEntityTypeConfiguratio
     {
         builder.ToTable("media_content_id_versions");
 
-        builder.HasKey(x => x.ContentHashXxh128);
+        builder.HasKey(x => x.Id);
 
+        builder.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
+        builder.Property(x => x.MediaGuid).HasColumnName("media_guid").IsRequired();
         builder.Property(x => x.ContentHashXxh128)
             .HasColumnName("content_hash_xxh128")
             .HasMaxLength(64)
-            .ValueGeneratedNever();
+            .IsRequired();
         builder.Property(x => x.StorageKey).HasColumnName("storage_key").HasMaxLength(100).IsRequired();
-        builder.Property(x => x.Path).HasColumnName("path").HasMaxLength(2048).IsRequired();
+        builder.Property(x => x.StoragePath).HasColumnName("storage_path").HasMaxLength(2048).IsRequired();
+        builder.Property(x => x.VersionNum).HasColumnName("version_num").IsRequired();
 
-        builder.HasIndex(x => new { x.StorageKey, x.Path })
-            .HasDatabaseName("ix_media_content_id_versions_storage_key_path");
+        builder.HasIndex(x => new { x.MediaGuid, x.VersionNum })
+            .IsUnique()
+            .HasDatabaseName("ux_media_content_id_versions_media_guid_version_num");
+
+        builder.HasIndex(x => new { x.StorageKey, x.ContentHashXxh128 })
+            .IsUnique()
+            .HasDatabaseName("ux_media_content_id_versions_storage_key_content_hash");
     }
 }

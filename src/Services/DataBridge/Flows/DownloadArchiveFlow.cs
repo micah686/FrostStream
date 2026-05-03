@@ -21,6 +21,7 @@ public class DownloadArchiveFlow(
     {
         var jobId = request.JobId;
         var jobInstance = jobId.ToString("N");
+        var storageKey = request.StorageKey ?? "default";
 
         await Capture(() => Update(jobId, DownloadJobState.Queued));
 
@@ -29,31 +30,54 @@ public class DownloadArchiveFlow(
         var metadata = await RunMetadataStep(request, jobInstance);
         if (metadata is null) return;
 
-        var sourceVersion = await Capture(() => RepoCall(r =>
-            r.RegisterSourceVersionAsync(metadata, request.ForceDownload)));
-        if (sourceVersion.AlreadyDownloaded)
+        // STEP 2: dedupe by source -------------------------------------------
+        var sourceCheck = await Capture(() => RepoCall(r =>
+            r.CheckSourceVersionAsync(metadata, request.ForceDownload)));
+        if (sourceCheck.AlreadyDownloaded && sourceCheck.MediaGuid is { } existingGuid)
         {
-            await Capture(() => RepoCall(r => r.MarkAlreadyDownloadedAsync(
-                jobId,
-                sourceVersion.LatestContentHashXxh128)));
+            await Capture(() => RepoCall(r => r.MarkAlreadyDownloadedAsync(jobId, existingGuid)));
             return;
         }
 
-        // STEP 2: download ----------------------------------------------------
+        // STEP 3: download ----------------------------------------------------
         await Capture(() => Update(jobId, DownloadJobState.DownloadPending));
-        var downloaded = await RunDownloadStep(request, metadata, jobInstance);
+        var downloaded = await RunDownloadStep(request, jobInstance);
         if (downloaded is null) return;
 
-        // STEP 3: upload ------------------------------------------------------
-        await Capture(() => Update(jobId, DownloadJobState.UploadPending));
-        var uploaded = await RunUploadStep(request, metadata, downloaded, jobInstance);
-        if (uploaded is null) return;
+        // STEP 4: reserve version (option-a merge happens here) ---------------
+        var reservation = await Capture(() => RepoCall(r => r.ReserveVersionAsync(new VersionReservationRequest
+        {
+            JobId = jobId,
+            ContentHashXxh128 = downloaded.ContentHashXxh128,
+            StorageKey = storageKey,
+            FileName = downloaded.FileName,
+            Provider = metadata.Provider,
+            SourceMediaId = metadata.SourceMediaId,
+            SourceLastModified = metadata.SourceLastModified
+        })));
 
-        // STEP 4: authoritative DB commit ------------------------------------
-        // Ingress already wrote storage coords + State=Uploaded; we only flip to Completed
-        // here. When an "archive" table is added, do that commit transactionally before
-        // marking Completed. If ANY part of this commit fails after the upload landed,
-        // we MUST tear down the storage object so DB and storage don't drift.
+        if (reservation.ContentAlreadyStored)
+        {
+            // Bytes already in storage under a prior media_guid (or a prior version of this
+            // one). Skip upload, clean the temp file we just produced, mark AlreadyDownloaded.
+            await Capture(() => DispatchTempFileCleanup(request, downloaded.TempFileRef, jobInstance, attempt: 1));
+            await Message<TempFileDeleted>();
+            await Capture(() => RepoCall(r => r.MarkAlreadyDownloadedAsync(jobId, reservation.MediaGuid)));
+            return;
+        }
+
+        // STEP 5: upload to the reserved path --------------------------------
+        await Capture(() => Update(jobId, DownloadJobState.UploadPending));
+        var uploaded = await RunUploadStep(request, downloaded, reservation, storageKey, jobInstance);
+        if (uploaded is null)
+        {
+            // Upload terminally failed. The reserved version row points at a path with no
+            // bytes — drop it so a future redownload doesn't reuse the orphan path.
+            await Capture(() => RepoCall(r => r.DeleteReservedVersionAsync(reservation.MediaGuid, reservation.VersionNum)));
+            return;
+        }
+
+        // STEP 6: authoritative DB commit ------------------------------------
         try
         {
             await Capture(() => Update(jobId, DownloadJobState.CommitPending));
@@ -63,6 +87,7 @@ public class DownloadArchiveFlow(
         {
             await Capture(() => DispatchUploadedObjectDeletion(request, uploaded, jobInstance, attempt: 1));
             await Capture(() => DispatchTempFileCleanup(request, uploaded.TempFileRef, jobInstance, attempt: 1));
+            await Capture(() => RepoCall(r => r.DeleteReservedVersionAsync(reservation.MediaGuid, reservation.VersionNum)));
             await Capture(() => RepoCall(r => r.RecordTerminalFailureAsync(
                 jobId,
                 FailureKind.Permanent,
@@ -73,9 +98,7 @@ public class DownloadArchiveFlow(
             return;
         }
 
-        // STEP 5: cleanup -----------------------------------------------------
-        // Best-effort — leaked temp files are operator debt, not job failure. The flow does
-        // wait for TempFileDeleted so the job's history captures the cleanup outcome.
+        // STEP 7: cleanup -----------------------------------------------------
         var cleanupId = await Capture(Guid.NewGuid);
         var cleanup = new DeleteTempFileCommand
         {
@@ -117,7 +140,6 @@ public class DownloadArchiveFlow(
             if (result.HasFirst) return result.First;
 
             var failure = result.Second;
-            // No prior side effects to compensate for — metadata is read-only on Worker.
             if (TerminalFailureForStep(failure, attempt) is { } terminal)
             {
                 await Capture(() => Fail(request.JobId, failure, terminal));
@@ -127,7 +149,7 @@ public class DownloadArchiveFlow(
         return null;
     }
 
-    private async Task<DownloadCompleted?> RunDownloadStep(DownloadRequested request, MetadataFetched metadata, string jobInstance)
+    private async Task<DownloadCompleted?> RunDownloadStep(DownloadRequested request, string jobInstance)
     {
         for (var attempt = 1; attempt <= MaxAttempts; attempt++)
         {
@@ -139,14 +161,12 @@ public class DownloadArchiveFlow(
             {
                 JobId = request.JobId,
                 CorrelationId = request.CorrelationId,
-                CausationId = metadata.MessageId,
+                CausationId = request.MessageId,
                 MessageId = msgId,
                 OperationKey = op,
                 OccurredAt = clock.GetCurrentInstant(),
                 Attempt = attempt,
-                SourceUrl = request.SourceUrl,
-                StorageKey = request.StorageKey ?? "default",
-                ArchiveKey = metadata.ArchiveKey
+                SourceUrl = request.SourceUrl
             };
             await Capture(() => Publish(DownloadSubjects.DownloadVideoCommand, cmd));
 
@@ -154,8 +174,6 @@ public class DownloadArchiveFlow(
             if (result.HasFirst) return result.First;
 
             var failure = result.Second;
-            // Compensation: any partial temp file from this attempt must be cleaned up
-            // before retry or termination, regardless of whether we're going to retry.
             if (!string.IsNullOrEmpty(failure.TempFileRef))
             {
                 await Capture(() => DispatchTempFileCleanup(request, failure.TempFileRef!, jobInstance, attempt));
@@ -170,7 +188,12 @@ public class DownloadArchiveFlow(
         return null;
     }
 
-    private async Task<UploadCompleted?> RunUploadStep(DownloadRequested request, MetadataFetched metadata, DownloadCompleted downloaded, string jobInstance)
+    private async Task<UploadCompleted?> RunUploadStep(
+        DownloadRequested request,
+        DownloadCompleted downloaded,
+        VersionReservation reservation,
+        string storageKey,
+        string jobInstance)
     {
         for (var attempt = 1; attempt <= MaxAttempts; attempt++)
         {
@@ -188,8 +211,9 @@ public class DownloadArchiveFlow(
                 OccurredAt = clock.GetCurrentInstant(),
                 Attempt = attempt,
                 TempFileRef = downloaded.TempFileRef,
-                StorageKey = request.StorageKey ?? "default",
-                ArchiveKey = metadata.ArchiveKey
+                StorageKey = storageKey,
+                StoragePath = reservation.StoragePath,
+                ContentHashXxh128 = downloaded.ContentHashXxh128
             };
             await Capture(() => Publish(DownloadSubjects.UploadObjectCommand, cmd));
 
@@ -199,21 +223,14 @@ public class DownloadArchiveFlow(
             var failure = result.Second;
             if (TerminalFailureForStep(failure, attempt) is { } terminal)
             {
-                // Final: clean up the temp file we still own and mark failed.
                 await Capture(() => DispatchTempFileCleanup(request, downloaded.TempFileRef, jobInstance, attempt));
                 await Capture(() => Fail(request.JobId, failure, terminal));
                 return null;
             }
-            // Retry: re-uploading the same temp file is the natural retry behavior.
         }
         return null;
     }
 
-    /// <summary>
-    /// Returns the terminal state to record IF this attempt should be the last,
-    /// or <c>null</c> when the loop should retry. Permanent failures terminate immediately;
-    /// transient/timeout/unknown failures retry until <see cref="MaxAttempts"/>.
-    /// </summary>
     private static DownloadJobState? TerminalFailureForStep<TFailure>(TFailure failure, int attempt)
         where TFailure : IFlowMessage
     {
@@ -263,7 +280,7 @@ public class DownloadArchiveFlow(
             OccurredAt = clock.GetCurrentInstant(),
             Attempt = attempt,
             StorageKey = uploaded.StorageKey,
-            ObjectKey = uploaded.ObjectKey,
+            StoragePath = uploaded.StoragePath,
             StorageVersion = uploaded.StorageVersion
         };
         await Publish(DownloadSubjects.DeleteUploadedObjectCommand, deletion);

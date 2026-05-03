@@ -1,3 +1,4 @@
+using NodaTime;
 using Shared.Messaging;
 
 namespace DataBridge.Data;
@@ -19,12 +20,36 @@ public interface IDownloadJobsRepository
 
     Task ApplyMetadataAsync(Guid jobId, MetadataFetched evt, CancellationToken ct = default);
 
-    Task<SourceVersionDecision> RegisterSourceVersionAsync(MetadataFetched evt, bool forceDownload, CancellationToken ct = default);
+    /// <summary>
+    /// Looks up an existing source row by (provider, source_media_id). Decides whether
+    /// the saga can fast-fail because we already have this exact source version.
+    /// </summary>
+    Task<SourceVersionDecision> CheckSourceVersionAsync(MetadataFetched evt, bool forceDownload, CancellationToken ct = default);
 
-    Task MarkAlreadyDownloadedAsync(Guid jobId, string? latestContentHashXxh128, CancellationToken ct = default);
+    Task MarkAlreadyDownloadedAsync(Guid jobId, Guid mediaGuid, CancellationToken ct = default);
+
+    /// <summary>
+    /// Deletes a row from <c>media_content_id_versions</c> after upload/commit failure so a
+    /// future job that re-downloads the same bytes doesn't reuse a path that has no bytes
+    /// at it. No-op if the row is missing.
+    /// </summary>
+    Task DeleteReservedVersionAsync(Guid mediaGuid, int versionNum, CancellationToken ct = default);
 
     Task ApplyDownloadCompletedAsync(Guid jobId, DownloadCompleted evt, CancellationToken ct = default);
 
+    /// <summary>
+    /// Reserves a content-version row for the bytes that just landed on a worker's temp
+    /// disk. Implements option-(a) merge: if the same (storage_key, content_hash) already
+    /// exists, the new source is mapped to that existing media_guid and no new version
+    /// row is inserted.
+    /// </summary>
+    Task<VersionReservation> ReserveVersionAsync(VersionReservationRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Flips the job to <see cref="DownloadJobState.Uploaded"/> and points the source row's
+    /// <c>latest_job_id</c> at this job. Does not write <c>media_content_id_versions</c> —
+    /// that row was inserted earlier by <see cref="ReserveVersionAsync"/>.
+    /// </summary>
     Task CommitUploadAsync(Guid jobId, UploadCompleted evt, CancellationToken ct = default);
 
     Task IncrementMetadataAttemptAsync(Guid jobId, int attempt, CancellationToken ct = default);
@@ -38,7 +63,49 @@ public interface IDownloadJobsRepository
     Task RecordTerminalFailureAsync(Guid jobId, FailureKind kind, string? code, string message, DownloadJobState terminalState, string? lastPayloadJson, CancellationToken ct = default);
 }
 
+/// <summary>
+/// Result of <see cref="IDownloadJobsRepository.CheckSourceVersionAsync"/>.
+/// </summary>
+/// <param name="AlreadyDownloaded">
+/// True when the source has been downloaded before AND <c>source_last_modified</c> matches
+/// AND <c>forceDownload</c> is false. The flow skips download/upload entirely.
+/// </param>
+/// <param name="MediaGuid">Existing source row's media_guid, when present.</param>
+/// <param name="LatestJobId">Existing source row's latest_job_id (for tracing).</param>
 public sealed record SourceVersionDecision(
     bool AlreadyDownloaded,
-    string? LatestContentHashXxh128,
+    Guid? MediaGuid,
     Guid? LatestJobId);
+
+/// <summary>
+/// Inputs to <see cref="IDownloadJobsRepository.ReserveVersionAsync"/>.
+/// </summary>
+public sealed record VersionReservationRequest
+{
+    public required Guid JobId { get; init; }
+    public required string ContentHashXxh128 { get; init; }
+    public required string StorageKey { get; init; }
+    public required string FileName { get; init; }
+    public string? Provider { get; init; }
+    public string? SourceMediaId { get; init; }
+    public Instant? SourceLastModified { get; init; }
+}
+
+/// <summary>
+/// Result of <see cref="IDownloadJobsRepository.ReserveVersionAsync"/>.
+/// </summary>
+/// <param name="MediaGuid">The media_guid the bytes belong to.</param>
+/// <param name="StoragePath">
+/// Path the worker should upload to — or, when <see cref="ContentAlreadyStored"/> is true,
+/// the path the bytes already live at.
+/// </param>
+/// <param name="VersionNum">version_num of the content row.</param>
+/// <param name="ContentAlreadyStored">
+/// True when the (storage_key, content_hash) already existed. Caller should skip the
+/// upload and treat the job as a successful no-op duplicate.
+/// </param>
+public sealed record VersionReservation(
+    Guid MediaGuid,
+    string StoragePath,
+    int VersionNum,
+    bool ContentAlreadyStored);

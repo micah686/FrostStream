@@ -56,65 +56,57 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
     public async Task ApplyMetadataAsync(Guid jobId, MetadataFetched evt, CancellationToken ct = default)
     {
         var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
-        job.ArchiveKey = evt.ArchiveKey;
-        job.SourceMetadataHash = NormalizeHash(evt.SourceMetadataHash);
         job.State = DownloadJobState.MetadataResolved;
         job.UpdatedAt = clock.GetCurrentInstant();
         await db.SaveChangesAsync(ct);
     }
 
-    public async Task<SourceVersionDecision> RegisterSourceVersionAsync(MetadataFetched evt, bool forceDownload, CancellationToken ct = default)
+    public async Task<SourceVersionDecision> CheckSourceVersionAsync(MetadataFetched evt, bool forceDownload, CancellationToken ct = default)
     {
-        var sourceMetadataHash = NormalizeHash(evt.SourceMetadataHash);
-        if (sourceMetadataHash is null)
+        var provider = NormalizeOptional(evt.Provider);
+        var sourceMediaId = NormalizeOptional(evt.SourceMediaId);
+        if (provider is null || sourceMediaId is null)
             return new SourceVersionDecision(false, null, null);
 
         var source = await db.MediaSourceVersions
-            .FirstOrDefaultAsync(x => x.SourceMetadataHash == sourceMetadataHash, ct);
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Provider == provider && x.SourceMediaId == sourceMediaId, ct);
 
         if (source is null)
-        {
-            source = new MediaSourceVersionEntity
-            {
-                SourceMetadataHash = sourceMetadataHash,
-                Provider = NormalizeOptional(evt.Provider),
-                SourceMediaId = NormalizeOptional(evt.SourceMediaId),
-                SourceLastModified = evt.SourceLastModified
-            };
-            db.MediaSourceVersions.Add(source);
-        }
-        else
-        {
-            source.Provider = NormalizeOptional(evt.Provider) ?? source.Provider;
-            source.SourceMediaId = NormalizeOptional(evt.SourceMediaId) ?? source.SourceMediaId;
-            source.SourceLastModified = evt.SourceLastModified ?? source.SourceLastModified;
-        }
+            return new SourceVersionDecision(false, null, null);
 
-        await db.SaveChangesAsync(ct);
-
-        var alreadyDownloaded = !forceDownload && !string.IsNullOrWhiteSpace(source.LatestContentHashXxh128);
-        return new SourceVersionDecision(
-            alreadyDownloaded,
-            NormalizeHash(source.LatestContentHashXxh128),
-            source.LatestJobId);
+        var sameLastModified = source.SourceLastModified == evt.SourceLastModified;
+        var alreadyDownloaded = !forceDownload && sameLastModified;
+        return new SourceVersionDecision(alreadyDownloaded, source.MediaGuid, source.LatestJobId);
     }
 
-    public async Task MarkAlreadyDownloadedAsync(Guid jobId, string? latestContentHashXxh128, CancellationToken ct = default)
+    public async Task MarkAlreadyDownloadedAsync(Guid jobId, Guid mediaGuid, CancellationToken ct = default)
     {
         var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
-        var contentHash = NormalizeHash(latestContentHashXxh128);
-        var content = contentHash is null
-            ? null
-            : await db.MediaContentIdVersions
-                .AsNoTracking()
-                .FirstOrDefaultAsync(x => x.ContentHashXxh128 == contentHash, ct);
+        var latest = await db.MediaContentIdVersions
+            .AsNoTracking()
+            .Where(x => x.MediaGuid == mediaGuid)
+            .OrderByDescending(x => x.VersionNum)
+            .FirstOrDefaultAsync(ct);
 
         job.State = DownloadJobState.AlreadyDownloaded;
-        job.ContentHashXxh128 = contentHash;
-        job.StorageKey = content?.StorageKey ?? job.StorageKey;
-        job.ObjectKey = content?.Path ?? job.ObjectKey;
+        if (latest is not null)
+        {
+            job.StorageKey = latest.StorageKey;
+            job.ContentHashXxh128 = latest.ContentHashXxh128;
+        }
         job.UpdatedAt = clock.GetCurrentInstant();
         job.CompletedAt = job.UpdatedAt;
+        await db.SaveChangesAsync(ct);
+    }
+
+    public async Task DeleteReservedVersionAsync(Guid mediaGuid, int versionNum, CancellationToken ct = default)
+    {
+        var row = await db.MediaContentIdVersions
+            .FirstOrDefaultAsync(x => x.MediaGuid == mediaGuid && x.VersionNum == versionNum, ct);
+        if (row is null)
+            return;
+        db.MediaContentIdVersions.Remove(row);
         await db.SaveChangesAsync(ct);
     }
 
@@ -122,19 +114,101 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
     {
         var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
         job.TempFileRef = evt.TempFileRef;
-        job.FileName = evt.FileName;
         job.FileSizeBytes = evt.FileSizeBytes;
-        job.ContentHashXxh128 = evt.ContentHashXxh128;
-        job.ContentType = evt.ContentType;
+        job.ContentHashXxh128 = NormalizeHash(evt.ContentHashXxh128);
         job.State = DownloadJobState.DownloadedTemp;
         job.UpdatedAt = clock.GetCurrentInstant();
         await db.SaveChangesAsync(ct);
     }
 
+    public async Task<VersionReservation> ReserveVersionAsync(VersionReservationRequest request, CancellationToken ct = default)
+    {
+        var contentHash = NormalizeHash(request.ContentHashXxh128)
+            ?? throw new ArgumentException("Content hash is required.", nameof(request));
+        var storageKey = request.StorageKey;
+        var provider = NormalizeOptional(request.Provider);
+        var sourceMediaId = NormalizeOptional(request.SourceMediaId);
+
+        // Option (a): if these exact bytes already exist on this storage, reuse the
+        // existing media_guid + storage_path. No new content row, no upload needed.
+        var existingContent = await db.MediaContentIdVersions
+            .FirstOrDefaultAsync(x => x.StorageKey == storageKey && x.ContentHashXxh128 == contentHash, ct);
+
+        Guid mediaGuid;
+        string storagePath;
+        int versionNum;
+        bool contentAlreadyStored;
+
+        if (existingContent is not null)
+        {
+            mediaGuid = existingContent.MediaGuid;
+            storagePath = existingContent.StoragePath;
+            versionNum = existingContent.VersionNum;
+            contentAlreadyStored = true;
+        }
+        else
+        {
+            // No prior bytes: fall back to source row's media_guid (if any), else mint a new one.
+            var existingSource = (provider is not null && sourceMediaId is not null)
+                ? await db.MediaSourceVersions
+                    .FirstOrDefaultAsync(x => x.Provider == provider && x.SourceMediaId == sourceMediaId, ct)
+                : null;
+
+            mediaGuid = existingSource?.MediaGuid ?? Guid.NewGuid();
+
+            var maxVersion = await db.MediaContentIdVersions
+                .Where(x => x.MediaGuid == mediaGuid)
+                .Select(x => (int?)x.VersionNum)
+                .MaxAsync(ct) ?? 0;
+            versionNum = maxVersion + 1;
+
+            storagePath = BuildStoragePath(mediaGuid, versionNum, request.FileName);
+
+            db.MediaContentIdVersions.Add(new MediaContentIdVersionEntity
+            {
+                MediaGuid = mediaGuid,
+                ContentHashXxh128 = contentHash,
+                StorageKey = storageKey,
+                StoragePath = storagePath,
+                VersionNum = versionNum
+            });
+            contentAlreadyStored = false;
+        }
+
+        // Upsert the source row pointing at media_guid. If it already exists with a different
+        // media_guid, prefer the bytes-derived one (option a) — same bytes win as identity.
+        if (provider is not null && sourceMediaId is not null)
+        {
+            var sourceRow = await db.MediaSourceVersions
+                .FirstOrDefaultAsync(x => x.Provider == provider && x.SourceMediaId == sourceMediaId, ct);
+            if (sourceRow is null)
+            {
+                db.MediaSourceVersions.Add(new MediaSourceVersionEntity
+                {
+                    Provider = provider,
+                    SourceMediaId = sourceMediaId,
+                    SourceLastModified = request.SourceLastModified,
+                    MediaGuid = mediaGuid,
+                    LatestJobId = request.JobId
+                });
+            }
+            else
+            {
+                sourceRow.SourceLastModified = request.SourceLastModified ?? sourceRow.SourceLastModified;
+                sourceRow.MediaGuid = mediaGuid;
+                sourceRow.LatestJobId = request.JobId;
+            }
+        }
+
+        await db.SaveChangesAsync(ct);
+
+        return new VersionReservation(mediaGuid, storagePath, versionNum, contentAlreadyStored);
+    }
+
     public async Task CommitUploadAsync(Guid jobId, UploadCompleted evt, CancellationToken ct = default)
     {
         var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
-        job.ObjectKey = evt.ObjectKey;
+        job.StorageKey = evt.StorageKey;
         job.StorageVersion = evt.StorageVersion;
         var contentHash = NormalizeHash(evt.ContentHashXxh128);
         if (contentHash is not null)
@@ -143,47 +217,6 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
             job.FileSizeBytes = len;
         job.State = DownloadJobState.Uploaded;
         job.UpdatedAt = clock.GetCurrentInstant();
-
-        if (contentHash is not null)
-        {
-            var content = await db.MediaContentIdVersions
-                .FirstOrDefaultAsync(x => x.ContentHashXxh128 == contentHash, ct);
-            if (content is null)
-            {
-                db.MediaContentIdVersions.Add(new MediaContentIdVersionEntity
-                {
-                    ContentHashXxh128 = contentHash,
-                    StorageKey = evt.StorageKey,
-                    Path = evt.ObjectKey
-                });
-            }
-            else
-            {
-                content.StorageKey = evt.StorageKey;
-                content.Path = evt.ObjectKey;
-            }
-
-            if (NormalizeHash(job.SourceMetadataHash) is { } sourceMetadataHash)
-            {
-                var source = await db.MediaSourceVersions
-                    .FirstOrDefaultAsync(x => x.SourceMetadataHash == sourceMetadataHash, ct);
-                if (source is null)
-                {
-                    db.MediaSourceVersions.Add(new MediaSourceVersionEntity
-                    {
-                        SourceMetadataHash = sourceMetadataHash,
-                        LatestContentHashXxh128 = contentHash,
-                        LatestJobId = jobId
-                    });
-                }
-                else
-                {
-                    source.LatestContentHashXxh128 = contentHash;
-                    source.LatestJobId = jobId;
-                }
-            }
-        }
-
         await db.SaveChangesAsync(ct);
     }
 
@@ -249,6 +282,27 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
         }
 
         await db.SaveChangesAsync(ct);
+    }
+
+    private static string BuildStoragePath(Guid mediaGuid, int versionNum, string fileName)
+    {
+        var sanitized = SanitizeFileName(fileName);
+        return $"archives/{mediaGuid:N}/v{versionNum}/{sanitized}";
+    }
+
+    private static string SanitizeFileName(string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName))
+            return "video.bin";
+
+        var name = Path.GetFileName(fileName);
+        var chars = name.Trim()
+            .Select(c => char.IsLetterOrDigit(c) || c is '-' or '_' or '.' ? c : '-')
+            .ToArray();
+        var safe = new string(chars).Trim('-', '.');
+        if (safe.Length == 0)
+            return "video.bin";
+        return safe.Length <= 120 ? safe : safe[..120];
     }
 
     private static string? NormalizeHash(string? value)

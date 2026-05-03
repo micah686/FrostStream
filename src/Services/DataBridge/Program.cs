@@ -90,7 +90,6 @@ class Program
         builder.Services.AddScoped<IDownloadJobsRepository, DownloadJobsRepository>();
 
         builder.Services.AddHostedService<StorageCrudConsumerService>();
-        builder.Services.AddHostedService<ContentVersionQueryConsumerService>();
         builder.Services.AddHostedService<DownloadRequestedIngressService>();
         builder.Services.AddHostedService<DownloadEventsConsumerService>();
 

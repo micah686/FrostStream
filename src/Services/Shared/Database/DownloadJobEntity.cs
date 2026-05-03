@@ -17,10 +17,6 @@ public class DownloadJobEntity
 
     public string? StorageKey { get; set; }
 
-    public string? ArchiveKey { get; set; }
-
-    public string? SourceMetadataHash { get; set; }
-
     public int AttemptMetadata { get; set; }
 
     public int AttemptDownload { get; set; }
@@ -29,15 +25,9 @@ public class DownloadJobEntity
 
     public string? TempFileRef { get; set; }
 
-    public string? FileName { get; set; }
-
     public long? FileSizeBytes { get; set; }
 
     public string? ContentHashXxh128 { get; set; }
-
-    public string? ContentType { get; set; }
-
-    public string? ObjectKey { get; set; }
 
     public string? StorageVersion { get; set; }
 
@@ -105,24 +95,28 @@ public class MediaSourceVersionEntity
 {
     public long Id { get; set; }
 
-    public required string SourceMetadataHash { get; set; }
-
     public string? Provider { get; set; }
 
     public string? SourceMediaId { get; set; }
 
     public Instant? SourceLastModified { get; set; }
 
-    public string? LatestContentHashXxh128 { get; set; }
+    public Guid MediaGuid { get; set; }
 
     public Guid? LatestJobId { get; set; }
 }
 
 public class MediaContentIdVersionEntity
 {
+    public long Id { get; set; }
+
+    public Guid MediaGuid { get; set; }
+
     public required string ContentHashXxh128 { get; set; }
 
     public required string StorageKey { get; set; }
 
-    public required string Path { get; set; }
+    public required string StoragePath { get; set; }
+
+    public int VersionNum { get; set; }
 }

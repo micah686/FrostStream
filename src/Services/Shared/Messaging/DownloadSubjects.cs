@@ -10,8 +10,6 @@ public static class DownloadSubjects
     public const string DeleteTempFileCommand          = "download.cmd.delete-temp-file";
     public const string DeleteUploadedObjectCommand    = "download.cmd.delete-uploaded-object";
 
-    public const string ContentVersionExistsQuery      = "databridge.download.content-version-exists";
-
     public const string MetadataFetched                = "download.evt.metadata-fetched";
     public const string MetadataFetchFailed            = "download.evt.metadata-fetch-failed";
     public const string DownloadCompleted              = "download.evt.download-completed";

@@ -89,7 +89,7 @@ public enum DownloadJobState
     FailedPermanent = 11,
     /// <summary>Retry budget exhausted; routed to the DLQ and requires manual intervention.</summary>
     DeadLettered = 12,
-    /// <summary>Metadata matched a previously completed source version; download was skipped.</summary>
+    /// <summary>Source already downloaded (matched an existing version); download was skipped.</summary>
     AlreadyDownloaded = 13
 }
 
@@ -117,19 +117,12 @@ public enum FailureKind
 /// </summary>
 public sealed record DownloadRequested : IFlowMessage
 {
-    /// <inheritdoc />
     public required Guid JobId { get; init; }
-    /// <inheritdoc />
     public required Guid CorrelationId { get; init; }
-    /// <inheritdoc />
     public Guid? CausationId { get; init; }
-    /// <inheritdoc />
     public required Guid MessageId { get; init; }
-    /// <inheritdoc />
     public required string OperationKey { get; init; }
-    /// <inheritdoc />
     public required Instant OccurredAt { get; init; }
-    /// <summary>Always <c>1</c> for the root request — retries open a new job rather than re-issuing this event.</summary>
     public int Attempt { get; init; } = 1;
 
     /// <summary>
@@ -138,47 +131,37 @@ public sealed record DownloadRequested : IFlowMessage
     /// </summary>
     public required string SourceUrl { get; init; }
 
-    /// <summary>
-    /// Optional principal who initiated the request (user id, API token id). Audit only —
-    /// the flow does not branch on it.
-    /// </summary>
+    /// <summary>Optional principal who initiated the request. Audit only.</summary>
     public string? RequestedBy { get; init; }
 
     /// <summary>
-    /// Target FluentStorage backend key (e.g. <c>"local-nas"</c>, <c>"aws-s3"</c>). Resolved
-    /// at upload time by the storage provider. <see langword="null"/> means "use the system default".
+    /// Target FluentStorage backend key (e.g. <c>"local-nas"</c>, <c>"aws-s3"</c>).
+    /// <see langword="null"/> means "use the system default".
     /// </summary>
     public string? StorageKey { get; init; }
 
-    /// <summary>Free-form tags to attach to the resulting movie row (collections, genre hints, etc.).</summary>
+    /// <summary>Free-form tags to attach to the resulting movie row.</summary>
     public IReadOnlyList<string>? Tags { get; init; }
 
     /// <summary>
-    /// When true, bypasses source-metadata duplicate fast-fail and continues to download bytes
-    /// so hosts that replace media under the same source metadata can be revalidated.
+    /// When true, bypasses dedupe-by-source fast-fail and continues to download bytes
+    /// so hosts that replace media under the same source identity can be revalidated.
     /// </summary>
     public bool ForceDownload { get; init; }
 }
 
 /// <summary>
-/// Command to the Worker telling it to invoke yt-dlp for source-only metadata (no media bytes
-/// downloaded). Reply: <see cref="MetadataFetched"/> on success, <see cref="MetadataFetchFailed"/> on failure.
+/// Command to the Worker telling it to invoke yt-dlp for source-only metadata.
+/// Reply: <see cref="MetadataFetched"/> on success, <see cref="MetadataFetchFailed"/> on failure.
 /// </summary>
 public sealed record FetchMetadataCommand : IFlowMessage
 {
-    /// <inheritdoc />
     public required Guid JobId { get; init; }
-    /// <inheritdoc />
     public required Guid CorrelationId { get; init; }
-    /// <inheritdoc />
     public Guid? CausationId { get; init; }
-    /// <inheritdoc />
     public required Guid MessageId { get; init; }
-    /// <inheritdoc />
     public required string OperationKey { get; init; }
-    /// <inheritdoc />
     public required Instant OccurredAt { get; init; }
-    /// <inheritdoc />
     public required int Attempt { get; init; }
 
     /// <summary>The original source URL passed through from <see cref="DownloadRequested.SourceUrl"/>.</summary>
@@ -186,28 +169,19 @@ public sealed record FetchMetadataCommand : IFlowMessage
 }
 
 /// <summary>
-/// Event emitted by the Worker once yt-dlp resolves the source metadata. Consumed by
-/// DataBridge to upsert the movie row, decide on dedupe, and emit a <see cref="DownloadVideoCommand"/>.
+/// Event emitted by the Worker once yt-dlp resolves the source metadata. DataBridge uses
+/// <see cref="Provider"/> + <see cref="SourceMediaId"/> + <see cref="SourceLastModified"/>
+/// to decide whether the source is already on file (dedupe-by-source).
 /// </summary>
 public sealed record MetadataFetched : IFlowMessage
 {
-    /// <inheritdoc />
     public required Guid JobId { get; init; }
-    /// <inheritdoc />
     public required Guid CorrelationId { get; init; }
-    /// <inheritdoc />
     public Guid? CausationId { get; init; }
-    /// <inheritdoc />
     public required Guid MessageId { get; init; }
-    /// <inheritdoc />
     public required string OperationKey { get; init; }
-    /// <inheritdoc />
     public required Instant OccurredAt { get; init; }
-    /// <inheritdoc />
     public required int Attempt { get; init; }
-
-    /// <summary>Deterministic XxHash128 over provider + source media id + source last-modified.</summary>
-    public string? SourceMetadataHash { get; init; }
 
     /// <summary>Provider-specific source media id (e.g. YouTube video id <c>"dQw4w9WgXcQ"</c>).</summary>
     public string? SourceMediaId { get; init; }
@@ -218,18 +192,11 @@ public sealed record MetadataFetched : IFlowMessage
     /// <summary>Source-reported last-modified instant, when available from metadata.</summary>
     public Instant? SourceLastModified { get; init; }
 
-    /// <summary>Display title from the source. Used for movie naming; not a stable identifier.</summary>
+    /// <summary>Display title from the source. Audit/search only — not a stable identifier.</summary>
     public string? Title { get; init; }
 
     /// <summary>Channel / creator display name. Audit and search only.</summary>
     public string? Uploader { get; init; }
-
-    /// <summary>
-    /// Stable archive identifier used to namespace the worker's temp directory and the final
-    /// object key (e.g. <c>"youtube/dQw4w9WgXcQ"</c>). Falls back to <c>JobId.ToString("N")</c>
-    /// when provider/source-id are absent.
-    /// </summary>
-    public required string ArchiveKey { get; init; }
 }
 
 /// <summary>
@@ -238,28 +205,18 @@ public sealed record MetadataFetched : IFlowMessage
 /// </summary>
 public sealed record MetadataFetchFailed : IFlowMessage
 {
-    /// <inheritdoc />
     public required Guid JobId { get; init; }
-    /// <inheritdoc />
     public required Guid CorrelationId { get; init; }
-    /// <inheritdoc />
     public Guid? CausationId { get; init; }
-    /// <inheritdoc />
     public required Guid MessageId { get; init; }
-    /// <inheritdoc />
     public required string OperationKey { get; init; }
-    /// <inheritdoc />
     public required Instant OccurredAt { get; init; }
-    /// <inheritdoc />
     public required int Attempt { get; init; }
 
-    /// <summary>Whether the failure is retryable. Maps to the saga's transient/permanent split.</summary>
     public required FailureKind FailureKind { get; init; }
 
-    /// <summary>Optional structured error code (e.g. <c>"GEO_BLOCKED"</c>, <c>"PRIVATE_VIDEO"</c>) for ops dashboards.</summary>
     public string? ErrorCode { get; init; }
 
-    /// <summary>Human-readable error text — typically the exception message or yt-dlp stderr tail.</summary>
     public required string ErrorMessage { get; init; }
 }
 
@@ -269,79 +226,44 @@ public sealed record MetadataFetchFailed : IFlowMessage
 /// </summary>
 public sealed record DownloadVideoCommand : IFlowMessage
 {
-    /// <inheritdoc />
     public required Guid JobId { get; init; }
-    /// <inheritdoc />
     public required Guid CorrelationId { get; init; }
-    /// <inheritdoc />
     public Guid? CausationId { get; init; }
-    /// <inheritdoc />
     public required Guid MessageId { get; init; }
-    /// <inheritdoc />
     public required string OperationKey { get; init; }
-    /// <inheritdoc />
     public required Instant OccurredAt { get; init; }
-    /// <inheritdoc />
     public required int Attempt { get; init; }
 
     /// <summary>Source URL to download (passed through from <see cref="DownloadRequested.SourceUrl"/>).</summary>
     public required string SourceUrl { get; init; }
-
-    /// <summary>
-    /// Target FluentStorage backend key. Used after hashing to ask DataBridge whether the
-    /// content is already registered for the destination backend.
-    /// </summary>
-    public required string StorageKey { get; init; }
-
-    /// <summary>
-    /// Archive identifier from <see cref="MetadataFetched.ArchiveKey"/>; the worker uses it to
-    /// namespace its temp directory.
-    /// </summary>
-    public required string ArchiveKey { get; init; }
 }
 
 /// <summary>
 /// Event emitted when the source media is fully written to a worker-local temp file and its
-/// hash is computed.
+/// hash is computed. DataBridge uses the hash to reserve a content-version row before
+/// dispatching the upload command.
 /// </summary>
 public sealed record DownloadCompleted : IFlowMessage
 {
-    /// <inheritdoc />
     public required Guid JobId { get; init; }
-    /// <inheritdoc />
     public required Guid CorrelationId { get; init; }
-    /// <inheritdoc />
     public Guid? CausationId { get; init; }
-    /// <inheritdoc />
     public required Guid MessageId { get; init; }
-    /// <inheritdoc />
     public required string OperationKey { get; init; }
-    /// <inheritdoc />
     public required Instant OccurredAt { get; init; }
-    /// <inheritdoc />
     public required int Attempt { get; init; }
 
-    /// <summary>
-    /// Absolute path on the producing worker where the bytes live. Worker-local — not visible
-    /// to other services. Cleaned up by <see cref="DeleteTempFileCommand"/>.
-    /// </summary>
+    /// <summary>Absolute path on the producing worker where the bytes live. Worker-local.</summary>
     public required string TempFileRef { get; init; }
 
-    /// <summary>Filename component (no directory) used for the eventual object key suffix.</summary>
+    /// <summary>Filename component (no directory) used as the suffix of the final storage path.</summary>
     public required string FileName { get; init; }
 
-    /// <summary>Total bytes written. Cross-checked against <see cref="UploadCompleted.ContentLengthBytes"/> at commit.</summary>
+    /// <summary>Total bytes written.</summary>
     public long FileSizeBytes { get; init; }
 
-    /// <summary>
-    /// Hex-encoded XxHash128 of the file contents. Content-addressed dedupe key when deciding
-    /// whether to skip the upload to backends that already host this hash. Null only if hashing
-    /// was skipped (should not happen in production).
-    /// </summary>
-    public string? ContentHashXxh128 { get; init; }
-
-    /// <summary>MIME type inferred from yt-dlp output / file probing (e.g. <c>"video/mp4"</c>).</summary>
-    public string? ContentType { get; init; }
+    /// <summary>Hex-encoded XxHash128 of the file contents. Identity for the bytes.</summary>
+    public required string ContentHashXxh128 { get; init; }
 }
 
 /// <summary>
@@ -350,106 +272,63 @@ public sealed record DownloadCompleted : IFlowMessage
 /// </summary>
 public sealed record DownloadFailed : IFlowMessage
 {
-    /// <inheritdoc />
     public required Guid JobId { get; init; }
-    /// <inheritdoc />
     public required Guid CorrelationId { get; init; }
-    /// <inheritdoc />
     public Guid? CausationId { get; init; }
-    /// <inheritdoc />
     public required Guid MessageId { get; init; }
-    /// <inheritdoc />
     public required string OperationKey { get; init; }
-    /// <inheritdoc />
     public required Instant OccurredAt { get; init; }
-    /// <inheritdoc />
     public required int Attempt { get; init; }
 
-    /// <summary>Whether the failure is retryable.</summary>
     public required FailureKind FailureKind { get; init; }
-
-    /// <summary>Optional structured error code for ops dashboards.</summary>
     public string? ErrorCode { get; init; }
-
-    /// <summary>Human-readable error text (exception message or yt-dlp stderr tail).</summary>
     public required string ErrorMessage { get; init; }
-
-    /// <summary>Path to any partial bytes left on disk; cleanup compensation will target it. Null when nothing was written.</summary>
     public string? TempFileRef { get; init; }
 }
 
 /// <summary>
-/// Worker-to-DataBridge query for content-addressed dedupe. DataBridge owns the database
-/// lookup and replies over core NATS.
-/// </summary>
-public sealed record ContentVersionExistsRequest
-{
-    public required string ContentHashXxh128 { get; init; }
-    public required string StorageKey { get; init; }
-}
-
-public sealed record ContentVersionExistsResponse
-{
-    public bool Success { get; init; }
-    public bool Exists { get; init; }
-    public string? ErrorCode { get; init; }
-    public string? ErrorMessage { get; init; }
-}
-
-/// <summary>
-/// Command telling the Worker to upload the temp file to the requested storage backend.
+/// Command telling the Worker to upload the temp file to a specific storage path that
+/// DataBridge has already reserved in <c>media_content_id_versions</c>.
 /// Reply: <see cref="UploadCompleted"/> on success, <see cref="UploadFailed"/> on failure.
 /// </summary>
 public sealed record UploadObjectCommand : IFlowMessage
 {
-    /// <inheritdoc />
     public required Guid JobId { get; init; }
-    /// <inheritdoc />
     public required Guid CorrelationId { get; init; }
-    /// <inheritdoc />
     public Guid? CausationId { get; init; }
-    /// <inheritdoc />
     public required Guid MessageId { get; init; }
-    /// <inheritdoc />
     public required string OperationKey { get; init; }
-    /// <inheritdoc />
     public required Instant OccurredAt { get; init; }
-    /// <inheritdoc />
     public required int Attempt { get; init; }
 
     /// <summary>Source path on the worker — must equal <see cref="DownloadCompleted.TempFileRef"/>.</summary>
     public required string TempFileRef { get; init; }
 
-    /// <summary>
-    /// FluentStorage backend key (e.g. <c>"local-nas"</c>, <c>"aws-s3"</c>) to upload into.
-    /// Resolved by the storage provider on the worker.
-    /// </summary>
+    /// <summary>FluentStorage backend key to upload into.</summary>
     public required string StorageKey { get; init; }
 
-    /// <summary>Archive identifier used to construct the final object key (e.g. <c>"youtube/dQw4w9WgXcQ"</c>).</summary>
-    public required string ArchiveKey { get; init; }
+    /// <summary>
+    /// Final, backend-relative path the worker must write to (e.g.
+    /// <c>"archives/{mediaGuid}/v1/video.mp4"</c>). Computed by DataBridge during version
+    /// reservation, so the worker has no path-construction logic of its own.
+    /// </summary>
+    public required string StoragePath { get; init; }
+
+    /// <summary>Hex XxHash128 of the bytes; passed through so the upload event can reaffirm it.</summary>
+    public required string ContentHashXxh128 { get; init; }
 }
 
 /// <summary>
-/// Event emitted when the upload is durable in the backend. Carries the canonical location
-/// (<see cref="StorageKey"/>, <see cref="ObjectKey"/>, optional <see cref="StorageVersion"/>)
-/// and the verification material (hash + length) DataBridge uses to commit the replica row.
+/// Event emitted when the upload is durable in the backend.
 /// </summary>
 public sealed record UploadCompleted : IFlowMessage
 {
-    /// <inheritdoc />
     public required Guid JobId { get; init; }
-    /// <inheritdoc />
     public required Guid CorrelationId { get; init; }
-    /// <inheritdoc />
     public Guid? CausationId { get; init; }
-    /// <inheritdoc />
     public required Guid MessageId { get; init; }
-    /// <inheritdoc />
     public required string OperationKey { get; init; }
-    /// <inheritdoc />
     public required Instant OccurredAt { get; init; }
-    /// <inheritdoc />
     public required int Attempt { get; init; }
 
     /// <summary>The temp-file source the bytes came from. Subsequently fed to <see cref="DeleteTempFileCommand"/>.</summary>
@@ -458,26 +337,16 @@ public sealed record UploadCompleted : IFlowMessage
     /// <summary>Backend key the bytes were written to.</summary>
     public required string StorageKey { get; init; }
 
-    /// <summary>
-    /// Backend-relative object path (e.g. <c>"archives/youtube/dQw4w9WgXcQ/video.bin"</c>).
-    /// Combined with <see cref="StorageKey"/> uniquely identifies the replica.
-    /// </summary>
-    public required string ObjectKey { get; init; }
+    /// <summary>Backend-relative object path, equal to the <see cref="UploadObjectCommand.StoragePath"/> the worker received.</summary>
+    public required string StoragePath { get; init; }
 
-    /// <summary>
-    /// Backend-supplied version id when the backend supports versioning (S3 <c>VersionId</c>,
-    /// Azure <c>ETag</c>). Null on backends that do not version.
-    /// </summary>
+    /// <summary>Backend-supplied version id when the backend supports versioning. Null when unsupported.</summary>
     public string? StorageVersion { get; init; }
 
-    /// <summary>
-    /// Hex XxHash128 of the bytes as observed at upload time. Should match
-    /// <see cref="DownloadCompleted.ContentHashXxh128"/> — divergence indicates corruption in
-    /// transit and aborts the commit.
-    /// </summary>
-    public string? ContentHashXxh128 { get; init; }
+    /// <summary>Hex XxHash128 of the bytes as observed at upload time.</summary>
+    public required string ContentHashXxh128 { get; init; }
 
-    /// <summary>Bytes durably stored. Should match <see cref="DownloadCompleted.FileSizeBytes"/>.</summary>
+    /// <summary>Bytes durably stored.</summary>
     public long? ContentLengthBytes { get; init; }
 }
 
@@ -487,31 +356,17 @@ public sealed record UploadCompleted : IFlowMessage
 /// </summary>
 public sealed record UploadFailed : IFlowMessage
 {
-    /// <inheritdoc />
     public required Guid JobId { get; init; }
-    /// <inheritdoc />
     public required Guid CorrelationId { get; init; }
-    /// <inheritdoc />
     public Guid? CausationId { get; init; }
-    /// <inheritdoc />
     public required Guid MessageId { get; init; }
-    /// <inheritdoc />
     public required string OperationKey { get; init; }
-    /// <inheritdoc />
     public required Instant OccurredAt { get; init; }
-    /// <inheritdoc />
     public required int Attempt { get; init; }
 
-    /// <summary>Whether the failure is retryable.</summary>
     public required FailureKind FailureKind { get; init; }
-
-    /// <summary>Optional structured error code.</summary>
     public string? ErrorCode { get; init; }
-
-    /// <summary>Human-readable error text.</summary>
     public required string ErrorMessage { get; init; }
-
-    /// <summary>Source path on the worker; retained so a retry can re-upload without re-downloading.</summary>
     public string? TempFileRef { get; init; }
 }
 
@@ -521,174 +376,101 @@ public sealed record UploadFailed : IFlowMessage
 /// </summary>
 public sealed record DeleteTempFileCommand : IFlowMessage
 {
-    /// <inheritdoc />
     public required Guid JobId { get; init; }
-    /// <inheritdoc />
     public required Guid CorrelationId { get; init; }
-    /// <inheritdoc />
     public Guid? CausationId { get; init; }
-    /// <inheritdoc />
     public required Guid MessageId { get; init; }
-    /// <inheritdoc />
     public required string OperationKey { get; init; }
-    /// <inheritdoc />
     public required Instant OccurredAt { get; init; }
-    /// <inheritdoc />
     public required int Attempt { get; init; }
 
-    /// <summary>Absolute path on the worker to remove.</summary>
     public required string TempFileRef { get; init; }
 }
 
 /// <summary>Event acknowledging that the temp file has been removed (or was never present).</summary>
 public sealed record TempFileDeleted : IFlowMessage
 {
-    /// <inheritdoc />
     public required Guid JobId { get; init; }
-    /// <inheritdoc />
     public required Guid CorrelationId { get; init; }
-    /// <inheritdoc />
     public Guid? CausationId { get; init; }
-    /// <inheritdoc />
     public required Guid MessageId { get; init; }
-    /// <inheritdoc />
     public required string OperationKey { get; init; }
-    /// <inheritdoc />
     public required Instant OccurredAt { get; init; }
-    /// <inheritdoc />
     public required int Attempt { get; init; }
 
-    /// <summary>The path that was removed.</summary>
     public required string TempFileRef { get; init; }
 }
 
-/// <summary>
-/// Event when the temp-file delete failed. Generally treated as advisory — the saga continues
-/// and a periodic janitor sweeps stragglers, since orphan temp files are local to one worker
-/// and not visible to readers.
-/// </summary>
+/// <summary>Event when the temp-file delete failed. Treated as advisory.</summary>
 public sealed record TempFileDeleteFailed : IFlowMessage
 {
-    /// <inheritdoc />
     public required Guid JobId { get; init; }
-    /// <inheritdoc />
     public required Guid CorrelationId { get; init; }
-    /// <inheritdoc />
     public Guid? CausationId { get; init; }
-    /// <inheritdoc />
     public required Guid MessageId { get; init; }
-    /// <inheritdoc />
     public required string OperationKey { get; init; }
-    /// <inheritdoc />
     public required Instant OccurredAt { get; init; }
-    /// <inheritdoc />
     public required int Attempt { get; init; }
 
-    /// <summary>The path that could not be removed.</summary>
     public required string TempFileRef { get; init; }
-
-    /// <summary>Whether the failure is retryable.</summary>
     public required FailureKind FailureKind { get; init; }
-
-    /// <summary>Human-readable error text.</summary>
     public required string ErrorMessage { get; init; }
 }
 
 /// <summary>
 /// Compensating command issued when an upload succeeded but a downstream step failed:
-/// removes the orphaned object from the final storage backend so storage costs do not leak.
+/// removes the orphaned object from the final storage backend.
 /// </summary>
 public sealed record DeleteUploadedObjectCommand : IFlowMessage
 {
-    /// <inheritdoc />
     public required Guid JobId { get; init; }
-    /// <inheritdoc />
     public required Guid CorrelationId { get; init; }
-    /// <inheritdoc />
     public Guid? CausationId { get; init; }
-    /// <inheritdoc />
     public required Guid MessageId { get; init; }
-    /// <inheritdoc />
     public required string OperationKey { get; init; }
-    /// <inheritdoc />
     public required Instant OccurredAt { get; init; }
-    /// <inheritdoc />
     public required int Attempt { get; init; }
 
-    /// <summary>Backend key that holds the orphaned object.</summary>
     public required string StorageKey { get; init; }
 
-    /// <summary>Backend-relative object path to remove.</summary>
-    public required string ObjectKey { get; init; }
+    /// <summary>Backend-relative path to remove (matches <see cref="UploadCompleted.StoragePath"/>).</summary>
+    public required string StoragePath { get; init; }
 
-    /// <summary>
-    /// Backend version id to target (S3 <c>VersionId</c>, etc.) when versioning is on.
-    /// Null = delete the latest version, or the unversioned object on backends without versioning.
-    /// </summary>
     public string? StorageVersion { get; init; }
 }
 
 /// <summary>Event acknowledging the compensating delete on the final backend.</summary>
 public sealed record UploadedObjectDeleted : IFlowMessage
 {
-    /// <inheritdoc />
     public required Guid JobId { get; init; }
-    /// <inheritdoc />
     public required Guid CorrelationId { get; init; }
-    /// <inheritdoc />
     public Guid? CausationId { get; init; }
-    /// <inheritdoc />
     public required Guid MessageId { get; init; }
-    /// <inheritdoc />
     public required string OperationKey { get; init; }
-    /// <inheritdoc />
     public required Instant OccurredAt { get; init; }
-    /// <inheritdoc />
     public required int Attempt { get; init; }
 
-    /// <summary>Backend the object was removed from.</summary>
     public required string StorageKey { get; init; }
-
-    /// <summary>The object path that was removed.</summary>
-    public required string ObjectKey { get; init; }
-
-    /// <summary>The specific version that was removed when versioning was used.</summary>
+    public required string StoragePath { get; init; }
     public string? StorageVersion { get; init; }
 }
 
 /// <summary>
-/// Event when the compensating delete failed — the orphan is still in the backend. Triggers a
-/// dead-letter / on-call alert because the object is now unreferenced and will accrue cost.
+/// Event when the compensating delete failed — the orphan is still in the backend.
 /// </summary>
 public sealed record UploadedObjectDeleteFailed : IFlowMessage
 {
-    /// <inheritdoc />
     public required Guid JobId { get; init; }
-    /// <inheritdoc />
     public required Guid CorrelationId { get; init; }
-    /// <inheritdoc />
     public Guid? CausationId { get; init; }
-    /// <inheritdoc />
     public required Guid MessageId { get; init; }
-    /// <inheritdoc />
     public required string OperationKey { get; init; }
-    /// <inheritdoc />
     public required Instant OccurredAt { get; init; }
-    /// <inheritdoc />
     public required int Attempt { get; init; }
 
-    /// <summary>Backend that still holds the orphan.</summary>
     public required string StorageKey { get; init; }
-
-    /// <summary>The orphaned object path.</summary>
-    public required string ObjectKey { get; init; }
-
-    /// <summary>The version that could not be removed when versioning was used.</summary>
+    public required string StoragePath { get; init; }
     public string? StorageVersion { get; init; }
-
-    /// <summary>Whether the failure is retryable.</summary>
     public required FailureKind FailureKind { get; init; }
-
-    /// <summary>Human-readable error text.</summary>
     public required string ErrorMessage { get; init; }
 }
