@@ -3,7 +3,7 @@ using FluentMigrator;
 
 namespace DataBridge.Migrations.FluentMigrator;
 
-[Migration(6, "Create accounts, media metadata, technical detail, taxonomy, and junction tables")]
+[Migration(6, "Create metadata_* schema: accounts, media metadata, technical detail, taxonomy, and junction tables")]
 public sealed class M006_CreateMediaMetadataSchema : Migration
 {
     public override void Up()
@@ -16,7 +16,7 @@ public sealed class M006_CreateMediaMetadataSchema : Migration
             "CREATE TYPE subtitle_type_enum AS ENUM (" +
             "'subtitles','automatic_captions');");
 
-        Create.Table("accounts")
+        Create.Table("metadata_accounts")
             .WithColumn("id").AsInt64().PrimaryKey().Identity()
             .WithColumn("platform").AsString(50).NotNullable()
             .WithColumn("account_name").AsCustom("text").NotNullable()
@@ -30,12 +30,12 @@ public sealed class M006_CreateMediaMetadataSchema : Migration
             .WithColumn("banner_storage_path").AsCustom("text").Nullable();
 
         Create.Index("ux_accounts_platform_handle")
-            .OnTable("accounts")
+            .OnTable("metadata_accounts")
             .OnColumn("platform").Ascending()
             .OnColumn("account_handle").Ascending()
             .WithOptions().Unique();
 
-        Create.Table("media_metadata")
+        Create.Table("metadata_media_metadata")
             .WithColumn("id").AsInt64().PrimaryKey().Identity()
             .WithColumn("media_guid").AsCustom("uuid").NotNullable()
             .WithColumn("account_id").AsInt64().NotNullable()
@@ -57,27 +57,27 @@ public sealed class M006_CreateMediaMetadataSchema : Migration
             .WithColumn("availability").AsCustom("availability_enum").Nullable()
             .WithColumn("location").AsCustom("text").Nullable();
 
-        Create.ForeignKey("fk_media_metadata_account_id")
-            .FromTable("media_metadata").ForeignColumn("account_id")
-            .ToTable("accounts").PrimaryColumn("id")
+        Create.ForeignKey("fk_metadata_media_metadata_account_id")
+            .FromTable("metadata_media_metadata").ForeignColumn("account_id")
+            .ToTable("metadata_accounts").PrimaryColumn("id")
             .OnDelete(Rule.Cascade);
 
         Create.Index("ux_media_metadata_media_guid")
-            .OnTable("media_metadata")
+            .OnTable("metadata_media_metadata")
             .OnColumn("media_guid").Ascending()
             .WithOptions().Unique();
 
-        Create.Table("media_base")
+        Create.Table("metadata_media_base")
             .WithColumn("id").AsInt64().PrimaryKey().Identity()
             .WithColumn("media_guid").AsCustom("uuid").NotNullable()
             .WithColumn("duration_ticks").AsInt64().NotNullable().WithDefaultValue(0);
 
         Create.Index("ix_media_base_media_guid")
-            .OnTable("media_base")
+            .OnTable("metadata_media_base")
             .OnColumn("media_guid").Ascending()
             .WithOptions().Unique();
 
-        Create.Table("media_format_details")
+        Create.Table("metadata_media_format_details")
             .WithColumn("id").AsInt64().PrimaryKey().Identity()
             .WithColumn("media_base_id").AsInt64().NotNullable()
             .WithColumn("duration_ticks").AsInt64().NotNullable().WithDefaultValue(0)
@@ -86,17 +86,17 @@ public sealed class M006_CreateMediaMetadataSchema : Migration
             .WithColumn("stream_count").AsInt32().NotNullable().WithDefaultValue(0)
             .WithColumn("bit_rate").AsDouble().NotNullable().WithDefaultValue(0);
 
-        Create.ForeignKey("fk_media_format_details_media_base_id")
-            .FromTable("media_format_details").ForeignColumn("media_base_id")
-            .ToTable("media_base").PrimaryColumn("id")
+        Create.ForeignKey("fk_metadata_media_format_details_media_base_id")
+            .FromTable("metadata_media_format_details").ForeignColumn("media_base_id")
+            .ToTable("metadata_media_base").PrimaryColumn("id")
             .OnDelete(Rule.Cascade);
 
         Create.Index("ix_media_format_details_media_base_id")
-            .OnTable("media_format_details")
+            .OnTable("metadata_media_format_details")
             .OnColumn("media_base_id").Ascending()
             .WithOptions().Unique();
 
-        Create.Table("media_streams")
+        Create.Table("metadata_media_streams")
             .WithColumn("id").AsInt64().PrimaryKey().Identity()
             .WithColumn("media_base_id").AsInt64().NotNullable()
             .WithColumn("stream_type").AsString(20).NotNullable()
@@ -109,16 +109,16 @@ public sealed class M006_CreateMediaMetadataSchema : Migration
             .WithColumn("duration_ticks").AsInt64().NotNullable().WithDefaultValue(0)
             .WithColumn("language").AsString(50).Nullable();
 
-        Create.ForeignKey("fk_media_streams_media_base_id")
-            .FromTable("media_streams").ForeignColumn("media_base_id")
-            .ToTable("media_base").PrimaryColumn("id")
+        Create.ForeignKey("fk_metadata_media_streams_media_base_id")
+            .FromTable("metadata_media_streams").ForeignColumn("media_base_id")
+            .ToTable("metadata_media_base").PrimaryColumn("id")
             .OnDelete(Rule.Cascade);
 
         Create.Index("ix_media_streams_media_base_id")
-            .OnTable("media_streams")
+            .OnTable("metadata_media_streams")
             .OnColumn("media_base_id").Ascending();
 
-        Create.Table("video_stream_details")
+        Create.Table("metadata_video_stream_details")
             .WithColumn("id").AsInt64().PrimaryKey().Identity()
             .WithColumn("media_stream_id").AsInt64().NotNullable()
             .WithColumn("avg_frame_rate").AsDouble().NotNullable().WithDefaultValue(0)
@@ -135,17 +135,17 @@ public sealed class M006_CreateMediaMetadataSchema : Migration
             .WithColumn("color_primaries").AsCustom("text").NotNullable()
             .WithColumn("hdr_type").AsString(20).NotNullable().WithDefaultValue("SDR");
 
-        Create.ForeignKey("fk_video_stream_details_media_stream_id")
-            .FromTable("video_stream_details").ForeignColumn("media_stream_id")
-            .ToTable("media_streams").PrimaryColumn("id")
+        Create.ForeignKey("fk_metadata_video_stream_details_media_stream_id")
+            .FromTable("metadata_video_stream_details").ForeignColumn("media_stream_id")
+            .ToTable("metadata_media_streams").PrimaryColumn("id")
             .OnDelete(Rule.Cascade);
 
         Create.Index("ix_video_stream_details_media_stream_id")
-            .OnTable("video_stream_details")
+            .OnTable("metadata_video_stream_details")
             .OnColumn("media_stream_id").Ascending()
             .WithOptions().Unique();
 
-        Create.Table("audio_stream_details")
+        Create.Table("metadata_audio_stream_details")
             .WithColumn("id").AsInt64().PrimaryKey().Identity()
             .WithColumn("media_stream_id").AsInt64().NotNullable()
             .WithColumn("channels").AsInt32().NotNullable().WithDefaultValue(0)
@@ -153,33 +153,33 @@ public sealed class M006_CreateMediaMetadataSchema : Migration
             .WithColumn("sample_rate_hz").AsInt32().NotNullable().WithDefaultValue(0)
             .WithColumn("profile").AsCustom("text").NotNullable();
 
-        Create.ForeignKey("fk_audio_stream_details_media_stream_id")
-            .FromTable("audio_stream_details").ForeignColumn("media_stream_id")
-            .ToTable("media_streams").PrimaryColumn("id")
+        Create.ForeignKey("fk_metadata_audio_stream_details_media_stream_id")
+            .FromTable("metadata_audio_stream_details").ForeignColumn("media_stream_id")
+            .ToTable("metadata_media_streams").PrimaryColumn("id")
             .OnDelete(Rule.Cascade);
 
         Create.Index("ix_audio_stream_details_media_stream_id")
-            .OnTable("audio_stream_details")
+            .OnTable("metadata_audio_stream_details")
             .OnColumn("media_stream_id").Ascending()
             .WithOptions().Unique();
 
-        Create.Table("chapter_data")
+        Create.Table("metadata_chapter_data")
             .WithColumn("id").AsInt64().PrimaryKey().Identity()
             .WithColumn("media_base_id").AsInt64().NotNullable()
             .WithColumn("title").AsCustom("text").NotNullable()
             .WithColumn("start_ticks").AsInt64().NotNullable().WithDefaultValue(0)
             .WithColumn("end_ticks").AsInt64().NotNullable().WithDefaultValue(0);
 
-        Create.ForeignKey("fk_chapter_data_media_base_id")
-            .FromTable("chapter_data").ForeignColumn("media_base_id")
-            .ToTable("media_base").PrimaryColumn("id")
+        Create.ForeignKey("fk_metadata_chapter_data_media_base_id")
+            .FromTable("metadata_chapter_data").ForeignColumn("media_base_id")
+            .ToTable("metadata_media_base").PrimaryColumn("id")
             .OnDelete(Rule.Cascade);
 
         Create.Index("ix_chapter_data_media_base_id")
-            .OnTable("chapter_data")
+            .OnTable("metadata_chapter_data")
             .OnColumn("media_base_id").Ascending();
 
-        Create.Table("media_captions")
+        Create.Table("metadata_media_captions")
             .WithColumn("id").AsInt64().PrimaryKey().Identity()
             .WithColumn("media_guid").AsCustom("uuid").NotNullable()
             .WithColumn("storage_path").AsCustom("text").NotNullable()
@@ -188,12 +188,12 @@ public sealed class M006_CreateMediaMetadataSchema : Migration
             .WithColumn("name").AsCustom("text").Nullable();
 
         Create.Index("ix_media_captions_media_lang_type")
-            .OnTable("media_captions")
+            .OnTable("metadata_media_captions")
             .OnColumn("media_guid").Ascending()
             .OnColumn("two_digit_language_code").Ascending()
             .OnColumn("caption_type").Ascending();
 
-        Create.Table("media_comments")
+        Create.Table("metadata_media_comments")
             .WithColumn("id").AsInt64().PrimaryKey().Identity()
             .WithColumn("media_guid").AsCustom("uuid").NotNullable()
             .WithColumn("comment_id").AsCustom("text").NotNullable()
@@ -207,25 +207,25 @@ public sealed class M006_CreateMediaMetadataSchema : Migration
             .WithColumn("is_uploader").AsBoolean().NotNullable().WithDefaultValue(false)
             .WithColumn("is_pinned").AsBoolean().NotNullable().WithDefaultValue(false);
 
-        Create.ForeignKey("fk_media_comments_account_id")
-            .FromTable("media_comments").ForeignColumn("account_id")
-            .ToTable("accounts").PrimaryColumn("id")
+        Create.ForeignKey("fk_metadata_media_comments_account_id")
+            .FromTable("metadata_media_comments").ForeignColumn("account_id")
+            .ToTable("metadata_accounts").PrimaryColumn("id")
             .OnDelete(Rule.Cascade);
 
         Create.Index("ix_media_comments_media_time")
-            .OnTable("media_comments")
+            .OnTable("metadata_media_comments")
             .OnColumn("media_guid").Ascending()
             .OnColumn("comment_timestamp").Ascending();
 
         Create.Index("ix_media_comments_comment_id")
-            .OnTable("media_comments")
+            .OnTable("metadata_media_comments")
             .OnColumn("comment_id").Ascending();
 
         Create.Index("ix_media_comments_parent_id")
-            .OnTable("media_comments")
+            .OnTable("metadata_media_comments")
             .OnColumn("parent_comment_id").Ascending();
 
-        Create.Table("series_metadata")
+        Create.Table("metadata_series_metadata")
             .WithColumn("id").AsInt64().PrimaryKey().Identity()
             .WithColumn("media_guid").AsCustom("uuid").NotNullable()
             .WithColumn("series_name").AsCustom("text").NotNullable()
@@ -236,11 +236,11 @@ public sealed class M006_CreateMediaMetadataSchema : Migration
             .WithColumn("episode_name").AsCustom("text").NotNullable();
 
         Create.Index("ux_series_metadata_media_guid")
-            .OnTable("series_metadata")
+            .OnTable("metadata_series_metadata")
             .OnColumn("media_guid").Ascending()
             .WithOptions().Unique();
 
-        Create.Table("music_metadata")
+        Create.Table("metadata_music_metadata")
             .WithColumn("id").AsInt64().PrimaryKey().Identity()
             .WithColumn("media_guid").AsCustom("uuid").NotNullable()
             .WithColumn("album_title").AsCustom("text").NotNullable()
@@ -252,173 +252,173 @@ public sealed class M006_CreateMediaMetadataSchema : Migration
             .WithColumn("composer").AsCustom("text").Nullable();
 
         Create.Index("ux_music_metadata_media_guid")
-            .OnTable("music_metadata")
+            .OnTable("metadata_music_metadata")
             .OnColumn("media_guid").Ascending()
             .WithOptions().Unique();
 
-        Create.Table("artists")
+        Create.Table("metadata_artists")
             .WithColumn("id").AsInt64().PrimaryKey().Identity()
             .WithColumn("artist_name").AsCustom("text").NotNullable();
 
         Create.Index("ux_artists_artist_name")
-            .OnTable("artists")
+            .OnTable("metadata_artists")
             .OnColumn("artist_name").Ascending()
             .WithOptions().Unique();
 
-        Create.Table("genres")
+        Create.Table("metadata_genres")
             .WithColumn("id").AsInt64().PrimaryKey().Identity()
             .WithColumn("genre_name").AsCustom("text").NotNullable();
 
         Create.Index("ux_genres_genre_name")
-            .OnTable("genres")
+            .OnTable("metadata_genres")
             .OnColumn("genre_name").Ascending()
             .WithOptions().Unique();
 
-        Create.Table("tags")
+        Create.Table("metadata_tags")
             .WithColumn("id").AsInt64().PrimaryKey().Identity()
             .WithColumn("tag_name").AsCustom("text").NotNullable();
 
         Create.Index("ux_tags_tag_name")
-            .OnTable("tags")
+            .OnTable("metadata_tags")
             .OnColumn("tag_name").Ascending()
             .WithOptions().Unique();
 
-        Create.Table("categories")
+        Create.Table("metadata_categories")
             .WithColumn("id").AsInt64().PrimaryKey().Identity()
             .WithColumn("category_name").AsCustom("text").NotNullable();
 
         Create.Index("ux_categories_category_name")
-            .OnTable("categories")
+            .OnTable("metadata_categories")
             .OnColumn("category_name").Ascending()
             .WithOptions().Unique();
 
-        Create.Table("cast_members")
+        Create.Table("metadata_cast_members")
             .WithColumn("id").AsInt64().PrimaryKey().Identity()
             .WithColumn("cast_name").AsCustom("text").NotNullable();
 
         Create.Index("ux_cast_members_cast_name")
-            .OnTable("cast_members")
+            .OnTable("metadata_cast_members")
             .OnColumn("cast_name").Ascending()
             .WithOptions().Unique();
 
-        Create.Table("media_artists")
+        Create.Table("metadata_media_artists")
             .WithColumn("media_metadata_id").AsInt64().NotNullable()
             .WithColumn("artist_id").AsInt64().NotNullable()
             .WithColumn("is_album_artist").AsBoolean().NotNullable().WithDefaultValue(false);
 
         Create.PrimaryKey("pk_media_artists")
-            .OnTable("media_artists")
+            .OnTable("metadata_media_artists")
             .Columns("media_metadata_id", "artist_id");
 
-        Create.ForeignKey("fk_media_artists_media_metadata_id")
-            .FromTable("media_artists").ForeignColumn("media_metadata_id")
-            .ToTable("media_metadata").PrimaryColumn("id")
+        Create.ForeignKey("fk_metadata_media_artists_media_metadata_id")
+            .FromTable("metadata_media_artists").ForeignColumn("media_metadata_id")
+            .ToTable("metadata_media_metadata").PrimaryColumn("id")
             .OnDelete(Rule.Cascade);
 
-        Create.ForeignKey("fk_media_artists_artist_id")
-            .FromTable("media_artists").ForeignColumn("artist_id")
-            .ToTable("artists").PrimaryColumn("id")
+        Create.ForeignKey("fk_metadata_media_artists_artist_id")
+            .FromTable("metadata_media_artists").ForeignColumn("artist_id")
+            .ToTable("metadata_artists").PrimaryColumn("id")
             .OnDelete(Rule.Cascade);
 
-        Create.Table("media_genres")
+        Create.Table("metadata_media_genres")
             .WithColumn("media_metadata_id").AsInt64().NotNullable()
             .WithColumn("genre_id").AsInt64().NotNullable();
 
         Create.PrimaryKey("pk_media_genres")
-            .OnTable("media_genres")
+            .OnTable("metadata_media_genres")
             .Columns("media_metadata_id", "genre_id");
 
-        Create.ForeignKey("fk_media_genres_media_metadata_id")
-            .FromTable("media_genres").ForeignColumn("media_metadata_id")
-            .ToTable("media_metadata").PrimaryColumn("id")
+        Create.ForeignKey("fk_metadata_media_genres_media_metadata_id")
+            .FromTable("metadata_media_genres").ForeignColumn("media_metadata_id")
+            .ToTable("metadata_media_metadata").PrimaryColumn("id")
             .OnDelete(Rule.Cascade);
 
-        Create.ForeignKey("fk_media_genres_genre_id")
-            .FromTable("media_genres").ForeignColumn("genre_id")
-            .ToTable("genres").PrimaryColumn("id")
+        Create.ForeignKey("fk_metadata_media_genres_genre_id")
+            .FromTable("metadata_media_genres").ForeignColumn("genre_id")
+            .ToTable("metadata_genres").PrimaryColumn("id")
             .OnDelete(Rule.Cascade);
 
-        Create.Table("media_tags")
+        Create.Table("metadata_media_tags")
             .WithColumn("media_metadata_id").AsInt64().NotNullable()
             .WithColumn("tag_id").AsInt64().NotNullable();
 
         Create.PrimaryKey("pk_media_tags")
-            .OnTable("media_tags")
+            .OnTable("metadata_media_tags")
             .Columns("media_metadata_id", "tag_id");
 
-        Create.ForeignKey("fk_media_tags_media_metadata_id")
-            .FromTable("media_tags").ForeignColumn("media_metadata_id")
-            .ToTable("media_metadata").PrimaryColumn("id")
+        Create.ForeignKey("fk_metadata_media_tags_media_metadata_id")
+            .FromTable("metadata_media_tags").ForeignColumn("media_metadata_id")
+            .ToTable("metadata_media_metadata").PrimaryColumn("id")
             .OnDelete(Rule.Cascade);
 
-        Create.ForeignKey("fk_media_tags_tag_id")
-            .FromTable("media_tags").ForeignColumn("tag_id")
-            .ToTable("tags").PrimaryColumn("id")
+        Create.ForeignKey("fk_metadata_media_tags_tag_id")
+            .FromTable("metadata_media_tags").ForeignColumn("tag_id")
+            .ToTable("metadata_tags").PrimaryColumn("id")
             .OnDelete(Rule.Cascade);
 
-        Create.Table("media_categories")
+        Create.Table("metadata_media_categories")
             .WithColumn("media_metadata_id").AsInt64().NotNullable()
             .WithColumn("category_id").AsInt64().NotNullable();
 
         Create.PrimaryKey("pk_media_categories")
-            .OnTable("media_categories")
+            .OnTable("metadata_media_categories")
             .Columns("media_metadata_id", "category_id");
 
-        Create.ForeignKey("fk_media_categories_media_metadata_id")
-            .FromTable("media_categories").ForeignColumn("media_metadata_id")
-            .ToTable("media_metadata").PrimaryColumn("id")
+        Create.ForeignKey("fk_metadata_media_categories_media_metadata_id")
+            .FromTable("metadata_media_categories").ForeignColumn("media_metadata_id")
+            .ToTable("metadata_media_metadata").PrimaryColumn("id")
             .OnDelete(Rule.Cascade);
 
-        Create.ForeignKey("fk_media_categories_category_id")
-            .FromTable("media_categories").ForeignColumn("category_id")
-            .ToTable("categories").PrimaryColumn("id")
+        Create.ForeignKey("fk_metadata_media_categories_category_id")
+            .FromTable("metadata_media_categories").ForeignColumn("category_id")
+            .ToTable("metadata_categories").PrimaryColumn("id")
             .OnDelete(Rule.Cascade);
 
-        Create.Table("media_cast")
+        Create.Table("metadata_media_cast")
             .WithColumn("media_metadata_id").AsInt64().NotNullable()
             .WithColumn("cast_member_id").AsInt64().NotNullable();
 
         Create.PrimaryKey("pk_media_cast")
-            .OnTable("media_cast")
+            .OnTable("metadata_media_cast")
             .Columns("media_metadata_id", "cast_member_id");
 
-        Create.ForeignKey("fk_media_cast_media_metadata_id")
-            .FromTable("media_cast").ForeignColumn("media_metadata_id")
-            .ToTable("media_metadata").PrimaryColumn("id")
+        Create.ForeignKey("fk_metadata_media_cast_media_metadata_id")
+            .FromTable("metadata_media_cast").ForeignColumn("media_metadata_id")
+            .ToTable("metadata_media_metadata").PrimaryColumn("id")
             .OnDelete(Rule.Cascade);
 
-        Create.ForeignKey("fk_media_cast_cast_member_id")
-            .FromTable("media_cast").ForeignColumn("cast_member_id")
-            .ToTable("cast_members").PrimaryColumn("id")
+        Create.ForeignKey("fk_metadata_media_cast_cast_member_id")
+            .FromTable("metadata_media_cast").ForeignColumn("cast_member_id")
+            .ToTable("metadata_cast_members").PrimaryColumn("id")
             .OnDelete(Rule.Cascade);
     }
 
     public override void Down()
     {
-        Delete.Table("media_cast");
-        Delete.Table("media_categories");
-        Delete.Table("media_tags");
-        Delete.Table("media_genres");
-        Delete.Table("media_artists");
+        Delete.Table("metadata_media_cast");
+        Delete.Table("metadata_media_categories");
+        Delete.Table("metadata_media_tags");
+        Delete.Table("metadata_media_genres");
+        Delete.Table("metadata_media_artists");
 
-        Delete.Table("cast_members");
-        Delete.Table("categories");
-        Delete.Table("tags");
-        Delete.Table("genres");
-        Delete.Table("artists");
+        Delete.Table("metadata_cast_members");
+        Delete.Table("metadata_categories");
+        Delete.Table("metadata_tags");
+        Delete.Table("metadata_genres");
+        Delete.Table("metadata_artists");
 
-        Delete.Table("music_metadata");
-        Delete.Table("series_metadata");
-        Delete.Table("media_comments");
-        Delete.Table("media_captions");
-        Delete.Table("chapter_data");
-        Delete.Table("audio_stream_details");
-        Delete.Table("video_stream_details");
-        Delete.Table("media_streams");
-        Delete.Table("media_format_details");
-        Delete.Table("media_base");
-        Delete.Table("media_metadata");
-        Delete.Table("accounts");
+        Delete.Table("metadata_music_metadata");
+        Delete.Table("metadata_series_metadata");
+        Delete.Table("metadata_media_comments");
+        Delete.Table("metadata_media_captions");
+        Delete.Table("metadata_chapter_data");
+        Delete.Table("metadata_audio_stream_details");
+        Delete.Table("metadata_video_stream_details");
+        Delete.Table("metadata_media_streams");
+        Delete.Table("metadata_media_format_details");
+        Delete.Table("metadata_media_base");
+        Delete.Table("metadata_media_metadata");
+        Delete.Table("metadata_accounts");
 
         Execute.Sql("DROP TYPE IF EXISTS subtitle_type_enum;");
         Execute.Sql("DROP TYPE IF EXISTS availability_enum;");
