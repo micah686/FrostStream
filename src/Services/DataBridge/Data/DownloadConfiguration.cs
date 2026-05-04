@@ -156,6 +156,25 @@ public sealed class ProcessedMessageConfiguration : IEntityTypeConfiguration<Pro
     }
 }
 
+public sealed class MediaConfiguration : IEntityTypeConfiguration<MediaEntity>
+{
+    public void Configure(EntityTypeBuilder<MediaEntity> builder)
+    {
+        builder.ToTable("media");
+
+        builder.HasKey(x => x.MediaGuid);
+
+        builder.Property(x => x.MediaGuid).HasColumnName("media_guid").ValueGeneratedNever();
+
+        builder.Property(x => x.CreatedAt)
+            .HasColumnName("created_at")
+            .HasColumnType("timestamp with time zone")
+            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .ValueGeneratedOnAdd()
+            .IsRequired();
+    }
+}
+
 public sealed class MediaSourceVersionConfiguration : IEntityTypeConfiguration<MediaSourceVersionEntity>
 {
     public void Configure(EntityTypeBuilder<MediaSourceVersionEntity> builder)

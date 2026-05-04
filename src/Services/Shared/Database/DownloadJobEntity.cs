@@ -91,6 +91,13 @@ public class ProcessedMessageEntity
     public Instant ProcessedAt { get; private set; } = SystemClock.Instance.GetCurrentInstant();
 }
 
+public class MediaEntity
+{
+    public Guid MediaGuid { get; set; }
+
+    public Instant CreatedAt { get; private set; } = SystemClock.Instance.GetCurrentInstant();
+}
+
 public class MediaSourceVersionEntity
 {
     public long Id { get; set; }

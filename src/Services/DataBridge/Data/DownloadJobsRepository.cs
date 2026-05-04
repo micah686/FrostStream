@@ -200,6 +200,9 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
             }
         }
 
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"INSERT INTO media (media_guid) VALUES ({mediaGuid}) ON CONFLICT (media_guid) DO NOTHING", ct);
+
         await db.SaveChangesAsync(ct);
 
         return new VersionReservation(mediaGuid, storagePath, versionNum, contentAlreadyStored);

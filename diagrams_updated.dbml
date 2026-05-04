@@ -1,0 +1,459 @@
+// =============================================================================
+// FrostStream — updated DBML
+//
+// `root` is removed (a one-column placeholder served no purpose).
+// `video_versions` is replaced by the actual rework-branch tables:
+//   - media_source_versions      (provider/source identity + media_guid)
+//   - media_content_id_versions  (per-content-hash versioned storage path)
+// `media_guid` (uuid) is now the cross-table identifier for a media item.
+// =============================================================================
+
+// ---- Download orchestration (DataBridge) -----------------------------------
+
+Table download_jobs {
+  job_id uuid [pk]
+  correlation_id uuid [not null]
+  state download_job_state [not null]
+  source_url varchar(4096) [not null]
+  requested_by varchar(255)
+  storage_key varchar(100)
+  attempt_metadata int [not null, default: 0]
+  attempt_download int [not null, default: 0]
+  attempt_upload int [not null, default: 0]
+  temp_file_ref varchar(2048)
+  file_size_bytes bigint
+  content_hash_xxh128 varchar(64)
+  storage_version varchar(255)
+  failure_kind failure_kind
+  failure_code varchar(255)
+  failure_message varchar(4096)
+  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+  completed_at timestamptz
+
+  indexes {
+    (state, updated_at) [name: "ix_download_jobs_state_updated_at"]
+    correlation_id [name: "ix_download_jobs_correlation_id"]
+  }
+}
+
+Table download_job_history {
+  id bigint [pk, increment]
+  job_id uuid [not null, ref: > download_jobs.job_id]
+  message_id uuid [not null]
+  operation_key varchar(512) [not null]
+  event_name varchar(255) [not null]
+  payload_json jsonb
+  recorded_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    (job_id, recorded_at) [name: "ix_download_job_history_job_id_recorded_at"]
+  }
+}
+
+Table failed_download_jobs {
+  job_id uuid [pk]
+  correlation_id uuid [not null]
+  failed_state download_job_state [not null]
+  failure_kind failure_kind [not null]
+  failure_code varchar(255)
+  failure_message varchar(4096) [not null]
+  last_payload_json jsonb
+  failed_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+}
+
+Table processed_messages {
+  message_id uuid [pk]
+  operation_key varchar(512) [not null]
+  job_id uuid [not null]
+  processed_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    job_id [name: "ix_processed_messages_job_id"]
+    operation_key [name: "ix_processed_messages_operation_key"]
+  }
+}
+
+// ---- Media identity / versioning -------------------------------------------
+
+// Canonical media identity. Every media_guid used elsewhere must exist here first.
+Table media {
+  media_guid uuid [pk]
+  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+}
+
+Table media_source_versions {
+  id bigint [pk, increment]
+  provider varchar(255)
+  source_media_id varchar(512)
+  source_last_modified timestamptz
+  media_guid uuid [not null, ref: > media.media_guid]
+  latest_job_id uuid [ref: > download_jobs.job_id]
+
+  indexes {
+    (provider, source_media_id) [name: "ix_media_source_versions_provider_source_media_id"]
+    media_guid [name: "ix_media_source_versions_media_guid"]
+  }
+}
+
+Table media_content_id_versions {
+  id bigint [pk, increment]
+  media_guid uuid [not null, ref: > media.media_guid]
+  content_hash_xxh128 varchar(64) [not null]
+  storage_key varchar(100) [not null]
+  storage_path varchar(2048) [not null]
+  version_num int [not null]
+
+  indexes {
+    (media_guid, version_num) [unique, name: "ux_media_content_id_versions_media_guid_version_num"]
+    (storage_key, content_hash_xxh128) [unique, name: "ux_media_content_id_versions_storage_key_content_hash"]
+  }
+}
+
+// ---- Accounts / channels ---------------------------------------------------
+
+Table metadata_accounts {
+  id bigint [pk, increment]
+  platform varchar(50) [not null]
+  account_name text [not null]
+  account_handle text [not null]
+  account_url text
+  account_creation_date timestamp
+  account_follower_count bigint
+  is_verified boolean [not null, default: false]
+  account_description text
+  avatar_storage_path text
+  banner_storage_path text
+
+  indexes {
+    (platform, account_handle) [unique, name: "ux_accounts_platform_handle"]
+  }
+}
+
+// ---- Per-media metadata ----------------------------------------------------
+
+Table metadata_media_metadata {
+  id bigint [pk, increment]
+  media_guid uuid [not null, ref: > media.media_guid]
+  account_id bigint [not null, ref: > metadata_accounts.id]
+  external_media_id text
+  metadata_scrape_date timestamp [not null]
+  thumbnail_storage_path text
+  age_limit int
+  average_rating double
+  like_count bigint
+  dislike_count bigint
+  duration double
+  description text
+  release_date timestamp
+  title text
+  was_live boolean [not null, default: false]
+  webpage_url text
+  view_count bigint
+  comment_count bigint
+  availability availability_enum
+  location text
+
+  indexes {
+    media_guid [unique, name: "ux_media_metadata_media_guid"]
+  }
+}
+
+Table metadata_media_base {
+  id bigint [pk, increment]
+  media_guid uuid [not null, ref: > media.media_guid]
+  duration_ticks bigint [not null, default: 0]
+
+  indexes {
+    media_guid [unique, name: "ix_media_base_media_guid"]
+  }
+}
+
+Table metadata_media_format_details {
+  id bigint [pk, increment]
+  media_base_id bigint [not null, ref: > metadata_media_base.id]
+  duration_ticks bigint [not null, default: 0]
+  start_time_ticks bigint [not null, default: 0]
+  format_long_names text [not null]
+    stream_count int [not null, default: 0]
+    bit_rate double [not null, default: 0]
+
+    indexes {
+      media_base_id [unique, name: "ix_media_format_details_media_base_id"]
+    }
+}
+
+Table metadata_media_streams {
+  id bigint [pk, increment]
+  media_base_id bigint [not null, ref: > metadata_media_base.id]
+  stream_type varchar(20) [not null]
+  is_primary boolean [not null, default: false]
+  codec_name text [not null]
+  codec_long_name text [not null]
+  bit_rate bigint [not null, default: 0]
+  bit_depth int
+  start_time_ticks bigint [not null, default: 0]
+  duration_ticks bigint [not null, default: 0]
+  language varchar(50)
+
+  indexes {
+    media_base_id [name: "ix_media_streams_media_base_id"]
+  }
+}
+
+Table metadata_video_stream_details {
+  id bigint [pk, increment]
+  media_stream_id bigint [not null, ref: > metadata_media_streams.id]
+  avg_frame_rate double [not null, default: 0]
+  bits_per_raw_sample int [not null, default: 0]
+  display_aspect_ratio_width int [not null, default: 0]
+  display_aspect_ratio_height int [not null, default: 0]
+  profile text [not null]
+  width int [not null, default: 0]
+  height int [not null, default: 0]
+  pixel_format text [not null]
+  rotation int [not null, default: 0]
+  color_space text [not null]
+  color_transfer text [not null]
+  color_primaries text [not null]
+  hdr_type varchar(20) [not null, default: "SDR"]
+
+  indexes {
+    media_stream_id [unique, name: "ix_video_stream_details_media_stream_id"]
+  }
+}
+
+Table metadata_audio_stream_details {
+  id bigint [pk, increment]
+  media_stream_id bigint [not null, ref: > metadata_media_streams.id]
+  channels int [not null, default: 0]
+  channel_layout text [not null]
+  sample_rate_hz int [not null, default: 0]
+  profile text [not null]
+
+  indexes {
+    media_stream_id [unique, name: "ix_audio_stream_details_media_stream_id"]
+  }
+}
+
+Table metadata_chapter_data {
+  id bigint [pk, increment]
+  media_base_id bigint [not null, ref: > metadata_media_base.id]
+  title text [not null]
+  start_ticks bigint [not null, default: 0]
+  end_ticks bigint [not null, default: 0]
+
+  indexes {
+    media_base_id [name: "ix_chapter_data_media_base_id"]
+  }
+}
+
+Table metadata_media_captions {
+  id bigint [pk, increment]
+  media_guid uuid [not null, ref: > media.media_guid]
+  storage_path text [not null]
+  caption_type subtitle_type_enum [not null]
+  two_digit_language_code varchar(10) [not null]
+  name text
+
+  indexes {
+    (media_guid, two_digit_language_code, caption_type) [name: "ix_media_captions_media_lang_type"]
+  }
+}
+
+Table metadata_media_comments {
+  id bigint [pk, increment]
+  media_guid uuid [not null, ref: > media.media_guid]
+  comment_id text [not null]
+  parent_comment_id text
+  text_comment text [not null]
+  account_id bigint [not null, ref: > metadata_accounts.id]
+  comment_timestamp timestamp [not null]
+  like_count int
+  dislike_count int
+  is_favorited boolean [not null, default: false]
+  is_uploader boolean [not null, default: false]
+  is_pinned boolean [not null, default: false]
+
+  indexes {
+    (media_guid, comment_timestamp) [name: "ix_media_comments_media_time"]
+    comment_id [name: "ix_media_comments_comment_id"]
+    parent_comment_id [name: "ix_media_comments_parent_id"]
+  }
+}
+
+Table metadata_series_metadata {
+  id bigint [pk, increment]
+  media_guid uuid [not null, ref: > media.media_guid]
+  series_name text [not null]
+  season_count int
+  season_number int [not null]
+  season_name text
+  episode_number int [not null]
+  episode_name text [not null]
+
+  indexes {
+    media_guid [unique, name: "ux_series_metadata_media_guid"]
+  }
+}
+
+Table metadata_music_metadata {
+  id bigint [pk, increment]
+  media_guid uuid [not null, ref: > media.media_guid]
+  album_title text [not null]
+  album_type text
+  disc_number int
+  release_year int
+  track_title text [not null]
+  track_number int [not null]
+  composer text
+
+  indexes {
+    media_guid [unique, name: "ux_music_metadata_media_guid"]
+  }
+}
+
+// ---- Taxonomy --------------------------------------------------------------
+
+Table metadata_artists {
+  id bigint [pk, increment]
+  artist_name text [not null]
+
+  indexes {
+    artist_name [unique, name: "ux_artists_artist_name"]
+  }
+}
+
+Table metadata_genres {
+  id bigint [pk, increment]
+  genre_name text [not null]
+
+  indexes {
+    genre_name [unique, name: "ux_genres_genre_name"]
+  }
+}
+
+Table metadata_tags {
+  id bigint [pk, increment]
+  tag_name text [not null]
+
+  indexes {
+    tag_name [unique, name: "ux_tags_tag_name"]
+  }
+}
+
+Table metadata_categories {
+  id bigint [pk, increment]
+  category_name text [not null]
+
+  indexes {
+    category_name [unique, name: "ux_categories_category_name"]
+  }
+}
+
+Table metadata_cast_members {
+  id bigint [pk, increment]
+  cast_name text [not null]
+
+  indexes {
+    cast_name [unique, name: "ux_cast_members_cast_name"]
+  }
+}
+
+Table metadata_media_artists {
+  media_metadata_id bigint [not null, ref: > metadata_media_metadata.id]
+  artist_id bigint [not null, ref: > metadata_artists.id]
+  is_album_artist boolean [not null, default: false]
+
+  indexes {
+    (media_metadata_id, artist_id) [pk, name: "pk_media_artists"]
+  }
+}
+
+Table metadata_media_genres {
+  media_metadata_id bigint [not null, ref: > metadata_media_metadata.id]
+  genre_id bigint [not null, ref: > metadata_genres.id]
+
+  indexes {
+    (media_metadata_id, genre_id) [pk, name: "pk_media_genres"]
+  }
+}
+
+Table metadata_media_tags {
+  media_metadata_id bigint [not null, ref: > metadata_media_metadata.id]
+  tag_id bigint [not null, ref: > metadata_tags.id]
+
+  indexes {
+    (media_metadata_id, tag_id) [pk, name: "pk_media_tags"]
+  }
+}
+
+Table metadata_media_categories {
+  media_metadata_id bigint [not null, ref: > metadata_media_metadata.id]
+  category_id bigint [not null, ref: > metadata_categories.id]
+
+  indexes {
+    (media_metadata_id, category_id) [pk, name: "pk_media_categories"]
+  }
+}
+
+Table metadata_media_cast {
+  media_metadata_id bigint [not null, ref: > metadata_media_metadata.id]
+  cast_member_id bigint [not null, ref: > metadata_cast_members.id]
+
+  indexes {
+    (media_metadata_id, cast_member_id) [pk, name: "pk_media_cast"]
+  }
+}
+
+// ---- Storage configuration (DataBridge) -----------------------------------
+
+Table storage_keys {
+  id int [pk, increment]
+  key varchar(100) [not null, unique]
+  method varchar(50) [not null]
+  description varchar(500)
+  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+  last_updated timestamptz
+}
+
+Table storage_keys_local {
+  storage_key_id int [pk, ref: > storage_keys.id]
+  protocol local_storage_protocol [not null]
+  path varchar(2048) [not null]
+}
+
+Table storage_keys_network {
+  storage_key_id int [pk, ref: > storage_keys.id]
+  protocol network_storage_protocol [not null]
+  host varchar(255) [not null]
+  port int
+  username varchar(255)
+  base_path varchar(2048)
+}
+
+Table storage_keys_object_s3_compatible {
+  storage_key_id int [pk, ref: > storage_keys.id]
+  provider s3_compatible_object_storage_provider [not null]
+  bucket_name varchar(255) [not null]
+  region varchar(255)
+  endpoint varchar(2048)
+  force_path_style boolean [not null, default: false]
+    use_ssl boolean
+    has_session_token boolean [not null, default: false]
+}
+
+Table storage_keys_object_azure_blob {
+  storage_key_id int [pk, ref: > storage_keys.id]
+  credential_mode azure_blob_credential_mode [not null]
+  container_name varchar(255)
+  azure_account_name varchar(255)
+}
+
+Table storage_keys_object_google_cloud_storage {
+  storage_key_id int [pk, ref: > storage_keys.id]
+  bucket_name varchar(255) [not null]
+  credential_mode google_cloud_storage_credential_mode [not null]
+  gcp_credentials_file_path varchar(2048)
+  gcp_project_id varchar(255)
+}
