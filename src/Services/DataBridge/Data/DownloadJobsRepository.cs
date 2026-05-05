@@ -138,6 +138,7 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
         string storagePath;
         int versionNum;
         bool contentAlreadyStored;
+        bool isNewMediaGuid;
 
         if (existingContent is not null)
         {
@@ -145,6 +146,7 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
             storagePath = existingContent.StoragePath;
             versionNum = existingContent.VersionNum;
             contentAlreadyStored = true;
+            isNewMediaGuid = false;
         }
         else
         {
@@ -154,6 +156,7 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
                     .FirstOrDefaultAsync(x => x.Provider == provider && x.SourceMediaId == sourceMediaId, ct)
                 : null;
 
+            isNewMediaGuid = existingSource is null;
             mediaGuid = existingSource?.MediaGuid ?? Guid.NewGuid();
 
             var maxVersion = await db.MediaContentIdVersions
@@ -205,7 +208,26 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
 
         await db.SaveChangesAsync(ct);
 
-        return new VersionReservation(mediaGuid, storagePath, versionNum, contentAlreadyStored);
+        return new VersionReservation(mediaGuid, storagePath, versionNum, contentAlreadyStored, isNewMediaGuid);
+    }
+
+    public async Task DeleteNewMediaGuidAsync(Guid mediaGuid, string? provider, string? sourceMediaId, CancellationToken ct = default)
+    {
+        var normalizedProvider = NormalizeOptional(provider);
+        var normalizedSourceId = NormalizeOptional(sourceMediaId);
+
+        if (normalizedProvider is not null && normalizedSourceId is not null)
+        {
+            var sourceRow = await db.MediaSourceVersions
+                .FirstOrDefaultAsync(x => x.Provider == normalizedProvider && x.SourceMediaId == normalizedSourceId, ct);
+            if (sourceRow is not null)
+                db.MediaSourceVersions.Remove(sourceRow);
+        }
+
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"DELETE FROM media WHERE media_guid = {mediaGuid}", ct);
+
+        await db.SaveChangesAsync(ct);
     }
 
     public async Task CommitUploadAsync(Guid jobId, UploadCompleted evt, CancellationToken ct = default)

@@ -1,4 +1,5 @@
 using NodaTime;
+using Shared.Metadata;
 
 namespace Shared.Messaging;
 
@@ -197,6 +198,13 @@ public sealed record MetadataFetched : IFlowMessage
 
     /// <summary>Channel / creator display name. Audit and search only.</summary>
     public string? Uploader { get; init; }
+
+    /// <summary>
+    /// Full structured metadata produced by the Worker's yt-dlp mapper. Present on the
+    /// happy path; null if the VideoInfo was too sparse to map. DataBridge uses this to
+    /// populate all <c>metadata.*</c> tables after a successful ingestion.
+    /// </summary>
+    public CapturedMediaMetadata? RichMetadata { get; init; }
 }
 
 /// <summary>

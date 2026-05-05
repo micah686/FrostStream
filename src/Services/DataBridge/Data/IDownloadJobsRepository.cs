@@ -35,6 +35,14 @@ public interface IDownloadJobsRepository
     /// </summary>
     Task DeleteReservedVersionAsync(Guid mediaGuid, int versionNum, CancellationToken ct = default);
 
+    /// <summary>
+    /// Removes the <c>media_source_versions</c> row for the given provider/source identity and
+    /// then deletes the <c>public.media</c> root row (CASCADE removes any partially-written
+    /// <c>metadata.*</c> rows). Only called when the <c>media_guid</c> was freshly minted by
+    /// this job and no prior content existed under it.
+    /// </summary>
+    Task DeleteNewMediaGuidAsync(Guid mediaGuid, string? provider, string? sourceMediaId, CancellationToken ct = default);
+
     Task ApplyDownloadCompletedAsync(Guid jobId, DownloadCompleted evt, CancellationToken ct = default);
 
     /// <summary>
@@ -104,8 +112,15 @@ public sealed record VersionReservationRequest
 /// True when the (storage_key, content_hash) already existed. Caller should skip the
 /// upload and treat the job as a successful no-op duplicate.
 /// </param>
+/// <param name="IsNewMediaGuid">
+/// True when the <c>media_guid</c> was freshly minted by this reservation (neither prior
+/// content nor prior source rows existed). Used by the flow to decide whether a full
+/// compensating rollback of <c>public.media</c> and <c>media_source_versions</c> is
+/// needed if a subsequent step fails.
+/// </param>
 public sealed record VersionReservation(
     Guid MediaGuid,
     string StoragePath,
     int VersionNum,
-    bool ContentAlreadyStored);
+    bool ContentAlreadyStored,
+    bool IsNewMediaGuid);

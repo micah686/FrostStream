@@ -5,6 +5,7 @@ using FlySwattr.NATS.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 using NodaTime;
 using Shared.Messaging;
+using Shared.Metadata;
 
 namespace DataBridge.Flows;
 
@@ -59,9 +60,11 @@ public class DownloadArchiveFlow(
         if (reservation.ContentAlreadyStored)
         {
             // Bytes already in storage under a prior media_guid (or a prior version of this
-            // one). Skip upload, clean the temp file we just produced, mark AlreadyDownloaded.
+            // one). Skip upload, clean the temp file we just produced, write metadata, mark AlreadyDownloaded.
             await Capture(() => DispatchTempFileCleanup(request, downloaded.TempFileRef, jobInstance, attempt: 1));
             await Message<TempFileDeleted>();
+            if (metadata.RichMetadata is { } existingRichMeta)
+                await RunMetadataWriteStep(jobId, reservation.MediaGuid, reservation.IsNewMediaGuid, metadata.Provider, metadata.SourceMediaId, existingRichMeta);
             await Capture(() => RepoCall(r => r.MarkAlreadyDownloadedAsync(jobId, reservation.MediaGuid)));
             return;
         }
@@ -74,6 +77,8 @@ public class DownloadArchiveFlow(
             // Upload terminally failed. The reserved version row points at a path with no
             // bytes — drop it so a future redownload doesn't reuse the orphan path.
             await Capture(() => RepoCall(r => r.DeleteReservedVersionAsync(reservation.MediaGuid, reservation.VersionNum)));
+            if (reservation.IsNewMediaGuid)
+                await Capture(() => RepoCall(r => r.DeleteNewMediaGuidAsync(reservation.MediaGuid, metadata.Provider, metadata.SourceMediaId)));
             return;
         }
 
@@ -88,6 +93,8 @@ public class DownloadArchiveFlow(
             await Capture(() => DispatchUploadedObjectDeletion(request, uploaded, jobInstance, attempt: 1));
             await Capture(() => DispatchTempFileCleanup(request, uploaded.TempFileRef, jobInstance, attempt: 1));
             await Capture(() => RepoCall(r => r.DeleteReservedVersionAsync(reservation.MediaGuid, reservation.VersionNum)));
+            if (reservation.IsNewMediaGuid)
+                await Capture(() => RepoCall(r => r.DeleteNewMediaGuidAsync(reservation.MediaGuid, metadata.Provider, metadata.SourceMediaId)));
             await Capture(() => RepoCall(r => r.RecordTerminalFailureAsync(
                 jobId,
                 FailureKind.Permanent,
@@ -97,6 +104,10 @@ public class DownloadArchiveFlow(
                 lastPayloadJson: null)));
             return;
         }
+
+        // STEP 6b: write rich metadata ----------------------------------------
+        if (metadata.RichMetadata is { } richMeta)
+            await RunMetadataWriteStep(jobId, reservation.MediaGuid, reservation.IsNewMediaGuid, metadata.Provider, metadata.SourceMediaId, richMeta);
 
         // STEP 7: cleanup -----------------------------------------------------
         var cleanupId = await Capture(Guid.NewGuid);
@@ -300,6 +311,49 @@ public class DownloadArchiveFlow(
             _ => (FailureKind.Unknown, (string?)null, "unknown failure")
         };
         await RepoCall(r => r.RecordTerminalFailureAsync(jobId, kind, code, message, terminalState, lastPayloadJson: null));
+    }
+
+    private async Task RunMetadataWriteStep(
+        Guid jobId,
+        Guid mediaGuid,
+        bool isNewMediaGuid,
+        string? provider,
+        string? sourceMediaId,
+        CapturedMediaMetadata richMeta)
+    {
+        for (var attempt = 1; attempt <= MaxAttempts; attempt++)
+        {
+            try
+            {
+                await Capture(() => MetaRepoCall(r => r.WriteMetadataAsync(mediaGuid, richMeta)));
+                return;
+            }
+            catch (Exception ex) when (attempt < MaxAttempts)
+            {
+                _ = ex;
+            }
+            catch (Exception metaEx)
+            {
+                // Metadata write exhausted retries — compensate and fail the job.
+                if (isNewMediaGuid)
+                    await Capture(() => RepoCall(r => r.DeleteNewMediaGuidAsync(mediaGuid, provider, sourceMediaId)));
+                await Capture(() => RepoCall(r => r.RecordTerminalFailureAsync(
+                    jobId,
+                    FailureKind.Permanent,
+                    code: "metadata_write_failed",
+                    message: metaEx.Message,
+                    terminalState: DownloadJobState.FailedPermanent,
+                    lastPayloadJson: null)));
+                return;
+            }
+        }
+    }
+
+    private async Task MetaRepoCall(Func<IMetadataRepository, Task> action)
+    {
+        using var scope = scopeFactory.CreateScope();
+        var repo = scope.ServiceProvider.GetRequiredService<IMetadataRepository>();
+        await action(repo);
     }
 
     private async Task RepoCall(Func<IDownloadJobsRepository, Task> action)

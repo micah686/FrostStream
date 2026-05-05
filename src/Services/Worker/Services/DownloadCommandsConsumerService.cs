@@ -6,7 +6,9 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NodaTime;
 using Shared.Messaging;
+using Shared.Metadata;
 using Shared.Storage;
+using Worker.Metadata;
 using YtDlpSharpLib;
 using YtDlpSharpLib.Downloads;
 using YtDlpSharpLib.Exceptions;
@@ -87,6 +89,19 @@ public sealed class DownloadCommandsConsumerService(
             var sourceMediaId = info.Id ?? info.DisplayId;
             var sourceLastModified = ResolveSourceLastModified(info);
 
+
+            CapturedMediaMetadata? richMetadata;
+            try
+            {
+                richMetadata = YtDlpMetadataMapper.Map(info, provider ?? "", clock);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+                throw;
+            }
+            
+
             await Publish(DownloadSubjects.MetadataFetched, new MetadataFetched
             {
                 JobId = cmd.JobId,
@@ -101,6 +116,7 @@ public sealed class DownloadCommandsConsumerService(
                 SourceLastModified = sourceLastModified,
                 Title = info.Title ?? info.FullTitle,
                 Uploader = info.Uploader ?? info.Channel,
+                RichMetadata = richMetadata
             });
             await context.AckAsync();
         }

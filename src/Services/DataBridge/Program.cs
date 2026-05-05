@@ -88,6 +88,7 @@ class Program
 
         builder.Services.AddSingleton<IClock>(SystemClock.Instance);
         builder.Services.AddScoped<IDownloadJobsRepository, DownloadJobsRepository>();
+        builder.Services.AddScoped<IMetadataRepository, MetadataRepository>();
 
         builder.Services.AddHostedService<StorageCrudConsumerService>();
         builder.Services.AddHostedService<DownloadRequestedIngressService>();
