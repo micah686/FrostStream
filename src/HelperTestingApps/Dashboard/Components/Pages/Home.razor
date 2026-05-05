@@ -1,0 +1,165 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@implements IDisposable
+@using Dashboard.Models
+@using Dashboard.Services
+@using Shared.Messaging
+@inject JobsDashboardState DashboardState
+
+<PageTitle>FrostStream Jobs</PageTitle>
+
+<div class="dashboard-shell">
+    <header class="dashboard-header">
+        <div>
+            <h1>Job Dashboard</h1>
+            <p>NATS-backed activity for the FrostStream download pipeline.</p>
+        </div>
+        <div class="connection-pill @(snapshot.NatsConnected ? "is-connected" : "is-disconnected")">
+            <span class="connection-dot"></span>
+            <span>@(snapshot.NatsStatus ?? "Unknown")</span>
+        </div>
+    </header>
+
+    <section class="metric-grid" aria-label="Job metrics">
+        <div class="metric">
+            <span>Total tracked</span>
+            <strong>@snapshot.Jobs.Count</strong>
+        </div>
+        <div class="metric">
+            <span>Active</span>
+            <strong>@ActiveCount</strong>
+        </div>
+        <div class="metric">
+            <span>Completed</span>
+            <strong>@CompletedCount</strong>
+        </div>
+        <div class="metric">
+            <span>Failed</span>
+            <strong>@FailedCount</strong>
+        </div>
+    </section>
+
+    <section class="dashboard-grid">
+        <div class="jobs-panel">
+            <div class="panel-heading">
+                <h2>Recent Jobs</h2>
+                <span>Updated @FormatTime(snapshot.LastUpdated)</span>
+            </div>
+
+            @if (snapshot.Jobs.Count == 0)
+            {
+                <div class="empty-state">No jobs have been recorded yet.</div>
+            }
+            else
+            {
+                <div class="jobs-table">
+                    <div class="jobs-row jobs-row-head">
+                        <span>State</span>
+                        <span>Source</span>
+                        <span>Attempts</span>
+                        <span>Size</span>
+                        <span>Updated</span>
+                    </div>
+                    @foreach (var job in snapshot.Jobs)
+                    {
+                        <div class="jobs-row">
+                            <span>
+                                <span class="state-badge @StateClass(job.State)">@job.State</span>
+                                <small>@ShortId(job.JobId)</small>
+                            </span>
+                            <span class="source-cell" title="@job.SourceUrl">@job.SourceUrl</span>
+                            <span>@job.AttemptMetadata / @job.AttemptDownload / @job.AttemptUpload</span>
+                            <span>@FormatBytes(job.FileSizeBytes)</span>
+                            <span>@FormatTime(job.UpdatedAt)</span>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <aside class="activity-panel">
+            <div class="panel-heading">
+                <h2>Live NATS</h2>
+                <span>@snapshot.Activity.Count events</span>
+            </div>
+
+            @if (snapshot.Activity.Count == 0)
+            {
+                <div class="empty-state">Waiting for messages on @DownloadTopology.SubjectFilter.</div>
+            }
+            else
+            {
+                <div class="activity-list">
+                    @foreach (var item in snapshot.Activity)
+                    {
+                        <article class="activity-item">
+                            <div>
+                                <strong>@item.Subject</strong>
+                                <span>@FormatTime(item.ReceivedAt)</span>
+                            </div>
+                            <small>@(item.JobId is null ? "No job id" : ShortId(item.JobId.Value))</small>
+                        </article>
+                    }
+                </div>
+            }
+        </aside>
+    </section>
+</div>
+
+@code {
+    private DashboardSnapshot snapshot = new([], [], DateTimeOffset.UtcNow, false, "Starting");
+
+    private int ActiveCount => snapshot.Jobs.Count(job => job.State is not (DownloadJobState.Completed or DownloadJobState.AlreadyDownloaded or DownloadJobState.FailedPermanent or DownloadJobState.DeadLettered));
+    private int CompletedCount => snapshot.Jobs.Count(job => job.State is DownloadJobState.Completed or DownloadJobState.AlreadyDownloaded);
+    private int FailedCount => snapshot.Jobs.Count(job => job.State is DownloadJobState.FailedPermanent or DownloadJobState.DeadLettered or DownloadJobState.FailedTransient);
+
+    protected override async Task OnInitializedAsync()
+    {
+        DashboardState.Changed += OnDashboardChanged;
+        snapshot = DashboardState.Snapshot();
+        await DashboardState.LoadInitialAsync();
+    }
+
+    public void Dispose()
+        => DashboardState.Changed -= OnDashboardChanged;
+
+    private async Task OnDashboardChanged()
+    {
+        snapshot = DashboardState.Snapshot();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private static string ShortId(Guid id)
+        => id.ToString("N")[..8];
+
+    private static string StateClass(DownloadJobState state)
+        => state switch
+        {
+            DownloadJobState.Completed or DownloadJobState.AlreadyDownloaded => "state-good",
+            DownloadJobState.FailedPermanent or DownloadJobState.DeadLettered => "state-bad",
+            DownloadJobState.FailedTransient or DownloadJobState.Compensating => "state-warn",
+            _ => "state-work"
+        };
+
+    private static string FormatBytes(long? bytes)
+    {
+        if (bytes is null)
+        {
+            return "-";
+        }
+
+        string[] units = ["B", "KB", "MB", "GB", "TB"];
+        var value = (double)bytes.Value;
+        var unit = 0;
+        while (value >= 1024 && unit < units.Length - 1)
+        {
+            value /= 1024;
+            unit++;
+        }
+
+        return $"{value:0.#} {units[unit]}";
+    }
+
+    private static string FormatTime(DateTimeOffset value)
+        => value.ToLocalTime().ToString("HH:mm:ss");
+}
