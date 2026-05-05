@@ -275,6 +275,38 @@ public sealed record DownloadCompleted : IFlowMessage
 }
 
 /// <summary>
+/// Advisory event emitted while yt-dlp is downloading or post-processing media. This is
+/// intentionally not part of DataBridge's persisted saga state.
+/// </summary>
+public sealed record DownloadProgress : IFlowMessage
+{
+    public required Guid JobId { get; init; }
+    public required Guid CorrelationId { get; init; }
+    public Guid? CausationId { get; init; }
+    public required Guid MessageId { get; init; }
+    public required string OperationKey { get; init; }
+    public required Instant OccurredAt { get; init; }
+    public required int Attempt { get; init; }
+
+    /// <summary>Monotonic per-download progress sequence assigned by the Worker.</summary>
+    public required int Sequence { get; init; }
+
+    /// <summary>Original source URL being downloaded.</summary>
+    public required string SourceUrl { get; init; }
+
+    /// <summary>High-level yt-dlp phase, e.g. <c>Downloading</c>, <c>Merging</c>.</summary>
+    public required string Phase { get; init; }
+
+    public double? Percent { get; init; }
+    public long? DownloadedBytes { get; init; }
+    public long? TotalBytes { get; init; }
+    public string? Speed { get; init; }
+    public double? EtaSeconds { get; init; }
+    public string? Destination { get; init; }
+    public string? Message { get; init; }
+}
+
+/// <summary>
 /// Event emitted when the download failed. Carries the temp-file ref so the saga can fire a
 /// cleanup command for any partial bytes left on disk.
 /// </summary>

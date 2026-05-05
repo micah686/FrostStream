@@ -125,7 +125,7 @@ public sealed class DownloadCommandsConsumerService(
             logger.LogWarning(ex,
                 "FetchMetadata: source unavailable for JobId {JobId} URL {SourceUrl}",
                 cmd.JobId, cmd.SourceUrl);
-            await PublishMetadataFailedAsync(cmd, ex, FailureKind.Permanent);
+            await PublishMetadataFailedAsync(cmd, ex, YtDlpFailureDetails.ClassifyYtDlpFailure(ex));
             await context.AckAsync();
         }
         catch (Exception ex)
@@ -133,7 +133,7 @@ public sealed class DownloadCommandsConsumerService(
             logger.LogError(ex,
                 "FetchMetadata failed for JobId {JobId} URL {SourceUrl}",
                 cmd.JobId, cmd.SourceUrl);
-            await PublishMetadataFailedAsync(cmd, ex, FailureKind.Transient);
+            await PublishMetadataFailedAsync(cmd, ex, YtDlpFailureDetails.ClassifyFailure(ex));
             await context.AckAsync();
         }
     }
@@ -143,16 +143,19 @@ public sealed class DownloadCommandsConsumerService(
         var cmd = context.Message;
         var tempDirectory = GetDownloadTempDirectory(cmd);
         string? tempFileRef = null;
+        DownloadProgressReporter? progress = null;
 
         try
         {
             Directory.CreateDirectory(tempDirectory);
 
+            progress = new DownloadProgressReporter(cmd, publisher, clock, logger);
             await ytDlp.DownloadAsync(
                 cmd.SourceUrl,
                 tempDirectory,
                 CreateDownloadOptions(),
-                progress: null);
+                progress);
+            await progress.FlushAsync();
 
             tempFileRef = FindDownloadedVideoFile(tempDirectory)
                           ?? throw new InvalidOperationException("yt-dlp completed without producing a media file.");
@@ -181,16 +184,22 @@ public sealed class DownloadCommandsConsumerService(
         }
         catch (YtDlpUnavailableException ex)
         {
+            if (progress is not null)
+                await progress.FlushAsync();
+
             logger.LogWarning(ex,
                 "DownloadVideo: source unavailable for JobId {JobId} URL {SourceUrl}",
                 cmd.JobId, cmd.SourceUrl);
-            await PublishDownloadFailedAsync(cmd, ex, FailureKind.Permanent, tempFileRef ?? FindDownloadedVideoFile(tempDirectory));
+            await PublishDownloadFailedAsync(cmd, ex, YtDlpFailureDetails.ClassifyYtDlpFailure(ex), tempFileRef ?? FindDownloadedVideoFile(tempDirectory));
             await context.AckAsync();
         }
         catch (Exception ex)
         {
+            if (progress is not null)
+                await progress.FlushAsync();
+
             logger.LogError(ex, "DownloadVideo failed for JobId {JobId} URL {SourceUrl}", cmd.JobId, cmd.SourceUrl);
-            await PublishDownloadFailedAsync(cmd, ex, FailureKind.Transient, tempFileRef ?? FindDownloadedVideoFile(tempDirectory));
+            await PublishDownloadFailedAsync(cmd, ex, YtDlpFailureDetails.ClassifyFailure(ex), tempFileRef ?? FindDownloadedVideoFile(tempDirectory));
             await context.AckAsync();
         }
     }
@@ -367,7 +376,8 @@ public sealed class DownloadCommandsConsumerService(
             OccurredAt = clock.GetCurrentInstant(),
             Attempt = cmd.Attempt,
             FailureKind = failureKind,
-            ErrorMessage = ex.Message
+            ErrorCode = YtDlpFailureDetails.ErrorCode(ex),
+            ErrorMessage = YtDlpFailureDetails.DescribeException(ex)
         });
 
     private Task PublishDownloadFailedAsync(
@@ -385,8 +395,8 @@ public sealed class DownloadCommandsConsumerService(
             OccurredAt = clock.GetCurrentInstant(),
             Attempt = cmd.Attempt,
             FailureKind = failureKind,
-            ErrorCode = null,
-            ErrorMessage = DescribeException(ex),
+            ErrorCode = YtDlpFailureDetails.ErrorCode(ex),
+            ErrorMessage = YtDlpFailureDetails.DescribeException(ex),
             TempFileRef = tempFileRef
         });
 
@@ -534,11 +544,6 @@ public sealed class DownloadCommandsConsumerService(
                && !relative.StartsWith("..", StringComparison.Ordinal)
                && !Path.IsPathRooted(relative);
     }
-
-    private static string DescribeException(Exception ex)
-        => ex is YtDlpProcessException { LastStderrLines: { Length: > 0 } stderr }
-            ? stderr
-            : ex.Message;
 
     private static FailureKind UploadFailureKind(Exception ex)
         => ex is FileNotFoundException or DirectoryNotFoundException

@@ -12,6 +12,11 @@ public static class DownloadSubjects
 
     public const string MetadataFetched                = "download.evt.metadata-fetched";
     public const string MetadataFetchFailed            = "download.evt.metadata-fetch-failed";
+    // TODO:
+    // This subject is intentionally not consumed by DataBridge yet. It is available for
+    // service-to-service/live diagnostics consumers that want download progress without
+    // making progress snapshots part of the database-backed download saga.
+    public const string DownloadProgress               = "download.evt.download-progress";
     public const string DownloadCompleted              = "download.evt.download-completed";
     public const string DownloadFailed                 = "download.evt.download-failed";
     public const string UploadCompleted                = "download.evt.upload-completed";

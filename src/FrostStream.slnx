@@ -1,5 +1,8 @@
 <Solution>
-  <Folder Name="/Modules/FlySwattr.NATS/" >
+  <Folder Name="/HelperTesterApps/">
+    <Project Path="HelperTestingApps/VideoServeLocalTest/VideoServeLocalTest.csproj" />
+  </Folder>
+  <Folder Name="/Modules/FlySwattr.NATS/">
     <Project Path="Modules/FlySwattr.NATS/FlySwattr.NATS.Abstractions/FlySwattr.NATS.Abstractions.csproj" />
     <Project Path="Modules/FlySwattr.NATS/FlySwattr.NATS.Caching/FlySwattr.NATS.Caching.csproj" />
     <Project Path="Modules/FlySwattr.NATS/FlySwattr.NATS.Core/FlySwattr.NATS.Core.csproj" />
@@ -28,6 +31,5 @@
     <Project Path="Tests/UnitTests/UnitTests.csproj" />
   </Folder>
   <Project Path="ServiceDefaults/ServiceDefaults.csproj" />
-  <Project Path="VideoServeLocalTest/VideoServeLocalTest.csproj" />
 
 </Solution>
