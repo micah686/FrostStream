@@ -15,7 +15,7 @@ if (!File.Exists(websocketCertPath) || !File.Exists(websocketKeyPath))
 
 var nats = builder
     .AddNats("nats") // logical name "nats"
-    .WithDataVolume("nats-data")    // persist JS data across restarts (uses a Docker volume)
+    //.WithDataVolume("nats-data")    // persist JS data across restarts (uses a Docker volume)
     .WithBindMount("./configs/nats/nats-server.conf", "/etc/nats/nats.conf", isReadOnly: true)
     .WithBindMount(websocketCertPath, "/etc/nats/certs/ws-cert.pem", isReadOnly: true)
     .WithBindMount(websocketKeyPath, "/etc/nats/certs/ws-key.pem", isReadOnly: true)

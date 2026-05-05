@@ -25,7 +25,7 @@ public sealed class StartupService(
                 DownloadYtDlp = true,
                 DownloadFfmpeg = true,
                 DownloadFfprobe = true,
-                DownloadDeno = false,
+                DownloadDeno = true,
             },
             progress: null,
             ct: cancellationToken);
