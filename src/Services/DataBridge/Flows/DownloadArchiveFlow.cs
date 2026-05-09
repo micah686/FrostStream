@@ -3,6 +3,7 @@ using Cleipnir.ResilientFunctions.Reactive.Extensions;
 using DataBridge.Data;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using NodaTime;
 using Shared.Messaging;
 using Shared.Metadata;
@@ -12,8 +13,10 @@ namespace DataBridge.Flows;
 [GenerateFlows]
 public class DownloadArchiveFlow(
     IJetStreamPublisher bus,
+    IMessageBus messageBus,
     IServiceScopeFactory scopeFactory,
-    IClock clock
+    IClock clock,
+    ILogger<DownloadArchiveFlow> logger
 ) : Flow<DownloadRequested>
 {
     private const int MaxAttempts = 3;
@@ -328,6 +331,7 @@ public class DownloadArchiveFlow(
             try
             {
                 await Capture(() => MetaRepoCall(r => r.WriteMetadataAsync(mediaGuid, richMeta)));
+                await Capture(() => PublishMetadataSync(mediaGuid));
                 return;
             }
             catch (Exception ex) when (attempt < MaxAttempts)
@@ -356,6 +360,20 @@ public class DownloadArchiveFlow(
         using var scope = scopeFactory.CreateScope();
         var repo = scope.ServiceProvider.GetRequiredService<IMetadataRepository>();
         await action(repo);
+    }
+
+    private async Task PublishMetadataSync(Guid mediaGuid)
+    {
+        try
+        {
+            await messageBus.PublishAsync(
+                MetadataSyncSubjects.SyncUpsert,
+                new MetadataSyncUpsertMessage { MediaGuid = mediaGuid });
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed publishing metadata sync upsert for {MediaGuid}.", mediaGuid);
+        }
     }
 
     private async Task PlaylistRepoCall(Func<IPlaylistsRepository, Task> action)

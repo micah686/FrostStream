@@ -64,13 +64,29 @@ var openbao = builder
 
 var openbaoEndpoint = openbao.GetEndpoint("http");
 
+// Typesense — typo-tolerant full-text search for the metadata.* schema. Treated as a
+// derived projection of Postgres, rebuildable from scratch if the volume is lost.
+const string typesenseDevApiKey = "froststream-dev-key";
+var typesense = builder
+    .AddContainer("typesense", "typesense/typesense", "30.2")
+    .WithVolume("typesense-data", "/data")
+    .WithEnvironment("TYPESENSE_DATA_DIR", "/data")
+    .WithEnvironment("TYPESENSE_API_KEY", typesenseDevApiKey)
+    .WithEnvironment("TYPESENSE_ENABLE_CORS", "true")
+    .WithHttpEndpoint(port: 8108, targetPort: 8108, name: "http");
+
+var typesenseEndpoint = typesense.GetEndpoint("http");
+
 // projects
 builder.AddProject<Projects.DataBridge>("databridge")
     .WithReference(database).WaitFor(database)
     .WithReference(nats).WaitFor(nats)
     .WithEnvironment("OpenBao__Address", openbaoEndpoint)
     .WithEnvironment("OpenBao__Token", baoDevRootToken)
-    .WaitFor(openbao);
+    .WithEnvironment("Typesense__Url", typesenseEndpoint)
+    .WithEnvironment("Typesense__ApiKey", typesenseDevApiKey)
+    .WaitFor(openbao)
+    .WaitFor(typesense);
 
 builder.AddProject<Projects.WebAPI>("webapi")
     .WithReference(nats).WaitFor(nats)

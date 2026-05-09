@@ -2,7 +2,9 @@ using Cleipnir.Flows;
 using Cleipnir.Flows.AspNet;
 using Cleipnir.Flows.PostgresSql;
 using DataBridge.Data;
+using DataBridge.Metadata;
 using DataBridge.Messaging;
+using DataBridge.Search;
 using FlySwattr.NATS.Extensions;
 using FlySwattr.NATS.Topology.Extensions;
 using FluentMigrator.Runner;
@@ -17,6 +19,7 @@ using Npgsql;
 using Shared.Messaging;
 using Shared.Secrets;
 using Shared.Storage;
+using Typesense.Setup;
 
 namespace DataBridge;
 
@@ -89,9 +92,32 @@ class Program
             .RegisterFlowsAutomatically());
 
         builder.Services.AddSingleton<IClock>(SystemClock.Instance);
+        builder.Services.AddSingleton(_ =>
+        {
+            var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
+            return dataSourceBuilder.Build();
+        });
         builder.Services.AddScoped<IDownloadJobsRepository, DownloadJobsRepository>();
         builder.Services.AddScoped<IMetadataRepository, MetadataRepository>();
+        builder.Services.AddScoped<IMetadataReadService, MetadataReadService>();
         builder.Services.AddScoped<IPlaylistsRepository, PlaylistsRepository>();
+
+        builder.Services.AddTypesenseClient(config =>
+        {
+            config.Nodes = [BuildTypesenseNode(builder.Configuration)];
+            config.ApiKey = builder.Configuration["Typesense:ApiKey"] ?? "froststream-dev-key";
+        });
+        builder.Services.AddSingleton<ITypesenseIndexService, TypesenseIndexService>();
+        builder.Services.AddSingleton<IMediaDocumentQuery, MediaDocumentQuery>();
+        builder.Services.AddSingleton<IMetadataRebuildCoordinator, MetadataRebuildCoordinator>();
+
+        builder.Services.AddHostedService<TypesenseStartupService>();
+        builder.Services.AddHostedService<TypesenseSyncConsumerService>();
+        builder.Services.AddHostedService<MetadataListConsumerService>();
+        builder.Services.AddHostedService<MetadataSearchConsumerService>();
+        builder.Services.AddHostedService<MetadataCommentsConsumerService>();
+        builder.Services.AddHostedService<MetadataCaptionsConsumerService>();
+        builder.Services.AddHostedService<MetadataRebuildConsumerService>();
 
         builder.Services.AddHostedService<StorageCrudConsumerService>();
         builder.Services.AddHostedService<DownloadRequestedIngressService>();
@@ -99,6 +125,7 @@ class Program
         builder.Services.AddHostedService<PlaylistRequestedIngressService>();
         builder.Services.AddHostedService<PlaylistEventsConsumerService>();
         builder.Services.AddHostedService<PlaylistQueryConsumerService>();
+        builder.Services.AddHostedService<MetadataQueryConsumerService>();
 
         // Force ConsoleLifetime so Ctrl+C / SIGTERM triggers StopAsync on hosted services
         builder.Services.AddSingleton<IHostLifetime, ConsoleLifetime>();
@@ -146,5 +173,24 @@ class Program
         }
 
         return null;
+    }
+
+    private static Node BuildTypesenseNode(IConfiguration configuration)
+    {
+        var url = configuration["Typesense:Url"] ?? configuration.GetConnectionString("typesense");
+        if (!string.IsNullOrWhiteSpace(url))
+        {
+            var uri = new Uri(url, UriKind.Absolute);
+            var port = uri.IsDefaultPort
+                ? (uri.Scheme == Uri.UriSchemeHttps ? "443" : "80")
+                : uri.Port.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var additionalPath = uri.AbsolutePath == "/" ? string.Empty : uri.AbsolutePath.TrimEnd('/');
+            return new Node(uri.Host, port, uri.Scheme, additionalPath);
+        }
+
+        return new Node(
+            configuration["Typesense:Host"] ?? "localhost",
+            configuration["Typesense:Port"] ?? "8108",
+            configuration["Typesense:Protocol"] ?? "http");
     }
 }
