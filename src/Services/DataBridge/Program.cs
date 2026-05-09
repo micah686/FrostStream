@@ -45,7 +45,8 @@ class Program
                         .MapEnum<AzureBlobCredentialMode>("azure_blob_credential_mode")
                         .MapEnum<GoogleCloudStorageCredentialMode>("google_cloud_storage_credential_mode")
                         .MapEnum<DownloadJobState>("download_job_state")
-                        .MapEnum<FailureKind>("failure_kind"))
+                        .MapEnum<FailureKind>("failure_kind")
+                        .MapEnum<PlaylistState>("playlist_state"))
                 .UseSnakeCaseNamingConvention());
 
         builder.Services
@@ -69,6 +70,7 @@ class Program
         });
 
         builder.Services.AddNatsTopologySource<DownloadTopology>();
+        builder.Services.AddNatsTopologySource<PlaylistTopology>();
         builder.Services.AddOpenBaoSecretStore(builder.Configuration);
 
         // Isolate Cleipnir's runtime tables in their own Postgres schema. Cleipnir's
@@ -89,10 +91,14 @@ class Program
         builder.Services.AddSingleton<IClock>(SystemClock.Instance);
         builder.Services.AddScoped<IDownloadJobsRepository, DownloadJobsRepository>();
         builder.Services.AddScoped<IMetadataRepository, MetadataRepository>();
+        builder.Services.AddScoped<IPlaylistsRepository, PlaylistsRepository>();
 
         builder.Services.AddHostedService<StorageCrudConsumerService>();
         builder.Services.AddHostedService<DownloadRequestedIngressService>();
         builder.Services.AddHostedService<DownloadEventsConsumerService>();
+        builder.Services.AddHostedService<PlaylistRequestedIngressService>();
+        builder.Services.AddHostedService<PlaylistEventsConsumerService>();
+        builder.Services.AddHostedService<PlaylistQueryConsumerService>();
 
         // Force ConsoleLifetime so Ctrl+C / SIGTERM triggers StopAsync on hosted services
         builder.Services.AddSingleton<IHostLifetime, ConsoleLifetime>();

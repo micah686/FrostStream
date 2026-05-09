@@ -65,6 +65,7 @@ public class DownloadArchiveFlow(
             await Message<TempFileDeleted>();
             if (metadata.RichMetadata is { } existingRichMeta)
                 await RunMetadataWriteStep(jobId, reservation.MediaGuid, reservation.IsNewMediaGuid, metadata.Provider, metadata.SourceMediaId, existingRichMeta);
+            await Capture(() => PlaylistRepoCall(r => r.TryLinkMediaGuidAsync(jobId, reservation.MediaGuid)));
             await Capture(() => RepoCall(r => r.MarkAlreadyDownloadedAsync(jobId, reservation.MediaGuid)));
             return;
         }
@@ -86,6 +87,7 @@ public class DownloadArchiveFlow(
         try
         {
             await Capture(() => Update(jobId, DownloadJobState.CommitPending));
+            await Capture(() => PlaylistRepoCall(r => r.TryLinkMediaGuidAsync(jobId, reservation.MediaGuid)));
             await Capture(() => Update(jobId, DownloadJobState.Completed));
         }
         catch (Exception commitEx)
@@ -354,6 +356,20 @@ public class DownloadArchiveFlow(
         using var scope = scopeFactory.CreateScope();
         var repo = scope.ServiceProvider.GetRequiredService<IMetadataRepository>();
         await action(repo);
+    }
+
+    private async Task PlaylistRepoCall(Func<IPlaylistsRepository, Task> action)
+    {
+        using var scope = scopeFactory.CreateScope();
+        var repo = scope.ServiceProvider.GetRequiredService<IPlaylistsRepository>();
+        await action(repo);
+    }
+
+    private async Task<T> PlaylistRepoCall<T>(Func<IPlaylistsRepository, Task<T>> action)
+    {
+        using var scope = scopeFactory.CreateScope();
+        var repo = scope.ServiceProvider.GetRequiredService<IPlaylistsRepository>();
+        return await action(repo);
     }
 
     private async Task RepoCall(Func<IDownloadJobsRepository, Task> action)

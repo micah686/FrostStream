@@ -22,6 +22,12 @@ public sealed class DataBridgeDbContext(DbContextOptions<DataBridgeDbContext> op
     public DbSet<MediaSourceVersionEntity> MediaSourceVersions => Set<MediaSourceVersionEntity>();
     public DbSet<MediaContentIdVersionEntity> MediaContentIdVersions => Set<MediaContentIdVersionEntity>();
 
+    public DbSet<PlaylistEntity> Playlists => Set<PlaylistEntity>();
+    public DbSet<PlaylistItemEntity> PlaylistItems => Set<PlaylistItemEntity>();
+    public DbSet<PlaylistScanEntryEntity> PlaylistScanEntries => Set<PlaylistScanEntryEntity>();
+    public DbSet<MediaPlaylistMembershipEntity> MediaPlaylistMemberships => Set<MediaPlaylistMembershipEntity>();
+    public DbSet<PlaylistMetadataEntity> PlaylistMetadata => Set<PlaylistMetadataEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasPostgresEnum<LocalStorageProtocol>("local_storage_protocol");
@@ -31,6 +37,18 @@ public sealed class DataBridgeDbContext(DbContextOptions<DataBridgeDbContext> op
         modelBuilder.HasPostgresEnum<GoogleCloudStorageCredentialMode>("google_cloud_storage_credential_mode");
         modelBuilder.HasPostgresEnum<DownloadJobState>("download_job_state");
         modelBuilder.HasPostgresEnum<FailureKind>("failure_kind");
+        modelBuilder.HasPostgresEnum<PlaylistState>("playlist_state");
+
+        modelBuilder.Entity<MediaPlaylistMembershipEntity>(builder =>
+        {
+            builder.ToTable("media_playlist_membership", "metadata");
+        });
+
+        modelBuilder.Entity<PlaylistMetadataEntity>(builder =>
+        {
+            builder.ToTable("playlist_metadata", "metadata");
+        });
+
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(DataBridgeDbContext).Assembly);
         base.OnModelCreating(modelBuilder);
     }
