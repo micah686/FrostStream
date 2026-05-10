@@ -18,13 +18,13 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Services\DataBridge\DataBridge.csproj" />
-      <ProjectReference Include="..\Services\WebAPI\WebAPI.csproj" />
-      <ProjectReference Include="..\Services\Worker\Worker.csproj" />
+      <Folder Include="configs\nats\certs\" />
     </ItemGroup>
 
     <ItemGroup>
-      <Folder Include="configs\nats\certs\" />
+      <ProjectReference Include="..\DataBridge\DataBridge.csproj" />
+      <ProjectReference Include="..\WebAPI\WebAPI.csproj" />
+      <ProjectReference Include="..\Worker\Worker.csproj" />
     </ItemGroup>
 
 </Project>

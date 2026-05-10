@@ -11,7 +11,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\..\Modules\FlySwattr.NATS\FlySwattr.NATS\FlySwattr.NATS.csproj" />
-      <ProjectReference Include="..\..\ServiceDefaults\ServiceDefaults.csproj" />
+      <ProjectReference Include="..\ServiceDefaults\ServiceDefaults.csproj" />
       <ProjectReference Include="..\Shared\Shared.csproj" />
     </ItemGroup>
 
@@ -37,9 +37,7 @@
       <PackageReference Include="FluentStorage" Version="6.0.3" />
       <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime" Version="10.0.1" />
       <PackageReference Include="Polly.Core" Version="8.6.6" />
-
       <PackageReference Include="System.IO.Hashing" Version="10.0.7" />
-
       <PackageReference Include="Typesense" Version="8.3.0" />
     </ItemGroup>
 

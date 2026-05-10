@@ -22,9 +22,9 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\Services\DataBridge\DataBridge.csproj" />
-        <ProjectReference Include="..\..\Services\Shared\Shared.csproj" />
-        <ProjectReference Include="..\..\Services\WebAPI\WebAPI.csproj" />
+        <ProjectReference Include="..\..\src\App\DataBridge\DataBridge.csproj" />
+        <ProjectReference Include="..\..\src\App\Shared\Shared.csproj" />
+        <ProjectReference Include="..\..\src\App\WebAPI\WebAPI.csproj" />
     </ItemGroup>
 
     <ItemGroup>

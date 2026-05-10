@@ -1,0 +1,35 @@
+<Solution>
+  <Folder Name="/HelperTesterApps/">
+    <Project Path="HelperTestingApps/VideoServeLocalTest/VideoServeLocalTest.csproj" />
+  </Folder>
+  <Folder Name="/Modules/FlySwattr.NATS/">
+    <Project Path="../Modules/FlySwattr.NATS/FlySwattr.NATS.Abstractions/FlySwattr.NATS.Abstractions.csproj" />
+    <Project Path="../Modules/FlySwattr.NATS/FlySwattr.NATS.Caching/FlySwattr.NATS.Caching.csproj" />
+    <Project Path="../Modules/FlySwattr.NATS/FlySwattr.NATS.Core/FlySwattr.NATS.Core.csproj" />
+    <Project Path="../Modules/FlySwattr.NATS/FlySwattr.NATS.DistributedLock/FlySwattr.NATS.DistributedLock.csproj" />
+    <Project Path="../Modules/FlySwattr.NATS/FlySwattr.NATS.Hosting/FlySwattr.NATS.Hosting.csproj" />
+    <Project Path="../Modules/FlySwattr.NATS/FlySwattr.NATS.Resilience/FlySwattr.NATS.Resilience.csproj" />
+    <Project Path="../Modules/FlySwattr.NATS/FlySwattr.NATS.Topology/FlySwattr.NATS.Topology.csproj" />
+    <Project Path="../Modules/FlySwattr.NATS/FlySwattr.NATS/FlySwattr.NATS.csproj" />
+  </Folder>
+  <Folder Name="/Modules/YtDlpSharpLib/">
+    <Project Path="../Modules/YtDlpSharpLib/YtDlpSharpLib/YtDlpSharpLib.csproj" />
+  </Folder>
+  <Folder Name="/Core/">
+    <Project Path="DataBridge/DataBridge.csproj" />
+    <Project Path="MediaProcessor/MediaProcessor.csproj" />
+    <Project Path="Scheduler/Scheduler.csproj" />
+    <Project Path="Shared/Shared.csproj" />
+    <Project Path="WebAPI/WebAPI.csproj" />
+    <Project Path="Worker/Worker.csproj" />
+  </Folder>
+  <Folder Name="/Startup/">
+    <Project Path="AppHost/AppHost.csproj" />
+  </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="../../Tests/IntegrationTests/IntegrationTests/IntegrationTests.csproj" />
+    <Project Path="../../Tests/UnitTests/UnitTests.csproj" />
+  </Folder>
+  <Project Path="ServiceDefaults/ServiceDefaults.csproj" />
+
+</Solution>
