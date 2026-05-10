@@ -27,6 +27,14 @@ public class DownloadArchiveFlow(
         var jobInstance = jobId.ToString("N");
         var storageKey = request.StorageKey ?? "default";
 
+        logger.LogInformation(
+            "Download flow started for JobId {JobId} CorrelationId {CorrelationId} URL {SourceUrl} StorageKey {StorageKey} ForceDownload {ForceDownload}",
+            jobId,
+            request.CorrelationId,
+            request.SourceUrl,
+            storageKey,
+            request.ForceDownload);
+
         await Capture(() => Update(jobId, DownloadJobState.Queued));
 
         // STEP 1: metadata ----------------------------------------------------
@@ -39,6 +47,10 @@ public class DownloadArchiveFlow(
             r.CheckSourceVersionAsync(metadata, request.ForceDownload)));
         if (sourceCheck.AlreadyDownloaded && sourceCheck.MediaGuid is { } existingGuid)
         {
+            logger.LogInformation(
+                "Download flow found existing media for JobId {JobId} MediaGuid {MediaGuid}; marking already downloaded.",
+                jobId,
+                existingGuid);
             await Capture(() => RepoCall(r => r.MarkAlreadyDownloadedAsync(jobId, existingGuid)));
             return;
         }
@@ -62,6 +74,11 @@ public class DownloadArchiveFlow(
 
         if (reservation.ContentAlreadyStored)
         {
+            logger.LogInformation(
+                "Download flow found existing stored content for JobId {JobId} MediaGuid {MediaGuid} Version {VersionNum}; skipping upload.",
+                jobId,
+                reservation.MediaGuid,
+                reservation.VersionNum);
             // Bytes already in storage under a prior media_guid (or a prior version of this
             // one). Skip upload, clean the temp file we just produced, write metadata, mark AlreadyDownloaded.
             await Capture(() => DispatchTempFileCleanup(request, downloaded.TempFileRef, jobInstance, attempt: 1));
@@ -78,6 +95,11 @@ public class DownloadArchiveFlow(
         var uploaded = await RunUploadStep(request, downloaded, reservation, storageKey, jobInstance);
         if (uploaded is null)
         {
+            logger.LogWarning(
+                "Upload did not complete for JobId {JobId} MediaGuid {MediaGuid} Version {VersionNum}; deleting reserved version.",
+                jobId,
+                reservation.MediaGuid,
+                reservation.VersionNum);
             // Upload terminally failed. The reserved version row points at a path with no
             // bytes — drop it so a future redownload doesn't reuse the orphan path.
             await Capture(() => RepoCall(r => r.DeleteReservedVersionAsync(reservation.MediaGuid, reservation.VersionNum)));
@@ -95,6 +117,11 @@ public class DownloadArchiveFlow(
         }
         catch (Exception commitEx)
         {
+            logger.LogError(commitEx,
+                "Download flow commit failed for JobId {JobId} MediaGuid {MediaGuid} StoragePath {StoragePath}; starting compensation.",
+                jobId,
+                reservation.MediaGuid,
+                uploaded.StoragePath);
             await Capture(() => DispatchUploadedObjectDeletion(request, uploaded, jobInstance, attempt: 1));
             await Capture(() => DispatchTempFileCleanup(request, uploaded.TempFileRef, jobInstance, attempt: 1));
             await Capture(() => RepoCall(r => r.DeleteReservedVersionAsync(reservation.MediaGuid, reservation.VersionNum)));
@@ -129,6 +156,12 @@ public class DownloadArchiveFlow(
         };
         await Capture(() => Publish(DownloadSubjects.DeleteTempFileCommand, cleanup));
         await Message<TempFileDeleted>();
+
+        logger.LogInformation(
+            "Download flow completed for JobId {JobId} MediaGuid {MediaGuid} StoragePath {StoragePath}",
+            jobId,
+            reservation.MediaGuid,
+            uploaded.StoragePath);
     }
 
     private async Task<MetadataFetched?> RunMetadataStep(DownloadRequested request, string jobInstance)
@@ -150,12 +183,34 @@ public class DownloadArchiveFlow(
                 Attempt = attempt,
                 SourceUrl = request.SourceUrl
             };
+            logger.LogInformation(
+                "Download flow dispatching metadata fetch for JobId {JobId} Attempt {Attempt} OperationKey {OperationKey}",
+                request.JobId,
+                attempt,
+                op);
             await Capture(() => Publish(DownloadSubjects.FetchMetadataCommand, cmd));
 
             var result = await Messages.FirstOfTypes<MetadataFetched, MetadataFetchFailed>();
-            if (result.HasFirst) return result.First;
+            if (result.HasFirst)
+            {
+                logger.LogInformation(
+                    "Download flow metadata fetch completed for JobId {JobId} Attempt {Attempt} Provider {Provider} SourceMediaId {SourceMediaId} Title {Title}",
+                    request.JobId,
+                    attempt,
+                    result.First.Provider,
+                    result.First.SourceMediaId,
+                    result.First.Title);
+                return result.First;
+            }
 
             var failure = result.Second;
+            logger.LogWarning(
+                "Download flow metadata fetch failed for JobId {JobId} Attempt {Attempt} FailureKind {FailureKind} ErrorCode {ErrorCode} ErrorMessage {ErrorMessage}",
+                request.JobId,
+                attempt,
+                failure.FailureKind,
+                failure.ErrorCode,
+                failure.ErrorMessage);
             if (TerminalFailureForStep(failure, attempt) is { } terminal)
             {
                 await Capture(() => Fail(request.JobId, failure, terminal));
@@ -184,12 +239,35 @@ public class DownloadArchiveFlow(
                 Attempt = attempt,
                 SourceUrl = request.SourceUrl
             };
+            logger.LogInformation(
+                "Download flow dispatching video download for JobId {JobId} Attempt {Attempt} OperationKey {OperationKey}",
+                request.JobId,
+                attempt,
+                op);
             await Capture(() => Publish(DownloadSubjects.DownloadVideoCommand, cmd));
 
             var result = await Messages.FirstOfTypes<DownloadCompleted, DownloadFailed>();
-            if (result.HasFirst) return result.First;
+            if (result.HasFirst)
+            {
+                logger.LogInformation(
+                    "Download flow video download completed for JobId {JobId} Attempt {Attempt} TempFileRef {TempFileRef} SizeBytes {FileSizeBytes} ContentHash {ContentHashXxh128}",
+                    request.JobId,
+                    attempt,
+                    result.First.TempFileRef,
+                    result.First.FileSizeBytes,
+                    result.First.ContentHashXxh128);
+                return result.First;
+            }
 
             var failure = result.Second;
+            logger.LogWarning(
+                "Download flow video download failed for JobId {JobId} Attempt {Attempt} FailureKind {FailureKind} ErrorCode {ErrorCode} ErrorMessage {ErrorMessage} TempFileRef {TempFileRef}",
+                request.JobId,
+                attempt,
+                failure.FailureKind,
+                failure.ErrorCode,
+                failure.ErrorMessage,
+                failure.TempFileRef);
             if (!string.IsNullOrEmpty(failure.TempFileRef))
             {
                 await Capture(() => DispatchTempFileCleanup(request, failure.TempFileRef!, jobInstance, attempt));
@@ -231,12 +309,36 @@ public class DownloadArchiveFlow(
                 StoragePath = reservation.StoragePath,
                 ContentHashXxh128 = downloaded.ContentHashXxh128
             };
+            logger.LogInformation(
+                "Download flow dispatching upload for JobId {JobId} Attempt {Attempt} StorageKey {StorageKey} StoragePath {StoragePath} OperationKey {OperationKey}",
+                request.JobId,
+                attempt,
+                storageKey,
+                reservation.StoragePath,
+                op);
             await Capture(() => Publish(DownloadSubjects.UploadObjectCommand, cmd));
 
             var result = await Messages.FirstOfTypes<UploadCompleted, UploadFailed>();
-            if (result.HasFirst) return result.First;
+            if (result.HasFirst)
+            {
+                logger.LogInformation(
+                    "Download flow upload completed for JobId {JobId} Attempt {Attempt} StorageKey {StorageKey} StoragePath {StoragePath} SizeBytes {ContentLengthBytes}",
+                    request.JobId,
+                    attempt,
+                    result.First.StorageKey,
+                    result.First.StoragePath,
+                    result.First.ContentLengthBytes);
+                return result.First;
+            }
 
             var failure = result.Second;
+            logger.LogWarning(
+                "Download flow upload failed for JobId {JobId} Attempt {Attempt} FailureKind {FailureKind} ErrorMessage {ErrorMessage} TempFileRef {TempFileRef}",
+                request.JobId,
+                attempt,
+                failure.FailureKind,
+                failure.ErrorMessage,
+                failure.TempFileRef);
             if (TerminalFailureForStep(failure, attempt) is { } terminal)
             {
                 await Capture(() => DispatchTempFileCleanup(request, downloaded.TempFileRef, jobInstance, attempt));
@@ -302,8 +404,11 @@ public class DownloadArchiveFlow(
         await Publish(DownloadSubjects.DeleteUploadedObjectCommand, deletion);
     }
 
-    private Task Update(Guid jobId, DownloadJobState state)
-        => RepoCall(r => r.UpdateStateAsync(jobId, state));
+    private async Task Update(Guid jobId, DownloadJobState state)
+    {
+        logger.LogInformation("Download flow state update for JobId {JobId}: {State}", jobId, state);
+        await RepoCall(r => r.UpdateStateAsync(jobId, state));
+    }
 
     private async Task Fail<TFailure>(Guid jobId, TFailure failure, DownloadJobState terminalState)
         where TFailure : IFlowMessage
@@ -315,6 +420,13 @@ public class DownloadArchiveFlow(
             UploadFailed u => (u.FailureKind, u.ErrorCode, u.ErrorMessage),
             _ => (FailureKind.Unknown, (string?)null, "unknown failure")
         };
+        logger.LogWarning(
+            "Download flow terminal failure for JobId {JobId}: State {TerminalState} FailureKind {FailureKind} ErrorCode {ErrorCode} ErrorMessage {ErrorMessage}",
+            jobId,
+            terminalState,
+            kind,
+            code,
+            message);
         await RepoCall(r => r.RecordTerminalFailureAsync(jobId, kind, code, message, terminalState, lastPayloadJson: null));
     }
 
@@ -330,16 +442,34 @@ public class DownloadArchiveFlow(
         {
             try
             {
+                logger.LogInformation(
+                    "Writing rich metadata for JobId {JobId} MediaGuid {MediaGuid} Attempt {Attempt}",
+                    jobId,
+                    mediaGuid,
+                    attempt);
                 await Capture(() => MetaRepoCall(r => r.WriteMetadataAsync(mediaGuid, richMeta)));
                 await Capture(() => PublishMetadataSync(mediaGuid));
+                logger.LogInformation(
+                    "Rich metadata written for JobId {JobId} MediaGuid {MediaGuid} Attempt {Attempt}",
+                    jobId,
+                    mediaGuid,
+                    attempt);
                 return;
             }
             catch (Exception ex) when (attempt < MaxAttempts)
             {
-                _ = ex;
+                logger.LogWarning(ex,
+                    "Rich metadata write failed for JobId {JobId} MediaGuid {MediaGuid} Attempt {Attempt}; retrying.",
+                    jobId,
+                    mediaGuid,
+                    attempt);
             }
             catch (Exception metaEx)
             {
+                logger.LogError(metaEx,
+                    "Rich metadata write failed terminally for JobId {JobId} MediaGuid {MediaGuid}",
+                    jobId,
+                    mediaGuid);
                 // Metadata write exhausted retries — compensate and fail the job.
                 if (isNewMediaGuid)
                     await Capture(() => RepoCall(r => r.DeleteNewMediaGuidAsync(mediaGuid, provider, sourceMediaId)));

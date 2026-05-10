@@ -42,14 +42,17 @@ internal sealed class DownloadProgressReporter(
         };
 
         logger.LogInformation(
-            "Download progress for JobId {JobId}: phase {Phase}, percent {Percent}, downloaded {DownloadedBytes}/{TotalBytes}, speed {Speed}, ETA {EtaSeconds}s",
+            "yt-dlp progress for JobId {JobId} Attempt {Attempt} Sequence {Sequence}: {Phase} {PercentText} downloaded {DownloadedText}/{TotalText} speed {Speed} ETA {EtaText}. Output: {RawLine}",
             message.JobId,
+            message.Attempt,
+            message.Sequence,
             message.Phase,
-            message.Percent,
-            message.DownloadedBytes,
-            message.TotalBytes,
-            message.Speed,
-            message.EtaSeconds);
+            FormatPercent(message.Percent),
+            FormatBytes(message.DownloadedBytes),
+            FormatBytes(message.TotalBytes),
+            message.Speed ?? "unknown",
+            FormatEta(value.Eta),
+            value.RawLine ?? message.Message ?? string.Empty);
 
         Task publishTask;
         try
@@ -98,5 +101,32 @@ internal sealed class DownloadProgressReporter(
                 message.JobId,
                 message.Sequence);
         }
+    }
+
+    private static string FormatPercent(double? percent)
+        => percent is { } value
+            ? value.ToString("0.0", CultureInfo.InvariantCulture) + "%"
+            : "unknown";
+
+    private static string FormatEta(TimeSpan? eta)
+        => eta is { } value
+            ? value.ToString(value.TotalHours >= 1 ? @"h\:mm\:ss" : @"m\:ss", CultureInfo.InvariantCulture)
+            : "unknown";
+
+    private static string FormatBytes(long? bytes)
+    {
+        if (bytes is null)
+            return "unknown";
+
+        string[] units = ["B", "KiB", "MiB", "GiB", "TiB"];
+        var value = (double)bytes.Value;
+        var unit = 0;
+        while (value >= 1024 && unit < units.Length - 1)
+        {
+            value /= 1024;
+            unit++;
+        }
+
+        return value.ToString(unit == 0 ? "0" : "0.0", CultureInfo.InvariantCulture) + " " + units[unit];
     }
 }

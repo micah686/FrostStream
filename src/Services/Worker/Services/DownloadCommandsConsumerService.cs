@@ -73,6 +73,12 @@ public sealed class DownloadCommandsConsumerService(
 
         try
         {
+            logger.LogInformation(
+                "Metadata fetch started for JobId {JobId} Attempt {Attempt} URL {SourceUrl}",
+                cmd.JobId,
+                cmd.Attempt,
+                cmd.SourceUrl);
+
             var metadataResult = await ytDlp.TryGetVideoInfoAsync(cmd.SourceUrl);
             if (!metadataResult.Success || metadataResult.Data is not { } info)
             {
@@ -95,12 +101,24 @@ public sealed class DownloadCommandsConsumerService(
             {
                 richMetadata = YtDlpMetadataMapper.Map(info, provider ?? "", clock);
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                Console.WriteLine(e);
+                logger.LogError(ex,
+                    "Metadata mapping failed for JobId {JobId} Provider {Provider} SourceMediaId {SourceMediaId}",
+                    cmd.JobId,
+                    provider,
+                    sourceMediaId);
                 throw;
             }
-            
+
+            logger.LogInformation(
+                "Metadata fetch completed for JobId {JobId} Attempt {Attempt} Provider {Provider} SourceMediaId {SourceMediaId} Title {Title}",
+                cmd.JobId,
+                cmd.Attempt,
+                provider,
+                sourceMediaId,
+                info.Title ?? info.FullTitle);
+
 
             await Publish(DownloadSubjects.MetadataFetched, new MetadataFetched
             {
@@ -149,6 +167,13 @@ public sealed class DownloadCommandsConsumerService(
         {
             Directory.CreateDirectory(tempDirectory);
 
+            logger.LogInformation(
+                "Download started for JobId {JobId} Attempt {Attempt} URL {SourceUrl} TempDirectory {TempDirectory}",
+                cmd.JobId,
+                cmd.Attempt,
+                cmd.SourceUrl,
+                tempDirectory);
+
             progress = new DownloadProgressReporter(cmd, publisher, clock, logger);
             await ytDlp.DownloadAsync(
                 cmd.SourceUrl,
@@ -165,6 +190,14 @@ public sealed class DownloadCommandsConsumerService(
                 throw new FileNotFoundException("yt-dlp completed but the temp file was not found.", tempFileRef);
 
             var contentHash = await ComputeXxHash128Async(tempFileRef);
+
+            logger.LogInformation(
+                "Download completed for JobId {JobId} Attempt {Attempt} File {TempFileRef} SizeBytes {FileSizeBytes} ContentHash {ContentHashXxh128}",
+                cmd.JobId,
+                cmd.Attempt,
+                tempFileRef,
+                fileInfo.Length,
+                contentHash);
 
             await Publish(DownloadSubjects.DownloadCompleted, new DownloadCompleted
             {
@@ -214,12 +247,30 @@ public sealed class DownloadCommandsConsumerService(
             if (!fileInfo.Exists)
                 throw new FileNotFoundException("Temp file to upload was not found.", cmd.TempFileRef);
 
+            logger.LogInformation(
+                "Upload started for JobId {JobId} Attempt {Attempt} TempFileRef {TempFileRef} SizeBytes {FileSizeBytes} StorageKey {StorageKey} StoragePath {StoragePath}",
+                cmd.JobId,
+                cmd.Attempt,
+                cmd.TempFileRef,
+                fileInfo.Length,
+                cmd.StorageKey,
+                cmd.StoragePath);
+
             var storage = await blobStorageProvider.GetAsync(cmd.StorageKey);
 
             await using (var stream = File.OpenRead(fileInfo.FullName))
             {
                 await storage.WriteAsync(cmd.StoragePath, stream, append: false);
             }
+
+            logger.LogInformation(
+                "Upload completed for JobId {JobId} Attempt {Attempt} StorageKey {StorageKey} StoragePath {StoragePath} SizeBytes {FileSizeBytes} ContentHash {ContentHashXxh128}",
+                cmd.JobId,
+                cmd.Attempt,
+                cmd.StorageKey,
+                cmd.StoragePath,
+                fileInfo.Length,
+                cmd.ContentHashXxh128);
 
             await Publish(DownloadSubjects.UploadCompleted, new UploadCompleted
             {
@@ -255,7 +306,19 @@ public sealed class DownloadCommandsConsumerService(
 
         try
         {
+            logger.LogInformation(
+                "Temp file cleanup started for JobId {JobId} Attempt {Attempt} TempFileRef {TempFileRef}",
+                cmd.JobId,
+                cmd.Attempt,
+                cmd.TempFileRef);
+
             DeleteTempFileRef(cmd.TempFileRef);
+
+            logger.LogInformation(
+                "Temp file cleanup completed for JobId {JobId} Attempt {Attempt} TempFileRef {TempFileRef}",
+                cmd.JobId,
+                cmd.Attempt,
+                cmd.TempFileRef);
 
             await Publish(DownloadSubjects.TempFileDeleted, new TempFileDeleted
             {
@@ -301,8 +364,22 @@ public sealed class DownloadCommandsConsumerService(
             if (string.IsNullOrWhiteSpace(cmd.StoragePath))
                 throw new ArgumentException("Storage path is required.", nameof(cmd.StoragePath));
 
+            logger.LogInformation(
+                "Uploaded object cleanup started for JobId {JobId} Attempt {Attempt} StorageKey {StorageKey} StoragePath {StoragePath}",
+                cmd.JobId,
+                cmd.Attempt,
+                cmd.StorageKey,
+                cmd.StoragePath);
+
             var storage = await blobStorageProvider.GetAsync(cmd.StorageKey);
             await storage.DeleteAsync([cmd.StoragePath]);
+
+            logger.LogInformation(
+                "Uploaded object cleanup completed for JobId {JobId} Attempt {Attempt} StorageKey {StorageKey} StoragePath {StoragePath}",
+                cmd.JobId,
+                cmd.Attempt,
+                cmd.StorageKey,
+                cmd.StoragePath);
 
             await Publish(DownloadSubjects.UploadedObjectDeleted, new UploadedObjectDeleted
             {
