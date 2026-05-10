@@ -101,6 +101,7 @@ class Program
         builder.Services.AddScoped<IMetadataRepository, MetadataRepository>();
         builder.Services.AddScoped<IMetadataReadService, MetadataReadService>();
         builder.Services.AddScoped<IPlaylistsRepository, PlaylistsRepository>();
+        builder.Services.AddScoped<IOptionPresetsRepository, OptionPresetsRepository>();
 
         builder.Services.AddTypesenseClient(config =>
         {
@@ -120,6 +121,7 @@ class Program
         builder.Services.AddHostedService<MetadataRebuildConsumerService>();
 
         builder.Services.AddHostedService<StorageCrudConsumerService>();
+        builder.Services.AddHostedService<OptionPresetCrudConsumerService>();
         builder.Services.AddHostedService<DownloadRequestedIngressService>();
         builder.Services.AddHostedService<DownloadEventsConsumerService>();
         builder.Services.AddHostedService<PlaylistRequestedIngressService>();

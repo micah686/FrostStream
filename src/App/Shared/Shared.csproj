@@ -23,6 +23,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\..\Modules\FlySwattr.NATS\FlySwattr.NATS.Abstractions\FlySwattr.NATS.Abstractions.csproj" />
+      <ProjectReference Include="..\..\Modules\YtDlpSharpLib\YtDlpSharpLib\YtDlpSharpLib.csproj" />
     </ItemGroup>
 
 </Project>

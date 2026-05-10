@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Cleipnir.Flows;
 using Cleipnir.ResilientFunctions.Reactive.Extensions;
 using DataBridge.Data;
@@ -7,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using NodaTime;
 using Shared.Messaging;
 using Shared.Metadata;
+using YtDlpSharpLib.Options;
 
 namespace DataBridge.Flows;
 
@@ -28,12 +30,19 @@ public class DownloadArchiveFlow(
         var storageKey = request.StorageKey ?? "default";
 
         logger.LogInformation(
-            "Download flow started for JobId {JobId} CorrelationId {CorrelationId} URL {SourceUrl} StorageKey {StorageKey} ForceDownload {ForceDownload}",
+            "Download flow started for JobId {JobId} CorrelationId {CorrelationId} URL {SourceUrl} StorageKey {StorageKey} ForceDownload {ForceDownload} MediaKind {MediaKind} PresetKey {PresetKey} CookieKey {CookieKey}",
             jobId,
             request.CorrelationId,
             request.SourceUrl,
             storageKey,
-            request.ForceDownload);
+            request.ForceDownload,
+            request.MediaKind,
+            request.PresetKey,
+            request.CookieKey);
+
+        // Resolve a stored preset -> YtDlpOptions if the request used PresetKey instead
+        // of inline options. Mutually-exclusive validation lives at the API layer.
+        request = await Capture(() => ResolvePresetAsync(request));
 
         await Capture(() => Update(jobId, DownloadJobState.Queued));
 
@@ -181,7 +190,9 @@ public class DownloadArchiveFlow(
                 OperationKey = op,
                 OccurredAt = clock.GetCurrentInstant(),
                 Attempt = attempt,
-                SourceUrl = request.SourceUrl
+                SourceUrl = request.SourceUrl,
+                YtDlpOptions = request.YtDlpOptions,
+                CookieKey = request.CookieKey
             };
             logger.LogInformation(
                 "Download flow dispatching metadata fetch for JobId {JobId} Attempt {Attempt} OperationKey {OperationKey}",
@@ -237,7 +248,11 @@ public class DownloadArchiveFlow(
                 OperationKey = op,
                 OccurredAt = clock.GetCurrentInstant(),
                 Attempt = attempt,
-                SourceUrl = request.SourceUrl
+                SourceUrl = request.SourceUrl,
+                MediaKind = request.MediaKind,
+                AudioFormat = request.AudioFormat,
+                YtDlpOptions = request.YtDlpOptions,
+                CookieKey = request.CookieKey
             };
             logger.LogInformation(
                 "Download flow dispatching video download for JobId {JobId} Attempt {Attempt} OperationKey {OperationKey}",
@@ -532,5 +547,44 @@ public class DownloadArchiveFlow(
         using var scope = scopeFactory.CreateScope();
         var jobs = scope.ServiceProvider.GetRequiredService<IDownloadJobsRepository>();
         return await action(jobs);
+    }
+
+    /// <summary>
+    /// If <see cref="DownloadRequested.PresetKey"/> is set and inline
+    /// <see cref="DownloadRequested.YtDlpOptions"/> are not, look up the preset and
+    /// hydrate the request. Missing presets are logged and the flow proceeds with
+    /// no options (rather than failing the job) — the API layer is responsible for
+    /// rejecting unknown keys upfront, this is a safety net for races.
+    /// </summary>
+    private async Task<DownloadRequested> ResolvePresetAsync(DownloadRequested request)
+    {
+        if (request.YtDlpOptions is not null || string.IsNullOrWhiteSpace(request.PresetKey))
+            return request;
+
+        using var scope = scopeFactory.CreateScope();
+        var presets = scope.ServiceProvider.GetRequiredService<IOptionPresetsRepository>();
+        var preset = await presets.GetByKeyAsync(request.PresetKey);
+        if (preset is null)
+        {
+            logger.LogWarning(
+                "Download flow could not find preset '{PresetKey}' for JobId {JobId}; proceeding with no options.",
+                request.PresetKey,
+                request.JobId);
+            return request;
+        }
+
+        try
+        {
+            var options = JsonSerializer.Deserialize<YtDlpOptions>(preset.YtDlpOptionsJson);
+            return request with { YtDlpOptions = options };
+        }
+        catch (JsonException ex)
+        {
+            logger.LogError(ex,
+                "Download flow failed to deserialize preset '{PresetKey}' for JobId {JobId}; proceeding with no options.",
+                request.PresetKey,
+                request.JobId);
+            return request;
+        }
     }
 }
