@@ -16,14 +16,12 @@ public class DownloadsController(
     ILogger<DownloadsController> logger) : ControllerBase
 {
     /// <summary>
-    /// Submits a new download/archive job. Publishes <see cref="DownloadRequested"/> to JetStream;
-    /// DataBridge consumes it from <c>FROSTSTREAM_DOWNLOAD</c> and starts a Cleipnir flow keyed
-    /// by the returned <c>JobId</c>. The caller may pass an inline yt-dlp options snapshot via
-    /// <see cref="DownloadRequest.YtDlpOptions"/>; for a stored preset, see
-    /// <see cref="SubmitWithPreset"/>.
+    /// Submits a simple video download. No yt-dlp options, no presets, no audio
+    /// toggles — just URL, storage, and optional cookie. Use
+    /// <see cref="SubmitWithPreset"/> for anything more elaborate.
     /// </summary>
     [HttpPost]
-    public Task<ActionResult<DownloadRequestResponse>> Submit(
+    public Task<ActionResult<DownloadRequestResponse>> Download(
         [FromBody] DownloadRequest request,
         CancellationToken cancellationToken)
         => PublishRequestAsync(
@@ -32,20 +30,41 @@ public class DownloadsController(
             forceDownload: request.ForceDownload,
             requestedBy: request.RequestedBy,
             tags: request.Tags,
-            mediaKind: request.MediaKind,
-            audioFormat: request.AudioFormat,
-            ytDlpOptions: request.YtDlpOptions,
+            mediaKind: MediaKind.Video,
+            audioFormat: null,
+            ytDlpOptions: null,
             presetKey: null,
             cookieKey: request.CookieKey,
             cancellationToken: cancellationToken);
 
     /// <summary>
-    /// Submits a download job whose yt-dlp options are resolved from a stored preset
-    /// (managed via <see cref="OptionPresetsController"/>). Mutually exclusive with
-    /// inline options on <see cref="Submit"/>.
+    /// Submits a simple audio-only download. The Worker forces
+    /// <c>--extract-audio --audio-format mp3</c>; no other options are configurable.
+    /// </summary>
+    [HttpPost("audio")]
+    public Task<ActionResult<DownloadRequestResponse>> DownloadAudio(
+        [FromBody] DownloadAudioRequest request,
+        CancellationToken cancellationToken)
+        => PublishRequestAsync(
+            sourceUrl: request.SourceUrl,
+            storageKey: request.StorageKey,
+            forceDownload: request.ForceDownload,
+            requestedBy: request.RequestedBy,
+            tags: request.Tags,
+            mediaKind: MediaKind.Audio,
+            audioFormat: AudioConversionFormat.Mp3,
+            ytDlpOptions: null,
+            presetKey: null,
+            cookieKey: request.CookieKey,
+            cancellationToken: cancellationToken);
+
+    /// <summary>
+    /// Submits a download whose yt-dlp options come from a stored preset (managed
+    /// via <see cref="OptionPresetsController"/>). Preset content drives every
+    /// yt-dlp flag — including audio extraction if the preset configures it.
     /// </summary>
     [HttpPost("preset")]
-    public Task<ActionResult<DownloadRequestResponse>> SubmitWithPreset(
+    public Task<ActionResult<DownloadRequestResponse>> DownloadWithPreset(
         [FromBody] DownloadPresetRequest request,
         CancellationToken cancellationToken)
         => PublishRequestAsync(
@@ -54,8 +73,8 @@ public class DownloadsController(
             forceDownload: request.ForceDownload,
             requestedBy: request.RequestedBy,
             tags: request.Tags,
-            mediaKind: request.MediaKind,
-            audioFormat: request.AudioFormat,
+            mediaKind: MediaKind.Video,
+            audioFormat: null,
             ytDlpOptions: null,
             presetKey: request.PresetKey,
             cookieKey: request.CookieKey,
@@ -122,6 +141,7 @@ public class DownloadsController(
     }
 }
 
+/// <summary>Body for <see cref="DownloadsController.Download"/> — simple video download.</summary>
 public sealed class DownloadRequest
 {
     [Required]
@@ -138,27 +158,12 @@ public sealed class DownloadRequest
 
     public IReadOnlyList<string>? Tags { get; init; }
 
-    /// <summary>What kind of media to produce. Defaults to <see cref="MediaKind.Video"/>.</summary>
-    [DefaultValue(MediaKind.Video)]
-    public MediaKind MediaKind { get; init; } = MediaKind.Video;
-
-    /// <summary>
-    /// Audio format used when <see cref="MediaKind"/> is <see cref="MediaKind.Audio"/>.
-    /// Ignored for video jobs. <c>null</c> defers to the worker's default (m4a).
-    /// </summary>
-    public AudioConversionFormat? AudioFormat { get; init; }
-
-    /// <summary>
-    /// Inline yt-dlp options snapshot. Worker merges this on top of its own defaults
-    /// before invoking yt-dlp.
-    /// </summary>
-    public YtDlpOptions? YtDlpOptions { get; init; }
-
     /// <summary>Reference to a Netscape cookie file stored at OpenBAO <c>cookies/{key}</c>.</summary>
     public string? CookieKey { get; init; }
 }
 
-public sealed class DownloadPresetRequest
+/// <summary>Body for <see cref="DownloadsController.DownloadAudio"/> — simple audio download (always MP3).</summary>
+public sealed class DownloadAudioRequest
 {
     [Required]
     [Url]
@@ -174,12 +179,26 @@ public sealed class DownloadPresetRequest
 
     public IReadOnlyList<string>? Tags { get; init; }
 
-    /// <summary>What kind of media to produce. Defaults to <see cref="MediaKind.Video"/>.</summary>
-    [DefaultValue(MediaKind.Video)]
-    public MediaKind MediaKind { get; init; } = MediaKind.Video;
+    /// <summary>Reference to a Netscape cookie file stored at OpenBAO <c>cookies/{key}</c>.</summary>
+    public string? CookieKey { get; init; }
+}
 
-    /// <summary>Audio format used when <see cref="MediaKind"/> is <see cref="MediaKind.Audio"/>.</summary>
-    public AudioConversionFormat? AudioFormat { get; init; }
+/// <summary>Body for <see cref="DownloadsController.DownloadWithPreset"/> — download driven by a stored option preset.</summary>
+public sealed class DownloadPresetRequest
+{
+    [Required]
+    [Url]
+    public required string SourceUrl { get; init; }
+
+    [DefaultValue("default")]
+    public required string StorageKey { get; init; }
+
+    [DefaultValue(false)]
+    public bool ForceDownload { get; init; } = false;
+
+    public string? RequestedBy { get; init; }
+
+    public IReadOnlyList<string>? Tags { get; init; }
 
     /// <summary>Stored option-preset key (see <see cref="OptionPresetsController"/>).</summary>
     [Required]
