@@ -57,6 +57,7 @@ src/.idea/**
 *.MKV
 *.webm
 *.info.json
+*.vtt
 
 src/VideoServeLocalTest/data/*
 
