@@ -100,4 +100,12 @@ builder.AddProject<Projects.Worker>("worker")
     .WithEnvironment("OpenBao__Token", baoDevRootToken)
     .WaitFor(openbao);
 
+builder.AddProject<Projects.Scheduler>("scheduler")
+    .WithHttpEndpoint(name: "http")
+    .WithUrlForEndpoint("http", url =>
+    {
+        url.Url = "/quartz";
+        url.DisplayText = "Quartz";
+    });
+
 builder.Build().Run();
