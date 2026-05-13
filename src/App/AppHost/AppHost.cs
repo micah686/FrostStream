@@ -78,7 +78,7 @@ var typesense = builder
 var typesenseEndpoint = typesense.GetEndpoint("http");
 
 // projects
-var databridge = builder.AddProject<Projects.DataBridge>("databridge")
+builder.AddProject<Projects.DataBridge>("databridge")
     .WithReference(database).WaitFor(database)
     .WithReference(nats).WaitFor(nats)
     .WithEnvironment("OpenBao__Address", openbaoEndpoint)
@@ -99,19 +99,5 @@ builder.AddProject<Projects.Worker>("worker")
     .WithEnvironment("OpenBao__Address", openbaoEndpoint)
     .WithEnvironment("OpenBao__Token", baoDevRootToken)
     .WaitFor(openbao);
-
-// Scheduler (BgProcessor) — Quartz triggers + JetStream publisher; reads schedule
-// definitions from DataBridge over NATS at startup, no DB access of its own.
-// WaitFor(databridge) narrows the startup race; the Scheduler also retries the
-// initial fs.schedules.activelist request with backoff since "process running" is
-// not the same as "subscribed".
-builder.AddProject<Projects.Scheduler>("scheduler")
-    .WithReference(nats).WaitFor(nats)
-    .WaitFor(databridge);
-
-// MediaProcessor — currently a stub; future home for thumbnail / artwork /
-// transcoding consumers on the FROSTSTREAM_BACKGROUND stream.
-builder.AddProject<Projects.MediaProcessor>("mediaprocessor")
-    .WithReference(nats).WaitFor(nats);
 
 builder.Build().Run();

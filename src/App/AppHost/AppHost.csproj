@@ -23,8 +23,6 @@
 
     <ItemGroup>
       <ProjectReference Include="..\DataBridge\DataBridge.csproj" />
-      <ProjectReference Include="..\MediaProcessor\MediaProcessor.csproj" />
-      <ProjectReference Include="..\Scheduler\Scheduler.csproj" />
       <ProjectReference Include="..\WebAPI\WebAPI.csproj" />
       <ProjectReference Include="..\Worker\Worker.csproj" />
     </ItemGroup>

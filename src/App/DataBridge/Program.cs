@@ -74,7 +74,6 @@ class Program
 
         builder.Services.AddNatsTopologySource<DownloadTopology>();
         builder.Services.AddNatsTopologySource<PlaylistTopology>();
-        builder.Services.AddNatsTopologySource<BackgroundJobsTopology>();
         builder.Services.AddOpenBaoSecretStore(builder.Configuration);
 
         // Isolate Cleipnir's runtime tables in their own Postgres schema. Cleipnir's
@@ -103,7 +102,6 @@ class Program
         builder.Services.AddScoped<IMetadataReadService, MetadataReadService>();
         builder.Services.AddScoped<IPlaylistsRepository, PlaylistsRepository>();
         builder.Services.AddScoped<IOptionPresetsRepository, OptionPresetsRepository>();
-        builder.Services.AddScoped<IScheduledTasksRepository, ScheduledTasksRepository>();
 
         builder.Services.AddTypesenseClient(config =>
         {
@@ -124,8 +122,6 @@ class Program
 
         builder.Services.AddHostedService<StorageCrudConsumerService>();
         builder.Services.AddHostedService<OptionPresetCrudConsumerService>();
-        builder.Services.AddHostedService<ScheduleCrudConsumerService>();
-        builder.Services.AddHostedService<OrphanMetadataCleanupConsumerService>();
         builder.Services.AddHostedService<DownloadRequestedIngressService>();
         builder.Services.AddHostedService<DownloadEventsConsumerService>();
         builder.Services.AddHostedService<PlaylistRequestedIngressService>();

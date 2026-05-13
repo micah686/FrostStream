@@ -30,8 +30,6 @@ public sealed class DataBridgeDbContext(DbContextOptions<DataBridgeDbContext> op
 
     public DbSet<OptionPresetEntity> OptionPresets => Set<OptionPresetEntity>();
 
-    public DbSet<ScheduledTaskEntity> ScheduledTasks => Set<ScheduledTaskEntity>();
-
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasPostgresEnum<LocalStorageProtocol>("local_storage_protocol");
