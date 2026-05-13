@@ -29,6 +29,7 @@ public sealed class DataBridgeDbContext(DbContextOptions<DataBridgeDbContext> op
     public DbSet<PlaylistMetadataEntity> PlaylistMetadata => Set<PlaylistMetadataEntity>();
 
     public DbSet<OptionPresetEntity> OptionPresets => Set<OptionPresetEntity>();
+    public DbSet<ScheduledTaskEntity> ScheduledTasks => Set<ScheduledTaskEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

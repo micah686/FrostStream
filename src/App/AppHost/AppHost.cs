@@ -78,7 +78,7 @@ var typesense = builder
 var typesenseEndpoint = typesense.GetEndpoint("http");
 
 // projects
-builder.AddProject<Projects.DataBridge>("databridge")
+var databridge = builder.AddProject<Projects.DataBridge>("databridge")
     .WithReference(database).WaitFor(database)
     .WithReference(nats).WaitFor(nats)
     .WithEnvironment("OpenBao__Address", openbaoEndpoint)
@@ -101,6 +101,8 @@ builder.AddProject<Projects.Worker>("worker")
     .WaitFor(openbao);
 
 builder.AddProject<Projects.Scheduler>("scheduler")
+    .WithReference(nats).WaitFor(nats)
+    .WaitFor(databridge)
     .WithHttpEndpoint(name: "http")
     .WithUrlForEndpoint("http", url =>
     {
