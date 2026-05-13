@@ -10,6 +10,9 @@ public sealed class BackgroundJobsTopology : ITopologySource
     public const string WorkerQueueGroup = "worker-bgjobs";
 
     public const string OrphanMetadataCleanupConsumer = "databridge-orphan-metadata-cleanup";
+    public const string SearchReindexConsumer = "databridge-search-reindex";
+    public const string DatabaseMaintenanceConsumer = "databridge-database-maintenance";
+    public const string StaleDatabaseCleanupConsumer = "databridge-stale-database-cleanup";
 
     public IEnumerable<StreamSpec> GetStreams()
     {
@@ -43,5 +46,21 @@ public sealed class BackgroundJobsTopology : ITopologySource
             AckWait = TimeSpan.FromMinutes(5),
             MaxDeliver = 5
         };
+
+        yield return DataBridgeConsumer(SearchReindexConsumer, BackgroundJobSubjects.SearchReindexRequest, TimeSpan.FromMinutes(30), maxDeliver: 3);
+        yield return DataBridgeConsumer(DatabaseMaintenanceConsumer, BackgroundJobSubjects.DatabaseMaintenanceRequest, TimeSpan.FromHours(2), maxDeliver: 3);
+        yield return DataBridgeConsumer(StaleDatabaseCleanupConsumer, BackgroundJobSubjects.StaleDatabaseCleanupRequest, TimeSpan.FromMinutes(15), maxDeliver: 5);
     }
+
+    private static ConsumerSpec DataBridgeConsumer(string durableName, string subject, TimeSpan ackWait, int maxDeliver)
+        => new()
+        {
+            StreamName = StreamName.From(StreamNameValue),
+            DurableName = ConsumerName.From(durableName),
+            DeliverGroup = QueueGroup.From(DataBridgeQueueGroup),
+            FilterSubject = subject,
+            AckPolicy = AckPolicy.Explicit,
+            AckWait = ackWait,
+            MaxDeliver = maxDeliver
+        };
 }

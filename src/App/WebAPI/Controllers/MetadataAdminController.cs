@@ -1,5 +1,6 @@
 using FlySwattr.NATS.Abstractions;
 using Microsoft.AspNetCore.Mvc;
+using NodaTime;
 using Shared.Messaging;
 
 namespace WebAPI.Controllers;
@@ -7,31 +8,33 @@ namespace WebAPI.Controllers;
 [ApiController]
 [Route("api/metadata")]
 public sealed class MetadataAdminController(
-    IMessageBus messageBus,
+    IJetStreamPublisher publisher,
+    IClock clock,
     ILogger<MetadataAdminController> logger) : ControllerBase
 {
-    private static readonly TimeSpan QueryTimeout = TimeSpan.FromSeconds(10);
-
     [HttpPost("reindex")]
     public async Task<IActionResult> TriggerReindex(CancellationToken cancellationToken)
     {
-        MetadataSyncRebuildResponseMessage? response;
+        var now = clock.GetCurrentInstant();
+        var request = BackgroundJobRequestFactory.CreateSearchReindex(
+            BackgroundJobRequestFactory.ManualScheduleKey,
+            BackgroundJobRequestFactory.ManualSearchReindexTaskType,
+            now,
+            now);
+
         try
         {
-            response = await messageBus.RequestAsync<MetadataSyncRebuildRequestMessage, MetadataSyncRebuildResponseMessage>(
-                MetadataSyncSubjects.SyncRebuild,
-                new MetadataSyncRebuildRequestMessage(),
-                QueryTimeout,
-                cancellationToken);
+            await publisher.PublishAsync(
+                BackgroundJobSubjects.SearchReindexRequest,
+                request,
+                request.IdempotencyKey,
+                cancellationToken: cancellationToken);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed publishing metadata reindex request.");
-            return StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable.");
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to publish metadata reindex request.");
         }
-
-        if (response is null || !response.Accepted)
-            return StatusCode(StatusCodes.Status503ServiceUnavailable, response?.ErrorMessage ?? "DataBridge did not accept the rebuild request.");
 
         return Accepted();
     }

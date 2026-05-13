@@ -126,6 +126,7 @@ class Program
         builder.Services.AddHostedService<OptionPresetCrudConsumerService>();
         builder.Services.AddHostedService<ScheduleCrudConsumerService>();
         builder.Services.AddHostedService<OrphanMetadataCleanupConsumerService>();
+        builder.Services.AddHostedService<BackgroundJobConsumerService>();
         builder.Services.AddHostedService<DownloadRequestedIngressService>();
         builder.Services.AddHostedService<DownloadEventsConsumerService>();
         builder.Services.AddHostedService<PlaylistRequestedIngressService>();

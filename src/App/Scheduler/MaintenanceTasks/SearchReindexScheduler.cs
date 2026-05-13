@@ -8,16 +8,17 @@ namespace Scheduler.MaintenanceTasks;
 public sealed class SearchReindexScheduler(INatsMessagePublisher publisher, IClock clock) : ISearchReindexScheduler
 {
     public Task QueueReindexAsync(ScheduledJobContext context, CancellationToken cancellationToken)
-        => publisher.PublishAsync(
+    {
+        var message = BackgroundJobRequestFactory.CreateSearchReindex(
+            context.ScheduleKey,
+            context.TaskType,
+            context.DueWindowUtc,
+            clock.GetCurrentInstant());
+
+        return publisher.PublishAsync(
             BackgroundJobSubjects.SearchReindexRequest,
-            new SearchReindexRequested
-            {
-                ScheduleKey = context.ScheduleKey,
-                TaskType = context.TaskType,
-                DueWindowUtc = context.DueWindowUtc,
-                IdempotencyKey = context.IdempotencyKey,
-                OccurredAt = clock.GetCurrentInstant()
-            },
-            context.IdempotencyKey,
+            message,
+            message.IdempotencyKey,
             cancellationToken: cancellationToken);
+    }
 }
