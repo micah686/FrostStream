@@ -53,6 +53,7 @@ class Program
 
         builder.Services.AddNatsTopologySource<DownloadTopology>();
         builder.Services.AddNatsTopologySource<PlaylistTopology>();
+        builder.Services.AddNatsTopologySource<BackgroundJobsTopology>();
 
         builder.Services.AddSingleton<IClock>(SystemClock.Instance);
         builder.Services.AddOpenBaoSecretStore(builder.Configuration);
@@ -95,6 +96,7 @@ class Program
         // Command consumers for the download flow.
         builder.Services.AddHostedService<DownloadCommandsConsumerService>();
         builder.Services.AddHostedService<PlaylistCommandsConsumerService>();
+        builder.Services.AddHostedService<ChannelDiscoveryConsumerService>();
 
         var app = builder.Build();
 

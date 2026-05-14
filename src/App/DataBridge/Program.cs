@@ -104,6 +104,7 @@ class Program
         builder.Services.AddScoped<IPlaylistsRepository, PlaylistsRepository>();
         builder.Services.AddScoped<IOptionPresetsRepository, OptionPresetsRepository>();
         builder.Services.AddScoped<IScheduledTasksRepository, ScheduledTasksRepository>();
+        builder.Services.AddScoped<ICreatorDiscoveryRepository, CreatorDiscoveryRepository>();
 
         builder.Services.AddTypesenseClient(config =>
         {
@@ -125,6 +126,7 @@ class Program
         builder.Services.AddHostedService<StorageCrudConsumerService>();
         builder.Services.AddHostedService<OptionPresetCrudConsumerService>();
         builder.Services.AddHostedService<ScheduleCrudConsumerService>();
+        builder.Services.AddHostedService<CreatorDiscoveryConsumerService>();
         builder.Services.AddHostedService<OrphanMetadataCleanupConsumerService>();
         builder.Services.AddHostedService<BackgroundJobConsumerService>();
         builder.Services.AddHostedService<DownloadRequestedIngressService>();

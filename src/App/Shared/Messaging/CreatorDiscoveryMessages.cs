@@ -1,0 +1,107 @@
+using NodaTime;
+using Shared.Database;
+
+namespace Shared.Messaging;
+
+public sealed record CreatorSourceDto
+{
+    public required long Id { get; init; }
+    public required string Platform { get; init; }
+    public required CreatorSourceType SourceType { get; init; }
+    public required string SourceUrl { get; init; }
+    public required bool ScanEnabled { get; init; }
+    public required int IncrementalPageSize { get; init; }
+    public required int ConsecutiveKnownThreshold { get; init; }
+    public required int FullRescanIntervalDays { get; init; }
+    public required int MetadataRefreshWindow { get; init; }
+    public Instant? LastSuccessfulScanAt { get; init; }
+    public Instant? LastFullScanAt { get; init; }
+    public string? LastSeenHighWatermark { get; init; }
+    public required Instant CreatedAt { get; init; }
+    public Instant? LastUpdated { get; init; }
+}
+
+public sealed record CreatorSourceCreateRequestMessage
+{
+    public required string Platform { get; init; }
+    public required CreatorSourceType SourceType { get; init; }
+    public required string SourceUrl { get; init; }
+    public bool ScanEnabled { get; init; } = true;
+    public int IncrementalPageSize { get; init; } = 50;
+    public int ConsecutiveKnownThreshold { get; init; } = 25;
+    public int FullRescanIntervalDays { get; init; } = 30;
+    public int MetadataRefreshWindow { get; init; } = 25;
+}
+
+public sealed record CreatorSourceUpdateRequestMessage
+{
+    public required long Id { get; init; }
+    public required string Platform { get; init; }
+    public required CreatorSourceType SourceType { get; init; }
+    public required string SourceUrl { get; init; }
+    public bool ScanEnabled { get; init; } = true;
+    public int IncrementalPageSize { get; init; } = 50;
+    public int ConsecutiveKnownThreshold { get; init; } = 25;
+    public int FullRescanIntervalDays { get; init; } = 30;
+    public int MetadataRefreshWindow { get; init; } = 25;
+}
+
+public sealed record CreatorSourceGetRequestMessage
+{
+    public required long Id { get; init; }
+}
+
+public sealed record CreatorSourceListRequestMessage;
+
+public sealed record CreatorSourceListEnabledForScanRequestMessage
+{
+    public required CreatorSourceScanMode ScanMode { get; init; }
+}
+
+public sealed record CreatorSourceDeleteRequestMessage
+{
+    public required long Id { get; init; }
+}
+
+public sealed record CreatorSourceOperationResponseMessage
+{
+    public bool Success { get; init; }
+    public string? ErrorCode { get; init; }
+    public string? ErrorMessage { get; init; }
+    public CreatorSourceDto? Entity { get; init; }
+    public IReadOnlyList<CreatorSourceDto>? Items { get; init; }
+}
+
+public sealed record DiscoveredMediaCandidate
+{
+    public required string Platform { get; init; }
+    public required string Extractor { get; init; }
+    public required string ExternalMediaId { get; init; }
+    public required string CanonicalUrl { get; init; }
+    public string? Title { get; init; }
+    public double? DurationSeconds { get; init; }
+    public string? ThumbnailUrl { get; init; }
+    public string? LiveStatus { get; init; }
+    public string? Availability { get; init; }
+}
+
+public sealed record UpsertDiscoveredMediaBatchRequestMessage
+{
+    public required long CreatorSourceId { get; init; }
+    public required CreatorSourceScanMode ScanMode { get; init; }
+    public required string ScheduleKey { get; init; }
+    public required string IdempotencyKey { get; init; }
+    public required Instant ScannedAt { get; init; }
+    public required IReadOnlyList<DiscoveredMediaCandidate> Items { get; init; }
+}
+
+public sealed record UpsertDiscoveredMediaBatchResponseMessage
+{
+    public bool Success { get; init; }
+    public string? ErrorCode { get; init; }
+    public string? ErrorMessage { get; init; }
+    public int TotalSeen { get; init; }
+    public int NewCount { get; init; }
+    public int ChangedCount { get; init; }
+    public IReadOnlyList<DiscoveredMediaCandidate>? EnqueuedItems { get; init; }
+}

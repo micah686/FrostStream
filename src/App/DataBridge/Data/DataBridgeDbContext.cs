@@ -30,6 +30,8 @@ public sealed class DataBridgeDbContext(DbContextOptions<DataBridgeDbContext> op
 
     public DbSet<OptionPresetEntity> OptionPresets => Set<OptionPresetEntity>();
     public DbSet<ScheduledTaskEntity> ScheduledTasks => Set<ScheduledTaskEntity>();
+    public DbSet<CreatorSourceEntity> CreatorSources => Set<CreatorSourceEntity>();
+    public DbSet<DiscoveredMediaEntity> DiscoveredMedia => Set<DiscoveredMediaEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

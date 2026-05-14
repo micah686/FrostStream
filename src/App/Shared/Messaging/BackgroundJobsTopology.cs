@@ -13,6 +13,8 @@ public sealed class BackgroundJobsTopology : ITopologySource
     public const string SearchReindexConsumer = "databridge-search-reindex";
     public const string DatabaseMaintenanceConsumer = "databridge-database-maintenance";
     public const string StaleDatabaseCleanupConsumer = "databridge-stale-database-cleanup";
+    public const string WorkerChannelUpdateCheckConsumer = "worker-channel-update-check";
+    public const string WorkerChannelMediaListConsumer = "worker-channel-media-list";
 
     public IEnumerable<StreamSpec> GetStreams()
     {
@@ -50,6 +52,8 @@ public sealed class BackgroundJobsTopology : ITopologySource
         yield return DataBridgeConsumer(SearchReindexConsumer, BackgroundJobSubjects.SearchReindexRequest, TimeSpan.FromMinutes(30), maxDeliver: 3);
         yield return DataBridgeConsumer(DatabaseMaintenanceConsumer, BackgroundJobSubjects.DatabaseMaintenanceRequest, TimeSpan.FromHours(2), maxDeliver: 3);
         yield return DataBridgeConsumer(StaleDatabaseCleanupConsumer, BackgroundJobSubjects.StaleDatabaseCleanupRequest, TimeSpan.FromMinutes(15), maxDeliver: 5);
+        yield return WorkerConsumer(WorkerChannelUpdateCheckConsumer, BackgroundJobSubjects.ChannelUpdateCheckRequest, TimeSpan.FromMinutes(30), maxDeliver: 5);
+        yield return WorkerConsumer(WorkerChannelMediaListConsumer, BackgroundJobSubjects.ChannelMediaListRequest, TimeSpan.FromHours(2), maxDeliver: 3);
     }
 
     private static ConsumerSpec DataBridgeConsumer(string durableName, string subject, TimeSpan ackWait, int maxDeliver)
@@ -58,6 +62,18 @@ public sealed class BackgroundJobsTopology : ITopologySource
             StreamName = StreamName.From(StreamNameValue),
             DurableName = ConsumerName.From(durableName),
             DeliverGroup = QueueGroup.From(DataBridgeQueueGroup),
+            FilterSubject = subject,
+            AckPolicy = AckPolicy.Explicit,
+            AckWait = ackWait,
+            MaxDeliver = maxDeliver
+        };
+
+    private static ConsumerSpec WorkerConsumer(string durableName, string subject, TimeSpan ackWait, int maxDeliver)
+        => new()
+        {
+            StreamName = StreamName.From(StreamNameValue),
+            DurableName = ConsumerName.From(durableName),
+            DeliverGroup = QueueGroup.From(WorkerQueueGroup),
             FilterSubject = subject,
             AckPolicy = AckPolicy.Explicit,
             AckWait = ackWait,

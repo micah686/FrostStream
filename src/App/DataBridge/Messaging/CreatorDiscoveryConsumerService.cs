@@ -1,0 +1,354 @@
+using System.Security.Cryptography;
+using System.Text;
+using DataBridge.Data;
+using FlySwattr.NATS.Abstractions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using NodaTime;
+using Shared.Database;
+using Shared.Messaging;
+
+namespace DataBridge.Messaging;
+
+public sealed class CreatorDiscoveryConsumerService(
+    IMessageBus messageBus,
+    IJetStreamPublisher publisher,
+    IServiceScopeFactory scopeFactory,
+    IClock clock,
+    ILogger<CreatorDiscoveryConsumerService> logger) : BackgroundService
+{
+    private const string QueueGroup = "databridge-creator-discovery";
+    private readonly List<ISubscription> _subscriptions = [];
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        _subscriptions.Add(await messageBus.SubscribeAsync<CreatorSourceCreateRequestMessage>(
+            CreatorDiscoverySubjects.CreateSource, HandleCreateAsync, QueueGroup, stoppingToken));
+        _subscriptions.Add(await messageBus.SubscribeAsync<CreatorSourceUpdateRequestMessage>(
+            CreatorDiscoverySubjects.UpdateSource, HandleUpdateAsync, QueueGroup, stoppingToken));
+        _subscriptions.Add(await messageBus.SubscribeAsync<CreatorSourceGetRequestMessage>(
+            CreatorDiscoverySubjects.GetSource, HandleGetAsync, QueueGroup, stoppingToken));
+        _subscriptions.Add(await messageBus.SubscribeAsync<CreatorSourceListRequestMessage>(
+            CreatorDiscoverySubjects.ListSources, HandleListAsync, QueueGroup, stoppingToken));
+        _subscriptions.Add(await messageBus.SubscribeAsync<CreatorSourceListEnabledForScanRequestMessage>(
+            CreatorDiscoverySubjects.ListEnabledSourcesForScan, HandleListEnabledForScanAsync, QueueGroup, stoppingToken));
+        _subscriptions.Add(await messageBus.SubscribeAsync<CreatorSourceDeleteRequestMessage>(
+            CreatorDiscoverySubjects.DeleteSource, HandleDeleteAsync, QueueGroup, stoppingToken));
+        _subscriptions.Add(await messageBus.SubscribeAsync<UpsertDiscoveredMediaBatchRequestMessage>(
+            CreatorDiscoverySubjects.UpsertDiscoveredMediaBatch, HandleUpsertBatchAsync, QueueGroup, stoppingToken));
+
+        logger.LogInformation("Subscribed to creator discovery subjects.");
+
+        try
+        {
+            await Task.Delay(Timeout.Infinite, stoppingToken);
+        }
+        catch (OperationCanceledException)
+        {
+            // graceful shutdown
+        }
+    }
+
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        foreach (var subscription in _subscriptions)
+        {
+            await subscription.StopAsync(cancellationToken);
+            await subscription.DisposeAsync();
+        }
+
+        _subscriptions.Clear();
+        await base.StopAsync(cancellationToken);
+    }
+
+    private async Task HandleCreateAsync(IMessageContext<CreatorSourceCreateRequestMessage> context)
+    {
+        var msg = context.Message;
+        try
+        {
+            if (Validate(msg.Platform, msg.SourceUrl, msg.IncrementalPageSize, msg.ConsecutiveKnownThreshold, msg.FullRescanIntervalDays, msg.MetadataRefreshWindow) is { } validationError)
+            {
+                await context.RespondAsync(Failure(validationError));
+                return;
+            }
+
+            using var scope = scopeFactory.CreateScope();
+            var repo = scope.ServiceProvider.GetRequiredService<ICreatorDiscoveryRepository>();
+            var entity = await repo.CreateSourceAsync(new CreatorSourceEntity
+            {
+                Platform = msg.Platform.Trim(),
+                SourceType = msg.SourceType,
+                SourceUrl = msg.SourceUrl.Trim(),
+                ScanEnabled = msg.ScanEnabled,
+                IncrementalPageSize = msg.IncrementalPageSize,
+                ConsecutiveKnownThreshold = msg.ConsecutiveKnownThreshold,
+                FullRescanIntervalDays = msg.FullRescanIntervalDays,
+                MetadataRefreshWindow = msg.MetadataRefreshWindow
+            });
+            await context.RespondAsync(new CreatorSourceOperationResponseMessage { Success = true, Entity = Map(entity) });
+        }
+        catch (DbUpdateException ex)
+        {
+            logger.LogWarning(ex, "Creator source create conflicted for URL {SourceUrl}", msg.SourceUrl);
+            await context.RespondAsync(new CreatorSourceOperationResponseMessage
+            {
+                Success = false,
+                ErrorCode = "conflict",
+                ErrorMessage = $"Creator source URL '{msg.SourceUrl}' already exists."
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed creating creator source {SourceUrl}", msg.SourceUrl);
+            await context.RespondAsync(InternalFailure("Failed to create creator source."));
+        }
+    }
+
+    private async Task HandleUpdateAsync(IMessageContext<CreatorSourceUpdateRequestMessage> context)
+    {
+        var msg = context.Message;
+        try
+        {
+            if (Validate(msg.Platform, msg.SourceUrl, msg.IncrementalPageSize, msg.ConsecutiveKnownThreshold, msg.FullRescanIntervalDays, msg.MetadataRefreshWindow) is { } validationError)
+            {
+                await context.RespondAsync(Failure(validationError));
+                return;
+            }
+
+            using var scope = scopeFactory.CreateScope();
+            var repo = scope.ServiceProvider.GetRequiredService<ICreatorDiscoveryRepository>();
+            var updated = await repo.UpdateSourceAsync(new CreatorSourceEntity
+            {
+                Id = msg.Id,
+                Platform = msg.Platform.Trim(),
+                SourceType = msg.SourceType,
+                SourceUrl = msg.SourceUrl.Trim(),
+                ScanEnabled = msg.ScanEnabled,
+                IncrementalPageSize = msg.IncrementalPageSize,
+                ConsecutiveKnownThreshold = msg.ConsecutiveKnownThreshold,
+                FullRescanIntervalDays = msg.FullRescanIntervalDays,
+                MetadataRefreshWindow = msg.MetadataRefreshWindow
+            });
+            if (updated is null)
+            {
+                await context.RespondAsync(NotFound(msg.Id));
+                return;
+            }
+
+            await context.RespondAsync(new CreatorSourceOperationResponseMessage { Success = true, Entity = Map(updated) });
+        }
+        catch (DbUpdateException ex)
+        {
+            logger.LogWarning(ex, "Creator source update conflicted for URL {SourceUrl}", msg.SourceUrl);
+            await context.RespondAsync(new CreatorSourceOperationResponseMessage
+            {
+                Success = false,
+                ErrorCode = "conflict",
+                ErrorMessage = $"Creator source URL '{msg.SourceUrl}' already exists."
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed updating creator source {SourceId}", msg.Id);
+            await context.RespondAsync(InternalFailure("Failed to update creator source."));
+        }
+    }
+
+    private async Task HandleGetAsync(IMessageContext<CreatorSourceGetRequestMessage> context)
+    {
+        var id = context.Message.Id;
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var repo = scope.ServiceProvider.GetRequiredService<ICreatorDiscoveryRepository>();
+            var entity = await repo.GetSourceAsync(id);
+            await context.RespondAsync(entity is null
+                ? NotFound(id)
+                : new CreatorSourceOperationResponseMessage { Success = true, Entity = Map(entity) });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed getting creator source {SourceId}", id);
+            await context.RespondAsync(InternalFailure("Failed to get creator source."));
+        }
+    }
+
+    private async Task HandleListAsync(IMessageContext<CreatorSourceListRequestMessage> context)
+    {
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var repo = scope.ServiceProvider.GetRequiredService<ICreatorDiscoveryRepository>();
+            var items = await repo.ListSourcesAsync();
+            await context.RespondAsync(new CreatorSourceOperationResponseMessage
+            {
+                Success = true,
+                Items = items.Select(Map).ToArray()
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed listing creator sources.");
+            await context.RespondAsync(InternalFailure("Failed to list creator sources."));
+        }
+    }
+
+    private async Task HandleListEnabledForScanAsync(IMessageContext<CreatorSourceListEnabledForScanRequestMessage> context)
+    {
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var repo = scope.ServiceProvider.GetRequiredService<ICreatorDiscoveryRepository>();
+            var items = await repo.ListEnabledSourcesForScanAsync(context.Message.ScanMode);
+            await context.RespondAsync(new CreatorSourceOperationResponseMessage
+            {
+                Success = true,
+                Items = items.Select(Map).ToArray()
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed listing enabled creator sources.");
+            await context.RespondAsync(InternalFailure("Failed to list enabled creator sources."));
+        }
+    }
+
+    private async Task HandleDeleteAsync(IMessageContext<CreatorSourceDeleteRequestMessage> context)
+    {
+        var id = context.Message.Id;
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var repo = scope.ServiceProvider.GetRequiredService<ICreatorDiscoveryRepository>();
+            var deleted = await repo.DeleteSourceAsync(id);
+            await context.RespondAsync(deleted
+                ? new CreatorSourceOperationResponseMessage { Success = true }
+                : NotFound(id));
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed deleting creator source {SourceId}", id);
+            await context.RespondAsync(InternalFailure("Failed to delete creator source."));
+        }
+    }
+
+    private async Task HandleUpsertBatchAsync(IMessageContext<UpsertDiscoveredMediaBatchRequestMessage> context)
+    {
+        var msg = context.Message;
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var repo = scope.ServiceProvider.GetRequiredService<ICreatorDiscoveryRepository>();
+            var result = await repo.UpsertDiscoveredMediaBatchAsync(msg);
+
+            foreach (var candidate in result.EnqueuedItems)
+            {
+                await PublishDownloadRequestedAsync(msg, candidate);
+            }
+
+            await context.RespondAsync(new UpsertDiscoveredMediaBatchResponseMessage
+            {
+                Success = true,
+                TotalSeen = result.TotalSeen,
+                NewCount = result.NewCount,
+                ChangedCount = result.ChangedCount,
+                EnqueuedItems = result.EnqueuedItems
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed upserting discovered media for source {CreatorSourceId}", msg.CreatorSourceId);
+            await context.RespondAsync(new UpsertDiscoveredMediaBatchResponseMessage
+            {
+                Success = false,
+                ErrorCode = "internal",
+                ErrorMessage = "Failed to upsert discovered media."
+            });
+        }
+    }
+
+    private Task PublishDownloadRequestedAsync(UpsertDiscoveredMediaBatchRequestMessage request, DiscoveredMediaCandidate candidate)
+    {
+        var seed = $"{request.CreatorSourceId}:{candidate.Platform}:{candidate.Extractor}:{candidate.ExternalMediaId}";
+        var jobId = DeterministicGuid(seed);
+        var messageId = DeterministicGuid($"{seed}:download-requested");
+        var operationKey = $"creator-discovery/{request.CreatorSourceId}/{candidate.Platform}/{candidate.Extractor}/{candidate.ExternalMediaId}";
+        return publisher.PublishAsync(
+            DownloadSubjects.DownloadRequested,
+            new DownloadRequested
+            {
+                JobId = jobId,
+                CorrelationId = jobId,
+                CausationId = null,
+                MessageId = messageId,
+                OperationKey = operationKey,
+                OccurredAt = clock.GetCurrentInstant(),
+                Attempt = 1,
+                SourceUrl = candidate.CanonicalUrl,
+                RequestedBy = $"schedule:{request.ScheduleKey}",
+                ForceDownload = false,
+                MediaKind = MediaKind.Video
+            },
+            messageId: messageId.ToString("N"));
+    }
+
+    private static string? Validate(
+        string platform,
+        string sourceUrl,
+        int incrementalPageSize,
+        int consecutiveKnownThreshold,
+        int fullRescanIntervalDays,
+        int metadataRefreshWindow)
+    {
+        if (string.IsNullOrWhiteSpace(platform))
+            return "platform is required.";
+        if (string.IsNullOrWhiteSpace(sourceUrl))
+            return "source_url is required.";
+        if (!Uri.TryCreate(sourceUrl, UriKind.Absolute, out _))
+            return "source_url must be an absolute URL.";
+        if (incrementalPageSize <= 0)
+            return "incremental_page_size must be greater than zero.";
+        if (consecutiveKnownThreshold <= 0)
+            return "consecutive_known_threshold must be greater than zero.";
+        if (fullRescanIntervalDays <= 0)
+            return "full_rescan_interval_days must be greater than zero.";
+        if (metadataRefreshWindow <= 0)
+            return "metadata_refresh_window must be greater than zero.";
+        return null;
+    }
+
+    private static CreatorSourceOperationResponseMessage Failure(string message)
+        => new() { Success = false, ErrorCode = "validation", ErrorMessage = message };
+
+    private static CreatorSourceOperationResponseMessage NotFound(long id)
+        => new() { Success = false, ErrorCode = "not_found", ErrorMessage = $"Creator source '{id}' was not found." };
+
+    private static CreatorSourceOperationResponseMessage InternalFailure(string message)
+        => new() { Success = false, ErrorCode = "internal", ErrorMessage = message };
+
+    private static CreatorSourceDto Map(CreatorSourceEntity entity) => new()
+    {
+        Id = entity.Id,
+        Platform = entity.Platform,
+        SourceType = entity.SourceType,
+        SourceUrl = entity.SourceUrl,
+        ScanEnabled = entity.ScanEnabled,
+        IncrementalPageSize = entity.IncrementalPageSize,
+        ConsecutiveKnownThreshold = entity.ConsecutiveKnownThreshold,
+        FullRescanIntervalDays = entity.FullRescanIntervalDays,
+        MetadataRefreshWindow = entity.MetadataRefreshWindow,
+        LastSuccessfulScanAt = entity.LastSuccessfulScanAt,
+        LastFullScanAt = entity.LastFullScanAt,
+        LastSeenHighWatermark = entity.LastSeenHighWatermark,
+        CreatedAt = entity.CreatedAt,
+        LastUpdated = entity.LastUpdated
+    };
+
+    private static Guid DeterministicGuid(string seed)
+    {
+        var bytes = MD5.HashData(Encoding.UTF8.GetBytes(seed));
+        return new Guid(bytes);
+    }
+}
