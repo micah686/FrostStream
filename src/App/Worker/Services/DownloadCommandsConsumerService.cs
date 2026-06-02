@@ -211,13 +211,16 @@ public sealed class DownloadCommandsConsumerService(
 
             var contentHash = await ComputeXxHash128Async(tempFileRef);
 
+            var infoJson = await ResolveInfoJsonSidecarAsync(tempDirectory);
+
             logger.LogInformation(
-                "Download completed for JobId {JobId} Attempt {Attempt} File {TempFileRef} SizeBytes {FileSizeBytes} ContentHash {ContentHashXxh128}",
+                "Download completed for JobId {JobId} Attempt {Attempt} File {TempFileRef} SizeBytes {FileSizeBytes} ContentHash {ContentHashXxh128} InfoJson {InfoJsonFileName}",
                 cmd.JobId,
                 cmd.Attempt,
                 tempFileRef,
                 fileInfo.Length,
-                contentHash);
+                contentHash,
+                infoJson?.FileName);
 
             await Publish(DownloadSubjects.DownloadCompleted, new DownloadCompleted
             {
@@ -231,7 +234,11 @@ public sealed class DownloadCommandsConsumerService(
                 TempFileRef = tempFileRef,
                 FileName = fileInfo.Name,
                 FileSizeBytes = fileInfo.Length,
-                ContentHashXxh128 = contentHash
+                ContentHashXxh128 = contentHash,
+                InfoJsonTempFileRef = infoJson?.TempFileRef,
+                InfoJsonFileName = infoJson?.FileName,
+                InfoJsonSizeBytes = infoJson?.SizeBytes,
+                InfoJsonContentHashXxh128 = infoJson?.ContentHash
             });
             await context.AckAsync();
         }
@@ -306,7 +313,8 @@ public sealed class DownloadCommandsConsumerService(
                 StoragePath = cmd.StoragePath,
                 StorageVersion = null,
                 ContentHashXxh128 = cmd.ContentHashXxh128,
-                ContentLengthBytes = fileInfo.Length
+                ContentLengthBytes = fileInfo.Length,
+                Kind = cmd.Kind
             });
             await context.AckAsync();
         }
@@ -509,7 +517,8 @@ public sealed class DownloadCommandsConsumerService(
             Attempt = cmd.Attempt,
             FailureKind = failureKind,
             ErrorMessage = ex.Message,
-            TempFileRef = cmd.TempFileRef
+            TempFileRef = cmd.TempFileRef,
+            Kind = cmd.Kind
         });
 
 
@@ -604,6 +613,28 @@ public sealed class DownloadCommandsConsumerService(
                 .Select(file => file.FullName)
                 .FirstOrDefault()
             : null;
+
+    /// <summary>
+    /// Locates a yt-dlp <c>.info.json</c> sidecar in the same temp directory as the media
+    /// file. Returns null when the caller didn't enable <c>--write-info-json</c>. The
+    /// output template forces <c>media.%(ext)s</c>, so the sidecar is always
+    /// <c>media.info.json</c>.
+    /// </summary>
+    private static async Task<InfoJsonSidecar?> ResolveInfoJsonSidecarAsync(string tempDirectory)
+    {
+        if (!Directory.Exists(tempDirectory))
+            return null;
+
+        var infoJsonPath = Path.Combine(tempDirectory, $"{MediaFileBase}.info.json");
+        var file = new FileInfo(infoJsonPath);
+        if (!file.Exists || file.Length == 0)
+            return null;
+
+        var hash = await ComputeXxHash128Async(file.FullName);
+        return new InfoJsonSidecar(file.FullName, file.Name, file.Length, hash);
+    }
+
+    private sealed record InfoJsonSidecar(string TempFileRef, string FileName, long SizeBytes, string ContentHash);
 
     private static async Task<string> ComputeXxHash128Async(string path)
     {

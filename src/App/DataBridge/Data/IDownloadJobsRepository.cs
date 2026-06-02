@@ -60,6 +60,13 @@ public interface IDownloadJobsRepository
     /// </summary>
     Task CommitUploadAsync(Guid jobId, UploadCompleted evt, CancellationToken ct = default);
 
+    /// <summary>
+    /// Records the <c>.info.json</c> sidecar's storage path / hash / size on the job row.
+    /// Does not touch <c>media_content_id_versions</c> or any metadata schema — the sidecar
+    /// is a convenience file co-located with the video, not a tracked content version.
+    /// </summary>
+    Task ApplySidecarUploadCompletedAsync(Guid jobId, UploadCompleted evt, CancellationToken ct = default);
+
     Task IncrementMetadataAttemptAsync(Guid jobId, int attempt, CancellationToken ct = default);
 
     Task IncrementDownloadAttemptAsync(Guid jobId, int attempt, CancellationToken ct = default);

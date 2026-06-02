@@ -245,6 +245,17 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
         await db.SaveChangesAsync(ct);
     }
 
+    public async Task ApplySidecarUploadCompletedAsync(Guid jobId, UploadCompleted evt, CancellationToken ct = default)
+    {
+        var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
+        job.InfoJsonStoragePath = evt.StoragePath;
+        job.InfoJsonContentHashXxh128 = NormalizeHash(evt.ContentHashXxh128);
+        if (evt.ContentLengthBytes is { } len)
+            job.InfoJsonSizeBytes = len;
+        job.UpdatedAt = clock.GetCurrentInstant();
+        await db.SaveChangesAsync(ct);
+    }
+
     public async Task IncrementMetadataAttemptAsync(Guid jobId, int attempt, CancellationToken ct = default)
     {
         var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);

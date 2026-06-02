@@ -341,6 +341,36 @@ public sealed record DownloadCompleted : IFlowMessage
 
     /// <summary>Hex-encoded XxHash128 of the file contents. Identity for the bytes.</summary>
     public required string ContentHashXxh128 { get; init; }
+
+    /// <summary>
+    /// When yt-dlp also produced an <c>.info.json</c> sidecar (because the caller passed
+    /// <c>WriteInfoJson = true</c>), the worker reports its temp ref and hash here so the
+    /// saga can upload it next to the video. Null when no sidecar was written.
+    /// </summary>
+    public string? InfoJsonTempFileRef { get; init; }
+
+    /// <summary>Filename of the info.json sidecar (no directory). Null when none.</summary>
+    public string? InfoJsonFileName { get; init; }
+
+    /// <summary>Bytes of the info.json sidecar. Null when none.</summary>
+    public long? InfoJsonSizeBytes { get; init; }
+
+    /// <summary>Hex-encoded XxHash128 of the info.json sidecar. Null when none.</summary>
+    public string? InfoJsonContentHashXxh128 { get; init; }
+}
+
+/// <summary>
+/// What artifact an <see cref="UploadObjectCommand"/>/<see cref="UploadCompleted"/> pair
+/// refers to. The flow dispatches the primary upload first, then optionally a second
+/// upload for the <c>.info.json</c> sidecar; DataBridge's event-apply layer routes them
+/// to different persistence paths.
+/// </summary>
+public enum UploadArtifactKind
+{
+    /// <summary>The main media file. Drives version reservation and job state.</summary>
+    Primary = 0,
+    /// <summary>The yt-dlp <c>.info.json</c> sidecar, written next to the primary.</summary>
+    InfoJson = 1
 }
 
 /// <summary>
@@ -425,6 +455,12 @@ public sealed record UploadObjectCommand : IFlowMessage
 
     /// <summary>Hex XxHash128 of the bytes; passed through so the upload event can reaffirm it.</summary>
     public required string ContentHashXxh128 { get; init; }
+
+    /// <summary>
+    /// Which artifact this upload represents. Defaults to <see cref="UploadArtifactKind.Primary"/>
+    /// for backwards compatibility with callers that don't care about sidecars.
+    /// </summary>
+    public UploadArtifactKind Kind { get; init; } = UploadArtifactKind.Primary;
 }
 
 /// <summary>
@@ -457,6 +493,9 @@ public sealed record UploadCompleted : IFlowMessage
 
     /// <summary>Bytes durably stored.</summary>
     public long? ContentLengthBytes { get; init; }
+
+    /// <summary>Mirrors the dispatching command's <see cref="UploadObjectCommand.Kind"/>.</summary>
+    public UploadArtifactKind Kind { get; init; } = UploadArtifactKind.Primary;
 }
 
 /// <summary>
@@ -477,6 +516,9 @@ public sealed record UploadFailed : IFlowMessage
     public string? ErrorCode { get; init; }
     public required string ErrorMessage { get; init; }
     public string? TempFileRef { get; init; }
+
+    /// <summary>Mirrors the dispatching command's <see cref="UploadObjectCommand.Kind"/>.</summary>
+    public UploadArtifactKind Kind { get; init; } = UploadArtifactKind.Primary;
 }
 
 /// <summary>

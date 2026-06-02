@@ -92,6 +92,13 @@ public class DownloadArchiveFlow(
             // one). Skip upload, clean the temp file we just produced, write metadata, mark AlreadyDownloaded.
             await Capture(() => DispatchTempFileCleanup(request, downloaded.TempFileRef, jobInstance, attempt: 1));
             await Message<TempFileDeleted>();
+            if (downloaded.InfoJsonTempFileRef is { } skippedSidecar)
+            {
+                // Co-located info.json from a duplicate download isn't useful — the prior
+                // copy already lives next to the bytes. Just drop the temp file.
+                await Capture(() => DispatchTempFileCleanup(request, skippedSidecar, jobInstance, attempt: 1));
+                await Message<TempFileDeleted>();
+            }
             if (metadata.RichMetadata is { } existingRichMeta)
                 await RunMetadataWriteStep(jobId, reservation.MediaGuid, reservation.IsNewMediaGuid, metadata.Provider, metadata.SourceMediaId, existingRichMeta);
             await Capture(() => PlaylistRepoCall(r => r.TryLinkMediaGuidAsync(jobId, reservation.MediaGuid)));
@@ -146,7 +153,22 @@ public class DownloadArchiveFlow(
             return;
         }
 
-        // STEP 6b: write rich metadata ----------------------------------------
+        // STEP 6b: upload the .info.json sidecar (best-effort) ----------------
+        if (downloaded.InfoJsonTempFileRef is { } sidecarTempRef &&
+            !string.IsNullOrWhiteSpace(downloaded.InfoJsonFileName) &&
+            !string.IsNullOrWhiteSpace(downloaded.InfoJsonContentHashXxh128))
+        {
+            await RunSidecarUploadStep(
+                request,
+                uploaded,
+                sidecarTempRef,
+                downloaded.InfoJsonFileName!,
+                downloaded.InfoJsonContentHashXxh128!,
+                storageKey,
+                jobInstance);
+        }
+
+        // STEP 6c: write rich metadata ----------------------------------------
         if (metadata.RichMetadata is { } richMeta)
             await RunMetadataWriteStep(jobId, reservation.MediaGuid, reservation.IsNewMediaGuid, metadata.Provider, metadata.SourceMediaId, richMeta);
 
@@ -362,6 +384,81 @@ public class DownloadArchiveFlow(
             }
         }
         return null;
+    }
+
+    /// <summary>
+    /// Uploads the yt-dlp <c>.info.json</c> sidecar to a path co-located with the primary
+    /// upload (same directory, sidecar's own filename). Best-effort: a failure here logs
+    /// a warning, cleans the sidecar temp file, and lets the flow proceed — the video
+    /// itself is already durable, and the metadata it contains is already in the database.
+    /// </summary>
+    private async Task RunSidecarUploadStep(
+        DownloadRequested request,
+        UploadCompleted primary,
+        string sidecarTempRef,
+        string sidecarFileName,
+        string sidecarContentHash,
+        string storageKey,
+        string jobInstance)
+    {
+        var sidecarStoragePath = BuildSidecarStoragePath(primary.StoragePath, sidecarFileName);
+        var msgId = await Capture(Guid.NewGuid);
+        var op = $"job/{jobInstance}/upload-sidecar/info-json";
+        var cmd = new UploadObjectCommand
+        {
+            JobId = request.JobId,
+            CorrelationId = request.CorrelationId,
+            CausationId = primary.MessageId,
+            MessageId = msgId,
+            OperationKey = op,
+            OccurredAt = clock.GetCurrentInstant(),
+            Attempt = 1,
+            TempFileRef = sidecarTempRef,
+            StorageKey = storageKey,
+            StoragePath = sidecarStoragePath,
+            ContentHashXxh128 = sidecarContentHash,
+            Kind = UploadArtifactKind.InfoJson
+        };
+        logger.LogInformation(
+            "Download flow dispatching info.json sidecar upload for JobId {JobId} StoragePath {StoragePath}",
+            request.JobId,
+            sidecarStoragePath);
+        await Capture(() => Publish(DownloadSubjects.UploadObjectCommand, cmd));
+
+        var result = await Messages.FirstOfTypes<UploadCompleted, UploadFailed>();
+        if (result.HasFirst)
+        {
+            logger.LogInformation(
+                "Download flow info.json sidecar uploaded for JobId {JobId} StoragePath {StoragePath} SizeBytes {ContentLengthBytes}",
+                request.JobId,
+                result.First.StoragePath,
+                result.First.ContentLengthBytes);
+        }
+        else
+        {
+            // Sidecar uploads aren't worth failing a job over — the bytes are already
+            // stored and the metadata lives in the database. Log and proceed.
+            logger.LogWarning(
+                "Download flow info.json sidecar upload failed for JobId {JobId}: {ErrorMessage}",
+                request.JobId,
+                result.Second.ErrorMessage);
+        }
+
+        await Capture(() => DispatchTempFileCleanup(request, sidecarTempRef, jobInstance, attempt: 1));
+        await Message<TempFileDeleted>();
+    }
+
+    /// <summary>
+    /// Derives the sidecar's final path from the primary's path. Keeps the same directory
+    /// (e.g. <c>archives/{guid}/v{n}/</c>) and substitutes the sidecar's filename.
+    /// </summary>
+    private static string BuildSidecarStoragePath(string primaryStoragePath, string sidecarFileName)
+    {
+        var lastSlash = primaryStoragePath.LastIndexOf('/');
+        var directory = lastSlash >= 0 ? primaryStoragePath[..lastSlash] : string.Empty;
+        return string.IsNullOrEmpty(directory)
+            ? sidecarFileName
+            : $"{directory}/{sidecarFileName}";
     }
 
     private static DownloadJobState? TerminalFailureForStep<TFailure>(TFailure failure, int attempt)

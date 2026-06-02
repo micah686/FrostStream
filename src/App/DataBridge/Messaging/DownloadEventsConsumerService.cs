@@ -118,7 +118,11 @@ public sealed class DownloadEventsConsumerService(
         => jobs.ApplyDownloadCompletedAsync(evt.JobId, evt, ct);
 
     private static Task ApplyUploadCompletedAsync(IDownloadJobsRepository jobs, UploadCompleted evt, CancellationToken ct)
-        => jobs.CommitUploadAsync(evt.JobId, evt, ct);
+        => evt.Kind switch
+        {
+            UploadArtifactKind.InfoJson => jobs.ApplySidecarUploadCompletedAsync(evt.JobId, evt, ct),
+            _ => jobs.CommitUploadAsync(evt.JobId, evt, ct)
+        };
 
     private static Task NoStateChange<TEvent>(IDownloadJobsRepository jobs, TEvent evt, CancellationToken ct)
         where TEvent : IFlowMessage
