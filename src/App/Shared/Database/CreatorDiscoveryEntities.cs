@@ -65,6 +65,26 @@ public sealed class CreatorSourceEntity
     public Instant CreatedAt { get; private set; } = SystemClock.Instance.GetCurrentInstant();
 
     public Instant? LastUpdated { get; set; }
+
+    public string? AvatarUrl { get; set; }
+
+    public string? AvatarCachePath { get; set; }
+
+    public string? AvatarContentHash { get; set; }
+
+    public string? BannerUrl { get; set; }
+
+    public string? BannerCachePath { get; set; }
+
+    public string? BannerContentHash { get; set; }
+
+    public Instant? AssetsLastRefreshedAt { get; set; }
+
+    public Instant? AssetsLastAttemptAt { get; set; }
+
+    public int AssetsAttemptCount { get; set; }
+
+    public string? AssetsLastError { get; set; }
 }
 
 public sealed class DiscoveredMediaEntity

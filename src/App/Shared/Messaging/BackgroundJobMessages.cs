@@ -13,7 +13,11 @@ public abstract record ScheduledBackgroundRequest
 
 public sealed record ChannelUpdateCheckRequested : ScheduledBackgroundRequest;
 
-public sealed record ChannelAssetRefreshRequested : ScheduledBackgroundRequest;
+public sealed record ChannelAssetRefreshRequested : ScheduledBackgroundRequest
+{
+    public long? TargetSourceId { get; init; }
+    public bool Force { get; init; }
+}
 
 public sealed record ChannelMediaListRequested : ScheduledBackgroundRequest;
 

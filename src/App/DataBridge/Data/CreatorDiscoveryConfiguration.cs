@@ -30,6 +30,16 @@ public sealed class CreatorSourceConfiguration : IEntityTypeConfiguration<Creato
             .ValueGeneratedOnAdd()
             .IsRequired();
         builder.Property(x => x.LastUpdated).HasColumnName("last_updated").HasColumnType("timestamp with time zone");
+        builder.Property(x => x.AvatarUrl).HasColumnName("avatar_url").HasMaxLength(4096);
+        builder.Property(x => x.AvatarCachePath).HasColumnName("avatar_cache_path").HasMaxLength(1024);
+        builder.Property(x => x.AvatarContentHash).HasColumnName("avatar_content_hash").HasMaxLength(64);
+        builder.Property(x => x.BannerUrl).HasColumnName("banner_url").HasMaxLength(4096);
+        builder.Property(x => x.BannerCachePath).HasColumnName("banner_cache_path").HasMaxLength(1024);
+        builder.Property(x => x.BannerContentHash).HasColumnName("banner_content_hash").HasMaxLength(64);
+        builder.Property(x => x.AssetsLastRefreshedAt).HasColumnName("assets_last_refreshed_at").HasColumnType("timestamp with time zone");
+        builder.Property(x => x.AssetsLastAttemptAt).HasColumnName("assets_last_attempt_at").HasColumnType("timestamp with time zone");
+        builder.Property(x => x.AssetsAttemptCount).HasColumnName("assets_attempt_count").IsRequired();
+        builder.Property(x => x.AssetsLastError).HasColumnName("assets_last_error").HasMaxLength(2048);
 
         builder.HasIndex(x => x.SourceUrl).HasDatabaseName("uq_creator_sources_source_url").IsUnique();
         builder.HasIndex(x => x.ScanEnabled).HasDatabaseName("ix_creator_sources_scan_enabled");

@@ -169,6 +169,61 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
         return new DiscoveredMediaUpsertResult(request.Items.Count, newCount, changedCount, enqueued);
     }
 
+    public async Task<CreatorSourceEntity?> UpdateAssetsAsync(
+        UpdateCreatorSourceAssetsRequestMessage request,
+        CancellationToken cancellationToken = default)
+    {
+        var existing = await db.CreatorSources.FirstOrDefaultAsync(x => x.Id == request.SourceId, cancellationToken);
+        if (existing is null)
+        {
+            return null;
+        }
+
+        var now = clock.GetCurrentInstant();
+
+        if (!string.IsNullOrWhiteSpace(request.AvatarUrl))
+        {
+            existing.AvatarUrl = request.AvatarUrl;
+            existing.AvatarCachePath = request.AvatarCachePath;
+            existing.AvatarContentHash = request.AvatarContentHash;
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.BannerUrl))
+        {
+            existing.BannerUrl = request.BannerUrl;
+            existing.BannerCachePath = request.BannerCachePath;
+            existing.BannerContentHash = request.BannerContentHash;
+        }
+
+        if (request.RefreshedAt is { } refreshedAt)
+        {
+            existing.AssetsLastRefreshedAt = refreshedAt;
+        }
+
+        if (request.AttemptedAt is { } attemptedAt)
+        {
+            existing.AssetsLastAttemptAt = attemptedAt;
+        }
+
+        if (request.AttemptCount is { } attemptCount)
+        {
+            existing.AssetsAttemptCount = attemptCount;
+        }
+
+        if (request.ClearError)
+        {
+            existing.AssetsLastError = null;
+        }
+        else if (request.LastError is not null)
+        {
+            existing.AssetsLastError = request.LastError;
+        }
+
+        existing.LastUpdated = now;
+        await db.SaveChangesAsync(cancellationToken);
+        return existing;
+    }
+
     private static bool HasMeaningfulChange(DiscoveredMediaEntity existing, DiscoveredMediaCandidate candidate)
         => !string.Equals(existing.Title, NormalizeOptional(candidate.Title), StringComparison.Ordinal) ||
            existing.DurationSeconds != candidate.DurationSeconds ||

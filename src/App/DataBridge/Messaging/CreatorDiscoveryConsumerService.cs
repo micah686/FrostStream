@@ -38,6 +38,8 @@ public sealed class CreatorDiscoveryConsumerService(
             CreatorDiscoverySubjects.DeleteSource, HandleDeleteAsync, QueueGroup, stoppingToken));
         _subscriptions.Add(await messageBus.SubscribeAsync<UpsertDiscoveredMediaBatchRequestMessage>(
             CreatorDiscoverySubjects.UpsertDiscoveredMediaBatch, HandleUpsertBatchAsync, QueueGroup, stoppingToken));
+        _subscriptions.Add(await messageBus.SubscribeAsync<UpdateCreatorSourceAssetsRequestMessage>(
+            CreatorDiscoverySubjects.UpdateAssets, HandleUpdateAssetsAsync, QueueGroup, stoppingToken));
 
         logger.LogInformation("Subscribed to creator discovery subjects.");
 
@@ -269,6 +271,43 @@ public sealed class CreatorDiscoveryConsumerService(
         }
     }
 
+    private async Task HandleUpdateAssetsAsync(IMessageContext<UpdateCreatorSourceAssetsRequestMessage> context)
+    {
+        var msg = context.Message;
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var repo = scope.ServiceProvider.GetRequiredService<ICreatorDiscoveryRepository>();
+            var updated = await repo.UpdateAssetsAsync(msg);
+            if (updated is null)
+            {
+                await context.RespondAsync(new UpdateCreatorSourceAssetsResponseMessage
+                {
+                    Success = false,
+                    ErrorCode = "not_found",
+                    ErrorMessage = $"Creator source '{msg.SourceId}' was not found."
+                });
+                return;
+            }
+
+            await context.RespondAsync(new UpdateCreatorSourceAssetsResponseMessage
+            {
+                Success = true,
+                Entity = Map(updated)
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed updating creator source assets {SourceId}", msg.SourceId);
+            await context.RespondAsync(new UpdateCreatorSourceAssetsResponseMessage
+            {
+                Success = false,
+                ErrorCode = "internal",
+                ErrorMessage = "Failed to update creator source assets."
+            });
+        }
+    }
+
     private Task PublishDownloadRequestedAsync(UpsertDiscoveredMediaBatchRequestMessage request, DiscoveredMediaCandidate candidate)
     {
         var seed = $"{request.CreatorSourceId}:{candidate.Platform}:{candidate.Extractor}:{candidate.ExternalMediaId}";
@@ -343,7 +382,17 @@ public sealed class CreatorDiscoveryConsumerService(
         LastFullScanAt = entity.LastFullScanAt,
         LastSeenHighWatermark = entity.LastSeenHighWatermark,
         CreatedAt = entity.CreatedAt,
-        LastUpdated = entity.LastUpdated
+        LastUpdated = entity.LastUpdated,
+        AvatarUrl = entity.AvatarUrl,
+        AvatarCachePath = entity.AvatarCachePath,
+        AvatarContentHash = entity.AvatarContentHash,
+        BannerUrl = entity.BannerUrl,
+        BannerCachePath = entity.BannerCachePath,
+        BannerContentHash = entity.BannerContentHash,
+        AssetsLastRefreshedAt = entity.AssetsLastRefreshedAt,
+        AssetsLastAttemptAt = entity.AssetsLastAttemptAt,
+        AssetsAttemptCount = entity.AssetsAttemptCount,
+        AssetsLastError = entity.AssetsLastError
     };
 
     private static Guid DeterministicGuid(string seed)

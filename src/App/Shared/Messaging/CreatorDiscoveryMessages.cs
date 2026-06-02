@@ -19,6 +19,16 @@ public sealed record CreatorSourceDto
     public string? LastSeenHighWatermark { get; init; }
     public required Instant CreatedAt { get; init; }
     public Instant? LastUpdated { get; init; }
+    public string? AvatarUrl { get; init; }
+    public string? AvatarCachePath { get; init; }
+    public string? AvatarContentHash { get; init; }
+    public string? BannerUrl { get; init; }
+    public string? BannerCachePath { get; init; }
+    public string? BannerContentHash { get; init; }
+    public Instant? AssetsLastRefreshedAt { get; init; }
+    public Instant? AssetsLastAttemptAt { get; init; }
+    public int AssetsAttemptCount { get; init; }
+    public string? AssetsLastError { get; init; }
 }
 
 public sealed record CreatorSourceCreateRequestMessage
@@ -104,4 +114,28 @@ public sealed record UpsertDiscoveredMediaBatchResponseMessage
     public int NewCount { get; init; }
     public int ChangedCount { get; init; }
     public IReadOnlyList<DiscoveredMediaCandidate>? EnqueuedItems { get; init; }
+}
+
+public sealed record UpdateCreatorSourceAssetsRequestMessage
+{
+    public required long SourceId { get; init; }
+    public string? AvatarUrl { get; init; }
+    public string? AvatarCachePath { get; init; }
+    public string? AvatarContentHash { get; init; }
+    public string? BannerUrl { get; init; }
+    public string? BannerCachePath { get; init; }
+    public string? BannerContentHash { get; init; }
+    public Instant? RefreshedAt { get; init; }
+    public Instant? AttemptedAt { get; init; }
+    public int? AttemptCount { get; init; }
+    public string? LastError { get; init; }
+    public bool ClearError { get; init; }
+}
+
+public sealed record UpdateCreatorSourceAssetsResponseMessage
+{
+    public bool Success { get; init; }
+    public string? ErrorCode { get; init; }
+    public string? ErrorMessage { get; init; }
+    public CreatorSourceDto? Entity { get; init; }
 }

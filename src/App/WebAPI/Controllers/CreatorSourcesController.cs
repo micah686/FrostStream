@@ -9,8 +9,13 @@ namespace WebAPI.Controllers;
 
 [ApiController]
 [Route("api/creator-sources")]
-public sealed class CreatorSourcesController(IMessageBus messageBus, ILogger<CreatorSourcesController> logger) : ControllerBase
+public sealed class CreatorSourcesController(
+    IMessageBus messageBus,
+    IJetStreamPublisher publisher,
+    IClock clock,
+    ILogger<CreatorSourcesController> logger) : ControllerBase
 {
+    private const string ChannelAssetRefreshTaskType = "channel_asset_refresh";
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);
 
     [HttpPost]
@@ -86,6 +91,54 @@ public sealed class CreatorSourcesController(IMessageBus messageBus, ILogger<Cre
             return MapErrorResponse(response);
 
         return Ok((response.Items ?? Array.Empty<CreatorSourceDto>()).Select(MapDto).ToArray());
+    }
+
+    [HttpPost("{id:long}/refresh-assets")]
+    public async Task<IActionResult> RefreshAssets(
+        long id,
+        [FromQuery] bool force,
+        CancellationToken cancellationToken)
+    {
+        var getResponse = await SendAsync(
+            CreatorDiscoverySubjects.GetSource,
+            new CreatorSourceGetRequestMessage { Id = id },
+            cancellationToken);
+
+        if (getResponse is null)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to process creator source request.");
+        if (!getResponse.Success)
+            return MapErrorResponse(getResponse);
+        if (getResponse.Entity is null)
+            return NotFound($"Creator source '{id}' was not found.");
+
+        var now = clock.GetCurrentInstant();
+        var idempotencyKey = $"manual:{id}:{Guid.NewGuid():N}";
+        var message = new ChannelAssetRefreshRequested
+        {
+            ScheduleKey = "manual",
+            TaskType = ChannelAssetRefreshTaskType,
+            DueWindowUtc = now,
+            IdempotencyKey = idempotencyKey,
+            OccurredAt = now,
+            TargetSourceId = id,
+            Force = force
+        };
+
+        try
+        {
+            await publisher.PublishAsync(
+                BackgroundJobSubjects.ChannelAssetRefreshRequest,
+                message,
+                messageId: idempotencyKey,
+                cancellationToken: cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed enqueueing channel asset refresh for source {SourceId}", id);
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to enqueue channel asset refresh.");
+        }
+
+        return Accepted(new { queued = true, sourceId = id, force });
     }
 
     [HttpDelete("{id:long}")]

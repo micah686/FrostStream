@@ -9,4 +9,5 @@ public static class CreatorDiscoverySubjects
     public const string ListEnabledSourcesForScan = "fs.creator-source.list-enabled-for-scan";
     public const string DeleteSource = "fs.creator-source.delete";
     public const string UpsertDiscoveredMediaBatch = "fs.creator-source.discovery.upsert-batch";
+    public const string UpdateAssets = "fs.creator-source.assets.update";
 }

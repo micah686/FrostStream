@@ -12,6 +12,7 @@ public interface ICreatorDiscoveryRepository
     Task<CreatorSourceEntity?> UpdateSourceAsync(CreatorSourceEntity source, CancellationToken cancellationToken = default);
     Task<bool> DeleteSourceAsync(long id, CancellationToken cancellationToken = default);
     Task<DiscoveredMediaUpsertResult> UpsertDiscoveredMediaBatchAsync(UpsertDiscoveredMediaBatchRequestMessage request, CancellationToken cancellationToken = default);
+    Task<CreatorSourceEntity?> UpdateAssetsAsync(UpdateCreatorSourceAssetsRequestMessage request, CancellationToken cancellationToken = default);
 }
 
 public sealed record DiscoveredMediaUpsertResult(

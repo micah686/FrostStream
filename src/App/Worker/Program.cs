@@ -93,10 +93,22 @@ class Program
         // BackgroundService starts).
         builder.Services.AddHostedService<StartupService>();
 
+        // Channel-asset cache wiring.
+        builder.Services.AddOptions<AssetCacheOptions>()
+            .Bind(builder.Configuration.GetSection(AssetCacheOptions.SectionName));
+        builder.Services.AddSingleton<AssetCacheWriter>();
+        builder.Services.AddHttpClient("asset-cache", (sp, client) =>
+        {
+            var assetOptions = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AssetCacheOptions>>().Value;
+            client.Timeout = assetOptions.RequestTimeout > TimeSpan.Zero ? assetOptions.RequestTimeout : TimeSpan.FromSeconds(30);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("FrostStream-Worker/1.0 (+asset-cache)");
+        });
+
         // Command consumers for the download flow.
         builder.Services.AddHostedService<DownloadCommandsConsumerService>();
         builder.Services.AddHostedService<PlaylistCommandsConsumerService>();
         builder.Services.AddHostedService<ChannelDiscoveryConsumerService>();
+        builder.Services.AddHostedService<ChannelAssetRefreshConsumerService>();
 
         var app = builder.Build();
 

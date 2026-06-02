@@ -15,6 +15,7 @@ public sealed class BackgroundJobsTopology : ITopologySource
     public const string StaleDatabaseCleanupConsumer = "databridge-stale-database-cleanup";
     public const string WorkerChannelUpdateCheckConsumer = "worker-channel-update-check";
     public const string WorkerChannelMediaListConsumer = "worker-channel-media-list";
+    public const string WorkerChannelAssetRefreshConsumer = "worker-channel-asset-refresh";
 
     public IEnumerable<StreamSpec> GetStreams()
     {
@@ -54,6 +55,7 @@ public sealed class BackgroundJobsTopology : ITopologySource
         yield return DataBridgeConsumer(StaleDatabaseCleanupConsumer, BackgroundJobSubjects.StaleDatabaseCleanupRequest, TimeSpan.FromMinutes(15), maxDeliver: 5);
         yield return WorkerConsumer(WorkerChannelUpdateCheckConsumer, BackgroundJobSubjects.ChannelUpdateCheckRequest, TimeSpan.FromMinutes(30), maxDeliver: 5);
         yield return WorkerConsumer(WorkerChannelMediaListConsumer, BackgroundJobSubjects.ChannelMediaListRequest, TimeSpan.FromHours(2), maxDeliver: 3);
+        yield return WorkerConsumer(WorkerChannelAssetRefreshConsumer, BackgroundJobSubjects.ChannelAssetRefreshRequest, TimeSpan.FromMinutes(30), maxDeliver: 3);
     }
 
     private static ConsumerSpec DataBridgeConsumer(string durableName, string subject, TimeSpan ackWait, int maxDeliver)
