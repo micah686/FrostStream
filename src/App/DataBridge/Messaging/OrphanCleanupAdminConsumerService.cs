@@ -1,5 +1,4 @@
 using FlySwattr.NATS.Abstractions;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NodaTime;
 using Shared.Messaging;
@@ -10,51 +9,32 @@ public sealed class OrphanCleanupAdminConsumerService(
     IMessageBus messageBus,
     OrphanMetadataCleanupExecutor cleanupExecutor,
     IClock clock,
-    ILogger<OrphanCleanupAdminConsumerService> logger) : BackgroundService
+    ILogger<OrphanCleanupAdminConsumerService> logger) : SubscriptionBackgroundService
 {
     private const string QueueGroup = "databridge-orphan-cleanup-admin";
-    private readonly List<ISubscription> _subscriptions = [];
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
     {
-        _subscriptions.Add(await messageBus.SubscribeAsync<OrphanCleanupListRequest>(
+        await SubscribeAsync<OrphanCleanupListRequest>(
+            messageBus,
             OrphanCleanupSubjects.AdminList,
             HandleListAsync,
             QueueGroup,
-            stoppingToken));
-        _subscriptions.Add(await messageBus.SubscribeAsync<RestoreOrphanRequest>(
+            stoppingToken);
+        await SubscribeAsync<RestoreOrphanRequest>(
+            messageBus,
             OrphanCleanupSubjects.AdminRestoreFile,
             HandleRestoreFileAsync,
             QueueGroup,
-            stoppingToken));
-        _subscriptions.Add(await messageBus.SubscribeAsync<RestoreOrphanRequest>(
+            stoppingToken);
+        await SubscribeAsync<RestoreOrphanRequest>(
+            messageBus,
             OrphanCleanupSubjects.AdminRestoreMetadata,
             HandleRestoreMetadataAsync,
             QueueGroup,
-            stoppingToken));
+            stoppingToken);
 
         logger.LogInformation("Subscribed to orphan cleanup admin requests.");
-
-        try
-        {
-            await Task.Delay(Timeout.Infinite, stoppingToken);
-        }
-        catch (OperationCanceledException)
-        {
-            // graceful shutdown
-        }
-    }
-
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        foreach (var subscription in _subscriptions)
-        {
-            await subscription.StopAsync(cancellationToken);
-            await subscription.DisposeAsync();
-        }
-
-        _subscriptions.Clear();
-        await base.StopAsync(cancellationToken);
     }
 
     private async Task HandleListAsync(IMessageContext<OrphanCleanupListRequest> context)

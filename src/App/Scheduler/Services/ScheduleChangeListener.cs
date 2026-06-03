@@ -12,39 +12,18 @@ public sealed class ScheduleChangeListener(
     IDatabridgeClient databridgeClient,
     ISchedulerFactory schedulerFactory,
     IQuartzJobRegistrar registrar,
-    ILogger<ScheduleChangeListener> logger) : BackgroundService
+    ILogger<ScheduleChangeListener> logger) : SubscriptionBackgroundService
 {
-    private ISubscription? _subscription;
-
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
     {
-        _subscription = await messageBus.SubscribeAsync<ScheduleChangedMessage>(
+        await SubscribeAsync<ScheduleChangedMessage>(
+            messageBus,
             ScheduleSubjects.Changed,
             HandleChangedAsync,
             queueGroup: null,
             cancellationToken: stoppingToken);
 
         logger.LogInformation("Subscribed to schedule change notifications.");
-
-        try
-        {
-            await Task.Delay(Timeout.Infinite, stoppingToken);
-        }
-        catch (OperationCanceledException)
-        {
-            // graceful shutdown
-        }
-    }
-
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        if (_subscription is not null)
-        {
-            await _subscription.StopAsync(cancellationToken);
-            await _subscription.DisposeAsync();
-        }
-
-        await base.StopAsync(cancellationToken);
     }
 
     private async Task HandleChangedAsync(IMessageContext<ScheduleChangedMessage> context)

@@ -1,6 +1,5 @@
 using System.Text.Json;
 using FlySwattr.NATS.Abstractions;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NodaTime;
 using Npgsql;
@@ -19,40 +18,26 @@ public sealed class FilesystemRescanConsumerService(
     Func<string, IObjectStore> objectStoreFactory,
     NpgsqlDataSource dataSource,
     IClock clock,
-    ILogger<FilesystemRescanConsumerService> logger) : BackgroundService
+    ILogger<FilesystemRescanConsumerService> logger) : SubscriptionBackgroundService
 {
     private const string QueueGroup = "databridge-filesystem-rescan";
-    private readonly List<ISubscription> _subscriptions = [];
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
     {
-        _subscriptions.Add(await messageBus.SubscribeAsync<FilesystemRescanStorageKeysRequest>(
-            FilesystemRescanSubjects.StorageKeys, HandleStorageKeysAsync, QueueGroup, stoppingToken));
-        _subscriptions.Add(await messageBus.SubscribeAsync<FilesystemRescanReconcileRequest>(
-            FilesystemRescanSubjects.Reconcile, HandleReconcileAsync, QueueGroup, stoppingToken));
+        await SubscribeAsync<FilesystemRescanStorageKeysRequest>(
+            messageBus,
+            FilesystemRescanSubjects.StorageKeys,
+            HandleStorageKeysAsync,
+            QueueGroup,
+            stoppingToken);
+        await SubscribeAsync<FilesystemRescanReconcileRequest>(
+            messageBus,
+            FilesystemRescanSubjects.Reconcile,
+            HandleReconcileAsync,
+            QueueGroup,
+            stoppingToken);
 
         logger.LogInformation("Subscribed to filesystem rescan storage-key/reconcile subjects.");
-
-        try
-        {
-            await Task.Delay(Timeout.Infinite, stoppingToken);
-        }
-        catch (OperationCanceledException)
-        {
-            // graceful shutdown
-        }
-    }
-
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        foreach (var subscription in _subscriptions)
-        {
-            await subscription.StopAsync(cancellationToken);
-            await subscription.DisposeAsync();
-        }
-
-        _subscriptions.Clear();
-        await base.StopAsync(cancellationToken);
     }
 
     private async Task HandleStorageKeysAsync(IMessageContext<FilesystemRescanStorageKeysRequest> context)

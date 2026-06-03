@@ -3,7 +3,6 @@ using DataBridge.Data;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Shared.Database;
 using Shared.Messaging;
@@ -18,65 +17,48 @@ namespace DataBridge.Messaging;
 public sealed class OptionPresetCrudConsumerService(
     IMessageBus messageBus,
     IServiceScopeFactory scopeFactory,
-    ILogger<OptionPresetCrudConsumerService> logger) : BackgroundService
+    ILogger<OptionPresetCrudConsumerService> logger) : SubscriptionBackgroundService
 {
     private const string QueueGroup = "databridge-option-presets";
-    private readonly List<ISubscription> _subscriptions = [];
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
     {
-        _subscriptions.Add(await messageBus.SubscribeAsync<OptionPresetCreateRequestMessage>(
+        await SubscribeAsync<OptionPresetCreateRequestMessage>(
+            messageBus,
             OptionPresetSubjects.CreatePreset,
             HandleCreateAsync,
             queueGroup: QueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<OptionPresetUpdateRequestMessage>(
+        await SubscribeAsync<OptionPresetUpdateRequestMessage>(
+            messageBus,
             OptionPresetSubjects.UpdatePreset,
             HandleUpdateAsync,
             queueGroup: QueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<OptionPresetGetRequestMessage>(
+        await SubscribeAsync<OptionPresetGetRequestMessage>(
+            messageBus,
             OptionPresetSubjects.GetPreset,
             HandleGetAsync,
             queueGroup: QueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<OptionPresetListRequestMessage>(
+        await SubscribeAsync<OptionPresetListRequestMessage>(
+            messageBus,
             OptionPresetSubjects.ListPresets,
             HandleListAsync,
             queueGroup: QueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<OptionPresetDeleteRequestMessage>(
+        await SubscribeAsync<OptionPresetDeleteRequestMessage>(
+            messageBus,
             OptionPresetSubjects.DeletePreset,
             HandleDeleteAsync,
             queueGroup: QueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
         logger.LogInformation("Subscribed to option-preset CRUD subjects.");
-
-        try
-        {
-            await Task.Delay(Timeout.Infinite, stoppingToken);
-        }
-        catch (OperationCanceledException)
-        {
-            // graceful shutdown
-        }
-    }
-
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        foreach (var subscription in _subscriptions)
-        {
-            await subscription.StopAsync(cancellationToken);
-            await subscription.DisposeAsync();
-        }
-
-        _subscriptions.Clear();
-        await base.StopAsync(cancellationToken);
     }
 
     private async Task HandleCreateAsync(IMessageContext<OptionPresetCreateRequestMessage> context)

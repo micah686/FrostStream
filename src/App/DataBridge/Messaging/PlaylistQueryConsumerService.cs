@@ -1,7 +1,6 @@
 using DataBridge.Data;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Shared.Database;
 using Shared.Messaging;
@@ -11,46 +10,27 @@ namespace DataBridge.Messaging;
 public sealed class PlaylistQueryConsumerService(
     IMessageBus messageBus,
     IServiceScopeFactory scopeFactory,
-    ILogger<PlaylistQueryConsumerService> logger) : BackgroundService
+    ILogger<PlaylistQueryConsumerService> logger) : SubscriptionBackgroundService
 {
     private const string QueueGroup = "databridge-playlist-queries";
-    private readonly List<ISubscription> _subscriptions = [];
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
     {
-        _subscriptions.Add(await messageBus.SubscribeAsync<PlaylistGetRequestMessage>(
+        await SubscribeAsync<PlaylistGetRequestMessage>(
+            messageBus,
             PlaylistSubjects.PlaylistGet,
             HandleGetAsync,
             queueGroup: QueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<PlaylistListRequestMessage>(
+        await SubscribeAsync<PlaylistListRequestMessage>(
+            messageBus,
             PlaylistSubjects.PlaylistList,
             HandleListAsync,
             queueGroup: QueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
         logger.LogInformation("Subscribed to playlist query subjects.");
-
-        try
-        {
-            await Task.Delay(Timeout.Infinite, stoppingToken);
-        }
-        catch (OperationCanceledException)
-        {
-            // graceful shutdown
-        }
-    }
-
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        foreach (var subscription in _subscriptions)
-        {
-            await subscription.StopAsync(cancellationToken);
-            await subscription.DisposeAsync();
-        }
-        _subscriptions.Clear();
-        await base.StopAsync(cancellationToken);
     }
 
     private async Task HandleGetAsync(IMessageContext<PlaylistGetRequestMessage> context)

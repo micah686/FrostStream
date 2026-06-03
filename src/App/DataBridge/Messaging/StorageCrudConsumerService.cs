@@ -2,7 +2,6 @@ using DataBridge.Data;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NodaTime;
 using Shared.Database;
@@ -17,114 +16,105 @@ public sealed class StorageCrudConsumerService(
     IServiceScopeFactory scopeFactory,
     ISecretStore secretStore,
     IClock clock,
-    ILogger<StorageCrudConsumerService> logger) : BackgroundService
+    ILogger<StorageCrudConsumerService> logger) : SubscriptionBackgroundService
 {
     private const string DefaultStorageKey = "default";
     private const string QueueGroup = "databridge-storage";
-    private readonly List<ISubscription> _subscriptions = [];
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
     {
-        _subscriptions.Add(await messageBus.SubscribeAsync<StorageCreateLocalRequestMessage>(
+        await SubscribeAsync<StorageCreateLocalRequestMessage>(
+            messageBus,
             StorageSubjects.CreateLocalStorage,
             HandleCreateLocalStorageAsync,
             queueGroup: QueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<StorageCreateStreamingRequestMessage>(
+        await SubscribeAsync<StorageCreateStreamingRequestMessage>(
+            messageBus,
             StorageSubjects.CreateNetworkStorage,
             HandleCreateStreamingStorageAsync,
             queueGroup: QueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<StorageCreateS3CompatibleObjectRequestMessage>(
+        await SubscribeAsync<StorageCreateS3CompatibleObjectRequestMessage>(
+            messageBus,
             StorageSubjects.CreateS3CompatibleObjectStorage,
             HandleCreateS3CompatibleObjectStorageAsync,
             queueGroup: QueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<StorageCreateAzureBlobObjectRequestMessage>(
+        await SubscribeAsync<StorageCreateAzureBlobObjectRequestMessage>(
+            messageBus,
             StorageSubjects.CreateAzureBlobObjectStorage,
             HandleCreateAzureBlobObjectStorageAsync,
             queueGroup: QueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<StorageCreateGoogleCloudStorageObjectRequestMessage>(
+        await SubscribeAsync<StorageCreateGoogleCloudStorageObjectRequestMessage>(
+            messageBus,
             StorageSubjects.CreateGoogleCloudStorageObjectStorage,
             HandleCreateGoogleCloudStorageObjectStorageAsync,
             queueGroup: QueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<StorageUpdateLocalRequestMessage>(
+        await SubscribeAsync<StorageUpdateLocalRequestMessage>(
+            messageBus,
             StorageSubjects.UpdateLocalStorage,
             HandleUpdateLocalStorageAsync,
             queueGroup: QueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<StorageUpdateStreamingRequestMessage>(
+        await SubscribeAsync<StorageUpdateStreamingRequestMessage>(
+            messageBus,
             StorageSubjects.UpdateNetworkStorage,
             HandleUpdateStreamingStorageAsync,
             queueGroup: QueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<StorageUpdateS3CompatibleObjectRequestMessage>(
+        await SubscribeAsync<StorageUpdateS3CompatibleObjectRequestMessage>(
+            messageBus,
             StorageSubjects.UpdateS3CompatibleObjectStorage,
             HandleUpdateS3CompatibleObjectStorageAsync,
             queueGroup: QueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<StorageUpdateAzureBlobObjectRequestMessage>(
+        await SubscribeAsync<StorageUpdateAzureBlobObjectRequestMessage>(
+            messageBus,
             StorageSubjects.UpdateAzureBlobObjectStorage,
             HandleUpdateAzureBlobObjectStorageAsync,
             queueGroup: QueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<StorageUpdateGoogleCloudStorageObjectRequestMessage>(
+        await SubscribeAsync<StorageUpdateGoogleCloudStorageObjectRequestMessage>(
+            messageBus,
             StorageSubjects.UpdateGoogleCloudStorageObjectStorage,
             HandleUpdateGoogleCloudStorageObjectStorageAsync,
             queueGroup: QueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<StorageListRequestMessage>(
+        await SubscribeAsync<StorageListRequestMessage>(
+            messageBus,
             StorageSubjects.ListStorage,
             HandleListStorageAsync,
             queueGroup: QueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<StorageGetRequestMessage>(
+        await SubscribeAsync<StorageGetRequestMessage>(
+            messageBus,
             StorageSubjects.GetStorage,
             HandleGetStorageAsync,
             queueGroup: QueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<StorageDeleteRequestMessage>(
+        await SubscribeAsync<StorageDeleteRequestMessage>(
+            messageBus,
             StorageSubjects.DeleteStorage,
             HandleDeleteStorageAsync,
             queueGroup: QueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
         logger.LogInformation("Subscribed to storage CRUD subjects.");
-
-        try
-        {
-            await Task.Delay(Timeout.Infinite, stoppingToken);
-        }
-        catch (OperationCanceledException)
-        {
-            // graceful shutdown
-        }
-    }
-
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        foreach (var subscription in _subscriptions)
-        {
-            await subscription.StopAsync(cancellationToken);
-            await subscription.DisposeAsync();
-        }
-
-        _subscriptions.Clear();
-        await base.StopAsync(cancellationToken);
     }
 
     private Task HandleCreateLocalStorageAsync(IMessageContext<StorageCreateLocalRequestMessage> context)

@@ -1,7 +1,6 @@
 using DataBridge.Data;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NodaTime;
 using Quartz;
@@ -14,46 +13,24 @@ public sealed class ScheduleCrudConsumerService(
     IMessageBus messageBus,
     IServiceScopeFactory scopeFactory,
     IClock clock,
-    ILogger<ScheduleCrudConsumerService> logger) : BackgroundService
+    ILogger<ScheduleCrudConsumerService> logger) : SubscriptionBackgroundService
 {
     private const string QueueGroup = "databridge-schedules";
-    private readonly List<ISubscription> _subscriptions = [];
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
     {
-        _subscriptions.Add(await messageBus.SubscribeAsync<ScheduleCreateRequestMessage>(ScheduleSubjects.Create, HandleCreateAsync, QueueGroup, stoppingToken));
-        _subscriptions.Add(await messageBus.SubscribeAsync<ScheduleUpdateRequestMessage>(ScheduleSubjects.Update, HandleUpdateAsync, QueueGroup, stoppingToken));
-        _subscriptions.Add(await messageBus.SubscribeAsync<ScheduleGetRequestMessage>(ScheduleSubjects.Get, HandleGetAsync, QueueGroup, stoppingToken));
-        _subscriptions.Add(await messageBus.SubscribeAsync<ScheduleListRequestMessage>(ScheduleSubjects.List, HandleListAsync, QueueGroup, stoppingToken));
-        _subscriptions.Add(await messageBus.SubscribeAsync<ScheduleListActiveRequestMessage>(ScheduleSubjects.ActiveList, HandleListActiveAsync, QueueGroup, stoppingToken));
-        _subscriptions.Add(await messageBus.SubscribeAsync<ScheduleListOverdueRequestMessage>(ScheduleSubjects.Overdue, HandleListOverdueAsync, QueueGroup, stoppingToken));
-        _subscriptions.Add(await messageBus.SubscribeAsync<ScheduleDeleteRequestMessage>(ScheduleSubjects.Delete, HandleDeleteAsync, QueueGroup, stoppingToken));
-        _subscriptions.Add(await messageBus.SubscribeAsync<ScheduleMarkAttemptRequestMessage>(ScheduleSubjects.MarkAttempt, HandleMarkAttemptAsync, QueueGroup, stoppingToken));
-        _subscriptions.Add(await messageBus.SubscribeAsync<ScheduleMarkSuccessRequestMessage>(ScheduleSubjects.MarkSuccess, HandleMarkSuccessAsync, QueueGroup, stoppingToken));
-        _subscriptions.Add(await messageBus.SubscribeAsync<ScheduleMarkFailureRequestMessage>(ScheduleSubjects.MarkFailure, HandleMarkFailureAsync, QueueGroup, stoppingToken));
+        await SubscribeAsync<ScheduleCreateRequestMessage>(messageBus, ScheduleSubjects.Create, HandleCreateAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<ScheduleUpdateRequestMessage>(messageBus, ScheduleSubjects.Update, HandleUpdateAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<ScheduleGetRequestMessage>(messageBus, ScheduleSubjects.Get, HandleGetAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<ScheduleListRequestMessage>(messageBus, ScheduleSubjects.List, HandleListAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<ScheduleListActiveRequestMessage>(messageBus, ScheduleSubjects.ActiveList, HandleListActiveAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<ScheduleListOverdueRequestMessage>(messageBus, ScheduleSubjects.Overdue, HandleListOverdueAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<ScheduleDeleteRequestMessage>(messageBus, ScheduleSubjects.Delete, HandleDeleteAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<ScheduleMarkAttemptRequestMessage>(messageBus, ScheduleSubjects.MarkAttempt, HandleMarkAttemptAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<ScheduleMarkSuccessRequestMessage>(messageBus, ScheduleSubjects.MarkSuccess, HandleMarkSuccessAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<ScheduleMarkFailureRequestMessage>(messageBus, ScheduleSubjects.MarkFailure, HandleMarkFailureAsync, QueueGroup, stoppingToken);
 
         logger.LogInformation("Subscribed to schedule CRUD subjects.");
-
-        try
-        {
-            await Task.Delay(Timeout.Infinite, stoppingToken);
-        }
-        catch (OperationCanceledException)
-        {
-            // graceful shutdown
-        }
-    }
-
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        foreach (var subscription in _subscriptions)
-        {
-            await subscription.StopAsync(cancellationToken);
-            await subscription.DisposeAsync();
-        }
-
-        _subscriptions.Clear();
-        await base.StopAsync(cancellationToken);
     }
 
     private async Task HandleCreateAsync(IMessageContext<ScheduleCreateRequestMessage> context)

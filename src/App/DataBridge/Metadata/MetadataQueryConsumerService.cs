@@ -1,6 +1,5 @@
 using FlySwattr.NATS.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Shared.Messaging;
 
@@ -9,76 +8,60 @@ namespace DataBridge.Metadata;
 public sealed class MetadataQueryConsumerService(
     IMessageBus messageBus,
     IServiceScopeFactory scopeFactory,
-    ILogger<MetadataQueryConsumerService> logger) : BackgroundService
+    ILogger<MetadataQueryConsumerService> logger) : SubscriptionBackgroundService
 {
-    private readonly List<ISubscription> _subscriptions = [];
-
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
     {
-        _subscriptions.Add(await messageBus.SubscribeAsync<MetadataGetRequestMessage>(
+        await SubscribeAsync<MetadataGetRequestMessage>(
+            messageBus,
             MetadataSubjects.Get,
             HandleGetAsync,
             queueGroup: MetadataSubjects.ProcessorsQueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<MetadataTechnicalRequestMessage>(
+        await SubscribeAsync<MetadataTechnicalRequestMessage>(
+            messageBus,
             MetadataSubjects.GetTechnical,
             HandleTechnicalAsync,
             queueGroup: MetadataSubjects.ProcessorsQueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<MetadataAccountsListRequestMessage>(
+        await SubscribeAsync<MetadataAccountsListRequestMessage>(
+            messageBus,
             MetadataSubjects.AccountsList,
             HandleAccountsListAsync,
             queueGroup: MetadataSubjects.ProcessorsQueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<MetadataAccountGetRequestMessage>(
+        await SubscribeAsync<MetadataAccountGetRequestMessage>(
+            messageBus,
             MetadataSubjects.AccountsGet,
             HandleAccountGetAsync,
             queueGroup: MetadataSubjects.ProcessorsQueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<MetadataTaxonomyListRequestMessage>(
+        await SubscribeAsync<MetadataTaxonomyListRequestMessage>(
+            messageBus,
             MetadataSubjects.TaxonomyTagsList,
             context => HandleTaxonomyListAsync(context, MetadataTaxonomyKind.Tags),
             queueGroup: MetadataSubjects.ProcessorsQueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<MetadataTaxonomyListRequestMessage>(
+        await SubscribeAsync<MetadataTaxonomyListRequestMessage>(
+            messageBus,
             MetadataSubjects.TaxonomyCategoriesList,
             context => HandleTaxonomyListAsync(context, MetadataTaxonomyKind.Categories),
             queueGroup: MetadataSubjects.ProcessorsQueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<MetadataTaxonomyListRequestMessage>(
+        await SubscribeAsync<MetadataTaxonomyListRequestMessage>(
+            messageBus,
             MetadataSubjects.TaxonomyGenresList,
             context => HandleTaxonomyListAsync(context, MetadataTaxonomyKind.Genres),
             queueGroup: MetadataSubjects.ProcessorsQueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
         logger.LogInformation("Subscribed to metadata Postgres query subjects.");
-
-        try
-        {
-            await Task.Delay(Timeout.Infinite, stoppingToken);
-        }
-        catch (OperationCanceledException)
-        {
-            // graceful shutdown
-        }
-    }
-
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        foreach (var subscription in _subscriptions)
-        {
-            await subscription.StopAsync(cancellationToken);
-            await subscription.DisposeAsync();
-        }
-
-        _subscriptions.Clear();
-        await base.StopAsync(cancellationToken);
     }
 
     private async Task HandleGetAsync(IMessageContext<MetadataGetRequestMessage> context)

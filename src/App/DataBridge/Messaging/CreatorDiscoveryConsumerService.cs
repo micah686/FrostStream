@@ -4,7 +4,6 @@ using DataBridge.Data;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NodaTime;
 using Shared.Database;
@@ -17,52 +16,22 @@ public sealed class CreatorDiscoveryConsumerService(
     IJetStreamPublisher publisher,
     IServiceScopeFactory scopeFactory,
     IClock clock,
-    ILogger<CreatorDiscoveryConsumerService> logger) : BackgroundService
+    ILogger<CreatorDiscoveryConsumerService> logger) : SubscriptionBackgroundService
 {
     private const string QueueGroup = "databridge-creator-discovery";
-    private readonly List<ISubscription> _subscriptions = [];
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
     {
-        _subscriptions.Add(await messageBus.SubscribeAsync<CreatorSourceCreateRequestMessage>(
-            CreatorDiscoverySubjects.CreateSource, HandleCreateAsync, QueueGroup, stoppingToken));
-        _subscriptions.Add(await messageBus.SubscribeAsync<CreatorSourceUpdateRequestMessage>(
-            CreatorDiscoverySubjects.UpdateSource, HandleUpdateAsync, QueueGroup, stoppingToken));
-        _subscriptions.Add(await messageBus.SubscribeAsync<CreatorSourceGetRequestMessage>(
-            CreatorDiscoverySubjects.GetSource, HandleGetAsync, QueueGroup, stoppingToken));
-        _subscriptions.Add(await messageBus.SubscribeAsync<CreatorSourceListRequestMessage>(
-            CreatorDiscoverySubjects.ListSources, HandleListAsync, QueueGroup, stoppingToken));
-        _subscriptions.Add(await messageBus.SubscribeAsync<CreatorSourceListEnabledForScanRequestMessage>(
-            CreatorDiscoverySubjects.ListEnabledSourcesForScan, HandleListEnabledForScanAsync, QueueGroup, stoppingToken));
-        _subscriptions.Add(await messageBus.SubscribeAsync<CreatorSourceDeleteRequestMessage>(
-            CreatorDiscoverySubjects.DeleteSource, HandleDeleteAsync, QueueGroup, stoppingToken));
-        _subscriptions.Add(await messageBus.SubscribeAsync<UpsertDiscoveredMediaBatchRequestMessage>(
-            CreatorDiscoverySubjects.UpsertDiscoveredMediaBatch, HandleUpsertBatchAsync, QueueGroup, stoppingToken));
-        _subscriptions.Add(await messageBus.SubscribeAsync<UpdateCreatorSourceAssetsRequestMessage>(
-            CreatorDiscoverySubjects.UpdateAssets, HandleUpdateAssetsAsync, QueueGroup, stoppingToken));
+        await SubscribeAsync<CreatorSourceCreateRequestMessage>(messageBus, CreatorDiscoverySubjects.CreateSource, HandleCreateAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<CreatorSourceUpdateRequestMessage>(messageBus, CreatorDiscoverySubjects.UpdateSource, HandleUpdateAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<CreatorSourceGetRequestMessage>(messageBus, CreatorDiscoverySubjects.GetSource, HandleGetAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<CreatorSourceListRequestMessage>(messageBus, CreatorDiscoverySubjects.ListSources, HandleListAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<CreatorSourceListEnabledForScanRequestMessage>(messageBus, CreatorDiscoverySubjects.ListEnabledSourcesForScan, HandleListEnabledForScanAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<CreatorSourceDeleteRequestMessage>(messageBus, CreatorDiscoverySubjects.DeleteSource, HandleDeleteAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<UpsertDiscoveredMediaBatchRequestMessage>(messageBus, CreatorDiscoverySubjects.UpsertDiscoveredMediaBatch, HandleUpsertBatchAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<UpdateCreatorSourceAssetsRequestMessage>(messageBus, CreatorDiscoverySubjects.UpdateAssets, HandleUpdateAssetsAsync, QueueGroup, stoppingToken);
 
         logger.LogInformation("Subscribed to creator discovery subjects.");
-
-        try
-        {
-            await Task.Delay(Timeout.Infinite, stoppingToken);
-        }
-        catch (OperationCanceledException)
-        {
-            // graceful shutdown
-        }
-    }
-
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        foreach (var subscription in _subscriptions)
-        {
-            await subscription.StopAsync(cancellationToken);
-            await subscription.DisposeAsync();
-        }
-
-        _subscriptions.Clear();
-        await base.StopAsync(cancellationToken);
     }
 
     private async Task HandleCreateAsync(IMessageContext<CreatorSourceCreateRequestMessage> context)

@@ -1,6 +1,5 @@
 using FlySwattr.NATS.Abstractions;
 using FluentStorage.Blobs;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Shared.Messaging;
 using Shared.Storage;
@@ -10,56 +9,38 @@ namespace Worker.Services;
 public sealed class OrphanCleanupConsumerService(
     IMessageBus messageBus,
     IBlobStorageProvider blobStorageProvider,
-    ILogger<OrphanCleanupConsumerService> logger) : BackgroundService
+    ILogger<OrphanCleanupConsumerService> logger) : SubscriptionBackgroundService
 {
     private const string QueueGroup = "worker-orphan-cleanup";
-    private readonly List<ISubscription> _subscriptions = [];
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
     {
-        _subscriptions.Add(await messageBus.SubscribeAsync<MoveOrphanedFileRequest>(
+        await SubscribeAsync<MoveOrphanedFileRequest>(
+            messageBus,
             OrphanCleanupSubjects.MoveFile,
             HandleMoveAsync,
             QueueGroup,
-            stoppingToken));
-        _subscriptions.Add(await messageBus.SubscribeAsync<DeleteOrphanedFileRequest>(
+            stoppingToken);
+        await SubscribeAsync<DeleteOrphanedFileRequest>(
+            messageBus,
             OrphanCleanupSubjects.DeleteFile,
             HandleDeleteAsync,
             QueueGroup,
-            stoppingToken));
-        _subscriptions.Add(await messageBus.SubscribeAsync<RestoreOrphanedFileRequest>(
+            stoppingToken);
+        await SubscribeAsync<RestoreOrphanedFileRequest>(
+            messageBus,
             OrphanCleanupSubjects.RestoreFile,
             HandleRestoreAsync,
             QueueGroup,
-            stoppingToken));
-        _subscriptions.Add(await messageBus.SubscribeAsync<OrphanFileExistsRequest>(
+            stoppingToken);
+        await SubscribeAsync<OrphanFileExistsRequest>(
+            messageBus,
             OrphanCleanupSubjects.FileExists,
             HandleFileExistsAsync,
             QueueGroup,
-            stoppingToken));
+            stoppingToken);
 
         logger.LogInformation("Subscribed to orphan cleanup move/delete/restore requests.");
-
-        try
-        {
-            await Task.Delay(Timeout.Infinite, stoppingToken);
-        }
-        catch (OperationCanceledException)
-        {
-            // graceful shutdown
-        }
-    }
-
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        foreach (var subscription in _subscriptions)
-        {
-            await subscription.StopAsync(cancellationToken);
-            await subscription.DisposeAsync();
-        }
-
-        _subscriptions.Clear();
-        await base.StopAsync(cancellationToken);
     }
 
     private async Task HandleMoveAsync(IMessageContext<MoveOrphanedFileRequest> context)

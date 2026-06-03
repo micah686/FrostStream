@@ -1,5 +1,4 @@
 using FlySwattr.NATS.Abstractions;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Shared.Messaging;
 
@@ -8,40 +7,18 @@ namespace DataBridge.Search;
 public sealed class MetadataRebuildConsumerService(
     IMessageBus messageBus,
     IMetadataRebuildCoordinator rebuildCoordinator,
-    ILogger<MetadataRebuildConsumerService> logger) : BackgroundService
+    ILogger<MetadataRebuildConsumerService> logger) : SubscriptionBackgroundService
 {
-    private ISubscription? _subscription;
-
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
     {
-        _subscription = await messageBus.SubscribeAsync<MetadataSyncRebuildRequestMessage>(
+        await SubscribeAsync<MetadataSyncRebuildRequestMessage>(
+            messageBus,
             MetadataSyncSubjects.SyncRebuild,
             HandleAsync,
             queueGroup: MetadataSubjects.SearchQueueGroup,
             cancellationToken: stoppingToken);
 
         logger.LogInformation("Subscribed to metadata sync rebuild subject.");
-
-        try
-        {
-            await Task.Delay(Timeout.Infinite, stoppingToken);
-        }
-        catch (OperationCanceledException)
-        {
-            // graceful shutdown
-        }
-    }
-
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        if (_subscription is not null)
-        {
-            await _subscription.StopAsync(cancellationToken);
-            await _subscription.DisposeAsync();
-            _subscription = null;
-        }
-
-        await base.StopAsync(cancellationToken);
     }
 
     private async Task HandleAsync(IMessageContext<MetadataSyncRebuildRequestMessage> context)

@@ -1,5 +1,4 @@
 using FlySwattr.NATS.Abstractions;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Shared.Messaging;
 using Typesense;
@@ -9,46 +8,25 @@ namespace DataBridge.Search;
 public sealed class MetadataListConsumerService(
     IMessageBus messageBus,
     ITypesenseClient typesense,
-    ILogger<MetadataListConsumerService> logger) : BackgroundService
+    ILogger<MetadataListConsumerService> logger) : SubscriptionBackgroundService
 {
-    private readonly List<ISubscription> _subscriptions = [];
-
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
     {
-        _subscriptions.Add(await messageBus.SubscribeAsync<MetadataListRequestMessage>(
+        await SubscribeAsync<MetadataListRequestMessage>(
+            messageBus,
             MetadataSubjects.List,
             HandleAsync,
             queueGroup: MetadataSubjects.SearchQueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<MetadataListRequestMessage>(
+        await SubscribeAsync<MetadataListRequestMessage>(
+            messageBus,
             MetadataSubjects.AccountsMediaList,
             HandleAsync,
             queueGroup: MetadataSubjects.SearchQueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
         logger.LogInformation("Subscribed to metadata list subjects.");
-
-        try
-        {
-            await Task.Delay(Timeout.Infinite, stoppingToken);
-        }
-        catch (OperationCanceledException)
-        {
-            // graceful shutdown
-        }
-    }
-
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        foreach (var subscription in _subscriptions)
-        {
-            await subscription.StopAsync(cancellationToken);
-            await subscription.DisposeAsync();
-        }
-
-        _subscriptions.Clear();
-        await base.StopAsync(cancellationToken);
     }
 
     private async Task HandleAsync(IMessageContext<MetadataListRequestMessage> context)
