@@ -2,9 +2,9 @@ namespace Shared.Messaging;
 
 public static class FilesystemRescanSubjects
 {
-    /// <summary>Request/reply: Worker asks DataBridge for the expected file inventory to reconcile against storage.</summary>
-    public const string Inventory = "fs.media.filesystem.inventory";
+    /// <summary>Request/reply: Worker asks DataBridge which storage keys have database content.</summary>
+    public const string StorageKeys = "fs.media.filesystem.storage-keys";
 
-    /// <summary>Request/reply: Worker reports the reconciliation findings for a single storage key back to DataBridge.</summary>
-    public const string Report = "fs.media.filesystem.report";
+    /// <summary>Request/reply: Worker asks DataBridge to reconcile one uploaded storage listing.</summary>
+    public const string Reconcile = "fs.media.filesystem.reconcile";
 }

@@ -5,6 +5,7 @@ namespace Shared.Messaging;
 public sealed class BackgroundJobsTopology : ITopologySource
 {
     public const string StreamNameValue = "FROSTSTREAM_BACKGROUND";
+    public const string FilesystemRescanObjectStoreBucket = "filesystem-rescan";
     public const string DataBridgeQueueGroup = "databridge-bgjobs";
     public const string MediaProcessorQueueGroup = "mediaprocessor-bgjobs";
     public const string WorkerQueueGroup = "worker-bgjobs";
@@ -59,7 +60,19 @@ public sealed class BackgroundJobsTopology : ITopologySource
         yield return WorkerConsumer(WorkerChannelUpdateCheckConsumer, BackgroundJobSubjects.ChannelUpdateCheckRequest, TimeSpan.FromMinutes(30), maxDeliver: 5);
         yield return WorkerConsumer(WorkerChannelMediaListConsumer, BackgroundJobSubjects.ChannelMediaListRequest, TimeSpan.FromHours(2), maxDeliver: 3);
         yield return WorkerConsumer(WorkerChannelAssetRefreshConsumer, BackgroundJobSubjects.ChannelAssetRefreshRequest, TimeSpan.FromMinutes(30), maxDeliver: 3);
-        yield return WorkerConsumer(WorkerFilesystemRescanConsumer, BackgroundJobSubjects.FilesystemRescanRequest, TimeSpan.FromHours(1), maxDeliver: 3);
+        yield return WorkerConsumer(WorkerFilesystemRescanConsumer, BackgroundJobSubjects.FilesystemRescanRequest, TimeSpan.FromSeconds(60), maxDeliver: 3);
+    }
+
+    public IEnumerable<ObjectStoreSpec> GetObjectStores()
+    {
+        yield return new ObjectStoreSpec
+        {
+            Name = BucketName.From(FilesystemRescanObjectStoreBucket),
+            StorageType = StorageType.File,
+            MaxAge = TimeSpan.FromHours(12),
+            Replicas = 1,
+            Description = "Temporary filesystem rescan storage listings"
+        };
     }
 
     private static ConsumerSpec DataBridgeConsumer(string durableName, string subject, TimeSpan ackWait, int maxDeliver)

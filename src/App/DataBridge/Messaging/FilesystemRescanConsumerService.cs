@@ -1,24 +1,22 @@
-using DataBridge.Data;
+using System.Text.Json;
 using FlySwattr.NATS.Abstractions;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NodaTime;
 using Npgsql;
-using Shared.Database;
+using NpgsqlTypes;
 using Shared.Messaging;
 
 namespace DataBridge.Messaging;
 
 /// <summary>
-/// Serves the expected-file inventory to the Worker's filesystem rescan and persists
-/// the reconciliation findings it reports back. The Worker owns storage access; this
-/// service owns the database, so the two cooperate over NATS request/reply.
+/// Reconciles Worker-uploaded filesystem listings against the database inventory.
+/// The Worker owns storage access; this service owns the database and computes findings
+/// in Postgres to avoid shipping large inventories over NATS.
 /// </summary>
 public sealed class FilesystemRescanConsumerService(
     IMessageBus messageBus,
-    IServiceScopeFactory scopeFactory,
+    Func<string, IObjectStore> objectStoreFactory,
     NpgsqlDataSource dataSource,
     IClock clock,
     ILogger<FilesystemRescanConsumerService> logger) : BackgroundService
@@ -28,12 +26,12 @@ public sealed class FilesystemRescanConsumerService(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _subscriptions.Add(await messageBus.SubscribeAsync<FilesystemRescanInventoryRequest>(
-            FilesystemRescanSubjects.Inventory, HandleInventoryAsync, QueueGroup, stoppingToken));
-        _subscriptions.Add(await messageBus.SubscribeAsync<FilesystemRescanReportRequest>(
-            FilesystemRescanSubjects.Report, HandleReportAsync, QueueGroup, stoppingToken));
+        _subscriptions.Add(await messageBus.SubscribeAsync<FilesystemRescanStorageKeysRequest>(
+            FilesystemRescanSubjects.StorageKeys, HandleStorageKeysAsync, QueueGroup, stoppingToken));
+        _subscriptions.Add(await messageBus.SubscribeAsync<FilesystemRescanReconcileRequest>(
+            FilesystemRescanSubjects.Reconcile, HandleReconcileAsync, QueueGroup, stoppingToken));
 
-        logger.LogInformation("Subscribed to filesystem rescan inventory/report subjects.");
+        logger.LogInformation("Subscribed to filesystem rescan storage-key/reconcile subjects.");
 
         try
         {
@@ -57,157 +55,282 @@ public sealed class FilesystemRescanConsumerService(
         await base.StopAsync(cancellationToken);
     }
 
-    private async Task HandleInventoryAsync(IMessageContext<FilesystemRescanInventoryRequest> context)
+    private async Task HandleStorageKeysAsync(IMessageContext<FilesystemRescanStorageKeysRequest> context)
     {
         try
         {
-            var storages = await LoadContentInventoryAsync(CancellationToken.None);
-            var sidecars = await LoadSidecarPathsAsync(CancellationToken.None);
-
-            await context.RespondAsync(new FilesystemRescanInventoryResponse
+            var storageKeys = await LoadStorageKeysAsync(CancellationToken.None);
+            await context.RespondAsync(new FilesystemRescanStorageKeysResponse
             {
                 Success = true,
-                Storages = storages,
-                SidecarPaths = sidecars
+                StorageKeys = storageKeys
             });
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed building filesystem rescan inventory.");
-            await context.RespondAsync(new FilesystemRescanInventoryResponse
+            logger.LogError(ex, "Failed loading filesystem rescan storage keys.");
+            await context.RespondAsync(new FilesystemRescanStorageKeysResponse
             {
                 Success = false,
-                ErrorMessage = "Failed to build filesystem rescan inventory."
+                ErrorMessage = "Failed to load filesystem rescan storage keys."
             });
         }
     }
 
-    private async Task<IReadOnlyList<FilesystemStorageInventoryDto>> LoadContentInventoryAsync(CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<string>> LoadStorageKeysAsync(CancellationToken cancellationToken)
     {
-        var grouped = new Dictionary<string, List<FilesystemContentPathDto>>(StringComparer.Ordinal);
-
-        await using var command = dataSource.CreateCommand(
-            "SELECT storage_key, storage_path, media_guid FROM media_content_id_versions;");
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        while (await reader.ReadAsync(cancellationToken))
-        {
-            var storageKey = reader.GetString(0);
-            var path = new FilesystemContentPathDto
-            {
-                StoragePath = reader.GetString(1),
-                MediaGuid = reader.GetGuid(2)
-            };
-
-            if (!grouped.TryGetValue(storageKey, out var list))
-            {
-                list = [];
-                grouped[storageKey] = list;
-            }
-
-            list.Add(path);
-        }
-
-        return grouped
-            .Select(kvp => new FilesystemStorageInventoryDto { StorageKey = kvp.Key, Paths = kvp.Value })
-            .ToArray();
-    }
-
-    private async Task<IReadOnlyList<string>> LoadSidecarPathsAsync(CancellationToken cancellationToken)
-    {
-        var paths = new List<string>();
-
+        var keys = new List<string>();
         await using var command = dataSource.CreateCommand("""
-            SELECT thumbnail_storage_path FROM metadata.media_metadata WHERE thumbnail_storage_path IS NOT NULL
-            UNION
-            SELECT storage_path FROM metadata.media_captions WHERE storage_path IS NOT NULL
-            UNION
-            SELECT avatar_storage_path FROM metadata.accounts WHERE avatar_storage_path IS NOT NULL
-            UNION
-            SELECT banner_storage_path FROM metadata.accounts WHERE banner_storage_path IS NOT NULL
-            UNION
-            SELECT info_json_storage_path FROM download_jobs WHERE info_json_storage_path IS NOT NULL;
+            SELECT DISTINCT storage_key
+            FROM media_content_id_versions
+            ORDER BY storage_key;
             """);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
-            paths.Add(reader.GetString(0));
+            keys.Add(reader.GetString(0));
         }
 
-        return paths;
+        return keys;
     }
 
-    private async Task HandleReportAsync(IMessageContext<FilesystemRescanReportRequest> context)
+    private async Task HandleReconcileAsync(IMessageContext<FilesystemRescanReconcileRequest> context)
     {
         var message = context.Message;
+        var tempFile = Path.Combine(
+            Path.GetTempPath(),
+            $"froststream-fs-rescan-{Guid.NewGuid():N}.ndjson");
+
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<DataBridgeDbContext>();
-            var now = clock.GetCurrentInstant();
-
-            var existing = await db.FilesystemRescanFindings
-                .Where(x => x.StorageKey == message.StorageKey)
-                .ToListAsync(CancellationToken.None);
-
-            var existingByKey = existing.ToDictionary(x => (x.StoragePath, x.FindingType));
-            var reported = new HashSet<(string, FilesystemRescanFindingType)>();
-
-            foreach (var finding in message.Findings)
+            var objectStore = objectStoreFactory(message.ObjectBucket);
+            await using (var file = File.Create(tempFile))
             {
-                reported.Add((finding.StoragePath, finding.FindingType));
-                if (existingByKey.TryGetValue((finding.StoragePath, finding.FindingType), out var row))
-                {
-                    row.LastSeenAt = now;
-                    row.ResolvedAt = null;
-                    row.MediaGuid = finding.MediaGuid;
-                }
-                else
-                {
-                    db.FilesystemRescanFindings.Add(new FilesystemRescanFindingEntity
-                    {
-                        StorageKey = message.StorageKey,
-                        StoragePath = finding.StoragePath,
-                        FindingType = finding.FindingType,
-                        MediaGuid = finding.MediaGuid,
-                        DetectedAt = now,
-                        LastSeenAt = now
-                    });
-                }
+                await objectStore.GetAsync(message.ObjectKey, file, CancellationToken.None);
             }
 
-            var resolvedCount = 0;
-            foreach (var row in existing)
-            {
-                if (row.ResolvedAt is null && !reported.Contains((row.StoragePath, row.FindingType)))
-                {
-                    row.ResolvedAt = now;
-                    resolvedCount++;
-                }
-            }
-
-            await db.SaveChangesAsync(CancellationToken.None);
+            var result = await ReconcileAsync(message.StorageKey, tempFile, CancellationToken.None);
+            await objectStore.DeleteAsync(message.ObjectKey, CancellationToken.None);
 
             logger.LogInformation(
-                "Filesystem rescan report for storage key {StorageKey}: {OpenCount} open finding(s), {ResolvedCount} resolved.",
+                "Filesystem rescan reconciled schedule {ScheduleKey} storage key {StorageKey}: {Missing} missing, {Unexpected} unexpected.",
+                message.ScheduleKey,
                 message.StorageKey,
-                message.Findings.Count,
-                resolvedCount);
+                result.MissingCount,
+                result.UnexpectedCount);
 
-            await context.RespondAsync(new FilesystemRescanReportResponse
+            await context.RespondAsync(new FilesystemRescanReconcileResponse
             {
                 Success = true,
-                OpenCount = message.Findings.Count,
-                ResolvedCount = resolvedCount
+                MissingCount = result.MissingCount,
+                UnexpectedCount = result.UnexpectedCount
             });
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed persisting filesystem rescan report for storage key {StorageKey}.", message.StorageKey);
-            await context.RespondAsync(new FilesystemRescanReportResponse
+            logger.LogError(
+                ex,
+                "Failed filesystem rescan reconcile for storage key {StorageKey} object {ObjectBucket}/{ObjectKey}.",
+                message.StorageKey,
+                message.ObjectBucket,
+                message.ObjectKey);
+
+            await context.RespondAsync(new FilesystemRescanReconcileResponse
             {
                 Success = false,
-                ErrorMessage = "Failed to persist filesystem rescan report."
+                ErrorMessage = "Failed to reconcile filesystem rescan listing."
             });
         }
+        finally
+        {
+            try
+            {
+                File.Delete(tempFile);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed deleting filesystem rescan temp file {TempFile}.", tempFile);
+            }
+        }
+    }
+
+    private async Task<(int MissingCount, int UnexpectedCount)> ReconcileAsync(
+        string storageKey,
+        string listingFile,
+        CancellationToken cancellationToken)
+    {
+        await using var conn = await dataSource.OpenConnectionAsync(cancellationToken);
+        await using var tx = await conn.BeginTransactionAsync(cancellationToken);
+
+        await using (var command = new NpgsqlCommand(
+                         "CREATE TEMP TABLE tmp_fs_listing(path text NOT NULL) ON COMMIT DROP;",
+                         conn,
+                         tx))
+        {
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await CopyListingAsync(conn, listingFile, cancellationToken);
+        var counts = await ApplyFindingsAsync(conn, tx, storageKey, cancellationToken);
+
+        await tx.CommitAsync(cancellationToken);
+        return counts;
+    }
+
+    private static async Task CopyListingAsync(
+        NpgsqlConnection conn,
+        string listingFile,
+        CancellationToken cancellationToken)
+    {
+        await using var importer = await conn.BeginBinaryImportAsync(
+            "COPY tmp_fs_listing (path) FROM STDIN (FORMAT BINARY)",
+            cancellationToken);
+
+        await using var stream = File.OpenRead(listingFile);
+        using var reader = new StreamReader(stream);
+        while (await reader.ReadLineAsync(cancellationToken) is { } line)
+        {
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            var path = JsonSerializer.Deserialize<string>(line);
+            if (string.IsNullOrEmpty(path))
+            {
+                continue;
+            }
+
+            await importer.StartRowAsync(cancellationToken);
+            await importer.WriteAsync(path, NpgsqlDbType.Text, cancellationToken);
+        }
+
+        await importer.CompleteAsync(cancellationToken);
+    }
+
+    private async Task<(int MissingCount, int UnexpectedCount)> ApplyFindingsAsync(
+        NpgsqlConnection conn,
+        NpgsqlTransaction tx,
+        string storageKey,
+        CancellationToken cancellationToken)
+    {
+        var now = clock.GetCurrentInstant().ToDateTimeOffset();
+        await using var command = new NpgsqlCommand("""
+            WITH actual AS (
+                SELECT DISTINCT path
+                FROM tmp_fs_listing
+            ),
+            expected_content AS (
+                SELECT
+                    storage_path,
+                    fs_normalize_path(storage_path) AS normalized_path,
+                    media_guid
+                FROM media_content_id_versions
+                WHERE storage_key = @storage_key
+            ),
+            sidecars AS (
+                SELECT fs_normalize_path(path) AS normalized_path
+                FROM (
+                    SELECT thumbnail_storage_path AS path FROM metadata.media_metadata WHERE thumbnail_storage_path IS NOT NULL
+                    UNION
+                    SELECT storage_path FROM metadata.media_captions WHERE storage_path IS NOT NULL
+                    UNION
+                    SELECT avatar_storage_path FROM metadata.accounts WHERE avatar_storage_path IS NOT NULL
+                    UNION
+                    SELECT banner_storage_path FROM metadata.accounts WHERE banner_storage_path IS NOT NULL
+                    UNION
+                    SELECT info_json_storage_path FROM download_jobs WHERE info_json_storage_path IS NOT NULL
+                ) source
+            ),
+            expected_all AS (
+                SELECT normalized_path FROM expected_content
+                UNION
+                SELECT normalized_path FROM sidecars
+            ),
+            missing_rows AS (
+                SELECT
+                    storage_path,
+                    'MissingFile'::text AS finding_type,
+                    media_guid
+                FROM expected_content expected
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM actual
+                    WHERE actual.path = expected.normalized_path
+                )
+            ),
+            unexpected_rows AS (
+                SELECT
+                    actual.path AS storage_path,
+                    'UnexpectedFile'::text AS finding_type,
+                    NULL::uuid AS media_guid
+                FROM actual
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM expected_all expected
+                    WHERE expected.normalized_path = actual.path
+                )
+            ),
+            combined_findings AS (
+                SELECT storage_path, finding_type, media_guid FROM missing_rows
+                UNION ALL
+                SELECT storage_path, finding_type, media_guid FROM unexpected_rows
+            ),
+            new_findings AS (
+                SELECT DISTINCT ON (storage_path, finding_type)
+                    storage_path,
+                    finding_type,
+                    media_guid
+                FROM combined_findings
+                ORDER BY storage_path, finding_type
+            ),
+            upserted AS (
+                INSERT INTO filesystem_rescan_findings
+                    (storage_key, storage_path, finding_type, media_guid, detected_at, last_seen_at, resolved_at)
+                SELECT
+                    @storage_key,
+                    storage_path,
+                    finding_type,
+                    media_guid,
+                    @now,
+                    @now,
+                    NULL
+                FROM new_findings
+                ON CONFLICT (storage_key, storage_path, finding_type)
+                DO UPDATE SET
+                    media_guid = EXCLUDED.media_guid,
+                    last_seen_at = EXCLUDED.last_seen_at,
+                    resolved_at = NULL
+                RETURNING 1
+            ),
+            resolved AS (
+                UPDATE filesystem_rescan_findings existing
+                SET resolved_at = @now
+                WHERE existing.storage_key = @storage_key
+                  AND existing.resolved_at IS NULL
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM new_findings latest
+                      WHERE latest.storage_path = existing.storage_path
+                        AND latest.finding_type = existing.finding_type
+                  )
+                RETURNING 1
+            )
+            SELECT
+                COUNT(*) FILTER (WHERE finding_type = 'MissingFile')::int AS missing_count,
+                COUNT(*) FILTER (WHERE finding_type = 'UnexpectedFile')::int AS unexpected_count
+            FROM new_findings;
+            """, conn, tx);
+
+        command.Parameters.Add("@storage_key", NpgsqlDbType.Text).Value = storageKey;
+        command.Parameters.Add("@now", NpgsqlDbType.TimestampTz).Value = now;
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            return (0, 0);
+        }
+
+        return (reader.GetInt32(0), reader.GetInt32(1));
     }
 }

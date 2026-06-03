@@ -1,10 +1,10 @@
-using FluentStorage;
+using System.IO.Pipelines;
+using System.Text.Json;
 using FluentStorage.Blobs;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NodaTime;
-using Shared.Database;
 using Shared.Messaging;
 using Shared.Storage;
 
@@ -12,20 +12,21 @@ namespace Worker.Services;
 
 /// <summary>
 /// Reconciles the configured storage filesystems against the database. The Worker is the
-/// only service with blob-storage access, so it lists each storage, asks DataBridge for the
-/// expected inventory, and reports the differences (files missing from storage, and files
-/// present in storage that the database does not track) back to DataBridge for persistence.
+/// only service with blob-storage access, so it uploads each actual storage listing to the
+/// NATS object store and asks DataBridge to reconcile that listing inside Postgres.
 /// </summary>
 public sealed class FilesystemRescanConsumerService(
     IJetStreamConsumer consumer,
     IMessageBus messageBus,
+    Func<string, IObjectStore> objectStoreFactory,
     IBlobStorageProvider blobStorageProvider,
     IClock clock,
     ILogger<FilesystemRescanConsumerService> logger) : BackgroundService
 {
     private static readonly StreamName Stream = StreamName.From(BackgroundJobsTopology.StreamNameValue);
-    private static readonly TimeSpan InventoryTimeout = TimeSpan.FromSeconds(60);
-    private static readonly TimeSpan ReportTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan StorageKeysTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan ReconcileTimeout = TimeSpan.FromMinutes(15);
+    private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(10);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -37,6 +38,8 @@ public sealed class FilesystemRescanConsumerService(
             async context =>
             {
                 var message = context.Message;
+                using var heartbeatCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+                var heartbeatTask = RunHeartbeatAsync(context, heartbeatCts.Token);
                 try
                 {
                     await HandleAsync(message, stoppingToken);
@@ -48,6 +51,11 @@ public sealed class FilesystemRescanConsumerService(
                     await MarkFailureAsync(message.ScheduleKey);
                     await context.NackAsync();
                 }
+                finally
+                {
+                    await heartbeatCts.CancelAsync();
+                    await heartbeatTask;
+                }
             },
             options: null,
             cancellationToken: stoppingToken);
@@ -57,32 +65,28 @@ public sealed class FilesystemRescanConsumerService(
     {
         await MarkAttemptAsync(request.ScheduleKey);
 
-        var inventory = await messageBus.RequestAsync<FilesystemRescanInventoryRequest, FilesystemRescanInventoryResponse>(
-            FilesystemRescanSubjects.Inventory,
-            new FilesystemRescanInventoryRequest(),
-            InventoryTimeout,
+        var storageKeys = await messageBus.RequestAsync<FilesystemRescanStorageKeysRequest, FilesystemRescanStorageKeysResponse>(
+            FilesystemRescanSubjects.StorageKeys,
+            new FilesystemRescanStorageKeysRequest(),
+            StorageKeysTimeout,
             cancellationToken);
 
-        if (inventory is not { Success: true })
+        if (storageKeys is not { Success: true })
         {
-            throw new InvalidOperationException(inventory?.ErrorMessage ?? "Filesystem rescan inventory request failed.");
+            throw new InvalidOperationException(storageKeys?.ErrorMessage ?? "Filesystem rescan storage-key request failed.");
         }
 
-        var sidecarPaths = inventory.SidecarPaths
-            .Select(Normalize)
-            .ToHashSet(StringComparer.Ordinal);
-
         var failed = false;
-        foreach (var storage in inventory.Storages)
+        foreach (var storageKey in storageKeys.StorageKeys)
         {
             try
             {
-                await ReconcileStorageAsync(request.ScheduleKey, storage, sidecarPaths, cancellationToken);
+                await ReconcileStorageAsync(request.ScheduleKey, storageKey, cancellationToken);
             }
             catch (Exception ex)
             {
                 failed = true;
-                logger.LogError(ex, "Filesystem rescan failed for storage key {StorageKey}.", storage.StorageKey);
+                logger.LogError(ex, "Filesystem rescan failed for storage key {StorageKey}.", storageKey);
             }
         }
 
@@ -95,88 +99,143 @@ public sealed class FilesystemRescanConsumerService(
         logger.LogInformation(
             "Completed filesystem rescan {IdempotencyKey} across {Count} storage key(s).",
             request.IdempotencyKey,
-            inventory.Storages.Count);
+            storageKeys.StorageKeys.Count);
     }
 
     private async Task ReconcileStorageAsync(
         string scheduleKey,
-        FilesystemStorageInventoryDto storage,
-        IReadOnlySet<string> sidecarPaths,
+        string storageKey,
         CancellationToken cancellationToken)
     {
-        var blobStorage = await blobStorageProvider.GetAsync(storage.StorageKey, cancellationToken);
+        var objectStore = objectStoreFactory(BackgroundJobsTopology.FilesystemRescanObjectStoreBucket);
+        var objectKey = BuildObjectKey(scheduleKey, storageKey);
+        var pipe = new Pipe();
 
-        var blobs = await blobStorage.ListAsync(
-            new ListOptions { Recurse = true },
-            cancellationToken);
+        logger.LogInformation(
+            "Uploading filesystem listing for storage key {StorageKey} to object {ObjectKey}.",
+            storageKey,
+            objectKey);
 
-        var actualPaths = blobs
-            .Where(b => b.IsFile)
-            .Select(b => Normalize(b.FullPath))
-            .ToHashSet(StringComparer.Ordinal);
-
-        // Expected content files for this storage key, indexed by normalized path so we can
-        // both detect missing files and recognise known files during the unexpected-file sweep.
-        var expectedByNormalized = new Dictionary<string, FilesystemContentPathDto>(StringComparer.Ordinal);
-        foreach (var path in storage.Paths)
+        var putTask = objectStore.PutAsync(objectKey, pipe.Reader.AsStream(), cancellationToken);
+        try
         {
-            expectedByNormalized[Normalize(path.StoragePath)] = path;
-        }
-
-        var findings = new List<FilesystemRescanFindingDto>();
-
-        // Files the database expects but storage no longer has.
-        foreach (var (normalized, expected) in expectedByNormalized)
-        {
-            if (!actualPaths.Contains(normalized))
+            Exception? writeException = null;
+            try
             {
-                findings.Add(new FilesystemRescanFindingDto
-                {
-                    StoragePath = expected.StoragePath,
-                    FindingType = FilesystemRescanFindingType.MissingFile,
-                    MediaGuid = expected.MediaGuid
-                });
+                await WriteStorageListingAsync(storageKey, pipe.Writer.AsStream(leaveOpen: true), cancellationToken);
             }
-        }
-
-        // Files present in storage that the database does not track (added outside the workflow).
-        foreach (var blob in blobs.Where(b => b.IsFile))
-        {
-            var normalized = Normalize(blob.FullPath);
-            if (!expectedByNormalized.ContainsKey(normalized) && !sidecarPaths.Contains(normalized))
+            catch (Exception ex)
             {
-                findings.Add(new FilesystemRescanFindingDto
-                {
-                    StoragePath = blob.FullPath,
-                    FindingType = FilesystemRescanFindingType.UnexpectedFile
-                });
+                writeException = ex;
+                throw;
             }
+            finally
+            {
+                await pipe.Writer.CompleteAsync(writeException);
+            }
+
+            await putTask;
+        }
+        catch
+        {
+            try
+            {
+                await putTask;
+            }
+            catch
+            {
+                // The original write/upload failure is logged by the caller.
+            }
+
+            throw;
+        }
+        finally
+        {
+            await pipe.Reader.CompleteAsync();
         }
 
-        var response = await messageBus.RequestAsync<FilesystemRescanReportRequest, FilesystemRescanReportResponse>(
-            FilesystemRescanSubjects.Report,
-            new FilesystemRescanReportRequest
+        var response = await messageBus.RequestAsync<FilesystemRescanReconcileRequest, FilesystemRescanReconcileResponse>(
+            FilesystemRescanSubjects.Reconcile,
+            new FilesystemRescanReconcileRequest
             {
                 ScheduleKey = scheduleKey,
-                StorageKey = storage.StorageKey,
-                Findings = findings
+                StorageKey = storageKey,
+                ObjectBucket = BackgroundJobsTopology.FilesystemRescanObjectStoreBucket,
+                ObjectKey = objectKey
             },
-            ReportTimeout,
+            ReconcileTimeout,
             cancellationToken);
 
         if (response is not { Success: true })
         {
-            throw new InvalidOperationException(response?.ErrorMessage ?? "Filesystem rescan report request failed.");
+            throw new InvalidOperationException(response?.ErrorMessage ?? "Filesystem rescan reconcile request failed.");
         }
 
         logger.LogInformation(
             "Reconciled storage key {StorageKey}: {Missing} missing, {Unexpected} unexpected file(s).",
-            storage.StorageKey,
-            findings.Count(f => f.FindingType == FilesystemRescanFindingType.MissingFile),
-            findings.Count(f => f.FindingType == FilesystemRescanFindingType.UnexpectedFile));
+            storageKey,
+            response.MissingCount,
+            response.UnexpectedCount);
     }
 
-    private static string Normalize(string path) => StoragePath.Normalize(path);
+    private async Task WriteStorageListingAsync(
+        string storageKey,
+        Stream target,
+        CancellationToken cancellationToken)
+    {
+        var blobStorage = await blobStorageProvider.GetAsync(storageKey, cancellationToken);
+
+        logger.LogWarning(
+            "Filesystem rescan storage listing for {StorageKey} uses FluentStorage ListAsync, which materializes the backend listing before upload.",
+            storageKey);
+
+        var blobs = await blobStorage.ListAsync(new ListOptions { Recurse = true }, cancellationToken);
+        var count = 0;
+        await using var writer = new StreamWriter(target, leaveOpen: true);
+        foreach (var blob in blobs.Where(b => b.IsFile))
+        {
+            var normalized = StoragePathNormalizer.Normalize(blob.FullPath);
+            await writer.WriteLineAsync(JsonSerializer.Serialize(normalized).AsMemory(), cancellationToken);
+            count++;
+        }
+
+        await writer.FlushAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Uploaded {Count} normalized file path(s) for filesystem rescan storage key {StorageKey}.",
+            count,
+            storageKey);
+    }
+
+    private static string BuildObjectKey(string scheduleKey, string storageKey)
+        => string.Join(
+            '/',
+            EscapeKeyPart(scheduleKey),
+            EscapeKeyPart(storageKey),
+            $"{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid():N}.ndjson");
+
+    private static string EscapeKeyPart(string value)
+        => Uri.EscapeDataString(value).Replace("%", "_", StringComparison.Ordinal);
+
+    private async Task RunHeartbeatAsync<T>(IJsMessageContext<T> context, CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(HeartbeatInterval);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(cancellationToken))
+            {
+                await context.InProgressAsync(cancellationToken);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // normal shutdown
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Filesystem rescan in-progress heartbeat failed.");
+        }
+    }
 
     private Task MarkAttemptAsync(string scheduleKey)
         => messageBus.PublishAsync(ScheduleSubjects.MarkAttempt, new ScheduleMarkAttemptRequestMessage
