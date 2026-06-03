@@ -107,7 +107,7 @@ public sealed class FilesystemRescanConsumerService(
         CancellationToken cancellationToken)
     {
         var objectStore = objectStoreFactory(BackgroundJobsTopology.FilesystemRescanObjectStoreBucket);
-        var objectKey = BuildObjectKey(scheduleKey, storageKey);
+        var objectKey = BuildObjectKey(scheduleKey, storageKey, clock.GetCurrentInstant());
         var pipe = new Pipe();
 
         logger.LogInformation(
@@ -199,12 +199,12 @@ public sealed class FilesystemRescanConsumerService(
             storageKey);
     }
 
-    private static string BuildObjectKey(string scheduleKey, string storageKey)
+    private static string BuildObjectKey(string scheduleKey, string storageKey, Instant now)
         => string.Join(
             '/',
             EscapeKeyPart(scheduleKey),
             EscapeKeyPart(storageKey),
-            $"{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid():N}.ndjson");
+            $"{now.ToDateTimeOffset():yyyyMMddHHmmssfff}-{Guid.NewGuid():N}.ndjson");
 
     private static string EscapeKeyPart(string value)
         => Uri.EscapeDataString(value).Replace("%", "_", StringComparison.Ordinal);

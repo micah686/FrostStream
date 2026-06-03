@@ -16,6 +16,7 @@ public sealed class StorageCrudConsumerService(
     IMessageBus messageBus,
     IServiceScopeFactory scopeFactory,
     ISecretStore secretStore,
+    IClock clock,
     ILogger<StorageCrudConsumerService> logger) : BackgroundService
 {
     private const string DefaultStorageKey = "default";
@@ -326,7 +327,7 @@ public sealed class StorageCrudConsumerService(
 
             entity.Key = storageKey;
             entity.Description = description;
-            entity.LastUpdated = SystemClock.Instance.GetCurrentInstant();
+            entity.LastUpdated = clock.GetCurrentInstant();
             entity.ApplyStoredParameters(stored);
 
             await dbContext.SaveChangesAsync();

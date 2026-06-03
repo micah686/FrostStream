@@ -1,12 +1,10 @@
-using System.Text.Json;
 using Npgsql;
+using static DataBridge.NpgsqlDataReaderExtensions;
 
 namespace DataBridge.Search;
 
 public sealed class MediaDocumentQuery(NpgsqlDataSource dataSource) : IMediaDocumentQuery
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-
     public async Task<MediaDocument?> GetMediaByGuidAsync(Guid mediaGuid, CancellationToken ct = default)
     {
         await using var command = CreateMediaCommand("""
@@ -283,47 +281,4 @@ public sealed class MediaDocumentQuery(NpgsqlDataSource dataSource) : IMediaDocu
         return (documents, lastId);
     }
 
-    private static IReadOnlyList<T> GetJsonList<T>(NpgsqlDataReader reader, string name)
-    {
-        var value = GetNullableString(reader, name);
-        return string.IsNullOrWhiteSpace(value)
-            ? []
-            : JsonSerializer.Deserialize<IReadOnlyList<T>>(value, JsonOptions) ?? [];
-    }
-
-    private static Guid GetGuid(NpgsqlDataReader reader, string name)
-        => reader.GetGuid(reader.GetOrdinal(name));
-
-    private static string GetString(NpgsqlDataReader reader, string name)
-        => reader.GetString(reader.GetOrdinal(name));
-
-    private static string? GetNullableString(NpgsqlDataReader reader, string name)
-    {
-        var ordinal = reader.GetOrdinal(name);
-        return reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
-    }
-
-    private static bool GetBoolean(NpgsqlDataReader reader, string name)
-        => reader.GetBoolean(reader.GetOrdinal(name));
-
-    private static int? GetNullableInt32(NpgsqlDataReader reader, string name)
-    {
-        var ordinal = reader.GetOrdinal(name);
-        return reader.IsDBNull(ordinal) ? null : reader.GetInt32(ordinal);
-    }
-
-    private static long GetInt64(NpgsqlDataReader reader, string name)
-        => reader.GetInt64(reader.GetOrdinal(name));
-
-    private static long? GetNullableInt64(NpgsqlDataReader reader, string name)
-    {
-        var ordinal = reader.GetOrdinal(name);
-        return reader.IsDBNull(ordinal) ? null : reader.GetInt64(ordinal);
-    }
-
-    private static double? GetNullableDouble(NpgsqlDataReader reader, string name)
-    {
-        var ordinal = reader.GetOrdinal(name);
-        return reader.IsDBNull(ordinal) ? null : reader.GetDouble(ordinal);
-    }
 }

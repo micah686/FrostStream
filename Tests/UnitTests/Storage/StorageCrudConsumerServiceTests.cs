@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using NodaTime;
 using NSubstitute;
 using Shouldly;
 using Shared.Database;
@@ -25,6 +26,7 @@ public class StorageCrudConsumerServiceTests
             bus,
             services.GetRequiredService<IServiceScopeFactory>(),
             services.GetRequiredService<ISecretStore>(),
+            SystemClock.Instance,
             Substitute.For<ILogger<StorageCrudConsumerService>>());
 
         await service.StartAsync(CancellationToken.None);
@@ -61,6 +63,7 @@ public class StorageCrudConsumerServiceTests
             bus,
             services.GetRequiredService<IServiceScopeFactory>(),
             secrets,
+            SystemClock.Instance,
             Substitute.For<ILogger<StorageCrudConsumerService>>());
         await service.StartAsync(CancellationToken.None);
         await WaitForSubscriptionsAsync(bus);
@@ -150,6 +153,7 @@ public class StorageCrudConsumerServiceTests
             bus,
             services.GetRequiredService<IServiceScopeFactory>(),
             secrets,
+            SystemClock.Instance,
             Substitute.For<ILogger<StorageCrudConsumerService>>());
         await service.StartAsync(CancellationToken.None);
         await WaitForSubscriptionsAsync(bus);
@@ -203,6 +207,7 @@ public class StorageCrudConsumerServiceTests
             bus,
             services.GetRequiredService<IServiceScopeFactory>(),
             secrets,
+            SystemClock.Instance,
             Substitute.For<ILogger<StorageCrudConsumerService>>());
         await service.StartAsync(CancellationToken.None);
         await WaitForSubscriptionsAsync(bus);

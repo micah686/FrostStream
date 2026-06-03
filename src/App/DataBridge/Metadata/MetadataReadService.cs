@@ -1,5 +1,5 @@
 using System.Text;
-using System.Text.Json;
+using static DataBridge.NpgsqlDataReaderExtensions;
 using NodaTime;
 using Npgsql;
 using NpgsqlTypes;
@@ -9,8 +9,6 @@ namespace DataBridge.Metadata;
 
 public sealed class MetadataReadService(NpgsqlDataSource dataSource) : IMetadataReadService
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-
     public async Task<MetadataDetailDto?> GetDetailAsync(Guid mediaGuid, CancellationToken ct = default)
     {
         await using var command = dataSource.CreateCommand("""
@@ -490,14 +488,6 @@ public sealed class MetadataReadService(NpgsqlDataSource dataSource) : IMetadata
         return new TaxonomyListResult(items, total);
     }
 
-    private static IReadOnlyList<T> GetJsonList<T>(NpgsqlDataReader reader, string name)
-    {
-        var value = GetNullableString(reader, name);
-        return string.IsNullOrWhiteSpace(value)
-            ? []
-            : JsonSerializer.Deserialize<IReadOnlyList<T>>(value, JsonOptions) ?? [];
-    }
-
     private static string? Normalize(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
@@ -540,71 +530,6 @@ public sealed class MetadataReadService(NpgsqlDataSource dataSource) : IMetadata
     }
 
     private sealed record AccountCursor(string Handle, long Id);
-
-    private static bool IsDbNull(NpgsqlDataReader reader, string name)
-        => reader.IsDBNull(reader.GetOrdinal(name));
-
-    private static Guid GetGuid(NpgsqlDataReader reader, string name)
-        => reader.GetGuid(reader.GetOrdinal(name));
-
-    private static string GetString(NpgsqlDataReader reader, string name)
-        => reader.GetString(reader.GetOrdinal(name));
-
-    private static string? GetNullableString(NpgsqlDataReader reader, string name)
-    {
-        var ordinal = reader.GetOrdinal(name);
-        return reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
-    }
-
-    private static bool GetBoolean(NpgsqlDataReader reader, string name)
-        => reader.GetBoolean(reader.GetOrdinal(name));
-
-    private static int GetInt32(NpgsqlDataReader reader, string name)
-        => reader.GetInt32(reader.GetOrdinal(name));
-
-    private static int? GetNullableInt32(NpgsqlDataReader reader, string name)
-    {
-        var ordinal = reader.GetOrdinal(name);
-        return reader.IsDBNull(ordinal) ? null : reader.GetInt32(ordinal);
-    }
-
-    private static long GetInt64(NpgsqlDataReader reader, string name)
-        => reader.GetInt64(reader.GetOrdinal(name));
-
-    private static long? GetNullableInt64(NpgsqlDataReader reader, string name)
-    {
-        var ordinal = reader.GetOrdinal(name);
-        return reader.IsDBNull(ordinal) ? null : reader.GetInt64(ordinal);
-    }
-
-    private static double GetDouble(NpgsqlDataReader reader, string name)
-        => reader.GetDouble(reader.GetOrdinal(name));
-
-    private static double? GetNullableDouble(NpgsqlDataReader reader, string name)
-    {
-        var ordinal = reader.GetOrdinal(name);
-        return reader.IsDBNull(ordinal) ? null : reader.GetDouble(ordinal);
-    }
-
-    private static Instant GetInstant(NpgsqlDataReader reader, string name)
-        => ToInstant(reader.GetDateTime(reader.GetOrdinal(name)));
-
-    private static Instant? GetNullableInstant(NpgsqlDataReader reader, string name)
-    {
-        var ordinal = reader.GetOrdinal(name);
-        return reader.IsDBNull(ordinal) ? null : ToInstant(reader.GetDateTime(ordinal));
-    }
-
-    private static Instant ToInstant(DateTime value)
-    {
-        var utc = value.Kind switch
-        {
-            DateTimeKind.Utc => value,
-            DateTimeKind.Local => value.ToUniversalTime(),
-            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
-        };
-        return Instant.FromDateTimeUtc(utc);
-    }
 }
 
 file static class LongFormattingExtensions
