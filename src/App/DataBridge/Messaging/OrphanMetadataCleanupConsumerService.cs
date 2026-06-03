@@ -11,6 +11,7 @@ namespace DataBridge.Messaging;
 public sealed class OrphanMetadataCleanupExecutor
 {
     private const int RetentionDays = 30;
+    private const int MaxPageSize = 500;
     private static readonly TimeSpan WorkerRequestTimeout = TimeSpan.FromMinutes(5);
     private readonly NpgsqlDataSource _dataSource;
     private readonly IMessageBus _messageBus;
@@ -46,6 +47,177 @@ public sealed class OrphanMetadataCleanupExecutor
             deleteResult.Succeeded,
             deleteResult.Failed,
             deletedMediaCount);
+    }
+
+    public async Task<OrphanCleanupListResponse> ListAsync(
+        OrphanCleanupListRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (request.PageSize is < 1 or > MaxPageSize)
+        {
+            return FailureList("validation", $"Page size must be between 1 and {MaxPageSize}.");
+        }
+
+        if (request.Page < 1)
+        {
+            return FailureList("validation", "Page must be greater than zero.");
+        }
+
+        var offset = (request.Page - 1) * request.PageSize;
+        var items = new List<OrphanCleanupItemDto>();
+        await using var command = _dataSource.CreateCommand("""
+            SELECT
+                id,
+                item_kind,
+                state,
+                storage_key,
+                original_storage_path,
+                orphan_storage_path,
+                media_guid,
+                detected_at,
+                last_seen_at,
+                delete_after,
+                moved_at,
+                finalized_at,
+                resolved_at,
+                last_error,
+                created_at,
+                updated_at
+            FROM orphan_cleanup_items
+            WHERE (@kind IS NULL OR item_kind = @kind)
+              AND (@state IS NULL OR state = @state)
+            ORDER BY detected_at DESC, id DESC
+            LIMIT @limit
+            OFFSET @offset;
+            """);
+        command.Parameters.Add("kind", NpgsqlDbType.Text).Value = string.IsNullOrWhiteSpace(request.Kind) ? DBNull.Value : request.Kind;
+        command.Parameters.Add("state", NpgsqlDbType.Text).Value = string.IsNullOrWhiteSpace(request.State) ? DBNull.Value : request.State;
+        command.Parameters.AddWithValue("limit", request.PageSize);
+        command.Parameters.AddWithValue("offset", offset);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            items.Add(new OrphanCleanupItemDto
+            {
+                Id = reader.GetInt64(0),
+                Kind = reader.GetString(1),
+                State = reader.GetString(2),
+                StorageKey = reader.GetString(3),
+                OriginalStoragePath = reader.GetString(4),
+                OrphanStoragePath = reader.IsDBNull(5) ? null : reader.GetString(5),
+                MediaGuid = reader.IsDBNull(6) ? null : reader.GetGuid(6),
+                DetectedAt = reader.GetFieldValue<DateTimeOffset>(7),
+                LastSeenAt = reader.GetFieldValue<DateTimeOffset>(8),
+                DeleteAfter = reader.GetFieldValue<DateTimeOffset>(9),
+                MovedAt = reader.IsDBNull(10) ? null : reader.GetFieldValue<DateTimeOffset>(10),
+                FinalizedAt = reader.IsDBNull(11) ? null : reader.GetFieldValue<DateTimeOffset>(11),
+                ResolvedAt = reader.IsDBNull(12) ? null : reader.GetFieldValue<DateTimeOffset>(12),
+                LastError = reader.IsDBNull(13) ? null : reader.GetString(13),
+                CreatedAt = reader.GetFieldValue<DateTimeOffset>(14),
+                UpdatedAt = reader.GetFieldValue<DateTimeOffset>(15)
+            });
+        }
+
+        return new OrphanCleanupListResponse { Success = true, Items = items };
+    }
+
+    public async Task<RestoreOrphanResponse> RestoreFileOrphanAsync(
+        long orphanId,
+        Instant now,
+        CancellationToken cancellationToken = default)
+    {
+        var item = await LoadOrphanItemAsync(orphanId, cancellationToken);
+        if (item is null)
+        {
+            return FailureRestore("not_found", $"Orphan cleanup item '{orphanId}' was not found.");
+        }
+
+        var validationError = ValidateFileRestoreItem(item);
+        if (validationError is not null)
+        {
+            return validationError;
+        }
+
+        try
+        {
+            var response = await _messageBus.RequestAsync<RestoreOrphanedFileRequest, RestoreOrphanedFileResponse>(
+                OrphanCleanupSubjects.RestoreFile,
+                new RestoreOrphanedFileRequest
+                {
+                    OrphanId = item.Id,
+                    StorageKey = item.StorageKey,
+                    OrphanStoragePath = item.OrphanStoragePath!,
+                    OriginalStoragePath = item.OriginalStoragePath
+                },
+                WorkerRequestTimeout,
+                cancellationToken);
+
+            if (response is not { Success: true })
+            {
+                return FailureRestore(response?.ErrorCode ?? "unavailable", response?.ErrorMessage ?? "Worker did not respond.");
+            }
+
+            await MarkFileOrphanRestoredAsync(item, now, cancellationToken);
+            return new RestoreOrphanResponse { Success = true };
+        }
+        catch (Exception ex)
+        {
+            return FailureRestore("unavailable", ex.Message);
+        }
+    }
+
+    public async Task<RestoreOrphanResponse> RestoreMetadataOrphanAsync(
+        long orphanId,
+        Instant now,
+        CancellationToken cancellationToken = default)
+    {
+        var item = await LoadOrphanItemAsync(orphanId, cancellationToken);
+        if (item is null)
+        {
+            return FailureRestore("not_found", $"Orphan cleanup item '{orphanId}' was not found.");
+        }
+
+        var validationError = ValidateMetadataRestoreItem(item);
+        if (validationError is not null)
+        {
+            return validationError;
+        }
+
+        if (!await ContentVersionExistsAsync(item, cancellationToken))
+        {
+            return FailureRestore("conflict", "Expected media content version row is missing.");
+        }
+
+        try
+        {
+            var existsResponse = await _messageBus.RequestAsync<OrphanFileExistsRequest, OrphanFileExistsResponse>(
+                OrphanCleanupSubjects.FileExists,
+                new OrphanFileExistsRequest
+                {
+                    StorageKey = item.StorageKey,
+                    StoragePath = item.OriginalStoragePath
+                },
+                WorkerRequestTimeout,
+                cancellationToken);
+
+            if (existsResponse is not { Success: true })
+            {
+                return FailureRestore(existsResponse?.ErrorCode ?? "unavailable", existsResponse?.ErrorMessage ?? "Worker did not respond.");
+            }
+
+            if (!existsResponse.Exists)
+            {
+                return FailureRestore("conflict", "Expected file is still missing from storage.");
+            }
+
+            await MarkMetadataOrphanRestoredAsync(item, now, cancellationToken);
+            return new RestoreOrphanResponse { Success = true };
+        }
+        catch (Exception ex)
+        {
+            return FailureRestore("unavailable", ex.Message);
+        }
     }
 
     private async Task<(long MetadataWithoutMediaCount, long MediaWithoutMetadataCount)> RecordCurrentFindingsAsync(
@@ -432,6 +604,120 @@ public sealed class OrphanMetadataCleanupExecutor
     private async Task MarkDeleteFailedAsync(long id, string error, Instant now, CancellationToken cancellationToken)
         => await UpdateItemAsync(id, "delete_failed", now, cancellationToken, error: error);
 
+    private async Task MarkFileOrphanRestoredAsync(OrphanCleanupItem item, Instant now, CancellationToken cancellationToken)
+    {
+        await using var command = _dataSource.CreateCommand("""
+            WITH restored AS (
+                UPDATE orphan_cleanup_items
+                SET
+                    state = 'resolved',
+                    resolved_at = @now,
+                    last_error = NULL,
+                    updated_at = @now
+                WHERE id = @id
+                  AND item_kind = 'media_without_metadata'
+                  AND state IN ('moved', 'delete_failed')
+                  AND finalized_at IS NULL
+                  AND orphan_storage_path IS NOT NULL
+                RETURNING storage_key, original_storage_path
+            )
+            UPDATE filesystem_rescan_findings finding
+            SET resolved_at = @now
+            FROM restored
+            WHERE finding.finding_type = 'UnexpectedFile'
+              AND finding.resolved_at IS NULL
+              AND finding.storage_key = restored.storage_key
+              AND finding.storage_path = restored.original_storage_path;
+            """);
+        command.Parameters.AddWithValue("id", item.Id);
+        command.Parameters.AddWithValue("now", now.ToDateTimeOffset());
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private async Task MarkMetadataOrphanRestoredAsync(OrphanCleanupItem item, Instant now, CancellationToken cancellationToken)
+    {
+        await using var command = _dataSource.CreateCommand("""
+            WITH restored AS (
+                UPDATE orphan_cleanup_items
+                SET
+                    state = 'resolved',
+                    resolved_at = @now,
+                    last_error = NULL,
+                    updated_at = @now
+                WHERE id = @id
+                  AND item_kind = 'metadata_without_media'
+                  AND state IN ('detected', 'delete_failed')
+                  AND finalized_at IS NULL
+                  AND media_guid IS NOT NULL
+                RETURNING storage_key, original_storage_path, media_guid
+            )
+            UPDATE filesystem_rescan_findings finding
+            SET resolved_at = @now
+            FROM restored
+            WHERE finding.finding_type = 'MissingFile'
+              AND finding.resolved_at IS NULL
+              AND finding.media_guid = restored.media_guid
+              AND finding.storage_key = restored.storage_key
+              AND finding.storage_path = restored.original_storage_path;
+            """);
+        command.Parameters.AddWithValue("id", item.Id);
+        command.Parameters.AddWithValue("now", now.ToDateTimeOffset());
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private async Task<OrphanCleanupItem?> LoadOrphanItemAsync(long orphanId, CancellationToken cancellationToken)
+    {
+        await using var command = _dataSource.CreateCommand("""
+            SELECT
+                id,
+                item_kind,
+                state,
+                storage_key,
+                original_storage_path,
+                orphan_storage_path,
+                media_guid,
+                finalized_at,
+                resolved_at
+            FROM orphan_cleanup_items
+            WHERE id = @id;
+            """);
+        command.Parameters.AddWithValue("id", orphanId);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            return null;
+        }
+
+        return new OrphanCleanupItem(
+            reader.GetInt64(0),
+            reader.GetString(1),
+            reader.GetString(2),
+            reader.GetString(3),
+            reader.GetString(4),
+            reader.IsDBNull(5) ? null : reader.GetString(5),
+            reader.IsDBNull(6) ? null : reader.GetGuid(6),
+            reader.IsDBNull(7) ? null : reader.GetFieldValue<DateTimeOffset>(7),
+            reader.IsDBNull(8) ? null : reader.GetFieldValue<DateTimeOffset>(8));
+    }
+
+    private async Task<bool> ContentVersionExistsAsync(OrphanCleanupItem item, CancellationToken cancellationToken)
+    {
+        await using var command = _dataSource.CreateCommand("""
+            SELECT EXISTS (
+                SELECT 1
+                FROM media_content_id_versions
+                WHERE media_guid = @media_guid
+                  AND storage_key = @storage_key
+                  AND storage_path = @storage_path
+            );
+            """);
+        command.Parameters.AddWithValue("media_guid", item.MediaGuid!.Value);
+        command.Parameters.AddWithValue("storage_key", item.StorageKey);
+        command.Parameters.AddWithValue("storage_path", item.OriginalStoragePath);
+        return (bool)(await command.ExecuteScalarAsync(cancellationToken) ?? false);
+    }
+
     private async Task UpdateItemAsync(
         long id,
         string state,
@@ -480,6 +766,73 @@ public sealed class OrphanMetadataCleanupExecutor
 
     private sealed record DeleteFileCandidate(long Id, string StorageKey, string OrphanStoragePath);
 
+    private sealed record OrphanCleanupItem(
+        long Id,
+        string ItemKind,
+        string State,
+        string StorageKey,
+        string OriginalStoragePath,
+        string? OrphanStoragePath,
+        Guid? MediaGuid,
+        DateTimeOffset? FinalizedAt,
+        DateTimeOffset? ResolvedAt);
+
+    private static RestoreOrphanResponse? ValidateFileRestoreItem(OrphanCleanupItem item)
+    {
+        if (item.ItemKind != "media_without_metadata")
+        {
+            return FailureRestore("conflict", "Only media-without-metadata orphan rows can restore files.");
+        }
+
+        if (item.State is not ("moved" or "delete_failed"))
+        {
+            return FailureRestore("conflict", "File restore is only allowed for moved or delete-failed orphan rows.");
+        }
+
+        if (item.FinalizedAt is not null || item.ResolvedAt is not null)
+        {
+            return FailureRestore("conflict", "Finalized or resolved orphan rows cannot be restored.");
+        }
+
+        if (string.IsNullOrWhiteSpace(item.OrphanStoragePath))
+        {
+            return FailureRestore("conflict", "File orphan row does not have an orphan storage path.");
+        }
+
+        return null;
+    }
+
+    private static RestoreOrphanResponse? ValidateMetadataRestoreItem(OrphanCleanupItem item)
+    {
+        if (item.ItemKind != "metadata_without_media")
+        {
+            return FailureRestore("conflict", "Only metadata-without-media orphan rows can restore metadata.");
+        }
+
+        if (item.State is not ("detected" or "delete_failed"))
+        {
+            return FailureRestore("conflict", "Metadata restore is only allowed for detected or delete-failed orphan rows.");
+        }
+
+        if (item.FinalizedAt is not null || item.ResolvedAt is not null)
+        {
+            return FailureRestore("conflict", "Finalized or resolved orphan rows cannot be restored.");
+        }
+
+        if (item.MediaGuid is null)
+        {
+            return FailureRestore("conflict", "Metadata orphan row does not have a media guid.");
+        }
+
+        return null;
+    }
+
+    private static OrphanCleanupListResponse FailureList(string errorCode, string errorMessage)
+        => new() { Success = false, ErrorCode = errorCode, ErrorMessage = errorMessage };
+
+    private static RestoreOrphanResponse FailureRestore(string errorCode, string errorMessage)
+        => new() { Success = false, ErrorCode = errorCode, ErrorMessage = errorMessage };
+
     private sealed class UnavailableMessageBus : IMessageBus
     {
         public Task PublishAsync<T>(string subject, T message, CancellationToken cancellationToken = default)
@@ -513,6 +866,114 @@ public sealed record OrphanMetadataCleanupResult(
     long DeletedFileCount,
     long FileDeleteFailedCount,
     long DeletedMediaCount);
+
+public sealed class OrphanCleanupAdminConsumerService(
+    IMessageBus messageBus,
+    OrphanMetadataCleanupExecutor cleanupExecutor,
+    IClock clock,
+    ILogger<OrphanCleanupAdminConsumerService> logger) : BackgroundService
+{
+    private const string QueueGroup = "databridge-orphan-cleanup-admin";
+    private readonly List<ISubscription> _subscriptions = [];
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        _subscriptions.Add(await messageBus.SubscribeAsync<OrphanCleanupListRequest>(
+            OrphanCleanupSubjects.AdminList,
+            HandleListAsync,
+            QueueGroup,
+            stoppingToken));
+        _subscriptions.Add(await messageBus.SubscribeAsync<RestoreOrphanRequest>(
+            OrphanCleanupSubjects.AdminRestoreFile,
+            HandleRestoreFileAsync,
+            QueueGroup,
+            stoppingToken));
+        _subscriptions.Add(await messageBus.SubscribeAsync<RestoreOrphanRequest>(
+            OrphanCleanupSubjects.AdminRestoreMetadata,
+            HandleRestoreMetadataAsync,
+            QueueGroup,
+            stoppingToken));
+
+        logger.LogInformation("Subscribed to orphan cleanup admin requests.");
+
+        try
+        {
+            await Task.Delay(Timeout.Infinite, stoppingToken);
+        }
+        catch (OperationCanceledException)
+        {
+            // graceful shutdown
+        }
+    }
+
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        foreach (var subscription in _subscriptions)
+        {
+            await subscription.StopAsync(cancellationToken);
+            await subscription.DisposeAsync();
+        }
+
+        _subscriptions.Clear();
+        await base.StopAsync(cancellationToken);
+    }
+
+    private async Task HandleListAsync(IMessageContext<OrphanCleanupListRequest> context)
+    {
+        try
+        {
+            await context.RespondAsync(await cleanupExecutor.ListAsync(context.Message));
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed listing orphan cleanup items.");
+            await context.RespondAsync(new OrphanCleanupListResponse
+            {
+                Success = false,
+                ErrorCode = "internal_error",
+                ErrorMessage = "Internal orphan cleanup service error."
+            });
+        }
+    }
+
+    private async Task HandleRestoreFileAsync(IMessageContext<RestoreOrphanRequest> context)
+    {
+        try
+        {
+            await context.RespondAsync(await cleanupExecutor.RestoreFileOrphanAsync(
+                context.Message.OrphanId,
+                clock.GetCurrentInstant()));
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed restoring orphan file row {OrphanId}.", context.Message.OrphanId);
+            await context.RespondAsync(InternalRestoreError());
+        }
+    }
+
+    private async Task HandleRestoreMetadataAsync(IMessageContext<RestoreOrphanRequest> context)
+    {
+        try
+        {
+            await context.RespondAsync(await cleanupExecutor.RestoreMetadataOrphanAsync(
+                context.Message.OrphanId,
+                clock.GetCurrentInstant()));
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed restoring orphan metadata row {OrphanId}.", context.Message.OrphanId);
+            await context.RespondAsync(InternalRestoreError());
+        }
+    }
+
+    private static RestoreOrphanResponse InternalRestoreError()
+        => new()
+        {
+            Success = false,
+            ErrorCode = "internal_error",
+            ErrorMessage = "Internal orphan cleanup service error."
+        };
+}
 
 /// <summary>
 /// Finalizes media whose content files have remained missing long enough for

@@ -128,6 +128,7 @@ class Program
         builder.Services.AddHostedService<OptionPresetCrudConsumerService>();
         builder.Services.AddHostedService<ScheduleCrudConsumerService>();
         builder.Services.AddHostedService<CreatorDiscoveryConsumerService>();
+        builder.Services.AddHostedService<OrphanCleanupAdminConsumerService>();
         builder.Services.AddHostedService<OrphanMetadataCleanupConsumerService>();
         builder.Services.AddHostedService<FilesystemRescanConsumerService>();
         builder.Services.AddHostedService<BackgroundJobConsumerService>();
