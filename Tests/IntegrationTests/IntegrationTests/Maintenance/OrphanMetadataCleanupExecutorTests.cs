@@ -2,10 +2,12 @@ using DataBridge.Messaging;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using FluentMigrator.Runner;
+using FlySwattr.NATS.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using NodaTime;
 using Shouldly;
+using Shared.Messaging;
 using TUnit.Core;
 
 namespace IntegrationTests.Maintenance;
@@ -46,12 +48,13 @@ public sealed class OrphanMetadataCleanupExecutorTests
         await Fixture.SeedMissingFindingAsync(mediaGuid, "storage-a", "media/a.mp4", Fixture.OldFinding);
         await Fixture.SeedMissingFindingAsync(mediaGuid, "storage-a", "media/a-2.mp4", Fixture.OldFinding);
 
-        var result = await Fixture.Executor.CleanupAsync(Fixture.Cutoff);
+        var result = await Fixture.CreateExecutor().CleanupAsync(Fixture.Now);
 
-        result.CandidateCount.ShouldBe(1);
-        result.DeletedCount.ShouldBe(1);
+        result.RecordedMetadataWithoutMediaCount.ShouldBe(2);
+        result.DeletedMediaCount.ShouldBe(1);
         (await Fixture.CountAsync("media", "media_guid = @media_guid", mediaGuid)).ShouldBe(0);
         (await Fixture.CountAsync("metadata.media_base", "media_guid = @media_guid", mediaGuid)).ShouldBe(0);
+        (await Fixture.CountOrphansAsync("metadata_without_media", "finalized")).ShouldBe(2);
     }
 
     [Test]
@@ -64,11 +67,12 @@ public sealed class OrphanMetadataCleanupExecutorTests
         ]);
         await Fixture.SeedMissingFindingAsync(mediaGuid, "storage-a", "media/a.mp4", Fixture.OldFinding);
 
-        var result = await Fixture.Executor.CleanupAsync(Fixture.Cutoff);
+        var result = await Fixture.CreateExecutor().CleanupAsync(Fixture.Now);
 
-        result.CandidateCount.ShouldBe(0);
-        result.DeletedCount.ShouldBe(0);
+        result.RecordedMetadataWithoutMediaCount.ShouldBe(1);
+        result.DeletedMediaCount.ShouldBe(0);
         (await Fixture.CountAsync("media", "media_guid = @media_guid", mediaGuid)).ShouldBe(1);
+        (await Fixture.CountOrphansAsync("metadata_without_media", "detected")).ShouldBe(1);
     }
 
     [Test]
@@ -78,11 +82,12 @@ public sealed class OrphanMetadataCleanupExecutorTests
         await Fixture.SeedMediaAsync(mediaGuid, [new ContentVersion("storage-a", "media/a.mp4", 1)]);
         await Fixture.SeedMissingFindingAsync(mediaGuid, "storage-a", "media/a.mp4", Fixture.NewFinding);
 
-        var result = await Fixture.Executor.CleanupAsync(Fixture.Cutoff);
+        var result = await Fixture.CreateExecutor().CleanupAsync(Fixture.Now);
 
-        result.CandidateCount.ShouldBe(0);
-        result.DeletedCount.ShouldBe(0);
+        result.RecordedMetadataWithoutMediaCount.ShouldBe(1);
+        result.DeletedMediaCount.ShouldBe(0);
         (await Fixture.CountAsync("media", "media_guid = @media_guid", mediaGuid)).ShouldBe(1);
+        (await Fixture.CountOrphansAsync("metadata_without_media", "detected")).ShouldBe(1);
     }
 
     [Test]
@@ -97,10 +102,10 @@ public sealed class OrphanMetadataCleanupExecutorTests
             Fixture.OldFinding,
             resolvedAt: Fixture.Now);
 
-        var result = await Fixture.Executor.CleanupAsync(Fixture.Cutoff);
+        var result = await Fixture.CreateExecutor().CleanupAsync(Fixture.Now);
 
-        result.CandidateCount.ShouldBe(0);
-        result.DeletedCount.ShouldBe(0);
+        result.RecordedMetadataWithoutMediaCount.ShouldBe(0);
+        result.DeletedMediaCount.ShouldBe(0);
         (await Fixture.CountAsync("media", "media_guid = @media_guid", mediaGuid)).ShouldBe(1);
     }
 
@@ -112,11 +117,52 @@ public sealed class OrphanMetadataCleanupExecutorTests
         await Fixture.SeedMissingFindingAsync(mediaGuid, "storage-a", "media/a.mp4", Fixture.OldFinding);
         await Fixture.SeedLatestJobAsync(mediaGuid, "upload_pending");
 
-        var result = await Fixture.Executor.CleanupAsync(Fixture.Cutoff);
+        var result = await Fixture.CreateExecutor().CleanupAsync(Fixture.Now);
 
-        result.CandidateCount.ShouldBe(0);
-        result.DeletedCount.ShouldBe(0);
+        result.RecordedMetadataWithoutMediaCount.ShouldBe(1);
+        result.DeletedMediaCount.ShouldBe(0);
         (await Fixture.CountAsync("media", "media_guid = @media_guid", mediaGuid)).ShouldBe(1);
+        (await Fixture.CountOrphansAsync("metadata_without_media", "detected")).ShouldBe(1);
+    }
+
+    [Test]
+    public async Task CleanupAsync_Records_And_Moves_Unexpected_Primary_Media_File()
+    {
+        await Fixture.SeedUnexpectedFindingAsync("storage-a", "loose/video.mp4", Fixture.NewFinding);
+        await Fixture.SeedUnexpectedFindingAsync("storage-a", "loose/info.json", Fixture.NewFinding);
+        var bus = new FakeMessageBus
+        {
+            MoveResponse = new MoveOrphanedFileResponse { Success = true }
+        };
+
+        var result = await Fixture.CreateExecutor(bus).CleanupAsync(Fixture.Now);
+
+        result.RecordedMediaWithoutMetadataCount.ShouldBe(1);
+        result.MovedFileCount.ShouldBe(1);
+        result.MoveFailedCount.ShouldBe(0);
+        bus.MoveRequests.Count.ShouldBe(1);
+        bus.MoveRequests[0].OriginalStoragePath.ShouldBe("loose/video.mp4");
+        bus.MoveRequests[0].OrphanStoragePath.ShouldStartWith("orphaned/20260503/");
+        (await Fixture.CountOrphansAsync("media_without_metadata", "moved")).ShouldBe(1);
+        (await Fixture.CountOrphansAsync("media_without_metadata", "detected")).ShouldBe(0);
+    }
+
+    [Test]
+    public async Task CleanupAsync_Deletes_Expired_Moved_File_Orphan()
+    {
+        await Fixture.SeedMovedFileOrphanAsync("storage-a", "loose/video.mp4", "orphaned/20260501/1/video.mp4", Fixture.OldFinding);
+        var bus = new FakeMessageBus
+        {
+            DeleteResponse = new DeleteOrphanedFileResponse { Success = true }
+        };
+
+        var result = await Fixture.CreateExecutor(bus).CleanupAsync(Fixture.Now);
+
+        result.DeletedFileCount.ShouldBe(1);
+        result.FileDeleteFailedCount.ShouldBe(0);
+        bus.DeleteRequests.Count.ShouldBe(1);
+        bus.DeleteRequests[0].OrphanStoragePath.ShouldBe("orphaned/20260501/1/video.mp4");
+        (await Fixture.CountOrphansAsync("media_without_metadata", "finalized")).ShouldBe(1);
     }
 
     private sealed record ContentVersion(string StorageKey, string StoragePath, int Version);
@@ -138,7 +184,8 @@ public sealed class OrphanMetadataCleanupExecutorTests
         public Instant Cutoff => Now.Minus(Duration.FromDays(30));
         public Instant OldFinding => Cutoff.Minus(Duration.FromDays(1));
         public Instant NewFinding => Cutoff.Plus(Duration.FromDays(1));
-        public OrphanMetadataCleanupExecutor Executor => new(DataSource);
+        public OrphanMetadataCleanupExecutor CreateExecutor(IMessageBus? messageBus = null)
+            => messageBus is null ? new OrphanMetadataCleanupExecutor(DataSource) : new OrphanMetadataCleanupExecutor(DataSource, messageBus);
 
         private string ConnectionString =>
             $"Host=127.0.0.1;Port={_postgresContainer.GetMappedPublicPort(5432)};Database=froststream_orphan_cleanup_tests;Username=postgres;Password=postgres";
@@ -164,7 +211,7 @@ public sealed class OrphanMetadataCleanupExecutorTests
         public async Task ResetAsync()
         {
             await using var command = DataSource.CreateCommand(
-                "TRUNCATE TABLE filesystem_rescan_findings, media, download_jobs RESTART IDENTITY CASCADE;");
+                "TRUNCATE TABLE orphan_cleanup_items, filesystem_rescan_findings, media, download_jobs RESTART IDENTITY CASCADE;");
             await command.ExecuteNonQueryAsync();
         }
 
@@ -232,6 +279,47 @@ public sealed class OrphanMetadataCleanupExecutorTests
             await command.ExecuteNonQueryAsync();
         }
 
+        public async Task SeedUnexpectedFindingAsync(
+            string storageKey,
+            string storagePath,
+            Instant detectedAt,
+            Instant? resolvedAt = null)
+        {
+            await using var command = DataSource.CreateCommand("""
+                INSERT INTO filesystem_rescan_findings
+                    (storage_key, storage_path, finding_type, media_guid, detected_at, last_seen_at, resolved_at)
+                VALUES
+                    (@storage_key, @storage_path, 'UnexpectedFile', NULL, @detected_at, @last_seen_at, @resolved_at);
+                """);
+            command.Parameters.AddWithValue("storage_key", storageKey);
+            command.Parameters.AddWithValue("storage_path", storagePath);
+            command.Parameters.AddWithValue("detected_at", detectedAt.ToDateTimeOffset());
+            command.Parameters.AddWithValue("last_seen_at", detectedAt.ToDateTimeOffset());
+            command.Parameters.AddWithValue("resolved_at", (object?)resolvedAt?.ToDateTimeOffset() ?? DBNull.Value);
+            await command.ExecuteNonQueryAsync();
+        }
+
+        public async Task SeedMovedFileOrphanAsync(
+            string storageKey,
+            string originalStoragePath,
+            string orphanStoragePath,
+            Instant detectedAt)
+        {
+            await using var command = DataSource.CreateCommand("""
+                INSERT INTO orphan_cleanup_items
+                    (item_kind, state, storage_key, original_storage_path, orphan_storage_path, detected_at, last_seen_at, delete_after, moved_at, created_at, updated_at)
+                VALUES
+                    ('media_without_metadata', 'moved', @storage_key, @original_storage_path, @orphan_storage_path, @detected_at, @detected_at, @delete_after, @moved_at, @moved_at, @moved_at);
+                """);
+            command.Parameters.AddWithValue("storage_key", storageKey);
+            command.Parameters.AddWithValue("original_storage_path", originalStoragePath);
+            command.Parameters.AddWithValue("orphan_storage_path", orphanStoragePath);
+            command.Parameters.AddWithValue("detected_at", detectedAt.ToDateTimeOffset());
+            command.Parameters.AddWithValue("delete_after", detectedAt.Plus(Duration.FromDays(30)).ToDateTimeOffset());
+            command.Parameters.AddWithValue("moved_at", detectedAt.ToDateTimeOffset());
+            await command.ExecuteNonQueryAsync();
+        }
+
         public async Task SeedLatestJobAsync(Guid mediaGuid, string state)
         {
             var jobId = Guid.NewGuid();
@@ -274,6 +362,19 @@ public sealed class OrphanMetadataCleanupExecutorTests
         {
             await using var command = DataSource.CreateCommand($"SELECT count(*)::bigint FROM {table} WHERE {whereClause};");
             command.Parameters.AddWithValue("media_guid", mediaGuid);
+            return (long)(await command.ExecuteScalarAsync() ?? 0L);
+        }
+
+        public async Task<long> CountOrphansAsync(string itemKind, string state)
+        {
+            await using var command = DataSource.CreateCommand("""
+                SELECT count(*)::bigint
+                FROM orphan_cleanup_items
+                WHERE item_kind = @item_kind
+                  AND state = @state;
+                """);
+            command.Parameters.AddWithValue("item_kind", itemKind);
+            command.Parameters.AddWithValue("state", state);
             return (long)(await command.ExecuteScalarAsync() ?? 0L);
         }
 
@@ -321,6 +422,48 @@ public sealed class OrphanMetadataCleanupExecutorTests
             }
 
             throw new TimeoutException("PostgreSQL container did not become reachable in time.");
+        }
+    }
+
+    private sealed class FakeMessageBus : IMessageBus
+    {
+        public MoveOrphanedFileResponse? MoveResponse { get; init; }
+        public DeleteOrphanedFileResponse? DeleteResponse { get; init; }
+        public List<MoveOrphanedFileRequest> MoveRequests { get; } = [];
+        public List<DeleteOrphanedFileRequest> DeleteRequests { get; } = [];
+
+        public Task PublishAsync<T>(string subject, T message, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task PublishAsync<T>(string subject, T message, MessageHeaders? headers, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task<ISubscription> SubscribeAsync<T>(
+            string subject,
+            Func<IMessageContext<T>, Task> handler,
+            string? queueGroup = null,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<TResponse?> RequestAsync<TRequest, TResponse>(
+            string subject,
+            TRequest request,
+            TimeSpan timeout,
+            CancellationToken cancellationToken = default)
+        {
+            if (request is MoveOrphanedFileRequest move)
+            {
+                MoveRequests.Add(move);
+                return Task.FromResult((TResponse?)(object?)MoveResponse);
+            }
+
+            if (request is DeleteOrphanedFileRequest delete)
+            {
+                DeleteRequests.Add(delete);
+                return Task.FromResult((TResponse?)(object?)DeleteResponse);
+            }
+
+            throw new NotSupportedException(subject);
         }
     }
 }
