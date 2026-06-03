@@ -105,6 +105,7 @@ class Program
         builder.Services.AddScoped<IOptionPresetsRepository, OptionPresetsRepository>();
         builder.Services.AddScoped<IScheduledTasksRepository, ScheduledTasksRepository>();
         builder.Services.AddScoped<ICreatorDiscoveryRepository, CreatorDiscoveryRepository>();
+        builder.Services.AddSingleton<OrphanMetadataCleanupExecutor>();
 
         builder.Services.AddTypesenseClient(config =>
         {
