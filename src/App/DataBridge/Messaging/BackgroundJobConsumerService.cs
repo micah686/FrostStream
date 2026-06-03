@@ -116,18 +116,7 @@ public sealed class BackgroundJobConsumerService(
                         FROM media_source_versions sv
                         JOIN download_jobs dj ON dj.job_id = sv.latest_job_id
                         WHERE sv.media_guid = m.media_guid
-                        AND dj.state IN (
-                            'queued',
-                            'metadata_pending',
-                            'metadata_resolved',
-                            'download_pending',
-                            'downloaded_temp',
-                            'upload_pending',
-                            'uploaded',
-                            'commit_pending',
-                            'compensating',
-                            'failed_transient'
-                        )
+                        AND dj.state::text = ANY(@active_download_job_states)
                     )
                 ),
                 deleted AS (
@@ -138,6 +127,7 @@ public sealed class BackgroundJobConsumerService(
                 )
                 SELECT count(*)::bigint FROM deleted;
                 """);
+            DownloadJobStateSql.AddActiveStatesParameter(command);
             command.CommandTimeout = 0;
             var deletedCount = (long)(await command.ExecuteScalarAsync() ?? 0L);
             await MarkSuccessAsync(message);

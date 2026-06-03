@@ -451,6 +451,14 @@ public sealed class DownloadCommandsConsumerService(
     private Task Publish<T>(string subject, T message) where T : IFlowMessage
         => publisher.PublishAsync(subject, message, messageId: message.MessageId.ToString("N"));
 
+    private Task PublishFailureAsync<TCommand, TFailure>(
+        string subject,
+        TCommand command,
+        Func<FailureEnvelope, TFailure> factory)
+        where TCommand : IFlowMessage
+        where TFailure : IFlowMessage
+        => Publish(subject, factory(FailureEnvelope.From(command, clock)));
+
     private static Instant? ResolveSourceLastModified(VideoInfo info)
     {
         if (info.ModifiedTimestamp is { } modifiedTimestamp)
@@ -471,15 +479,15 @@ public sealed class DownloadCommandsConsumerService(
     }
 
     private Task PublishMetadataFailedAsync(FetchMetadataCommand cmd, Exception ex, FailureKind failureKind)
-        => Publish(DownloadSubjects.MetadataFetchFailed, new MetadataFetchFailed
+        => PublishFailureAsync(DownloadSubjects.MetadataFetchFailed, cmd, envelope => new MetadataFetchFailed
         {
-            JobId = cmd.JobId,
-            CorrelationId = cmd.CorrelationId,
-            CausationId = cmd.MessageId,
-            MessageId = DeterministicGuid.Create(cmd.MessageId, "/failed"),
-            OperationKey = $"{cmd.OperationKey}/failed",
-            OccurredAt = clock.GetCurrentInstant(),
-            Attempt = cmd.Attempt,
+            JobId = envelope.JobId,
+            CorrelationId = envelope.CorrelationId,
+            CausationId = envelope.CausationId,
+            MessageId = envelope.MessageId,
+            OperationKey = envelope.OperationKey,
+            OccurredAt = envelope.OccurredAt,
+            Attempt = envelope.Attempt,
             FailureKind = failureKind,
             ErrorCode = YtDlpFailureDetails.ErrorCode(ex),
             ErrorMessage = YtDlpFailureDetails.DescribeException(ex)
@@ -490,15 +498,15 @@ public sealed class DownloadCommandsConsumerService(
         Exception ex,
         FailureKind failureKind,
         string? tempFileRef)
-        => Publish(DownloadSubjects.DownloadFailed, new DownloadFailed
+        => PublishFailureAsync(DownloadSubjects.DownloadFailed, cmd, envelope => new DownloadFailed
         {
-            JobId = cmd.JobId,
-            CorrelationId = cmd.CorrelationId,
-            CausationId = cmd.MessageId,
-            MessageId = DeterministicGuid.Create(cmd.MessageId, "/failed"),
-            OperationKey = $"{cmd.OperationKey}/failed",
-            OccurredAt = clock.GetCurrentInstant(),
-            Attempt = cmd.Attempt,
+            JobId = envelope.JobId,
+            CorrelationId = envelope.CorrelationId,
+            CausationId = envelope.CausationId,
+            MessageId = envelope.MessageId,
+            OperationKey = envelope.OperationKey,
+            OccurredAt = envelope.OccurredAt,
+            Attempt = envelope.Attempt,
             FailureKind = failureKind,
             ErrorCode = YtDlpFailureDetails.ErrorCode(ex),
             ErrorMessage = YtDlpFailureDetails.DescribeException(ex),
@@ -506,20 +514,40 @@ public sealed class DownloadCommandsConsumerService(
         });
 
     private Task PublishUploadFailedAsync(UploadObjectCommand cmd, Exception ex, FailureKind failureKind)
-        => Publish(DownloadSubjects.UploadFailed, new UploadFailed
+        => PublishFailureAsync(DownloadSubjects.UploadFailed, cmd, envelope => new UploadFailed
         {
-            JobId = cmd.JobId,
-            CorrelationId = cmd.CorrelationId,
-            CausationId = cmd.MessageId,
-            MessageId = DeterministicGuid.Create(cmd.MessageId, "/failed"),
-            OperationKey = $"{cmd.OperationKey}/failed",
-            OccurredAt = clock.GetCurrentInstant(),
-            Attempt = cmd.Attempt,
+            JobId = envelope.JobId,
+            CorrelationId = envelope.CorrelationId,
+            CausationId = envelope.CausationId,
+            MessageId = envelope.MessageId,
+            OperationKey = envelope.OperationKey,
+            OccurredAt = envelope.OccurredAt,
+            Attempt = envelope.Attempt,
             FailureKind = failureKind,
             ErrorMessage = ex.Message,
             TempFileRef = cmd.TempFileRef,
             Kind = cmd.Kind
         });
+
+    private readonly record struct FailureEnvelope(
+        Guid JobId,
+        Guid CorrelationId,
+        Guid? CausationId,
+        Guid MessageId,
+        string OperationKey,
+        Instant OccurredAt,
+        int Attempt)
+    {
+        public static FailureEnvelope From(IFlowMessage command, IClock clock)
+            => new(
+                command.JobId,
+                command.CorrelationId,
+                command.MessageId,
+                DeterministicGuid.Create(command.MessageId, "/failed"),
+                $"{command.OperationKey}/failed",
+                clock.GetCurrentInstant(),
+                command.Attempt);
+    }
 
 
     #region Helpers

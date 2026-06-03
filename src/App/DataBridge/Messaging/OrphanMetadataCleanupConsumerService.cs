@@ -488,18 +488,7 @@ public sealed class OrphanMetadataCleanupExecutor
                     FROM media_source_versions sv
                     JOIN download_jobs dj ON dj.job_id = sv.latest_job_id
                     WHERE sv.media_guid = m.media_guid
-                    AND dj.state IN (
-                        'queued',
-                        'metadata_pending',
-                        'metadata_resolved',
-                        'download_pending',
-                        'downloaded_temp',
-                        'upload_pending',
-                        'uploaded',
-                        'commit_pending',
-                        'compensating',
-                        'failed_transient'
-                    )
+                    AND dj.state::text = ANY(@active_download_job_states)
                 )
             ),
             candidate_count AS (
@@ -528,6 +517,7 @@ public sealed class OrphanMetadataCleanupExecutor
             """);
         command.Parameters.AddWithValue("now", now.ToDateTimeOffset());
         command.Parameters.AddWithValue("retention_days", RetentionDays);
+        DownloadJobStateSql.AddActiveStatesParameter(command);
         command.CommandTimeout = 0;
 
         return (long)(await command.ExecuteScalarAsync(cancellationToken) ?? 0L);

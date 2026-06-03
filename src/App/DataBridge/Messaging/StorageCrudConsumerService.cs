@@ -19,6 +19,7 @@ public sealed class StorageCrudConsumerService(
     ILogger<StorageCrudConsumerService> logger) : BackgroundService
 {
     private const string DefaultStorageKey = "default";
+    private const string QueueGroup = "databridge-storage";
     private readonly List<ISubscription> _subscriptions = [];
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -26,79 +27,79 @@ public sealed class StorageCrudConsumerService(
         _subscriptions.Add(await messageBus.SubscribeAsync<StorageCreateLocalRequestMessage>(
             StorageSubjects.CreateLocalStorage,
             HandleCreateLocalStorageAsync,
-            queueGroup: "databridge-storage",
+            queueGroup: QueueGroup,
             cancellationToken: stoppingToken));
 
         _subscriptions.Add(await messageBus.SubscribeAsync<StorageCreateStreamingRequestMessage>(
             StorageSubjects.CreateNetworkStorage,
             HandleCreateStreamingStorageAsync,
-            queueGroup: "databridge-storage",
+            queueGroup: QueueGroup,
             cancellationToken: stoppingToken));
 
         _subscriptions.Add(await messageBus.SubscribeAsync<StorageCreateS3CompatibleObjectRequestMessage>(
             StorageSubjects.CreateS3CompatibleObjectStorage,
             HandleCreateS3CompatibleObjectStorageAsync,
-            queueGroup: "databridge-storage",
+            queueGroup: QueueGroup,
             cancellationToken: stoppingToken));
 
         _subscriptions.Add(await messageBus.SubscribeAsync<StorageCreateAzureBlobObjectRequestMessage>(
             StorageSubjects.CreateAzureBlobObjectStorage,
             HandleCreateAzureBlobObjectStorageAsync,
-            queueGroup: "databridge-storage",
+            queueGroup: QueueGroup,
             cancellationToken: stoppingToken));
 
         _subscriptions.Add(await messageBus.SubscribeAsync<StorageCreateGoogleCloudStorageObjectRequestMessage>(
             StorageSubjects.CreateGoogleCloudStorageObjectStorage,
             HandleCreateGoogleCloudStorageObjectStorageAsync,
-            queueGroup: "databridge-storage",
+            queueGroup: QueueGroup,
             cancellationToken: stoppingToken));
 
         _subscriptions.Add(await messageBus.SubscribeAsync<StorageUpdateLocalRequestMessage>(
             StorageSubjects.UpdateLocalStorage,
             HandleUpdateLocalStorageAsync,
-            queueGroup: "databridge-storage",
+            queueGroup: QueueGroup,
             cancellationToken: stoppingToken));
 
         _subscriptions.Add(await messageBus.SubscribeAsync<StorageUpdateStreamingRequestMessage>(
             StorageSubjects.UpdateNetworkStorage,
             HandleUpdateStreamingStorageAsync,
-            queueGroup: "databridge-storage",
+            queueGroup: QueueGroup,
             cancellationToken: stoppingToken));
 
         _subscriptions.Add(await messageBus.SubscribeAsync<StorageUpdateS3CompatibleObjectRequestMessage>(
             StorageSubjects.UpdateS3CompatibleObjectStorage,
             HandleUpdateS3CompatibleObjectStorageAsync,
-            queueGroup: "databridge-storage",
+            queueGroup: QueueGroup,
             cancellationToken: stoppingToken));
 
         _subscriptions.Add(await messageBus.SubscribeAsync<StorageUpdateAzureBlobObjectRequestMessage>(
             StorageSubjects.UpdateAzureBlobObjectStorage,
             HandleUpdateAzureBlobObjectStorageAsync,
-            queueGroup: "databridge-storage",
+            queueGroup: QueueGroup,
             cancellationToken: stoppingToken));
 
         _subscriptions.Add(await messageBus.SubscribeAsync<StorageUpdateGoogleCloudStorageObjectRequestMessage>(
             StorageSubjects.UpdateGoogleCloudStorageObjectStorage,
             HandleUpdateGoogleCloudStorageObjectStorageAsync,
-            queueGroup: "databridge-storage",
+            queueGroup: QueueGroup,
             cancellationToken: stoppingToken));
 
         _subscriptions.Add(await messageBus.SubscribeAsync<StorageListRequestMessage>(
             StorageSubjects.ListStorage,
             HandleListStorageAsync,
-            queueGroup: "databridge-storage",
+            queueGroup: QueueGroup,
             cancellationToken: stoppingToken));
 
         _subscriptions.Add(await messageBus.SubscribeAsync<StorageGetRequestMessage>(
             StorageSubjects.GetStorage,
             HandleGetStorageAsync,
-            queueGroup: "databridge-storage",
+            queueGroup: QueueGroup,
             cancellationToken: stoppingToken));
 
         _subscriptions.Add(await messageBus.SubscribeAsync<StorageDeleteRequestMessage>(
             StorageSubjects.DeleteStorage,
             HandleDeleteStorageAsync,
-            queueGroup: "databridge-storage",
+            queueGroup: QueueGroup,
             cancellationToken: stoppingToken));
 
         logger.LogInformation("Subscribed to storage CRUD subjects.");
@@ -194,8 +195,7 @@ public sealed class StorageCrudConsumerService(
             // Best-effort cleanup if DB write fails afterward.
             if (secrets.Count > 0)
             {
-                await secretStore.WriteAsync(SecretPaths.ForStorage(storageKey), secrets)
-                    .ConfigureAwait(false);
+                await secretStore.WriteAsync(SecretPaths.ForStorage(storageKey), secrets);
             }
 
             var entity = new StorageConfigEntity
@@ -214,12 +214,12 @@ public sealed class StorageCrudConsumerService(
             {
                 if (secrets.Count > 0)
                 {
-                    await SafeDeleteSecretAsync(storageKey).ConfigureAwait(false);
+                    await SafeDeleteSecretAsync(storageKey);
                 }
                 throw;
             }
 
-            await PublishChangedAsync(storageKey, StorageConfigChangeKind.Created).ConfigureAwait(false);
+            await PublishChangedAsync(storageKey, StorageConfigChangeKind.Created);
 
             await context.RespondAsync(new StorageOperationResponseMessage
             {
@@ -313,14 +313,13 @@ public sealed class StorageCrudConsumerService(
             // Update Vault first so any reader that arrives mid-update sees a coherent state.
             if (secrets.Count > 0)
             {
-                await secretStore.WriteAsync(SecretPaths.ForStorage(storageKey), secrets)
-                    .ConfigureAwait(false);
+                await secretStore.WriteAsync(SecretPaths.ForStorage(storageKey), secrets);
             }
             else
             {
                 // Nothing sensitive supplied this round — clear the existing secret bundle so old
                 // values don't linger after a switch (e.g. password → key-based auth).
-                await SafeDeleteSecretAsync(storageKey).ConfigureAwait(false);
+                await SafeDeleteSecretAsync(storageKey);
             }
 
             RemoveExistingParameters(dbContext, entity);
@@ -332,7 +331,7 @@ public sealed class StorageCrudConsumerService(
 
             await dbContext.SaveChangesAsync();
 
-            await PublishChangedAsync(storageKey, StorageConfigChangeKind.Updated).ConfigureAwait(false);
+            await PublishChangedAsync(storageKey, StorageConfigChangeKind.Updated);
 
             await context.RespondAsync(new StorageOperationResponseMessage
             {
@@ -441,9 +440,9 @@ public sealed class StorageCrudConsumerService(
             await dbContext.SaveChangesAsync();
 
             // DB row is the source of truth; orphan secrets in Vault are tolerable but log on failure.
-            await SafeDeleteSecretAsync(context.Message.Key).ConfigureAwait(false);
+            await SafeDeleteSecretAsync(context.Message.Key);
 
-            await PublishChangedAsync(context.Message.Key, StorageConfigChangeKind.Deleted).ConfigureAwait(false);
+            await PublishChangedAsync(context.Message.Key, StorageConfigChangeKind.Deleted);
 
             await context.RespondAsync(new StorageOperationResponseMessage
             {
@@ -461,7 +460,7 @@ public sealed class StorageCrudConsumerService(
     {
         try
         {
-            await secretStore.DeleteAsync(SecretPaths.ForStorage(storageKey)).ConfigureAwait(false);
+            await secretStore.DeleteAsync(SecretPaths.ForStorage(storageKey));
         }
         catch (Exception ex)
         {

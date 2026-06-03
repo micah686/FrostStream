@@ -34,8 +34,7 @@ public sealed class CookieMaterializer : IAsyncDisposable
         if (string.IsNullOrWhiteSpace(cookieKey))
             return new CookieMaterializer(path: null, logger);
 
-        var secrets = await secretStore.ReadAsync(SecretPaths.ForCookies(cookieKey), cancellationToken)
-            .ConfigureAwait(false);
+        var secrets = await secretStore.ReadAsync(SecretPaths.ForCookies(cookieKey), cancellationToken);
         if (secrets is null || !secrets.TryGetValue(CookieField, out var content) || string.IsNullOrEmpty(content))
         {
             throw new InvalidOperationException(
@@ -45,7 +44,7 @@ public sealed class CookieMaterializer : IAsyncDisposable
 
         Directory.CreateDirectory(scratchDirectory);
         var path = Path.Combine(scratchDirectory, $"cookies-{Guid.NewGuid():N}.txt");
-        await File.WriteAllTextAsync(path, content, cancellationToken).ConfigureAwait(false);
+        await File.WriteAllTextAsync(path, content, cancellationToken);
 
         // Best-effort permission tightening on POSIX systems. Failing here is non-fatal.
         try
