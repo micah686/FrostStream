@@ -1,11 +1,13 @@
 using System.Text.Json;
 using Cleipnir.Flows;
 using Cleipnir.ResilientFunctions.Reactive.Extensions;
+using DataBridge;
 using DataBridge.Data;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NodaTime;
+using Shared.Database;
 using Shared.Messaging;
 using Shared.Metadata;
 using YtDlpSharpLib.Options;
@@ -598,11 +600,7 @@ public class DownloadArchiveFlow(
     }
 
     private async Task MetaRepoCall(Func<IMetadataRepository, Task> action)
-    {
-        using var scope = scopeFactory.CreateScope();
-        var repo = scope.ServiceProvider.GetRequiredService<IMetadataRepository>();
-        await action(repo);
-    }
+        => await scopeFactory.WithScopedAsync(action);
 
     private async Task PublishMetadataSync(Guid mediaGuid)
     {
@@ -619,32 +617,16 @@ public class DownloadArchiveFlow(
     }
 
     private async Task PlaylistRepoCall(Func<IPlaylistsRepository, Task> action)
-    {
-        using var scope = scopeFactory.CreateScope();
-        var repo = scope.ServiceProvider.GetRequiredService<IPlaylistsRepository>();
-        await action(repo);
-    }
+        => await scopeFactory.WithScopedAsync(action);
 
     private async Task<T> PlaylistRepoCall<T>(Func<IPlaylistsRepository, Task<T>> action)
-    {
-        using var scope = scopeFactory.CreateScope();
-        var repo = scope.ServiceProvider.GetRequiredService<IPlaylistsRepository>();
-        return await action(repo);
-    }
+        => await scopeFactory.WithScopedAsync(action);
 
     private async Task RepoCall(Func<IDownloadJobsRepository, Task> action)
-    {
-        using var scope = scopeFactory.CreateScope();
-        var jobs = scope.ServiceProvider.GetRequiredService<IDownloadJobsRepository>();
-        await action(jobs);
-    }
+        => await scopeFactory.WithScopedAsync(action);
 
     private async Task<T> RepoCall<T>(Func<IDownloadJobsRepository, Task<T>> action)
-    {
-        using var scope = scopeFactory.CreateScope();
-        var jobs = scope.ServiceProvider.GetRequiredService<IDownloadJobsRepository>();
-        return await action(jobs);
-    }
+        => await scopeFactory.WithScopedAsync(action);
 
     /// <summary>
     /// If <see cref="DownloadRequested.PresetKey"/> is set and inline
@@ -658,9 +640,8 @@ public class DownloadArchiveFlow(
         if (request.YtDlpOptions is not null || string.IsNullOrWhiteSpace(request.PresetKey))
             return request;
 
-        using var scope = scopeFactory.CreateScope();
-        var presets = scope.ServiceProvider.GetRequiredService<IOptionPresetsRepository>();
-        var preset = await presets.GetByKeyAsync(request.PresetKey);
+        var preset = await scopeFactory.WithScopedAsync<IOptionPresetsRepository, OptionPresetEntity?>(
+            presets => presets.GetByKeyAsync(request.PresetKey));
         if (preset is null)
         {
             logger.LogWarning(

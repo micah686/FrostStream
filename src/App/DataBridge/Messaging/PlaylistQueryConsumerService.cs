@@ -1,3 +1,4 @@
+using DataBridge;
 using DataBridge.Data;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
@@ -37,10 +38,7 @@ public sealed class PlaylistQueryConsumerService(
     {
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var playlists = scope.ServiceProvider.GetRequiredService<IPlaylistsRepository>();
-
-            var detail = await playlists.GetDetailAsync(context.Message.PlaylistId);
+            var detail = await WithPlaylists(playlists => playlists.GetDetailAsync(context.Message.PlaylistId));
             if (detail is null)
             {
                 await context.RespondAsync(new PlaylistGetResponseMessage
@@ -74,10 +72,7 @@ public sealed class PlaylistQueryConsumerService(
     {
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var playlists = scope.ServiceProvider.GetRequiredService<IPlaylistsRepository>();
-
-            var summaries = await playlists.ListAsync(context.Message.PageSize, context.Message.PageOffset);
+            var summaries = await WithPlaylists(playlists => playlists.ListAsync(context.Message.PageSize, context.Message.PageOffset));
             await context.RespondAsync(new PlaylistListResponseMessage
             {
                 Success = true,
@@ -95,6 +90,9 @@ public sealed class PlaylistQueryConsumerService(
             });
         }
     }
+
+    private Task<TResult> WithPlaylists<TResult>(Func<IPlaylistsRepository, Task<TResult>> action)
+        => scopeFactory.WithScopedAsync(action);
 
     private static PlaylistDto MapDetail(PlaylistDetail detail)
         => MapBase(

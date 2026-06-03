@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using DataBridge;
 using DataBridge.Data;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.EntityFrameworkCore;
@@ -45,9 +46,7 @@ public sealed class CreatorDiscoveryConsumerService(
                 return;
             }
 
-            using var scope = scopeFactory.CreateScope();
-            var repo = scope.ServiceProvider.GetRequiredService<ICreatorDiscoveryRepository>();
-            var entity = await repo.CreateSourceAsync(new CreatorSourceEntity
+            var entity = await WithRepo(repo => repo.CreateSourceAsync(new CreatorSourceEntity
             {
                 Platform = msg.Platform.Trim(),
                 SourceType = msg.SourceType,
@@ -57,7 +56,7 @@ public sealed class CreatorDiscoveryConsumerService(
                 ConsecutiveKnownThreshold = msg.ConsecutiveKnownThreshold,
                 FullRescanIntervalDays = msg.FullRescanIntervalDays,
                 MetadataRefreshWindow = msg.MetadataRefreshWindow
-            });
+            }));
             await context.RespondAsync(new CreatorSourceOperationResponseMessage { Success = true, Entity = Map(entity) });
         }
         catch (DbUpdateException ex)
@@ -88,9 +87,7 @@ public sealed class CreatorDiscoveryConsumerService(
                 return;
             }
 
-            using var scope = scopeFactory.CreateScope();
-            var repo = scope.ServiceProvider.GetRequiredService<ICreatorDiscoveryRepository>();
-            var updated = await repo.UpdateSourceAsync(new CreatorSourceEntity
+            var updated = await WithRepo(repo => repo.UpdateSourceAsync(new CreatorSourceEntity
             {
                 Id = msg.Id,
                 Platform = msg.Platform.Trim(),
@@ -101,7 +98,7 @@ public sealed class CreatorDiscoveryConsumerService(
                 ConsecutiveKnownThreshold = msg.ConsecutiveKnownThreshold,
                 FullRescanIntervalDays = msg.FullRescanIntervalDays,
                 MetadataRefreshWindow = msg.MetadataRefreshWindow
-            });
+            }));
             if (updated is null)
             {
                 await context.RespondAsync(NotFound(msg.Id));
@@ -132,9 +129,7 @@ public sealed class CreatorDiscoveryConsumerService(
         var id = context.Message.Id;
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var repo = scope.ServiceProvider.GetRequiredService<ICreatorDiscoveryRepository>();
-            var entity = await repo.GetSourceAsync(id);
+            var entity = await WithRepo(repo => repo.GetSourceAsync(id));
             await context.RespondAsync(entity is null
                 ? NotFound(id)
                 : new CreatorSourceOperationResponseMessage { Success = true, Entity = Map(entity) });
@@ -150,9 +145,7 @@ public sealed class CreatorDiscoveryConsumerService(
     {
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var repo = scope.ServiceProvider.GetRequiredService<ICreatorDiscoveryRepository>();
-            var items = await repo.ListSourcesAsync();
+            var items = await WithRepo(repo => repo.ListSourcesAsync());
             await context.RespondAsync(new CreatorSourceOperationResponseMessage
             {
                 Success = true,
@@ -170,9 +163,7 @@ public sealed class CreatorDiscoveryConsumerService(
     {
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var repo = scope.ServiceProvider.GetRequiredService<ICreatorDiscoveryRepository>();
-            var items = await repo.ListEnabledSourcesForScanAsync(context.Message.ScanMode);
+            var items = await WithRepo(repo => repo.ListEnabledSourcesForScanAsync(context.Message.ScanMode));
             await context.RespondAsync(new CreatorSourceOperationResponseMessage
             {
                 Success = true,
@@ -191,9 +182,7 @@ public sealed class CreatorDiscoveryConsumerService(
         var id = context.Message.Id;
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var repo = scope.ServiceProvider.GetRequiredService<ICreatorDiscoveryRepository>();
-            var deleted = await repo.DeleteSourceAsync(id);
+            var deleted = await WithRepo(repo => repo.DeleteSourceAsync(id));
             await context.RespondAsync(deleted
                 ? new CreatorSourceOperationResponseMessage { Success = true }
                 : NotFound(id));
@@ -210,9 +199,7 @@ public sealed class CreatorDiscoveryConsumerService(
         var msg = context.Message;
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var repo = scope.ServiceProvider.GetRequiredService<ICreatorDiscoveryRepository>();
-            var result = await repo.UpsertDiscoveredMediaBatchAsync(msg);
+            var result = await WithRepo(repo => repo.UpsertDiscoveredMediaBatchAsync(msg));
 
             foreach (var candidate in result.EnqueuedItems)
             {
@@ -245,9 +232,7 @@ public sealed class CreatorDiscoveryConsumerService(
         var msg = context.Message;
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var repo = scope.ServiceProvider.GetRequiredService<ICreatorDiscoveryRepository>();
-            var updated = await repo.UpdateAssetsAsync(msg);
+            var updated = await WithRepo(repo => repo.UpdateAssetsAsync(msg));
             if (updated is null)
             {
                 await context.RespondAsync(new UpdateCreatorSourceAssetsResponseMessage
@@ -301,6 +286,9 @@ public sealed class CreatorDiscoveryConsumerService(
             },
             messageId: messageId.ToString("N"));
     }
+
+    private Task<TResult> WithRepo<TResult>(Func<ICreatorDiscoveryRepository, Task<TResult>> action)
+        => scopeFactory.WithScopedAsync(action);
 
     private static string? Validate(
         string platform,

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using DataBridge;
 using DataBridge.Data;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.EntityFrameworkCore;
@@ -72,16 +73,13 @@ public sealed class OptionPresetCrudConsumerService(
                 return;
             }
 
-            using var scope = scopeFactory.CreateScope();
-            var repo = scope.ServiceProvider.GetRequiredService<IOptionPresetsRepository>();
-
-            if (await repo.GetByKeyAsync(msg.Key) is not null)
+            if (await WithRepo(repo => repo.GetByKeyAsync(msg.Key)) is not null)
             {
                 await context.RespondAsync(Failure("conflict", $"Preset key '{msg.Key}' already exists."));
                 return;
             }
 
-            var entity = await repo.CreateAsync(msg.Key, msg.Name, msg.Description, msg.YtDlpOptionsJson);
+            var entity = await WithRepo(repo => repo.CreateAsync(msg.Key, msg.Name, msg.Description, msg.YtDlpOptionsJson));
             await context.RespondAsync(new OptionPresetOperationResponseMessage
             {
                 Success = true,
@@ -106,10 +104,7 @@ public sealed class OptionPresetCrudConsumerService(
                 return;
             }
 
-            using var scope = scopeFactory.CreateScope();
-            var repo = scope.ServiceProvider.GetRequiredService<IOptionPresetsRepository>();
-
-            var updated = await repo.UpdateAsync(msg.Key, msg.Name, msg.Description, msg.YtDlpOptionsJson);
+            var updated = await WithRepo(repo => repo.UpdateAsync(msg.Key, msg.Name, msg.Description, msg.YtDlpOptionsJson));
             if (updated is null)
             {
                 await context.RespondAsync(Failure("not_found", $"Preset key '{msg.Key}' was not found."));
@@ -134,9 +129,7 @@ public sealed class OptionPresetCrudConsumerService(
         var key = context.Message.Key;
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var repo = scope.ServiceProvider.GetRequiredService<IOptionPresetsRepository>();
-            var entity = await repo.GetByKeyAsync(key);
+            var entity = await WithRepo(repo => repo.GetByKeyAsync(key));
             if (entity is null)
             {
                 await context.RespondAsync(Failure("not_found", $"Preset key '{key}' was not found."));
@@ -160,9 +153,7 @@ public sealed class OptionPresetCrudConsumerService(
     {
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var repo = scope.ServiceProvider.GetRequiredService<IOptionPresetsRepository>();
-            var items = await repo.ListAsync();
+            var items = await WithRepo(repo => repo.ListAsync());
             await context.RespondAsync(new OptionPresetOperationResponseMessage
             {
                 Success = true,
@@ -181,9 +172,7 @@ public sealed class OptionPresetCrudConsumerService(
         var key = context.Message.Key;
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var repo = scope.ServiceProvider.GetRequiredService<IOptionPresetsRepository>();
-            var deleted = await repo.DeleteAsync(key);
+            var deleted = await WithRepo(repo => repo.DeleteAsync(key));
             if (!deleted)
             {
                 await context.RespondAsync(Failure("not_found", $"Preset key '{key}' was not found."));
@@ -216,6 +205,9 @@ public sealed class OptionPresetCrudConsumerService(
             return $"ytdlp_options_json is not valid: {ex.Message}";
         }
     }
+
+    private Task<TResult> WithRepo<TResult>(Func<IOptionPresetsRepository, Task<TResult>> action)
+        => scopeFactory.WithScopedAsync(action);
 
     private static OptionPresetOperationResponseMessage Failure(string code, string message)
         => new() { Success = false, ErrorCode = code, ErrorMessage = message };

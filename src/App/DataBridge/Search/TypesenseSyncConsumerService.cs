@@ -1,3 +1,4 @@
+using DataBridge;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -30,27 +31,27 @@ public sealed class TypesenseSyncConsumerService(
 
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var query = scope.ServiceProvider.GetRequiredService<IMediaDocumentQuery>();
-
-            var mediaTask = query.GetMediaByGuidAsync(mediaGuid);
-            var commentsTask = query.GetCommentsByMediaGuidAsync(mediaGuid);
-            var captionsTask = query.GetCaptionsByMediaGuidAsync(mediaGuid);
-
-            await Task.WhenAll(mediaTask, commentsTask, captionsTask);
-
-            var media = await mediaTask;
-            if (media is null)
+            await scopeFactory.WithScopedAsync<IMediaDocumentQuery>(async query =>
             {
-                logger.LogWarning("Skipping Typesense sync for missing media {MediaGuid}.", mediaGuid);
-                return;
-            }
+                var mediaTask = query.GetMediaByGuidAsync(mediaGuid);
+                var commentsTask = query.GetCommentsByMediaGuidAsync(mediaGuid);
+                var captionsTask = query.GetCaptionsByMediaGuidAsync(mediaGuid);
 
-            await indexService.UpsertMediaAsync(media);
-            await indexService.DeleteCommentsByMediaGuidAsync(mediaGuidString);
-            await indexService.BulkImportCommentsAsync(await commentsTask);
-            await indexService.DeleteCaptionsByMediaGuidAsync(mediaGuidString);
-            await indexService.BulkImportCaptionsAsync(await captionsTask);
+                await Task.WhenAll(mediaTask, commentsTask, captionsTask);
+
+                var media = await mediaTask;
+                if (media is null)
+                {
+                    logger.LogWarning("Skipping Typesense sync for missing media {MediaGuid}.", mediaGuid);
+                    return;
+                }
+
+                await indexService.UpsertMediaAsync(media);
+                await indexService.DeleteCommentsByMediaGuidAsync(mediaGuidString);
+                await indexService.BulkImportCommentsAsync(await commentsTask);
+                await indexService.DeleteCaptionsByMediaGuidAsync(mediaGuidString);
+                await indexService.BulkImportCaptionsAsync(await captionsTask);
+            });
 
             logger.LogInformation("Synced Typesense metadata documents for {MediaGuid}.", mediaGuid);
         }

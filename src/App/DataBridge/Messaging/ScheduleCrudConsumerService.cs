@@ -1,3 +1,4 @@
+using DataBridge;
 using DataBridge.Data;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
@@ -44,15 +45,13 @@ public sealed class ScheduleCrudConsumerService(
                 return;
             }
 
-            using var scope = scopeFactory.CreateScope();
-            var repo = scope.ServiceProvider.GetRequiredService<IScheduledTasksRepository>();
-            if (await repo.GetByKeyAsync(msg.Key) is not null)
+            if (await WithRepo(repo => repo.GetByKeyAsync(msg.Key)) is not null)
             {
                 await context.RespondAsync(Failure("conflict", $"Schedule key '{msg.Key}' already exists."));
                 return;
             }
 
-            var entity = await repo.CreateAsync(ToEntity(msg));
+            var entity = await WithRepo(repo => repo.CreateAsync(ToEntity(msg)));
             await PublishChangedAsync(entity.Key, ScheduleChangeKind.Created);
             await context.RespondAsync(Success(entity));
         }
@@ -74,9 +73,7 @@ public sealed class ScheduleCrudConsumerService(
                 return;
             }
 
-            using var scope = scopeFactory.CreateScope();
-            var repo = scope.ServiceProvider.GetRequiredService<IScheduledTasksRepository>();
-            var entity = await repo.UpdateAsync(ToEntity(msg));
+            var entity = await WithRepo(repo => repo.UpdateAsync(ToEntity(msg)));
             if (entity is null)
             {
                 await context.RespondAsync(Failure("not_found", $"Schedule key '{msg.Key}' was not found."));
@@ -98,9 +95,7 @@ public sealed class ScheduleCrudConsumerService(
         var key = context.Message.Key;
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var repo = scope.ServiceProvider.GetRequiredService<IScheduledTasksRepository>();
-            var entity = await repo.GetByKeyAsync(key);
+            var entity = await WithRepo(repo => repo.GetByKeyAsync(key));
             await context.RespondAsync(entity is null ? Failure("not_found", $"Schedule key '{key}' was not found.") : Success(entity));
         }
         catch (Exception ex)
@@ -125,9 +120,7 @@ public sealed class ScheduleCrudConsumerService(
     {
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var repo = scope.ServiceProvider.GetRequiredService<IScheduledTasksRepository>();
-            var items = await list(repo);
+            var items = await WithRepo(list);
             await context.RespondAsync(new ScheduleOperationResponseMessage
             {
                 Success = true,
@@ -146,9 +139,7 @@ public sealed class ScheduleCrudConsumerService(
         var key = context.Message.Key;
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var repo = scope.ServiceProvider.GetRequiredService<IScheduledTasksRepository>();
-            var deleted = await repo.DeleteAsync(key);
+            var deleted = await WithRepo(repo => repo.DeleteAsync(key));
             if (!deleted)
             {
                 await context.RespondAsync(Failure("not_found", $"Schedule key '{key}' was not found."));
@@ -166,17 +157,11 @@ public sealed class ScheduleCrudConsumerService(
     }
 
     private async Task HandleMarkAttemptAsync(IMessageContext<ScheduleMarkAttemptRequestMessage> context)
-    {
-        using var scope = scopeFactory.CreateScope();
-        var repo = scope.ServiceProvider.GetRequiredService<IScheduledTasksRepository>();
-        await repo.MarkAttemptAsync(context.Message.Key, context.Message.AttemptedAt);
-    }
+        => await WithRepo(repo => repo.MarkAttemptAsync(context.Message.Key, context.Message.AttemptedAt));
 
     private async Task HandleMarkSuccessAsync(IMessageContext<ScheduleMarkSuccessRequestMessage> context)
     {
-        using var scope = scopeFactory.CreateScope();
-        var repo = scope.ServiceProvider.GetRequiredService<IScheduledTasksRepository>();
-        var entity = await repo.MarkSuccessAsync(context.Message.Key, context.Message.SucceededAt);
+        var entity = await WithRepo(repo => repo.MarkSuccessAsync(context.Message.Key, context.Message.SucceededAt));
         if (entity is not null)
         {
             await PublishChangedAsync(entity.Key, ScheduleChangeKind.Updated);
@@ -185,14 +170,18 @@ public sealed class ScheduleCrudConsumerService(
 
     private async Task HandleMarkFailureAsync(IMessageContext<ScheduleMarkFailureRequestMessage> context)
     {
-        using var scope = scopeFactory.CreateScope();
-        var repo = scope.ServiceProvider.GetRequiredService<IScheduledTasksRepository>();
-        var entity = await repo.MarkFailureAsync(context.Message.Key, context.Message.FailedAt);
+        var entity = await WithRepo(repo => repo.MarkFailureAsync(context.Message.Key, context.Message.FailedAt));
         if (entity is not null)
         {
             await PublishChangedAsync(entity.Key, ScheduleChangeKind.Updated);
         }
     }
+
+    private Task<TResult> WithRepo<TResult>(Func<IScheduledTasksRepository, Task<TResult>> action)
+        => scopeFactory.WithScopedAsync(action);
+
+    private Task WithRepo(Func<IScheduledTasksRepository, Task> action)
+        => scopeFactory.WithScopedAsync(action);
 
     private async Task PublishChangedAsync(string key, ScheduleChangeKind kind)
         => await messageBus.PublishAsync(ScheduleSubjects.Changed, new ScheduleChangedMessage

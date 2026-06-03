@@ -149,8 +149,7 @@ public sealed class StorageCrudConsumerService(
         string? description)
         where T : class
     {
-        using var scope = scopeFactory.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<DataBridgeDbContext>();
+        using var scope = CreateDbContextScope(out var dbContext);
 
         try
         {
@@ -257,8 +256,7 @@ public sealed class StorageCrudConsumerService(
         string? description)
         where T : class
     {
-        using var scope = scopeFactory.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<DataBridgeDbContext>();
+        using var scope = CreateDbContextScope(out var dbContext);
 
         try
         {
@@ -339,8 +337,7 @@ public sealed class StorageCrudConsumerService(
 
     private async Task HandleListStorageAsync(IMessageContext<StorageListRequestMessage> context)
     {
-        using var scope = scopeFactory.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<DataBridgeDbContext>();
+        using var scope = CreateDbContextScope(out var dbContext);
 
         try
         {
@@ -363,8 +360,7 @@ public sealed class StorageCrudConsumerService(
 
     private async Task HandleGetStorageAsync(IMessageContext<StorageGetRequestMessage> context)
     {
-        using var scope = scopeFactory.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<DataBridgeDbContext>();
+        using var scope = CreateDbContextScope(out var dbContext);
 
         try
         {
@@ -397,8 +393,7 @@ public sealed class StorageCrudConsumerService(
 
     private async Task HandleDeleteStorageAsync(IMessageContext<StorageDeleteRequestMessage> context)
     {
-        using var scope = scopeFactory.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<DataBridgeDbContext>();
+        using var scope = CreateDbContextScope(out var dbContext);
 
         try
         {
@@ -471,6 +466,13 @@ public sealed class StorageCrudConsumerService(
         {
             logger.LogWarning(ex, "Failed publishing StorageConfigChanged for key '{StorageKey}'", storageKey);
         }
+    }
+
+    private IServiceScope CreateDbContextScope(out DataBridgeDbContext dbContext)
+    {
+        var scope = scopeFactory.CreateScope();
+        dbContext = scope.ServiceProvider.GetRequiredService<DataBridgeDbContext>();
+        return scope;
     }
 
     private static StorageConfigDto Map(StorageConfigEntity entity)

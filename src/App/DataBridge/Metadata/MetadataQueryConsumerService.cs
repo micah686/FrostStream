@@ -1,3 +1,4 @@
+using DataBridge;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -68,9 +69,7 @@ public sealed class MetadataQueryConsumerService(
     {
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var query = scope.ServiceProvider.GetRequiredService<IMetadataReadService>();
-            var item = await query.GetDetailAsync(context.Message.MediaGuid);
+            var item = await WithQuery(query => query.GetDetailAsync(context.Message.MediaGuid));
             await context.RespondAsync(item is null
                 ? new MetadataGetResponseMessage
                 {
@@ -96,9 +95,7 @@ public sealed class MetadataQueryConsumerService(
     {
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var query = scope.ServiceProvider.GetRequiredService<IMetadataReadService>();
-            var item = await query.GetTechnicalAsync(context.Message.MediaGuid);
+            var item = await WithQuery(query => query.GetTechnicalAsync(context.Message.MediaGuid));
             await context.RespondAsync(item is null
                 ? new MetadataTechnicalResponseMessage
                 {
@@ -124,12 +121,10 @@ public sealed class MetadataQueryConsumerService(
     {
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var query = scope.ServiceProvider.GetRequiredService<IMetadataReadService>();
-            var result = await query.ListAccountsAsync(
+            var result = await WithQuery(query => query.ListAccountsAsync(
                 context.Message.PageSize,
                 context.Message.After,
-                context.Message.Platform);
+                context.Message.Platform));
 
             await context.RespondAsync(new MetadataAccountsListResponseMessage
             {
@@ -164,9 +159,7 @@ public sealed class MetadataQueryConsumerService(
     {
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var query = scope.ServiceProvider.GetRequiredService<IMetadataReadService>();
-            var item = await query.GetAccountAsync(context.Message.AccountId);
+            var item = await WithQuery(query => query.GetAccountAsync(context.Message.AccountId));
             await context.RespondAsync(item is null
                 ? new MetadataAccountGetResponseMessage
                 {
@@ -194,13 +187,11 @@ public sealed class MetadataQueryConsumerService(
     {
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var query = scope.ServiceProvider.GetRequiredService<IMetadataReadService>();
-            var result = await query.ListTaxonomyAsync(
+            var result = await WithQuery(query => query.ListTaxonomyAsync(
                 kind,
                 context.Message.PageSize,
                 context.Message.PageOffset,
-                context.Message.Search);
+                context.Message.Search));
 
             await context.RespondAsync(new MetadataTaxonomyListResponseMessage
             {
@@ -220,4 +211,7 @@ public sealed class MetadataQueryConsumerService(
             });
         }
     }
+
+    private Task<TResult> WithQuery<TResult>(Func<IMetadataReadService, Task<TResult>> action)
+        => scopeFactory.WithScopedAsync(action);
 }
