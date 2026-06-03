@@ -9,6 +9,13 @@ public enum ScheduleCatchupPolicy
     Skip = 1
 }
 
+public enum ScheduleRunStatus
+{
+    InProgress = 0,
+    Completed = 1,
+    Failed = 2
+}
+
 public sealed class ScheduledTaskEntity
 {
     public int Id { get; init; }
@@ -38,6 +45,8 @@ public sealed class ScheduledTaskEntity
     public Instant? LastAttemptAt { get; set; }
 
     public Instant? LastSuccessAt { get; set; }
+
+    public ScheduleRunStatus? LastRunStatus { get; set; }
 
     public Instant? NextDueAt { get; set; }
 

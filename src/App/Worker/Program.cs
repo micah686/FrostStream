@@ -109,6 +109,7 @@ class Program
         builder.Services.AddHostedService<PlaylistCommandsConsumerService>();
         builder.Services.AddHostedService<ChannelDiscoveryConsumerService>();
         builder.Services.AddHostedService<ChannelAssetRefreshConsumerService>();
+        builder.Services.AddHostedService<FilesystemRescanConsumerService>();
 
         var app = builder.Build();
 

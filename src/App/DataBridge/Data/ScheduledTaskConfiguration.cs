@@ -35,6 +35,10 @@ public sealed class ScheduledTaskConfiguration : IEntityTypeConfiguration<Schedu
             .IsRequired();
         builder.Property(x => x.LastAttemptAt).HasColumnName("last_attempt_at").HasColumnType("timestamp with time zone");
         builder.Property(x => x.LastSuccessAt).HasColumnName("last_success_at").HasColumnType("timestamp with time zone");
+        builder.Property(x => x.LastRunStatus)
+            .HasColumnName("last_run_status")
+            .HasMaxLength(32)
+            .HasConversion<string>();
         builder.Property(x => x.NextDueAt).HasColumnName("next_due_at").HasColumnType("timestamp with time zone");
         builder.Property(x => x.CreatedAt)
             .HasColumnName("created_at")

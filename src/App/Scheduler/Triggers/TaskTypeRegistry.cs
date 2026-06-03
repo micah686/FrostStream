@@ -13,7 +13,7 @@ internal static class TaskTypeRegistry
     public const string DatabaseMaintenance = "database_maintenance";
     public const string SearchReindex = "search_reindex";
     public const string FilesystemRescan = "filesystem_rescan";
-    public const string HeavyDataProcessing = "heavy_data_processing";
+    public const string ProcessedMessageCleanup = "processed_message_cleanup";
 
     private static readonly IReadOnlyDictionary<string, Type> JobTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
     {
@@ -25,7 +25,7 @@ internal static class TaskTypeRegistry
         [DatabaseMaintenance] = typeof(DatabaseMaintenanceJob),
         [SearchReindex] = typeof(SearchReindexJob),
         [FilesystemRescan] = typeof(FilesystemRescanJob),
-        [HeavyDataProcessing] = typeof(HeavyDataProcessingScheduleJob)
+        [ProcessedMessageCleanup] = typeof(ProcessedMessageCleanupJob)
     };
 
     public static bool TryGetJobType(string taskType, out Type jobType)

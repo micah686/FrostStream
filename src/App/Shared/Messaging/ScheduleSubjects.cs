@@ -11,6 +11,7 @@ public static class ScheduleSubjects
     public const string Overdue = "fs.schedules.overdue";
     public const string MarkAttempt = "fs.schedules.markattempt";
     public const string MarkSuccess = "fs.schedules.marksuccess";
+    public const string MarkFailure = "fs.schedules.markfailure";
     public const string Changed = "fs.schedules.changed";
 
     public const string OrphanMetadataCleanupRequest = "fs.cleanup.metadata.orphans.request";

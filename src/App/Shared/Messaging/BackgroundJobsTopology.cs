@@ -10,12 +10,14 @@ public sealed class BackgroundJobsTopology : ITopologySource
     public const string WorkerQueueGroup = "worker-bgjobs";
 
     public const string OrphanMetadataCleanupConsumer = "databridge-orphan-metadata-cleanup";
+    public const string ProcessedMessageCleanupConsumer = "databridge-processed-message-cleanup";
     public const string SearchReindexConsumer = "databridge-search-reindex";
     public const string DatabaseMaintenanceConsumer = "databridge-database-maintenance";
     public const string StaleDatabaseCleanupConsumer = "databridge-stale-database-cleanup";
     public const string WorkerChannelUpdateCheckConsumer = "worker-channel-update-check";
     public const string WorkerChannelMediaListConsumer = "worker-channel-media-list";
     public const string WorkerChannelAssetRefreshConsumer = "worker-channel-asset-refresh";
+    public const string WorkerFilesystemRescanConsumer = "worker-filesystem-rescan";
 
     public IEnumerable<StreamSpec> GetStreams()
     {
@@ -50,12 +52,14 @@ public sealed class BackgroundJobsTopology : ITopologySource
             MaxDeliver = 5
         };
 
+        yield return DataBridgeConsumer(ProcessedMessageCleanupConsumer, BackgroundJobSubjects.ProcessedMessageCleanupRequest, TimeSpan.FromMinutes(15), maxDeliver: 5);
         yield return DataBridgeConsumer(SearchReindexConsumer, BackgroundJobSubjects.SearchReindexRequest, TimeSpan.FromMinutes(30), maxDeliver: 3);
         yield return DataBridgeConsumer(DatabaseMaintenanceConsumer, BackgroundJobSubjects.DatabaseMaintenanceRequest, TimeSpan.FromHours(2), maxDeliver: 3);
         yield return DataBridgeConsumer(StaleDatabaseCleanupConsumer, BackgroundJobSubjects.StaleDatabaseCleanupRequest, TimeSpan.FromMinutes(15), maxDeliver: 5);
         yield return WorkerConsumer(WorkerChannelUpdateCheckConsumer, BackgroundJobSubjects.ChannelUpdateCheckRequest, TimeSpan.FromMinutes(30), maxDeliver: 5);
         yield return WorkerConsumer(WorkerChannelMediaListConsumer, BackgroundJobSubjects.ChannelMediaListRequest, TimeSpan.FromHours(2), maxDeliver: 3);
         yield return WorkerConsumer(WorkerChannelAssetRefreshConsumer, BackgroundJobSubjects.ChannelAssetRefreshRequest, TimeSpan.FromMinutes(30), maxDeliver: 3);
+        yield return WorkerConsumer(WorkerFilesystemRescanConsumer, BackgroundJobSubjects.FilesystemRescanRequest, TimeSpan.FromHours(1), maxDeliver: 3);
     }
 
     private static ConsumerSpec DataBridgeConsumer(string durableName, string subject, TimeSpan ackWait, int maxDeliver)

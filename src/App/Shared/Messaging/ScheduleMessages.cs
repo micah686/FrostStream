@@ -15,6 +15,7 @@ public sealed record ScheduledTaskDto
     public required ScheduleCatchupPolicy CatchupPolicy { get; init; }
     public Instant? LastAttemptAt { get; init; }
     public Instant? LastSuccessAt { get; init; }
+    public ScheduleRunStatus? LastRunStatus { get; init; }
     public Instant? NextDueAt { get; init; }
     public required Instant CreatedAt { get; init; }
     public Instant? LastUpdated { get; init; }
@@ -68,6 +69,12 @@ public sealed record ScheduleMarkSuccessRequestMessage
 {
     public required string Key { get; init; }
     public required Instant SucceededAt { get; init; }
+}
+
+public sealed record ScheduleMarkFailureRequestMessage
+{
+    public required string Key { get; init; }
+    public required Instant FailedAt { get; init; }
 }
 
 public sealed record ScheduleOperationResponseMessage

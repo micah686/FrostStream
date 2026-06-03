@@ -5,12 +5,12 @@ using Shared.Messaging;
 
 namespace Scheduler.MaintenanceTasks;
 
-public sealed class HeavyDataProcessingScheduler(INatsMessagePublisher publisher, IClock clock) : IHeavyDataProcessingScheduler
+public sealed class ProcessedMessageCleanupScheduler(INatsMessagePublisher publisher, IClock clock) : IProcessedMessageCleanupScheduler
 {
-    public Task QueueProcessingAsync(ScheduledJobContext context, CancellationToken cancellationToken)
+    public Task QueueCleanupAsync(ScheduledJobContext context, CancellationToken cancellationToken)
         => publisher.PublishAsync(
-            BackgroundJobSubjects.HeavyDataProcessingRequest,
-            new HeavyDataProcessingRequested
+            BackgroundJobSubjects.ProcessedMessageCleanupRequest,
+            new ProcessedMessageCleanupRequested
             {
                 ScheduleKey = context.ScheduleKey,
                 TaskType = context.TaskType,

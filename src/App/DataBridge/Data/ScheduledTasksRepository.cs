@@ -78,6 +78,7 @@ public sealed class ScheduledTasksRepository(DataBridgeDbContext db, IClock cloc
         }
 
         existing.LastAttemptAt = attemptedAt;
+        existing.LastRunStatus = ScheduleRunStatus.InProgress;
         existing.LastUpdated = clock.GetCurrentInstant();
         await db.SaveChangesAsync(cancellationToken);
     }
@@ -91,7 +92,23 @@ public sealed class ScheduledTasksRepository(DataBridgeDbContext db, IClock cloc
         }
 
         existing.LastSuccessAt = succeededAt;
+        existing.LastRunStatus = ScheduleRunStatus.Completed;
         existing.NextDueAt = ComputeNextDue(existing, succeededAt);
+        existing.LastUpdated = clock.GetCurrentInstant();
+        await db.SaveChangesAsync(cancellationToken);
+        return existing;
+    }
+
+    public async Task<ScheduledTaskEntity?> MarkFailureAsync(string key, Instant failedAt, CancellationToken cancellationToken = default)
+    {
+        var existing = await db.ScheduledTasks.FirstOrDefaultAsync(x => x.Key == key, cancellationToken);
+        if (existing is null)
+        {
+            return null;
+        }
+
+        existing.LastRunStatus = ScheduleRunStatus.Failed;
+        existing.NextDueAt = ComputeNextDue(existing, failedAt);
         existing.LastUpdated = clock.GetCurrentInstant();
         await db.SaveChangesAsync(cancellationToken);
         return existing;

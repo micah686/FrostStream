@@ -24,7 +24,8 @@ public sealed class BackgroundJobConsumerService(
         {
             Consume<SearchReindexRequested>(BackgroundJobsTopology.SearchReindexConsumer, HandleSearchReindexAsync, stoppingToken),
             Consume<DatabaseMaintenanceRequested>(BackgroundJobsTopology.DatabaseMaintenanceConsumer, HandleDatabaseMaintenanceAsync, stoppingToken),
-            Consume<StaleDatabaseCleanupRequested>(BackgroundJobsTopology.StaleDatabaseCleanupConsumer, HandleStaleDatabaseCleanupAsync, stoppingToken)
+            Consume<StaleDatabaseCleanupRequested>(BackgroundJobsTopology.StaleDatabaseCleanupConsumer, HandleStaleDatabaseCleanupAsync, stoppingToken),
+            Consume<ProcessedMessageCleanupRequested>(BackgroundJobsTopology.ProcessedMessageCleanupConsumer, HandleProcessedMessageCleanupAsync, stoppingToken)
         };
 
         logger.LogInformation("Subscribed to {Count} background job consumers on stream {Stream}.", consumers.Length, Stream.Value);
@@ -49,10 +50,16 @@ public sealed class BackgroundJobConsumerService(
         try
         {
             await MarkAttemptAsync(message);
-            var result = rebuildCoordinator.StartRebuild($"background job {message.IdempotencyKey}");
+
+            // Await the rebuild so the schedule is only marked completed once the
+            // synchronous index rebuild actually finishes (not just when accepted).
+            var result = await rebuildCoordinator.RebuildAsync(
+                $"background job {message.IdempotencyKey}",
+                CancellationToken.None);
             if (!result.Accepted)
             {
                 logger.LogWarning("Typesense reindex request {IdempotencyKey} was not accepted: {Error}", message.IdempotencyKey, result.ErrorMessage);
+                await MarkFailureAsync(message);
                 await context.NackAsync();
                 return;
             }
@@ -63,6 +70,7 @@ public sealed class BackgroundJobConsumerService(
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed handling Typesense reindex request {IdempotencyKey}; nacking", message.IdempotencyKey);
+            await MarkFailureAsync(message);
             await context.NackAsync();
         }
     }
@@ -83,6 +91,7 @@ public sealed class BackgroundJobConsumerService(
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed handling database maintenance request {IdempotencyKey}; nacking", message.IdempotencyKey);
+            await MarkFailureAsync(message);
             await context.NackAsync();
         }
     }
@@ -141,6 +150,37 @@ public sealed class BackgroundJobConsumerService(
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed handling stale database cleanup request {IdempotencyKey}; nacking", message.IdempotencyKey);
+            await MarkFailureAsync(message);
+            await context.NackAsync();
+        }
+    }
+
+    private async Task HandleProcessedMessageCleanupAsync(IJsMessageContext<ProcessedMessageCleanupRequested> context)
+    {
+        var message = context.Message;
+        try
+        {
+            await MarkAttemptAsync(message);
+
+            var cutoff = clock.GetCurrentInstant().Minus(Duration.FromDays(30));
+            await using var command = dataSource.CreateCommand(
+                "DELETE FROM processed_messages WHERE processed_at < @cutoff;");
+            command.Parameters.AddWithValue("cutoff", cutoff.ToDateTimeOffset());
+            command.CommandTimeout = 0;
+            var deletedCount = await command.ExecuteNonQueryAsync();
+
+            await MarkSuccessAsync(message);
+            logger.LogInformation(
+                "Deleted {Count} processed message row(s) older than {Cutoff} for background request {IdempotencyKey}.",
+                deletedCount,
+                cutoff,
+                message.IdempotencyKey);
+            await context.AckAsync();
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed handling processed message cleanup request {IdempotencyKey}; nacking", message.IdempotencyKey);
+            await MarkFailureAsync(message);
             await context.NackAsync();
         }
     }
@@ -157,5 +197,12 @@ public sealed class BackgroundJobConsumerService(
         {
             Key = message.ScheduleKey,
             SucceededAt = clock.GetCurrentInstant()
+        });
+
+    private Task MarkFailureAsync(ScheduledBackgroundRequest message)
+        => messageBus.PublishAsync(ScheduleSubjects.MarkFailure, new ScheduleMarkFailureRequestMessage
+        {
+            Key = message.ScheduleKey,
+            FailedAt = clock.GetCurrentInstant()
         });
 }

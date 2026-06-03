@@ -23,10 +23,10 @@ public sealed record ChannelMediaListRequested : ScheduledBackgroundRequest;
 
 public sealed record StaleDatabaseCleanupRequested : ScheduledBackgroundRequest;
 
+public sealed record ProcessedMessageCleanupRequested : ScheduledBackgroundRequest;
+
 public sealed record DatabaseMaintenanceRequested : ScheduledBackgroundRequest;
 
 public sealed record SearchReindexRequested : ScheduledBackgroundRequest;
 
 public sealed record FilesystemRescanRequested : ScheduledBackgroundRequest;
-
-public sealed record HeavyDataProcessingRequested : ScheduledBackgroundRequest;

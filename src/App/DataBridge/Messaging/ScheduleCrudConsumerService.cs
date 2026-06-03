@@ -30,6 +30,7 @@ public sealed class ScheduleCrudConsumerService(
         _subscriptions.Add(await messageBus.SubscribeAsync<ScheduleDeleteRequestMessage>(ScheduleSubjects.Delete, HandleDeleteAsync, QueueGroup, stoppingToken));
         _subscriptions.Add(await messageBus.SubscribeAsync<ScheduleMarkAttemptRequestMessage>(ScheduleSubjects.MarkAttempt, HandleMarkAttemptAsync, QueueGroup, stoppingToken));
         _subscriptions.Add(await messageBus.SubscribeAsync<ScheduleMarkSuccessRequestMessage>(ScheduleSubjects.MarkSuccess, HandleMarkSuccessAsync, QueueGroup, stoppingToken));
+        _subscriptions.Add(await messageBus.SubscribeAsync<ScheduleMarkFailureRequestMessage>(ScheduleSubjects.MarkFailure, HandleMarkFailureAsync, QueueGroup, stoppingToken));
 
         logger.LogInformation("Subscribed to schedule CRUD subjects.");
 
@@ -205,6 +206,17 @@ public sealed class ScheduleCrudConsumerService(
         }
     }
 
+    private async Task HandleMarkFailureAsync(IMessageContext<ScheduleMarkFailureRequestMessage> context)
+    {
+        using var scope = scopeFactory.CreateScope();
+        var repo = scope.ServiceProvider.GetRequiredService<IScheduledTasksRepository>();
+        var entity = await repo.MarkFailureAsync(context.Message.Key, context.Message.FailedAt);
+        if (entity is not null)
+        {
+            await PublishChangedAsync(entity.Key, ScheduleChangeKind.Updated);
+        }
+    }
+
     private async Task PublishChangedAsync(string key, ScheduleChangeKind kind)
         => await messageBus.PublishAsync(ScheduleSubjects.Changed, new ScheduleChangedMessage
         {
@@ -289,6 +301,7 @@ public sealed class ScheduleCrudConsumerService(
         CatchupPolicy = entity.CatchupPolicy,
         LastAttemptAt = entity.LastAttemptAt,
         LastSuccessAt = entity.LastSuccessAt,
+        LastRunStatus = entity.LastRunStatus,
         NextDueAt = entity.NextDueAt,
         CreatedAt = entity.CreatedAt,
         LastUpdated = entity.LastUpdated

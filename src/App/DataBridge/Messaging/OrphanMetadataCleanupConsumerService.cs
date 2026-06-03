@@ -1,7 +1,4 @@
-using DataBridge.Data;
 using FlySwattr.NATS.Abstractions;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NodaTime;
@@ -9,10 +6,16 @@ using Shared.Messaging;
 
 namespace DataBridge.Messaging;
 
+/// <summary>
+/// Placeholder consumer for the <c>orphan_metadata_cleanup</c> task. Cleaning up
+/// metadata that has no associated media file is not yet implemented; the previous
+/// processed-message purge logic now lives in <see cref="BackgroundJobConsumerService"/>
+/// under the <c>processed_message_cleanup</c> task. This handler drains and
+/// acknowledges requests (marking the schedule) so the queue does not back up.
+/// </summary>
 public sealed class OrphanMetadataCleanupConsumerService(
     IJetStreamConsumer consumer,
     IMessageBus messageBus,
-    IServiceScopeFactory scopeFactory,
     IClock clock,
     ILogger<OrphanMetadataCleanupConsumerService> logger) : BackgroundService
 {
@@ -38,12 +41,10 @@ public sealed class OrphanMetadataCleanupConsumerService(
                 AttemptedAt = now
             });
 
-            using var scope = scopeFactory.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<DataBridgeDbContext>();
-            var cutoff = now.Minus(Duration.FromDays(30));
-            var deleted = await db.ProcessedMessages
-                .Where(x => x.ProcessedAt < cutoff)
-                .ExecuteDeleteAsync();
+            // No-op placeholder: orphan metadata cleanup is not yet implemented.
+            logger.LogInformation(
+                "Orphan metadata cleanup is a no-op placeholder; acknowledging schedule {ScheduleKey}.",
+                message.ScheduleKey);
 
             await messageBus.PublishAsync(ScheduleSubjects.MarkSuccess, new ScheduleMarkSuccessRequestMessage
             {
@@ -51,16 +52,16 @@ public sealed class OrphanMetadataCleanupConsumerService(
                 SucceededAt = clock.GetCurrentInstant()
             });
 
-            logger.LogInformation(
-                "Deleted {Count} processed message rows older than {Cutoff} for schedule {ScheduleKey}.",
-                deleted,
-                cutoff,
-                message.ScheduleKey);
             await context.AckAsync();
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed handling orphan metadata cleanup for schedule {ScheduleKey}; nacking", message.ScheduleKey);
+            await messageBus.PublishAsync(ScheduleSubjects.MarkFailure, new ScheduleMarkFailureRequestMessage
+            {
+                Key = message.ScheduleKey,
+                FailedAt = clock.GetCurrentInstant()
+            });
             await context.NackAsync();
         }
     }

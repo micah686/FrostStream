@@ -14,4 +14,5 @@ public interface IScheduledTasksRepository
     Task<bool> DeleteAsync(string key, CancellationToken cancellationToken = default);
     Task MarkAttemptAsync(string key, Instant attemptedAt, CancellationToken cancellationToken = default);
     Task<ScheduledTaskEntity?> MarkSuccessAsync(string key, Instant succeededAt, CancellationToken cancellationToken = default);
+    Task<ScheduledTaskEntity?> MarkFailureAsync(string key, Instant failedAt, CancellationToken cancellationToken = default);
 }

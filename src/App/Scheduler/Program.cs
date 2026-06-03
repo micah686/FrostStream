@@ -75,7 +75,7 @@ internal static class Program
         builder.Services.AddTransient<Jobs.DatabaseMaintenanceJob>();
         builder.Services.AddTransient<Jobs.SearchReindexJob>();
         builder.Services.AddTransient<Jobs.FilesystemRescanJob>();
-        builder.Services.AddTransient<Jobs.HeavyDataProcessingScheduleJob>();
+        builder.Services.AddTransient<Jobs.ProcessedMessageCleanupJob>();
 
         builder.Services.AddSingleton<IChannelUpdateChecker, ChannelUpdateChecker>();
         builder.Services.AddSingleton<IChannelAssetRefresher, ChannelAssetRefresher>();
@@ -85,7 +85,7 @@ internal static class Program
         builder.Services.AddSingleton<IDatabaseMaintenanceScheduler, DatabaseMaintenanceScheduler>();
         builder.Services.AddSingleton<ISearchReindexScheduler, SearchReindexScheduler>();
         builder.Services.AddSingleton<IFilesystemRescanScheduler, FilesystemRescanScheduler>();
-        builder.Services.AddSingleton<IHeavyDataProcessingScheduler, HeavyDataProcessingScheduler>();
+        builder.Services.AddSingleton<IProcessedMessageCleanupScheduler, ProcessedMessageCleanupScheduler>();
 
         builder.Services.AddHostedService<ScheduleHydrationService>();
         builder.Services.AddHostedService<ScheduleChangeListener>();
