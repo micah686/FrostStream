@@ -5,58 +5,58 @@ using Shared.Storage;
 
 namespace WebAPI.Controllers;
 
-public abstract class StorageUpsertRequestBase
+public interface IStorageRequest<out TParameters>
+    where TParameters : StorageParametersBase
+{
+    string? Description { get; }
+
+    TParameters ToParameters();
+}
+
+public interface IStorageUpsertRequest<out TParameters> : IStorageRequest<TParameters>
+    where TParameters : StorageParametersBase
+{
+    string Key { get; }
+}
+
+public abstract class StorageUpdateRequestBase<TParameters> : IStorageRequest<TParameters>, IValidatableObject
+    where TParameters : StorageParametersBase
+{
+    [StringLength(500)]
+    public string? Description { get; init; }
+
+    public abstract TParameters ToParameters();
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+        => StorageParametersSerializer.Validate(ToParameters()).Select(error => new ValidationResult(error));
+}
+
+public class LocalStorageUpdateRequest : StorageUpdateRequestBase<PosixLocalStorageParameters>
+{
+    [Required]
+    public LocalStorageProtocol Protocol { get; init; }
+
+    [Required]
+    [MinLength(1)]
+    public required string Path { get; init; }
+
+    public override PosixLocalStorageParameters ToParameters()
+        => new()
+        {
+            Protocol = Protocol,
+            Path = Path
+        };
+}
+
+public sealed class LocalStorageUpsertRequest : LocalStorageUpdateRequest, IStorageUpsertRequest<PosixLocalStorageParameters>
 {
     [Required]
     [StringLength(100, MinimumLength = 2)]
     [RegularExpression("^[a-z0-9-]{2,100}$")]
     public required string Key { get; init; }
-
-    [StringLength(500)]
-    public string? Description { get; init; }
 }
 
-public abstract class StorageUpdateRequestBase
-{
-    [StringLength(500)]
-    public string? Description { get; init; }
-}
-
-public sealed class LocalStorageUpsertRequest : StorageUpsertRequestBase, IValidatableObject
-{
-    [Required]
-    public LocalStorageProtocol Protocol { get; init; }
-
-    [Required]
-    [MinLength(1)]
-    public required string Path { get; init; }
-
-    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
-        => StorageParametersSerializer.Validate(new PosixLocalStorageParameters
-        {
-            Protocol = Protocol,
-            Path = Path
-        }).Select(error => new ValidationResult(error, [nameof(Path)]));
-}
-
-public sealed class LocalStorageUpdateRequest : StorageUpdateRequestBase, IValidatableObject
-{
-    [Required]
-    public LocalStorageProtocol Protocol { get; init; }
-
-    [Required]
-    [MinLength(1)]
-    public required string Path { get; init; }
-
-    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
-        => StorageParametersSerializer.Validate(new PosixLocalStorageParameters
-        {
-            Protocol = Protocol,
-            Path = Path
-        }).Select(error => new ValidationResult(error, [nameof(Path)]));
-}
-
-public sealed class NetworkStorageUpsertRequest : StorageUpsertRequestBase, IValidatableObject
+public class NetworkStorageUpdateRequest : StorageUpdateRequestBase<StreamingNetworkStorageParameters>
 {
     [Required]
     public NetworkStorageProtocol Protocol { get; init; }
@@ -74,8 +74,8 @@ public sealed class NetworkStorageUpsertRequest : StorageUpsertRequestBase, IVal
     public string? PublicKey { get; init; }
     public string? BasePath { get; init; }
 
-    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
-        => StorageParametersSerializer.Validate(new StreamingNetworkStorageParameters
+    public override StreamingNetworkStorageParameters ToParameters()
+        => new()
         {
             Protocol = Protocol,
             Host = Host,
@@ -85,42 +85,18 @@ public sealed class NetworkStorageUpsertRequest : StorageUpsertRequestBase, IVal
             PrivateKey = PrivateKey,
             PublicKey = PublicKey,
             BasePath = BasePath
-        }).Select(error => new ValidationResult(error));
+        };
 }
 
-public sealed class NetworkStorageUpdateRequest : StorageUpdateRequestBase, IValidatableObject
+public sealed class NetworkStorageUpsertRequest : NetworkStorageUpdateRequest, IStorageUpsertRequest<StreamingNetworkStorageParameters>
 {
     [Required]
-    public NetworkStorageProtocol Protocol { get; init; }
-
-    [Required]
-    [MinLength(1)]
-    public required string Host { get; init; }
-
-    [Range(1, 65535)]
-    public int? Port { get; init; }
-
-    public string? Username { get; init; }
-    public string? Password { get; init; }
-    public string? PrivateKey { get; init; }
-    public string? PublicKey { get; init; }
-    public string? BasePath { get; init; }
-
-    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
-        => StorageParametersSerializer.Validate(new StreamingNetworkStorageParameters
-        {
-            Protocol = Protocol,
-            Host = Host,
-            Port = Port,
-            Username = Username,
-            Password = Password,
-            PrivateKey = PrivateKey,
-            PublicKey = PublicKey,
-            BasePath = BasePath
-        }).Select(error => new ValidationResult(error));
+    [StringLength(100, MinimumLength = 2)]
+    [RegularExpression("^[a-z0-9-]{2,100}$")]
+    public required string Key { get; init; }
 }
 
-public sealed class S3CompatibleObjectStorageUpsertRequest : StorageUpsertRequestBase, IValidatableObject
+public class S3CompatibleObjectStorageUpdateRequest : StorageUpdateRequestBase<S3CompatibleObjectStorageParameters>
 {
     [Required]
     public S3CompatibleObjectStorageProvider Provider { get; init; }
@@ -144,8 +120,8 @@ public sealed class S3CompatibleObjectStorageUpsertRequest : StorageUpsertReques
     public bool ForcePathStyle { get; init; }
     public bool? UseSsl { get; init; }
 
-    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
-        => StorageParametersSerializer.Validate(new S3CompatibleObjectStorageParameters
+    public override S3CompatibleObjectStorageParameters ToParameters()
+        => new()
         {
             Provider = Provider,
             BucketName = BucketName,
@@ -156,49 +132,18 @@ public sealed class S3CompatibleObjectStorageUpsertRequest : StorageUpsertReques
             SessionTokenSecretId = SessionTokenSecretId,
             ForcePathStyle = ForcePathStyle,
             UseSsl = UseSsl
-        }).Select(error => new ValidationResult(error));
+        };
 }
 
-public sealed class S3CompatibleObjectStorageUpdateRequest : StorageUpdateRequestBase, IValidatableObject
+public sealed class S3CompatibleObjectStorageUpsertRequest : S3CompatibleObjectStorageUpdateRequest, IStorageUpsertRequest<S3CompatibleObjectStorageParameters>
 {
     [Required]
-    public S3CompatibleObjectStorageProvider Provider { get; init; }
-
-    [Required]
-    [MinLength(1)]
-    public required string BucketName { get; init; }
-
-    public string? Region { get; init; }
-    public string? Endpoint { get; init; }
-
-    [Required]
-    [MinLength(1)]
-    public required string AccessKeyId { get; init; }
-
-    [Required]
-    [MinLength(1)]
-    public required string SecretKeyId { get; init; }
-
-    public string? SessionTokenSecretId { get; init; }
-    public bool ForcePathStyle { get; init; }
-    public bool? UseSsl { get; init; }
-
-    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
-        => StorageParametersSerializer.Validate(new S3CompatibleObjectStorageParameters
-        {
-            Provider = Provider,
-            BucketName = BucketName,
-            Region = Region,
-            Endpoint = Endpoint,
-            AccessKeyId = AccessKeyId,
-            SecretKeyId = SecretKeyId,
-            SessionTokenSecretId = SessionTokenSecretId,
-            ForcePathStyle = ForcePathStyle,
-            UseSsl = UseSsl
-        }).Select(error => new ValidationResult(error));
+    [StringLength(100, MinimumLength = 2)]
+    [RegularExpression("^[a-z0-9-]{2,100}$")]
+    public required string Key { get; init; }
 }
 
-public sealed class AzureBlobObjectStorageUpsertRequest : StorageUpsertRequestBase, IValidatableObject
+public class AzureBlobObjectStorageUpdateRequest : StorageUpdateRequestBase<AzureBlobObjectStorageParameters>
 {
     [Required]
     public AzureBlobCredentialMode CredentialMode { get; init; }
@@ -209,8 +154,8 @@ public sealed class AzureBlobObjectStorageUpsertRequest : StorageUpsertRequestBa
     public string? AzureConnectionStringSecretId { get; init; }
     public string? AzureSasUrlSecretId { get; init; }
 
-    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
-        => StorageParametersSerializer.Validate(new AzureBlobObjectStorageParameters
+    public override AzureBlobObjectStorageParameters ToParameters()
+        => new()
         {
             CredentialMode = CredentialMode,
             ContainerName = ContainerName,
@@ -218,33 +163,18 @@ public sealed class AzureBlobObjectStorageUpsertRequest : StorageUpsertRequestBa
             AzureAccountKeySecretId = AzureAccountKeySecretId,
             AzureConnectionStringSecretId = AzureConnectionStringSecretId,
             AzureSasUrlSecretId = AzureSasUrlSecretId
-        }).Select(error => new ValidationResult(error));
+        };
 }
 
-public sealed class AzureBlobObjectStorageUpdateRequest : StorageUpdateRequestBase, IValidatableObject
+public sealed class AzureBlobObjectStorageUpsertRequest : AzureBlobObjectStorageUpdateRequest, IStorageUpsertRequest<AzureBlobObjectStorageParameters>
 {
     [Required]
-    public AzureBlobCredentialMode CredentialMode { get; init; }
-
-    public string? ContainerName { get; init; }
-    public string? AzureAccountName { get; init; }
-    public string? AzureAccountKeySecretId { get; init; }
-    public string? AzureConnectionStringSecretId { get; init; }
-    public string? AzureSasUrlSecretId { get; init; }
-
-    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
-        => StorageParametersSerializer.Validate(new AzureBlobObjectStorageParameters
-        {
-            CredentialMode = CredentialMode,
-            ContainerName = ContainerName,
-            AzureAccountName = AzureAccountName,
-            AzureAccountKeySecretId = AzureAccountKeySecretId,
-            AzureConnectionStringSecretId = AzureConnectionStringSecretId,
-            AzureSasUrlSecretId = AzureSasUrlSecretId
-        }).Select(error => new ValidationResult(error));
+    [StringLength(100, MinimumLength = 2)]
+    [RegularExpression("^[a-z0-9-]{2,100}$")]
+    public required string Key { get; init; }
 }
 
-public sealed class GoogleCloudStorageObjectStorageUpsertRequest : StorageUpsertRequestBase, IValidatableObject
+public class GoogleCloudStorageObjectStorageUpdateRequest : StorageUpdateRequestBase<GoogleCloudStorageObjectStorageParameters>
 {
     [Required]
     [MinLength(1)]
@@ -258,8 +188,8 @@ public sealed class GoogleCloudStorageObjectStorageUpsertRequest : StorageUpsert
     public string? GcpCredentialsFilePath { get; init; }
     public string? GcpProjectId { get; init; }
 
-    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
-        => StorageParametersSerializer.Validate(new GoogleCloudStorageObjectStorageParameters
+    public override GoogleCloudStorageObjectStorageParameters ToParameters()
+        => new()
         {
             BucketName = BucketName,
             CredentialMode = CredentialMode,
@@ -267,33 +197,15 @@ public sealed class GoogleCloudStorageObjectStorageUpsertRequest : StorageUpsert
             GcpCredentialsJsonIsBase64Encoded = GcpCredentialsJsonIsBase64Encoded,
             GcpCredentialsFilePath = GcpCredentialsFilePath,
             GcpProjectId = GcpProjectId
-        }).Select(error => new ValidationResult(error));
+        };
 }
 
-public sealed class GoogleCloudStorageObjectStorageUpdateRequest : StorageUpdateRequestBase, IValidatableObject
+public sealed class GoogleCloudStorageObjectStorageUpsertRequest : GoogleCloudStorageObjectStorageUpdateRequest, IStorageUpsertRequest<GoogleCloudStorageObjectStorageParameters>
 {
     [Required]
-    [MinLength(1)]
-    public required string BucketName { get; init; }
-
-    [Required]
-    public GoogleCloudStorageCredentialMode CredentialMode { get; init; }
-
-    public JsonElement? GcpCredentialsJson { get; init; }
-    public bool GcpCredentialsJsonIsBase64Encoded { get; init; }
-    public string? GcpCredentialsFilePath { get; init; }
-    public string? GcpProjectId { get; init; }
-
-    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
-        => StorageParametersSerializer.Validate(new GoogleCloudStorageObjectStorageParameters
-        {
-            BucketName = BucketName,
-            CredentialMode = CredentialMode,
-            GcpCredentialsJson = GcpCredentialsJson,
-            GcpCredentialsJsonIsBase64Encoded = GcpCredentialsJsonIsBase64Encoded,
-            GcpCredentialsFilePath = GcpCredentialsFilePath,
-            GcpProjectId = GcpProjectId
-        }).Select(error => new ValidationResult(error));
+    [StringLength(100, MinimumLength = 2)]
+    [RegularExpression("^[a-z0-9-]{2,100}$")]
+    public required string Key { get; init; }
 }
 
 public abstract class StorageConfigResponseBase

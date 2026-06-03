@@ -24,268 +24,131 @@ public class StorageController : ControllerBase
     public async Task<ActionResult<LocalStorageConfigResponse>> CreateLocalStorage(
         [FromBody] LocalStorageUpsertRequest request,
         CancellationToken cancellationToken)
-    {
-        var response = await SendRequestAsync(
+        => await CreateStorageAsync<LocalStorageUpsertRequest, StorageCreateLocalRequestMessage, PosixLocalStorageParameters, LocalStorageConfigResponse>(
             StorageSubjects.CreateLocalStorage,
-            new StorageCreateLocalRequestMessage
-            {
-                Key = request.Key,
-                Description = request.Description,
-                Parameters = new PosixLocalStorageParameters
-                {
-                    Protocol = request.Protocol,
-                    Path = request.Path
-                }
-            },
+            request,
+            (key, description, parameters) => new StorageCreateLocalRequestMessage { Key = key, Description = description, Parameters = parameters },
+            MapLocalResponse,
+            StorageMethod.Local,
             cancellationToken);
-
-        return MapTypedStorageResponse(response, MapLocalResponse, StorageMethod.Local);
-    }
 
     [HttpPut("local/update/{key}")]
     public async Task<ActionResult<LocalStorageConfigResponse>> UpdateLocalStorage(
         string key,
         [FromBody] LocalStorageUpdateRequest request,
         CancellationToken cancellationToken)
-    {
-        var response = await SendRequestAsync(
+        => await UpdateStorageAsync<LocalStorageUpdateRequest, StorageUpdateLocalRequestMessage, PosixLocalStorageParameters, LocalStorageConfigResponse>(
             StorageSubjects.UpdateLocalStorage,
-            new StorageUpdateLocalRequestMessage
-            {
-                Key = key,
-                Description = request.Description,
-                Parameters = new PosixLocalStorageParameters
-                {
-                    Protocol = request.Protocol,
-                    Path = request.Path
-                }
-            },
+            key,
+            request,
+            (storageKey, description, parameters) => new StorageUpdateLocalRequestMessage { Key = storageKey, Description = description, Parameters = parameters },
+            MapLocalResponse,
+            StorageMethod.Local,
             cancellationToken);
-
-        return MapTypedStorageResponse(response, MapLocalResponse, StorageMethod.Local);
-    }
 
     [HttpPost("network/create")]
     public async Task<ActionResult<NetworkStorageConfigResponse>> CreateNetworkStorage(
         [FromBody] NetworkStorageUpsertRequest request,
         CancellationToken cancellationToken)
-    {
-        var response = await SendRequestAsync(
+        => await CreateStorageAsync<NetworkStorageUpsertRequest, StorageCreateStreamingRequestMessage, StreamingNetworkStorageParameters, NetworkStorageConfigResponse>(
             StorageSubjects.CreateNetworkStorage,
-            new StorageCreateStreamingRequestMessage
-            {
-                Key = request.Key,
-                Description = request.Description,
-                Parameters = new StreamingNetworkStorageParameters
-                {
-                    Protocol = request.Protocol,
-                    Host = request.Host,
-                    Port = request.Port,
-                    Username = request.Username,
-                    Password = request.Password,
-                    PrivateKey = request.PrivateKey,
-                    PublicKey = request.PublicKey,
-                    BasePath = request.BasePath
-                }
-            },
+            request,
+            (key, description, parameters) => new StorageCreateStreamingRequestMessage { Key = key, Description = description, Parameters = parameters },
+            MapNetworkResponse,
+            StorageMethod.Network,
             cancellationToken);
-
-        return MapTypedStorageResponse(response, MapNetworkResponse, StorageMethod.Network);
-    }
 
     [HttpPut("network/update/{key}")]
     public async Task<ActionResult<NetworkStorageConfigResponse>> UpdateNetworkStorage(
         string key,
         [FromBody] NetworkStorageUpdateRequest request,
         CancellationToken cancellationToken)
-    {
-        var response = await SendRequestAsync(
+        => await UpdateStorageAsync<NetworkStorageUpdateRequest, StorageUpdateStreamingRequestMessage, StreamingNetworkStorageParameters, NetworkStorageConfigResponse>(
             StorageSubjects.UpdateNetworkStorage,
-            new StorageUpdateStreamingRequestMessage
-            {
-                Key = key,
-                Description = request.Description,
-                Parameters = new StreamingNetworkStorageParameters
-                {
-                    Protocol = request.Protocol,
-                    Host = request.Host,
-                    Port = request.Port,
-                    Username = request.Username,
-                    Password = request.Password,
-                    PrivateKey = request.PrivateKey,
-                    PublicKey = request.PublicKey,
-                    BasePath = request.BasePath
-                }
-            },
+            key,
+            request,
+            (storageKey, description, parameters) => new StorageUpdateStreamingRequestMessage { Key = storageKey, Description = description, Parameters = parameters },
+            MapNetworkResponse,
+            StorageMethod.Network,
             cancellationToken);
-
-        return MapTypedStorageResponse(response, MapNetworkResponse, StorageMethod.Network);
-    }
 
     [HttpPost("object/s3-compatible/create")]
     public async Task<ActionResult<S3CompatibleObjectStorageConfigResponse>> CreateS3CompatibleObjectStorage(
         [FromBody] S3CompatibleObjectStorageUpsertRequest request,
         CancellationToken cancellationToken)
-    {
-        var response = await SendRequestAsync(
+        => await CreateStorageAsync<S3CompatibleObjectStorageUpsertRequest, StorageCreateS3CompatibleObjectRequestMessage, S3CompatibleObjectStorageParameters, S3CompatibleObjectStorageConfigResponse>(
             StorageSubjects.CreateS3CompatibleObjectStorage,
-            new StorageCreateS3CompatibleObjectRequestMessage
-            {
-                Key = request.Key,
-                Description = request.Description,
-                Parameters = new S3CompatibleObjectStorageParameters
-                {
-                    Provider = request.Provider,
-                    BucketName = request.BucketName,
-                    Region = request.Region,
-                    Endpoint = request.Endpoint,
-                    AccessKeyId = request.AccessKeyId,
-                    SecretKeyId = request.SecretKeyId,
-                    SessionTokenSecretId = request.SessionTokenSecretId,
-                    ForcePathStyle = request.ForcePathStyle,
-                    UseSsl = request.UseSsl
-                }
-            },
+            request,
+            (key, description, parameters) => new StorageCreateS3CompatibleObjectRequestMessage { Key = key, Description = description, Parameters = parameters },
+            MapS3CompatibleObjectResponse,
+            StorageMethod.ObjectStorage,
             cancellationToken);
-
-        return MapTypedStorageResponse(response, MapS3CompatibleObjectResponse, StorageMethod.ObjectStorage);
-    }
 
     [HttpPut("object/s3-compatible/update/{key}")]
     public async Task<ActionResult<S3CompatibleObjectStorageConfigResponse>> UpdateS3CompatibleObjectStorage(
         string key,
         [FromBody] S3CompatibleObjectStorageUpdateRequest request,
         CancellationToken cancellationToken)
-    {
-        var response = await SendRequestAsync(
+        => await UpdateStorageAsync<S3CompatibleObjectStorageUpdateRequest, StorageUpdateS3CompatibleObjectRequestMessage, S3CompatibleObjectStorageParameters, S3CompatibleObjectStorageConfigResponse>(
             StorageSubjects.UpdateS3CompatibleObjectStorage,
-            new StorageUpdateS3CompatibleObjectRequestMessage
-            {
-                Key = key,
-                Description = request.Description,
-                Parameters = new S3CompatibleObjectStorageParameters
-                {
-                    Provider = request.Provider,
-                    BucketName = request.BucketName,
-                    Region = request.Region,
-                    Endpoint = request.Endpoint,
-                    AccessKeyId = request.AccessKeyId,
-                    SecretKeyId = request.SecretKeyId,
-                    SessionTokenSecretId = request.SessionTokenSecretId,
-                    ForcePathStyle = request.ForcePathStyle,
-                    UseSsl = request.UseSsl
-                }
-            },
+            key,
+            request,
+            (storageKey, description, parameters) => new StorageUpdateS3CompatibleObjectRequestMessage { Key = storageKey, Description = description, Parameters = parameters },
+            MapS3CompatibleObjectResponse,
+            StorageMethod.ObjectStorage,
             cancellationToken);
-
-        return MapTypedStorageResponse(response, MapS3CompatibleObjectResponse, StorageMethod.ObjectStorage);
-    }
 
     [HttpPost("object/azure-blob/create")]
     public async Task<ActionResult<AzureBlobObjectStorageConfigResponse>> CreateAzureBlobObjectStorage(
         [FromBody] AzureBlobObjectStorageUpsertRequest request,
         CancellationToken cancellationToken)
-    {
-        var response = await SendRequestAsync(
+        => await CreateStorageAsync<AzureBlobObjectStorageUpsertRequest, StorageCreateAzureBlobObjectRequestMessage, AzureBlobObjectStorageParameters, AzureBlobObjectStorageConfigResponse>(
             StorageSubjects.CreateAzureBlobObjectStorage,
-            new StorageCreateAzureBlobObjectRequestMessage
-            {
-                Key = request.Key,
-                Description = request.Description,
-                Parameters = new AzureBlobObjectStorageParameters
-                {
-                    CredentialMode = request.CredentialMode,
-                    ContainerName = request.ContainerName,
-                    AzureAccountName = request.AzureAccountName,
-                    AzureAccountKeySecretId = request.AzureAccountKeySecretId,
-                    AzureConnectionStringSecretId = request.AzureConnectionStringSecretId,
-                    AzureSasUrlSecretId = request.AzureSasUrlSecretId
-                }
-            },
+            request,
+            (key, description, parameters) => new StorageCreateAzureBlobObjectRequestMessage { Key = key, Description = description, Parameters = parameters },
+            MapAzureBlobObjectResponse,
+            StorageMethod.ObjectStorage,
             cancellationToken);
-
-        return MapTypedStorageResponse(response, MapAzureBlobObjectResponse, StorageMethod.ObjectStorage);
-    }
 
     [HttpPut("object/azure-blob/update/{key}")]
     public async Task<ActionResult<AzureBlobObjectStorageConfigResponse>> UpdateAzureBlobObjectStorage(
         string key,
         [FromBody] AzureBlobObjectStorageUpdateRequest request,
         CancellationToken cancellationToken)
-    {
-        var response = await SendRequestAsync(
+        => await UpdateStorageAsync<AzureBlobObjectStorageUpdateRequest, StorageUpdateAzureBlobObjectRequestMessage, AzureBlobObjectStorageParameters, AzureBlobObjectStorageConfigResponse>(
             StorageSubjects.UpdateAzureBlobObjectStorage,
-            new StorageUpdateAzureBlobObjectRequestMessage
-            {
-                Key = key,
-                Description = request.Description,
-                Parameters = new AzureBlobObjectStorageParameters
-                {
-                    CredentialMode = request.CredentialMode,
-                    ContainerName = request.ContainerName,
-                    AzureAccountName = request.AzureAccountName,
-                    AzureAccountKeySecretId = request.AzureAccountKeySecretId,
-                    AzureConnectionStringSecretId = request.AzureConnectionStringSecretId,
-                    AzureSasUrlSecretId = request.AzureSasUrlSecretId
-                }
-            },
+            key,
+            request,
+            (storageKey, description, parameters) => new StorageUpdateAzureBlobObjectRequestMessage { Key = storageKey, Description = description, Parameters = parameters },
+            MapAzureBlobObjectResponse,
+            StorageMethod.ObjectStorage,
             cancellationToken);
-
-        return MapTypedStorageResponse(response, MapAzureBlobObjectResponse, StorageMethod.ObjectStorage);
-    }
 
     [HttpPost("object/google-cloud-storage/create")]
     public async Task<ActionResult<GoogleCloudStorageObjectStorageConfigResponse>> CreateGoogleCloudStorageObjectStorage(
         [FromBody] GoogleCloudStorageObjectStorageUpsertRequest request,
         CancellationToken cancellationToken)
-    {
-        var response = await SendRequestAsync(
+        => await CreateStorageAsync<GoogleCloudStorageObjectStorageUpsertRequest, StorageCreateGoogleCloudStorageObjectRequestMessage, GoogleCloudStorageObjectStorageParameters, GoogleCloudStorageObjectStorageConfigResponse>(
             StorageSubjects.CreateGoogleCloudStorageObjectStorage,
-            new StorageCreateGoogleCloudStorageObjectRequestMessage
-            {
-                Key = request.Key,
-                Description = request.Description,
-                Parameters = new GoogleCloudStorageObjectStorageParameters
-                {
-                    BucketName = request.BucketName,
-                    CredentialMode = request.CredentialMode,
-                    GcpCredentialsJson = request.GcpCredentialsJson,
-                    GcpCredentialsJsonIsBase64Encoded = request.GcpCredentialsJsonIsBase64Encoded,
-                    GcpCredentialsFilePath = request.GcpCredentialsFilePath,
-                    GcpProjectId = request.GcpProjectId
-                }
-            },
+            request,
+            (key, description, parameters) => new StorageCreateGoogleCloudStorageObjectRequestMessage { Key = key, Description = description, Parameters = parameters },
+            MapGoogleCloudStorageObjectResponse,
+            StorageMethod.ObjectStorage,
             cancellationToken);
-
-        return MapTypedStorageResponse(response, MapGoogleCloudStorageObjectResponse, StorageMethod.ObjectStorage);
-    }
 
     [HttpPut("object/google-cloud-storage/update/{key}")]
     public async Task<ActionResult<GoogleCloudStorageObjectStorageConfigResponse>> UpdateGoogleCloudStorageObjectStorage(
         string key,
         [FromBody] GoogleCloudStorageObjectStorageUpdateRequest request,
         CancellationToken cancellationToken)
-    {
-        var response = await SendRequestAsync(
+        => await UpdateStorageAsync<GoogleCloudStorageObjectStorageUpdateRequest, StorageUpdateGoogleCloudStorageObjectRequestMessage, GoogleCloudStorageObjectStorageParameters, GoogleCloudStorageObjectStorageConfigResponse>(
             StorageSubjects.UpdateGoogleCloudStorageObjectStorage,
-            new StorageUpdateGoogleCloudStorageObjectRequestMessage
-            {
-                Key = key,
-                Description = request.Description,
-                Parameters = new GoogleCloudStorageObjectStorageParameters
-                {
-                    BucketName = request.BucketName,
-                    CredentialMode = request.CredentialMode,
-                    GcpCredentialsJson = request.GcpCredentialsJson,
-                    GcpCredentialsJsonIsBase64Encoded = request.GcpCredentialsJsonIsBase64Encoded,
-                    GcpCredentialsFilePath = request.GcpCredentialsFilePath,
-                    GcpProjectId = request.GcpProjectId
-                }
-            },
+            key,
+            request,
+            (storageKey, description, parameters) => new StorageUpdateGoogleCloudStorageObjectRequestMessage { Key = storageKey, Description = description, Parameters = parameters },
+            MapGoogleCloudStorageObjectResponse,
+            StorageMethod.ObjectStorage,
             cancellationToken);
-
-        return MapTypedStorageResponse(response, MapGoogleCloudStorageObjectResponse, StorageMethod.ObjectStorage);
-    }
 
     [HttpGet("list")]
     public async Task<ActionResult<IReadOnlyCollection<StorageConfigDto>>> ListStorage(CancellationToken cancellationToken)
@@ -373,6 +236,43 @@ public class StorageController : ControllerBase
             _logger.LogError(ex, "Failed processing storage request on subject '{Subject}'", subject);
             return null;
         }
+    }
+
+    private async Task<ActionResult<TResponse>> CreateStorageAsync<TRequest, TMessage, TParameters, TResponse>(
+        string subject,
+        TRequest request,
+        Func<string, string?, TParameters, TMessage> messageFactory,
+        Func<StorageConfigDto, TResponse> map,
+        StorageMethod expectedMethod,
+        CancellationToken cancellationToken)
+        where TRequest : IStorageUpsertRequest<TParameters>
+        where TParameters : StorageParametersBase
+    {
+        var response = await SendRequestAsync(
+            subject,
+            messageFactory(request.Key, request.Description, request.ToParameters()),
+            cancellationToken);
+
+        return MapTypedStorageResponse(response, map, expectedMethod);
+    }
+
+    private async Task<ActionResult<TResponse>> UpdateStorageAsync<TRequest, TMessage, TParameters, TResponse>(
+        string subject,
+        string key,
+        TRequest request,
+        Func<string, string?, TParameters, TMessage> messageFactory,
+        Func<StorageConfigDto, TResponse> map,
+        StorageMethod expectedMethod,
+        CancellationToken cancellationToken)
+        where TRequest : IStorageRequest<TParameters>
+        where TParameters : StorageParametersBase
+    {
+        var response = await SendRequestAsync(
+            subject,
+            messageFactory(key, request.Description, request.ToParameters()),
+            cancellationToken);
+
+        return MapTypedStorageResponse(response, map, expectedMethod);
     }
 
     private ActionResult<TResponse> MapTypedStorageResponse<TResponse>(
