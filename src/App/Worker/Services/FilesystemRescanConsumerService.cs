@@ -1,6 +1,5 @@
 using System.IO.Pipelines;
 using System.Text.Json;
-using FluentStorage.Blobs;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -19,7 +18,7 @@ public sealed class FilesystemRescanConsumerService(
     IJetStreamConsumer consumer,
     IMessageBus messageBus,
     Func<string, IObjectStore> objectStoreFactory,
-    IBlobStorageProvider blobStorageProvider,
+    IStorageEnumerator storageEnumerator,
     IClock clock,
     ILogger<FilesystemRescanConsumerService> logger) : BackgroundService
 {
@@ -183,18 +182,11 @@ public sealed class FilesystemRescanConsumerService(
         Stream target,
         CancellationToken cancellationToken)
     {
-        var blobStorage = await blobStorageProvider.GetAsync(storageKey, cancellationToken);
-
-        logger.LogWarning(
-            "Filesystem rescan storage listing for {StorageKey} uses FluentStorage ListAsync, which materializes the backend listing before upload.",
-            storageKey);
-
-        var blobs = await blobStorage.ListAsync(new ListOptions { Recurse = true }, cancellationToken);
         var count = 0;
         await using var writer = new StreamWriter(target, leaveOpen: true);
-        foreach (var blob in blobs.Where(b => b.IsFile))
+        await foreach (var path in storageEnumerator.EnumerateFilePathsAsync(storageKey, cancellationToken))
         {
-            var normalized = StoragePathNormalizer.Normalize(blob.FullPath);
+            var normalized = StoragePathNormalizer.Normalize(path);
             await writer.WriteLineAsync(JsonSerializer.Serialize(normalized).AsMemory(), cancellationToken);
             count++;
         }

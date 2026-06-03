@@ -58,6 +58,7 @@ class Program
         builder.Services.AddSingleton<IClock>(SystemClock.Instance);
         builder.Services.AddOpenBaoSecretStore(builder.Configuration);
         builder.Services.AddFrostStreamStorage();
+        builder.Services.AddSingleton<IStorageEnumerator, StorageEnumerator>();
 
         // yt-dlp wiring. The binary downloader writes into <BaseDirectory>/tools and the
         // client points at the predicted absolute paths so the first invocation finds them
