@@ -6,7 +6,7 @@ using Shared.Storage;
 using System.Net;
 using System.Net.Http.Json;
 using TUnit.Core;
-using WebAPI.Controllers;
+using WebAPI.Features.Storage.Models;
 
 namespace IntegrationTests.Storage;
 

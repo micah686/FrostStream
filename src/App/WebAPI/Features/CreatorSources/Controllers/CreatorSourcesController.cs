@@ -1,11 +1,11 @@
-using System.ComponentModel.DataAnnotations;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.AspNetCore.Mvc;
 using NodaTime;
 using Shared.Database;
 using Shared.Messaging;
+using WebAPI.Features.CreatorSources.Models;
 
-namespace WebAPI.Controllers;
+namespace WebAPI.Features.CreatorSources.Controllers;
 
 [ApiController]
 [Route("api/creator-sources")]
@@ -216,54 +216,4 @@ public sealed class CreatorSourcesController(
             CreatedAt = dto.CreatedAt,
             LastUpdated = dto.LastUpdated
         };
-}
-
-public abstract class CreatorSourceRequestBase
-{
-    [Required]
-    [StringLength(50, MinimumLength = 1)]
-    public required string Platform { get; init; }
-
-    public CreatorSourceType SourceType { get; init; }
-
-    [Required]
-    [Url]
-    [StringLength(4096, MinimumLength = 1)]
-    public required string SourceUrl { get; init; }
-
-    public bool ScanEnabled { get; init; } = true;
-
-    [Range(1, 500)]
-    public int IncrementalPageSize { get; init; } = 50;
-
-    [Range(1, 500)]
-    public int ConsecutiveKnownThreshold { get; init; } = 25;
-
-    [Range(1, 365)]
-    public int FullRescanIntervalDays { get; init; } = 30;
-
-    [Range(1, 500)]
-    public int MetadataRefreshWindow { get; init; } = 25;
-}
-
-public sealed class CreatorSourceCreateRequest : CreatorSourceRequestBase;
-
-public sealed class CreatorSourceUpdateRequest : CreatorSourceRequestBase;
-
-public sealed class CreatorSourceResponse
-{
-    public required long Id { get; init; }
-    public required string Platform { get; init; }
-    public required CreatorSourceType SourceType { get; init; }
-    public required string SourceUrl { get; init; }
-    public required bool ScanEnabled { get; init; }
-    public required int IncrementalPageSize { get; init; }
-    public required int ConsecutiveKnownThreshold { get; init; }
-    public required int FullRescanIntervalDays { get; init; }
-    public required int MetadataRefreshWindow { get; init; }
-    public Instant? LastSuccessfulScanAt { get; init; }
-    public Instant? LastFullScanAt { get; init; }
-    public string? LastSeenHighWatermark { get; init; }
-    public required Instant CreatedAt { get; init; }
-    public Instant? LastUpdated { get; init; }
 }

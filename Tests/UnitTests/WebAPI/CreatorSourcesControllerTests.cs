@@ -8,7 +8,8 @@ using Shared.Database;
 using Shared.Messaging;
 using Shouldly;
 using TUnit.Core;
-using WebAPI.Controllers;
+using WebAPI.Features.CreatorSources.Controllers;
+using WebAPI.Features.CreatorSources.Models;
 
 namespace UnitTests.WebAPI;
 

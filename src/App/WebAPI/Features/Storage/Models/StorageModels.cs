@@ -3,7 +3,7 @@ using System.Text.Json;
 using NodaTime;
 using Shared.Storage;
 
-namespace WebAPI.Controllers;
+namespace WebAPI.Features.Storage.Models;
 
 public interface IStorageRequest<out TParameters>
     where TParameters : StorageParametersBase

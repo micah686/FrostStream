@@ -222,9 +222,9 @@ public sealed class StorageStackFixture(SaveChangesInterceptor? interceptor = nu
             .SingleOrDefaultAsync(x => x.Key == key);
     }
 
-    public async Task<WebAPI.Controllers.LocalStorageConfigResponse> CreateLocalAsync(string key, string path)
+    public async Task<WebAPI.Features.Storage.Models.LocalStorageConfigResponse> CreateLocalAsync(string key, string path)
     {
-        var response = await Client.PostAsJsonAsync("/api/storage/local/create", new WebAPI.Controllers.LocalStorageUpsertRequest
+        var response = await Client.PostAsJsonAsync("/api/storage/local/create", new WebAPI.Features.Storage.Models.LocalStorageUpsertRequest
         {
             Key = key,
             Description = "desc",
@@ -233,25 +233,25 @@ public sealed class StorageStackFixture(SaveChangesInterceptor? interceptor = nu
         });
 
         response.EnsureSuccessStatusCode();
-        return (await response.Content.ReadFromJsonAsync<WebAPI.Controllers.LocalStorageConfigResponse>(JsonOptions))!;
+        return (await response.Content.ReadFromJsonAsync<WebAPI.Features.Storage.Models.LocalStorageConfigResponse>(JsonOptions))!;
     }
 
-    public async Task<HttpResponseMessage> CreateNetworkAsync(WebAPI.Controllers.NetworkStorageUpsertRequest request)
+    public async Task<HttpResponseMessage> CreateNetworkAsync(WebAPI.Features.Storage.Models.NetworkStorageUpsertRequest request)
     {
         return await Client.PostAsJsonAsync("/api/storage/network/create", request);
     }
 
-    public async Task<HttpResponseMessage> CreateS3Async(WebAPI.Controllers.S3CompatibleObjectStorageUpsertRequest request)
+    public async Task<HttpResponseMessage> CreateS3Async(WebAPI.Features.Storage.Models.S3CompatibleObjectStorageUpsertRequest request)
     {
         return await Client.PostAsJsonAsync("/api/storage/object/s3-compatible/create", request);
     }
 
-    public async Task<HttpResponseMessage> CreateAzureAsync(WebAPI.Controllers.AzureBlobObjectStorageUpsertRequest request)
+    public async Task<HttpResponseMessage> CreateAzureAsync(WebAPI.Features.Storage.Models.AzureBlobObjectStorageUpsertRequest request)
     {
         return await Client.PostAsJsonAsync("/api/storage/object/azure-blob/create", request);
     }
 
-    public async Task<HttpResponseMessage> CreateGcsAsync(WebAPI.Controllers.GoogleCloudStorageObjectStorageUpsertRequest request)
+    public async Task<HttpResponseMessage> CreateGcsAsync(WebAPI.Features.Storage.Models.GoogleCloudStorageObjectStorageUpsertRequest request)
     {
         return await Client.PostAsJsonAsync("/api/storage/object/google-cloud-storage/create", request);
     }

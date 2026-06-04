@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using NodaTime;
 using Shared.Messaging;
 
-namespace WebAPI.Controllers;
+namespace WebAPI.Features.Metadata.Controllers;
 
 [ApiController]
 [Route("api/metadata")]

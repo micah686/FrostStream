@@ -12,7 +12,7 @@ using Shared.Messaging;
 using Shared.Secrets;
 using Shouldly;
 using TUnit.Core;
-using WebAPI.Controllers;
+using WebAPI.Features.Downloads.Models;
 using YtDlpSharpLib.Options;
 
 namespace IntegrationTests.WebApiHttp;

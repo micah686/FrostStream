@@ -7,7 +7,8 @@ using NSubstitute;
 using Shared.Messaging;
 using Shouldly;
 using TUnit.Core;
-using WebAPI.Controllers;
+using WebAPI.Features.Metadata.Controllers;
+using WebAPI.Features.Metadata.Models;
 
 namespace UnitTests.WebAPI;
 

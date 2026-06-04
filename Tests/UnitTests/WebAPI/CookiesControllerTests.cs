@@ -5,7 +5,8 @@ using NSubstitute;
 using Shared.Secrets;
 using Shouldly;
 using TUnit.Core;
-using WebAPI.Controllers;
+using WebAPI.Features.Cookies.Controllers;
+using WebAPI.Features.Cookies.Models;
 
 namespace UnitTests.WebAPI;
 

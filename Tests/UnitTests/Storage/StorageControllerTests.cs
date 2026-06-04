@@ -7,7 +7,8 @@ using Shouldly;
 using Shared.Messaging;
 using Shared.Storage;
 using TUnit.Core;
-using WebAPI.Controllers;
+using WebAPI.Features.Storage.Controllers;
+using WebAPI.Features.Storage.Models;
 
 namespace UnitTests.Storage;
 

@@ -1,8 +1,8 @@
-using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc;
 using Shared.Secrets;
+using WebAPI.Features.Cookies.Models;
 
-namespace WebAPI.Controllers;
+namespace WebAPI.Features.Cookies.Controllers;
 
 /// <summary>
 /// CRUD for Netscape-formatted cookie files stored in OpenBAO under
@@ -90,12 +90,3 @@ public class CookiesController(ISecretStore secretStore, ILogger<CookiesControll
         => !string.IsNullOrWhiteSpace(key)
            && System.Text.RegularExpressions.Regex.IsMatch(key, "^[a-z0-9-]{2,100}$");
 }
-
-public sealed class CookieUpsertRequest
-{
-    [Required]
-    [MinLength(1)]
-    public required string Content { get; init; }
-}
-
-public sealed record CookieResponse(string Key);

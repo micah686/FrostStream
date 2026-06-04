@@ -1,11 +1,10 @@
-using System.ComponentModel;
-using System.ComponentModel.DataAnnotations;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.AspNetCore.Mvc;
 using NodaTime;
 using Shared.Messaging;
+using WebAPI.Features.Playlists.Models;
 
-namespace WebAPI.Controllers;
+namespace WebAPI.Features.Playlists.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
@@ -139,17 +138,3 @@ public class PlaylistsController(
         return Ok(response.Playlist);
     }
 }
-
-public sealed class PlaylistRequest
-{
-    [Required]
-    [Url]
-    public required string SourceUrl { get; init; }
-
-    [DefaultValue("default")]
-    public string? StorageKey { get; init; }
-
-    public string? RequestedBy { get; init; }
-}
-
-public sealed record PlaylistRequestResponse(Guid PlaylistId, Guid CorrelationId);

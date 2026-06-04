@@ -1,8 +1,9 @@
 using FlySwattr.NATS.Abstractions;
 using Microsoft.AspNetCore.Mvc;
 using Shared.Messaging;
+using WebAPI.Features.Metadata.Models;
 
-namespace WebAPI.Controllers;
+namespace WebAPI.Features.Metadata.Controllers;
 
 [ApiController]
 [Route("api/metadata")]
@@ -355,22 +356,3 @@ public sealed class MetadataController(
     private ObjectResult ServiceUnavailable()
         => StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable.");
 }
-
-public sealed record PagedMetadataResponse<T>(
-    IReadOnlyList<T> Items,
-    int Page,
-    int TotalCount,
-    bool HasMore);
-
-public sealed record MetadataListResponse<T>(
-    IReadOnlyList<T> Items,
-    int TotalCount);
-
-public sealed record AccountListResponse(
-    IReadOnlyList<AccountSummaryDto> Items,
-    string? NextCursor,
-    bool HasMore);
-
-public sealed record TaxonomyListResponse(
-    IReadOnlyList<TaxonomyItemDto> Items,
-    int Total);

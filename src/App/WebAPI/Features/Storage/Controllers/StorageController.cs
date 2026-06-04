@@ -3,8 +3,9 @@ using Microsoft.AspNetCore.Mvc;
 using Shared;
 using Shared.Messaging;
 using Shared.Storage;
+using WebAPI.Features.Storage.Models;
 
-namespace WebAPI.Controllers;
+namespace WebAPI.Features.Storage.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
