@@ -124,6 +124,7 @@ public sealed class StorageStackFixture(SaveChangesInterceptor? interceptor = nu
 
         builder.Services.AddLogging();
         builder.Services.AddSingleton<ISecretStore>(SecretStore);
+        builder.Services.AddSingleton<NodaTime.IClock>(NodaTime.SystemClock.Instance);
         builder.Services.AddDbContext<DataBridgeDbContext>(options =>
         {
             options.UseNpgsql(
