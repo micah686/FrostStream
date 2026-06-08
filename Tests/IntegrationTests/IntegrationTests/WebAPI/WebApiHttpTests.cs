@@ -1,5 +1,7 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using FluentStorage.Blobs;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -8,8 +10,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using NodaTime;
+using NSubstitute;
 using Shared.Messaging;
 using Shared.Secrets;
+using Shared.Storage;
 using Shouldly;
 using TUnit.Core;
 using WebAPI.Features.Downloads.Models;
@@ -19,6 +23,46 @@ namespace IntegrationTests.WebApiHttp;
 
 public sealed class WebApiHttpTests
 {
+    [Test]
+    public async Task Get_Media_Content_Supports_Http_Range_Requests()
+    {
+        var mediaGuid = Guid.NewGuid();
+        var bytes = Enumerable.Range(0, 10).Select(value => (byte)value).ToArray();
+        using var factory = new TestWebApiFactory();
+        factory.MessageBus.MediaContentResponse = new MediaContentResolveResponseMessage
+        {
+            Success = true,
+            Item = new MediaContentLocationDto
+            {
+                MediaGuid = mediaGuid,
+                StorageKey = "storage-a",
+                StoragePath = "media/video.mp4",
+                Version = 3
+            }
+        };
+        factory.BlobStorageProvider.GetAsync("storage-a", Arg.Any<CancellationToken>())
+            .Returns(factory.BlobStorage);
+        factory.BlobStorage.OpenReadAsync("media/video.mp4", Arg.Any<CancellationToken>())
+            .Returns(_ => Task.FromResult<Stream>(new MemoryStream(bytes, writable: false)));
+
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"/api/media/{mediaGuid}/content?storageKey=storage-a");
+        request.Headers.Range = new RangeHeaderValue(2, 4);
+
+        using var response = await client.SendAsync(request);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.PartialContent);
+        response.Content.Headers.ContentType!.MediaType.ShouldBe("video/mp4");
+        response.Content.Headers.ContentRange!.From.ShouldBe(2);
+        response.Content.Headers.ContentRange.To.ShouldBe(4);
+        (await response.Content.ReadAsByteArrayAsync()).ShouldBe([2, 3, 4]);
+        factory.MessageBus.MediaContentRequest.ShouldNotBeNull();
+        factory.MessageBus.MediaContentRequest.StorageKey.ShouldBe("storage-a");
+        factory.MessageBus.MediaContentRequest.Version.ShouldBeNull();
+    }
+
     [Test]
     public async Task Post_Download_Audio_Publishes_Message_Through_Http_Surface()
     {
@@ -93,6 +137,8 @@ internal sealed class TestWebApiFactory : WebApplicationFactory<global::WebAPI.P
     public CapturingJetStreamPublisher Publisher { get; } = new();
     public FakeMessageBus MessageBus { get; } = new();
     public InMemorySecretStore SecretStore { get; } = new();
+    public IBlobStorageProvider BlobStorageProvider { get; } = Substitute.For<IBlobStorageProvider>();
+    public IBlobStorage BlobStorage { get; } = Substitute.For<IBlobStorage>();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -104,11 +150,13 @@ internal sealed class TestWebApiFactory : WebApplicationFactory<global::WebAPI.P
             services.RemoveAll<IMessageBus>();
             services.RemoveAll<ISecretStore>();
             services.RemoveAll<IClock>();
+            services.RemoveAll<IBlobStorageProvider>();
 
             services.AddSingleton<IJetStreamPublisher>(Publisher);
             services.AddSingleton<IMessageBus>(MessageBus);
             services.AddSingleton<ISecretStore>(SecretStore);
             services.AddSingleton<IClock>(new TestClock(Now));
+            services.AddSingleton(BlobStorageProvider);
         });
     }
 }
@@ -146,6 +194,9 @@ internal sealed record Published<T>(string Subject, T Message, string? MessageId
 
 internal sealed class FakeMessageBus : IMessageBus
 {
+    public MediaContentResolveResponseMessage? MediaContentResponse { get; set; }
+    public MediaContentResolveRequestMessage? MediaContentRequest { get; private set; }
+
     public Task PublishAsync<T>(string subject, T message, CancellationToken cancellationToken = default)
         => Task.CompletedTask;
 
@@ -168,7 +219,17 @@ internal sealed class FakeMessageBus : IMessageBus
         TRequest request,
         TimeSpan timeout,
         CancellationToken cancellationToken = default)
-        => Task.FromResult<TResponse?>(default);
+    {
+        if (subject == MediaContentSubjects.Resolve &&
+            request is MediaContentResolveRequestMessage mediaContentRequest &&
+            MediaContentResponse is not null)
+        {
+            MediaContentRequest = mediaContentRequest;
+            return Task.FromResult((TResponse?)(object)MediaContentResponse);
+        }
+
+        return Task.FromResult<TResponse?>(default);
+    }
 }
 
 internal sealed class NoopSubscription : ISubscription

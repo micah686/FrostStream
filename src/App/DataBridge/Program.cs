@@ -2,6 +2,7 @@ using Cleipnir.Flows;
 using Cleipnir.Flows.AspNet;
 using Cleipnir.Flows.PostgresSql;
 using DataBridge.Data;
+using DataBridge.MediaContent;
 using DataBridge.Metadata;
 using DataBridge.Messaging;
 using DataBridge.Search;
@@ -101,6 +102,7 @@ class Program
         builder.Services.AddScoped<IDownloadJobsRepository, DownloadJobsRepository>();
         builder.Services.AddScoped<IMetadataRepository, MetadataRepository>();
         builder.Services.AddScoped<IMetadataReadService, MetadataReadService>();
+        builder.Services.AddScoped<IMediaContentReadService, MediaContentReadService>();
         builder.Services.AddScoped<IPlaylistsRepository, PlaylistsRepository>();
         builder.Services.AddScoped<IOptionPresetsRepository, OptionPresetsRepository>();
         builder.Services.AddScoped<IScheduledTasksRepository, ScheduledTasksRepository>();
@@ -138,6 +140,7 @@ class Program
         builder.Services.AddHostedService<PlaylistEventsConsumerService>();
         builder.Services.AddHostedService<PlaylistQueryConsumerService>();
         builder.Services.AddHostedService<MetadataQueryConsumerService>();
+        builder.Services.AddHostedService<MediaContentQueryConsumerService>();
 
         // Force ConsoleLifetime so Ctrl+C / SIGTERM triggers StopAsync on hosted services
         builder.Services.AddSingleton<IHostLifetime, ConsoleLifetime>();
