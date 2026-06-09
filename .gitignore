@@ -58,6 +58,7 @@ src/.idea/**
 *.webm
 *.info.json
 *.vtt
+/data/
 
 src/VideoServeLocalTest/data/*
 

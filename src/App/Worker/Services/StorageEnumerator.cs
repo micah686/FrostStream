@@ -85,7 +85,7 @@ public sealed class StorageEnumerator(
         PosixLocalStorageParameters parameters,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var root = Path.GetFullPath(parameters.Path);
+        var root = Path.GetFullPath(LocalStoragePathResolver.Resolve(parameters.Path));
         if (!Directory.Exists(root))
         {
             throw new DirectoryNotFoundException($"Local storage path does not exist: {root}");

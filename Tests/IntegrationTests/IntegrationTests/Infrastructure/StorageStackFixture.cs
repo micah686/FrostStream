@@ -12,6 +12,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using NATS.Client.Core;
@@ -84,7 +85,7 @@ public sealed class StorageStackFixture(SaveChangesInterceptor? interceptor = nu
 
             await StartDataBridgeAsync();
 
-            _webAppFactory = new StorageWebApplicationFactory(NatsUrl);
+            _webAppFactory = new StorageWebApplicationFactory(NatsUrl, SecretStore);
             _client = _webAppFactory.CreateClient(new WebApplicationFactoryClientOptions
             {
                 BaseAddress = new Uri("https://localhost")
@@ -265,12 +266,29 @@ public sealed class StorageStackFixture(SaveChangesInterceptor? interceptor = nu
 
         if (_webAppFactory is not null)
         {
-            await _webAppFactory.DisposeAsync();
+            try
+            {
+                await _webAppFactory.DisposeAsync();
+            }
+            catch (InvalidOperationException exception)
+                when (exception.Message.Contains("Collection was modified", StringComparison.Ordinal))
+            {
+                // SubscriptionBackgroundService currently mutates its subscription list during shutdown.
+            }
         }
 
         if (_dataBridgeHost is not null)
         {
-            await _dataBridgeHost.StopAsync();
+            try
+            {
+                await _dataBridgeHost.StopAsync();
+            }
+            catch (InvalidOperationException exception)
+                when (exception.Message.Contains("Collection was modified", StringComparison.Ordinal))
+            {
+                // SubscriptionBackgroundService currently mutates its subscription list during shutdown.
+            }
+
             _dataBridgeHost.Dispose();
         }
 
@@ -307,7 +325,9 @@ public sealed class StorageStackFixture(SaveChangesInterceptor? interceptor = nu
         throw new TimeoutException("PostgreSQL container did not become reachable in time.");
     }
 
-    private sealed class StorageWebApplicationFactory(string natsUrl) : WebApplicationFactory<WebAPI.Program>
+    private sealed class StorageWebApplicationFactory(
+        string natsUrl,
+        ISecretStore secretStore) : WebApplicationFactory<WebAPI.Program>
     {
         protected override void ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder)
         {
@@ -321,6 +341,11 @@ public sealed class StorageStackFixture(SaveChangesInterceptor? interceptor = nu
                     ["ConnectionStrings:nats"] = natsUrl,
                     ["NATS:Url"] = natsUrl
                 });
+            });
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<ISecretStore>();
+                services.AddSingleton(secretStore);
             });
         }
     }

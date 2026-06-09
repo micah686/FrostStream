@@ -3,6 +3,20 @@ using Aspire.Hosting;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
+var configuredStorageRoot = Environment.GetEnvironmentVariable("FROSTSTREAM_STORAGE_ROOT");
+var sharedStorageRoot = string.IsNullOrWhiteSpace(configuredStorageRoot)
+    ? Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "..", "..", "data"))
+    : configuredStorageRoot;
+
+if (!Path.IsPathRooted(sharedStorageRoot))
+{
+    throw new InvalidOperationException(
+        $"FROSTSTREAM_STORAGE_ROOT must be an absolute path, but was '{sharedStorageRoot}'.");
+}
+
+sharedStorageRoot = Path.GetFullPath(sharedStorageRoot);
+Directory.CreateDirectory(sharedStorageRoot);
+
 #region NATS
 //Generate TLS certs for SSL
 var certsDirectory = Path.Combine(builder.AppHostDirectory, "configs", "nats", "certs");
@@ -85,6 +99,7 @@ var databridge = builder.AddProject<Projects.DataBridge>("databridge")
     .WithEnvironment("OpenBao__Token", baoDevRootToken)
     .WithEnvironment("Typesense__Url", typesenseEndpoint)
     .WithEnvironment("Typesense__ApiKey", typesenseDevApiKey)
+    .WithEnvironment("FROSTSTREAM_STORAGE_ROOT", sharedStorageRoot)
     .WaitFor(openbao)
     .WaitFor(typesense);
 
@@ -92,12 +107,14 @@ builder.AddProject<Projects.WebAPI>("webapi")
     .WithReference(nats).WaitFor(nats)
     .WithEnvironment("OpenBao__Address", openbaoEndpoint)
     .WithEnvironment("OpenBao__Token", baoDevRootToken)
+    .WithEnvironment("FROSTSTREAM_STORAGE_ROOT", sharedStorageRoot)
     .WaitFor(openbao);
 
 builder.AddProject<Projects.Worker>("worker")
     .WithReference(nats).WaitFor(nats)
     .WithEnvironment("OpenBao__Address", openbaoEndpoint)
     .WithEnvironment("OpenBao__Token", baoDevRootToken)
+    .WithEnvironment("FROSTSTREAM_STORAGE_ROOT", sharedStorageRoot)
     .WaitFor(openbao);
 
 builder.AddProject<Projects.Scheduler>("scheduler")

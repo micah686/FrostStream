@@ -64,13 +64,34 @@ Default development URL from `launchSettings.json`:
 
 ## Storage Configuration
 
-Migration `001_CreateStorageConfigsTable` seeds one working storage target:
+The storage migrations seed one working storage target:
 
 - `storageKey: default`
 - method: `PosixLocal`
-- path: `/tmp/froststream`
+- path: `${FROSTSTREAM_STORAGE_ROOT}`
 
 That means the simplest valid request body uses `"storageKey": "default"`.
+
+When run through AppHost, `FROSTSTREAM_STORAGE_ROOT` defaults to the absolute
+`data` directory at the repository root. Set the variable before starting
+AppHost to override it with another absolute path.
+
+For manual startup, set the same absolute path for every service that accesses
+local storage:
+
+```bash
+export FROSTSTREAM_STORAGE_ROOT=/absolute/path/to/froststream/data
+```
+
+For containers, mount the same persistent volume into every Worker and WebAPI
+container at the same path and set:
+
+```text
+FROSTSTREAM_STORAGE_ROOT=/var/lib/froststream/data
+```
+
+A local filesystem path cannot be shared between different hosts. Use NFS or
+object storage when FrostStream services run on multiple machines.
 
 ## Queue a Download
 
@@ -121,7 +142,7 @@ Common states:
 With the seeded `default` storage config, uploaded artifacts are written under:
 
 ```text
-/tmp/froststream/
+${FROSTSTREAM_STORAGE_ROOT}/
 ```
 
 A typical object path looks like:

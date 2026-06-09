@@ -66,6 +66,17 @@ public class StorageLifecycleTests
     }
 
     [Test]
+    public async Task Default_Local_Storage_Uses_Shared_Storage_Root()
+    {
+        var entity = await Fixture.FindStorageAsync("default");
+
+        entity.ShouldNotBeNull();
+        entity.Method.ShouldBe(StorageMethod.Local);
+        entity.Local.ShouldNotBeNull();
+        entity.Local.Path.ShouldBe(LocalStoragePathResolver.StorageRootToken);
+    }
+
+    [Test]
     public async Task Network_Storage_Lifecycle_Works()
     {
         var response = await Fixture.CreateNetworkAsync(new NetworkStorageUpsertRequest
