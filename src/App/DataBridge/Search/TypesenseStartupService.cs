@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using NodaTime;
 using Typesense;
 
 namespace DataBridge.Search;
@@ -8,6 +9,7 @@ public sealed class TypesenseStartupService(
     ITypesenseClient client,
     ITypesenseIndexService indexService,
     IMetadataRebuildCoordinator rebuildCoordinator,
+    IClock clock,
     ILogger<TypesenseStartupService> logger) : IHostedService
 {
     public async Task StartAsync(CancellationToken cancellationToken)
@@ -40,7 +42,7 @@ public sealed class TypesenseStartupService(
 
     private async Task WaitForTypesenseAsync(CancellationToken ct)
     {
-        var deadline = DateTimeOffset.UtcNow.AddSeconds(60);
+        var deadline = clock.GetCurrentInstant().Plus(Duration.FromSeconds(60));
         var attempt = 0;
 
         while (true)
@@ -52,7 +54,7 @@ public sealed class TypesenseStartupService(
                 logger.LogInformation("Typesense health check succeeded on attempt {Attempt}.", attempt);
                 return;
             }
-            catch (Exception ex) when (DateTimeOffset.UtcNow < deadline && !ct.IsCancellationRequested)
+            catch (Exception ex) when (clock.GetCurrentInstant() < deadline && !ct.IsCancellationRequested)
             {
                 logger.LogWarning(ex, "Typesense health check failed on attempt {Attempt}; retrying.", attempt);
                 await Task.Delay(TimeSpan.FromSeconds(Math.Min(attempt, 5)), ct);

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using DataBridge;
 using DataBridge.Data;
 using DataBridge.Flows;
 using FlySwattr.NATS.Abstractions;
@@ -77,32 +78,32 @@ public sealed class DownloadEventsConsumerService(
 
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var jobs = scope.ServiceProvider.GetRequiredService<IDownloadJobsRepository>();
-
-            if (await jobs.IsMessageProcessedAsync(evt.MessageId))
+            await scopeFactory.WithScopedAsync<IDownloadJobsRepository>(async jobs =>
             {
+                if (await jobs.IsMessageProcessedAsync(evt.MessageId))
+                {
+                    await context.AckAsync();
+                    return;
+                }
+
+                await persist(jobs, evt, CancellationToken.None);
+
+                await jobs.RecordHistoryAsync(
+                    evt.JobId,
+                    evt.MessageId,
+                    evt.OperationKey,
+                    eventName,
+                    JsonSerializer.Serialize<TEvent>(evt));
+
+                // Cleipnir-internal dedupe by OperationKey. If two events ever reach this point
+                // with the same OperationKey (e.g. ingress dedupe race after a crash), Cleipnir
+                // drops the second one before the flow sees it.
+                await flows.SendMessage(evt.JobId.ToString("N"), evt, idempotencyKey: evt.OperationKey);
+
+                await jobs.MarkMessageProcessedAsync(evt.MessageId, evt.OperationKey, evt.JobId);
+
                 await context.AckAsync();
-                return;
-            }
-
-            await persist(jobs, evt, CancellationToken.None);
-
-            await jobs.RecordHistoryAsync(
-                evt.JobId,
-                evt.MessageId,
-                evt.OperationKey,
-                eventName,
-                JsonSerializer.Serialize<TEvent>(evt));
-
-            // Cleipnir-internal dedupe by OperationKey. If two events ever reach this point
-            // with the same OperationKey (e.g. ingress dedupe race after a crash), Cleipnir
-            // drops the second one before the flow sees it.
-            await flows.SendMessage(evt.JobId.ToString("N"), evt, idempotencyKey: evt.OperationKey);
-
-            await jobs.MarkMessageProcessedAsync(evt.MessageId, evt.OperationKey, evt.JobId);
-
-            await context.AckAsync();
+            });
         }
         catch (Exception ex)
         {
@@ -118,7 +119,11 @@ public sealed class DownloadEventsConsumerService(
         => jobs.ApplyDownloadCompletedAsync(evt.JobId, evt, ct);
 
     private static Task ApplyUploadCompletedAsync(IDownloadJobsRepository jobs, UploadCompleted evt, CancellationToken ct)
-        => jobs.CommitUploadAsync(evt.JobId, evt, ct);
+        => evt.Kind switch
+        {
+            UploadArtifactKind.InfoJson => jobs.ApplySidecarUploadCompletedAsync(evt.JobId, evt, ct),
+            _ => jobs.CommitUploadAsync(evt.JobId, evt, ct)
+        };
 
     private static Task NoStateChange<TEvent>(IDownloadJobsRepository jobs, TEvent evt, CancellationToken ct)
         where TEvent : IFlowMessage

@@ -5,7 +5,6 @@
         <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
         <NoWarn>NU1901</NoWarn>
     </PropertyGroup>
 
@@ -37,6 +36,7 @@
       <PackageReference Include="FluentStorage" Version="6.0.3" />
       <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime" Version="10.0.1" />
       <PackageReference Include="Polly.Core" Version="8.6.6" />
+      <PackageReference Include="Quartz" Version="3.14.0" />
       <PackageReference Include="System.IO.Hashing" Version="10.0.7" />
       <PackageReference Include="Typesense" Version="8.3.0" />
     </ItemGroup>

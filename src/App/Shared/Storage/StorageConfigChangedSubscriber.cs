@@ -1,5 +1,4 @@
 using FlySwattr.NATS.Abstractions;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Shared.Messaging;
 
@@ -13,39 +12,17 @@ namespace Shared.Storage;
 public sealed class StorageConfigChangedSubscriber(
     IMessageBus messageBus,
     IBlobStorageProvider blobStorageProvider,
-    ILogger<StorageConfigChangedSubscriber> logger) : BackgroundService
+    ILogger<StorageConfigChangedSubscriber> logger) : SubscriptionBackgroundService
 {
-    private ISubscription? _subscription;
-
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
     {
-        _subscription = await messageBus.SubscribeAsync<StorageConfigChangedMessage>(
+        await SubscribeAsync<StorageConfigChangedMessage>(
+            messageBus,
             StorageSubjects.StorageConfigChanged,
             HandleAsync,
             cancellationToken: stoppingToken);
 
         logger.LogInformation("Subscribed to storage config change notifications.");
-
-        try
-        {
-            await Task.Delay(Timeout.Infinite, stoppingToken);
-        }
-        catch (OperationCanceledException)
-        {
-            // graceful shutdown
-        }
-    }
-
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        if (_subscription is not null)
-        {
-            await _subscription.StopAsync(cancellationToken);
-            await _subscription.DisposeAsync();
-            _subscription = null;
-        }
-
-        await base.StopAsync(cancellationToken);
     }
 
     private Task HandleAsync(IMessageContext<StorageConfigChangedMessage> context)

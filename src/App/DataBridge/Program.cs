@@ -2,6 +2,7 @@ using Cleipnir.Flows;
 using Cleipnir.Flows.AspNet;
 using Cleipnir.Flows.PostgresSql;
 using DataBridge.Data;
+using DataBridge.MediaStream;
 using DataBridge.Metadata;
 using DataBridge.Messaging;
 using DataBridge.Search;
@@ -74,6 +75,7 @@ class Program
 
         builder.Services.AddNatsTopologySource<DownloadTopology>();
         builder.Services.AddNatsTopologySource<PlaylistTopology>();
+        builder.Services.AddNatsTopologySource<BackgroundJobsTopology>();
         builder.Services.AddOpenBaoSecretStore(builder.Configuration);
 
         // Isolate Cleipnir's runtime tables in their own Postgres schema. Cleipnir's
@@ -100,7 +102,12 @@ class Program
         builder.Services.AddScoped<IDownloadJobsRepository, DownloadJobsRepository>();
         builder.Services.AddScoped<IMetadataRepository, MetadataRepository>();
         builder.Services.AddScoped<IMetadataReadService, MetadataReadService>();
+        builder.Services.AddScoped<IMediaStreamReadService, MediaStreamReadService>();
         builder.Services.AddScoped<IPlaylistsRepository, PlaylistsRepository>();
+        builder.Services.AddScoped<IOptionPresetsRepository, OptionPresetsRepository>();
+        builder.Services.AddScoped<IScheduledTasksRepository, ScheduledTasksRepository>();
+        builder.Services.AddScoped<ICreatorDiscoveryRepository, CreatorDiscoveryRepository>();
+        builder.Services.AddSingleton<OrphanMetadataCleanupExecutor>();
 
         builder.Services.AddTypesenseClient(config =>
         {
@@ -120,12 +127,20 @@ class Program
         builder.Services.AddHostedService<MetadataRebuildConsumerService>();
 
         builder.Services.AddHostedService<StorageCrudConsumerService>();
+        builder.Services.AddHostedService<OptionPresetCrudConsumerService>();
+        builder.Services.AddHostedService<ScheduleCrudConsumerService>();
+        builder.Services.AddHostedService<CreatorDiscoveryConsumerService>();
+        builder.Services.AddHostedService<OrphanCleanupAdminConsumerService>();
+        builder.Services.AddHostedService<OrphanMetadataCleanupConsumerService>();
+        builder.Services.AddHostedService<FilesystemRescanConsumerService>();
+        builder.Services.AddHostedService<BackgroundJobConsumerService>();
         builder.Services.AddHostedService<DownloadRequestedIngressService>();
         builder.Services.AddHostedService<DownloadEventsConsumerService>();
         builder.Services.AddHostedService<PlaylistRequestedIngressService>();
         builder.Services.AddHostedService<PlaylistEventsConsumerService>();
         builder.Services.AddHostedService<PlaylistQueryConsumerService>();
         builder.Services.AddHostedService<MetadataQueryConsumerService>();
+        builder.Services.AddHostedService<MediaStreamQueryConsumerService>();
 
         // Force ConsoleLifetime so Ctrl+C / SIGTERM triggers StopAsync on hosted services
         builder.Services.AddSingleton<IHostLifetime, ConsoleLifetime>();

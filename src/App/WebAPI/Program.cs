@@ -2,6 +2,8 @@ using FlySwattr.NATS.Extensions;
 using NodaTime;
 using NodaTime.Serialization.SystemTextJson;
 using Scalar.AspNetCore;
+using Shared.Secrets;
+using Shared.Storage;
 using System.Text.Json.Serialization;
 
 namespace WebAPI;
@@ -24,6 +26,8 @@ public class Program
             });
         
         builder.Services.AddSingleton<IClock>(SystemClock.Instance);
+        builder.Services.AddOpenBaoSecretStore(builder.Configuration);
+        builder.Services.AddFrostStreamStorage();
 
         //var natsUrl = builder.Configuration["NATS:Url"] ?? "nats://localhost:4222";
         builder.Services.AddEnterpriseNATSMessaging(options =>

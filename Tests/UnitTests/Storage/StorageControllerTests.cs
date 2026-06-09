@@ -7,7 +7,8 @@ using Shouldly;
 using Shared.Messaging;
 using Shared.Storage;
 using TUnit.Core;
-using WebAPI.Controllers;
+using WebAPI.Features.Storage.Controllers;
+using WebAPI.Features.Storage.Models;
 
 namespace UnitTests.Storage;
 
@@ -407,5 +408,61 @@ public class StorageControllerTests
 
         emptyItems.Count.ShouldBe(0);
         populatedItems.Count.ShouldBe(1);
+    }
+
+    [Test]
+    public async Task GetStorage_Returns_Entity_And_Rejects_Invalid_Service_Response()
+    {
+        var bus = Substitute.For<IMessageBus>();
+        var controller = new StorageController(bus, Substitute.For<ILogger<StorageController>>());
+        var dto = StorageTestHelpers.CreateDto(StorageMethod.Local, "local-a");
+
+        bus.RequestAsync<StorageGetRequestMessage, StorageOperationResponseMessage>(
+                StorageSubjects.GetStorage,
+                Arg.Is<StorageGetRequestMessage>(x => x.Key == "local-a"),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new StorageOperationResponseMessage { Success = true, Entity = dto });
+        bus.RequestAsync<StorageGetRequestMessage, StorageOperationResponseMessage>(
+                StorageSubjects.GetStorage,
+                Arg.Is<StorageGetRequestMessage>(x => x.Key == "broken"),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new StorageOperationResponseMessage { Success = true, Entity = null });
+
+        var ok = await controller.GetStorage("local-a", CancellationToken.None);
+        ok.Result.ShouldBeOfType<OkObjectResult>().Value.ShouldBeOfType<StorageConfigDto>().Key.ShouldBe("local-a");
+
+        var broken = await controller.GetStorage("broken", CancellationToken.None);
+        broken.Result.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status502BadGateway);
+    }
+
+    [Test]
+    public async Task UpdateLocalStorage_Sends_Request_And_Returns_Typed_Response()
+    {
+        var bus = Substitute.For<IMessageBus>();
+        var controller = new StorageController(bus, Substitute.For<ILogger<StorageController>>());
+        var dto = StorageTestHelpers.CreateDto(StorageMethod.Local, "local-a");
+
+        bus.RequestAsync<StorageUpdateLocalRequestMessage, StorageOperationResponseMessage>(
+                StorageSubjects.UpdateLocalStorage,
+                Arg.Is<StorageUpdateLocalRequestMessage>(x =>
+                    x.Key == "local-a" &&
+                    x.Description == "updated" &&
+                    x.Parameters.Protocol == LocalStorageProtocol.Local &&
+                    x.Parameters.Path == "/mnt/updated"),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new StorageOperationResponseMessage { Success = true, Entity = dto });
+
+        var result = await controller.UpdateLocalStorage("local-a", new LocalStorageUpdateRequest
+        {
+            Description = "updated",
+            Protocol = LocalStorageProtocol.Local,
+            Path = "/mnt/updated"
+        }, CancellationToken.None);
+
+        result.Result.ShouldBeOfType<OkObjectResult>().Value
+            .ShouldBeOfType<LocalStorageConfigResponse>().Key.ShouldBe("local-a");
     }
 }

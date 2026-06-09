@@ -92,7 +92,7 @@ internal sealed class DownloadProgressReporter(
             await publisher.PublishAsync(
                 DownloadSubjects.DownloadProgress,
                 message,
-                messageId: message.MessageId.ToString("N")).ConfigureAwait(false);
+                messageId: message.MessageId.ToString("N"));
         }
         catch (Exception ex)
         {

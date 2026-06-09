@@ -4,7 +4,7 @@ using Shared.Secrets;
 using Shared.Storage;
 using System.Net;
 using TUnit.Core;
-using WebAPI.Controllers;
+using WebAPI.Features.Storage.Models;
 
 namespace IntegrationTests.Storage;
 

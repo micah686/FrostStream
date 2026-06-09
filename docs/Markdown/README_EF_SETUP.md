@@ -24,13 +24,13 @@ Migrations run automatically every time `DataBridge` starts.
 
 ### `storage_configs`
 
-Storage targets keyed by `storageKey`. Migration `001` seeds a default local target:
+Storage targets keyed by `storageKey`. The migrations seed a default local target:
 
 ```json
 {
   "key": "default",
   "method": "PosixLocal",
-  "parameters": { "path": "/tmp/froststream" }
+  "parameters": { "path": "${FROSTSTREAM_STORAGE_ROOT}" }
 }
 ```
 

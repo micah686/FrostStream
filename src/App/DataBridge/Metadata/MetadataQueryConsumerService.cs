@@ -1,6 +1,6 @@
+using DataBridge;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Shared.Messaging;
 
@@ -9,85 +9,67 @@ namespace DataBridge.Metadata;
 public sealed class MetadataQueryConsumerService(
     IMessageBus messageBus,
     IServiceScopeFactory scopeFactory,
-    ILogger<MetadataQueryConsumerService> logger) : BackgroundService
+    ILogger<MetadataQueryConsumerService> logger) : SubscriptionBackgroundService
 {
-    private readonly List<ISubscription> _subscriptions = [];
-
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
     {
-        _subscriptions.Add(await messageBus.SubscribeAsync<MetadataGetRequestMessage>(
+        await SubscribeAsync<MetadataGetRequestMessage>(
+            messageBus,
             MetadataSubjects.Get,
             HandleGetAsync,
             queueGroup: MetadataSubjects.ProcessorsQueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<MetadataTechnicalRequestMessage>(
+        await SubscribeAsync<MetadataTechnicalRequestMessage>(
+            messageBus,
             MetadataSubjects.GetTechnical,
             HandleTechnicalAsync,
             queueGroup: MetadataSubjects.ProcessorsQueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<MetadataAccountsListRequestMessage>(
+        await SubscribeAsync<MetadataAccountsListRequestMessage>(
+            messageBus,
             MetadataSubjects.AccountsList,
             HandleAccountsListAsync,
             queueGroup: MetadataSubjects.ProcessorsQueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<MetadataAccountGetRequestMessage>(
+        await SubscribeAsync<MetadataAccountGetRequestMessage>(
+            messageBus,
             MetadataSubjects.AccountsGet,
             HandleAccountGetAsync,
             queueGroup: MetadataSubjects.ProcessorsQueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<MetadataTaxonomyListRequestMessage>(
+        await SubscribeAsync<MetadataTaxonomyListRequestMessage>(
+            messageBus,
             MetadataSubjects.TaxonomyTagsList,
             context => HandleTaxonomyListAsync(context, MetadataTaxonomyKind.Tags),
             queueGroup: MetadataSubjects.ProcessorsQueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<MetadataTaxonomyListRequestMessage>(
+        await SubscribeAsync<MetadataTaxonomyListRequestMessage>(
+            messageBus,
             MetadataSubjects.TaxonomyCategoriesList,
             context => HandleTaxonomyListAsync(context, MetadataTaxonomyKind.Categories),
             queueGroup: MetadataSubjects.ProcessorsQueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<MetadataTaxonomyListRequestMessage>(
+        await SubscribeAsync<MetadataTaxonomyListRequestMessage>(
+            messageBus,
             MetadataSubjects.TaxonomyGenresList,
             context => HandleTaxonomyListAsync(context, MetadataTaxonomyKind.Genres),
             queueGroup: MetadataSubjects.ProcessorsQueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
         logger.LogInformation("Subscribed to metadata Postgres query subjects.");
-
-        try
-        {
-            await Task.Delay(Timeout.Infinite, stoppingToken);
-        }
-        catch (OperationCanceledException)
-        {
-            // graceful shutdown
-        }
-    }
-
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        foreach (var subscription in _subscriptions)
-        {
-            await subscription.StopAsync(cancellationToken);
-            await subscription.DisposeAsync();
-        }
-
-        _subscriptions.Clear();
-        await base.StopAsync(cancellationToken);
     }
 
     private async Task HandleGetAsync(IMessageContext<MetadataGetRequestMessage> context)
     {
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var query = scope.ServiceProvider.GetRequiredService<IMetadataReadService>();
-            var item = await query.GetDetailAsync(context.Message.MediaGuid);
+            var item = await WithQuery(query => query.GetDetailAsync(context.Message.MediaGuid));
             await context.RespondAsync(item is null
                 ? new MetadataGetResponseMessage
                 {
@@ -113,9 +95,7 @@ public sealed class MetadataQueryConsumerService(
     {
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var query = scope.ServiceProvider.GetRequiredService<IMetadataReadService>();
-            var item = await query.GetTechnicalAsync(context.Message.MediaGuid);
+            var item = await WithQuery(query => query.GetTechnicalAsync(context.Message.MediaGuid));
             await context.RespondAsync(item is null
                 ? new MetadataTechnicalResponseMessage
                 {
@@ -141,12 +121,10 @@ public sealed class MetadataQueryConsumerService(
     {
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var query = scope.ServiceProvider.GetRequiredService<IMetadataReadService>();
-            var result = await query.ListAccountsAsync(
+            var result = await WithQuery(query => query.ListAccountsAsync(
                 context.Message.PageSize,
                 context.Message.After,
-                context.Message.Platform);
+                context.Message.Platform));
 
             await context.RespondAsync(new MetadataAccountsListResponseMessage
             {
@@ -181,9 +159,7 @@ public sealed class MetadataQueryConsumerService(
     {
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var query = scope.ServiceProvider.GetRequiredService<IMetadataReadService>();
-            var item = await query.GetAccountAsync(context.Message.AccountId);
+            var item = await WithQuery(query => query.GetAccountAsync(context.Message.AccountId));
             await context.RespondAsync(item is null
                 ? new MetadataAccountGetResponseMessage
                 {
@@ -211,13 +187,11 @@ public sealed class MetadataQueryConsumerService(
     {
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var query = scope.ServiceProvider.GetRequiredService<IMetadataReadService>();
-            var result = await query.ListTaxonomyAsync(
+            var result = await WithQuery(query => query.ListTaxonomyAsync(
                 kind,
                 context.Message.PageSize,
                 context.Message.PageOffset,
-                context.Message.Search);
+                context.Message.Search));
 
             await context.RespondAsync(new MetadataTaxonomyListResponseMessage
             {
@@ -237,4 +211,7 @@ public sealed class MetadataQueryConsumerService(
             });
         }
     }
+
+    private Task<TResult> WithQuery<TResult>(Func<IMetadataReadService, Task<TResult>> action)
+        => scopeFactory.WithScopedAsync(action);
 }

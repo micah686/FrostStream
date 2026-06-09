@@ -11,6 +11,7 @@
 
     <ItemGroup>
       <PackageReference Include="Aspire.Hosting.ClickHouse" Version="13.1.2" />
+      <PackageReference Include="Aspire.Hosting.JavaScript" Version="13.2.4" />
       <PackageReference Include="Aspire.Hosting.Nats" Version="13.2.4" />
       <PackageReference Include="Aspire.Hosting.PostgreSQL" Version="13.2.4" />
       <PackageReference Include="CommunityToolkit.Aspire.Hosting.DbGate" Version="13.1.1" />
@@ -23,6 +24,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\DataBridge\DataBridge.csproj" />
+      <ProjectReference Include="..\Scheduler\Scheduler.csproj" />
       <ProjectReference Include="..\WebAPI\WebAPI.csproj" />
       <ProjectReference Include="..\Worker\Worker.csproj" />
     </ItemGroup>

@@ -1,5 +1,4 @@
 using FlySwattr.NATS.Abstractions;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Shared.Messaging;
 using Typesense;
@@ -9,40 +8,18 @@ namespace DataBridge.Search;
 public sealed class MetadataCommentsConsumerService(
     IMessageBus messageBus,
     ITypesenseClient typesense,
-    ILogger<MetadataCommentsConsumerService> logger) : BackgroundService
+    ILogger<MetadataCommentsConsumerService> logger) : SubscriptionBackgroundService
 {
-    private ISubscription? _subscription;
-
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
     {
-        _subscription = await messageBus.SubscribeAsync<MetadataCommentsListRequestMessage>(
+        await SubscribeAsync<MetadataCommentsListRequestMessage>(
+            messageBus,
             MetadataSubjects.CommentsList,
             HandleAsync,
             queueGroup: MetadataSubjects.SearchQueueGroup,
             cancellationToken: stoppingToken);
 
         logger.LogInformation("Subscribed to metadata comments subject.");
-
-        try
-        {
-            await Task.Delay(Timeout.Infinite, stoppingToken);
-        }
-        catch (OperationCanceledException)
-        {
-            // graceful shutdown
-        }
-    }
-
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        if (_subscription is not null)
-        {
-            await _subscription.StopAsync(cancellationToken);
-            await _subscription.DisposeAsync();
-            _subscription = null;
-        }
-
-        await base.StopAsync(cancellationToken);
     }
 
     private async Task HandleAsync(IMessageContext<MetadataCommentsListRequestMessage> context)

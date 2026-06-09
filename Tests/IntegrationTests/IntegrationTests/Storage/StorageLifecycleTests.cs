@@ -6,7 +6,7 @@ using Shared.Storage;
 using System.Net;
 using System.Net.Http.Json;
 using TUnit.Core;
-using WebAPI.Controllers;
+using WebAPI.Features.Storage.Models;
 
 namespace IntegrationTests.Storage;
 
@@ -63,6 +63,17 @@ public class StorageLifecycleTests
         var deleteResponse = await Fixture.Client.DeleteAsync("/api/storage/delete/local-a");
         deleteResponse.StatusCode.ShouldBe(HttpStatusCode.NoContent);
         (await Fixture.FindStorageAsync("local-a")).ShouldBeNull();
+    }
+
+    [Test]
+    public async Task Default_Local_Storage_Uses_Shared_Storage_Root()
+    {
+        var entity = await Fixture.FindStorageAsync("default");
+
+        entity.ShouldNotBeNull();
+        entity.Method.ShouldBe(StorageMethod.Local);
+        entity.Local.ShouldNotBeNull();
+        entity.Local.Path.ShouldBe(LocalStoragePathResolver.StorageRootToken);
     }
 
     [Test]

@@ -3,6 +3,20 @@ using Aspire.Hosting;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
+var configuredStorageRoot = Environment.GetEnvironmentVariable("FROSTSTREAM_STORAGE_ROOT");
+var sharedStorageRoot = string.IsNullOrWhiteSpace(configuredStorageRoot)
+    ? Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "..", "..", "data"))
+    : configuredStorageRoot;
+
+if (!Path.IsPathRooted(sharedStorageRoot))
+{
+    throw new InvalidOperationException(
+        $"FROSTSTREAM_STORAGE_ROOT must be an absolute path, but was '{sharedStorageRoot}'.");
+}
+
+sharedStorageRoot = Path.GetFullPath(sharedStorageRoot);
+Directory.CreateDirectory(sharedStorageRoot);
+
 #region NATS
 //Generate TLS certs for SSL
 var certsDirectory = Path.Combine(builder.AppHostDirectory, "configs", "nats", "certs");
@@ -78,26 +92,44 @@ var typesense = builder
 var typesenseEndpoint = typesense.GetEndpoint("http");
 
 // projects
-builder.AddProject<Projects.DataBridge>("databridge")
+var databridge = builder.AddProject<Projects.DataBridge>("databridge")
     .WithReference(database).WaitFor(database)
     .WithReference(nats).WaitFor(nats)
     .WithEnvironment("OpenBao__Address", openbaoEndpoint)
     .WithEnvironment("OpenBao__Token", baoDevRootToken)
     .WithEnvironment("Typesense__Url", typesenseEndpoint)
     .WithEnvironment("Typesense__ApiKey", typesenseDevApiKey)
+    .WithEnvironment("FROSTSTREAM_STORAGE_ROOT", sharedStorageRoot)
     .WaitFor(openbao)
     .WaitFor(typesense);
 
-builder.AddProject<Projects.WebAPI>("webapi")
+var webapi = builder.AddProject<Projects.WebAPI>("webapi", launchProfileName: "https")
     .WithReference(nats).WaitFor(nats)
     .WithEnvironment("OpenBao__Address", openbaoEndpoint)
     .WithEnvironment("OpenBao__Token", baoDevRootToken)
+    .WithEnvironment("FROSTSTREAM_STORAGE_ROOT", sharedStorageRoot)
     .WaitFor(openbao);
+
+builder.AddViteApp("frontend", "../Frontend")
+    .WithPnpm()
+    .WithReference(webapi)
+    .WithEnvironment("VITE_API_BASE_URL", webapi.GetEndpoint("https"));
 
 builder.AddProject<Projects.Worker>("worker")
     .WithReference(nats).WaitFor(nats)
     .WithEnvironment("OpenBao__Address", openbaoEndpoint)
     .WithEnvironment("OpenBao__Token", baoDevRootToken)
+    .WithEnvironment("FROSTSTREAM_STORAGE_ROOT", sharedStorageRoot)
     .WaitFor(openbao);
+
+builder.AddProject<Projects.Scheduler>("scheduler")
+    .WithReference(nats).WaitFor(nats)
+    .WaitFor(databridge)
+    .WithHttpEndpoint(name: "http")
+    .WithUrlForEndpoint("http", url =>
+    {
+        url.Url = "/quartz";
+        url.DisplayText = "Quartz";
+    });
 
 builder.Build().Run();

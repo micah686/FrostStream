@@ -53,10 +53,12 @@ class Program
 
         builder.Services.AddNatsTopologySource<DownloadTopology>();
         builder.Services.AddNatsTopologySource<PlaylistTopology>();
+        builder.Services.AddNatsTopologySource<BackgroundJobsTopology>();
 
         builder.Services.AddSingleton<IClock>(SystemClock.Instance);
         builder.Services.AddOpenBaoSecretStore(builder.Configuration);
         builder.Services.AddFrostStreamStorage();
+        builder.Services.AddSingleton<IStorageEnumerator, StorageEnumerator>();
 
         // yt-dlp wiring. The binary downloader writes into <BaseDirectory>/tools and the
         // client points at the predicted absolute paths so the first invocation finds them
@@ -92,9 +94,24 @@ class Program
         // BackgroundService starts).
         builder.Services.AddHostedService<StartupService>();
 
+        // Channel-asset cache wiring.
+        builder.Services.AddOptions<AssetCacheOptions>()
+            .Bind(builder.Configuration.GetSection(AssetCacheOptions.SectionName));
+        builder.Services.AddSingleton<AssetCacheWriter>();
+        builder.Services.AddHttpClient("asset-cache", (sp, client) =>
+        {
+            var assetOptions = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AssetCacheOptions>>().Value;
+            client.Timeout = assetOptions.RequestTimeout > TimeSpan.Zero ? assetOptions.RequestTimeout : TimeSpan.FromSeconds(30);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("FrostStream-Worker/1.0 (+asset-cache)");
+        });
+
         // Command consumers for the download flow.
         builder.Services.AddHostedService<DownloadCommandsConsumerService>();
         builder.Services.AddHostedService<PlaylistCommandsConsumerService>();
+        builder.Services.AddHostedService<ChannelDiscoveryConsumerService>();
+        builder.Services.AddHostedService<ChannelAssetRefreshConsumerService>();
+        builder.Services.AddHostedService<FilesystemRescanConsumerService>();
+        builder.Services.AddHostedService<OrphanCleanupConsumerService>();
 
         var app = builder.Build();
 

@@ -31,6 +31,12 @@ public class DownloadJobEntity
 
     public string? StorageVersion { get; set; }
 
+    public string? InfoJsonStoragePath { get; set; }
+
+    public string? InfoJsonContentHashXxh128 { get; set; }
+
+    public long? InfoJsonSizeBytes { get; set; }
+
     public FailureKind? FailureKind { get; set; }
 
     public string? FailureCode { get; set; }

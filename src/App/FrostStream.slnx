@@ -1,6 +1,6 @@
 <Solution>
   <Folder Name="/HelperTesterApps/">
-    <Project Path="HelperTestingApps/VideoServeLocalTest/VideoServeLocalTest.csproj" />
+    <Project Path="../HelperTestingApps/VideoServeLocalTest/VideoServeLocalTest.csproj" />
   </Folder>
   <Folder Name="/Modules/FlySwattr.NATS/">
     <Project Path="../Modules/FlySwattr.NATS/FlySwattr.NATS.Abstractions/FlySwattr.NATS.Abstractions.csproj" />

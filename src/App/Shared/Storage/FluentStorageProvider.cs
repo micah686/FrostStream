@@ -42,7 +42,7 @@ public static class FluentStorageProvider
 
     private static string BuildDiskConnectionString(PosixLocalStorageParameters parameters)
     {
-        return $"disk://path={parameters.Path}";
+        return $"disk://path={LocalStoragePathResolver.Resolve(parameters.Path)}";
     }
 
     private static string BuildNetworkConnectionString(StreamingNetworkStorageParameters parameters)

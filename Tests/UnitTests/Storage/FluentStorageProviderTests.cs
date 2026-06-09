@@ -23,6 +23,31 @@ public class FluentStorageProviderTests
     }
 
     [Test]
+    [NotInParallel("FrostStreamStorageRootEnvironment")]
+    public void BuildConnectionString_Requires_Configured_Shared_Storage_Root()
+    {
+        var previousRoot = Environment.GetEnvironmentVariable(LocalStoragePathResolver.EnvironmentVariableName);
+        Environment.SetEnvironmentVariable(LocalStoragePathResolver.EnvironmentVariableName, null);
+
+        try
+        {
+            var exception = Should.Throw<TargetInvocationException>(() =>
+                Build(StorageMethod.Local, new PosixLocalStorageParameters
+                {
+                    Protocol = LocalStorageProtocol.Local,
+                    Path = LocalStoragePathResolver.StorageRootToken
+                }));
+
+            exception.InnerException.ShouldBeOfType<InvalidOperationException>()
+                .Message.ShouldContain(LocalStoragePathResolver.EnvironmentVariableName);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(LocalStoragePathResolver.EnvironmentVariableName, previousRoot);
+        }
+    }
+
+    [Test]
     public void BuildConnectionString_Formats_Network_Storage()
     {
         Build(StorageMethod.Network, new StreamingNetworkStorageParameters

@@ -1,6 +1,6 @@
 using Shouldly;
 using TUnit.Core;
-using WebAPI.Controllers;
+using WebAPI.Features.Storage.Models;
 
 namespace UnitTests.Storage;
 

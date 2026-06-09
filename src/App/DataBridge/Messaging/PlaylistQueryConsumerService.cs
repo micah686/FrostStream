@@ -1,7 +1,7 @@
+using DataBridge;
 using DataBridge.Data;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Shared.Database;
 using Shared.Messaging;
@@ -11,56 +11,34 @@ namespace DataBridge.Messaging;
 public sealed class PlaylistQueryConsumerService(
     IMessageBus messageBus,
     IServiceScopeFactory scopeFactory,
-    ILogger<PlaylistQueryConsumerService> logger) : BackgroundService
+    ILogger<PlaylistQueryConsumerService> logger) : SubscriptionBackgroundService
 {
     private const string QueueGroup = "databridge-playlist-queries";
-    private readonly List<ISubscription> _subscriptions = [];
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
     {
-        _subscriptions.Add(await messageBus.SubscribeAsync<PlaylistGetRequestMessage>(
+        await SubscribeAsync<PlaylistGetRequestMessage>(
+            messageBus,
             PlaylistSubjects.PlaylistGet,
             HandleGetAsync,
             queueGroup: QueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
-        _subscriptions.Add(await messageBus.SubscribeAsync<PlaylistListRequestMessage>(
+        await SubscribeAsync<PlaylistListRequestMessage>(
+            messageBus,
             PlaylistSubjects.PlaylistList,
             HandleListAsync,
             queueGroup: QueueGroup,
-            cancellationToken: stoppingToken));
+            cancellationToken: stoppingToken);
 
         logger.LogInformation("Subscribed to playlist query subjects.");
-
-        try
-        {
-            await Task.Delay(Timeout.Infinite, stoppingToken);
-        }
-        catch (OperationCanceledException)
-        {
-            // graceful shutdown
-        }
-    }
-
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        foreach (var subscription in _subscriptions)
-        {
-            await subscription.StopAsync(cancellationToken);
-            await subscription.DisposeAsync();
-        }
-        _subscriptions.Clear();
-        await base.StopAsync(cancellationToken);
     }
 
     private async Task HandleGetAsync(IMessageContext<PlaylistGetRequestMessage> context)
     {
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var playlists = scope.ServiceProvider.GetRequiredService<IPlaylistsRepository>();
-
-            var detail = await playlists.GetDetailAsync(context.Message.PlaylistId);
+            var detail = await WithPlaylists(playlists => playlists.GetDetailAsync(context.Message.PlaylistId));
             if (detail is null)
             {
                 await context.RespondAsync(new PlaylistGetResponseMessage
@@ -94,10 +72,7 @@ public sealed class PlaylistQueryConsumerService(
     {
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var playlists = scope.ServiceProvider.GetRequiredService<IPlaylistsRepository>();
-
-            var summaries = await playlists.ListAsync(context.Message.PageSize, context.Message.PageOffset);
+            var summaries = await WithPlaylists(playlists => playlists.ListAsync(context.Message.PageSize, context.Message.PageOffset));
             await context.RespondAsync(new PlaylistListResponseMessage
             {
                 Success = true,
@@ -115,6 +90,9 @@ public sealed class PlaylistQueryConsumerService(
             });
         }
     }
+
+    private Task<TResult> WithPlaylists<TResult>(Func<IPlaylistsRepository, Task<TResult>> action)
+        => scopeFactory.WithScopedAsync(action);
 
     private static PlaylistDto MapDetail(PlaylistDetail detail)
         => MapBase(

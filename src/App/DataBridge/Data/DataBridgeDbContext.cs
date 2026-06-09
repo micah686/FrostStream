@@ -28,6 +28,12 @@ public sealed class DataBridgeDbContext(DbContextOptions<DataBridgeDbContext> op
     public DbSet<MediaPlaylistMembershipEntity> MediaPlaylistMemberships => Set<MediaPlaylistMembershipEntity>();
     public DbSet<PlaylistMetadataEntity> PlaylistMetadata => Set<PlaylistMetadataEntity>();
 
+    public DbSet<OptionPresetEntity> OptionPresets => Set<OptionPresetEntity>();
+    public DbSet<ScheduledTaskEntity> ScheduledTasks => Set<ScheduledTaskEntity>();
+    public DbSet<FilesystemRescanFindingEntity> FilesystemRescanFindings => Set<FilesystemRescanFindingEntity>();
+    public DbSet<CreatorSourceEntity> CreatorSources => Set<CreatorSourceEntity>();
+    public DbSet<DiscoveredMediaEntity> DiscoveredMedia => Set<DiscoveredMediaEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasPostgresEnum<LocalStorageProtocol>("local_storage_protocol");

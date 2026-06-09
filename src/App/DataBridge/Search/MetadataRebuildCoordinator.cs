@@ -1,3 +1,4 @@
+using DataBridge;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -66,12 +67,12 @@ public sealed class MetadataRebuildCoordinator(
             logger.LogInformation("Starting Typesense metadata rebuild. Reason: {Reason}", reason);
             await indexService.RecreateAllCollectionsAsync(ct);
 
-            using var scope = scopeFactory.CreateScope();
-            var query = scope.ServiceProvider.GetRequiredService<IMediaDocumentQuery>();
-
-            await RebuildMediaAsync(query, ct);
-            await RebuildCommentsAsync(query, ct);
-            await RebuildCaptionsAsync(query, ct);
+            await scopeFactory.WithScopedAsync<IMediaDocumentQuery>(async query =>
+            {
+                await RebuildMediaAsync(query, ct);
+                await RebuildCommentsAsync(query, ct);
+                await RebuildCaptionsAsync(query, ct);
+            });
 
             logger.LogInformation("Finished Typesense metadata rebuild.");
         }

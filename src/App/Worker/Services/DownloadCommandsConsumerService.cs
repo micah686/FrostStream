@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using NodaTime;
 using Shared.Messaging;
 using Shared.Metadata;
+using Shared.Secrets;
 using Shared.Storage;
 using Worker.Metadata;
 using YtDlpSharpLib;
@@ -35,9 +36,11 @@ public sealed class DownloadCommandsConsumerService(
     IJetStreamPublisher publisher,
     IYtDlpClient ytDlp,
     IBlobStorageProvider blobStorageProvider,
+    ISecretStore secretStore,
     IClock clock,
     ILogger<DownloadCommandsConsumerService> logger) : BackgroundService
 {
+    private const string MediaFileBase = "media";
     private static readonly StreamName Stream = StreamName.From(DownloadTopology.StreamNameValue);
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
@@ -70,16 +73,28 @@ public sealed class DownloadCommandsConsumerService(
     private async Task HandleFetchMetadataAsync(IJsMessageContext<FetchMetadataCommand> context)
     {
         var cmd = context.Message;
+        var cookieScratch = GetCookieScratchDirectory(cmd.JobId);
 
         try
         {
             logger.LogInformation(
-                "Metadata fetch started for JobId {JobId} Attempt {Attempt} URL {SourceUrl}",
+                "Metadata fetch started for JobId {JobId} Attempt {Attempt} URL {SourceUrl} CookieKey {CookieKey}",
                 cmd.JobId,
                 cmd.Attempt,
-                cmd.SourceUrl);
+                cmd.SourceUrl,
+                cmd.CookieKey);
 
-            var metadataResult = await ytDlp.TryGetVideoInfoAsync(cmd.SourceUrl);
+            await using var cookies = await CookieMaterializer.CreateAsync(
+                secretStore,
+                cmd.CookieKey,
+                cookieScratch,
+                logger);
+            var metadataOptions = YtDlpOptionsMerger.Merge(
+                cmd.YtDlpOptions,
+                ffmpegLocation: GetFfmpegLocation(),
+                cookieFilePath: cookies.FilePath);
+
+            var metadataResult = await ytDlp.TryGetVideoInfoAsync(cmd.SourceUrl, overrideOptions: metadataOptions);
             if (!metadataResult.Success || metadataResult.Data is not { } info)
             {
                 throw new YtDlpProcessException(
@@ -160,6 +175,7 @@ public sealed class DownloadCommandsConsumerService(
     {
         var cmd = context.Message;
         var tempDirectory = GetDownloadTempDirectory(cmd);
+        var cookieScratch = GetCookieScratchDirectory(cmd.JobId);
         string? tempFileRef = null;
         DownloadProgressReporter? progress = null;
 
@@ -168,21 +184,25 @@ public sealed class DownloadCommandsConsumerService(
             Directory.CreateDirectory(tempDirectory);
 
             logger.LogInformation(
-                "Download started for JobId {JobId} Attempt {Attempt} URL {SourceUrl} TempDirectory {TempDirectory}",
+                "Download started for JobId {JobId} Attempt {Attempt} URL {SourceUrl} MediaKind {MediaKind} CookieKey {CookieKey} TempDirectory {TempDirectory}",
                 cmd.JobId,
                 cmd.Attempt,
                 cmd.SourceUrl,
+                cmd.MediaKind,
+                cmd.CookieKey,
                 tempDirectory);
 
+            await using var cookies = await CookieMaterializer.CreateAsync(
+                secretStore,
+                cmd.CookieKey,
+                cookieScratch,
+                logger);
+
             progress = new DownloadProgressReporter(cmd, publisher, clock, logger);
-            await ytDlp.DownloadAsync(
-                cmd.SourceUrl,
-                tempDirectory,
-                CreateDownloadOptions(),
-                progress);
+            await DispatchYtDlpAsync(cmd, tempDirectory, cookies.FilePath, progress);
             await progress.FlushAsync();
 
-            tempFileRef = FindDownloadedVideoFile(tempDirectory)
+            tempFileRef = FindDownloadedMediaFile(tempDirectory)
                           ?? throw new InvalidOperationException("yt-dlp completed without producing a media file.");
 
             var fileInfo = new FileInfo(tempFileRef);
@@ -191,13 +211,16 @@ public sealed class DownloadCommandsConsumerService(
 
             var contentHash = await ComputeXxHash128Async(tempFileRef);
 
+            var infoJson = await ResolveInfoJsonSidecarAsync(tempDirectory);
+
             logger.LogInformation(
-                "Download completed for JobId {JobId} Attempt {Attempt} File {TempFileRef} SizeBytes {FileSizeBytes} ContentHash {ContentHashXxh128}",
+                "Download completed for JobId {JobId} Attempt {Attempt} File {TempFileRef} SizeBytes {FileSizeBytes} ContentHash {ContentHashXxh128} InfoJson {InfoJsonFileName}",
                 cmd.JobId,
                 cmd.Attempt,
                 tempFileRef,
                 fileInfo.Length,
-                contentHash);
+                contentHash,
+                infoJson?.FileName);
 
             await Publish(DownloadSubjects.DownloadCompleted, new DownloadCompleted
             {
@@ -211,7 +234,11 @@ public sealed class DownloadCommandsConsumerService(
                 TempFileRef = tempFileRef,
                 FileName = fileInfo.Name,
                 FileSizeBytes = fileInfo.Length,
-                ContentHashXxh128 = contentHash
+                ContentHashXxh128 = contentHash,
+                InfoJsonTempFileRef = infoJson?.TempFileRef,
+                InfoJsonFileName = infoJson?.FileName,
+                InfoJsonSizeBytes = infoJson?.SizeBytes,
+                InfoJsonContentHashXxh128 = infoJson?.ContentHash
             });
             await context.AckAsync();
         }
@@ -223,7 +250,7 @@ public sealed class DownloadCommandsConsumerService(
             logger.LogWarning(ex,
                 "DownloadVideo: source unavailable for JobId {JobId} URL {SourceUrl}",
                 cmd.JobId, cmd.SourceUrl);
-            await PublishDownloadFailedAsync(cmd, ex, YtDlpFailureDetails.ClassifyYtDlpFailure(ex), tempFileRef ?? FindDownloadedVideoFile(tempDirectory));
+            await PublishDownloadFailedAsync(cmd, ex, YtDlpFailureDetails.ClassifyYtDlpFailure(ex), tempFileRef ?? FindDownloadedMediaFile(tempDirectory));
             await context.AckAsync();
         }
         catch (Exception ex)
@@ -232,7 +259,7 @@ public sealed class DownloadCommandsConsumerService(
                 await progress.FlushAsync();
 
             logger.LogError(ex, "DownloadVideo failed for JobId {JobId} URL {SourceUrl}", cmd.JobId, cmd.SourceUrl);
-            await PublishDownloadFailedAsync(cmd, ex, YtDlpFailureDetails.ClassifyFailure(ex), tempFileRef ?? FindDownloadedVideoFile(tempDirectory));
+            await PublishDownloadFailedAsync(cmd, ex, YtDlpFailureDetails.ClassifyFailure(ex), tempFileRef ?? FindDownloadedMediaFile(tempDirectory));
             await context.AckAsync();
         }
     }
@@ -286,7 +313,8 @@ public sealed class DownloadCommandsConsumerService(
                 StoragePath = cmd.StoragePath,
                 StorageVersion = null,
                 ContentHashXxh128 = cmd.ContentHashXxh128,
-                ContentLengthBytes = fileInfo.Length
+                ContentLengthBytes = fileInfo.Length,
+                Kind = cmd.Kind
             });
             await context.AckAsync();
         }
@@ -423,6 +451,14 @@ public sealed class DownloadCommandsConsumerService(
     private Task Publish<T>(string subject, T message) where T : IFlowMessage
         => publisher.PublishAsync(subject, message, messageId: message.MessageId.ToString("N"));
 
+    private Task PublishFailureAsync<TCommand, TFailure>(
+        string subject,
+        TCommand command,
+        Func<FailureEnvelope, TFailure> factory)
+        where TCommand : IFlowMessage
+        where TFailure : IFlowMessage
+        => Publish(subject, factory(FailureEnvelope.From(command, clock)));
+
     private static Instant? ResolveSourceLastModified(VideoInfo info)
     {
         if (info.ModifiedTimestamp is { } modifiedTimestamp)
@@ -443,15 +479,15 @@ public sealed class DownloadCommandsConsumerService(
     }
 
     private Task PublishMetadataFailedAsync(FetchMetadataCommand cmd, Exception ex, FailureKind failureKind)
-        => Publish(DownloadSubjects.MetadataFetchFailed, new MetadataFetchFailed
+        => PublishFailureAsync(DownloadSubjects.MetadataFetchFailed, cmd, envelope => new MetadataFetchFailed
         {
-            JobId = cmd.JobId,
-            CorrelationId = cmd.CorrelationId,
-            CausationId = cmd.MessageId,
-            MessageId = DeterministicGuid.Create(cmd.MessageId, "/failed"),
-            OperationKey = $"{cmd.OperationKey}/failed",
-            OccurredAt = clock.GetCurrentInstant(),
-            Attempt = cmd.Attempt,
+            JobId = envelope.JobId,
+            CorrelationId = envelope.CorrelationId,
+            CausationId = envelope.CausationId,
+            MessageId = envelope.MessageId,
+            OperationKey = envelope.OperationKey,
+            OccurredAt = envelope.OccurredAt,
+            Attempt = envelope.Attempt,
             FailureKind = failureKind,
             ErrorCode = YtDlpFailureDetails.ErrorCode(ex),
             ErrorMessage = YtDlpFailureDetails.DescribeException(ex)
@@ -462,15 +498,15 @@ public sealed class DownloadCommandsConsumerService(
         Exception ex,
         FailureKind failureKind,
         string? tempFileRef)
-        => Publish(DownloadSubjects.DownloadFailed, new DownloadFailed
+        => PublishFailureAsync(DownloadSubjects.DownloadFailed, cmd, envelope => new DownloadFailed
         {
-            JobId = cmd.JobId,
-            CorrelationId = cmd.CorrelationId,
-            CausationId = cmd.MessageId,
-            MessageId = DeterministicGuid.Create(cmd.MessageId, "/failed"),
-            OperationKey = $"{cmd.OperationKey}/failed",
-            OccurredAt = clock.GetCurrentInstant(),
-            Attempt = cmd.Attempt,
+            JobId = envelope.JobId,
+            CorrelationId = envelope.CorrelationId,
+            CausationId = envelope.CausationId,
+            MessageId = envelope.MessageId,
+            OperationKey = envelope.OperationKey,
+            OccurredAt = envelope.OccurredAt,
+            Attempt = envelope.Attempt,
             FailureKind = failureKind,
             ErrorCode = YtDlpFailureDetails.ErrorCode(ex),
             ErrorMessage = YtDlpFailureDetails.DescribeException(ex),
@@ -478,48 +514,99 @@ public sealed class DownloadCommandsConsumerService(
         });
 
     private Task PublishUploadFailedAsync(UploadObjectCommand cmd, Exception ex, FailureKind failureKind)
-        => Publish(DownloadSubjects.UploadFailed, new UploadFailed
+        => PublishFailureAsync(DownloadSubjects.UploadFailed, cmd, envelope => new UploadFailed
         {
-            JobId = cmd.JobId,
-            CorrelationId = cmd.CorrelationId,
-            CausationId = cmd.MessageId,
-            MessageId = DeterministicGuid.Create(cmd.MessageId, "/failed"),
-            OperationKey = $"{cmd.OperationKey}/failed",
-            OccurredAt = clock.GetCurrentInstant(),
-            Attempt = cmd.Attempt,
+            JobId = envelope.JobId,
+            CorrelationId = envelope.CorrelationId,
+            CausationId = envelope.CausationId,
+            MessageId = envelope.MessageId,
+            OperationKey = envelope.OperationKey,
+            OccurredAt = envelope.OccurredAt,
+            Attempt = envelope.Attempt,
             FailureKind = failureKind,
             ErrorMessage = ex.Message,
-            TempFileRef = cmd.TempFileRef
+            TempFileRef = cmd.TempFileRef,
+            Kind = cmd.Kind
         });
+
+    private readonly record struct FailureEnvelope(
+        Guid JobId,
+        Guid CorrelationId,
+        Guid? CausationId,
+        Guid MessageId,
+        string OperationKey,
+        Instant OccurredAt,
+        int Attempt)
+    {
+        public static FailureEnvelope From(IFlowMessage command, IClock clock)
+            => new(
+                command.JobId,
+                command.CorrelationId,
+                command.MessageId,
+                DeterministicGuid.Create(command.MessageId, "/failed"),
+                $"{command.OperationKey}/failed",
+                clock.GetCurrentInstant(),
+                command.Attempt);
+    }
 
 
     #region Helpers
-    private static DownloadOptions CreateDownloadOptions()
-        => new()
+    private Task DispatchYtDlpAsync(
+        DownloadVideoCommand cmd,
+        string tempDirectory,
+        string? cookieFilePath,
+        DownloadProgressReporter progress)
+    {
+        var ytDlpOptions = ApplyOperationalDefaults(YtDlpOptionsMerger.Merge(
+            cmd.YtDlpOptions,
+            ffmpegLocation: GetFfmpegLocation(),
+            cookieFilePath: cookieFilePath));
+
+        var outputTemplate = $"{MediaFileBase}.%(ext)s";
+
+        if (cmd.MediaKind == MediaKind.Audio)
         {
-            AbortOnError = true,
-            OutputTemplate = "video.%(ext)s",
-            OverwriteFiles = true,
-            RestrictFilenames = true,
-            YtDlp = new YtDlpOptions
+            return ytDlp.DownloadAudioAsync(
+                cmd.SourceUrl,
+                tempDirectory,
+                new AudioDownloadOptions
+                {
+                    AbortOnError = true,
+                    OutputTemplate = outputTemplate,
+                    OverwriteFiles = true,
+                    RestrictFilenames = true,
+                    AudioFormat = cmd.AudioFormat ?? AudioConversionFormat.M4a,
+                    YtDlp = ytDlpOptions
+                },
+                progress);
+        }
+
+        return ytDlp.DownloadAsync(
+            cmd.SourceUrl,
+            tempDirectory,
+            new DownloadOptions
             {
-                VideoSelection = new YtDlpVideoSelectionOptions
-                {
-                    NoPlaylist = true
-                },
-                Filesystem = new YtDlpFilesystemOptions
-                {
-                    NoPart = true
-                },
-                PostProcessing = new YtDlpPostProcessingOptions
-                {
-                    FfmpegLocation = GetFfmpegLocation()
-                },
-                VerbositySimulation = new YtDlpVerbositySimulationOptions
-                {
-                    Newline = true
-                }
-            }
+                AbortOnError = true,
+                OutputTemplate = outputTemplate,
+                OverwriteFiles = true,
+                RestrictFilenames = true,
+                YtDlp = ytDlpOptions
+            },
+            progress);
+    }
+
+    /// <summary>
+    /// Layer Worker-mandated defaults on top of the merged options. We force
+    /// <c>NoPlaylist</c>, <c>NoPart</c>, and <c>Newline</c> regardless of caller input
+    /// because they're load-bearing for the saga (one file per job, atomic temp moves,
+    /// readable progress).
+    /// </summary>
+    private static YtDlpOptions ApplyOperationalDefaults(YtDlpOptions options)
+        => options with
+        {
+            VideoSelection = options.VideoSelection with { NoPlaylist = true },
+            Filesystem = options.Filesystem with { NoPart = true },
+            VerbositySimulation = options.VerbositySimulation with { Newline = true }
         };
 
     private static string GetDownloadTempDirectory(DownloadVideoCommand cmd)
@@ -530,22 +617,52 @@ public sealed class DownloadCommandsConsumerService(
             cmd.JobId.ToString("N"),
             $"attempt-{cmd.Attempt.ToString(CultureInfo.InvariantCulture)}");
 
+    private static string GetCookieScratchDirectory(Guid jobId)
+        => Path.Combine(
+            Path.GetTempPath(),
+            "froststream",
+            "cookies",
+            jobId.ToString("N"));
+
     private static string? GetFfmpegLocation()
     {
         var toolsDirectory = Path.Combine(AppContext.BaseDirectory, "tools");
         return Directory.Exists(toolsDirectory) ? toolsDirectory : null;
     }
 
-    private static string? FindDownloadedVideoFile(string tempDirectory)
+    private static string? FindDownloadedMediaFile(string tempDirectory)
         => Directory.Exists(tempDirectory)
-            ? Directory.EnumerateFiles(tempDirectory, "video.*", SearchOption.TopDirectoryOnly)
-                .Where(path => !Path.GetFileName(path).EndsWith(".ytdl", StringComparison.OrdinalIgnoreCase))
+            ? Directory.EnumerateFiles(tempDirectory, $"{MediaFileBase}.*", SearchOption.TopDirectoryOnly)
+                .Where(path => !Path.GetFileName(path).EndsWith(".ytdl", StringComparison.OrdinalIgnoreCase)
+                    && !Path.GetFileName(path).EndsWith(".part", StringComparison.OrdinalIgnoreCase))
                 .Select(path => new FileInfo(path))
                 .Where(file => file.Exists && file.Length > 0)
                 .OrderByDescending(file => file.LastWriteTimeUtc)
                 .Select(file => file.FullName)
                 .FirstOrDefault()
             : null;
+
+    /// <summary>
+    /// Locates a yt-dlp <c>.info.json</c> sidecar in the same temp directory as the media
+    /// file. Returns null when the caller didn't enable <c>--write-info-json</c>. The
+    /// output template forces <c>media.%(ext)s</c>, so the sidecar is always
+    /// <c>media.info.json</c>.
+    /// </summary>
+    private static async Task<InfoJsonSidecar?> ResolveInfoJsonSidecarAsync(string tempDirectory)
+    {
+        if (!Directory.Exists(tempDirectory))
+            return null;
+
+        var infoJsonPath = Path.Combine(tempDirectory, $"{MediaFileBase}.info.json");
+        var file = new FileInfo(infoJsonPath);
+        if (!file.Exists || file.Length == 0)
+            return null;
+
+        var hash = await ComputeXxHash128Async(file.FullName);
+        return new InfoJsonSidecar(file.FullName, file.Name, file.Length, hash);
+    }
+
+    private sealed record InfoJsonSidecar(string TempFileRef, string FileName, long SizeBytes, string ContentHash);
 
     private static async Task<string> ComputeXxHash128Async(string path)
     {

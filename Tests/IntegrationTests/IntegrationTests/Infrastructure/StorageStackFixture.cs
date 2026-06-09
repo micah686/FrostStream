@@ -12,6 +12,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using NATS.Client.Core;
@@ -84,7 +85,7 @@ public sealed class StorageStackFixture(SaveChangesInterceptor? interceptor = nu
 
             await StartDataBridgeAsync();
 
-            _webAppFactory = new StorageWebApplicationFactory(NatsUrl);
+            _webAppFactory = new StorageWebApplicationFactory(NatsUrl, SecretStore);
             _client = _webAppFactory.CreateClient(new WebApplicationFactoryClientOptions
             {
                 BaseAddress = new Uri("https://localhost")
@@ -124,6 +125,7 @@ public sealed class StorageStackFixture(SaveChangesInterceptor? interceptor = nu
 
         builder.Services.AddLogging();
         builder.Services.AddSingleton<ISecretStore>(SecretStore);
+        builder.Services.AddSingleton<NodaTime.IClock>(NodaTime.SystemClock.Instance);
         builder.Services.AddDbContext<DataBridgeDbContext>(options =>
         {
             options.UseNpgsql(
@@ -221,9 +223,9 @@ public sealed class StorageStackFixture(SaveChangesInterceptor? interceptor = nu
             .SingleOrDefaultAsync(x => x.Key == key);
     }
 
-    public async Task<WebAPI.Controllers.LocalStorageConfigResponse> CreateLocalAsync(string key, string path)
+    public async Task<WebAPI.Features.Storage.Models.LocalStorageConfigResponse> CreateLocalAsync(string key, string path)
     {
-        var response = await Client.PostAsJsonAsync("/api/storage/local/create", new WebAPI.Controllers.LocalStorageUpsertRequest
+        var response = await Client.PostAsJsonAsync("/api/storage/local/create", new WebAPI.Features.Storage.Models.LocalStorageUpsertRequest
         {
             Key = key,
             Description = "desc",
@@ -232,25 +234,25 @@ public sealed class StorageStackFixture(SaveChangesInterceptor? interceptor = nu
         });
 
         response.EnsureSuccessStatusCode();
-        return (await response.Content.ReadFromJsonAsync<WebAPI.Controllers.LocalStorageConfigResponse>(JsonOptions))!;
+        return (await response.Content.ReadFromJsonAsync<WebAPI.Features.Storage.Models.LocalStorageConfigResponse>(JsonOptions))!;
     }
 
-    public async Task<HttpResponseMessage> CreateNetworkAsync(WebAPI.Controllers.NetworkStorageUpsertRequest request)
+    public async Task<HttpResponseMessage> CreateNetworkAsync(WebAPI.Features.Storage.Models.NetworkStorageUpsertRequest request)
     {
         return await Client.PostAsJsonAsync("/api/storage/network/create", request);
     }
 
-    public async Task<HttpResponseMessage> CreateS3Async(WebAPI.Controllers.S3CompatibleObjectStorageUpsertRequest request)
+    public async Task<HttpResponseMessage> CreateS3Async(WebAPI.Features.Storage.Models.S3CompatibleObjectStorageUpsertRequest request)
     {
         return await Client.PostAsJsonAsync("/api/storage/object/s3-compatible/create", request);
     }
 
-    public async Task<HttpResponseMessage> CreateAzureAsync(WebAPI.Controllers.AzureBlobObjectStorageUpsertRequest request)
+    public async Task<HttpResponseMessage> CreateAzureAsync(WebAPI.Features.Storage.Models.AzureBlobObjectStorageUpsertRequest request)
     {
         return await Client.PostAsJsonAsync("/api/storage/object/azure-blob/create", request);
     }
 
-    public async Task<HttpResponseMessage> CreateGcsAsync(WebAPI.Controllers.GoogleCloudStorageObjectStorageUpsertRequest request)
+    public async Task<HttpResponseMessage> CreateGcsAsync(WebAPI.Features.Storage.Models.GoogleCloudStorageObjectStorageUpsertRequest request)
     {
         return await Client.PostAsJsonAsync("/api/storage/object/google-cloud-storage/create", request);
     }
@@ -264,12 +266,29 @@ public sealed class StorageStackFixture(SaveChangesInterceptor? interceptor = nu
 
         if (_webAppFactory is not null)
         {
-            await _webAppFactory.DisposeAsync();
+            try
+            {
+                await _webAppFactory.DisposeAsync();
+            }
+            catch (InvalidOperationException exception)
+                when (exception.Message.Contains("Collection was modified", StringComparison.Ordinal))
+            {
+                // SubscriptionBackgroundService currently mutates its subscription list during shutdown.
+            }
         }
 
         if (_dataBridgeHost is not null)
         {
-            await _dataBridgeHost.StopAsync();
+            try
+            {
+                await _dataBridgeHost.StopAsync();
+            }
+            catch (InvalidOperationException exception)
+                when (exception.Message.Contains("Collection was modified", StringComparison.Ordinal))
+            {
+                // SubscriptionBackgroundService currently mutates its subscription list during shutdown.
+            }
+
             _dataBridgeHost.Dispose();
         }
 
@@ -306,7 +325,9 @@ public sealed class StorageStackFixture(SaveChangesInterceptor? interceptor = nu
         throw new TimeoutException("PostgreSQL container did not become reachable in time.");
     }
 
-    private sealed class StorageWebApplicationFactory(string natsUrl) : WebApplicationFactory<WebAPI.Program>
+    private sealed class StorageWebApplicationFactory(
+        string natsUrl,
+        ISecretStore secretStore) : WebApplicationFactory<WebAPI.Program>
     {
         protected override void ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder)
         {
@@ -320,6 +341,11 @@ public sealed class StorageStackFixture(SaveChangesInterceptor? interceptor = nu
                     ["ConnectionStrings:nats"] = natsUrl,
                     ["NATS:Url"] = natsUrl
                 });
+            });
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<ISecretStore>();
+                services.AddSingleton(secretStore);
             });
         }
     }

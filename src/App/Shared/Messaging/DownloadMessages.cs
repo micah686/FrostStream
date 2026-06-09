@@ -1,7 +1,21 @@
 using NodaTime;
 using Shared.Metadata;
+using YtDlpSharpLib.Options;
 
 namespace Shared.Messaging;
+
+/// <summary>
+/// What kind of media a download job should produce. Audio jobs cause the Worker to
+/// force <c>--extract-audio</c> + an audio output template; video jobs use the default
+/// merge/recode pipeline.
+/// </summary>
+public enum MediaKind
+{
+    /// <summary>Default: download video (with audio muxed in).</summary>
+    Video = 0,
+    /// <summary>Audio-only: yt-dlp extracts audio and converts to <see cref="AudioConversionFormat"/>.</summary>
+    Audio = 1
+}
 
 /// <summary>
 /// Common envelope carried by every message on the download flow's NATS subjects. The
@@ -149,6 +163,39 @@ public sealed record DownloadRequested : IFlowMessage
     /// so hosts that replace media under the same source identity can be revalidated.
     /// </summary>
     public bool ForceDownload { get; init; }
+
+    /// <summary>
+    /// What kind of media to produce (video or audio-only). Audio jobs force
+    /// <c>--extract-audio</c> at the Worker.
+    /// </summary>
+    public MediaKind MediaKind { get; init; } = MediaKind.Video;
+
+    /// <summary>
+    /// Audio output format used when <see cref="MediaKind"/> is <see cref="MediaKind.Audio"/>.
+    /// Ignored for video jobs. <see langword="null"/> defers to yt-dlp's default.
+    /// </summary>
+    public AudioConversionFormat? AudioFormat { get; init; }
+
+    /// <summary>
+    /// Caller-supplied yt-dlp options snapshot. The Worker merges this on top of its
+    /// own defaults before invoking yt-dlp. Mutually exclusive with
+    /// <see cref="PresetKey"/> at the API boundary.
+    /// </summary>
+    public YtDlpOptions? YtDlpOptions { get; init; }
+
+    /// <summary>
+    /// Reference to a stored option preset (resolved by DataBridge from the
+    /// <c>download_option_presets</c> table). DataBridge populates
+    /// <see cref="YtDlpOptions"/> from the preset before commands are dispatched.
+    /// </summary>
+    public string? PresetKey { get; init; }
+
+    /// <summary>
+    /// Reference to a Netscape cookie file stored in OpenBAO at <c>cookies/{key}</c>.
+    /// The Worker fetches the secret, materializes it to a temp file, and passes
+    /// <c>--cookies &lt;path&gt;</c> to yt-dlp for the duration of the run.
+    /// </summary>
+    public string? CookieKey { get; init; }
 }
 
 /// <summary>
@@ -167,6 +214,16 @@ public sealed record FetchMetadataCommand : IFlowMessage
 
     /// <summary>The original source URL passed through from <see cref="DownloadRequested.SourceUrl"/>.</summary>
     public required string SourceUrl { get; init; }
+
+    /// <summary>
+    /// Caller-supplied yt-dlp options snapshot, passed through to the Worker for the
+    /// metadata-fetch invocation. Cookies-from-browser, custom user-agent, etc. all
+    /// matter at metadata time, so we don't strip the options here.
+    /// </summary>
+    public YtDlpOptions? YtDlpOptions { get; init; }
+
+    /// <summary>Same OpenBAO cookie reference as on <see cref="DownloadRequested.CookieKey"/>.</summary>
+    public string? CookieKey { get; init; }
 }
 
 /// <summary>
@@ -244,6 +301,18 @@ public sealed record DownloadVideoCommand : IFlowMessage
 
     /// <summary>Source URL to download (passed through from <see cref="DownloadRequested.SourceUrl"/>).</summary>
     public required string SourceUrl { get; init; }
+
+    /// <summary>What kind of media to produce (video or audio-only).</summary>
+    public MediaKind MediaKind { get; init; } = MediaKind.Video;
+
+    /// <summary>Audio output format used when <see cref="MediaKind"/> is <see cref="MediaKind.Audio"/>.</summary>
+    public AudioConversionFormat? AudioFormat { get; init; }
+
+    /// <summary>Caller-supplied yt-dlp options snapshot, passed through to the Worker.</summary>
+    public YtDlpOptions? YtDlpOptions { get; init; }
+
+    /// <summary>Same OpenBAO cookie reference as on <see cref="DownloadRequested.CookieKey"/>.</summary>
+    public string? CookieKey { get; init; }
 }
 
 /// <summary>
@@ -272,6 +341,36 @@ public sealed record DownloadCompleted : IFlowMessage
 
     /// <summary>Hex-encoded XxHash128 of the file contents. Identity for the bytes.</summary>
     public required string ContentHashXxh128 { get; init; }
+
+    /// <summary>
+    /// When yt-dlp also produced an <c>.info.json</c> sidecar (because the caller passed
+    /// <c>WriteInfoJson = true</c>), the worker reports its temp ref and hash here so the
+    /// saga can upload it next to the video. Null when no sidecar was written.
+    /// </summary>
+    public string? InfoJsonTempFileRef { get; init; }
+
+    /// <summary>Filename of the info.json sidecar (no directory). Null when none.</summary>
+    public string? InfoJsonFileName { get; init; }
+
+    /// <summary>Bytes of the info.json sidecar. Null when none.</summary>
+    public long? InfoJsonSizeBytes { get; init; }
+
+    /// <summary>Hex-encoded XxHash128 of the info.json sidecar. Null when none.</summary>
+    public string? InfoJsonContentHashXxh128 { get; init; }
+}
+
+/// <summary>
+/// What artifact an <see cref="UploadObjectCommand"/>/<see cref="UploadCompleted"/> pair
+/// refers to. The flow dispatches the primary upload first, then optionally a second
+/// upload for the <c>.info.json</c> sidecar; DataBridge's event-apply layer routes them
+/// to different persistence paths.
+/// </summary>
+public enum UploadArtifactKind
+{
+    /// <summary>The main media file. Drives version reservation and job state.</summary>
+    Primary = 0,
+    /// <summary>The yt-dlp <c>.info.json</c> sidecar, written next to the primary.</summary>
+    InfoJson = 1
 }
 
 /// <summary>
@@ -356,6 +455,12 @@ public sealed record UploadObjectCommand : IFlowMessage
 
     /// <summary>Hex XxHash128 of the bytes; passed through so the upload event can reaffirm it.</summary>
     public required string ContentHashXxh128 { get; init; }
+
+    /// <summary>
+    /// Which artifact this upload represents. Defaults to <see cref="UploadArtifactKind.Primary"/>
+    /// for backwards compatibility with callers that don't care about sidecars.
+    /// </summary>
+    public UploadArtifactKind Kind { get; init; } = UploadArtifactKind.Primary;
 }
 
 /// <summary>
@@ -388,6 +493,9 @@ public sealed record UploadCompleted : IFlowMessage
 
     /// <summary>Bytes durably stored.</summary>
     public long? ContentLengthBytes { get; init; }
+
+    /// <summary>Mirrors the dispatching command's <see cref="UploadObjectCommand.Kind"/>.</summary>
+    public UploadArtifactKind Kind { get; init; } = UploadArtifactKind.Primary;
 }
 
 /// <summary>
@@ -408,6 +516,9 @@ public sealed record UploadFailed : IFlowMessage
     public string? ErrorCode { get; init; }
     public required string ErrorMessage { get; init; }
     public string? TempFileRef { get; init; }
+
+    /// <summary>Mirrors the dispatching command's <see cref="UploadObjectCommand.Kind"/>.</summary>
+    public UploadArtifactKind Kind { get; init; } = UploadArtifactKind.Primary;
 }
 
 /// <summary>

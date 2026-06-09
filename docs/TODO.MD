@@ -1,9 +1,9 @@
-Playlists
+[X]Playlists
 upload metadata
 Channel downloads
-audio downloads
+[X]audio downloads
 live_chat (complex, need to integrate with clickhousedb)
-options passed through via api
+[X]options passed through via api
 background download channel assets (thumbnail, art) (maybe check cache as part of step)
 batch local import (need to figure out if JUST local filesystem, or use IFluentStorage)
     Implement complete offline media file import from json file
