@@ -62,6 +62,13 @@ src/.idea/**
 
 src/VideoServeLocalTest/data/*
 
+# SvelteKit frontend output
+src/App/Frontend/node_modules/
+src/App/Frontend/.svelte-kit/
+src/App/Frontend/build/
+src/App/Frontend/.vite/
+src/App/Frontend/*.tsbuildinfo
+
 # CMake
 cmake-build-*/
 

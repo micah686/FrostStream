@@ -103,12 +103,17 @@ var databridge = builder.AddProject<Projects.DataBridge>("databridge")
     .WaitFor(openbao)
     .WaitFor(typesense);
 
-builder.AddProject<Projects.WebAPI>("webapi")
+var webapi = builder.AddProject<Projects.WebAPI>("webapi", launchProfileName: "https")
     .WithReference(nats).WaitFor(nats)
     .WithEnvironment("OpenBao__Address", openbaoEndpoint)
     .WithEnvironment("OpenBao__Token", baoDevRootToken)
     .WithEnvironment("FROSTSTREAM_STORAGE_ROOT", sharedStorageRoot)
     .WaitFor(openbao);
+
+builder.AddViteApp("frontend", "../Frontend")
+    .WithPnpm()
+    .WithReference(webapi)
+    .WithEnvironment("VITE_API_BASE_URL", webapi.GetEndpoint("https"));
 
 builder.AddProject<Projects.Worker>("worker")
     .WithReference(nats).WaitFor(nats)
