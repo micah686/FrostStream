@@ -13,6 +13,8 @@ public sealed class SchedulesController(IMessageBus messageBus, ILogger<Schedule
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);
 
     [HttpPost]
+    [EndpointSummary("Create a scheduled background task")]
+    [EndpointDescription("Creates a scheduler definition for the requested task type using either cron or interval timing, timezone, enabled state, and catch-up policy. DataBridge validates the schedule and persists it; duplicate keys return 409 and invalid timing combinations return 400.")]
     public async Task<ActionResult<ScheduledTaskResponse>> Create(
         [FromBody] ScheduleCreateRequest request,
         CancellationToken cancellationToken)
@@ -35,6 +37,8 @@ public sealed class SchedulesController(IMessageBus messageBus, ILogger<Schedule
     }
 
     [HttpPut("{key}")]
+    [EndpointSummary("Update a scheduled background task")]
+    [EndpointDescription("Replaces the configuration of an existing scheduled task identified by key. The task type, timing, timezone, enabled state, and catch-up policy are revalidated and persisted while execution timestamps are returned from the stored schedule.")]
     public async Task<ActionResult<ScheduledTaskResponse>> Update(
         string key,
         [FromBody] ScheduleUpdateRequest request,
@@ -58,6 +62,8 @@ public sealed class SchedulesController(IMessageBus messageBus, ILogger<Schedule
     }
 
     [HttpGet("{key}")]
+    [EndpointSummary("Get a scheduled background task")]
+    [EndpointDescription("Retrieves a single scheduler definition by key, including its timing configuration, enabled state, last attempt and success timestamps, and next due time. Returns 404 for an unknown key and 503 when DataBridge is unavailable.")]
     public async Task<ActionResult<ScheduledTaskResponse>> Get(string key, CancellationToken cancellationToken)
     {
         var response = await SendAsync(
@@ -69,6 +75,8 @@ public sealed class SchedulesController(IMessageBus messageBus, ILogger<Schedule
     }
 
     [HttpGet]
+    [EndpointSummary("List scheduled background tasks")]
+    [EndpointDescription("Returns every persisted scheduler definition with its configuration and runtime status timestamps. The request is served through DataBridge request/reply and returns 503 if the schedule service does not respond within the configured timeout.")]
     public async Task<ActionResult<IReadOnlyCollection<ScheduledTaskResponse>>> List(CancellationToken cancellationToken)
     {
         var response = await SendAsync(
@@ -85,6 +93,8 @@ public sealed class SchedulesController(IMessageBus messageBus, ILogger<Schedule
     }
 
     [HttpDelete("{key}")]
+    [EndpointSummary("Delete a scheduled background task")]
+    [EndpointDescription("Deletes the scheduler definition identified by its key so it is no longer eligible for future execution. Successful deletion returns 204; missing schedules return 404 and conflicting deletions return 409.")]
     public async Task<IActionResult> Delete(string key, CancellationToken cancellationToken)
     {
         var response = await SendAsync(

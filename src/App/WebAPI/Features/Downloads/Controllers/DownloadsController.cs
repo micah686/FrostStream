@@ -21,6 +21,8 @@ public class DownloadsController(
     /// <see cref="SubmitWithPreset"/> for anything more elaborate.
     /// </summary>
     [HttpPost]
+    [EndpointSummary("Queue a video download")]
+    [EndpointDescription("Creates a new video download job and publishes it to the durable download stream. Blank storage keys use the default storage target; optional requester, tags, cookie credentials, and force-download behavior are included in the queued command. Returns job and correlation identifiers immediately without waiting for the download to complete.")]
     public Task<ActionResult<DownloadRequestResponse>> Download(
         [FromBody] DownloadRequest request,
         CancellationToken cancellationToken)
@@ -42,6 +44,8 @@ public class DownloadsController(
     /// <c>--extract-audio --audio-format mp3</c>; no other options are configurable.
     /// </summary>
     [HttpPost("audio")]
+    [EndpointSummary("Queue an MP3 audio download")]
+    [EndpointDescription("Creates an audio-only download job that extracts and converts the source to MP3. The request is published asynchronously to the download stream, uses the default storage target when no storage key is supplied, and returns job and correlation identifiers before processing begins.")]
     public Task<ActionResult<DownloadRequestResponse>> DownloadAudio(
         [FromBody] DownloadAudioRequest request,
         CancellationToken cancellationToken)
@@ -64,6 +68,8 @@ public class DownloadsController(
     /// yt-dlp flag — including audio extraction if the preset configures it.
     /// </summary>
     [HttpPost("preset")]
+    [EndpointSummary("Queue a download using an option preset")]
+    [EndpointDescription("Creates a download job whose yt-dlp behavior is loaded from the named stored option preset by the downstream worker flow. The endpoint publishes the request asynchronously, supports the same storage, requester, tags, cookie, and force-download fields as a standard download, and returns tracking identifiers immediately.")]
     public Task<ActionResult<DownloadRequestResponse>> DownloadWithPreset(
         [FromBody] DownloadPresetRequest request,
         CancellationToken cancellationToken)

@@ -16,6 +16,8 @@ public class CookiesController(ISecretStore secretStore, ILogger<CookiesControll
 
     /// <summary>Stores or replaces the Netscape cookie file at <c>cookies/{key}</c>.</summary>
     [HttpPut("{key}")]
+    [EndpointSummary("Store a download cookie file")]
+    [EndpointDescription("Creates or replaces a Netscape-formatted cookie file in the configured secret store under the supplied key. Keys must contain only lowercase letters, digits, and hyphens and be between 2 and 100 characters; cookie contents are stored as secrets for authenticated downloads.")]
     public async Task<IActionResult> Upsert(
         string key,
         [FromBody] CookieUpsertRequest request,
@@ -45,6 +47,8 @@ public class CookiesController(ISecretStore secretStore, ILogger<CookiesControll
 
     /// <summary>Returns metadata about a stored cookie. The body is never returned over HTTP.</summary>
     [HttpGet("{key}")]
+    [EndpointSummary("Check a download cookie file")]
+    [EndpointDescription("Checks whether a cookie secret exists for the supplied key and returns only its key metadata. The stored cookie body is deliberately never exposed over HTTP; invalid keys return 400 and missing secrets return 404.")]
     public async Task<ActionResult<CookieResponse>> Get(string key, CancellationToken cancellationToken)
     {
         if (!IsValidKey(key))
@@ -68,6 +72,8 @@ public class CookiesController(ISecretStore secretStore, ILogger<CookiesControll
     }
 
     [HttpDelete("{key}")]
+    [EndpointSummary("Delete a download cookie file")]
+    [EndpointDescription("Deletes the Netscape cookie file associated with the supplied key from the secret store. The key format is validated before deletion, and a successful request returns 204 without exposing or returning the secret contents.")]
     public async Task<IActionResult> Delete(string key, CancellationToken cancellationToken)
     {
         if (!IsValidKey(key))
