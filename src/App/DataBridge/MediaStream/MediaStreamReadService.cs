@@ -2,11 +2,11 @@ using DataBridge.Data;
 using Microsoft.EntityFrameworkCore;
 using Shared.Messaging;
 
-namespace DataBridge.MediaContent;
+namespace DataBridge.MediaStream;
 
-public sealed class MediaContentReadService(DataBridgeDbContext dbContext) : IMediaContentReadService
+public sealed class MediaStreamReadService(DataBridgeDbContext dbContext) : IMediaStreamReadService
 {
-    public async Task<MediaContentLocationDto?> ResolveAsync(
+    public async Task<MediaStreamLocationDto?> ResolveAsync(
         Guid mediaGuid,
         string? storageKey,
         int? version,
@@ -28,7 +28,7 @@ public sealed class MediaContentReadService(DataBridgeDbContext dbContext) : IMe
 
         return await query
             .OrderByDescending(content => content.VersionNum)
-            .Select(content => new MediaContentLocationDto
+            .Select(content => new MediaStreamLocationDto
             {
                 MediaGuid = content.MediaGuid,
                 StorageKey = content.StorageKey,

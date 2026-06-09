@@ -1,10 +1,10 @@
 using Shared.Messaging;
 
-namespace DataBridge.MediaContent;
+namespace DataBridge.MediaStream;
 
-public interface IMediaContentReadService
+public interface IMediaStreamReadService
 {
-    Task<MediaContentLocationDto?> ResolveAsync(
+    Task<MediaStreamLocationDto?> ResolveAsync(
         Guid mediaGuid,
         string? storageKey,
         int? version,

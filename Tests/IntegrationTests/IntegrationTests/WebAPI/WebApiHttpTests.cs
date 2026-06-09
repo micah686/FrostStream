@@ -24,15 +24,15 @@ namespace IntegrationTests.WebApiHttp;
 public sealed class WebApiHttpTests
 {
     [Test]
-    public async Task Get_Media_Content_Supports_Http_Range_Requests()
+    public async Task Get_Media_Stream_Supports_Http_Range_Requests()
     {
         var mediaGuid = Guid.NewGuid();
         var bytes = Enumerable.Range(0, 10).Select(value => (byte)value).ToArray();
         using var factory = new TestWebApiFactory();
-        factory.MessageBus.MediaContentResponse = new MediaContentResolveResponseMessage
+        factory.MessageBus.MediaStreamResponse = new MediaStreamResolveResponseMessage
         {
             Success = true,
-            Item = new MediaContentLocationDto
+            Item = new MediaStreamLocationDto
             {
                 MediaGuid = mediaGuid,
                 StorageKey = "storage-a",
@@ -48,7 +48,7 @@ public sealed class WebApiHttpTests
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(
             HttpMethod.Get,
-            $"/api/media/{mediaGuid}/content?storageKey=storage-a");
+            $"/stream/{mediaGuid}?storageKey=storage-a");
         request.Headers.Range = new RangeHeaderValue(2, 4);
 
         using var response = await client.SendAsync(request);
@@ -58,9 +58,9 @@ public sealed class WebApiHttpTests
         response.Content.Headers.ContentRange!.From.ShouldBe(2);
         response.Content.Headers.ContentRange.To.ShouldBe(4);
         (await response.Content.ReadAsByteArrayAsync()).ShouldBe([2, 3, 4]);
-        factory.MessageBus.MediaContentRequest.ShouldNotBeNull();
-        factory.MessageBus.MediaContentRequest.StorageKey.ShouldBe("storage-a");
-        factory.MessageBus.MediaContentRequest.Version.ShouldBeNull();
+        factory.MessageBus.MediaStreamRequest.ShouldNotBeNull();
+        factory.MessageBus.MediaStreamRequest.StorageKey.ShouldBe("storage-a");
+        factory.MessageBus.MediaStreamRequest.Version.ShouldBeNull();
     }
 
     [Test]
@@ -194,8 +194,8 @@ internal sealed record Published<T>(string Subject, T Message, string? MessageId
 
 internal sealed class FakeMessageBus : IMessageBus
 {
-    public MediaContentResolveResponseMessage? MediaContentResponse { get; set; }
-    public MediaContentResolveRequestMessage? MediaContentRequest { get; private set; }
+    public MediaStreamResolveResponseMessage? MediaStreamResponse { get; set; }
+    public MediaStreamResolveRequestMessage? MediaStreamRequest { get; private set; }
 
     public Task PublishAsync<T>(string subject, T message, CancellationToken cancellationToken = default)
         => Task.CompletedTask;
@@ -220,12 +220,12 @@ internal sealed class FakeMessageBus : IMessageBus
         TimeSpan timeout,
         CancellationToken cancellationToken = default)
     {
-        if (subject == MediaContentSubjects.Resolve &&
-            request is MediaContentResolveRequestMessage mediaContentRequest &&
-            MediaContentResponse is not null)
+        if (subject == MediaStreamSubjects.Resolve &&
+            request is MediaStreamResolveRequestMessage mediaStreamRequest &&
+            MediaStreamResponse is not null)
         {
-            MediaContentRequest = mediaContentRequest;
-            return Task.FromResult((TResponse?)(object)MediaContentResponse);
+            MediaStreamRequest = mediaStreamRequest;
+            return Task.FromResult((TResponse?)(object)MediaStreamResponse);
         }
 
         return Task.FromResult<TResponse?>(default);

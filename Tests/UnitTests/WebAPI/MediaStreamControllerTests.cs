@@ -12,10 +12,10 @@ using WebAPI.Features.Media.Controllers;
 
 namespace UnitTests.WebAPI;
 
-public sealed class MediaContentControllerTests
+public sealed class MediaStreamControllerTests
 {
     [Test]
-    public async Task GetContent_Resolves_Filters_And_Returns_Range_Enabled_Stream()
+    public async Task GetStream_Resolves_Filters_And_Returns_Range_Enabled_Stream()
     {
         var mediaGuid = Guid.NewGuid();
         var bus = Substitute.For<IMessageBus>();
@@ -23,15 +23,15 @@ public sealed class MediaContentControllerTests
         var storage = Substitute.For<IBlobStorage>();
         var stream = new MemoryStream([1, 2, 3]);
 
-        bus.RequestAsync<MediaContentResolveRequestMessage, MediaContentResolveResponseMessage>(
-                MediaContentSubjects.Resolve,
-                Arg.Is<MediaContentResolveRequestMessage>(request =>
+        bus.RequestAsync<MediaStreamResolveRequestMessage, MediaStreamResolveResponseMessage>(
+                MediaStreamSubjects.Resolve,
+                Arg.Is<MediaStreamResolveRequestMessage>(request =>
                     request.MediaGuid == mediaGuid &&
                     request.StorageKey == "storage-a" &&
                     request.Version == 2),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
-            .Returns(new MediaContentResolveResponseMessage
+            .Returns(new MediaStreamResolveResponseMessage
             {
                 Success = true,
                 Item = Location(mediaGuid, "storage-a", "media/video.mp4", 2)
@@ -39,7 +39,7 @@ public sealed class MediaContentControllerTests
         provider.GetAsync("storage-a", Arg.Any<CancellationToken>()).Returns(storage);
         storage.OpenReadAsync("media/video.mp4", Arg.Any<CancellationToken>()).Returns(stream);
 
-        var result = await CreateController(bus, provider).GetContent(
+        var result = await CreateController(bus, provider).GetStream(
             mediaGuid,
             " storage-a ",
             2,
@@ -52,7 +52,7 @@ public sealed class MediaContentControllerTests
     }
 
     [Test]
-    public async Task GetContent_Disables_Ranges_For_NonSeekable_Stream_And_Uses_Binary_Mime()
+    public async Task GetStream_Disables_Ranges_For_NonSeekable_Stream_And_Uses_Binary_Mime()
     {
         var mediaGuid = Guid.NewGuid();
         var bus = Substitute.For<IMessageBus>();
@@ -64,7 +64,7 @@ public sealed class MediaContentControllerTests
         provider.GetAsync("storage-a", Arg.Any<CancellationToken>()).Returns(storage);
         storage.OpenReadAsync("media/content.unknown", Arg.Any<CancellationToken>()).Returns(stream);
 
-        var result = await CreateController(bus, provider).GetContent(mediaGuid);
+        var result = await CreateController(bus, provider).GetStream(mediaGuid);
 
         var file = result.ShouldBeOfType<FileStreamResult>();
         file.ContentType.ShouldBe("application/octet-stream");
@@ -72,34 +72,34 @@ public sealed class MediaContentControllerTests
     }
 
     [Test]
-    public async Task GetContent_Validates_Version_And_Maps_Lookup_Failures()
+    public async Task GetStream_Validates_Version_And_Maps_Lookup_Failures()
     {
         var mediaGuid = Guid.NewGuid();
         var bus = Substitute.For<IMessageBus>();
         var provider = Substitute.For<IBlobStorageProvider>();
         var controller = CreateController(bus, provider);
 
-        var invalid = await controller.GetContent(mediaGuid, version: 0);
+        var invalid = await controller.GetStream(mediaGuid, version: 0);
         invalid.ShouldBeOfType<BadRequestObjectResult>();
 
-        bus.RequestAsync<MediaContentResolveRequestMessage, MediaContentResolveResponseMessage>(
-                MediaContentSubjects.Resolve,
-                Arg.Any<MediaContentResolveRequestMessage>(),
+        bus.RequestAsync<MediaStreamResolveRequestMessage, MediaStreamResolveResponseMessage>(
+                MediaStreamSubjects.Resolve,
+                Arg.Any<MediaStreamResolveRequestMessage>(),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
-            .Returns(new MediaContentResolveResponseMessage
+            .Returns(new MediaStreamResolveResponseMessage
             {
                 Success = false,
                 ErrorCode = "not_found",
                 ErrorMessage = "missing"
             });
 
-        var missing = await controller.GetContent(mediaGuid);
+        var missing = await controller.GetStream(mediaGuid);
         missing.ShouldBeOfType<NotFoundObjectResult>().Value.ShouldBe("missing");
     }
 
     [Test]
-    public async Task GetContent_Maps_Missing_Object_And_Provider_Failure()
+    public async Task GetStream_Maps_Missing_Object_And_Provider_Failure()
     {
         var mediaGuid = Guid.NewGuid();
         var bus = Substitute.For<IMessageBus>();
@@ -112,39 +112,39 @@ public sealed class MediaContentControllerTests
             .Returns(Task.FromResult<Stream>(null!));
 
         var controller = CreateController(bus, provider);
-        var missing = await controller.GetContent(mediaGuid);
+        var missing = await controller.GetStream(mediaGuid);
         missing.ShouldBeOfType<NotFoundObjectResult>();
 
         provider.GetAsync("storage-a", Arg.Any<CancellationToken>())
             .Returns<Task<IBlobStorage>>(_ => throw new InvalidOperationException("storage failed"));
 
-        var failed = await controller.GetContent(mediaGuid);
+        var failed = await controller.GetStream(mediaGuid);
         failed.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status502BadGateway);
     }
 
-    private static MediaContentController CreateController(
+    private static MediaStreamController CreateController(
         IMessageBus bus,
         IBlobStorageProvider provider)
-        => new(bus, provider, Substitute.For<ILogger<MediaContentController>>());
+        => new(bus, provider, Substitute.For<ILogger<MediaStreamController>>());
 
     private static void ArrangeResolved(
         IMessageBus bus,
         Guid mediaGuid,
-        MediaContentLocationDto location)
+        MediaStreamLocationDto location)
     {
-        bus.RequestAsync<MediaContentResolveRequestMessage, MediaContentResolveResponseMessage>(
-                MediaContentSubjects.Resolve,
-                Arg.Is<MediaContentResolveRequestMessage>(request => request.MediaGuid == mediaGuid),
+        bus.RequestAsync<MediaStreamResolveRequestMessage, MediaStreamResolveResponseMessage>(
+                MediaStreamSubjects.Resolve,
+                Arg.Is<MediaStreamResolveRequestMessage>(request => request.MediaGuid == mediaGuid),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
-            .Returns(new MediaContentResolveResponseMessage
+            .Returns(new MediaStreamResolveResponseMessage
             {
                 Success = true,
                 Item = location
             });
     }
 
-    private static MediaContentLocationDto Location(
+    private static MediaStreamLocationDto Location(
         Guid mediaGuid,
         string storageKey,
         string storagePath,

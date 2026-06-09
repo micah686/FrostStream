@@ -1,5 +1,5 @@
 using DataBridge.Data;
-using DataBridge.MediaContent;
+using DataBridge.MediaStream;
 using Microsoft.EntityFrameworkCore;
 using Shared.Database;
 using Shouldly;
@@ -7,7 +7,7 @@ using TUnit.Core;
 
 namespace UnitTests.DataBridge;
 
-public sealed class MediaContentReadServiceTests
+public sealed class MediaStreamReadServiceTests
 {
     [Test]
     public async Task ResolveAsync_Selects_Highest_Matching_Version()
@@ -20,7 +20,7 @@ public sealed class MediaContentReadServiceTests
             Content(mediaGuid, "storage-a", "media/v2.mp4", 2));
         await db.SaveChangesAsync();
 
-        var service = new MediaContentReadService(db);
+        var service = new MediaStreamReadService(db);
 
         var latest = await service.ResolveAsync(mediaGuid, null, null);
         latest.ShouldNotBeNull();
@@ -44,7 +44,7 @@ public sealed class MediaContentReadServiceTests
         db.MediaContentIdVersions.Add(Content(mediaGuid, "storage-a", "media/v1.mp4", 1));
         await db.SaveChangesAsync();
 
-        var service = new MediaContentReadService(db);
+        var service = new MediaStreamReadService(db);
 
         (await service.ResolveAsync(mediaGuid, "storage-b", null)).ShouldBeNull();
         (await service.ResolveAsync(mediaGuid, "storage-a", 2)).ShouldBeNull();

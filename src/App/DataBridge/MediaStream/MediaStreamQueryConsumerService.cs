@@ -3,40 +3,40 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Shared.Messaging;
 
-namespace DataBridge.MediaContent;
+namespace DataBridge.MediaStream;
 
-public sealed class MediaContentQueryConsumerService(
+public sealed class MediaStreamQueryConsumerService(
     IMessageBus messageBus,
     IServiceScopeFactory scopeFactory,
-    ILogger<MediaContentQueryConsumerService> logger) : SubscriptionBackgroundService
+    ILogger<MediaStreamQueryConsumerService> logger) : SubscriptionBackgroundService
 {
     protected override Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
-        => SubscribeAsync<MediaContentResolveRequestMessage>(
+        => SubscribeAsync<MediaStreamResolveRequestMessage>(
             messageBus,
-            MediaContentSubjects.Resolve,
+            MediaStreamSubjects.Resolve,
             HandleResolveAsync,
-            queueGroup: MediaContentSubjects.ProcessorsQueueGroup,
+            queueGroup: MediaStreamSubjects.ProcessorsQueueGroup,
             cancellationToken: stoppingToken);
 
-    private async Task HandleResolveAsync(IMessageContext<MediaContentResolveRequestMessage> context)
+    private async Task HandleResolveAsync(IMessageContext<MediaStreamResolveRequestMessage> context)
     {
         try
         {
             var request = context.Message;
-            var item = await scopeFactory.WithScopedAsync<IMediaContentReadService, MediaContentLocationDto?>(
+            var item = await scopeFactory.WithScopedAsync<IMediaStreamReadService, MediaStreamLocationDto?>(
                 service => service.ResolveAsync(
                     request.MediaGuid,
                     request.StorageKey,
                     request.Version));
 
             await context.RespondAsync(item is null
-                ? new MediaContentResolveResponseMessage
+                ? new MediaStreamResolveResponseMessage
                 {
                     Success = false,
                     ErrorCode = "not_found",
-                    ErrorMessage = $"Media content for '{request.MediaGuid}' was not found."
+                    ErrorMessage = $"Media stream for '{request.MediaGuid}' was not found."
                 }
-                : new MediaContentResolveResponseMessage
+                : new MediaStreamResolveResponseMessage
                 {
                     Success = true,
                     Item = item
@@ -46,14 +46,14 @@ public sealed class MediaContentQueryConsumerService(
         {
             logger.LogError(
                 ex,
-                "Failed resolving media content for {MediaGuid}.",
+                "Failed resolving media stream for {MediaGuid}.",
                 context.Message.MediaGuid);
 
-            await context.RespondAsync(new MediaContentResolveResponseMessage
+            await context.RespondAsync(new MediaStreamResolveResponseMessage
             {
                 Success = false,
                 ErrorCode = "internal_error",
-                ErrorMessage = "Internal media content service error."
+                ErrorMessage = "Internal media stream service error."
             });
         }
     }

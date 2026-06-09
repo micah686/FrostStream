@@ -7,17 +7,17 @@ using Shared.Storage;
 namespace WebAPI.Features.Media.Controllers;
 
 [ApiController]
-[Route("api/media")]
-public sealed class MediaContentController(
+[Route("stream")]
+public sealed class MediaStreamController(
     IMessageBus messageBus,
     IBlobStorageProvider blobStorageProvider,
-    ILogger<MediaContentController> logger) : ControllerBase
+    ILogger<MediaStreamController> logger) : ControllerBase
 {
     private static readonly TimeSpan QueryTimeout = TimeSpan.FromSeconds(10);
     private static readonly FileExtensionContentTypeProvider ContentTypeProvider = new();
 
-    [HttpGet("{mediaGuid:guid}/content")]
-    public async Task<IActionResult> GetContent(
+    [HttpGet("{mediaGuid:guid}")]
+    public async Task<IActionResult> GetStream(
         Guid mediaGuid,
         [FromQuery] string? storageKey = null,
         [FromQuery] int? version = null,
@@ -30,14 +30,14 @@ public sealed class MediaContentController(
 
         storageKey = string.IsNullOrWhiteSpace(storageKey) ? null : storageKey.Trim();
 
-        MediaContentResolveResponseMessage? response;
+        MediaStreamResolveResponseMessage? response;
         try
         {
             response = await messageBus.RequestAsync<
-                MediaContentResolveRequestMessage,
-                MediaContentResolveResponseMessage>(
-                MediaContentSubjects.Resolve,
-                new MediaContentResolveRequestMessage
+                MediaStreamResolveRequestMessage,
+                MediaStreamResolveResponseMessage>(
+                MediaStreamSubjects.Resolve,
+                new MediaStreamResolveRequestMessage
                 {
                     MediaGuid = mediaGuid,
                     StorageKey = storageKey,
@@ -52,7 +52,7 @@ public sealed class MediaContentController(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed resolving media content for {MediaGuid}.", mediaGuid);
+            logger.LogError(ex, "Failed resolving media stream for {MediaGuid}.", mediaGuid);
             return StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable.");
         }
 
@@ -64,17 +64,17 @@ public sealed class MediaContentController(
         if (!response.Success)
         {
             return response.ErrorCode == "not_found"
-                ? NotFound(response.ErrorMessage ?? "Media content was not found.")
+                ? NotFound(response.ErrorMessage ?? "Media stream was not found.")
                 : StatusCode(
                     StatusCodes.Status500InternalServerError,
-                    response.ErrorMessage ?? "Media content lookup failed.");
+                    response.ErrorMessage ?? "Media stream lookup failed.");
         }
 
         if (response.Item is null)
         {
             return StatusCode(
                 StatusCodes.Status502BadGateway,
-                "DataBridge returned an invalid media content response.");
+                "DataBridge returned an invalid media stream response.");
         }
 
         var location = response.Item;
@@ -84,7 +84,7 @@ public sealed class MediaContentController(
             var stream = await storage.OpenReadAsync(location.StoragePath, cancellationToken);
             if (stream is null)
             {
-                return NotFound("The selected media content is missing from storage.");
+                return NotFound("The selected media stream is missing from storage.");
             }
 
             var contentType = ContentTypeProvider.TryGetContentType(location.StoragePath, out var resolvedContentType)
@@ -99,17 +99,17 @@ public sealed class MediaContentController(
         }
         catch (FileNotFoundException)
         {
-            return NotFound("The selected media content is missing from storage.");
+            return NotFound("The selected media stream is missing from storage.");
         }
         catch (DirectoryNotFoundException)
         {
-            return NotFound("The selected media content is missing from storage.");
+            return NotFound("The selected media stream is missing from storage.");
         }
         catch (Exception ex)
         {
             logger.LogError(
                 ex,
-                "Failed opening media content {MediaGuid} version {Version} from storage {StorageKey} at {StoragePath}.",
+                "Failed opening media stream {MediaGuid} version {Version} from storage {StorageKey} at {StoragePath}.",
                 location.MediaGuid,
                 location.Version,
                 location.StorageKey,
@@ -117,7 +117,7 @@ public sealed class MediaContentController(
 
             return StatusCode(
                 StatusCodes.Status502BadGateway,
-                "The selected media content could not be opened.");
+                "The selected media stream could not be opened.");
         }
     }
 }
