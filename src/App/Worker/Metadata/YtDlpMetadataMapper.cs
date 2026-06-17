@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using NodaTime;
 using Shared.Metadata;
 using YtDlpSharpLib.Models;
@@ -61,6 +62,7 @@ internal static class YtDlpMetadataMapper
     private static CapturedMediaTechnicalMetadata BuildTechnical(VideoInfo info)
     {
         var durationTicks = SecondsToTicks(info.Duration);
+        var streams = BuildStreams(info, durationTicks);
 
         return new CapturedMediaTechnicalMetadata
         {
@@ -70,10 +72,10 @@ internal static class YtDlpMetadataMapper
                 DurationTicks = durationTicks,
                 StartTimeTicks = 0,
                 FormatLongNames = FirstNonBlank(info.Format, info.Extension) ?? "",
-                StreamCount = info.Formats?.Count ?? 0,
+                StreamCount = streams.Count,
                 BitRate = 0
             },
-            Streams = [],
+            Streams = streams,
             Chapters = info.Chapters?
                 .Select(c => new CapturedChapterMetadata
                 {
@@ -84,6 +86,162 @@ internal static class YtDlpMetadataMapper
                 .ToArray() ?? []
         };
     }
+
+    // ── streams ─────────────────────────────────────────────────────────────
+    // yt-dlp's --dump-json gives format-level (not ffprobe-level) detail, so the
+    // streams we synthesise here come from the format(s) yt-dlp actually selected
+    // (VideoInfo.FormatId, e.g. "137+140" for a merged video+audio download).
+    // Fields ffprobe would supply but yt-dlp does not — codec long name, bit depth,
+    // colour space/transfer/primaries, channel layout — are left at their schema
+    // defaults rather than guessed.
+
+    private static IReadOnlyList<CapturedStreamMetadata> BuildStreams(VideoInfo info, long durationTicks)
+    {
+        var formats = info.Formats;
+        if (formats is null || formats.Count == 0)
+            return [];
+
+        var selected = SelectFormats(info, formats);
+        if (selected.Count == 0)
+            return [];
+
+        var streams = new List<CapturedStreamMetadata>();
+        var videoMarked = false;
+        var audioMarked = false;
+
+        foreach (var format in selected)
+        {
+            if (HasVideo(format))
+            {
+                streams.Add(new CapturedStreamMetadata
+                {
+                    StreamType = "video",
+                    IsPrimary = !videoMarked,
+                    CodecName = FirstNonBlank(format.Vcodec) ?? "unknown",
+                    CodecLongName = FirstNonBlank(format.Vcodec) ?? "unknown",
+                    BitRate = KbpsToBitsPerSecond(format.Vbr ?? (HasAudio(format) ? null : format.Tbr)),
+                    BitDepth = null,
+                    DurationTicks = durationTicks,
+                    Language = null,
+                    Video = new CapturedVideoStreamMetadata
+                    {
+                        AvgFrameRate = format.Fps ?? 0,
+                        Width = format.Width ?? ParseResolutionPart(format.Resolution, 0),
+                        Height = format.Height ?? ParseResolutionPart(format.Resolution, 1),
+                        HdrType = MapHdrType(format.DynamicRange)
+                    }
+                });
+                videoMarked = true;
+            }
+
+            if (HasAudio(format))
+            {
+                streams.Add(new CapturedStreamMetadata
+                {
+                    StreamType = "audio",
+                    IsPrimary = !audioMarked,
+                    CodecName = FirstNonBlank(format.Acodec) ?? "unknown",
+                    CodecLongName = FirstNonBlank(format.Acodec) ?? "unknown",
+                    BitRate = KbpsToBitsPerSecond(format.Abr ?? (HasVideo(format) ? null : format.Tbr)),
+                    BitDepth = null,
+                    DurationTicks = durationTicks,
+                    Language = FirstNonBlank(format.Language),
+                    Audio = new CapturedAudioStreamMetadata
+                    {
+                        Channels = ReadAudioChannels(format),
+                        SampleRateHz = format.Asr ?? 0
+                    }
+                });
+                audioMarked = true;
+            }
+        }
+
+        return streams;
+    }
+
+    private static IReadOnlyList<FormatInfo> SelectFormats(VideoInfo info, IReadOnlyList<FormatInfo> formats)
+    {
+        if (!string.IsNullOrWhiteSpace(info.FormatId))
+        {
+            var matched = info.FormatId
+                .Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(id => formats.FirstOrDefault(f => string.Equals(f.FormatId, id, StringComparison.Ordinal)))
+                .Where(f => f is not null)
+                .Select(f => f!)
+                .ToArray();
+
+            if (matched.Length > 0)
+                return matched;
+        }
+
+        // No explicit selection (e.g. a flat playlist entry) — approximate with the
+        // best available video and the best stand-alone audio.
+        var bestVideo = formats
+            .Where(HasVideo)
+            .OrderByDescending(f => (long)(f.Width ?? 0) * (f.Height ?? 0))
+            .ThenByDescending(f => f.Tbr ?? 0)
+            .FirstOrDefault();
+
+        var bestAudio = formats
+            .Where(f => HasAudio(f) && !HasVideo(f))
+            .OrderByDescending(f => f.Abr ?? f.Tbr ?? 0)
+            .FirstOrDefault();
+
+        var fallback = new List<FormatInfo>();
+        if (bestVideo is not null)
+            fallback.Add(bestVideo);
+        if (bestAudio is not null && !ReferenceEquals(bestAudio, bestVideo))
+            fallback.Add(bestAudio);
+
+        return fallback;
+    }
+
+    private static bool HasVideo(FormatInfo format)
+        => (!string.IsNullOrWhiteSpace(format.Vcodec) && !IsNone(format.Vcodec))
+            || format.Width is > 0
+            || format.Height is > 0;
+
+    private static bool HasAudio(FormatInfo format)
+        => (!string.IsNullOrWhiteSpace(format.Acodec) && !IsNone(format.Acodec))
+            || format.Asr is > 0
+            || format.Abr is > 0;
+
+    private static bool IsNone(string? codec)
+        => string.Equals(codec, "none", StringComparison.OrdinalIgnoreCase);
+
+    private static long KbpsToBitsPerSecond(double? kbps)
+        => kbps is null or <= 0 ? 0 : (long)Math.Round(kbps.Value * 1000);
+
+    private static string MapHdrType(string? dynamicRange)
+    {
+        if (string.IsNullOrWhiteSpace(dynamicRange))
+            return "SDR";
+
+        var trimmed = dynamicRange.Trim();
+        // metadata.video_stream_details.hdr_type is varchar(20).
+        return trimmed.Length <= 20 ? trimmed : trimmed[..20];
+    }
+
+    private static int ParseResolutionPart(string? resolution, int index)
+    {
+        if (string.IsNullOrWhiteSpace(resolution))
+            return 0;
+
+        var parts = resolution.Split('x', StringSplitOptions.TrimEntries);
+        return parts.Length == 2
+            && int.TryParse(parts[index], NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
+            ? value
+            : 0;
+    }
+
+    private static int ReadAudioChannels(FormatInfo format)
+        => format.ExtensionData is not null
+            && format.ExtensionData.TryGetValue("audio_channels", out var element)
+            && element.ValueKind == JsonValueKind.Number
+            && element.TryGetInt32(out var channels)
+            && channels > 0
+            ? channels
+            : 0;
 
     private static IReadOnlyList<CapturedCaptionMetadata> BuildCaptions(VideoInfo info)
     {
