@@ -17,6 +17,10 @@ public sealed class ChannelDiscoveryConsumerService(
     IClock clock,
     ILogger<ChannelDiscoveryConsumerService> logger) : BackgroundService
 {
+    internal const int MaxIncrementalScanEntries = 500;
+    internal const int MaxFullScanEntriesPerSource = 5_000;
+    internal const int DiscoveryUpsertBatchSize = 100;
+
     private static readonly StreamName Stream = StreamName.From(BackgroundJobsTopology.StreamNameValue);
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(30);
 
@@ -107,45 +111,122 @@ public sealed class ChannelDiscoveryConsumerService(
             throw new InvalidOperationException($"yt-dlp flat scan failed for creator source {source.Id}: {result.ErrorOutput}");
         }
 
-        var candidates = ExtractCandidates(source, container).ToArray();
-        var response = await messageBus.RequestAsync<UpsertDiscoveredMediaBatchRequestMessage, UpsertDiscoveredMediaBatchResponseMessage>(
-            CreatorDiscoverySubjects.UpsertDiscoveredMediaBatch,
-            new UpsertDiscoveredMediaBatchRequestMessage
-            {
-                CreatorSourceId = source.Id,
-                ScanMode = scanMode,
-                ScheduleKey = request.ScheduleKey,
-                IdempotencyKey = $"{request.IdempotencyKey}:{source.Id}",
-                ScannedAt = clock.GetCurrentInstant(),
-                Items = candidates
-            },
-            RequestTimeout,
-            cancellationToken);
+        var candidates = ExtractCandidates(source, container)
+            .Take(EntryLimit(scanMode, source))
+            .ToArray();
+        var scanHighWatermark = candidates.FirstOrDefault()?.ExternalMediaId;
+        var pageStartIndex = PageStartIndex(scanMode, source);
+        var scanPageComplete = scanMode != CreatorSourceScanMode.Full || candidates.Length < EntryLimit(scanMode, source);
+        int? nextScanPageStartIndex = scanPageComplete ? null : pageStartIndex + candidates.Length;
 
-        if (response is not { Success: true })
+        var totalSeen = 0;
+        var newCount = 0;
+        var changedCount = 0;
+        var batchIndex = 0;
+        var batches = Chunk(candidates, DiscoveryUpsertBatchSize).ToArray();
+
+        foreach (var batch in batches)
         {
-            throw new InvalidOperationException(response?.ErrorMessage ?? $"Discovery upsert failed for creator source {source.Id}.");
+            var response = await messageBus.RequestAsync<UpsertDiscoveredMediaBatchRequestMessage, UpsertDiscoveredMediaBatchResponseMessage>(
+                CreatorDiscoverySubjects.UpsertDiscoveredMediaBatch,
+                new UpsertDiscoveredMediaBatchRequestMessage
+                {
+                    CreatorSourceId = source.Id,
+                    ScanMode = scanMode,
+                    ScheduleKey = request.ScheduleKey,
+                    IdempotencyKey = $"{request.IdempotencyKey}:{source.Id}:batch-{batchIndex}",
+                    ScannedAt = clock.GetCurrentInstant(),
+                    ScanHighWatermarkExternalMediaId = scanHighWatermark,
+                    ScanPageStartIndex = pageStartIndex,
+                    NextScanPageStartIndex = nextScanPageStartIndex,
+                    ScanPageComplete = scanPageComplete,
+                    IsScanPageFinalBatch = batchIndex == batches.Length - 1,
+                    Items = batch
+                },
+                RequestTimeout,
+                cancellationToken);
+
+            if (response is not { Success: true })
+            {
+                throw new InvalidOperationException(response?.ErrorMessage ?? $"Discovery upsert failed for creator source {source.Id}.");
+            }
+
+            totalSeen += response.TotalSeen;
+            newCount += response.NewCount;
+            changedCount += response.ChangedCount;
+            batchIndex++;
+        }
+
+        if (batchIndex == 0)
+        {
+            var response = await messageBus.RequestAsync<UpsertDiscoveredMediaBatchRequestMessage, UpsertDiscoveredMediaBatchResponseMessage>(
+                CreatorDiscoverySubjects.UpsertDiscoveredMediaBatch,
+                new UpsertDiscoveredMediaBatchRequestMessage
+                {
+                    CreatorSourceId = source.Id,
+                    ScanMode = scanMode,
+                    ScheduleKey = request.ScheduleKey,
+                    IdempotencyKey = $"{request.IdempotencyKey}:{source.Id}:batch-0",
+                    ScannedAt = clock.GetCurrentInstant(),
+                    ScanHighWatermarkExternalMediaId = scanHighWatermark,
+                    ScanPageStartIndex = pageStartIndex,
+                    NextScanPageStartIndex = nextScanPageStartIndex,
+                    ScanPageComplete = scanPageComplete,
+                    IsScanPageFinalBatch = true,
+                    Items = []
+                },
+                RequestTimeout,
+                cancellationToken);
+
+            if (response is not { Success: true })
+            {
+                throw new InvalidOperationException(response?.ErrorMessage ?? $"Discovery upsert failed for creator source {source.Id}.");
+            }
+        }
+
+        var limit = EntryLimit(scanMode, source);
+        if (!scanPageComplete)
+        {
+            logger.LogWarning(
+                "Creator source {SourceId} ({ScanMode}) scanned page {PageStart}-{PageEnd} and will resume at index {NextStart}.",
+                source.Id,
+                scanMode,
+                pageStartIndex,
+                pageStartIndex + candidates.Length - 1,
+                nextScanPageStartIndex);
         }
 
         logger.LogInformation(
-            "Scanned creator source {SourceId} ({ScanMode}); seen {SeenCount}, new {NewCount}, changed {ChangedCount}.",
+            "Scanned creator source {SourceId} ({ScanMode}); seen {SeenCount}, new {NewCount}, changed {ChangedCount}, batches {BatchCount}.",
             source.Id,
             scanMode,
-            response.TotalSeen,
-            response.NewCount,
-            response.ChangedCount);
+            totalSeen,
+            newCount,
+            changedCount,
+            Math.Max(batchIndex, 1));
     }
 
-    private static YtDlpOptions? BuildOptions(CreatorSourceScanMode scanMode, CreatorSourceDto source)
-        => scanMode == CreatorSourceScanMode.Incremental
-            ? new YtDlpOptions
+    internal static YtDlpOptions BuildOptions(CreatorSourceScanMode scanMode, CreatorSourceDto source)
+        => new()
+        {
+            VideoSelection = new YtDlpVideoSelectionOptions
             {
-                VideoSelection = new YtDlpVideoSelectionOptions
-                {
-                    PlaylistItems = $"1:{source.IncrementalPageSize}"
-                }
+                PlaylistItems = $"{PageStartIndex(scanMode, source)}:{PageEndIndex(scanMode, source)}"
             }
-            : null;
+        };
+
+    internal static int EntryLimit(CreatorSourceScanMode scanMode, CreatorSourceDto source)
+        => scanMode == CreatorSourceScanMode.Incremental
+            ? Math.Clamp(source.IncrementalPageSize, 1, MaxIncrementalScanEntries)
+            : MaxFullScanEntriesPerSource;
+
+    internal static int PageStartIndex(CreatorSourceScanMode scanMode, CreatorSourceDto source)
+        => scanMode == CreatorSourceScanMode.Full
+            ? Math.Max(1, source.NextFullScanStartIndex ?? 1)
+            : 1;
+
+    private static int PageEndIndex(CreatorSourceScanMode scanMode, CreatorSourceDto source)
+        => PageStartIndex(scanMode, source) + EntryLimit(scanMode, source) - 1;
 
     private static IEnumerable<DiscoveredMediaCandidate> ExtractCandidates(CreatorSourceDto source, VideoInfo container)
     {
@@ -211,6 +292,19 @@ public sealed class ChannelDiscoveryConsumerService(
 
     private static string? FirstNonBlank(params string?[] values)
         => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
+
+    private static IEnumerable<IReadOnlyList<DiscoveredMediaCandidate>> Chunk(
+        IReadOnlyList<DiscoveredMediaCandidate> candidates,
+        int size)
+    {
+        for (var offset = 0; offset < candidates.Count; offset += size)
+        {
+            yield return candidates
+                .Skip(offset)
+                .Take(size)
+                .ToArray();
+        }
+    }
 
     private Task MarkAttemptAsync(ScheduledBackgroundRequest message, CancellationToken cancellationToken)
         => messageBus.PublishAsync(ScheduleSubjects.MarkAttempt, new ScheduleMarkAttemptRequestMessage

@@ -35,7 +35,8 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
 
         var now = clock.GetCurrentInstant();
         return sources
-            .Where(x => x.LastFullScanAt is null ||
+            .Where(x => x.NextFullScanStartIndex is not null ||
+                x.LastFullScanAt is null ||
                 x.LastFullScanAt.Value.Plus(Duration.FromDays(x.FullRescanIntervalDays)) <= now)
             .ToList();
     }
@@ -55,6 +56,10 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
             return null;
         }
 
+        var sourceChanged = !string.Equals(existing.SourceUrl, source.SourceUrl, StringComparison.Ordinal)
+            || !string.Equals(existing.Platform, source.Platform, StringComparison.Ordinal)
+            || existing.SourceType != source.SourceType;
+
         existing.Platform = source.Platform;
         existing.SourceType = source.SourceType;
         existing.SourceUrl = source.SourceUrl;
@@ -63,6 +68,11 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
         existing.ConsecutiveKnownThreshold = source.ConsecutiveKnownThreshold;
         existing.FullRescanIntervalDays = source.FullRescanIntervalDays;
         existing.MetadataRefreshWindow = source.MetadataRefreshWindow;
+        if (sourceChanged)
+        {
+            existing.LastFullScanAt = null;
+            existing.NextFullScanStartIndex = null;
+        }
         existing.LastUpdated = clock.GetCurrentInstant();
         await db.SaveChangesAsync(cancellationToken);
         return existing;
@@ -159,10 +169,20 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
 
         source.LastSuccessfulScanAt = now;
         source.LastUpdated = now;
-        source.LastSeenHighWatermark = request.Items.FirstOrDefault()?.ExternalMediaId ?? source.LastSeenHighWatermark;
-        if (request.ScanMode == CreatorSourceScanMode.Full)
+        source.LastSeenHighWatermark = request.ScanHighWatermarkExternalMediaId
+            ?? request.Items.FirstOrDefault()?.ExternalMediaId
+            ?? source.LastSeenHighWatermark;
+        if (request.ScanMode == CreatorSourceScanMode.Full && request.IsScanPageFinalBatch)
         {
-            source.LastFullScanAt = now;
+            if (request.ScanPageComplete)
+            {
+                source.LastFullScanAt = now;
+                source.NextFullScanStartIndex = null;
+            }
+            else
+            {
+                source.NextFullScanStartIndex = request.NextScanPageStartIndex;
+            }
         }
 
         await db.SaveChangesAsync(cancellationToken);

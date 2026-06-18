@@ -6,6 +6,7 @@ using Shared.Messaging;
 using YtDlpSharpLib;
 using YtDlpSharpLib.Exceptions;
 using YtDlpSharpLib.Models;
+using YtDlpSharpLib.Options;
 
 namespace Worker.Services;
 
@@ -22,6 +23,8 @@ public sealed class PlaylistCommandsConsumerService(
     IClock clock,
     ILogger<PlaylistCommandsConsumerService> logger) : BackgroundService
 {
+    internal const int MaxPlaylistEntriesPerRequest = 5_000;
+
     private static readonly StreamName Stream = StreamName.From(PlaylistTopology.StreamNameValue);
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
@@ -47,8 +50,10 @@ public sealed class PlaylistCommandsConsumerService(
             string? title = null;
             string? providerPlaylistId = null;
 
+            var playlistOptions = BuildPlaylistOptions();
+
             // First, get the top-level playlist metadata (with flat entries embedded).
-            var topResult = await ytDlp.TryGetVideoInfoAsync(cmd.SourceUrl, flat: true);
+            var topResult = await ytDlp.TryGetVideoInfoAsync(cmd.SourceUrl, flat: true, overrideOptions: playlistOptions);
             if (topResult.Success && topResult.Data is { } container)
             {
                 title = container.PlaylistTitle ?? container.Title;
@@ -57,7 +62,7 @@ public sealed class PlaylistCommandsConsumerService(
                 if (container.Entries is { Count: > 0 } childEntries)
                 {
                     var index = 1;
-                    foreach (var entry in childEntries)
+                    foreach (var entry in childEntries.Take(MaxPlaylistEntriesPerRequest))
                     {
                         var url = entry.WebpageUrl ?? entry.Url;
                         if (string.IsNullOrWhiteSpace(url))
@@ -78,6 +83,9 @@ public sealed class PlaylistCommandsConsumerService(
                     // dump did not embed the entries (some extractors return them piecemeal).
                     await foreach (var entry in ytDlp.GetPlaylistInfoAsync(cmd.SourceUrl))
                     {
+                        if (entries.Count >= MaxPlaylistEntriesPerRequest)
+                            break;
+
                         var url = entry.WebpageUrl ?? entry.Url;
                         if (string.IsNullOrWhiteSpace(url))
                             continue;
@@ -107,6 +115,15 @@ public sealed class PlaylistCommandsConsumerService(
                     command: null,
                     exitCode: null,
                     lastStderrLines: string.Empty);
+            }
+
+            if (entries.Count >= MaxPlaylistEntriesPerRequest)
+            {
+                logger.LogWarning(
+                    "Playlist {PlaylistId} URL {SourceUrl} reached the configured entry limit of {Limit}; remaining entries were not staged in this request.",
+                    cmd.PlaylistId,
+                    cmd.SourceUrl,
+                    MaxPlaylistEntriesPerRequest);
             }
 
             await Publish(PlaylistSubjects.PlaylistMetadataFetched, new PlaylistMetadataFetched
@@ -160,4 +177,13 @@ public sealed class PlaylistCommandsConsumerService(
 
     private Task Publish<T>(string subject, T message) where T : IPlaylistFlowMessage
         => publisher.PublishAsync(subject, message, messageId: message.MessageId.ToString("N"));
+
+    internal static YtDlpOptions BuildPlaylistOptions()
+        => new()
+        {
+            VideoSelection = new YtDlpVideoSelectionOptions
+            {
+                PlaylistItems = $"1:{MaxPlaylistEntriesPerRequest}"
+            }
+        };
 }

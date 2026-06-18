@@ -17,6 +17,7 @@ public sealed record CreatorSourceDto
     public Instant? LastSuccessfulScanAt { get; init; }
     public Instant? LastFullScanAt { get; init; }
     public string? LastSeenHighWatermark { get; init; }
+    public int? NextFullScanStartIndex { get; init; }
     public required Instant CreatedAt { get; init; }
     public Instant? LastUpdated { get; init; }
     public string? AvatarUrl { get; init; }
@@ -102,6 +103,11 @@ public sealed record UpsertDiscoveredMediaBatchRequestMessage
     public required string ScheduleKey { get; init; }
     public required string IdempotencyKey { get; init; }
     public required Instant ScannedAt { get; init; }
+    public string? ScanHighWatermarkExternalMediaId { get; init; }
+    public int? ScanPageStartIndex { get; init; }
+    public int? NextScanPageStartIndex { get; init; }
+    public bool ScanPageComplete { get; init; } = true;
+    public bool IsScanPageFinalBatch { get; init; } = true;
     public required IReadOnlyList<DiscoveredMediaCandidate> Items { get; init; }
 }
 

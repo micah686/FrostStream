@@ -232,6 +232,7 @@ public sealed class CreatorSourcesController(
             LastSuccessfulScanAt = dto.LastSuccessfulScanAt,
             LastFullScanAt = dto.LastFullScanAt,
             LastSeenHighWatermark = dto.LastSeenHighWatermark,
+            NextFullScanStartIndex = dto.NextFullScanStartIndex,
             CreatedAt = dto.CreatedAt,
             LastUpdated = dto.LastUpdated
         };

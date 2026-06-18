@@ -23,6 +23,7 @@ public sealed class CreatorSourceConfiguration : IEntityTypeConfiguration<Creato
         builder.Property(x => x.LastSuccessfulScanAt).HasColumnName("last_successful_scan_at").HasColumnType("timestamp with time zone");
         builder.Property(x => x.LastFullScanAt).HasColumnName("last_full_scan_at").HasColumnType("timestamp with time zone");
         builder.Property(x => x.LastSeenHighWatermark).HasColumnName("last_seen_high_watermark").HasMaxLength(512);
+        builder.Property(x => x.NextFullScanStartIndex).HasColumnName("next_full_scan_start_index");
         builder.Property(x => x.CreatedAt)
             .HasColumnName("created_at")
             .HasColumnType("timestamp with time zone")

@@ -62,6 +62,8 @@ public sealed class CreatorSourceEntity
 
     public string? LastSeenHighWatermark { get; set; }
 
+    public int? NextFullScanStartIndex { get; set; }
+
     public Instant CreatedAt { get; private set; } = SystemClock.Instance.GetCurrentInstant();
 
     public Instant? LastUpdated { get; set; }

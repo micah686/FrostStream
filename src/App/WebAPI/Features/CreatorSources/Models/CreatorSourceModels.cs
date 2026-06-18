@@ -50,6 +50,7 @@ public sealed class CreatorSourceResponse
     public Instant? LastSuccessfulScanAt { get; init; }
     public Instant? LastFullScanAt { get; init; }
     public string? LastSeenHighWatermark { get; init; }
+    public int? NextFullScanStartIndex { get; init; }
     public required Instant CreatedAt { get; init; }
     public Instant? LastUpdated { get; init; }
 }

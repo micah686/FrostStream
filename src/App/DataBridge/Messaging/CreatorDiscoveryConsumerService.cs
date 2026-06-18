@@ -338,6 +338,7 @@ public sealed class CreatorDiscoveryConsumerService(
         LastSuccessfulScanAt = entity.LastSuccessfulScanAt,
         LastFullScanAt = entity.LastFullScanAt,
         LastSeenHighWatermark = entity.LastSeenHighWatermark,
+        NextFullScanStartIndex = entity.NextFullScanStartIndex,
         CreatedAt = entity.CreatedAt,
         LastUpdated = entity.LastUpdated,
         AvatarUrl = entity.AvatarUrl,
