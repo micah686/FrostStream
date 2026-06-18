@@ -127,6 +127,26 @@ public sealed class PlaylistsControllerTests
         result.Result.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status502BadGateway);
     }
 
+    [Test]
+    public async Task Submit_Rejects_Localhost_Source_Url()
+    {
+        var publisher = Substitute.For<IJetStreamPublisher>();
+        var controller = CreateController(publisher: publisher);
+
+        var result = await controller.Submit(new PlaylistRequest
+        {
+            SourceUrl = "http://localhost:8080/playlist"
+        }, CancellationToken.None);
+
+        result.Result.ShouldBeOfType<BadRequestObjectResult>();
+        await publisher.DidNotReceiveWithAnyArgs().PublishAsync(
+            default!,
+            default(PlaylistRequested)!,
+            default,
+            default,
+            default);
+    }
+
     private static PlaylistsController CreateController(
         IJetStreamPublisher? publisher = null,
         IMessageBus? bus = null)

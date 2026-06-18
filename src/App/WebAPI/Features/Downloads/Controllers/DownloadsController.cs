@@ -2,6 +2,7 @@ using FlySwattr.NATS.Abstractions;
 using Microsoft.AspNetCore.Mvc;
 using NodaTime;
 using Shared.Messaging;
+using WebAPI.Features.Common;
 using WebAPI.Features.Downloads.Models;
 using WebAPI.Features.OptionPresets.Controllers;
 using YtDlpSharpLib.Options;
@@ -99,6 +100,16 @@ public class DownloadsController(
         string? cookieKey,
         CancellationToken cancellationToken)
     {
+        if (!YtDlpSourceUrlValidator.TryValidate(sourceUrl, out var validationError))
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Invalid source URL",
+                Detail = validationError,
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+
         var jobId = Guid.NewGuid();
         var correlationId = Guid.NewGuid();
         var messageId = Guid.NewGuid();

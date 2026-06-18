@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using NodaTime;
 using Shared.Database;
 using Shared.Messaging;
+using WebAPI.Features.Common;
 using WebAPI.Features.CreatorSources.Models;
 
 namespace WebAPI.Features.CreatorSources.Controllers;
@@ -25,6 +26,9 @@ public sealed class CreatorSourcesController(
         [FromBody] CreatorSourceCreateRequest request,
         CancellationToken cancellationToken)
     {
+        if (!YtDlpSourceUrlValidator.TryValidate(request.SourceUrl, out var validationError))
+            return BadRequest(validationError);
+
         var response = await SendAsync(
             CreatorDiscoverySubjects.CreateSource,
             new CreatorSourceCreateRequestMessage
@@ -51,6 +55,9 @@ public sealed class CreatorSourcesController(
         [FromBody] CreatorSourceUpdateRequest request,
         CancellationToken cancellationToken)
     {
+        if (!YtDlpSourceUrlValidator.TryValidate(request.SourceUrl, out var validationError))
+            return BadRequest(validationError);
+
         var response = await SendAsync(
             CreatorDiscoverySubjects.UpdateSource,
             new CreatorSourceUpdateRequestMessage

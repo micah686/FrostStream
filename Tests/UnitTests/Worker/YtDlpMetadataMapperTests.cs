@@ -141,6 +141,40 @@ public sealed class YtDlpMetadataMapperTests
         result.Music.ShouldBeNull();
     }
 
+    [Test]
+    public void Map_Uses_Per_Media_Unknown_Account_Handle_When_Creator_Identity_Is_Missing()
+    {
+        var result = YtDlpMetadataMapper.Map(new VideoInfo
+        {
+            Id = "video-1",
+            Title = "orphaned video"
+        }, "youtube", new FixedClock(Now));
+
+        result.Account.AccountName.ShouldBe("unknown");
+        result.Account.AccountHandle.ShouldBe("unknown:media:video-1");
+    }
+
+    [Test]
+    public void Map_Uses_Per_Comment_Unknown_Account_Handle_When_Comment_Author_Is_Missing()
+    {
+        var result = YtDlpMetadataMapper.Map(new VideoInfo
+        {
+            Id = "video-1",
+            Comments =
+            [
+                new CommentInfo
+                {
+                    Id = "comment-1",
+                    Text = "authorless"
+                }
+            ]
+        }, "youtube", new FixedClock(Now));
+
+        var comment = result.Comments.Single();
+        comment.Account.AccountName.ShouldBe("unknown");
+        comment.Account.AccountHandle.ShouldBe("unknown:comment:video-1:comment-1");
+    }
+
     private sealed class FixedClock(Instant now) : IClock
     {
         public Instant GetCurrentInstant() => now;

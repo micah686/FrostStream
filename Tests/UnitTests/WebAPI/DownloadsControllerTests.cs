@@ -135,6 +135,49 @@ public sealed class DownloadsControllerTests
         objectResult.Value.ShouldBeOfType<ProblemDetails>().Title.ShouldBe("Failed to submit download request");
     }
 
+    [Test]
+    public async Task Download_Rejects_Non_Http_Source_Url()
+    {
+        var publisher = Substitute.For<IJetStreamPublisher>();
+        var controller = CreateController(publisher);
+
+        var result = await controller.Download(new DownloadRequest
+        {
+            SourceUrl = "file:///etc/passwd",
+            StorageKey = "storage-a"
+        }, CancellationToken.None);
+
+        var badRequest = result.Result.ShouldBeOfType<BadRequestObjectResult>();
+        badRequest.Value.ShouldBeOfType<ProblemDetails>().Title.ShouldBe("Invalid source URL");
+        await publisher.DidNotReceiveWithAnyArgs().PublishAsync(
+            default!,
+            default(DownloadRequested)!,
+            default,
+            default,
+            default);
+    }
+
+    [Test]
+    public async Task Download_Rejects_Private_Ip_Source_Url()
+    {
+        var publisher = Substitute.For<IJetStreamPublisher>();
+        var controller = CreateController(publisher);
+
+        var result = await controller.Download(new DownloadRequest
+        {
+            SourceUrl = "http://169.254.169.254/latest/meta-data",
+            StorageKey = "storage-a"
+        }, CancellationToken.None);
+
+        result.Result.ShouldBeOfType<BadRequestObjectResult>();
+        await publisher.DidNotReceiveWithAnyArgs().PublishAsync(
+            default!,
+            default(DownloadRequested)!,
+            default,
+            default,
+            default);
+    }
+
     private static DownloadsController CreateController(IJetStreamPublisher publisher)
     {
         var clock = Substitute.For<IClock>();

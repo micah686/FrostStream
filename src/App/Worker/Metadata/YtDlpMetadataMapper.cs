@@ -11,12 +11,14 @@ internal static class YtDlpMetadataMapper
     public static CapturedMediaMetadata Map(VideoInfo info, string platform, IClock clock)
     {
         var scrapedAt = clock.GetCurrentInstant();
+        var externalMediaId = FirstNonBlank(info.Id, info.DisplayId);
 
         var account = new CapturedAccountMetadata
         {
             Platform = platform,
             AccountName = FirstNonBlank(info.Uploader, info.Channel, info.Creator) ?? "unknown",
-            AccountHandle = FirstNonBlank(info.UploaderId, info.ChannelId, info.Uploader, info.Channel) ?? "unknown",
+            AccountHandle = FirstNonBlank(info.UploaderId, info.ChannelId, info.Uploader, info.Channel)
+                ?? UnknownAccountHandle("media", externalMediaId),
             AccountUrl = FirstNonBlank(info.UploaderUrl, info.ChannelUrl),
             FollowerCount = info.ChannelFollowerCount,
             Description = null
@@ -27,7 +29,7 @@ internal static class YtDlpMetadataMapper
             Account = account,
             Media = new CapturedMediaMetadataCore
             {
-                ExternalMediaId = FirstNonBlank(info.Id, info.DisplayId),
+                ExternalMediaId = externalMediaId,
                 MetadataScrapeDate = scrapedAt,
                 ThumbnailStoragePath = info.Thumbnails?.FirstOrDefault(t => !string.IsNullOrWhiteSpace(t.Url))?.Url,
                 AgeLimit = info.AgeLimit,
@@ -47,7 +49,7 @@ internal static class YtDlpMetadataMapper
             },
             Technical = BuildTechnical(info),
             Captions = BuildCaptions(info),
-            Comments = BuildComments(info, platform, scrapedAt),
+            Comments = BuildComments(info, platform, externalMediaId, scrapedAt),
             Series = BuildSeries(info),
             Music = BuildMusic(info),
             Artists = DistinctNonBlank(info.Artists ?? ToList(info.Artist)),
@@ -278,7 +280,11 @@ internal static class YtDlpMetadataMapper
         }
     }
 
-    private static IReadOnlyList<CapturedCommentMetadata> BuildComments(VideoInfo info, string platform, Instant fallbackTime)
+    private static IReadOnlyList<CapturedCommentMetadata> BuildComments(
+        VideoInfo info,
+        string platform,
+        string? externalMediaId,
+        Instant fallbackTime)
         => info.Comments?
             .Where(c => !string.IsNullOrWhiteSpace(c.Id) && !string.IsNullOrWhiteSpace(c.Text))
             .Select(c => new CapturedCommentMetadata
@@ -290,7 +296,8 @@ internal static class YtDlpMetadataMapper
                 {
                     Platform = platform,
                     AccountName = FirstNonBlank(c.Author, c.AuthorId) ?? "unknown",
-                    AccountHandle = FirstNonBlank(c.AuthorId, c.Author) ?? "unknown",
+                    AccountHandle = FirstNonBlank(c.AuthorId, c.Author)
+                        ?? UnknownAccountHandle("comment", externalMediaId, c.Id),
                     AccountUrl = null,
                     Description = null
                 },
@@ -376,6 +383,19 @@ internal static class YtDlpMetadataMapper
 
     private static string? FirstNonBlank(params string?[] values)
         => values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v))?.Trim();
+
+    private static string UnknownAccountHandle(string scope, params string?[] identityParts)
+    {
+        var identity = string.Join(
+            ":",
+            identityParts
+                .Select(part => FirstNonBlank(part))
+                .OfType<string>());
+
+        return string.IsNullOrWhiteSpace(identity)
+            ? "unknown"
+            : $"unknown:{scope}:{identity}";
+    }
 
     private static IReadOnlyList<string> ToList(string? value)
         => string.IsNullOrWhiteSpace(value) ? [] : [value];
