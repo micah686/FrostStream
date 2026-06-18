@@ -110,6 +110,7 @@ public sealed class DownloadCommandsConsumerService(
             var sourceMediaId = info.Id ?? info.DisplayId;
             var sourceLastModified = ResolveSourceLastModified(info);
 
+            PlaceholderContentDetector.ThrowIfPlaceholderMetadata(info, provider);
 
             CapturedMediaMetadata? richMetadata;
             try
@@ -210,6 +211,7 @@ public sealed class DownloadCommandsConsumerService(
                 throw new FileNotFoundException("yt-dlp completed but the temp file was not found.", tempFileRef);
 
             var contentHash = await ComputeXxHash128Async(tempFileRef);
+            PlaceholderContentDetector.ThrowIfPlaceholderContentHash(contentHash);
 
             var infoJson = await ResolveInfoJsonSidecarAsync(tempDirectory);
 
