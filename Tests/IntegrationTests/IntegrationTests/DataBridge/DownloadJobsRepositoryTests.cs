@@ -93,6 +93,35 @@ public sealed class DownloadJobsRepositoryTests
         (await Fixture.CountAsync("media_source_versions", "media_guid = @media_guid", mediaGuid)).ShouldBe(0);
     }
 
+    [Test]
+    public async Task TryMarkMessageProcessedAsync_Returns_False_For_Duplicate_Message()
+    {
+        var messageId = Guid.NewGuid();
+        await using var db = Fixture.CreateDb();
+        var repository = new DownloadJobsRepository(db, SystemClock.Instance);
+
+        (await repository.TryMarkMessageProcessedAsync(messageId, "op-a", Guid.NewGuid())).ShouldBeTrue();
+        (await repository.TryMarkMessageProcessedAsync(messageId, "op-a", Guid.NewGuid())).ShouldBeFalse();
+
+        (await Fixture.CountAsync("processed_messages")).ShouldBe(1);
+    }
+
+    [Test]
+    public async Task TryMarkMessageProcessedAsync_Rolls_Back_With_Transaction()
+    {
+        var messageId = Guid.NewGuid();
+        await using var db = Fixture.CreateDb();
+        var repository = new DownloadJobsRepository(db, SystemClock.Instance);
+
+        await using (var tx = await db.Database.BeginTransactionAsync())
+        {
+            (await repository.TryMarkMessageProcessedAsync(messageId, "op-a", Guid.NewGuid())).ShouldBeTrue();
+            await tx.RollbackAsync();
+        }
+
+        (await Fixture.CountAsync("processed_messages")).ShouldBe(0);
+    }
+
     private sealed class PostgresFixture : IAsyncDisposable
     {
         private readonly IContainer _postgresContainer = new ContainerBuilder()
@@ -128,7 +157,7 @@ public sealed class DownloadJobsRepositoryTests
             await using var connection = new NpgsqlConnection(ConnectionString);
             await connection.OpenAsync();
             await using var command = new NpgsqlCommand(
-                "TRUNCATE TABLE media, download_jobs RESTART IDENTITY CASCADE;",
+                "TRUNCATE TABLE media, download_jobs, processed_messages RESTART IDENTITY CASCADE;",
                 connection);
             await command.ExecuteNonQueryAsync();
         }

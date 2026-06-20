@@ -20,7 +20,7 @@ namespace DataBridge.Messaging;
 ///      <see cref="IFlowMessage.OperationKey"/> as Cleipnir's idempotency key — so even if
 ///      ingress dedupe is bypassed (e.g. a different MessageId for the same logical event),
 ///      Cleipnir's message store will deduplicate by OperationKey before the flow advances.
-///   4. Mark the message processed.
+///   4. Mark the message processed in the same transaction as the state/history write.
 ///   5. Ack JetStream — only after every step above has succeeded.
 ///
 /// All work runs under a single fresh DI scope per message so the scoped
@@ -78,10 +78,12 @@ public sealed class DownloadEventsConsumerService(
 
         try
         {
-            await scopeFactory.WithScopedAsync<IDownloadJobsRepository>(async jobs =>
+            await scopeFactory.WithScopedAsync<IDownloadJobsRepository, DataBridgeDbContext>(async (jobs, db) =>
             {
-                if (await jobs.IsMessageProcessedAsync(evt.MessageId))
+                await using var tx = await db.Database.BeginTransactionAsync();
+                if (!await jobs.TryMarkMessageProcessedAsync(evt.MessageId, evt.OperationKey, evt.JobId))
                 {
+                    await tx.CommitAsync();
                     await context.AckAsync();
                     return;
                 }
@@ -95,13 +97,13 @@ public sealed class DownloadEventsConsumerService(
                     eventName,
                     JsonSerializer.Serialize<TEvent>(evt));
 
-                // Cleipnir-internal dedupe by OperationKey. If two events ever reach this point
-                // with the same OperationKey (e.g. ingress dedupe race after a crash), Cleipnir
-                // drops the second one before the flow sees it.
+                // Keep the flow handoff before committing processed_messages: if the process
+                // dies after commit, redelivery will be acked as processed and will not resend.
+                // If commit fails after this send, redelivery may resend and Cleipnir's
+                // OperationKey idempotency absorbs the duplicate.
                 await flows.SendMessage(evt.JobId.ToString("N"), evt, idempotencyKey: evt.OperationKey);
 
-                await jobs.MarkMessageProcessedAsync(evt.MessageId, evt.OperationKey, evt.JobId);
-
+                await tx.CommitAsync();
                 await context.AckAsync();
             });
         }

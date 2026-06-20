@@ -12,6 +12,8 @@ public interface IDownloadJobsRepository
 {
     Task<bool> IsMessageProcessedAsync(Guid messageId, CancellationToken ct = default);
 
+    Task<bool> TryMarkMessageProcessedAsync(Guid messageId, string operationKey, Guid jobId, CancellationToken ct = default);
+
     Task MarkMessageProcessedAsync(Guid messageId, string operationKey, Guid jobId, CancellationToken ct = default);
 
     Task CreateJobIfMissingAsync(DownloadRequested request, CancellationToken ct = default);

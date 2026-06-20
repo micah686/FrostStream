@@ -10,20 +10,21 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
     public Task<bool> IsMessageProcessedAsync(Guid messageId, CancellationToken ct = default)
         => db.ProcessedMessages.AsNoTracking().AnyAsync(x => x.MessageId == messageId, ct);
 
-    public async Task MarkMessageProcessedAsync(Guid messageId, string operationKey, Guid jobId, CancellationToken ct = default)
+    public async Task<bool> TryMarkMessageProcessedAsync(Guid messageId, string operationKey, Guid jobId, CancellationToken ct = default)
     {
-        var exists = await db.ProcessedMessages.AnyAsync(x => x.MessageId == messageId, ct);
-        if (exists)
-            return;
+        var inserted = await db.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+             INSERT INTO processed_messages (message_id, operation_key, job_id)
+             VALUES ({messageId}, {operationKey}, {jobId})
+             ON CONFLICT (message_id) DO NOTHING
+             """,
+            ct);
 
-        db.ProcessedMessages.Add(new ProcessedMessageEntity
-        {
-            MessageId = messageId,
-            OperationKey = operationKey,
-            JobId = jobId
-        });
-        await db.SaveChangesAsync(ct);
+        return inserted == 1;
     }
+
+    public async Task MarkMessageProcessedAsync(Guid messageId, string operationKey, Guid jobId, CancellationToken ct = default)
+        => await TryMarkMessageProcessedAsync(messageId, operationKey, jobId, ct);
 
     public async Task CreateJobIfMissingAsync(DownloadRequested request, CancellationToken ct = default)
     {
