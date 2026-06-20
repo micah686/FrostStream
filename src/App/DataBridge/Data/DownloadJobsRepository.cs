@@ -203,10 +203,20 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
             }
         }
 
-        await db.Database.ExecuteSqlInterpolatedAsync(
-            $"INSERT INTO media (media_guid) VALUES ({mediaGuid}) ON CONFLICT (media_guid) DO NOTHING", ct);
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            await db.Database.ExecuteSqlInterpolatedAsync(
+                $"INSERT INTO media (media_guid) VALUES ({mediaGuid}) ON CONFLICT (media_guid) DO NOTHING", ct);
 
-        await db.SaveChangesAsync(ct);
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct);
+            throw;
+        }
 
         return new VersionReservation(mediaGuid, storagePath, versionNum, contentAlreadyStored, isNewMediaGuid);
     }
@@ -224,10 +234,21 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
                 db.MediaSourceVersions.Remove(sourceRow);
         }
 
-        await db.Database.ExecuteSqlInterpolatedAsync(
-            $"DELETE FROM media WHERE media_guid = {mediaGuid}", ct);
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
 
-        await db.SaveChangesAsync(ct);
+            await db.Database.ExecuteSqlInterpolatedAsync(
+                $"DELETE FROM media WHERE media_guid = {mediaGuid}", ct);
+
+            await tx.CommitAsync(ct);
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct);
+            throw;
+        }
     }
 
     public async Task CommitUploadAsync(Guid jobId, UploadCompleted evt, CancellationToken ct = default)
