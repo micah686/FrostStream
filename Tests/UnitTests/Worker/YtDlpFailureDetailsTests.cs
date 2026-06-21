@@ -1,6 +1,7 @@
 using Shared.Messaging;
 using Shouldly;
 using TUnit.Core;
+using Worker.Metadata;
 using Worker.Services;
 using YtDlpSharpLib.Exceptions;
 
@@ -31,6 +32,15 @@ public sealed class YtDlpFailureDetailsTests
 
         YtDlpFailureDetails.ClassifyFailure(exception).ShouldBe(FailureKind.Permanent);
         YtDlpFailureDetails.ErrorCode(exception).ShouldBe("yt-dlp.source-unavailable");
+    }
+
+    [Test]
+    public void Placeholder_Content_Exception_Is_Permanent_With_Specific_Code()
+    {
+        var exception = new YtDlpPlaceholderContentException("placeholder content");
+
+        YtDlpFailureDetails.ClassifyFailure(exception).ShouldBe(FailureKind.Permanent);
+        YtDlpFailureDetails.ErrorCode(exception).ShouldBe("yt-dlp.placeholder-content");
     }
 
     [Test]

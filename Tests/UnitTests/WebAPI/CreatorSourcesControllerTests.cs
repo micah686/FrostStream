@@ -197,6 +197,28 @@ public sealed class CreatorSourcesControllerTests
         result.ShouldBeOfType<BadRequestObjectResult>().Value.ShouldBe("invalid");
     }
 
+    [Test]
+    public async Task Create_Rejects_Link_Local_Source_Url()
+    {
+        var bus = Substitute.For<IMessageBus>();
+        var controller = CreateController(bus: bus);
+
+        var result = await controller.Create(new CreatorSourceCreateRequest
+        {
+            Platform = "youtube",
+            SourceType = CreatorSourceType.Videos,
+            SourceUrl = "http://[fe80::1]/@creator"
+        }, CancellationToken.None);
+
+        result.Result.ShouldBeOfType<BadRequestObjectResult>();
+        await bus.DidNotReceiveWithAnyArgs()
+            .RequestAsync<CreatorSourceCreateRequestMessage, CreatorSourceOperationResponseMessage>(
+                default!,
+                default!,
+                default,
+                default);
+    }
+
     private static CreatorSourcesController CreateController(
         IMessageBus? bus = null,
         IJetStreamPublisher? publisher = null)

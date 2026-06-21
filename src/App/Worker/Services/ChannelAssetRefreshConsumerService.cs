@@ -142,13 +142,14 @@ public sealed class ChannelAssetRefreshConsumerService(
             return;
         }
 
+        var identity = DeriveIdentity(container);
         var avatar = SelectThumbnail(container.Thumbnails, AssetKind.Avatar);
         var banner = SelectThumbnail(container.Thumbnails, AssetKind.Banner);
 
         if (avatar is null && banner is null)
         {
             logger.LogInformation("No avatar/banner thumbnails available for source {SourceId} ({SourceUrl}).", source.Id, source.SourceUrl);
-            await PublishSuccessAsync(source, null, null, cancellationToken);
+            await PublishSuccessAsync(source, identity, null, null, cancellationToken);
             return;
         }
 
@@ -190,6 +191,7 @@ public sealed class ChannelAssetRefreshConsumerService(
 
         await PublishSuccessAsync(
             source,
+            identity,
             avatarResult is not null ? new AvatarOrBanner(avatar!.Url!, avatarResult) : null,
             bannerResult is not null ? new AvatarOrBanner(banner!.Url!, bannerResult) : null,
             cancellationToken,
@@ -198,6 +200,7 @@ public sealed class ChannelAssetRefreshConsumerService(
 
     private async Task PublishSuccessAsync(
         CreatorSourceDto source,
+        ChannelAccountIdentity identity,
         AvatarOrBanner? avatar,
         AvatarOrBanner? banner,
         CancellationToken cancellationToken,
@@ -207,11 +210,16 @@ public sealed class ChannelAssetRefreshConsumerService(
         var request = new UpdateCreatorSourceAssetsRequestMessage
         {
             SourceId = source.Id,
+            Platform = identity.Platform,
+            AccountHandle = identity.Handle,
+            AccountName = identity.Name,
+            AccountUrl = identity.Url,
+            StorageKey = avatar?.Result.StorageKey ?? banner?.Result.StorageKey,
             AvatarUrl = avatar?.Url,
-            AvatarCachePath = avatar?.Result.CachePath,
+            AvatarStoragePath = avatar?.Result.StoragePath,
             AvatarContentHash = avatar?.Result.ContentHash,
             BannerUrl = banner?.Url,
-            BannerCachePath = banner?.Result.CachePath,
+            BannerStoragePath = banner?.Result.StoragePath,
             BannerContentHash = banner?.Result.ContentHash,
             RefreshedAt = partialFailure is null ? now : null,
             AttemptedAt = now,
@@ -311,6 +319,23 @@ public sealed class ChannelAssetRefreshConsumerService(
 
     private static string Truncate(string value, int max)
         => value.Length <= max ? value : value[..max];
+
+    /// <summary>
+    /// Derives the account identity for the channel using the same fields the per-media metadata
+    /// mapper uses, so the avatar/banner blobs land on the same <c>metadata.accounts</c> row that
+    /// media downloads from this channel populate.
+    /// </summary>
+    private static ChannelAccountIdentity DeriveIdentity(VideoInfo info)
+        => new(
+            FirstNonBlank(info.Extractor, info.ExtractorKey),
+            FirstNonBlank(info.UploaderId, info.ChannelId, info.Uploader, info.Channel),
+            FirstNonBlank(info.Uploader, info.Channel, info.Creator),
+            FirstNonBlank(info.UploaderUrl, info.ChannelUrl));
+
+    private static string? FirstNonBlank(params string?[] values)
+        => values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v))?.Trim();
+
+    private sealed record ChannelAccountIdentity(string? Platform, string? Handle, string? Name, string? Url);
 
     private sealed record AvatarOrBanner(string Url, AssetDownloadResult Result);
 }

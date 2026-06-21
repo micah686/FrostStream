@@ -79,6 +79,88 @@ public sealed class CreatorDiscoveryRepositoryTests
         row.LastChangedAt.ShouldNotBeNull();
     }
 
+    [Test]
+    public async Task UpsertDiscoveredMediaBatch_Uses_Scan_High_Watermark_When_Batch_Is_Chunked()
+    {
+        await using var db = CreateDb();
+        var repo = new CreatorDiscoveryRepository(db, SystemClock.Instance);
+        var source = await repo.CreateSourceAsync(CreateSource());
+
+        await repo.UpsertDiscoveredMediaBatchAsync(new UpsertDiscoveredMediaBatchRequestMessage
+        {
+            CreatorSourceId = source.Id,
+            ScanMode = CreatorSourceScanMode.Full,
+            ScheduleKey = "channel-full",
+            IdempotencyKey = "channel-full:1:batch-3",
+            ScannedAt = SystemClock.Instance.GetCurrentInstant(),
+            ScanHighWatermarkExternalMediaId = "first-in-scan",
+            Items =
+            [
+                Candidate("later-batch-item", "https://www.youtube.com/watch?v=later-batch-item", title: "Later")
+            ]
+        });
+
+        var updated = await db.CreatorSources.SingleAsync();
+        updated.LastSeenHighWatermark.ShouldBe("first-in-scan");
+    }
+
+    [Test]
+    public async Task Full_Scan_Final_Batch_Advances_Cursor_When_Page_Is_Not_Complete()
+    {
+        await using var db = CreateDb();
+        var repo = new CreatorDiscoveryRepository(db, SystemClock.Instance);
+        var source = await repo.CreateSourceAsync(CreateSource());
+
+        await repo.UpsertDiscoveredMediaBatchAsync(new UpsertDiscoveredMediaBatchRequestMessage
+        {
+            CreatorSourceId = source.Id,
+            ScanMode = CreatorSourceScanMode.Full,
+            ScheduleKey = "channel-full",
+            IdempotencyKey = "channel-full:1:batch-49",
+            ScannedAt = SystemClock.Instance.GetCurrentInstant(),
+            ScanPageStartIndex = 1,
+            NextScanPageStartIndex = 5_001,
+            ScanPageComplete = false,
+            IsScanPageFinalBatch = true,
+            Items =
+            [
+                Candidate("page-item", "https://www.youtube.com/watch?v=page-item", title: "Page")
+            ]
+        });
+
+        var updated = await db.CreatorSources.SingleAsync();
+        updated.NextFullScanStartIndex.ShouldBe(5_001);
+        updated.LastFullScanAt.ShouldBeNull();
+    }
+
+    [Test]
+    public async Task Full_Scan_Final_Batch_Clears_Cursor_When_Page_Is_Complete()
+    {
+        await using var db = CreateDb();
+        var repo = new CreatorDiscoveryRepository(db, SystemClock.Instance);
+        var source = await repo.CreateSourceAsync(CreateSource());
+        source.NextFullScanStartIndex = 5_001;
+        await db.SaveChangesAsync();
+
+        var scannedAt = SystemClock.Instance.GetCurrentInstant();
+        await repo.UpsertDiscoveredMediaBatchAsync(new UpsertDiscoveredMediaBatchRequestMessage
+        {
+            CreatorSourceId = source.Id,
+            ScanMode = CreatorSourceScanMode.Full,
+            ScheduleKey = "channel-full",
+            IdempotencyKey = "channel-full:1:batch-0",
+            ScannedAt = scannedAt,
+            ScanPageStartIndex = 5_001,
+            ScanPageComplete = true,
+            IsScanPageFinalBatch = true,
+            Items = []
+        });
+
+        var updated = await db.CreatorSources.SingleAsync();
+        updated.NextFullScanStartIndex.ShouldBeNull();
+        updated.LastFullScanAt.ShouldBe(scannedAt);
+    }
+
     private static DataBridgeDbContext CreateDb()
     {
         var options = new DbContextOptionsBuilder<DataBridgeDbContext>()

@@ -232,7 +232,31 @@ public sealed class CreatorDiscoveryConsumerService(
         var msg = context.Message;
         try
         {
-            var updated = await WithRepo(repo => repo.UpdateAssetsAsync(msg));
+            var updated = await scopeFactory.WithScopedAsync<ICreatorDiscoveryRepository, IMetadataRepository, CreatorSourceEntity?>(
+                async (creators, metadata) =>
+                {
+                    var entity = await creators.UpdateAssetsAsync(msg);
+                    if (entity is null)
+                        return null;
+
+                    // Bridge the durable avatar/banner blobs into metadata.accounts (authoritative).
+                    if (!string.IsNullOrWhiteSpace(msg.Platform) &&
+                        !string.IsNullOrWhiteSpace(msg.AccountHandle) &&
+                        (!string.IsNullOrWhiteSpace(msg.AvatarStoragePath) || !string.IsNullOrWhiteSpace(msg.BannerStoragePath)))
+                    {
+                        await metadata.UpsertAccountAssetsAsync(
+                            msg.Platform!,
+                            msg.AccountHandle!,
+                            string.IsNullOrWhiteSpace(msg.AccountName) ? "unknown" : msg.AccountName!,
+                            msg.AccountUrl,
+                            msg.AvatarStoragePath,
+                            msg.BannerStoragePath,
+                            string.IsNullOrWhiteSpace(msg.StorageKey) ? "default" : msg.StorageKey!);
+                    }
+
+                    return entity;
+                });
+
             if (updated is null)
             {
                 await context.RespondAsync(new UpdateCreatorSourceAssetsResponseMessage
@@ -338,13 +362,12 @@ public sealed class CreatorDiscoveryConsumerService(
         LastSuccessfulScanAt = entity.LastSuccessfulScanAt,
         LastFullScanAt = entity.LastFullScanAt,
         LastSeenHighWatermark = entity.LastSeenHighWatermark,
+        NextFullScanStartIndex = entity.NextFullScanStartIndex,
         CreatedAt = entity.CreatedAt,
         LastUpdated = entity.LastUpdated,
         AvatarUrl = entity.AvatarUrl,
-        AvatarCachePath = entity.AvatarCachePath,
         AvatarContentHash = entity.AvatarContentHash,
         BannerUrl = entity.BannerUrl,
-        BannerCachePath = entity.BannerCachePath,
         BannerContentHash = entity.BannerContentHash,
         AssetsLastRefreshedAt = entity.AssetsLastRefreshedAt,
         AssetsLastAttemptAt = entity.AssetsLastAttemptAt,

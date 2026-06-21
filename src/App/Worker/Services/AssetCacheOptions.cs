@@ -4,7 +4,12 @@ public sealed class AssetCacheOptions
 {
     public const string SectionName = "Cache:Assets";
 
-    public string Root { get; set; } = ".cache";
+    /// <summary>
+    /// The storage backend (FluentStorage <c>storage_key</c>) that durable avatar/banner blobs
+    /// are written to. The scheduler-driven channel refresh has no caller-supplied backend, so
+    /// it falls back to this. Defaults to the conventional <c>"default"</c> key.
+    /// </summary>
+    public string StorageKey { get; set; } = "default";
 
     public int MaxAttempts { get; set; } = 3;
 

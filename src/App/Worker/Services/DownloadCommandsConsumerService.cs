@@ -110,6 +110,7 @@ public sealed class DownloadCommandsConsumerService(
             var sourceMediaId = info.Id ?? info.DisplayId;
             var sourceLastModified = ResolveSourceLastModified(info);
 
+            PlaceholderContentDetector.ThrowIfPlaceholderMetadata(info, provider);
 
             CapturedMediaMetadata? richMetadata;
             try
@@ -210,17 +211,21 @@ public sealed class DownloadCommandsConsumerService(
                 throw new FileNotFoundException("yt-dlp completed but the temp file was not found.", tempFileRef);
 
             var contentHash = await ComputeXxHash128Async(tempFileRef);
+            PlaceholderContentDetector.ThrowIfPlaceholderContentHash(contentHash);
 
             var infoJson = await ResolveInfoJsonSidecarAsync(tempDirectory);
+            var (thumbnail, captions) = await ResolveAssetSidecarsAsync(tempDirectory, tempFileRef);
 
             logger.LogInformation(
-                "Download completed for JobId {JobId} Attempt {Attempt} File {TempFileRef} SizeBytes {FileSizeBytes} ContentHash {ContentHashXxh128} InfoJson {InfoJsonFileName}",
+                "Download completed for JobId {JobId} Attempt {Attempt} File {TempFileRef} SizeBytes {FileSizeBytes} ContentHash {ContentHashXxh128} InfoJson {InfoJsonFileName} Thumbnail {ThumbnailFileName} Captions {CaptionCount}",
                 cmd.JobId,
                 cmd.Attempt,
                 tempFileRef,
                 fileInfo.Length,
                 contentHash,
-                infoJson?.FileName);
+                infoJson?.FileName,
+                thumbnail?.FileName,
+                captions.Count);
 
             await Publish(DownloadSubjects.DownloadCompleted, new DownloadCompleted
             {
@@ -238,7 +243,9 @@ public sealed class DownloadCommandsConsumerService(
                 InfoJsonTempFileRef = infoJson?.TempFileRef,
                 InfoJsonFileName = infoJson?.FileName,
                 InfoJsonSizeBytes = infoJson?.SizeBytes,
-                InfoJsonContentHashXxh128 = infoJson?.ContentHash
+                InfoJsonContentHashXxh128 = infoJson?.ContentHash,
+                Thumbnail = thumbnail,
+                Captions = captions
             });
             await context.AckAsync();
         }
@@ -600,13 +607,19 @@ public sealed class DownloadCommandsConsumerService(
     /// <c>NoPlaylist</c>, <c>NoPart</c>, and <c>Newline</c> regardless of caller input
     /// because they're load-bearing for the saga (one file per job, atomic temp moves,
     /// readable progress).
+    ///
+    /// Per-media asset capture: the thumbnail is written by default (callers can opt out with
+    /// <c>NoWriteThumbnail</c>); subtitle capture stays opt-in — the caller drives it via
+    /// <c>WriteSubs</c>/<c>WriteAutoSubs</c> + <c>SubLangs</c>, which yt-dlp already honors.
+    /// The downloaded sidecar files are collected post-download and uploaded as durable blobs.
     /// </summary>
     private static YtDlpOptions ApplyOperationalDefaults(YtDlpOptions options)
         => options with
         {
             VideoSelection = options.VideoSelection with { NoPlaylist = true },
             Filesystem = options.Filesystem with { NoPart = true },
-            VerbositySimulation = options.VerbositySimulation with { Newline = true }
+            VerbositySimulation = options.VerbositySimulation with { Newline = true },
+            Thumbnail = options.Thumbnail with { WriteThumbnail = !options.Thumbnail.NoWriteThumbnail }
         };
 
     private static string GetDownloadTempDirectory(DownloadVideoCommand cmd)
@@ -630,17 +643,43 @@ public sealed class DownloadCommandsConsumerService(
         return Directory.Exists(toolsDirectory) ? toolsDirectory : null;
     }
 
-    private static string? FindDownloadedMediaFile(string tempDirectory)
+    internal static string? FindDownloadedMediaFile(string tempDirectory)
         => Directory.Exists(tempDirectory)
             ? Directory.EnumerateFiles(tempDirectory, $"{MediaFileBase}.*", SearchOption.TopDirectoryOnly)
-                .Where(path => !Path.GetFileName(path).EndsWith(".ytdl", StringComparison.OrdinalIgnoreCase)
-                    && !Path.GetFileName(path).EndsWith(".part", StringComparison.OrdinalIgnoreCase))
+                .Where(path => !IsSidecarFileName(Path.GetFileName(path)))
                 .Select(path => new FileInfo(path))
                 .Where(file => file.Exists && file.Length > 0)
                 .OrderByDescending(file => file.LastWriteTimeUtc)
                 .Select(file => file.FullName)
                 .FirstOrDefault()
             : null;
+
+    // Extensions yt-dlp writes alongside the media file (thumbnails, subtitles, partials). The
+    // media file detector must skip these so a freshly-written thumbnail (e.g. media.webp) isn't
+    // mistaken for the media file.
+    private static readonly HashSet<string> SidecarExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".part", ".ytdl", ".temp",
+        ".jpg", ".jpeg", ".png", ".webp", ".gif",
+        ".vtt", ".srt", ".ass", ".ssa", ".lrc", ".ttml", ".sbv", ".dfxp",
+        ".json3", ".srv1", ".srv2", ".srv3", ".scc"
+    };
+
+    private static readonly HashSet<string> SubtitleExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".vtt", ".srt", ".ass", ".ssa", ".lrc", ".ttml", ".sbv", ".dfxp",
+        ".json3", ".srv1", ".srv2", ".srv3", ".scc"
+    };
+
+    private static readonly HashSet<string> ThumbnailExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".jpg", ".jpeg", ".png", ".webp", ".gif"
+    };
+
+    private static bool IsSidecarFileName(string fileName)
+        => fileName.EndsWith(".info.json", StringComparison.OrdinalIgnoreCase)
+            || fileName.EndsWith(".live_chat.json", StringComparison.OrdinalIgnoreCase)
+            || SidecarExtensions.Contains(Path.GetExtension(fileName));
 
     /// <summary>
     /// Locates a yt-dlp <c>.info.json</c> sidecar in the same temp directory as the media
@@ -663,6 +702,73 @@ public sealed class DownloadCommandsConsumerService(
     }
 
     private sealed record InfoJsonSidecar(string TempFileRef, string FileName, long SizeBytes, string ContentHash);
+
+    /// <summary>
+    /// Collects the per-media thumbnail and caption sidecars yt-dlp wrote next to the media file
+    /// (same temp directory, <c>media.&lt;ext&gt;</c> naming). The media file itself and the
+    /// info.json sidecar are skipped by extension. Caption languages are parsed from the
+    /// <c>media.&lt;lang&gt;.&lt;ext&gt;</c> filename.
+    /// </summary>
+    // internal for unit testing the sidecar classification logic.
+    internal static async Task<(SidecarFileRef? Thumbnail, IReadOnlyList<SidecarFileRef> Captions)> ResolveAssetSidecarsAsync(
+        string tempDirectory,
+        string mediaFileRef)
+    {
+        if (!Directory.Exists(tempDirectory))
+            return (null, []);
+
+        var mediaFileName = Path.GetFileName(mediaFileRef);
+        SidecarFileRef? thumbnail = null;
+        var captions = new List<SidecarFileRef>();
+
+        foreach (var path in Directory.EnumerateFiles(tempDirectory, $"{MediaFileBase}.*", SearchOption.TopDirectoryOnly))
+        {
+            var fileName = Path.GetFileName(path);
+            if (string.Equals(fileName, mediaFileName, StringComparison.Ordinal))
+                continue;
+
+            var ext = Path.GetExtension(fileName);
+            var file = new FileInfo(path);
+            if (!file.Exists || file.Length == 0)
+                continue;
+
+            if (thumbnail is null && ThumbnailExtensions.Contains(ext))
+            {
+                thumbnail = new SidecarFileRef
+                {
+                    TempFileRef = path,
+                    FileName = fileName,
+                    SizeBytes = file.Length,
+                    ContentHashXxh128 = await ComputeXxHash128Async(path)
+                };
+            }
+            else if (SubtitleExtensions.Contains(ext))
+            {
+                captions.Add(new SidecarFileRef
+                {
+                    TempFileRef = path,
+                    FileName = fileName,
+                    SizeBytes = file.Length,
+                    ContentHashXxh128 = await ComputeXxHash128Async(path),
+                    LanguageCode = ParseCaptionLanguage(fileName)
+                });
+            }
+        }
+
+        return (thumbnail, captions);
+    }
+
+    /// <summary>Extracts the language tag from a <c>media.&lt;lang&gt;.&lt;ext&gt;</c> caption filename.</summary>
+    internal static string ParseCaptionLanguage(string fileName)
+    {
+        var prefix = $"{MediaFileBase}.";
+        var middle = fileName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+            ? fileName[prefix.Length..]
+            : fileName;
+        var lastDot = middle.LastIndexOf('.');
+        var lang = lastDot > 0 ? middle[..lastDot] : null;
+        return string.IsNullOrWhiteSpace(lang) ? "und" : lang;
+    }
 
     private static async Task<string> ComputeXxHash128Async(string path)
     {

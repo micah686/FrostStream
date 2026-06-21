@@ -62,19 +62,17 @@ public sealed class CreatorSourceEntity
 
     public string? LastSeenHighWatermark { get; set; }
 
+    public int? NextFullScanStartIndex { get; set; }
+
     public Instant CreatedAt { get; private set; } = SystemClock.Instance.GetCurrentInstant();
 
     public Instant? LastUpdated { get; set; }
 
     public string? AvatarUrl { get; set; }
 
-    public string? AvatarCachePath { get; set; }
-
     public string? AvatarContentHash { get; set; }
 
     public string? BannerUrl { get; set; }
-
-    public string? BannerCachePath { get; set; }
 
     public string? BannerContentHash { get; set; }
 

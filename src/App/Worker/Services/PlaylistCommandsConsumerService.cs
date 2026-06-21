@@ -6,6 +6,7 @@ using Shared.Messaging;
 using YtDlpSharpLib;
 using YtDlpSharpLib.Exceptions;
 using YtDlpSharpLib.Models;
+using YtDlpSharpLib.Options;
 
 namespace Worker.Services;
 
@@ -22,6 +23,8 @@ public sealed class PlaylistCommandsConsumerService(
     IClock clock,
     ILogger<PlaylistCommandsConsumerService> logger) : BackgroundService
 {
+    internal const int MaxPlaylistEntriesPerRequest = 5_000;
+
     private static readonly StreamName Stream = StreamName.From(PlaylistTopology.StreamNameValue);
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
@@ -46,9 +49,13 @@ public sealed class PlaylistCommandsConsumerService(
             var entries = new List<PlaylistEntry>();
             string? title = null;
             string? providerPlaylistId = null;
+            var pageStartIndex = PageStartIndex(cmd);
+            var pageSize = PageSize(cmd);
+
+            var playlistOptions = BuildPlaylistOptions(pageStartIndex, pageSize);
 
             // First, get the top-level playlist metadata (with flat entries embedded).
-            var topResult = await ytDlp.TryGetVideoInfoAsync(cmd.SourceUrl, flat: true);
+            var topResult = await ytDlp.TryGetVideoInfoAsync(cmd.SourceUrl, flat: true, overrideOptions: playlistOptions);
             if (topResult.Success && topResult.Data is { } container)
             {
                 title = container.PlaylistTitle ?? container.Title;
@@ -56,32 +63,41 @@ public sealed class PlaylistCommandsConsumerService(
 
                 if (container.Entries is { Count: > 0 } childEntries)
                 {
-                    var index = 1;
-                    foreach (var entry in childEntries)
+                    var fallbackIndex = pageStartIndex;
+                    foreach (var entry in childEntries.Take(pageSize))
                     {
                         var url = entry.WebpageUrl ?? entry.Url;
                         if (string.IsNullOrWhiteSpace(url))
                             continue;
-                        var resolvedIndex = entry.PlaylistIndex ?? index;
+                        var resolvedIndex = entry.PlaylistIndex ?? fallbackIndex;
                         entries.Add(new PlaylistEntry
                         {
                             PlaylistIndex = resolvedIndex,
                             EntryUrl = url!,
                             EntryTitle = entry.Title ?? entry.FullTitle
                         });
-                        index++;
+                        fallbackIndex++;
                     }
                 }
                 else
                 {
                     // Fall back to the streaming flat-playlist endpoint when the top-level
                     // dump did not embed the entries (some extractors return them piecemeal).
+                    var streamedIndex = 0;
                     await foreach (var entry in ytDlp.GetPlaylistInfoAsync(cmd.SourceUrl))
                     {
+                        streamedIndex++;
+                        var resolvedIndex = entry.PlaylistIndex ?? streamedIndex;
+                        if (resolvedIndex < pageStartIndex)
+                            continue;
+
+                        if (entries.Count >= pageSize)
+                            break;
+
                         var url = entry.WebpageUrl ?? entry.Url;
                         if (string.IsNullOrWhiteSpace(url))
                             continue;
-                        var resolvedIndex = entry.PlaylistIndex ?? entries.Count + 1;
+
                         entries.Add(new PlaylistEntry
                         {
                             PlaylistIndex = resolvedIndex,
@@ -100,13 +116,29 @@ public sealed class PlaylistCommandsConsumerService(
                     lastStderrLines: topResult.ErrorOutput);
             }
 
-            if (entries.Count == 0)
+            if (entries.Count == 0 && pageStartIndex == FetchPlaylistMetadataCommandDefaults.PageStartIndex)
             {
                 throw new YtDlpProcessException(
                     $"yt-dlp returned no entries for playlist URL {cmd.SourceUrl}",
                     command: null,
                     exitCode: null,
                     lastStderrLines: string.Empty);
+            }
+
+            var totalItems = topResult.Data?.PlaylistCount ?? 0;
+            var nextPageStartIndex = pageStartIndex + pageSize;
+            var pageEndIndex = pageStartIndex + entries.Count - 1;
+            var isComplete = entries.Count < pageSize;
+
+            if (!isComplete)
+            {
+                logger.LogInformation(
+                    "Playlist {PlaylistId} URL {SourceUrl} staged page {PageStartIndex}:{PageEndIndex}; requesting next page from {NextPageStartIndex}.",
+                    cmd.PlaylistId,
+                    cmd.SourceUrl,
+                    pageStartIndex,
+                    pageEndIndex,
+                    nextPageStartIndex);
             }
 
             await Publish(PlaylistSubjects.PlaylistMetadataFetched, new PlaylistMetadataFetched
@@ -120,7 +152,11 @@ public sealed class PlaylistCommandsConsumerService(
                 Attempt = cmd.Attempt,
                 ProviderPlaylistId = providerPlaylistId,
                 Title = title,
-                TotalItems = entries.Count,
+                TotalItems = totalItems > 0 ? totalItems : Math.Max(0, pageEndIndex),
+                PageStartIndex = pageStartIndex,
+                PageSize = pageSize,
+                IsComplete = isComplete,
+                NextPageStartIndex = isComplete ? null : nextPageStartIndex,
                 Entries = entries
             });
             await context.AckAsync();
@@ -160,4 +196,27 @@ public sealed class PlaylistCommandsConsumerService(
 
     private Task Publish<T>(string subject, T message) where T : IPlaylistFlowMessage
         => publisher.PublishAsync(subject, message, messageId: message.MessageId.ToString("N"));
+
+    internal static YtDlpOptions BuildPlaylistOptions(
+        int pageStartIndex = FetchPlaylistMetadataCommandDefaults.PageStartIndex,
+        int pageSize = FetchPlaylistMetadataCommandDefaults.PageSize)
+    {
+        pageStartIndex = Math.Max(FetchPlaylistMetadataCommandDefaults.PageStartIndex, pageStartIndex);
+        pageSize = Math.Clamp(pageSize, 1, MaxPlaylistEntriesPerRequest);
+        var pageEndIndex = pageStartIndex + pageSize - 1;
+
+        return new YtDlpOptions
+        {
+            VideoSelection = new YtDlpVideoSelectionOptions
+            {
+                PlaylistItems = $"{pageStartIndex}:{pageEndIndex}"
+            }
+        };
+    }
+
+    private static int PageStartIndex(FetchPlaylistMetadataCommand cmd)
+        => Math.Max(FetchPlaylistMetadataCommandDefaults.PageStartIndex, cmd.PageStartIndex);
+
+    private static int PageSize(FetchPlaylistMetadataCommand cmd)
+        => Math.Clamp(cmd.PageSize, 1, MaxPlaylistEntriesPerRequest);
 }

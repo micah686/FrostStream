@@ -40,6 +40,7 @@ public sealed class DownloadRequestedIngressService(
         {
             using var scope = scopeFactory.CreateScope();
             var jobs = scope.ServiceProvider.GetRequiredService<IDownloadJobsRepository>();
+            var db = scope.ServiceProvider.GetRequiredService<DataBridgeDbContext>();
 
             if (await jobs.IsMessageProcessedAsync(request.MessageId))
             {
@@ -48,16 +49,9 @@ public sealed class DownloadRequestedIngressService(
             }
 
             await jobs.CreateJobIfMissingAsync(request);
-            await jobs.RecordHistoryAsync(
-                request.JobId,
-                request.MessageId,
-                request.OperationKey,
-                nameof(DownloadRequested),
-                payloadJson: null);
 
             // The first invocation normally suspends while waiting for Worker events.
             // Treat that as a successful handoff to Cleipnir, not as a NATS failure.
-            //TODO: check this. We want to make sure that dupe jobs aren't being accepted
             // flows.Run is safe to call again for an existing instance id — Cleipnir
             // recognises the duplicate and no-ops.
             try
@@ -71,7 +65,22 @@ public sealed class DownloadRequestedIngressService(
                     request.JobId);
             }
 
-            await jobs.MarkMessageProcessedAsync(request.MessageId, request.OperationKey, request.JobId);
+            await using var tx = await db.Database.BeginTransactionAsync();
+            if (!await jobs.TryMarkMessageProcessedAsync(request.MessageId, request.OperationKey, request.JobId))
+            {
+                await tx.CommitAsync();
+                await context.AckAsync();
+                return;
+            }
+
+            await jobs.RecordHistoryAsync(
+                request.JobId,
+                request.MessageId,
+                request.OperationKey,
+                nameof(DownloadRequested),
+                payloadJson: null);
+
+            await tx.CommitAsync();
 
             await context.AckAsync();
         }

@@ -357,6 +357,41 @@ public sealed record DownloadCompleted : IFlowMessage
 
     /// <summary>Hex-encoded XxHash128 of the info.json sidecar. Null when none.</summary>
     public string? InfoJsonContentHashXxh128 { get; init; }
+
+    /// <summary>
+    /// The thumbnail sidecar yt-dlp wrote (because <c>WriteThumbnail</c> was set). The saga
+    /// uploads it co-located with the video and records the blob path on
+    /// <c>media_metadata.thumbnail_storage_path</c>. Null when none was produced.
+    /// </summary>
+    public SidecarFileRef? Thumbnail { get; init; }
+
+    /// <summary>
+    /// Caption/subtitle sidecars yt-dlp wrote (bounded to the caller's requested
+    /// <c>SubLangs</c>). Each is uploaded co-located with the video and recorded as a
+    /// <c>metadata.media_captions</c> row. Empty when none were produced.
+    /// </summary>
+    public IReadOnlyList<SidecarFileRef> Captions { get; init; } = [];
+}
+
+/// <summary>
+/// A worker-local sidecar file (thumbnail or caption) yt-dlp produced next to the media file.
+/// </summary>
+public sealed record SidecarFileRef
+{
+    /// <summary>Absolute worker-local path to the sidecar file.</summary>
+    public required string TempFileRef { get; init; }
+
+    /// <summary>Filename (no directory); reused as the co-located blob filename.</summary>
+    public required string FileName { get; init; }
+
+    /// <summary>Total bytes written.</summary>
+    public long SizeBytes { get; init; }
+
+    /// <summary>Hex-encoded XxHash128 of the sidecar contents.</summary>
+    public required string ContentHashXxh128 { get; init; }
+
+    /// <summary>Language code for caption sidecars (e.g. "en", "en-US"); null for thumbnails.</summary>
+    public string? LanguageCode { get; init; }
 }
 
 /// <summary>
@@ -370,7 +405,11 @@ public enum UploadArtifactKind
     /// <summary>The main media file. Drives version reservation and job state.</summary>
     Primary = 0,
     /// <summary>The yt-dlp <c>.info.json</c> sidecar, written next to the primary.</summary>
-    InfoJson = 1
+    InfoJson = 1,
+    /// <summary>The per-media thumbnail image, co-located with the primary.</summary>
+    Thumbnail = 2,
+    /// <summary>A per-media caption/subtitle track, co-located with the primary.</summary>
+    Caption = 3
 }
 
 /// <summary>

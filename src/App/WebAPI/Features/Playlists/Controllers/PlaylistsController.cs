@@ -2,6 +2,7 @@ using FlySwattr.NATS.Abstractions;
 using Microsoft.AspNetCore.Mvc;
 using NodaTime;
 using Shared.Messaging;
+using WebAPI.Features.Common;
 using WebAPI.Features.Playlists.Models;
 
 namespace WebAPI.Features.Playlists.Controllers;
@@ -27,6 +28,16 @@ public class PlaylistsController(
         [FromBody] PlaylistRequest request,
         CancellationToken cancellationToken)
     {
+        if (!YtDlpSourceUrlValidator.TryValidate(request.SourceUrl, out var validationError))
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Invalid source URL",
+                Detail = validationError,
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+
         var playlistId = Guid.NewGuid();
         var correlationId = Guid.NewGuid();
         var messageId = Guid.NewGuid();

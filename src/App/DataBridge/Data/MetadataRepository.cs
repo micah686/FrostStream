@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using NodaTime;
@@ -8,7 +9,56 @@ namespace DataBridge.Data;
 
 public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataRepository
 {
-    public async Task WriteMetadataAsync(Guid mediaGuid, CapturedMediaMetadata metadata, CancellationToken ct = default)
+    public async Task UpsertAccountAssetsAsync(
+        string platform,
+        string accountHandle,
+        string accountName,
+        string? accountUrl,
+        string? avatarStoragePath,
+        string? bannerStoragePath,
+        string storageKey,
+        CancellationToken ct = default)
+    {
+        var conn = (NpgsqlConnection)db.Database.GetDbConnection();
+        var opened = conn.State != ConnectionState.Open;
+        if (opened)
+            await conn.OpenAsync(ct);
+
+        try
+        {
+            // Don't overwrite account_name on conflict: a media-download write may already have
+            // recorded a better name than a channel refresh can derive.
+            await using var cmd = new NpgsqlCommand("""
+                INSERT INTO metadata.accounts
+                    (platform, account_name, account_handle, account_url, is_verified,
+                     avatar_storage_path, banner_storage_path, storage_key)
+                VALUES
+                    (@platform, @account_name, @account_handle, @account_url, false,
+                     @avatar_path, @banner_path, @storage_key)
+                ON CONFLICT (platform, account_handle) DO UPDATE SET
+                    account_url         = COALESCE(EXCLUDED.account_url, accounts.account_url),
+                    avatar_storage_path = COALESCE(EXCLUDED.avatar_storage_path, accounts.avatar_storage_path),
+                    banner_storage_path = COALESCE(EXCLUDED.banner_storage_path, accounts.banner_storage_path),
+                    storage_key         = COALESCE(EXCLUDED.storage_key, accounts.storage_key)
+                """, conn);
+
+            cmd.Parameters.AddWithValue("@platform", platform);
+            cmd.Parameters.AddWithValue("@account_name", accountName);
+            cmd.Parameters.AddWithValue("@account_handle", accountHandle);
+            cmd.Parameters.AddWithValue("@account_url", (object?)accountUrl ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@avatar_path", (object?)avatarStoragePath ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@banner_path", (object?)bannerStoragePath ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@storage_key", (object?)storageKey ?? DBNull.Value);
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+        finally
+        {
+            if (opened)
+                await conn.CloseAsync();
+        }
+    }
+
+    public async Task WriteMetadataAsync(Guid mediaGuid, CapturedMediaMetadata metadata, string storageKey, CancellationToken ct = default)
     {
         await db.Database.OpenConnectionAsync(ct);
         await using var tx = await db.Database.BeginTransactionAsync(ct);
@@ -18,10 +68,10 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
         try
         {
             var accountId = await UpsertAccountAsync(conn, npgsqlTx, metadata.Account, ct);
-            var mediaMetadataId = await InsertMediaMetadataAsync(conn, npgsqlTx, mediaGuid, accountId, metadata.Media, ct);
+            var mediaMetadataId = await InsertMediaMetadataAsync(conn, npgsqlTx, mediaGuid, accountId, metadata.Media, storageKey, ct);
             await InsertTaxonomyAsync(conn, npgsqlTx, mediaMetadataId, metadata, ct);
             await InsertTechnicalAsync(conn, npgsqlTx, mediaGuid, metadata.Technical, ct);
-            await InsertCaptionsAsync(conn, npgsqlTx, mediaGuid, metadata.Captions, ct);
+            await InsertCaptionsAsync(conn, npgsqlTx, mediaGuid, metadata.Captions, storageKey, ct);
             await InsertCommentsAsync(conn, npgsqlTx, mediaGuid, metadata.Comments, ct);
             await InsertSeriesAsync(conn, npgsqlTx, mediaGuid, metadata.Series, ct);
             await InsertMusicAsync(conn, npgsqlTx, mediaGuid, metadata.Music, ct);
@@ -74,6 +124,7 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
         Guid mediaGuid,
         long accountId,
         CapturedMediaMetadataCore core,
+        string storageKey,
         CancellationToken ct)
     {
         await using var del = new NpgsqlCommand(
@@ -84,12 +135,12 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
         await using var ins = new NpgsqlCommand("""
             INSERT INTO metadata.media_metadata
                 (media_guid, account_id, external_media_id, metadata_scrape_date,
-                 thumbnail_storage_path, age_limit, average_rating, like_count, dislike_count,
+                 thumbnail_storage_path, storage_key, age_limit, average_rating, like_count, dislike_count,
                  duration, description, release_date, title, was_live, webpage_url,
                  view_count, comment_count, availability, location)
             VALUES
                 (@media_guid, @account_id, @external_media_id, @scrape_date,
-                 @thumbnail, @age_limit, @avg_rating, @like_count, @dislike_count,
+                 @thumbnail, @storage_key, @age_limit, @avg_rating, @like_count, @dislike_count,
                  @duration, @description, @release_date, @title, @was_live, @webpage_url,
                  @view_count, @comment_count,
                  CAST(NULLIF(@availability, '') AS metadata.availability_enum),
@@ -102,6 +153,7 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
         ins.Parameters.AddWithValue("@external_media_id", (object?)core.ExternalMediaId ?? DBNull.Value);
         ins.Parameters.AddWithValue("@scrape_date", core.MetadataScrapeDate.ToDateTimeUtc());
         ins.Parameters.AddWithValue("@thumbnail", (object?)core.ThumbnailStoragePath ?? DBNull.Value);
+        ins.Parameters.AddWithValue("@storage_key", (object?)(core.ThumbnailStoragePath is null ? null : storageKey) ?? DBNull.Value);
         ins.Parameters.AddWithValue("@age_limit", (object?)core.AgeLimit ?? DBNull.Value);
         ins.Parameters.AddWithValue("@avg_rating", (object?)core.AverageRating ?? DBNull.Value);
         ins.Parameters.AddWithValue("@like_count", (object?)core.LikeCount ?? DBNull.Value);
@@ -316,6 +368,7 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
         NpgsqlTransaction tx,
         Guid mediaGuid,
         IReadOnlyList<CapturedCaptionMetadata> captions,
+        string storageKey,
         CancellationToken ct)
     {
         await using var del = new NpgsqlCommand(
@@ -327,12 +380,13 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
         {
             await using var ins = new NpgsqlCommand("""
                 INSERT INTO metadata.media_captions
-                    (media_guid, storage_path, caption_type, two_digit_language_code, name)
+                    (media_guid, storage_path, storage_key, caption_type, two_digit_language_code, name)
                 VALUES
-                    (@media_guid, @path, @type::metadata.subtitle_type_enum, @lang, @name)
+                    (@media_guid, @path, @storage_key, @type::metadata.subtitle_type_enum, @lang, @name)
                 """, conn, tx);
             ins.Parameters.AddWithValue("@media_guid", mediaGuid);
             ins.Parameters.AddWithValue("@path", caption.StoragePath);
+            ins.Parameters.AddWithValue("@storage_key", storageKey);
             ins.Parameters.AddWithValue("@type", caption.CaptionType);
             ins.Parameters.AddWithValue("@lang", caption.LanguageCode);
             ins.Parameters.AddWithValue("@name", (object?)caption.Name ?? DBNull.Value);

@@ -1,7 +1,10 @@
 using System.Net;
+using FluentStorage;
+using FluentStorage.Blobs;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
+using Shared.Storage;
 using Shouldly;
 using TUnit.Core;
 using Worker.Services;
@@ -11,12 +14,13 @@ namespace UnitTests.Worker;
 public sealed class AssetCacheWriterTests
 {
     [Test]
-    public async Task DownloadAndStoreAsync_Stores_Content_In_Kind_And_Hash_Sharded_Path()
+    public async Task DownloadAndStoreAsync_Stores_Content_In_Kind_And_Hash_Sharded_Blob()
     {
         var root = Path.Combine(Path.GetTempPath(), $"froststream-assets-{Guid.NewGuid():N}");
+        var storage = StorageFactory.Blobs.DirectoryFiles(root);
         var handler = new QueueingHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.OK, "avatar-bytes"u8.ToArray(), "image/png");
-        var sut = CreateSut(root, handler);
+        var sut = CreateSut(storage, handler);
 
         try
         {
@@ -29,13 +33,15 @@ public sealed class AssetCacheWriterTests
             result.ContentLength.ShouldBe("avatar-bytes"u8.ToArray().Length);
             result.Attempts.ShouldBe(1);
             result.ReusedExisting.ShouldBeFalse();
-            result.CachePath.ShouldStartWith(Path.Combine(root, "avatars"));
-            result.CachePath.ShouldEndWith(".png");
-            File.Exists(result.CachePath).ShouldBeTrue();
-            (await File.ReadAllBytesAsync(result.CachePath)).ShouldBe("avatar-bytes"u8.ToArray());
+            result.StorageKey.ShouldBe("default");
+            result.StoragePath.ShouldStartWith("assets/avatars/");
+            result.StoragePath.ShouldEndWith(".png");
+            (await storage.ExistsAsync(result.StoragePath)).ShouldBeTrue();
+            (await storage.ReadBytesAsync(result.StoragePath)).ShouldBe("avatar-bytes"u8.ToArray());
         }
         finally
         {
+            storage.Dispose();
             if (Directory.Exists(root))
             {
                 Directory.Delete(root, recursive: true);
@@ -44,13 +50,14 @@ public sealed class AssetCacheWriterTests
     }
 
     [Test]
-    public async Task DownloadAndStoreAsync_Reuses_Existing_File_For_Same_Content()
+    public async Task DownloadAndStoreAsync_Reuses_Existing_Blob_For_Same_Content()
     {
         var root = Path.Combine(Path.GetTempPath(), $"froststream-assets-{Guid.NewGuid():N}");
+        var storage = StorageFactory.Blobs.DirectoryFiles(root);
         var handler = new QueueingHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.OK, "same-bytes"u8.ToArray(), "image/jpeg");
         handler.Enqueue(HttpStatusCode.OK, "same-bytes"u8.ToArray(), "image/jpeg");
-        var sut = CreateSut(root, handler);
+        var sut = CreateSut(storage, handler);
 
         try
         {
@@ -63,15 +70,15 @@ public sealed class AssetCacheWriterTests
                 AssetKind.Banner,
                 CancellationToken.None);
 
-            second.CachePath.ShouldBe(first.CachePath);
+            second.StoragePath.ShouldBe(first.StoragePath);
             second.ContentHash.ShouldBe(first.ContentHash);
             second.ReusedExisting.ShouldBeTrue();
-            Directory.GetFiles(Path.Combine(root, "banners"), "*", SearchOption.AllDirectories)
-                .Single()
-                .ShouldBe(first.CachePath);
+            var blobs = await storage.ListAsync(new ListOptions { Recurse = true, FolderPath = "assets/banners" });
+            blobs.Count(b => !b.IsFolder).ShouldBe(1);
         }
         finally
         {
+            storage.Dispose();
             if (Directory.Exists(root))
             {
                 Directory.Delete(root, recursive: true);
@@ -83,10 +90,11 @@ public sealed class AssetCacheWriterTests
     public async Task DownloadAndStoreAsync_Retries_Transient_Http_Failure()
     {
         var root = Path.Combine(Path.GetTempPath(), $"froststream-assets-{Guid.NewGuid():N}");
+        var storage = StorageFactory.Blobs.DirectoryFiles(root);
         var handler = new QueueingHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.InternalServerError, [] , "text/plain");
         handler.Enqueue(HttpStatusCode.OK, "banner-bytes"u8.ToArray(), "image/webp");
-        var sut = CreateSut(root, handler);
+        var sut = CreateSut(storage, handler);
 
         try
         {
@@ -101,6 +109,7 @@ public sealed class AssetCacheWriterTests
         }
         finally
         {
+            storage.Dispose();
             if (Directory.Exists(root))
             {
                 Directory.Delete(root, recursive: true);
@@ -108,16 +117,19 @@ public sealed class AssetCacheWriterTests
         }
     }
 
-    private static AssetCacheWriter CreateSut(string root, QueueingHttpMessageHandler handler)
+    private static AssetCacheWriter CreateSut(IBlobStorage storage, QueueingHttpMessageHandler handler)
     {
         var factory = Substitute.For<IHttpClientFactory>();
         factory.CreateClient("asset-cache").Returns(_ => new HttpClient(handler, disposeHandler: false));
 
+        var provider = Substitute.For<IBlobStorageProvider>();
+        provider.GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(_ => storage);
+
         return new AssetCacheWriter(
             factory,
+            provider,
             Options.Create(new AssetCacheOptions
             {
-                Root = root,
                 MaxAttempts = 2,
                 InitialBackoff = TimeSpan.FromMilliseconds(1)
             }),

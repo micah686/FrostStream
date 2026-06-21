@@ -1,5 +1,6 @@
 using System.Globalization;
 using Shared.Messaging;
+using Worker.Metadata;
 using YtDlpSharpLib.Exceptions;
 
 namespace Worker.Services;
@@ -40,6 +41,7 @@ internal static class YtDlpFailureDetails
 
         return ex switch
         {
+            YtDlpPlaceholderContentException => PlaceholderContentDetector.ErrorCode,
             YtDlpUnavailableException => "yt-dlp.source-unavailable",
             YtDlpProcessException processException when processException.ExitCode is { } exitCode
                 => $"yt-dlp.exit-{exitCode.ToString(CultureInfo.InvariantCulture)}",

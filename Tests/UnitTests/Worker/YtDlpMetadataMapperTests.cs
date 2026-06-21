@@ -96,7 +96,9 @@ public sealed class YtDlpMetadataMapperTests
         result.Media.ExternalMediaId.ShouldBe("video-1");
         result.Media.MetadataScrapeDate.ShouldBe(Now);
         result.Media.Title.ShouldBe("Test Video");
-        result.Media.ThumbnailStoragePath.ShouldBe("https://cdn.example.test/thumb.jpg");
+        // The mapper no longer stores remote thumbnail/caption URLs — durable blob paths are filled
+        // in by the download saga after the sidecar files are uploaded.
+        result.Media.ThumbnailStoragePath.ShouldBeNull();
         result.Media.DurationSeconds.ShouldBe(12.5);
         result.Media.ReleaseDate.ShouldBe(Instant.FromUtc(2026, 6, 1, 0, 0));
         result.Media.Availability.ShouldBe("unlisted");
@@ -104,8 +106,8 @@ public sealed class YtDlpMetadataMapperTests
 
         result.Technical.DurationTicks.ShouldBe(TimeSpan.FromSeconds(12.5).Ticks);
         result.Technical.Chapters.Single().Title.ShouldBe("Intro");
-        result.Captions.Count.ShouldBe(2);
-        result.Captions.Select(x => x.CaptionType).ShouldBe(["subtitles", "automatic_captions"]);
+        // Captions are persisted from the actual downloaded subtitle blobs, not the remote tracks.
+        result.Captions.ShouldBeEmpty();
 
         var comment = result.Comments.Single();
         comment.CommentId.ShouldBe("comment-1");
@@ -139,6 +141,40 @@ public sealed class YtDlpMetadataMapperTests
         result.Comments.ShouldBeEmpty();
         result.Series.ShouldBeNull();
         result.Music.ShouldBeNull();
+    }
+
+    [Test]
+    public void Map_Uses_Per_Media_Unknown_Account_Handle_When_Creator_Identity_Is_Missing()
+    {
+        var result = YtDlpMetadataMapper.Map(new VideoInfo
+        {
+            Id = "video-1",
+            Title = "orphaned video"
+        }, "youtube", new FixedClock(Now));
+
+        result.Account.AccountName.ShouldBe("unknown");
+        result.Account.AccountHandle.ShouldBe("unknown:media:video-1");
+    }
+
+    [Test]
+    public void Map_Uses_Per_Comment_Unknown_Account_Handle_When_Comment_Author_Is_Missing()
+    {
+        var result = YtDlpMetadataMapper.Map(new VideoInfo
+        {
+            Id = "video-1",
+            Comments =
+            [
+                new CommentInfo
+                {
+                    Id = "comment-1",
+                    Text = "authorless"
+                }
+            ]
+        }, "youtube", new FixedClock(Now));
+
+        var comment = result.Comments.Single();
+        comment.Account.AccountName.ShouldBe("unknown");
+        comment.Account.AccountHandle.ShouldBe("unknown:comment:video-1:comment-1");
     }
 
     private sealed class FixedClock(Instant now) : IClock

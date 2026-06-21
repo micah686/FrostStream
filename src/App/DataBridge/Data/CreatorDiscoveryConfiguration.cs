@@ -23,6 +23,7 @@ public sealed class CreatorSourceConfiguration : IEntityTypeConfiguration<Creato
         builder.Property(x => x.LastSuccessfulScanAt).HasColumnName("last_successful_scan_at").HasColumnType("timestamp with time zone");
         builder.Property(x => x.LastFullScanAt).HasColumnName("last_full_scan_at").HasColumnType("timestamp with time zone");
         builder.Property(x => x.LastSeenHighWatermark).HasColumnName("last_seen_high_watermark").HasMaxLength(512);
+        builder.Property(x => x.NextFullScanStartIndex).HasColumnName("next_full_scan_start_index");
         builder.Property(x => x.CreatedAt)
             .HasColumnName("created_at")
             .HasColumnType("timestamp with time zone")
@@ -31,10 +32,8 @@ public sealed class CreatorSourceConfiguration : IEntityTypeConfiguration<Creato
             .IsRequired();
         builder.Property(x => x.LastUpdated).HasColumnName("last_updated").HasColumnType("timestamp with time zone");
         builder.Property(x => x.AvatarUrl).HasColumnName("avatar_url").HasMaxLength(4096);
-        builder.Property(x => x.AvatarCachePath).HasColumnName("avatar_cache_path").HasMaxLength(1024);
         builder.Property(x => x.AvatarContentHash).HasColumnName("avatar_content_hash").HasMaxLength(64);
         builder.Property(x => x.BannerUrl).HasColumnName("banner_url").HasMaxLength(4096);
-        builder.Property(x => x.BannerCachePath).HasColumnName("banner_cache_path").HasMaxLength(1024);
         builder.Property(x => x.BannerContentHash).HasColumnName("banner_content_hash").HasMaxLength(64);
         builder.Property(x => x.AssetsLastRefreshedAt).HasColumnName("assets_last_refreshed_at").HasColumnType("timestamp with time zone");
         builder.Property(x => x.AssetsLastAttemptAt).HasColumnName("assets_last_attempt_at").HasColumnType("timestamp with time zone");
