@@ -4,7 +4,7 @@ Channel downloads
 [X]audio downloads
 live_chat (complex, need to integrate with clickhousedb)
 [X]options passed through via api
-background download channel assets (thumbnail, art) (maybe check cache as part of step)
+[X]background download channel assets (thumbnail, art) (maybe check cache as part of step)
 batch local import (need to figure out if JUST local filesystem, or use IFluentStorage)
     Implement complete offline media file import from json file
 backup and restore (should be postgres+openbao+...)
