@@ -8,7 +8,7 @@ public sealed class CreatorSourceConfiguration : IEntityTypeConfiguration<Creato
 {
     public void Configure(EntityTypeBuilder<CreatorSourceEntity> builder)
     {
-        builder.ToTable("creator_sources");
+        builder.ToTable("creator_sources", "discovery");
 
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
@@ -49,7 +49,7 @@ public sealed class DiscoveredMediaConfiguration : IEntityTypeConfiguration<Disc
 {
     public void Configure(EntityTypeBuilder<DiscoveredMediaEntity> builder)
     {
-        builder.ToTable("discovered_media");
+        builder.ToTable("discovered_media", "discovery");
 
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();

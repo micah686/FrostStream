@@ -8,7 +8,7 @@ public sealed class DownloadJobConfiguration : IEntityTypeConfiguration<Download
 {
     public void Configure(EntityTypeBuilder<DownloadJobEntity> builder)
     {
-        builder.ToTable("download_jobs");
+        builder.ToTable("download_jobs", "downloads");
 
         builder.HasKey(x => x.JobId);
 
@@ -17,7 +17,7 @@ public sealed class DownloadJobConfiguration : IEntityTypeConfiguration<Download
 
         builder.Property(x => x.State)
             .HasColumnName("state")
-            .HasColumnType("download_job_state")
+            .HasColumnType("downloads.download_job_state")
             .IsRequired();
 
         builder.Property(x => x.SourceUrl).HasColumnName("source_url").HasMaxLength(4096).IsRequired();
@@ -38,7 +38,7 @@ public sealed class DownloadJobConfiguration : IEntityTypeConfiguration<Download
 
         builder.Property(x => x.FailureKind)
             .HasColumnName("failure_kind")
-            .HasColumnType("failure_kind");
+            .HasColumnType("downloads.failure_kind");
 
         builder.Property(x => x.FailureCode).HasColumnName("failure_code").HasMaxLength(255);
         builder.Property(x => x.FailureMessage).HasColumnName("failure_message").HasMaxLength(4096);
@@ -72,7 +72,7 @@ public sealed class DownloadJobHistoryConfiguration : IEntityTypeConfiguration<D
 {
     public void Configure(EntityTypeBuilder<DownloadJobHistoryEntity> builder)
     {
-        builder.ToTable("download_job_history");
+        builder.ToTable("download_job_history", "downloads");
 
         builder.HasKey(x => x.Id);
 
@@ -105,7 +105,7 @@ public sealed class FailedDownloadJobConfiguration : IEntityTypeConfiguration<Fa
 {
     public void Configure(EntityTypeBuilder<FailedDownloadJobEntity> builder)
     {
-        builder.ToTable("failed_download_jobs");
+        builder.ToTable("failed_download_jobs", "downloads");
 
         builder.HasKey(x => x.JobId);
 
@@ -114,12 +114,12 @@ public sealed class FailedDownloadJobConfiguration : IEntityTypeConfiguration<Fa
 
         builder.Property(x => x.FailedState)
             .HasColumnName("failed_state")
-            .HasColumnType("download_job_state")
+            .HasColumnType("downloads.download_job_state")
             .IsRequired();
 
         builder.Property(x => x.FailureKind)
             .HasColumnName("failure_kind")
-            .HasColumnType("failure_kind")
+            .HasColumnType("downloads.failure_kind")
             .IsRequired();
 
         builder.Property(x => x.FailureCode).HasColumnName("failure_code").HasMaxLength(255);
@@ -139,7 +139,7 @@ public sealed class ProcessedMessageConfiguration : IEntityTypeConfiguration<Pro
 {
     public void Configure(EntityTypeBuilder<ProcessedMessageEntity> builder)
     {
-        builder.ToTable("processed_messages");
+        builder.ToTable("processed_messages", "downloads");
 
         builder.HasKey(x => x.MessageId);
 
@@ -163,7 +163,7 @@ public sealed class MediaConfiguration : IEntityTypeConfiguration<MediaEntity>
 {
     public void Configure(EntityTypeBuilder<MediaEntity> builder)
     {
-        builder.ToTable("media");
+        builder.ToTable("media", "media");
 
         builder.HasKey(x => x.MediaGuid);
 
@@ -182,7 +182,7 @@ public sealed class MediaSourceVersionConfiguration : IEntityTypeConfiguration<M
 {
     public void Configure(EntityTypeBuilder<MediaSourceVersionEntity> builder)
     {
-        builder.ToTable("media_source_versions");
+        builder.ToTable("media_source_versions", "media");
 
         builder.HasKey(x => x.Id);
 
@@ -213,7 +213,7 @@ public sealed class MediaContentIdVersionConfiguration : IEntityTypeConfiguratio
 {
     public void Configure(EntityTypeBuilder<MediaContentIdVersionEntity> builder)
     {
-        builder.ToTable("media_content_id_versions");
+        builder.ToTable("media_content_id_versions", "media");
 
         builder.HasKey(x => x.Id);
 

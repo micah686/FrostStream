@@ -105,22 +105,22 @@ public sealed class BackgroundJobConsumerService(
             await using var command = dataSource.CreateCommand("""
                 WITH candidates AS (
                     SELECT m.media_guid
-                    FROM media m
+                    FROM media.media m
                     WHERE NOT EXISTS (
                         SELECT 1
-                        FROM media_content_id_versions civ
+                        FROM media.media_content_id_versions civ
                         WHERE civ.media_guid = m.media_guid
                     )
                     AND NOT EXISTS (
                         SELECT 1
-                        FROM media_source_versions sv
-                        JOIN download_jobs dj ON dj.job_id = sv.latest_job_id
+                        FROM media.media_source_versions sv
+                        JOIN downloads.download_jobs dj ON dj.job_id = sv.latest_job_id
                         WHERE sv.media_guid = m.media_guid
                         AND dj.state::text = ANY(@active_download_job_states)
                     )
                 ),
                 deleted AS (
-                    DELETE FROM media m
+                    DELETE FROM media.media m
                     USING candidates c
                     WHERE m.media_guid = c.media_guid
                     RETURNING m.media_guid
@@ -154,7 +154,7 @@ public sealed class BackgroundJobConsumerService(
 
             var cutoff = clock.GetCurrentInstant().Minus(Duration.FromDays(30));
             await using var command = dataSource.CreateCommand(
-                "DELETE FROM processed_messages WHERE processed_at < @cutoff;");
+                "DELETE FROM downloads.processed_messages WHERE processed_at < @cutoff;");
             command.Parameters.AddWithValue("cutoff", cutoff.ToDateTimeOffset());
             command.CommandTimeout = 0;
             var deletedCount = await command.ExecuteNonQueryAsync();

@@ -10,6 +10,7 @@ public sealed class StorageConfiguration : IEntityTypeConfiguration<StorageConfi
     {
         builder.ToTable(
             "storage_keys",
+            "storage",
             tableBuilder =>
             {
                 tableBuilder.HasCheckConstraint(
@@ -59,10 +60,10 @@ public sealed class StorageLocalConfiguration : IEntityTypeConfiguration<Storage
 {
     public void Configure(EntityTypeBuilder<StorageLocalConfigEntity> builder)
     {
-        builder.ToTable("storage_keys_local");
+        builder.ToTable("storage_keys_local", "storage");
         builder.HasKey(x => x.StorageKeyId);
         builder.Property(x => x.StorageKeyId).HasColumnName("storage_key_id").ValueGeneratedNever();
-        builder.Property(x => x.Protocol).HasColumnName("protocol").HasColumnType("local_storage_protocol").IsRequired();
+        builder.Property(x => x.Protocol).HasColumnName("protocol").HasColumnType("storage.local_storage_protocol").IsRequired();
         builder.Property(x => x.Path).HasColumnName("path").HasMaxLength(2048).IsRequired();
         builder.HasOne(x => x.StorageConfig)
             .WithOne(x => x.Local)
@@ -75,10 +76,10 @@ public sealed class StorageNetworkConfiguration : IEntityTypeConfiguration<Stora
 {
     public void Configure(EntityTypeBuilder<StorageNetworkConfigEntity> builder)
     {
-        builder.ToTable("storage_keys_network");
+        builder.ToTable("storage_keys_network", "storage");
         builder.HasKey(x => x.StorageKeyId);
         builder.Property(x => x.StorageKeyId).HasColumnName("storage_key_id").ValueGeneratedNever();
-        builder.Property(x => x.Protocol).HasColumnName("protocol").HasColumnType("network_storage_protocol").IsRequired();
+        builder.Property(x => x.Protocol).HasColumnName("protocol").HasColumnType("storage.network_storage_protocol").IsRequired();
         builder.Property(x => x.Host).HasColumnName("host").HasMaxLength(255).IsRequired();
         builder.Property(x => x.Port).HasColumnName("port");
         builder.Property(x => x.Username).HasColumnName("username").HasMaxLength(255);
@@ -94,10 +95,10 @@ public sealed class StorageS3CompatibleObjectConfiguration : IEntityTypeConfigur
 {
     public void Configure(EntityTypeBuilder<StorageS3CompatibleObjectConfigEntity> builder)
     {
-        builder.ToTable("storage_keys_object_s3_compatible");
+        builder.ToTable("storage_keys_object_s3_compatible", "storage");
         builder.HasKey(x => x.StorageKeyId);
         builder.Property(x => x.StorageKeyId).HasColumnName("storage_key_id").ValueGeneratedNever();
-        builder.Property(x => x.Provider).HasColumnName("provider").HasColumnType("s3_compatible_object_storage_provider").IsRequired();
+        builder.Property(x => x.Provider).HasColumnName("provider").HasColumnType("storage.s3_compatible_object_storage_provider").IsRequired();
         builder.Property(x => x.BucketName).HasColumnName("bucket_name").HasMaxLength(255).IsRequired();
         builder.Property(x => x.Region).HasColumnName("region").HasMaxLength(255);
         builder.Property(x => x.Endpoint).HasColumnName("endpoint").HasMaxLength(2048);
@@ -115,10 +116,10 @@ public sealed class StorageAzureBlobObjectConfiguration : IEntityTypeConfigurati
 {
     public void Configure(EntityTypeBuilder<StorageAzureBlobObjectConfigEntity> builder)
     {
-        builder.ToTable("storage_keys_object_azure_blob");
+        builder.ToTable("storage_keys_object_azure_blob", "storage");
         builder.HasKey(x => x.StorageKeyId);
         builder.Property(x => x.StorageKeyId).HasColumnName("storage_key_id").ValueGeneratedNever();
-        builder.Property(x => x.CredentialMode).HasColumnName("credential_mode").HasColumnType("azure_blob_credential_mode").IsRequired();
+        builder.Property(x => x.CredentialMode).HasColumnName("credential_mode").HasColumnType("storage.azure_blob_credential_mode").IsRequired();
         builder.Property(x => x.ContainerName).HasColumnName("container_name").HasMaxLength(255);
         builder.Property(x => x.AzureAccountName).HasColumnName("azure_account_name").HasMaxLength(255);
         builder.HasOne(x => x.StorageConfig)
@@ -132,11 +133,11 @@ public sealed class StorageGoogleCloudStorageObjectConfiguration : IEntityTypeCo
 {
     public void Configure(EntityTypeBuilder<StorageGoogleCloudStorageObjectConfigEntity> builder)
     {
-        builder.ToTable("storage_keys_object_google_cloud_storage");
+        builder.ToTable("storage_keys_object_google_cloud_storage", "storage");
         builder.HasKey(x => x.StorageKeyId);
         builder.Property(x => x.StorageKeyId).HasColumnName("storage_key_id").ValueGeneratedNever();
         builder.Property(x => x.BucketName).HasColumnName("bucket_name").HasMaxLength(255).IsRequired();
-        builder.Property(x => x.CredentialMode).HasColumnName("credential_mode").HasColumnType("google_cloud_storage_credential_mode").IsRequired();
+        builder.Property(x => x.CredentialMode).HasColumnName("credential_mode").HasColumnType("storage.google_cloud_storage_credential_mode").IsRequired();
         builder.Property(x => x.GcpCredentialsFilePath).HasColumnName("gcp_credentials_file_path").HasMaxLength(2048);
         builder.Property(x => x.GcpProjectId).HasColumnName("gcp_project_id").HasMaxLength(255);
         builder.HasOne(x => x.StorageConfig)

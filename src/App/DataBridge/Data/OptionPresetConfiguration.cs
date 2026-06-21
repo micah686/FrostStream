@@ -10,6 +10,7 @@ public sealed class OptionPresetConfiguration : IEntityTypeConfiguration<OptionP
     {
         builder.ToTable(
             "download_option_presets",
+            "downloads",
             tableBuilder =>
             {
                 tableBuilder.HasCheckConstraint(

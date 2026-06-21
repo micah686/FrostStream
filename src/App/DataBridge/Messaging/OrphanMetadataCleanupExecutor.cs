@@ -81,7 +81,7 @@ public sealed class OrphanMetadataCleanupExecutor
                 last_error,
                 created_at,
                 updated_at
-            FROM orphan_cleanup_items
+            FROM maintenance.orphan_cleanup_items
             WHERE (@kind IS NULL OR item_kind = @kind)
               AND (@state IS NULL OR state = @state)
             ORDER BY detected_at DESC, id DESC
@@ -224,7 +224,7 @@ public sealed class OrphanMetadataCleanupExecutor
     {
         await using var command = _dataSource.CreateCommand("""
             WITH metadata_without_media AS (
-                INSERT INTO orphan_cleanup_items
+                INSERT INTO maintenance.orphan_cleanup_items
                     (item_kind, state, storage_key, original_storage_path, media_guid, detected_at, last_seen_at, delete_after, created_at, updated_at)
                 SELECT
                     'metadata_without_media',
@@ -237,8 +237,8 @@ public sealed class OrphanMetadataCleanupExecutor
                     finding.detected_at + (@retention_days * INTERVAL '1 day'),
                     @now,
                     @now
-                FROM filesystem_rescan_findings finding
-                JOIN media_content_id_versions civ
+                FROM maintenance.filesystem_rescan_findings finding
+                JOIN media.media_content_id_versions civ
                   ON civ.media_guid = finding.media_guid
                  AND civ.storage_key = finding.storage_key
                  AND civ.storage_path = finding.storage_path
@@ -261,7 +261,7 @@ public sealed class OrphanMetadataCleanupExecutor
                 RETURNING 1
             ),
             media_without_metadata AS (
-                INSERT INTO orphan_cleanup_items
+                INSERT INTO maintenance.orphan_cleanup_items
                     (item_kind, state, storage_key, original_storage_path, detected_at, last_seen_at, delete_after, created_at, updated_at)
                 SELECT
                     'media_without_metadata',
@@ -273,7 +273,7 @@ public sealed class OrphanMetadataCleanupExecutor
                     finding.detected_at + (@retention_days * INTERVAL '1 day'),
                     @now,
                     @now
-                FROM filesystem_rescan_findings finding
+                FROM maintenance.filesystem_rescan_findings finding
                 WHERE finding.finding_type = 'UnexpectedFile'
                   AND finding.resolved_at IS NULL
                   AND lower(finding.storage_path) NOT LIKE 'orphaned/%'
@@ -314,7 +314,7 @@ public sealed class OrphanMetadataCleanupExecutor
     {
         await using var command = _dataSource.CreateCommand("""
             WITH resolved AS (
-                UPDATE orphan_cleanup_items item
+                UPDATE maintenance.orphan_cleanup_items item
                 SET
                     state = 'resolved',
                     resolved_at = @now,
@@ -326,7 +326,7 @@ public sealed class OrphanMetadataCleanupExecutor
                           item.item_kind = 'metadata_without_media'
                           AND NOT EXISTS (
                               SELECT 1
-                              FROM filesystem_rescan_findings finding
+                              FROM maintenance.filesystem_rescan_findings finding
                               WHERE finding.finding_type = 'MissingFile'
                                 AND finding.resolved_at IS NULL
                                 AND finding.media_guid = item.media_guid
@@ -340,7 +340,7 @@ public sealed class OrphanMetadataCleanupExecutor
                           AND item.orphan_storage_path IS NULL
                           AND NOT EXISTS (
                               SELECT 1
-                              FROM filesystem_rescan_findings finding
+                              FROM maintenance.filesystem_rescan_findings finding
                               WHERE finding.finding_type = 'UnexpectedFile'
                                 AND finding.resolved_at IS NULL
                                 AND finding.storage_key = item.storage_key
@@ -451,7 +451,7 @@ public sealed class OrphanMetadataCleanupExecutor
         await using var command = _dataSource.CreateCommand("""
             WITH due_media AS (
                 SELECT DISTINCT media_guid
-                FROM orphan_cleanup_items
+                FROM maintenance.orphan_cleanup_items
                 WHERE item_kind = 'metadata_without_media'
                   AND state IN ('detected', 'delete_failed')
                   AND delete_after <= @now
@@ -459,20 +459,20 @@ public sealed class OrphanMetadataCleanupExecutor
             ),
             candidates AS (
                 SELECT m.media_guid
-                FROM media m
+                FROM media.media m
                 JOIN due_media due ON due.media_guid = m.media_guid
                 WHERE EXISTS (
                     SELECT 1
-                    FROM media_content_id_versions civ
+                    FROM media.media_content_id_versions civ
                     WHERE civ.media_guid = m.media_guid
                 )
                 AND NOT EXISTS (
                     SELECT 1
-                    FROM media_content_id_versions civ
+                    FROM media.media_content_id_versions civ
                     WHERE civ.media_guid = m.media_guid
                     AND NOT EXISTS (
                         SELECT 1
-                        FROM filesystem_rescan_findings finding
+                        FROM maintenance.filesystem_rescan_findings finding
                         WHERE finding.media_guid = civ.media_guid
                           AND finding.storage_key = civ.storage_key
                           AND finding.storage_path = civ.storage_path
@@ -483,8 +483,8 @@ public sealed class OrphanMetadataCleanupExecutor
                 )
                 AND NOT EXISTS (
                     SELECT 1
-                    FROM media_source_versions sv
-                    JOIN download_jobs dj ON dj.job_id = sv.latest_job_id
+                    FROM media.media_source_versions sv
+                    JOIN downloads.download_jobs dj ON dj.job_id = sv.latest_job_id
                     WHERE sv.media_guid = m.media_guid
                     AND dj.state::text = ANY(@active_download_job_states)
                 )
@@ -493,13 +493,13 @@ public sealed class OrphanMetadataCleanupExecutor
                 SELECT count(*)::bigint AS count FROM candidates
             ),
             deleted AS (
-                DELETE FROM media m
+                DELETE FROM media.media m
                 USING candidates c
                 WHERE m.media_guid = c.media_guid
                 RETURNING m.media_guid
             ),
             finalized AS (
-                UPDATE orphan_cleanup_items item
+                UPDATE maintenance.orphan_cleanup_items item
                 SET
                     state = 'finalized',
                     finalized_at = @now,
@@ -526,7 +526,7 @@ public sealed class OrphanMetadataCleanupExecutor
         var candidates = new List<MoveCandidate>();
         await using var command = _dataSource.CreateCommand("""
             SELECT id, storage_key, original_storage_path, detected_at
-            FROM orphan_cleanup_items
+            FROM maintenance.orphan_cleanup_items
             WHERE item_kind = 'media_without_metadata'
               AND state IN ('detected', 'move_failed')
               AND resolved_at IS NULL
@@ -553,7 +553,7 @@ public sealed class OrphanMetadataCleanupExecutor
         var candidates = new List<DeleteFileCandidate>();
         await using var command = _dataSource.CreateCommand("""
             SELECT id, storage_key, orphan_storage_path
-            FROM orphan_cleanup_items
+            FROM maintenance.orphan_cleanup_items
             WHERE item_kind = 'media_without_metadata'
               AND state IN ('moved', 'delete_failed')
               AND delete_after <= @now
@@ -596,7 +596,7 @@ public sealed class OrphanMetadataCleanupExecutor
     {
         await using var command = _dataSource.CreateCommand("""
             WITH restored AS (
-                UPDATE orphan_cleanup_items
+                UPDATE maintenance.orphan_cleanup_items
                 SET
                     state = 'resolved',
                     resolved_at = @now,
@@ -609,7 +609,7 @@ public sealed class OrphanMetadataCleanupExecutor
                   AND orphan_storage_path IS NOT NULL
                 RETURNING storage_key, original_storage_path
             )
-            UPDATE filesystem_rescan_findings finding
+            UPDATE maintenance.filesystem_rescan_findings finding
             SET resolved_at = @now
             FROM restored
             WHERE finding.finding_type = 'UnexpectedFile'
@@ -626,7 +626,7 @@ public sealed class OrphanMetadataCleanupExecutor
     {
         await using var command = _dataSource.CreateCommand("""
             WITH restored AS (
-                UPDATE orphan_cleanup_items
+                UPDATE maintenance.orphan_cleanup_items
                 SET
                     state = 'resolved',
                     resolved_at = @now,
@@ -639,7 +639,7 @@ public sealed class OrphanMetadataCleanupExecutor
                   AND media_guid IS NOT NULL
                 RETURNING storage_key, original_storage_path, media_guid
             )
-            UPDATE filesystem_rescan_findings finding
+            UPDATE maintenance.filesystem_rescan_findings finding
             SET resolved_at = @now
             FROM restored
             WHERE finding.finding_type = 'MissingFile'
@@ -666,7 +666,7 @@ public sealed class OrphanMetadataCleanupExecutor
                 media_guid,
                 finalized_at,
                 resolved_at
-            FROM orphan_cleanup_items
+            FROM maintenance.orphan_cleanup_items
             WHERE id = @id;
             """);
         command.Parameters.AddWithValue("id", orphanId);
@@ -694,7 +694,7 @@ public sealed class OrphanMetadataCleanupExecutor
         await using var command = _dataSource.CreateCommand("""
             SELECT EXISTS (
                 SELECT 1
-                FROM media_content_id_versions
+                FROM media.media_content_id_versions
                 WHERE media_guid = @media_guid
                   AND storage_key = @storage_key
                   AND storage_path = @storage_path
@@ -717,7 +717,7 @@ public sealed class OrphanMetadataCleanupExecutor
         string? error = null)
     {
         await using var command = _dataSource.CreateCommand("""
-            UPDATE orphan_cleanup_items
+            UPDATE maintenance.orphan_cleanup_items
             SET
                 state = @state,
                 orphan_storage_path = COALESCE(@orphan_storage_path, orphan_storage_path),

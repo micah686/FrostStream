@@ -8,7 +8,7 @@ public sealed class M012_SeedMonthlySchedulerMaintenanceTasks : Migration
     public override void Up()
     {
         Execute.Sql("""
-            INSERT INTO scheduled_tasks
+            INSERT INTO scheduling.scheduled_tasks
                 ("key", task_type, cron, timezone, enabled, catchup_policy, next_due_at)
             VALUES
                 (
@@ -32,7 +32,7 @@ public sealed class M012_SeedMonthlySchedulerMaintenanceTasks : Migration
             """);
 
         Execute.Sql("""
-            INSERT INTO scheduled_tasks
+            INSERT INTO scheduling.scheduled_tasks
                 ("key", task_type, cron, timezone, enabled, catchup_policy, next_due_at)
             VALUES
                 (
@@ -58,6 +58,6 @@ public sealed class M012_SeedMonthlySchedulerMaintenanceTasks : Migration
 
     public override void Down()
     {
-        Execute.Sql("DELETE FROM scheduled_tasks WHERE \"key\" IN ('monthly-db-maintenance', 'monthly-stale-media-cleanup');");
+        Execute.Sql("DELETE FROM scheduling.scheduled_tasks WHERE \"key\" IN ('monthly-db-maintenance', 'monthly-stale-media-cleanup');");
     }
 }

@@ -36,23 +36,23 @@ public sealed class DataBridgeDbContext(DbContextOptions<DataBridgeDbContext> op
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.HasPostgresEnum<LocalStorageProtocol>("local_storage_protocol");
-        modelBuilder.HasPostgresEnum<NetworkStorageProtocol>("network_storage_protocol");
-        modelBuilder.HasPostgresEnum<S3CompatibleObjectStorageProvider>("s3_compatible_object_storage_provider");
-        modelBuilder.HasPostgresEnum<AzureBlobCredentialMode>("azure_blob_credential_mode");
-        modelBuilder.HasPostgresEnum<GoogleCloudStorageCredentialMode>("google_cloud_storage_credential_mode");
-        modelBuilder.HasPostgresEnum<DownloadJobState>("download_job_state");
-        modelBuilder.HasPostgresEnum<FailureKind>("failure_kind");
-        modelBuilder.HasPostgresEnum<PlaylistState>("playlist_state");
+        modelBuilder.HasPostgresEnum<LocalStorageProtocol>("storage", "local_storage_protocol");
+        modelBuilder.HasPostgresEnum<NetworkStorageProtocol>("storage", "network_storage_protocol");
+        modelBuilder.HasPostgresEnum<S3CompatibleObjectStorageProvider>("storage", "s3_compatible_object_storage_provider");
+        modelBuilder.HasPostgresEnum<AzureBlobCredentialMode>("storage", "azure_blob_credential_mode");
+        modelBuilder.HasPostgresEnum<GoogleCloudStorageCredentialMode>("storage", "google_cloud_storage_credential_mode");
+        modelBuilder.HasPostgresEnum<DownloadJobState>("downloads", "download_job_state");
+        modelBuilder.HasPostgresEnum<FailureKind>("downloads", "failure_kind");
+        modelBuilder.HasPostgresEnum<PlaylistState>("playlists", "playlist_state");
 
         modelBuilder.Entity<MediaPlaylistMembershipEntity>(builder =>
         {
-            builder.ToTable("media_playlist_membership", "metadata");
+            builder.ToTable("media_playlist_membership", "playlists");
         });
 
         modelBuilder.Entity<PlaylistMetadataEntity>(builder =>
         {
-            builder.ToTable("playlist_metadata", "metadata");
+            builder.ToTable("playlist_metadata", "playlists");
         });
 
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(DataBridgeDbContext).Assembly);

@@ -14,7 +14,7 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
     {
         var inserted = await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
-             INSERT INTO processed_messages (message_id, operation_key, job_id)
+             INSERT INTO downloads.processed_messages (message_id, operation_key, job_id)
              VALUES ({messageId}, {operationKey}, {jobId})
              ON CONFLICT (message_id) DO NOTHING
              """,
@@ -208,7 +208,7 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
         try
         {
             await db.Database.ExecuteSqlInterpolatedAsync(
-                $"INSERT INTO media (media_guid) VALUES ({mediaGuid}) ON CONFLICT (media_guid) DO NOTHING", ct);
+                $"INSERT INTO media.media (media_guid) VALUES ({mediaGuid}) ON CONFLICT (media_guid) DO NOTHING", ct);
 
             await db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
@@ -241,7 +241,7 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
             await db.SaveChangesAsync(ct);
 
             await db.Database.ExecuteSqlInterpolatedAsync(
-                $"DELETE FROM media WHERE media_guid = {mediaGuid}", ct);
+                $"DELETE FROM media.media WHERE media_guid = {mediaGuid}", ct);
 
             await tx.CommitAsync(ct);
         }

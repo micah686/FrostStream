@@ -8,7 +8,7 @@ public sealed class FilesystemRescanFindingConfiguration : IEntityTypeConfigurat
 {
     public void Configure(EntityTypeBuilder<FilesystemRescanFindingEntity> builder)
     {
-        builder.ToTable("filesystem_rescan_findings");
+        builder.ToTable("filesystem_rescan_findings", "maintenance");
 
         builder.HasKey(x => x.Id);
 

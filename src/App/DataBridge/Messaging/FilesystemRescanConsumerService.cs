@@ -67,7 +67,7 @@ public sealed class FilesystemRescanConsumerService(
         var keys = new List<string>();
         await using var command = dataSource.CreateCommand("""
             SELECT DISTINCT storage_key
-            FROM media_content_id_versions
+            FROM media.media_content_id_versions
             ORDER BY storage_key;
             """);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -210,7 +210,7 @@ public sealed class FilesystemRescanConsumerService(
                     storage_path,
                     fs_normalize_path(storage_path) AS normalized_path,
                     media_guid
-                FROM media_content_id_versions
+                FROM media.media_content_id_versions
                 WHERE storage_key = @storage_key
             ),
             sidecars AS (
@@ -231,7 +231,7 @@ public sealed class FilesystemRescanConsumerService(
                     SELECT banner_storage_path FROM metadata.accounts
                         WHERE banner_storage_path IS NOT NULL AND storage_key = @storage_key
                     UNION
-                    SELECT info_json_storage_path FROM download_jobs
+                    SELECT info_json_storage_path FROM downloads.download_jobs
                         WHERE info_json_storage_path IS NOT NULL AND storage_key = @storage_key
                 ) source
             ),
@@ -279,7 +279,7 @@ public sealed class FilesystemRescanConsumerService(
                 ORDER BY storage_path, finding_type
             ),
             upserted AS (
-                INSERT INTO filesystem_rescan_findings
+                INSERT INTO maintenance.filesystem_rescan_findings
                     (storage_key, storage_path, finding_type, media_guid, detected_at, last_seen_at, resolved_at)
                 SELECT
                     @storage_key,
@@ -298,7 +298,7 @@ public sealed class FilesystemRescanConsumerService(
                 RETURNING 1
             ),
             resolved AS (
-                UPDATE filesystem_rescan_findings existing
+                UPDATE maintenance.filesystem_rescan_findings existing
                 SET resolved_at = @now
                 WHERE existing.storage_key = @storage_key
                   AND existing.resolved_at IS NULL

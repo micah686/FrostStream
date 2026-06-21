@@ -43,14 +43,14 @@ class Program
                     connectionString,
                     npgsqlOptions => npgsqlOptions
                         .UseNodaTime()
-                        .MapEnum<LocalStorageProtocol>("local_storage_protocol")
-                        .MapEnum<NetworkStorageProtocol>("network_storage_protocol")
-                        .MapEnum<S3CompatibleObjectStorageProvider>("s3_compatible_object_storage_provider")
-                        .MapEnum<AzureBlobCredentialMode>("azure_blob_credential_mode")
-                        .MapEnum<GoogleCloudStorageCredentialMode>("google_cloud_storage_credential_mode")
-                        .MapEnum<DownloadJobState>("download_job_state")
-                        .MapEnum<FailureKind>("failure_kind")
-                        .MapEnum<PlaylistState>("playlist_state"))
+                        .MapEnum<LocalStorageProtocol>("local_storage_protocol", "storage")
+                        .MapEnum<NetworkStorageProtocol>("network_storage_protocol", "storage")
+                        .MapEnum<S3CompatibleObjectStorageProvider>("s3_compatible_object_storage_provider", "storage")
+                        .MapEnum<AzureBlobCredentialMode>("azure_blob_credential_mode", "storage")
+                        .MapEnum<GoogleCloudStorageCredentialMode>("google_cloud_storage_credential_mode", "storage")
+                        .MapEnum<DownloadJobState>("download_job_state", "downloads")
+                        .MapEnum<FailureKind>("failure_kind", "downloads")
+                        .MapEnum<PlaylistState>("playlist_state", "playlists"))
                 .UseSnakeCaseNamingConvention());
 
         builder.Services

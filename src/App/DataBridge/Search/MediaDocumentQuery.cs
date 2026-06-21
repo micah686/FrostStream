@@ -134,7 +134,7 @@ public sealed class MediaDocumentQuery(NpgsqlDataSource dataSource) : IMediaDocu
                      WHERE c.media_guid = mm.media_guid),
                     '[]'::json)::text AS caption_languages_json
             FROM metadata.media_metadata mm
-            JOIN media m ON m.media_guid = mm.media_guid
+            JOIN media.media m ON m.media_guid = mm.media_guid
             JOIN metadata.accounts a ON a.id = mm.account_id
             {whereClause}
             """);
@@ -159,7 +159,7 @@ public sealed class MediaDocumentQuery(NpgsqlDataSource dataSource) : IMediaDocu
                 a.platform,
                 a.avatar_storage_path AS account_avatar_storage_path
             FROM metadata.media_comments mc
-            JOIN media m ON m.media_guid = mc.media_guid
+            JOIN media.media m ON m.media_guid = mc.media_guid
             JOIN metadata.accounts a ON a.id = mc.account_id
             {whereClause}
             """);
@@ -175,7 +175,7 @@ public sealed class MediaDocumentQuery(NpgsqlDataSource dataSource) : IMediaDocu
                 mc.name,
                 mc.storage_path
             FROM metadata.media_captions mc
-            JOIN media m ON m.media_guid = mc.media_guid
+            JOIN media.media m ON m.media_guid = mc.media_guid
             {whereClause}
             """);
 
