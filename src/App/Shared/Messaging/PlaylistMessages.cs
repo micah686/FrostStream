@@ -32,6 +32,12 @@ public interface IPlaylistFlowMessage
     int Attempt { get; init; }
 }
 
+public static class FetchPlaylistMetadataCommandDefaults
+{
+    public const int PageStartIndex = 1;
+    public const int PageSize = 5_000;
+}
+
 /// <summary>
 /// Root event for the playlist pipeline. Published by WebAPI when a user submits a playlist URL.
 /// DataBridge persists/reuses the playlist row and emits <see cref="FetchPlaylistMetadataCommand"/>.
@@ -71,6 +77,12 @@ public sealed record FetchPlaylistMetadataCommand : IPlaylistFlowMessage
     public required int Attempt { get; init; }
 
     public required string SourceUrl { get; init; }
+
+    /// <summary>1-based playlist entry index where this bounded metadata page starts.</summary>
+    public int PageStartIndex { get; init; } = FetchPlaylistMetadataCommandDefaults.PageStartIndex;
+
+    /// <summary>Maximum number of playlist entries to resolve in this metadata page.</summary>
+    public int PageSize { get; init; } = FetchPlaylistMetadataCommandDefaults.PageSize;
 }
 
 /// <summary>
@@ -109,6 +121,18 @@ public sealed record PlaylistMetadataFetched : IPlaylistFlowMessage
 
     /// <summary>Total entry count reported by yt-dlp.</summary>
     public int TotalItems { get; init; }
+
+    /// <summary>1-based playlist entry index where this bounded metadata page started.</summary>
+    public int PageStartIndex { get; init; } = FetchPlaylistMetadataCommandDefaults.PageStartIndex;
+
+    /// <summary>Maximum number of entries requested for this metadata page.</summary>
+    public int PageSize { get; init; } = FetchPlaylistMetadataCommandDefaults.PageSize;
+
+    /// <summary>True when no additional playlist metadata pages need to be fetched.</summary>
+    public bool IsComplete { get; init; } = true;
+
+    /// <summary>Next 1-based playlist entry index to fetch when <see cref="IsComplete"/> is false.</summary>
+    public int? NextPageStartIndex { get; init; }
 
     /// <summary>The full entry list, ordered by <see cref="PlaylistEntry.PlaylistIndex"/>.</summary>
     public required IReadOnlyList<PlaylistEntry> Entries { get; init; }

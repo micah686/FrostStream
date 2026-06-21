@@ -56,7 +56,9 @@ public sealed class PlaylistRequestedIngressService(
                 OperationKey = $"playlist/{upsert.Playlist.PlaylistId:N}/fetch-metadata/attempt/1",
                 OccurredAt = clock.GetCurrentInstant(),
                 Attempt = 1,
-                SourceUrl = upsert.Playlist.SourceUrl
+                SourceUrl = upsert.Playlist.SourceUrl,
+                PageStartIndex = 1,
+                PageSize = FetchPlaylistMetadataCommandDefaults.PageSize
             };
 
             await publisher.PublishAsync(

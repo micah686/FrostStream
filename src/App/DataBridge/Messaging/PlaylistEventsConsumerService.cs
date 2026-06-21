@@ -67,24 +67,50 @@ public sealed class PlaylistEventsConsumerService(
                 await jobs.MarkMessageProcessedAsync(evt.MessageId, evt.OperationKey, evt.PlaylistId);
             }
 
-            // Always re-publish the process-staged-entries command — re-publishing is
-            // idempotent (each entry is fanned out only once thanks to the unique
-            // (playlist_id, entry_url) constraint), and a duplicate event still needs to
-            // make sure the staging drain happens.
-            var cmd = new ProcessPlaylistStagedEntriesCommand
+            if (!evt.IsComplete)
             {
-                PlaylistId = evt.PlaylistId,
-                CorrelationId = evt.CorrelationId,
-                CausationId = evt.MessageId,
-                MessageId = Guid.NewGuid(),
-                OperationKey = $"playlist/{evt.PlaylistId:N}/process-staged",
-                OccurredAt = clock.GetCurrentInstant(),
-                Attempt = 1
-            };
-            await publisher.PublishAsync(
-                PlaylistSubjects.ProcessPlaylistStagedEntriesCommand,
-                cmd,
-                messageId: cmd.MessageId.ToString("N"));
+                var nextPageStartIndex = evt.NextPageStartIndex
+                                         ?? evt.PageStartIndex + Math.Max(evt.PageSize, evt.Entries.Count);
+                var cmd = new FetchPlaylistMetadataCommand
+                {
+                    PlaylistId = evt.PlaylistId,
+                    CorrelationId = evt.CorrelationId,
+                    CausationId = evt.MessageId,
+                    MessageId = Guid.NewGuid(),
+                    OperationKey = $"playlist/{evt.PlaylistId:N}/fetch-metadata/page/{nextPageStartIndex}",
+                    OccurredAt = clock.GetCurrentInstant(),
+                    Attempt = evt.Attempt + 1,
+                    SourceUrl = await ResolvePlaylistSourceUrlAsync(playlists, evt.PlaylistId),
+                    PageStartIndex = nextPageStartIndex,
+                    PageSize = evt.PageSize
+                };
+
+                await publisher.PublishAsync(
+                    PlaylistSubjects.FetchPlaylistMetadataCommand,
+                    cmd,
+                    messageId: cmd.MessageId.ToString("N"));
+            }
+            else
+            {
+                // Always re-publish the process-staged-entries command — re-publishing is
+                // idempotent (each entry is fanned out only once thanks to the unique
+                // (playlist_id, entry_url) constraint), and a duplicate event still needs to
+                // make sure the staging drain happens.
+                var cmd = new ProcessPlaylistStagedEntriesCommand
+                {
+                    PlaylistId = evt.PlaylistId,
+                    CorrelationId = evt.CorrelationId,
+                    CausationId = evt.MessageId,
+                    MessageId = Guid.NewGuid(),
+                    OperationKey = $"playlist/{evt.PlaylistId:N}/process-staged",
+                    OccurredAt = clock.GetCurrentInstant(),
+                    Attempt = 1
+                };
+                await publisher.PublishAsync(
+                    PlaylistSubjects.ProcessPlaylistStagedEntriesCommand,
+                    cmd,
+                    messageId: cmd.MessageId.ToString("N"));
+            }
 
             await context.AckAsync();
         }
@@ -185,5 +211,12 @@ public sealed class PlaylistEventsConsumerService(
             logger.LogError(ex, "Failed handling ProcessPlaylistStagedEntries for PlaylistId {PlaylistId}", cmd.PlaylistId);
             await context.NackAsync();
         }
+    }
+
+    private static async Task<string> ResolvePlaylistSourceUrlAsync(IPlaylistsRepository playlists, Guid playlistId)
+    {
+        var playlist = await playlists.GetByIdAsync(playlistId);
+        return playlist?.SourceUrl
+               ?? throw new InvalidOperationException($"Playlist {playlistId} was not found while scheduling the next metadata page.");
     }
 }

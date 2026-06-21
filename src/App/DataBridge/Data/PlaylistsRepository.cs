@@ -70,10 +70,11 @@ public sealed class PlaylistsRepository(DataBridgeDbContext db, IClock clock) : 
 
         playlist.ProviderPlaylistId = evt.ProviderPlaylistId ?? playlist.ProviderPlaylistId;
         playlist.Title = evt.Title ?? playlist.Title;
-        playlist.TotalItems = evt.TotalItems;
-        playlist.State = PlaylistState.MetadataResolved;
+        playlist.TotalItems = Math.Max(playlist.TotalItems, evt.TotalItems);
+        playlist.State = evt.IsComplete ? PlaylistState.MetadataResolved : PlaylistState.PendingMetadata;
         playlist.UpdatedAt = clock.GetCurrentInstant();
-        playlist.LastScannedAt = playlist.UpdatedAt;
+        if (evt.IsComplete)
+            playlist.LastScannedAt = playlist.UpdatedAt;
         await db.SaveChangesAsync(ct);
 
         await UpsertPlaylistMetadataAsync(playlistId, playlist.Title, ct);

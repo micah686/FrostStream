@@ -55,6 +55,22 @@ public sealed class ScanGuardTests
         options.VideoSelection.PlaylistItems.ShouldBe($"1:{PlaylistCommandsConsumerService.MaxPlaylistEntriesPerRequest}");
     }
 
+    [Test]
+    public void Playlist_Metadata_Fetch_Uses_Requested_Page_Range()
+    {
+        var options = PlaylistCommandsConsumerService.BuildPlaylistOptions(pageStartIndex: 5_001, pageSize: 5_000);
+
+        options.VideoSelection.PlaylistItems.ShouldBe("5001:10000");
+    }
+
+    [Test]
+    public void Playlist_Metadata_Fetch_Clamps_Page_Size_To_Hard_Limit()
+    {
+        var options = PlaylistCommandsConsumerService.BuildPlaylistOptions(pageStartIndex: 1, pageSize: 10_000);
+
+        options.VideoSelection.PlaylistItems.ShouldBe($"1:{PlaylistCommandsConsumerService.MaxPlaylistEntriesPerRequest}");
+    }
+
     private static CreatorSourceDto CreateSource(int incrementalPageSize)
         => new()
         {

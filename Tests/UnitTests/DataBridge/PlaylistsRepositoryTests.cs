@@ -75,6 +75,46 @@ public sealed class PlaylistsRepositoryTests
     }
 
     [Test]
+    public async Task ApplyMetadataFetched_For_Partial_Page_Keeps_Playlist_Pending()
+    {
+        await using var db = DataBridgeTestHelpers.CreateDb();
+        var repo = new PlaylistsRepository(db, new FixedClock(DataBridgeTestHelpers.Now));
+        var playlistId = Guid.NewGuid();
+        db.Playlists.Add(new PlaylistEntity
+        {
+            PlaylistId = playlistId,
+            CorrelationId = Guid.NewGuid(),
+            State = PlaylistState.PendingMetadata,
+            SourceUrl = "https://example.test/playlist",
+            StorageKey = "default"
+        });
+        await db.SaveChangesAsync();
+
+        await repo.ApplyMetadataFetchedAsync(playlistId, new PlaylistMetadataFetched
+        {
+            PlaylistId = playlistId,
+            CorrelationId = Guid.NewGuid(),
+            MessageId = Guid.NewGuid(),
+            OperationKey = "playlist/metadata/page/1",
+            OccurredAt = DataBridgeTestHelpers.Now,
+            Attempt = 1,
+            ProviderPlaylistId = "provider-playlist",
+            Title = "Playlist Title",
+            TotalItems = 10_000,
+            PageStartIndex = 1,
+            PageSize = 5_000,
+            IsComplete = false,
+            NextPageStartIndex = 5_001,
+            Entries = []
+        });
+
+        var playlist = await db.Playlists.SingleAsync();
+        playlist.State.ShouldBe(PlaylistState.PendingMetadata);
+        playlist.TotalItems.ShouldBe(10_000);
+        playlist.LastScannedAt.ShouldBeNull();
+    }
+
+    [Test]
     public async Task WriteStagingEntries_Skips_Existing_Indexes_And_Urls()
     {
         await using var db = DataBridgeTestHelpers.CreateDb();
