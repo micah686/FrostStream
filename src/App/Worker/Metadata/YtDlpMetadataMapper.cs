@@ -31,7 +31,10 @@ internal static class YtDlpMetadataMapper
             {
                 ExternalMediaId = externalMediaId,
                 MetadataScrapeDate = scrapedAt,
-                ThumbnailStoragePath = info.Thumbnails?.FirstOrDefault(t => !string.IsNullOrWhiteSpace(t.Url))?.Url,
+                // Durable thumbnail/caption blob paths are filled in by the download saga once the
+                // sidecar files are uploaded. The mapper no longer stores remote URLs / inline data
+                // here (they aren't resolvable storage paths).
+                ThumbnailStoragePath = null,
                 AgeLimit = info.AgeLimit,
                 AverageRating = info.AverageRating,
                 LikeCount = info.LikeCount,
@@ -48,7 +51,9 @@ internal static class YtDlpMetadataMapper
                 Location = info.Location
             },
             Technical = BuildTechnical(info),
-            Captions = BuildCaptions(info),
+            // Captions are persisted from the actual downloaded subtitle blobs (bounded to the
+            // requested SubLangs), not from the 100+ remote tracks yt-dlp lists in metadata.
+            Captions = [],
             Comments = BuildComments(info, platform, externalMediaId, scrapedAt),
             Series = BuildSeries(info),
             Music = BuildMusic(info),
@@ -244,41 +249,6 @@ internal static class YtDlpMetadataMapper
             && channels > 0
             ? channels
             : 0;
-
-    private static IReadOnlyList<CapturedCaptionMetadata> BuildCaptions(VideoInfo info)
-    {
-        var captions = new List<CapturedCaptionMetadata>();
-        AddCaptions(captions, info.Subtitles, "subtitles");
-        AddCaptions(captions, info.AutomaticCaptions, "automatic_captions");
-        return captions;
-    }
-
-    private static void AddCaptions(
-        List<CapturedCaptionMetadata> captions,
-        IReadOnlyDictionary<string, IReadOnlyList<SubtitleTrack>>? tracks,
-        string captionType)
-    {
-        if (tracks is null)
-            return;
-
-        foreach (var (language, variants) in tracks)
-        {
-            foreach (var track in variants)
-            {
-                var storagePath = FirstNonBlank(track.Url, track.Data);
-                if (storagePath is null)
-                    continue;
-
-                captions.Add(new CapturedCaptionMetadata
-                {
-                    StoragePath = storagePath,
-                    CaptionType = captionType,
-                    LanguageCode = string.IsNullOrWhiteSpace(language) ? "und" : language,
-                    Name = FirstNonBlank(track.Name, track.Ext)
-                });
-            }
-        }
-    }
 
     private static IReadOnlyList<CapturedCommentMetadata> BuildComments(
         VideoInfo info,

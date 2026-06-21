@@ -21,10 +21,8 @@ public sealed record CreatorSourceDto
     public required Instant CreatedAt { get; init; }
     public Instant? LastUpdated { get; init; }
     public string? AvatarUrl { get; init; }
-    public string? AvatarCachePath { get; init; }
     public string? AvatarContentHash { get; init; }
     public string? BannerUrl { get; init; }
-    public string? BannerCachePath { get; init; }
     public string? BannerContentHash { get; init; }
     public Instant? AssetsLastRefreshedAt { get; init; }
     public Instant? AssetsLastAttemptAt { get; init; }
@@ -125,11 +123,24 @@ public sealed record UpsertDiscoveredMediaBatchResponseMessage
 public sealed record UpdateCreatorSourceAssetsRequestMessage
 {
     public required long SourceId { get; init; }
+
+    // Account identity (derived from the channel's yt-dlp metadata) used to bridge the durable
+    // avatar/banner blobs into metadata.accounts — the authoritative table consumers/rescan read.
+    public string? Platform { get; init; }
+    public string? AccountHandle { get; init; }
+    public string? AccountName { get; init; }
+    public string? AccountUrl { get; init; }
+
+    // The storage backend (FluentStorage storage_key) the avatar/banner blobs were written to.
+    public string? StorageKey { get; init; }
+
     public string? AvatarUrl { get; init; }
-    public string? AvatarCachePath { get; init; }
+    /// <summary>Durable blob path (within <see cref="StorageKey"/>) of the avatar. Persisted to metadata.accounts.</summary>
+    public string? AvatarStoragePath { get; init; }
     public string? AvatarContentHash { get; init; }
     public string? BannerUrl { get; init; }
-    public string? BannerCachePath { get; init; }
+    /// <summary>Durable blob path (within <see cref="StorageKey"/>) of the banner. Persisted to metadata.accounts.</summary>
+    public string? BannerStoragePath { get; init; }
     public string? BannerContentHash { get; init; }
     public Instant? RefreshedAt { get; init; }
     public Instant? AttemptedAt { get; init; }

@@ -94,15 +94,27 @@ public class DownloadArchiveFlow(
             // one). Skip upload, clean the temp file we just produced, write metadata, mark AlreadyDownloaded.
             await Capture(() => DispatchTempFileCleanup(request, downloaded.TempFileRef, jobInstance, attempt: 1));
             await Message<TempFileDeleted>();
+            // Co-located sidecars (info.json, thumbnail, captions) from a duplicate download aren't
+            // useful — the prior copy already lives next to the bytes. Just drop the temp files.
             if (downloaded.InfoJsonTempFileRef is { } skippedSidecar)
             {
-                // Co-located info.json from a duplicate download isn't useful — the prior
-                // copy already lives next to the bytes. Just drop the temp file.
                 await Capture(() => DispatchTempFileCleanup(request, skippedSidecar, jobInstance, attempt: 1));
                 await Message<TempFileDeleted>();
             }
+            if (downloaded.Thumbnail is { } skippedThumb)
+            {
+                await Capture(() => DispatchTempFileCleanup(request, skippedThumb.TempFileRef, jobInstance, attempt: 1));
+                await Message<TempFileDeleted>();
+            }
+            foreach (var skippedCaption in downloaded.Captions)
+            {
+                await Capture(() => DispatchTempFileCleanup(request, skippedCaption.TempFileRef, jobInstance, attempt: 1));
+                await Message<TempFileDeleted>();
+            }
+            // richMeta here already carries no thumbnail/captions (the mapper emits none) — so the
+            // dedupe branch writes durable metadata without leaking remote URLs.
             if (metadata.RichMetadata is { } existingRichMeta)
-                await RunMetadataWriteStep(jobId, reservation.MediaGuid, reservation.IsNewMediaGuid, metadata.Provider, metadata.SourceMediaId, existingRichMeta);
+                await RunMetadataWriteStep(jobId, reservation.MediaGuid, reservation.IsNewMediaGuid, metadata.Provider, metadata.SourceMediaId, existingRichMeta, storageKey);
             await Capture(() => PlaylistRepoCall(r => r.TryLinkMediaGuidAsync(jobId, reservation.MediaGuid)));
             await Capture(() => RepoCall(r => r.MarkAlreadyDownloadedAsync(jobId, reservation.MediaGuid)));
             return;
@@ -142,6 +154,17 @@ public class DownloadArchiveFlow(
                 uploaded.StoragePath);
             await Capture(() => DispatchUploadedObjectDeletion(request, uploaded, jobInstance, attempt: 1));
             await Capture(() => DispatchTempFileCleanup(request, uploaded.TempFileRef, jobInstance, attempt: 1));
+            // Per-media asset sidecars (thumbnail/captions/info.json) are uploaded only AFTER a
+            // successful commit, so on commit-failure rollback there are no asset blobs to delete —
+            // only the worker-local temp files, which we drop here so they don't orphan. (When a
+            // committed version is later removed, its co-located asset blobs become unexpected files
+            // and are reclaimed by the generic orphan-cleanup pass.)
+            if (downloaded.InfoJsonTempFileRef is { } failedInfoJson)
+                await Capture(() => DispatchTempFileCleanup(request, failedInfoJson, jobInstance, attempt: 1));
+            if (downloaded.Thumbnail is { } failedThumb)
+                await Capture(() => DispatchTempFileCleanup(request, failedThumb.TempFileRef, jobInstance, attempt: 1));
+            foreach (var failedCaption in downloaded.Captions)
+                await Capture(() => DispatchTempFileCleanup(request, failedCaption.TempFileRef, jobInstance, attempt: 1));
             await Capture(() => RepoCall(r => r.DeleteReservedVersionAsync(reservation.MediaGuid, reservation.VersionNum)));
             if (reservation.IsNewMediaGuid)
                 await Capture(() => RepoCall(r => r.DeleteNewMediaGuidAsync(reservation.MediaGuid, metadata.Provider, metadata.SourceMediaId)));
@@ -170,9 +193,15 @@ public class DownloadArchiveFlow(
                 jobInstance);
         }
 
+        // STEP 6b2: upload per-media asset sidecars (thumbnail + captions) and rewrite the
+        // metadata storage paths to the uploaded blob keys (best-effort).
+        var enrichedMeta = metadata.RichMetadata is { } baseMeta
+            ? await RunAssetSidecarUploadsStep(request, uploaded, downloaded, storageKey, jobInstance, baseMeta)
+            : null;
+
         // STEP 6c: write rich metadata ----------------------------------------
-        if (metadata.RichMetadata is { } richMeta)
-            await RunMetadataWriteStep(jobId, reservation.MediaGuid, reservation.IsNewMediaGuid, metadata.Provider, metadata.SourceMediaId, richMeta);
+        if (enrichedMeta is { } richMeta)
+            await RunMetadataWriteStep(jobId, reservation.MediaGuid, reservation.IsNewMediaGuid, metadata.Provider, metadata.SourceMediaId, richMeta, storageKey);
 
         // STEP 7: cleanup -----------------------------------------------------
         var cleanupId = await Capture(Guid.NewGuid);
@@ -451,6 +480,103 @@ public class DownloadArchiveFlow(
     }
 
     /// <summary>
+    /// Uploads the per-media thumbnail and caption sidecars co-located with the primary upload
+    /// (best-effort), then returns <paramref name="richMeta"/> with the thumbnail storage path and
+    /// caption rows rewritten to the uploaded blob keys. Each sidecar temp file is cleaned after.
+    /// </summary>
+    private async Task<CapturedMediaMetadata> RunAssetSidecarUploadsStep(
+        DownloadRequested request,
+        UploadCompleted primary,
+        DownloadCompleted downloaded,
+        string storageKey,
+        string jobInstance,
+        CapturedMediaMetadata richMeta)
+    {
+        string? thumbnailStoragePath = null;
+        if (downloaded.Thumbnail is { } thumb)
+        {
+            thumbnailStoragePath = BuildSidecarStoragePath(primary.StoragePath, thumb.FileName);
+            await RunAssetSidecarUploadStep(request, primary, thumb, thumbnailStoragePath, storageKey, UploadArtifactKind.Thumbnail, "thumbnail", jobInstance);
+        }
+
+        var captionRows = new List<CapturedCaptionMetadata>(downloaded.Captions.Count);
+        for (var i = 0; i < downloaded.Captions.Count; i++)
+        {
+            var caption = downloaded.Captions[i];
+            var captionPath = BuildSidecarStoragePath(primary.StoragePath, caption.FileName);
+            await RunAssetSidecarUploadStep(request, primary, caption, captionPath, storageKey, UploadArtifactKind.Caption, $"caption-{i}", jobInstance);
+            captionRows.Add(new CapturedCaptionMetadata
+            {
+                StoragePath = captionPath,
+                // The downloaded filename doesn't distinguish manual vs auto-generated captions;
+                // default to "subtitles".
+                CaptionType = "subtitles",
+                LanguageCode = string.IsNullOrWhiteSpace(caption.LanguageCode) ? "und" : caption.LanguageCode!,
+                Name = null
+            });
+        }
+
+        return richMeta with
+        {
+            Media = richMeta.Media with { ThumbnailStoragePath = thumbnailStoragePath },
+            Captions = captionRows
+        };
+    }
+
+    /// <summary>
+    /// Uploads a single per-media asset sidecar (thumbnail/caption) to a path co-located with the
+    /// primary upload. Best-effort: a failure logs a warning and proceeds — the video is already
+    /// durable and the metadata write tolerates a missing asset. The temp file is cleaned after.
+    /// </summary>
+    private async Task RunAssetSidecarUploadStep(
+        DownloadRequested request,
+        UploadCompleted primary,
+        SidecarFileRef sidecar,
+        string storagePath,
+        string storageKey,
+        UploadArtifactKind kind,
+        string opSuffix,
+        string jobInstance)
+    {
+        var msgId = await Capture(Guid.NewGuid);
+        var cmd = new UploadObjectCommand
+        {
+            JobId = request.JobId,
+            CorrelationId = request.CorrelationId,
+            CausationId = primary.MessageId,
+            MessageId = msgId,
+            OperationKey = $"job/{jobInstance}/upload-sidecar/{opSuffix}",
+            OccurredAt = clock.GetCurrentInstant(),
+            Attempt = 1,
+            TempFileRef = sidecar.TempFileRef,
+            StorageKey = storageKey,
+            StoragePath = storagePath,
+            ContentHashXxh128 = sidecar.ContentHashXxh128,
+            Kind = kind
+        };
+        logger.LogInformation(
+            "Download flow dispatching {Kind} sidecar upload for JobId {JobId} StoragePath {StoragePath}",
+            kind,
+            request.JobId,
+            storagePath);
+        await Capture(() => Publish(DownloadSubjects.UploadObjectCommand, cmd));
+
+        var result = await Messages.FirstOfTypes<UploadCompleted, UploadFailed>();
+        if (!result.HasFirst)
+        {
+            logger.LogWarning(
+                "Download flow {Kind} sidecar upload failed for JobId {JobId} StoragePath {StoragePath}: {ErrorMessage}",
+                kind,
+                request.JobId,
+                storagePath,
+                result.Second.ErrorMessage);
+        }
+
+        await Capture(() => DispatchTempFileCleanup(request, sidecar.TempFileRef, jobInstance, attempt: 1));
+        await Message<TempFileDeleted>();
+    }
+
+    /// <summary>
     /// Derives the sidecar's final path from the primary's path. Keeps the same directory
     /// (e.g. <c>archives/{guid}/v{n}/</c>) and substitutes the sidecar's filename.
     /// </summary>
@@ -550,7 +676,8 @@ public class DownloadArchiveFlow(
         bool isNewMediaGuid,
         string? provider,
         string? sourceMediaId,
-        CapturedMediaMetadata richMeta)
+        CapturedMediaMetadata richMeta,
+        string storageKey)
     {
         for (var attempt = 1; attempt <= MaxAttempts; attempt++)
         {
@@ -561,7 +688,7 @@ public class DownloadArchiveFlow(
                     jobId,
                     mediaGuid,
                     attempt);
-                await Capture(() => MetaRepoCall(r => r.WriteMetadataAsync(mediaGuid, richMeta)));
+                await Capture(() => MetaRepoCall(r => r.WriteMetadataAsync(mediaGuid, richMeta, storageKey)));
                 await Capture(() => PublishMetadataSync(mediaGuid));
                 logger.LogInformation(
                     "Rich metadata written for JobId {JobId} MediaGuid {MediaGuid} Attempt {Attempt}",

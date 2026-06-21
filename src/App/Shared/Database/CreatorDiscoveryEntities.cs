@@ -70,13 +70,9 @@ public sealed class CreatorSourceEntity
 
     public string? AvatarUrl { get; set; }
 
-    public string? AvatarCachePath { get; set; }
-
     public string? AvatarContentHash { get; set; }
 
     public string? BannerUrl { get; set; }
-
-    public string? BannerCachePath { get; set; }
 
     public string? BannerContentHash { get; set; }
 

@@ -214,17 +214,25 @@ public sealed class FilesystemRescanConsumerService(
                 WHERE storage_key = @storage_key
             ),
             sidecars AS (
+                -- Sidecars are scoped to the backend they live on (@storage_key). Without this,
+                -- a sidecar recorded for backend B would be treated as expected when scanning
+                -- backend A, masking genuinely unexpected files.
                 SELECT fs_normalize_path(path) AS normalized_path
                 FROM (
-                    SELECT thumbnail_storage_path AS path FROM metadata.media_metadata WHERE thumbnail_storage_path IS NOT NULL
+                    SELECT thumbnail_storage_path AS path FROM metadata.media_metadata
+                        WHERE thumbnail_storage_path IS NOT NULL AND storage_key = @storage_key
                     UNION
-                    SELECT storage_path FROM metadata.media_captions WHERE storage_path IS NOT NULL
+                    SELECT storage_path FROM metadata.media_captions
+                        WHERE storage_path IS NOT NULL AND storage_key = @storage_key
                     UNION
-                    SELECT avatar_storage_path FROM metadata.accounts WHERE avatar_storage_path IS NOT NULL
+                    SELECT avatar_storage_path FROM metadata.accounts
+                        WHERE avatar_storage_path IS NOT NULL AND storage_key = @storage_key
                     UNION
-                    SELECT banner_storage_path FROM metadata.accounts WHERE banner_storage_path IS NOT NULL
+                    SELECT banner_storage_path FROM metadata.accounts
+                        WHERE banner_storage_path IS NOT NULL AND storage_key = @storage_key
                     UNION
-                    SELECT info_json_storage_path FROM download_jobs WHERE info_json_storage_path IS NOT NULL
+                    SELECT info_json_storage_path FROM download_jobs
+                        WHERE info_json_storage_path IS NOT NULL AND storage_key = @storage_key
                 ) source
             ),
             expected_all AS (

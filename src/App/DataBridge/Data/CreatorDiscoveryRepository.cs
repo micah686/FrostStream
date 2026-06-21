@@ -201,17 +201,17 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
 
         var now = clock.GetCurrentInstant();
 
+        // The durable avatar/banner blob path now lives in metadata.accounts (the authoritative
+        // table). creator_sources only retains the source URL + content hash for change detection.
         if (!string.IsNullOrWhiteSpace(request.AvatarUrl))
         {
             existing.AvatarUrl = request.AvatarUrl;
-            existing.AvatarCachePath = request.AvatarCachePath;
             existing.AvatarContentHash = request.AvatarContentHash;
         }
 
         if (!string.IsNullOrWhiteSpace(request.BannerUrl))
         {
             existing.BannerUrl = request.BannerUrl;
-            existing.BannerCachePath = request.BannerCachePath;
             existing.BannerContentHash = request.BannerContentHash;
         }
 
