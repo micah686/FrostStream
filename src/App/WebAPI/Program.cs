@@ -1,10 +1,16 @@
 using FlySwattr.NATS.Extensions;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.IdentityModel.Tokens;
 using NodaTime;
 using NodaTime.Serialization.SystemTextJson;
 using Scalar.AspNetCore;
+using Shared.Auth;
 using Shared.Secrets;
 using Shared.Storage;
 using System.Text.Json.Serialization;
+using WebAPI.Auth;
 
 namespace WebAPI;
 
@@ -15,8 +21,57 @@ public class Program
         var builder = WebApplication.CreateBuilder(args);
         builder.AddServiceDefaults();
 
-        // Add services to the container.
-        builder.Services.AddAuthorization();
+        var singleUserMode = AuthMode.IsSingleUserMode(builder.Configuration);
+        builder.Services.Configure<FrostStreamAuthOptions>(builder.Configuration.GetSection(FrostStreamAuthOptions.SectionName));
+        builder.Services.Configure<OpenFgaOptions>(builder.Configuration.GetSection(OpenFgaOptions.SectionName));
+
+        if (singleUserMode)
+        {
+            builder.Services
+                .AddAuthentication(AuthConstants.SingleUserScheme)
+                .AddScheme<AuthenticationSchemeOptions, SingleUserAuthenticationHandler>(
+                    AuthConstants.SingleUserScheme,
+                    _ => { });
+            builder.Services.AddSingleton<IFrostStreamAuthorizer, AllowAllAuthorizer>();
+        }
+        else
+        {
+            var authority = builder.Configuration["Auth:Authority"];
+            if (string.IsNullOrWhiteSpace(authority))
+            {
+                throw new InvalidOperationException("Auth:Authority must be configured when SINGLE_USER_MODE is not enabled.");
+            }
+
+            builder.Services
+                .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+                .AddJwtBearer(options =>
+                {
+                    options.Authority = authority;
+                    options.Audience = builder.Configuration["Auth:Audience"] ?? "froststream-api";
+                    options.RequireHttpsMetadata = builder.Configuration.GetValue("Auth:RequireHttpsMetadata", true);
+                    options.MapInboundClaims = false;
+                    options.TokenValidationParameters = new TokenValidationParameters
+                    {
+                        NameClaimType = AuthConstants.PreferredUsernameClaim,
+                        RoleClaimType = AuthConstants.GroupsClaim
+                    };
+                });
+
+            builder.Services.AddHttpClient<OpenFgaAuthorizer>();
+            builder.Services.AddScoped<IFrostStreamAuthorizer>(sp => sp.GetRequiredService<OpenFgaAuthorizer>());
+        }
+
+        builder.Services.AddSingleton<IAuthorizationHandler, FrostStreamPermissionHandler>();
+        builder.Services.AddAuthorization(options =>
+        {
+            var authenticatedSystemAccess = new AuthorizationPolicyBuilder()
+                .RequireAuthenticatedUser()
+                .AddRequirements(new FrostStreamPermissionRequirement(AuthConstants.AccessRelation, AuthConstants.SystemObject))
+                .Build();
+
+            options.FallbackPolicy = authenticatedSystemAccess;
+            options.AddPolicy("SystemAccess", authenticatedSystemAccess);
+        });
         builder.Services
             .AddControllers()
             .AddJsonOptions(options =>
@@ -25,7 +80,7 @@ public class Program
                 options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
             });
         
-        builder.Services.AddSingleton<IClock>(SystemClock.Instance);
+        builder.Services.AddSingleton<IClock>(NodaTime.SystemClock.Instance);
         builder.Services.AddOpenBaoSecretStore(builder.Configuration);
         builder.Services.AddFrostStreamStorage();
 
@@ -53,11 +108,22 @@ public class Program
         // Configure the HTTP request pipeline.
         // if (app.Environment.IsDevelopment())
         // {
-            app.MapOpenApi();
-            app.MapScalarApiReference();
+        var exposeOpenApi = builder.Environment.IsDevelopment() ||
+            builder.Configuration.GetValue("Auth:ExposeOpenApi", false);
+        if (exposeOpenApi)
+        {
+            app.MapOpenApi().AllowAnonymous();
+            app.MapScalarApiReference().AllowAnonymous();
+        }
         //}
 
+        if (singleUserMode)
+        {
+            app.Logger.LogWarning("AUTH DISABLED - SINGLE_USER_MODE is active; full access is granted to all requests.");
+        }
+
         app.UseHttpsRedirection();
+        app.UseAuthentication();
         app.UseAuthorization();
         app.MapControllers();
         app.MapDefaultEndpoints();

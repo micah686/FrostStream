@@ -119,6 +119,7 @@ class Program
         builder.Services.AddSingleton<IMetadataRebuildCoordinator, MetadataRebuildCoordinator>();
 
         builder.Services.AddHostedService<TypesenseStartupService>();
+        builder.Services.AddHostedService<SingleUserOwnerSeederService>();
         builder.Services.AddHostedService<TypesenseSyncConsumerService>();
         builder.Services.AddHostedService<MetadataListConsumerService>();
         builder.Services.AddHostedService<MetadataSearchConsumerService>();

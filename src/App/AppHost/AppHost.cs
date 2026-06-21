@@ -1,7 +1,15 @@
 using AppHost;
 using Aspire.Hosting;
+using Aspire.Hosting.ApplicationModel;
 
 var builder = DistributedApplication.CreateBuilder(args);
+
+#if DEBUG
+    //TODO: REMOVE THIS LATER
+    Environment.SetEnvironmentVariable("SINGLE_USER_MODE", "true");
+#endif
+
+var singleUserMode = IsTruthy(Environment.GetEnvironmentVariable("SINGLE_USER_MODE"));
 
 var configuredStorageRoot = Environment.GetEnvironmentVariable("FROSTSTREAM_STORAGE_ROOT");
 var sharedStorageRoot = string.IsNullOrWhiteSpace(configuredStorageRoot)
@@ -52,7 +60,12 @@ var natsUi = builder
 
 #endregion
 
-var postgres = builder.AddPostgres("postgres")
+var postgresUserValue = Environment.GetEnvironmentVariable("POSTGRES_USER") ?? "postgres";
+var postgresPasswordValue = Environment.GetEnvironmentVariable("POSTGRES_PASSWORD") ?? "postgres";
+var postgresUser = builder.AddParameter("postgres-user", postgresUserValue, publishValueAsDefault: false);
+var postgresPassword = builder.AddParameter("postgres-password", postgresPasswordValue, publishValueAsDefault: false, secret: true);
+
+var postgres = builder.AddPostgres("postgres", postgresUser, postgresPassword)
     .WithDbGate(); //needs both aspire dbgate and community toolkit postgres extensions to be same version
     //.WithPgAdmin(); // Optional: adds a pgAdmin container for database management
     //.WithDataVolume(); // Persists data between runs
@@ -91,6 +104,83 @@ var typesense = builder
 
 var typesenseEndpoint = typesense.GetEndpoint("http");
 
+var authentikAuthority = Environment.GetEnvironmentVariable("AUTHENTIK_AUTHORITY")
+    ?? "http://localhost:9000/application/o/froststream/";
+var authentikClientSecret = builder.AddParameter(
+    "authentik-client-secret",
+    Environment.GetEnvironmentVariable("AUTHENTIK_CLIENT_SECRET") ?? "froststream-dev-client-secret",
+    publishValueAsDefault: false,
+    secret: true);
+IResourceBuilder<ContainerResource>? authentik = null;
+IResourceBuilder<ContainerResource>? openfga = null;
+EndpointReference? openfgaEndpoint = null;
+
+if (!singleUserMode)
+{
+    var authentikSecretKey = builder.AddParameter(
+        "authentik-secret-key",
+        Environment.GetEnvironmentVariable("AUTHENTIK_SECRET_KEY") ?? Guid.NewGuid().ToString("N"),
+        publishValueAsDefault: false,
+        secret: true);
+    var authentikBootstrapPassword = builder.AddParameter(
+        "authentik-bootstrap-password",
+        Environment.GetEnvironmentVariable("AUTHENTIK_BOOTSTRAP_PASSWORD") ?? "froststream-dev-admin",
+        publishValueAsDefault: false,
+        secret: true);
+    var authentikRedis = builder
+        .AddContainer("authentik-redis", "redis", "7-alpine")
+        .WithEndpoint(targetPort: 6379, name: "tcp");
+
+    authentik = builder
+        .AddContainer("authentik", "ghcr.io/goauthentik/server", "latest")
+        .WithArgs("server")
+        .WithHttpEndpoint(port: 9000, targetPort: 9000, name: "http")
+        .WithEnvironment("AUTHENTIK_SECRET_KEY", authentikSecretKey)
+        .WithEnvironment("AUTHENTIK_REDIS__HOST", "authentik-redis")
+        .WithEnvironment("AUTHENTIK_REDIS__PORT", "6379")
+        .WithEnvironment("AUTHENTIK_POSTGRESQL__HOST", "postgres")
+        .WithEnvironment("AUTHENTIK_POSTGRESQL__PORT", "5432")
+        .WithEnvironment("AUTHENTIK_POSTGRESQL__USER", postgresUser)
+        .WithEnvironment("AUTHENTIK_POSTGRESQL__PASSWORD", postgresPassword)
+        .WithEnvironment("AUTHENTIK_POSTGRESQL__NAME", "froststreamdb")
+        .WithEnvironment("AUTHENTIK_BOOTSTRAP_EMAIL", Environment.GetEnvironmentVariable("AUTHENTIK_BOOTSTRAP_EMAIL") ?? "admin@localhost")
+        .WithEnvironment("AUTHENTIK_BOOTSTRAP_PASSWORD", authentikBootstrapPassword)
+        .WaitFor(database)
+        .WaitFor(authentikRedis);
+
+    builder
+        .AddContainer("authentik-worker", "ghcr.io/goauthentik/server", "latest")
+        .WithArgs("worker")
+        .WithEnvironment("AUTHENTIK_SECRET_KEY", authentikSecretKey)
+        .WithEnvironment("AUTHENTIK_REDIS__HOST", "authentik-redis")
+        .WithEnvironment("AUTHENTIK_REDIS__PORT", "6379")
+        .WithEnvironment("AUTHENTIK_POSTGRESQL__HOST", "postgres")
+        .WithEnvironment("AUTHENTIK_POSTGRESQL__PORT", "5432")
+        .WithEnvironment("AUTHENTIK_POSTGRESQL__USER", postgresUser)
+        .WithEnvironment("AUTHENTIK_POSTGRESQL__PASSWORD", postgresPassword)
+        .WithEnvironment("AUTHENTIK_POSTGRESQL__NAME", "froststreamdb")
+        .WaitFor(database)
+        .WaitFor(authentikRedis);
+
+    var openfgaMigrate = builder
+        .AddContainer("openfga-migrate", "openfga/openfga", "latest")
+        .WithArgs("migrate")
+        .WithEnvironment("OPENFGA_DATASTORE_ENGINE", "postgres")
+        .WithEnvironment("OPENFGA_DATASTORE_URI", $"postgres://{postgresUser}:{postgresPassword}@postgres:5432/froststreamdb?sslmode=disable")
+        .WaitFor(database);
+
+    openfga = builder
+        .AddContainer("openfga", "openfga/openfga", "latest")
+        .WithArgs("run")
+        .WithHttpEndpoint(port: 8081, targetPort: 8080, name: "http")
+        .WithEnvironment("OPENFGA_DATASTORE_ENGINE", "postgres")
+        .WithEnvironment("OPENFGA_DATASTORE_URI", $"postgres://{postgresUser}:{postgresPassword}@postgres:5432/froststreamdb?sslmode=disable")
+        .WithEnvironment("OPENFGA_PLAYGROUND_ENABLED", "true")
+        .WaitForCompletion(openfgaMigrate)
+        .WaitFor(database);
+    openfgaEndpoint = openfga.GetEndpoint("http");
+}
+
 // projects
 var databridge = builder.AddProject<Projects.DataBridge>("databridge")
     .WithReference(database).WaitFor(database)
@@ -100,6 +190,7 @@ var databridge = builder.AddProject<Projects.DataBridge>("databridge")
     .WithEnvironment("Typesense__Url", typesenseEndpoint)
     .WithEnvironment("Typesense__ApiKey", typesenseDevApiKey)
     .WithEnvironment("FROSTSTREAM_STORAGE_ROOT", sharedStorageRoot)
+    .WithEnvironment("SINGLE_USER_MODE", singleUserMode ? "true" : "false")
     .WaitFor(openbao)
     .WaitFor(typesense);
 
@@ -108,12 +199,36 @@ var webapi = builder.AddProject<Projects.WebAPI>("webapi", launchProfileName: "h
     .WithEnvironment("OpenBao__Address", openbaoEndpoint)
     .WithEnvironment("OpenBao__Token", baoDevRootToken)
     .WithEnvironment("FROSTSTREAM_STORAGE_ROOT", sharedStorageRoot)
+    .WithEnvironment("SINGLE_USER_MODE", singleUserMode ? "true" : "false")
+    .WithEnvironment("Auth__SingleUserMode", singleUserMode ? "true" : "false")
+    .WithEnvironment("Auth__Authority", authentikAuthority)
+    .WithEnvironment("Auth__Audience", Environment.GetEnvironmentVariable("AUTHENTIK_API_AUDIENCE") ?? "froststream-api")
+    .WithEnvironment("Auth__RequireHttpsMetadata", Environment.GetEnvironmentVariable("AUTH_REQUIRE_HTTPS_METADATA") ?? "false")
+    .WithEnvironment("OpenFga__StoreId", Environment.GetEnvironmentVariable("OPENFGA_STORE_ID") ?? "")
+    .WithEnvironment("OpenFga__AuthorizationModelId", Environment.GetEnvironmentVariable("OPENFGA_AUTHORIZATION_MODEL_ID") ?? "")
     .WaitFor(openbao);
+
+if (!singleUserMode && authentik is not null && openfga is not null && openfgaEndpoint is not null)
+{
+    webapi = webapi
+        .WithEnvironment("OpenFga__Endpoint", openfgaEndpoint)
+        .WaitFor(authentik)
+        .WaitFor(openfga);
+}
 
 builder.AddViteApp("frontend", "../Frontend")
     .WithPnpm()
     .WithReference(webapi)
-    .WithEnvironment("VITE_API_BASE_URL", webapi.GetEndpoint("https"));
+    .WithEnvironment("VITE_API_BASE_URL", webapi.GetEndpoint("https"))
+    .WithEnvironment("API_BASE_URL", webapi.GetEndpoint("https"))
+    .WithEnvironment("SINGLE_USER_MODE", singleUserMode ? "true" : "false")
+    .WithEnvironment("VITE_SINGLE_USER_MODE", singleUserMode ? "true" : "false")
+    .WithEnvironment("VITE_AUTH_MODE", singleUserMode ? "single-user" : "multi-user")
+    .WithEnvironment("VITE_AUTH_AUTHORITY", singleUserMode ? "" : authentikAuthority)
+    .WithEnvironment("AUTH_AUTHORITY", singleUserMode ? "" : authentikAuthority)
+    .WithEnvironment("AUTH_CLIENT_ID", Environment.GetEnvironmentVariable("AUTHENTIK_CLIENT_ID") ?? "froststream-bff")
+    .WithEnvironment("AUTH_CLIENT_SECRET", authentikClientSecret)
+    .WithEnvironment("AUTH_SCOPES", Environment.GetEnvironmentVariable("AUTH_SCOPES") ?? "openid profile email groups");
 
 builder.AddProject<Projects.Worker>("worker")
     .WithReference(nats).WaitFor(nats)
@@ -133,3 +248,10 @@ builder.AddProject<Projects.Scheduler>("scheduler")
     });
 
 builder.Build().Run();
+
+static bool IsTruthy(string? value)
+    => value is not null &&
+       (string.Equals(value, "1", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(value, "yes", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(value, "on", StringComparison.OrdinalIgnoreCase));
