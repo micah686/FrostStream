@@ -1,0 +1,57 @@
+# yaml-language-server: $schema=https://goauthentik.io/blueprints/schema.json
+version: 1
+metadata:
+  name: froststream-oidc
+  labels:
+    blueprints.goauthentik.io/description: FrostStream development OIDC application and provider.
+entries:
+  - id: froststream-oauth-provider
+    model: authentik_providers_oauth2.oauth2provider
+    identifiers:
+      name: FrostStream
+    attrs:
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
+      client_type: confidential
+      client_id: !Env [AUTHENTIK_CLIENT_ID, froststream-bff]
+      client_secret: !Env [AUTHENTIK_CLIENT_SECRET, froststream-dev-client-secret]
+      grant_types:
+        - authorization_code
+        - refresh_token
+      include_claims_in_id_token: true
+      issuer_mode: per_provider
+      sub_mode: user_uuid
+      access_code_validity: minutes=5
+      access_token_validity: hours=1
+      refresh_token_validity: days=30
+      redirect_uris:
+        - matching_mode: regex
+          url: ^http://localhost:[0-9]+/auth/callback$
+          redirect_uri_type: authorization
+        - matching_mode: regex
+          url: ^https://localhost:[0-9]+/auth/callback$
+          redirect_uri_type: authorization
+        - matching_mode: regex
+          url: ^http://127\.0\.0\.1:[0-9]+/auth/callback$
+          redirect_uri_type: authorization
+        - matching_mode: regex
+          url: ^https://127\.0\.0\.1:[0-9]+/auth/callback$
+          redirect_uri_type: authorization
+        - matching_mode: regex
+          url: ^http://localhost:[0-9]+/$
+          redirect_uri_type: logout
+        - matching_mode: regex
+          url: ^https://localhost:[0-9]+/$
+          redirect_uri_type: logout
+
+  - model: authentik_core.application
+    identifiers:
+      slug: froststream
+    attrs:
+      name: FrostStream
+      provider: !KeyOf froststream-oauth-provider
+      meta_description: FrostStream development authentication client.

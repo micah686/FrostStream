@@ -61,7 +61,7 @@ public class Program
             builder.Services.AddScoped<IFrostStreamAuthorizer>(sp => sp.GetRequiredService<OpenFgaAuthorizer>());
         }
 
-        builder.Services.AddSingleton<IAuthorizationHandler, FrostStreamPermissionHandler>();
+        builder.Services.AddScoped<IAuthorizationHandler, FrostStreamPermissionHandler>();
         builder.Services.AddAuthorization(options =>
         {
             var authenticatedSystemAccess = new AuthorizationPolicyBuilder()
