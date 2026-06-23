@@ -11,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using NodaTime;
 using NSubstitute;
+using Shared.Auth;
 using Shared.Messaging;
 using Shared.Secrets;
 using Shared.Storage;
@@ -114,19 +115,25 @@ public sealed class WebApiHttpTests
     }
 
     [Test]
-    public async Task Put_Cookie_Writes_To_Fake_Secret_Store_Through_Http_Surface()
+    public async Task Put_Cookie_Writes_To_User_Scoped_Secret_Path_Through_Http_Surface()
     {
         using var factory = new TestWebApiFactory();
         using var client = factory.CreateClient();
 
         var response = await client.PutAsJsonAsync("/api/cookies/member-cookie", new
         {
-            content = "# Netscape HTTP Cookie File"
+            content = "# Netscape HTTP Cookie File",
+            site = "example.com"
         });
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        factory.SecretStore.Secrets["cookies/member-cookie"]["content"]
+        // Single-user mode resolves the subject to the synthetic owner, so the body lands under the
+        // user-scoped path — never the legacy global cookies/{key}.
+        factory.SecretStore.Secrets[$"cookies/users/{AuthConstants.SingleUserSubject}/member-cookie"]["content"]
             .ShouldBe("# Netscape HTTP Cookie File");
+        factory.MessageBus.LastCookieUpsert.ShouldNotBeNull();
+        factory.MessageBus.LastCookieUpsert!.ProfileKey.ShouldBe("member-cookie");
+        factory.MessageBus.LastCookieUpsert.OwnerSubject.ShouldBe(AuthConstants.SingleUserSubject);
     }
 }
 
@@ -196,6 +203,7 @@ internal sealed class FakeMessageBus : IMessageBus
 {
     public MediaStreamResolveResponseMessage? MediaStreamResponse { get; set; }
     public MediaStreamResolveRequestMessage? MediaStreamRequest { get; private set; }
+    public CookieProfileUpsertRequestMessage? LastCookieUpsert { get; private set; }
 
     public Task PublishAsync<T>(string subject, T message, CancellationToken cancellationToken = default)
         => Task.CompletedTask;
@@ -226,6 +234,24 @@ internal sealed class FakeMessageBus : IMessageBus
         {
             MediaStreamRequest = mediaStreamRequest;
             return Task.FromResult((TResponse?)(object)MediaStreamResponse);
+        }
+
+        if (subject == CookieProfileSubjects.Upsert && request is CookieProfileUpsertRequestMessage cookieUpsert)
+        {
+            LastCookieUpsert = cookieUpsert;
+            return Task.FromResult((TResponse?)(object)new CookieProfileOperationResponseMessage
+            {
+                Success = true,
+                Entity = new CookieProfileDto
+                {
+                    Id = Guid.NewGuid(),
+                    OwnerSubject = cookieUpsert.OwnerSubject,
+                    ProfileKey = cookieUpsert.ProfileKey,
+                    Site = cookieUpsert.Site,
+                    DisplayName = cookieUpsert.DisplayName,
+                    CreatedAt = TestWebApiFactory.Now
+                }
+            });
         }
 
         return Task.FromResult<TResponse?>(default);
