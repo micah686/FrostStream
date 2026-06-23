@@ -45,6 +45,11 @@ entries:
     attrs:
       authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
       invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      # Without an RSA signing key, authentik signs access tokens with HS256 (the client secret) and
+      # publishes an empty JWKS, so the WebAPI JwtBearer validation can never find a key
+      # ("The signature key was not found"). Bind authentik's built-in self-signed keypair so tokens
+      # are RS256-signed and the public key is exposed at the provider's jwks_uri.
+      signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
       property_mappings:
         - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
         - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]
