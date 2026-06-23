@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Options;
 
 namespace WebAPI.Auth;
@@ -22,7 +23,7 @@ public sealed class NullOpenFgaTupleWriter : IOpenFgaTupleWriter
         => Task.CompletedTask;
 }
 
-public sealed class OpenFgaTupleWriter(
+public sealed partial class OpenFgaTupleWriter(
     HttpClient httpClient,
     IOptions<OpenFgaOptions> options,
     OpenFgaRuntimeState state,
@@ -32,6 +33,13 @@ public sealed class OpenFgaTupleWriter(
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
     };
+
+    // OpenFGA object ids may not contain whitespace or the `:`/`#` separators. Authentik's default
+    // groups (e.g. `authentik Admins`) carry spaces, so they can never become a `group:<name>` tuple;
+    // we skip them here with a log line rather than letting the write fail server-side. Access requires
+    // membership in canonically named groups (admins / users / viewers / owner) — see the blueprint.
+    [GeneratedRegex(@"^[A-Za-z0-9_.@/+=,|-]+$")]
+    private static partial Regex ValidGroupIdRegex();
 
     private readonly OpenFgaOptions _options = options.Value;
 
@@ -47,7 +55,21 @@ public sealed class OpenFgaTupleWriter(
         var user = $"user:{subject}";
         var desired = groups
             .Where(group => !string.IsNullOrWhiteSpace(group))
-            .Select(group => $"group:{group.Trim()}")
+            .Select(group => group.Trim())
+            .Where(group =>
+            {
+                if (ValidGroupIdRegex().IsMatch(group))
+                {
+                    return true;
+                }
+
+                logger.LogWarning(
+                    "Skipping group '{Group}' for {Subject}: not a valid OpenFGA object id (no spaces/`:`/`#`).",
+                    group,
+                    subject);
+                return false;
+            })
+            .Select(group => $"group:{group}")
             .ToHashSet(StringComparer.Ordinal);
 
         IReadOnlySet<string> existing;

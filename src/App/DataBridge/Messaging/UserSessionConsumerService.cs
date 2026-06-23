@@ -75,7 +75,8 @@ public sealed class UserSessionConsumerService(
                 Id = Guid.NewGuid(),
                 AuthentikSubjectId = msg.Subject,
                 DisplayName = displayName,
-                LastSeenAt = now
+                LastSeenAt = now,
+                CreatedAt = now
             };
             db.FrostStreamUsers.Add(entity);
             await db.SaveChangesAsync();

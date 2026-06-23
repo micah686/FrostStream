@@ -163,7 +163,8 @@ public sealed class CookieProfileConsumerService(
                 OwnerSubject = msg.OwnerSubject,
                 ProfileKey = msg.ProfileKey,
                 Site = msg.Site,
-                DisplayName = msg.DisplayName
+                DisplayName = msg.DisplayName,
+                CreatedAt = now
             };
             db.CookieProfiles.Add(existing);
         }

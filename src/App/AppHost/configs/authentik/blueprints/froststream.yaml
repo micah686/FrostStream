@@ -95,3 +95,40 @@ entries:
       name: FrostStream
       provider: !KeyOf froststream-oauth-provider
       meta_description: FrostStream development authentication client.
+
+  # Role groups consumed by OpenFGA authorization. The tuple writer maps each membership to
+  # `group:<name>#member@user:<sub>`, and the OpenFgaProvisioner seeds the bootstrap tuples
+  # (`group:admins#member -> admin`, `users -> member`, `viewers -> viewer`, `owner -> owner`).
+  # Names must be valid OpenFGA object ids (no spaces), so these canonical names are required —
+  # Authentik's default `authentik Admins` group is silently skipped by the tuple writer.
+  # `akadmin` (the Authentik bootstrap admin) is added to `admins` so the deployer has a working
+  # privileged account on first login without any manual OpenFGA tuple writes.
+  - id: froststream-group-admins
+    model: authentik_core.group
+    identifiers:
+      name: admins
+    attrs:
+      name: admins
+      users:
+        - !Find [authentik_core.user, [username, akadmin]]
+
+  - id: froststream-group-users
+    model: authentik_core.group
+    identifiers:
+      name: users
+    attrs:
+      name: users
+
+  - id: froststream-group-viewers
+    model: authentik_core.group
+    identifiers:
+      name: viewers
+    attrs:
+      name: viewers
+
+  - id: froststream-group-owner
+    model: authentik_core.group
+    identifiers:
+      name: owner
+    attrs:
+      name: owner

@@ -18,7 +18,7 @@ public sealed class CookieProfileEntity
 
     public string? DisplayName { get; set; }
 
-    public Instant CreatedAt { get; private set; } = SystemClock.Instance.GetCurrentInstant();
+    public Instant CreatedAt { get; set; } = SystemClock.Instance.GetCurrentInstant();
 
     public Instant? LastUpdated { get; set; }
 }
