@@ -1,7 +1,9 @@
 using System.Text.Json;
 using FlySwattr.NATS.Abstractions;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Shared.Messaging;
+using WebAPI.Auth;
 using WebAPI.Features.OptionPresets.Models;
 using YtDlpSharpLib.Options;
 
@@ -14,11 +16,13 @@ namespace WebAPI.Features.OptionPresets.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/option-presets")]
+[Authorize(Policy = AuthPolicies.SystemAccess)]
 public class OptionPresetsController(IMessageBus messageBus, ILogger<OptionPresetsController> logger) : ControllerBase
 {
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);
 
     [HttpPost]
+    [Authorize(Policy = AuthPolicies.SystemManage)]
     [EndpointSummary("Create a yt-dlp option preset")]
     [EndpointDescription("Stores a named set of yt-dlp options that can be referenced by preset-based download requests. The options are serialized and sent to DataBridge for validation and persistence; duplicate keys return 409 and invalid preset data returns 400.")]
     public async Task<ActionResult<OptionPresetResponse>> Create(
@@ -42,6 +46,7 @@ public class OptionPresetsController(IMessageBus messageBus, ILogger<OptionPrese
     }
 
     [HttpPut("{key}")]
+    [Authorize(Policy = AuthPolicies.SystemManage)]
     [EndpointSummary("Update a yt-dlp option preset")]
     [EndpointDescription("Replaces the display metadata and yt-dlp option payload for an existing preset identified by its key. DataBridge validates and persists the complete replacement; unknown keys return 404 and invalid updates return 400.")]
     public async Task<ActionResult<OptionPresetResponse>> Update(
@@ -97,6 +102,7 @@ public class OptionPresetsController(IMessageBus messageBus, ILogger<OptionPrese
     }
 
     [HttpDelete("{key}")]
+    [Authorize(Policy = AuthPolicies.SystemManage)]
     [EndpointSummary("Delete a yt-dlp option preset")]
     [EndpointDescription("Deletes the stored option preset identified by its key. A successful deletion returns 204; unknown keys return 404 and presets that cannot be deleted because of a conflict return 409.")]
     public async Task<IActionResult> Delete(string key, CancellationToken cancellationToken)

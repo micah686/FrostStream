@@ -5,6 +5,39 @@ metadata:
   labels:
     blueprints.goauthentik.io/description: FrostStream development OIDC application and provider.
 entries:
+  # Emits a `groups` claim containing the user's Authentik group names. WebAPI maps this
+  # claim to OpenFGA membership tuples (see Section 3 session sync). Keep the scope_name as
+  # `groups` so it lines up with AUTH_SCOPES (`openid profile email groups`).
+  - id: froststream-scope-groups
+    model: authentik_providers_oauth2.scopemapping
+    identifiers:
+      scope_name: groups
+      name: FrostStream groups
+    attrs:
+      scope_name: groups
+      name: FrostStream groups
+      description: FrostStream group membership claim used for OpenFGA authorization.
+      expression: |
+        return {
+            "groups": [group.name for group in request.user.ak_groups.all()],
+        }
+
+  # Authentik defaults the `aud` claim to the client_id. WebAPI validates the audience as
+  # `froststream-api`, so this mapping injects that audience into issued tokens.
+  - id: froststream-scope-audience
+    model: authentik_providers_oauth2.scopemapping
+    identifiers:
+      scope_name: froststream-audience
+      name: FrostStream audience
+    attrs:
+      scope_name: froststream-audience
+      name: FrostStream audience
+      description: Adds the froststream-api audience claim expected by the WebAPI JWT validation.
+      expression: |
+        return {
+            "aud": "froststream-api",
+        }
+
   - id: froststream-oauth-provider
     model: authentik_providers_oauth2.oauth2provider
     identifiers:
@@ -16,6 +49,8 @@ entries:
         - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
         - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]
         - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
+        - !KeyOf froststream-scope-groups
+        - !KeyOf froststream-scope-audience
       client_type: confidential
       client_id: !Env [AUTHENTIK_CLIENT_ID, froststream-bff]
       client_secret: !Env [AUTHENTIK_CLIENT_SECRET, froststream-dev-client-secret]

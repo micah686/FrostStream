@@ -125,6 +125,24 @@ export function setTransientCookie(cookies: Cookies, name: string, value: string
   });
 }
 
+/**
+ * Notifies the WebAPI that a session was established so it can upsert the local user and refresh
+ * OpenFGA group tuples. Best-effort: never throw, so a sync hiccup cannot break login.
+ */
+export async function syncSession(accessToken: string): Promise<void> {
+  try {
+    const response = await fetch(new URL('/api/auth/session', apiBaseUrl()), {
+      method: 'POST',
+      headers: { authorization: `Bearer ${accessToken}` }
+    });
+    if (!response.ok) {
+      console.warn(`Session sync returned ${response.status}.`);
+    }
+  } catch (err) {
+    console.warn('Session sync failed:', err);
+  }
+}
+
 export function tokenSetFromResponse(body: Record<string, unknown>): TokenSet {
   const accessToken = typeof body.access_token === 'string' ? body.access_token : '';
   if (!accessToken) {

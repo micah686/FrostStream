@@ -1,14 +1,17 @@
 using FlySwattr.NATS.Abstractions;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Shared;
 using Shared.Messaging;
 using Shared.Storage;
+using WebAPI.Auth;
 using WebAPI.Features.Storage.Models;
 
 namespace WebAPI.Features.Storage.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Policy = AuthPolicies.SystemManage)]
 public class StorageController : ControllerBase
 {
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);
@@ -172,6 +175,7 @@ public class StorageController : ControllerBase
             cancellationToken);
 
     [HttpGet("list")]
+    [Authorize(Policy = AuthPolicies.SystemAccess)]
     [EndpointSummary("List storage targets")]
     [EndpointDescription("Returns every configured storage key with its method, description, timestamps, and non-sensitive provider parameters. Passwords, access keys, connection strings, SAS URLs, and credential documents are never included in the response.")]
     public async Task<ActionResult<IReadOnlyCollection<StorageConfigDto>>> ListStorage(CancellationToken cancellationToken)
@@ -218,6 +222,7 @@ public class StorageController : ControllerBase
     }
 
     [HttpGet("{key}")]
+    [Authorize(Policy = AuthPolicies.SystemAccess)]
     [EndpointSummary("Get a storage target")]
     [EndpointDescription("Retrieves one storage configuration by key, including its method and non-sensitive local, network, or object-storage parameters. Secret credentials remain redacted and are only hydrated internally when a service opens the storage backend.")]
     public async Task<ActionResult<StorageConfigDto>> GetStorage(string key, CancellationToken cancellationToken)

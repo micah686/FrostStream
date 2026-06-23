@@ -120,9 +120,11 @@ var webapi = builder.AddProject<Projects.WebAPI>("webapi", launchProfileName: "h
     .WithEnvironment("SINGLE_USER_MODE", singleUserMode ? "true" : "false")
     .WithEnvironment("Auth__SingleUserMode", singleUserMode ? "true" : "false")
     .WithEnvironment("Auth__Audience", Environment.GetEnvironmentVariable("AUTHENTIK_API_AUDIENCE") ?? "froststream-api")
+    .WithEnvironment("Auth__ClientId", authentik.ClientId)
     .WithEnvironment("Auth__RequireHttpsMetadata", Environment.GetEnvironmentVariable("AUTH_REQUIRE_HTTPS_METADATA") ?? "false")
     .WithEnvironment("OpenFga__StoreId", Environment.GetEnvironmentVariable("OPENFGA_STORE_ID") ?? "")
     .WithEnvironment("OpenFga__AuthorizationModelId", Environment.GetEnvironmentVariable("OPENFGA_AUTHORIZATION_MODEL_ID") ?? "")
+    .WithEnvironment("OpenFga__BootstrapOwnerSubjects", Environment.GetEnvironmentVariable("OPENFGA_BOOTSTRAP_OWNER_SUB") ?? "")
     .WaitFor(openbao);
 
 webapi = WithAuthAuthority(webapi, "Auth__Authority");

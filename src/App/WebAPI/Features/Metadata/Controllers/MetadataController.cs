@@ -1,12 +1,15 @@
 using FlySwattr.NATS.Abstractions;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Shared.Messaging;
+using WebAPI.Auth;
 using WebAPI.Features.Metadata.Models;
 
 namespace WebAPI.Features.Metadata.Controllers;
 
 [ApiController]
 [Route("api/metadata")]
+[Authorize(Policy = AuthPolicies.SystemAccess)]
 public sealed class MetadataController(
     IMessageBus messageBus,
     ILogger<MetadataController> logger) : ControllerBase

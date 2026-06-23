@@ -34,6 +34,7 @@ public sealed class DataBridgeDbContext(DbContextOptions<DataBridgeDbContext> op
     public DbSet<CreatorSourceEntity> CreatorSources => Set<CreatorSourceEntity>();
     public DbSet<DiscoveredMediaEntity> DiscoveredMedia => Set<DiscoveredMediaEntity>();
     public DbSet<FrostStreamUserEntity> FrostStreamUsers => Set<FrostStreamUserEntity>();
+    public DbSet<CookieProfileEntity> CookieProfiles => Set<CookieProfileEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

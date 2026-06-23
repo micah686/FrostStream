@@ -1,12 +1,15 @@
 using FlySwattr.NATS.Abstractions;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NodaTime;
 using Shared.Messaging;
+using WebAPI.Auth;
 
 namespace WebAPI.Features.Metadata.Controllers;
 
 [ApiController]
 [Route("api/metadata")]
+[Authorize(Policy = AuthPolicies.SystemManage)]
 public sealed class MetadataAdminController(
     IJetStreamPublisher publisher,
     IMessageBus messageBus,

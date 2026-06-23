@@ -1,7 +1,9 @@
 using FlySwattr.NATS.Abstractions;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NodaTime;
 using Shared.Messaging;
+using WebAPI.Auth;
 using WebAPI.Features.Common;
 using WebAPI.Features.Playlists.Models;
 
@@ -9,6 +11,7 @@ namespace WebAPI.Features.Playlists.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Policy = AuthPolicies.SystemAccess)]
 public class PlaylistsController(
     IJetStreamPublisher jetStreamPublisher,
     IMessageBus messageBus,

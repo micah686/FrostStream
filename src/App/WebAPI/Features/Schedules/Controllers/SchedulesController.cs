@@ -1,18 +1,22 @@
 using FlySwattr.NATS.Abstractions;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Shared.Database;
 using Shared.Messaging;
+using WebAPI.Auth;
 using WebAPI.Features.Schedules.Models;
 
 namespace WebAPI.Features.Schedules.Controllers;
 
 [ApiController]
 [Route("api/schedules")]
+[Authorize(Policy = AuthPolicies.SystemAccess)]
 public sealed class SchedulesController(IMessageBus messageBus, ILogger<SchedulesController> logger) : ControllerBase
 {
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);
 
     [HttpPost]
+    [Authorize(Policy = AuthPolicies.SystemManage)]
     [EndpointSummary("Create a scheduled background task")]
     [EndpointDescription("Creates a scheduler definition for the requested task type using either cron or interval timing, timezone, enabled state, and catch-up policy. DataBridge validates the schedule and persists it; duplicate keys return 409 and invalid timing combinations return 400.")]
     public async Task<ActionResult<ScheduledTaskResponse>> Create(
@@ -37,6 +41,7 @@ public sealed class SchedulesController(IMessageBus messageBus, ILogger<Schedule
     }
 
     [HttpPut("{key}")]
+    [Authorize(Policy = AuthPolicies.SystemManage)]
     [EndpointSummary("Update a scheduled background task")]
     [EndpointDescription("Replaces the configuration of an existing scheduled task identified by key. The task type, timing, timezone, enabled state, and catch-up policy are revalidated and persisted while execution timestamps are returned from the stored schedule.")]
     public async Task<ActionResult<ScheduledTaskResponse>> Update(
@@ -93,6 +98,7 @@ public sealed class SchedulesController(IMessageBus messageBus, ILogger<Schedule
     }
 
     [HttpDelete("{key}")]
+    [Authorize(Policy = AuthPolicies.SystemManage)]
     [EndpointSummary("Delete a scheduled background task")]
     [EndpointDescription("Deletes the scheduler definition identified by its key so it is no longer eligible for future execution. Successful deletion returns 204; missing schedules return 404 and conflicting deletions return 409.")]
     public async Task<IActionResult> Delete(string key, CancellationToken cancellationToken)

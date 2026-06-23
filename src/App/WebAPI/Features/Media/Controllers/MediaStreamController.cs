@@ -1,13 +1,16 @@
 using FlySwattr.NATS.Abstractions;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.StaticFiles;
 using Shared.Messaging;
 using Shared.Storage;
+using WebAPI.Auth;
 
 namespace WebAPI.Features.Media.Controllers;
 
 [ApiController]
 [Route("stream")]
+[Authorize(Policy = AuthPolicies.SystemAccess)]
 public sealed class MediaStreamController(
     IMessageBus messageBus,
     IBlobStorageProvider blobStorageProvider,

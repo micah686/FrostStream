@@ -6,6 +6,7 @@ import {
   cookieSecure,
   discover,
   redirectUri,
+  syncSession,
   tokenSetFromResponse,
   writeTokens
 } from '$lib/server/auth';
@@ -49,6 +50,9 @@ export const GET: RequestHandler = async ({ cookies, url }) => {
   writeTokens(cookies, tokens, secure);
   cookies.delete(authCookies.state, { path: '/', secure });
   cookies.delete(authCookies.verifier, { path: '/', secure });
+
+  // Upsert the local user and refresh OpenFGA group tuples before landing on the app.
+  await syncSession(tokens.accessToken);
 
   throw redirect(303, '/');
 };

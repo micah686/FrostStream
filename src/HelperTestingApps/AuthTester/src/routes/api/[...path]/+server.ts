@@ -1,4 +1,4 @@
-import { apiBaseUrl, isSingleUserMode, readTokens } from '$lib/server/auth';
+import { apiBaseUrl, cookieSecure, ensureFreshTokens, isSingleUserMode } from '$lib/server/auth';
 import type { RequestHandler } from './$types';
 
 const hopByHopHeaders = new Set([
@@ -25,7 +25,7 @@ async function proxy({ request, params, url, cookies }: Parameters<RequestHandle
 
   const anonymousConfigRequest = params.path === 'auth/config';
   if (!isSingleUserMode() && !anonymousConfigRequest) {
-    const tokens = readTokens(cookies);
+    const tokens = await ensureFreshTokens(cookies, cookieSecure(url));
     if (!tokens?.accessToken) {
       return new Response('Authentication required.', { status: 401 });
     }

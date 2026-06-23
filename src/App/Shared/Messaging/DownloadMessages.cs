@@ -196,6 +196,14 @@ public sealed record DownloadRequested : IFlowMessage
     /// <c>--cookies &lt;path&gt;</c> to yt-dlp for the duration of the run.
     /// </summary>
     public string? CookieKey { get; init; }
+
+    /// <summary>
+    /// Opaque, fully-resolved OpenBAO path to a user-owned cookie profile
+    /// (<c>cookies/users/{subject}/{profileKey}</c>), resolved by WebAPI from the authenticated
+    /// user. Preferred over <see cref="CookieKey"/>; the Worker only ever sees this reference,
+    /// never the cookie body or the owning user's identity beyond the path.
+    /// </summary>
+    public string? CookieSecretPath { get; init; }
 }
 
 /// <summary>
@@ -224,6 +232,9 @@ public sealed record FetchMetadataCommand : IFlowMessage
 
     /// <summary>Same OpenBAO cookie reference as on <see cref="DownloadRequested.CookieKey"/>.</summary>
     public string? CookieKey { get; init; }
+
+    /// <summary>Same resolved user-owned cookie path as on <see cref="DownloadRequested.CookieSecretPath"/>.</summary>
+    public string? CookieSecretPath { get; init; }
 }
 
 /// <summary>
@@ -313,6 +324,9 @@ public sealed record DownloadVideoCommand : IFlowMessage
 
     /// <summary>Same OpenBAO cookie reference as on <see cref="DownloadRequested.CookieKey"/>.</summary>
     public string? CookieKey { get; init; }
+
+    /// <summary>Same resolved user-owned cookie path as on <see cref="DownloadRequested.CookieSecretPath"/>.</summary>
+    public string? CookieSecretPath { get; init; }
 }
 
 /// <summary>

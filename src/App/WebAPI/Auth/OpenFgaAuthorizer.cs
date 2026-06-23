@@ -9,6 +9,7 @@ namespace WebAPI.Auth;
 public sealed class OpenFgaAuthorizer(
     HttpClient httpClient,
     IOptions<OpenFgaOptions> options,
+    OpenFgaRuntimeState state,
     ILogger<OpenFgaAuthorizer> logger) : IFrostStreamAuthorizer
 {
     private readonly OpenFgaOptions _options = options.Value;
@@ -17,8 +18,9 @@ public sealed class OpenFgaAuthorizer(
         FrostStreamAuthorizationCheck check,
         CancellationToken cancellationToken = default)
     {
+        var storeId = state.StoreId;
         if (string.IsNullOrWhiteSpace(_options.Endpoint) ||
-            string.IsNullOrWhiteSpace(_options.StoreId))
+            string.IsNullOrWhiteSpace(storeId))
         {
             logger.LogWarning("OpenFGA authorization is not configured; denying {Relation} on {Object} for {User}.",
                 check.Relation,
@@ -29,7 +31,7 @@ public sealed class OpenFgaAuthorizer(
 
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
-            $"{_options.Endpoint.TrimEnd('/')}/stores/{Uri.EscapeDataString(_options.StoreId)}/check");
+            $"{_options.Endpoint.TrimEnd('/')}/stores/{Uri.EscapeDataString(storeId)}/check");
 
         if (!string.IsNullOrWhiteSpace(_options.ApiToken))
         {
@@ -38,7 +40,7 @@ public sealed class OpenFgaAuthorizer(
 
         request.Content = JsonContent.Create(new OpenFgaCheckRequest
         {
-            AuthorizationModelId = string.IsNullOrWhiteSpace(_options.AuthorizationModelId) ? null : _options.AuthorizationModelId,
+            AuthorizationModelId = string.IsNullOrWhiteSpace(state.AuthorizationModelId) ? null : state.AuthorizationModelId,
             TupleKey = new OpenFgaTupleKey
             {
                 User = check.User,

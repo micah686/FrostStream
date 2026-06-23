@@ -1,0 +1,17 @@
+model
+  schema 1.1
+
+type user
+
+type group
+  relations
+    define member: [user]
+
+type system
+  relations
+    define owner: [user, group#member]
+    define admin: [user, group#member] or owner
+    define member: [user, group#member] or admin
+    define viewer: [user, group#member] or member
+    define access: viewer
+    define manage: admin

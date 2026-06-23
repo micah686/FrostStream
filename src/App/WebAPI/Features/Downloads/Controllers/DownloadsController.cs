@@ -1,7 +1,11 @@
 using FlySwattr.NATS.Abstractions;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NodaTime;
+using Shared.Auth;
 using Shared.Messaging;
+using Shared.Secrets;
+using WebAPI.Auth;
 using WebAPI.Features.Common;
 using WebAPI.Features.Downloads.Models;
 using WebAPI.Features.OptionPresets.Controllers;
@@ -11,6 +15,7 @@ namespace WebAPI.Features.Downloads.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Policy = AuthPolicies.SystemAccess)]
 public class DownloadsController(
     IJetStreamPublisher publisher,
     IClock clock,
@@ -38,6 +43,7 @@ public class DownloadsController(
             ytDlpOptions: null,
             presetKey: null,
             cookieKey: request.CookieKey,
+            cookieProfileKey: request.CookieProfileKey,
             cancellationToken: cancellationToken);
 
     /// <summary>
@@ -61,6 +67,7 @@ public class DownloadsController(
             ytDlpOptions: null,
             presetKey: null,
             cookieKey: request.CookieKey,
+            cookieProfileKey: request.CookieProfileKey,
             cancellationToken: cancellationToken);
 
     /// <summary>
@@ -85,6 +92,7 @@ public class DownloadsController(
             ytDlpOptions: null,
             presetKey: request.PresetKey,
             cookieKey: request.CookieKey,
+            cookieProfileKey: request.CookieProfileKey,
             cancellationToken: cancellationToken);
 
     private async Task<ActionResult<DownloadRequestResponse>> PublishRequestAsync(
@@ -98,6 +106,7 @@ public class DownloadsController(
         YtDlpOptions? ytDlpOptions,
         string? presetKey,
         string? cookieKey,
+        string? cookieProfileKey,
         CancellationToken cancellationToken)
     {
         if (!YtDlpSourceUrlValidator.TryValidate(sourceUrl, out var validationError))
@@ -108,6 +117,26 @@ public class DownloadsController(
                 Detail = validationError,
                 Status = StatusCodes.Status400BadRequest
             });
+        }
+
+        var subject = AuthConstants.FindSubject(User);
+
+        // A user-owned cookie profile is resolved server-side to a subject-scoped secret path, so a
+        // caller can only ever reference their own cookies — never a global key or another user's.
+        string? cookieSecretPath = null;
+        if (!string.IsNullOrWhiteSpace(cookieProfileKey))
+        {
+            if (!SecretPaths.IsValidUserScope(subject) || !SecretPaths.IsValidProfileKey(cookieProfileKey))
+            {
+                return BadRequest(new ProblemDetails
+                {
+                    Title = "Invalid cookie profile",
+                    Detail = "cookieProfileKey must match ^[a-z0-9-]{2,100}$ for an authenticated user.",
+                    Status = StatusCodes.Status400BadRequest
+                });
+            }
+
+            cookieSecretPath = SecretPaths.ForUserCookieProfile(subject!, cookieProfileKey);
         }
 
         var jobId = Guid.NewGuid();
@@ -124,7 +153,7 @@ public class DownloadsController(
             OccurredAt = clock.GetCurrentInstant(),
             Attempt = 1,
             SourceUrl = sourceUrl,
-            RequestedBy = requestedBy,
+            RequestedBy = string.IsNullOrWhiteSpace(requestedBy) ? subject : requestedBy,
             StorageKey = string.IsNullOrWhiteSpace(storageKey) ? "default" : storageKey,
             Tags = tags,
             ForceDownload = forceDownload,
@@ -132,7 +161,8 @@ public class DownloadsController(
             AudioFormat = audioFormat,
             YtDlpOptions = ytDlpOptions,
             PresetKey = presetKey,
-            CookieKey = cookieKey
+            CookieKey = cookieKey,
+            CookieSecretPath = cookieSecretPath
         };
 
         try

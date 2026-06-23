@@ -245,7 +245,8 @@ public class DownloadArchiveFlow(
                 Attempt = attempt,
                 SourceUrl = request.SourceUrl,
                 YtDlpOptions = request.YtDlpOptions,
-                CookieKey = request.CookieKey
+                CookieKey = request.CookieKey,
+                CookieSecretPath = request.CookieSecretPath
             };
             logger.LogInformation(
                 "Download flow dispatching metadata fetch for JobId {JobId} Attempt {Attempt} OperationKey {OperationKey}",
@@ -305,7 +306,8 @@ public class DownloadArchiveFlow(
                 MediaKind = request.MediaKind,
                 AudioFormat = request.AudioFormat,
                 YtDlpOptions = request.YtDlpOptions,
-                CookieKey = request.CookieKey
+                CookieKey = request.CookieKey,
+                CookieSecretPath = request.CookieSecretPath
             };
             logger.LogInformation(
                 "Download flow dispatching video download for JobId {JobId} Attempt {Attempt} OperationKey {OperationKey}",

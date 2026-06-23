@@ -18,6 +18,10 @@ interface DiscoveryDocument {
   end_session_endpoint?: string;
 }
 
+// Refresh the access token this many ms before it actually expires, so in-flight proxied
+// requests never carry a token that lapses mid-flight.
+const refreshSkewMs = 60_000;
+
 export const authCookies = {
   token: tokenCookie,
   state: stateCookie,
@@ -138,6 +142,99 @@ export function tokenSetFromResponse(body: Record<string, unknown>): TokenSet {
     idToken: typeof body.id_token === 'string' ? body.id_token : undefined,
     expiresAt: Date.now() + expiresIn * 1000
   };
+}
+
+/**
+ * Notifies the WebAPI that a session was established so it can upsert the local user and refresh
+ * OpenFGA group tuples. Best-effort: never throw, so a sync hiccup cannot break login.
+ */
+export async function syncSession(accessToken: string): Promise<void> {
+  try {
+    const response = await fetch(new URL('/api/auth/session', apiBaseUrl()), {
+      method: 'POST',
+      headers: { authorization: `Bearer ${accessToken}` }
+    });
+    if (!response.ok) {
+      console.warn(`Session sync returned ${response.status}.`);
+    }
+  } catch (err) {
+    console.warn('Session sync failed:', err);
+  }
+}
+
+/**
+ * Returns a valid token set, transparently refreshing it via the OIDC refresh_token grant when the
+ * access token is within {@link refreshSkewMs} of expiry. Persists the rotated tokens back to the
+ * httpOnly cookie. Returns null when there is no usable session.
+ */
+export async function ensureFreshTokens(cookies: Cookies, secure: boolean): Promise<TokenSet | null> {
+  const tokens = readTokens(cookies);
+  if (!tokens?.accessToken) {
+    return null;
+  }
+
+  const expiresAt = tokens.expiresAt ?? 0;
+  if (!tokens.refreshToken || expiresAt - Date.now() > refreshSkewMs) {
+    return tokens;
+  }
+
+  try {
+    const discovery = await discover();
+    const body = new URLSearchParams({
+      grant_type: 'refresh_token',
+      client_id: clientId(),
+      refresh_token: tokens.refreshToken
+    });
+    const secret = clientSecret();
+    if (secret) {
+      body.set('client_secret', secret);
+    }
+
+    const response = await fetch(discovery.token_endpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body
+    });
+
+    if (!response.ok) {
+      console.warn(`Token refresh failed with status ${response.status}.`);
+      return tokens;
+    }
+
+    const refreshed = tokenSetFromResponse((await response.json()) as Record<string, unknown>);
+    // Authentik may omit a rotated refresh token; keep the previous one when it does.
+    if (!refreshed.refreshToken) {
+      refreshed.refreshToken = tokens.refreshToken;
+    }
+    writeTokens(cookies, refreshed, secure);
+    return refreshed;
+  } catch (err) {
+    console.warn('Token refresh error:', err);
+    return tokens;
+  }
+}
+
+/**
+ * Builds the IdP end-session URL (RP-initiated logout) when discovery advertises one. Returns null
+ * if the provider has no end_session_endpoint, in which case logout is local-only.
+ */
+export async function endSessionUrl(idToken: string | undefined, postLogoutRedirect: string): Promise<string | null> {
+  try {
+    const discovery = await discover();
+    if (!discovery.end_session_endpoint) {
+      return null;
+    }
+
+    const endSession = new URL(discovery.end_session_endpoint);
+    endSession.searchParams.set('post_logout_redirect_uri', postLogoutRedirect);
+    if (idToken) {
+      endSession.searchParams.set('id_token_hint', idToken);
+    }
+    return endSession.toString();
+  } catch (err) {
+    console.warn('Failed building end-session URL:', err);
+    return null;
+  }
 }
 
 export function decodeJwtPayload(token: string | undefined): Record<string, unknown> | undefined {

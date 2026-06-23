@@ -2,6 +2,7 @@ using FlySwattr.NATS.Extensions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using NodaTime;
 using NodaTime.Serialization.SystemTextJson;
@@ -33,6 +34,7 @@ public class Program
                     AuthConstants.SingleUserScheme,
                     _ => { });
             builder.Services.AddSingleton<IFrostStreamAuthorizer, AllowAllAuthorizer>();
+            builder.Services.AddSingleton<IOpenFgaTupleWriter, NullOpenFgaTupleWriter>();
         }
         else
         {
@@ -42,36 +44,51 @@ public class Program
                 throw new InvalidOperationException("Auth:Authority must be configured when SINGLE_USER_MODE is not enabled.");
             }
 
+            var audience = builder.Configuration["Auth:Audience"] ?? "froststream-api";
+            // Authentik defaults the token `aud` to the OIDC client_id. The froststream blueprint
+            // also ships a custom mapping that can emit `froststream-api`, so accept both: the
+            // configured API audience and the client_id when one is supplied.
+            var validAudiences = new[] { audience, builder.Configuration["Auth:ClientId"] }
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => value!)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+
             builder.Services
                 .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 .AddJwtBearer(options =>
                 {
                     options.Authority = authority;
-                    options.Audience = builder.Configuration["Auth:Audience"] ?? "froststream-api";
                     options.RequireHttpsMetadata = builder.Configuration.GetValue("Auth:RequireHttpsMetadata", true);
                     options.MapInboundClaims = false;
                     options.TokenValidationParameters = new TokenValidationParameters
                     {
+                        ValidateAudience = true,
+                        ValidAudiences = validAudiences,
                         NameClaimType = AuthConstants.PreferredUsernameClaim,
                         RoleClaimType = AuthConstants.GroupsClaim
                     };
                 });
 
+            builder.Services.AddSingleton(sp =>
+            {
+                var openFgaOptions = sp.GetRequiredService<IOptions<OpenFgaOptions>>().Value;
+                return new OpenFgaRuntimeState
+                {
+                    StoreId = NullIfBlank(openFgaOptions.StoreId),
+                    AuthorizationModelId = NullIfBlank(openFgaOptions.AuthorizationModelId)
+                };
+            });
             builder.Services.AddHttpClient<OpenFgaAuthorizer>();
             builder.Services.AddScoped<IFrostStreamAuthorizer>(sp => sp.GetRequiredService<OpenFgaAuthorizer>());
+            builder.Services.AddHttpClient<OpenFgaTupleWriter>();
+            builder.Services.AddScoped<IOpenFgaTupleWriter>(sp => sp.GetRequiredService<OpenFgaTupleWriter>());
+            builder.Services.AddHttpClient(OpenFgaProvisioner.HttpClientName);
+            builder.Services.AddHostedService<OpenFgaProvisioner>();
         }
 
         builder.Services.AddScoped<IAuthorizationHandler, FrostStreamPermissionHandler>();
-        builder.Services.AddAuthorization(options =>
-        {
-            var authenticatedSystemAccess = new AuthorizationPolicyBuilder()
-                .RequireAuthenticatedUser()
-                .AddRequirements(new FrostStreamPermissionRequirement(AuthConstants.AccessRelation, AuthConstants.SystemObject))
-                .Build();
-
-            options.FallbackPolicy = authenticatedSystemAccess;
-            options.AddPolicy("SystemAccess", authenticatedSystemAccess);
-        });
+        builder.Services.AddAuthorization(AuthPolicies.AddFrostStreamPolicies);
         builder.Services
             .AddControllers()
             .AddJsonOptions(options =>
@@ -130,4 +147,7 @@ public class Program
 
         app.Run();
     }
+
+    private static string? NullIfBlank(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value;
 }

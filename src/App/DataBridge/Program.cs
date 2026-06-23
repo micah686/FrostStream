@@ -120,6 +120,8 @@ class Program
 
         builder.Services.AddHostedService<TypesenseStartupService>();
         builder.Services.AddHostedService<SingleUserOwnerSeederService>();
+        builder.Services.AddHostedService<UserSessionConsumerService>();
+        builder.Services.AddHostedService<CookieProfileConsumerService>();
         builder.Services.AddHostedService<TypesenseSyncConsumerService>();
         builder.Services.AddHostedService<MetadataListConsumerService>();
         builder.Services.AddHostedService<MetadataSearchConsumerService>();

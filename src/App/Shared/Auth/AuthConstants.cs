@@ -10,18 +10,23 @@ public static class AuthConstants
 
     public const string SystemObject = "system:froststream";
     public const string AccessRelation = "access";
+    public const string ManageRelation = "manage";
     public const string OwnerRelation = "owner";
     public const string AdminRelation = "admin";
+    public const string MemberRelation = "member";
+    public const string ViewerRelation = "viewer";
 
     public const string SubjectClaim = "sub";
     public const string GroupsClaim = "groups";
     public const string PreferredUsernameClaim = "preferred_username";
 
-    public static string? FindSubject(ClaimsPrincipal principal)
-        => FirstNonBlank(
-            principal.FindFirst(SubjectClaim)?.Value,
-            principal.FindFirst(ClaimTypes.NameIdentifier)?.Value,
-            principal.Identity?.Name);
+    public static string? FindSubject(ClaimsPrincipal? principal)
+        => principal is null
+            ? null
+            : FirstNonBlank(
+                principal.FindFirst(SubjectClaim)?.Value,
+                principal.FindFirst(ClaimTypes.NameIdentifier)?.Value,
+                principal.Identity?.Name);
 
     private static string? FirstNonBlank(params string?[] values)
         => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();

@@ -84,9 +84,9 @@ public sealed class DownloadCommandsConsumerService(
                 cmd.SourceUrl,
                 cmd.CookieKey);
 
-            await using var cookies = await CookieMaterializer.CreateAsync(
+            await using var cookies = await CookieMaterializer.CreateFromPathAsync(
                 secretStore,
-                cmd.CookieKey,
+                CookieMaterializer.ResolveSecretPath(cmd.CookieSecretPath, cmd.CookieKey),
                 cookieScratch,
                 logger);
             var metadataOptions = YtDlpOptionsMerger.Merge(
@@ -193,9 +193,9 @@ public sealed class DownloadCommandsConsumerService(
                 cmd.CookieKey,
                 tempDirectory);
 
-            await using var cookies = await CookieMaterializer.CreateAsync(
+            await using var cookies = await CookieMaterializer.CreateFromPathAsync(
                 secretStore,
-                cmd.CookieKey,
+                CookieMaterializer.ResolveSecretPath(cmd.CookieSecretPath, cmd.CookieKey),
                 cookieScratch,
                 logger);
 

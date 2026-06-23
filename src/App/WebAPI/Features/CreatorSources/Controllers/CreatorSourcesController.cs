@@ -1,8 +1,10 @@
 using FlySwattr.NATS.Abstractions;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NodaTime;
 using Shared.Database;
 using Shared.Messaging;
+using WebAPI.Auth;
 using WebAPI.Features.Common;
 using WebAPI.Features.CreatorSources.Models;
 
@@ -10,6 +12,7 @@ namespace WebAPI.Features.CreatorSources.Controllers;
 
 [ApiController]
 [Route("api/creator-sources")]
+[Authorize(Policy = AuthPolicies.SystemAccess)]
 public sealed class CreatorSourcesController(
     IMessageBus messageBus,
     IJetStreamPublisher publisher,
@@ -20,6 +23,7 @@ public sealed class CreatorSourcesController(
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);
 
     [HttpPost]
+    [Authorize(Policy = AuthPolicies.SystemManage)]
     [EndpointSummary("Create a creator discovery source")]
     [EndpointDescription("Registers a creator or channel source for recurring discovery scans. The platform, source type, URL, scan enablement, incremental paging thresholds, full-rescan interval, and metadata refresh window are validated and persisted by DataBridge.")]
     public async Task<ActionResult<CreatorSourceResponse>> Create(
@@ -48,6 +52,7 @@ public sealed class CreatorSourcesController(
     }
 
     [HttpPut("{id:long}")]
+    [Authorize(Policy = AuthPolicies.SystemManage)]
     [EndpointSummary("Update a creator discovery source")]
     [EndpointDescription("Replaces the discovery configuration for an existing creator source. The complete platform, source URL, scan controls, paging thresholds, rescan interval, and metadata refresh window are sent to DataBridge for validation and persistence.")]
     public async Task<ActionResult<CreatorSourceResponse>> Update(
@@ -109,6 +114,7 @@ public sealed class CreatorSourcesController(
     }
 
     [HttpPost("{id:long}/refresh-assets")]
+    [Authorize(Policy = AuthPolicies.SystemManage)]
     [EndpointSummary("Queue a creator asset refresh")]
     [EndpointDescription("Verifies that the creator source exists, then queues an asynchronous refresh of its avatar, banner, and related channel assets. The force query parameter controls whether cached assets may be replaced; a successful request returns 202 with the queued source identifier.")]
     public async Task<IActionResult> RefreshAssets(
@@ -159,6 +165,7 @@ public sealed class CreatorSourcesController(
     }
 
     [HttpDelete("{id:long}")]
+    [Authorize(Policy = AuthPolicies.SystemManage)]
     [EndpointSummary("Delete a creator discovery source")]
     [EndpointDescription("Deletes the creator discovery source identified by its numeric ID, preventing future scheduled discovery scans for that source. Successful deletion returns 204; missing sources return 404 and conflicting deletions return 409.")]
     public async Task<IActionResult> Delete(long id, CancellationToken cancellationToken)
