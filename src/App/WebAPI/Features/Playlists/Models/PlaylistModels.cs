@@ -11,8 +11,6 @@ public sealed class PlaylistRequest
 
     [DefaultValue("default")]
     public string? StorageKey { get; init; }
-
-    public string? RequestedBy { get; init; }
 }
 
 public sealed record PlaylistRequestResponse(Guid PlaylistId, Guid CorrelationId);

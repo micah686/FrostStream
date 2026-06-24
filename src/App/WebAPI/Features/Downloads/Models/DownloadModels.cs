@@ -18,8 +18,6 @@ public sealed class DownloadRequest
     [DefaultValue(false)]
     public bool ForceDownload { get; init; } = false;
 
-    public string? RequestedBy { get; init; }
-
     public IReadOnlyList<string>? Tags { get; init; }
 
     /// <summary>Legacy global cookie reference stored at OpenBAO <c>cookies/{key}</c>.</summary>
@@ -45,8 +43,6 @@ public sealed class DownloadAudioRequest
     [DefaultValue(false)]
     public bool ForceDownload { get; init; } = false;
 
-    public string? RequestedBy { get; init; }
-
     public IReadOnlyList<string>? Tags { get; init; }
 
     /// <summary>Legacy global cookie reference stored at OpenBAO <c>cookies/{key}</c>.</summary>
@@ -71,8 +67,6 @@ public sealed class DownloadPresetRequest
 
     [DefaultValue(false)]
     public bool ForceDownload { get; init; } = false;
-
-    public string? RequestedBy { get; init; }
 
     public IReadOnlyList<string>? Tags { get; init; }
 

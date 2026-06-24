@@ -2,6 +2,7 @@ using FlySwattr.NATS.Abstractions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NodaTime;
+using Shared.Auth;
 using Shared.Messaging;
 using WebAPI.Auth;
 using WebAPI.Features.Common;
@@ -55,7 +56,8 @@ public class PlaylistsController(
             OccurredAt = clock.GetCurrentInstant(),
             Attempt = 1,
             SourceUrl = request.SourceUrl,
-            RequestedBy = request.RequestedBy,
+            // Stamp the validated token subject, never client-supplied text, so "requested by" is trustworthy.
+            RequestedBy = AuthConstants.FindSubject(User),
             StorageKey = string.IsNullOrWhiteSpace(request.StorageKey) ? "default" : request.StorageKey
         };
 

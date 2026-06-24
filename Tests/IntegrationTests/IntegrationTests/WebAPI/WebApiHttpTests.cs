@@ -74,7 +74,6 @@ public sealed class WebApiHttpTests
         {
             sourceUrl = "https://example.test/audio",
             storageKey = "",
-            requestedBy = "micah",
             cookieKey = "member-cookie"
         });
 
@@ -89,7 +88,8 @@ public sealed class WebApiHttpTests
         published.Message.JobId.ShouldBe(body.JobId);
         published.Message.SourceUrl.ShouldBe("https://example.test/audio");
         published.Message.StorageKey.ShouldBe("default");
-        published.Message.RequestedBy.ShouldBe("micah");
+        // RequestedBy is now stamped server-side from the validated subject (single-user mode).
+        published.Message.RequestedBy.ShouldBe(AuthConstants.SingleUserSubject);
         published.Message.CookieKey.ShouldBe("member-cookie");
         published.Message.MediaKind.ShouldBe(MediaKind.Audio);
         published.Message.AudioFormat.ShouldBe(AudioConversionFormat.Mp3);
