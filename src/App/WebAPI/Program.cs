@@ -22,6 +22,10 @@ public class Program
         var builder = WebApplication.CreateBuilder(args);
         builder.AddServiceDefaults();
 
+        // Fail fast if the [Endpoint] attributes have drifted from the registry (the Finding-1 class
+        // of bug). This is the single drift guard between attributes, the catalog, and seeding.
+        EndpointCatalogValidator.Validate(typeof(Program).Assembly);
+
         var singleUserMode = AuthMode.IsSingleUserMode(builder.Configuration);
         builder.Services.Configure<FrostStreamAuthOptions>(builder.Configuration.GetSection(FrostStreamAuthOptions.SectionName));
         builder.Services.Configure<OpenFgaOptions>(builder.Configuration.GetSection(OpenFgaOptions.SectionName));
@@ -35,6 +39,7 @@ public class Program
                     _ => { });
             builder.Services.AddSingleton<IFrostStreamAuthorizer, AllowAllAuthorizer>();
             builder.Services.AddSingleton<IOpenFgaTupleWriter, NullOpenFgaTupleWriter>();
+            builder.Services.AddSingleton<IBundleManagementService, NullBundleManagementService>();
         }
         else
         {
@@ -85,10 +90,14 @@ public class Program
             builder.Services.AddScoped<IOpenFgaTupleWriter>(sp => sp.GetRequiredService<OpenFgaTupleWriter>());
             builder.Services.AddHttpClient(OpenFgaProvisioner.HttpClientName);
             builder.Services.AddHostedService<OpenFgaProvisioner>();
+            builder.Services.AddHttpClient<OpenFgaBundleManagementService>();
+            builder.Services.AddScoped<IBundleManagementService>(sp => sp.GetRequiredService<OpenFgaBundleManagementService>());
         }
 
         builder.Services.AddScoped<IAuthorizationHandler, FrostStreamPermissionHandler>();
         builder.Services.AddAuthorization(AuthPolicies.AddFrostStreamPolicies);
+        // Per-endpoint policies (fs.endpoint:<id>) are resolved dynamically rather than registered up front.
+        builder.Services.AddSingleton<IAuthorizationPolicyProvider, EndpointPolicyProvider>();
         builder.Services
             .AddControllers()
             .AddJsonOptions(options =>

@@ -10,7 +10,6 @@ namespace WebAPI.Features.Media.Controllers;
 
 [ApiController]
 [Route("stream")]
-[Authorize(Policy = AuthPolicies.SystemAccess)]
 public sealed class MediaStreamController(
     IMessageBus messageBus,
     IBlobStorageProvider blobStorageProvider,
@@ -20,6 +19,7 @@ public sealed class MediaStreamController(
     private static readonly FileExtensionContentTypeProvider ContentTypeProvider = new();
 
     [HttpGet("{mediaGuid:guid}")]
+    [Endpoint(EndpointIds.MediaStream)]
     [EndpointSummary("Stream an archived media file")]
     [EndpointDescription("Resolves an archived media file by media GUID and streams it directly from the configured storage backend. Optional storageKey and positive version parameters select a specific stored copy; otherwise the latest matching version is used. Seekable streams support HTTP range requests for efficient playback, and the response content type is inferred from the stored file extension.")]
     public async Task<IActionResult> GetStream(

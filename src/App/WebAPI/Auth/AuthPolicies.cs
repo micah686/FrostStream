@@ -1,48 +1,33 @@
 using Microsoft.AspNetCore.Authorization;
-using Shared.Auth;
 
 namespace WebAPI.Auth;
 
 /// <summary>
-/// Named authorization policies applied across FrostStream controllers. Each policy maps to a
-/// coarse OpenFGA relation on <see cref="AuthConstants.SystemObject"/>. Resource-scoped checks
-/// (per download/playlist/cookie owner) are layered on top of these in later auth work.
+/// Named authorization policies applied across FrostStream controllers. Per-endpoint authorization
+/// is dynamic: actions carry <see cref="EndpointAttribute"/> and the policy is resolved by
+/// <see cref="EndpointPolicyProvider"/> into an OpenFGA <c>invoke</c> check on
+/// <c>endpoint:&lt;id&gt;</c>. The only static policy is <see cref="Authenticated"/>.
 /// </summary>
 public static class AuthPolicies
 {
-    /// <summary>Viewer/member-level read access to FrostStream. Mirrors the global fallback policy.</summary>
-    public const string SystemAccess = "SystemAccess";
-
-    /// <summary>Admin-level management access (storage, schedules, presets, creator sources, reindex).</summary>
-    public const string SystemManage = "SystemManage";
-
     /// <summary>
     /// Authentication only, with no OpenFGA check. Used by the session-sync endpoint, which is what
-    /// bootstraps a user's access tuples — requiring <see cref="SystemAccess"/> there would 403 every
-    /// first-time login before any tuples exist.
+    /// bootstraps a user's tuples — requiring an endpoint <c>invoke</c> check there would 403 every
+    /// first-time login before any tuple exists.
     /// </summary>
     public const string Authenticated = "Authenticated";
 
     public static void AddFrostStreamPolicies(AuthorizationOptions options)
     {
-        var authenticated = new AuthorizationPolicyBuilder()
+        options.AddPolicy(Authenticated, new AuthorizationPolicyBuilder()
             .RequireAuthenticatedUser()
-            .Build();
+            .Build());
 
-        var access = new AuthorizationPolicyBuilder()
-            .RequireAuthenticatedUser()
-            .AddRequirements(new FrostStreamPermissionRequirement(AuthConstants.AccessRelation, AuthConstants.SystemObject))
+        // Fail closed: any route that does not opt in with [Endpoint], [Authorize(Authenticated)],
+        // or [AllowAnonymous] is denied. A newly-added route is locked out until it declares an id
+        // and is seeded, rather than silently inheriting broad access.
+        options.FallbackPolicy = new AuthorizationPolicyBuilder()
+            .RequireAssertion(_ => false)
             .Build();
-
-        var manage = new AuthorizationPolicyBuilder()
-            .RequireAuthenticatedUser()
-            .AddRequirements(new FrostStreamPermissionRequirement(AuthConstants.ManageRelation, AuthConstants.SystemObject))
-            .Build();
-
-        // Every endpoint without an explicit policy still requires authenticated system access.
-        options.FallbackPolicy = access;
-        options.AddPolicy(Authenticated, authenticated);
-        options.AddPolicy(SystemAccess, access);
-        options.AddPolicy(SystemManage, manage);
     }
 }

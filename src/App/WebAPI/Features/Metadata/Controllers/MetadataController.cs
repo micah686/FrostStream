@@ -9,7 +9,6 @@ namespace WebAPI.Features.Metadata.Controllers;
 
 [ApiController]
 [Route("api/metadata")]
-[Authorize(Policy = AuthPolicies.SystemAccess)]
 public sealed class MetadataController(
     IMessageBus messageBus,
     ILogger<MetadataController> logger) : ControllerBase
@@ -17,6 +16,7 @@ public sealed class MetadataController(
     private static readonly TimeSpan QueryTimeout = TimeSpan.FromSeconds(10);
 
     [HttpGet]
+    [Endpoint(EndpointIds.MetadataList)]
     [EndpointSummary("Browse archived media metadata")]
     [EndpointDescription("Returns a paginated collection of media cards from the authoritative metadata store. Results can be sorted and filtered by platform, creator account, tag, category, genre, or caption language; the response includes total count and whether another page is available.")]
     public async Task<ActionResult<PagedMetadataResponse<MetadataCardDto>>> List(
@@ -62,6 +62,7 @@ public sealed class MetadataController(
     }
 
     [HttpGet("search")]
+    [Endpoint(EndpointIds.MetadataSearch)]
     [EndpointSummary("Search archived media metadata")]
     [EndpointDescription("Performs full-text search across indexed media metadata using the required q parameter. Results support pagination, platform and taxonomy filters, optional explicit sorting, and return total-count and continuation information; blank search queries return 400.")]
     public async Task<ActionResult<PagedMetadataResponse<MetadataCardDto>>> Search(
@@ -108,6 +109,7 @@ public sealed class MetadataController(
     }
 
     [HttpGet("{mediaGuid:guid}")]
+    [Endpoint(EndpointIds.MetadataGet)]
     [EndpointSummary("Get detailed media metadata")]
     [EndpointDescription("Retrieves the complete descriptive metadata record for one archived media item by GUID. The response includes the item's core metadata and associated descriptive relationships exposed by DataBridge; unknown media identifiers return 404.")]
     public async Task<ActionResult<MetadataDetailDto>> Get(Guid mediaGuid, CancellationToken cancellationToken)
@@ -128,6 +130,7 @@ public sealed class MetadataController(
     }
 
     [HttpGet("{mediaGuid:guid}/technical")]
+    [Endpoint(EndpointIds.MetadataTechnical)]
     [EndpointSummary("Get technical media metadata")]
     [EndpointDescription("Retrieves technical capture and encoding details for one archived media item, separate from its descriptive metadata. Returns 404 when the media GUID has no technical record and 503 when DataBridge cannot be reached.")]
     public async Task<ActionResult<MetadataTechnicalDto>> GetTechnical(Guid mediaGuid, CancellationToken cancellationToken)
@@ -148,6 +151,7 @@ public sealed class MetadataController(
     }
 
     [HttpGet("{mediaGuid:guid}/comments")]
+    [Endpoint(EndpointIds.MetadataComments)]
     [EndpointSummary("List comments for a media item")]
     [EndpointDescription("Returns paginated comments associated with a media item. Comments can be searched by text, restricted to replies under a parent comment, and sorted by a supported field and direction; the response includes total count and whether more results remain.")]
     public async Task<ActionResult<PagedMetadataResponse<CommentDto>>> ListComments(
@@ -187,6 +191,7 @@ public sealed class MetadataController(
     }
 
     [HttpGet("{mediaGuid:guid}/captions")]
+    [Endpoint(EndpointIds.MetadataCaptions)]
     [EndpointSummary("List captions for a media item")]
     [EndpointDescription("Returns caption tracks associated with a media item, optionally filtered by language code and caption type such as manual or automatic. The response includes all matching caption metadata and the total number of tracks.")]
     public async Task<ActionResult<MetadataListResponse<CaptionDto>>> ListCaptions(
@@ -214,6 +219,7 @@ public sealed class MetadataController(
     }
 
     [HttpGet("accounts")]
+    [Endpoint(EndpointIds.MetadataAccountsList)]
     [EndpointSummary("List creator accounts")]
     [EndpointDescription("Returns creator accounts using cursor-based pagination, with an optional platform filter. Supply the returned next cursor as after to continue from the previous page; the response indicates whether more accounts are available.")]
     public async Task<ActionResult<AccountListResponse>> ListAccounts(
@@ -241,6 +247,7 @@ public sealed class MetadataController(
     }
 
     [HttpGet("accounts/{accountId:long}")]
+    [Endpoint(EndpointIds.MetadataAccountsGet)]
     [EndpointSummary("Get a creator account")]
     [EndpointDescription("Retrieves one normalized creator account by its internal numeric identifier, including platform identity and stored profile metadata. Returns 404 when the account does not exist.")]
     public async Task<ActionResult<AccountDto>> GetAccount(long accountId, CancellationToken cancellationToken)
@@ -261,6 +268,7 @@ public sealed class MetadataController(
     }
 
     [HttpGet("accounts/{accountId:long}/media")]
+    [Endpoint(EndpointIds.MetadataAccountsMedia)]
     [EndpointSummary("List media for a creator account")]
     [EndpointDescription("Returns a paginated collection of archived media associated with one creator account. Results can be sorted by a supported metadata field and direction and include total-count and has-more information.")]
     public async Task<ActionResult<PagedMetadataResponse<MetadataCardDto>>> ListAccountMedia(
@@ -296,6 +304,7 @@ public sealed class MetadataController(
     }
 
     [HttpGet("taxonomy/tags")]
+    [Endpoint(EndpointIds.MetadataTaxonomyTags)]
     [EndpointSummary("List metadata tags")]
     [EndpointDescription("Returns a paginated list of distinct metadata tags and their usage information. The optional search term filters tag values, while pageSize and pageOffset control offset pagination.")]
     public Task<ActionResult<TaxonomyListResponse>> ListTags(
@@ -306,6 +315,7 @@ public sealed class MetadataController(
         => ListTaxonomy(MetadataSubjects.TaxonomyTagsList, pageSize, pageOffset, search, cancellationToken);
 
     [HttpGet("taxonomy/categories")]
+    [Endpoint(EndpointIds.MetadataTaxonomyCategories)]
     [EndpointSummary("List metadata categories")]
     [EndpointDescription("Returns a paginated list of distinct metadata categories and their usage information. The optional search term filters category values, while pageSize and pageOffset control offset pagination.")]
     public Task<ActionResult<TaxonomyListResponse>> ListCategories(
@@ -316,6 +326,7 @@ public sealed class MetadataController(
         => ListTaxonomy(MetadataSubjects.TaxonomyCategoriesList, pageSize, pageOffset, search, cancellationToken);
 
     [HttpGet("taxonomy/genres")]
+    [Endpoint(EndpointIds.MetadataTaxonomyGenres)]
     [EndpointSummary("List metadata genres")]
     [EndpointDescription("Returns a paginated list of distinct metadata genres and their usage information. The optional search term filters genre values, while pageSize and pageOffset control offset pagination.")]
     public Task<ActionResult<TaxonomyListResponse>> ListGenres(

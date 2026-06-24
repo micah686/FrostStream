@@ -30,64 +30,52 @@ public static class OpenFgaModel
               }
             },
             {
-              "type": "system",
+              "type": "capability_group",
               "relations": {
-                "owner": { "this": {} },
-                "admin": {
-                  "union": {
-                    "child": [
-                      { "this": {} },
-                      { "computedUserset": { "relation": "owner" } }
-                    ]
-                  }
-                },
-                "member": {
-                  "union": {
-                    "child": [
-                      { "this": {} },
-                      { "computedUserset": { "relation": "admin" } }
-                    ]
-                  }
-                },
-                "viewer": {
-                  "union": {
-                    "child": [
-                      { "this": {} },
-                      { "computedUserset": { "relation": "member" } }
-                    ]
-                  }
-                },
-                "access": { "computedUserset": { "relation": "viewer" } },
-                "manage": { "computedUserset": { "relation": "admin" } }
+                "grantee": { "this": {} }
               },
               "metadata": {
                 "relations": {
-                  "owner": {
+                  "grantee": {
                     "directly_related_user_types": [
                       { "type": "user" },
                       { "type": "group", "relation": "member" }
                     ]
+                  }
+                }
+              }
+            },
+            {
+              "type": "endpoint",
+              "relations": {
+                "bundle": { "this": {} },
+                "invoke": {
+                  "union": {
+                    "child": [
+                      { "this": {} },
+                      {
+                        "tupleToUserset": {
+                          "tupleset": { "relation": "bundle" },
+                          "computedUserset": { "relation": "grantee" }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              "metadata": {
+                "relations": {
+                  "bundle": {
+                    "directly_related_user_types": [
+                      { "type": "capability_group" }
+                    ]
                   },
-                  "admin": {
+                  "invoke": {
                     "directly_related_user_types": [
                       { "type": "user" },
                       { "type": "group", "relation": "member" }
                     ]
-                  },
-                  "member": {
-                    "directly_related_user_types": [
-                      { "type": "user" },
-                      { "type": "group", "relation": "member" }
-                    ]
-                  },
-                  "viewer": {
-                    "directly_related_user_types": [
-                      { "type": "user" },
-                      { "type": "group", "relation": "member" }
-                    ]
-                  },
-                  "access": { "directly_related_user_types": [] },
-                  "manage": { "directly_related_user_types": [] }
+                  }
                 }
               }
             }

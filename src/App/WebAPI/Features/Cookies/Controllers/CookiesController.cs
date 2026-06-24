@@ -18,7 +18,6 @@ namespace WebAPI.Features.Cookies.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AuthPolicies.SystemAccess)]
 public class CookiesController(ISecretStore secretStore, IMessageBus messageBus, ILogger<CookiesController> logger) : ControllerBase
 {
     private const string CookieField = "content";
@@ -26,6 +25,7 @@ public class CookiesController(ISecretStore secretStore, IMessageBus messageBus,
 
     /// <summary>Stores or replaces the caller's Netscape cookie profile.</summary>
     [HttpPut("{profileKey}")]
+    [Endpoint(EndpointIds.CookiesPut)]
     [EndpointSummary("Store a cookie profile")]
     [EndpointDescription("Creates or replaces a Netscape-formatted cookie profile owned by the authenticated user. The cookie body is written to the secret store under a user-scoped path and is never returned; only non-secret metadata (site, display name, timestamps) is persisted in the database and echoed back.")]
     public async Task<ActionResult<CookieProfileResponse>> Upsert(
@@ -82,6 +82,7 @@ public class CookiesController(ISecretStore secretStore, IMessageBus messageBus,
 
     /// <summary>Lists the caller's cookie profiles (metadata only).</summary>
     [HttpGet]
+    [Endpoint(EndpointIds.CookiesList)]
     [EndpointSummary("List cookie profiles")]
     [EndpointDescription("Returns the authenticated user's cookie profiles with non-secret metadata only. Cookie bodies are never included. The list is scoped to the caller, so it cannot reveal other users' profiles.")]
     public async Task<ActionResult<IReadOnlyCollection<CookieProfileResponse>>> List(CancellationToken cancellationToken)
@@ -111,6 +112,7 @@ public class CookiesController(ISecretStore secretStore, IMessageBus messageBus,
 
     /// <summary>Returns metadata about one of the caller's cookie profiles. The body is never returned.</summary>
     [HttpGet("{profileKey}")]
+    [Endpoint(EndpointIds.CookiesGet)]
     [EndpointSummary("Check a cookie profile")]
     [EndpointDescription("Returns metadata for one of the authenticated user's cookie profiles. The stored cookie body is deliberately never exposed; unknown profiles return 404 and the lookup is scoped to the caller.")]
     public async Task<ActionResult<CookieProfileResponse>> Get(string profileKey, CancellationToken cancellationToken)
@@ -144,6 +146,7 @@ public class CookiesController(ISecretStore secretStore, IMessageBus messageBus,
     }
 
     [HttpDelete("{profileKey}")]
+    [Endpoint(EndpointIds.CookiesDelete)]
     [EndpointSummary("Delete a cookie profile")]
     [EndpointDescription("Deletes one of the authenticated user's cookie profiles, removing both the secret body from the secret store and the non-secret metadata. Returns 204 on success and 404 when the profile does not exist for the caller.")]
     public async Task<IActionResult> Delete(string profileKey, CancellationToken cancellationToken)

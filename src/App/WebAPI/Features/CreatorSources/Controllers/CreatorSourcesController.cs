@@ -12,7 +12,6 @@ namespace WebAPI.Features.CreatorSources.Controllers;
 
 [ApiController]
 [Route("api/creator-sources")]
-[Authorize(Policy = AuthPolicies.SystemAccess)]
 public sealed class CreatorSourcesController(
     IMessageBus messageBus,
     IJetStreamPublisher publisher,
@@ -23,7 +22,7 @@ public sealed class CreatorSourcesController(
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);
 
     [HttpPost]
-    [Authorize(Policy = AuthPolicies.SystemManage)]
+    [Endpoint(EndpointIds.CreatorSourcesCreate)]
     [EndpointSummary("Create a creator discovery source")]
     [EndpointDescription("Registers a creator or channel source for recurring discovery scans. The platform, source type, URL, scan enablement, incremental paging thresholds, full-rescan interval, and metadata refresh window are validated and persisted by DataBridge.")]
     public async Task<ActionResult<CreatorSourceResponse>> Create(
@@ -52,7 +51,7 @@ public sealed class CreatorSourcesController(
     }
 
     [HttpPut("{id:long}")]
-    [Authorize(Policy = AuthPolicies.SystemManage)]
+    [Endpoint(EndpointIds.CreatorSourcesUpdate)]
     [EndpointSummary("Update a creator discovery source")]
     [EndpointDescription("Replaces the discovery configuration for an existing creator source. The complete platform, source URL, scan controls, paging thresholds, rescan interval, and metadata refresh window are sent to DataBridge for validation and persistence.")]
     public async Task<ActionResult<CreatorSourceResponse>> Update(
@@ -83,6 +82,7 @@ public sealed class CreatorSourcesController(
     }
 
     [HttpGet("{id:long}")]
+    [Endpoint(EndpointIds.CreatorSourcesGet)]
     [EndpointSummary("Get a creator discovery source")]
     [EndpointDescription("Retrieves a creator source by numeric identifier, including its scan configuration, last successful and full scan timestamps, high-water mark, and audit timestamps. Returns 404 when the source does not exist.")]
     public async Task<ActionResult<CreatorSourceResponse>> Get(long id, CancellationToken cancellationToken)
@@ -96,6 +96,7 @@ public sealed class CreatorSourcesController(
     }
 
     [HttpGet]
+    [Endpoint(EndpointIds.CreatorSourcesList)]
     [EndpointSummary("List creator discovery sources")]
     [EndpointDescription("Returns all configured creator discovery sources with their scanning policies and latest discovery state. The list is obtained from DataBridge through request/reply and returns 503 if the service cannot be reached.")]
     public async Task<ActionResult<IReadOnlyCollection<CreatorSourceResponse>>> List(CancellationToken cancellationToken)
@@ -114,7 +115,7 @@ public sealed class CreatorSourcesController(
     }
 
     [HttpPost("{id:long}/refresh-assets")]
-    [Authorize(Policy = AuthPolicies.SystemManage)]
+    [Endpoint(EndpointIds.CreatorSourcesRefreshAssets)]
     [EndpointSummary("Queue a creator asset refresh")]
     [EndpointDescription("Verifies that the creator source exists, then queues an asynchronous refresh of its avatar, banner, and related channel assets. The force query parameter controls whether cached assets may be replaced; a successful request returns 202 with the queued source identifier.")]
     public async Task<IActionResult> RefreshAssets(
@@ -165,7 +166,7 @@ public sealed class CreatorSourcesController(
     }
 
     [HttpDelete("{id:long}")]
-    [Authorize(Policy = AuthPolicies.SystemManage)]
+    [Endpoint(EndpointIds.CreatorSourcesDelete)]
     [EndpointSummary("Delete a creator discovery source")]
     [EndpointDescription("Deletes the creator discovery source identified by its numeric ID, preventing future scheduled discovery scans for that source. Successful deletion returns 204; missing sources return 404 and conflicting deletions return 409.")]
     public async Task<IActionResult> Delete(long id, CancellationToken cancellationToken)

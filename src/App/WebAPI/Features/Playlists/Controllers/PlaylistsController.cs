@@ -11,7 +11,6 @@ namespace WebAPI.Features.Playlists.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AuthPolicies.SystemAccess)]
 public class PlaylistsController(
     IJetStreamPublisher jetStreamPublisher,
     IMessageBus messageBus,
@@ -25,6 +24,7 @@ public class PlaylistsController(
     /// JetStream and returns immediately. Polling status uses <see cref="GetById"/>.
     /// </summary>
     [HttpPost]
+    [Endpoint(EndpointIds.PlaylistsCreate)]
     [EndpointSummary("Queue a playlist download")]
     [EndpointDescription("Creates a playlist ingestion request and publishes it to the durable playlist stream. A blank storage key is normalized to the default storage target, and the response contains playlist and correlation identifiers for subsequent status queries.")]
     public async Task<ActionResult<PlaylistRequestResponse>> Submit(
@@ -86,6 +86,7 @@ public class PlaylistsController(
     /// <see cref="GetById"/> endpoint for that.
     /// </summary>
     [HttpGet]
+    [Endpoint(EndpointIds.PlaylistsList)]
     [EndpointSummary("List playlist download requests")]
     [EndpointDescription("Returns playlist records in newest-first order using offset pagination. The list response omits the full per-item playlist contents; request a specific playlist identifier to retrieve its detailed item list and current processing state.")]
     public async Task<ActionResult<IReadOnlyList<PlaylistDto>>> List(
@@ -121,6 +122,7 @@ public class PlaylistsController(
     /// Gets a single playlist by id, including the full item list.
     /// </summary>
     [HttpGet("{id:guid}")]
+    [Endpoint(EndpointIds.PlaylistsGet)]
     [EndpointSummary("Get a playlist download request")]
     [EndpointDescription("Retrieves a playlist ingestion record by its identifier, including its current state and complete discovered item list. Returns 404 when the playlist is unknown and 503 when DataBridge cannot be reached within the request timeout.")]
     public async Task<ActionResult<PlaylistDto>> GetById(Guid id, CancellationToken cancellationToken)

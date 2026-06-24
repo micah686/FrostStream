@@ -9,7 +9,6 @@ namespace WebAPI.Features.Metadata.Controllers;
 
 [ApiController]
 [Route("api/metadata")]
-[Authorize(Policy = AuthPolicies.SystemManage)]
 public sealed class MetadataAdminController(
     IJetStreamPublisher publisher,
     IMessageBus messageBus,
@@ -19,6 +18,7 @@ public sealed class MetadataAdminController(
     private static readonly TimeSpan AdminRequestTimeout = TimeSpan.FromSeconds(30);
 
     [HttpPost("reindex")]
+    [Endpoint(EndpointIds.MetadataReindex)]
     [EndpointSummary("Queue a full metadata search reindex")]
     [EndpointDescription("Publishes an asynchronous background job that rebuilds the derived search index from authoritative metadata records. The endpoint returns 202 once the idempotent reindex request is accepted and does not wait for indexing to finish.")]
     public async Task<IActionResult> TriggerReindex(CancellationToken cancellationToken)
@@ -48,6 +48,7 @@ public sealed class MetadataAdminController(
     }
 
     [HttpGet("orphans")]
+    [Endpoint(EndpointIds.MetadataOrphansList)]
     [EndpointSummary("List orphan cleanup items")]
     [EndpointDescription("Returns paginated orphan-cleanup lifecycle records, optionally filtered by orphan kind and state. Results describe missing metadata or unexpected files detected by filesystem reconciliation and include the information needed to review restoration or cleanup actions.")]
     public async Task<ActionResult<IReadOnlyList<OrphanCleanupItemDto>>> ListOrphans(
@@ -82,6 +83,7 @@ public sealed class MetadataAdminController(
     }
 
     [HttpPost("orphans/{id:long}/restore-file")]
+    [Endpoint(EndpointIds.MetadataOrphansRestoreFile)]
     [EndpointSummary("Restore an orphaned file")]
     [EndpointDescription("Requests restoration of a file orphan by moving the archived object from its orphaned storage path back to its recorded original path. The operation validates lifecycle state and destination conflicts, returning 404 for an unknown item and 409 when restoration is no longer valid.")]
     public async Task<IActionResult> RestoreFile(long id, CancellationToken cancellationToken)
@@ -95,6 +97,7 @@ public sealed class MetadataAdminController(
     }
 
     [HttpPost("orphans/{id:long}/restore-metadata")]
+    [Endpoint(EndpointIds.MetadataOrphansRestoreMetadata)]
     [EndpointSummary("Restore orphaned metadata")]
     [EndpointDescription("Requests restoration of metadata previously marked orphaned after its expected file disappeared. Restoration succeeds only when the referenced content-version record remains valid and the expected storage object is present; invalid lifecycle states return 409.")]
     public async Task<IActionResult> RestoreMetadata(long id, CancellationToken cancellationToken)

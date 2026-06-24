@@ -136,26 +136,50 @@ public sealed class OpenFgaProvisioner(
 
     private async Task WriteBootstrapTuplesAsync(HttpClient client, string storeId, string modelId, CancellationToken cancellationToken)
     {
-        var tuples = new List<(string User, string Relation, string Object)>
-        {
-            ($"group:{_options.BootstrapAdminGroup}#member", AuthConstants.AdminRelation, AuthConstants.SystemObject),
-            ("group:users#member", AuthConstants.MemberRelation, AuthConstants.SystemObject),
-            ("group:viewers#member", AuthConstants.ViewerRelation, AuthConstants.SystemObject),
-            ("group:owner#member", AuthConstants.OwnerRelation, AuthConstants.SystemObject)
-        };
+        var tuples = new List<(string User, string Relation, string Object)>();
 
+        var allBundle = AuthConstants.CapabilityGroupObject(AuthConstants.AllBundle);
+
+        // Seed the endpoint catalog: each endpoint joins its baseline bundle and the `:all` guard
+        // bundle. This is generated from the single-source-of-truth registry, not hand-written, so a
+        // new endpoint is seeded automatically on the next provision.
+        foreach (var endpoint in EndpointCatalog.Endpoints)
+        {
+            var endpointObject = AuthConstants.EndpointObject(endpoint.Id);
+            tuples.Add((AuthConstants.CapabilityGroupObject(endpoint.Bundle), AuthConstants.BundleRelation, endpointObject));
+            tuples.Add((allBundle, AuthConstants.BundleRelation, endpointObject));
+        }
+
+        // Lock-out guard: the bootstrap admin group is granted the `:all` bundle, so it can always
+        // invoke every endpoint — including the runtime bundle-management endpoints.
+        tuples.Add(($"group:{_options.BootstrapAdminGroup}#member", AuthConstants.GranteeRelation, allBundle));
+
+        // Named bootstrap owner subjects get the `:all` bundle directly, so a known operator is never
+        // locked out even before any group membership is synced.
         foreach (var subject in SplitSubjects(_options.BootstrapOwnerSubjects))
         {
-            tuples.Add(($"user:{subject}", AuthConstants.OwnerRelation, AuthConstants.SystemObject));
+            tuples.Add(($"user:{subject}", AuthConstants.GranteeRelation, allBundle));
         }
 
+        var written = 0;
         foreach (var (user, relation, @object) in tuples)
         {
-            await WriteTupleAsync(client, storeId, modelId, user, relation, @object, cancellationToken);
+            if (await WriteTupleAsync(client, storeId, modelId, user, relation, @object, cancellationToken))
+            {
+                written++;
+            }
         }
+
+        logger.LogInformation(
+            "OpenFGA bootstrap seeding complete: {Written} new tuple(s) written, {Total} desired ({Endpoints} endpoints across {Bundles} baseline bundles + :all).",
+            written,
+            tuples.Count,
+            EndpointCatalog.Endpoints.Count,
+            EndpointCatalog.SeededBundleIds.Count);
     }
 
-    private async Task WriteTupleAsync(
+    /// <summary>Writes a single tuple idempotently. Returns true when a new tuple was written.</summary>
+    private async Task<bool> WriteTupleAsync(
         HttpClient client,
         string storeId,
         string modelId,
@@ -174,8 +198,8 @@ public sealed class OpenFgaProvisioner(
         using var response = await client.SendAsync(request, cancellationToken);
         if (response.IsSuccessStatusCode)
         {
-            logger.LogInformation("Bootstrap tuple written: {Object}#{Relation}@{User}.", @object, relation, user);
-            return;
+            logger.LogDebug("Bootstrap tuple written: {Object}#{Relation}@{User}.", @object, relation, user);
+            return true;
         }
 
         // OpenFGA returns 400 with code `write_failed_due_to_invalid_input` when the tuple already
@@ -186,6 +210,7 @@ public sealed class OpenFgaProvisioner(
             @object,
             relation,
             user);
+        return false;
     }
 
     private static async Task<string?> ReadStringPropertyAsync(HttpResponseMessage response, string property, CancellationToken cancellationToken)
