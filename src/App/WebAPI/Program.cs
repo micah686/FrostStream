@@ -27,6 +27,10 @@ public class Program
         EndpointCatalogValidator.Validate(typeof(Program).Assembly);
 
         var singleUserMode = AuthMode.IsSingleUserMode(builder.Configuration);
+        var authOptions = builder.Configuration
+            .GetSection(FrostStreamAuthOptions.SectionName)
+            .Get<FrostStreamAuthOptions>() ?? new FrostStreamAuthOptions();
+        WebApiHardening.ValidateStartup(authOptions, singleUserMode, builder.Environment.IsProduction());
         builder.Services.Configure<FrostStreamAuthOptions>(builder.Configuration.GetSection(FrostStreamAuthOptions.SectionName));
         builder.Services.Configure<OpenFgaOptions>(builder.Configuration.GetSection(OpenFgaOptions.SectionName));
 

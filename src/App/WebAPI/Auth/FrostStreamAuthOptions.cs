@@ -6,6 +6,8 @@ public sealed class FrostStreamAuthOptions
 
     public bool SingleUserMode { get; init; }
 
+    public bool AllowSingleUserModeInProduction { get; init; }
+
     public string Authority { get; init; } = "";
 
     public string Audience { get; init; } = "froststream-api";

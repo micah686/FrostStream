@@ -48,8 +48,10 @@ entries:
       # Without an RSA signing key, authentik signs access tokens with HS256 (the client secret) and
       # publishes an empty JWKS, so the WebAPI JwtBearer validation can never find a key
       # ("The signature key was not found"). Bind authentik's built-in self-signed keypair so tokens
-      # are RS256-signed and the public key is exposed at the provider's jwks_uri.
-      signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+      # are RS256-signed and the public key is exposed at the provider's jwks_uri. Production can set
+      # AUTHENTIK_SIGNING_KEY_NAME to a dedicated rotated certificate keypair; development falls back
+      # to authentik's built-in self-signed keypair.
+      signing_key: !Find [authentik_crypto.certificatekeypair, [name, !Env [AUTHENTIK_SIGNING_KEY_NAME, authentik Self-signed Certificate]]]
       property_mappings:
         - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
         - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]

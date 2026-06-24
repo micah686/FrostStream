@@ -28,7 +28,8 @@ public static class StartAuthentik
         bool singleUserMode,
         IResourceBuilder<ParameterResource> postgresUser,
         IResourceBuilder<ParameterResource> postgresPassword,
-        IResourceBuilder<IResource> database)
+        IResourceBuilder<IResource> database,
+        string databaseName)
     {
         // Client details and an optional externally-configured authority are needed regardless
         // of mode, so they are resolved before the single-user early-out below.
@@ -63,6 +64,7 @@ public static class StartAuthentik
             Environment.GetEnvironmentVariable("AUTHENTIK_BOOTSTRAP_PASSWORD") ?? "froststream-dev-admin",
             publishValueAsDefault: false,
             secret: true);
+        var signingKeyName = Environment.GetEnvironmentVariable("AUTHENTIK_SIGNING_KEY_NAME");
 
         // The server serves the web UI and OIDC endpoints; the worker applies blueprints and
         // runs background tasks. Both run the same image with different args and share config.
@@ -75,7 +77,7 @@ public static class StartAuthentik
             .WithEnvironment("AUTHENTIK_POSTGRESQL__PORT", "5432")
             .WithEnvironment("AUTHENTIK_POSTGRESQL__USER", postgresUser)
             .WithEnvironment("AUTHENTIK_POSTGRESQL__PASSWORD", postgresPassword)
-            .WithEnvironment("AUTHENTIK_POSTGRESQL__NAME", "froststreamdb")
+            .WithEnvironment("AUTHENTIK_POSTGRESQL__NAME", databaseName)
             .WithEnvironment("AUTHENTIK_BOOTSTRAP_EMAIL", Environment.GetEnvironmentVariable("AUTHENTIK_BOOTSTRAP_EMAIL") ?? "admin@localhost")
             .WithEnvironment("AUTHENTIK_BOOTSTRAP_PASSWORD", bootstrapPassword)
             .WithEnvironment("AUTHENTIK_CLIENT_ID", clientId)
@@ -84,7 +86,12 @@ public static class StartAuthentik
             .WithHttpHealthCheck(path: "/-/health/ready/")
             .WaitFor(database);
 
-        builder
+        if (!string.IsNullOrWhiteSpace(signingKeyName))
+        {
+            server = server.WithEnvironment("AUTHENTIK_SIGNING_KEY_NAME", signingKeyName);
+        }
+
+        var worker = builder
             .AddContainer("authentik-worker", "ghcr.io/goauthentik/server", ImageTag)
             .WithArgs("worker")
             .WithEnvironment("AUTHENTIK_SECRET_KEY", secretKey)
@@ -92,11 +99,16 @@ public static class StartAuthentik
             .WithEnvironment("AUTHENTIK_POSTGRESQL__PORT", "5432")
             .WithEnvironment("AUTHENTIK_POSTGRESQL__USER", postgresUser)
             .WithEnvironment("AUTHENTIK_POSTGRESQL__PASSWORD", postgresPassword)
-            .WithEnvironment("AUTHENTIK_POSTGRESQL__NAME", "froststreamdb")
+            .WithEnvironment("AUTHENTIK_POSTGRESQL__NAME", databaseName)
             .WithEnvironment("AUTHENTIK_CLIENT_ID", clientId)
             .WithEnvironment("AUTHENTIK_CLIENT_SECRET", clientSecret)
             .WithBindMount(blueprintPath, "/blueprints/froststream.yaml", isReadOnly: true)
             .WaitFor(database);
+
+        if (!string.IsNullOrWhiteSpace(signingKeyName))
+        {
+            worker = worker.WithEnvironment("AUTHENTIK_SIGNING_KEY_NAME", signingKeyName);
+        }
 
         var authority = ReferenceExpression.Create($"{server.GetEndpoint("http")}/application/o/froststream/");
 
