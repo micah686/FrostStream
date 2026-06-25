@@ -74,7 +74,7 @@ public sealed class WebApiHttpTests
         {
             sourceUrl = "https://example.test/audio",
             storageKey = "",
-            cookieKey = "member-cookie"
+            cookieProfileKey = "member-cookie"
         });
 
         response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
@@ -90,7 +90,9 @@ public sealed class WebApiHttpTests
         published.Message.StorageKey.ShouldBe("default");
         // RequestedBy is now stamped server-side from the validated subject (single-user mode).
         published.Message.RequestedBy.ShouldBe(AuthConstants.SingleUserSubject);
-        published.Message.CookieKey.ShouldBe("member-cookie");
+        // Single-user mode resolves the subject to the synthetic owner, so the cookie profile lands
+        // under that owner's user-scoped path — never a global key.
+        published.Message.CookieSecretPath.ShouldBe($"cookies/users/{AuthConstants.SingleUserSubject}/member-cookie");
         published.Message.MediaKind.ShouldBe(MediaKind.Audio);
         published.Message.AudioFormat.ShouldBe(AudioConversionFormat.Mp3);
         published.Message.OccurredAt.ShouldBe(TestWebApiFactory.Now);

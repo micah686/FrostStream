@@ -20,12 +20,9 @@ public sealed class DownloadRequest
 
     public IReadOnlyList<string>? Tags { get; init; }
 
-    /// <summary>Legacy global cookie reference stored at OpenBAO <c>cookies/{key}</c>.</summary>
-    public string? CookieKey { get; init; }
-
     /// <summary>
     /// Key of one of the authenticated user's cookie profiles. Resolved server-side to the
-    /// user-scoped secret path; takes precedence over <see cref="CookieKey"/>.
+    /// user-scoped secret path; the worker only ever receives the resolved opaque path.
     /// </summary>
     public string? CookieProfileKey { get; init; }
 }
@@ -45,12 +42,9 @@ public sealed class DownloadAudioRequest
 
     public IReadOnlyList<string>? Tags { get; init; }
 
-    /// <summary>Legacy global cookie reference stored at OpenBAO <c>cookies/{key}</c>.</summary>
-    public string? CookieKey { get; init; }
-
     /// <summary>
     /// Key of one of the authenticated user's cookie profiles. Resolved server-side to the
-    /// user-scoped secret path; takes precedence over <see cref="CookieKey"/>.
+    /// user-scoped secret path; the worker only ever receives the resolved opaque path.
     /// </summary>
     public string? CookieProfileKey { get; init; }
 }
@@ -76,12 +70,9 @@ public sealed class DownloadPresetRequest
     [RegularExpression("^[a-z0-9-]{2,100}$")]
     public required string PresetKey { get; init; }
 
-    /// <summary>Legacy global cookie reference stored at OpenBAO <c>cookies/{key}</c>.</summary>
-    public string? CookieKey { get; init; }
-
     /// <summary>
     /// Key of one of the authenticated user's cookie profiles. Resolved server-side to the
-    /// user-scoped secret path; takes precedence over <see cref="CookieKey"/>.
+    /// user-scoped secret path; the worker only ever receives the resolved opaque path.
     /// </summary>
     public string? CookieProfileKey { get; init; }
 }

@@ -9,14 +9,16 @@ namespace UnitTests.Worker;
 
 public sealed class CookieMaterializerTests
 {
+    private const string ProfilePath = "cookies/users/user-abc/member-cookie";
+
     [Test]
-    public async Task CreateAsync_With_Blank_Key_Does_Not_Read_Secret_Store()
+    public async Task CreateFromPathAsync_With_Blank_Path_Does_Not_Read_Secret_Store()
     {
         var store = Substitute.For<ISecretStore>();
 
-        await using var materializer = await CookieMaterializer.CreateAsync(
+        await using var materializer = await CookieMaterializer.CreateFromPathAsync(
             store,
-            cookieKey: " ",
+            secretPath: " ",
             scratchDirectory: Path.GetTempPath(),
             NullLogger.Instance);
 
@@ -25,11 +27,11 @@ public sealed class CookieMaterializerTests
     }
 
     [Test]
-    public async Task CreateAsync_Writes_Cookie_Content_To_Temp_File_And_Disposes_It()
+    public async Task CreateFromPathAsync_Writes_Cookie_Content_To_Temp_File_And_Disposes_It()
     {
         var scratch = Path.Combine(Path.GetTempPath(), $"froststream-cookies-{Guid.NewGuid():N}");
         var store = Substitute.For<ISecretStore>();
-        store.ReadAsync("cookies/member-cookie", Arg.Any<CancellationToken>())
+        store.ReadAsync(ProfilePath, Arg.Any<CancellationToken>())
             .Returns(new Dictionary<string, string>
             {
                 ["content"] = "# Netscape HTTP Cookie File"
@@ -37,9 +39,9 @@ public sealed class CookieMaterializerTests
 
         try
         {
-            var materializer = await CookieMaterializer.CreateAsync(
+            var materializer = await CookieMaterializer.CreateFromPathAsync(
                 store,
-                "member-cookie",
+                ProfilePath,
                 scratch,
                 NullLogger.Instance);
 
@@ -61,20 +63,20 @@ public sealed class CookieMaterializerTests
     }
 
     [Test]
-    public async Task CreateAsync_Throws_When_Secret_Has_No_Content_Field()
+    public async Task CreateFromPathAsync_Throws_When_Secret_Has_No_Content_Field()
     {
         var store = Substitute.For<ISecretStore>();
-        store.ReadAsync("cookies/missing-cookie", Arg.Any<CancellationToken>())
+        store.ReadAsync("cookies/users/user-abc/missing", Arg.Any<CancellationToken>())
             .Returns(new Dictionary<string, string>());
 
         var exception = await Should.ThrowAsync<InvalidOperationException>(() =>
-            CookieMaterializer.CreateAsync(
+            CookieMaterializer.CreateFromPathAsync(
                 store,
-                "missing-cookie",
+                "cookies/users/user-abc/missing",
                 Path.GetTempPath(),
                 NullLogger.Instance));
 
-        exception.Message.ShouldContain("cookies/missing-cookie");
+        exception.Message.ShouldContain("cookies/users/user-abc/missing");
         exception.Message.ShouldContain("content");
     }
 }

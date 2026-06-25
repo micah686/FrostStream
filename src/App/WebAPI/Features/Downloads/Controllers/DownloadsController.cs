@@ -41,7 +41,6 @@ public class DownloadsController(
             audioFormat: null,
             ytDlpOptions: null,
             presetKey: null,
-            cookieKey: request.CookieKey,
             cookieProfileKey: request.CookieProfileKey,
             cancellationToken: cancellationToken);
 
@@ -65,7 +64,6 @@ public class DownloadsController(
             audioFormat: AudioConversionFormat.Mp3,
             ytDlpOptions: null,
             presetKey: null,
-            cookieKey: request.CookieKey,
             cookieProfileKey: request.CookieProfileKey,
             cancellationToken: cancellationToken);
 
@@ -90,7 +88,6 @@ public class DownloadsController(
             audioFormat: null,
             ytDlpOptions: null,
             presetKey: request.PresetKey,
-            cookieKey: request.CookieKey,
             cookieProfileKey: request.CookieProfileKey,
             cancellationToken: cancellationToken);
 
@@ -103,7 +100,6 @@ public class DownloadsController(
         AudioConversionFormat? audioFormat,
         YtDlpOptions? ytDlpOptions,
         string? presetKey,
-        string? cookieKey,
         string? cookieProfileKey,
         CancellationToken cancellationToken)
     {
@@ -160,7 +156,6 @@ public class DownloadsController(
             AudioFormat = audioFormat,
             YtDlpOptions = ytDlpOptions,
             PresetKey = presetKey,
-            CookieKey = cookieKey,
             CookieSecretPath = cookieSecretPath
         };
 

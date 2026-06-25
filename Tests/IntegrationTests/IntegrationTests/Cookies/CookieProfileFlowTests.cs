@@ -144,21 +144,18 @@ public class CookieProfileFlowTests
         }, CancellationToken.None);
 
         // Exactly the opaque reference DownloadsController stamps onto DownloadRequested.CookieSecretPath.
-        // The Worker only ever receives this path — never the subject/identity — and resolving it is a
-        // no-op pass-through (no identity needed to materialize).
+        // The Worker only ever receives this path — never the subject/identity.
         var downloadCookieSecretPath = SecretPaths.ForUserCookieProfile(subject, profileKey);
-        CookieMaterializer.ResolveSecretPath(downloadCookieSecretPath, cookieKey: null)
-            .ShouldBe(downloadCookieSecretPath);
 
         var scratch = Path.Combine(Path.GetTempPath(), $"froststream-worker-cookies-{Guid.NewGuid():N}");
         try
         {
             string? materializedPath;
 
-            // Worker side: resolve + materialize exactly as DownloadCommandsConsumerService does.
+            // Worker side: materialize from the opaque path exactly as DownloadCommandsConsumerService does.
             await using (var cookies = await CookieMaterializer.CreateFromPathAsync(
                 store,
-                CookieMaterializer.ResolveSecretPath(downloadCookieSecretPath, cookieKey: null),
+                downloadCookieSecretPath,
                 scratch,
                 NullLogger.Instance))
             {

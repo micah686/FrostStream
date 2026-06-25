@@ -191,17 +191,11 @@ public sealed record DownloadRequested : IFlowMessage
     public string? PresetKey { get; init; }
 
     /// <summary>
-    /// Reference to a Netscape cookie file stored in OpenBAO at <c>cookies/{key}</c>.
-    /// The Worker fetches the secret, materializes it to a temp file, and passes
-    /// <c>--cookies &lt;path&gt;</c> to yt-dlp for the duration of the run.
-    /// </summary>
-    public string? CookieKey { get; init; }
-
-    /// <summary>
     /// Opaque, fully-resolved OpenBAO path to a user-owned cookie profile
     /// (<c>cookies/users/{subject}/{profileKey}</c>), resolved by WebAPI from the authenticated
-    /// user. Preferred over <see cref="CookieKey"/>; the Worker only ever sees this reference,
-    /// never the cookie body or the owning user's identity beyond the path.
+    /// user. The Worker fetches the secret, materializes it to a temp file, and passes
+    /// <c>--cookies &lt;path&gt;</c> to yt-dlp for the duration of the run; it only ever sees this
+    /// reference, never the cookie body or the owning user's identity beyond the path.
     /// </summary>
     public string? CookieSecretPath { get; init; }
 }
@@ -229,9 +223,6 @@ public sealed record FetchMetadataCommand : IFlowMessage
     /// matter at metadata time, so we don't strip the options here.
     /// </summary>
     public YtDlpOptions? YtDlpOptions { get; init; }
-
-    /// <summary>Same OpenBAO cookie reference as on <see cref="DownloadRequested.CookieKey"/>.</summary>
-    public string? CookieKey { get; init; }
 
     /// <summary>Same resolved user-owned cookie path as on <see cref="DownloadRequested.CookieSecretPath"/>.</summary>
     public string? CookieSecretPath { get; init; }
@@ -321,9 +312,6 @@ public sealed record DownloadVideoCommand : IFlowMessage
 
     /// <summary>Caller-supplied yt-dlp options snapshot, passed through to the Worker.</summary>
     public YtDlpOptions? YtDlpOptions { get; init; }
-
-    /// <summary>Same OpenBAO cookie reference as on <see cref="DownloadRequested.CookieKey"/>.</summary>
-    public string? CookieKey { get; init; }
 
     /// <summary>Same resolved user-owned cookie path as on <see cref="DownloadRequested.CookieSecretPath"/>.</summary>
     public string? CookieSecretPath { get; init; }

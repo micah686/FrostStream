@@ -32,7 +32,7 @@ public class DownloadArchiveFlow(
         var storageKey = request.StorageKey ?? "default";
 
         logger.LogInformation(
-            "Download flow started for JobId {JobId} CorrelationId {CorrelationId} URL {SourceUrl} StorageKey {StorageKey} ForceDownload {ForceDownload} MediaKind {MediaKind} PresetKey {PresetKey} CookieKey {CookieKey}",
+            "Download flow started for JobId {JobId} CorrelationId {CorrelationId} URL {SourceUrl} StorageKey {StorageKey} ForceDownload {ForceDownload} MediaKind {MediaKind} PresetKey {PresetKey} HasCookieProfile {HasCookieProfile}",
             jobId,
             request.CorrelationId,
             request.SourceUrl,
@@ -40,7 +40,7 @@ public class DownloadArchiveFlow(
             request.ForceDownload,
             request.MediaKind,
             request.PresetKey,
-            request.CookieKey);
+            !string.IsNullOrWhiteSpace(request.CookieSecretPath));
 
         // Resolve a stored preset -> YtDlpOptions if the request used PresetKey instead
         // of inline options. Mutually-exclusive validation lives at the API layer.
@@ -245,7 +245,6 @@ public class DownloadArchiveFlow(
                 Attempt = attempt,
                 SourceUrl = request.SourceUrl,
                 YtDlpOptions = request.YtDlpOptions,
-                CookieKey = request.CookieKey,
                 CookieSecretPath = request.CookieSecretPath
             };
             logger.LogInformation(
@@ -306,7 +305,6 @@ public class DownloadArchiveFlow(
                 MediaKind = request.MediaKind,
                 AudioFormat = request.AudioFormat,
                 YtDlpOptions = request.YtDlpOptions,
-                CookieKey = request.CookieKey,
                 CookieSecretPath = request.CookieSecretPath
             };
             logger.LogInformation(

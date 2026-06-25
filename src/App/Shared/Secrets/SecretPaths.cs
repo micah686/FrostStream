@@ -15,20 +15,6 @@ public static partial class SecretPaths
     }
 
     /// <summary>
-    /// Legacy global cookie path (<c>cookies/{key}</c>). Retained for backwards compatibility;
-    /// new cookie profiles are user-scoped via <see cref="ForUserCookieProfile"/>.
-    /// </summary>
-    public static string ForCookies(string cookieKey)
-    {
-        if (string.IsNullOrWhiteSpace(cookieKey))
-        {
-            throw new ArgumentException("Cookie key is required.", nameof(cookieKey));
-        }
-
-        return $"cookies/{cookieKey}";
-    }
-
-    /// <summary>
     /// User-scoped cookie profile path (<c>cookies/users/{userScope}/{profileKey}</c>). The scope is
     /// derived from the authenticated subject, so a user can only ever address their own profiles.
     /// </summary>

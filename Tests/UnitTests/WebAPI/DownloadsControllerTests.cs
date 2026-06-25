@@ -31,7 +31,7 @@ public sealed class DownloadsControllerTests
             StorageKey = " ",
             ForceDownload = true,
             Tags = ["archive", "manual"],
-            CookieKey = "member-cookie"
+            CookieProfileKey = "member-cookie"
         }, CancellationToken.None);
 
         var payload = result.Result.ShouldBeOfType<AcceptedResult>().Value
@@ -57,7 +57,7 @@ public sealed class DownloadsControllerTests
                 x.MediaKind == MediaKind.Video &&
                 x.AudioFormat == null &&
                 x.PresetKey == null &&
-                x.CookieKey == "member-cookie"),
+                x.CookieSecretPath == "cookies/users/unit_test_user/member-cookie"),
             Arg.Is<string>(x => x.Length == 32),
             null,
             Arg.Any<CancellationToken>());

@@ -45,6 +45,9 @@ public sealed class DownloadCommandsConsumerService(
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // Remove any cookie scratch dirs left behind by a previous crash before serving traffic.
+        SweepCookieScratchRoot();
+
         var consumers = new[]
         {
             Consume<FetchMetadataCommand>(DownloadTopology.WorkerFetchMetadataConsumer, HandleFetchMetadataAsync, stoppingToken),
@@ -78,15 +81,15 @@ public sealed class DownloadCommandsConsumerService(
         try
         {
             logger.LogInformation(
-                "Metadata fetch started for JobId {JobId} Attempt {Attempt} URL {SourceUrl} CookieKey {CookieKey}",
+                "Metadata fetch started for JobId {JobId} Attempt {Attempt} URL {SourceUrl} HasCookieProfile {HasCookieProfile}",
                 cmd.JobId,
                 cmd.Attempt,
                 cmd.SourceUrl,
-                cmd.CookieKey);
+                !string.IsNullOrWhiteSpace(cmd.CookieSecretPath));
 
             await using var cookies = await CookieMaterializer.CreateFromPathAsync(
                 secretStore,
-                CookieMaterializer.ResolveSecretPath(cmd.CookieSecretPath, cmd.CookieKey),
+                cmd.CookieSecretPath,
                 cookieScratch,
                 logger);
             var metadataOptions = YtDlpOptionsMerger.Merge(
@@ -170,6 +173,10 @@ public sealed class DownloadCommandsConsumerService(
             await PublishMetadataFailedAsync(cmd, ex, YtDlpFailureDetails.ClassifyFailure(ex));
             await context.AckAsync();
         }
+        finally
+        {
+            DeleteCookieScratch(cookieScratch);
+        }
     }
 
     private async Task HandleDownloadVideoAsync(IJsMessageContext<DownloadVideoCommand> context)
@@ -185,17 +192,17 @@ public sealed class DownloadCommandsConsumerService(
             Directory.CreateDirectory(tempDirectory);
 
             logger.LogInformation(
-                "Download started for JobId {JobId} Attempt {Attempt} URL {SourceUrl} MediaKind {MediaKind} CookieKey {CookieKey} TempDirectory {TempDirectory}",
+                "Download started for JobId {JobId} Attempt {Attempt} URL {SourceUrl} MediaKind {MediaKind} HasCookieProfile {HasCookieProfile} TempDirectory {TempDirectory}",
                 cmd.JobId,
                 cmd.Attempt,
                 cmd.SourceUrl,
                 cmd.MediaKind,
-                cmd.CookieKey,
+                !string.IsNullOrWhiteSpace(cmd.CookieSecretPath),
                 tempDirectory);
 
             await using var cookies = await CookieMaterializer.CreateFromPathAsync(
                 secretStore,
-                CookieMaterializer.ResolveSecretPath(cmd.CookieSecretPath, cmd.CookieKey),
+                cmd.CookieSecretPath,
                 cookieScratch,
                 logger);
 
@@ -268,6 +275,10 @@ public sealed class DownloadCommandsConsumerService(
             logger.LogError(ex, "DownloadVideo failed for JobId {JobId} URL {SourceUrl}", cmd.JobId, cmd.SourceUrl);
             await PublishDownloadFailedAsync(cmd, ex, YtDlpFailureDetails.ClassifyFailure(ex), tempFileRef ?? FindDownloadedMediaFile(tempDirectory));
             await context.AckAsync();
+        }
+        finally
+        {
+            DeleteCookieScratch(cookieScratch);
         }
     }
 
@@ -630,12 +641,49 @@ public sealed class DownloadCommandsConsumerService(
             cmd.JobId.ToString("N"),
             $"attempt-{cmd.Attempt.ToString(CultureInfo.InvariantCulture)}");
 
+    /// <summary>
+    /// Root for per-job cookie scratch dirs. Prefers tmpfs (<c>/dev/shm</c>) on Linux so cookie bytes
+    /// live in RAM and never touch persistent disk; falls back to the system temp dir elsewhere. The
+    /// materialized file is deleted immediately after each yt-dlp run regardless.
+    /// </summary>
+    private static string GetCookieScratchRoot()
+        => OperatingSystem.IsLinux() && Directory.Exists("/dev/shm")
+            ? Path.Combine("/dev/shm", "froststream", "cookies")
+            : Path.Combine(Path.GetTempPath(), "froststream", "cookies");
+
     private static string GetCookieScratchDirectory(Guid jobId)
-        => Path.Combine(
-            Path.GetTempPath(),
-            "froststream",
-            "cookies",
-            jobId.ToString("N"));
+        => Path.Combine(GetCookieScratchRoot(), jobId.ToString("N"));
+
+    /// <summary>Best-effort removal of a per-job cookie scratch dir once its file is gone. Leftovers
+    /// are harmless and swept on next startup, so failures here are ignored.</summary>
+    private void DeleteCookieScratch(string directory)
+    {
+        try
+        {
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Could not delete cookie scratch directory {Directory}.", directory);
+        }
+    }
+
+    /// <summary>Clears any cookie scratch dirs orphaned by a previous crash, so no materialized cookie
+    /// file outlives the process that wrote it.</summary>
+    private void SweepCookieScratchRoot()
+    {
+        try
+        {
+            var root = GetCookieScratchRoot();
+            if (Directory.Exists(root))
+                Directory.Delete(root, recursive: true);
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Could not sweep the cookie scratch root on startup.");
+        }
+    }
 
     private static string? GetFfmpegLocation()
     {
