@@ -292,7 +292,15 @@ public sealed class OrphanMetadataCleanupExecutorTests
             => messageBus is null ? new OrphanMetadataCleanupExecutor(DataSource) : new OrphanMetadataCleanupExecutor(DataSource, messageBus);
 
         private string ConnectionString =>
-            $"Host=127.0.0.1;Port={_postgresContainer.GetMappedPublicPort(5432)};Database=froststream_orphan_cleanup_tests;Username=postgres;Password=postgres";
+            new NpgsqlConnectionStringBuilder
+            {
+                Host = _postgresContainer.Hostname,
+                Port = _postgresContainer.GetMappedPublicPort(5432),
+                Database = "froststream_orphan_cleanup_tests",
+                Username = "postgres",
+                Password = "postgres",
+                SearchPath = "storage,downloads,media,maintenance,metadata,auth,public"
+            }.ConnectionString;
 
         private NpgsqlDataSource DataSource => _dataSource ?? throw new InvalidOperationException("Fixture not initialized.");
 

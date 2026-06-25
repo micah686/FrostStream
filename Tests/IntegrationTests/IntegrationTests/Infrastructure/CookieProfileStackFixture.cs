@@ -59,7 +59,15 @@ public sealed class CookieProfileStackFixture : IAsyncDisposable
     public string OpenBaoAddress => $"http://127.0.0.1:{_openBaoContainer.GetMappedPublicPort(8200)}";
 
     private string PostgresConnectionString =>
-        $"Host=127.0.0.1;Port={_postgresContainer.GetMappedPublicPort(5432)};Database=froststream_cookie_tests;Username=postgres;Password=postgres";
+        new NpgsqlConnectionStringBuilder
+        {
+            Host = _postgresContainer.Hostname,
+            Port = _postgresContainer.GetMappedPublicPort(5432),
+            Database = "froststream_cookie_tests",
+            Username = "postgres",
+            Password = "postgres",
+            SearchPath = "storage,downloads,media,maintenance,metadata,auth,public"
+        }.ConnectionString;
 
     private string NatsUrl => _natsContainer.GetConnectionString();
 
@@ -146,11 +154,11 @@ public sealed class CookieProfileStackFixture : IAsyncDisposable
                     PostgresConnectionString,
                     npgsqlOptions => npgsqlOptions
                         .UseNodaTime()
-                        .MapEnum<LocalStorageProtocol>("local_storage_protocol")
-                        .MapEnum<NetworkStorageProtocol>("network_storage_protocol")
-                        .MapEnum<S3CompatibleObjectStorageProvider>("s3_compatible_object_storage_provider")
-                        .MapEnum<AzureBlobCredentialMode>("azure_blob_credential_mode")
-                        .MapEnum<GoogleCloudStorageCredentialMode>("google_cloud_storage_credential_mode"))
+                        .MapEnum<LocalStorageProtocol>("local_storage_protocol", "storage")
+                        .MapEnum<NetworkStorageProtocol>("network_storage_protocol", "storage")
+                        .MapEnum<S3CompatibleObjectStorageProvider>("s3_compatible_object_storage_provider", "storage")
+                        .MapEnum<AzureBlobCredentialMode>("azure_blob_credential_mode", "storage")
+                        .MapEnum<GoogleCloudStorageCredentialMode>("google_cloud_storage_credential_mode", "storage"))
                 .UseSnakeCaseNamingConvention();
         });
 
