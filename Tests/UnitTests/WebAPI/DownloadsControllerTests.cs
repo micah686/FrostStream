@@ -51,7 +51,7 @@ public sealed class DownloadsControllerTests
                 x.SourceUrl == "https://example.test/video" &&
                 x.StorageKey == "default" &&
                 x.ForceDownload &&
-                x.RequestedBy == "micah" &&
+                x.RequestedBy == "unit_test_user" &&
                 x.Tags != null &&
                 x.Tags.SequenceEqual(new[] { "archive", "manual" }) &&
                 x.MediaKind == MediaKind.Video &&

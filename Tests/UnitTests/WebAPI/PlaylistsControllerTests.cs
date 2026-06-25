@@ -46,7 +46,7 @@ public sealed class PlaylistsControllerTests
                 x.Attempt == 1 &&
                 x.SourceUrl == "https://example.test/playlist" &&
                 x.StorageKey == "default" &&
-                x.RequestedBy == "micah"),
+                x.RequestedBy == "unit_test_user"),
             Arg.Is<string>(x => x.Length == 32),
             null,
             Arg.Any<CancellationToken>());
