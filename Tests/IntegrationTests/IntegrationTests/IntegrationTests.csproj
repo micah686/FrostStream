@@ -23,6 +23,7 @@
     <ItemGroup>
         <ProjectReference Include="..\..\..\src\App\DataBridge\DataBridge.csproj" />
         <ProjectReference Include="..\..\..\src\App\WebAPI\WebAPI.csproj" />
+        <ProjectReference Include="..\..\..\src\App\Worker\Worker.csproj" />
     </ItemGroup>
 
     <ItemGroup>

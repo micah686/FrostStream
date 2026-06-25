@@ -9,6 +9,7 @@ using Shouldly;
 using TUnit.Core;
 using WebAPI.Features.Cookies.Controllers;
 using WebAPI.Features.Cookies.Models;
+using Worker.Services;
 
 namespace IntegrationTests.Cookies;
 
@@ -123,6 +124,61 @@ public class CookieProfileFlowTests
         // Secrets live at distinct, isolated OpenBAO paths.
         (await store.ReadAsync("cookies/users/user-a/shared"))!["content"].ShouldBe("a-secret");
         (await store.ReadAsync("cookies/users/user-b/shared"))!["content"].ShouldBe("b-secret");
+    }
+
+    [Test]
+    public async Task Worker_Materializes_The_User_Owned_Cookie_From_The_Opaque_Download_Path_And_Cleans_Up()
+    {
+        const string subject = "user-worker";
+        const string profileKey = "youtube";
+        const string cookieBody = "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t0\tSID\tworker-secret";
+
+        var store = Fixture.CreateSecretStore();
+
+        // WebAPI write side: the user uploads a cookie profile through the production controller, which
+        // persists the body to the subject-scoped OpenBAO path.
+        await CreateController(store, subject).Upsert(profileKey, new CookieUpsertRequest
+        {
+            Content = cookieBody,
+            Site = "youtube.com"
+        }, CancellationToken.None);
+
+        // Exactly the opaque reference DownloadsController stamps onto DownloadRequested.CookieSecretPath.
+        // The Worker only ever receives this path — never the subject/identity — and resolving it is a
+        // no-op pass-through (no identity needed to materialize).
+        var downloadCookieSecretPath = SecretPaths.ForUserCookieProfile(subject, profileKey);
+        CookieMaterializer.ResolveSecretPath(downloadCookieSecretPath, cookieKey: null)
+            .ShouldBe(downloadCookieSecretPath);
+
+        var scratch = Path.Combine(Path.GetTempPath(), $"froststream-worker-cookies-{Guid.NewGuid():N}");
+        try
+        {
+            string? materializedPath;
+
+            // Worker side: resolve + materialize exactly as DownloadCommandsConsumerService does.
+            await using (var cookies = await CookieMaterializer.CreateFromPathAsync(
+                store,
+                CookieMaterializer.ResolveSecretPath(downloadCookieSecretPath, cookieKey: null),
+                scratch,
+                NullLogger.Instance))
+            {
+                materializedPath = cookies.FilePath;
+                materializedPath.ShouldNotBeNull();
+                Path.GetDirectoryName(materializedPath).ShouldBe(scratch);
+                File.Exists(materializedPath).ShouldBeTrue();
+                (await File.ReadAllTextAsync(materializedPath!)).ShouldBe(cookieBody);
+            }
+
+            // Disposed at the end of the using scope -> the temp cookie file is removed.
+            File.Exists(materializedPath!).ShouldBeFalse();
+        }
+        finally
+        {
+            if (Directory.Exists(scratch))
+            {
+                Directory.Delete(scratch, recursive: true);
+            }
+        }
     }
 
     private static CookiesController CreateController(ISecretStore store, string subject)
