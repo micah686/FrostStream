@@ -35,6 +35,12 @@ public sealed class OpenFgaStackFixture : IAsyncDisposable
 
     public string Endpoint => $"http://127.0.0.1:{_openFgaContainer.GetMappedPublicPort(8080)}";
 
+    /// <summary>Resolved store id, available after <see cref="InitializeAsync"/> provisions the stack.</summary>
+    public string StoreId => _services!.GetRequiredService<OpenFgaRuntimeState>().StoreId!;
+
+    /// <summary>Resolved authorization-model id, available after <see cref="InitializeAsync"/>.</summary>
+    public string ModelId => _services!.GetRequiredService<OpenFgaRuntimeState>().AuthorizationModelId!;
+
     public OpenFgaAuthorizer Authorizer => _services!.GetRequiredService<OpenFgaAuthorizer>();
 
     public IOpenFgaTupleWriter TupleWriter => _services!.GetRequiredService<OpenFgaTupleWriter>();
