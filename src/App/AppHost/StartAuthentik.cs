@@ -20,16 +20,14 @@ public static class StartAuthentik
 {
     // authentik 2025.10+ dropped the Redis requirement; caching, the embedded outpost
     // and WebSocket state are now backed by PostgreSQL. Both server and worker share the
-    // existing "postgres"/"froststreamdb" instance.
+    // existing postgres instance.
     private const string ImageTag = "2026.5.3";
+    private const string DatabaseName = "authentikdb";
 
     public static AuthentikResources Start(
         IDistributedApplicationBuilder builder,
-        bool singleUserMode,
-        IResourceBuilder<ParameterResource> postgresUser,
-        IResourceBuilder<ParameterResource> postgresPassword,
-        IResourceBuilder<IResource> database,
-        string databaseName)
+        PostgresResources postgres,
+        AppHostHardeningOptions hardening)
     {
         // Client details and an optional externally-configured authority are needed regardless
         // of mode, so they are resolved before the single-user early-out below.
@@ -42,7 +40,7 @@ public static class StartAuthentik
         var clientId = Environment.GetEnvironmentVariable("AUTHENTIK_CLIENT_ID") ?? "froststream-bff";
 
         // Single-user mode runs without an identity provider, so no authentik containers are added.
-        if (singleUserMode)
+        if (hardening.SingleUserMode)
         {
             return new AuthentikResources(clientId, clientSecret, configuredAuthority, Server: null, Authority: null);
         }
@@ -73,18 +71,14 @@ public static class StartAuthentik
             .WithArgs("server")
             .WithHttpEndpoint(port: 9000, targetPort: 9000, name: "http")
             .WithEnvironment("AUTHENTIK_SECRET_KEY", secretKey)
-            .WithEnvironment("AUTHENTIK_POSTGRESQL__HOST", "postgres")
-            .WithEnvironment("AUTHENTIK_POSTGRESQL__PORT", "5432")
-            .WithEnvironment("AUTHENTIK_POSTGRESQL__USER", postgresUser)
-            .WithEnvironment("AUTHENTIK_POSTGRESQL__PASSWORD", postgresPassword)
-            .WithEnvironment("AUTHENTIK_POSTGRESQL__NAME", databaseName)
+            .WithAuthentikPostgresEnv(postgres)
             .WithEnvironment("AUTHENTIK_BOOTSTRAP_EMAIL", Environment.GetEnvironmentVariable("AUTHENTIK_BOOTSTRAP_EMAIL") ?? "admin@localhost")
             .WithEnvironment("AUTHENTIK_BOOTSTRAP_PASSWORD", bootstrapPassword)
             .WithEnvironment("AUTHENTIK_CLIENT_ID", clientId)
             .WithEnvironment("AUTHENTIK_CLIENT_SECRET", clientSecret)
             .WithBindMount(blueprintPath, "/blueprints/froststream.yaml", isReadOnly: true)
             .WithHttpHealthCheck(path: "/-/health/ready/")
-            .WaitFor(database);
+            .WaitFor(postgres.AuthentikDb);
 
         if (!string.IsNullOrWhiteSpace(signingKeyName))
         {
@@ -95,15 +89,11 @@ public static class StartAuthentik
             .AddContainer("authentik-worker", "ghcr.io/goauthentik/server", ImageTag)
             .WithArgs("worker")
             .WithEnvironment("AUTHENTIK_SECRET_KEY", secretKey)
-            .WithEnvironment("AUTHENTIK_POSTGRESQL__HOST", "postgres")
-            .WithEnvironment("AUTHENTIK_POSTGRESQL__PORT", "5432")
-            .WithEnvironment("AUTHENTIK_POSTGRESQL__USER", postgresUser)
-            .WithEnvironment("AUTHENTIK_POSTGRESQL__PASSWORD", postgresPassword)
-            .WithEnvironment("AUTHENTIK_POSTGRESQL__NAME", databaseName)
+            .WithAuthentikPostgresEnv(postgres)
             .WithEnvironment("AUTHENTIK_CLIENT_ID", clientId)
             .WithEnvironment("AUTHENTIK_CLIENT_SECRET", clientSecret)
             .WithBindMount(blueprintPath, "/blueprints/froststream.yaml", isReadOnly: true)
-            .WaitFor(database);
+            .WaitFor(postgres.AuthentikDb);
 
         if (!string.IsNullOrWhiteSpace(signingKeyName))
         {
@@ -113,5 +103,17 @@ public static class StartAuthentik
         var authority = ReferenceExpression.Create($"{server.GetEndpoint("http")}/application/o/froststream/");
 
         return new AuthentikResources(clientId, clientSecret, configuredAuthority, server, authority);
+    }
+
+    private static IResourceBuilder<ContainerResource> WithAuthentikPostgresEnv(
+        this IResourceBuilder<ContainerResource> container,
+        PostgresResources postgres)
+    {
+        return container
+            .WithEnvironment("AUTHENTIK_POSTGRESQL__HOST", "postgres")
+            .WithEnvironment("AUTHENTIK_POSTGRESQL__PORT", "5432")
+            .WithEnvironment("AUTHENTIK_POSTGRESQL__USER", postgres.User)
+            .WithEnvironment("AUTHENTIK_POSTGRESQL__PASSWORD", postgres.Password)
+            .WithEnvironment("AUTHENTIK_POSTGRESQL__NAME", DatabaseName);
     }
 }

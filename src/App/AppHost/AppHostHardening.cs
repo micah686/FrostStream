@@ -1,6 +1,6 @@
 namespace AppHost;
 
-internal sealed record AppHostHardeningOptions(
+public sealed record AppHostHardeningOptions(
     bool SingleUserMode,
     bool IsProduction,
     bool EnableHttps,
@@ -12,7 +12,7 @@ internal sealed record AppHostHardeningOptions(
     string TypesenseApiKey,
     string OpenFgaApiToken);
 
-internal static class AppHostHardening
+public static class AppHostHardening
 {
     private const string DevOpenBaoToken = "froststream-dev-root";
     private const string DevTypesenseApiKey = "froststream-dev-key";
@@ -139,7 +139,7 @@ internal static class AppHostHardening
         => Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
            string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
 
-    private static bool IsTruthy(string? value)
+    internal static bool IsTruthy(string? value)
         => value is not null &&
            (string.Equals(value, "1", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ||
