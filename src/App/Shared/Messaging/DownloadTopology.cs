@@ -76,6 +76,24 @@ public sealed class DownloadTopology : ITopologySource
         yield return WorkerConsumer(WorkerDeleteUploadedObjectConsumer, DownloadSubjects.DeleteUploadedObjectCommand);
     }
 
+    /// <summary>
+    /// Builds a durable consumer spec for a tagged worker command. Workers call
+    /// <see cref="ITopologyManager.EnsureConsumerAsync"/> with this spec at startup for each
+    /// of their configured tags. Multiple workers sharing the same tag use the same durable
+    /// name, so they form a queue group and share load.
+    /// </summary>
+    public static ConsumerSpec TaggedWorkerConsumerSpec(string baseConsumerName, string baseSubject, string tag)
+        => new()
+        {
+            StreamName = StreamName.From(StreamNameValue),
+            DurableName = ConsumerName.From($"{baseConsumerName}-{tag}"),
+            DeliverGroup = QueueGroup.From($"workers-{tag}"),
+            FilterSubject = DownloadSubjects.Tagged(baseSubject, tag),
+            AckPolicy = AckPolicy.Explicit,
+            AckWait = TimeSpan.FromMinutes(2),
+            MaxDeliver = 10
+        };
+
     private static ConsumerSpec DataBridgeConsumer(string durableName, string subject)
         => Consumer(durableName, subject, DataBridgeQueueGroup);
 

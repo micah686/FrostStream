@@ -94,6 +94,10 @@ class Program
         // BackgroundService starts).
         builder.Services.AddHostedService<StartupService>();
 
+        // Worker tag routing config.
+        builder.Services.AddOptions<WorkerOptions>()
+            .Bind(builder.Configuration.GetSection(WorkerOptions.SectionName));
+
         // Channel-asset cache wiring.
         builder.Services.AddOptions<AssetCacheOptions>()
             .Bind(builder.Configuration.GetSection(AssetCacheOptions.SectionName));

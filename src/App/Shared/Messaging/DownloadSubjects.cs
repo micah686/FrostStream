@@ -10,6 +10,15 @@ public static class DownloadSubjects
     public const string DeleteTempFileCommand          = "download.cmd.delete-temp-file";
     public const string DeleteUploadedObjectCommand    = "download.cmd.delete-uploaded-object";
 
+    /// <summary>Returns the tagged variant of a command subject (<c>{baseSubject}.{tag}</c>).</summary>
+    public static string Tagged(string baseSubject, string tag) => $"{baseSubject}.{tag}";
+
+    public static string FetchMetadataCommandForTag(string tag) => Tagged(FetchMetadataCommand, tag);
+    public static string DownloadVideoCommandForTag(string tag) => Tagged(DownloadVideoCommand, tag);
+    public static string UploadObjectCommandForTag(string tag) => Tagged(UploadObjectCommand, tag);
+    public static string DeleteTempFileCommandForTag(string tag) => Tagged(DeleteTempFileCommand, tag);
+    public static string DeleteUploadedObjectCommandForTag(string tag) => Tagged(DeleteUploadedObjectCommand, tag);
+
     public const string MetadataFetched                = "download.evt.metadata-fetched";
     public const string MetadataFetchFailed            = "download.evt.metadata-fetch-failed";
     // TODO:

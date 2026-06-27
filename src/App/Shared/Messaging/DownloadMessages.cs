@@ -218,6 +218,19 @@ public sealed record FetchMetadataCommand : IFlowMessage
     public required string SourceUrl { get; init; }
 
     /// <summary>
+    /// Target FluentStorage backend key. The Worker probes this backend for connectivity
+    /// before running yt-dlp so that a misconfigured or unreachable backend fails fast
+    /// rather than after a potentially lengthy metadata fetch.
+    /// </summary>
+    public required string StorageKey { get; init; }
+
+    /// <summary>
+    /// Worker tag that was used to route this command. Informational; the routing already
+    /// happened at publish time via the subject suffix (<c>download.cmd.fetch-metadata.{tag}</c>).
+    /// </summary>
+    public string? RequiredWorkerTag { get; init; }
+
+    /// <summary>
     /// Caller-supplied yt-dlp options snapshot, passed through to the Worker for the
     /// metadata-fetch invocation. Cookies-from-browser, custom user-agent, etc. all
     /// matter at metadata time, so we don't strip the options here.
@@ -303,6 +316,9 @@ public sealed record DownloadVideoCommand : IFlowMessage
 
     /// <summary>Source URL to download (passed through from <see cref="DownloadRequested.SourceUrl"/>).</summary>
     public required string SourceUrl { get; init; }
+
+    /// <summary>Worker tag used to route this command. Informational.</summary>
+    public string? RequiredWorkerTag { get; init; }
 
     /// <summary>What kind of media to produce (video or audio-only).</summary>
     public MediaKind MediaKind { get; init; } = MediaKind.Video;
@@ -484,6 +500,9 @@ public sealed record UploadObjectCommand : IFlowMessage
     /// <summary>Source path on the worker — must equal <see cref="DownloadCompleted.TempFileRef"/>.</summary>
     public required string TempFileRef { get; init; }
 
+    /// <summary>Worker tag used to route this command. Informational.</summary>
+    public string? RequiredWorkerTag { get; init; }
+
     /// <summary>FluentStorage backend key to upload into.</summary>
     public required string StorageKey { get; init; }
 
@@ -576,6 +595,9 @@ public sealed record DeleteTempFileCommand : IFlowMessage
     public required Instant OccurredAt { get; init; }
     public required int Attempt { get; init; }
 
+    /// <summary>Worker tag used to route this command. Informational.</summary>
+    public string? RequiredWorkerTag { get; init; }
+
     public required string TempFileRef { get; init; }
 }
 
@@ -622,6 +644,9 @@ public sealed record DeleteUploadedObjectCommand : IFlowMessage
     public required string OperationKey { get; init; }
     public required Instant OccurredAt { get; init; }
     public required int Attempt { get; init; }
+
+    /// <summary>Worker tag used to route this command. Informational.</summary>
+    public string? RequiredWorkerTag { get; init; }
 
     public required string StorageKey { get; init; }
 

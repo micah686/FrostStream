@@ -53,6 +53,10 @@ public sealed class StorageConfiguration : IEntityTypeConfiguration<StorageConfi
         builder.Property(x => x.LastUpdated)
             .HasColumnName("last_updated")
             .HasColumnType("timestamp with time zone");
+
+        builder.Property(x => x.WorkerTag)
+            .HasColumnName("worker_tag")
+            .HasMaxLength(50);
     }
 }
 

@@ -23,6 +23,16 @@ public class StorageConfigEntity
     [StringLength(500)]
     public string? Description { get; set; }
 
+    /// <summary>
+    /// Optional tag constraining which worker instances may access this backend.
+    /// When set, the download saga publishes commands to the tagged subject
+    /// (<c>download.cmd.*.{tag}</c>) instead of the default untagged subject.
+    /// Workers opt in to a tag by setting <c>Worker:Tags</c> in their config.
+    /// </summary>
+    [StringLength(50)]
+    [RegularExpression("^[a-z0-9-]{2,50}$")]
+    public string? WorkerTag { get; set; }
+
     public Instant CreatedAt { get; private set; } = SystemClock.Instance.GetCurrentInstant();
 
     public Instant? LastUpdated { get; set; }

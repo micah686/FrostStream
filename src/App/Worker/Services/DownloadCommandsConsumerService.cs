@@ -1,9 +1,11 @@
 using System.Buffers;
 using System.IO.Hashing;
 using System.Globalization;
+using FluentStorage.Blobs;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using NodaTime;
 using Shared.Messaging;
 using Shared.Metadata;
@@ -34,31 +36,69 @@ namespace Worker.Services;
 public sealed class DownloadCommandsConsumerService(
     IJetStreamConsumer consumer,
     IJetStreamPublisher publisher,
+    ITopologyManager topologyManager,
     IYtDlpClient ytDlp,
     IBlobStorageProvider blobStorageProvider,
     ISecretStore secretStore,
     IClock clock,
+    IOptions<WorkerOptions> workerOptions,
     ILogger<DownloadCommandsConsumerService> logger) : BackgroundService
 {
     private const string MediaFileBase = "media";
     private static readonly StreamName Stream = StreamName.From(DownloadTopology.StreamNameValue);
+    private static readonly TimeSpan StorageProbeTimeout = TimeSpan.FromSeconds(10);
 
-    protected override Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         // Remove any cookie scratch dirs left behind by a previous crash before serving traffic.
         SweepCookieScratchRoot();
 
-        var consumers = new[]
-        {
-            Consume<FetchMetadataCommand>(DownloadTopology.WorkerFetchMetadataConsumer, HandleFetchMetadataAsync, stoppingToken),
-            Consume<DownloadVideoCommand>(DownloadTopology.WorkerDownloadVideoConsumer, HandleDownloadVideoAsync, stoppingToken),
-            Consume<UploadObjectCommand>(DownloadTopology.WorkerUploadObjectConsumer, HandleUploadObjectAsync, stoppingToken),
-            Consume<DeleteTempFileCommand>(DownloadTopology.WorkerDeleteTempFileConsumer, HandleDeleteTempFileAsync, stoppingToken),
-            Consume<DeleteUploadedObjectCommand>(DownloadTopology.WorkerDeleteUploadedObjectConsumer, HandleDeleteUploadedObjectAsync, stoppingToken),
-        };
+        var options = workerOptions.Value;
+        var tags = options.Tags;
 
-        logger.LogInformation("Subscribed to {Count} download command consumers on stream {Stream}.", consumers.Length, Stream.Value);
-        return Task.WhenAll(consumers);
+        // Ensure per-tag consumers exist in JetStream before subscribing. EnsureConsumerAsync is
+        // idempotent — multiple worker instances with the same tags race to create the same durable
+        // consumers, and the second+ calls become no-ops.
+        foreach (var tag in tags)
+        {
+            await topologyManager.EnsureConsumerAsync(DownloadTopology.TaggedWorkerConsumerSpec(DownloadTopology.WorkerFetchMetadataConsumer,        DownloadSubjects.FetchMetadataCommand,        tag), stoppingToken);
+            await topologyManager.EnsureConsumerAsync(DownloadTopology.TaggedWorkerConsumerSpec(DownloadTopology.WorkerDownloadVideoConsumer,        DownloadSubjects.DownloadVideoCommand,        tag), stoppingToken);
+            await topologyManager.EnsureConsumerAsync(DownloadTopology.TaggedWorkerConsumerSpec(DownloadTopology.WorkerUploadObjectConsumer,         DownloadSubjects.UploadObjectCommand,         tag), stoppingToken);
+            await topologyManager.EnsureConsumerAsync(DownloadTopology.TaggedWorkerConsumerSpec(DownloadTopology.WorkerDeleteTempFileConsumer,       DownloadSubjects.DeleteTempFileCommand,       tag), stoppingToken);
+            await topologyManager.EnsureConsumerAsync(DownloadTopology.TaggedWorkerConsumerSpec(DownloadTopology.WorkerDeleteUploadedObjectConsumer, DownloadSubjects.DeleteUploadedObjectCommand, tag), stoppingToken);
+            logger.LogInformation("Ensured tagged download consumers for tag '{Tag}'.", tag);
+        }
+
+        var consumerTasks = new List<Task>();
+
+        // Subscribe to untagged consumers when this worker accepts jobs with no required tag.
+        if (options.AcceptsUntaggedJobs || tags.Count == 0)
+        {
+            consumerTasks.Add(Consume<FetchMetadataCommand>(DownloadTopology.WorkerFetchMetadataConsumer,        HandleFetchMetadataAsync,        stoppingToken));
+            consumerTasks.Add(Consume<DownloadVideoCommand>(DownloadTopology.WorkerDownloadVideoConsumer,        HandleDownloadVideoAsync,        stoppingToken));
+            consumerTasks.Add(Consume<UploadObjectCommand>(DownloadTopology.WorkerUploadObjectConsumer,          HandleUploadObjectAsync,         stoppingToken));
+            consumerTasks.Add(Consume<DeleteTempFileCommand>(DownloadTopology.WorkerDeleteTempFileConsumer,      HandleDeleteTempFileAsync,       stoppingToken));
+            consumerTasks.Add(Consume<DeleteUploadedObjectCommand>(DownloadTopology.WorkerDeleteUploadedObjectConsumer, HandleDeleteUploadedObjectAsync, stoppingToken));
+        }
+
+        // Subscribe to per-tag consumers.
+        foreach (var tag in tags)
+        {
+            consumerTasks.Add(Consume<FetchMetadataCommand>($"{DownloadTopology.WorkerFetchMetadataConsumer}-{tag}",        HandleFetchMetadataAsync,        stoppingToken));
+            consumerTasks.Add(Consume<DownloadVideoCommand>($"{DownloadTopology.WorkerDownloadVideoConsumer}-{tag}",        HandleDownloadVideoAsync,        stoppingToken));
+            consumerTasks.Add(Consume<UploadObjectCommand>($"{DownloadTopology.WorkerUploadObjectConsumer}-{tag}",          HandleUploadObjectAsync,         stoppingToken));
+            consumerTasks.Add(Consume<DeleteTempFileCommand>($"{DownloadTopology.WorkerDeleteTempFileConsumer}-{tag}",      HandleDeleteTempFileAsync,       stoppingToken));
+            consumerTasks.Add(Consume<DeleteUploadedObjectCommand>($"{DownloadTopology.WorkerDeleteUploadedObjectConsumer}-{tag}", HandleDeleteUploadedObjectAsync, stoppingToken));
+        }
+
+        logger.LogInformation(
+            "Subscribed to {Count} download command consumers on stream {Stream}. Tags: [{Tags}] AcceptsUntaggedJobs: {AcceptsUntaggedJobs}",
+            consumerTasks.Count,
+            Stream.Value,
+            string.Join(", ", tags),
+            options.AcceptsUntaggedJobs);
+
+        await Task.WhenAll(consumerTasks);
     }
 
     private Task Consume<TCommand>(
@@ -81,11 +121,22 @@ public sealed class DownloadCommandsConsumerService(
         try
         {
             logger.LogInformation(
-                "Metadata fetch started for JobId {JobId} Attempt {Attempt} URL {SourceUrl} HasCookieProfile {HasCookieProfile}",
+                "Metadata fetch started for JobId {JobId} Attempt {Attempt} URL {SourceUrl} StorageKey {StorageKey} WorkerTag {WorkerTag} HasCookieProfile {HasCookieProfile}",
                 cmd.JobId,
                 cmd.Attempt,
                 cmd.SourceUrl,
+                cmd.StorageKey,
+                cmd.RequiredWorkerTag,
                 !string.IsNullOrWhiteSpace(cmd.CookieSecretPath));
+
+            // Probe storage connectivity before invoking yt-dlp. A failed probe fails the job
+            // immediately with a permanent failure so the saga doesn't waste time downloading
+            // bytes that can never be uploaded.
+            if (!await ProbeStorageAsync(cmd))
+            {
+                await context.AckAsync();
+                return;
+            }
 
             await using var cookies = await CookieMaterializer.CreateFromPathAsync(
                 secretStore,
@@ -463,6 +514,52 @@ public sealed class DownloadCommandsConsumerService(
                 ErrorMessage = ex.Message
             });
             await context.AckAsync();
+        }
+    }
+
+    /// <summary>
+    /// Probes the target storage backend for connectivity. Returns <see langword="true"/> when the
+    /// backend is reachable; publishes <see cref="MetadataFetchFailed"/> and returns
+    /// <see langword="false"/> when it is not. Failing fast here prevents a worker from spending
+    /// time on a multi-minute yt-dlp download only to discover at upload time that its storage
+    /// backend is unreachable (e.g. a NAS worker tag pointing at a locally-mounted share that
+    /// went offline).
+    /// </summary>
+    private async Task<bool> ProbeStorageAsync(FetchMetadataCommand cmd)
+    {
+        try
+        {
+            using var cts = new CancellationTokenSource(StorageProbeTimeout);
+            var storage = await blobStorageProvider.GetAsync(cmd.StorageKey, cts.Token);
+            await storage.ListAsync(new ListOptions { MaxResults = 1 }, cts.Token);
+
+            logger.LogDebug(
+                "Storage probe succeeded for JobId {JobId} StorageKey {StorageKey}.",
+                cmd.JobId,
+                cmd.StorageKey);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Storage probe failed for JobId {JobId} StorageKey {StorageKey}; failing job permanently.",
+                cmd.JobId,
+                cmd.StorageKey);
+
+            await Publish(DownloadSubjects.MetadataFetchFailed, new MetadataFetchFailed
+            {
+                JobId = cmd.JobId,
+                CorrelationId = cmd.CorrelationId,
+                CausationId = cmd.MessageId,
+                MessageId = DeterministicGuid.Create(cmd.MessageId, "/storage-probe-failed"),
+                OperationKey = $"{cmd.OperationKey}/storage-probe-failed",
+                OccurredAt = clock.GetCurrentInstant(),
+                Attempt = cmd.Attempt,
+                FailureKind = FailureKind.Permanent,
+                ErrorCode = "storage_unavailable",
+                ErrorMessage = $"Storage backend '{cmd.StorageKey}' is unreachable from this worker: {ex.Message}"
+            });
+            return false;
         }
     }
 
