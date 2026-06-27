@@ -233,6 +233,9 @@ public sealed class FilesystemRescanConsumerService(
                     UNION
                     SELECT info_json_storage_path FROM downloads.download_jobs
                         WHERE info_json_storage_path IS NOT NULL AND storage_key = @storage_key
+                    UNION
+                    SELECT meta_storage_path FROM downloads.download_jobs
+                        WHERE meta_storage_path IS NOT NULL AND storage_key = @storage_key
                 ) source
             ),
             expected_all AS (

@@ -427,7 +427,11 @@ public enum UploadArtifactKind
     /// <summary>The per-media thumbnail image, co-located with the primary.</summary>
     Thumbnail = 2,
     /// <summary>A per-media caption/subtitle track, co-located with the primary.</summary>
-    Caption = 3
+    Caption = 3,
+    /// <summary>The DataBridge-generated <c>.meta</c> sidecar containing title, hash, media GUID,
+    /// and original URL — used to correlate storage objects back to their DB records after
+    /// migrations or path changes.</summary>
+    Meta = 4
 }
 
 /// <summary>
@@ -497,8 +501,15 @@ public sealed record UploadObjectCommand : IFlowMessage
     public required Instant OccurredAt { get; init; }
     public required int Attempt { get; init; }
 
-    /// <summary>Source path on the worker — must equal <see cref="DownloadCompleted.TempFileRef"/>.</summary>
-    public required string TempFileRef { get; init; }
+    /// <summary>Source path on the worker. Null when <see cref="InlineContent"/> is set instead.</summary>
+    public string? TempFileRef { get; init; }
+
+    /// <summary>
+    /// Raw bytes for the worker to write directly to <see cref="StoragePath"/>. Used for
+    /// DataBridge-generated sidecars (e.g. <c>.meta</c> files) where no worker-local temp file
+    /// exists. Exactly one of <see cref="TempFileRef"/> and <see cref="InlineContent"/> must be set.
+    /// </summary>
+    public byte[]? InlineContent { get; init; }
 
     /// <summary>Worker tag used to route this command. Informational.</summary>
     public string? RequiredWorkerTag { get; init; }
@@ -536,8 +547,8 @@ public sealed record UploadCompleted : IFlowMessage
     public required Instant OccurredAt { get; init; }
     public required int Attempt { get; init; }
 
-    /// <summary>The temp-file source the bytes came from. Subsequently fed to <see cref="DeleteTempFileCommand"/>.</summary>
-    public required string TempFileRef { get; init; }
+    /// <summary>The temp-file source the bytes came from. Null for inline-content uploads (e.g. <c>.meta</c> sidecars).</summary>
+    public string? TempFileRef { get; init; }
 
     /// <summary>Backend key the bytes were written to.</summary>
     public required string StorageKey { get; init; }

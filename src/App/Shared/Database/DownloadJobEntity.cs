@@ -37,6 +37,8 @@ public class DownloadJobEntity
 
     public long? InfoJsonSizeBytes { get; set; }
 
+    public string? MetaStoragePath { get; set; }
+
     public FailureKind? FailureKind { get; set; }
 
     public string? FailureCode { get; set; }

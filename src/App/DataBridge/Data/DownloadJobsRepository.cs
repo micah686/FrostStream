@@ -278,6 +278,14 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
         await db.SaveChangesAsync(ct);
     }
 
+    public async Task ApplyMetaUploadCompletedAsync(Guid jobId, UploadCompleted evt, CancellationToken ct = default)
+    {
+        var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
+        job.MetaStoragePath = evt.StoragePath;
+        job.UpdatedAt = clock.GetCurrentInstant();
+        await db.SaveChangesAsync(ct);
+    }
+
     public async Task IncrementMetadataAttemptAsync(Guid jobId, int attempt, CancellationToken ct = default)
     {
         var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);

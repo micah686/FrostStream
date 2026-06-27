@@ -2,6 +2,13 @@ using AppHost;
 using Aspire.Hosting;
 
 var builder = DistributedApplication.CreateBuilder(args);
+
+
+//Test with single-user-mode for easy dev
+Environment.SetEnvironmentVariable("SINGLE_USER_MODE", "true");
+
+
+
 var hardening = AppHostHardening.Read(AppHostHardening.IsTruthy(Environment.GetEnvironmentVariable("SINGLE_USER_MODE")));
 AppHostHardening.Validate(hardening);
 

@@ -339,34 +339,65 @@ public sealed class DownloadCommandsConsumerService(
 
         try
         {
-            var fileInfo = new FileInfo(cmd.TempFileRef);
-            if (!fileInfo.Exists)
-                throw new FileNotFoundException("Temp file to upload was not found.", cmd.TempFileRef);
-
-            logger.LogInformation(
-                "Upload started for JobId {JobId} Attempt {Attempt} TempFileRef {TempFileRef} SizeBytes {FileSizeBytes} StorageKey {StorageKey} StoragePath {StoragePath}",
-                cmd.JobId,
-                cmd.Attempt,
-                cmd.TempFileRef,
-                fileInfo.Length,
-                cmd.StorageKey,
-                cmd.StoragePath);
-
             var storage = await blobStorageProvider.GetAsync(cmd.StorageKey);
+            long contentLength;
 
-            await using (var stream = File.OpenRead(fileInfo.FullName))
+            if (cmd.InlineContent is { } inlineBytes)
             {
-                await storage.WriteAsync(cmd.StoragePath, stream, append: false);
-            }
+                logger.LogInformation(
+                    "Upload (inline) started for JobId {JobId} Attempt {Attempt} SizeBytes {SizeBytes} StorageKey {StorageKey} StoragePath {StoragePath}",
+                    cmd.JobId,
+                    cmd.Attempt,
+                    inlineBytes.Length,
+                    cmd.StorageKey,
+                    cmd.StoragePath);
 
-            logger.LogInformation(
-                "Upload completed for JobId {JobId} Attempt {Attempt} StorageKey {StorageKey} StoragePath {StoragePath} SizeBytes {FileSizeBytes} ContentHash {ContentHashXxh128}",
-                cmd.JobId,
-                cmd.Attempt,
-                cmd.StorageKey,
-                cmd.StoragePath,
-                fileInfo.Length,
-                cmd.ContentHashXxh128);
+                await using var memStream = new MemoryStream(inlineBytes, writable: false);
+                await storage.WriteAsync(cmd.StoragePath, memStream, append: false);
+                contentLength = inlineBytes.Length;
+
+                logger.LogInformation(
+                    "Upload (inline) completed for JobId {JobId} Attempt {Attempt} StorageKey {StorageKey} StoragePath {StoragePath} SizeBytes {SizeBytes}",
+                    cmd.JobId,
+                    cmd.Attempt,
+                    cmd.StorageKey,
+                    cmd.StoragePath,
+                    contentLength);
+            }
+            else if (cmd.TempFileRef is { } tempRef)
+            {
+                var fileInfo = new FileInfo(tempRef);
+                if (!fileInfo.Exists)
+                    throw new FileNotFoundException("Temp file to upload was not found.", tempRef);
+
+                logger.LogInformation(
+                    "Upload started for JobId {JobId} Attempt {Attempt} TempFileRef {TempFileRef} SizeBytes {FileSizeBytes} StorageKey {StorageKey} StoragePath {StoragePath}",
+                    cmd.JobId,
+                    cmd.Attempt,
+                    tempRef,
+                    fileInfo.Length,
+                    cmd.StorageKey,
+                    cmd.StoragePath);
+
+                await using (var stream = File.OpenRead(fileInfo.FullName))
+                {
+                    await storage.WriteAsync(cmd.StoragePath, stream, append: false);
+                }
+                contentLength = fileInfo.Length;
+
+                logger.LogInformation(
+                    "Upload completed for JobId {JobId} Attempt {Attempt} StorageKey {StorageKey} StoragePath {StoragePath} SizeBytes {FileSizeBytes} ContentHash {ContentHashXxh128}",
+                    cmd.JobId,
+                    cmd.Attempt,
+                    cmd.StorageKey,
+                    cmd.StoragePath,
+                    contentLength,
+                    cmd.ContentHashXxh128);
+            }
+            else
+            {
+                throw new InvalidOperationException("UploadObjectCommand has neither TempFileRef nor InlineContent.");
+            }
 
             await Publish(DownloadSubjects.UploadCompleted, new UploadCompleted
             {
@@ -382,7 +413,7 @@ public sealed class DownloadCommandsConsumerService(
                 StoragePath = cmd.StoragePath,
                 StorageVersion = null,
                 ContentHashXxh128 = cmd.ContentHashXxh128,
-                ContentLengthBytes = fileInfo.Length,
+                ContentLengthBytes = contentLength,
                 Kind = cmd.Kind
             });
             await context.AckAsync();

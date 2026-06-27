@@ -69,6 +69,13 @@ public interface IDownloadJobsRepository
     /// </summary>
     Task ApplySidecarUploadCompletedAsync(Guid jobId, UploadCompleted evt, CancellationToken ct = default);
 
+    /// <summary>
+    /// Records the <c>.meta</c> sidecar's storage path on the job row. The file is
+    /// DataBridge-generated and contains title, hash, media GUID, and original URL for
+    /// storage-migration correlation.
+    /// </summary>
+    Task ApplyMetaUploadCompletedAsync(Guid jobId, UploadCompleted evt, CancellationToken ct = default);
+
     Task IncrementMetadataAttemptAsync(Guid jobId, int attempt, CancellationToken ct = default);
 
     Task IncrementDownloadAttemptAsync(Guid jobId, int attempt, CancellationToken ct = default);

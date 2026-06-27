@@ -158,7 +158,7 @@ public class DownloadArchiveFlow(
                 reservation.MediaGuid,
                 uploaded.StoragePath);
             await Capture(() => DispatchUploadedObjectDeletion(request, uploaded, jobInstance, attempt: 1, workerTag));
-            await Capture(() => DispatchTempFileCleanup(request, uploaded.TempFileRef, jobInstance, attempt: 1, workerTag));
+            await Capture(() => DispatchTempFileCleanup(request, uploaded.TempFileRef!, jobInstance, attempt: 1, workerTag));
             // Per-media asset sidecars (thumbnail/captions/info.json) are uploaded only AFTER a
             // successful commit, so on commit-failure rollback there are no asset blobs to delete —
             // only the worker-local temp files, which we drop here so they don't orphan. (When a
@@ -183,7 +183,7 @@ public class DownloadArchiveFlow(
             return;
         }
 
-        // STEP 6b: upload the .info.json sidecar (best-effort) ----------------
+        // STEP 6b: upload the .info.json sidecar (best-effort, only when yt-dlp produced one) --
         if (downloaded.InfoJsonTempFileRef is { } sidecarTempRef &&
             !string.IsNullOrWhiteSpace(downloaded.InfoJsonFileName) &&
             !string.IsNullOrWhiteSpace(downloaded.InfoJsonContentHashXxh128))
@@ -198,6 +198,17 @@ public class DownloadArchiveFlow(
                 jobInstance,
                 workerTag);
         }
+
+        // STEP 6b_meta: write .meta sidecar (always — DataBridge-generated, inline content) --
+        await RunMetaFileUploadStep(
+            request,
+            uploaded,
+            reservation.MediaGuid,
+            metadata.Title,
+            downloaded.ContentHashXxh128,
+            storageKey,
+            jobInstance,
+            workerTag);
 
         // STEP 6b2: upload per-media asset sidecars (thumbnail + captions) and rewrite the
         // metadata storage paths to the uploaded blob keys (best-effort).
@@ -221,7 +232,7 @@ public class DownloadArchiveFlow(
             OccurredAt = clock.GetCurrentInstant(),
             Attempt = 1,
             RequiredWorkerTag = workerTag,
-            TempFileRef = uploaded.TempFileRef
+            TempFileRef = uploaded.TempFileRef!
         };
         var cleanupSubject = string.IsNullOrWhiteSpace(workerTag)
             ? DownloadSubjects.DeleteTempFileCommand
@@ -509,6 +520,79 @@ public class DownloadArchiveFlow(
 
         await Capture(() => DispatchTempFileCleanup(request, sidecarTempRef, jobInstance, attempt: 1, workerTag));
         await Message<TempFileDeleted>();
+    }
+
+    /// <summary>
+    /// Generates and uploads a DataBridge-authored <c>.meta</c> sidecar co-located with the
+    /// primary upload. The file contains title, content hash, media GUID, and original URL so
+    /// that the object can be correlated back to its database record after a storage migration
+    /// or path rename. Best-effort: failure logs a warning but does not fail the job.
+    /// </summary>
+    private async Task RunMetaFileUploadStep(
+        DownloadRequested request,
+        UploadCompleted primary,
+        Guid mediaGuid,
+        string? title,
+        string contentHashXxh128,
+        string storageKey,
+        string jobInstance,
+        string? workerTag)
+    {
+        var metaFileName = $"{mediaGuid:N}.meta";
+        var metaStoragePath = BuildSidecarStoragePath(primary.StoragePath, metaFileName);
+
+        var metaContent = new
+        {
+            mediaGuid = mediaGuid.ToString("D"),
+            title,
+            contentHashXxh128,
+            originalUrl = request.SourceUrl
+        };
+        var metaBytes = System.Text.Encoding.UTF8.GetBytes(
+            JsonSerializer.Serialize(metaContent, new JsonSerializerOptions { WriteIndented = false }));
+        var metaHash = Convert.ToHexStringLower(System.IO.Hashing.XxHash128.Hash(metaBytes));
+
+        var msgId = await Capture(Guid.NewGuid);
+        var cmd = new UploadObjectCommand
+        {
+            JobId = request.JobId,
+            CorrelationId = request.CorrelationId,
+            CausationId = primary.MessageId,
+            MessageId = msgId,
+            OperationKey = $"job/{jobInstance}/upload-sidecar/meta",
+            OccurredAt = clock.GetCurrentInstant(),
+            Attempt = 1,
+            InlineContent = metaBytes,
+            RequiredWorkerTag = workerTag,
+            StorageKey = storageKey,
+            StoragePath = metaStoragePath,
+            ContentHashXxh128 = metaHash,
+            Kind = UploadArtifactKind.Meta
+        };
+        var subject = string.IsNullOrWhiteSpace(workerTag)
+            ? DownloadSubjects.UploadObjectCommand
+            : DownloadSubjects.UploadObjectCommandForTag(workerTag);
+        logger.LogInformation(
+            "Download flow dispatching .meta sidecar upload for JobId {JobId} StoragePath {StoragePath}",
+            request.JobId,
+            metaStoragePath);
+        await Capture(() => Publish(subject, cmd));
+
+        var result = await Messages.FirstOfTypes<UploadCompleted, UploadFailed>();
+        if (result.HasFirst)
+        {
+            logger.LogInformation(
+                "Download flow .meta sidecar uploaded for JobId {JobId} StoragePath {StoragePath}",
+                request.JobId,
+                result.First.StoragePath);
+        }
+        else
+        {
+            logger.LogWarning(
+                "Download flow .meta sidecar upload failed for JobId {JobId}: {ErrorMessage}",
+                request.JobId,
+                result.Second.ErrorMessage);
+        }
     }
 
     /// <summary>
