@@ -1,11 +1,15 @@
 ## DONE
+
 [X]Playlists
 [X]audio downloads
 [X]options passed through via api
 [X]background download channel assets
 [!]Channel downloads (Partial, on a schedule, not on demand)
 
-## TODO 
+[X]add tags to workers, so jobs can be assigned to a worker with that tag (otherwise, a S3 worker might not be able to write to the storage for a local NAS)
+
+## TODO
+
 upload metadata
 live_chat (complex, need to integrate with clickhousedb)
 batch local import (need to figure out if JUST local filesystem, or use IFluentStorage)
@@ -13,6 +17,7 @@ batch local import (need to figure out if JUST local filesystem, or use IFluentS
 backup and restore (should be postgres+openbao+...) 
 
 ## TubeArchivst Options
+
 Audio download
 Podcast mode to serve channel as mp3
 Random and repeat controls (#108, #220)
@@ -51,20 +56,3 @@ Un-ignore videos [2021-10-03]
 Dynamic download queue [2021-09-26]
 Backup and restore [2021-09-22]
 Scan your file system to index already downloaded videos [2021-09-14]
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
