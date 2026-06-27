@@ -273,8 +273,7 @@ public sealed class OrphanMetadataCleanupExecutorTests
 
     private sealed class PostgresFixture : IAsyncDisposable
     {
-        private readonly IContainer _postgresContainer = new ContainerBuilder()
-            .WithImage("postgres:17")
+        private readonly IContainer _postgresContainer = new ContainerBuilder("postgres:17")
             .WithEnvironment("POSTGRES_DB", "froststream_orphan_cleanup_tests")
             .WithEnvironment("POSTGRES_USER", "postgres")
             .WithEnvironment("POSTGRES_PASSWORD", "postgres")

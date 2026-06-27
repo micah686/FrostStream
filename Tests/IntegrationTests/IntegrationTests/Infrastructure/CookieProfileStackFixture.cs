@@ -28,26 +28,22 @@ public sealed class CookieProfileStackFixture : IAsyncDisposable
 {
     private const string OpenBaoToken = "froststream-test-root";
 
-    private readonly NatsContainer _natsContainer = new NatsBuilder()
-        .WithImage("nats:2.10")
+    private readonly NatsContainer _natsContainer = new NatsBuilder("nats:2.10")
         .WithCommand("--jetstream")
         .Build();
 
-    private readonly IContainer _postgresContainer = new ContainerBuilder()
-        .WithImage("postgres:17")
+    private readonly IContainer _postgresContainer = new ContainerBuilder("postgres:17")
         .WithEnvironment("POSTGRES_DB", "froststream_cookie_tests")
         .WithEnvironment("POSTGRES_USER", "postgres")
         .WithEnvironment("POSTGRES_PASSWORD", "postgres")
         .WithPortBinding(5432, true)
         .Build();
 
-    private readonly IContainer _openBaoContainer = new ContainerBuilder()
-        .WithImage("openbao/openbao:latest")
+    private readonly IContainer _openBaoContainer = new ContainerBuilder("openbao/openbao:latest")
         .WithEnvironment("BAO_DEV_ROOT_TOKEN_ID", OpenBaoToken)
         .WithEnvironment("BAO_DEV_LISTEN_ADDRESS", "0.0.0.0:8200")
         .WithPortBinding(8200, true)
         .WithCommand("server", "-dev", "-dev-root-token-id", OpenBaoToken, "-dev-listen-address", "0.0.0.0:8200")
-        .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(8200))
         .Build();
 
     private readonly SemaphoreSlim _gate = new(1, 1);

@@ -33,13 +33,11 @@ namespace IntegrationTests.Infrastructure;
 
 public sealed class StorageStackFixture(SaveChangesInterceptor? interceptor = null) : IAsyncDisposable
 {
-    private readonly NatsContainer _natsContainer = new NatsBuilder()
-        .WithImage("nats:2.10")
+    private readonly NatsContainer _natsContainer = new NatsBuilder("nats:2.10")
         .WithCommand("--jetstream")
         .Build();
 
-    private readonly IContainer _postgresContainer = new ContainerBuilder()
-        .WithImage("postgres:17")
+    private readonly IContainer _postgresContainer = new ContainerBuilder("postgres:17")
         .WithEnvironment("POSTGRES_DB", "froststream_storage_tests")
         .WithEnvironment("POSTGRES_USER", "postgres")
         .WithEnvironment("POSTGRES_PASSWORD", "postgres")

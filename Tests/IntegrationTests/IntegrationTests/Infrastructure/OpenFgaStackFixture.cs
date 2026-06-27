@@ -23,8 +23,7 @@ public sealed class OpenFgaStackFixture : IAsyncDisposable
 
     // No in-container port wait strategy: the openfga image's minimal shell makes UntilPortIsAvailable
     // unreliable. We wait from the host against /healthz on the mapped port (WaitForOpenFgaAsync).
-    private readonly IContainer _openFgaContainer = new ContainerBuilder()
-        .WithImage("openfga/openfga:latest")
+    private readonly IContainer _openFgaContainer = new ContainerBuilder("openfga/openfga:latest")
         .WithCommand("run")
         .WithPortBinding(8080, true)
         .Build();

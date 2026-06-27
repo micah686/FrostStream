@@ -171,6 +171,7 @@ public sealed class StorageEnumerator(
         await foreach (var blob in container.GetBlobsAsync(
                            traits: BlobTraits.None,
                            states: BlobStates.None,
+                           prefix: null,
                            cancellationToken: cancellationToken))
         {
             if (!string.IsNullOrEmpty(blob.Name))
@@ -251,24 +252,29 @@ public sealed class StorageEnumerator(
         }
     }
 
-    private static Task<StorageClient> CreateGcsClientAsync(
+    // Credentials originate from admin-configured OpenBao secret store, not untrusted user input,
+    // so the security concern behind the GoogleCredential deprecations does not apply here.
+#pragma warning disable CS0618
+    private static async Task<StorageClient> CreateGcsClientAsync(
         GoogleCloudStorageObjectStorageParameters parameters,
         CancellationToken cancellationToken)
     {
         GoogleCredential? credential = parameters.CredentialMode switch
         {
             GoogleCloudStorageCredentialMode.CredentialsJson when parameters.GcpCredentialsJson is not null =>
-                GoogleCredential.FromJson(GetGoogleCredentialsJson(parameters)),
+                await GoogleCredential.FromStreamAsync(
+                    new MemoryStream(System.Text.Encoding.UTF8.GetBytes(GetGoogleCredentialsJson(parameters))),
+                    cancellationToken),
             GoogleCloudStorageCredentialMode.CredentialsFilePath when !string.IsNullOrWhiteSpace(parameters.GcpCredentialsFilePath) =>
-                GoogleCredential.FromFile(parameters.GcpCredentialsFilePath),
+                await GoogleCredential.FromFileAsync(parameters.GcpCredentialsFilePath, cancellationToken),
             GoogleCloudStorageCredentialMode.WorkloadIdentity or GoogleCloudStorageCredentialMode.DefaultCredentials =>
                 GoogleCredential.GetApplicationDefault(),
             _ => null
         };
 
-        cancellationToken.ThrowIfCancellationRequested();
-        return Task.FromResult(StorageClient.Create(credential));
+        return StorageClient.Create(credential);
     }
+#pragma warning restore CS0618
 
     private static string GetGoogleCredentialsJson(GoogleCloudStorageObjectStorageParameters parameters)
     {
