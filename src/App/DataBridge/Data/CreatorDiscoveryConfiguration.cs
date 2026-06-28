@@ -64,6 +64,7 @@ public sealed class DiscoveredMediaConfiguration : IEntityTypeConfiguration<Disc
         builder.Property(x => x.LiveStatus).HasColumnName("live_status").HasMaxLength(100);
         builder.Property(x => x.Availability).HasColumnName("availability").HasMaxLength(100);
         builder.Property(x => x.DiscoveryStatus).HasColumnName("discovery_status").HasMaxLength(50).HasConversion<string>().IsRequired();
+        builder.Property(x => x.IgnoredKeyword).HasColumnName("ignored_keyword").HasMaxLength(200);
         builder.Property(x => x.MetadataStatus).HasColumnName("metadata_status").HasMaxLength(50).HasConversion<string>().IsRequired();
         builder.Property(x => x.FirstSeenAt)
             .HasColumnName("first_seen_at")

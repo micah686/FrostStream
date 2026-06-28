@@ -32,6 +32,8 @@ public sealed class CreatorDiscoveryConsumerService(
         await SubscribeAsync<CreatorSourceDeleteRequestMessage>(messageBus, CreatorDiscoverySubjects.DeleteSource, HandleDeleteAsync, QueueGroup, stoppingToken);
         await SubscribeAsync<UpsertDiscoveredMediaBatchRequestMessage>(messageBus, CreatorDiscoverySubjects.UpsertDiscoveredMediaBatch, HandleUpsertBatchAsync, QueueGroup, stoppingToken);
         await SubscribeAsync<UpdateCreatorSourceAssetsRequestMessage>(messageBus, CreatorDiscoverySubjects.UpdateAssets, HandleUpdateAssetsAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<ListIgnoredMediaRequestMessage>(messageBus, CreatorDiscoverySubjects.ListIgnoredMedia, HandleListIgnoredMediaAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<ForceQueueDiscoveredMediaRequestMessage>(messageBus, CreatorDiscoverySubjects.ForceQueueDiscoveredMedia, HandleForceQueueDiscoveredMediaAsync, QueueGroup, stoppingToken);
 
         logger.LogInformation("Subscribed to creator discovery subjects.");
     }
@@ -314,6 +316,95 @@ public sealed class CreatorDiscoveryConsumerService(
                 Success = false,
                 ErrorCode = "internal",
                 ErrorMessage = "Failed to update creator source assets."
+            });
+        }
+    }
+
+    private async Task HandleListIgnoredMediaAsync(IMessageContext<ListIgnoredMediaRequestMessage> context)
+    {
+        try
+        {
+            var items = await WithRepo(repo => repo.ListIgnoredMediaAsync(context.Message.CreatorSourceId));
+            await context.RespondAsync(new ListIgnoredMediaResponseMessage
+            {
+                Success = true,
+                Items = items.Select(x => new IgnoredMediaDto
+                {
+                    Id = x.Id,
+                    CreatorSourceId = x.CreatorSourceId,
+                    Title = x.Title,
+                    CanonicalUrl = x.CanonicalUrl,
+                    IgnoredKeyword = x.IgnoredKeyword,
+                    FirstSeenAt = x.FirstSeenAt,
+                    LastSeenAt = x.LastSeenAt
+                }).ToArray()
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed listing ignored media for source {SourceId}", context.Message.CreatorSourceId);
+            await context.RespondAsync(new ListIgnoredMediaResponseMessage
+            {
+                Success = false,
+                ErrorCode = "internal",
+                ErrorMessage = "Failed to list ignored media."
+            });
+        }
+    }
+
+    private async Task HandleForceQueueDiscoveredMediaAsync(IMessageContext<ForceQueueDiscoveredMediaRequestMessage> context)
+    {
+        var msg = context.Message;
+        try
+        {
+            var entity = await WithRepo(repo => repo.RequeueIgnoredMediaAsync(msg.DiscoveredMediaId));
+            if (entity is null)
+            {
+                await context.RespondAsync(new ForceQueueOperationResponseMessage
+                {
+                    Success = false,
+                    ErrorCode = "not_found",
+                    ErrorMessage = $"Discovered media '{msg.DiscoveredMediaId}' was not found."
+                });
+                return;
+            }
+
+            var jobId = Guid.NewGuid();
+            await publisher.PublishAsync(
+                DownloadSubjects.DownloadRequested,
+                new DownloadRequested
+                {
+                    JobId = jobId,
+                    CorrelationId = jobId,
+                    CausationId = null,
+                    MessageId = Guid.NewGuid(),
+                    OperationKey = $"force-queue/discovered-media/{entity.Id}/{jobId:N}",
+                    OccurredAt = clock.GetCurrentInstant(),
+                    Attempt = 1,
+                    SourceUrl = entity.CanonicalUrl,
+                    RequestedBy = msg.RequestedBy,
+                    StorageKey = msg.StorageKey,
+                    ForceDownload = true,
+                    MediaKind = MediaKind.Video,
+                    YtDlpOptions = msg.YtDlpOptions,
+                    CookieSecretPath = msg.CookieSecretPath,
+                    Priority = msg.Priority,
+                    FetchComments = msg.FetchComments,
+                    EncodeAudioRendition = msg.EncodeForPlaylist,
+                    AudioRenditionFormat = msg.AudioFormat
+                },
+                messageId: jobId.ToString("N"));
+
+            await context.RespondAsync(new ForceQueueOperationResponseMessage { Success = true, JobId = jobId });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed force-queueing discovered media {DiscoveredMediaId}", msg.DiscoveredMediaId);
+            await context.RespondAsync(new ForceQueueOperationResponseMessage
+            {
+                Success = false,
+                ErrorCode = "internal",
+                ErrorMessage = "Failed to force-queue discovered media."
             });
         }
     }

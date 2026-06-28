@@ -4,6 +4,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NodaTime;
+using Shared.Database;
+using Shared.Downloads;
 using Shared.Messaging;
 using System.Text.Json;
 using YtDlpSharpLib.Options;
@@ -161,6 +163,7 @@ public sealed class PlaylistEventsConsumerService(
         {
             using var scope = scopeFactory.CreateScope();
             var playlists = scope.ServiceProvider.GetRequiredService<IPlaylistsRepository>();
+            var configSets = scope.ServiceProvider.GetRequiredService<IDownloadConfigSetsRepository>();
 
             var playlist = await playlists.GetByIdAsync(cmd.PlaylistId);
             if (playlist is null)
@@ -170,10 +173,13 @@ public sealed class PlaylistEventsConsumerService(
                 return;
             }
 
+            var ignoreKeywords = await LoadIgnoreKeywordsAsync(configSets, playlist.RequestedBy, playlist.ConfigSetKey);
+
             var entries = await playlists.ListStagingEntriesAsync(cmd.PlaylistId);
             foreach (var entry in entries)
             {
                 var jobId = Guid.NewGuid();
+                var ignoreMatch = IgnoreKeywordMatcher.FirstMatch(entry.EntryTitle, ignoreKeywords);
                 var fanOut = new FanOutEntryRequest(
                     PlaylistId: playlist.PlaylistId,
                     CorrelationId: playlist.CorrelationId,
@@ -182,9 +188,19 @@ public sealed class PlaylistEventsConsumerService(
                     EntryUrl: entry.EntryUrl,
                     EntryTitle: entry.EntryTitle,
                     RequestedBy: playlist.RequestedBy,
-                    StorageKey: playlist.StorageKey);
+                    StorageKey: playlist.StorageKey,
+                    InitialState: ignoreMatch is null ? DownloadJobState.Queued : DownloadJobState.Ignored,
+                    IgnoredKeyword: ignoreMatch?.Pattern);
 
                 await playlists.FanOutEntryAsync(fanOut);
+
+                if (ignoreMatch is not null)
+                {
+                    logger.LogInformation(
+                        "Playlist {PlaylistId} entry {Index} ignored by keyword '{Keyword}': {Title}",
+                        playlist.PlaylistId, entry.PlaylistIndex, ignoreMatch.Pattern, entry.EntryTitle);
+                    continue;
+                }
 
                 var downloadRequested = new DownloadRequested
                 {
@@ -219,6 +235,18 @@ public sealed class PlaylistEventsConsumerService(
             logger.LogError(ex, "Failed handling ProcessPlaylistStagedEntries for PlaylistId {PlaylistId}", cmd.PlaylistId);
             await context.NackAsync();
         }
+    }
+
+    private static async Task<IReadOnlyList<IgnoreKeyword>> LoadIgnoreKeywordsAsync(
+        IDownloadConfigSetsRepository configSets,
+        string? ownerSubject,
+        string? configSetKey)
+    {
+        if (string.IsNullOrWhiteSpace(ownerSubject) || string.IsNullOrWhiteSpace(configSetKey))
+            return [];
+
+        var configSet = await configSets.GetAsync(ownerSubject, configSetKey);
+        return IgnoreKeywordMatcher.Deserialize(configSet?.IgnoreKeywordsJson);
     }
 
     private static async Task<string> ResolvePlaylistSourceUrlAsync(IPlaylistsRepository playlists, Guid playlistId)

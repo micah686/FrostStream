@@ -14,6 +14,15 @@ public interface ICreatorDiscoveryRepository
     Task<bool> DeleteSourceAsync(long id, CancellationToken cancellationToken = default);
     Task<DiscoveredMediaUpsertResult> UpsertDiscoveredMediaBatchAsync(UpsertDiscoveredMediaBatchRequestMessage request, CancellationToken cancellationToken = default);
     Task<CreatorSourceEntity?> UpdateAssetsAsync(UpdateCreatorSourceAssetsRequestMessage request, CancellationToken cancellationToken = default);
+
+    /// <summary>Lists discovered-media rows for a source that were suppressed by an ignore keyword.</summary>
+    Task<IReadOnlyList<DiscoveredMediaEntity>> ListIgnoredMediaAsync(long creatorSourceId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Clears the ignored state of a discovered-media row (status back to <see cref="MediaDiscoveryStatus.Queued"/>,
+    /// keyword cleared) and returns it so the caller can publish a forced download. Returns null when not found.
+    /// </summary>
+    Task<DiscoveredMediaEntity?> RequeueIgnoredMediaAsync(long discoveredMediaId, CancellationToken cancellationToken = default);
 }
 
 public sealed record DiscoveredMediaUpsertResult(

@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using Shared.Downloads;
 using Shared.Messaging;
 using YtDlpSharpLib.Options;
 
@@ -28,6 +29,10 @@ public class DownloadConfigSetCreateRequest
 
     public YtDlpOptions? YtDlpOptions { get; init; }
 
+    /// <summary>Title keywords that suppress videos during user-initiated channel/playlist downloads
+    /// using this config set. Background channel monitoring ignores this list.</summary>
+    public IReadOnlyList<IgnoreKeyword> IgnoreKeywords { get; init; } = [];
+
     [DefaultValue(false)]
     public bool EncodeForPlaylist { get; init; }
 
@@ -52,6 +57,7 @@ public sealed class DownloadConfigSetResponse
     public string? StorageKey { get; init; }
     public string? CookieProfileKey { get; init; }
     public YtDlpOptions? YtDlpOptions { get; init; }
+    public IReadOnlyList<IgnoreKeyword> IgnoreKeywords { get; init; } = [];
     public bool EncodeForPlaylist { get; init; }
     public AudioRenditionFormat AudioFormat { get; init; }
     public int Priority { get; init; }

@@ -111,6 +111,10 @@ public sealed class DiscoveredMediaEntity
 
     public MediaDiscoveryStatus DiscoveryStatus { get; set; } = MediaDiscoveryStatus.Discovered;
 
+    /// <summary>When <see cref="DiscoveryStatus"/> is <see cref="MediaDiscoveryStatus.Ignored"/>,
+    /// the config-set keyword pattern that suppressed this video (for reporting). Null otherwise.</summary>
+    public string? IgnoredKeyword { get; set; }
+
     public MediaMetadataStatus MetadataStatus { get; set; } = MediaMetadataStatus.PendingEnrichment;
 
     public Instant FirstSeenAt { get; set; } = SystemClock.Instance.GetCurrentInstant();

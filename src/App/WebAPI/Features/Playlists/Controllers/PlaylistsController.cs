@@ -199,4 +199,48 @@ public class PlaylistsController(
 
         return Ok(response.Playlist);
     }
+
+    /// <summary>
+    /// Force-queues a playlist entry that was suppressed by an ignore keyword, re-downloading it with
+    /// force enabled regardless of the config set's ignore list.
+    /// </summary>
+    [HttpPost("{id:guid}/items/{jobId:guid}/force-queue")]
+    [Endpoint(EndpointIds.PlaylistsForceQueueItem)]
+    [EndpointSummary("Force-queue an ignored playlist entry")]
+    [EndpointDescription("Clears the ignored state of a playlist entry and re-queues it for download with force enabled, using the playlist's original download configuration. Returns 404 when the playlist or entry is unknown.")]
+    public async Task<ActionResult<object>> ForceQueueItem(Guid id, Guid jobId, CancellationToken cancellationToken)
+    {
+        ForceQueueOperationResponseMessage? response;
+        try
+        {
+            response = await messageBus.RequestAsync<PlaylistItemForceQueueRequestMessage, ForceQueueOperationResponseMessage>(
+                PlaylistSubjects.PlaylistItemForceQueue,
+                new PlaylistItemForceQueueRequestMessage
+                {
+                    PlaylistId = id,
+                    JobId = jobId,
+                    RequestedBy = AuthConstants.FindSubject(User)
+                },
+                QueryTimeout,
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed force-queueing playlist item {JobId} in {PlaylistId}", jobId, id);
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable.");
+        }
+
+        if (response is null)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable.");
+        if (!response.Success)
+        {
+            return response.ErrorCode switch
+            {
+                "not_found" => NotFound(response.ErrorMessage),
+                _ => StatusCode(StatusCodes.Status500InternalServerError, response.ErrorMessage ?? "Force-queue failed.")
+            };
+        }
+
+        return Accepted(new { playlistId = id, jobId, queued = true });
+    }
 }

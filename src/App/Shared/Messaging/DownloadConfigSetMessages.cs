@@ -1,4 +1,5 @@
 using NodaTime;
+using Shared.Downloads;
 
 namespace Shared.Messaging;
 
@@ -23,6 +24,7 @@ public sealed record DownloadConfigSetDto
     public string? StorageKey { get; init; }
     public string? CookieProfileKey { get; init; }
     public string? YtDlpOptionsJson { get; init; }
+    public IReadOnlyList<IgnoreKeyword> IgnoreKeywords { get; init; } = [];
     public bool EncodeForPlaylist { get; init; }
     public AudioRenditionFormat AudioFormat { get; init; } = AudioRenditionFormat.Aac;
     public int Priority { get; init; }
@@ -40,6 +42,7 @@ public record DownloadConfigSetCreateRequestMessage
     public string? StorageKey { get; init; }
     public string? CookieProfileKey { get; init; }
     public string? YtDlpOptionsJson { get; init; }
+    public IReadOnlyList<IgnoreKeyword> IgnoreKeywords { get; init; } = [];
     public bool EncodeForPlaylist { get; init; }
     public AudioRenditionFormat AudioFormat { get; init; } = AudioRenditionFormat.Aac;
     public int Priority { get; init; }

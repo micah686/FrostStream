@@ -12,6 +12,7 @@ public static class PlaylistSubjects
 
     public const string PlaylistGet                        = "playlist.get";
     public const string PlaylistList                       = "playlist.list";
+    public const string PlaylistItemForceQueue             = "playlist.item.force-queue";
 
     public const string UserPlaylistCreate                 = "playlist.user.create";
     public const string UserPlaylistUpdate                 = "playlist.user.update";

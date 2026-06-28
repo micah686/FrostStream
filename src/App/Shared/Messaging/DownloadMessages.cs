@@ -112,7 +112,10 @@ public enum DownloadJobState
     /// <summary>A user requested cancellation; the flow is stopping any in-flight work and cleanup.</summary>
     Cancelling = 15,
     /// <summary>End state — the user cancelled the job before it completed.</summary>
-    Cancelled = 16
+    Cancelled = 16,
+    /// <summary>Suppressed by a config-set ignore keyword during a user-initiated playlist/channel
+    /// download; no download was started. Force-queueing transitions it back to <see cref="Queued"/>.</summary>
+    Ignored = 17
 }
 
 /// <summary>

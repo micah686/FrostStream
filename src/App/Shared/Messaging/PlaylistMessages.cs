@@ -211,6 +211,10 @@ public sealed class PlaylistItemDto
     public string? EntryTitle { get; init; }
     public required DownloadJobState JobState { get; init; }
     public Guid? MediaGuid { get; init; }
+
+    /// <summary>When <see cref="JobState"/> is <see cref="DownloadJobState.Ignored"/>, the config-set
+    /// keyword that suppressed this entry. Null otherwise.</summary>
+    public string? IgnoredKeyword { get; init; }
 }
 
 public sealed record PlaylistDto

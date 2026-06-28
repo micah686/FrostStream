@@ -17,6 +17,10 @@ public class DownloadJobEntity
 
     public string? StorageKey { get; set; }
 
+    /// <summary>When <see cref="State"/> is <see cref="DownloadJobState.Ignored"/>, the config-set
+    /// keyword pattern that suppressed this entry (for reporting). Null otherwise.</summary>
+    public string? IgnoredKeyword { get; set; }
+
     public int AttemptMetadata { get; set; }
 
     public int AttemptDownload { get; set; }

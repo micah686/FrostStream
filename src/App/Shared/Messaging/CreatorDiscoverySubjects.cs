@@ -11,4 +11,6 @@ public static class CreatorDiscoverySubjects
     public const string DeleteSource = "fs.creator-source.delete";
     public const string UpsertDiscoveredMediaBatch = "fs.creator-source.discovery.upsert-batch";
     public const string UpdateAssets = "fs.creator-source.assets.update";
+    public const string ListIgnoredMedia = "fs.creator-source.discovery.list-ignored";
+    public const string ForceQueueDiscoveredMedia = "fs.creator-source.discovery.force-queue";
 }

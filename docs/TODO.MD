@@ -45,19 +45,18 @@
 
 [X]Custom searchable notes to videos, channels, playlists (#144)
 
+[X]Download or Ignore videos by keyword (#163)
+
 ## TODO
 
 upload metadata
 live_chat (complex, need to integrate with clickhousedb)
 
-
-
 ## TubeArchivst Options
-
 
 Multi language support
 
-Download or Ignore videos by keyword (#163)
+
 
 Search comments
 
@@ -79,13 +78,9 @@ User roles, aka read only user [2023-11-10] (hook into auth framework/APIs)
 
 Access control [2021-11-01]
 
-
 Un-ignore videos [2021-10-03]
 Dynamic download queue [2021-09-26]
 Scan your file system to index already downloaded videos [2021-09-14]
-
-
-
 
 ## Frontend Tasks
 
@@ -95,8 +90,6 @@ Make items in grid row configurable to use more of the screen [2022-06-04]
 
 Random and repeat controls (#108, #220)
 Auto play or play next link (#226)
-
-
 
 ## Should be simple DB queries:
 

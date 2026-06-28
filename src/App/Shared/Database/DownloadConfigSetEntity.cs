@@ -21,6 +21,12 @@ public sealed class DownloadConfigSetEntity
 
     public string? YtDlpOptionsJson { get; set; }
 
+    /// <summary>
+    /// Serialized <see cref="Shared.Downloads.IgnoreKeyword"/> list applied to user-initiated
+    /// channel/playlist downloads using this set. Null/blank means no ignore filtering.
+    /// </summary>
+    public string? IgnoreKeywordsJson { get; set; }
+
     public bool EncodeForPlaylist { get; set; }
 
     public AudioRenditionFormat AudioFormat { get; set; } = AudioRenditionFormat.Aac;

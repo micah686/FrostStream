@@ -81,6 +81,7 @@ public static class EndpointIds
     public const string PlaylistsCreate = "playlists.create";
     public const string PlaylistsList = "playlists.list";
     public const string PlaylistsGet = "playlists.get";
+    public const string PlaylistsForceQueueItem = "playlists.force-queue-item";
     public const string UserPlaylistsCreate = "user-playlists.create";
     public const string UserPlaylistsList = "user-playlists.list";
     public const string UserPlaylistsGet = "user-playlists.get";
@@ -125,6 +126,8 @@ public static class EndpointIds
     public const string CreatorSourcesList = "creator-sources.list";
     public const string CreatorSourcesRefreshAssets = "creator-sources.refresh-assets";
     public const string CreatorSourcesDelete = "creator-sources.delete";
+    public const string CreatorSourcesListIgnoredMedia = "creator-sources.list-ignored-media";
+    public const string CreatorSourcesForceQueueMedia = "creator-sources.force-queue-media";
 
     // Media
     public const string MediaStream = "media.stream";
@@ -211,6 +214,7 @@ public static class EndpointCatalog
         new(EndpointIds.PlaylistsCreate, Bundles.Playlists),
         new(EndpointIds.PlaylistsList, Bundles.Playlists),
         new(EndpointIds.PlaylistsGet, Bundles.Playlists),
+        new(EndpointIds.PlaylistsForceQueueItem, Bundles.Playlists),
         new(EndpointIds.UserPlaylistsCreate, Bundles.Playlists),
         new(EndpointIds.UserPlaylistsList, Bundles.Playlists),
         new(EndpointIds.UserPlaylistsGet, Bundles.Playlists),
@@ -249,6 +253,8 @@ public static class EndpointCatalog
         new(EndpointIds.CreatorSourcesList, Bundles.CreatorSources),
         new(EndpointIds.CreatorSourcesRefreshAssets, Bundles.CreatorSources),
         new(EndpointIds.CreatorSourcesDelete, Bundles.CreatorSources),
+        new(EndpointIds.CreatorSourcesListIgnoredMedia, Bundles.CreatorSources),
+        new(EndpointIds.CreatorSourcesForceQueueMedia, Bundles.CreatorSources),
 
         new(EndpointIds.MediaStream, Bundles.Media),
         new(EndpointIds.MediaAudioStream, Bundles.Media),

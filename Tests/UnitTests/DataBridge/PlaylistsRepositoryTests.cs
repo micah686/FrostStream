@@ -205,6 +205,60 @@ public sealed class PlaylistsRepositoryTests
     }
 
     [Test]
+    public async Task FanOutEntry_Persists_Ignored_State_And_Keyword()
+    {
+        await using var db = DataBridgeTestHelpers.CreateDb();
+        var repo = new PlaylistsRepository(db, SystemClock.Instance);
+        var playlistId = Guid.NewGuid();
+        var jobId = Guid.NewGuid();
+
+        await repo.FanOutEntryAsync(new FanOutEntryRequest(
+            PlaylistId: playlistId,
+            PlaylistIndex: 1,
+            EntryUrl: "https://example.test/trailer",
+            EntryTitle: "Official Trailer",
+            JobId: jobId,
+            CorrelationId: Guid.NewGuid(),
+            RequestedBy: "micah",
+            StorageKey: "default",
+            InitialState: DownloadJobState.Ignored,
+            IgnoredKeyword: "trailer"));
+
+        var job = await db.DownloadJobs.SingleAsync();
+        job.State.ShouldBe(DownloadJobState.Ignored);
+        job.IgnoredKeyword.ShouldBe("trailer");
+    }
+
+    [Test]
+    public async Task RequeuePlaylistItem_Resets_State_And_Returns_Entry_Url()
+    {
+        await using var db = DataBridgeTestHelpers.CreateDb();
+        var repo = new PlaylistsRepository(db, SystemClock.Instance);
+        var playlistId = Guid.NewGuid();
+        var jobId = Guid.NewGuid();
+        await repo.FanOutEntryAsync(new FanOutEntryRequest(
+            PlaylistId: playlistId,
+            PlaylistIndex: 1,
+            EntryUrl: "https://example.test/trailer",
+            EntryTitle: "Official Trailer",
+            JobId: jobId,
+            CorrelationId: Guid.NewGuid(),
+            RequestedBy: "micah",
+            StorageKey: "default",
+            InitialState: DownloadJobState.Ignored,
+            IgnoredKeyword: "trailer"));
+
+        var entryUrl = await repo.RequeuePlaylistItemAsync(playlistId, jobId);
+
+        entryUrl.ShouldBe("https://example.test/trailer");
+        var job = await db.DownloadJobs.SingleAsync();
+        job.State.ShouldBe(DownloadJobState.Queued);
+        job.IgnoredKeyword.ShouldBeNull();
+
+        (await repo.RequeuePlaylistItemAsync(playlistId, Guid.NewGuid())).ShouldBeNull();
+    }
+
+    [Test]
     public async Task List_And_GetDetail_Classify_Item_State_Counts()
     {
         await using var db = DataBridgeTestHelpers.CreateDb();

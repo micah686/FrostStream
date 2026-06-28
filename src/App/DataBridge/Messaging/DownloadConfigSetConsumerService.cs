@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Shared.Database;
+using Shared.Downloads;
 using Shared.Messaging;
 using YtDlpSharpLib.Options;
 
@@ -140,6 +141,14 @@ public sealed class DownloadConfigSetConsumerService(
             }
         }
 
+        if (msg.IgnoreKeywords.Count > IgnoreKeywordMatcher.MaxKeywordCount)
+            return $"ignoreKeywords must contain at most {IgnoreKeywordMatcher.MaxKeywordCount} entries.";
+        foreach (var keyword in msg.IgnoreKeywords)
+        {
+            if (IgnoreKeywordMatcher.Validate(keyword) is { } keywordError)
+                return keywordError;
+        }
+
         return null;
     }
 
@@ -153,6 +162,7 @@ public sealed class DownloadConfigSetConsumerService(
             StorageKey = Normalize(msg.StorageKey),
             CookieProfileKey = Normalize(msg.CookieProfileKey),
             YtDlpOptionsJson = Normalize(msg.YtDlpOptionsJson),
+            IgnoreKeywordsJson = IgnoreKeywordMatcher.Serialize(msg.IgnoreKeywords),
             EncodeForPlaylist = msg.EncodeForPlaylist,
             AudioFormat = msg.AudioFormat,
             Priority = msg.Priority,
@@ -170,6 +180,7 @@ public sealed class DownloadConfigSetConsumerService(
             StorageKey = entity.StorageKey,
             CookieProfileKey = entity.CookieProfileKey,
             YtDlpOptionsJson = entity.YtDlpOptionsJson,
+            IgnoreKeywords = IgnoreKeywordMatcher.Deserialize(entity.IgnoreKeywordsJson),
             EncodeForPlaylist = entity.EncodeForPlaylist,
             AudioFormat = entity.AudioFormat,
             Priority = entity.Priority,

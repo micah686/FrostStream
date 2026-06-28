@@ -23,6 +23,7 @@ public sealed class DownloadJobConfiguration : IEntityTypeConfiguration<Download
         builder.Property(x => x.SourceUrl).HasColumnName("source_url").HasMaxLength(4096).IsRequired();
         builder.Property(x => x.RequestedBy).HasColumnName("requested_by").HasMaxLength(255);
         builder.Property(x => x.StorageKey).HasColumnName("storage_key").HasMaxLength(100);
+        builder.Property(x => x.IgnoredKeyword).HasColumnName("ignored_keyword").HasMaxLength(200);
 
         builder.Property(x => x.AttemptMetadata).HasColumnName("attempt_metadata").IsRequired();
         builder.Property(x => x.AttemptDownload).HasColumnName("attempt_download").IsRequired();

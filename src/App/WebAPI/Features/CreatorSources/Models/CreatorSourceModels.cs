@@ -83,6 +83,45 @@ public sealed record ChannelDownloadResponse(
     bool Queued,
     string IdempotencyKey);
 
+public sealed class IgnoredMediaResponse
+{
+    public required long Id { get; init; }
+    public required long CreatorSourceId { get; init; }
+    public string? Title { get; init; }
+    public required string CanonicalUrl { get; init; }
+    public string? IgnoredKeyword { get; init; }
+    public required Instant FirstSeenAt { get; init; }
+    public required Instant LastSeenAt { get; init; }
+}
+
+/// <summary>Optional config-set / overrides used when force-queueing a previously ignored video.</summary>
+public sealed class ForceQueueMediaRequest
+{
+    [StringLength(100, MinimumLength = 2)]
+    [RegularExpression("^[a-z0-9-]{2,100}$")]
+    public string? ConfigSetKey { get; init; }
+
+    [DefaultValue("default")]
+    public string? StorageKey { get; init; }
+
+    [StringLength(100, MinimumLength = 2)]
+    [RegularExpression("^[a-z0-9-]{2,100}$")]
+    public string? CookieProfileKey { get; init; }
+
+    public YtDlpOptions? YtDlpOptions { get; init; }
+
+    public bool? EncodeForPlaylist { get; init; }
+
+    public AudioRenditionFormat? AudioFormat { get; init; }
+
+    [Range(0, 100)]
+    public int? Priority { get; init; }
+
+    public bool? FetchComments { get; init; }
+}
+
+public sealed record ForceQueueResponse(long MediaId, Guid JobId, bool Queued);
+
 public sealed class CreatorSourceResponse
 {
     public required long Id { get; init; }

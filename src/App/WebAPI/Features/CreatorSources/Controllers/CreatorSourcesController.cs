@@ -287,6 +287,124 @@ public sealed class CreatorSourcesController(
         return NoContent();
     }
 
+    [HttpGet("{id:long}/ignored-media")]
+    [Endpoint(EndpointIds.CreatorSourcesListIgnoredMedia)]
+    [EndpointSummary("List ignored videos for a creator source")]
+    [EndpointDescription("Returns videos that were suppressed by a config-set ignore keyword during a user-initiated full channel download for this source, including the keyword that matched. Background monitoring never ignores videos.")]
+    public async Task<ActionResult<IReadOnlyCollection<IgnoredMediaResponse>>> ListIgnoredMedia(
+        long id,
+        CancellationToken cancellationToken)
+    {
+        ListIgnoredMediaResponseMessage? response;
+        try
+        {
+            response = await messageBus.RequestAsync<ListIgnoredMediaRequestMessage, ListIgnoredMediaResponseMessage>(
+                CreatorDiscoverySubjects.ListIgnoredMedia,
+                new ListIgnoredMediaRequestMessage { CreatorSourceId = id },
+                RequestTimeout,
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed listing ignored media for source {SourceId}", id);
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to list ignored media.");
+        }
+
+        if (response is null)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to list ignored media.");
+        if (!response.Success)
+            return StatusCode(StatusCodes.Status500InternalServerError, response.ErrorMessage ?? "Failed to list ignored media.");
+
+        return Ok((response.Items ?? Array.Empty<IgnoredMediaDto>()).Select(x => new IgnoredMediaResponse
+        {
+            Id = x.Id,
+            CreatorSourceId = x.CreatorSourceId,
+            Title = x.Title,
+            CanonicalUrl = x.CanonicalUrl,
+            IgnoredKeyword = x.IgnoredKeyword,
+            FirstSeenAt = x.FirstSeenAt,
+            LastSeenAt = x.LastSeenAt
+        }).ToArray());
+    }
+
+    [HttpPost("discovered-media/{id:long}/force-queue")]
+    [Endpoint(EndpointIds.CreatorSourcesForceQueueMedia)]
+    [EndpointSummary("Force-queue an ignored video")]
+    [EndpointDescription("Clears the ignored state of a discovered video and queues it for download with force enabled, bypassing the ignore keywords. The download configuration is resolved from the supplied config set or overrides.")]
+    public async Task<ActionResult<ForceQueueResponse>> ForceQueueMedia(
+        long id,
+        [FromBody] ForceQueueMediaRequest request,
+        CancellationToken cancellationToken)
+    {
+        var subject = AuthConstants.FindSubject(User);
+        if (string.IsNullOrWhiteSpace(subject))
+            return Unauthorized();
+
+        ResolvedDownloadConfigSet resolved;
+        try
+        {
+            var (config, error) = await DownloadConfigSetResolver.ResolveAsync(
+                messageBus,
+                subject,
+                request.ConfigSetKey,
+                request.StorageKey,
+                request.CookieProfileKey,
+                request.YtDlpOptions,
+                request.EncodeForPlaylist,
+                request.AudioFormat,
+                request.Priority,
+                request.FetchComments,
+                cancellationToken);
+            if (error is not null)
+                return BadRequest(error);
+            resolved = config!;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed resolving force-queue config set {ConfigSetKey}.", request.ConfigSetKey);
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to resolve download config set.");
+        }
+
+        ForceQueueOperationResponseMessage? response;
+        try
+        {
+            response = await messageBus.RequestAsync<ForceQueueDiscoveredMediaRequestMessage, ForceQueueOperationResponseMessage>(
+                CreatorDiscoverySubjects.ForceQueueDiscoveredMedia,
+                new ForceQueueDiscoveredMediaRequestMessage
+                {
+                    DiscoveredMediaId = id,
+                    RequestedBy = subject,
+                    StorageKey = resolved.StorageKey,
+                    CookieSecretPath = resolved.CookieSecretPath,
+                    YtDlpOptions = resolved.YtDlpOptions,
+                    EncodeForPlaylist = resolved.EncodeForPlaylist,
+                    AudioFormat = resolved.AudioFormat,
+                    Priority = resolved.Priority,
+                    FetchComments = resolved.FetchComments
+                },
+                RequestTimeout,
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed force-queueing discovered media {MediaId}", id);
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to force-queue media.");
+        }
+
+        if (response is null)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to force-queue media.");
+        if (!response.Success)
+        {
+            return response.ErrorCode switch
+            {
+                "not_found" => NotFound(response.ErrorMessage),
+                _ => StatusCode(StatusCodes.Status500InternalServerError, response.ErrorMessage ?? "Failed to force-queue media.")
+            };
+        }
+
+        return Accepted(new ForceQueueResponse(id, response.JobId ?? Guid.Empty, Queued: true));
+    }
+
     private async Task<CreatorSourceOperationResponseMessage?> SendAsync<TRequest>(
         string subject,
         TRequest request,

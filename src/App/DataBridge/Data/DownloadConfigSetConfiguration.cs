@@ -29,6 +29,7 @@ public sealed class DownloadConfigSetConfiguration : IEntityTypeConfiguration<Do
         builder.Property(x => x.StorageKey).HasColumnName("storage_key").HasMaxLength(100);
         builder.Property(x => x.CookieProfileKey).HasColumnName("cookie_profile_key").HasMaxLength(100);
         builder.Property(x => x.YtDlpOptionsJson).HasColumnName("ytdlp_options_json").HasColumnType("jsonb");
+        builder.Property(x => x.IgnoreKeywordsJson).HasColumnName("ignore_keywords_json").HasColumnType("jsonb");
         builder.Property(x => x.EncodeForPlaylist).HasColumnName("encode_for_playlist").HasDefaultValue(false).IsRequired();
         builder.Property(x => x.AudioFormat)
             .HasColumnName("audio_format")

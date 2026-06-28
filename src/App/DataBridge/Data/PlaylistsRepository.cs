@@ -191,10 +191,11 @@ public sealed class PlaylistsRepository(DataBridgeDbContext db, IClock clock) : 
             {
                 JobId = request.JobId,
                 CorrelationId = request.CorrelationId,
-                State = DownloadJobState.Queued,
+                State = request.InitialState,
                 SourceUrl = request.EntryUrl,
                 RequestedBy = request.RequestedBy,
-                StorageKey = request.StorageKey
+                StorageKey = request.StorageKey,
+                IgnoredKeyword = request.IgnoredKeyword
             });
         }
 
@@ -211,6 +212,25 @@ public sealed class PlaylistsRepository(DataBridgeDbContext db, IClock clock) : 
             db.PlaylistScanEntries.Remove(staging);
 
         await db.SaveChangesAsync(ct);
+    }
+
+    public async Task<string?> RequeuePlaylistItemAsync(Guid playlistId, Guid jobId, CancellationToken ct = default)
+    {
+        var item = await db.PlaylistItems
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.PlaylistId == playlistId && x.JobId == jobId, ct);
+        if (item is null)
+            return null;
+
+        var job = await db.DownloadJobs.FirstOrDefaultAsync(x => x.JobId == jobId, ct);
+        if (job is null)
+            return null;
+
+        job.State = DownloadJobState.Queued;
+        job.IgnoredKeyword = null;
+        job.UpdatedAt = clock.GetCurrentInstant();
+        await db.SaveChangesAsync(ct);
+        return item.EntryUrl;
     }
 
     public async Task<bool> TryLinkMediaGuidAsync(Guid jobId, Guid mediaGuid, CancellationToken ct = default)
@@ -313,7 +333,8 @@ public sealed class PlaylistsRepository(DataBridgeDbContext db, IClock clock) : 
                 item.EntryUrl,
                 item.EntryTitle,
                 job.State,
-                m == null ? (Guid?)null : m.MediaGuid))
+                m == null ? (Guid?)null : m.MediaGuid,
+                job.IgnoredKeyword))
             .ToListAsync(ct);
 
         var (completed, failed, pending) = ClassifyCounts(items.Select(i => (i.JobState, 1)));
