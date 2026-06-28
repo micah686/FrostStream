@@ -1,6 +1,7 @@
 using FlySwattr.NATS.Abstractions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Shared.Auth;
 using Shared.Messaging;
 using WebAPI.Auth;
 using WebAPI.Features.Metadata.Models;
@@ -45,7 +46,8 @@ public sealed class MetadataController(
                 Tag = tag,
                 Category = category,
                 Genre = genre,
-                CaptionLanguage = captionLanguage
+                CaptionLanguage = captionLanguage,
+                OwnerSubject = ResolveSubject()
             },
             cancellationToken);
 
@@ -92,7 +94,8 @@ public sealed class MetadataController(
                 Category = category,
                 Genre = genre,
                 SortBy = sortBy,
-                SortOrder = sortOrder
+                SortOrder = sortOrder,
+                OwnerSubject = ResolveSubject()
             },
             cancellationToken);
 
@@ -116,7 +119,7 @@ public sealed class MetadataController(
     {
         var response = await SendRequestAsync<MetadataGetRequestMessage, MetadataGetResponseMessage>(
             MetadataSubjects.Get,
-            new MetadataGetRequestMessage { MediaGuid = mediaGuid },
+            new MetadataGetRequestMessage { MediaGuid = mediaGuid, OwnerSubject = ResolveSubject() },
             cancellationToken);
 
         if (response is null)
@@ -234,7 +237,8 @@ public sealed class MetadataController(
             {
                 PageSize = pageSize,
                 After = after,
-                Platform = platform
+                Platform = platform,
+                OwnerSubject = ResolveSubject()
             },
             cancellationToken);
 
@@ -254,7 +258,7 @@ public sealed class MetadataController(
     {
         var response = await SendRequestAsync<MetadataAccountGetRequestMessage, MetadataAccountGetResponseMessage>(
             MetadataSubjects.AccountsGet,
-            new MetadataAccountGetRequestMessage { AccountId = accountId },
+            new MetadataAccountGetRequestMessage { AccountId = accountId, OwnerSubject = ResolveSubject() },
             cancellationToken);
 
         if (response is null)
@@ -360,6 +364,9 @@ public sealed class MetadataController(
 
         return Ok(new TaxonomyListResponse(response.Items, response.Total));
     }
+
+    private string? ResolveSubject()
+        => AuthConstants.FindSubject(User);
 
     private async Task<TResponse?> SendRequestAsync<TRequest, TResponse>(
         string subject,

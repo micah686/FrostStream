@@ -50,10 +50,13 @@ public sealed class PlaylistQueryConsumerService(
                 return;
             }
 
+            var playlist = MapDetail(detail);
+            playlist = await AttachNoteAsync(playlist, context.Message.OwnerSubject);
+
             await context.RespondAsync(new PlaylistGetResponseMessage
             {
                 Success = true,
-                Playlist = MapDetail(detail)
+                Playlist = playlist
             });
         }
         catch (Exception ex)
@@ -73,10 +76,11 @@ public sealed class PlaylistQueryConsumerService(
         try
         {
             var summaries = await WithPlaylists(playlists => playlists.ListAsync(context.Message.PageSize, context.Message.PageOffset));
+            var items = await AttachNotesAsync(summaries.Select(MapSummary).ToArray(), context.Message.OwnerSubject);
             await context.RespondAsync(new PlaylistListResponseMessage
             {
                 Success = true,
-                Items = summaries.Select(MapSummary).ToArray()
+                Items = items
             });
         }
         catch (Exception ex)
@@ -93,6 +97,28 @@ public sealed class PlaylistQueryConsumerService(
 
     private Task<TResult> WithPlaylists<TResult>(Func<IPlaylistsRepository, Task<TResult>> action)
         => scopeFactory.WithScopedAsync(action);
+
+    private async Task<PlaylistDto> AttachNoteAsync(PlaylistDto item, string? ownerSubject)
+    {
+        var items = await AttachNotesAsync([item], ownerSubject);
+        return items[0];
+    }
+
+    private async Task<IReadOnlyList<PlaylistDto>> AttachNotesAsync(
+        IReadOnlyList<PlaylistDto> items,
+        string? ownerSubject)
+    {
+        if (items.Count == 0 || string.IsNullOrWhiteSpace(ownerSubject))
+            return items;
+
+        var ids = items.Select(x => x.PlaylistId).ToArray();
+        var notes = await scopeFactory.WithScopedAsync<IUserNotesRepository, IReadOnlyDictionary<Guid, string>>(
+            repository => repository.GetPlaylistNotesAsync(ownerSubject, ids));
+
+        return items
+            .Select(x => x with { UserNote = notes.GetValueOrDefault(x.PlaylistId) })
+            .ToArray();
+    }
 
     private static PlaylistDto MapDetail(PlaylistDetail detail)
         => MapBase(

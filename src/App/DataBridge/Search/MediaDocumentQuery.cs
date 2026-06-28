@@ -16,6 +16,21 @@ public sealed class MediaDocumentQuery(NpgsqlDataSource dataSource) : IMediaDocu
         return items.Count == 0 ? null : items[0];
     }
 
+    public async Task<IReadOnlyList<MediaDocument>> GetMediaByGuidsAsync(IReadOnlyCollection<Guid> mediaGuids, CancellationToken ct = default)
+    {
+        if (mediaGuids.Count == 0)
+            return [];
+
+        await using var command = CreateMediaCommand("""
+            WHERE mm.media_guid = ANY(@media_guids)
+            ORDER BY mm.id
+            """);
+        command.Parameters.AddWithValue("@media_guids", mediaGuids.Distinct().ToArray());
+
+        var (items, _) = await ReadMediaDocumentsAsync(command, ct);
+        return items;
+    }
+
     public async Task<IReadOnlyList<CommentDocument>> GetCommentsByMediaGuidAsync(Guid mediaGuid, CancellationToken ct = default)
     {
         await using var command = CreateCommentsCommand("""

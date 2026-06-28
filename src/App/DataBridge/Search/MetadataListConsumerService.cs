@@ -1,4 +1,7 @@
+using DataBridge;
+using DataBridge.Data;
 using FlySwattr.NATS.Abstractions;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Shared.Messaging;
 using Typesense;
@@ -8,6 +11,7 @@ namespace DataBridge.Search;
 public sealed class MetadataListConsumerService(
     IMessageBus messageBus,
     ITypesenseClient typesense,
+    IServiceScopeFactory scopeFactory,
     ILogger<MetadataListConsumerService> logger) : SubscriptionBackgroundService
 {
     protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
@@ -56,7 +60,7 @@ public sealed class MetadataListConsumerService(
                 MediaCollectionSchema.CollectionName,
                 parameters);
 
-            var items = result.Hits.Select(x => TypesenseSearchHelpers.ToCardDto(x.Document)).ToArray();
+            var items = await ToCardsAsync(result.Hits.Select(x => x.Document).ToArray(), request.OwnerSubject);
             await context.RespondAsync(new MetadataListResponseMessage
             {
                 Success = true,
@@ -77,5 +81,35 @@ public sealed class MetadataListConsumerService(
                 Page = page
             });
         }
+    }
+
+    private async Task<IReadOnlyList<MetadataCardDto>> ToCardsAsync(
+        IReadOnlyList<MediaDocument> documents,
+        string? ownerSubject)
+    {
+        if (documents.Count == 0)
+            return [];
+
+        if (string.IsNullOrWhiteSpace(ownerSubject))
+            return documents.Select(TypesenseSearchHelpers.ToCardDto).ToArray();
+
+        var mediaGuids = documents
+            .Select(x => Guid.ParseExact(x.Id, "N"))
+            .ToArray();
+        var notes = await scopeFactory.WithScopedAsync<IUserNotesRepository, IReadOnlyDictionary<Guid, string>>(
+            repository => repository.GetVideoNotesAsync(ownerSubject, mediaGuids));
+        var channelNotes = await scopeFactory.WithScopedAsync<IUserNotesRepository, IReadOnlyDictionary<long, string>>(
+            repository => repository.GetChannelNotesAsync(ownerSubject, documents.Select(x => x.AccountId).ToArray()));
+
+        return documents
+            .Select(x =>
+            {
+                var mediaGuid = Guid.ParseExact(x.Id, "N");
+                return TypesenseSearchHelpers.ToCardDto(
+                    x,
+                    notes.GetValueOrDefault(mediaGuid),
+                    channelNotes.GetValueOrDefault(x.AccountId));
+            })
+            .ToArray();
     }
 }

@@ -193,12 +193,14 @@ public sealed record ProcessPlaylistStagedEntriesCommand : IPlaylistFlowMessage
 public sealed class PlaylistGetRequestMessage
 {
     public required Guid PlaylistId { get; init; }
+    public string? OwnerSubject { get; init; }
 }
 
 public sealed class PlaylistListRequestMessage
 {
     public int PageSize { get; init; } = 50;
     public int PageOffset { get; init; }
+    public string? OwnerSubject { get; init; }
 }
 
 public sealed class PlaylistItemDto
@@ -211,7 +213,7 @@ public sealed class PlaylistItemDto
     public Guid? MediaGuid { get; init; }
 }
 
-public sealed class PlaylistDto
+public sealed record PlaylistDto
 {
     public required Guid PlaylistId { get; init; }
     public required Guid CorrelationId { get; init; }
@@ -230,6 +232,7 @@ public sealed class PlaylistDto
     public int CompletedItems { get; init; }
     public int FailedItems { get; init; }
     public int PendingItems { get; init; }
+    public string? UserNote { get; init; }
 
     /// <summary>Populated only by the GET-by-id query; null on list responses.</summary>
     public IReadOnlyList<PlaylistItemDto>? Items { get; init; }
@@ -316,7 +319,7 @@ public sealed class UserPlaylistItemDto
     public required Instant AddedAt { get; init; }
 }
 
-public sealed class UserPlaylistDto
+public sealed record UserPlaylistDto
 {
     public required Guid PlaylistId { get; init; }
     public required string Name { get; init; }
@@ -324,6 +327,7 @@ public sealed class UserPlaylistDto
     public required Instant CreatedAt { get; init; }
     public required Instant UpdatedAt { get; init; }
     public int ItemCount { get; init; }
+    public string? UserNote { get; init; }
     public IReadOnlyList<UserPlaylistItemDto>? Items { get; init; }
 }
 

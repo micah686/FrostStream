@@ -1,4 +1,5 @@
 using DataBridge;
+using DataBridge.Data;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -70,6 +71,9 @@ public sealed class MetadataQueryConsumerService(
         try
         {
             var item = await WithQuery(query => query.GetDetailAsync(context.Message.MediaGuid));
+            if (item is not null)
+                item = await AttachNotesAsync(item, context.Message.OwnerSubject);
+
             await context.RespondAsync(item is null
                 ? new MetadataGetResponseMessage
                 {
@@ -125,11 +129,12 @@ public sealed class MetadataQueryConsumerService(
                 context.Message.PageSize,
                 context.Message.After,
                 context.Message.Platform));
+            var items = await AttachAccountNotesAsync(result.Items, context.Message.OwnerSubject);
 
             await context.RespondAsync(new MetadataAccountsListResponseMessage
             {
                 Success = true,
-                Items = result.Items,
+                Items = items,
                 NextCursor = result.NextCursor,
                 HasMore = result.HasMore
             });
@@ -160,6 +165,9 @@ public sealed class MetadataQueryConsumerService(
         try
         {
             var item = await WithQuery(query => query.GetAccountAsync(context.Message.AccountId));
+            if (item is not null)
+                item = await AttachAccountNoteAsync(item, context.Message.OwnerSubject);
+
             await context.RespondAsync(item is null
                 ? new MetadataAccountGetResponseMessage
                 {
@@ -214,4 +222,48 @@ public sealed class MetadataQueryConsumerService(
 
     private Task<TResult> WithQuery<TResult>(Func<IMetadataReadService, Task<TResult>> action)
         => scopeFactory.WithScopedAsync(action);
+
+    private async Task<MetadataDetailDto> AttachNotesAsync(MetadataDetailDto item, string? ownerSubject)
+    {
+        if (string.IsNullOrWhiteSpace(ownerSubject))
+            return item;
+
+        var videoNotes = await scopeFactory.WithScopedAsync<IUserNotesRepository, IReadOnlyDictionary<Guid, string>>(
+            repository => repository.GetVideoNotesAsync(ownerSubject, [item.MediaGuid]));
+        var channelNotes = await scopeFactory.WithScopedAsync<IUserNotesRepository, IReadOnlyDictionary<long, string>>(
+            repository => repository.GetChannelNotesAsync(ownerSubject, [item.Account.AccountId]));
+
+        return item with
+        {
+            UserNote = videoNotes.GetValueOrDefault(item.MediaGuid),
+            Account = item.Account with { UserNote = channelNotes.GetValueOrDefault(item.Account.AccountId) }
+        };
+    }
+
+    private async Task<IReadOnlyList<AccountSummaryDto>> AttachAccountNotesAsync(
+        IReadOnlyList<AccountSummaryDto> items,
+        string? ownerSubject)
+    {
+        if (items.Count == 0 || string.IsNullOrWhiteSpace(ownerSubject))
+            return items;
+
+        var ids = items.Select(x => x.AccountId).ToArray();
+        var notes = await scopeFactory.WithScopedAsync<IUserNotesRepository, IReadOnlyDictionary<long, string>>(
+            repository => repository.GetChannelNotesAsync(ownerSubject, ids));
+
+        return items
+            .Select(x => x with { UserNote = notes.GetValueOrDefault(x.AccountId) })
+            .ToArray();
+    }
+
+    private async Task<AccountDto> AttachAccountNoteAsync(AccountDto item, string? ownerSubject)
+    {
+        if (string.IsNullOrWhiteSpace(ownerSubject))
+            return item;
+
+        var notes = await scopeFactory.WithScopedAsync<IUserNotesRepository, IReadOnlyDictionary<long, string>>(
+            repository => repository.GetChannelNotesAsync(ownerSubject, [item.AccountId]));
+
+        return item with { UserNote = notes.GetValueOrDefault(item.AccountId) };
+    }
 }

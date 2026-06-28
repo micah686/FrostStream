@@ -134,7 +134,12 @@ public class PlaylistsController(
         {
             response = await messageBus.RequestAsync<PlaylistListRequestMessage, PlaylistListResponseMessage>(
                 PlaylistSubjects.PlaylistList,
-                new PlaylistListRequestMessage { PageSize = pageSize, PageOffset = pageOffset },
+                new PlaylistListRequestMessage
+                {
+                    PageSize = pageSize,
+                    PageOffset = pageOffset,
+                    OwnerSubject = AuthConstants.FindSubject(User)
+                },
                 QueryTimeout,
                 cancellationToken);
         }
@@ -167,7 +172,7 @@ public class PlaylistsController(
         {
             response = await messageBus.RequestAsync<PlaylistGetRequestMessage, PlaylistGetResponseMessage>(
                 PlaylistSubjects.PlaylistGet,
-                new PlaylistGetRequestMessage { PlaylistId = id },
+                new PlaylistGetRequestMessage { PlaylistId = id, OwnerSubject = AuthConstants.FindSubject(User) },
                 QueryTimeout,
                 cancellationToken);
         }

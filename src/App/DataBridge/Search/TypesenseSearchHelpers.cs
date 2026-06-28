@@ -73,6 +73,12 @@ public static class TypesenseSearchHelpers
     }
 
     public static MetadataCardDto ToCardDto(MediaDocument document)
+        => ToCardDto(document, userNote: null, accountUserNote: null);
+
+    public static MetadataCardDto ToCardDto(MediaDocument document, string? userNote)
+        => ToCardDto(document, userNote, accountUserNote: null);
+
+    public static MetadataCardDto ToCardDto(MediaDocument document, string? userNote, string? accountUserNote)
         => new()
         {
             MediaGuid = Guid.ParseExact(document.Id, "N"),
@@ -91,8 +97,10 @@ public static class TypesenseSearchHelpers
                 Platform = document.Platform,
                 AccountName = document.AccountName,
                 AccountHandle = document.AccountHandle,
-                AvatarStoragePath = document.AccountAvatarStoragePath
-            }
+                AvatarStoragePath = document.AccountAvatarStoragePath,
+                UserNote = accountUserNote
+            },
+            UserNote = userNote
         };
 
     public static CommentDto ToCommentDto(CommentDocument document)

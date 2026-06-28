@@ -43,6 +43,8 @@
 
 [X]Make sure you can create and set a configuration set for playlist or channel downloads.
 
+[X]Custom searchable notes to videos, channels, playlists (#144)
+
 ## TODO
 
 upload metadata
@@ -56,7 +58,7 @@ live_chat (complex, need to integrate with clickhousedb)
 Multi language support
 
 Download or Ignore videos by keyword (#163)
-Custom searchable notes to videos, channels, playlists (#144)
+
 Search comments
 
 Search download queue [2025-07-31]

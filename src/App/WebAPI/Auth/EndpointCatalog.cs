@@ -64,6 +64,10 @@ public static class EndpointIds
     public const string MetadataTaxonomyTags = "metadata.taxonomy.tags";
     public const string MetadataTaxonomyCategories = "metadata.taxonomy.categories";
     public const string MetadataTaxonomyGenres = "metadata.taxonomy.genres";
+    public const string UserNotesUpsert = "user-notes.upsert";
+    public const string UserNotesGet = "user-notes.get";
+    public const string UserNotesDelete = "user-notes.delete";
+    public const string UserNotesSearch = "user-notes.search";
 
     // Metadata (admin)
     public const string MetadataReindex = "metadata.reindex";
@@ -192,6 +196,10 @@ public static class EndpointCatalog
         new(EndpointIds.MetadataTaxonomyTags, Bundles.Metadata),
         new(EndpointIds.MetadataTaxonomyCategories, Bundles.Metadata),
         new(EndpointIds.MetadataTaxonomyGenres, Bundles.Metadata),
+        new(EndpointIds.UserNotesUpsert, Bundles.Metadata),
+        new(EndpointIds.UserNotesGet, Bundles.Metadata),
+        new(EndpointIds.UserNotesDelete, Bundles.Metadata),
+        new(EndpointIds.UserNotesSearch, Bundles.Metadata),
 
         new(EndpointIds.MetadataReindex, Bundles.MetadataAdmin),
         new(EndpointIds.MetadataOrphansList, Bundles.MetadataAdmin),

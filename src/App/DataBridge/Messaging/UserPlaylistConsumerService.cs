@@ -43,7 +43,7 @@ public sealed class UserPlaylistConsumerService(
                 context.Message.OwnerSubject,
                 context.Message.Name,
                 context.Message.Description));
-            await context.RespondAsync(Success(detail));
+            await context.RespondAsync(await SuccessAsync(detail, context.Message.OwnerSubject));
         }
         catch (Exception ex)
         {
@@ -70,7 +70,7 @@ public sealed class UserPlaylistConsumerService(
                 context.Message.Description));
             await context.RespondAsync(detail is null
                 ? Failure("not_found", $"Playlist '{context.Message.PlaylistId}' was not found.")
-                : Success(detail));
+                : await SuccessAsync(detail, context.Message.OwnerSubject));
         }
         catch (Exception ex)
         {
@@ -114,7 +114,7 @@ public sealed class UserPlaylistConsumerService(
             var detail = await WithRepo(repository => repository.GetAsync(context.Message.OwnerSubject, context.Message.PlaylistId));
             await context.RespondAsync(detail is null
                 ? Failure("not_found", $"Playlist '{context.Message.PlaylistId}' was not found.")
-                : Success(detail));
+                : await SuccessAsync(detail, context.Message.OwnerSubject));
         }
         catch (Exception ex)
         {
@@ -143,10 +143,12 @@ public sealed class UserPlaylistConsumerService(
                 context.Message.PageSize,
                 context.Message.PageOffset));
 
+            var mapped = await AttachNotesAsync(items.Select(MapSummary).ToArray(), context.Message.OwnerSubject);
+
             await context.RespondAsync(new UserPlaylistListResponseMessage
             {
                 Success = true,
-                Items = items.Select(MapSummary).ToArray()
+                Items = mapped
             });
         }
         catch (Exception ex)
@@ -170,7 +172,7 @@ public sealed class UserPlaylistConsumerService(
                 context.Message.PlaylistId,
                 context.Message.MediaGuid,
                 context.Message.Position));
-            await context.RespondAsync(MapMutation(result));
+            await context.RespondAsync(await MapMutationAsync(result, context.Message.OwnerSubject));
         }
         catch (Exception ex)
         {
@@ -187,7 +189,7 @@ public sealed class UserPlaylistConsumerService(
                 context.Message.OwnerSubject,
                 context.Message.PlaylistId,
                 context.Message.MediaGuid));
-            await context.RespondAsync(MapMutation(result));
+            await context.RespondAsync(await MapMutationAsync(result, context.Message.OwnerSubject));
         }
         catch (Exception ex)
         {
@@ -204,7 +206,7 @@ public sealed class UserPlaylistConsumerService(
                 context.Message.OwnerSubject,
                 context.Message.PlaylistId,
                 context.Message.MediaGuids));
-            await context.RespondAsync(MapMutation(result));
+            await context.RespondAsync(await MapMutationAsync(result, context.Message.OwnerSubject));
         }
         catch (Exception ex)
         {
@@ -225,13 +227,19 @@ public sealed class UserPlaylistConsumerService(
     private Task<TResult> WithRepo<TResult>(Func<IUserPlaylistsRepository, Task<TResult>> action)
         => scopeFactory.WithScopedAsync(action);
 
-    private static UserPlaylistResponseMessage MapMutation(UserPlaylistMutationResult result)
+    private async Task<UserPlaylistResponseMessage> MapMutationAsync(UserPlaylistMutationResult result, string ownerSubject)
         => result.Success && result.Detail is not null
-            ? Success(result.Detail)
+            ? await SuccessAsync(result.Detail, ownerSubject)
             : Failure(result.ErrorCode ?? "unknown", result.ErrorMessage ?? "User playlist operation failed.");
 
     private static UserPlaylistResponseMessage Success(UserPlaylistDetail detail)
         => new() { Success = true, Playlist = MapDetail(detail) };
+
+    private async Task<UserPlaylistResponseMessage> SuccessAsync(UserPlaylistDetail detail, string ownerSubject)
+    {
+        var playlist = await AttachNoteAsync(MapDetail(detail), ownerSubject);
+        return new UserPlaylistResponseMessage { Success = true, Playlist = playlist };
+    }
 
     private static UserPlaylistResponseMessage Failure((string Code, string Message) validation)
         => Failure(validation.Code, validation.Message);
@@ -270,4 +278,26 @@ public sealed class UserPlaylistConsumerService(
                 })
                 .ToArray()
         };
+
+    private async Task<UserPlaylistDto> AttachNoteAsync(UserPlaylistDto item, string ownerSubject)
+    {
+        var items = await AttachNotesAsync([item], ownerSubject);
+        return items[0];
+    }
+
+    private async Task<IReadOnlyList<UserPlaylistDto>> AttachNotesAsync(
+        IReadOnlyList<UserPlaylistDto> items,
+        string ownerSubject)
+    {
+        if (items.Count == 0 || string.IsNullOrWhiteSpace(ownerSubject))
+            return items;
+
+        var ids = items.Select(x => x.PlaylistId).ToArray();
+        var notes = await scopeFactory.WithScopedAsync<IUserNotesRepository, IReadOnlyDictionary<Guid, string>>(
+            repository => repository.GetPlaylistNotesAsync(ownerSubject, ids));
+
+        return items
+            .Select(x => x with { UserNote = notes.GetValueOrDefault(x.PlaylistId) })
+            .ToArray();
+    }
 }

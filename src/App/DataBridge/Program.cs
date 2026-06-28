@@ -116,6 +116,7 @@ class Program
         builder.Services.AddScoped<IAudioRenditionRepository, AudioRenditionRepository>();
         builder.Services.AddScoped<IPlaylistsRepository, PlaylistsRepository>();
         builder.Services.AddScoped<IUserPlaylistsRepository, UserPlaylistsRepository>();
+        builder.Services.AddScoped<IUserNotesRepository, UserNotesRepository>();
         builder.Services.AddScoped<IOptionPresetsRepository, OptionPresetsRepository>();
         builder.Services.AddScoped<IDownloadConfigSetsRepository, DownloadConfigSetsRepository>();
         builder.Services.AddScoped<IScheduledTasksRepository, ScheduledTasksRepository>();
@@ -163,6 +164,7 @@ class Program
         builder.Services.AddHostedService<PlaylistEventsConsumerService>();
         builder.Services.AddHostedService<PlaylistQueryConsumerService>();
         builder.Services.AddHostedService<UserPlaylistConsumerService>();
+        builder.Services.AddHostedService<UserNoteConsumerService>();
         builder.Services.AddHostedService<MetadataQueryConsumerService>();
         builder.Services.AddHostedService<MediaStreamQueryConsumerService>();
         builder.Services.AddHostedService<AudioRenditionConsumerService>();
