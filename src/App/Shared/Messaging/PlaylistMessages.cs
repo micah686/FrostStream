@@ -60,6 +60,12 @@ public sealed record PlaylistRequested : IPlaylistFlowMessage
 
     /// <summary>FluentStorage backend key used for every per-item job. Defaults to "default".</summary>
     public string? StorageKey { get; init; }
+
+    /// <summary>When true, playlist fan-out asks for cached audio renditions for stream mode.</summary>
+    public bool EncodeForPlaylist { get; init; }
+
+    /// <summary>Preferred audio format for playlist audio stream mode.</summary>
+    public AudioRenditionFormat AudioFormat { get; init; } = AudioRenditionFormat.Aac;
 }
 
 /// <summary>

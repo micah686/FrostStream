@@ -17,6 +17,10 @@ public class PlaylistEntity
 
     public string? StorageKey { get; set; }
 
+    public bool EncodeForPlaylist { get; set; }
+
+    public AudioRenditionFormat AudioFormat { get; set; } = AudioRenditionFormat.Aac;
+
     public string? ProviderPlaylistId { get; set; }
 
     public string? Title { get; set; }

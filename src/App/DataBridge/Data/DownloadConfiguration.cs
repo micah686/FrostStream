@@ -248,3 +248,56 @@ public sealed class MediaContentIdVersionConfiguration : IEntityTypeConfiguratio
             .HasDatabaseName("ux_media_content_id_versions_storage_key_content_hash");
     }
 }
+
+public sealed class AudioRenditionConfiguration : IEntityTypeConfiguration<AudioRenditionEntity>
+{
+    public void Configure(EntityTypeBuilder<AudioRenditionEntity> builder)
+    {
+        builder.ToTable("audio_renditions", "media");
+
+        builder.HasKey(x => x.RenditionId);
+
+        builder.Property(x => x.RenditionId).HasColumnName("rendition_id").ValueGeneratedNever();
+        builder.Property(x => x.MediaGuid).HasColumnName("media_guid").IsRequired();
+        builder.Property(x => x.SourceVersionNum).HasColumnName("source_version_num").IsRequired();
+        builder.Property(x => x.Format)
+            .HasColumnName("format")
+            .HasColumnType("media.audio_rendition_format")
+            .IsRequired();
+        builder.Property(x => x.Status)
+            .HasColumnName("status")
+            .HasColumnType("media.audio_rendition_status")
+            .IsRequired();
+        builder.Property(x => x.StorageKey).HasColumnName("storage_key").HasMaxLength(100).IsRequired();
+        builder.Property(x => x.StoragePath).HasColumnName("storage_path").HasMaxLength(2048);
+        builder.Property(x => x.ContentHashXxh128).HasColumnName("content_hash_xxh128").HasMaxLength(64);
+        builder.Property(x => x.SizeBytes).HasColumnName("size_bytes");
+        builder.Property(x => x.DurationSeconds).HasColumnName("duration_seconds");
+        builder.Property(x => x.ErrorMessage).HasColumnName("error_message").HasMaxLength(4096);
+        builder.Property(x => x.CreatedAt)
+            .HasColumnName("created_at")
+            .HasColumnType("timestamp with time zone")
+            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .ValueGeneratedOnAdd()
+            .IsRequired();
+        builder.Property(x => x.UpdatedAt)
+            .HasColumnName("updated_at")
+            .HasColumnType("timestamp with time zone")
+            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .IsRequired();
+
+        builder.HasIndex(x => new { x.MediaGuid, x.SourceVersionNum, x.Format, x.StorageKey })
+            .IsUnique()
+            .HasDatabaseName("ux_audio_renditions_media_version_format_storage");
+
+        builder.HasIndex(x => x.Status)
+            .HasDatabaseName("ix_audio_renditions_status");
+
+        builder.HasOne<MediaContentIdVersionEntity>()
+            .WithMany()
+            .HasPrincipalKey(x => new { x.MediaGuid, x.VersionNum })
+            .HasForeignKey(x => new { x.MediaGuid, x.SourceVersionNum })
+            .HasConstraintName("fk_audio_renditions_source_version")
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}

@@ -20,6 +20,8 @@ public sealed class PlaylistsRepository(DataBridgeDbContext db, IClock clock) : 
         {
             existingById.State = PlaylistState.PendingMetadata;
             existingById.UpdatedAt = clock.GetCurrentInstant();
+            existingById.EncodeForPlaylist = request.EncodeForPlaylist;
+            existingById.AudioFormat = request.AudioFormat;
             await db.SaveChangesAsync(ct);
             return new UpsertResult(existingById, WasReused: true);
         }
@@ -31,6 +33,8 @@ public sealed class PlaylistsRepository(DataBridgeDbContext db, IClock clock) : 
             existingByUrl.UpdatedAt = clock.GetCurrentInstant();
             existingByUrl.RequestedBy = request.RequestedBy ?? existingByUrl.RequestedBy;
             existingByUrl.StorageKey = request.StorageKey ?? existingByUrl.StorageKey;
+            existingByUrl.EncodeForPlaylist = request.EncodeForPlaylist;
+            existingByUrl.AudioFormat = request.AudioFormat;
             await db.SaveChangesAsync(ct);
             return new UpsertResult(existingByUrl, WasReused: true);
         }
@@ -42,7 +46,9 @@ public sealed class PlaylistsRepository(DataBridgeDbContext db, IClock clock) : 
             State = PlaylistState.PendingMetadata,
             SourceUrl = request.SourceUrl,
             RequestedBy = request.RequestedBy,
-            StorageKey = request.StorageKey
+            StorageKey = request.StorageKey,
+            EncodeForPlaylist = request.EncodeForPlaylist,
+            AudioFormat = request.AudioFormat
         };
         db.Playlists.Add(entity);
         await db.SaveChangesAsync(ct);
@@ -223,6 +229,14 @@ public sealed class PlaylistsRepository(DataBridgeDbContext db, IClock clock) : 
 
         return true;
     }
+
+    public async Task<PlaylistAudioPreference?> GetAudioPreferenceForJobAsync(Guid jobId, CancellationToken ct = default)
+        => await (
+            from item in db.PlaylistItems.AsNoTracking()
+            where item.JobId == jobId
+            join playlist in db.Playlists.AsNoTracking() on item.PlaylistId equals playlist.PlaylistId
+            select new PlaylistAudioPreference(playlist.EncodeForPlaylist, playlist.AudioFormat, playlist.StorageKey))
+            .FirstOrDefaultAsync(ct);
 
     public async Task<IReadOnlyList<PlaylistSummary>> ListAsync(int pageSize, int pageOffset, CancellationToken ct = default)
     {

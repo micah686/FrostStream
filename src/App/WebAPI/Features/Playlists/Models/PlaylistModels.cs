@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using Shared.Messaging;
 
 namespace WebAPI.Features.Playlists.Models;
 
@@ -11,6 +12,12 @@ public sealed class PlaylistRequest
 
     [DefaultValue("default")]
     public string? StorageKey { get; init; }
+
+    [DefaultValue(false)]
+    public bool EncodeForPlaylist { get; init; }
+
+    [DefaultValue(AudioRenditionFormat.Aac)]
+    public AudioRenditionFormat AudioFormat { get; init; } = AudioRenditionFormat.Aac;
 }
 
 public sealed record PlaylistRequestResponse(Guid PlaylistId, Guid CorrelationId);

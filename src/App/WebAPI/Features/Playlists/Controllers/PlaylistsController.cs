@@ -58,7 +58,9 @@ public class PlaylistsController(
             SourceUrl = request.SourceUrl,
             // Stamp the validated token subject, never client-supplied text, so "requested by" is trustworthy.
             RequestedBy = AuthConstants.FindSubject(User),
-            StorageKey = string.IsNullOrWhiteSpace(request.StorageKey) ? "default" : request.StorageKey
+            StorageKey = string.IsNullOrWhiteSpace(request.StorageKey) ? "default" : request.StorageKey,
+            EncodeForPlaylist = request.EncodeForPlaylist,
+            AudioFormat = request.AudioFormat
         };
 
         try

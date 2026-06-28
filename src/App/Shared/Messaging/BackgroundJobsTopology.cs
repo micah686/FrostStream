@@ -19,6 +19,7 @@ public sealed class BackgroundJobsTopology : ITopologySource
     public const string WorkerChannelMediaListConsumer = "worker-channel-media-list";
     public const string WorkerChannelAssetRefreshConsumer = "worker-channel-asset-refresh";
     public const string WorkerFilesystemRescanConsumer = "worker-filesystem-rescan";
+    public const string MediaProcessorAudioRenditionConsumer = "mediaprocessor-audio-rendition";
 
     public IEnumerable<StreamSpec> GetStreams()
     {
@@ -61,6 +62,7 @@ public sealed class BackgroundJobsTopology : ITopologySource
         yield return WorkerConsumer(WorkerChannelMediaListConsumer, BackgroundJobSubjects.ChannelMediaListRequest, TimeSpan.FromHours(2), maxDeliver: 3);
         yield return WorkerConsumer(WorkerChannelAssetRefreshConsumer, BackgroundJobSubjects.ChannelAssetRefreshRequest, TimeSpan.FromMinutes(30), maxDeliver: 3);
         yield return WorkerConsumer(WorkerFilesystemRescanConsumer, BackgroundJobSubjects.FilesystemRescanRequest, TimeSpan.FromSeconds(60), maxDeliver: 3);
+        yield return MediaProcessorConsumer(MediaProcessorAudioRenditionConsumer, BackgroundJobSubjects.AudioRenditionEncodeRequest, TimeSpan.FromHours(2), maxDeliver: 3);
     }
 
     public IEnumerable<ObjectStoreSpec> GetObjectStores()
@@ -93,6 +95,18 @@ public sealed class BackgroundJobsTopology : ITopologySource
             StreamName = StreamName.From(StreamNameValue),
             DurableName = ConsumerName.From(durableName),
             DeliverGroup = QueueGroup.From(WorkerQueueGroup),
+            FilterSubject = subject,
+            AckPolicy = AckPolicy.Explicit,
+            AckWait = ackWait,
+            MaxDeliver = maxDeliver
+        };
+
+    private static ConsumerSpec MediaProcessorConsumer(string durableName, string subject, TimeSpan ackWait, int maxDeliver)
+        => new()
+        {
+            StreamName = StreamName.From(StreamNameValue),
+            DurableName = ConsumerName.From(durableName),
+            DeliverGroup = QueueGroup.From(MediaProcessorQueueGroup),
             FilterSubject = subject,
             AckPolicy = AckPolicy.Explicit,
             AckWait = ackWait,

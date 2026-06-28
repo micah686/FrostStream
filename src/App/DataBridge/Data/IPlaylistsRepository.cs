@@ -39,6 +39,8 @@ public interface IPlaylistsRepository
 
     Task<bool> TryLinkMediaGuidAsync(Guid jobId, Guid mediaGuid, CancellationToken ct = default);
 
+    Task<PlaylistAudioPreference?> GetAudioPreferenceForJobAsync(Guid jobId, CancellationToken ct = default);
+
     Task<IReadOnlyList<PlaylistSummary>> ListAsync(int pageSize, int pageOffset, CancellationToken ct = default);
 
     Task<PlaylistDetail?> GetDetailAsync(Guid playlistId, CancellationToken ct = default);
@@ -76,3 +78,5 @@ public sealed record PlaylistDetailItem(
     string? EntryTitle,
     DownloadJobState JobState,
     Guid? MediaGuid);
+
+public sealed record PlaylistAudioPreference(bool EncodeForPlaylist, AudioRenditionFormat AudioFormat, string? StorageKey);

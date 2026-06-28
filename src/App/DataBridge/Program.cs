@@ -2,6 +2,7 @@ using Cleipnir.Flows;
 using Cleipnir.Flows.AspNet;
 using Cleipnir.Flows.PostgresSql;
 using DataBridge.Data;
+using DataBridge.AudioRenditions;
 using DataBridge.Flows;
 using DataBridge.MediaStream;
 using DataBridge.Metadata;
@@ -54,6 +55,8 @@ class Program
                         .MapEnum<DownloadJobState>("download_job_state", "downloads")
                         .MapEnum<FailureKind>("failure_kind", "downloads")
                         .MapEnum<IngestOrigin>("ingest_origin", "media")
+                        .MapEnum<AudioRenditionFormat>("audio_rendition_format", "media")
+                        .MapEnum<AudioRenditionStatus>("audio_rendition_status", "media")
                         .MapEnum<LocalImportStatus>("local_import_status", "imports")
                         .MapEnum<PlaylistState>("playlist_state", "playlists"))
                 .UseSnakeCaseNamingConvention());
@@ -110,6 +113,7 @@ class Program
         builder.Services.AddScoped<IMetadataRepository, MetadataRepository>();
         builder.Services.AddScoped<IMetadataReadService, MetadataReadService>();
         builder.Services.AddScoped<IMediaStreamReadService, MediaStreamReadService>();
+        builder.Services.AddScoped<IAudioRenditionRepository, AudioRenditionRepository>();
         builder.Services.AddScoped<IPlaylistsRepository, PlaylistsRepository>();
         builder.Services.AddScoped<IUserPlaylistsRepository, UserPlaylistsRepository>();
         builder.Services.AddScoped<IOptionPresetsRepository, OptionPresetsRepository>();
@@ -159,6 +163,7 @@ class Program
         builder.Services.AddHostedService<UserPlaylistConsumerService>();
         builder.Services.AddHostedService<MetadataQueryConsumerService>();
         builder.Services.AddHostedService<MediaStreamQueryConsumerService>();
+        builder.Services.AddHostedService<AudioRenditionConsumerService>();
         builder.Services.AddHostedService<MediaDeleteConsumerService>();
 
         // POT broker role: answers pot.request over NATS from a nearby bgutil provider. No-ops unless
