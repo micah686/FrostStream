@@ -22,6 +22,8 @@ public sealed class MediaProcessorOptions
     public string AacBitrate { get; init; } = "128k";
 
     public string OpusBitrate { get; init; } = "96k";
+
+    public int HlsSegmentSeconds { get; init; } = 10;
 }
 
 public sealed class AudioRenditionProcessorService(
@@ -48,6 +50,8 @@ public sealed class AudioRenditionProcessorService(
         var workRoot = Path.Combine(options.Value.TempRoot, request.RenditionId.ToString("N"));
         var inputPath = Path.Combine(workRoot, "source");
         var outputPath = Path.Combine(workRoot, $"audio.{Extension(request.Format)}");
+        var hlsRoot = Path.Combine(workRoot, "hls");
+        var manifestPath = Path.Combine(hlsRoot, "index.m3u8");
 
         try
         {
@@ -82,11 +86,18 @@ public sealed class AudioRenditionProcessorService(
                 await source.CopyToAsync(destination, CancellationToken.None);
             }
 
-            await RunFfmpegAsync(inputPath, outputPath, item.Format, CancellationToken.None);
+            await RunAudioFfmpegAsync(inputPath, outputPath, item.Format, CancellationToken.None);
 
             var outputInfo = new FileInfo(outputPath);
             if (!outputInfo.Exists || outputInfo.Length == 0)
                 throw new InvalidOperationException("ffmpeg completed without producing an audio file.");
+
+            Directory.CreateDirectory(hlsRoot);
+            await RunHlsFfmpegAsync(outputPath, hlsRoot, manifestPath, item.Format, CancellationToken.None);
+
+            var manifestInfo = new FileInfo(manifestPath);
+            if (!manifestInfo.Exists || manifestInfo.Length == 0)
+                throw new InvalidOperationException("ffmpeg completed without producing an HLS manifest.");
 
             var outputStorage = await blobStorageProvider.GetAsync(item.OutputStorageKey, CancellationToken.None);
             await using (var output = File.OpenRead(outputPath))
@@ -94,7 +105,19 @@ public sealed class AudioRenditionProcessorService(
                 await outputStorage.WriteAsync(item.OutputStoragePath, output, append: false);
             }
 
+            var outputBasePath = StorageDirectory(item.OutputStoragePath);
+            var hlsBasePath = CombineStoragePath(outputBasePath, "hls");
+            foreach (var file in Directory.EnumerateFiles(hlsRoot))
+            {
+                var storagePath = CombineStoragePath(hlsBasePath, Path.GetFileName(file));
+                await using var output = File.OpenRead(file);
+                await outputStorage.WriteAsync(storagePath, output, append: false);
+            }
+
             var hash = await ComputeXxHash128Async(outputPath, CancellationToken.None);
+            var totalSizeBytes = Directory.EnumerateFiles(hlsRoot)
+                .Select(path => new FileInfo(path).Length)
+                .Sum() + outputInfo.Length;
             await messageBus.RequestAsync<AudioRenditionCompleteRequest, AudioRenditionCompleteResponse>(
                 AudioRenditionSubjects.Complete,
                 new AudioRenditionCompleteRequest
@@ -102,7 +125,7 @@ public sealed class AudioRenditionProcessorService(
                     RenditionId = item.RenditionId,
                     StoragePath = item.OutputStoragePath,
                     ContentHashXxh128 = hash,
-                    SizeBytes = outputInfo.Length,
+                    SizeBytes = totalSizeBytes,
                     DurationSeconds = null
                 },
                 DataBridgeTimeout,
@@ -113,7 +136,7 @@ public sealed class AudioRenditionProcessorService(
                 item.RenditionId,
                 item.OutputStorageKey,
                 item.OutputStoragePath,
-                outputInfo.Length);
+                totalSizeBytes);
 
             await context.AckAsync();
         }
@@ -141,7 +164,7 @@ public sealed class AudioRenditionProcessorService(
         }
     }
 
-    private async Task RunFfmpegAsync(
+    private async Task RunAudioFfmpegAsync(
         string inputPath,
         string outputPath,
         AudioRenditionFormat format,
@@ -154,12 +177,56 @@ public sealed class AudioRenditionProcessorService(
             _ => throw new ArgumentOutOfRangeException(nameof(format), format, "Unsupported audio rendition format.")
         };
 
+        await RunFfmpegProcessAsync(args, workingDirectory: null, cancellationToken);
+    }
+
+    private async Task RunHlsFfmpegAsync(
+        string inputPath,
+        string hlsRoot,
+        string manifestPath,
+        AudioRenditionFormat format,
+        CancellationToken cancellationToken)
+    {
+        var args = format switch
+        {
+            AudioRenditionFormat.Aac => string.Join(' ',
+                "-hide_banner -y",
+                $"-i {Quote(inputPath)}",
+                "-vn -c:a aac",
+                $"-b:a {options.Value.AacBitrate}",
+                "-f hls",
+                $"-hls_time {Math.Max(2, options.Value.HlsSegmentSeconds)}",
+                "-hls_playlist_type vod",
+                $"-hls_segment_filename {Quote(Path.Combine(hlsRoot, "segment_%05d.ts"))}",
+                Quote(manifestPath)),
+            AudioRenditionFormat.Opus => string.Join(' ',
+                "-hide_banner -y",
+                $"-i {Quote(inputPath)}",
+                "-vn -c:a libopus",
+                $"-b:a {options.Value.OpusBitrate}",
+                "-f hls",
+                "-hls_segment_type fmp4",
+                "-hls_fmp4_init_filename init.mp4",
+                $"-hls_time {Math.Max(2, options.Value.HlsSegmentSeconds)}",
+                "-hls_playlist_type vod",
+                $"-hls_segment_filename {Quote(Path.Combine(hlsRoot, "segment_%05d.m4s"))}",
+                Quote(manifestPath)),
+            _ => throw new ArgumentOutOfRangeException(nameof(format), format, "Unsupported audio rendition format.")
+        };
+
+        await RunFfmpegProcessAsync(args, hlsRoot, cancellationToken);
+    }
+
+    private async Task RunFfmpegProcessAsync(string args, string? workingDirectory, CancellationToken cancellationToken)
+    {
+
         using var process = new Process
         {
             StartInfo = new ProcessStartInfo
             {
                 FileName = options.Value.FfmpegPath,
                 Arguments = args,
+                WorkingDirectory = workingDirectory,
                 RedirectStandardError = true,
                 RedirectStandardOutput = true,
                 UseShellExecute = false
@@ -199,6 +266,9 @@ public sealed class AudioRenditionProcessorService(
         }
     }
 
+    private static string Quote(string value)
+        => "\"" + value.Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
+
     private static string Extension(AudioRenditionFormat format)
         => format switch
         {
@@ -207,8 +277,14 @@ public sealed class AudioRenditionProcessorService(
             _ => "bin"
         };
 
-    private static string Quote(string value)
-        => "\"" + value.Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
+    private static string StorageDirectory(string storagePath)
+    {
+        var slash = storagePath.LastIndexOf('/');
+        return slash < 0 ? string.Empty : storagePath[..slash];
+    }
+
+    private static string CombineStoragePath(string directory, string fileName)
+        => string.IsNullOrWhiteSpace(directory) ? fileName : $"{directory.TrimEnd('/')}/{fileName}";
 
     private static string LastLines(string value, int count)
         => string.Join('\n', value.Split('\n', StringSplitOptions.RemoveEmptyEntries).TakeLast(count));

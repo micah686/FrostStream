@@ -130,7 +130,7 @@ public sealed class MediaStreamController(
     [HttpGet("audio/{mediaGuid:guid}/file.{format}")]
     [Endpoint(EndpointIds.MediaAudioStream)]
     [EndpointSummary("Stream a cached audio rendition")]
-    [EndpointDescription("Streams a cached audio rendition for a media item. When the requested rendition is missing, DataBridge queues MediaProcessor work and the endpoint returns 202 while the audio is prepared.")]
+    [EndpointDescription("Streams a cached audio file rendition for a media item. When the requested rendition is missing, DataBridge queues MediaProcessor work and the endpoint returns 202 while the audio is prepared.")]
     public async Task<IActionResult> GetAudioFile(
         Guid mediaGuid,
         string format,
@@ -186,14 +186,16 @@ public sealed class MediaStreamController(
     }
 
     [HttpGet("audio/{mediaGuid:guid}/index.m3u8")]
+    [HttpGet("audio/{mediaGuid:guid}/hls/index.m3u8")]
     [Endpoint(EndpointIds.MediaAudioStream)]
-    [EndpointSummary("Get an audio-only media playlist")]
-    [EndpointDescription("Returns a simple audio-only M3U8 playlist for a cached media rendition, queuing MediaProcessor work when the rendition is missing.")]
+    [EndpointSummary("Get an audio-only HLS media playlist")]
+    [EndpointDescription("Returns the stored HLS media playlist for a cached audio rendition, rewriting segment URLs through FrostStream so authenticated clients can fetch the generated HLS asset.")]
     public async Task<IActionResult> GetAudioPlaylist(
         Guid mediaGuid,
         [FromQuery] string format = "aac",
         [FromQuery] string? storageKey = null,
         [FromQuery] int? sourceVersion = null,
+        [FromQuery] bool cacheAudio = true,
         CancellationToken cancellationToken = default)
     {
         if (!TryParseAudioFormat(format, out var audioFormat))
@@ -204,7 +206,7 @@ public sealed class MediaStreamController(
             audioFormat,
             storageKey,
             sourceVersion,
-            createIfMissing: true,
+            createIfMissing: cacheAudio,
             cancellationToken);
 
         if (response.Result is not null)
@@ -220,18 +222,59 @@ public sealed class MediaStreamController(
             });
         }
 
-        var uri = Url.ActionLink(
-            action: nameof(GetAudioFile),
-            values: new
-            {
-                mediaGuid,
-                format = AudioFormatToken(audioFormat),
-                storageKey = rendition.StorageKey,
-                sourceVersion = rendition.SourceVersion,
-                cacheAudio = true
-            }) ?? $"/stream/audio/{mediaGuid:D}/file.{AudioFormatToken(audioFormat)}";
+        return await ServeAudioManifestAsync(rendition, cancellationToken);
+    }
 
-        return Content(BuildSingleItemM3u8(uri, rendition.DurationSeconds), "application/vnd.apple.mpegurl");
+    [HttpGet("audio/{mediaGuid:guid}/hls/{format}/{sourceVersion:int}/{fileName}")]
+    [Endpoint(EndpointIds.MediaAudioStream)]
+    [EndpointSummary("Stream an audio HLS segment")]
+    [EndpointDescription("Streams a cached HLS media segment or fMP4 initialization file belonging to a prepared audio rendition. Segment paths are resolved from rendition metadata and validated so clients can fetch only files generated beside the stored manifest.")]
+    public async Task<IActionResult> GetAudioSegment(
+        Guid mediaGuid,
+        string format,
+        int sourceVersion,
+        string fileName,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryParseAudioFormat(format, out var audioFormat))
+            return BadRequest("Audio format must be 'aac' or 'opus'.");
+
+        if (!IsSafeHlsFileName(fileName))
+            return BadRequest("Invalid HLS file name.");
+
+        var response = await ResolveAudioRenditionAsync(
+            mediaGuid,
+            audioFormat,
+            storageKey: null,
+            sourceVersion,
+            createIfMissing: false,
+            cancellationToken);
+
+        if (response.Result is not null)
+            return response.Result;
+
+        var rendition = response.Rendition!;
+        if (rendition.Status != AudioRenditionStatus.Ready || string.IsNullOrWhiteSpace(rendition.StoragePath))
+            return NotFound("The selected audio segment is not ready.");
+
+        var segmentPath = CombineStoragePath(HlsStorageDirectory(rendition), fileName);
+        try
+        {
+            var storage = await blobStorageProvider.GetAsync(rendition.StorageKey, cancellationToken);
+            var stream = await storage.OpenReadAsync(segmentPath, cancellationToken);
+            if (stream is null)
+                return NotFound("The selected audio segment is missing from storage.");
+
+            return File(stream, HlsFileContentType(fileName), enableRangeProcessing: stream.CanSeek);
+        }
+        catch (FileNotFoundException)
+        {
+            return NotFound("The selected audio segment is missing from storage.");
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return NotFound("The selected audio segment is missing from storage.");
+        }
     }
 
     [HttpGet("playlists/{playlistId:guid}/audio.m3u8")]
@@ -264,7 +307,7 @@ public sealed class MediaStreamController(
         if (playlistResponse?.Success != true || playlistResponse.Playlist is null)
             return NotFound(playlistResponse?.ErrorMessage ?? "Playlist was not found.");
 
-        var readyUris = new List<(string Uri, int? DurationSeconds)>();
+        var readyManifests = new List<(AudioRenditionDto Rendition, string Manifest)>();
         foreach (var item in playlistResponse.Playlist.Items?.Where(x => x.MediaGuid is not null).OrderBy(x => x.PlaylistIndex)
                      ?? Enumerable.Empty<PlaylistItemDto>())
         {
@@ -278,23 +321,56 @@ public sealed class MediaStreamController(
 
             if (resolved.Rendition?.Status == AudioRenditionStatus.Ready)
             {
-                var uri = Url.ActionLink(
-                    action: nameof(GetAudioFile),
-                    values: new
-                    {
-                        mediaGuid = item.MediaGuid.Value,
-                        format = AudioFormatToken(audioFormat),
-                        sourceVersion = resolved.Rendition.SourceVersion,
-                        cacheAudio = true
-                    }) ?? $"/stream/audio/{item.MediaGuid.Value:D}/file.{AudioFormatToken(audioFormat)}";
-                readyUris.Add((uri, resolved.Rendition.DurationSeconds));
+                var manifest = await ReadStorageTextAsync(
+                    resolved.Rendition.StorageKey,
+                    HlsManifestStoragePath(resolved.Rendition),
+                    cancellationToken);
+                if (manifest is not null)
+                    readyManifests.Add((resolved.Rendition, manifest));
             }
         }
 
-        if (readyUris.Count == 0)
+        if (readyManifests.Count == 0)
             return Accepted(new { playlistId, Status = "preparing" });
 
-        return Content(BuildPlaylistM3u8(readyUris), "application/vnd.apple.mpegurl");
+        return Content(BuildCombinedPlaylistM3u8(readyManifests), "application/vnd.apple.mpegurl");
+    }
+
+    private async Task<IActionResult> ServeAudioManifestAsync(AudioRenditionDto rendition, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(rendition.StoragePath))
+            return NotFound("The selected audio rendition has no HLS manifest.");
+
+        var manifest = await ReadStorageTextAsync(rendition.StorageKey, HlsManifestStoragePath(rendition), cancellationToken);
+        if (manifest is null)
+            return NotFound("The selected audio HLS manifest is missing from storage.");
+
+        return Content(RewriteManifestSegmentUris(rendition, manifest), "application/vnd.apple.mpegurl");
+    }
+
+    private async Task<string?> ReadStorageTextAsync(string storageKey, string? storagePath, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(storagePath))
+            return null;
+
+        try
+        {
+            var storage = await blobStorageProvider.GetAsync(storageKey, cancellationToken);
+            await using var stream = await storage.OpenReadAsync(storagePath, cancellationToken);
+            if (stream is null)
+                return null;
+
+            using var reader = new StreamReader(stream);
+            return await reader.ReadToEndAsync(cancellationToken);
+        }
+        catch (FileNotFoundException)
+        {
+            return null;
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return null;
+        }
     }
 
     private async Task<(IActionResult? Result, AudioRenditionDto? Rendition)> ResolveAudioRenditionAsync(
@@ -374,27 +450,153 @@ public sealed class MediaStreamController(
             _ => "application/octet-stream"
         };
 
-    private static string BuildSingleItemM3u8(string uri, int? durationSeconds)
-        => BuildPlaylistM3u8([(uri, durationSeconds)]);
-
-    private static string BuildPlaylistM3u8(IEnumerable<(string Uri, int? DurationSeconds)> items)
+    private string RewriteManifestSegmentUris(AudioRenditionDto rendition, string manifest)
     {
+        var lines = new List<string>();
+        foreach (var rawLine in manifest.Split('\n'))
+        {
+            var line = rawLine.TrimEnd('\r');
+            if (line.StartsWith("#EXT-X-MAP:", StringComparison.Ordinal))
+            {
+                lines.Add(RewriteMapUri(rendition, line));
+            }
+            else if (line.Length == 0 || line.StartsWith('#'))
+            {
+                lines.Add(line);
+            }
+            else
+            {
+                lines.Add(BuildSegmentUrl(rendition, line));
+            }
+        }
+
+        return string.Join('\n', lines).TrimEnd('\n') + "\n";
+    }
+
+    private string BuildCombinedPlaylistM3u8(IEnumerable<(AudioRenditionDto Rendition, string Manifest)> manifests)
+    {
+        var bodyLines = new List<string>();
+        var targetDuration = 10;
+
+        foreach (var (rendition, manifest) in manifests)
+        {
+            foreach (var rawLine in manifest.Split('\n'))
+            {
+                var line = rawLine.TrimEnd('\r');
+                if (line.StartsWith("#EXT-X-TARGETDURATION:", StringComparison.Ordinal) &&
+                    int.TryParse(line["#EXT-X-TARGETDURATION:".Length..], out var parsedTarget))
+                {
+                    targetDuration = Math.Max(targetDuration, parsedTarget);
+                    continue;
+                }
+
+                if (line.Length == 0 ||
+                    line is "#EXTM3U" or "#EXT-X-ENDLIST" ||
+                    line.StartsWith("#EXT-X-VERSION:", StringComparison.Ordinal) ||
+                    line.StartsWith("#EXT-X-PLAYLIST-TYPE:", StringComparison.Ordinal) ||
+                    line.StartsWith("#EXT-X-MEDIA-SEQUENCE:", StringComparison.Ordinal) ||
+                    line.StartsWith("#EXT-X-INDEPENDENT-SEGMENTS", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (line.StartsWith("#EXT-X-MAP:", StringComparison.Ordinal))
+                {
+                    bodyLines.Add(RewriteMapUri(rendition, line));
+                }
+                else if (line.StartsWith('#'))
+                {
+                    bodyLines.Add(line);
+                }
+                else
+                {
+                    bodyLines.Add(BuildSegmentUrl(rendition, line));
+                }
+            }
+        }
+
         var lines = new List<string>
         {
             "#EXTM3U",
-            "#EXT-X-VERSION:3",
+            "#EXT-X-VERSION:7",
             "#EXT-X-PLAYLIST-TYPE:VOD",
-            "#EXT-X-TARGETDURATION:600"
+            $"#EXT-X-TARGETDURATION:{targetDuration}"
         };
 
-        foreach (var (uri, durationSeconds) in items)
-        {
-            var duration = Math.Max(durationSeconds ?? 0, 0);
-            lines.Add($"#EXTINF:{duration},");
-            lines.Add(uri);
-        }
-
+        lines.AddRange(bodyLines);
         lines.Add("#EXT-X-ENDLIST");
         return string.Join('\n', lines) + "\n";
     }
+
+    private string RewriteMapUri(AudioRenditionDto rendition, string line)
+        => RewriteQuotedUri(line, uri => BuildSegmentUrl(rendition, uri));
+
+    private static string RewriteQuotedUri(string line, Func<string, string> rewrite)
+    {
+        const string marker = "URI=\"";
+        var start = line.IndexOf(marker, StringComparison.Ordinal);
+        if (start < 0)
+            return line;
+
+        start += marker.Length;
+        var end = line.IndexOf('"', start);
+        if (end < 0)
+            return line;
+
+        var original = line[start..end];
+        return line[..start] + rewrite(original) + line[end..];
+    }
+
+    private string BuildSegmentUrl(AudioRenditionDto rendition, string fileName)
+    {
+        fileName = Path.GetFileName(fileName.Trim());
+        var uri = Url.ActionLink(
+            action: nameof(GetAudioSegment),
+            values: new
+            {
+                mediaGuid = rendition.MediaGuid,
+                format = AudioFormatToken(rendition.Format),
+                sourceVersion = rendition.SourceVersion,
+                fileName
+            });
+
+        return uri ?? $"/stream/audio/{rendition.MediaGuid:D}/hls/{AudioFormatToken(rendition.Format)}/{rendition.SourceVersion}/{Uri.EscapeDataString(fileName)}";
+    }
+
+    private static bool IsSafeHlsFileName(string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName) || fileName != Path.GetFileName(fileName))
+            return false;
+
+        var extension = Path.GetExtension(fileName).ToLowerInvariant();
+        return extension is ".ts" or ".m4s" or ".mp4";
+    }
+
+    private static string HlsFileContentType(string fileName)
+        => Path.GetExtension(fileName).ToLowerInvariant() switch
+        {
+            ".ts" => "video/mp2t",
+            ".m4s" => "video/iso.segment",
+            ".mp4" => "video/mp4",
+            _ => "application/octet-stream"
+        };
+
+    private static string StorageDirectory(string storagePath)
+    {
+        var slash = storagePath.LastIndexOf('/');
+        return slash < 0 ? string.Empty : storagePath[..slash];
+    }
+
+    private static string CombineStoragePath(string directory, string fileName)
+        => string.IsNullOrWhiteSpace(directory) ? fileName : $"{directory.TrimEnd('/')}/{fileName}";
+
+    private static string HlsStorageDirectory(AudioRenditionDto rendition)
+        => string.IsNullOrWhiteSpace(rendition.StoragePath)
+            ? "hls"
+            : CombineStoragePath(StorageDirectory(rendition.StoragePath), "hls");
+
+    private static string? HlsManifestStoragePath(AudioRenditionDto rendition)
+        => string.IsNullOrWhiteSpace(rendition.StoragePath)
+            ? null
+            : CombineStoragePath(HlsStorageDirectory(rendition), "index.m3u8");
 }
