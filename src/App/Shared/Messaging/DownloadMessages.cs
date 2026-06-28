@@ -105,7 +105,10 @@ public enum DownloadJobState
     /// <summary>Retry budget exhausted; routed to the DLQ and requires manual intervention.</summary>
     DeadLettered = 12,
     /// <summary>Source already downloaded (matched an existing version); download was skipped.</summary>
-    AlreadyDownloaded = 13
+    AlreadyDownloaded = 13,
+    /// <summary>Waiting for a download slot from the <c>DownloadSlotCoordinator</c>; will proceed once
+    /// a slot is available in priority order.</summary>
+    DownloadQueued = 14
 }
 
 /// <summary>
@@ -198,6 +201,12 @@ public sealed record DownloadRequested : IFlowMessage
     /// reference, never the cookie body or the owning user's identity beyond the path.
     /// </summary>
     public string? CookieSecretPath { get; init; }
+
+    /// <summary>
+    /// Scheduling priority: 0 (default / lowest) to 100 (highest). When multiple jobs
+    /// are waiting for a download slot, higher-priority jobs are dispatched first.
+    /// </summary>
+    public int Priority { get; init; } = 0;
 }
 
 /// <summary>
@@ -640,6 +649,42 @@ public sealed record TempFileDeleteFailed : IFlowMessage
     public required string TempFileRef { get; init; }
     public required FailureKind FailureKind { get; init; }
     public required string ErrorMessage { get; init; }
+}
+
+/// <summary>
+/// Sent by <c>DownloadSlotCoordinator</c> directly into a Cleipnir flow instance when
+/// that job has been granted a download slot. The flow resumes its download step upon receipt.
+/// </summary>
+public sealed record DownloadSlotGranted : IFlowMessage
+{
+    public required Guid JobId { get; init; }
+    public required Guid CorrelationId { get; init; }
+    public Guid? CausationId { get; init; }
+    public required Guid MessageId { get; init; }
+    public required string OperationKey { get; init; }
+    public required Instant OccurredAt { get; init; }
+    public int Attempt { get; init; } = 1;
+
+    /// <summary>The worker tag this slot belongs to (empty string for the default/untagged worker).</summary>
+    public required string WorkerTag { get; init; }
+}
+
+// ── NATS Core request/reply — download admin ────────────────────────────────────
+
+/// <summary>Request to update a queued job's scheduling priority (NATS Core request/reply).</summary>
+public sealed record UpdateDownloadPriorityRequest
+{
+    public required Guid JobId { get; init; }
+    /// <summary>New priority value 0–100.</summary>
+    public required int Priority { get; init; }
+}
+
+/// <summary>Response to <see cref="UpdateDownloadPriorityRequest"/>.</summary>
+public sealed record UpdateDownloadPriorityResponse
+{
+    public bool Success { get; init; }
+    /// <summary>When false, explanation of why the update was not applied.</summary>
+    public string? Error { get; init; }
 }
 
 /// <summary>

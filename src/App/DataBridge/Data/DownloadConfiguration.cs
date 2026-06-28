@@ -36,6 +36,7 @@ public sealed class DownloadJobConfiguration : IEntityTypeConfiguration<Download
         builder.Property(x => x.InfoJsonContentHashXxh128).HasColumnName("info_json_content_hash_xxh128").HasMaxLength(64);
         builder.Property(x => x.InfoJsonSizeBytes).HasColumnName("info_json_size_bytes");
         builder.Property(x => x.MetaStoragePath).HasColumnName("meta_storage_path").HasMaxLength(2048);
+        builder.Property(x => x.Priority).HasColumnName("priority").HasDefaultValue(0).IsRequired();
 
         builder.Property(x => x.FailureKind)
             .HasColumnName("failure_kind")

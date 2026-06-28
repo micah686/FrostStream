@@ -21,6 +21,7 @@ public class DownloadArchiveFlow(
     IMessageBus messageBus,
     IServiceScopeFactory scopeFactory,
     IClock clock,
+    DownloadSlotCoordinator slotCoordinator,
     ILogger<DownloadArchiveFlow> logger
 ) : Flow<DownloadRequested>
 {
@@ -71,9 +72,17 @@ public class DownloadArchiveFlow(
             return;
         }
 
+        // STEP 2.5: priority gate — wait for download slot --------------------
+        await Capture(() => Update(jobId, DownloadJobState.DownloadQueued));
+        await Capture(() => slotCoordinator.EnqueueAsync(jobId, request.Priority, workerTag, clock.GetCurrentInstant()));
+        await Message<DownloadSlotGranted>();
+
         // STEP 3: download ----------------------------------------------------
         await Capture(() => Update(jobId, DownloadJobState.DownloadPending));
         var downloaded = await RunDownloadStep(request, jobInstance, workerTag);
+        // Release immediately after the download (regardless of outcome) so the next
+        // highest-priority job can start while we finish upload/commit for this one.
+        await Capture(() => slotCoordinator.ReleaseSlotAsync(workerTag));
         if (downloaded is null) return;
 
         // STEP 4: reserve version (option-a merge happens here) ---------------

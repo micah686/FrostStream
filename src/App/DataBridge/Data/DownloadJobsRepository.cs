@@ -39,7 +39,8 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
             State = DownloadJobState.Queued,
             SourceUrl = request.SourceUrl,
             RequestedBy = request.RequestedBy,
-            StorageKey = request.StorageKey
+            StorageKey = request.StorageKey,
+            Priority = request.Priority
         });
         await db.SaveChangesAsync(ct);
     }
@@ -284,6 +285,38 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
         job.MetaStoragePath = evt.StoragePath;
         job.UpdatedAt = clock.GetCurrentInstant();
         await db.SaveChangesAsync(ct);
+    }
+
+    public async Task<bool> UpdatePriorityAsync(Guid jobId, int priority, CancellationToken ct = default)
+    {
+        var job = await db.DownloadJobs.FirstOrDefaultAsync(x => x.JobId == jobId, ct);
+        if (job is null) return false;
+        job.Priority = priority;
+        job.UpdatedAt = clock.GetCurrentInstant();
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<(DownloadJobState? State, string? StorageKey)> GetJobStateAndStorageKeyAsync(Guid jobId, CancellationToken ct = default)
+    {
+        var row = await db.DownloadJobs
+            .AsNoTracking()
+            .Where(x => x.JobId == jobId)
+            .Select(x => new { x.State, x.StorageKey })
+            .FirstOrDefaultAsync(ct);
+        return row is null ? (null, null) : (row.State, row.StorageKey);
+    }
+
+    public async Task<IReadOnlyList<DownloadQueuedEntry>> GetDownloadQueuedJobsAsync(CancellationToken ct = default)
+    {
+        var rows = await db.DownloadJobs
+            .AsNoTracking()
+            .Where(x => x.State == DownloadJobState.DownloadQueued)
+            .OrderByDescending(x => x.Priority)
+            .ThenBy(x => x.CreatedAt)
+            .Select(x => new { x.JobId, x.Priority, x.CreatedAt, x.StorageKey })
+            .ToListAsync(ct);
+        return rows.Select(r => new DownloadQueuedEntry(r.JobId, r.Priority, r.CreatedAt, r.StorageKey)).ToList();
     }
 
     public async Task IncrementMetadataAttemptAsync(Guid jobId, int attempt, CancellationToken ct = default)

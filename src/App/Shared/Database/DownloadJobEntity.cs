@@ -39,6 +39,8 @@ public class DownloadJobEntity
 
     public string? MetaStoragePath { get; set; }
 
+    public int Priority { get; set; }
+
     public FailureKind? FailureKind { get; set; }
 
     public string? FailureCode { get; set; }

@@ -17,9 +17,11 @@ namespace WebAPI.Features.Downloads.Controllers;
 [Route("api/[controller]")]
 public class DownloadsController(
     IJetStreamPublisher publisher,
+    IMessageBus messageBus,
     IClock clock,
     ILogger<DownloadsController> logger) : ControllerBase
 {
+    private static readonly TimeSpan AdminRequestTimeout = TimeSpan.FromSeconds(10);
     /// <summary>
     /// Submits a simple video download. No yt-dlp options, no presets, no audio
     /// toggles — just URL, storage, and optional cookie. Use
@@ -42,6 +44,7 @@ public class DownloadsController(
             ytDlpOptions: null,
             presetKey: null,
             cookieProfileKey: request.CookieProfileKey,
+            priority: request.Priority,
             cancellationToken: cancellationToken);
 
     /// <summary>
@@ -65,6 +68,7 @@ public class DownloadsController(
             ytDlpOptions: null,
             presetKey: null,
             cookieProfileKey: request.CookieProfileKey,
+            priority: request.Priority,
             cancellationToken: cancellationToken);
 
     /// <summary>
@@ -89,7 +93,53 @@ public class DownloadsController(
             ytDlpOptions: null,
             presetKey: request.PresetKey,
             cookieProfileKey: request.CookieProfileKey,
+            priority: request.Priority,
             cancellationToken: cancellationToken);
+
+    /// <summary>
+    /// Updates the scheduling priority of a download job. Only effective while the job
+    /// is waiting for a download slot (<c>DownloadQueued</c> state); has no effect once
+    /// the actual download has started.
+    /// </summary>
+    [HttpPatch("{jobId:guid}/priority")]
+    [Endpoint(EndpointIds.DownloadsUpdatePriority)]
+    [EndpointSummary("Update a download job's scheduling priority")]
+    [EndpointDescription("Changes the priority (0–100) of a queued download job. Higher values run before lower ones. Effective only while the job is waiting for a download slot; no-ops if the download has already started.")]
+    public async Task<ActionResult> UpdatePriority(
+        [FromRoute] Guid jobId,
+        [FromBody] UpdatePriorityRequest request,
+        CancellationToken cancellationToken)
+    {
+        UpdateDownloadPriorityResponse? response;
+        try
+        {
+            response = await messageBus.RequestAsync<UpdateDownloadPriorityRequest, UpdateDownloadPriorityResponse>(
+                DownloadSubjects.UpdatePriorityRequest,
+                new UpdateDownloadPriorityRequest { JobId = jobId, Priority = request.Priority },
+                AdminRequestTimeout,
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed requesting priority update for JobId {JobId}", jobId);
+            return StatusCode(StatusCodes.Status502BadGateway, new ProblemDetails
+            {
+                Title = "Failed to update priority",
+                Detail = "Could not reach the messaging bus.",
+                Status = StatusCodes.Status502BadGateway
+            });
+        }
+
+        if (response is null || !response.Success)
+        {
+            var error = response?.Error ?? "No response from DataBridge.";
+            if (error == "Job not found.")
+                return NotFound(new ProblemDetails { Title = "Job not found.", Status = StatusCodes.Status404NotFound });
+            return BadRequest(new ProblemDetails { Title = error, Status = StatusCodes.Status400BadRequest });
+        }
+
+        return NoContent();
+    }
 
     private async Task<ActionResult<DownloadRequestResponse>> PublishRequestAsync(
         string sourceUrl,
@@ -101,6 +151,7 @@ public class DownloadsController(
         YtDlpOptions? ytDlpOptions,
         string? presetKey,
         string? cookieProfileKey,
+        int priority,
         CancellationToken cancellationToken)
     {
         if (!YtDlpSourceUrlValidator.TryValidate(sourceUrl, out var validationError))
@@ -156,7 +207,8 @@ public class DownloadsController(
             AudioFormat = audioFormat,
             YtDlpOptions = ytDlpOptions,
             PresetKey = presetKey,
-            CookieSecretPath = cookieSecretPath
+            CookieSecretPath = cookieSecretPath,
+            Priority = priority
         };
 
         try

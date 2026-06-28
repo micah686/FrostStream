@@ -25,6 +25,11 @@ public sealed class DownloadRequest
     /// user-scoped secret path; the worker only ever receives the resolved opaque path.
     /// </summary>
     public string? CookieProfileKey { get; init; }
+
+    /// <summary>Scheduling priority 0–100 (default 0). Higher values run before lower ones when multiple
+    /// jobs are waiting for a download slot.</summary>
+    [Range(0, 100)]
+    public int Priority { get; init; } = 0;
 }
 
 /// <summary>Body for <see cref="DownloadsController.DownloadAudio"/> - simple audio download (always MP3).</summary>
@@ -47,6 +52,11 @@ public sealed class DownloadAudioRequest
     /// user-scoped secret path; the worker only ever receives the resolved opaque path.
     /// </summary>
     public string? CookieProfileKey { get; init; }
+
+    /// <summary>Scheduling priority 0–100 (default 0). Higher values run before lower ones when multiple
+    /// jobs are waiting for a download slot.</summary>
+    [Range(0, 100)]
+    public int Priority { get; init; } = 0;
 }
 
 /// <summary>Body for <see cref="DownloadsController.DownloadWithPreset"/> - download driven by a stored option preset.</summary>
@@ -75,6 +85,18 @@ public sealed class DownloadPresetRequest
     /// user-scoped secret path; the worker only ever receives the resolved opaque path.
     /// </summary>
     public string? CookieProfileKey { get; init; }
+
+    /// <summary>Scheduling priority 0–100 (default 0). Higher values run before lower ones when multiple
+    /// jobs are waiting for a download slot.</summary>
+    [Range(0, 100)]
+    public int Priority { get; init; } = 0;
+}
+
+/// <summary>Body for <c>PATCH /api/downloads/{jobId}/priority</c>.</summary>
+public sealed class UpdatePriorityRequest
+{
+    [Range(0, 100)]
+    public required int Priority { get; init; }
 }
 
 public sealed record DownloadRequestResponse(Guid JobId, Guid CorrelationId);

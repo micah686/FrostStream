@@ -34,4 +34,7 @@ public static class DownloadSubjects
     public const string TempFileDeleteFailed           = "download.evt.temp-file-delete-failed";
     public const string UploadedObjectDeleted          = "download.evt.uploaded-object-deleted";
     public const string UploadedObjectDeleteFailed     = "download.evt.uploaded-object-delete-failed";
+
+    // NATS Core request/reply (not JetStream) — admin operations.
+    public const string UpdatePriorityRequest = "download.admin.update-priority";
 }

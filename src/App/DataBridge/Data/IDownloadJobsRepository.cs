@@ -76,6 +76,15 @@ public interface IDownloadJobsRepository
     /// </summary>
     Task ApplyMetaUploadCompletedAsync(Guid jobId, UploadCompleted evt, CancellationToken ct = default);
 
+    /// <summary>Updates the priority of an existing job. Returns false when the job does not exist.</summary>
+    Task<bool> UpdatePriorityAsync(Guid jobId, int priority, CancellationToken ct = default);
+
+    /// <summary>Returns the current state and storage key for a job, or (null, null) when not found.</summary>
+    Task<(DownloadJobState? State, string? StorageKey)> GetJobStateAndStorageKeyAsync(Guid jobId, CancellationToken ct = default);
+
+    /// <summary>Returns all jobs in <see cref="DownloadJobState.DownloadQueued"/> ordered by priority then creation time.</summary>
+    Task<IReadOnlyList<DownloadQueuedEntry>> GetDownloadQueuedJobsAsync(CancellationToken ct = default);
+
     Task IncrementMetadataAttemptAsync(Guid jobId, int attempt, CancellationToken ct = default);
 
     Task IncrementDownloadAttemptAsync(Guid jobId, int attempt, CancellationToken ct = default);
@@ -140,3 +149,6 @@ public sealed record VersionReservation(
     int VersionNum,
     bool ContentAlreadyStored,
     bool IsNewMediaGuid);
+
+/// <summary>A job waiting for a download slot, as returned by <see cref="IDownloadJobsRepository.GetDownloadQueuedJobsAsync"/>.</summary>
+public sealed record DownloadQueuedEntry(Guid JobId, int Priority, Instant CreatedAt, string? StorageKey);

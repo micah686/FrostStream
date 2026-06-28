@@ -10,6 +10,8 @@
 
 [X]make info.json optional, write a .meta file with title, hash, media guid, original url (for correlating data back if storage gets moved around)
 
+[X]setup download priorities (so you can force one video to start over another)
+
 ## TODO
 
 upload metadata
