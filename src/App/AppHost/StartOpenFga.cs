@@ -32,6 +32,17 @@ public static class StartOpenFga
             .WithEnvironment("OPENFGA_PLAYGROUND_ENABLED", hardening.EnableFgaAuthenticatedEndpoints ? "false" : "true")
             .WaitForCompletion(migrate)
             .WaitFor(postgres.OpenFgaDb);
+        
+        var studio = builder
+            .AddContainer("openfga-studio", "ghcr.io/prakashm88/openfga-studio")
+            .WithHttpEndpoint(port: 3000, targetPort: 3000, name: "http")
+            // Tell Studio not to run its own embedded OpenFGA.
+            .WithEnvironment("DISABLE_LOCAL_OPENFGA", "true")
+            // Internal container-to-container URL.
+            // Use targetPort 8080, not the host-mapped Aspire port 8081.
+            .WithEnvironment("OPENFGA_ENDPOINT", "http://openfga:8080")
+
+            .WaitFor(server);
 
         if (hardening.EnableFgaAuthenticatedEndpoints)
         {

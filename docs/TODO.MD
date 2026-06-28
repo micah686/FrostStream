@@ -8,6 +8,8 @@
 
 [X]add tags to workers, so jobs can be assigned to a worker with that tag (otherwise, a S3 worker might not be able to write to the storage for a local NAS)
 
+[X]make info.json optional, write a .meta file with title, hash, media guid, original url (for correlating data back if storage gets moved around)
+
 ## TODO
 
 upload metadata
