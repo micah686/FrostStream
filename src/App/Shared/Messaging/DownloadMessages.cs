@@ -211,6 +211,10 @@ public sealed record DownloadRequested : IFlowMessage
     /// are waiting for a download slot, higher-priority jobs are dispatched first.
     /// </summary>
     public int Priority { get; init; } = 0;
+
+    /// <summary>When true, the Worker passes <c>--write-comments</c> to yt-dlp so comments are fetched,
+    /// persisted to the database, and indexed in Typesense.</summary>
+    public bool FetchComments { get; init; } = false;
 }
 
 /// <summary>
@@ -252,6 +256,10 @@ public sealed record FetchMetadataCommand : IFlowMessage
 
     /// <summary>Same resolved user-owned cookie path as on <see cref="DownloadRequested.CookieSecretPath"/>.</summary>
     public string? CookieSecretPath { get; init; }
+
+    /// <summary>When true, the Worker passes <c>--write-comments</c> to yt-dlp so comments are included in
+    /// the returned metadata and subsequently persisted to the database and indexed in Typesense.</summary>
+    public bool FetchComments { get; init; } = false;
 }
 
 /// <summary>

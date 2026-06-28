@@ -33,6 +33,10 @@ public sealed class DownloadRequest
     public int Priority { get; init; } = 0;
 
     public SponsorBlockRequest? SponsorBlock { get; init; }
+
+    /// <summary>When true, yt-dlp fetches comments and they are persisted to the database and indexed in Typesense.</summary>
+    [DefaultValue(false)]
+    public bool FetchComments { get; init; } = false;
 }
 
 /// <summary>Body for <see cref="DownloadsController.DownloadAudio"/> - simple audio download (always MP3).</summary>
@@ -62,6 +66,10 @@ public sealed class DownloadAudioRequest
     public int Priority { get; init; } = 0;
 
     public SponsorBlockRequest? SponsorBlock { get; init; }
+
+    /// <summary>When true, yt-dlp fetches comments and they are persisted to the database and indexed in Typesense.</summary>
+    [DefaultValue(false)]
+    public bool FetchComments { get; init; } = false;
 }
 
 /// <summary>Body for <see cref="DownloadsController.DownloadWithPreset"/> - download driven by a stored option preset.</summary>
@@ -95,6 +103,10 @@ public sealed class DownloadPresetRequest
     /// jobs are waiting for a download slot.</summary>
     [Range(0, 100)]
     public int Priority { get; init; } = 0;
+
+    /// <summary>When true, yt-dlp fetches comments and they are persisted to the database and indexed in Typesense.</summary>
+    [DefaultValue(false)]
+    public bool FetchComments { get; init; } = false;
 }
 
 /// <summary>Body for <c>PATCH /api/downloads/{jobId}/priority</c>.</summary>

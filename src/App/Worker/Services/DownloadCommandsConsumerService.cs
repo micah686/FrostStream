@@ -176,7 +176,8 @@ public sealed class DownloadCommandsConsumerService(
 
             var metadataResult = await ytDlp.TryGetVideoInfoAsync(
                 cmd.SourceUrl,
-                overrideOptions: potOptionsApplier.Apply(metadataOptions));
+                overrideOptions: potOptionsApplier.Apply(metadataOptions),
+                fetchComments: cmd.FetchComments);
             if (!metadataResult.Success || metadataResult.Data is not { } info)
             {
                 throw new YtDlpProcessException(

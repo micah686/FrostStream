@@ -299,7 +299,8 @@ public class DownloadArchiveFlow(
                 StorageKey = storageKey,
                 RequiredWorkerTag = workerTag,
                 YtDlpOptions = request.YtDlpOptions,
-                CookieSecretPath = request.CookieSecretPath
+                CookieSecretPath = request.CookieSecretPath,
+                FetchComments = request.FetchComments
             };
             var subject = string.IsNullOrWhiteSpace(workerTag)
                 ? DownloadSubjects.FetchMetadataCommand

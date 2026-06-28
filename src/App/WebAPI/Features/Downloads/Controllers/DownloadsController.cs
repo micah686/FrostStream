@@ -45,6 +45,7 @@ public class DownloadsController(
             presetKey: null,
             cookieProfileKey: request.CookieProfileKey,
             priority: request.Priority,
+            fetchComments: request.FetchComments,
             cancellationToken: cancellationToken);
 
     /// <summary>
@@ -69,6 +70,7 @@ public class DownloadsController(
             presetKey: null,
             cookieProfileKey: request.CookieProfileKey,
             priority: request.Priority,
+            fetchComments: request.FetchComments,
             cancellationToken: cancellationToken);
 
     /// <summary>
@@ -94,6 +96,7 @@ public class DownloadsController(
             presetKey: request.PresetKey,
             cookieProfileKey: request.CookieProfileKey,
             priority: request.Priority,
+            fetchComments: request.FetchComments,
             cancellationToken: cancellationToken);
 
     /// <summary>
@@ -214,6 +217,7 @@ public class DownloadsController(
         string? presetKey,
         string? cookieProfileKey,
         int priority,
+        bool fetchComments,
         CancellationToken cancellationToken)
     {
         if (!YtDlpSourceUrlValidator.TryValidate(sourceUrl, out var validationError))
@@ -270,7 +274,8 @@ public class DownloadsController(
             YtDlpOptions = ytDlpOptions,
             PresetKey = presetKey,
             CookieSecretPath = cookieSecretPath,
-            Priority = priority
+            Priority = priority,
+            FetchComments = fetchComments
         };
 
         try
