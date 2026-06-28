@@ -48,6 +48,33 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
         return source;
     }
 
+    public async Task<CreatorSourceEntity> CreateOrReuseSourceAsync(CreatorSourceEntity source, CancellationToken cancellationToken = default)
+    {
+        var existing = await db.CreatorSources.FirstOrDefaultAsync(x => x.SourceUrl == source.SourceUrl, cancellationToken);
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        db.CreatorSources.Add(source);
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+            return source;
+        }
+        catch (DbUpdateException)
+        {
+            db.Entry(source).State = EntityState.Detached;
+            existing = await db.CreatorSources.FirstOrDefaultAsync(x => x.SourceUrl == source.SourceUrl, cancellationToken);
+            if (existing is not null)
+            {
+                return existing;
+            }
+
+            throw;
+        }
+    }
+
     public async Task<CreatorSourceEntity?> UpdateSourceAsync(CreatorSourceEntity source, CancellationToken cancellationToken = default)
     {
         var existing = await db.CreatorSources.FirstOrDefaultAsync(x => x.Id == source.Id, cancellationToken);

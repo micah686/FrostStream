@@ -42,6 +42,18 @@ public sealed record CreatorSourceCreateRequestMessage
     public int MetadataRefreshWindow { get; init; } = 25;
 }
 
+public sealed record CreatorSourceCreateOrReuseRequestMessage
+{
+    public required string Platform { get; init; }
+    public required CreatorSourceType SourceType { get; init; }
+    public required string SourceUrl { get; init; }
+    public bool ScanEnabled { get; init; } = true;
+    public int IncrementalPageSize { get; init; } = 50;
+    public int ConsecutiveKnownThreshold { get; init; } = 25;
+    public int FullRescanIntervalDays { get; init; } = 30;
+    public int MetadataRefreshWindow { get; init; } = 25;
+}
+
 public sealed record CreatorSourceUpdateRequestMessage
 {
     public required long Id { get; init; }
@@ -106,6 +118,8 @@ public sealed record UpsertDiscoveredMediaBatchRequestMessage
     public int? NextScanPageStartIndex { get; init; }
     public bool ScanPageComplete { get; init; } = true;
     public bool IsScanPageFinalBatch { get; init; } = true;
+    public string? StorageKey { get; init; }
+    public string? RequestedBy { get; init; }
     public required IReadOnlyList<DiscoveredMediaCandidate> Items { get; init; }
 }
 

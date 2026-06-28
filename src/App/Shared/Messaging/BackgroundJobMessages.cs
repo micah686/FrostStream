@@ -19,7 +19,12 @@ public sealed record ChannelAssetRefreshRequested : ScheduledBackgroundRequest
     public bool Force { get; init; }
 }
 
-public sealed record ChannelMediaListRequested : ScheduledBackgroundRequest;
+public sealed record ChannelMediaListRequested : ScheduledBackgroundRequest
+{
+    public long? TargetSourceId { get; init; }
+    public string? StorageKey { get; init; }
+    public string? RequestedBy { get; init; }
+}
 
 public sealed record StaleDatabaseCleanupRequested : ScheduledBackgroundRequest;
 

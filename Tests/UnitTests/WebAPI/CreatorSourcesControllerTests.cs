@@ -1,9 +1,11 @@
+using System.Security.Claims;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using NodaTime;
 using NSubstitute;
+using Shared.Auth;
 using Shared.Database;
 using Shared.Messaging;
 using Shouldly;
@@ -145,6 +147,55 @@ public sealed class CreatorSourcesControllerTests
     }
 
     [Test]
+    public async Task DownloadChannel_Creates_Or_Reuses_Source_And_Publishes_Targeted_Channel_Scan()
+    {
+        var bus = Substitute.For<IMessageBus>();
+        var publisher = Substitute.For<IJetStreamPublisher>();
+        var controller = CreateController(bus, publisher);
+
+        bus.RequestAsync<CreatorSourceCreateOrReuseRequestMessage, CreatorSourceOperationResponseMessage>(
+                CreatorDiscoverySubjects.CreateOrReuseSource,
+                Arg.Is<CreatorSourceCreateOrReuseRequestMessage>(x =>
+                    x.Platform == "youtube" &&
+                    x.SourceType == CreatorSourceType.Videos &&
+                    x.SourceUrl == "https://example.test/@creator/videos" &&
+                    x.ScanEnabled),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new CreatorSourceOperationResponseMessage
+            {
+                Success = true,
+                Entity = CreateDto(42) with { SourceUrl = "https://example.test/@creator/videos" }
+            });
+
+        var result = await controller.DownloadChannel(new ChannelDownloadRequest
+        {
+            SourceUrl = "https://example.test/@creator/videos",
+            StorageKey = "archive"
+        }, CancellationToken.None);
+
+        var payload = result.Result.ShouldBeOfType<AcceptedResult>().Value
+            .ShouldBeOfType<ChannelDownloadResponse>();
+        payload.SourceId.ShouldBe(42);
+        payload.Queued.ShouldBeTrue();
+        payload.IdempotencyKey.ShouldStartWith("manual-channel-download:42:");
+
+        await publisher.Received(1).PublishAsync(
+            BackgroundJobSubjects.ChannelMediaListRequest,
+            Arg.Is<ChannelMediaListRequested>(x =>
+                x.ScheduleKey == "manual-channel-download" &&
+                x.TaskType == "channel_media_list" &&
+                x.DueWindowUtc == Now &&
+                x.OccurredAt == Now &&
+                x.TargetSourceId == 42 &&
+                x.StorageKey == "archive" &&
+                x.RequestedBy == "unit_test_user"),
+            Arg.Is<string>(x => x.StartsWith("manual-channel-download:42:", StringComparison.Ordinal)),
+            null,
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task RefreshAssets_Returns_503_When_Publish_Fails()
     {
         var bus = Substitute.For<IMessageBus>();
@@ -226,11 +277,19 @@ public sealed class CreatorSourcesControllerTests
         var clock = Substitute.For<IClock>();
         clock.GetCurrentInstant().Returns(Now);
 
-        return new CreatorSourcesController(
+        var controller = new CreatorSourcesController(
             bus ?? Substitute.For<IMessageBus>(),
             publisher ?? Substitute.For<IJetStreamPublisher>(),
             clock,
             Substitute.For<ILogger<CreatorSourcesController>>());
+
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(AuthConstants.SubjectClaim, "unit_test_user")], "test"));
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = user }
+        };
+
+        return controller;
     }
 
     private static CreatorSourceDto CreateDto(long id) => new()

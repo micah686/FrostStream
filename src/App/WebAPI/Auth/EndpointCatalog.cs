@@ -105,6 +105,7 @@ public static class EndpointIds
 
     // Creator sources
     public const string CreatorSourcesCreate = "creator-sources.create";
+    public const string CreatorSourcesDownloadChannel = "creator-sources.download-channel";
     public const string CreatorSourcesUpdate = "creator-sources.update";
     public const string CreatorSourcesGet = "creator-sources.get";
     public const string CreatorSourcesList = "creator-sources.list";
@@ -215,6 +216,7 @@ public static class EndpointCatalog
         new(EndpointIds.OptionPresetsDelete, Bundles.Presets),
 
         new(EndpointIds.CreatorSourcesCreate, Bundles.CreatorSources),
+        new(EndpointIds.CreatorSourcesDownloadChannel, Bundles.CreatorSources),
         new(EndpointIds.CreatorSourcesUpdate, Bundles.CreatorSources),
         new(EndpointIds.CreatorSourcesGet, Bundles.CreatorSources),
         new(EndpointIds.CreatorSourcesList, Bundles.CreatorSources),

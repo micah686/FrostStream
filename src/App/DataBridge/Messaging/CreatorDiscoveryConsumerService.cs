@@ -24,6 +24,7 @@ public sealed class CreatorDiscoveryConsumerService(
     protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
     {
         await SubscribeAsync<CreatorSourceCreateRequestMessage>(messageBus, CreatorDiscoverySubjects.CreateSource, HandleCreateAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<CreatorSourceCreateOrReuseRequestMessage>(messageBus, CreatorDiscoverySubjects.CreateOrReuseSource, HandleCreateOrReuseAsync, QueueGroup, stoppingToken);
         await SubscribeAsync<CreatorSourceUpdateRequestMessage>(messageBus, CreatorDiscoverySubjects.UpdateSource, HandleUpdateAsync, QueueGroup, stoppingToken);
         await SubscribeAsync<CreatorSourceGetRequestMessage>(messageBus, CreatorDiscoverySubjects.GetSource, HandleGetAsync, QueueGroup, stoppingToken);
         await SubscribeAsync<CreatorSourceListRequestMessage>(messageBus, CreatorDiscoverySubjects.ListSources, HandleListAsync, QueueGroup, stoppingToken);
@@ -73,6 +74,37 @@ public sealed class CreatorDiscoveryConsumerService(
         {
             logger.LogError(ex, "Failed creating creator source {SourceUrl}", msg.SourceUrl);
             await context.RespondAsync(InternalFailure("Failed to create creator source."));
+        }
+    }
+
+    private async Task HandleCreateOrReuseAsync(IMessageContext<CreatorSourceCreateOrReuseRequestMessage> context)
+    {
+        var msg = context.Message;
+        try
+        {
+            if (Validate(msg.Platform, msg.SourceUrl, msg.IncrementalPageSize, msg.ConsecutiveKnownThreshold, msg.FullRescanIntervalDays, msg.MetadataRefreshWindow) is { } validationError)
+            {
+                await context.RespondAsync(Failure(validationError));
+                return;
+            }
+
+            var entity = await WithRepo(repo => repo.CreateOrReuseSourceAsync(new CreatorSourceEntity
+            {
+                Platform = msg.Platform.Trim(),
+                SourceType = msg.SourceType,
+                SourceUrl = msg.SourceUrl.Trim(),
+                ScanEnabled = msg.ScanEnabled,
+                IncrementalPageSize = msg.IncrementalPageSize,
+                ConsecutiveKnownThreshold = msg.ConsecutiveKnownThreshold,
+                FullRescanIntervalDays = msg.FullRescanIntervalDays,
+                MetadataRefreshWindow = msg.MetadataRefreshWindow
+            }));
+            await context.RespondAsync(new CreatorSourceOperationResponseMessage { Success = true, Entity = Map(entity) });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed creating or reusing creator source {SourceUrl}", msg.SourceUrl);
+            await context.RespondAsync(InternalFailure("Failed to create or reuse creator source."));
         }
     }
 
@@ -304,7 +336,8 @@ public sealed class CreatorDiscoveryConsumerService(
                 OccurredAt = clock.GetCurrentInstant(),
                 Attempt = 1,
                 SourceUrl = candidate.CanonicalUrl,
-                RequestedBy = $"schedule:{request.ScheduleKey}",
+                RequestedBy = request.RequestedBy ?? $"schedule:{request.ScheduleKey}",
+                StorageKey = request.StorageKey,
                 ForceDownload = false,
                 MediaKind = MediaKind.Video
             },

@@ -2,6 +2,7 @@ using FlySwattr.NATS.Abstractions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NodaTime;
+using Shared.Auth;
 using Shared.Database;
 using Shared.Messaging;
 using WebAPI.Auth;
@@ -19,6 +20,8 @@ public sealed class CreatorSourcesController(
     ILogger<CreatorSourcesController> logger) : ControllerBase
 {
     private const string ChannelAssetRefreshTaskType = "channel_asset_refresh";
+    private const string ChannelMediaListTaskType = "channel_media_list";
+    private const string ManualChannelDownloadScheduleKey = "manual-channel-download";
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);
 
     [HttpPost]
@@ -48,6 +51,72 @@ public sealed class CreatorSourcesController(
             cancellationToken);
 
         return MapEntityResponse(response);
+    }
+
+    [HttpPost("channel-downloads")]
+    [Endpoint(EndpointIds.CreatorSourcesDownloadChannel)]
+    [EndpointSummary("Queue a full channel download")]
+    [EndpointDescription("Creates or reuses a creator channel source, then queues a targeted full channel scan. The scan uses the same creator-discovery pipeline as scheduled channel downloads, so discovered videos are tracked as channel media and unchanged known videos are not re-enqueued.")]
+    public async Task<ActionResult<ChannelDownloadResponse>> DownloadChannel(
+        [FromBody] ChannelDownloadRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!YtDlpSourceUrlValidator.TryValidate(request.SourceUrl, out var validationError))
+            return BadRequest(validationError);
+
+        var sourceResponse = await SendAsync(
+            CreatorDiscoverySubjects.CreateOrReuseSource,
+            new CreatorSourceCreateOrReuseRequestMessage
+            {
+                Platform = request.Platform,
+                SourceType = request.SourceType,
+                SourceUrl = request.SourceUrl,
+                ScanEnabled = true
+            },
+            cancellationToken);
+
+        if (sourceResponse is null)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to process creator source request.");
+        if (!sourceResponse.Success)
+            return MapErrorResponse(sourceResponse);
+        if (sourceResponse.Entity is null)
+            return StatusCode(StatusCodes.Status502BadGateway, "Creator source service returned an invalid response.");
+
+        var now = clock.GetCurrentInstant();
+        var idempotencyKey = $"manual-channel-download:{sourceResponse.Entity.Id}:{Guid.NewGuid():N}";
+        var message = new ChannelMediaListRequested
+        {
+            ScheduleKey = ManualChannelDownloadScheduleKey,
+            TaskType = ChannelMediaListTaskType,
+            DueWindowUtc = now,
+            IdempotencyKey = idempotencyKey,
+            OccurredAt = now,
+            TargetSourceId = sourceResponse.Entity.Id,
+            StorageKey = string.IsNullOrWhiteSpace(request.StorageKey) ? "default" : request.StorageKey,
+            RequestedBy = AuthConstants.FindSubject(User)
+        };
+
+        try
+        {
+            await publisher.PublishAsync(
+                BackgroundJobSubjects.ChannelMediaListRequest,
+                message,
+                messageId: idempotencyKey,
+                cancellationToken: cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed enqueueing manual channel download for source {SourceId}", sourceResponse.Entity.Id);
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to enqueue channel download.");
+        }
+
+        return Accepted(new ChannelDownloadResponse(
+            sourceResponse.Entity.Id,
+            sourceResponse.Entity.SourceUrl,
+            sourceResponse.Entity.Platform,
+            sourceResponse.Entity.SourceType,
+            Queued: true,
+            idempotencyKey));
     }
 
     [HttpPut("{id:long}")]

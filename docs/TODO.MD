@@ -25,6 +25,10 @@
 
 [!]Per user videos/channel/playlists (playlists only implemented)
 
+Add SponsorBlock integration [2022-04-16]
+
+[X]make sure you can manually download a channel
+
 ## TODO
 
 upload metadata
@@ -52,7 +56,7 @@ Download video comments [2022-11-30]
 Show similar videos on video page [2022-11-30]
 Filter and query in search form, search by url query [2022-07-23]
 Add passing browser cookies to yt-dlp [2022-05-08]
-Add SponsorBlock integration [2022-04-16]
+
 Implement per channel settings [2022-03-26]
 Subtitle download & indexing [2022-02-13]
 Fancy advanced unified search interface [2022-01-08]

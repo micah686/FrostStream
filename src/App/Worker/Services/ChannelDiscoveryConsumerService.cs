@@ -73,18 +73,7 @@ public sealed class ChannelDiscoveryConsumerService(
     {
         await MarkAttemptAsync(request, cancellationToken);
 
-        var sourcesResponse = await messageBus.RequestAsync<CreatorSourceListEnabledForScanRequestMessage, CreatorSourceOperationResponseMessage>(
-            CreatorDiscoverySubjects.ListEnabledSourcesForScan,
-            new CreatorSourceListEnabledForScanRequestMessage { ScanMode = scanMode },
-            RequestTimeout,
-            cancellationToken);
-
-        if (sourcesResponse is not { Success: true })
-        {
-            throw new InvalidOperationException(sourcesResponse?.ErrorMessage ?? "Creator source list request failed.");
-        }
-
-        var sources = sourcesResponse.Items ?? Array.Empty<CreatorSourceDto>();
+        var sources = await ResolveSourcesAsync(request, scanMode, cancellationToken);
         foreach (var source in sources)
         {
             await ScanSourceAsync(request, scanMode, source, cancellationToken);
@@ -96,6 +85,41 @@ public sealed class ChannelDiscoveryConsumerService(
             scanMode,
             request.IdempotencyKey,
             sources.Count);
+    }
+
+    private async Task<IReadOnlyList<CreatorSourceDto>> ResolveSourcesAsync(
+        ScheduledBackgroundRequest request,
+        CreatorSourceScanMode scanMode,
+        CancellationToken cancellationToken)
+    {
+        if (request is ChannelMediaListRequested { TargetSourceId: { } targetSourceId })
+        {
+            var sourceResponse = await messageBus.RequestAsync<CreatorSourceGetRequestMessage, CreatorSourceOperationResponseMessage>(
+                CreatorDiscoverySubjects.GetSource,
+                new CreatorSourceGetRequestMessage { Id = targetSourceId },
+                RequestTimeout,
+                cancellationToken);
+
+            if (sourceResponse is not { Success: true, Entity: { } source })
+            {
+                throw new InvalidOperationException(sourceResponse?.ErrorMessage ?? $"Creator source '{targetSourceId}' was not found.");
+            }
+
+            return [source];
+        }
+
+        var sourcesResponse = await messageBus.RequestAsync<CreatorSourceListEnabledForScanRequestMessage, CreatorSourceOperationResponseMessage>(
+            CreatorDiscoverySubjects.ListEnabledSourcesForScan,
+            new CreatorSourceListEnabledForScanRequestMessage { ScanMode = scanMode },
+            RequestTimeout,
+            cancellationToken);
+
+        if (sourcesResponse is not { Success: true })
+        {
+            throw new InvalidOperationException(sourcesResponse?.ErrorMessage ?? "Creator source list request failed.");
+        }
+
+        return sourcesResponse.Items ?? Array.Empty<CreatorSourceDto>();
     }
 
     private async Task ScanSourceAsync(
@@ -141,6 +165,8 @@ public sealed class ChannelDiscoveryConsumerService(
                     NextScanPageStartIndex = nextScanPageStartIndex,
                     ScanPageComplete = scanPageComplete,
                     IsScanPageFinalBatch = batchIndex == batches.Length - 1,
+                    StorageKey = ChannelStorageKey(request),
+                    RequestedBy = ChannelRequestedBy(request),
                     Items = batch
                 },
                 RequestTimeout,
@@ -173,6 +199,8 @@ public sealed class ChannelDiscoveryConsumerService(
                     NextScanPageStartIndex = nextScanPageStartIndex,
                     ScanPageComplete = scanPageComplete,
                     IsScanPageFinalBatch = true,
+                    StorageKey = ChannelStorageKey(request),
+                    RequestedBy = ChannelRequestedBy(request),
                     Items = []
                 },
                 RequestTimeout,
@@ -227,6 +255,16 @@ public sealed class ChannelDiscoveryConsumerService(
 
     private static int PageEndIndex(CreatorSourceScanMode scanMode, CreatorSourceDto source)
         => PageStartIndex(scanMode, source) + EntryLimit(scanMode, source) - 1;
+
+    private static string? ChannelStorageKey(ScheduledBackgroundRequest request)
+        => request is ChannelMediaListRequested channelRequest && !string.IsNullOrWhiteSpace(channelRequest.StorageKey)
+            ? channelRequest.StorageKey
+            : null;
+
+    private static string? ChannelRequestedBy(ScheduledBackgroundRequest request)
+        => request is ChannelMediaListRequested channelRequest && !string.IsNullOrWhiteSpace(channelRequest.RequestedBy)
+            ? channelRequest.RequestedBy
+            : null;
 
     private static IEnumerable<DiscoveredMediaCandidate> ExtractCandidates(CreatorSourceDto source, VideoInfo container)
     {
