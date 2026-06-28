@@ -10,6 +10,7 @@ internal static class TaskTypeRegistry
     public const string ChannelAssetRefresh = "channel_asset_refresh";
     public const string ChannelMediaList = "channel_media_list";
     public const string StaleDatabaseCleanup = "stale_database_cleanup";
+    public const string WatchedItemAutoDelete = "watched_item_auto_delete";
     public const string DatabaseMaintenance = "database_maintenance";
     public const string SearchReindex = "search_reindex";
     public const string FilesystemRescan = "filesystem_rescan";
@@ -22,6 +23,7 @@ internal static class TaskTypeRegistry
         [ChannelAssetRefresh] = typeof(ChannelAssetRefreshJob),
         [ChannelMediaList] = typeof(ChannelMediaListJob),
         [StaleDatabaseCleanup] = typeof(StaleDatabaseCleanupJob),
+        [WatchedItemAutoDelete] = typeof(WatchedItemAutoDeleteJob),
         [DatabaseMaintenance] = typeof(DatabaseMaintenanceJob),
         [SearchReindex] = typeof(SearchReindexJob),
         [FilesystemRescan] = typeof(FilesystemRescanJob),

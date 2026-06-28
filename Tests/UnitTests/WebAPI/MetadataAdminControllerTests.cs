@@ -84,6 +84,77 @@ public sealed class MetadataAdminControllerTests
         unknown.Result.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status500InternalServerError);
     }
 
+    [Test]
+    public async Task UpdateWatchedAutoDeletePolicy_Forwards_Admin_Request()
+    {
+        var bus = Substitute.For<IMessageBus>();
+        var controller = CreateController(bus: bus);
+        bus.RequestAsync<WatchedAutoDeletePolicyUpdateRequest, WatchedAutoDeletePolicyResponse>(
+                WatchedAutoDeleteSubjects.UpdatePolicy,
+                Arg.Is<WatchedAutoDeletePolicyUpdateRequest>(x =>
+                    x.Enabled &&
+                    x.DeleteAfterDays == 14 &&
+                    x.MaxDeletionsPerRun == 25),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new WatchedAutoDeletePolicyResponse
+            {
+                Success = true,
+                Policy = new WatchedAutoDeletePolicyDto
+                {
+                    Enabled = true,
+                    DeleteAfterDays = 14,
+                    MaxDeletionsPerRun = 25
+                }
+            });
+
+        var result = await controller.UpdateWatchedAutoDeletePolicy(
+            new WatchedAutoDeletePolicyUpdateHttpRequest
+            {
+                Enabled = true,
+                DeleteAfterDays = 14,
+                MaxDeletionsPerRun = 25
+            },
+            CancellationToken.None);
+
+        var payload = result.ShouldBeOfType<OkObjectResult>().Value.ShouldBeOfType<WatchedAutoDeletePolicyDto>();
+        payload.Enabled.ShouldBeTrue();
+        payload.DeleteAfterDays.ShouldBe(14);
+        payload.MaxDeletionsPerRun.ShouldBe(25);
+    }
+
+    [Test]
+    public async Task RunWatchedAutoDelete_Returns_Cleanup_Result()
+    {
+        var bus = Substitute.For<IMessageBus>();
+        var controller = CreateController(bus: bus);
+        bus.RequestAsync<WatchedAutoDeleteCleanupRunRequest, WatchedAutoDeleteCleanupResponse>(
+                WatchedAutoDeleteSubjects.RunCleanup,
+                Arg.Any<WatchedAutoDeleteCleanupRunRequest>(),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new WatchedAutoDeleteCleanupResponse
+            {
+                Success = true,
+                Result = new WatchedAutoDeleteCleanupResultDto
+                {
+                    PolicyEnabled = true,
+                    Cutoff = Now,
+                    CandidatesFound = 2,
+                    DeletedCount = 1,
+                    FailedCount = 1,
+                    FilesDeleted = 3
+                }
+            });
+
+        var result = await controller.RunWatchedAutoDelete(CancellationToken.None);
+
+        var payload = result.ShouldBeOfType<OkObjectResult>().Value.ShouldBeOfType<WatchedAutoDeleteCleanupResultDto>();
+        payload.DeletedCount.ShouldBe(1);
+        payload.FailedCount.ShouldBe(1);
+        payload.FilesDeleted.ShouldBe(3);
+    }
+
     private static async Task<ActionResult<IReadOnlyList<OrphanCleanupItemDto>>> ListOrphansWith(
         OrphanCleanupListResponse response)
     {

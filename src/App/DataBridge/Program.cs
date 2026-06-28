@@ -123,6 +123,7 @@ class Program
         builder.Services.AddScoped<ICreatorDiscoveryRepository, CreatorDiscoveryRepository>();
         builder.Services.AddSingleton<OrphanMetadataCleanupExecutor>();
         builder.Services.AddSingleton<MediaDeleteExecutor>();
+        builder.Services.AddSingleton<WatchedItemAutoDeleteExecutor>();
         builder.Services.AddSingleton<DownloadSlotCoordinator>();
 
         builder.Services.AddTypesenseClient(config =>
@@ -151,6 +152,8 @@ class Program
         builder.Services.AddHostedService<DownloadConfigSetConsumerService>();
         builder.Services.AddHostedService<ScheduleCrudConsumerService>();
         builder.Services.AddHostedService<CreatorDiscoveryConsumerService>();
+        builder.Services.AddHostedService<WatchStateConsumerService>();
+        builder.Services.AddHostedService<WatchedAutoDeleteAdminConsumerService>();
         builder.Services.AddHostedService<OrphanCleanupAdminConsumerService>();
         builder.Services.AddHostedService<OrphanMetadataCleanupConsumerService>();
         builder.Services.AddHostedService<FilesystemRescanConsumerService>();

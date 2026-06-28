@@ -51,6 +51,14 @@
 
 [X] Youtube bot detection
 
+~~Scan your file system to index already downloaded videos [2021-09-14]~~ (not applicable to design)
+
+[X]Auto rescan and auto download on a schedule [2021-12-17]
+
+[X]Add passing browser cookies to yt-dlp [2022-05-08]
+
+[X]Optional automatic deletion of watched items after a specified time [2021-12-17]
+
 ## TODO
 
 upload metadata
@@ -60,23 +68,15 @@ live_chat (complex, need to integrate with clickhousedb)
 
 Multi language support
 
-
-
-
-
 Search download queue [2025-07-31]
 Configure shorts, streams and video sizes per channel [2024-07-15]
 Implement Apprise for notifications [2023-08-05]
-
-Show similar videos on video page [2022-11-30]
 Filter and query in search form, search by url query [2022-07-23]
-Add passing browser cookies to yt-dlp [2022-05-08]
 
 Implement per channel settings [2022-03-26]
 
-Fancy advanced unified search interface [2022-01-08]
-Auto rescan and auto download on a schedule [2021-12-17]
-Optional automatic deletion of watched items after a specified time [2021-12-17]
+
+
 
 User roles, aka read only user [2023-11-10] (hook into auth framework/APIs)
 
@@ -84,7 +84,7 @@ Access control [2021-11-01]
 
 Un-ignore videos [2021-10-03]
 Dynamic download queue [2021-09-26]
-Scan your file system to index already downloaded videos [2021-09-14]
+
 
 ## Frontend Tasks
 
@@ -94,6 +94,10 @@ Make items in grid row configurable to use more of the screen [2022-06-04]
 
 Random and repeat controls (#108, #220)
 Auto play or play next link (#226)
+
+Show similar videos on video page [2022-11-30]
+
+Fancy advanced unified search interface [2022-01-08] (should use typesense framework)
 
 ## Should be simple DB queries:
 

@@ -138,6 +138,71 @@ public sealed class MetadataAdminController(
         return MapDeleteResponse(response);
     }
 
+    [HttpGet("watched-auto-delete")]
+    [Endpoint(EndpointIds.WatchedAutoDeletePolicyGet)]
+    [EndpointSummary("Get watched-item auto-delete policy")]
+    [EndpointDescription("Returns the global watched-item auto-delete policy, including whether it is enabled, its retention period, batch limit, and latest run counters. This policy controls destructive automatic deletion and is intentionally separate from reader playback endpoints.")]
+    public async Task<IActionResult> GetWatchedAutoDeletePolicy(CancellationToken cancellationToken)
+    {
+        var response = await SendRequestAsync<WatchedAutoDeletePolicyGetRequest, WatchedAutoDeletePolicyResponse>(
+            WatchedAutoDeleteSubjects.GetPolicy,
+            new WatchedAutoDeletePolicyGetRequest(),
+            cancellationToken);
+
+        return MapPolicyResponse(response);
+    }
+
+    [HttpPut("watched-auto-delete")]
+    [Endpoint(EndpointIds.WatchedAutoDeletePolicyUpdate)]
+    [EndpointSummary("Update watched-item auto-delete policy")]
+    [EndpointDescription("Enables or disables automatic deletion of watched media and sets the retention period and maximum deletions per cleanup run. The scheduled cleanup only deletes media after this admin-controlled policy is enabled.")]
+    public async Task<IActionResult> UpdateWatchedAutoDeletePolicy(
+        [FromBody] WatchedAutoDeletePolicyUpdateHttpRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await SendRequestAsync<WatchedAutoDeletePolicyUpdateRequest, WatchedAutoDeletePolicyResponse>(
+            WatchedAutoDeleteSubjects.UpdatePolicy,
+            new WatchedAutoDeletePolicyUpdateRequest
+            {
+                Enabled = request.Enabled,
+                DeleteAfterDays = request.DeleteAfterDays,
+                MaxDeletionsPerRun = request.MaxDeletionsPerRun,
+                UpdatedBy = Shared.Auth.AuthConstants.FindSubject(User)
+            },
+            cancellationToken);
+
+        return MapPolicyResponse(response);
+    }
+
+    [HttpPost("watched-auto-delete/run")]
+    [Endpoint(EndpointIds.WatchedAutoDeleteRun)]
+    [EndpointSummary("Run watched-item auto-delete cleanup")]
+    [EndpointDescription("Runs the watched-item auto-delete cleanup immediately using the persisted global policy. The operation uses the same deletion executor as manual media deletion, removing stored files, metadata, and search index entries for expired watched items.")]
+    public async Task<IActionResult> RunWatchedAutoDelete(CancellationToken cancellationToken)
+    {
+        var response = await SendRequestAsync<WatchedAutoDeleteCleanupRunRequest, WatchedAutoDeleteCleanupResponse>(
+            WatchedAutoDeleteSubjects.RunCleanup,
+            new WatchedAutoDeleteCleanupRunRequest(),
+            cancellationToken);
+
+        if (response is null)
+        {
+            return ServiceUnavailable();
+        }
+
+        if (response.Success)
+        {
+            return Ok(response.Result);
+        }
+
+        return response.ErrorCode switch
+        {
+            "validation" => BadRequest(response.ErrorMessage),
+            "unavailable" => StatusCode(StatusCodes.Status503ServiceUnavailable, response.ErrorMessage),
+            _ => StatusCode(StatusCodes.Status500InternalServerError, response.ErrorMessage ?? "Watched auto-delete cleanup failed.")
+        };
+    }
+
     private IActionResult MapDeleteResponse(MediaDeleteResponse? response)
     {
         if (response is null)
@@ -212,4 +277,31 @@ public sealed class MetadataAdminController(
 
     private ObjectResult ServiceUnavailable()
         => StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to process orphan cleanup admin request.");
+
+    private IActionResult MapPolicyResponse(WatchedAutoDeletePolicyResponse? response)
+    {
+        if (response is null)
+        {
+            return ServiceUnavailable();
+        }
+
+        if (response.Success)
+        {
+            return Ok(response.Policy);
+        }
+
+        return response.ErrorCode switch
+        {
+            "validation" => BadRequest(response.ErrorMessage),
+            "unavailable" => StatusCode(StatusCodes.Status503ServiceUnavailable, response.ErrorMessage),
+            _ => StatusCode(StatusCodes.Status500InternalServerError, response.ErrorMessage ?? "Watched auto-delete policy request failed.")
+        };
+    }
+}
+
+public sealed record WatchedAutoDeletePolicyUpdateHttpRequest
+{
+    public required bool Enabled { get; init; }
+    public required int DeleteAfterDays { get; init; }
+    public int MaxDeletionsPerRun { get; init; } = 100;
 }

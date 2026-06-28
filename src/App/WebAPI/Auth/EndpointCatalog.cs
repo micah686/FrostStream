@@ -81,6 +81,9 @@ public static class EndpointIds
     public const string MetadataOrphansRestoreMetadata = "metadata.orphans.restore-metadata";
     public const string MediaDelete = "media.delete";
     public const string MediaDeleteForStorageKey = "media.delete-for-key";
+    public const string WatchedAutoDeletePolicyGet = "watched-auto-delete.policy.get";
+    public const string WatchedAutoDeletePolicyUpdate = "watched-auto-delete.policy.update";
+    public const string WatchedAutoDeleteRun = "watched-auto-delete.run";
 
     // Playlists
     public const string PlaylistsCreate = "playlists.create";
@@ -139,6 +142,8 @@ public static class EndpointIds
     public const string MediaAudioStream = "media.audio-stream";
     public const string MediaAudioPlaylist = "media.audio-playlist";
     public const string MediaAudioSegment = "media.audio-segment";
+    public const string MediaWatchStateGet = "media.watch-state.get";
+    public const string MediaWatchStateUpsert = "media.watch-state.upsert";
     public const string PlaylistAudioStream = "playlists.audio-stream";
 
     // Bundle management (runtime). These live in the `:all` bootstrap bundle so the bootstrap admin
@@ -220,6 +225,9 @@ public static class EndpointCatalog
         new(EndpointIds.MetadataOrphansRestoreMetadata, Bundles.MetadataAdmin),
         new(EndpointIds.MediaDelete, Bundles.MetadataAdmin),
         new(EndpointIds.MediaDeleteForStorageKey, Bundles.MetadataAdmin),
+        new(EndpointIds.WatchedAutoDeletePolicyGet, Bundles.MetadataAdmin),
+        new(EndpointIds.WatchedAutoDeletePolicyUpdate, Bundles.MetadataAdmin),
+        new(EndpointIds.WatchedAutoDeleteRun, Bundles.MetadataAdmin),
 
         new(EndpointIds.PlaylistsCreate, Bundles.Playlists),
         new(EndpointIds.PlaylistsList, Bundles.Playlists),
@@ -270,6 +278,8 @@ public static class EndpointCatalog
         new(EndpointIds.MediaAudioStream, Bundles.Media),
         new(EndpointIds.MediaAudioPlaylist, Bundles.Media),
         new(EndpointIds.MediaAudioSegment, Bundles.Media),
+        new(EndpointIds.MediaWatchStateGet, Bundles.Media),
+        new(EndpointIds.MediaWatchStateUpsert, Bundles.Media),
         new(EndpointIds.PlaylistAudioStream, Bundles.Playlists),
 
         new(EndpointIds.ManagementCatalog, Bundles.Management),

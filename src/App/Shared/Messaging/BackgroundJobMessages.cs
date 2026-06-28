@@ -35,6 +35,8 @@ public sealed record ChannelMediaListRequested : ScheduledBackgroundRequest
 
 public sealed record StaleDatabaseCleanupRequested : ScheduledBackgroundRequest;
 
+public sealed record WatchedItemAutoDeleteRequested : ScheduledBackgroundRequest;
+
 public sealed record ProcessedMessageCleanupRequested : ScheduledBackgroundRequest;
 
 public sealed record DatabaseMaintenanceRequested : ScheduledBackgroundRequest;
