@@ -12,13 +12,15 @@ internal static class DownloadJobStateSql
         DownloadJobState.Queued,
         DownloadJobState.MetadataPending,
         DownloadJobState.MetadataResolved,
+        DownloadJobState.DownloadQueued,
         DownloadJobState.DownloadPending,
         DownloadJobState.DownloadedTemp,
         DownloadJobState.UploadPending,
         DownloadJobState.Uploaded,
         DownloadJobState.CommitPending,
         DownloadJobState.Compensating,
-        DownloadJobState.FailedTransient
+        DownloadJobState.FailedTransient,
+        DownloadJobState.Cancelling
     }.Select(ToPostgresName).ToArray();
 
     public static void AddActiveStatesParameter(NpgsqlCommand command)

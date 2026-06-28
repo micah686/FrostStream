@@ -53,11 +53,21 @@ public class DownloadArchiveFlow(
         request = await Capture(() => ResolvePresetAsync(request));
 
         await Capture(() => Update(jobId, DownloadJobState.Queued));
+        if (await Capture(() => IsCancelling(jobId)))
+        {
+            await Capture(() => Cancel(jobId, "Download cancelled by request."));
+            return;
+        }
 
         // STEP 1: metadata ----------------------------------------------------
         await Capture(() => Update(jobId, DownloadJobState.MetadataPending));
         var metadata = await RunMetadataStep(request, jobInstance, storageKey, workerTag);
         if (metadata is null) return;
+        if (await Capture(() => IsCancelling(jobId)))
+        {
+            await Capture(() => Cancel(jobId, "Download cancelled by request."));
+            return;
+        }
 
         // STEP 2: dedupe by source -------------------------------------------
         var sourceCheck = await Capture(() => RepoCall(r =>
@@ -73,9 +83,21 @@ public class DownloadArchiveFlow(
         }
 
         // STEP 2.5: priority gate — wait for download slot --------------------
+        if (await Capture(() => IsCancelling(jobId)))
+        {
+            await Capture(() => Cancel(jobId, "Download cancelled by request."));
+            return;
+        }
         await Capture(() => Update(jobId, DownloadJobState.DownloadQueued));
         await Capture(() => slotCoordinator.EnqueueAsync(jobId, request.Priority, workerTag, clock.GetCurrentInstant()));
-        await Message<DownloadSlotGranted>();
+        var slotResult = await Messages.FirstOfTypes<DownloadSlotGranted, DownloadCancelRequested>();
+        if (slotResult.HasSecond || await Capture(() => IsCancelling(jobId)))
+        {
+            if (slotResult.HasFirst)
+                await Capture(() => slotCoordinator.ReleaseSlotAsync(workerTag));
+            await Capture(() => Cancel(jobId, slotResult.HasSecond ? slotResult.Second.Reason : null));
+            return;
+        }
 
         // STEP 3: download ----------------------------------------------------
         await Capture(() => Update(jobId, DownloadJobState.DownloadPending));
@@ -365,6 +387,13 @@ public class DownloadArchiveFlow(
                     result.First.TempFileRef,
                     result.First.FileSizeBytes,
                     result.First.ContentHashXxh128);
+                if (await Capture(() => IsCancelling(request.JobId)))
+                {
+                    await Capture(() => DispatchTempFileCleanup(request, result.First.TempFileRef, jobInstance, attempt, workerTag));
+                    await Message<TempFileDeleted>();
+                    await Capture(() => Cancel(request.JobId, "Download cancelled by request."));
+                    return null;
+                }
                 return result.First;
             }
 
@@ -384,7 +413,10 @@ public class DownloadArchiveFlow(
 
             if (TerminalFailureForStep(failure, attempt) is { } terminal)
             {
-                await Capture(() => Fail(request.JobId, failure, terminal));
+                if (terminal == DownloadJobState.Cancelled)
+                    await Capture(() => Cancel(request.JobId, failure.ErrorMessage));
+                else
+                    await Capture(() => Fail(request.JobId, failure, terminal));
                 return null;
             }
         }
@@ -731,7 +763,9 @@ public class DownloadArchiveFlow(
             _ => FailureKind.Unknown
         };
 
-        if (kind is FailureKind.Permanent or FailureKind.Cancelled)
+        if (kind is FailureKind.Cancelled)
+            return DownloadJobState.Cancelled;
+        if (kind is FailureKind.Permanent)
             return DownloadJobState.FailedPermanent;
         if (attempt >= MaxAttempts)
             return DownloadJobState.FailedTransient;
@@ -807,6 +841,18 @@ public class DownloadArchiveFlow(
             code,
             message);
         await RepoCall(r => r.RecordTerminalFailureAsync(jobId, kind, code, message, terminalState, lastPayloadJson: null));
+    }
+
+    private async Task Cancel(Guid jobId, string? message)
+    {
+        logger.LogInformation("Download flow cancelled for JobId {JobId}: {Message}", jobId, message);
+        await RepoCall(r => r.MarkCancelledAsync(jobId, message));
+    }
+
+    private async Task<bool> IsCancelling(Guid jobId)
+    {
+        var (state, _) = await RepoCall(r => r.GetJobStateAndStorageKeyAsync(jobId));
+        return state == DownloadJobState.Cancelling || state == DownloadJobState.Cancelled;
     }
 
     private async Task RunMetadataWriteStep(

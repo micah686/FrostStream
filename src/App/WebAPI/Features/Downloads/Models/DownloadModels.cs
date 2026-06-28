@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using Shared.Messaging;
 using WebAPI.Features.Downloads.Controllers;
 using WebAPI.Features.OptionPresets.Controllers;
 
@@ -98,5 +99,14 @@ public sealed class UpdatePriorityRequest
     [Range(0, 100)]
     public required int Priority { get; init; }
 }
+
+/// <summary>Body for <c>POST /api/downloads/{jobId}/cancel</c>.</summary>
+public sealed class CancelDownloadApiRequest
+{
+    [StringLength(512)]
+    public string? Reason { get; init; }
+}
+
+public sealed record CancelDownloadApiResponse(DownloadJobState State);
 
 public sealed record DownloadRequestResponse(Guid JobId, Guid CorrelationId);

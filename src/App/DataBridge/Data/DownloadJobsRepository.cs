@@ -49,6 +49,9 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
     public async Task UpdateStateAsync(Guid jobId, DownloadJobState state, CancellationToken ct = default)
     {
         var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
+        if ((job.State is DownloadJobState.Cancelling or DownloadJobState.Cancelled) && state != DownloadJobState.Cancelled)
+            return;
+
         job.State = state;
         job.UpdatedAt = clock.GetCurrentInstant();
         if (state is DownloadJobState.Completed or DownloadJobState.AlreadyDownloaded)
@@ -310,6 +313,87 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
         return row is null ? (null, null) : (row.State, row.StorageKey);
     }
 
+    public async Task<CancelDownloadDecision> TryBeginCancellationAsync(
+        Guid jobId,
+        string? requestedBy,
+        string? reason,
+        CancellationToken ct = default)
+    {
+        var job = await db.DownloadJobs.FirstOrDefaultAsync(x => x.JobId == jobId, ct);
+
+        if (job is null)
+            return CancelDownloadDecision.NotFound();
+
+        var workerTag = await db.StorageConfigs
+            .Where(x => x.Key == job.StorageKey)
+            .Select(x => x.WorkerTag)
+            .FirstOrDefaultAsync(ct);
+
+        if (job.State is DownloadJobState.Cancelled)
+            return CancelDownloadDecision.Rejected(job.State, "Job is already cancelled.", alreadyTerminal: true);
+
+        if (job.State is DownloadJobState.Completed or DownloadJobState.AlreadyDownloaded)
+            return CancelDownloadDecision.Rejected(job.State, "Job is already complete.", alreadyTerminal: true);
+
+        if (job.State is DownloadJobState.FailedPermanent or DownloadJobState.FailedTransient or DownloadJobState.DeadLettered)
+            return CancelDownloadDecision.Rejected(job.State, "Job has already failed.", alreadyTerminal: true);
+
+        if (job.State is DownloadJobState.UploadPending or DownloadJobState.Uploaded or DownloadJobState.CommitPending or DownloadJobState.Compensating or DownloadJobState.DownloadedTemp)
+        {
+            return CancelDownloadDecision.Rejected(
+                job.State,
+                $"Job cannot be cancelled cleanly from state {job.State}.");
+        }
+
+        if (job.State is not (DownloadJobState.Queued or DownloadJobState.MetadataPending or DownloadJobState.MetadataResolved or DownloadJobState.DownloadQueued or DownloadJobState.DownloadPending or DownloadJobState.Cancelling))
+        {
+            return CancelDownloadDecision.Rejected(
+                job.State,
+                $"Job cannot be cancelled from state {job.State}.");
+        }
+
+        var previousState = job.State;
+        if (job.State != DownloadJobState.Cancelling)
+        {
+            job.State = DownloadJobState.Cancelling;
+            job.FailureKind = FailureKind.Cancelled;
+            job.FailureCode = "cancel_requested";
+            job.FailureMessage = BuildCancellationMessage(requestedBy, reason);
+            job.UpdatedAt = clock.GetCurrentInstant();
+            await db.SaveChangesAsync(ct);
+        }
+
+        return CancelDownloadDecision.AcceptedFor(job.CorrelationId, job.State, previousState, workerTag);
+    }
+
+    public async Task MarkCancelledAsync(Guid jobId, string? message, CancellationToken ct = default)
+    {
+        var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
+        job.State = DownloadJobState.Cancelled;
+        job.FailureKind = FailureKind.Cancelled;
+        job.FailureCode = "cancel_requested";
+        job.FailureMessage = string.IsNullOrWhiteSpace(message) ? "Download cancelled by request." : message;
+        job.UpdatedAt = clock.GetCurrentInstant();
+        job.CompletedAt = job.UpdatedAt;
+
+        var alreadyTerminal = await db.FailedDownloadJobs.AnyAsync(x => x.JobId == jobId, ct);
+        if (!alreadyTerminal)
+        {
+            db.FailedDownloadJobs.Add(new FailedDownloadJobEntity
+            {
+                JobId = jobId,
+                CorrelationId = job.CorrelationId,
+                FailedState = DownloadJobState.Cancelled,
+                FailureKind = FailureKind.Cancelled,
+                FailureCode = job.FailureCode,
+                FailureMessage = job.FailureMessage,
+                LastPayloadJson = null
+            });
+        }
+
+        await db.SaveChangesAsync(ct);
+    }
+
     public async Task<IReadOnlyList<DownloadQueuedEntry>> GetDownloadQueuedJobsAsync(CancellationToken ct = default)
     {
         var rows = await db.DownloadJobs
@@ -416,4 +500,18 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
         => string.IsNullOrWhiteSpace(value)
             ? null
             : value.Trim();
+
+    private static string BuildCancellationMessage(string? requestedBy, string? reason)
+    {
+        var trimmedReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+        var trimmedRequester = string.IsNullOrWhiteSpace(requestedBy) ? null : requestedBy.Trim();
+
+        return (trimmedRequester, trimmedReason) switch
+        {
+            ({ } requester, { } why) => $"Download cancelled by {requester}: {why}",
+            ({ } requester, null) => $"Download cancelled by {requester}.",
+            (null, { } why) => $"Download cancelled by request: {why}",
+            _ => "Download cancelled by request."
+        };
+    }
 }

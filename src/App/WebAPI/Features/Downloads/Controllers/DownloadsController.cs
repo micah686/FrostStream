@@ -141,6 +141,68 @@ public class DownloadsController(
         return NoContent();
     }
 
+    /// <summary>
+    /// Requests clean cancellation of a queued or actively downloading job. Cancellation is
+    /// accepted asynchronously; the job moves through <c>Cancelling</c> before terminal
+    /// <c>Cancelled</c> once the flow has released any held resources.
+    /// </summary>
+    [HttpPost("{jobId:guid}/cancel")]
+    [Endpoint(EndpointIds.DownloadsCancel)]
+    [EndpointSummary("Cancel a download job")]
+    [EndpointDescription("Requests clean cancellation of a queued or active download job. Queued jobs are removed from the scheduler; active yt-dlp processes are asked to stop and any worker-local temp files are cleaned.")]
+    public async Task<ActionResult> Cancel(
+        [FromRoute] Guid jobId,
+        [FromBody] CancelDownloadApiRequest? request,
+        CancellationToken cancellationToken)
+    {
+        CancelDownloadResponse? response;
+        try
+        {
+            response = await messageBus.RequestAsync<CancelDownloadRequest, CancelDownloadResponse>(
+                DownloadSubjects.CancelDownloadRequest,
+                new CancelDownloadRequest
+                {
+                    JobId = jobId,
+                    RequestedBy = AuthConstants.FindSubject(User),
+                    Reason = request?.Reason
+                },
+                AdminRequestTimeout,
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed requesting cancellation for JobId {JobId}", jobId);
+            return StatusCode(StatusCodes.Status502BadGateway, new ProblemDetails
+            {
+                Title = "Failed to cancel download",
+                Detail = "Could not reach the messaging bus.",
+                Status = StatusCodes.Status502BadGateway
+            });
+        }
+
+        if (response is null)
+        {
+            return StatusCode(StatusCodes.Status502BadGateway, new ProblemDetails
+            {
+                Title = "Failed to cancel download",
+                Detail = "No response from DataBridge.",
+                Status = StatusCodes.Status502BadGateway
+            });
+        }
+
+        if (response.Success)
+            return Accepted(new CancelDownloadApiResponse(response.State ?? DownloadJobState.Cancelling));
+
+        if (response.Error == "Job not found.")
+            return NotFound(new ProblemDetails { Title = "Job not found.", Status = StatusCodes.Status404NotFound });
+
+        return Conflict(new ProblemDetails
+        {
+            Title = response.Error ?? "Download cannot be cancelled.",
+            Status = StatusCodes.Status409Conflict
+        });
+    }
+
     private async Task<ActionResult<DownloadRequestResponse>> PublishRequestAsync(
         string sourceUrl,
         string? storageKey,

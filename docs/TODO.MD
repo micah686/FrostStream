@@ -17,6 +17,8 @@
 
 [X]backup and restore (should be postgres+openbao+...)
 
+[X]cancel a download (nicely)
+
 ## TODO
 
 upload metadata
@@ -28,8 +30,6 @@ live_chat (complex, need to integrate with clickhousedb)
 
 Audio download
 Podcast mode to serve channel as mp3
-Random and repeat controls (#108, #220)
-Auto play or play next link (#226)
 Multi language support
 Show total video downloaded vs total videos available in channel
 Download or Ignore videos by keyword (#163)
@@ -46,7 +46,6 @@ Download video comments [2022-11-30]
 Show similar videos on video page [2022-11-30]
 Implement complete offline media file import from json file [2022-08-20]
 Filter and query in search form, search by url query [2022-07-23]
-Make items in grid row configurable to use more of the screen [2022-06-04]
 Add passing browser cookies to yt-dlp [2022-05-08]
 Add SponsorBlock integration [2022-04-16]
 Implement per channel settings [2022-03-26]
@@ -59,8 +58,19 @@ Access control [2021-11-01]
 Delete videos and channel [2021-10-16] (global vs a specific storage key?)
 Add thumbnail embed option [2021-10-16]
 Create a github wiki for user documentation [2021-10-03]
-Grid and list view for both channel and video list pages [2021-10-03]
 Un-ignore videos [2021-10-03]
 Dynamic download queue [2021-09-26]
 Backup and restore [2021-09-22]
 Scan your file system to index already downloaded videos [2021-09-14]
+
+
+
+
+## Frontend Tasks
+
+Grid and list view for both channel and video list pages [2021-10-03]
+
+Make items in grid row configurable to use more of the screen [2022-06-04]
+
+Random and repeat controls (#108, #220)
+Auto play or play next link (#226)

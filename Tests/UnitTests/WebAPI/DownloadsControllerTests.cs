@@ -179,14 +179,49 @@ public sealed class DownloadsControllerTests
             default);
     }
 
-    private static DownloadsController CreateController(IJetStreamPublisher publisher)
+    [Test]
+    public async Task Cancel_Requests_Download_Cancellation()
+    {
+        var publisher = Substitute.For<IJetStreamPublisher>();
+        var messageBus = Substitute.For<IMessageBus>();
+        var jobId = Guid.NewGuid();
+        messageBus.RequestAsync<CancelDownloadRequest, CancelDownloadResponse>(
+                DownloadSubjects.CancelDownloadRequest,
+                Arg.Any<CancelDownloadRequest>(),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new CancelDownloadResponse
+            {
+                Success = true,
+                State = DownloadJobState.Cancelling
+            });
+        var controller = CreateController(publisher, messageBus);
+
+        var result = await controller.Cancel(
+            jobId,
+            new CancelDownloadApiRequest { Reason = "clicked stop" },
+            CancellationToken.None);
+
+        var accepted = result.ShouldBeOfType<AcceptedResult>();
+        accepted.Value.ShouldBeOfType<CancelDownloadApiResponse>().State.ShouldBe(DownloadJobState.Cancelling);
+        await messageBus.Received(1).RequestAsync<CancelDownloadRequest, CancelDownloadResponse>(
+            DownloadSubjects.CancelDownloadRequest,
+            Arg.Is<CancelDownloadRequest>(x =>
+                x.JobId == jobId &&
+                x.RequestedBy == "unit_test_user" &&
+                x.Reason == "clicked stop"),
+            Arg.Any<TimeSpan>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    private static DownloadsController CreateController(IJetStreamPublisher publisher, IMessageBus? messageBus = null)
     {
         var clock = Substitute.For<IClock>();
         clock.GetCurrentInstant().Returns(Now);
 
         var controller = new DownloadsController(
             publisher,
-            Substitute.For<IMessageBus>(),
+            messageBus ?? Substitute.For<IMessageBus>(),
             clock,
             Substitute.For<ILogger<DownloadsController>>());
 

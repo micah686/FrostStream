@@ -108,7 +108,11 @@ public enum DownloadJobState
     AlreadyDownloaded = 13,
     /// <summary>Waiting for a download slot from the <c>DownloadSlotCoordinator</c>; will proceed once
     /// a slot is available in priority order.</summary>
-    DownloadQueued = 14
+    DownloadQueued = 14,
+    /// <summary>A user requested cancellation; the flow is stopping any in-flight work and cleanup.</summary>
+    Cancelling = 15,
+    /// <summary>End state — the user cancelled the job before it completed.</summary>
+    Cancelled = 16
 }
 
 /// <summary>
@@ -685,6 +689,55 @@ public sealed record UpdateDownloadPriorityResponse
     public bool Success { get; init; }
     /// <summary>When false, explanation of why the update was not applied.</summary>
     public string? Error { get; init; }
+}
+
+/// <summary>Request to cancel a download job (NATS Core request/reply).</summary>
+public sealed record CancelDownloadRequest
+{
+    public required Guid JobId { get; init; }
+    public string? RequestedBy { get; init; }
+    public string? Reason { get; init; }
+}
+
+/// <summary>Response to <see cref="CancelDownloadRequest"/>.</summary>
+public sealed record CancelDownloadResponse
+{
+    public bool Success { get; init; }
+    /// <summary>Current or final state after the cancellation request was handled.</summary>
+    public DownloadJobState? State { get; init; }
+    /// <summary>When false, explanation of why cancellation was not applied.</summary>
+    public string? Error { get; init; }
+}
+
+/// <summary>
+/// Message delivered directly into the Cleipnir flow when a caller requests cancellation.
+/// The flow consumes this while waiting for a download slot; active downloads are cancelled
+/// by a separate Worker broadcast and report back through <see cref="DownloadFailed"/>.
+/// </summary>
+public sealed record DownloadCancelRequested : IFlowMessage
+{
+    public required Guid JobId { get; init; }
+    public required Guid CorrelationId { get; init; }
+    public Guid? CausationId { get; init; }
+    public required Guid MessageId { get; init; }
+    public required string OperationKey { get; init; }
+    public required Instant OccurredAt { get; init; }
+    public int Attempt { get; init; } = 1;
+
+    public string? RequestedBy { get; init; }
+    public string? Reason { get; init; }
+}
+
+/// <summary>
+/// Core NATS broadcast to Workers asking the instance that currently owns <see cref="JobId"/>
+/// to cancel its local yt-dlp process. Workers without that active job ignore the message.
+/// </summary>
+public sealed record CancelActiveDownloadCommand
+{
+    public required Guid JobId { get; init; }
+    public required Guid MessageId { get; init; }
+    public string? RequestedBy { get; init; }
+    public string? Reason { get; init; }
 }
 
 /// <summary>

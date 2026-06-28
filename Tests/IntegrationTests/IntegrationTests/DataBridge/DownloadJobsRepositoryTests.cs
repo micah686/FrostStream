@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using NodaTime;
 using Npgsql;
+using Shared.Database;
 using Shared.Messaging;
 using Shared.Storage;
 using Shouldly;
@@ -122,6 +123,59 @@ public sealed class DownloadJobsRepositoryTests
         (await Fixture.CountAsync("processed_messages")).ShouldBe(0);
     }
 
+    [Test]
+    public async Task TryBeginCancellationAsync_Marks_Queued_Job_Cancelling()
+    {
+        var jobId = Guid.NewGuid();
+        await using var db = Fixture.CreateDb();
+        db.DownloadJobs.Add(Job(jobId, DownloadJobState.DownloadQueued));
+        await db.SaveChangesAsync();
+
+        var repository = new DownloadJobsRepository(db, SystemClock.Instance);
+
+        var decision = await repository.TryBeginCancellationAsync(jobId, "tester", "stop requested");
+
+        decision.Accepted.ShouldBeTrue();
+        decision.State.ShouldBe(DownloadJobState.Cancelling);
+        decision.PreviousState.ShouldBe(DownloadJobState.DownloadQueued);
+        var job = await db.DownloadJobs.SingleAsync(x => x.JobId == jobId);
+        job.State.ShouldBe(DownloadJobState.Cancelling);
+        job.FailureKind.ShouldBe(FailureKind.Cancelled);
+        job.FailureCode.ShouldBe("cancel_requested");
+    }
+
+    [Test]
+    public async Task MarkCancelledAsync_Writes_Terminal_State_And_Failed_Row()
+    {
+        var jobId = Guid.NewGuid();
+        await using var db = Fixture.CreateDb();
+        db.DownloadJobs.Add(Job(jobId, DownloadJobState.Cancelling));
+        await db.SaveChangesAsync();
+
+        var repository = new DownloadJobsRepository(db, SystemClock.Instance);
+
+        await repository.MarkCancelledAsync(jobId, "cancelled cleanly");
+
+        var job = await db.DownloadJobs.SingleAsync(x => x.JobId == jobId);
+        job.State.ShouldBe(DownloadJobState.Cancelled);
+        job.CompletedAt.ShouldNotBeNull();
+        var failed = await db.FailedDownloadJobs.SingleAsync(x => x.JobId == jobId);
+        failed.FailedState.ShouldBe(DownloadJobState.Cancelled);
+        failed.FailureKind.ShouldBe(FailureKind.Cancelled);
+        failed.FailureMessage.ShouldBe("cancelled cleanly");
+    }
+
+    private static DownloadJobEntity Job(Guid jobId, DownloadJobState state)
+        => new()
+        {
+            JobId = jobId,
+            CorrelationId = Guid.NewGuid(),
+            State = state,
+            SourceUrl = "https://example.test/video",
+            StorageKey = "default",
+            IngestOrigin = IngestOrigin.Download
+        };
+
     private sealed class PostgresFixture : IAsyncDisposable
     {
         private readonly IContainer _postgresContainer = new ContainerBuilder("postgres:17")
@@ -183,6 +237,7 @@ public sealed class DownloadJobsRepositoryTests
                         .MapEnum<GoogleCloudStorageCredentialMode>("google_cloud_storage_credential_mode", "storage")
                         .MapEnum<DownloadJobState>("download_job_state", "downloads")
                         .MapEnum<FailureKind>("failure_kind", "downloads")
+                        .MapEnum<IngestOrigin>("ingest_origin", "media")
                         .MapEnum<PlaylistState>("playlist_state", "playlists"))
                 .UseSnakeCaseNamingConvention();
 

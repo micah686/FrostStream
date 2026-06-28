@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Collections.Concurrent;
 using System.IO.Hashing;
 using System.Globalization;
 using FluentStorage.Blobs;
@@ -36,6 +37,7 @@ namespace Worker.Services;
 public sealed class DownloadCommandsConsumerService(
     IJetStreamConsumer consumer,
     IJetStreamPublisher publisher,
+    IMessageBus messageBus,
     ITopologyManager topologyManager,
     IYtDlpClient ytDlp,
     IBlobStorageProvider blobStorageProvider,
@@ -47,11 +49,19 @@ public sealed class DownloadCommandsConsumerService(
     private const string MediaFileBase = "media";
     private static readonly StreamName Stream = StreamName.From(DownloadTopology.StreamNameValue);
     private static readonly TimeSpan StorageProbeTimeout = TimeSpan.FromSeconds(10);
+    private readonly ConcurrentDictionary<Guid, CancellationTokenSource> _activeDownloadCancellations = new();
+    private ISubscription? _cancelSubscription;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         // Remove any cookie scratch dirs left behind by a previous crash before serving traffic.
         SweepCookieScratchRoot();
+
+        _cancelSubscription = await messageBus.SubscribeAsync<CancelActiveDownloadCommand>(
+            DownloadSubjects.CancelActiveDownloadCommand,
+            HandleCancelActiveDownloadAsync,
+            queueGroup: null,
+            cancellationToken: stoppingToken);
 
         var options = workerOptions.Value;
         var tags = options.Tags;
@@ -99,6 +109,21 @@ public sealed class DownloadCommandsConsumerService(
             options.AcceptsUntaggedJobs);
 
         await Task.WhenAll(consumerTasks);
+    }
+
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        if (_cancelSubscription is not null)
+        {
+            await _cancelSubscription.StopAsync(cancellationToken);
+            await _cancelSubscription.DisposeAsync();
+            _cancelSubscription = null;
+        }
+
+        foreach (var cancellation in _activeDownloadCancellations.Values)
+            await cancellation.CancelAsync();
+
+        await base.StopAsync(cancellationToken);
     }
 
     private Task Consume<TCommand>(
@@ -237,9 +262,13 @@ public sealed class DownloadCommandsConsumerService(
         var cookieScratch = GetCookieScratchDirectory(cmd.JobId);
         string? tempFileRef = null;
         DownloadProgressReporter? progress = null;
+        using var downloadCts = new CancellationTokenSource();
 
         try
         {
+            if (!_activeDownloadCancellations.TryAdd(cmd.JobId, downloadCts))
+                throw new InvalidOperationException($"Download job {cmd.JobId} is already active on this worker.");
+
             Directory.CreateDirectory(tempDirectory);
 
             logger.LogInformation(
@@ -258,7 +287,7 @@ public sealed class DownloadCommandsConsumerService(
                 logger);
 
             progress = new DownloadProgressReporter(cmd, publisher, clock, logger);
-            await DispatchYtDlpAsync(cmd, tempDirectory, cookies.FilePath, progress);
+            await DispatchYtDlpAsync(cmd, tempDirectory, cookies.FilePath, progress, downloadCts.Token);
             await progress.FlushAsync();
 
             tempFileRef = FindDownloadedMediaFile(tempDirectory)
@@ -318,6 +347,21 @@ public sealed class DownloadCommandsConsumerService(
             await PublishDownloadFailedAsync(cmd, ex, YtDlpFailureDetails.ClassifyYtDlpFailure(ex), tempFileRef ?? FindDownloadedMediaFile(tempDirectory));
             await context.AckAsync();
         }
+        catch (OperationCanceledException ex) when (downloadCts.IsCancellationRequested)
+        {
+            if (progress is not null)
+                await progress.FlushAsync();
+
+            logger.LogInformation(ex,
+                "DownloadVideo cancelled for JobId {JobId} URL {SourceUrl}",
+                cmd.JobId, cmd.SourceUrl);
+            await PublishDownloadFailedAsync(
+                cmd,
+                new OperationCanceledException("Download cancelled by request.", ex, downloadCts.Token),
+                FailureKind.Cancelled,
+                tempFileRef ?? FindDownloadedMediaFile(tempDirectory) ?? tempDirectory);
+            await context.AckAsync();
+        }
         catch (Exception ex)
         {
             if (progress is not null)
@@ -329,8 +373,29 @@ public sealed class DownloadCommandsConsumerService(
         }
         finally
         {
+            _activeDownloadCancellations.TryRemove(cmd.JobId, out _);
             DeleteCookieScratch(cookieScratch);
         }
+    }
+
+    private Task HandleCancelActiveDownloadAsync(IMessageContext<CancelActiveDownloadCommand> context)
+    {
+        var cmd = context.Message;
+        if (_activeDownloadCancellations.TryGetValue(cmd.JobId, out var cancellation))
+        {
+            logger.LogInformation(
+                "Cancelling active download for JobId {JobId}. RequestedBy {RequestedBy} Reason {Reason}",
+                cmd.JobId,
+                cmd.RequestedBy,
+                cmd.Reason);
+            cancellation.Cancel();
+        }
+        else
+        {
+            logger.LogDebug("Ignoring cancel request for JobId {JobId}; no active download on this worker.", cmd.JobId);
+        }
+
+        return Task.CompletedTask;
     }
 
     private async Task HandleUploadObjectAsync(IJsMessageContext<UploadObjectCommand> context)
@@ -701,7 +766,8 @@ public sealed class DownloadCommandsConsumerService(
         DownloadVideoCommand cmd,
         string tempDirectory,
         string? cookieFilePath,
-        DownloadProgressReporter progress)
+        DownloadProgressReporter progress,
+        CancellationToken cancellationToken)
     {
         var ytDlpOptions = ApplyOperationalDefaults(YtDlpOptionsMerger.Merge(
             cmd.YtDlpOptions,
@@ -724,7 +790,8 @@ public sealed class DownloadCommandsConsumerService(
                     AudioFormat = cmd.AudioFormat ?? AudioConversionFormat.M4a,
                     YtDlp = ytDlpOptions
                 },
-                progress);
+                progress,
+                cancellationToken);
         }
 
         return ytDlp.DownloadAsync(
@@ -738,7 +805,8 @@ public sealed class DownloadCommandsConsumerService(
                 RestrictFilenames = true,
                 YtDlp = ytDlpOptions
             },
-            progress);
+            progress,
+            cancellationToken);
     }
 
     /// <summary>

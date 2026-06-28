@@ -83,6 +83,12 @@ public interface IDownloadJobsRepository
     /// <summary>Returns the current state and storage key for a job, or (null, null) when not found.</summary>
     Task<(DownloadJobState? State, string? StorageKey)> GetJobStateAndStorageKeyAsync(Guid jobId, CancellationToken ct = default);
 
+    /// <summary>Attempts to move a job into <see cref="DownloadJobState.Cancelling"/>.</summary>
+    Task<CancelDownloadDecision> TryBeginCancellationAsync(Guid jobId, string? requestedBy, string? reason, CancellationToken ct = default);
+
+    /// <summary>Marks a cancellation request as the terminal user-visible job result.</summary>
+    Task MarkCancelledAsync(Guid jobId, string? message, CancellationToken ct = default);
+
     /// <summary>Returns all jobs in <see cref="DownloadJobState.DownloadQueued"/> ordered by priority then creation time.</summary>
     Task<IReadOnlyList<DownloadQueuedEntry>> GetDownloadQueuedJobsAsync(CancellationToken ct = default);
 
@@ -157,3 +163,27 @@ public sealed record VersionReservation(
 
 /// <summary>A job waiting for a download slot, as returned by <see cref="IDownloadJobsRepository.GetDownloadQueuedJobsAsync"/>.</summary>
 public sealed record DownloadQueuedEntry(Guid JobId, int Priority, Instant CreatedAt, string? StorageKey);
+
+public sealed record CancelDownloadDecision(
+    bool Accepted,
+    bool Found,
+    bool AlreadyTerminal,
+    DownloadJobState? State,
+    DownloadJobState? PreviousState,
+    Guid? CorrelationId,
+    string? WorkerTag,
+    string? Error)
+{
+    public static CancelDownloadDecision NotFound()
+        => new(false, false, false, null, null, null, null, "Job not found.");
+
+    public static CancelDownloadDecision Rejected(DownloadJobState state, string error, bool alreadyTerminal = false)
+        => new(false, true, alreadyTerminal, state, state, null, null, error);
+
+    public static CancelDownloadDecision AcceptedFor(
+        Guid correlationId,
+        DownloadJobState state,
+        DownloadJobState previousState,
+        string? workerTag)
+        => new(true, true, false, state, previousState, correlationId, workerTag, null);
+}

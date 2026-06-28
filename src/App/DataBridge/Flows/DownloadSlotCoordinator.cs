@@ -146,6 +146,37 @@ public sealed class DownloadSlotCoordinator(
             await TryGrantNextAsync(tag);
     }
 
+    /// <summary>
+    /// Removes a waiting job from the priority queue. No-op if the job has already been granted
+    /// a slot or is not queued for this tag.
+    /// </summary>
+    public async Task<bool> CancelQueuedAsync(Guid jobId, string? workerTag)
+    {
+        var tag = NormalizeTag(workerTag);
+        await _lock.WaitAsync();
+        try
+        {
+            if (!_waiting.TryGetValue(tag, out var set))
+                return false;
+
+            var existing = set.FirstOrDefault(e => e.JobId == jobId);
+            if (existing == default)
+                return false;
+
+            set.Remove(existing);
+            logger.LogDebug(
+                "DownloadSlotCoordinator removed cancelled JobId {JobId} from Tag '{Tag}'. Queue depth: {Depth}",
+                jobId,
+                tag,
+                set.Count);
+            return true;
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
     private async Task TryGrantNextAsync(string tag)
     {
         SlotEntry? toGrant = null;
