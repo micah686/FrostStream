@@ -23,9 +23,9 @@ public class DownloadsController(
 {
     private static readonly TimeSpan AdminRequestTimeout = TimeSpan.FromSeconds(10);
     /// <summary>
-    /// Submits a simple video download. No yt-dlp options, no presets, no audio
-    /// toggles — just URL, storage, and optional cookie. Use
-    /// <see cref="SubmitWithPreset"/> for anything more elaborate.
+    /// Submits a simple video download. Supports only the small set of request fields exposed here,
+    /// including optional SponsorBlock categories. Use <see cref="DownloadWithPreset"/> for full yt-dlp
+    /// option presets.
     /// </summary>
     [HttpPost]
     [Endpoint(EndpointIds.DownloadsCreate)]
@@ -41,7 +41,7 @@ public class DownloadsController(
             tags: request.Tags,
             mediaKind: MediaKind.Video,
             audioFormat: null,
-            ytDlpOptions: null,
+            ytDlpOptions: BuildYtDlpOptions(request.SponsorBlock),
             presetKey: null,
             cookieProfileKey: request.CookieProfileKey,
             priority: request.Priority,
@@ -65,7 +65,7 @@ public class DownloadsController(
             tags: request.Tags,
             mediaKind: MediaKind.Audio,
             audioFormat: AudioConversionFormat.Mp3,
-            ytDlpOptions: null,
+            ytDlpOptions: BuildYtDlpOptions(request.SponsorBlock),
             presetKey: null,
             cookieProfileKey: request.CookieProfileKey,
             priority: request.Priority,
@@ -294,4 +294,39 @@ public class DownloadsController(
 
         return Accepted(new DownloadRequestResponse(jobId, correlationId));
     }
+
+    private static YtDlpOptions? BuildYtDlpOptions(SponsorBlockRequest? sponsorBlock)
+    {
+        if (sponsorBlock is null)
+            return null;
+
+        var markCategories = Normalize(sponsorBlock.MarkCategories);
+        var removeCategories = Normalize(sponsorBlock.RemoveCategories);
+        var chapterTitleTemplate = Normalize(sponsorBlock.ChapterTitleTemplate);
+        var apiUrl = Normalize(sponsorBlock.ApiUrl);
+
+        if (!sponsorBlock.Disable &&
+            markCategories is null &&
+            removeCategories is null &&
+            chapterTitleTemplate is null &&
+            apiUrl is null)
+        {
+            return null;
+        }
+
+        return new YtDlpOptions
+        {
+            SponsorBlock = new YtDlpSponsorBlockOptions
+            {
+                SponsorblockMark = markCategories,
+                SponsorblockRemove = removeCategories,
+                SponsorblockChapterTitle = chapterTitleTemplate,
+                SponsorblockApi = apiUrl,
+                NoSponsorblock = sponsorBlock.Disable
+            }
+        };
+    }
+
+    private static string? Normalize(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

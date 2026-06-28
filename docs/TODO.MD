@@ -19,6 +19,12 @@
 
 [X]cancel a download (nicely)
 
+[X] User created playlists [2024-04-10]
+
+[X]Create playlists [2021-11-27]
+
+[!]Per user videos/channel/playlists (playlists only implemented)
+
 ## TODO
 
 upload metadata
@@ -35,10 +41,10 @@ Multi language support
 Download or Ignore videos by keyword (#163)
 Custom searchable notes to videos, channels, playlists (#144)
 Search comments
-Per user videos/channel/playlists
+
 Search download queue [2025-07-31]
 Configure shorts, streams and video sizes per channel [2024-07-15]
-User created playlists [2024-04-10]
+
 User roles, aka read only user [2023-11-10] (hook into auth framework/APIs)
 
 Implement Apprise for notifications [2023-08-05]
@@ -52,11 +58,10 @@ Subtitle download & indexing [2022-02-13]
 Fancy advanced unified search interface [2022-01-08]
 Auto rescan and auto download on a schedule [2021-12-17]
 Optional automatic deletion of watched items after a specified time [2021-12-17]
-Create playlists [2021-11-27]
+
 Access control [2021-11-01]
 Delete videos and channel [2021-10-16] (global vs a specific storage key?)
 Add thumbnail embed option [2021-10-16]
-Create a github wiki for user documentation [2021-10-03]
 Un-ignore videos [2021-10-03]
 Dynamic download queue [2021-09-26]
 Scan your file system to index already downloaded videos [2021-09-14]

@@ -88,6 +88,65 @@ public sealed class DownloadsControllerTests
     }
 
     [Test]
+    public async Task Download_Publishes_SponsorBlock_Options()
+    {
+        var publisher = Substitute.For<IJetStreamPublisher>();
+        var controller = CreateController(publisher);
+
+        await controller.Download(new DownloadRequest
+        {
+            SourceUrl = "https://example.test/video",
+            StorageKey = "storage-a",
+            SponsorBlock = new SponsorBlockRequest
+            {
+                MarkCategories = " all,-preview ",
+                RemoveCategories = "sponsor,selfpromo",
+                ChapterTitleTemplate = "[SponsorBlock]: %(category_names)l",
+                ApiUrl = "https://sponsor.example.test"
+            }
+        }, CancellationToken.None);
+
+        await publisher.Received(1).PublishAsync(
+            DownloadSubjects.DownloadRequested,
+            Arg.Is<DownloadRequested>(x =>
+                x.SourceUrl == "https://example.test/video" &&
+                x.YtDlpOptions != null &&
+                x.YtDlpOptions.SponsorBlock.SponsorblockMark == "all,-preview" &&
+                x.YtDlpOptions.SponsorBlock.SponsorblockRemove == "sponsor,selfpromo" &&
+                x.YtDlpOptions.SponsorBlock.SponsorblockChapterTitle == "[SponsorBlock]: %(category_names)l" &&
+                x.YtDlpOptions.SponsorBlock.SponsorblockApi == "https://sponsor.example.test" &&
+                !x.YtDlpOptions.SponsorBlock.NoSponsorblock),
+            Arg.Any<string>(),
+            null,
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task DownloadAudio_Can_Disable_SponsorBlock()
+    {
+        var publisher = Substitute.For<IJetStreamPublisher>();
+        var controller = CreateController(publisher);
+
+        await controller.DownloadAudio(new DownloadAudioRequest
+        {
+            SourceUrl = "https://example.test/audio",
+            StorageKey = "storage-a",
+            SponsorBlock = new SponsorBlockRequest { Disable = true }
+        }, CancellationToken.None);
+
+        await publisher.Received(1).PublishAsync(
+            DownloadSubjects.DownloadRequested,
+            Arg.Is<DownloadRequested>(x =>
+                x.MediaKind == MediaKind.Audio &&
+                x.AudioFormat == AudioConversionFormat.Mp3 &&
+                x.YtDlpOptions != null &&
+                x.YtDlpOptions.SponsorBlock.NoSponsorblock),
+            Arg.Any<string>(),
+            null,
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task DownloadWithPreset_Publishes_Preset_Key()
     {
         var publisher = Substitute.For<IJetStreamPublisher>();

@@ -31,6 +31,8 @@ public sealed class DownloadRequest
     /// jobs are waiting for a download slot.</summary>
     [Range(0, 100)]
     public int Priority { get; init; } = 0;
+
+    public SponsorBlockRequest? SponsorBlock { get; init; }
 }
 
 /// <summary>Body for <see cref="DownloadsController.DownloadAudio"/> - simple audio download (always MP3).</summary>
@@ -58,6 +60,8 @@ public sealed class DownloadAudioRequest
     /// jobs are waiting for a download slot.</summary>
     [Range(0, 100)]
     public int Priority { get; init; } = 0;
+
+    public SponsorBlockRequest? SponsorBlock { get; init; }
 }
 
 /// <summary>Body for <see cref="DownloadsController.DownloadWithPreset"/> - download driven by a stored option preset.</summary>
@@ -108,5 +112,27 @@ public sealed class CancelDownloadApiRequest
 }
 
 public sealed record CancelDownloadApiResponse(DownloadJobState State);
+
+public sealed class SponsorBlockRequest
+{
+    /// <summary>SponsorBlock categories to mark as chapters, e.g. <c>all,-preview</c>.</summary>
+    [StringLength(255)]
+    [RegularExpression("^[a-z0-9_,-]+$")]
+    public string? MarkCategories { get; init; }
+
+    /// <summary>SponsorBlock categories to remove from the media file, e.g. <c>sponsor,selfpromo</c>.</summary>
+    [StringLength(255)]
+    [RegularExpression("^[a-z0-9_,-]+$")]
+    public string? RemoveCategories { get; init; }
+
+    [StringLength(512)]
+    public string? ChapterTitleTemplate { get; init; }
+
+    [Url]
+    [StringLength(2048)]
+    public string? ApiUrl { get; init; }
+
+    public bool Disable { get; init; }
+}
 
 public sealed record DownloadRequestResponse(Guid JobId, Guid CorrelationId);
