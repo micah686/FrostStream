@@ -5,7 +5,8 @@ namespace Shared.Messaging;
 public enum AudioRenditionFormat
 {
     Aac = 0,
-    Opus = 1
+    Opus = 1,
+    Mp3 = 2
 }
 
 public enum AudioRenditionStatus

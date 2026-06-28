@@ -127,20 +127,20 @@ public sealed class MediaStreamController(
         }
     }
 
-    [HttpGet("audio/{mediaGuid:guid}/file.{format}")]
+    [HttpGet("audio/{mediaGuid:guid}/")]
     [Endpoint(EndpointIds.MediaAudioStream)]
     [EndpointSummary("Stream a cached audio rendition")]
     [EndpointDescription("Streams a cached audio file rendition for a media item. When the requested rendition is missing, DataBridge queues MediaProcessor work and the endpoint returns 202 while the audio is prepared.")]
     public async Task<IActionResult> GetAudioFile(
         Guid mediaGuid,
-        string format,
+        [FromQuery] string format = "opus",
         [FromQuery] string? storageKey = null,
         [FromQuery] int? sourceVersion = null,
         [FromQuery] bool cacheAudio = true,
         CancellationToken cancellationToken = default)
     {
         if (!TryParseAudioFormat(format, out var audioFormat))
-            return BadRequest("Audio format must be 'aac' or 'opus'.");
+            return BadRequest("Audio format must be 'aac', 'opus', or 'mp3'.");
 
         var response = await ResolveAudioRenditionAsync(
             mediaGuid,
@@ -186,7 +186,6 @@ public sealed class MediaStreamController(
     }
 
     [HttpGet("audio/{mediaGuid:guid}/index.m3u8")]
-    [HttpGet("audio/{mediaGuid:guid}/hls/index.m3u8")]
     [Endpoint(EndpointIds.MediaAudioPlaylist)]
     [EndpointSummary("Get an audio-only HLS media playlist")]
     [EndpointDescription("Returns the stored HLS media playlist for a cached audio rendition, rewriting segment URLs through FrostStream so authenticated clients can fetch the generated HLS asset.")]
@@ -199,7 +198,7 @@ public sealed class MediaStreamController(
         CancellationToken cancellationToken = default)
     {
         if (!TryParseAudioFormat(format, out var audioFormat))
-            return BadRequest("Audio format must be 'aac' or 'opus'.");
+            return BadRequest("Audio format must be 'aac', 'opus', or 'mp3'.");
 
         var response = await ResolveAudioRenditionAsync(
             mediaGuid,
@@ -237,7 +236,7 @@ public sealed class MediaStreamController(
         CancellationToken cancellationToken = default)
     {
         if (!TryParseAudioFormat(format, out var audioFormat))
-            return BadRequest("Audio format must be 'aac' or 'opus'.");
+            return BadRequest("Audio format must be 'aac', 'opus', or 'mp3'.");
 
         if (!IsSafeHlsFileName(fileName))
             return BadRequest("Invalid HLS file name.");
@@ -287,7 +286,7 @@ public sealed class MediaStreamController(
         CancellationToken cancellationToken = default)
     {
         if (!TryParseAudioFormat(format, out var audioFormat))
-            return BadRequest("Audio format must be 'aac' or 'opus'.");
+            return BadRequest("Audio format must be 'aac', 'opus', or 'mp3'.");
 
         PlaylistGetResponseMessage? playlistResponse;
         try
@@ -419,11 +418,12 @@ public sealed class MediaStreamController(
 
     private static bool TryParseAudioFormat(string? value, out AudioRenditionFormat format)
     {
-        format = AudioRenditionFormat.Aac;
+        format = AudioRenditionFormat.Opus;
         return value?.Trim().ToLowerInvariant() switch
         {
             "aac" or "m4a" => Set(out format, AudioRenditionFormat.Aac),
             "opus" => Set(out format, AudioRenditionFormat.Opus),
+            "mp3" => Set(out format, AudioRenditionFormat.Mp3),
             _ => false
         };
     }
@@ -439,7 +439,8 @@ public sealed class MediaStreamController(
         {
             AudioRenditionFormat.Aac => "aac",
             AudioRenditionFormat.Opus => "opus",
-            _ => "aac"
+            AudioRenditionFormat.Mp3 => "mp3",
+            _ => "opus"
         };
 
     private static string AudioContentType(AudioRenditionFormat format)
@@ -447,6 +448,7 @@ public sealed class MediaStreamController(
         {
             AudioRenditionFormat.Aac => "audio/mp4",
             AudioRenditionFormat.Opus => "audio/ogg",
+            AudioRenditionFormat.Mp3 => "audio/mpeg",
             _ => "application/octet-stream"
         };
 

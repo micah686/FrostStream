@@ -177,6 +177,7 @@ public sealed class AudioRenditionRepository(DataBridgeDbContext db, IClock cloc
         {
             AudioRenditionFormat.Aac => "m4a",
             AudioRenditionFormat.Opus => "opus",
+            AudioRenditionFormat.Mp3 => "mp3",
             _ => "bin"
         };
 

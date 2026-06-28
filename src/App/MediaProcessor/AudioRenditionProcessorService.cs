@@ -23,6 +23,8 @@ public sealed class MediaProcessorOptions
 
     public string OpusBitrate { get; init; } = "96k";
 
+    public string Mp3Bitrate { get; init; } = "128k";
+
     public int HlsSegmentSeconds { get; init; } = 10;
 }
 
@@ -174,6 +176,7 @@ public sealed class AudioRenditionProcessorService(
         {
             AudioRenditionFormat.Aac => $"-hide_banner -y -i {Quote(inputPath)} -vn -c:a aac -b:a {options.Value.AacBitrate} -movflags +faststart {Quote(outputPath)}",
             AudioRenditionFormat.Opus => $"-hide_banner -y -i {Quote(inputPath)} -vn -c:a libopus -b:a {options.Value.OpusBitrate} {Quote(outputPath)}",
+            AudioRenditionFormat.Mp3 => $"-hide_banner -y -i {Quote(inputPath)} -vn -c:a libmp3lame -b:a {options.Value.Mp3Bitrate} {Quote(outputPath)}",
             _ => throw new ArgumentOutOfRangeException(nameof(format), format, "Unsupported audio rendition format.")
         };
 
@@ -210,6 +213,16 @@ public sealed class AudioRenditionProcessorService(
                 $"-hls_time {Math.Max(2, options.Value.HlsSegmentSeconds)}",
                 "-hls_playlist_type vod",
                 $"-hls_segment_filename {Quote(Path.Combine(hlsRoot, "segment_%05d.m4s"))}",
+                Quote(manifestPath)),
+            AudioRenditionFormat.Mp3 => string.Join(' ',
+                "-hide_banner -y",
+                $"-i {Quote(inputPath)}",
+                "-vn -c:a libmp3lame",
+                $"-b:a {options.Value.Mp3Bitrate}",
+                "-f hls",
+                $"-hls_time {Math.Max(2, options.Value.HlsSegmentSeconds)}",
+                "-hls_playlist_type vod",
+                $"-hls_segment_filename {Quote(Path.Combine(hlsRoot, "segment_%05d.ts"))}",
                 Quote(manifestPath)),
             _ => throw new ArgumentOutOfRangeException(nameof(format), format, "Unsupported audio rendition format.")
         };
@@ -274,6 +287,7 @@ public sealed class AudioRenditionProcessorService(
         {
             AudioRenditionFormat.Aac => "m4a",
             AudioRenditionFormat.Opus => "opus",
+            AudioRenditionFormat.Mp3 => "mp3",
             _ => "bin"
         };
 
