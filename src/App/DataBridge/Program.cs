@@ -110,6 +110,7 @@ class Program
         builder.Services.AddScoped<IMetadataReadService, MetadataReadService>();
         builder.Services.AddScoped<IMediaStreamReadService, MediaStreamReadService>();
         builder.Services.AddScoped<IPlaylistsRepository, PlaylistsRepository>();
+        builder.Services.AddScoped<IUserPlaylistsRepository, UserPlaylistsRepository>();
         builder.Services.AddScoped<IOptionPresetsRepository, OptionPresetsRepository>();
         builder.Services.AddScoped<IScheduledTasksRepository, ScheduledTasksRepository>();
         builder.Services.AddScoped<ICreatorDiscoveryRepository, CreatorDiscoveryRepository>();
@@ -153,6 +154,7 @@ class Program
         builder.Services.AddHostedService<PlaylistRequestedIngressService>();
         builder.Services.AddHostedService<PlaylistEventsConsumerService>();
         builder.Services.AddHostedService<PlaylistQueryConsumerService>();
+        builder.Services.AddHostedService<UserPlaylistConsumerService>();
         builder.Services.AddHostedService<MetadataQueryConsumerService>();
         builder.Services.AddHostedService<MediaStreamQueryConsumerService>();
 

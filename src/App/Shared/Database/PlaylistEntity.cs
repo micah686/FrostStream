@@ -79,3 +79,31 @@ public class PlaylistMetadataEntity
 
     public string? Title { get; set; }
 }
+
+public class UserPlaylistEntity
+{
+    public Guid PlaylistId { get; set; }
+
+    public required string OwnerSubject { get; set; }
+
+    public required string Name { get; set; }
+
+    public string? Description { get; set; }
+
+    public Instant CreatedAt { get; private set; } = SystemClock.Instance.GetCurrentInstant();
+
+    public Instant UpdatedAt { get; set; } = SystemClock.Instance.GetCurrentInstant();
+}
+
+public class UserPlaylistItemEntity
+{
+    public long Id { get; set; }
+
+    public Guid PlaylistId { get; set; }
+
+    public Guid MediaGuid { get; set; }
+
+    public int Position { get; set; }
+
+    public Instant AddedAt { get; private set; } = SystemClock.Instance.GetCurrentInstant();
+}

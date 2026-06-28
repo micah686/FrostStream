@@ -74,6 +74,14 @@ public static class EndpointIds
     public const string PlaylistsCreate = "playlists.create";
     public const string PlaylistsList = "playlists.list";
     public const string PlaylistsGet = "playlists.get";
+    public const string UserPlaylistsCreate = "user-playlists.create";
+    public const string UserPlaylistsList = "user-playlists.list";
+    public const string UserPlaylistsGet = "user-playlists.get";
+    public const string UserPlaylistsUpdate = "user-playlists.update";
+    public const string UserPlaylistsDelete = "user-playlists.delete";
+    public const string UserPlaylistsAddItem = "user-playlists.add-item";
+    public const string UserPlaylistsRemoveItem = "user-playlists.remove-item";
+    public const string UserPlaylistsReorderItems = "user-playlists.reorder-items";
 
     // Cookies
     public const string CookiesPut = "cookies.put";
@@ -180,6 +188,14 @@ public static class EndpointCatalog
         new(EndpointIds.PlaylistsCreate, Bundles.Playlists),
         new(EndpointIds.PlaylistsList, Bundles.Playlists),
         new(EndpointIds.PlaylistsGet, Bundles.Playlists),
+        new(EndpointIds.UserPlaylistsCreate, Bundles.Playlists),
+        new(EndpointIds.UserPlaylistsList, Bundles.Playlists),
+        new(EndpointIds.UserPlaylistsGet, Bundles.Playlists),
+        new(EndpointIds.UserPlaylistsUpdate, Bundles.Playlists),
+        new(EndpointIds.UserPlaylistsDelete, Bundles.Playlists),
+        new(EndpointIds.UserPlaylistsAddItem, Bundles.Playlists),
+        new(EndpointIds.UserPlaylistsRemoveItem, Bundles.Playlists),
+        new(EndpointIds.UserPlaylistsReorderItems, Bundles.Playlists),
 
         new(EndpointIds.CookiesPut, Bundles.Cookies),
         new(EndpointIds.CookiesList, Bundles.Cookies),

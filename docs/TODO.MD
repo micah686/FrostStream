@@ -31,7 +31,7 @@ live_chat (complex, need to integrate with clickhousedb)
 Audio download
 Podcast mode to serve channel as mp3
 Multi language support
-Show total video downloaded vs total videos available in channel
+
 Download or Ignore videos by keyword (#163)
 Custom searchable notes to videos, channels, playlists (#144)
 Search comments
@@ -40,11 +40,10 @@ Search download queue [2025-07-31]
 Configure shorts, streams and video sizes per channel [2024-07-15]
 User created playlists [2024-04-10]
 User roles, aka read only user [2023-11-10] (hook into auth framework/APIs)
-Add statistics of index [2023-09-03]
+
 Implement Apprise for notifications [2023-08-05]
 Download video comments [2022-11-30]
 Show similar videos on video page [2022-11-30]
-Implement complete offline media file import from json file [2022-08-20]
 Filter and query in search form, search by url query [2022-07-23]
 Add passing browser cookies to yt-dlp [2022-05-08]
 Add SponsorBlock integration [2022-04-16]
@@ -60,7 +59,6 @@ Add thumbnail embed option [2021-10-16]
 Create a github wiki for user documentation [2021-10-03]
 Un-ignore videos [2021-10-03]
 Dynamic download queue [2021-09-26]
-Backup and restore [2021-09-22]
 Scan your file system to index already downloaded videos [2021-09-14]
 
 
@@ -74,3 +72,11 @@ Make items in grid row configurable to use more of the screen [2022-06-04]
 
 Random and repeat controls (#108, #220)
 Auto play or play next link (#226)
+
+
+
+## Should be simple DB queries:
+
+Show total video downloaded vs total videos available in channel
+
+Add statistics of index [2023-09-03]

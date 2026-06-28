@@ -140,3 +140,56 @@ public sealed class PlaylistMetadataConfiguration : IEntityTypeConfiguration<Pla
             .OnDelete(DeleteBehavior.Cascade);
     }
 }
+
+public sealed class UserPlaylistConfiguration : IEntityTypeConfiguration<UserPlaylistEntity>
+{
+    public void Configure(EntityTypeBuilder<UserPlaylistEntity> builder)
+    {
+        builder.ToTable("user_playlists", "playlists");
+        builder.HasKey(x => x.PlaylistId);
+
+        builder.Property(x => x.PlaylistId).HasColumnName("playlist_id").ValueGeneratedNever();
+        builder.Property(x => x.OwnerSubject).HasColumnName("owner_subject").HasMaxLength(255).IsRequired();
+        builder.Property(x => x.Name).HasColumnName("name").HasMaxLength(255).IsRequired();
+        builder.Property(x => x.Description).HasColumnName("description").HasMaxLength(2048);
+        builder.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone").ValueGeneratedOnAdd().IsRequired();
+        builder.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp with time zone").IsRequired();
+
+        builder.HasIndex(x => new { x.OwnerSubject, x.CreatedAt }).HasDatabaseName("ix_user_playlists_owner_created_at");
+    }
+}
+
+public sealed class UserPlaylistItemConfiguration : IEntityTypeConfiguration<UserPlaylistItemEntity>
+{
+    public void Configure(EntityTypeBuilder<UserPlaylistItemEntity> builder)
+    {
+        builder.ToTable("user_playlist_items", "playlists");
+        builder.HasKey(x => x.Id);
+
+        builder.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
+        builder.Property(x => x.PlaylistId).HasColumnName("playlist_id").IsRequired();
+        builder.Property(x => x.MediaGuid).HasColumnName("media_guid").IsRequired();
+        builder.Property(x => x.Position).HasColumnName("position").IsRequired();
+        builder.Property(x => x.AddedAt).HasColumnName("added_at").HasColumnType("timestamp with time zone").ValueGeneratedOnAdd().IsRequired();
+
+        builder.HasIndex(x => new { x.PlaylistId, x.Position })
+            .IsUnique()
+            .HasDatabaseName("ux_user_playlist_items_playlist_position");
+
+        builder.HasIndex(x => new { x.PlaylistId, x.MediaGuid })
+            .IsUnique()
+            .HasDatabaseName("ux_user_playlist_items_playlist_media");
+
+        builder.HasOne<UserPlaylistEntity>()
+            .WithMany()
+            .HasForeignKey(x => x.PlaylistId)
+            .HasConstraintName("fk_user_playlist_items_playlist_id")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne<MediaEntity>()
+            .WithMany()
+            .HasForeignKey(x => x.MediaGuid)
+            .HasConstraintName("fk_user_playlist_items_media_guid")
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
