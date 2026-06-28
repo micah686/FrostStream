@@ -40,7 +40,8 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
             SourceUrl = request.SourceUrl,
             RequestedBy = request.RequestedBy,
             StorageKey = request.StorageKey,
-            Priority = request.Priority
+            Priority = request.Priority,
+            IngestOrigin = IngestOrigin.Download
         });
         await db.SaveChangesAsync(ct);
     }
@@ -175,7 +176,8 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
                 ContentHashXxh128 = contentHash,
                 StorageKey = storageKey,
                 StoragePath = storagePath,
-                VersionNum = versionNum
+                VersionNum = versionNum,
+                IngestOrigin = request.IngestOrigin
             });
             contentAlreadyStored = false;
         }
@@ -194,14 +196,15 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
                     SourceMediaId = sourceMediaId,
                     SourceLastModified = request.SourceLastModified,
                     MediaGuid = mediaGuid,
-                    LatestJobId = request.JobId
+                    LatestJobId = request.LinkSourceToDownloadJob ? request.JobId : null
                 });
             }
             else
             {
                 sourceRow.SourceLastModified = request.SourceLastModified ?? sourceRow.SourceLastModified;
                 sourceRow.MediaGuid = mediaGuid;
-                sourceRow.LatestJobId = request.JobId;
+                if (request.LinkSourceToDownloadJob)
+                    sourceRow.LatestJobId = request.JobId;
             }
         }
 

@@ -78,6 +78,12 @@ public sealed class DownloadEventsConsumerService(
 
         try
         {
+            if (IsLocalImportEvent(evt))
+            {
+                await context.AckAsync();
+                return;
+            }
+
             await scopeFactory.WithScopedAsync<IDownloadJobsRepository, DataBridgeDbContext>(async (jobs, db) =>
             {
                 await using var tx = await db.Database.BeginTransactionAsync();
@@ -135,4 +141,7 @@ public sealed class DownloadEventsConsumerService(
     private static Task NoStateChange<TEvent>(IDownloadJobsRepository jobs, TEvent evt, CancellationToken ct)
         where TEvent : IFlowMessage
         => Task.CompletedTask;
+
+    private static bool IsLocalImportEvent(IFlowMessage evt)
+        => evt.OperationKey.StartsWith("local-import/", StringComparison.Ordinal);
 }

@@ -37,6 +37,11 @@ public sealed class DownloadJobConfiguration : IEntityTypeConfiguration<Download
         builder.Property(x => x.InfoJsonSizeBytes).HasColumnName("info_json_size_bytes");
         builder.Property(x => x.MetaStoragePath).HasColumnName("meta_storage_path").HasMaxLength(2048);
         builder.Property(x => x.Priority).HasColumnName("priority").HasDefaultValue(0).IsRequired();
+        builder.Property(x => x.IngestOrigin)
+            .HasColumnName("ingest_origin")
+            .HasColumnType("media.ingest_origin")
+            .HasDefaultValue(IngestOrigin.Download)
+            .IsRequired();
 
         builder.Property(x => x.FailureKind)
             .HasColumnName("failure_kind")
@@ -228,6 +233,11 @@ public sealed class MediaContentIdVersionConfiguration : IEntityTypeConfiguratio
         builder.Property(x => x.StorageKey).HasColumnName("storage_key").HasMaxLength(100).IsRequired();
         builder.Property(x => x.StoragePath).HasColumnName("storage_path").HasMaxLength(2048).IsRequired();
         builder.Property(x => x.VersionNum).HasColumnName("version_num").IsRequired();
+        builder.Property(x => x.IngestOrigin)
+            .HasColumnName("ingest_origin")
+            .HasColumnType("media.ingest_origin")
+            .HasDefaultValue(IngestOrigin.Download)
+            .IsRequired();
 
         builder.HasIndex(x => new { x.MediaGuid, x.VersionNum })
             .IsUnique()

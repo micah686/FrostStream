@@ -32,6 +32,10 @@ public sealed class DownloadTopology : ITopologySource
     public const string TempFileDeleteFailedConsumer     = "databridge-temp-file-delete-failed";
     public const string UploadedObjectDeletedConsumer    = "databridge-uploaded-object-deleted";
     public const string UploadedObjectDeleteFailedConsumer = "databridge-uploaded-object-delete-failed";
+    public const string LocalImportUploadCompletedConsumer = "databridge-local-import-upload-completed";
+    public const string LocalImportUploadFailedConsumer = "databridge-local-import-upload-failed";
+    public const string LocalImportUploadedObjectDeletedConsumer = "databridge-local-import-uploaded-object-deleted";
+    public const string LocalImportUploadedObjectDeleteFailedConsumer = "databridge-local-import-uploaded-object-delete-failed";
 
     // Worker consumer durable names.
     public const string WorkerFetchMetadataConsumer        = "worker-fetch-metadata";
@@ -67,6 +71,10 @@ public sealed class DownloadTopology : ITopologySource
         yield return DataBridgeConsumer(TempFileDeleteFailedConsumer,      DownloadSubjects.TempFileDeleteFailed);
         yield return DataBridgeConsumer(UploadedObjectDeletedConsumer,     DownloadSubjects.UploadedObjectDeleted);
         yield return DataBridgeConsumer(UploadedObjectDeleteFailedConsumer, DownloadSubjects.UploadedObjectDeleteFailed);
+        yield return DataBridgeConsumer(LocalImportUploadCompletedConsumer, DownloadSubjects.UploadCompleted);
+        yield return DataBridgeConsumer(LocalImportUploadFailedConsumer, DownloadSubjects.UploadFailed);
+        yield return DataBridgeConsumer(LocalImportUploadedObjectDeletedConsumer, DownloadSubjects.UploadedObjectDeleted);
+        yield return DataBridgeConsumer(LocalImportUploadedObjectDeleteFailedConsumer, DownloadSubjects.UploadedObjectDeleteFailed);
 
         // Worker-side command consumers — durable so a Worker pod restart resumes mid-flight commands.
         yield return WorkerConsumer(WorkerFetchMetadataConsumer,        DownloadSubjects.FetchMetadataCommand);

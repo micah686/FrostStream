@@ -25,4 +25,10 @@ public sealed class WorkerOptions
     /// Defaults to <see langword="true"/> so untagged deployments are unaffected.
     /// </summary>
     public bool AcceptsUntaggedJobs { get; init; } = true;
+
+    /// <summary>
+    /// Absolute filesystem roots this worker is allowed to read for v1 local media imports.
+    /// Empty means local imports are rejected by this worker.
+    /// </summary>
+    public IReadOnlyList<string> AllowedImportRoots { get; init; } = [];
 }

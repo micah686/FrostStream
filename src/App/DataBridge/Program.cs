@@ -18,6 +18,7 @@ using Microsoft.Extensions.Hosting.Internal;
 using NATS.Client.Core;
 using NodaTime;
 using Npgsql;
+using Shared.Database;
 using Shared.Messaging;
 using Shared.Secrets;
 using Shared.Storage;
@@ -51,6 +52,8 @@ class Program
                         .MapEnum<GoogleCloudStorageCredentialMode>("google_cloud_storage_credential_mode", "storage")
                         .MapEnum<DownloadJobState>("download_job_state", "downloads")
                         .MapEnum<FailureKind>("failure_kind", "downloads")
+                        .MapEnum<IngestOrigin>("ingest_origin", "media")
+                        .MapEnum<LocalImportStatus>("local_import_status", "imports")
                         .MapEnum<PlaylistState>("playlist_state", "playlists"))
                 .UseSnakeCaseNamingConvention());
 
@@ -77,6 +80,7 @@ class Program
         builder.Services.AddNatsTopologySource<DownloadTopology>();
         builder.Services.AddNatsTopologySource<PlaylistTopology>();
         builder.Services.AddNatsTopologySource<BackgroundJobsTopology>();
+        builder.Services.AddNatsTopologySource<LocalImportTopology>();
         builder.Services.AddOpenBaoSecretStore(builder.Configuration);
 
         // Isolate Cleipnir's runtime tables in their own Postgres schema. Cleipnir's
@@ -101,6 +105,7 @@ class Program
             return dataSourceBuilder.Build();
         });
         builder.Services.AddScoped<IDownloadJobsRepository, DownloadJobsRepository>();
+        builder.Services.AddScoped<ILocalImportRepository, LocalImportRepository>();
         builder.Services.AddScoped<IMetadataRepository, MetadataRepository>();
         builder.Services.AddScoped<IMetadataReadService, MetadataReadService>();
         builder.Services.AddScoped<IMediaStreamReadService, MediaStreamReadService>();
@@ -143,6 +148,8 @@ class Program
         builder.Services.AddHostedService<DownloadAdminConsumerService>();
         builder.Services.AddHostedService<DownloadRequestedIngressService>();
         builder.Services.AddHostedService<DownloadEventsConsumerService>();
+        builder.Services.AddHostedService<LocalMediaImportRequestedIngressService>();
+        builder.Services.AddHostedService<LocalImportEventsConsumerService>();
         builder.Services.AddHostedService<PlaylistRequestedIngressService>();
         builder.Services.AddHostedService<PlaylistEventsConsumerService>();
         builder.Services.AddHostedService<PlaylistQueryConsumerService>();

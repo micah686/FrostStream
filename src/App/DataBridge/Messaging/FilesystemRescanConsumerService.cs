@@ -236,6 +236,20 @@ public sealed class FilesystemRescanConsumerService(
                     UNION
                     SELECT meta_storage_path FROM downloads.download_jobs
                         WHERE meta_storage_path IS NOT NULL AND storage_key = @storage_key
+                    UNION
+                    SELECT meta_storage_path FROM imports.local_import_items
+                        WHERE meta_storage_path IS NOT NULL AND storage_key = @storage_key
+                    UNION
+                    SELECT info_json_storage_path FROM imports.local_import_items
+                        WHERE info_json_storage_path IS NOT NULL AND storage_key = @storage_key
+                    UNION
+                    SELECT thumbnail_storage_path FROM imports.local_import_items
+                        WHERE thumbnail_storage_path IS NOT NULL AND storage_key = @storage_key
+                    UNION
+                    SELECT caption_path->>'storagePath' AS path
+                    FROM imports.local_import_items item
+                    CROSS JOIN LATERAL jsonb_array_elements(item.caption_storage_paths) AS caption_path
+                    WHERE item.caption_storage_paths IS NOT NULL AND item.storage_key = @storage_key
                 ) source
             ),
             expected_all AS (

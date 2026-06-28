@@ -41,6 +41,8 @@ public class DownloadJobEntity
 
     public int Priority { get; set; }
 
+    public IngestOrigin IngestOrigin { get; set; } = IngestOrigin.Download;
+
     public FailureKind? FailureKind { get; set; }
 
     public string? FailureCode { get; set; }
@@ -136,4 +138,6 @@ public class MediaContentIdVersionEntity
     public required string StoragePath { get; set; }
 
     public int VersionNum { get; set; }
+
+    public IngestOrigin IngestOrigin { get; set; } = IngestOrigin.Download;
 }

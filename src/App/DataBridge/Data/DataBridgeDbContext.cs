@@ -21,6 +21,8 @@ public sealed class DataBridgeDbContext(DbContextOptions<DataBridgeDbContext> op
     public DbSet<MediaEntity> Media => Set<MediaEntity>();
     public DbSet<MediaSourceVersionEntity> MediaSourceVersions => Set<MediaSourceVersionEntity>();
     public DbSet<MediaContentIdVersionEntity> MediaContentIdVersions => Set<MediaContentIdVersionEntity>();
+    public DbSet<LocalImportBatchEntity> LocalImportBatches => Set<LocalImportBatchEntity>();
+    public DbSet<LocalImportItemEntity> LocalImportItems => Set<LocalImportItemEntity>();
 
     public DbSet<PlaylistEntity> Playlists => Set<PlaylistEntity>();
     public DbSet<PlaylistItemEntity> PlaylistItems => Set<PlaylistItemEntity>();
@@ -45,6 +47,8 @@ public sealed class DataBridgeDbContext(DbContextOptions<DataBridgeDbContext> op
         modelBuilder.HasPostgresEnum<GoogleCloudStorageCredentialMode>("storage", "google_cloud_storage_credential_mode");
         modelBuilder.HasPostgresEnum<DownloadJobState>("downloads", "download_job_state");
         modelBuilder.HasPostgresEnum<FailureKind>("downloads", "failure_kind");
+        modelBuilder.HasPostgresEnum<IngestOrigin>("media", "ingest_origin");
+        modelBuilder.HasPostgresEnum<LocalImportStatus>("imports", "local_import_status");
         modelBuilder.HasPostgresEnum<PlaylistState>("playlists", "playlist_state");
 
         modelBuilder.Entity<MediaPlaylistMembershipEntity>(builder =>

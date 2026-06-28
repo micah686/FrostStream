@@ -32,6 +32,7 @@ public static class EndpointIds
     public const string DownloadsAudio = "downloads.audio";
     public const string DownloadsPreset = "downloads.preset";
     public const string DownloadsUpdatePriority = "downloads.update-priority";
+    public const string ImportsLocalMedia = "imports.local-media";
 
     // Storage
     public const string StorageLocalCreate = "storage.local.create";
@@ -132,6 +133,7 @@ public static class EndpointCatalog
         new(EndpointIds.DownloadsAudio, Bundles.Downloading),
         new(EndpointIds.DownloadsPreset, Bundles.Downloading),
         new(EndpointIds.DownloadsUpdatePriority, Bundles.Downloading),
+        new(EndpointIds.ImportsLocalMedia, Bundles.Downloading),
 
         new(EndpointIds.StorageLocalCreate, Bundles.Storage),
         new(EndpointIds.StorageLocalUpdate, Bundles.Storage),

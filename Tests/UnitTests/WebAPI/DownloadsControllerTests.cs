@@ -186,6 +186,7 @@ public sealed class DownloadsControllerTests
 
         var controller = new DownloadsController(
             publisher,
+            Substitute.For<IMessageBus>(),
             clock,
             Substitute.For<ILogger<DownloadsController>>());
 

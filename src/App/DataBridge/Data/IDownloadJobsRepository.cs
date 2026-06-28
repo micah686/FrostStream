@@ -1,4 +1,5 @@
 using NodaTime;
+using Shared.Database;
 using Shared.Messaging;
 
 namespace DataBridge.Data;
@@ -122,6 +123,10 @@ public sealed record VersionReservationRequest
     public string? Provider { get; init; }
     public string? SourceMediaId { get; init; }
     public Instant? SourceLastModified { get; init; }
+
+    public IngestOrigin IngestOrigin { get; init; } = IngestOrigin.Download;
+
+    public bool LinkSourceToDownloadJob { get; init; } = true;
 }
 
 /// <summary>
