@@ -25,9 +25,10 @@
 
 [!]Per user videos/channel/playlists (playlists only implemented)
 
-Add SponsorBlock integration [2022-04-16]
+[X]Add SponsorBlock integration [2022-04-16]
 
 [X]make sure you can manually download a channel
+[X] Added Proof-of-Origin support sidecar/proxy
 
 ## TODO
 

@@ -20,8 +20,9 @@ var openBao   = StartOpenBao.Start(builder, hardening);
 var typesense = StartTypesense.Start(builder, hardening);
 var authentik = StartAuthentik.Start(builder, postgres, hardening);
 var openFga   = StartOpenFga.Start(builder, postgres, hardening);
+var potProvider = StartPotProvider.Start(builder, hardening);
 
-StartServices.Wire(builder, hardening, sharedStorageRoot, nats, postgres, openBao, typesense, authentik, openFga);
+StartServices.Wire(builder, hardening, sharedStorageRoot, nats, postgres, openBao, typesense, authentik, openFga, potProvider);
 
 builder.Build().Run();
 

@@ -11,11 +11,12 @@ public static class StartServices
         IResourceBuilder<ContainerResource> openBao,
         IResourceBuilder<ContainerResource> typesense,
         AuthentikResources authentik,
-        OpenFgaResources openFga)
+        OpenFgaResources openFga,
+        IResourceBuilder<ContainerResource> potProvider)
     {
         var webApiEndpointName = hardening.EnableHttps ? "https" : "http";
 
-        var databridge = WireDataBridge(builder, hardening, sharedStorageRoot, nats, postgres, openBao, typesense);
+        var databridge = WireDataBridge(builder, hardening, sharedStorageRoot, nats, postgres, openBao, typesense, potProvider);
         var webapi = WireWebApi(builder, hardening, sharedStorageRoot, nats, postgres, openBao, authentik, openFga, webApiEndpointName);
         WireWorker(builder, hardening, sharedStorageRoot, nats, openBao);
         WireScheduler(builder, nats, databridge);
@@ -29,7 +30,8 @@ public static class StartServices
         IResourceBuilder<NatsServerResource> nats,
         PostgresResources postgres,
         IResourceBuilder<ContainerResource> openBao,
-        IResourceBuilder<ContainerResource> typesense)
+        IResourceBuilder<ContainerResource> typesense,
+        IResourceBuilder<ContainerResource> potProvider)
     {
         return builder.AddProject<Projects.DataBridge>("databridge")
             .WithReference(postgres.FrostStreamDb).WaitFor(postgres.FrostStreamDb)
@@ -40,8 +42,12 @@ public static class StartServices
             .WithEnvironment("Typesense__ApiKey", hardening.TypesenseApiKey)
             .WithEnvironment("FROSTSTREAM_STORAGE_ROOT", sharedStorageRoot)
             .WithEnvironment("SINGLE_USER_MODE", hardening.SingleUserMode ? "true" : "false")
+            // POT broker role: answers Worker pot.request messages from the co-located bgutil provider.
+            .WithEnvironment("PotBroker__Enabled", "true")
+            .WithEnvironment("PotBroker__ProviderUrl", potProvider.GetEndpoint("http"))
             .WaitFor(openBao)
-            .WaitFor(typesense);
+            .WaitFor(typesense)
+            .WaitFor(potProvider);
     }
 
     private static IResourceBuilder<ProjectResource> WireWebApi(
@@ -118,6 +124,9 @@ public static class StartServices
             .WithEnvironment("OpenBao__Address", openBao.GetEndpoint("http"))
             .WithEnvironment("OpenBao__Token", hardening.OpenBaoToken)
             .WithEnvironment("FROSTSTREAM_STORAGE_ROOT", sharedStorageRoot)
+            // Start the loopback HTTP→NATS POT shim and inject the bgutil extractor-args. The Worker
+            // reaches a provider via the pot-brokers queue group over NATS, not a direct container URL.
+            .WithEnvironment("PotProvider__Enabled", "true")
             .WaitFor(openBao);
     }
 

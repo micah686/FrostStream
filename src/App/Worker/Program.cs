@@ -91,9 +91,19 @@ class Program
             sp.GetRequiredService<IYtDlpArgumentRenderer>(),
             sp.GetRequiredService<TimeProvider>()));
 
+        // POT (Proof-of-Origin Token) wiring. When enabled, the Worker provisions the bgutil plugin,
+        // runs a loopback HTTP→NATS shim, and injects the bgutil extractor-args into every download.
+        builder.Services.AddOptions<PotProviderOptions>()
+            .Bind(builder.Configuration.GetSection(PotProviderOptions.SectionName));
+        builder.Services.AddSingleton<PotShimEndpoint>();
+        builder.Services.AddSingleton<PotOptionsApplier>();
+
         // Register startup service (downloads yt-dlp/ffmpeg/ffprobe binaries before any
         // BackgroundService starts).
         builder.Services.AddHostedService<StartupService>();
+
+        // POT shim: starts after StartupService; its constructor publishes the loopback base URL.
+        builder.Services.AddHostedService<PotShimService>();
 
         // Worker tag routing config.
         builder.Services.AddOptions<WorkerOptions>()

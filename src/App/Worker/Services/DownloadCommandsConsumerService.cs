@@ -44,6 +44,7 @@ public sealed class DownloadCommandsConsumerService(
     ISecretStore secretStore,
     IClock clock,
     IOptions<WorkerOptions> workerOptions,
+    PotOptionsApplier potOptionsApplier,
     ILogger<DownloadCommandsConsumerService> logger) : BackgroundService
 {
     private const string MediaFileBase = "media";
@@ -173,7 +174,9 @@ public sealed class DownloadCommandsConsumerService(
                 ffmpegLocation: GetFfmpegLocation(),
                 cookieFilePath: cookies.FilePath);
 
-            var metadataResult = await ytDlp.TryGetVideoInfoAsync(cmd.SourceUrl, overrideOptions: metadataOptions);
+            var metadataResult = await ytDlp.TryGetVideoInfoAsync(
+                cmd.SourceUrl,
+                overrideOptions: potOptionsApplier.Apply(metadataOptions));
             if (!metadataResult.Success || metadataResult.Data is not { } info)
             {
                 throw new YtDlpProcessException(
@@ -819,15 +822,24 @@ public sealed class DownloadCommandsConsumerService(
     /// <c>NoWriteThumbnail</c>); subtitle capture stays opt-in — the caller drives it via
     /// <c>WriteSubs</c>/<c>WriteAutoSubs</c> + <c>SubLangs</c>, which yt-dlp already honors.
     /// The downloaded sidecar files are collected post-download and uploaded as durable blobs.
+    ///
+    /// When POT is enabled and the shim is up, the bgutil <c>--extractor-args</c> and
+    /// <c>--plugin-dirs</c> are appended (never replacing caller values) so YouTube downloads can
+    /// fetch a Proof-of-Origin token via the loopback shim → NATS broker → provider path.
     /// </summary>
-    private static YtDlpOptions ApplyOperationalDefaults(YtDlpOptions options)
-        => options with
+    private YtDlpOptions ApplyOperationalDefaults(YtDlpOptions options)
+    {
+        options = options with
         {
             VideoSelection = options.VideoSelection with { NoPlaylist = true },
             Filesystem = options.Filesystem with { NoPart = true },
             VerbositySimulation = options.VerbositySimulation with { Newline = true },
             Thumbnail = options.Thumbnail with { WriteThumbnail = !options.Thumbnail.NoWriteThumbnail }
         };
+
+        // Non-null input always yields non-null output (POT args are appended, never replacing).
+        return potOptionsApplier.Apply(options)!;
+    }
 
     private static string GetDownloadTempDirectory(DownloadVideoCommand cmd)
         => Path.Combine(

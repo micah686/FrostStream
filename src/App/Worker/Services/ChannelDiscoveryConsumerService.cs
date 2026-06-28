@@ -14,6 +14,7 @@ public sealed class ChannelDiscoveryConsumerService(
     IJetStreamConsumer consumer,
     IMessageBus messageBus,
     IYtDlpClient ytDlp,
+    PotOptionsApplier potOptionsApplier,
     IClock clock,
     ILogger<ChannelDiscoveryConsumerService> logger) : BackgroundService
 {
@@ -129,7 +130,7 @@ public sealed class ChannelDiscoveryConsumerService(
         CancellationToken cancellationToken)
     {
         var options = BuildOptions(scanMode, source);
-        var result = await ytDlp.TryGetVideoInfoAsync(source.SourceUrl, cancellationToken, flat: true, overrideOptions: options);
+        var result = await ytDlp.TryGetVideoInfoAsync(source.SourceUrl, cancellationToken, flat: true, overrideOptions: potOptionsApplier.Apply(options));
         if (!result.Success || result.Data is not { } container)
         {
             throw new InvalidOperationException($"yt-dlp flat scan failed for creator source {source.Id}: {result.ErrorOutput}");

@@ -14,6 +14,7 @@ public sealed class ChannelAssetRefreshConsumerService(
     IJetStreamConsumer consumer,
     IMessageBus messageBus,
     IYtDlpClient ytDlp,
+    PotOptionsApplier potOptionsApplier,
     AssetCacheWriter assetCacheWriter,
     IOptions<AssetCacheOptions> assetCacheOptions,
     IClock clock,
@@ -127,7 +128,7 @@ public sealed class ChannelAssetRefreshConsumerService(
                     PlaylistItems = "0"
                 }
             };
-            var result = await ytDlp.TryGetVideoInfoAsync(source.SourceUrl, cancellationToken, flat: false, overrideOptions: options);
+            var result = await ytDlp.TryGetVideoInfoAsync(source.SourceUrl, cancellationToken, flat: false, overrideOptions: potOptionsApplier.Apply(options));
             if (!result.Success || result.Data is not { } info)
             {
                 await PublishFailureAsync(source, $"yt-dlp returned no metadata: {result.ErrorOutput}", cancellationToken);

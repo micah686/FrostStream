@@ -20,6 +20,7 @@ using NodaTime;
 using Npgsql;
 using Shared.Database;
 using Shared.Messaging;
+using Shared.Pot;
 using Shared.Secrets;
 using Shared.Storage;
 using Typesense.Setup;
@@ -157,6 +158,10 @@ class Program
         builder.Services.AddHostedService<UserPlaylistConsumerService>();
         builder.Services.AddHostedService<MetadataQueryConsumerService>();
         builder.Services.AddHostedService<MediaStreamQueryConsumerService>();
+
+        // POT broker role: answers pot.request over NATS from a nearby bgutil provider. No-ops unless
+        // PotBroker:Enabled is set, so this is inert on deployments without a co-located provider.
+        builder.Services.AddPotBroker(builder.Configuration);
 
         // Force ConsoleLifetime so Ctrl+C / SIGTERM triggers StopAsync on hosted services
         builder.Services.AddSingleton<IHostLifetime, ConsoleLifetime>();

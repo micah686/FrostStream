@@ -8,6 +8,7 @@ public sealed record AppHostHardeningOptions(
     bool EnableFgaAuthenticatedEndpoints,
     string OpenBaoImageTag,
     string OpenFgaImageTag,
+    string BgUtilImageTag,
     string OpenBaoToken,
     string TypesenseApiKey,
     string OpenFgaApiToken);
@@ -39,6 +40,9 @@ public static class AppHostHardening
             enableFgaAuthenticatedEndpoints,
             OpenBaoImageTag: Environment.GetEnvironmentVariable("OPENBAO_IMAGE_TAG") ?? "2.5.5",
             OpenFgaImageTag: Environment.GetEnvironmentVariable("OPENFGA_IMAGE_TAG") ?? "v1.18.0",
+            // MUST match YtDlpBinaryDownloaderOptions.BgUtilPluginVersion — bgutil requires the
+            // provider server and the yt-dlp plugin to be the same version.
+            BgUtilImageTag: Environment.GetEnvironmentVariable("BGUTIL_IMAGE_TAG") ?? "1.3.1",
             OpenBaoToken: Environment.GetEnvironmentVariable("OPENBAO_TOKEN") ?? DevOpenBaoToken,
             TypesenseApiKey: Environment.GetEnvironmentVariable("TYPESENSE_API_KEY") ?? DevTypesenseApiKey,
             OpenFgaApiToken: Environment.GetEnvironmentVariable("OPENFGA_API_TOKEN") ?? DevOpenFgaApiToken);
