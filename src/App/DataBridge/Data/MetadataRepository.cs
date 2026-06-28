@@ -380,9 +380,9 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
         {
             await using var ins = new NpgsqlCommand("""
                 INSERT INTO metadata.media_captions
-                    (media_guid, storage_path, storage_key, caption_type, two_digit_language_code, name)
+                    (media_guid, storage_path, storage_key, caption_type, two_digit_language_code, name, text_content)
                 VALUES
-                    (@media_guid, @path, @storage_key, @type::metadata.subtitle_type_enum, @lang, @name)
+                    (@media_guid, @path, @storage_key, @type::metadata.subtitle_type_enum, @lang, @name, @text_content)
                 """, conn, tx);
             ins.Parameters.AddWithValue("@media_guid", mediaGuid);
             ins.Parameters.AddWithValue("@path", caption.StoragePath);
@@ -390,6 +390,7 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
             ins.Parameters.AddWithValue("@type", caption.CaptionType);
             ins.Parameters.AddWithValue("@lang", caption.LanguageCode);
             ins.Parameters.AddWithValue("@name", (object?)caption.Name ?? DBNull.Value);
+            ins.Parameters.AddWithValue("@text_content", (object?)caption.TextContent ?? DBNull.Value);
             await ins.ExecuteNonQueryAsync(ct);
         }
     }

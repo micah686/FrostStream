@@ -21,4 +21,7 @@ public sealed record CaptionDocument
 
     [JsonPropertyName("storage_path")]
     public required string StoragePath { get; init; }
+
+    [JsonPropertyName("text")]
+    public string? Text { get; init; }
 }

@@ -173,7 +173,8 @@ public sealed class MediaDocumentQuery(NpgsqlDataSource dataSource) : IMediaDocu
                 mc.two_digit_language_code AS language_code,
                 mc.caption_type::text AS caption_type,
                 mc.name,
-                mc.storage_path
+                mc.storage_path,
+                mc.text_content
             FROM metadata.media_captions mc
             JOIN media.media m ON m.media_guid = mc.media_guid
             {whereClause}
@@ -274,7 +275,8 @@ public sealed class MediaDocumentQuery(NpgsqlDataSource dataSource) : IMediaDocu
                 LanguageCode = GetString(reader, "language_code"),
                 CaptionType = GetString(reader, "caption_type"),
                 Name = GetNullableString(reader, "name"),
-                StoragePath = GetString(reader, "storage_path")
+                StoragePath = GetString(reader, "storage_path"),
+                Text = GetNullableString(reader, "text_content")
             });
         }
 

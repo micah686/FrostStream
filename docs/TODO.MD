@@ -30,6 +30,12 @@
 [X]make sure you can manually download a channel
 [X] Added Proof-of-Origin support sidecar/proxy
 
+[X]Download video comments [2022-11-30]
+
+[X]Add thumbnail embed option [2021-10-16] (backend only)
+
+[X]Subtitle download & indexing [2022-02-13]
+
 ## TODO
 
 upload metadata
@@ -49,24 +55,23 @@ Search comments
 
 Search download queue [2025-07-31]
 Configure shorts, streams and video sizes per channel [2024-07-15]
-
-User roles, aka read only user [2023-11-10] (hook into auth framework/APIs)
-
 Implement Apprise for notifications [2023-08-05]
-Download video comments [2022-11-30]
+
 Show similar videos on video page [2022-11-30]
 Filter and query in search form, search by url query [2022-07-23]
 Add passing browser cookies to yt-dlp [2022-05-08]
 
 Implement per channel settings [2022-03-26]
-Subtitle download & indexing [2022-02-13]
+
 Fancy advanced unified search interface [2022-01-08]
 Auto rescan and auto download on a schedule [2021-12-17]
 Optional automatic deletion of watched items after a specified time [2021-12-17]
 
+User roles, aka read only user [2023-11-10] (hook into auth framework/APIs)
+
 Access control [2021-11-01]
 Delete videos and channel [2021-10-16] (global vs a specific storage key?)
-Add thumbnail embed option [2021-10-16]
+
 Un-ignore videos [2021-10-03]
 Dynamic download queue [2021-09-26]
 Scan your file system to index already downloaded videos [2021-09-14]
