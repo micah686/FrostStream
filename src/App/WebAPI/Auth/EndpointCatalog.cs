@@ -132,6 +132,8 @@ public static class EndpointIds
     // Media
     public const string MediaStream = "media.stream";
     public const string MediaAudioStream = "media.audio-stream";
+    public const string MediaAudioPlaylist = "media.audio-playlist";
+    public const string MediaAudioSegment = "media.audio-segment";
     public const string PlaylistAudioStream = "playlists.audio-stream";
 
     // Bundle management (runtime). These live in the `:all` bootstrap bundle so the bootstrap admin
@@ -258,6 +260,8 @@ public static class EndpointCatalog
 
         new(EndpointIds.MediaStream, Bundles.Media),
         new(EndpointIds.MediaAudioStream, Bundles.Media),
+        new(EndpointIds.MediaAudioPlaylist, Bundles.Media),
+        new(EndpointIds.MediaAudioSegment, Bundles.Media),
         new(EndpointIds.PlaylistAudioStream, Bundles.Playlists),
 
         new(EndpointIds.ManagementCatalog, Bundles.Management),

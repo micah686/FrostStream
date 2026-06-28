@@ -187,7 +187,7 @@ public sealed class MediaStreamController(
 
     [HttpGet("audio/{mediaGuid:guid}/index.m3u8")]
     [HttpGet("audio/{mediaGuid:guid}/hls/index.m3u8")]
-    [Endpoint(EndpointIds.MediaAudioStream)]
+    [Endpoint(EndpointIds.MediaAudioPlaylist)]
     [EndpointSummary("Get an audio-only HLS media playlist")]
     [EndpointDescription("Returns the stored HLS media playlist for a cached audio rendition, rewriting segment URLs through FrostStream so authenticated clients can fetch the generated HLS asset.")]
     public async Task<IActionResult> GetAudioPlaylist(
@@ -226,7 +226,7 @@ public sealed class MediaStreamController(
     }
 
     [HttpGet("audio/{mediaGuid:guid}/hls/{format}/{sourceVersion:int}/{fileName}")]
-    [Endpoint(EndpointIds.MediaAudioStream)]
+    [Endpoint(EndpointIds.MediaAudioSegment)]
     [EndpointSummary("Stream an audio HLS segment")]
     [EndpointDescription("Streams a cached HLS media segment or fMP4 initialization file belonging to a prepared audio rendition. Segment paths are resolved from rendition metadata and validated so clients can fetch only files generated beside the stored manifest.")]
     public async Task<IActionResult> GetAudioSegment(
