@@ -117,6 +117,7 @@ class Program
         builder.Services.AddScoped<IPlaylistsRepository, PlaylistsRepository>();
         builder.Services.AddScoped<IUserPlaylistsRepository, UserPlaylistsRepository>();
         builder.Services.AddScoped<IOptionPresetsRepository, OptionPresetsRepository>();
+        builder.Services.AddScoped<IDownloadConfigSetsRepository, DownloadConfigSetsRepository>();
         builder.Services.AddScoped<IScheduledTasksRepository, ScheduledTasksRepository>();
         builder.Services.AddScoped<ICreatorDiscoveryRepository, CreatorDiscoveryRepository>();
         builder.Services.AddSingleton<OrphanMetadataCleanupExecutor>();
@@ -145,6 +146,7 @@ class Program
 
         builder.Services.AddHostedService<StorageCrudConsumerService>();
         builder.Services.AddHostedService<OptionPresetCrudConsumerService>();
+        builder.Services.AddHostedService<DownloadConfigSetConsumerService>();
         builder.Services.AddHostedService<ScheduleCrudConsumerService>();
         builder.Services.AddHostedService<CreatorDiscoveryConsumerService>();
         builder.Services.AddHostedService<OrphanCleanupAdminConsumerService>();

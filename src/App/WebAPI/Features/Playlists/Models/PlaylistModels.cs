@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using Shared.Messaging;
+using YtDlpSharpLib.Options;
 
 namespace WebAPI.Features.Playlists.Models;
 
@@ -13,11 +14,25 @@ public sealed class PlaylistRequest
     [DefaultValue("default")]
     public string? StorageKey { get; init; }
 
-    [DefaultValue(false)]
-    public bool EncodeForPlaylist { get; init; }
+    [StringLength(100, MinimumLength = 2)]
+    [RegularExpression("^[a-z0-9-]{2,100}$")]
+    public string? ConfigSetKey { get; init; }
 
-    [DefaultValue(AudioRenditionFormat.Aac)]
-    public AudioRenditionFormat AudioFormat { get; init; } = AudioRenditionFormat.Aac;
+    [StringLength(100, MinimumLength = 2)]
+    [RegularExpression("^[a-z0-9-]{2,100}$")]
+    public string? CookieProfileKey { get; init; }
+
+    public YtDlpOptions? YtDlpOptions { get; init; }
+
+    [DefaultValue(false)]
+    public bool? EncodeForPlaylist { get; init; }
+
+    public AudioRenditionFormat? AudioFormat { get; init; }
+
+    [Range(0, 100)]
+    public int? Priority { get; init; }
+
+    public bool? FetchComments { get; init; }
 }
 
 public sealed record PlaylistRequestResponse(Guid PlaylistId, Guid CorrelationId);

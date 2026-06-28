@@ -153,7 +153,7 @@ public class DownloadArchiveFlow(
             if (metadata.RichMetadata is { } existingRichMeta)
                 await RunMetadataWriteStep(jobId, reservation.MediaGuid, reservation.IsNewMediaGuid, metadata.Provider, metadata.SourceMediaId, existingRichMeta, storageKey);
             await Capture(() => PlaylistRepoCall(r => r.TryLinkMediaGuidAsync(jobId, reservation.MediaGuid)));
-            await Capture(() => QueuePlaylistAudioRenditionAsync(jobId, reservation.MediaGuid, reservation.VersionNum));
+            await Capture(() => QueueAudioRenditionAsync(request, reservation.MediaGuid, reservation.VersionNum, storageKey));
             await Capture(() => RepoCall(r => r.MarkAlreadyDownloadedAsync(jobId, reservation.MediaGuid)));
             return;
         }
@@ -181,7 +181,7 @@ public class DownloadArchiveFlow(
         {
             await Capture(() => Update(jobId, DownloadJobState.CommitPending));
             await Capture(() => PlaylistRepoCall(r => r.TryLinkMediaGuidAsync(jobId, reservation.MediaGuid)));
-            await Capture(() => QueuePlaylistAudioRenditionAsync(jobId, reservation.MediaGuid, reservation.VersionNum));
+            await Capture(() => QueueAudioRenditionAsync(request, reservation.MediaGuid, reservation.VersionNum, storageKey));
             await Capture(() => Update(jobId, DownloadJobState.Completed));
         }
         catch (Exception commitEx)
@@ -946,14 +946,18 @@ public class DownloadArchiveFlow(
     private async Task<T> PlaylistRepoCall<T>(Func<IPlaylistsRepository, Task<T>> action)
         => await scopeFactory.WithScopedAsync(action);
 
-    private async Task QueuePlaylistAudioRenditionAsync(Guid jobId, Guid mediaGuid, int sourceVersion)
+    private async Task QueueAudioRenditionAsync(DownloadRequested request, Guid mediaGuid, int sourceVersion, string storageKey)
     {
-        var preference = await PlaylistRepoCall(r => r.GetAudioPreferenceForJobAsync(jobId));
-        if (preference is not { EncodeForPlaylist: true })
+        var preference = await PlaylistRepoCall(r => r.GetAudioPreferenceForJobAsync(request.JobId));
+        var shouldEncode = preference is { EncodeForPlaylist: true } || request.EncodeAudioRendition;
+        if (!shouldEncode)
             return;
 
+        var audioFormat = preference?.AudioFormat ?? request.AudioRenditionFormat;
+        var audioStorageKey = preference?.StorageKey ?? storageKey;
+
         var rendition = await scopeFactory.WithScopedAsync<IAudioRenditionRepository, AudioRenditionDto?>(
-            repo => repo.CreateIfMissingAsync(mediaGuid, preference.AudioFormat, preference.StorageKey, sourceVersion));
+            repo => repo.CreateIfMissingAsync(mediaGuid, audioFormat, audioStorageKey, sourceVersion));
         if (rendition is null || rendition.Status == AudioRenditionStatus.Ready)
             return;
 

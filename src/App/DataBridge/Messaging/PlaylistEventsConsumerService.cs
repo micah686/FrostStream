@@ -5,6 +5,8 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NodaTime;
 using Shared.Messaging;
+using System.Text.Json;
+using YtDlpSharpLib.Options;
 
 namespace DataBridge.Messaging;
 
@@ -195,7 +197,13 @@ public sealed class PlaylistEventsConsumerService(
                     Attempt = 1,
                     SourceUrl = entry.EntryUrl,
                     RequestedBy = playlist.RequestedBy,
-                    StorageKey = playlist.StorageKey ?? "default"
+                    StorageKey = playlist.StorageKey ?? "default",
+                    YtDlpOptions = DeserializeYtDlpOptions(playlist.YtDlpOptionsJson),
+                    CookieSecretPath = playlist.CookieSecretPath,
+                    Priority = playlist.Priority,
+                    FetchComments = playlist.FetchComments,
+                    EncodeAudioRendition = playlist.EncodeForPlaylist,
+                    AudioRenditionFormat = playlist.AudioFormat
                 };
 
                 await publisher.PublishAsync(
@@ -218,5 +226,20 @@ public sealed class PlaylistEventsConsumerService(
         var playlist = await playlists.GetByIdAsync(playlistId);
         return playlist?.SourceUrl
                ?? throw new InvalidOperationException($"Playlist {playlistId} was not found while scheduling the next metadata page.");
+    }
+
+    private static YtDlpOptions? DeserializeYtDlpOptions(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return null;
+
+        try
+        {
+            return JsonSerializer.Deserialize<YtDlpOptions>(json);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 }

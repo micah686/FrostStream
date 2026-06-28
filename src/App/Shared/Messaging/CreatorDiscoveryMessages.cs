@@ -120,6 +120,13 @@ public sealed record UpsertDiscoveredMediaBatchRequestMessage
     public bool IsScanPageFinalBatch { get; init; } = true;
     public string? StorageKey { get; init; }
     public string? RequestedBy { get; init; }
+    public string? ConfigSetKey { get; init; }
+    public bool EncodeForPlaylist { get; init; }
+    public AudioRenditionFormat AudioFormat { get; init; } = AudioRenditionFormat.Aac;
+    public string? CookieSecretPath { get; init; }
+    public int Priority { get; init; }
+    public bool FetchComments { get; init; }
+    public YtDlpSharpLib.Options.YtDlpOptions? YtDlpOptions { get; init; }
     public required IReadOnlyList<DiscoveredMediaCandidate> Items { get; init; }
 }
 

@@ -7,6 +7,7 @@ using Shared.Database;
 using Shared.Messaging;
 using WebAPI.Auth;
 using WebAPI.Features.Common;
+using WebAPI.Features.DownloadConfigSets;
 using WebAPI.Features.CreatorSources.Models;
 
 namespace WebAPI.Features.CreatorSources.Controllers;
@@ -84,6 +85,32 @@ public sealed class CreatorSourcesController(
 
         var now = clock.GetCurrentInstant();
         var idempotencyKey = $"manual-channel-download:{sourceResponse.Entity.Id}:{Guid.NewGuid():N}";
+        var subject = AuthConstants.FindSubject(User);
+        ResolvedDownloadConfigSet resolved;
+        try
+        {
+            var (config, error) = await DownloadConfigSetResolver.ResolveAsync(
+                messageBus,
+                subject,
+                request.ConfigSetKey,
+                request.StorageKey,
+                request.CookieProfileKey,
+                request.YtDlpOptions,
+                request.EncodeForPlaylist,
+                request.AudioFormat,
+                request.Priority,
+                request.FetchComments,
+                cancellationToken);
+            if (error is not null)
+                return BadRequest(error);
+            resolved = config!;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed resolving channel download config set {ConfigSetKey}.", request.ConfigSetKey);
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to resolve download config set.");
+        }
+
         var message = new ChannelMediaListRequested
         {
             ScheduleKey = ManualChannelDownloadScheduleKey,
@@ -92,8 +119,15 @@ public sealed class CreatorSourcesController(
             IdempotencyKey = idempotencyKey,
             OccurredAt = now,
             TargetSourceId = sourceResponse.Entity.Id,
-            StorageKey = string.IsNullOrWhiteSpace(request.StorageKey) ? "default" : request.StorageKey,
-            RequestedBy = AuthConstants.FindSubject(User)
+            StorageKey = resolved.StorageKey,
+            RequestedBy = subject,
+            ConfigSetKey = resolved.ConfigSetKey,
+            EncodeForPlaylist = resolved.EncodeForPlaylist,
+            AudioFormat = resolved.AudioFormat,
+            CookieSecretPath = resolved.CookieSecretPath,
+            YtDlpOptions = resolved.YtDlpOptions,
+            Priority = resolved.Priority,
+            FetchComments = resolved.FetchComments
         };
 
         try

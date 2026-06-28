@@ -17,9 +17,19 @@ public class PlaylistEntity
 
     public string? StorageKey { get; set; }
 
+    public string? ConfigSetKey { get; set; }
+
     public bool EncodeForPlaylist { get; set; }
 
     public AudioRenditionFormat AudioFormat { get; set; } = AudioRenditionFormat.Aac;
+
+    public string? CookieSecretPath { get; set; }
+
+    public string? YtDlpOptionsJson { get; set; }
+
+    public int Priority { get; set; }
+
+    public bool FetchComments { get; set; }
 
     public string? ProviderPlaylistId { get; set; }
 

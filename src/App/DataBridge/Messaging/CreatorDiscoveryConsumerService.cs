@@ -339,7 +339,13 @@ public sealed class CreatorDiscoveryConsumerService(
                 RequestedBy = request.RequestedBy ?? $"schedule:{request.ScheduleKey}",
                 StorageKey = request.StorageKey,
                 ForceDownload = false,
-                MediaKind = MediaKind.Video
+                MediaKind = MediaKind.Video,
+                YtDlpOptions = request.YtDlpOptions,
+                CookieSecretPath = request.CookieSecretPath,
+                Priority = request.Priority,
+                FetchComments = request.FetchComments,
+                EncodeAudioRendition = request.EncodeForPlaylist,
+                AudioRenditionFormat = request.AudioFormat
             },
             messageId: messageId.ToString("N"));
     }

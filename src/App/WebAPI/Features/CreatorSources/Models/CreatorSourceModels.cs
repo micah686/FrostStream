@@ -2,6 +2,8 @@ using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using NodaTime;
 using Shared.Database;
+using Shared.Messaging;
+using YtDlpSharpLib.Options;
 
 namespace WebAPI.Features.CreatorSources.Models;
 
@@ -52,6 +54,25 @@ public sealed class ChannelDownloadRequest
 
     [DefaultValue("default")]
     public string? StorageKey { get; init; }
+
+    [StringLength(100, MinimumLength = 2)]
+    [RegularExpression("^[a-z0-9-]{2,100}$")]
+    public string? ConfigSetKey { get; init; }
+
+    [StringLength(100, MinimumLength = 2)]
+    [RegularExpression("^[a-z0-9-]{2,100}$")]
+    public string? CookieProfileKey { get; init; }
+
+    public YtDlpOptions? YtDlpOptions { get; init; }
+
+    public bool? EncodeForPlaylist { get; init; }
+
+    public AudioRenditionFormat? AudioFormat { get; init; }
+
+    [Range(0, 100)]
+    public int? Priority { get; init; }
+
+    public bool? FetchComments { get; init; }
 }
 
 public sealed record ChannelDownloadResponse(

@@ -168,6 +168,13 @@ public sealed class ChannelDiscoveryConsumerService(
                     IsScanPageFinalBatch = batchIndex == batches.Length - 1,
                     StorageKey = ChannelStorageKey(request),
                     RequestedBy = ChannelRequestedBy(request),
+                    ConfigSetKey = ChannelConfigSetKey(request),
+                    EncodeForPlaylist = ChannelEncodeForPlaylist(request),
+                    AudioFormat = ChannelAudioFormat(request),
+                    CookieSecretPath = ChannelCookieSecretPath(request),
+                    Priority = ChannelPriority(request),
+                    FetchComments = ChannelFetchComments(request),
+                    YtDlpOptions = ChannelYtDlpOptions(request),
                     Items = batch
                 },
                 RequestTimeout,
@@ -202,6 +209,13 @@ public sealed class ChannelDiscoveryConsumerService(
                     IsScanPageFinalBatch = true,
                     StorageKey = ChannelStorageKey(request),
                     RequestedBy = ChannelRequestedBy(request),
+                    ConfigSetKey = ChannelConfigSetKey(request),
+                    EncodeForPlaylist = ChannelEncodeForPlaylist(request),
+                    AudioFormat = ChannelAudioFormat(request),
+                    CookieSecretPath = ChannelCookieSecretPath(request),
+                    Priority = ChannelPriority(request),
+                    FetchComments = ChannelFetchComments(request),
+                    YtDlpOptions = ChannelYtDlpOptions(request),
                     Items = []
                 },
                 RequestTimeout,
@@ -266,6 +280,27 @@ public sealed class ChannelDiscoveryConsumerService(
         => request is ChannelMediaListRequested channelRequest && !string.IsNullOrWhiteSpace(channelRequest.RequestedBy)
             ? channelRequest.RequestedBy
             : null;
+
+    private static string? ChannelConfigSetKey(ScheduledBackgroundRequest request)
+        => request is ChannelMediaListRequested channelRequest ? channelRequest.ConfigSetKey : null;
+
+    private static bool ChannelEncodeForPlaylist(ScheduledBackgroundRequest request)
+        => request is ChannelMediaListRequested channelRequest && channelRequest.EncodeForPlaylist;
+
+    private static AudioRenditionFormat ChannelAudioFormat(ScheduledBackgroundRequest request)
+        => request is ChannelMediaListRequested channelRequest ? channelRequest.AudioFormat : AudioRenditionFormat.Aac;
+
+    private static string? ChannelCookieSecretPath(ScheduledBackgroundRequest request)
+        => request is ChannelMediaListRequested channelRequest ? channelRequest.CookieSecretPath : null;
+
+    private static int ChannelPriority(ScheduledBackgroundRequest request)
+        => request is ChannelMediaListRequested channelRequest ? channelRequest.Priority : 0;
+
+    private static bool ChannelFetchComments(ScheduledBackgroundRequest request)
+        => request is ChannelMediaListRequested channelRequest && channelRequest.FetchComments;
+
+    private static YtDlpOptions? ChannelYtDlpOptions(ScheduledBackgroundRequest request)
+        => request is ChannelMediaListRequested channelRequest ? channelRequest.YtDlpOptions : null;
 
     private static IEnumerable<DiscoveredMediaCandidate> ExtractCandidates(CreatorSourceDto source, VideoInfo container)
     {

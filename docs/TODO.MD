@@ -38,6 +38,11 @@
 
 [X]Delete videos and channel [2021-10-16] (global vs a specific storage key?)
 
+[X]Audio download
+[X]M3U8 Playlist mode to serve channel as aac/opus (no podcast mode)
+
+[X]Make sure you can create and set a configuration set for playlist or channel downloads.
+
 ## TODO
 
 upload metadata
@@ -47,8 +52,7 @@ live_chat (complex, need to integrate with clickhousedb)
 
 ## TubeArchivst Options
 
-Audio download
-Podcast mode to serve channel as mp3
+
 Multi language support
 
 Download or Ignore videos by keyword (#163)

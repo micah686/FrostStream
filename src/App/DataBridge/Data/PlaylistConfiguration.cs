@@ -18,12 +18,17 @@ public sealed class PlaylistConfiguration : IEntityTypeConfiguration<PlaylistEnt
         builder.Property(x => x.SourceUrl).HasColumnName("source_url").HasMaxLength(4096).IsRequired();
         builder.Property(x => x.RequestedBy).HasColumnName("requested_by").HasMaxLength(255);
         builder.Property(x => x.StorageKey).HasColumnName("storage_key").HasMaxLength(100);
+        builder.Property(x => x.ConfigSetKey).HasColumnName("config_set_key").HasMaxLength(100);
         builder.Property(x => x.EncodeForPlaylist).HasColumnName("encode_for_playlist").HasDefaultValue(false).IsRequired();
         builder.Property(x => x.AudioFormat)
             .HasColumnName("audio_format")
             .HasColumnType("media.audio_rendition_format")
             .HasDefaultValue(AudioRenditionFormat.Aac)
             .IsRequired();
+        builder.Property(x => x.CookieSecretPath).HasColumnName("cookie_secret_path").HasMaxLength(512);
+        builder.Property(x => x.YtDlpOptionsJson).HasColumnName("ytdlp_options_json").HasColumnType("jsonb");
+        builder.Property(x => x.Priority).HasColumnName("priority").HasDefaultValue(0).IsRequired();
+        builder.Property(x => x.FetchComments).HasColumnName("fetch_comments").HasDefaultValue(false).IsRequired();
         builder.Property(x => x.ProviderPlaylistId).HasColumnName("provider_playlist_id").HasMaxLength(512);
         builder.Property(x => x.Title).HasColumnName("title").HasMaxLength(2048);
         builder.Property(x => x.TotalItems).HasColumnName("total_items").IsRequired();

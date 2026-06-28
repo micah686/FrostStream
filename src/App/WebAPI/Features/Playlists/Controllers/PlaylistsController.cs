@@ -6,6 +6,7 @@ using Shared.Auth;
 using Shared.Messaging;
 using WebAPI.Auth;
 using WebAPI.Features.Common;
+using WebAPI.Features.DownloadConfigSets;
 using WebAPI.Features.Playlists.Models;
 
 namespace WebAPI.Features.Playlists.Controllers;
@@ -45,6 +46,31 @@ public class PlaylistsController(
         var playlistId = Guid.NewGuid();
         var correlationId = Guid.NewGuid();
         var messageId = Guid.NewGuid();
+        var subject = AuthConstants.FindSubject(User);
+        ResolvedDownloadConfigSet resolved;
+        try
+        {
+            var (config, error) = await DownloadConfigSetResolver.ResolveAsync(
+                messageBus,
+                subject,
+                request.ConfigSetKey,
+                request.StorageKey,
+                request.CookieProfileKey,
+                request.YtDlpOptions,
+                request.EncodeForPlaylist,
+                request.AudioFormat,
+                request.Priority,
+                request.FetchComments,
+                cancellationToken);
+            if (error is not null)
+                return BadRequest(error);
+            resolved = config!;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed resolving playlist download config set {ConfigSetKey}.", request.ConfigSetKey);
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to resolve download config set.");
+        }
 
         var message = new PlaylistRequested
         {
@@ -57,10 +83,15 @@ public class PlaylistsController(
             Attempt = 1,
             SourceUrl = request.SourceUrl,
             // Stamp the validated token subject, never client-supplied text, so "requested by" is trustworthy.
-            RequestedBy = AuthConstants.FindSubject(User),
-            StorageKey = string.IsNullOrWhiteSpace(request.StorageKey) ? "default" : request.StorageKey,
-            EncodeForPlaylist = request.EncodeForPlaylist,
-            AudioFormat = request.AudioFormat
+            RequestedBy = subject,
+            StorageKey = resolved.StorageKey,
+            ConfigSetKey = resolved.ConfigSetKey,
+            EncodeForPlaylist = resolved.EncodeForPlaylist,
+            AudioFormat = resolved.AudioFormat,
+            CookieSecretPath = resolved.CookieSecretPath,
+            YtDlpOptions = resolved.YtDlpOptions,
+            Priority = resolved.Priority,
+            FetchComments = resolved.FetchComments
         };
 
         try

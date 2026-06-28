@@ -15,6 +15,7 @@ public static class Bundles
     public const string Cookies = "cookies";
     public const string Schedules = "schedules";
     public const string Presets = "presets";
+    public const string DownloadConfigSets = "download-config-sets";
     public const string CreatorSources = "creator-sources";
     public const string Media = "media";
     public const string Management = "management";
@@ -104,6 +105,13 @@ public static class EndpointIds
     public const string OptionPresetsGet = "option-presets.get";
     public const string OptionPresetsList = "option-presets.list";
     public const string OptionPresetsDelete = "option-presets.delete";
+
+    // Download config sets
+    public const string DownloadConfigSetsCreate = "download-config-sets.create";
+    public const string DownloadConfigSetsUpdate = "download-config-sets.update";
+    public const string DownloadConfigSetsGet = "download-config-sets.get";
+    public const string DownloadConfigSetsList = "download-config-sets.list";
+    public const string DownloadConfigSetsDelete = "download-config-sets.delete";
 
     // Creator sources
     public const string CreatorSourcesCreate = "creator-sources.create";
@@ -220,6 +228,11 @@ public static class EndpointCatalog
         new(EndpointIds.OptionPresetsGet, Bundles.Presets),
         new(EndpointIds.OptionPresetsList, Bundles.Presets),
         new(EndpointIds.OptionPresetsDelete, Bundles.Presets),
+        new(EndpointIds.DownloadConfigSetsCreate, Bundles.DownloadConfigSets),
+        new(EndpointIds.DownloadConfigSetsUpdate, Bundles.DownloadConfigSets),
+        new(EndpointIds.DownloadConfigSetsGet, Bundles.DownloadConfigSets),
+        new(EndpointIds.DownloadConfigSetsList, Bundles.DownloadConfigSets),
+        new(EndpointIds.DownloadConfigSetsDelete, Bundles.DownloadConfigSets),
 
         new(EndpointIds.CreatorSourcesCreate, Bundles.CreatorSources),
         new(EndpointIds.CreatorSourcesDownloadChannel, Bundles.CreatorSources),

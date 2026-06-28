@@ -20,8 +20,13 @@ public sealed class PlaylistsRepository(DataBridgeDbContext db, IClock clock) : 
         {
             existingById.State = PlaylistState.PendingMetadata;
             existingById.UpdatedAt = clock.GetCurrentInstant();
+            existingById.ConfigSetKey = request.ConfigSetKey;
             existingById.EncodeForPlaylist = request.EncodeForPlaylist;
             existingById.AudioFormat = request.AudioFormat;
+            existingById.CookieSecretPath = request.CookieSecretPath;
+            existingById.YtDlpOptionsJson = request.YtDlpOptions is null ? null : System.Text.Json.JsonSerializer.Serialize(request.YtDlpOptions);
+            existingById.Priority = request.Priority;
+            existingById.FetchComments = request.FetchComments;
             await db.SaveChangesAsync(ct);
             return new UpsertResult(existingById, WasReused: true);
         }
@@ -33,8 +38,13 @@ public sealed class PlaylistsRepository(DataBridgeDbContext db, IClock clock) : 
             existingByUrl.UpdatedAt = clock.GetCurrentInstant();
             existingByUrl.RequestedBy = request.RequestedBy ?? existingByUrl.RequestedBy;
             existingByUrl.StorageKey = request.StorageKey ?? existingByUrl.StorageKey;
+            existingByUrl.ConfigSetKey = request.ConfigSetKey;
             existingByUrl.EncodeForPlaylist = request.EncodeForPlaylist;
             existingByUrl.AudioFormat = request.AudioFormat;
+            existingByUrl.CookieSecretPath = request.CookieSecretPath;
+            existingByUrl.YtDlpOptionsJson = request.YtDlpOptions is null ? null : System.Text.Json.JsonSerializer.Serialize(request.YtDlpOptions);
+            existingByUrl.Priority = request.Priority;
+            existingByUrl.FetchComments = request.FetchComments;
             await db.SaveChangesAsync(ct);
             return new UpsertResult(existingByUrl, WasReused: true);
         }
@@ -47,8 +57,13 @@ public sealed class PlaylistsRepository(DataBridgeDbContext db, IClock clock) : 
             SourceUrl = request.SourceUrl,
             RequestedBy = request.RequestedBy,
             StorageKey = request.StorageKey,
+            ConfigSetKey = request.ConfigSetKey,
             EncodeForPlaylist = request.EncodeForPlaylist,
-            AudioFormat = request.AudioFormat
+            AudioFormat = request.AudioFormat,
+            CookieSecretPath = request.CookieSecretPath,
+            YtDlpOptionsJson = request.YtDlpOptions is null ? null : System.Text.Json.JsonSerializer.Serialize(request.YtDlpOptions),
+            Priority = request.Priority,
+            FetchComments = request.FetchComments
         };
         db.Playlists.Add(entity);
         await db.SaveChangesAsync(ct);

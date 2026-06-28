@@ -61,11 +61,22 @@ public sealed record PlaylistRequested : IPlaylistFlowMessage
     /// <summary>FluentStorage backend key used for every per-item job. Defaults to "default".</summary>
     public string? StorageKey { get; init; }
 
+    /// <summary>User-owned reusable download config key used to submit this playlist, if any.</summary>
+    public string? ConfigSetKey { get; init; }
+
     /// <summary>When true, playlist fan-out asks for cached audio renditions for stream mode.</summary>
     public bool EncodeForPlaylist { get; init; }
 
     /// <summary>Preferred audio format for playlist audio stream mode.</summary>
     public AudioRenditionFormat AudioFormat { get; init; } = AudioRenditionFormat.Aac;
+
+    public string? CookieSecretPath { get; init; }
+
+    public int Priority { get; init; }
+
+    public bool FetchComments { get; init; }
+
+    public YtDlpSharpLib.Options.YtDlpOptions? YtDlpOptions { get; init; }
 }
 
 /// <summary>

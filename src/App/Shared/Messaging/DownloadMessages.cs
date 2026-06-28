@@ -183,6 +183,12 @@ public sealed record DownloadRequested : IFlowMessage
     /// </summary>
     public AudioConversionFormat? AudioFormat { get; init; }
 
+    /// <summary>When true, queue a cached audio rendition after the video download completes.</summary>
+    public bool EncodeAudioRendition { get; init; }
+
+    /// <summary>Cached audio rendition format used when <see cref="EncodeAudioRendition"/> is true.</summary>
+    public AudioRenditionFormat AudioRenditionFormat { get; init; } = AudioRenditionFormat.Aac;
+
     /// <summary>
     /// Caller-supplied yt-dlp options snapshot. The Worker merges this on top of its
     /// own defaults before invoking yt-dlp. Mutually exclusive with
