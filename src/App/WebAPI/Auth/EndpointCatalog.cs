@@ -69,6 +69,8 @@ public static class EndpointIds
     public const string MetadataOrphansList = "metadata.orphans.list";
     public const string MetadataOrphansRestoreFile = "metadata.orphans.restore-file";
     public const string MetadataOrphansRestoreMetadata = "metadata.orphans.restore-metadata";
+    public const string MediaDelete = "media.delete";
+    public const string MediaDeleteForStorageKey = "media.delete-for-key";
 
     // Playlists
     public const string PlaylistsCreate = "playlists.create";
@@ -185,6 +187,8 @@ public static class EndpointCatalog
         new(EndpointIds.MetadataOrphansList, Bundles.MetadataAdmin),
         new(EndpointIds.MetadataOrphansRestoreFile, Bundles.MetadataAdmin),
         new(EndpointIds.MetadataOrphansRestoreMetadata, Bundles.MetadataAdmin),
+        new(EndpointIds.MediaDelete, Bundles.MetadataAdmin),
+        new(EndpointIds.MediaDeleteForStorageKey, Bundles.MetadataAdmin),
 
         new(EndpointIds.PlaylistsCreate, Bundles.Playlists),
         new(EndpointIds.PlaylistsList, Bundles.Playlists),

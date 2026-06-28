@@ -116,6 +116,7 @@ class Program
         builder.Services.AddScoped<IScheduledTasksRepository, ScheduledTasksRepository>();
         builder.Services.AddScoped<ICreatorDiscoveryRepository, CreatorDiscoveryRepository>();
         builder.Services.AddSingleton<OrphanMetadataCleanupExecutor>();
+        builder.Services.AddSingleton<MediaDeleteExecutor>();
         builder.Services.AddSingleton<DownloadSlotCoordinator>();
 
         builder.Services.AddTypesenseClient(config =>
@@ -158,6 +159,7 @@ class Program
         builder.Services.AddHostedService<UserPlaylistConsumerService>();
         builder.Services.AddHostedService<MetadataQueryConsumerService>();
         builder.Services.AddHostedService<MediaStreamQueryConsumerService>();
+        builder.Services.AddHostedService<MediaDeleteConsumerService>();
 
         // POT broker role: answers pot.request over NATS from a nearby bgutil provider. No-ops unless
         // PotBroker:Enabled is set, so this is inert on deployments without a co-located provider.

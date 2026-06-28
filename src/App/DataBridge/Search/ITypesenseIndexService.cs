@@ -12,6 +12,8 @@ public interface ITypesenseIndexService
 
     Task BulkImportMediaAsync(IReadOnlyList<MediaDocument> documents, CancellationToken ct = default);
 
+    Task DeleteMediaByGuidAsync(string mediaGuid, CancellationToken ct = default);
+
     Task DeleteCommentsByMediaGuidAsync(string mediaGuid, CancellationToken ct = default);
 
     Task BulkImportCommentsAsync(IReadOnlyList<CommentDocument> documents, CancellationToken ct = default);

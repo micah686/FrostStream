@@ -40,6 +40,20 @@ public sealed class TypesenseIndexService(
     public Task BulkImportMediaAsync(IReadOnlyList<MediaDocument> documents, CancellationToken ct = default)
         => ImportAsync(MediaCollectionSchema.CollectionName, documents, ct);
 
+    public async Task DeleteMediaByGuidAsync(string mediaGuid, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        try
+        {
+            // The media collection's document id is the media_guid (see MediaDocument.Id).
+            await client.DeleteDocument<MediaDocument>(MediaCollectionSchema.CollectionName, mediaGuid);
+        }
+        catch (TypesenseApiNotFoundException)
+        {
+            // Already absent from the index — nothing to delete.
+        }
+    }
+
     public Task DeleteCommentsByMediaGuidAsync(string mediaGuid, CancellationToken ct = default)
         => DeleteByMediaGuidAsync(CommentsCollectionSchema.CollectionName, mediaGuid, ct);
 

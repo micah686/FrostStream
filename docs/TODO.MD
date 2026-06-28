@@ -36,6 +36,8 @@
 
 [X]Subtitle download & indexing [2022-02-13]
 
+[X]Delete videos and channel [2021-10-16] (global vs a specific storage key?)
+
 ## TODO
 
 upload metadata
@@ -70,7 +72,7 @@ Optional automatic deletion of watched items after a specified time [2021-12-17]
 User roles, aka read only user [2023-11-10] (hook into auth framework/APIs)
 
 Access control [2021-11-01]
-Delete videos and channel [2021-10-16] (global vs a specific storage key?)
+
 
 Un-ignore videos [2021-10-03]
 Dynamic download queue [2021-09-26]
