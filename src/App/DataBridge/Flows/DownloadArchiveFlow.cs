@@ -33,6 +33,7 @@ public class DownloadArchiveFlow(
         var jobId = request.JobId;
         var jobInstance = jobId.ToString("N");
         var storageKey = request.StorageKey ?? "default";
+        MetadataFetched? metadata = null;
 
         // Resolve the worker tag for this storage key once and capture it so retries
         // replay the same routing decision even if config changes mid-flow.
@@ -60,14 +61,31 @@ public class DownloadArchiveFlow(
             return;
         }
 
-        // STEP 1: metadata ----------------------------------------------------
-        await Capture(() => Update(jobId, DownloadJobState.MetadataPending));
-        var metadata = await RunMetadataStep(request, jobInstance, storageKey, workerTag);
-        if (metadata is null) return;
-        if (await Capture(() => IsCancelling(jobId)))
+        if (request.ResumeFromHaltedState)
         {
-            await Capture(() => Cancel(jobId, "Download cancelled by request."));
-            return;
+            metadata = await Capture(() => RepoCall(r => r.GetLastMetadataFetchedAsync(jobId)));
+            if (metadata is not null)
+            {
+                logger.LogInformation(
+                    "Download flow resuming from recorded metadata for JobId {JobId} Provider {Provider} SourceMediaId {SourceMediaId}.",
+                    jobId,
+                    metadata.Provider,
+                    metadata.SourceMediaId);
+                await Capture(() => Update(jobId, DownloadJobState.MetadataResolved));
+            }
+        }
+
+        // STEP 1: metadata ----------------------------------------------------
+        if (metadata is null)
+        {
+            await Capture(() => Update(jobId, DownloadJobState.MetadataPending));
+            metadata = await RunMetadataStep(request, jobInstance, storageKey, workerTag);
+            if (metadata is null) return;
+            if (await Capture(() => IsCancelling(jobId)))
+            {
+                await Capture(() => Cancel(jobId, "Download cancelled by request."));
+                return;
+            }
         }
 
         // STEP 2: dedupe by source -------------------------------------------
@@ -303,7 +321,8 @@ public class DownloadArchiveFlow(
                 RequiredWorkerTag = workerTag,
                 YtDlpOptions = request.YtDlpOptions,
                 CookieSecretPath = request.CookieSecretPath,
-                FetchComments = request.FetchComments
+                FetchComments = request.FetchComments,
+                ResumeFromHaltedState = request.ResumeFromHaltedState
             };
             var subject = string.IsNullOrWhiteSpace(workerTag)
                 ? DownloadSubjects.FetchMetadataCommand
@@ -331,15 +350,17 @@ public class DownloadArchiveFlow(
 
             var failure = result.Second;
             logger.LogWarning(
-                "Download flow metadata fetch failed for JobId {JobId} Attempt {Attempt} FailureKind {FailureKind} ErrorCode {ErrorCode} ErrorMessage {ErrorMessage}",
+                "Download flow metadata fetch failed for JobId {JobId} Attempt {Attempt} FailureKind {FailureKind} ErrorCode {ErrorCode} Provider {Provider} HaltProviderDownloads {HaltProviderDownloads} ErrorMessage {ErrorMessage}",
                 request.JobId,
                 attempt,
                 failure.FailureKind,
                 failure.ErrorCode,
+                failure.Provider,
+                failure.HaltProviderDownloads,
                 failure.ErrorMessage);
             if (TerminalFailureForStep(failure, attempt) is { } terminal)
             {
-                await Capture(() => Fail(request.JobId, failure, terminal));
+                await Capture(() => Fail(request, failure, terminal));
                 return null;
             }
         }
@@ -368,7 +389,8 @@ public class DownloadArchiveFlow(
                 MediaKind = request.MediaKind,
                 AudioFormat = request.AudioFormat,
                 YtDlpOptions = request.YtDlpOptions,
-                CookieSecretPath = request.CookieSecretPath
+                CookieSecretPath = request.CookieSecretPath,
+                ResumeFromHaltedState = request.ResumeFromHaltedState
             };
             var subject = string.IsNullOrWhiteSpace(workerTag)
                 ? DownloadSubjects.DownloadVideoCommand
@@ -403,11 +425,13 @@ public class DownloadArchiveFlow(
 
             var failure = result.Second;
             logger.LogWarning(
-                "Download flow video download failed for JobId {JobId} Attempt {Attempt} FailureKind {FailureKind} ErrorCode {ErrorCode} ErrorMessage {ErrorMessage} TempFileRef {TempFileRef}",
+                "Download flow video download failed for JobId {JobId} Attempt {Attempt} FailureKind {FailureKind} ErrorCode {ErrorCode} Provider {Provider} HaltProviderDownloads {HaltProviderDownloads} ErrorMessage {ErrorMessage} TempFileRef {TempFileRef}",
                 request.JobId,
                 attempt,
                 failure.FailureKind,
                 failure.ErrorCode,
+                failure.Provider,
+                failure.HaltProviderDownloads,
                 failure.ErrorMessage,
                 failure.TempFileRef);
             if (!string.IsNullOrEmpty(failure.TempFileRef))
@@ -420,7 +444,7 @@ public class DownloadArchiveFlow(
                 if (terminal == DownloadJobState.Cancelled)
                     await Capture(() => Cancel(request.JobId, failure.ErrorMessage));
                 else
-                    await Capture(() => Fail(request.JobId, failure, terminal));
+                    await Capture(() => Fail(request, failure, terminal));
                 return null;
             }
         }
@@ -493,7 +517,7 @@ public class DownloadArchiveFlow(
             if (TerminalFailureForStep(failure, attempt) is { } terminal)
             {
                 await Capture(() => DispatchTempFileCleanup(request, downloaded.TempFileRef, jobInstance, attempt, workerTag));
-                await Capture(() => Fail(request.JobId, failure, terminal));
+                await Capture(() => Fail(request, failure, terminal));
                 return null;
             }
         }
@@ -760,14 +784,16 @@ public class DownloadArchiveFlow(
     private static DownloadJobState? TerminalFailureForStep<TFailure>(TFailure failure, int attempt)
         where TFailure : IFlowMessage
     {
-        var kind = failure switch
+        var (kind, haltProviderDownloads) = failure switch
         {
-            MetadataFetchFailed m => m.FailureKind,
-            DownloadFailed d => d.FailureKind,
-            UploadFailed u => u.FailureKind,
-            _ => FailureKind.Unknown
+            MetadataFetchFailed m => (m.FailureKind, m.HaltProviderDownloads),
+            DownloadFailed d => (d.FailureKind, d.HaltProviderDownloads),
+            UploadFailed u => (u.FailureKind, false),
+            _ => (FailureKind.Unknown, false)
         };
 
+        if (haltProviderDownloads)
+            return DownloadJobState.ProviderHalted;
         if (kind is FailureKind.Cancelled)
             return DownloadJobState.Cancelled;
         if (kind is FailureKind.Permanent)
@@ -828,7 +854,7 @@ public class DownloadArchiveFlow(
         await RepoCall(r => r.UpdateStateAsync(jobId, state));
     }
 
-    private async Task Fail<TFailure>(Guid jobId, TFailure failure, DownloadJobState terminalState)
+    private async Task Fail<TFailure>(DownloadRequested request, TFailure failure, DownloadJobState terminalState)
         where TFailure : IFlowMessage
     {
         var (kind, code, message) = failure switch
@@ -840,12 +866,23 @@ public class DownloadArchiveFlow(
         };
         logger.LogWarning(
             "Download flow terminal failure for JobId {JobId}: State {TerminalState} FailureKind {FailureKind} ErrorCode {ErrorCode} ErrorMessage {ErrorMessage}",
-            jobId,
+            request.JobId,
             terminalState,
             kind,
             code,
             message);
-        await RepoCall(r => r.RecordTerminalFailureAsync(jobId, kind, code, message, terminalState, lastPayloadJson: null));
+        await RepoCall(r => r.RecordTerminalFailureAsync(request.JobId, kind, code, message, terminalState, lastPayloadJson: null));
+
+        if (terminalState == DownloadJobState.ProviderHalted && request.SourceKind is not DownloadSourceKind.Direct)
+        {
+            var retryAt = clock.GetCurrentInstant().Plus(Duration.FromHours(2));
+            logger.LogInformation(
+                "Scheduling provider-halt retry for JobId {JobId} at {RetryAt} SourceKind {SourceKind}.",
+                request.JobId,
+                retryAt,
+                request.SourceKind);
+            await RepoCall(r => r.ScheduleProviderHaltRetryAsync(request.JobId, retryAt));
+        }
     }
 
     private async Task Cancel(Guid jobId, string? message)

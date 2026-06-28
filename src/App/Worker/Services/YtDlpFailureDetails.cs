@@ -7,9 +7,12 @@ namespace Worker.Services;
 
 internal static class YtDlpFailureDetails
 {
-    public static string DescribeException(Exception ex)
+    public static string DescribeException(Exception ex, string? provider = null, string? sourceUrl = null)
     {
         var ytDlpOutput = GetYtDlpOutput(ex);
+
+        if (ClassifyProviderAccessFailure(ex, provider, sourceUrl) is { } providerFailure)
+            return providerFailure.Description;
 
         if (IsYtDlpSignInOrBotChallenge(ytDlpOutput))
         {
@@ -29,8 +32,11 @@ internal static class YtDlpFailureDetails
         return ytDlpOutput;
     }
 
-    public static string? ErrorCode(Exception ex)
+    public static string? ErrorCode(Exception ex, string? provider = null, string? sourceUrl = null)
     {
+        if (ClassifyProviderAccessFailure(ex, provider, sourceUrl) is { } providerFailure)
+            return providerFailure.ErrorCode;
+
         var text = GetYtDlpOutput(ex);
 
         if (IsYtDlpSignInOrBotChallenge(text))
@@ -46,6 +52,51 @@ internal static class YtDlpFailureDetails
             YtDlpProcessException processException when processException.ExitCode is { } exitCode
                 => $"yt-dlp.exit-{exitCode.ToString(CultureInfo.InvariantCulture)}",
             YtDlpException => "yt-dlp.failed",
+            _ => null
+        };
+    }
+
+    public static ProviderAccessFailure? ClassifyProviderAccessFailure(
+        Exception ex,
+        string? provider = null,
+        string? sourceUrl = null)
+    {
+        var normalizedProvider = ResolveProvider(provider, sourceUrl);
+        if (normalizedProvider is null)
+            return null;
+
+        var text = GetYtDlpOutput(ex);
+        return normalizedProvider switch
+        {
+            "youtube" when IsYtDlpBotChallenge(text) => ProviderAccessFailure.BotDetection(
+                normalizedProvider,
+                "yt-dlp.youtube.bot-detection-halted",
+                "yt-dlp could not access YouTube because YouTube is requiring bot verification. " +
+                "YouTube downloads have been halted on this worker until cookies or provider access are refreshed. " +
+                $"Raw yt-dlp error: {text}"),
+            _ => null
+        };
+    }
+
+    public static string? ResolveProvider(string? provider = null, string? sourceUrl = null)
+    {
+        if (!string.IsNullOrWhiteSpace(provider))
+        {
+            var normalized = provider.Trim().ToLowerInvariant();
+            if (normalized.StartsWith("youtube", StringComparison.Ordinal))
+                return "youtube";
+            return normalized.Split(':', 2)[0];
+        }
+
+        if (!Uri.TryCreate(sourceUrl, UriKind.Absolute, out var uri))
+            return null;
+
+        var host = uri.Host.ToLowerInvariant();
+        return host switch
+        {
+            "youtu.be" => "youtube",
+            "youtube.com" or "www.youtube.com" or "m.youtube.com" or "music.youtube.com" => "youtube",
+            _ when host.EndsWith(".youtube.com", StringComparison.Ordinal) => "youtube",
             _ => null
         };
     }
@@ -76,12 +127,15 @@ internal static class YtDlpFailureDetails
             : ex.Message;
 
     private static bool IsYtDlpSignInOrBotChallenge(string text)
+        => IsYtDlpBotChallenge(text)
+           || Contains(text, "use --cookies")
+           || Contains(text, "use cookies from browser");
+
+    private static bool IsYtDlpBotChallenge(string text)
         => Contains(text, "not a bot")
            || Contains(text, "confirm you are not")
            || Contains(text, "confirm you're not")
-           || Contains(text, "sign in to confirm")
-           || Contains(text, "use --cookies")
-           || Contains(text, "use cookies from browser");
+           || Contains(text, "sign in to confirm");
 
     private static bool IsYtDlpAuthenticationFailure(string text)
         => Contains(text, "login required")
@@ -92,4 +146,14 @@ internal static class YtDlpFailureDetails
 
     private static bool Contains(string text, string value)
         => text.Contains(value, StringComparison.OrdinalIgnoreCase);
+}
+
+internal sealed record ProviderAccessFailure(
+    string Provider,
+    string ErrorCode,
+    string Description,
+    bool HaltProviderDownloads)
+{
+    public static ProviderAccessFailure BotDetection(string provider, string errorCode, string description)
+        => new(provider, errorCode, description, HaltProviderDownloads: true);
 }

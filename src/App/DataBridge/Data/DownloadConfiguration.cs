@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Shared.Database;
+using Shared.Messaging;
 
 namespace DataBridge.Data;
 
@@ -38,6 +39,16 @@ public sealed class DownloadJobConfiguration : IEntityTypeConfiguration<Download
         builder.Property(x => x.InfoJsonSizeBytes).HasColumnName("info_json_size_bytes");
         builder.Property(x => x.MetaStoragePath).HasColumnName("meta_storage_path").HasMaxLength(2048);
         builder.Property(x => x.Priority).HasColumnName("priority").HasDefaultValue(0).IsRequired();
+        builder.Property(x => x.SourceKind)
+            .HasColumnName("source_kind")
+            .HasDefaultValue(DownloadSourceKind.Direct)
+            .IsRequired();
+        builder.Property(x => x.ProviderHaltRetryAt)
+            .HasColumnName("provider_halt_retry_at")
+            .HasColumnType("timestamp with time zone");
+        builder.Property(x => x.ProviderHaltRetryDispatchedAt)
+            .HasColumnName("provider_halt_retry_dispatched_at")
+            .HasColumnType("timestamp with time zone");
         builder.Property(x => x.IngestOrigin)
             .HasColumnName("ingest_origin")
             .HasColumnType("media.ingest_origin")

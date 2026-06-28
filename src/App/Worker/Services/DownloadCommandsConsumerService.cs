@@ -45,6 +45,7 @@ public sealed class DownloadCommandsConsumerService(
     IClock clock,
     IOptions<WorkerOptions> workerOptions,
     PotOptionsApplier potOptionsApplier,
+    ProviderDownloadHaltRegistry providerHaltRegistry,
     ILogger<DownloadCommandsConsumerService> logger) : BackgroundService
 {
     private const string MediaFileBase = "media";
@@ -155,6 +156,12 @@ public sealed class DownloadCommandsConsumerService(
                 cmd.RequiredWorkerTag,
                 !string.IsNullOrWhiteSpace(cmd.CookieSecretPath));
 
+            if (await TryPublishHaltedMetadataAsync(cmd))
+            {
+                await context.AckAsync();
+                return;
+            }
+
             // Probe storage connectivity before invoking yt-dlp. A failed probe fails the job
             // immediately with a permanent failure so the saga doesn't waste time downloading
             // bytes that can never be uploaded.
@@ -242,6 +249,7 @@ public sealed class DownloadCommandsConsumerService(
             logger.LogWarning(ex,
                 "FetchMetadata: source unavailable for JobId {JobId} URL {SourceUrl}",
                 cmd.JobId, cmd.SourceUrl);
+            RecordProviderHaltIfNeeded(ex, sourceUrl: cmd.SourceUrl);
             await PublishMetadataFailedAsync(cmd, ex, YtDlpFailureDetails.ClassifyYtDlpFailure(ex));
             await context.AckAsync();
         }
@@ -250,6 +258,7 @@ public sealed class DownloadCommandsConsumerService(
             logger.LogError(ex,
                 "FetchMetadata failed for JobId {JobId} URL {SourceUrl}",
                 cmd.JobId, cmd.SourceUrl);
+            RecordProviderHaltIfNeeded(ex, sourceUrl: cmd.SourceUrl);
             await PublishMetadataFailedAsync(cmd, ex, YtDlpFailureDetails.ClassifyFailure(ex));
             await context.AckAsync();
         }
@@ -270,6 +279,12 @@ public sealed class DownloadCommandsConsumerService(
 
         try
         {
+            if (await TryPublishHaltedDownloadAsync(cmd))
+            {
+                await context.AckAsync();
+                return;
+            }
+
             if (!_activeDownloadCancellations.TryAdd(cmd.JobId, downloadCts))
                 throw new InvalidOperationException($"Download job {cmd.JobId} is already active on this worker.");
 
@@ -348,6 +363,7 @@ public sealed class DownloadCommandsConsumerService(
             logger.LogWarning(ex,
                 "DownloadVideo: source unavailable for JobId {JobId} URL {SourceUrl}",
                 cmd.JobId, cmd.SourceUrl);
+            RecordProviderHaltIfNeeded(ex, sourceUrl: cmd.SourceUrl);
             await PublishDownloadFailedAsync(cmd, ex, YtDlpFailureDetails.ClassifyYtDlpFailure(ex), tempFileRef ?? FindDownloadedMediaFile(tempDirectory));
             await context.AckAsync();
         }
@@ -372,6 +388,7 @@ public sealed class DownloadCommandsConsumerService(
                 await progress.FlushAsync();
 
             logger.LogError(ex, "DownloadVideo failed for JobId {JobId} URL {SourceUrl}", cmd.JobId, cmd.SourceUrl);
+            RecordProviderHaltIfNeeded(ex, sourceUrl: cmd.SourceUrl);
             await PublishDownloadFailedAsync(cmd, ex, YtDlpFailureDetails.ClassifyFailure(ex), tempFileRef ?? FindDownloadedMediaFile(tempDirectory));
             await context.AckAsync();
         }
@@ -693,8 +710,96 @@ public sealed class DownloadCommandsConsumerService(
             : null;
     }
 
+    private async Task<bool> TryPublishHaltedMetadataAsync(FetchMetadataCommand cmd)
+    {
+        if (cmd.ResumeFromHaltedState)
+            return false;
+
+        var provider = YtDlpFailureDetails.ResolveProvider(sourceUrl: cmd.SourceUrl);
+        if (!providerHaltRegistry.TryGetHalt(provider, out var halt))
+            return false;
+
+        logger.LogWarning(
+            "Metadata fetch halted for JobId {JobId} URL {SourceUrl} Provider {Provider} HaltedAt {HaltedAt}: {ErrorMessage}",
+            cmd.JobId,
+            cmd.SourceUrl,
+            halt.Provider,
+            halt.HaltedAt,
+            halt.ErrorMessage);
+
+        await PublishFailureAsync(DownloadSubjects.MetadataFetchFailed, cmd, envelope => new MetadataFetchFailed
+        {
+            JobId = envelope.JobId,
+            CorrelationId = envelope.CorrelationId,
+            CausationId = envelope.CausationId,
+            MessageId = envelope.MessageId,
+            OperationKey = envelope.OperationKey,
+            OccurredAt = envelope.OccurredAt,
+            Attempt = envelope.Attempt,
+            FailureKind = FailureKind.Permanent,
+            ErrorCode = halt.ErrorCode,
+            Provider = halt.Provider,
+            HaltProviderDownloads = true,
+            ErrorMessage = halt.ErrorMessage
+        });
+        return true;
+    }
+
+    private async Task<bool> TryPublishHaltedDownloadAsync(DownloadVideoCommand cmd)
+    {
+        if (cmd.ResumeFromHaltedState)
+            return false;
+
+        var provider = YtDlpFailureDetails.ResolveProvider(sourceUrl: cmd.SourceUrl);
+        if (!providerHaltRegistry.TryGetHalt(provider, out var halt))
+            return false;
+
+        logger.LogWarning(
+            "Download halted for JobId {JobId} URL {SourceUrl} Provider {Provider} HaltedAt {HaltedAt}: {ErrorMessage}",
+            cmd.JobId,
+            cmd.SourceUrl,
+            halt.Provider,
+            halt.HaltedAt,
+            halt.ErrorMessage);
+
+        await PublishFailureAsync(DownloadSubjects.DownloadFailed, cmd, envelope => new DownloadFailed
+        {
+            JobId = envelope.JobId,
+            CorrelationId = envelope.CorrelationId,
+            CausationId = envelope.CausationId,
+            MessageId = envelope.MessageId,
+            OperationKey = envelope.OperationKey,
+            OccurredAt = envelope.OccurredAt,
+            Attempt = envelope.Attempt,
+            FailureKind = FailureKind.Permanent,
+            ErrorCode = halt.ErrorCode,
+            Provider = halt.Provider,
+            HaltProviderDownloads = true,
+            ErrorMessage = halt.ErrorMessage,
+            TempFileRef = null
+        });
+        return true;
+    }
+
+    private void RecordProviderHaltIfNeeded(Exception ex, string sourceUrl)
+    {
+        var providerFailure = YtDlpFailureDetails.ClassifyProviderAccessFailure(ex, sourceUrl: sourceUrl);
+        if (providerFailure is not { HaltProviderDownloads: true })
+            return;
+
+        var halt = providerHaltRegistry.Record(providerFailure);
+        logger.LogWarning(
+            "Provider downloads halted for Provider {Provider} ErrorCode {ErrorCode} HaltedAt {HaltedAt}: {ErrorMessage}",
+            halt.Provider,
+            halt.ErrorCode,
+            halt.HaltedAt,
+            halt.ErrorMessage);
+    }
+
     private Task PublishMetadataFailedAsync(FetchMetadataCommand cmd, Exception ex, FailureKind failureKind)
-        => PublishFailureAsync(DownloadSubjects.MetadataFetchFailed, cmd, envelope => new MetadataFetchFailed
+    {
+        var providerFailure = YtDlpFailureDetails.ClassifyProviderAccessFailure(ex, sourceUrl: cmd.SourceUrl);
+        return PublishFailureAsync(DownloadSubjects.MetadataFetchFailed, cmd, envelope => new MetadataFetchFailed
         {
             JobId = envelope.JobId,
             CorrelationId = envelope.CorrelationId,
@@ -704,16 +809,21 @@ public sealed class DownloadCommandsConsumerService(
             OccurredAt = envelope.OccurredAt,
             Attempt = envelope.Attempt,
             FailureKind = failureKind,
-            ErrorCode = YtDlpFailureDetails.ErrorCode(ex),
-            ErrorMessage = YtDlpFailureDetails.DescribeException(ex)
+            ErrorCode = providerFailure?.ErrorCode ?? YtDlpFailureDetails.ErrorCode(ex, sourceUrl: cmd.SourceUrl),
+            Provider = providerFailure?.Provider ?? YtDlpFailureDetails.ResolveProvider(sourceUrl: cmd.SourceUrl),
+            HaltProviderDownloads = providerFailure?.HaltProviderDownloads ?? false,
+            ErrorMessage = providerFailure?.Description ?? YtDlpFailureDetails.DescribeException(ex, sourceUrl: cmd.SourceUrl)
         });
+    }
 
     private Task PublishDownloadFailedAsync(
         DownloadVideoCommand cmd,
         Exception ex,
         FailureKind failureKind,
         string? tempFileRef)
-        => PublishFailureAsync(DownloadSubjects.DownloadFailed, cmd, envelope => new DownloadFailed
+    {
+        var providerFailure = YtDlpFailureDetails.ClassifyProviderAccessFailure(ex, sourceUrl: cmd.SourceUrl);
+        return PublishFailureAsync(DownloadSubjects.DownloadFailed, cmd, envelope => new DownloadFailed
         {
             JobId = envelope.JobId,
             CorrelationId = envelope.CorrelationId,
@@ -723,10 +833,13 @@ public sealed class DownloadCommandsConsumerService(
             OccurredAt = envelope.OccurredAt,
             Attempt = envelope.Attempt,
             FailureKind = failureKind,
-            ErrorCode = YtDlpFailureDetails.ErrorCode(ex),
-            ErrorMessage = YtDlpFailureDetails.DescribeException(ex),
+            ErrorCode = providerFailure?.ErrorCode ?? YtDlpFailureDetails.ErrorCode(ex, sourceUrl: cmd.SourceUrl),
+            Provider = providerFailure?.Provider ?? YtDlpFailureDetails.ResolveProvider(sourceUrl: cmd.SourceUrl),
+            HaltProviderDownloads = providerFailure?.HaltProviderDownloads ?? false,
+            ErrorMessage = providerFailure?.Description ?? YtDlpFailureDetails.DescribeException(ex, sourceUrl: cmd.SourceUrl),
             TempFileRef = tempFileRef
         });
+    }
 
     private Task PublishUploadFailedAsync(UploadObjectCommand cmd, Exception ex, FailureKind failureKind)
         => PublishFailureAsync(DownloadSubjects.UploadFailed, cmd, envelope => new UploadFailed

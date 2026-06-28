@@ -14,6 +14,7 @@ namespace DataBridge.Messaging;
 /// </summary>
 public sealed class DownloadAdminConsumerService(
     IMessageBus messageBus,
+    IJetStreamPublisher publisher,
     IServiceScopeFactory scopeFactory,
     DownloadSlotCoordinator slotCoordinator,
     DownloadArchiveFlows flows,
@@ -35,6 +36,13 @@ public sealed class DownloadAdminConsumerService(
             messageBus,
             DownloadSubjects.CancelDownloadRequest,
             HandleCancelAsync,
+            queueGroup: QueueGroup,
+            cancellationToken: stoppingToken);
+
+        await SubscribeAsync<RestartHaltedDownloadRequest>(
+            messageBus,
+            DownloadSubjects.RestartHaltedDownloadRequest,
+            HandleRestartHaltedAsync,
             queueGroup: QueueGroup,
             cancellationToken: stoppingToken);
 
@@ -81,6 +89,99 @@ public sealed class DownloadAdminConsumerService(
             {
                 Success = false,
                 Error = "Internal error."
+            });
+        }
+    }
+
+    private async Task HandleRestartHaltedAsync(IMessageContext<RestartHaltedDownloadRequest> context)
+    {
+        var req = context.Message;
+        try
+        {
+            DownloadRequested? originalRequest;
+            using (var scope = scopeFactory.CreateScope())
+            {
+                var repo = scope.ServiceProvider.GetRequiredService<IDownloadJobsRepository>();
+                var job = await repo.GetJobStateAndStorageKeyAsync(req.JobId);
+                if (job.State is null)
+                {
+                    await context.RespondAsync(new RestartHaltedDownloadResponse
+                    {
+                        Success = false,
+                        ErrorCode = "not_found",
+                        ErrorMessage = $"Job '{req.JobId}' was not found."
+                    });
+                    return;
+                }
+
+                if (job.State is not DownloadJobState.ProviderHalted)
+                {
+                    await context.RespondAsync(new RestartHaltedDownloadResponse
+                    {
+                        Success = false,
+                        ErrorCode = "not_halted",
+                        ErrorMessage = $"Job '{req.JobId}' is not halted."
+                    });
+                    return;
+                }
+
+                originalRequest = await repo.GetOriginalRequestAsync(req.JobId);
+                if (originalRequest is null)
+                {
+                    await context.RespondAsync(new RestartHaltedDownloadResponse
+                    {
+                        Success = false,
+                        ErrorCode = "missing_request",
+                        ErrorMessage = $"Original request for job '{req.JobId}' was not found."
+                    });
+                    return;
+                }
+
+                await repo.MarkProviderHaltRetryDispatchedAsync(req.JobId);
+            }
+
+            var replay = originalRequest with
+            {
+                MessageId = Guid.NewGuid(),
+                CausationId = originalRequest.MessageId,
+                OperationKey = $"job/{req.JobId:N}/restart/{Guid.NewGuid():N}",
+                OccurredAt = clock.GetCurrentInstant(),
+                Attempt = originalRequest.Attempt + 1,
+                ResumeFromHaltedState = true
+            };
+
+            await publisher.PublishAsync(
+                DownloadSubjects.DownloadRequested,
+                replay,
+                messageId: replay.MessageId.ToString("N"));
+
+            logger.LogInformation("Restarted halted download JobId {JobId}.", req.JobId);
+
+            await context.RespondAsync(new RestartHaltedDownloadResponse
+            {
+                Success = true,
+                JobId = req.JobId
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed restarting halted download JobId {JobId}.", req.JobId);
+            try
+            {
+                using var scope = scopeFactory.CreateScope();
+                var repo = scope.ServiceProvider.GetRequiredService<IDownloadJobsRepository>();
+                await repo.ClearProviderHaltRetryDispatchedAsync(req.JobId);
+            }
+            catch
+            {
+                // If cleanup fails, the job stays halted and can still be restarted manually.
+            }
+
+            await context.RespondAsync(new RestartHaltedDownloadResponse
+            {
+                Success = false,
+                ErrorCode = "internal",
+                ErrorMessage = "Failed to restart halted download."
             });
         }
     }

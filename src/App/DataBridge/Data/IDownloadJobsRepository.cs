@@ -19,6 +19,10 @@ public interface IDownloadJobsRepository
 
     Task CreateJobIfMissingAsync(DownloadRequested request, CancellationToken ct = default);
 
+    Task<DownloadRequested?> GetOriginalRequestAsync(Guid jobId, CancellationToken ct = default);
+
+    Task<MetadataFetched?> GetLastMetadataFetchedAsync(Guid jobId, CancellationToken ct = default);
+
     Task UpdateStateAsync(Guid jobId, DownloadJobState state, CancellationToken ct = default);
 
     Task ApplyMetadataAsync(Guid jobId, MetadataFetched evt, CancellationToken ct = default);
@@ -101,6 +105,14 @@ public interface IDownloadJobsRepository
     Task RecordHistoryAsync(Guid jobId, Guid messageId, string operationKey, string eventName, string? payloadJson, CancellationToken ct = default);
 
     Task RecordTerminalFailureAsync(Guid jobId, FailureKind kind, string? code, string message, DownloadJobState terminalState, string? lastPayloadJson, CancellationToken ct = default);
+
+    Task ScheduleProviderHaltRetryAsync(Guid jobId, Instant retryAt, CancellationToken ct = default);
+
+    Task MarkProviderHaltRetryDispatchedAsync(Guid jobId, CancellationToken ct = default);
+
+    Task ClearProviderHaltRetryDispatchedAsync(Guid jobId, CancellationToken ct = default);
+
+    Task<IReadOnlyList<ProviderHaltRetryCandidate>> GetDueProviderHaltRetriesAsync(Instant now, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -163,6 +175,8 @@ public sealed record VersionReservation(
 
 /// <summary>A job waiting for a download slot, as returned by <see cref="IDownloadJobsRepository.GetDownloadQueuedJobsAsync"/>.</summary>
 public sealed record DownloadQueuedEntry(Guid JobId, int Priority, Instant CreatedAt, string? StorageKey);
+
+public sealed record ProviderHaltRetryCandidate(Guid JobId, Instant RetryAt, DownloadSourceKind SourceKind);
 
 public sealed record CancelDownloadDecision(
     bool Accepted,

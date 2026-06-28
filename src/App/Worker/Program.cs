@@ -97,6 +97,7 @@ class Program
             .Bind(builder.Configuration.GetSection(PotProviderOptions.SectionName));
         builder.Services.AddSingleton<PotShimEndpoint>();
         builder.Services.AddSingleton<PotOptionsApplier>();
+        builder.Services.AddSingleton<ProviderDownloadHaltRegistry>();
 
         // Register startup service (downloads yt-dlp/ffmpeg/ffprobe binaries before any
         // BackgroundService starts).

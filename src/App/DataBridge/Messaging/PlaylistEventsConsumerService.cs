@@ -219,7 +219,8 @@ public sealed class PlaylistEventsConsumerService(
                     Priority = playlist.Priority,
                     FetchComments = playlist.FetchComments,
                     EncodeAudioRendition = playlist.EncodeForPlaylist,
-                    AudioRenditionFormat = playlist.AudioFormat
+                    AudioRenditionFormat = playlist.AudioFormat,
+                    SourceKind = DownloadSourceKind.Playlist
                 };
 
                 await publisher.PublishAsync(

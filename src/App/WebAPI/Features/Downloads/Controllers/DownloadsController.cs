@@ -150,7 +150,7 @@ public class DownloadsController(
     /// <c>Cancelled</c> once the flow has released any held resources.
     /// </summary>
     [HttpPost("{jobId:guid}/cancel")]
-    [Endpoint(EndpointIds.DownloadsCancel)]
+    [Endpoint(EndpointIds.DownloadsRestartHalted)]
     [EndpointSummary("Cancel a download job")]
     [EndpointDescription("Requests clean cancellation of a queued or active download job. Queued jobs are removed from the scheduler; active yt-dlp processes are asked to stop and any worker-local temp files are cleaned.")]
     public async Task<ActionResult> Cancel(
@@ -204,6 +204,68 @@ public class DownloadsController(
             Title = response.Error ?? "Download cannot be cancelled.",
             Status = StatusCodes.Status409Conflict
         });
+    }
+
+    /// <summary>
+    /// Restarts a download job that was halted because the provider demanded bot verification.
+    /// The restart replays the original request payload and resumes from the last recorded
+    /// successful step when the flow has one available.
+    /// </summary>
+    [HttpPost("{jobId:guid}/restart")]
+    [Endpoint(EndpointIds.DownloadsCancel)]
+    [EndpointSummary("Restart a halted download job")]
+    [EndpointDescription("Restarts a download job that was halted by provider bot-detection. The original request is replayed and the worker resumes from the last recorded successful step when possible.")]
+    public async Task<ActionResult> RestartHalted(
+        [FromRoute] Guid jobId,
+        CancellationToken cancellationToken)
+    {
+        RestartHaltedDownloadResponse? response;
+        try
+        {
+            response = await messageBus.RequestAsync<RestartHaltedDownloadRequest, RestartHaltedDownloadResponse>(
+                DownloadSubjects.RestartHaltedDownloadRequest,
+                new RestartHaltedDownloadRequest
+                {
+                    JobId = jobId,
+                    RequestedBy = AuthConstants.FindSubject(User)
+                },
+                AdminRequestTimeout,
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed requesting restart for JobId {JobId}", jobId);
+            return StatusCode(StatusCodes.Status502BadGateway, new ProblemDetails
+            {
+                Title = "Failed to restart download",
+                Detail = "Could not reach the messaging bus.",
+                Status = StatusCodes.Status502BadGateway
+            });
+        }
+
+        if (response is null)
+        {
+            return StatusCode(StatusCodes.Status502BadGateway, new ProblemDetails
+            {
+                Title = "Failed to restart download",
+                Detail = "No response from DataBridge.",
+                Status = StatusCodes.Status502BadGateway
+            });
+        }
+
+        if (response.Success)
+            return Accepted(new { State = "queued", JobId = response.JobId });
+
+        return response.ErrorCode switch
+        {
+            "not_halted" => Conflict(new ProblemDetails { Title = response.ErrorMessage, Status = StatusCodes.Status409Conflict }),
+            "missing_request" => StatusCode(StatusCodes.Status500InternalServerError, new ProblemDetails { Title = response.ErrorMessage, Status = StatusCodes.Status500InternalServerError }),
+            _ => StatusCode(StatusCodes.Status409Conflict, new ProblemDetails
+            {
+                Title = response.ErrorMessage ?? "Download cannot be restarted.",
+                Status = StatusCodes.Status409Conflict
+            })
+        };
     }
 
     private async Task<ActionResult<DownloadRequestResponse>> PublishRequestAsync(
@@ -271,6 +333,7 @@ public class DownloadsController(
             ForceDownload = forceDownload,
             MediaKind = mediaKind,
             AudioFormat = audioFormat,
+            SourceKind = DownloadSourceKind.Direct,
             YtDlpOptions = ytDlpOptions,
             PresetKey = presetKey,
             CookieSecretPath = cookieSecretPath,

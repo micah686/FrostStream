@@ -391,7 +391,8 @@ public sealed class CreatorDiscoveryConsumerService(
                     Priority = msg.Priority,
                     FetchComments = msg.FetchComments,
                     EncodeAudioRendition = msg.EncodeForPlaylist,
-                    AudioRenditionFormat = msg.AudioFormat
+                    AudioRenditionFormat = msg.AudioFormat,
+                    SourceKind = DownloadSourceKind.Channel
                 },
                 messageId: jobId.ToString("N"));
 
@@ -436,7 +437,8 @@ public sealed class CreatorDiscoveryConsumerService(
                 Priority = request.Priority,
                 FetchComments = request.FetchComments,
                 EncodeAudioRendition = request.EncodeForPlaylist,
-                AudioRenditionFormat = request.AudioFormat
+                AudioRenditionFormat = request.AudioFormat,
+                SourceKind = DownloadSourceKind.Channel
             },
             messageId: messageId.ToString("N"));
     }

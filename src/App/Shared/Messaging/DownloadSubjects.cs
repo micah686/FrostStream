@@ -37,6 +37,7 @@ public static class DownloadSubjects
 
     // NATS Core request/reply (not JetStream) — admin operations.
     public const string UpdatePriorityRequest = "download.admin.update-priority";
+    public const string RestartHaltedDownloadRequest = "download.admin.restart-halted";
     public const string CancelDownloadRequest = "download.admin.cancel";
     public const string CancelActiveDownloadCommand = "download.admin.cancel-active";
 }

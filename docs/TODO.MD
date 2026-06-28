@@ -49,6 +49,8 @@
 
 [X]Search comments
 
+[X] Youtube bot detection
+
 ## TODO
 
 upload metadata

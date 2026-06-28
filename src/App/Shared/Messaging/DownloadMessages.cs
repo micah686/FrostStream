@@ -18,6 +18,17 @@ public enum MediaKind
 }
 
 /// <summary>
+/// Where a download request came from. Used to decide whether a provider-halt should be
+/// automatically retried later.
+/// </summary>
+public enum DownloadSourceKind
+{
+    Direct = 0,
+    Playlist = 1,
+    Channel = 2
+}
+
+/// <summary>
 /// Common envelope carried by every message on the download flow's NATS subjects. The
 /// dedupe / correlation / retry machinery in DataBridge, Worker, and Cleipnir relies on
 /// these fields being populated consistently across producers.
@@ -115,7 +126,9 @@ public enum DownloadJobState
     Cancelled = 16,
     /// <summary>Suppressed by a config-set ignore keyword during a user-initiated playlist/channel
     /// download; no download was started. Force-queueing transitions it back to <see cref="Queued"/>.</summary>
-    Ignored = 17
+    Ignored = 17,
+    /// <summary>Provider access was halted after bot-detection or anti-automation challenge was detected.</summary>
+    ProviderHalted = 18
 }
 
 /// <summary>
@@ -173,6 +186,18 @@ public sealed record DownloadRequested : IFlowMessage
     /// so hosts that replace media under the same source identity can be revalidated.
     /// </summary>
     public bool ForceDownload { get; init; }
+
+    /// <summary>
+    /// Where this request came from. Direct user requests do not get automatic provider-halt
+    /// retries; playlist and channel fan-outs do.
+    /// </summary>
+    public DownloadSourceKind SourceKind { get; init; } = DownloadSourceKind.Direct;
+
+    /// <summary>
+    /// When true, the flow should resume from the last recorded successful step instead of
+    /// restarting from the beginning.
+    /// </summary>
+    public bool ResumeFromHaltedState { get; init; }
 
     /// <summary>
     /// What kind of media to produce (video or audio-only). Audio jobs force
@@ -263,6 +288,12 @@ public sealed record FetchMetadataCommand : IFlowMessage
     /// </summary>
     public YtDlpOptions? YtDlpOptions { get; init; }
 
+    /// <summary>
+    /// When true, the Worker should ignore any cached provider halt and attempt the command
+    /// anyway. Used by manual and automatic restarts.
+    /// </summary>
+    public bool ResumeFromHaltedState { get; init; }
+
     /// <summary>Same resolved user-owned cookie path as on <see cref="DownloadRequested.CookieSecretPath"/>.</summary>
     public string? CookieSecretPath { get; init; }
 
@@ -327,6 +358,12 @@ public sealed record MetadataFetchFailed : IFlowMessage
 
     public string? ErrorCode { get; init; }
 
+    /// <summary>Provider whose access failed, when known (for example, <c>youtube</c>).</summary>
+    public string? Provider { get; init; }
+
+    /// <summary>When true, the producer recommends halting more downloads from <see cref="Provider"/>.</summary>
+    public bool HaltProviderDownloads { get; init; }
+
     public required string ErrorMessage { get; init; }
 }
 
@@ -361,6 +398,12 @@ public sealed record DownloadVideoCommand : IFlowMessage
 
     /// <summary>Same resolved user-owned cookie path as on <see cref="DownloadRequested.CookieSecretPath"/>.</summary>
     public string? CookieSecretPath { get; init; }
+
+    /// <summary>
+    /// When true, the Worker should ignore any cached provider halt and attempt the command
+    /// anyway. Used by manual and automatic restarts.
+    /// </summary>
+    public bool ResumeFromHaltedState { get; init; }
 }
 
 /// <summary>
@@ -516,8 +559,31 @@ public sealed record DownloadFailed : IFlowMessage
 
     public required FailureKind FailureKind { get; init; }
     public string? ErrorCode { get; init; }
+    /// <summary>Provider whose access failed, when known (for example, <c>youtube</c>).</summary>
+    public string? Provider { get; init; }
+    /// <summary>When true, the producer recommends halting more downloads from <see cref="Provider"/>.</summary>
+    public bool HaltProviderDownloads { get; init; }
     public required string ErrorMessage { get; init; }
     public string? TempFileRef { get; init; }
+}
+
+/// <summary>
+/// Request to restart a download job that was halted because the provider demanded bot
+/// verification. The DataBridge admin service replays the original request payload with
+/// <see cref="DownloadRequested.ResumeFromHaltedState"/> enabled.
+/// </summary>
+public sealed record RestartHaltedDownloadRequest
+{
+    public required Guid JobId { get; init; }
+    public string? RequestedBy { get; init; }
+}
+
+public sealed record RestartHaltedDownloadResponse
+{
+    public bool Success { get; init; }
+    public string? ErrorCode { get; init; }
+    public string? ErrorMessage { get; init; }
+    public Guid? JobId { get; init; }
 }
 
 /// <summary>

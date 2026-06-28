@@ -357,6 +357,7 @@ public sealed class PlaylistsRepository(DataBridgeDbContext db, IClock clock) : 
                 case DownloadJobState.FailedPermanent:
                 case DownloadJobState.FailedTransient:
                 case DownloadJobState.DeadLettered:
+                case DownloadJobState.ProviderHalted:
                     failed += count;
                     break;
                 default:
