@@ -443,6 +443,8 @@ public sealed class MediaDeleteExecutorTests
 
         public Task<int> GetDocumentCountAsync(string collection, CancellationToken ct = default) => throw new NotSupportedException();
 
+        public Task<bool> MediaCollectionHasFieldAsync(string fieldName, CancellationToken ct = default) => throw new NotSupportedException();
+
         public Task RecreateAllCollectionsAsync(CancellationToken ct = default) => throw new NotSupportedException();
 
         public Task UpsertMediaAsync(MediaDocument document, CancellationToken ct = default) => throw new NotSupportedException();

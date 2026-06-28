@@ -143,6 +143,7 @@ class Program
         builder.Services.AddHostedService<MetadataSearchConsumerService>();
         builder.Services.AddHostedService<MetadataCommentsConsumerService>();
         builder.Services.AddHostedService<MetadataCaptionsConsumerService>();
+        builder.Services.AddHostedService<UnifiedSearchConsumerService>();
         builder.Services.AddHostedService<MetadataRebuildConsumerService>();
 
         builder.Services.AddHostedService<StorageCrudConsumerService>();

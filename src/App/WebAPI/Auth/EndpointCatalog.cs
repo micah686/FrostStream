@@ -69,6 +69,10 @@ public static class EndpointIds
     public const string UserNotesDelete = "user-notes.delete";
     public const string UserNotesSearch = "user-notes.search";
 
+    // Unified search
+    public const string SearchQuery = "search.query";
+    public const string SearchSimilar = "search.similar";
+
     // Metadata (admin)
     public const string MetadataReindex = "metadata.reindex";
     public const string MetadataOrphansList = "metadata.orphans.list";
@@ -205,6 +209,8 @@ public static class EndpointCatalog
         new(EndpointIds.UserNotesGet, Bundles.Metadata),
         new(EndpointIds.UserNotesDelete, Bundles.Metadata),
         new(EndpointIds.UserNotesSearch, Bundles.Metadata),
+        new(EndpointIds.SearchQuery, Bundles.Metadata),
+        new(EndpointIds.SearchSimilar, Bundles.Metadata),
 
         new(EndpointIds.MetadataReindex, Bundles.MetadataAdmin),
         new(EndpointIds.MetadataOrphansList, Bundles.MetadataAdmin),

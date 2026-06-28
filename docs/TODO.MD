@@ -47,6 +47,8 @@
 
 [X]Download or Ignore videos by keyword (#163)
 
+[X]Search comments
+
 ## TODO
 
 upload metadata
@@ -58,7 +60,7 @@ Multi language support
 
 
 
-Search comments
+
 
 Search download queue [2025-07-31]
 Configure shorts, streams and video sizes per channel [2024-07-15]

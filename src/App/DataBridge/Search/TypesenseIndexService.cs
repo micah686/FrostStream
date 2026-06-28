@@ -31,6 +31,19 @@ public sealed class TypesenseIndexService(
         return response.NumberOfDocuments;
     }
 
+    public async Task<bool> MediaCollectionHasFieldAsync(string fieldName, CancellationToken ct = default)
+    {
+        try
+        {
+            var response = await client.RetrieveCollection(MediaCollectionSchema.CollectionName, ct);
+            return response.Fields.Any(field => string.Equals(field.Name, fieldName, StringComparison.Ordinal));
+        }
+        catch (TypesenseApiNotFoundException)
+        {
+            return false;
+        }
+    }
+
     public async Task UpsertMediaAsync(MediaDocument document, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();

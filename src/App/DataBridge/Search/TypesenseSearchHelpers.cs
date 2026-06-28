@@ -7,6 +7,11 @@ public static class TypesenseSearchHelpers
 {
     public const int MaxPageSize = 100;
 
+    /// <summary>Fields needed to project a <see cref="MediaDocument"/> into a media card.</summary>
+    public const string MediaCardIncludeFields =
+        "id,title,thumbnail_storage_path,account_avatar_storage_path,duration_seconds," +
+        "release_date_unix,view_count,availability,was_live,platform,account_id,account_name,account_handle";
+
     public static int NormalizePage(int page)
         => Math.Max(1, page);
 
@@ -20,7 +25,10 @@ public static class TypesenseSearchHelpers
         => sortBy?.Trim().ToLowerInvariant() switch
         {
             "release_date" or "release_date_unix" or "release_date_sort" => "release_date_sort",
-            "view_count" => "view_count",
+            "view_count" or "views" => "view_count",
+            "like_count" or "likes" => "like_count",
+            "duration" or "duration_seconds" => "duration_seconds",
+            "resolution" or "height" or "video_height" => "video_height",
             "title" => "title",
             _ => "release_date_sort"
         };
@@ -41,6 +49,9 @@ public static class TypesenseSearchHelpers
 
     public static string Eq(string field, long value)
         => field + ":=" + value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    public static string Ne(string field, string value)
+        => field + ":!=" + Quote(value);
 
     public static string Quote(string value)
         => "`" + value.Replace("`", "\\`", StringComparison.Ordinal) + "`";
