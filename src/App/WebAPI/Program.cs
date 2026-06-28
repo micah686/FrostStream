@@ -12,6 +12,7 @@ using Shared.Secrets;
 using Shared.Storage;
 using System.Text.Json.Serialization;
 using WebAPI.Auth;
+using WebAPI.Features.Backups;
 
 namespace WebAPI;
 
@@ -33,6 +34,7 @@ public class Program
         WebApiHardening.ValidateStartup(authOptions, singleUserMode, builder.Environment.IsProduction());
         builder.Services.Configure<FrostStreamAuthOptions>(builder.Configuration.GetSection(FrostStreamAuthOptions.SectionName));
         builder.Services.Configure<OpenFgaOptions>(builder.Configuration.GetSection(OpenFgaOptions.SectionName));
+        builder.Services.Configure<BackupOptions>(builder.Configuration.GetSection(BackupOptions.SectionName));
 
         if (singleUserMode)
         {
@@ -111,6 +113,7 @@ public class Program
             });
         
         builder.Services.AddSingleton<IClock>(NodaTime.SystemClock.Instance);
+        builder.Services.AddSingleton<BackupJobService>();
         builder.Services.AddOpenBaoSecretStore(builder.Configuration);
         builder.Services.AddFrostStreamStorage();
 

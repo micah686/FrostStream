@@ -15,12 +15,14 @@
 [X]batch local import (need to figure out if JUST local filesystem, or use IFluentStorage)
  Implement complete offline media file import from json file
 
+[X]backup and restore (should be postgres+openbao+...)
+
 ## TODO
 
 upload metadata
 live_chat (complex, need to integrate with clickhousedb)
 
-backup and restore (should be postgres+openbao+...) 
+
 
 ## TubeArchivst Options
 

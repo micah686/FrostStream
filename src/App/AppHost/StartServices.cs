@@ -16,7 +16,7 @@ public static class StartServices
         var webApiEndpointName = hardening.EnableHttps ? "https" : "http";
 
         var databridge = WireDataBridge(builder, hardening, sharedStorageRoot, nats, postgres, openBao, typesense);
-        var webapi = WireWebApi(builder, hardening, sharedStorageRoot, nats, openBao, authentik, openFga, webApiEndpointName);
+        var webapi = WireWebApi(builder, hardening, sharedStorageRoot, nats, postgres, openBao, authentik, openFga, webApiEndpointName);
         WireWorker(builder, hardening, sharedStorageRoot, nats, openBao);
         WireScheduler(builder, nats, databridge);
         WireAuthTester(builder, hardening, webapi, authentik, webApiEndpointName);
@@ -49,15 +49,31 @@ public static class StartServices
         AppHostHardeningOptions hardening,
         string sharedStorageRoot,
         IResourceBuilder<NatsServerResource> nats,
+        PostgresResources postgres,
         IResourceBuilder<ContainerResource> openBao,
         AuthentikResources authentik,
         OpenFgaResources openFga,
         string webApiEndpointName)
     {
+        var backupToolProject = Path.GetFullPath(Path.Combine(
+            builder.AppHostDirectory,
+            "..",
+            "BackupTool",
+            "BackupTool.csproj"));
+        var backupRoot = Environment.GetEnvironmentVariable("FROSTSTREAM_BACKUP_ROOT")
+                         ?? Path.Combine(sharedStorageRoot, "core-backups");
+
         var webapi = builder.AddProject<Projects.WebAPI>("webapi", launchProfileName: webApiEndpointName)
+            .WithReference(postgres.FrostStreamDb).WaitFor(postgres.FrostStreamDb)
             .WithReference(nats).WaitFor(nats)
             .WithEnvironment("OpenBao__Address", openBao.GetEndpoint("http"))
             .WithEnvironment("OpenBao__Token", hardening.OpenBaoToken)
+            .WithEnvironment("Backup__Directory", backupRoot)
+            .WithEnvironment("Backup__ToolPath", "dotnet")
+            .WithEnvironment("Backup__ToolBaseArguments", $"run --project {backupToolProject} --")
+            .WithEnvironment("Backup__OpenBaoAddress", openBao.GetEndpoint("http"))
+            .WithEnvironment("Backup__OpenBaoToken", hardening.OpenBaoToken)
+            .WithEnvironment("Backup__OpenBaoKvMount", "secret")
             .WithEnvironment("FROSTSTREAM_STORAGE_ROOT", sharedStorageRoot)
             .WithEnvironment("SINGLE_USER_MODE", hardening.SingleUserMode ? "true" : "false")
             .WithEnvironment("Auth__SingleUserMode", hardening.SingleUserMode ? "true" : "false")
