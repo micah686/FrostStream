@@ -1,6 +1,7 @@
 using Cleipnir.Flows;
 using Cleipnir.Flows.AspNet;
 using Cleipnir.Flows.PostgresSql;
+using DataBridge.Backup;
 using DataBridge.Data;
 using DataBridge.AudioRenditions;
 using DataBridge.Flows;
@@ -131,6 +132,9 @@ class Program
         builder.Services.AddSingleton<WatchedItemAutoDeleteExecutor>();
         builder.Services.AddSingleton<DownloadSlotCoordinator>();
         builder.Services.AddSingleton<INotificationDispatcher, NotificationDispatcher>();
+        builder.Services.Configure<BackupRunnerOptions>(
+            builder.Configuration.GetSection(BackupRunnerOptions.SectionName));
+        builder.Services.AddSingleton<BackupRunner>();
 
         builder.Services.AddTypesenseClient(config =>
         {

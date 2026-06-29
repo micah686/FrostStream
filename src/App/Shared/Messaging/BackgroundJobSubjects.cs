@@ -12,4 +12,5 @@ public static class BackgroundJobSubjects
     public const string SearchReindexRequest = "fs.index.search.rebuild.request";
     public const string FilesystemRescanRequest = "fs.media.filesystem.rescan.request";
     public const string AudioRenditionEncodeRequest = "fs.media.audio-rendition.encode.request";
+    public const string BackupRequest = "fs.cleanup.backup.request";
 }

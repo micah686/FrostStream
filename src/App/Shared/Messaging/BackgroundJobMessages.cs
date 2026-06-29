@@ -46,3 +46,9 @@ public sealed record DatabaseMaintenanceRequested : ScheduledBackgroundRequest;
 public sealed record SearchReindexRequested : ScheduledBackgroundRequest;
 
 public sealed record FilesystemRescanRequested : ScheduledBackgroundRequest;
+
+public sealed record BackupRequested : ScheduledBackgroundRequest
+{
+    /// <summary>Optional human-readable archive name. Defaults to a timestamp-keyed name when absent.</summary>
+    public string? Name { get; init; }
+}

@@ -13,6 +13,7 @@ using Shared.Storage;
 using System.Text.Json.Serialization;
 using WebAPI.Auth;
 using WebAPI.Features.Backups;
+using WebAPI.Features.Downloads;
 
 namespace WebAPI;
 
@@ -114,6 +115,8 @@ public class Program
         
         builder.Services.AddSingleton<IClock>(NodaTime.SystemClock.Instance);
         builder.Services.AddSingleton<BackupJobService>();
+        builder.Services.AddSingleton<DownloadProgressHub>();
+        builder.Services.AddHostedService<DownloadProgressHub>(p => p.GetRequiredService<DownloadProgressHub>());
         builder.Services.AddOpenBaoSecretStore(builder.Configuration);
         builder.Services.AddFrostStreamStorage();
 

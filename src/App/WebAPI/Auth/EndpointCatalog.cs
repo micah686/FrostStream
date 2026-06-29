@@ -37,6 +37,7 @@ public static class EndpointIds
     public const string DownloadsUpdatePriority = "downloads.update-priority";
     public const string DownloadsCancel = "downloads.cancel";
     public const string DownloadsRestartHalted = "downloads.restart-halted";
+    public const string DownloadsProgress = "downloads.progress";
     public const string ImportsLocalMedia = "imports.local-media";
 
     // Storage
@@ -219,6 +220,7 @@ public static class EndpointCatalog
         new(EndpointIds.DownloadsUpdatePriority, Bundles.Downloading),
         new(EndpointIds.DownloadsCancel, Bundles.Downloading),
         new(EndpointIds.DownloadsRestartHalted, Bundles.Downloading),
+        new(EndpointIds.DownloadsProgress, Bundles.Downloading),
         new(EndpointIds.ImportsLocalMedia, Bundles.Downloading),
 
         new(EndpointIds.StorageLocalCreate, Bundles.Storage),

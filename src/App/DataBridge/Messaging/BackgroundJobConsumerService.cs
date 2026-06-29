@@ -1,3 +1,4 @@
+using DataBridge.Backup;
 using DataBridge.Search;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.Extensions.Hosting;
@@ -14,6 +15,7 @@ public sealed class BackgroundJobConsumerService(
     NpgsqlDataSource dataSource,
     IMetadataRebuildCoordinator rebuildCoordinator,
     WatchedItemAutoDeleteExecutor watchedAutoDeleteExecutor,
+    BackupRunner backupRunner,
     INotificationDispatcher notificationDispatcher,
     IClock clock,
     ILogger<BackgroundJobConsumerService> logger) : BackgroundService
@@ -28,7 +30,8 @@ public sealed class BackgroundJobConsumerService(
             Consume<DatabaseMaintenanceRequested>(BackgroundJobsTopology.DatabaseMaintenanceConsumer, HandleDatabaseMaintenanceAsync, stoppingToken),
             Consume<StaleDatabaseCleanupRequested>(BackgroundJobsTopology.StaleDatabaseCleanupConsumer, HandleStaleDatabaseCleanupAsync, stoppingToken),
             Consume<WatchedItemAutoDeleteRequested>(BackgroundJobsTopology.WatchedItemAutoDeleteConsumer, HandleWatchedItemAutoDeleteAsync, stoppingToken),
-            Consume<ProcessedMessageCleanupRequested>(BackgroundJobsTopology.ProcessedMessageCleanupConsumer, HandleProcessedMessageCleanupAsync, stoppingToken)
+            Consume<ProcessedMessageCleanupRequested>(BackgroundJobsTopology.ProcessedMessageCleanupConsumer, HandleProcessedMessageCleanupAsync, stoppingToken),
+            Consume<BackupRequested>(BackgroundJobsTopology.DataBridgeBackupConsumer, HandleBackupAsync, stoppingToken)
         };
 
         logger.LogInformation("Subscribed to {Count} background job consumers on stream {Stream}.", consumers.Length, Stream.Value);
@@ -209,6 +212,34 @@ public sealed class BackgroundJobConsumerService(
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed handling watched item auto-delete request {IdempotencyKey}; nacking", message.IdempotencyKey);
+            await MarkFailureAsync(message);
+            await context.NackAsync();
+        }
+    }
+
+    private async Task HandleBackupAsync(IJsMessageContext<BackupRequested> context)
+    {
+        var message = context.Message;
+        try
+        {
+            await MarkAttemptAsync(message);
+            var name = $"scheduled-{message.ScheduleKey}-{message.DueWindowUtc:yyyyMMddHHmmss}";
+            var (success, archivePath, errorMessage) = await backupRunner.RunAsync(name, CancellationToken.None);
+            if (!success)
+            {
+                logger.LogError("Backup failed for schedule {ScheduleKey}: {ErrorMessage}", message.ScheduleKey, errorMessage);
+                await MarkFailureAsync(message, errorMessage);
+                await context.NackAsync();
+                return;
+            }
+
+            logger.LogInformation("Backup completed for schedule {ScheduleKey}. Archive: {ArchivePath}", message.ScheduleKey, archivePath);
+            await MarkSuccessAsync(message);
+            await context.AckAsync();
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed handling backup request {IdempotencyKey}; nacking", message.IdempotencyKey);
             await MarkFailureAsync(message);
             await context.NackAsync();
         }

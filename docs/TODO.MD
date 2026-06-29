@@ -79,6 +79,16 @@
 
 [X]Access control [2021-11-01]
 
+[X]integration with returnyoutubedislike
+
+[X]add throttling (download speed limit, throttle rate limit, seconds to stop between calls to yt-dlp)
+
+[X]Timestamp seeking
+
+[X]add automatic backups
+
+[X]implement the progress for a download
+
 
 
 ## TODO
