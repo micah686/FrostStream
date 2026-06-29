@@ -6,8 +6,7 @@ fix the orphan data
 Add cast support
 
 
-Add a metrics/settings dashboard(#577)
-Per user, have mark watched/unwatched(#547)
+
 Implement some settings from the settings page(#528)
 
 Save video progress per user (#179)(websocket?)

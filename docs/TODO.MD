@@ -63,6 +63,16 @@
 
 [X]Configure shorts, streams and video sizes per channel [2024-07-15]
 
+[?]Filter and query in search form, search by url query [2022-07-23]
+
+[X]Per user, have mark watched/unwatched(#547)
+
+[X]Show total video downloaded vs total videos available in channel
+
+[X]Add statistics of index [2023-09-03]
+
+[X]Add a metrics/settings dashboard(#577)
+
 
 
 ## TODO
@@ -75,8 +85,8 @@ live_chat (complex, need to integrate with clickhousedb)
 Multi language support
 
 Search download queue [2025-07-31]
-Implement Apprise for notifications [2023-08-05]
-Filter and query in search form, search by url query [2022-07-23]
+Implement ~~~~Apprise~~~ `recurpixel/notify` for notifications [2023-08-05]
+
 
 Implement per channel settings [2022-03-26]
 
@@ -103,9 +113,3 @@ Auto play or play next link (#226)
 Show similar videos on video page [2022-11-30]
 
 Fancy advanced unified search interface [2022-01-08] (should use typesense framework)
-
-## Should be simple DB queries:
-
-Show total video downloaded vs total videos available in channel
-
-Add statistics of index [2023-09-03]

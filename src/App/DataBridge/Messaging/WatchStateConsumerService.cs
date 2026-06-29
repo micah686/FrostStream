@@ -54,10 +54,11 @@ public sealed class WatchStateConsumerService(
                 DO UPDATE SET
                     position_seconds = EXCLUDED.position_seconds,
                     duration_seconds = EXCLUDED.duration_seconds,
-                    completed = media.watch_states.completed OR EXCLUDED.completed,
+                    completed = EXCLUDED.completed,
                     watched_at = CASE
-                        WHEN EXCLUDED.completed THEN COALESCE(media.watch_states.watched_at, EXCLUDED.watched_at)
-                        ELSE media.watch_states.watched_at
+                        WHEN EXCLUDED.completed AND media.watch_states.completed THEN media.watch_states.watched_at
+                        WHEN EXCLUDED.completed THEN EXCLUDED.watched_at
+                        ELSE NULL
                     END,
                     last_played_at = EXCLUDED.last_played_at,
                     updated_at = EXCLUDED.updated_at
@@ -169,4 +170,3 @@ public sealed class WatchStateConsumerService(
             UpdatedAt = Instant.FromDateTimeOffset(reader.GetFieldValue<DateTimeOffset>(7))
         };
 }
-

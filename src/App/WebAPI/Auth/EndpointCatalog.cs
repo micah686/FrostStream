@@ -65,6 +65,10 @@ public static class EndpointIds
     public const string MetadataTaxonomyTags = "metadata.taxonomy.tags";
     public const string MetadataTaxonomyCategories = "metadata.taxonomy.categories";
     public const string MetadataTaxonomyGenres = "metadata.taxonomy.genres";
+    public const string StatisticsOverview = "statistics.overview";
+    public const string StatisticsChannelsList = "statistics.channels.list";
+    public const string StatisticsChannelsGet = "statistics.channels.get";
+    public const string StatisticsDownloadHistory = "statistics.download-history";
     public const string UserNotesUpsert = "user-notes.upsert";
     public const string UserNotesGet = "user-notes.get";
     public const string UserNotesDelete = "user-notes.delete";
@@ -144,6 +148,8 @@ public static class EndpointIds
     public const string MediaAudioSegment = "media.audio-segment";
     public const string MediaWatchStateGet = "media.watch-state.get";
     public const string MediaWatchStateUpsert = "media.watch-state.upsert";
+    public const string MediaWatchStateMarkWatched = "media.watch-state.mark-watched";
+    public const string MediaWatchStateMarkUnwatched = "media.watch-state.mark-unwatched";
     public const string PlaylistAudioStream = "playlists.audio-stream";
 
     // Bundle management (runtime). These live in the `:all` bootstrap bundle so the bootstrap admin
@@ -212,6 +218,10 @@ public static class EndpointCatalog
         new(EndpointIds.MetadataTaxonomyTags, Bundles.Metadata),
         new(EndpointIds.MetadataTaxonomyCategories, Bundles.Metadata),
         new(EndpointIds.MetadataTaxonomyGenres, Bundles.Metadata),
+        new(EndpointIds.StatisticsOverview, Bundles.Metadata),
+        new(EndpointIds.StatisticsChannelsList, Bundles.Metadata),
+        new(EndpointIds.StatisticsChannelsGet, Bundles.Metadata),
+        new(EndpointIds.StatisticsDownloadHistory, Bundles.Metadata),
         new(EndpointIds.UserNotesUpsert, Bundles.Metadata),
         new(EndpointIds.UserNotesGet, Bundles.Metadata),
         new(EndpointIds.UserNotesDelete, Bundles.Metadata),
@@ -280,6 +290,8 @@ public static class EndpointCatalog
         new(EndpointIds.MediaAudioSegment, Bundles.Media),
         new(EndpointIds.MediaWatchStateGet, Bundles.Media),
         new(EndpointIds.MediaWatchStateUpsert, Bundles.Media),
+        new(EndpointIds.MediaWatchStateMarkWatched, Bundles.Media),
+        new(EndpointIds.MediaWatchStateMarkUnwatched, Bundles.Media),
         new(EndpointIds.PlaylistAudioStream, Bundles.Playlists),
 
         new(EndpointIds.ManagementCatalog, Bundles.Management),

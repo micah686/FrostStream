@@ -8,6 +8,7 @@ using DataBridge.MediaStream;
 using DataBridge.Metadata;
 using DataBridge.Messaging;
 using DataBridge.Search;
+using DataBridge.Statistics;
 using FlySwattr.NATS.Extensions;
 using FlySwattr.NATS.Topology.Extensions;
 using FluentMigrator.Runner;
@@ -112,6 +113,7 @@ class Program
         builder.Services.AddScoped<ILocalImportRepository, LocalImportRepository>();
         builder.Services.AddScoped<IMetadataRepository, MetadataRepository>();
         builder.Services.AddScoped<IMetadataReadService, MetadataReadService>();
+        builder.Services.AddScoped<IStatisticsReadService, StatisticsReadService>();
         builder.Services.AddScoped<IMediaStreamReadService, MediaStreamReadService>();
         builder.Services.AddScoped<IAudioRenditionRepository, AudioRenditionRepository>();
         builder.Services.AddScoped<IPlaylistsRepository, PlaylistsRepository>();
@@ -171,6 +173,7 @@ class Program
         builder.Services.AddHostedService<UserPlaylistConsumerService>();
         builder.Services.AddHostedService<UserNoteConsumerService>();
         builder.Services.AddHostedService<MetadataQueryConsumerService>();
+        builder.Services.AddHostedService<StatisticsQueryConsumerService>();
         builder.Services.AddHostedService<MediaStreamQueryConsumerService>();
         builder.Services.AddHostedService<AudioRenditionConsumerService>();
         builder.Services.AddHostedService<MediaDeleteConsumerService>();

@@ -93,6 +93,61 @@ public sealed class MediaWatchStateControllerTests
         result.ShouldBeOfType<NotFoundObjectResult>();
     }
 
+    [Test]
+    public async Task MarkWatched_Forwards_Completed_State_For_Authenticated_User()
+    {
+        var bus = Substitute.For<IMessageBus>();
+        var controller = CreateController(bus);
+        bus.RequestAsync<WatchStateUpsertRequest, WatchStateResponse>(
+                WatchStateSubjects.Upsert,
+                Arg.Is<WatchStateUpsertRequest>(x =>
+                    x.OwnerSubject == "reader-1" &&
+                    x.MediaGuid == MediaGuid &&
+                    x.PositionSeconds == null &&
+                    x.DurationSeconds == null &&
+                    x.Completed),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new WatchStateResponse
+            {
+                Success = true,
+                State = State(completed: true)
+            });
+
+        var result = await controller.MarkWatched(MediaGuid, CancellationToken.None);
+
+        var payload = result.ShouldBeOfType<OkObjectResult>().Value.ShouldBeOfType<WatchStateDto>();
+        payload.Completed.ShouldBeTrue();
+    }
+
+    [Test]
+    public async Task MarkUnwatched_Forwards_Incomplete_State_For_Authenticated_User()
+    {
+        var bus = Substitute.For<IMessageBus>();
+        var controller = CreateController(bus);
+        bus.RequestAsync<WatchStateUpsertRequest, WatchStateResponse>(
+                WatchStateSubjects.Upsert,
+                Arg.Is<WatchStateUpsertRequest>(x =>
+                    x.OwnerSubject == "reader-1" &&
+                    x.MediaGuid == MediaGuid &&
+                    x.PositionSeconds == null &&
+                    x.DurationSeconds == null &&
+                    !x.Completed),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new WatchStateResponse
+            {
+                Success = true,
+                State = State(completed: false)
+            });
+
+        var result = await controller.MarkUnwatched(MediaGuid, CancellationToken.None);
+
+        var payload = result.ShouldBeOfType<OkObjectResult>().Value.ShouldBeOfType<WatchStateDto>();
+        payload.Completed.ShouldBeFalse();
+        payload.WatchedAt.ShouldBeNull();
+    }
+
     private static MediaWatchStateController CreateController(IMessageBus bus)
     {
         var controller = new MediaWatchStateController(
@@ -123,4 +178,3 @@ public sealed class MediaWatchStateControllerTests
             UpdatedAt = Now
         };
 }
-

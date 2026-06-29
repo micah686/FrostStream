@@ -47,6 +47,43 @@ public sealed class MediaWatchStateController(
         Guid mediaGuid,
         [FromBody] WatchStateUpdateRequest request,
         CancellationToken cancellationToken)
+        => await UpsertForCurrentUserAsync(
+            mediaGuid,
+            request.PositionSeconds,
+            request.DurationSeconds,
+            request.Completed,
+            cancellationToken);
+
+    [HttpPost("watched")]
+    [Endpoint(EndpointIds.MediaWatchStateMarkWatched)]
+    [EndpointSummary("Mark the caller's media item as watched")]
+    [EndpointDescription("Marks the supplied media item as watched for the authenticated caller only. The operation records a completed watch state for that user and does not expose or modify another user's watch history.")]
+    public async Task<IActionResult> MarkWatched(Guid mediaGuid, CancellationToken cancellationToken)
+        => await UpsertForCurrentUserAsync(
+            mediaGuid,
+            positionSeconds: null,
+            durationSeconds: null,
+            completed: true,
+            cancellationToken);
+
+    [HttpPost("unwatched")]
+    [Endpoint(EndpointIds.MediaWatchStateMarkUnwatched)]
+    [EndpointSummary("Mark the caller's media item as unwatched")]
+    [EndpointDescription("Marks the supplied media item as unwatched for the authenticated caller only. The operation clears that user's completed flag and watched timestamp without revealing or changing another user's watch history.")]
+    public async Task<IActionResult> MarkUnwatched(Guid mediaGuid, CancellationToken cancellationToken)
+        => await UpsertForCurrentUserAsync(
+            mediaGuid,
+            positionSeconds: null,
+            durationSeconds: null,
+            completed: false,
+            cancellationToken);
+
+    private async Task<IActionResult> UpsertForCurrentUserAsync(
+        Guid mediaGuid,
+        double? positionSeconds,
+        double? durationSeconds,
+        bool completed,
+        CancellationToken cancellationToken)
     {
         var subject = AuthConstants.FindSubject(User);
         if (string.IsNullOrWhiteSpace(subject))
@@ -58,9 +95,9 @@ public sealed class MediaWatchStateController(
             {
                 OwnerSubject = subject,
                 MediaGuid = mediaGuid,
-                PositionSeconds = request.PositionSeconds,
-                DurationSeconds = request.DurationSeconds,
-                Completed = request.Completed
+                PositionSeconds = positionSeconds,
+                DurationSeconds = durationSeconds,
+                Completed = completed
             },
             cancellationToken);
 
@@ -107,4 +144,3 @@ public sealed record WatchStateUpdateRequest
     public double? DurationSeconds { get; init; }
     public bool Completed { get; init; }
 }
-
