@@ -18,6 +18,7 @@ public static class Bundles
     public const string DownloadConfigSets = "download-config-sets";
     public const string CreatorSources = "creator-sources";
     public const string Media = "media";
+    public const string Notifications = "notifications";
     public const string Management = "management";
 }
 
@@ -110,6 +111,17 @@ public static class EndpointIds
     public const string CookiesList = "cookies.list";
     public const string CookiesGet = "cookies.get";
     public const string CookiesDelete = "cookies.delete";
+
+    // Notifications
+    public const string NotificationsPreferencesGet = "notifications.preferences.get";
+    public const string NotificationsPreferencesUpdate = "notifications.preferences.update";
+    public const string NotificationsProvidersList = "notifications.providers.list";
+    public const string NotificationsProvidersGet = "notifications.providers.get";
+    public const string NotificationsProvidersUpsert = "notifications.providers.upsert";
+    public const string NotificationsProvidersDelete = "notifications.providers.delete";
+    public const string NotificationsSecretsUpsert = "notifications.secrets.upsert";
+    public const string NotificationsSecretsDelete = "notifications.secrets.delete";
+    public const string NotificationsTest = "notifications.test";
 
     // Schedules
     public const string SchedulesCreate = "schedules.create";
@@ -260,6 +272,16 @@ public static class EndpointCatalog
         new(EndpointIds.CookiesList, Bundles.Cookies),
         new(EndpointIds.CookiesGet, Bundles.Cookies),
         new(EndpointIds.CookiesDelete, Bundles.Cookies),
+
+        new(EndpointIds.NotificationsPreferencesGet, Bundles.Notifications),
+        new(EndpointIds.NotificationsPreferencesUpdate, Bundles.Notifications),
+        new(EndpointIds.NotificationsProvidersList, Bundles.Notifications),
+        new(EndpointIds.NotificationsProvidersGet, Bundles.Notifications),
+        new(EndpointIds.NotificationsProvidersUpsert, Bundles.Notifications),
+        new(EndpointIds.NotificationsProvidersDelete, Bundles.Notifications),
+        new(EndpointIds.NotificationsSecretsUpsert, Bundles.Notifications),
+        new(EndpointIds.NotificationsSecretsDelete, Bundles.Notifications),
+        new(EndpointIds.NotificationsTest, Bundles.Notifications),
 
         new(EndpointIds.SchedulesCreate, Bundles.Schedules),
         new(EndpointIds.SchedulesUpdate, Bundles.Schedules),

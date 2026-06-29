@@ -127,6 +127,7 @@ class Program
         builder.Services.AddSingleton<MediaDeleteExecutor>();
         builder.Services.AddSingleton<WatchedItemAutoDeleteExecutor>();
         builder.Services.AddSingleton<DownloadSlotCoordinator>();
+        builder.Services.AddSingleton<INotificationDispatcher, NotificationDispatcher>();
 
         builder.Services.AddTypesenseClient(config =>
         {
@@ -140,6 +141,7 @@ class Program
         builder.Services.AddHostedService<TypesenseStartupService>();
         builder.Services.AddHostedService<SingleUserOwnerSeederService>();
         builder.Services.AddHostedService<UserSessionConsumerService>();
+        builder.Services.AddHostedService<NotificationPreferencesConsumerService>();
         builder.Services.AddHostedService<CookieProfileConsumerService>();
         builder.Services.AddHostedService<TypesenseSyncConsumerService>();
         builder.Services.AddHostedService<MetadataListConsumerService>();

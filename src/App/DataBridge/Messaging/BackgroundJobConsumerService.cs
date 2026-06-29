@@ -14,6 +14,7 @@ public sealed class BackgroundJobConsumerService(
     NpgsqlDataSource dataSource,
     IMetadataRebuildCoordinator rebuildCoordinator,
     WatchedItemAutoDeleteExecutor watchedAutoDeleteExecutor,
+    INotificationDispatcher notificationDispatcher,
     IClock clock,
     ILogger<BackgroundJobConsumerService> logger) : BackgroundService
 {
@@ -61,7 +62,7 @@ public sealed class BackgroundJobConsumerService(
             if (!result.Accepted)
             {
                 logger.LogWarning("Typesense reindex request {IdempotencyKey} was not accepted: {Error}", message.IdempotencyKey, result.ErrorMessage);
-                await MarkFailureAsync(message);
+                await MarkFailureAsync(message, result.ErrorMessage);
                 await context.NackAsync();
                 return;
             }
@@ -227,10 +228,15 @@ public sealed class BackgroundJobConsumerService(
             SucceededAt = clock.GetCurrentInstant()
         });
 
-    private Task MarkFailureAsync(ScheduledBackgroundRequest message)
-        => messageBus.PublishAsync(ScheduleSubjects.MarkFailure, new ScheduleMarkFailureRequestMessage
+    private async Task MarkFailureAsync(ScheduledBackgroundRequest message, string? failureMessage = null)
+    {
+        await messageBus.PublishAsync(ScheduleSubjects.MarkFailure, new ScheduleMarkFailureRequestMessage
         {
             Key = message.ScheduleKey,
             FailedAt = clock.GetCurrentInstant()
         });
+        await notificationDispatcher.NotifyScheduleFailureAsync(
+            message.ScheduleKey,
+            failureMessage ?? $"Background request {message.IdempotencyKey} failed.");
+    }
 }

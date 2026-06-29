@@ -73,6 +73,8 @@
 
 [X]Add a metrics/settings dashboard(#577)
 
+[X]Implement ~~~~Apprise~~~ `recurpixel/notify` for notifications [2023-08-05]
+
 
 
 ## TODO
@@ -85,7 +87,7 @@ live_chat (complex, need to integrate with clickhousedb)
 Multi language support
 
 Search download queue [2025-07-31]
-Implement ~~~~Apprise~~~ `recurpixel/notify` for notifications [2023-08-05]
+
 
 
 Implement per channel settings [2022-03-26]

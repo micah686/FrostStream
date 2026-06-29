@@ -4,6 +4,7 @@ using Cleipnir.ResilientFunctions.Reactive.Extensions;
 using DataBridge.AudioRenditions;
 using DataBridge;
 using DataBridge.Data;
+using DataBridge.Messaging;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,6 +24,7 @@ public class DownloadArchiveFlow(
     IServiceScopeFactory scopeFactory,
     IClock clock,
     DownloadSlotCoordinator slotCoordinator,
+    INotificationDispatcher notificationDispatcher,
     ILogger<DownloadArchiveFlow> logger
 ) : Flow<DownloadRequested>
 {
@@ -201,6 +203,11 @@ public class DownloadArchiveFlow(
             await Capture(() => PlaylistRepoCall(r => r.TryLinkMediaGuidAsync(jobId, reservation.MediaGuid)));
             await Capture(() => QueueAudioRenditionAsync(request, reservation.MediaGuid, reservation.VersionNum, storageKey));
             await Capture(() => Update(jobId, DownloadJobState.Completed));
+            await notificationDispatcher.NotifyDownloadOutcomeAsync(
+                jobId,
+                NotificationEventKeys.DownloadCompleted,
+                "FrostStream download completed",
+                $"Download completed for {request.SourceUrl}");
         }
         catch (Exception commitEx)
         {
@@ -232,6 +239,7 @@ public class DownloadArchiveFlow(
                 message: commitEx.Message,
                 terminalState: DownloadJobState.FailedPermanent,
                 lastPayloadJson: null)));
+            await NotifyTerminalFailureAsync(jobId, DownloadJobState.FailedPermanent, "commit_failed", commitEx.Message);
             return;
         }
 
@@ -872,6 +880,7 @@ public class DownloadArchiveFlow(
             code,
             message);
         await RepoCall(r => r.RecordTerminalFailureAsync(request.JobId, kind, code, message, terminalState, lastPayloadJson: null));
+        await NotifyTerminalFailureAsync(request.JobId, terminalState, code, message);
 
         if (terminalState == DownloadJobState.ProviderHalted && request.SourceKind is not DownloadSourceKind.Direct)
         {
@@ -948,9 +957,34 @@ public class DownloadArchiveFlow(
                     message: metaEx.Message,
                     terminalState: DownloadJobState.FailedPermanent,
                     lastPayloadJson: null)));
+                await NotifyTerminalFailureAsync(jobId, DownloadJobState.FailedPermanent, "metadata_write_failed", metaEx.Message);
                 return;
             }
         }
+    }
+
+    private Task NotifyTerminalFailureAsync(Guid jobId, DownloadJobState terminalState, string? code, string message)
+    {
+        if (terminalState is not (DownloadJobState.FailedPermanent or DownloadJobState.DeadLettered or DownloadJobState.ProviderHalted))
+            return Task.CompletedTask;
+
+        var eventKey = terminalState switch
+        {
+            DownloadJobState.ProviderHalted => NotificationEventKeys.DownloadProviderHalted,
+            DownloadJobState.DeadLettered => NotificationEventKeys.DownloadDeadLettered,
+            _ => NotificationEventKeys.DownloadFailedPermanent
+        };
+        var subject = terminalState switch
+        {
+            DownloadJobState.ProviderHalted => "FrostStream provider halted a download",
+            DownloadJobState.DeadLettered => "FrostStream download dead-lettered",
+            _ => "FrostStream download failed"
+        };
+        var body = string.IsNullOrWhiteSpace(code)
+            ? $"Download job {jobId} entered {terminalState}: {message}"
+            : $"Download job {jobId} entered {terminalState} ({code}): {message}";
+
+        return notificationDispatcher.NotifyDownloadOutcomeAsync(jobId, eventKey, subject, body);
     }
 
     private async Task<string?> ResolveWorkerTagAsync(string storageKey)
