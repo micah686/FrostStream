@@ -83,6 +83,8 @@ public static class EndpointIds
     public const string MetadataOrphansList = "metadata.orphans.list";
     public const string MetadataOrphansRestoreFile = "metadata.orphans.restore-file";
     public const string MetadataOrphansRestoreMetadata = "metadata.orphans.restore-metadata";
+    public const string OrphanCleanupPolicyGet = "metadata.orphan-cleanup-policy.get";
+    public const string OrphanCleanupPolicyUpdate = "metadata.orphan-cleanup-policy.update";
     public const string MediaDelete = "media.delete";
     public const string MediaDeleteForStorageKey = "media.delete-for-key";
     public const string WatchedAutoDeletePolicyGet = "watched-auto-delete.policy.get";
@@ -233,6 +235,8 @@ public static class EndpointCatalog
         new(EndpointIds.MetadataOrphansList, Bundles.MetadataAdmin),
         new(EndpointIds.MetadataOrphansRestoreFile, Bundles.MetadataAdmin),
         new(EndpointIds.MetadataOrphansRestoreMetadata, Bundles.MetadataAdmin),
+        new(EndpointIds.OrphanCleanupPolicyGet, Bundles.MetadataAdmin),
+        new(EndpointIds.OrphanCleanupPolicyUpdate, Bundles.MetadataAdmin),
         new(EndpointIds.MediaDelete, Bundles.MetadataAdmin),
         new(EndpointIds.MediaDeleteForStorageKey, Bundles.MetadataAdmin),
         new(EndpointIds.WatchedAutoDeletePolicyGet, Bundles.MetadataAdmin),

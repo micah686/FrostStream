@@ -110,6 +110,43 @@ public sealed class MetadataAdminController(
         return MapRestoreResponse(response);
     }
 
+    [HttpGet("orphan-cleanup-policy")]
+    [Endpoint(EndpointIds.OrphanCleanupPolicyGet)]
+    [EndpointSummary("Get orphan-cleanup policy")]
+    [EndpointDescription("Returns the global orphan-cleanup policy: whether automatic cleanup is enabled, the delay before a file with no metadata is moved into the orphaned folder, the delay before a moved file is permanently purged, the delay before metadata whose file is missing is deleted, and the latest run counters.")]
+    public async Task<IActionResult> GetOrphanCleanupPolicy(CancellationToken cancellationToken)
+    {
+        var response = await SendRequestAsync<OrphanCleanupPolicyGetRequest, OrphanCleanupPolicyResponse>(
+            OrphanCleanupSubjects.AdminGetPolicy,
+            new OrphanCleanupPolicyGetRequest(),
+            cancellationToken);
+
+        return MapOrphanPolicyResponse(response);
+    }
+
+    [HttpPut("orphan-cleanup-policy")]
+    [Endpoint(EndpointIds.OrphanCleanupPolicyUpdate)]
+    [EndpointSummary("Update orphan-cleanup policy")]
+    [EndpointDescription("Enables or disables automatic orphan cleanup and sets its three retention timers (in days): how long before a file with no metadata is moved to the orphaned folder, how long a moved file is retained there before permanent deletion, and how long before metadata with a missing file is deleted. Destructive cleanup runs only while this admin-controlled policy is enabled.")]
+    public async Task<IActionResult> UpdateOrphanCleanupPolicy(
+        [FromBody] OrphanCleanupPolicyUpdateHttpRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await SendRequestAsync<OrphanCleanupPolicyUpdateRequest, OrphanCleanupPolicyResponse>(
+            OrphanCleanupSubjects.AdminUpdatePolicy,
+            new OrphanCleanupPolicyUpdateRequest
+            {
+                Enabled = request.Enabled,
+                FileMoveAfterDays = request.FileMoveAfterDays,
+                FilePurgeAfterDays = request.FilePurgeAfterDays,
+                MetadataDeleteAfterDays = request.MetadataDeleteAfterDays,
+                UpdatedBy = Shared.Auth.AuthConstants.FindSubject(User)
+            },
+            cancellationToken);
+
+        return MapOrphanPolicyResponse(response);
+    }
+
     [HttpDelete("{mediaGuid:guid}")]
     [Endpoint(EndpointIds.MediaDelete)]
     [EndpointSummary("Delete a video globally")]
@@ -278,6 +315,26 @@ public sealed class MetadataAdminController(
     private ObjectResult ServiceUnavailable()
         => StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to process orphan cleanup admin request.");
 
+    private IActionResult MapOrphanPolicyResponse(OrphanCleanupPolicyResponse? response)
+    {
+        if (response is null)
+        {
+            return ServiceUnavailable();
+        }
+
+        if (response.Success)
+        {
+            return Ok(response.Policy);
+        }
+
+        return response.ErrorCode switch
+        {
+            "validation" => BadRequest(response.ErrorMessage),
+            "unavailable" => StatusCode(StatusCodes.Status503ServiceUnavailable, response.ErrorMessage),
+            _ => StatusCode(StatusCodes.Status500InternalServerError, response.ErrorMessage ?? "Orphan cleanup policy request failed.")
+        };
+    }
+
     private IActionResult MapPolicyResponse(WatchedAutoDeletePolicyResponse? response)
     {
         if (response is null)
@@ -304,4 +361,12 @@ public sealed record WatchedAutoDeletePolicyUpdateHttpRequest
     public required bool Enabled { get; init; }
     public required int DeleteAfterDays { get; init; }
     public int MaxDeletionsPerRun { get; init; } = 100;
+}
+
+public sealed record OrphanCleanupPolicyUpdateHttpRequest
+{
+    public required bool Enabled { get; init; }
+    public required int FileMoveAfterDays { get; init; }
+    public required int FilePurgeAfterDays { get; init; }
+    public required int MetadataDeleteAfterDays { get; init; }
 }

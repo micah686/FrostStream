@@ -128,8 +128,8 @@ public sealed class OrphanMetadataCleanupExecutorTests
     [Test]
     public async Task CleanupAsync_Records_And_Moves_Unexpected_Primary_Media_File()
     {
-        await Fixture.SeedUnexpectedFindingAsync("storage-a", "loose/video.mp4", Fixture.NewFinding);
-        await Fixture.SeedUnexpectedFindingAsync("storage-a", "loose/info.json", Fixture.NewFinding);
+        await Fixture.SeedUnexpectedFindingAsync("storage-a", "loose/video.mp4", Fixture.OldFinding);
+        await Fixture.SeedUnexpectedFindingAsync("storage-a", "loose/info.json", Fixture.OldFinding);
         var bus = new FakeMessageBus
         {
             MoveResponse = new MoveOrphanedFileResponse { Success = true }
@@ -142,9 +142,110 @@ public sealed class OrphanMetadataCleanupExecutorTests
         result.MoveFailedCount.ShouldBe(0);
         bus.MoveRequests.Count.ShouldBe(1);
         bus.MoveRequests[0].OriginalStoragePath.ShouldBe("loose/video.mp4");
-        bus.MoveRequests[0].OrphanStoragePath.ShouldStartWith("orphaned/20260503/");
+        bus.MoveRequests[0].OrphanStoragePath.ShouldStartWith("orphaned/20260501/");
         (await Fixture.CountOrphansAsync("media_without_metadata", "moved")).ShouldBe(1);
         (await Fixture.CountOrphansAsync("media_without_metadata", "detected")).ShouldBe(0);
+    }
+
+    [Test]
+    public async Task CleanupAsync_Does_Not_Move_File_Orphan_Before_Move_Timer_Elapses()
+    {
+        // Detected only 29 days ago; the default 30-day move timer has not yet elapsed.
+        await Fixture.SeedUnexpectedFindingAsync("storage-a", "loose/video.mp4", Fixture.NewFinding);
+        var bus = new FakeMessageBus
+        {
+            MoveResponse = new MoveOrphanedFileResponse { Success = true }
+        };
+
+        var result = await Fixture.CreateExecutor(bus).CleanupAsync(Fixture.Now);
+
+        result.RecordedMediaWithoutMetadataCount.ShouldBe(1);
+        result.MovedFileCount.ShouldBe(0);
+        bus.MoveRequests.Count.ShouldBe(0);
+        (await Fixture.CountOrphansAsync("media_without_metadata", "detected")).ShouldBe(1);
+    }
+
+    [Test]
+    public async Task CleanupAsync_Does_Not_Purge_Moved_File_Before_Purge_Timer_Elapses()
+    {
+        // Moved 29 days ago; the default 30-day purge timer has not yet elapsed.
+        await Fixture.SeedMovedFileOrphanAsync("storage-a", "loose/video.mp4", "orphaned/20260503/1/video.mp4", Fixture.NewFinding);
+        var bus = new FakeMessageBus
+        {
+            DeleteResponse = new DeleteOrphanedFileResponse { Success = true }
+        };
+
+        var result = await Fixture.CreateExecutor(bus).CleanupAsync(Fixture.Now);
+
+        result.DeletedFileCount.ShouldBe(0);
+        bus.DeleteRequests.Count.ShouldBe(0);
+        (await Fixture.CountOrphansAsync("media_without_metadata", "moved")).ShouldBe(1);
+    }
+
+    [Test]
+    public async Task CleanupAsync_Records_But_Skips_Destructive_Stages_When_Disabled()
+    {
+        await Fixture.SetPolicyAsync(enabled: false, fileMoveAfterDays: 30, filePurgeAfterDays: 30, metadataDeleteAfterDays: 30);
+        var mediaGuid = Guid.NewGuid();
+        await Fixture.SeedMediaAsync(mediaGuid, [new ContentVersion("storage-a", "media/a.mp4", 1)]);
+        await Fixture.SeedMediaBaseAsync(mediaGuid);
+        await Fixture.SeedMissingFindingAsync(mediaGuid, "storage-a", "media/a.mp4", Fixture.OldFinding);
+        await Fixture.SeedUnexpectedFindingAsync("storage-a", "loose/video.mp4", Fixture.OldFinding);
+        var bus = new FakeMessageBus
+        {
+            MoveResponse = new MoveOrphanedFileResponse { Success = true }
+        };
+
+        var result = await Fixture.CreateExecutor(bus).CleanupAsync(Fixture.Now);
+
+        result.RecordedMetadataWithoutMediaCount.ShouldBe(1);
+        result.RecordedMediaWithoutMetadataCount.ShouldBe(1);
+        result.MovedFileCount.ShouldBe(0);
+        result.DeletedMediaCount.ShouldBe(0);
+        bus.MoveRequests.Count.ShouldBe(0);
+        (await Fixture.CountAsync("media", "media_guid = @media_guid", mediaGuid)).ShouldBe(1);
+        (await Fixture.CountOrphansAsync("media_without_metadata", "detected")).ShouldBe(1);
+        (await Fixture.CountOrphansAsync("metadata_without_media", "detected")).ShouldBe(1);
+    }
+
+    [Test]
+    public async Task UpdatePolicyAsync_RoundTrips_And_Validates()
+    {
+        var executor = Fixture.CreateExecutor();
+
+        var updated = await executor.UpdatePolicyAsync(
+            new OrphanCleanupPolicyUpdateRequest
+            {
+                Enabled = true,
+                FileMoveAfterDays = 7,
+                FilePurgeAfterDays = 90,
+                MetadataDeleteAfterDays = 180,
+                UpdatedBy = "admin"
+            },
+            Fixture.Now);
+
+        updated.Success.ShouldBeTrue();
+        updated.Policy!.Enabled.ShouldBeTrue();
+        updated.Policy.FileMoveAfterDays.ShouldBe(7);
+        updated.Policy.FilePurgeAfterDays.ShouldBe(90);
+        updated.Policy.MetadataDeleteAfterDays.ShouldBe(180);
+        updated.Policy.UpdatedBy.ShouldBe("admin");
+
+        var fetched = await executor.GetPolicyAsync();
+        fetched.Policy!.FileMoveAfterDays.ShouldBe(7);
+
+        var invalid = await executor.UpdatePolicyAsync(
+            new OrphanCleanupPolicyUpdateRequest
+            {
+                Enabled = true,
+                FileMoveAfterDays = 0,
+                FilePurgeAfterDays = 30,
+                MetadataDeleteAfterDays = 30
+            },
+            Fixture.Now);
+
+        invalid.Success.ShouldBeFalse();
+        invalid.ErrorCode.ShouldBe("validation");
     }
 
     [Test]
@@ -323,6 +424,30 @@ public sealed class OrphanMetadataCleanupExecutorTests
         {
             await using var command = DataSource.CreateCommand(
                 "TRUNCATE TABLE orphan_cleanup_items, filesystem_rescan_findings, media, download_jobs RESTART IDENTITY CASCADE;");
+            await command.ExecuteNonQueryAsync();
+
+            // Default seeded policy is disabled; enable it with the legacy 30-day timers so the
+            // destructive cleanup stages run. Individual tests override this as needed.
+            await SetPolicyAsync(enabled: true, fileMoveAfterDays: 30, filePurgeAfterDays: 30, metadataDeleteAfterDays: 30);
+        }
+
+        public async Task SetPolicyAsync(bool enabled, int fileMoveAfterDays, int filePurgeAfterDays, int metadataDeleteAfterDays)
+        {
+            await using var command = DataSource.CreateCommand("""
+                INSERT INTO orphan_cleanup_policy
+                    (id, enabled, file_move_after_days, file_purge_after_days, metadata_delete_after_days)
+                VALUES
+                    (1, @enabled, @move, @purge, @metadata)
+                ON CONFLICT (id) DO UPDATE SET
+                    enabled = EXCLUDED.enabled,
+                    file_move_after_days = EXCLUDED.file_move_after_days,
+                    file_purge_after_days = EXCLUDED.file_purge_after_days,
+                    metadata_delete_after_days = EXCLUDED.metadata_delete_after_days;
+                """);
+            command.Parameters.AddWithValue("enabled", enabled);
+            command.Parameters.AddWithValue("move", fileMoveAfterDays);
+            command.Parameters.AddWithValue("purge", filePurgeAfterDays);
+            command.Parameters.AddWithValue("metadata", metadataDeleteAfterDays);
             await command.ExecuteNonQueryAsync();
         }
 

@@ -1,3 +1,5 @@
+using NodaTime;
+
 namespace Shared.Messaging;
 
 public static class OrphanCleanupSubjects
@@ -9,6 +11,8 @@ public static class OrphanCleanupSubjects
     public const string AdminList = "fs.cleanup.orphans.admin.list";
     public const string AdminRestoreFile = "fs.cleanup.orphans.admin.file.restore";
     public const string AdminRestoreMetadata = "fs.cleanup.orphans.admin.metadata.restore";
+    public const string AdminGetPolicy = "fs.cleanup.orphans.admin.policy.get";
+    public const string AdminUpdatePolicy = "fs.cleanup.orphans.admin.policy.update";
 }
 
 public sealed record MoveOrphanedFileRequest
@@ -115,4 +119,37 @@ public sealed record RestoreOrphanResponse
     public required bool Success { get; init; }
     public string? ErrorCode { get; init; }
     public string? ErrorMessage { get; init; }
+}
+
+public sealed record OrphanCleanupPolicyGetRequest;
+
+public sealed record OrphanCleanupPolicyUpdateRequest
+{
+    public required bool Enabled { get; init; }
+    public required int FileMoveAfterDays { get; init; }
+    public required int FilePurgeAfterDays { get; init; }
+    public required int MetadataDeleteAfterDays { get; init; }
+    public string? UpdatedBy { get; init; }
+}
+
+public sealed record OrphanCleanupPolicyResponse
+{
+    public required bool Success { get; init; }
+    public string? ErrorCode { get; init; }
+    public string? ErrorMessage { get; init; }
+    public OrphanCleanupPolicyDto? Policy { get; init; }
+}
+
+public sealed record OrphanCleanupPolicyDto
+{
+    public required bool Enabled { get; init; }
+    public required int FileMoveAfterDays { get; init; }
+    public required int FilePurgeAfterDays { get; init; }
+    public required int MetadataDeleteAfterDays { get; init; }
+    public string? UpdatedBy { get; init; }
+    public Instant? UpdatedAt { get; init; }
+    public Instant? LastRunAt { get; init; }
+    public int LastMovedCount { get; init; }
+    public int LastDeletedFilesCount { get; init; }
+    public int LastDeletedMetadataCount { get; init; }
 }
