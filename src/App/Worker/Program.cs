@@ -69,6 +69,9 @@ class Program
         // and register the services directly with prebuilt options instances.
         var toolsDirectory = Path.Combine(AppContext.BaseDirectory, "tools");
         Directory.CreateDirectory(toolsDirectory);
+        var configuredWorkerOptions = builder.Configuration
+            .GetSection(WorkerOptions.SectionName)
+            .Get<WorkerOptions>() ?? new WorkerOptions();
 
         var binaryDownloaderOptions = new YtDlpSharpLib.Provisioning.YtDlpBinaryDownloaderOptions
         {
@@ -81,6 +84,9 @@ class Program
         {
             YtDlpExecutablePath = Path.Combine(toolsDirectory, YtDlpPaths.YtDlpFileName),
             FfmpegExecutablePath = Path.Combine(toolsDirectory, YtDlpPaths.FfmpegFileName),
+            DownloadLimitRate = configuredWorkerOptions.YtDlpLimitRate,
+            DownloadThrottledRate = configuredWorkerOptions.YtDlpThrottledRate,
+            MinimumDelayBetweenProcessStarts = configuredWorkerOptions.YtDlpMinDelayBetweenStarts
         };
         builder.Services.TryAddSingleton(TimeProvider.System);
         builder.Services.TryAddSingleton<IYtDlpArgumentRenderer, YtDlpArgumentRenderer>();
@@ -98,6 +104,15 @@ class Program
         builder.Services.AddSingleton<PotShimEndpoint>();
         builder.Services.AddSingleton<PotOptionsApplier>();
         builder.Services.AddSingleton<ProviderDownloadHaltRegistry>();
+        builder.Services.AddHttpClient<IReturnYouTubeDislikeClient, ReturnYouTubeDislikeClient>((sp, client) =>
+        {
+            var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<WorkerOptions>>()
+                .Value
+                .ReturnYouTubeDislike;
+            client.BaseAddress = options.BaseUrl;
+            client.Timeout = options.Timeout > TimeSpan.Zero ? options.Timeout : TimeSpan.FromSeconds(5);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("FrostStream-Worker/1.0 (+return-youtube-dislike)");
+        });
 
         // Register startup service (downloads yt-dlp/ffmpeg/ffprobe binaries before any
         // BackgroundService starts).

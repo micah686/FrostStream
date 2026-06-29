@@ -46,6 +46,7 @@ public sealed class DownloadCommandsConsumerService(
     IOptions<WorkerOptions> workerOptions,
     PotOptionsApplier potOptionsApplier,
     ProviderDownloadHaltRegistry providerHaltRegistry,
+    IReturnYouTubeDislikeClient returnYouTubeDislikeClient,
     ILogger<DownloadCommandsConsumerService> logger) : BackgroundService
 {
     private const string MediaFileBase = "media";
@@ -201,6 +202,10 @@ public sealed class DownloadCommandsConsumerService(
             var sourceLastModified = ResolveSourceLastModified(info);
 
             PlaceholderContentDetector.ThrowIfPlaceholderMetadata(info, provider);
+            info = await ReturnYouTubeDislikeMetadataEnricher.EnrichAsync(
+                info,
+                returnYouTubeDislikeClient,
+                CancellationToken.None);
 
             CapturedMediaMetadata? richMetadata;
             try

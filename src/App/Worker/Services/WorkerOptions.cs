@@ -31,4 +31,28 @@ public sealed class WorkerOptions
     /// Empty means local imports are rejected by this worker.
     /// </summary>
     public IReadOnlyList<string> AllowedImportRoots { get; init; } = [];
+
+    /// <summary>Worker-wide yt-dlp <c>--limit-rate</c> value, e.g. <c>500K</c> or <c>4.2M</c>.</summary>
+    public string? YtDlpLimitRate { get; init; }
+
+    /// <summary>Worker-wide yt-dlp <c>--throttled-rate</c> value, e.g. <c>100K</c>.</summary>
+    public string? YtDlpThrottledRate { get; init; }
+
+    /// <summary>Minimum time to wait between yt-dlp process starts on this worker.</summary>
+    public TimeSpan? YtDlpMinDelayBetweenStarts { get; init; }
+
+    /// <summary>Return YouTube Dislike enrichment settings.</summary>
+    public ReturnYouTubeDislikeOptions ReturnYouTubeDislike { get; init; } = new();
+}
+
+public sealed class ReturnYouTubeDislikeOptions
+{
+    /// <summary>Whether YouTube metadata should be enriched from Return YouTube Dislike.</summary>
+    public bool Enabled { get; init; }
+
+    /// <summary>Base URL for the Return YouTube Dislike API.</summary>
+    public Uri BaseUrl { get; init; } = new("https://returnyoutubedislikeapi.com/");
+
+    /// <summary>Timeout for a single Return YouTube Dislike request.</summary>
+    public TimeSpan Timeout { get; init; } = TimeSpan.FromSeconds(5);
 }
