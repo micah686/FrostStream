@@ -20,6 +20,7 @@ public static class Bundles
     public const string Media = "media";
     public const string Notifications = "notifications";
     public const string Management = "management";
+    public const string MediaAccessAdmin = "media-access-admin";
 }
 
 /// <summary>
@@ -165,6 +166,20 @@ public static class EndpointIds
     public const string MediaWatchStateMarkWatched = "media.watch-state.mark-watched";
     public const string MediaWatchStateMarkUnwatched = "media.watch-state.mark-unwatched";
     public const string PlaylistAudioStream = "playlists.audio-stream";
+
+    // Media access control (watch-time restrictions). The internal `media-access.check` gate has no
+    // endpoint id — it is server-to-server only and never reachable as a route.
+    public const string MediaAccessMediaList = "media-access.media.list";
+    public const string MediaAccessMediaAdd = "media-access.media.add";
+    public const string MediaAccessMediaRemove = "media-access.media.remove";
+    public const string MediaAccessMediaClear = "media-access.media.clear";
+    public const string MediaAccessProviderList = "media-access.provider.list";
+    public const string MediaAccessProviderAdd = "media-access.provider.add";
+    public const string MediaAccessProviderRemove = "media-access.provider.remove";
+    public const string MediaAccessProviderClear = "media-access.provider.clear";
+    public const string MediaAccessAgeList = "media-access.age.list";
+    public const string MediaAccessAgeAdd = "media-access.age.add";
+    public const string MediaAccessAgeRemove = "media-access.age.remove";
 
     // Bundle management (runtime). These live in the `:all` bootstrap bundle so the bootstrap admin
     // can always reach them — see the lock-out guard in B_Axis1.MD.
@@ -319,6 +334,18 @@ public static class EndpointCatalog
         new(EndpointIds.MediaWatchStateMarkWatched, Bundles.Media),
         new(EndpointIds.MediaWatchStateMarkUnwatched, Bundles.Media),
         new(EndpointIds.PlaylistAudioStream, Bundles.Playlists),
+
+        new(EndpointIds.MediaAccessMediaList, Bundles.MediaAccessAdmin),
+        new(EndpointIds.MediaAccessMediaAdd, Bundles.MediaAccessAdmin),
+        new(EndpointIds.MediaAccessMediaRemove, Bundles.MediaAccessAdmin),
+        new(EndpointIds.MediaAccessMediaClear, Bundles.MediaAccessAdmin),
+        new(EndpointIds.MediaAccessProviderList, Bundles.MediaAccessAdmin),
+        new(EndpointIds.MediaAccessProviderAdd, Bundles.MediaAccessAdmin),
+        new(EndpointIds.MediaAccessProviderRemove, Bundles.MediaAccessAdmin),
+        new(EndpointIds.MediaAccessProviderClear, Bundles.MediaAccessAdmin),
+        new(EndpointIds.MediaAccessAgeList, Bundles.MediaAccessAdmin),
+        new(EndpointIds.MediaAccessAgeAdd, Bundles.MediaAccessAdmin),
+        new(EndpointIds.MediaAccessAgeRemove, Bundles.MediaAccessAdmin),
 
         new(EndpointIds.ManagementCatalog, Bundles.Management),
         new(EndpointIds.ManagementBundlesList, Bundles.Management),

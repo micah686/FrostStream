@@ -2,6 +2,7 @@ using FlySwattr.NATS.Abstractions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.StaticFiles;
+using Shared.Auth;
 using Shared.Messaging;
 using Shared.Storage;
 using WebAPI.Auth;
@@ -19,6 +20,48 @@ public sealed class MediaStreamController(
     private static readonly TimeSpan AudioQueryTimeout = TimeSpan.FromSeconds(30);
     private static readonly FileExtensionContentTypeProvider ContentTypeProvider = new();
 
+    /// <summary>
+    /// Evaluates the caller's watch-time access to a media item via DataBridge. Returns <c>null</c> when
+    /// playback is permitted, or a non-null result (403 when restricted, 503 when the check is
+    /// unreachable) that the caller must return instead of serving the stream. Fails closed.
+    /// </summary>
+    private async Task<IActionResult?> CheckWatchAccessAsync(Guid mediaGuid, CancellationToken cancellationToken)
+    {
+        var groups = (User?.FindAll(AuthConstants.GroupsClaim) ?? [])
+            .Select(claim => claim.Value)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        MediaAccessCheckResponseMessage? response;
+        try
+        {
+            response = await messageBus.RequestAsync<MediaAccessCheckRequestMessage, MediaAccessCheckResponseMessage>(
+                MediaAccessSubjects.Check,
+                new MediaAccessCheckRequestMessage { MediaGuid = mediaGuid, UserGroups = groups },
+                QueryTimeout,
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed checking media access for {MediaGuid}.", mediaGuid);
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable.");
+        }
+
+        if (response is null)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable.");
+        }
+
+        return response.IsAllowed
+            ? null
+            : StatusCode(StatusCodes.Status403Forbidden, "You are not allowed to watch this media item.");
+    }
+
     [HttpGet("{mediaGuid:guid}")]
     [Endpoint(EndpointIds.MediaStream)]
     [EndpointSummary("Stream an archived media file")]
@@ -32,6 +75,11 @@ public sealed class MediaStreamController(
         if (version is <= 0)
         {
             return BadRequest("Query parameter 'version' must be greater than zero.");
+        }
+
+        if (await CheckWatchAccessAsync(mediaGuid, cancellationToken) is { } denied)
+        {
+            return denied;
         }
 
         storageKey = string.IsNullOrWhiteSpace(storageKey) ? null : storageKey.Trim();
@@ -142,6 +190,9 @@ public sealed class MediaStreamController(
         if (!TryParseAudioFormat(format, out var audioFormat))
             return BadRequest("Audio format must be 'aac', 'opus', or 'mp3'.");
 
+        if (await CheckWatchAccessAsync(mediaGuid, cancellationToken) is { } denied)
+            return denied;
+
         var response = await ResolveAudioRenditionAsync(
             mediaGuid,
             audioFormat,
@@ -200,6 +251,9 @@ public sealed class MediaStreamController(
         if (!TryParseAudioFormat(format, out var audioFormat))
             return BadRequest("Audio format must be 'aac', 'opus', or 'mp3'.");
 
+        if (await CheckWatchAccessAsync(mediaGuid, cancellationToken) is { } denied)
+            return denied;
+
         var response = await ResolveAudioRenditionAsync(
             mediaGuid,
             audioFormat,
@@ -240,6 +294,9 @@ public sealed class MediaStreamController(
 
         if (!IsSafeHlsFileName(fileName))
             return BadRequest("Invalid HLS file name.");
+
+        if (await CheckWatchAccessAsync(mediaGuid, cancellationToken) is { } denied)
+            return denied;
 
         var response = await ResolveAudioRenditionAsync(
             mediaGuid,
@@ -310,6 +367,10 @@ public sealed class MediaStreamController(
         foreach (var item in playlistResponse.Playlist.Items?.Where(x => x.MediaGuid is not null).OrderBy(x => x.PlaylistIndex)
                      ?? Enumerable.Empty<PlaylistItemDto>())
         {
+            // Skip items the caller is not allowed to watch rather than failing the whole playlist.
+            if (await CheckWatchAccessAsync(item.MediaGuid!.Value, cancellationToken) is not null)
+                continue;
+
             var resolved = await ResolveAudioRenditionAsync(
                 item.MediaGuid!.Value,
                 audioFormat,

@@ -75,6 +75,10 @@
 
 [X]Implement ~~~~Apprise~~~ `recurpixel/notify` for notifications [2023-08-05]
 
+[X]User roles, aka read only user [2023-11-10] (hook into auth framework/APIs)
+
+[X]Access control [2021-11-01]
+
 
 
 ## TODO
@@ -95,9 +99,7 @@ Implement per channel settings [2022-03-26]
 
 
 
-User roles, aka read only user [2023-11-10] (hook into auth framework/APIs)
 
-Access control [2021-11-01]
 
 Un-ignore videos [2021-10-03]
 Dynamic download queue [2021-09-26]

@@ -125,6 +125,9 @@ class Program
         builder.Services.AddScoped<ICreatorDiscoveryRepository, CreatorDiscoveryRepository>();
         builder.Services.AddSingleton<OrphanMetadataCleanupExecutor>();
         builder.Services.AddSingleton<MediaDeleteExecutor>();
+        builder.Services.AddSingleton<MediaAccessExecutor>();
+        builder.Services.Configure<MediaAccessOptions>(
+            builder.Configuration.GetSection(MediaAccessOptions.SectionName));
         builder.Services.AddSingleton<WatchedItemAutoDeleteExecutor>();
         builder.Services.AddSingleton<DownloadSlotCoordinator>();
         builder.Services.AddSingleton<INotificationDispatcher, NotificationDispatcher>();
@@ -179,6 +182,7 @@ class Program
         builder.Services.AddHostedService<MediaStreamQueryConsumerService>();
         builder.Services.AddHostedService<AudioRenditionConsumerService>();
         builder.Services.AddHostedService<MediaDeleteConsumerService>();
+        builder.Services.AddHostedService<MediaAccessConsumerService>();
 
         // POT broker role: answers pot.request over NATS from a nearby bgutil provider. No-ops unless
         // PotBroker:Enabled is set, so this is inert on deployments without a co-located provider.
