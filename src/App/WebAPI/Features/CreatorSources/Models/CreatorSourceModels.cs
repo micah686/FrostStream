@@ -33,6 +33,8 @@ public abstract class CreatorSourceRequestBase
 
     [Range(1, 500)]
     public int MetadataRefreshWindow { get; init; } = 25;
+
+    public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
 }
 
 public sealed class CreatorSourceCreateRequest : CreatorSourceRequestBase;
@@ -73,6 +75,8 @@ public sealed class ChannelDownloadRequest
     public int? Priority { get; init; }
 
     public bool? FetchComments { get; init; }
+
+    public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
 }
 
 public sealed record ChannelDownloadResponse(
@@ -133,6 +137,7 @@ public sealed class CreatorSourceResponse
     public required int ConsecutiveKnownThreshold { get; init; }
     public required int FullRescanIntervalDays { get; init; }
     public required int MetadataRefreshWindow { get; init; }
+    public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
     public Instant? LastSuccessfulScanAt { get; init; }
     public Instant? LastFullScanAt { get; init; }
     public string? LastSeenHighWatermark { get; init; }

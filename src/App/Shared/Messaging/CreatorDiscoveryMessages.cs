@@ -18,6 +18,7 @@ public sealed record CreatorSourceDto
     public Instant? LastFullScanAt { get; init; }
     public string? LastSeenHighWatermark { get; init; }
     public int? NextFullScanStartIndex { get; init; }
+    public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
     public required Instant CreatedAt { get; init; }
     public Instant? LastUpdated { get; init; }
     public string? AvatarUrl { get; init; }
@@ -40,6 +41,7 @@ public sealed record CreatorSourceCreateRequestMessage
     public int ConsecutiveKnownThreshold { get; init; } = 25;
     public int FullRescanIntervalDays { get; init; } = 30;
     public int MetadataRefreshWindow { get; init; } = 25;
+    public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
 }
 
 public sealed record CreatorSourceCreateOrReuseRequestMessage
@@ -52,6 +54,7 @@ public sealed record CreatorSourceCreateOrReuseRequestMessage
     public int ConsecutiveKnownThreshold { get; init; } = 25;
     public int FullRescanIntervalDays { get; init; } = 30;
     public int MetadataRefreshWindow { get; init; } = 25;
+    public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
 }
 
 public sealed record CreatorSourceUpdateRequestMessage
@@ -65,6 +68,7 @@ public sealed record CreatorSourceUpdateRequestMessage
     public int ConsecutiveKnownThreshold { get; init; } = 25;
     public int FullRescanIntervalDays { get; init; } = 30;
     public int MetadataRefreshWindow { get; init; } = 25;
+    public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
 }
 
 public sealed record CreatorSourceGetRequestMessage

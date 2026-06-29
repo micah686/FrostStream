@@ -96,6 +96,7 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
         existing.ConsecutiveKnownThreshold = source.ConsecutiveKnownThreshold;
         existing.FullRescanIntervalDays = source.FullRescanIntervalDays;
         existing.MetadataRefreshWindow = source.MetadataRefreshWindow;
+        existing.ProviderQueryLimitsJson = source.ProviderQueryLimitsJson;
         if (sourceChanged)
         {
             existing.LastFullScanAt = null;

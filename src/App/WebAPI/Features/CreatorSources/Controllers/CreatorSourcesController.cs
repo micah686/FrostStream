@@ -47,7 +47,8 @@ public sealed class CreatorSourcesController(
                 IncrementalPageSize = request.IncrementalPageSize,
                 ConsecutiveKnownThreshold = request.ConsecutiveKnownThreshold,
                 FullRescanIntervalDays = request.FullRescanIntervalDays,
-                MetadataRefreshWindow = request.MetadataRefreshWindow
+                MetadataRefreshWindow = request.MetadataRefreshWindow,
+                ProviderQueryLimits = request.ProviderQueryLimits
             },
             cancellationToken);
 
@@ -72,7 +73,8 @@ public sealed class CreatorSourcesController(
                 Platform = request.Platform,
                 SourceType = request.SourceType,
                 SourceUrl = request.SourceUrl,
-                ScanEnabled = true
+                ScanEnabled = true,
+                ProviderQueryLimits = request.ProviderQueryLimits
             },
             cancellationToken);
 
@@ -127,7 +129,8 @@ public sealed class CreatorSourcesController(
             CookieSecretPath = resolved.CookieSecretPath,
             YtDlpOptions = resolved.YtDlpOptions,
             Priority = resolved.Priority,
-            FetchComments = resolved.FetchComments
+            FetchComments = resolved.FetchComments,
+            ProviderQueryLimits = request.ProviderQueryLimits
         };
 
         try
@@ -177,7 +180,8 @@ public sealed class CreatorSourcesController(
                 IncrementalPageSize = request.IncrementalPageSize,
                 ConsecutiveKnownThreshold = request.ConsecutiveKnownThreshold,
                 FullRescanIntervalDays = request.FullRescanIntervalDays,
-                MetadataRefreshWindow = request.MetadataRefreshWindow
+                MetadataRefreshWindow = request.MetadataRefreshWindow,
+                ProviderQueryLimits = request.ProviderQueryLimits
             },
             cancellationToken);
 
@@ -458,6 +462,7 @@ public sealed class CreatorSourcesController(
             ConsecutiveKnownThreshold = dto.ConsecutiveKnownThreshold,
             FullRescanIntervalDays = dto.FullRescanIntervalDays,
             MetadataRefreshWindow = dto.MetadataRefreshWindow,
+            ProviderQueryLimits = dto.ProviderQueryLimits,
             LastSuccessfulScanAt = dto.LastSuccessfulScanAt,
             LastFullScanAt = dto.LastFullScanAt,
             LastSeenHighWatermark = dto.LastSeenHighWatermark,

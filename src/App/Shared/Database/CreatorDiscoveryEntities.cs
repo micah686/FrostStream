@@ -64,6 +64,8 @@ public sealed class CreatorSourceEntity
 
     public int? NextFullScanStartIndex { get; set; }
 
+    public string? ProviderQueryLimitsJson { get; set; }
+
     public Instant CreatedAt { get; private set; } = SystemClock.Instance.GetCurrentInstant();
 
     public Instant? LastUpdated { get; set; }

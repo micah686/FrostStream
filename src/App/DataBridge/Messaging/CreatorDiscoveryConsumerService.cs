@@ -20,6 +20,7 @@ public sealed class CreatorDiscoveryConsumerService(
     ILogger<CreatorDiscoveryConsumerService> logger) : SubscriptionBackgroundService
 {
     private const string QueueGroup = "databridge-creator-discovery";
+    private const int MaxProviderQueryLimit = 5_000;
 
     protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
     {
@@ -43,7 +44,7 @@ public sealed class CreatorDiscoveryConsumerService(
         var msg = context.Message;
         try
         {
-            if (Validate(msg.Platform, msg.SourceUrl, msg.IncrementalPageSize, msg.ConsecutiveKnownThreshold, msg.FullRescanIntervalDays, msg.MetadataRefreshWindow) is { } validationError)
+            if (Validate(msg.Platform, msg.SourceUrl, msg.IncrementalPageSize, msg.ConsecutiveKnownThreshold, msg.FullRescanIntervalDays, msg.MetadataRefreshWindow, msg.ProviderQueryLimits) is { } validationError)
             {
                 await context.RespondAsync(Failure(validationError));
                 return;
@@ -58,7 +59,8 @@ public sealed class CreatorDiscoveryConsumerService(
                 IncrementalPageSize = msg.IncrementalPageSize,
                 ConsecutiveKnownThreshold = msg.ConsecutiveKnownThreshold,
                 FullRescanIntervalDays = msg.FullRescanIntervalDays,
-                MetadataRefreshWindow = msg.MetadataRefreshWindow
+                MetadataRefreshWindow = msg.MetadataRefreshWindow,
+                ProviderQueryLimitsJson = msg.ProviderQueryLimits?.ToJson()
             }));
             await context.RespondAsync(new CreatorSourceOperationResponseMessage { Success = true, Entity = Map(entity) });
         }
@@ -84,7 +86,7 @@ public sealed class CreatorDiscoveryConsumerService(
         var msg = context.Message;
         try
         {
-            if (Validate(msg.Platform, msg.SourceUrl, msg.IncrementalPageSize, msg.ConsecutiveKnownThreshold, msg.FullRescanIntervalDays, msg.MetadataRefreshWindow) is { } validationError)
+            if (Validate(msg.Platform, msg.SourceUrl, msg.IncrementalPageSize, msg.ConsecutiveKnownThreshold, msg.FullRescanIntervalDays, msg.MetadataRefreshWindow, msg.ProviderQueryLimits) is { } validationError)
             {
                 await context.RespondAsync(Failure(validationError));
                 return;
@@ -99,7 +101,8 @@ public sealed class CreatorDiscoveryConsumerService(
                 IncrementalPageSize = msg.IncrementalPageSize,
                 ConsecutiveKnownThreshold = msg.ConsecutiveKnownThreshold,
                 FullRescanIntervalDays = msg.FullRescanIntervalDays,
-                MetadataRefreshWindow = msg.MetadataRefreshWindow
+                MetadataRefreshWindow = msg.MetadataRefreshWindow,
+                ProviderQueryLimitsJson = msg.ProviderQueryLimits?.ToJson()
             }));
             await context.RespondAsync(new CreatorSourceOperationResponseMessage { Success = true, Entity = Map(entity) });
         }
@@ -115,7 +118,7 @@ public sealed class CreatorDiscoveryConsumerService(
         var msg = context.Message;
         try
         {
-            if (Validate(msg.Platform, msg.SourceUrl, msg.IncrementalPageSize, msg.ConsecutiveKnownThreshold, msg.FullRescanIntervalDays, msg.MetadataRefreshWindow) is { } validationError)
+            if (Validate(msg.Platform, msg.SourceUrl, msg.IncrementalPageSize, msg.ConsecutiveKnownThreshold, msg.FullRescanIntervalDays, msg.MetadataRefreshWindow, msg.ProviderQueryLimits) is { } validationError)
             {
                 await context.RespondAsync(Failure(validationError));
                 return;
@@ -131,7 +134,8 @@ public sealed class CreatorDiscoveryConsumerService(
                 IncrementalPageSize = msg.IncrementalPageSize,
                 ConsecutiveKnownThreshold = msg.ConsecutiveKnownThreshold,
                 FullRescanIntervalDays = msg.FullRescanIntervalDays,
-                MetadataRefreshWindow = msg.MetadataRefreshWindow
+                MetadataRefreshWindow = msg.MetadataRefreshWindow,
+                ProviderQueryLimitsJson = msg.ProviderQueryLimits?.ToJson()
             }));
             if (updated is null)
             {
@@ -452,7 +456,8 @@ public sealed class CreatorDiscoveryConsumerService(
         int incrementalPageSize,
         int consecutiveKnownThreshold,
         int fullRescanIntervalDays,
-        int metadataRefreshWindow)
+        int metadataRefreshWindow,
+        CreatorSourceProviderQueryLimits? providerQueryLimits)
     {
         if (string.IsNullOrWhiteSpace(platform))
             return "platform is required.";
@@ -468,6 +473,8 @@ public sealed class CreatorDiscoveryConsumerService(
             return "full_rescan_interval_days must be greater than zero.";
         if (metadataRefreshWindow <= 0)
             return "metadata_refresh_window must be greater than zero.";
+        if (providerQueryLimits?.Validate(MaxProviderQueryLimit) is { Count: > 0 } errors)
+            return errors[0];
         return null;
     }
 
@@ -495,6 +502,7 @@ public sealed class CreatorDiscoveryConsumerService(
         LastFullScanAt = entity.LastFullScanAt,
         LastSeenHighWatermark = entity.LastSeenHighWatermark,
         NextFullScanStartIndex = entity.NextFullScanStartIndex,
+        ProviderQueryLimits = CreatorSourceProviderQueryLimits.FromJson(entity.ProviderQueryLimitsJson),
         CreatedAt = entity.CreatedAt,
         LastUpdated = entity.LastUpdated,
         AvatarUrl = entity.AvatarUrl,

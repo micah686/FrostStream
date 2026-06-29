@@ -59,6 +59,12 @@
 
 [X]Optional automatic deletion of watched items after a specified time [2021-12-17]
 
+[X]Add page size overrides per channel (#702)(allow scanning of videos/lives/shorts)
+
+[X]Configure shorts, streams and video sizes per channel [2024-07-15]
+
+
+
 ## TODO
 
 upload metadata
@@ -69,7 +75,6 @@ live_chat (complex, need to integrate with clickhousedb)
 Multi language support
 
 Search download queue [2025-07-31]
-Configure shorts, streams and video sizes per channel [2024-07-15]
 Implement Apprise for notifications [2023-08-05]
 Filter and query in search form, search by url query [2022-07-23]
 

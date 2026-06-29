@@ -129,7 +129,8 @@ public sealed class ChannelDiscoveryConsumerService(
         CreatorSourceDto source,
         CancellationToken cancellationToken)
     {
-        var options = BuildOptions(scanMode, source);
+        var requestQueryLimits = ChannelProviderQueryLimits(request);
+        var options = BuildOptions(scanMode, source, requestQueryLimits);
         var result = await ytDlp.TryGetVideoInfoAsync(source.SourceUrl, cancellationToken, flat: true, overrideOptions: potOptionsApplier.Apply(options));
         if (!result.Success || result.Data is not { } container)
         {
@@ -137,11 +138,12 @@ public sealed class ChannelDiscoveryConsumerService(
         }
 
         var candidates = ExtractCandidates(source, container)
-            .Take(EntryLimit(scanMode, source))
+            .Take(EntryLimit(scanMode, source, requestQueryLimits))
             .ToArray();
         var scanHighWatermark = candidates.FirstOrDefault()?.ExternalMediaId;
         var pageStartIndex = PageStartIndex(scanMode, source);
-        var scanPageComplete = scanMode != CreatorSourceScanMode.Full || candidates.Length < EntryLimit(scanMode, source);
+        var entryLimit = EntryLimit(scanMode, source, requestQueryLimits);
+        var scanPageComplete = scanMode != CreatorSourceScanMode.Full || candidates.Length < entryLimit;
         int? nextScanPageStartIndex = scanPageComplete ? null : pageStartIndex + candidates.Length;
 
         var totalSeen = 0;
@@ -227,7 +229,6 @@ public sealed class ChannelDiscoveryConsumerService(
             }
         }
 
-        var limit = EntryLimit(scanMode, source);
         if (!scanPageComplete)
         {
             logger.LogWarning(
@@ -249,27 +250,50 @@ public sealed class ChannelDiscoveryConsumerService(
             Math.Max(batchIndex, 1));
     }
 
-    internal static YtDlpOptions BuildOptions(CreatorSourceScanMode scanMode, CreatorSourceDto source)
+    internal static YtDlpOptions BuildOptions(
+        CreatorSourceScanMode scanMode,
+        CreatorSourceDto source,
+        CreatorSourceProviderQueryLimits? requestQueryLimits = null)
         => new()
         {
             VideoSelection = new YtDlpVideoSelectionOptions
             {
-                PlaylistItems = $"{PageStartIndex(scanMode, source)}:{PageEndIndex(scanMode, source)}"
+                PlaylistItems = $"{PageStartIndex(scanMode, source)}:{PageEndIndex(scanMode, source, requestQueryLimits)}"
             }
         };
 
-    internal static int EntryLimit(CreatorSourceScanMode scanMode, CreatorSourceDto source)
-        => scanMode == CreatorSourceScanMode.Incremental
+    internal static int EntryLimit(
+        CreatorSourceScanMode scanMode,
+        CreatorSourceDto source,
+        CreatorSourceProviderQueryLimits? requestQueryLimits = null)
+    {
+        var providerLimit = requestQueryLimits?.GetLimit(source.Platform, source.SourceType)
+            ?? source.ProviderQueryLimits?.GetLimit(source.Platform, source.SourceType);
+        if (providerLimit is not null)
+        {
+            return Math.Clamp(providerLimit.Value, 1, ModeMaxEntries(scanMode));
+        }
+
+        return scanMode == CreatorSourceScanMode.Incremental
             ? Math.Clamp(source.IncrementalPageSize, 1, MaxIncrementalScanEntries)
             : MaxFullScanEntriesPerSource;
+    }
 
     internal static int PageStartIndex(CreatorSourceScanMode scanMode, CreatorSourceDto source)
         => scanMode == CreatorSourceScanMode.Full
             ? Math.Max(1, source.NextFullScanStartIndex ?? 1)
             : 1;
 
-    private static int PageEndIndex(CreatorSourceScanMode scanMode, CreatorSourceDto source)
-        => PageStartIndex(scanMode, source) + EntryLimit(scanMode, source) - 1;
+    private static int PageEndIndex(
+        CreatorSourceScanMode scanMode,
+        CreatorSourceDto source,
+        CreatorSourceProviderQueryLimits? requestQueryLimits)
+        => PageStartIndex(scanMode, source) + EntryLimit(scanMode, source, requestQueryLimits) - 1;
+
+    private static int ModeMaxEntries(CreatorSourceScanMode scanMode)
+        => scanMode == CreatorSourceScanMode.Incremental
+            ? MaxIncrementalScanEntries
+            : MaxFullScanEntriesPerSource;
 
     private static string? ChannelStorageKey(ScheduledBackgroundRequest request)
         => request is ChannelMediaListRequested channelRequest && !string.IsNullOrWhiteSpace(channelRequest.StorageKey)
@@ -301,6 +325,9 @@ public sealed class ChannelDiscoveryConsumerService(
 
     private static YtDlpOptions? ChannelYtDlpOptions(ScheduledBackgroundRequest request)
         => request is ChannelMediaListRequested channelRequest ? channelRequest.YtDlpOptions : null;
+
+    private static CreatorSourceProviderQueryLimits? ChannelProviderQueryLimits(ScheduledBackgroundRequest request)
+        => request is ChannelMediaListRequested channelRequest ? channelRequest.ProviderQueryLimits : null;
 
     private static IEnumerable<DiscoveredMediaCandidate> ExtractCandidates(CreatorSourceDto source, VideoInfo container)
     {
