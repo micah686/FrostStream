@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
@@ -21,7 +21,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\..\Modules\FlySwattr.NATS\FlySwattr.NATS.Abstractions\FlySwattr.NATS.Abstractions.csproj" />
+      <ProjectReference Include="..\..\Modules\Conduit.NATS\Conduit.NATS\Conduit.NATS.csproj" />
       <ProjectReference Include="..\..\Modules\YtDlpSharpLib\YtDlpSharpLib\YtDlpSharpLib.csproj" />
     </ItemGroup>
 

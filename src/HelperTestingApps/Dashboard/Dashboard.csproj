@@ -10,16 +10,16 @@
 
   <ItemGroup>
     <PackageReference Include="EFCore.NamingConventions" Version="10.0.1" />
-    <PackageReference Include="NodaTime.Serialization.SystemTextJson" Version="1.3.1" />
-    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1" />
-    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime" Version="10.0.1" />
+    <PackageReference Include="NodaTime.Serialization.SystemTextJson" Version="1.4.0" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.2" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime" Version="10.0.2" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Modules\FlySwattr.NATS\FlySwattr.NATS\FlySwattr.NATS.csproj" />
-    <ProjectReference Include="..\..\ServiceDefaults\ServiceDefaults.csproj" />
-    <ProjectReference Include="..\DataBridge\DataBridge.csproj" />
-    <ProjectReference Include="..\Shared\Shared.csproj" />
+    <ProjectReference Include="..\..\Modules\Conduit.NATS\Conduit.NATS\Conduit.NATS.csproj" />
+    <ProjectReference Include="..\..\App\ServiceDefaults\ServiceDefaults.csproj" />
+    <ProjectReference Include="..\..\App\DataBridge\DataBridge.csproj" />
+    <ProjectReference Include="..\..\App\Shared\Shared.csproj" />
   </ItemGroup>
 
 </Project>

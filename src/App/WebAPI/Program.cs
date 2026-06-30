@@ -1,4 +1,4 @@
-using FlySwattr.NATS.Extensions;
+using Conduit.NATS;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -121,18 +121,12 @@ public class Program
         builder.Services.AddFrostStreamStorage();
 
         //var natsUrl = builder.Configuration["NATS:Url"] ?? "nats://localhost:4222";
-        builder.Services.AddEnterpriseNATSMessaging(options =>
+        builder.Services.AddNats(options =>
         {
-            options.Core.Url = builder.Configuration.GetConnectionString("nats")
-                               ?? builder.Configuration["NATS:Url"]
-                               ?? "nats://localhost:4222";
-            //options.Core.Url = natsUrl;
+            options.Url = builder.Configuration.GetConnectionString("nats")
+                          ?? builder.Configuration["NATS:Url"]
+                          ?? "nats://localhost:4222";
             options.EnableTopologyProvisioning = false;
-            options.EnablePayloadOffloading = false;
-            options.EnableResilience = false;
-            options.EnableCaching = false;
-            options.EnableDistributedLock = false;
-            options.EnableDlqAdvisoryListener = false;
         });
 
         

@@ -5,7 +5,7 @@ using DataBridge.AudioRenditions;
 using DataBridge;
 using DataBridge.Data;
 using DataBridge.Messaging;
-using FlySwattr.NATS.Abstractions;
+using Conduit.NATS;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;

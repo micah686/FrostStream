@@ -1,5 +1,5 @@
 using System.Globalization;
-using FlySwattr.NATS.Abstractions;
+using Conduit.NATS;
 using Microsoft.Extensions.Logging;
 using NodaTime;
 using Shared.Messaging;

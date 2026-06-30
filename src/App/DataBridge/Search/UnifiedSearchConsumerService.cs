@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 using DataBridge.Data;
-using FlySwattr.NATS.Abstractions;
+using Conduit.NATS;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Shared.Messaging;

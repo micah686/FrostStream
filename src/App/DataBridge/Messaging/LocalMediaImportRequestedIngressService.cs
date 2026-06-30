@@ -1,7 +1,7 @@
 using Cleipnir.ResilientFunctions.Domain.Exceptions;
 using DataBridge.Data;
 using DataBridge.Flows;
-using FlySwattr.NATS.Abstractions;
+using Conduit.NATS;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;

@@ -1,4 +1,4 @@
-using FlySwattr.NATS.Abstractions;
+using Conduit.NATS;
 using FluentStorage.Blobs;
 using Microsoft.Extensions.Logging;
 using Shared.Messaging;

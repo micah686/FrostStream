@@ -1,5 +1,4 @@
-using FlySwattr.NATS.Extensions;
-using FlySwattr.NATS.Topology.Extensions;
+using Conduit.NATS;
 using NodaTime;
 using Quartz;
 using Scheduler.ChannelTasks;
@@ -32,16 +31,11 @@ internal static class Program
         builder.Services.Configure<MaintenanceJobOptions>(
             builder.Configuration.GetSection(MaintenanceJobOptions.SectionName));
 
-        builder.Services.AddEnterpriseNATSMessaging(options =>
+        builder.Services.AddNats(options =>
         {
-            options.Core.Url = NatsConnectionFactory.GetUrl(builder.Configuration);
-            options.Core.NatsAuth = NatsConnectionFactory.BuildAuth(builder.Configuration);
+            options.Url = NatsConnectionFactory.GetUrl(builder.Configuration);
+            options.AuthOpts = NatsConnectionFactory.BuildAuth(builder.Configuration);
             options.EnableTopologyProvisioning = true;
-            options.EnablePayloadOffloading = false;
-            options.EnableResilience = false;
-            options.EnableCaching = false;
-            options.EnableDistributedLock = false;
-            options.EnableDlqAdvisoryListener = false;
         });
         builder.Services.AddNatsTopologySource<BackgroundJobsTopology>();
         builder.Services.AddSingleton<INatsMessagePublisher, NatsMessagePublisher>();

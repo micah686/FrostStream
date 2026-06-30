@@ -1,4 +1,4 @@
-using FlySwattr.NATS.Abstractions;
+using Conduit.NATS;
 
 namespace Shared.Messaging;
 

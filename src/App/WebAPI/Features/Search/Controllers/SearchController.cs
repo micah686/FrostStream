@@ -1,4 +1,4 @@
-using FlySwattr.NATS.Abstractions;
+using Conduit.NATS;
 using Microsoft.AspNetCore.Mvc;
 using Shared.Auth;
 using Shared.Messaging;
