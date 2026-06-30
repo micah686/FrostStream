@@ -1,4 +1,4 @@
-using FlySwattr.NATS.Abstractions;
+using Conduit.NATS;
 using NodaTime;
 using Quartz;
 using Scheduler.Databridge;

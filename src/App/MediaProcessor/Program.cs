@@ -1,5 +1,4 @@
-﻿using FlySwattr.NATS.Extensions;
-using FlySwattr.NATS.Topology.Extensions;
+﻿using Conduit.NATS;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -23,16 +22,11 @@ class Program
             ?? "nats://localhost:4222";
         var natsAuth = BuildNatsAuth(builder.Configuration);
 
-        builder.Services.AddEnterpriseNATSMessaging(options =>
+        builder.Services.AddNats(options =>
         {
-            options.Core.Url = natsUrl;
-            options.Core.NatsAuth = natsAuth;
+            options.Url = natsUrl;
+            options.AuthOpts = natsAuth;
             options.EnableTopologyProvisioning = true;
-            options.EnablePayloadOffloading = false;
-            options.EnableResilience = false;
-            options.EnableCaching = false;
-            options.EnableDistributedLock = false;
-            options.EnableDlqAdvisoryListener = false;
         });
 
         builder.Services.AddNatsTopologySource<BackgroundJobsTopology>();

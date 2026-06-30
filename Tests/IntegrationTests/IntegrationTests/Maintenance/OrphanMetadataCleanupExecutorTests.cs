@@ -2,7 +2,7 @@ using DataBridge.Messaging;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using FluentMigrator.Runner;
-using FlySwattr.NATS.Abstractions;
+using Conduit.NATS;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using NodaTime;

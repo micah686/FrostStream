@@ -1,5 +1,5 @@
 using System.Security.Claims;
-using FlySwattr.NATS.Abstractions;
+using Conduit.NATS;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -129,17 +129,5 @@ public sealed class ImportsControllerTests
             Objects.Remove(key);
             return Task.CompletedTask;
         }
-
-        public Task<ObjectInfo?> GetInfoAsync(string key, bool showDeleted = false, CancellationToken cancellationToken = default)
-            => Task.FromResult<ObjectInfo?>(null);
-
-        public Task UpdateMetaAsync(string key, ObjectMetaInfo meta, CancellationToken cancellationToken = default)
-            => Task.CompletedTask;
-
-        public Task<IEnumerable<ObjectInfo>> ListAsync(bool showDeleted = false, CancellationToken cancellationToken = default)
-            => Task.FromResult<IEnumerable<ObjectInfo>>([]);
-
-        public Task WatchAsync(Func<ObjectInfo, Task> handler, CancellationToken cancellationToken = default)
-            => Task.CompletedTask;
     }
 }

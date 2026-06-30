@@ -10,8 +10,7 @@ using DataBridge.Metadata;
 using DataBridge.Messaging;
 using DataBridge.Search;
 using DataBridge.Statistics;
-using FlySwattr.NATS.Extensions;
-using FlySwattr.NATS.Topology.Extensions;
+using Conduit.NATS;
 using FluentMigrator.Runner;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -70,17 +69,12 @@ class Program
                 .WithGlobalConnectionString(connectionString)
                 .ScanIn(typeof(Program).Assembly).For.Migrations());
         
-        builder.Services.AddEnterpriseNATSMessaging(options =>
+        builder.Services.AddNats(options =>
         {
-            options.Core.Url = natsUrl;
-            options.Core.NatsAuth = natsAuth;
+            options.Url = natsUrl;
+            options.AuthOpts = natsAuth;
             // Provisions every ITopologySource registered below at startup.
             options.EnableTopologyProvisioning = true;
-            options.EnablePayloadOffloading = false;
-            options.EnableResilience = false;
-            options.EnableCaching = false;
-            options.EnableDistributedLock = false;
-            options.EnableDlqAdvisoryListener = false;
         });
 
         builder.Services.AddNatsTopologySource<DownloadTopology>();

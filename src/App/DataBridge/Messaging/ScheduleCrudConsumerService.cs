@@ -1,6 +1,6 @@
 using DataBridge;
 using DataBridge.Data;
-using FlySwattr.NATS.Abstractions;
+using Conduit.NATS;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NodaTime;

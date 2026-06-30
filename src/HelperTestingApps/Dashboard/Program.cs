@@ -1,7 +1,7 @@
 using Dashboard.Components;
 using Dashboard.Services;
+using Conduit.NATS;
 using DataBridge.Data;
-using FlySwattr.NATS.Extensions;
 using Microsoft.EntityFrameworkCore;
 using NATS.Client.Core;
 using NodaTime.Serialization.SystemTextJson;
@@ -43,16 +43,11 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
 });
 
-builder.Services.AddEnterpriseNATSMessaging(options =>
+builder.Services.AddNats(options =>
 {
-    options.Core.Url = natsUrl;
-    options.Core.NatsAuth = BuildNatsAuth(builder.Configuration);
+    options.Url = natsUrl;
+    options.AuthOpts = BuildNatsAuth(builder.Configuration);
     options.EnableTopologyProvisioning = false;
-    options.EnablePayloadOffloading = false;
-    options.EnableResilience = false;
-    options.EnableCaching = false;
-    options.EnableDistributedLock = false;
-    options.EnableDlqAdvisoryListener = false;
 });
 
 builder.Services.AddScoped<JobQueryService>();

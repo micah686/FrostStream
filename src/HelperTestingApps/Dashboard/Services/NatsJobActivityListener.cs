@@ -1,6 +1,6 @@
 using System.Text.Json;
+using Conduit.NATS;
 using Dashboard.Models;
-using FlySwattr.NATS.Abstractions;
 using Microsoft.Extensions.Hosting;
 using Shared.Messaging;
 

@@ -65,6 +65,9 @@ public static class Extensions
             .WithTracing(tracing =>
             {
                 tracing.AddSource(builder.Environment.ApplicationName)
+                    // Conduit.NATS hands the transport to the NATS.Net v3 client, which emits
+                    // its own activities under this source.
+                    .AddSource("NATS.Net")
                     .AddAspNetCoreInstrumentation(tracing =>
                         // Exclude health check requests from tracing
                         tracing.Filter = context =>

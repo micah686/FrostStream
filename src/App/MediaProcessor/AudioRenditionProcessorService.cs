@@ -2,7 +2,7 @@ using System.Buffers;
 using System.Diagnostics;
 using System.IO.Hashing;
 using FluentStorage.Blobs;
-using FlySwattr.NATS.Abstractions;
+using Conduit.NATS;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;

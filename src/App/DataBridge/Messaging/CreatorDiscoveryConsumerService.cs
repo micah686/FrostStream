@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using DataBridge;
 using DataBridge.Data;
-using FlySwattr.NATS.Abstractions;
+using Conduit.NATS;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;

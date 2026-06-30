@@ -1,5 +1,5 @@
 using System.Text.Json;
-using FlySwattr.NATS.Abstractions;
+using Conduit.NATS;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Shared.Messaging;

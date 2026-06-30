@@ -3,8 +3,7 @@ using DataBridge.Messaging;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using FluentMigrator.Runner;
-using FlySwattr.NATS.Abstractions;
-using FlySwattr.NATS.Extensions;
+using Conduit.NATS;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -165,15 +164,10 @@ public sealed class CookieProfileStackFixture : IAsyncDisposable
                 .WithGlobalConnectionString(PostgresConnectionString)
                 .ScanIn(typeof(CookieProfileConsumerService).Assembly).For.Migrations());
 
-        builder.Services.AddEnterpriseNATSMessaging(options =>
+        builder.Services.AddNats(options =>
         {
-            options.Core.Url = NatsUrl;
+            options.Url = NatsUrl;
             options.EnableTopologyProvisioning = false;
-            options.EnablePayloadOffloading = false;
-            options.EnableResilience = false;
-            options.EnableCaching = false;
-            options.EnableDistributedLock = false;
-            options.EnableDlqAdvisoryListener = false;
         });
 
         builder.Services.AddHostedService<CookieProfileConsumerService>();

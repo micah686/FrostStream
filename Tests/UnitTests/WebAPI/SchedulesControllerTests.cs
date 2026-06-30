@@ -1,5 +1,5 @@
 using System.ComponentModel.DataAnnotations;
-using FlySwattr.NATS.Abstractions;
+using Conduit.NATS;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using NodaTime;

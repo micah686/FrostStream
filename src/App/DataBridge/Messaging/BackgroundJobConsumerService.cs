@@ -1,6 +1,6 @@
 using DataBridge.Backup;
 using DataBridge.Search;
-using FlySwattr.NATS.Abstractions;
+using Conduit.NATS;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NodaTime;

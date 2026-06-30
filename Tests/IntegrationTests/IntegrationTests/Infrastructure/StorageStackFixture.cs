@@ -3,9 +3,7 @@ using DataBridge.Messaging;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using FluentMigrator.Runner;
-using FlySwattr.NATS.Abstractions;
-using FlySwattr.NATS.Core;
-using FlySwattr.NATS.Extensions;
+using Conduit.NATS;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -158,15 +156,10 @@ public sealed class StorageStackFixture(SaveChangesInterceptor? interceptor = nu
                 .WithGlobalConnectionString(PostgresConnectionString)
                 .ScanIn(typeof(StorageCrudConsumerService).Assembly).For.Migrations());
 
-        builder.Services.AddEnterpriseNATSMessaging(options =>
+        builder.Services.AddNats(options =>
         {
-            options.Core.Url = NatsUrl;
+            options.Url = NatsUrl;
             options.EnableTopologyProvisioning = false;
-            options.EnablePayloadOffloading = false;
-            options.EnableResilience = false;
-            options.EnableCaching = false;
-            options.EnableDistributedLock = false;
-            options.EnableDlqAdvisoryListener = false;
         });
 
         builder.Services.AddHostedService<StorageCrudConsumerService>();
@@ -205,14 +198,19 @@ public sealed class StorageStackFixture(SaveChangesInterceptor? interceptor = nu
 
     public async Task<RealMessageBusHarness> CreateExternalBusAsync()
     {
-        var opts = new NatsOpts
+        // Build an independent IMessageBus over the same broker via Conduit's public DI surface
+        // (the concrete bus type is internal to the library by design).
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddNats(o =>
         {
-            Url = NatsUrl,
-            SerializerRegistry = NatsJsonSerializerRegistry.Default
-        };
-        var connection = new NatsConnection(opts);
-        await connection.ConnectAsync();
-        return new RealMessageBusHarness(connection, new NatsMessageBus(connection, NullLogger<NatsMessageBus>.Instance));
+            o.Url = NatsUrl;
+            o.EnableTopologyProvisioning = false;
+            o.ValidateConnectionOnStart = false;
+        });
+        var provider = services.BuildServiceProvider();
+        await provider.GetRequiredService<NatsConnection>().ConnectAsync();
+        return new RealMessageBusHarness(provider, provider.GetRequiredService<IMessageBus>());
     }
 
     public async Task<StorageConfigEntity?> FindStorageAsync(string key)
@@ -357,19 +355,12 @@ public sealed class StorageStackFixture(SaveChangesInterceptor? interceptor = nu
     }
 }
 
-public sealed class RealMessageBusHarness(NatsConnection connection, IMessageBus bus) : IAsyncDisposable
+public sealed class RealMessageBusHarness(ServiceProvider provider, IMessageBus bus) : IAsyncDisposable
 {
     public IMessageBus Bus { get; } = bus;
 
-    public async ValueTask DisposeAsync()
-    {
-        if (Bus is IAsyncDisposable asyncDisposable)
-        {
-            await asyncDisposable.DisposeAsync();
-        }
-
-        await connection.DisposeAsync();
-    }
+    // Disposing the provider tears down the singleton NatsConnection and message bus it owns.
+    public ValueTask DisposeAsync() => provider.DisposeAsync();
 }
 
 public sealed class FailingSaveChangesInterceptor : SaveChangesInterceptor
