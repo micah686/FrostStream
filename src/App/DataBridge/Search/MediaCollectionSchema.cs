@@ -30,6 +30,14 @@ public static class MediaCollectionSchema
                 new Field("view_count", FieldType.Int64) { Sort = true, Optional = true },
                 new Field("like_count", FieldType.Int64) { Sort = true, Optional = true },
                 new Field("duration_seconds", FieldType.Float) { Sort = true, Optional = true },
+                // Technical metadata of the primary video/audio stream, projected for fast filtering.
+                new Field("video_codec", FieldType.String) { Facet = true, Optional = true },
+                new Field("audio_codec", FieldType.String) { Facet = true, Optional = true },
+                new Field("video_width", FieldType.Int32) { Optional = true },
+                new Field("video_height", FieldType.Int32) { Sort = true, Optional = true },
+                new Field("resolution_label", FieldType.String) { Facet = true, Optional = true },
+                new Field("hdr_type", FieldType.String) { Facet = true, Optional = true },
+                new Field("audio_channels", FieldType.Int32) { Facet = true, Optional = true },
                 new Field("thumbnail_storage_path", FieldType.String) { Index = false, Optional = true },
                 new Field("account_avatar_storage_path", FieldType.String) { Index = false, Optional = true },
                 new Field("webpage_url", FieldType.String) { Index = false, Optional = true }

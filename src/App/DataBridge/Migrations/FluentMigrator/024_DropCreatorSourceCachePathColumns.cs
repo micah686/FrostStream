@@ -16,12 +16,12 @@ public sealed class M024_DropCreatorSourceCachePathColumns : Migration
     {
         Delete.Column("avatar_cache_path")
             .Column("banner_cache_path")
-            .FromTable("creator_sources");
+            .FromTable("creator_sources").InSchema("discovery");
     }
 
     public override void Down()
     {
-        Alter.Table("creator_sources")
+        Alter.Table("creator_sources").InSchema("discovery")
             .AddColumn("avatar_cache_path").AsString(1024).Nullable()
             .AddColumn("banner_cache_path").AsString(1024).Nullable();
     }

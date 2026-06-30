@@ -18,6 +18,17 @@ public enum MediaKind
 }
 
 /// <summary>
+/// Where a download request came from. Used to decide whether a provider-halt should be
+/// automatically retried later.
+/// </summary>
+public enum DownloadSourceKind
+{
+    Direct = 0,
+    Playlist = 1,
+    Channel = 2
+}
+
+/// <summary>
 /// Common envelope carried by every message on the download flow's NATS subjects. The
 /// dedupe / correlation / retry machinery in DataBridge, Worker, and Cleipnir relies on
 /// these fields being populated consistently across producers.
@@ -105,7 +116,19 @@ public enum DownloadJobState
     /// <summary>Retry budget exhausted; routed to the DLQ and requires manual intervention.</summary>
     DeadLettered = 12,
     /// <summary>Source already downloaded (matched an existing version); download was skipped.</summary>
-    AlreadyDownloaded = 13
+    AlreadyDownloaded = 13,
+    /// <summary>Waiting for a download slot from the <c>DownloadSlotCoordinator</c>; will proceed once
+    /// a slot is available in priority order.</summary>
+    DownloadQueued = 14,
+    /// <summary>A user requested cancellation; the flow is stopping any in-flight work and cleanup.</summary>
+    Cancelling = 15,
+    /// <summary>End state — the user cancelled the job before it completed.</summary>
+    Cancelled = 16,
+    /// <summary>Suppressed by a config-set ignore keyword during a user-initiated playlist/channel
+    /// download; no download was started. Force-queueing transitions it back to <see cref="Queued"/>.</summary>
+    Ignored = 17,
+    /// <summary>Provider access was halted after bot-detection or anti-automation challenge was detected.</summary>
+    ProviderHalted = 18
 }
 
 /// <summary>
@@ -165,6 +188,18 @@ public sealed record DownloadRequested : IFlowMessage
     public bool ForceDownload { get; init; }
 
     /// <summary>
+    /// Where this request came from. Direct user requests do not get automatic provider-halt
+    /// retries; playlist and channel fan-outs do.
+    /// </summary>
+    public DownloadSourceKind SourceKind { get; init; } = DownloadSourceKind.Direct;
+
+    /// <summary>
+    /// When true, the flow should resume from the last recorded successful step instead of
+    /// restarting from the beginning.
+    /// </summary>
+    public bool ResumeFromHaltedState { get; init; }
+
+    /// <summary>
     /// What kind of media to produce (video or audio-only). Audio jobs force
     /// <c>--extract-audio</c> at the Worker.
     /// </summary>
@@ -175,6 +210,12 @@ public sealed record DownloadRequested : IFlowMessage
     /// Ignored for video jobs. <see langword="null"/> defers to yt-dlp's default.
     /// </summary>
     public AudioConversionFormat? AudioFormat { get; init; }
+
+    /// <summary>When true, queue a cached audio rendition after the video download completes.</summary>
+    public bool EncodeAudioRendition { get; init; }
+
+    /// <summary>Cached audio rendition format used when <see cref="EncodeAudioRendition"/> is true.</summary>
+    public AudioRenditionFormat AudioRenditionFormat { get; init; } = AudioRenditionFormat.Aac;
 
     /// <summary>
     /// Caller-supplied yt-dlp options snapshot. The Worker merges this on top of its
@@ -191,11 +232,23 @@ public sealed record DownloadRequested : IFlowMessage
     public string? PresetKey { get; init; }
 
     /// <summary>
-    /// Reference to a Netscape cookie file stored in OpenBAO at <c>cookies/{key}</c>.
-    /// The Worker fetches the secret, materializes it to a temp file, and passes
-    /// <c>--cookies &lt;path&gt;</c> to yt-dlp for the duration of the run.
+    /// Opaque, fully-resolved OpenBAO path to a user-owned cookie profile
+    /// (<c>cookies/users/{subject}/{profileKey}</c>), resolved by WebAPI from the authenticated
+    /// user. The Worker fetches the secret, materializes it to a temp file, and passes
+    /// <c>--cookies &lt;path&gt;</c> to yt-dlp for the duration of the run; it only ever sees this
+    /// reference, never the cookie body or the owning user's identity beyond the path.
     /// </summary>
-    public string? CookieKey { get; init; }
+    public string? CookieSecretPath { get; init; }
+
+    /// <summary>
+    /// Scheduling priority: 0 (default / lowest) to 100 (highest). When multiple jobs
+    /// are waiting for a download slot, higher-priority jobs are dispatched first.
+    /// </summary>
+    public int Priority { get; init; } = 0;
+
+    /// <summary>When true, the Worker passes <c>--write-comments</c> to yt-dlp so comments are fetched,
+    /// persisted to the database, and indexed in Typesense.</summary>
+    public bool FetchComments { get; init; } = false;
 }
 
 /// <summary>
@@ -216,14 +269,37 @@ public sealed record FetchMetadataCommand : IFlowMessage
     public required string SourceUrl { get; init; }
 
     /// <summary>
+    /// Target FluentStorage backend key. The Worker probes this backend for connectivity
+    /// before running yt-dlp so that a misconfigured or unreachable backend fails fast
+    /// rather than after a potentially lengthy metadata fetch.
+    /// </summary>
+    public required string StorageKey { get; init; }
+
+    /// <summary>
+    /// Worker tag that was used to route this command. Informational; the routing already
+    /// happened at publish time via the subject suffix (<c>download.cmd.fetch-metadata.{tag}</c>).
+    /// </summary>
+    public string? RequiredWorkerTag { get; init; }
+
+    /// <summary>
     /// Caller-supplied yt-dlp options snapshot, passed through to the Worker for the
     /// metadata-fetch invocation. Cookies-from-browser, custom user-agent, etc. all
     /// matter at metadata time, so we don't strip the options here.
     /// </summary>
     public YtDlpOptions? YtDlpOptions { get; init; }
 
-    /// <summary>Same OpenBAO cookie reference as on <see cref="DownloadRequested.CookieKey"/>.</summary>
-    public string? CookieKey { get; init; }
+    /// <summary>
+    /// When true, the Worker should ignore any cached provider halt and attempt the command
+    /// anyway. Used by manual and automatic restarts.
+    /// </summary>
+    public bool ResumeFromHaltedState { get; init; }
+
+    /// <summary>Same resolved user-owned cookie path as on <see cref="DownloadRequested.CookieSecretPath"/>.</summary>
+    public string? CookieSecretPath { get; init; }
+
+    /// <summary>When true, the Worker passes <c>--write-comments</c> to yt-dlp so comments are included in
+    /// the returned metadata and subsequently persisted to the database and indexed in Typesense.</summary>
+    public bool FetchComments { get; init; } = false;
 }
 
 /// <summary>
@@ -282,6 +358,12 @@ public sealed record MetadataFetchFailed : IFlowMessage
 
     public string? ErrorCode { get; init; }
 
+    /// <summary>Provider whose access failed, when known (for example, <c>youtube</c>).</summary>
+    public string? Provider { get; init; }
+
+    /// <summary>When true, the producer recommends halting more downloads from <see cref="Provider"/>.</summary>
+    public bool HaltProviderDownloads { get; init; }
+
     public required string ErrorMessage { get; init; }
 }
 
@@ -302,6 +384,9 @@ public sealed record DownloadVideoCommand : IFlowMessage
     /// <summary>Source URL to download (passed through from <see cref="DownloadRequested.SourceUrl"/>).</summary>
     public required string SourceUrl { get; init; }
 
+    /// <summary>Worker tag used to route this command. Informational.</summary>
+    public string? RequiredWorkerTag { get; init; }
+
     /// <summary>What kind of media to produce (video or audio-only).</summary>
     public MediaKind MediaKind { get; init; } = MediaKind.Video;
 
@@ -311,8 +396,14 @@ public sealed record DownloadVideoCommand : IFlowMessage
     /// <summary>Caller-supplied yt-dlp options snapshot, passed through to the Worker.</summary>
     public YtDlpOptions? YtDlpOptions { get; init; }
 
-    /// <summary>Same OpenBAO cookie reference as on <see cref="DownloadRequested.CookieKey"/>.</summary>
-    public string? CookieKey { get; init; }
+    /// <summary>Same resolved user-owned cookie path as on <see cref="DownloadRequested.CookieSecretPath"/>.</summary>
+    public string? CookieSecretPath { get; init; }
+
+    /// <summary>
+    /// When true, the Worker should ignore any cached provider halt and attempt the command
+    /// anyway. Used by manual and automatic restarts.
+    /// </summary>
+    public bool ResumeFromHaltedState { get; init; }
 }
 
 /// <summary>
@@ -392,6 +483,10 @@ public sealed record SidecarFileRef
 
     /// <summary>Language code for caption sidecars (e.g. "en", "en-US"); null for thumbnails.</summary>
     public string? LanguageCode { get; init; }
+
+    /// <summary>Plain text extracted from the subtitle file at download time. Null for thumbnails or
+    /// unsupported formats. Stored in the DB and indexed in Typesense for full-text search.</summary>
+    public string? ParsedText { get; init; }
 }
 
 /// <summary>
@@ -409,7 +504,11 @@ public enum UploadArtifactKind
     /// <summary>The per-media thumbnail image, co-located with the primary.</summary>
     Thumbnail = 2,
     /// <summary>A per-media caption/subtitle track, co-located with the primary.</summary>
-    Caption = 3
+    Caption = 3,
+    /// <summary>The DataBridge-generated <c>.meta</c> sidecar containing title, hash, media GUID,
+    /// and original URL — used to correlate storage objects back to their DB records after
+    /// migrations or path changes.</summary>
+    Meta = 4
 }
 
 /// <summary>
@@ -460,8 +559,31 @@ public sealed record DownloadFailed : IFlowMessage
 
     public required FailureKind FailureKind { get; init; }
     public string? ErrorCode { get; init; }
+    /// <summary>Provider whose access failed, when known (for example, <c>youtube</c>).</summary>
+    public string? Provider { get; init; }
+    /// <summary>When true, the producer recommends halting more downloads from <see cref="Provider"/>.</summary>
+    public bool HaltProviderDownloads { get; init; }
     public required string ErrorMessage { get; init; }
     public string? TempFileRef { get; init; }
+}
+
+/// <summary>
+/// Request to restart a download job that was halted because the provider demanded bot
+/// verification. The DataBridge admin service replays the original request payload with
+/// <see cref="DownloadRequested.ResumeFromHaltedState"/> enabled.
+/// </summary>
+public sealed record RestartHaltedDownloadRequest
+{
+    public required Guid JobId { get; init; }
+    public string? RequestedBy { get; init; }
+}
+
+public sealed record RestartHaltedDownloadResponse
+{
+    public bool Success { get; init; }
+    public string? ErrorCode { get; init; }
+    public string? ErrorMessage { get; init; }
+    public Guid? JobId { get; init; }
 }
 
 /// <summary>
@@ -479,8 +601,18 @@ public sealed record UploadObjectCommand : IFlowMessage
     public required Instant OccurredAt { get; init; }
     public required int Attempt { get; init; }
 
-    /// <summary>Source path on the worker — must equal <see cref="DownloadCompleted.TempFileRef"/>.</summary>
-    public required string TempFileRef { get; init; }
+    /// <summary>Source path on the worker. Null when <see cref="InlineContent"/> is set instead.</summary>
+    public string? TempFileRef { get; init; }
+
+    /// <summary>
+    /// Raw bytes for the worker to write directly to <see cref="StoragePath"/>. Used for
+    /// DataBridge-generated sidecars (e.g. <c>.meta</c> files) where no worker-local temp file
+    /// exists. Exactly one of <see cref="TempFileRef"/> and <see cref="InlineContent"/> must be set.
+    /// </summary>
+    public byte[]? InlineContent { get; init; }
+
+    /// <summary>Worker tag used to route this command. Informational.</summary>
+    public string? RequiredWorkerTag { get; init; }
 
     /// <summary>FluentStorage backend key to upload into.</summary>
     public required string StorageKey { get; init; }
@@ -515,8 +647,8 @@ public sealed record UploadCompleted : IFlowMessage
     public required Instant OccurredAt { get; init; }
     public required int Attempt { get; init; }
 
-    /// <summary>The temp-file source the bytes came from. Subsequently fed to <see cref="DeleteTempFileCommand"/>.</summary>
-    public required string TempFileRef { get; init; }
+    /// <summary>The temp-file source the bytes came from. Null for inline-content uploads (e.g. <c>.meta</c> sidecars).</summary>
+    public string? TempFileRef { get; init; }
 
     /// <summary>Backend key the bytes were written to.</summary>
     public required string StorageKey { get; init; }
@@ -574,6 +706,9 @@ public sealed record DeleteTempFileCommand : IFlowMessage
     public required Instant OccurredAt { get; init; }
     public required int Attempt { get; init; }
 
+    /// <summary>Worker tag used to route this command. Informational.</summary>
+    public string? RequiredWorkerTag { get; init; }
+
     public required string TempFileRef { get; init; }
 }
 
@@ -608,6 +743,91 @@ public sealed record TempFileDeleteFailed : IFlowMessage
 }
 
 /// <summary>
+/// Sent by <c>DownloadSlotCoordinator</c> directly into a Cleipnir flow instance when
+/// that job has been granted a download slot. The flow resumes its download step upon receipt.
+/// </summary>
+public sealed record DownloadSlotGranted : IFlowMessage
+{
+    public required Guid JobId { get; init; }
+    public required Guid CorrelationId { get; init; }
+    public Guid? CausationId { get; init; }
+    public required Guid MessageId { get; init; }
+    public required string OperationKey { get; init; }
+    public required Instant OccurredAt { get; init; }
+    public int Attempt { get; init; } = 1;
+
+    /// <summary>The worker tag this slot belongs to (empty string for the default/untagged worker).</summary>
+    public required string WorkerTag { get; init; }
+}
+
+// ── NATS Core request/reply — download admin ────────────────────────────────────
+
+/// <summary>Request to update a queued job's scheduling priority (NATS Core request/reply).</summary>
+public sealed record UpdateDownloadPriorityRequest
+{
+    public required Guid JobId { get; init; }
+    /// <summary>New priority value 0–100.</summary>
+    public required int Priority { get; init; }
+}
+
+/// <summary>Response to <see cref="UpdateDownloadPriorityRequest"/>.</summary>
+public sealed record UpdateDownloadPriorityResponse
+{
+    public bool Success { get; init; }
+    /// <summary>When false, explanation of why the update was not applied.</summary>
+    public string? Error { get; init; }
+}
+
+/// <summary>Request to cancel a download job (NATS Core request/reply).</summary>
+public sealed record CancelDownloadRequest
+{
+    public required Guid JobId { get; init; }
+    public string? RequestedBy { get; init; }
+    public string? Reason { get; init; }
+}
+
+/// <summary>Response to <see cref="CancelDownloadRequest"/>.</summary>
+public sealed record CancelDownloadResponse
+{
+    public bool Success { get; init; }
+    /// <summary>Current or final state after the cancellation request was handled.</summary>
+    public DownloadJobState? State { get; init; }
+    /// <summary>When false, explanation of why cancellation was not applied.</summary>
+    public string? Error { get; init; }
+}
+
+/// <summary>
+/// Message delivered directly into the Cleipnir flow when a caller requests cancellation.
+/// The flow consumes this while waiting for a download slot; active downloads are cancelled
+/// by a separate Worker broadcast and report back through <see cref="DownloadFailed"/>.
+/// </summary>
+public sealed record DownloadCancelRequested : IFlowMessage
+{
+    public required Guid JobId { get; init; }
+    public required Guid CorrelationId { get; init; }
+    public Guid? CausationId { get; init; }
+    public required Guid MessageId { get; init; }
+    public required string OperationKey { get; init; }
+    public required Instant OccurredAt { get; init; }
+    public int Attempt { get; init; } = 1;
+
+    public string? RequestedBy { get; init; }
+    public string? Reason { get; init; }
+}
+
+/// <summary>
+/// Core NATS broadcast to Workers asking the instance that currently owns <see cref="JobId"/>
+/// to cancel its local yt-dlp process. Workers without that active job ignore the message.
+/// </summary>
+public sealed record CancelActiveDownloadCommand
+{
+    public required Guid JobId { get; init; }
+    public required Guid MessageId { get; init; }
+    public string? RequestedBy { get; init; }
+    public string? Reason { get; init; }
+}
+
+/// <summary>
 /// Compensating command issued when an upload succeeded but a downstream step failed:
 /// removes the orphaned object from the final storage backend.
 /// </summary>
@@ -620,6 +840,9 @@ public sealed record DeleteUploadedObjectCommand : IFlowMessage
     public required string OperationKey { get; init; }
     public required Instant OccurredAt { get; init; }
     public required int Attempt { get; init; }
+
+    /// <summary>Worker tag used to route this command. Informational.</summary>
+    public string? RequiredWorkerTag { get; init; }
 
     public required string StorageKey { get; init; }
 

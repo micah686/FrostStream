@@ -15,10 +15,13 @@ public sealed class BackgroundJobsTopology : ITopologySource
     public const string SearchReindexConsumer = "databridge-search-reindex";
     public const string DatabaseMaintenanceConsumer = "databridge-database-maintenance";
     public const string StaleDatabaseCleanupConsumer = "databridge-stale-database-cleanup";
+    public const string WatchedItemAutoDeleteConsumer = "databridge-watched-item-auto-delete";
     public const string WorkerChannelUpdateCheckConsumer = "worker-channel-update-check";
     public const string WorkerChannelMediaListConsumer = "worker-channel-media-list";
     public const string WorkerChannelAssetRefreshConsumer = "worker-channel-asset-refresh";
     public const string WorkerFilesystemRescanConsumer = "worker-filesystem-rescan";
+    public const string MediaProcessorAudioRenditionConsumer = "mediaprocessor-audio-rendition";
+    public const string DataBridgeBackupConsumer = "databridge-backup";
 
     public IEnumerable<StreamSpec> GetStreams()
     {
@@ -57,10 +60,13 @@ public sealed class BackgroundJobsTopology : ITopologySource
         yield return DataBridgeConsumer(SearchReindexConsumer, BackgroundJobSubjects.SearchReindexRequest, TimeSpan.FromMinutes(30), maxDeliver: 3);
         yield return DataBridgeConsumer(DatabaseMaintenanceConsumer, BackgroundJobSubjects.DatabaseMaintenanceRequest, TimeSpan.FromHours(2), maxDeliver: 3);
         yield return DataBridgeConsumer(StaleDatabaseCleanupConsumer, BackgroundJobSubjects.StaleDatabaseCleanupRequest, TimeSpan.FromMinutes(15), maxDeliver: 5);
+        yield return DataBridgeConsumer(WatchedItemAutoDeleteConsumer, BackgroundJobSubjects.WatchedItemAutoDeleteRequest, TimeSpan.FromHours(2), maxDeliver: 3);
         yield return WorkerConsumer(WorkerChannelUpdateCheckConsumer, BackgroundJobSubjects.ChannelUpdateCheckRequest, TimeSpan.FromMinutes(30), maxDeliver: 5);
         yield return WorkerConsumer(WorkerChannelMediaListConsumer, BackgroundJobSubjects.ChannelMediaListRequest, TimeSpan.FromHours(2), maxDeliver: 3);
         yield return WorkerConsumer(WorkerChannelAssetRefreshConsumer, BackgroundJobSubjects.ChannelAssetRefreshRequest, TimeSpan.FromMinutes(30), maxDeliver: 3);
         yield return WorkerConsumer(WorkerFilesystemRescanConsumer, BackgroundJobSubjects.FilesystemRescanRequest, TimeSpan.FromSeconds(60), maxDeliver: 3);
+        yield return MediaProcessorConsumer(MediaProcessorAudioRenditionConsumer, BackgroundJobSubjects.AudioRenditionEncodeRequest, TimeSpan.FromHours(2), maxDeliver: 3);
+        yield return DataBridgeConsumer(DataBridgeBackupConsumer, BackgroundJobSubjects.BackupRequest, TimeSpan.FromHours(2), maxDeliver: 2);
     }
 
     public IEnumerable<ObjectStoreSpec> GetObjectStores()
@@ -93,6 +99,18 @@ public sealed class BackgroundJobsTopology : ITopologySource
             StreamName = StreamName.From(StreamNameValue),
             DurableName = ConsumerName.From(durableName),
             DeliverGroup = QueueGroup.From(WorkerQueueGroup),
+            FilterSubject = subject,
+            AckPolicy = AckPolicy.Explicit,
+            AckWait = ackWait,
+            MaxDeliver = maxDeliver
+        };
+
+    private static ConsumerSpec MediaProcessorConsumer(string durableName, string subject, TimeSpan ackWait, int maxDeliver)
+        => new()
+        {
+            StreamName = StreamName.From(StreamNameValue),
+            DurableName = ConsumerName.From(durableName),
+            DeliverGroup = QueueGroup.From(MediaProcessorQueueGroup),
             FilterSubject = subject,
             AckPolicy = AckPolicy.Explicit,
             AckWait = ackWait,

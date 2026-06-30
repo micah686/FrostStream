@@ -1,11 +1,15 @@
 using Cleipnir.Flows;
 using Cleipnir.Flows.AspNet;
 using Cleipnir.Flows.PostgresSql;
+using DataBridge.Backup;
 using DataBridge.Data;
+using DataBridge.AudioRenditions;
+using DataBridge.Flows;
 using DataBridge.MediaStream;
 using DataBridge.Metadata;
 using DataBridge.Messaging;
 using DataBridge.Search;
+using DataBridge.Statistics;
 using FlySwattr.NATS.Extensions;
 using FlySwattr.NATS.Topology.Extensions;
 using FluentMigrator.Runner;
@@ -17,7 +21,9 @@ using Microsoft.Extensions.Hosting.Internal;
 using NATS.Client.Core;
 using NodaTime;
 using Npgsql;
+using Shared.Database;
 using Shared.Messaging;
+using Shared.Pot;
 using Shared.Secrets;
 using Shared.Storage;
 using Typesense.Setup;
@@ -43,14 +49,18 @@ class Program
                     connectionString,
                     npgsqlOptions => npgsqlOptions
                         .UseNodaTime()
-                        .MapEnum<LocalStorageProtocol>("local_storage_protocol")
-                        .MapEnum<NetworkStorageProtocol>("network_storage_protocol")
-                        .MapEnum<S3CompatibleObjectStorageProvider>("s3_compatible_object_storage_provider")
-                        .MapEnum<AzureBlobCredentialMode>("azure_blob_credential_mode")
-                        .MapEnum<GoogleCloudStorageCredentialMode>("google_cloud_storage_credential_mode")
-                        .MapEnum<DownloadJobState>("download_job_state")
-                        .MapEnum<FailureKind>("failure_kind")
-                        .MapEnum<PlaylistState>("playlist_state"))
+                        .MapEnum<LocalStorageProtocol>("local_storage_protocol", "storage")
+                        .MapEnum<NetworkStorageProtocol>("network_storage_protocol", "storage")
+                        .MapEnum<S3CompatibleObjectStorageProvider>("s3_compatible_object_storage_provider", "storage")
+                        .MapEnum<AzureBlobCredentialMode>("azure_blob_credential_mode", "storage")
+                        .MapEnum<GoogleCloudStorageCredentialMode>("google_cloud_storage_credential_mode", "storage")
+                        .MapEnum<DownloadJobState>("download_job_state", "downloads")
+                        .MapEnum<FailureKind>("failure_kind", "downloads")
+                        .MapEnum<IngestOrigin>("ingest_origin", "media")
+                        .MapEnum<AudioRenditionFormat>("audio_rendition_format", "media")
+                        .MapEnum<AudioRenditionStatus>("audio_rendition_status", "media")
+                        .MapEnum<LocalImportStatus>("local_import_status", "imports")
+                        .MapEnum<PlaylistState>("playlist_state", "playlists"))
                 .UseSnakeCaseNamingConvention());
 
         builder.Services
@@ -76,6 +86,7 @@ class Program
         builder.Services.AddNatsTopologySource<DownloadTopology>();
         builder.Services.AddNatsTopologySource<PlaylistTopology>();
         builder.Services.AddNatsTopologySource<BackgroundJobsTopology>();
+        builder.Services.AddNatsTopologySource<LocalImportTopology>();
         builder.Services.AddOpenBaoSecretStore(builder.Configuration);
 
         // Isolate Cleipnir's runtime tables in their own Postgres schema. Cleipnir's
@@ -100,14 +111,30 @@ class Program
             return dataSourceBuilder.Build();
         });
         builder.Services.AddScoped<IDownloadJobsRepository, DownloadJobsRepository>();
+        builder.Services.AddScoped<ILocalImportRepository, LocalImportRepository>();
         builder.Services.AddScoped<IMetadataRepository, MetadataRepository>();
         builder.Services.AddScoped<IMetadataReadService, MetadataReadService>();
+        builder.Services.AddScoped<IStatisticsReadService, StatisticsReadService>();
         builder.Services.AddScoped<IMediaStreamReadService, MediaStreamReadService>();
+        builder.Services.AddScoped<IAudioRenditionRepository, AudioRenditionRepository>();
         builder.Services.AddScoped<IPlaylistsRepository, PlaylistsRepository>();
+        builder.Services.AddScoped<IUserPlaylistsRepository, UserPlaylistsRepository>();
+        builder.Services.AddScoped<IUserNotesRepository, UserNotesRepository>();
         builder.Services.AddScoped<IOptionPresetsRepository, OptionPresetsRepository>();
+        builder.Services.AddScoped<IDownloadConfigSetsRepository, DownloadConfigSetsRepository>();
         builder.Services.AddScoped<IScheduledTasksRepository, ScheduledTasksRepository>();
         builder.Services.AddScoped<ICreatorDiscoveryRepository, CreatorDiscoveryRepository>();
         builder.Services.AddSingleton<OrphanMetadataCleanupExecutor>();
+        builder.Services.AddSingleton<MediaDeleteExecutor>();
+        builder.Services.AddSingleton<MediaAccessExecutor>();
+        builder.Services.Configure<MediaAccessOptions>(
+            builder.Configuration.GetSection(MediaAccessOptions.SectionName));
+        builder.Services.AddSingleton<WatchedItemAutoDeleteExecutor>();
+        builder.Services.AddSingleton<DownloadSlotCoordinator>();
+        builder.Services.AddSingleton<INotificationDispatcher, NotificationDispatcher>();
+        builder.Services.Configure<BackupRunnerOptions>(
+            builder.Configuration.GetSection(BackupRunnerOptions.SectionName));
+        builder.Services.AddSingleton<BackupRunner>();
 
         builder.Services.AddTypesenseClient(config =>
         {
@@ -119,28 +146,51 @@ class Program
         builder.Services.AddSingleton<IMetadataRebuildCoordinator, MetadataRebuildCoordinator>();
 
         builder.Services.AddHostedService<TypesenseStartupService>();
+        builder.Services.AddHostedService<SingleUserOwnerSeederService>();
+        builder.Services.AddHostedService<UserSessionConsumerService>();
+        builder.Services.AddHostedService<NotificationPreferencesConsumerService>();
+        builder.Services.AddHostedService<CookieProfileConsumerService>();
         builder.Services.AddHostedService<TypesenseSyncConsumerService>();
         builder.Services.AddHostedService<MetadataListConsumerService>();
         builder.Services.AddHostedService<MetadataSearchConsumerService>();
         builder.Services.AddHostedService<MetadataCommentsConsumerService>();
         builder.Services.AddHostedService<MetadataCaptionsConsumerService>();
+        builder.Services.AddHostedService<UnifiedSearchConsumerService>();
         builder.Services.AddHostedService<MetadataRebuildConsumerService>();
 
         builder.Services.AddHostedService<StorageCrudConsumerService>();
         builder.Services.AddHostedService<OptionPresetCrudConsumerService>();
+        builder.Services.AddHostedService<DownloadConfigSetConsumerService>();
         builder.Services.AddHostedService<ScheduleCrudConsumerService>();
         builder.Services.AddHostedService<CreatorDiscoveryConsumerService>();
+        builder.Services.AddHostedService<WatchStateConsumerService>();
+        builder.Services.AddHostedService<WatchedAutoDeleteAdminConsumerService>();
         builder.Services.AddHostedService<OrphanCleanupAdminConsumerService>();
         builder.Services.AddHostedService<OrphanMetadataCleanupConsumerService>();
         builder.Services.AddHostedService<FilesystemRescanConsumerService>();
         builder.Services.AddHostedService<BackgroundJobConsumerService>();
+        builder.Services.AddHostedService<DownloadSlotCoordinator>(p => p.GetRequiredService<DownloadSlotCoordinator>());
+        builder.Services.AddHostedService<DownloadAdminConsumerService>();
         builder.Services.AddHostedService<DownloadRequestedIngressService>();
+        builder.Services.AddHostedService<ProviderHaltRetryService>();
         builder.Services.AddHostedService<DownloadEventsConsumerService>();
+        builder.Services.AddHostedService<LocalMediaImportRequestedIngressService>();
+        builder.Services.AddHostedService<LocalImportEventsConsumerService>();
         builder.Services.AddHostedService<PlaylistRequestedIngressService>();
         builder.Services.AddHostedService<PlaylistEventsConsumerService>();
         builder.Services.AddHostedService<PlaylistQueryConsumerService>();
+        builder.Services.AddHostedService<UserPlaylistConsumerService>();
+        builder.Services.AddHostedService<UserNoteConsumerService>();
         builder.Services.AddHostedService<MetadataQueryConsumerService>();
+        builder.Services.AddHostedService<StatisticsQueryConsumerService>();
         builder.Services.AddHostedService<MediaStreamQueryConsumerService>();
+        builder.Services.AddHostedService<AudioRenditionConsumerService>();
+        builder.Services.AddHostedService<MediaDeleteConsumerService>();
+        builder.Services.AddHostedService<MediaAccessConsumerService>();
+
+        // POT broker role: answers pot.request over NATS from a nearby bgutil provider. No-ops unless
+        // PotBroker:Enabled is set, so this is inert on deployments without a co-located provider.
+        builder.Services.AddPotBroker(builder.Configuration);
 
         // Force ConsoleLifetime so Ctrl+C / SIGTERM triggers StopAsync on hosted services
         builder.Services.AddSingleton<IHostLifetime, ConsoleLifetime>();

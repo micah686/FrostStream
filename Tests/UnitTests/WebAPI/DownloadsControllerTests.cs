@@ -1,9 +1,11 @@
+using System.Security.Claims;
 using FlySwattr.NATS.Abstractions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using NodaTime;
 using NSubstitute;
+using Shared.Auth;
 using Shared.Messaging;
 using Shouldly;
 using TUnit.Core;
@@ -28,9 +30,8 @@ public sealed class DownloadsControllerTests
             SourceUrl = "https://example.test/video",
             StorageKey = " ",
             ForceDownload = true,
-            RequestedBy = "micah",
             Tags = ["archive", "manual"],
-            CookieKey = "member-cookie"
+            CookieProfileKey = "member-cookie"
         }, CancellationToken.None);
 
         var payload = result.Result.ShouldBeOfType<AcceptedResult>().Value
@@ -50,13 +51,13 @@ public sealed class DownloadsControllerTests
                 x.SourceUrl == "https://example.test/video" &&
                 x.StorageKey == "default" &&
                 x.ForceDownload &&
-                x.RequestedBy == "micah" &&
+                x.RequestedBy == "unit_test_user" &&
                 x.Tags != null &&
                 x.Tags.SequenceEqual(new[] { "archive", "manual" }) &&
                 x.MediaKind == MediaKind.Video &&
                 x.AudioFormat == null &&
                 x.PresetKey == null &&
-                x.CookieKey == "member-cookie"),
+                x.CookieSecretPath == "cookies/users/unit_test_user/member-cookie"),
             Arg.Is<string>(x => x.Length == 32),
             null,
             Arg.Any<CancellationToken>());
@@ -81,6 +82,65 @@ public sealed class DownloadsControllerTests
                 x.StorageKey == "storage-a" &&
                 x.MediaKind == MediaKind.Audio &&
                 x.AudioFormat == AudioConversionFormat.Mp3),
+            Arg.Any<string>(),
+            null,
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Download_Publishes_SponsorBlock_Options()
+    {
+        var publisher = Substitute.For<IJetStreamPublisher>();
+        var controller = CreateController(publisher);
+
+        await controller.Download(new DownloadRequest
+        {
+            SourceUrl = "https://example.test/video",
+            StorageKey = "storage-a",
+            SponsorBlock = new SponsorBlockRequest
+            {
+                MarkCategories = " all,-preview ",
+                RemoveCategories = "sponsor,selfpromo",
+                ChapterTitleTemplate = "[SponsorBlock]: %(category_names)l",
+                ApiUrl = "https://sponsor.example.test"
+            }
+        }, CancellationToken.None);
+
+        await publisher.Received(1).PublishAsync(
+            DownloadSubjects.DownloadRequested,
+            Arg.Is<DownloadRequested>(x =>
+                x.SourceUrl == "https://example.test/video" &&
+                x.YtDlpOptions != null &&
+                x.YtDlpOptions.SponsorBlock.SponsorblockMark == "all,-preview" &&
+                x.YtDlpOptions.SponsorBlock.SponsorblockRemove == "sponsor,selfpromo" &&
+                x.YtDlpOptions.SponsorBlock.SponsorblockChapterTitle == "[SponsorBlock]: %(category_names)l" &&
+                x.YtDlpOptions.SponsorBlock.SponsorblockApi == "https://sponsor.example.test" &&
+                !x.YtDlpOptions.SponsorBlock.NoSponsorblock),
+            Arg.Any<string>(),
+            null,
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task DownloadAudio_Can_Disable_SponsorBlock()
+    {
+        var publisher = Substitute.For<IJetStreamPublisher>();
+        var controller = CreateController(publisher);
+
+        await controller.DownloadAudio(new DownloadAudioRequest
+        {
+            SourceUrl = "https://example.test/audio",
+            StorageKey = "storage-a",
+            SponsorBlock = new SponsorBlockRequest { Disable = true }
+        }, CancellationToken.None);
+
+        await publisher.Received(1).PublishAsync(
+            DownloadSubjects.DownloadRequested,
+            Arg.Is<DownloadRequested>(x =>
+                x.MediaKind == MediaKind.Audio &&
+                x.AudioFormat == AudioConversionFormat.Mp3 &&
+                x.YtDlpOptions != null &&
+                x.YtDlpOptions.SponsorBlock.NoSponsorblock),
             Arg.Any<string>(),
             null,
             Arg.Any<CancellationToken>());
@@ -178,14 +238,59 @@ public sealed class DownloadsControllerTests
             default);
     }
 
-    private static DownloadsController CreateController(IJetStreamPublisher publisher)
+    [Test]
+    public async Task Cancel_Requests_Download_Cancellation()
+    {
+        var publisher = Substitute.For<IJetStreamPublisher>();
+        var messageBus = Substitute.For<IMessageBus>();
+        var jobId = Guid.NewGuid();
+        messageBus.RequestAsync<CancelDownloadRequest, CancelDownloadResponse>(
+                DownloadSubjects.CancelDownloadRequest,
+                Arg.Any<CancelDownloadRequest>(),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new CancelDownloadResponse
+            {
+                Success = true,
+                State = DownloadJobState.Cancelling
+            });
+        var controller = CreateController(publisher, messageBus);
+
+        var result = await controller.Cancel(
+            jobId,
+            new CancelDownloadApiRequest { Reason = "clicked stop" },
+            CancellationToken.None);
+
+        var accepted = result.ShouldBeOfType<AcceptedResult>();
+        accepted.Value.ShouldBeOfType<CancelDownloadApiResponse>().State.ShouldBe(DownloadJobState.Cancelling);
+        await messageBus.Received(1).RequestAsync<CancelDownloadRequest, CancelDownloadResponse>(
+            DownloadSubjects.CancelDownloadRequest,
+            Arg.Is<CancelDownloadRequest>(x =>
+                x.JobId == jobId &&
+                x.RequestedBy == "unit_test_user" &&
+                x.Reason == "clicked stop"),
+            Arg.Any<TimeSpan>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    private static DownloadsController CreateController(IJetStreamPublisher publisher, IMessageBus? messageBus = null)
     {
         var clock = Substitute.For<IClock>();
         clock.GetCurrentInstant().Returns(Now);
 
-        return new DownloadsController(
+        var controller = new DownloadsController(
             publisher,
+            messageBus ?? Substitute.For<IMessageBus>(),
             clock,
             Substitute.For<ILogger<DownloadsController>>());
+
+        // The controller stamps RequestedBy from the validated token subject, so give it one.
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(AuthConstants.SubjectClaim, "unit_test_user")], "test"));
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = user }
+        };
+
+        return controller;
     }
 }

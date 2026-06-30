@@ -31,6 +31,19 @@ public sealed class TypesenseIndexService(
         return response.NumberOfDocuments;
     }
 
+    public async Task<bool> MediaCollectionHasFieldAsync(string fieldName, CancellationToken ct = default)
+    {
+        try
+        {
+            var response = await client.RetrieveCollection(MediaCollectionSchema.CollectionName, ct);
+            return response.Fields.Any(field => string.Equals(field.Name, fieldName, StringComparison.Ordinal));
+        }
+        catch (TypesenseApiNotFoundException)
+        {
+            return false;
+        }
+    }
+
     public async Task UpsertMediaAsync(MediaDocument document, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
@@ -39,6 +52,20 @@ public sealed class TypesenseIndexService(
 
     public Task BulkImportMediaAsync(IReadOnlyList<MediaDocument> documents, CancellationToken ct = default)
         => ImportAsync(MediaCollectionSchema.CollectionName, documents, ct);
+
+    public async Task DeleteMediaByGuidAsync(string mediaGuid, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        try
+        {
+            // The media collection's document id is the media_guid (see MediaDocument.Id).
+            await client.DeleteDocument<MediaDocument>(MediaCollectionSchema.CollectionName, mediaGuid);
+        }
+        catch (TypesenseApiNotFoundException)
+        {
+            // Already absent from the index — nothing to delete.
+        }
+    }
 
     public Task DeleteCommentsByMediaGuidAsync(string mediaGuid, CancellationToken ct = default)
         => DeleteByMediaGuidAsync(CommentsCollectionSchema.CollectionName, mediaGuid, ct);

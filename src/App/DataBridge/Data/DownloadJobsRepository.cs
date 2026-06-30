@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using NodaTime;
 using Shared.Database;
 using Shared.Messaging;
@@ -14,7 +15,7 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
     {
         var inserted = await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
-             INSERT INTO processed_messages (message_id, operation_key, job_id)
+             INSERT INTO downloads.processed_messages (message_id, operation_key, job_id)
              VALUES ({messageId}, {operationKey}, {jobId})
              ON CONFLICT (message_id) DO NOTHING
              """,
@@ -39,14 +40,48 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
             State = DownloadJobState.Queued,
             SourceUrl = request.SourceUrl,
             RequestedBy = request.RequestedBy,
-            StorageKey = request.StorageKey
+            StorageKey = request.StorageKey,
+            SourceKind = request.SourceKind,
+            Priority = request.Priority,
+            IngestOrigin = IngestOrigin.Download
         });
         await db.SaveChangesAsync(ct);
+    }
+
+    public async Task<DownloadRequested?> GetOriginalRequestAsync(Guid jobId, CancellationToken ct = default)
+    {
+        var row = await db.DownloadJobHistory
+            .AsNoTracking()
+            .Where(x => x.JobId == jobId && x.EventName == nameof(DownloadRequested))
+            .OrderBy(x => x.RecordedAt)
+            .Select(x => x.PayloadJson)
+            .FirstOrDefaultAsync(ct);
+
+        return string.IsNullOrWhiteSpace(row)
+            ? null
+            : JsonSerializer.Deserialize<DownloadRequested>(row);
+    }
+
+    public async Task<MetadataFetched?> GetLastMetadataFetchedAsync(Guid jobId, CancellationToken ct = default)
+    {
+        var row = await db.DownloadJobHistory
+            .AsNoTracking()
+            .Where(x => x.JobId == jobId && x.EventName == nameof(MetadataFetched))
+            .OrderByDescending(x => x.RecordedAt)
+            .Select(x => x.PayloadJson)
+            .FirstOrDefaultAsync(ct);
+
+        return string.IsNullOrWhiteSpace(row)
+            ? null
+            : JsonSerializer.Deserialize<MetadataFetched>(row);
     }
 
     public async Task UpdateStateAsync(Guid jobId, DownloadJobState state, CancellationToken ct = default)
     {
         var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
+        if ((job.State is DownloadJobState.Cancelling or DownloadJobState.Cancelled) && state != DownloadJobState.Cancelled)
+            return;
+
         job.State = state;
         job.UpdatedAt = clock.GetCurrentInstant();
         if (state is DownloadJobState.Completed or DownloadJobState.AlreadyDownloaded)
@@ -174,7 +209,8 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
                 ContentHashXxh128 = contentHash,
                 StorageKey = storageKey,
                 StoragePath = storagePath,
-                VersionNum = versionNum
+                VersionNum = versionNum,
+                IngestOrigin = request.IngestOrigin
             });
             contentAlreadyStored = false;
         }
@@ -193,14 +229,15 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
                     SourceMediaId = sourceMediaId,
                     SourceLastModified = request.SourceLastModified,
                     MediaGuid = mediaGuid,
-                    LatestJobId = request.JobId
+                    LatestJobId = request.LinkSourceToDownloadJob ? request.JobId : null
                 });
             }
             else
             {
                 sourceRow.SourceLastModified = request.SourceLastModified ?? sourceRow.SourceLastModified;
                 sourceRow.MediaGuid = mediaGuid;
-                sourceRow.LatestJobId = request.JobId;
+                if (request.LinkSourceToDownloadJob)
+                    sourceRow.LatestJobId = request.JobId;
             }
         }
 
@@ -208,7 +245,7 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
         try
         {
             await db.Database.ExecuteSqlInterpolatedAsync(
-                $"INSERT INTO media (media_guid) VALUES ({mediaGuid}) ON CONFLICT (media_guid) DO NOTHING", ct);
+                $"INSERT INTO media.media (media_guid) VALUES ({mediaGuid}) ON CONFLICT (media_guid) DO NOTHING", ct);
 
             await db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
@@ -241,7 +278,7 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
             await db.SaveChangesAsync(ct);
 
             await db.Database.ExecuteSqlInterpolatedAsync(
-                $"DELETE FROM media WHERE media_guid = {mediaGuid}", ct);
+                $"DELETE FROM media.media WHERE media_guid = {mediaGuid}", ct);
 
             await tx.CommitAsync(ct);
         }
@@ -276,6 +313,127 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
             job.InfoJsonSizeBytes = len;
         job.UpdatedAt = clock.GetCurrentInstant();
         await db.SaveChangesAsync(ct);
+    }
+
+    public async Task ApplyMetaUploadCompletedAsync(Guid jobId, UploadCompleted evt, CancellationToken ct = default)
+    {
+        var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
+        job.MetaStoragePath = evt.StoragePath;
+        job.UpdatedAt = clock.GetCurrentInstant();
+        await db.SaveChangesAsync(ct);
+    }
+
+    public async Task<bool> UpdatePriorityAsync(Guid jobId, int priority, CancellationToken ct = default)
+    {
+        var job = await db.DownloadJobs.FirstOrDefaultAsync(x => x.JobId == jobId, ct);
+        if (job is null) return false;
+        job.Priority = priority;
+        job.UpdatedAt = clock.GetCurrentInstant();
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<(DownloadJobState? State, string? StorageKey)> GetJobStateAndStorageKeyAsync(Guid jobId, CancellationToken ct = default)
+    {
+        var row = await db.DownloadJobs
+            .AsNoTracking()
+            .Where(x => x.JobId == jobId)
+            .Select(x => new { x.State, x.StorageKey })
+            .FirstOrDefaultAsync(ct);
+        return row is null ? (null, null) : (row.State, row.StorageKey);
+    }
+
+    public async Task<CancelDownloadDecision> TryBeginCancellationAsync(
+        Guid jobId,
+        string? requestedBy,
+        string? reason,
+        CancellationToken ct = default)
+    {
+        var job = await db.DownloadJobs.FirstOrDefaultAsync(x => x.JobId == jobId, ct);
+
+        if (job is null)
+            return CancelDownloadDecision.NotFound();
+
+        var workerTag = await db.StorageConfigs
+            .Where(x => x.Key == job.StorageKey)
+            .Select(x => x.WorkerTag)
+            .FirstOrDefaultAsync(ct);
+
+        if (job.State is DownloadJobState.Cancelled)
+            return CancelDownloadDecision.Rejected(job.State, "Job is already cancelled.", alreadyTerminal: true);
+
+        if (job.State is DownloadJobState.Completed or DownloadJobState.AlreadyDownloaded)
+            return CancelDownloadDecision.Rejected(job.State, "Job is already complete.", alreadyTerminal: true);
+
+        if (job.State is DownloadJobState.FailedPermanent or DownloadJobState.FailedTransient or DownloadJobState.DeadLettered or DownloadJobState.ProviderHalted)
+            return CancelDownloadDecision.Rejected(job.State, "Job has already failed.", alreadyTerminal: true);
+
+        if (job.State is DownloadJobState.UploadPending or DownloadJobState.Uploaded or DownloadJobState.CommitPending or DownloadJobState.Compensating or DownloadJobState.DownloadedTemp)
+        {
+            return CancelDownloadDecision.Rejected(
+                job.State,
+                $"Job cannot be cancelled cleanly from state {job.State}.");
+        }
+
+        if (job.State is not (DownloadJobState.Queued or DownloadJobState.MetadataPending or DownloadJobState.MetadataResolved or DownloadJobState.DownloadQueued or DownloadJobState.DownloadPending or DownloadJobState.Cancelling))
+        {
+            return CancelDownloadDecision.Rejected(
+                job.State,
+                $"Job cannot be cancelled from state {job.State}.");
+        }
+
+        var previousState = job.State;
+        if (job.State != DownloadJobState.Cancelling)
+        {
+            job.State = DownloadJobState.Cancelling;
+            job.FailureKind = FailureKind.Cancelled;
+            job.FailureCode = "cancel_requested";
+            job.FailureMessage = BuildCancellationMessage(requestedBy, reason);
+            job.UpdatedAt = clock.GetCurrentInstant();
+            await db.SaveChangesAsync(ct);
+        }
+
+        return CancelDownloadDecision.AcceptedFor(job.CorrelationId, job.State, previousState, workerTag);
+    }
+
+    public async Task MarkCancelledAsync(Guid jobId, string? message, CancellationToken ct = default)
+    {
+        var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
+        job.State = DownloadJobState.Cancelled;
+        job.FailureKind = FailureKind.Cancelled;
+        job.FailureCode = "cancel_requested";
+        job.FailureMessage = string.IsNullOrWhiteSpace(message) ? "Download cancelled by request." : message;
+        job.UpdatedAt = clock.GetCurrentInstant();
+        job.CompletedAt = job.UpdatedAt;
+
+        var alreadyTerminal = await db.FailedDownloadJobs.AnyAsync(x => x.JobId == jobId, ct);
+        if (!alreadyTerminal)
+        {
+            db.FailedDownloadJobs.Add(new FailedDownloadJobEntity
+            {
+                JobId = jobId,
+                CorrelationId = job.CorrelationId,
+                FailedState = DownloadJobState.Cancelled,
+                FailureKind = FailureKind.Cancelled,
+                FailureCode = job.FailureCode,
+                FailureMessage = job.FailureMessage,
+                LastPayloadJson = null
+            });
+        }
+
+        await db.SaveChangesAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<DownloadQueuedEntry>> GetDownloadQueuedJobsAsync(CancellationToken ct = default)
+    {
+        var rows = await db.DownloadJobs
+            .AsNoTracking()
+            .Where(x => x.State == DownloadJobState.DownloadQueued)
+            .OrderByDescending(x => x.Priority)
+            .ThenBy(x => x.CreatedAt)
+            .Select(x => new { x.JobId, x.Priority, x.CreatedAt, x.StorageKey })
+            .ToListAsync(ct);
+        return rows.Select(r => new DownloadQueuedEntry(r.JobId, r.Priority, r.CreatedAt, r.StorageKey)).ToList();
     }
 
     public async Task IncrementMetadataAttemptAsync(Guid jobId, int attempt, CancellationToken ct = default)
@@ -342,6 +500,45 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
         await db.SaveChangesAsync(ct);
     }
 
+    public async Task ScheduleProviderHaltRetryAsync(Guid jobId, Instant retryAt, CancellationToken ct = default)
+    {
+        var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
+        job.ProviderHaltRetryAt = retryAt;
+        job.ProviderHaltRetryDispatchedAt = null;
+        job.UpdatedAt = clock.GetCurrentInstant();
+        await db.SaveChangesAsync(ct);
+    }
+
+    public async Task MarkProviderHaltRetryDispatchedAsync(Guid jobId, CancellationToken ct = default)
+    {
+        var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
+        job.ProviderHaltRetryDispatchedAt = clock.GetCurrentInstant();
+        job.UpdatedAt = job.ProviderHaltRetryDispatchedAt.Value;
+        await db.SaveChangesAsync(ct);
+    }
+
+    public async Task ClearProviderHaltRetryDispatchedAsync(Guid jobId, CancellationToken ct = default)
+    {
+        var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
+        job.ProviderHaltRetryDispatchedAt = null;
+        job.UpdatedAt = clock.GetCurrentInstant();
+        await db.SaveChangesAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<ProviderHaltRetryCandidate>> GetDueProviderHaltRetriesAsync(Instant now, CancellationToken ct = default)
+    {
+        var rows = await db.DownloadJobs
+            .AsNoTracking()
+            .Where(x => x.State == DownloadJobState.ProviderHalted
+                        && x.ProviderHaltRetryAt != null
+                        && x.ProviderHaltRetryAt <= now
+                        && x.ProviderHaltRetryDispatchedAt == null)
+            .OrderBy(x => x.ProviderHaltRetryAt)
+            .Select(x => new ProviderHaltRetryCandidate(x.JobId, x.ProviderHaltRetryAt!.Value, x.SourceKind))
+            .ToListAsync(ct);
+        return rows;
+    }
+
     private static string BuildStoragePath(Guid mediaGuid, int versionNum, string fileName)
     {
         var sanitized = SanitizeFileName(fileName);
@@ -372,4 +569,18 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
         => string.IsNullOrWhiteSpace(value)
             ? null
             : value.Trim();
+
+    private static string BuildCancellationMessage(string? requestedBy, string? reason)
+    {
+        var trimmedReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+        var trimmedRequester = string.IsNullOrWhiteSpace(requestedBy) ? null : requestedBy.Trim();
+
+        return (trimmedRequester, trimmedReason) switch
+        {
+            ({ } requester, { } why) => $"Download cancelled by {requester}: {why}",
+            ({ } requester, null) => $"Download cancelled by {requester}.",
+            (null, { } why) => $"Download cancelled by request: {why}",
+            _ => "Download cancelled by request."
+        };
+    }
 }

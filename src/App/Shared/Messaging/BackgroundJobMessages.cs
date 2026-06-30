@@ -1,4 +1,5 @@
 using NodaTime;
+using Shared.Database;
 
 namespace Shared.Messaging;
 
@@ -19,9 +20,24 @@ public sealed record ChannelAssetRefreshRequested : ScheduledBackgroundRequest
     public bool Force { get; init; }
 }
 
-public sealed record ChannelMediaListRequested : ScheduledBackgroundRequest;
+public sealed record ChannelMediaListRequested : ScheduledBackgroundRequest
+{
+    public long? TargetSourceId { get; init; }
+    public string? StorageKey { get; init; }
+    public string? RequestedBy { get; init; }
+    public string? ConfigSetKey { get; init; }
+    public bool EncodeForPlaylist { get; init; }
+    public AudioRenditionFormat AudioFormat { get; init; } = AudioRenditionFormat.Aac;
+    public string? CookieSecretPath { get; init; }
+    public int Priority { get; init; }
+    public bool FetchComments { get; init; }
+    public YtDlpSharpLib.Options.YtDlpOptions? YtDlpOptions { get; init; }
+    public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
+}
 
 public sealed record StaleDatabaseCleanupRequested : ScheduledBackgroundRequest;
+
+public sealed record WatchedItemAutoDeleteRequested : ScheduledBackgroundRequest;
 
 public sealed record ProcessedMessageCleanupRequested : ScheduledBackgroundRequest;
 
@@ -30,3 +46,9 @@ public sealed record DatabaseMaintenanceRequested : ScheduledBackgroundRequest;
 public sealed record SearchReindexRequested : ScheduledBackgroundRequest;
 
 public sealed record FilesystemRescanRequested : ScheduledBackgroundRequest;
+
+public sealed record BackupRequested : ScheduledBackgroundRequest
+{
+    /// <summary>Optional human-readable archive name. Defaults to a timestamp-keyed name when absent.</summary>
+    public string? Name { get; init; }
+}

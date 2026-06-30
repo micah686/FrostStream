@@ -78,6 +78,12 @@ public sealed class DownloadEventsConsumerService(
 
         try
         {
+            if (IsLocalImportEvent(evt))
+            {
+                await context.AckAsync();
+                return;
+            }
+
             await scopeFactory.WithScopedAsync<IDownloadJobsRepository, DataBridgeDbContext>(async (jobs, db) =>
             {
                 await using var tx = await db.Database.BeginTransactionAsync();
@@ -124,6 +130,7 @@ public sealed class DownloadEventsConsumerService(
         => evt.Kind switch
         {
             UploadArtifactKind.InfoJson => jobs.ApplySidecarUploadCompletedAsync(evt.JobId, evt, ct),
+            UploadArtifactKind.Meta => jobs.ApplyMetaUploadCompletedAsync(evt.JobId, evt, ct),
             // Thumbnail/caption blobs are best-effort, version-lifecycle assets. They drive no
             // download_jobs state — the flow records their blob paths via the metadata write —
             // so they must not fall through to primary-commit logic.
@@ -134,4 +141,7 @@ public sealed class DownloadEventsConsumerService(
     private static Task NoStateChange<TEvent>(IDownloadJobsRepository jobs, TEvent evt, CancellationToken ct)
         where TEvent : IFlowMessage
         => Task.CompletedTask;
+
+    private static bool IsLocalImportEvent(IFlowMessage evt)
+        => evt.OperationKey.StartsWith("local-import/", StringComparison.Ordinal);
 }

@@ -4,6 +4,8 @@ public interface IMediaDocumentQuery
 {
     Task<MediaDocument?> GetMediaByGuidAsync(Guid mediaGuid, CancellationToken ct = default);
 
+    Task<IReadOnlyList<MediaDocument>> GetMediaByGuidsAsync(IReadOnlyCollection<Guid> mediaGuids, CancellationToken ct = default);
+
     Task<IReadOnlyList<CommentDocument>> GetCommentsByMediaGuidAsync(Guid mediaGuid, CancellationToken ct = default);
 
     Task<IReadOnlyList<CaptionDocument>> GetCaptionsByMediaGuidAsync(Guid mediaGuid, CancellationToken ct = default);

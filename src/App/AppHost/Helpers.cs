@@ -11,6 +11,24 @@ public static class Helpers
     /// </summary>
     /// <param name="certificatePath"></param>
     /// <param name="keyPath"></param>
+    internal static IResourceBuilder<T> WithAuthAuthority<T>(
+        this IResourceBuilder<T> resource,
+        string name,
+        bool singleUserMode,
+        AuthentikResources authentik)
+        where T : IResourceWithEnvironment
+    {
+        if (singleUserMode)
+            return resource.WithEnvironment(name, "");
+
+        if (!string.IsNullOrWhiteSpace(authentik.ConfiguredAuthority))
+            return resource.WithEnvironment(name, authentik.ConfiguredAuthority);
+
+        return authentik.Authority is null
+            ? resource.WithEnvironment(name, "")
+            : resource.WithEnvironment(name, authentik.Authority);
+    }
+
     internal static void EnsureNatsWebSocketTlsCertificates(string certificatePath, string keyPath)
     {
         if (File.Exists(certificatePath) && File.Exists(keyPath))

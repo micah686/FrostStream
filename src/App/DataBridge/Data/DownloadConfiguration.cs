@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Shared.Database;
+using Shared.Messaging;
 
 namespace DataBridge.Data;
 
@@ -8,7 +9,7 @@ public sealed class DownloadJobConfiguration : IEntityTypeConfiguration<Download
 {
     public void Configure(EntityTypeBuilder<DownloadJobEntity> builder)
     {
-        builder.ToTable("download_jobs");
+        builder.ToTable("download_jobs", "downloads");
 
         builder.HasKey(x => x.JobId);
 
@@ -17,12 +18,13 @@ public sealed class DownloadJobConfiguration : IEntityTypeConfiguration<Download
 
         builder.Property(x => x.State)
             .HasColumnName("state")
-            .HasColumnType("download_job_state")
+            .HasColumnType("downloads.download_job_state")
             .IsRequired();
 
         builder.Property(x => x.SourceUrl).HasColumnName("source_url").HasMaxLength(4096).IsRequired();
         builder.Property(x => x.RequestedBy).HasColumnName("requested_by").HasMaxLength(255);
         builder.Property(x => x.StorageKey).HasColumnName("storage_key").HasMaxLength(100);
+        builder.Property(x => x.IgnoredKeyword).HasColumnName("ignored_keyword").HasMaxLength(200);
 
         builder.Property(x => x.AttemptMetadata).HasColumnName("attempt_metadata").IsRequired();
         builder.Property(x => x.AttemptDownload).HasColumnName("attempt_download").IsRequired();
@@ -35,10 +37,27 @@ public sealed class DownloadJobConfiguration : IEntityTypeConfiguration<Download
         builder.Property(x => x.InfoJsonStoragePath).HasColumnName("info_json_storage_path").HasMaxLength(2048);
         builder.Property(x => x.InfoJsonContentHashXxh128).HasColumnName("info_json_content_hash_xxh128").HasMaxLength(64);
         builder.Property(x => x.InfoJsonSizeBytes).HasColumnName("info_json_size_bytes");
+        builder.Property(x => x.MetaStoragePath).HasColumnName("meta_storage_path").HasMaxLength(2048);
+        builder.Property(x => x.Priority).HasColumnName("priority").HasDefaultValue(0).IsRequired();
+        builder.Property(x => x.SourceKind)
+            .HasColumnName("source_kind")
+            .HasDefaultValue(DownloadSourceKind.Direct)
+            .IsRequired();
+        builder.Property(x => x.ProviderHaltRetryAt)
+            .HasColumnName("provider_halt_retry_at")
+            .HasColumnType("timestamp with time zone");
+        builder.Property(x => x.ProviderHaltRetryDispatchedAt)
+            .HasColumnName("provider_halt_retry_dispatched_at")
+            .HasColumnType("timestamp with time zone");
+        builder.Property(x => x.IngestOrigin)
+            .HasColumnName("ingest_origin")
+            .HasColumnType("media.ingest_origin")
+            .HasDefaultValue(IngestOrigin.Download)
+            .IsRequired();
 
         builder.Property(x => x.FailureKind)
             .HasColumnName("failure_kind")
-            .HasColumnType("failure_kind");
+            .HasColumnType("downloads.failure_kind");
 
         builder.Property(x => x.FailureCode).HasColumnName("failure_code").HasMaxLength(255);
         builder.Property(x => x.FailureMessage).HasColumnName("failure_message").HasMaxLength(4096);
@@ -72,7 +91,7 @@ public sealed class DownloadJobHistoryConfiguration : IEntityTypeConfiguration<D
 {
     public void Configure(EntityTypeBuilder<DownloadJobHistoryEntity> builder)
     {
-        builder.ToTable("download_job_history");
+        builder.ToTable("download_job_history", "downloads");
 
         builder.HasKey(x => x.Id);
 
@@ -105,7 +124,7 @@ public sealed class FailedDownloadJobConfiguration : IEntityTypeConfiguration<Fa
 {
     public void Configure(EntityTypeBuilder<FailedDownloadJobEntity> builder)
     {
-        builder.ToTable("failed_download_jobs");
+        builder.ToTable("failed_download_jobs", "downloads");
 
         builder.HasKey(x => x.JobId);
 
@@ -114,12 +133,12 @@ public sealed class FailedDownloadJobConfiguration : IEntityTypeConfiguration<Fa
 
         builder.Property(x => x.FailedState)
             .HasColumnName("failed_state")
-            .HasColumnType("download_job_state")
+            .HasColumnType("downloads.download_job_state")
             .IsRequired();
 
         builder.Property(x => x.FailureKind)
             .HasColumnName("failure_kind")
-            .HasColumnType("failure_kind")
+            .HasColumnType("downloads.failure_kind")
             .IsRequired();
 
         builder.Property(x => x.FailureCode).HasColumnName("failure_code").HasMaxLength(255);
@@ -139,7 +158,7 @@ public sealed class ProcessedMessageConfiguration : IEntityTypeConfiguration<Pro
 {
     public void Configure(EntityTypeBuilder<ProcessedMessageEntity> builder)
     {
-        builder.ToTable("processed_messages");
+        builder.ToTable("processed_messages", "downloads");
 
         builder.HasKey(x => x.MessageId);
 
@@ -163,7 +182,7 @@ public sealed class MediaConfiguration : IEntityTypeConfiguration<MediaEntity>
 {
     public void Configure(EntityTypeBuilder<MediaEntity> builder)
     {
-        builder.ToTable("media");
+        builder.ToTable("media", "media");
 
         builder.HasKey(x => x.MediaGuid);
 
@@ -182,7 +201,7 @@ public sealed class MediaSourceVersionConfiguration : IEntityTypeConfiguration<M
 {
     public void Configure(EntityTypeBuilder<MediaSourceVersionEntity> builder)
     {
-        builder.ToTable("media_source_versions");
+        builder.ToTable("media_source_versions", "media");
 
         builder.HasKey(x => x.Id);
 
@@ -213,7 +232,7 @@ public sealed class MediaContentIdVersionConfiguration : IEntityTypeConfiguratio
 {
     public void Configure(EntityTypeBuilder<MediaContentIdVersionEntity> builder)
     {
-        builder.ToTable("media_content_id_versions");
+        builder.ToTable("media_content_id_versions", "media");
 
         builder.HasKey(x => x.Id);
 
@@ -226,6 +245,11 @@ public sealed class MediaContentIdVersionConfiguration : IEntityTypeConfiguratio
         builder.Property(x => x.StorageKey).HasColumnName("storage_key").HasMaxLength(100).IsRequired();
         builder.Property(x => x.StoragePath).HasColumnName("storage_path").HasMaxLength(2048).IsRequired();
         builder.Property(x => x.VersionNum).HasColumnName("version_num").IsRequired();
+        builder.Property(x => x.IngestOrigin)
+            .HasColumnName("ingest_origin")
+            .HasColumnType("media.ingest_origin")
+            .HasDefaultValue(IngestOrigin.Download)
+            .IsRequired();
 
         builder.HasIndex(x => new { x.MediaGuid, x.VersionNum })
             .IsUnique()
@@ -234,5 +258,58 @@ public sealed class MediaContentIdVersionConfiguration : IEntityTypeConfiguratio
         builder.HasIndex(x => new { x.StorageKey, x.ContentHashXxh128 })
             .IsUnique()
             .HasDatabaseName("ux_media_content_id_versions_storage_key_content_hash");
+    }
+}
+
+public sealed class AudioRenditionConfiguration : IEntityTypeConfiguration<AudioRenditionEntity>
+{
+    public void Configure(EntityTypeBuilder<AudioRenditionEntity> builder)
+    {
+        builder.ToTable("audio_renditions", "media");
+
+        builder.HasKey(x => x.RenditionId);
+
+        builder.Property(x => x.RenditionId).HasColumnName("rendition_id").ValueGeneratedNever();
+        builder.Property(x => x.MediaGuid).HasColumnName("media_guid").IsRequired();
+        builder.Property(x => x.SourceVersionNum).HasColumnName("source_version_num").IsRequired();
+        builder.Property(x => x.Format)
+            .HasColumnName("format")
+            .HasColumnType("media.audio_rendition_format")
+            .IsRequired();
+        builder.Property(x => x.Status)
+            .HasColumnName("status")
+            .HasColumnType("media.audio_rendition_status")
+            .IsRequired();
+        builder.Property(x => x.StorageKey).HasColumnName("storage_key").HasMaxLength(100).IsRequired();
+        builder.Property(x => x.StoragePath).HasColumnName("storage_path").HasMaxLength(2048);
+        builder.Property(x => x.ContentHashXxh128).HasColumnName("content_hash_xxh128").HasMaxLength(64);
+        builder.Property(x => x.SizeBytes).HasColumnName("size_bytes");
+        builder.Property(x => x.DurationSeconds).HasColumnName("duration_seconds");
+        builder.Property(x => x.ErrorMessage).HasColumnName("error_message").HasMaxLength(4096);
+        builder.Property(x => x.CreatedAt)
+            .HasColumnName("created_at")
+            .HasColumnType("timestamp with time zone")
+            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .ValueGeneratedOnAdd()
+            .IsRequired();
+        builder.Property(x => x.UpdatedAt)
+            .HasColumnName("updated_at")
+            .HasColumnType("timestamp with time zone")
+            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .IsRequired();
+
+        builder.HasIndex(x => new { x.MediaGuid, x.SourceVersionNum, x.Format, x.StorageKey })
+            .IsUnique()
+            .HasDatabaseName("ux_audio_renditions_media_version_format_storage");
+
+        builder.HasIndex(x => x.Status)
+            .HasDatabaseName("ix_audio_renditions_status");
+
+        builder.HasOne<MediaContentIdVersionEntity>()
+            .WithMany()
+            .HasPrincipalKey(x => new { x.MediaGuid, x.VersionNum })
+            .HasForeignKey(x => new { x.MediaGuid, x.SourceVersionNum })
+            .HasConstraintName("fk_audio_renditions_source_version")
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

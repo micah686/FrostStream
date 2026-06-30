@@ -484,6 +484,7 @@ public sealed class StorageCrudConsumerService(
             Key = entity.Key,
             Method = entity.Method,
             Description = entity.Description,
+            WorkerTag = entity.WorkerTag,
             CreatedAt = entity.CreatedAt,
             LastUpdated = entity.LastUpdated,
             Local = stored as PosixLocalStorageStored,

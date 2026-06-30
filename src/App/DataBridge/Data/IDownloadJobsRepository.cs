@@ -1,4 +1,5 @@
 using NodaTime;
+using Shared.Database;
 using Shared.Messaging;
 
 namespace DataBridge.Data;
@@ -17,6 +18,10 @@ public interface IDownloadJobsRepository
     Task MarkMessageProcessedAsync(Guid messageId, string operationKey, Guid jobId, CancellationToken ct = default);
 
     Task CreateJobIfMissingAsync(DownloadRequested request, CancellationToken ct = default);
+
+    Task<DownloadRequested?> GetOriginalRequestAsync(Guid jobId, CancellationToken ct = default);
+
+    Task<MetadataFetched?> GetLastMetadataFetchedAsync(Guid jobId, CancellationToken ct = default);
 
     Task UpdateStateAsync(Guid jobId, DownloadJobState state, CancellationToken ct = default);
 
@@ -69,6 +74,28 @@ public interface IDownloadJobsRepository
     /// </summary>
     Task ApplySidecarUploadCompletedAsync(Guid jobId, UploadCompleted evt, CancellationToken ct = default);
 
+    /// <summary>
+    /// Records the <c>.meta</c> sidecar's storage path on the job row. The file is
+    /// DataBridge-generated and contains title, hash, media GUID, and original URL for
+    /// storage-migration correlation.
+    /// </summary>
+    Task ApplyMetaUploadCompletedAsync(Guid jobId, UploadCompleted evt, CancellationToken ct = default);
+
+    /// <summary>Updates the priority of an existing job. Returns false when the job does not exist.</summary>
+    Task<bool> UpdatePriorityAsync(Guid jobId, int priority, CancellationToken ct = default);
+
+    /// <summary>Returns the current state and storage key for a job, or (null, null) when not found.</summary>
+    Task<(DownloadJobState? State, string? StorageKey)> GetJobStateAndStorageKeyAsync(Guid jobId, CancellationToken ct = default);
+
+    /// <summary>Attempts to move a job into <see cref="DownloadJobState.Cancelling"/>.</summary>
+    Task<CancelDownloadDecision> TryBeginCancellationAsync(Guid jobId, string? requestedBy, string? reason, CancellationToken ct = default);
+
+    /// <summary>Marks a cancellation request as the terminal user-visible job result.</summary>
+    Task MarkCancelledAsync(Guid jobId, string? message, CancellationToken ct = default);
+
+    /// <summary>Returns all jobs in <see cref="DownloadJobState.DownloadQueued"/> ordered by priority then creation time.</summary>
+    Task<IReadOnlyList<DownloadQueuedEntry>> GetDownloadQueuedJobsAsync(CancellationToken ct = default);
+
     Task IncrementMetadataAttemptAsync(Guid jobId, int attempt, CancellationToken ct = default);
 
     Task IncrementDownloadAttemptAsync(Guid jobId, int attempt, CancellationToken ct = default);
@@ -78,6 +105,14 @@ public interface IDownloadJobsRepository
     Task RecordHistoryAsync(Guid jobId, Guid messageId, string operationKey, string eventName, string? payloadJson, CancellationToken ct = default);
 
     Task RecordTerminalFailureAsync(Guid jobId, FailureKind kind, string? code, string message, DownloadJobState terminalState, string? lastPayloadJson, CancellationToken ct = default);
+
+    Task ScheduleProviderHaltRetryAsync(Guid jobId, Instant retryAt, CancellationToken ct = default);
+
+    Task MarkProviderHaltRetryDispatchedAsync(Guid jobId, CancellationToken ct = default);
+
+    Task ClearProviderHaltRetryDispatchedAsync(Guid jobId, CancellationToken ct = default);
+
+    Task<IReadOnlyList<ProviderHaltRetryCandidate>> GetDueProviderHaltRetriesAsync(Instant now, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -106,6 +141,10 @@ public sealed record VersionReservationRequest
     public string? Provider { get; init; }
     public string? SourceMediaId { get; init; }
     public Instant? SourceLastModified { get; init; }
+
+    public IngestOrigin IngestOrigin { get; init; } = IngestOrigin.Download;
+
+    public bool LinkSourceToDownloadJob { get; init; } = true;
 }
 
 /// <summary>
@@ -133,3 +172,32 @@ public sealed record VersionReservation(
     int VersionNum,
     bool ContentAlreadyStored,
     bool IsNewMediaGuid);
+
+/// <summary>A job waiting for a download slot, as returned by <see cref="IDownloadJobsRepository.GetDownloadQueuedJobsAsync"/>.</summary>
+public sealed record DownloadQueuedEntry(Guid JobId, int Priority, Instant CreatedAt, string? StorageKey);
+
+public sealed record ProviderHaltRetryCandidate(Guid JobId, Instant RetryAt, DownloadSourceKind SourceKind);
+
+public sealed record CancelDownloadDecision(
+    bool Accepted,
+    bool Found,
+    bool AlreadyTerminal,
+    DownloadJobState? State,
+    DownloadJobState? PreviousState,
+    Guid? CorrelationId,
+    string? WorkerTag,
+    string? Error)
+{
+    public static CancelDownloadDecision NotFound()
+        => new(false, false, false, null, null, null, null, "Job not found.");
+
+    public static CancelDownloadDecision Rejected(DownloadJobState state, string error, bool alreadyTerminal = false)
+        => new(false, true, alreadyTerminal, state, state, null, null, error);
+
+    public static CancelDownloadDecision AcceptedFor(
+        Guid correlationId,
+        DownloadJobState state,
+        DownloadJobState previousState,
+        string? workerTag)
+        => new(true, true, false, state, previousState, correlationId, workerTag, null);
+}

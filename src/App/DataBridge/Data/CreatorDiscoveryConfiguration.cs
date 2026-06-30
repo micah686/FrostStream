@@ -8,7 +8,7 @@ public sealed class CreatorSourceConfiguration : IEntityTypeConfiguration<Creato
 {
     public void Configure(EntityTypeBuilder<CreatorSourceEntity> builder)
     {
-        builder.ToTable("creator_sources");
+        builder.ToTable("creator_sources", "discovery");
 
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
@@ -24,6 +24,7 @@ public sealed class CreatorSourceConfiguration : IEntityTypeConfiguration<Creato
         builder.Property(x => x.LastFullScanAt).HasColumnName("last_full_scan_at").HasColumnType("timestamp with time zone");
         builder.Property(x => x.LastSeenHighWatermark).HasColumnName("last_seen_high_watermark").HasMaxLength(512);
         builder.Property(x => x.NextFullScanStartIndex).HasColumnName("next_full_scan_start_index");
+        builder.Property(x => x.ProviderQueryLimitsJson).HasColumnName("provider_query_limits_json").HasColumnType("jsonb");
         builder.Property(x => x.CreatedAt)
             .HasColumnName("created_at")
             .HasColumnType("timestamp with time zone")
@@ -49,7 +50,7 @@ public sealed class DiscoveredMediaConfiguration : IEntityTypeConfiguration<Disc
 {
     public void Configure(EntityTypeBuilder<DiscoveredMediaEntity> builder)
     {
-        builder.ToTable("discovered_media");
+        builder.ToTable("discovered_media", "discovery");
 
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
@@ -64,6 +65,7 @@ public sealed class DiscoveredMediaConfiguration : IEntityTypeConfiguration<Disc
         builder.Property(x => x.LiveStatus).HasColumnName("live_status").HasMaxLength(100);
         builder.Property(x => x.Availability).HasColumnName("availability").HasMaxLength(100);
         builder.Property(x => x.DiscoveryStatus).HasColumnName("discovery_status").HasMaxLength(50).HasConversion<string>().IsRequired();
+        builder.Property(x => x.IgnoredKeyword).HasColumnName("ignored_keyword").HasMaxLength(200);
         builder.Property(x => x.MetadataStatus).HasColumnName("metadata_status").HasMaxLength(50).HasConversion<string>().IsRequired();
         builder.Property(x => x.FirstSeenAt)
             .HasColumnName("first_seen_at")

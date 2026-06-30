@@ -8,7 +8,7 @@ public sealed class ScheduledTaskConfiguration : IEntityTypeConfiguration<Schedu
 {
     public void Configure(EntityTypeBuilder<ScheduledTaskEntity> builder)
     {
-        builder.ToTable("scheduled_tasks", table =>
+        builder.ToTable("scheduled_tasks", "scheduling", table =>
         {
             table.HasCheckConstraint("ck_scheduled_tasks_key_format", "\"key\" ~ '^[a-z0-9-]{2,100}$'");
             table.HasCheckConstraint(

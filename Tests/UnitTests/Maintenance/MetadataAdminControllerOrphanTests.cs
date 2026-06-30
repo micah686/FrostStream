@@ -110,6 +110,70 @@ public sealed class MetadataAdminControllerOrphanTests
         return await controller.RestoreMetadata(10, CancellationToken.None);
     }
 
+    [Test]
+    public async Task GetOrphanCleanupPolicy_Returns_Ok_With_Policy()
+    {
+        var bus = Substitute.For<IMessageBus>();
+        var controller = CreateController(bus);
+        bus.RequestAsync<OrphanCleanupPolicyGetRequest, OrphanCleanupPolicyResponse>(
+                OrphanCleanupSubjects.AdminGetPolicy,
+                Arg.Any<OrphanCleanupPolicyGetRequest>(),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new OrphanCleanupPolicyResponse
+            {
+                Success = true,
+                Policy = new OrphanCleanupPolicyDto
+                {
+                    Enabled = true,
+                    FileMoveAfterDays = 7,
+                    FilePurgeAfterDays = 90,
+                    MetadataDeleteAfterDays = 180
+                }
+            });
+
+        var result = await controller.GetOrphanCleanupPolicy(CancellationToken.None);
+
+        var policy = result.ShouldBeOfType<OkObjectResult>().Value.ShouldBeOfType<OrphanCleanupPolicyDto>();
+        policy.FileMoveAfterDays.ShouldBe(7);
+        policy.FilePurgeAfterDays.ShouldBe(90);
+        policy.MetadataDeleteAfterDays.ShouldBe(180);
+    }
+
+    [Test]
+    public async Task UpdateOrphanCleanupPolicy_Forwards_Request_And_Maps_Validation_Error()
+    {
+        var bus = Substitute.For<IMessageBus>();
+        var controller = CreateController(bus);
+        bus.RequestAsync<OrphanCleanupPolicyUpdateRequest, OrphanCleanupPolicyResponse>(
+                OrphanCleanupSubjects.AdminUpdatePolicy,
+                Arg.Is<OrphanCleanupPolicyUpdateRequest>(x =>
+                    x.Enabled &&
+                    x.FileMoveAfterDays == 30 &&
+                    x.FilePurgeAfterDays == 60 &&
+                    x.MetadataDeleteAfterDays == 90),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new OrphanCleanupPolicyResponse
+            {
+                Success = false,
+                ErrorCode = "validation",
+                ErrorMessage = "bad"
+            });
+
+        var result = await controller.UpdateOrphanCleanupPolicy(
+            new OrphanCleanupPolicyUpdateHttpRequest
+            {
+                Enabled = true,
+                FileMoveAfterDays = 30,
+                FilePurgeAfterDays = 60,
+                MetadataDeleteAfterDays = 90
+            },
+            CancellationToken.None);
+
+        result.ShouldBeOfType<BadRequestObjectResult>();
+    }
+
     private static MetadataAdminController CreateController(IMessageBus bus)
         => new(
             Substitute.For<IJetStreamPublisher>(),

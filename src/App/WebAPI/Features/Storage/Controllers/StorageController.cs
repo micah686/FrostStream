@@ -1,8 +1,10 @@
 using FlySwattr.NATS.Abstractions;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Shared;
 using Shared.Messaging;
 using Shared.Storage;
+using WebAPI.Auth;
 using WebAPI.Features.Storage.Models;
 
 namespace WebAPI.Features.Storage.Controllers;
@@ -22,6 +24,7 @@ public class StorageController : ControllerBase
     }
 
     [HttpPost("local/create")]
+    [Endpoint(EndpointIds.StorageLocalCreate)]
     [EndpointSummary("Create a local filesystem storage target")]
     [EndpointDescription("Creates a named local-filesystem storage configuration used by workers and the streaming API. The path and protocol are validated by DataBridge; all services using this key must resolve the path to the same shared filesystem location.")]
     public async Task<ActionResult<LocalStorageConfigResponse>> CreateLocalStorage(
@@ -36,6 +39,7 @@ public class StorageController : ControllerBase
             cancellationToken);
 
     [HttpPut("local/update/{key}")]
+    [Endpoint(EndpointIds.StorageLocalUpdate)]
     [EndpointSummary("Update a local filesystem storage target")]
     [EndpointDescription("Replaces the description and local-filesystem parameters for an existing storage key. The storage method must remain local, the default key is protected from modification, and invalid or conflicting updates are returned as 400 or 409 responses.")]
     public async Task<ActionResult<LocalStorageConfigResponse>> UpdateLocalStorage(
@@ -52,6 +56,7 @@ public class StorageController : ControllerBase
             cancellationToken);
 
     [HttpPost("network/create")]
+    [Endpoint(EndpointIds.StorageNetworkCreate)]
     [EndpointSummary("Create a network storage target")]
     [EndpointDescription("Creates a named FTP, FTPS, SFTP, NFS, SMB, or CIFS storage configuration. Connection metadata is persisted by DataBridge while sensitive credentials are separated into the secret store; invalid authentication combinations return 400.")]
     public async Task<ActionResult<NetworkStorageConfigResponse>> CreateNetworkStorage(
@@ -66,6 +71,7 @@ public class StorageController : ControllerBase
             cancellationToken);
 
     [HttpPut("network/update/{key}")]
+    [Endpoint(EndpointIds.StorageNetworkUpdate)]
     [EndpointSummary("Update a network storage target")]
     [EndpointDescription("Replaces the connection metadata and supplied credentials for an existing network storage key. DataBridge validates the protocol, host, port, authentication combination, and base path while preserving secret isolation.")]
     public async Task<ActionResult<NetworkStorageConfigResponse>> UpdateNetworkStorage(
@@ -82,6 +88,7 @@ public class StorageController : ControllerBase
             cancellationToken);
 
     [HttpPost("object/s3-compatible/create")]
+    [Endpoint(EndpointIds.StorageS3Create)]
     [EndpointSummary("Create an S3-compatible storage target")]
     [EndpointDescription("Creates an AWS S3, MinIO, or DigitalOcean Spaces storage configuration. Provider-specific bucket, region, endpoint, path-style, TLS, and credential requirements are validated, with access credentials stored separately from non-sensitive metadata.")]
     public async Task<ActionResult<S3CompatibleObjectStorageConfigResponse>> CreateS3CompatibleObjectStorage(
@@ -96,6 +103,7 @@ public class StorageController : ControllerBase
             cancellationToken);
 
     [HttpPut("object/s3-compatible/update/{key}")]
+    [Endpoint(EndpointIds.StorageS3Update)]
     [EndpointSummary("Update an S3-compatible storage target")]
     [EndpointDescription("Replaces the provider settings and credentials for an existing S3-compatible storage key. The operation revalidates bucket, region or endpoint requirements and securely updates access, secret, and optional session-token values.")]
     public async Task<ActionResult<S3CompatibleObjectStorageConfigResponse>> UpdateS3CompatibleObjectStorage(
@@ -112,6 +120,7 @@ public class StorageController : ControllerBase
             cancellationToken);
 
     [HttpPost("object/azure-blob/create")]
+    [Endpoint(EndpointIds.StorageAzureCreate)]
     [EndpointSummary("Create an Azure Blob storage target")]
     [EndpointDescription("Creates an Azure Blob Storage configuration using account-key, connection-string, or SAS-URL authentication. Required fields depend on the selected credential mode, and all sensitive credential material is stored outside the application database.")]
     public async Task<ActionResult<AzureBlobObjectStorageConfigResponse>> CreateAzureBlobObjectStorage(
@@ -126,6 +135,7 @@ public class StorageController : ControllerBase
             cancellationToken);
 
     [HttpPut("object/azure-blob/update/{key}")]
+    [Endpoint(EndpointIds.StorageAzureUpdate)]
     [EndpointSummary("Update an Azure Blob storage target")]
     [EndpointDescription("Replaces the container, account metadata, credential mode, and supplied secrets for an existing Azure Blob storage key. DataBridge validates the selected authentication mode and atomically updates persisted metadata and secret material.")]
     public async Task<ActionResult<AzureBlobObjectStorageConfigResponse>> UpdateAzureBlobObjectStorage(
@@ -142,6 +152,7 @@ public class StorageController : ControllerBase
             cancellationToken);
 
     [HttpPost("object/google-cloud-storage/create")]
+    [Endpoint(EndpointIds.StorageGcsCreate)]
     [EndpointSummary("Create a Google Cloud Storage target")]
     [EndpointDescription("Creates a Google Cloud Storage configuration for a bucket using credentials JSON, a credentials file, workload identity, or application default credentials. Mode-specific fields are validated and inline credential JSON is isolated in the secret store.")]
     public async Task<ActionResult<GoogleCloudStorageObjectStorageConfigResponse>> CreateGoogleCloudStorageObjectStorage(
@@ -156,6 +167,7 @@ public class StorageController : ControllerBase
             cancellationToken);
 
     [HttpPut("object/google-cloud-storage/update/{key}")]
+    [Endpoint(EndpointIds.StorageGcsUpdate)]
     [EndpointSummary("Update a Google Cloud Storage target")]
     [EndpointDescription("Replaces the bucket, project, credential mode, and supplied credential data for an existing Google Cloud Storage key. DataBridge validates mode-specific requirements and updates secret-backed credentials without returning them in API responses.")]
     public async Task<ActionResult<GoogleCloudStorageObjectStorageConfigResponse>> UpdateGoogleCloudStorageObjectStorage(
@@ -172,6 +184,7 @@ public class StorageController : ControllerBase
             cancellationToken);
 
     [HttpGet("list")]
+    [Endpoint(EndpointIds.StorageList)]
     [EndpointSummary("List storage targets")]
     [EndpointDescription("Returns every configured storage key with its method, description, timestamps, and non-sensitive provider parameters. Passwords, access keys, connection strings, SAS URLs, and credential documents are never included in the response.")]
     public async Task<ActionResult<IReadOnlyCollection<StorageConfigDto>>> ListStorage(CancellationToken cancellationToken)
@@ -195,6 +208,7 @@ public class StorageController : ControllerBase
     }
 
     [HttpDelete("delete/{key}")]
+    [Endpoint(EndpointIds.StorageDelete)]
     [EndpointSummary("Delete a storage target")]
     [EndpointDescription("Deletes the storage configuration and associated secret bundle for the supplied key. The protected default storage key cannot be deleted; successful deletion returns 204, unknown keys return 404, and protected or conflicting requests return 409.")]
     public async Task<IActionResult> DeleteStorage(string key, CancellationToken cancellationToken)
@@ -218,6 +232,7 @@ public class StorageController : ControllerBase
     }
 
     [HttpGet("{key}")]
+    [Endpoint(EndpointIds.StorageGet)]
     [EndpointSummary("Get a storage target")]
     [EndpointDescription("Retrieves one storage configuration by key, including its method and non-sensitive local, network, or object-storage parameters. Secret credentials remain redacted and are only hydrated internally when a service opens the storage backend.")]
     public async Task<ActionResult<StorageConfigDto>> GetStorage(string key, CancellationToken cancellationToken)

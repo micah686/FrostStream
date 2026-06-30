@@ -5,7 +5,8 @@ public sealed record StorageConfigResponse(
     string? Key,
     StorageMethod? Method,
     string? Parameters,
-    string? Description)
+    string? Description,
+    string? WorkerTag = null)
 {
     public static StorageConfigResponse NotFound(string? key)
     {
@@ -14,6 +15,7 @@ public sealed record StorageConfigResponse(
             Key: key,
             Method: null,
             Parameters: null,
-            Description: null);
+            Description: null,
+            WorkerTag: null);
     }
 }

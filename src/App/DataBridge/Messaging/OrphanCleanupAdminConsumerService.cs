@@ -33,8 +33,48 @@ public sealed class OrphanCleanupAdminConsumerService(
             HandleRestoreMetadataAsync,
             QueueGroup,
             stoppingToken);
+        await SubscribeAsync<OrphanCleanupPolicyGetRequest>(
+            messageBus,
+            OrphanCleanupSubjects.AdminGetPolicy,
+            HandleGetPolicyAsync,
+            QueueGroup,
+            stoppingToken);
+        await SubscribeAsync<OrphanCleanupPolicyUpdateRequest>(
+            messageBus,
+            OrphanCleanupSubjects.AdminUpdatePolicy,
+            HandleUpdatePolicyAsync,
+            QueueGroup,
+            stoppingToken);
 
         logger.LogInformation("Subscribed to orphan cleanup admin requests.");
+    }
+
+    private async Task HandleGetPolicyAsync(IMessageContext<OrphanCleanupPolicyGetRequest> context)
+    {
+        try
+        {
+            await context.RespondAsync(await cleanupExecutor.GetPolicyAsync());
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed loading orphan cleanup policy.");
+            await context.RespondAsync(InternalPolicyError());
+        }
+    }
+
+    private async Task HandleUpdatePolicyAsync(IMessageContext<OrphanCleanupPolicyUpdateRequest> context)
+    {
+        try
+        {
+            await context.RespondAsync(await cleanupExecutor.UpdatePolicyAsync(
+                context.Message,
+                clock.GetCurrentInstant()));
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed updating orphan cleanup policy.");
+            await context.RespondAsync(InternalPolicyError());
+        }
     }
 
     private async Task HandleListAsync(IMessageContext<OrphanCleanupListRequest> context)
@@ -86,6 +126,14 @@ public sealed class OrphanCleanupAdminConsumerService(
     }
 
     private static RestoreOrphanResponse InternalRestoreError()
+        => new()
+        {
+            Success = false,
+            ErrorCode = "internal_error",
+            ErrorMessage = "Internal orphan cleanup service error."
+        };
+
+    private static OrphanCleanupPolicyResponse InternalPolicyError()
         => new()
         {
             Success = false,

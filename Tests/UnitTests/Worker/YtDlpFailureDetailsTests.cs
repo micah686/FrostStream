@@ -19,10 +19,31 @@ public sealed class YtDlpFailureDetailsTests
             "ERROR: Sign in to confirm you're not a bot. Use --cookies-from-browser or --cookies");
 
         YtDlpFailureDetails.ClassifyFailure(exception).ShouldBe(FailureKind.Permanent);
+        YtDlpFailureDetails.ErrorCode(exception, sourceUrl: "https://www.youtube.com/watch?v=abc123")
+            .ShouldBe("yt-dlp.youtube.bot-detection-halted");
+        YtDlpFailureDetails.DescribeException(exception, sourceUrl: "https://www.youtube.com/watch?v=abc123")
+            .ShouldContain("YouTube downloads have been halted");
+
+        var providerFailure = YtDlpFailureDetails.ClassifyProviderAccessFailure(
+            exception,
+            sourceUrl: "https://www.youtube.com/watch?v=abc123");
+        providerFailure.ShouldNotBeNull();
+        providerFailure.Provider.ShouldBe("youtube");
+        providerFailure.HaltProviderDownloads.ShouldBeTrue();
+    }
+
+    [Test]
+    public void YouTube_Bot_Challenge_Without_Provider_Context_Keeps_Generic_Code()
+    {
+        var exception = new YtDlpProcessException(
+            "yt-dlp failed",
+            "yt-dlp https://example.test",
+            1,
+            "ERROR: Sign in to confirm you're not a bot. Use --cookies-from-browser or --cookies");
+
         YtDlpFailureDetails.ErrorCode(exception)
             .ShouldBe("yt-dlp.sign-in-or-bot-verification-required");
-        YtDlpFailureDetails.DescribeException(exception)
-            .ShouldContain("requiring sign-in or bot verification");
+        YtDlpFailureDetails.ClassifyProviderAccessFailure(exception).ShouldBeNull();
     }
 
     [Test]

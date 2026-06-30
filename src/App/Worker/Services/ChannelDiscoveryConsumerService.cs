@@ -14,6 +14,7 @@ public sealed class ChannelDiscoveryConsumerService(
     IJetStreamConsumer consumer,
     IMessageBus messageBus,
     IYtDlpClient ytDlp,
+    PotOptionsApplier potOptionsApplier,
     IClock clock,
     ILogger<ChannelDiscoveryConsumerService> logger) : BackgroundService
 {
@@ -73,18 +74,7 @@ public sealed class ChannelDiscoveryConsumerService(
     {
         await MarkAttemptAsync(request, cancellationToken);
 
-        var sourcesResponse = await messageBus.RequestAsync<CreatorSourceListEnabledForScanRequestMessage, CreatorSourceOperationResponseMessage>(
-            CreatorDiscoverySubjects.ListEnabledSourcesForScan,
-            new CreatorSourceListEnabledForScanRequestMessage { ScanMode = scanMode },
-            RequestTimeout,
-            cancellationToken);
-
-        if (sourcesResponse is not { Success: true })
-        {
-            throw new InvalidOperationException(sourcesResponse?.ErrorMessage ?? "Creator source list request failed.");
-        }
-
-        var sources = sourcesResponse.Items ?? Array.Empty<CreatorSourceDto>();
+        var sources = await ResolveSourcesAsync(request, scanMode, cancellationToken);
         foreach (var source in sources)
         {
             await ScanSourceAsync(request, scanMode, source, cancellationToken);
@@ -98,25 +88,62 @@ public sealed class ChannelDiscoveryConsumerService(
             sources.Count);
     }
 
+    private async Task<IReadOnlyList<CreatorSourceDto>> ResolveSourcesAsync(
+        ScheduledBackgroundRequest request,
+        CreatorSourceScanMode scanMode,
+        CancellationToken cancellationToken)
+    {
+        if (request is ChannelMediaListRequested { TargetSourceId: { } targetSourceId })
+        {
+            var sourceResponse = await messageBus.RequestAsync<CreatorSourceGetRequestMessage, CreatorSourceOperationResponseMessage>(
+                CreatorDiscoverySubjects.GetSource,
+                new CreatorSourceGetRequestMessage { Id = targetSourceId },
+                RequestTimeout,
+                cancellationToken);
+
+            if (sourceResponse is not { Success: true, Entity: { } source })
+            {
+                throw new InvalidOperationException(sourceResponse?.ErrorMessage ?? $"Creator source '{targetSourceId}' was not found.");
+            }
+
+            return [source];
+        }
+
+        var sourcesResponse = await messageBus.RequestAsync<CreatorSourceListEnabledForScanRequestMessage, CreatorSourceOperationResponseMessage>(
+            CreatorDiscoverySubjects.ListEnabledSourcesForScan,
+            new CreatorSourceListEnabledForScanRequestMessage { ScanMode = scanMode },
+            RequestTimeout,
+            cancellationToken);
+
+        if (sourcesResponse is not { Success: true })
+        {
+            throw new InvalidOperationException(sourcesResponse?.ErrorMessage ?? "Creator source list request failed.");
+        }
+
+        return sourcesResponse.Items ?? Array.Empty<CreatorSourceDto>();
+    }
+
     private async Task ScanSourceAsync(
         ScheduledBackgroundRequest request,
         CreatorSourceScanMode scanMode,
         CreatorSourceDto source,
         CancellationToken cancellationToken)
     {
-        var options = BuildOptions(scanMode, source);
-        var result = await ytDlp.TryGetVideoInfoAsync(source.SourceUrl, cancellationToken, flat: true, overrideOptions: options);
+        var requestQueryLimits = ChannelProviderQueryLimits(request);
+        var options = BuildOptions(scanMode, source, requestQueryLimits);
+        var result = await ytDlp.TryGetVideoInfoAsync(source.SourceUrl, cancellationToken, flat: true, overrideOptions: potOptionsApplier.Apply(options));
         if (!result.Success || result.Data is not { } container)
         {
             throw new InvalidOperationException($"yt-dlp flat scan failed for creator source {source.Id}: {result.ErrorOutput}");
         }
 
         var candidates = ExtractCandidates(source, container)
-            .Take(EntryLimit(scanMode, source))
+            .Take(EntryLimit(scanMode, source, requestQueryLimits))
             .ToArray();
         var scanHighWatermark = candidates.FirstOrDefault()?.ExternalMediaId;
         var pageStartIndex = PageStartIndex(scanMode, source);
-        var scanPageComplete = scanMode != CreatorSourceScanMode.Full || candidates.Length < EntryLimit(scanMode, source);
+        var entryLimit = EntryLimit(scanMode, source, requestQueryLimits);
+        var scanPageComplete = scanMode != CreatorSourceScanMode.Full || candidates.Length < entryLimit;
         int? nextScanPageStartIndex = scanPageComplete ? null : pageStartIndex + candidates.Length;
 
         var totalSeen = 0;
@@ -141,6 +168,15 @@ public sealed class ChannelDiscoveryConsumerService(
                     NextScanPageStartIndex = nextScanPageStartIndex,
                     ScanPageComplete = scanPageComplete,
                     IsScanPageFinalBatch = batchIndex == batches.Length - 1,
+                    StorageKey = ChannelStorageKey(request),
+                    RequestedBy = ChannelRequestedBy(request),
+                    ConfigSetKey = ChannelConfigSetKey(request),
+                    EncodeForPlaylist = ChannelEncodeForPlaylist(request),
+                    AudioFormat = ChannelAudioFormat(request),
+                    CookieSecretPath = ChannelCookieSecretPath(request),
+                    Priority = ChannelPriority(request),
+                    FetchComments = ChannelFetchComments(request),
+                    YtDlpOptions = ChannelYtDlpOptions(request),
                     Items = batch
                 },
                 RequestTimeout,
@@ -173,6 +209,15 @@ public sealed class ChannelDiscoveryConsumerService(
                     NextScanPageStartIndex = nextScanPageStartIndex,
                     ScanPageComplete = scanPageComplete,
                     IsScanPageFinalBatch = true,
+                    StorageKey = ChannelStorageKey(request),
+                    RequestedBy = ChannelRequestedBy(request),
+                    ConfigSetKey = ChannelConfigSetKey(request),
+                    EncodeForPlaylist = ChannelEncodeForPlaylist(request),
+                    AudioFormat = ChannelAudioFormat(request),
+                    CookieSecretPath = ChannelCookieSecretPath(request),
+                    Priority = ChannelPriority(request),
+                    FetchComments = ChannelFetchComments(request),
+                    YtDlpOptions = ChannelYtDlpOptions(request),
                     Items = []
                 },
                 RequestTimeout,
@@ -184,7 +229,6 @@ public sealed class ChannelDiscoveryConsumerService(
             }
         }
 
-        var limit = EntryLimit(scanMode, source);
         if (!scanPageComplete)
         {
             logger.LogWarning(
@@ -206,27 +250,84 @@ public sealed class ChannelDiscoveryConsumerService(
             Math.Max(batchIndex, 1));
     }
 
-    internal static YtDlpOptions BuildOptions(CreatorSourceScanMode scanMode, CreatorSourceDto source)
+    internal static YtDlpOptions BuildOptions(
+        CreatorSourceScanMode scanMode,
+        CreatorSourceDto source,
+        CreatorSourceProviderQueryLimits? requestQueryLimits = null)
         => new()
         {
             VideoSelection = new YtDlpVideoSelectionOptions
             {
-                PlaylistItems = $"{PageStartIndex(scanMode, source)}:{PageEndIndex(scanMode, source)}"
+                PlaylistItems = $"{PageStartIndex(scanMode, source)}:{PageEndIndex(scanMode, source, requestQueryLimits)}"
             }
         };
 
-    internal static int EntryLimit(CreatorSourceScanMode scanMode, CreatorSourceDto source)
-        => scanMode == CreatorSourceScanMode.Incremental
+    internal static int EntryLimit(
+        CreatorSourceScanMode scanMode,
+        CreatorSourceDto source,
+        CreatorSourceProviderQueryLimits? requestQueryLimits = null)
+    {
+        var providerLimit = requestQueryLimits?.GetLimit(source.Platform, source.SourceType)
+            ?? source.ProviderQueryLimits?.GetLimit(source.Platform, source.SourceType);
+        if (providerLimit is not null)
+        {
+            return Math.Clamp(providerLimit.Value, 1, ModeMaxEntries(scanMode));
+        }
+
+        return scanMode == CreatorSourceScanMode.Incremental
             ? Math.Clamp(source.IncrementalPageSize, 1, MaxIncrementalScanEntries)
             : MaxFullScanEntriesPerSource;
+    }
 
     internal static int PageStartIndex(CreatorSourceScanMode scanMode, CreatorSourceDto source)
         => scanMode == CreatorSourceScanMode.Full
             ? Math.Max(1, source.NextFullScanStartIndex ?? 1)
             : 1;
 
-    private static int PageEndIndex(CreatorSourceScanMode scanMode, CreatorSourceDto source)
-        => PageStartIndex(scanMode, source) + EntryLimit(scanMode, source) - 1;
+    private static int PageEndIndex(
+        CreatorSourceScanMode scanMode,
+        CreatorSourceDto source,
+        CreatorSourceProviderQueryLimits? requestQueryLimits)
+        => PageStartIndex(scanMode, source) + EntryLimit(scanMode, source, requestQueryLimits) - 1;
+
+    private static int ModeMaxEntries(CreatorSourceScanMode scanMode)
+        => scanMode == CreatorSourceScanMode.Incremental
+            ? MaxIncrementalScanEntries
+            : MaxFullScanEntriesPerSource;
+
+    private static string? ChannelStorageKey(ScheduledBackgroundRequest request)
+        => request is ChannelMediaListRequested channelRequest && !string.IsNullOrWhiteSpace(channelRequest.StorageKey)
+            ? channelRequest.StorageKey
+            : null;
+
+    private static string? ChannelRequestedBy(ScheduledBackgroundRequest request)
+        => request is ChannelMediaListRequested channelRequest && !string.IsNullOrWhiteSpace(channelRequest.RequestedBy)
+            ? channelRequest.RequestedBy
+            : null;
+
+    private static string? ChannelConfigSetKey(ScheduledBackgroundRequest request)
+        => request is ChannelMediaListRequested channelRequest ? channelRequest.ConfigSetKey : null;
+
+    private static bool ChannelEncodeForPlaylist(ScheduledBackgroundRequest request)
+        => request is ChannelMediaListRequested channelRequest && channelRequest.EncodeForPlaylist;
+
+    private static AudioRenditionFormat ChannelAudioFormat(ScheduledBackgroundRequest request)
+        => request is ChannelMediaListRequested channelRequest ? channelRequest.AudioFormat : AudioRenditionFormat.Aac;
+
+    private static string? ChannelCookieSecretPath(ScheduledBackgroundRequest request)
+        => request is ChannelMediaListRequested channelRequest ? channelRequest.CookieSecretPath : null;
+
+    private static int ChannelPriority(ScheduledBackgroundRequest request)
+        => request is ChannelMediaListRequested channelRequest ? channelRequest.Priority : 0;
+
+    private static bool ChannelFetchComments(ScheduledBackgroundRequest request)
+        => request is ChannelMediaListRequested channelRequest && channelRequest.FetchComments;
+
+    private static YtDlpOptions? ChannelYtDlpOptions(ScheduledBackgroundRequest request)
+        => request is ChannelMediaListRequested channelRequest ? channelRequest.YtDlpOptions : null;
+
+    private static CreatorSourceProviderQueryLimits? ChannelProviderQueryLimits(ScheduledBackgroundRequest request)
+        => request is ChannelMediaListRequested channelRequest ? channelRequest.ProviderQueryLimits : null;
 
     private static IEnumerable<DiscoveredMediaCandidate> ExtractCandidates(CreatorSourceDto source, VideoInfo container)
     {

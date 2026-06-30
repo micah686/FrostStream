@@ -5,9 +5,13 @@ namespace DataBridge.Migrations.FluentMigrator;
 [Migration(11, "Create scheduled_tasks table")]
 public sealed class M011_CreateScheduledTasksTable : Migration
 {
+    private const string SchemaName = "scheduling";
+
     public override void Up()
     {
-        Create.Table("scheduled_tasks")
+        Create.Schema(SchemaName);
+
+        Create.Table("scheduled_tasks").InSchema(SchemaName)
             .WithColumn("id").AsInt32().PrimaryKey().Identity()
             .WithColumn("key").AsString(100).NotNullable()
             .WithColumn("task_type").AsString(100).NotNullable()
@@ -23,26 +27,26 @@ public sealed class M011_CreateScheduledTasksTable : Migration
             .WithColumn("last_updated").AsCustom("timestamp with time zone").Nullable();
 
         Create.UniqueConstraint("uq_scheduled_tasks_key")
-            .OnTable("scheduled_tasks")
+            .OnTable("scheduled_tasks").WithSchema(SchemaName)
             .Column("key");
 
         Execute.Sql(
-            "ALTER TABLE scheduled_tasks ADD CONSTRAINT ck_scheduled_tasks_key_format " +
+            "ALTER TABLE scheduling.scheduled_tasks ADD CONSTRAINT ck_scheduled_tasks_key_format " +
             "CHECK (\"key\" ~ '^[a-z0-9-]{2,100}$');");
 
         Execute.Sql(
-            "ALTER TABLE scheduled_tasks ADD CONSTRAINT ck_scheduled_tasks_trigger_xor " +
+            "ALTER TABLE scheduling.scheduled_tasks ADD CONSTRAINT ck_scheduled_tasks_trigger_xor " +
             "CHECK ((cron IS NOT NULL AND interval_seconds IS NULL) OR (cron IS NULL AND interval_seconds IS NOT NULL));");
 
         Execute.Sql(
-            "ALTER TABLE scheduled_tasks ADD CONSTRAINT ck_scheduled_tasks_interval_positive " +
+            "ALTER TABLE scheduling.scheduled_tasks ADD CONSTRAINT ck_scheduled_tasks_interval_positive " +
             "CHECK (interval_seconds IS NULL OR interval_seconds > 0);");
 
         Create.Index("ix_scheduled_tasks_next_due_at")
-            .OnTable("scheduled_tasks")
+            .OnTable("scheduled_tasks").InSchema(SchemaName)
             .OnColumn("next_due_at").Ascending();
 
-        Insert.IntoTable("scheduled_tasks").Row(new
+        Insert.IntoTable("scheduled_tasks").InSchema(SchemaName).Row(new
         {
             key = "nightly-orphan-cleanup",
             task_type = "orphan_metadata_cleanup",
@@ -55,7 +59,8 @@ public sealed class M011_CreateScheduledTasksTable : Migration
 
     public override void Down()
     {
-        Delete.Index("ix_scheduled_tasks_next_due_at").OnTable("scheduled_tasks");
-        Delete.Table("scheduled_tasks");
+        Delete.Index("ix_scheduled_tasks_next_due_at").OnTable("scheduled_tasks").InSchema(SchemaName);
+        Delete.Table("scheduled_tasks").InSchema(SchemaName);
+        Delete.Schema(SchemaName);
     }
 }

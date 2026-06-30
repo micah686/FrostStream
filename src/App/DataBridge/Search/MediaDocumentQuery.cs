@@ -16,6 +16,21 @@ public sealed class MediaDocumentQuery(NpgsqlDataSource dataSource) : IMediaDocu
         return items.Count == 0 ? null : items[0];
     }
 
+    public async Task<IReadOnlyList<MediaDocument>> GetMediaByGuidsAsync(IReadOnlyCollection<Guid> mediaGuids, CancellationToken ct = default)
+    {
+        if (mediaGuids.Count == 0)
+            return [];
+
+        await using var command = CreateMediaCommand("""
+            WHERE mm.media_guid = ANY(@media_guids)
+            ORDER BY mm.id
+            """);
+        command.Parameters.AddWithValue("@media_guids", mediaGuids.Distinct().ToArray());
+
+        var (items, _) = await ReadMediaDocumentsAsync(command, ct);
+        return items;
+    }
+
     public async Task<IReadOnlyList<CommentDocument>> GetCommentsByMediaGuidAsync(Guid mediaGuid, CancellationToken ct = default)
     {
         await using var command = CreateCommentsCommand("""
@@ -99,6 +114,21 @@ public sealed class MediaDocumentQuery(NpgsqlDataSource dataSource) : IMediaDocu
                 mm.was_live,
                 mm.availability::text AS availability,
                 mm.age_limit,
+                v.video_codec,
+                v.video_width,
+                v.video_height,
+                v.hdr_type,
+                au.audio_codec,
+                au.audio_channels,
+                CASE
+                    WHEN v.video_height >= 2160 THEN '2160p'
+                    WHEN v.video_height >= 1440 THEN '1440p'
+                    WHEN v.video_height >= 1080 THEN '1080p'
+                    WHEN v.video_height >= 720 THEN '720p'
+                    WHEN v.video_height >= 480 THEN '480p'
+                    WHEN v.video_height > 0 THEN 'SD'
+                    ELSE NULL
+                END AS resolution_label,
                 a.id AS account_id,
                 a.platform,
                 a.account_name,
@@ -134,8 +164,29 @@ public sealed class MediaDocumentQuery(NpgsqlDataSource dataSource) : IMediaDocu
                      WHERE c.media_guid = mm.media_guid),
                     '[]'::json)::text AS caption_languages_json
             FROM metadata.media_metadata mm
-            JOIN media m ON m.media_guid = mm.media_guid
+            JOIN media.media m ON m.media_guid = mm.media_guid
             JOIN metadata.accounts a ON a.id = mm.account_id
+            LEFT JOIN LATERAL (
+                SELECT ms.codec_name AS video_codec, vsd.width AS video_width,
+                       vsd.height AS video_height, vsd.hdr_type
+                FROM metadata.media_base mb
+                JOIN metadata.media_streams ms
+                    ON ms.media_base_id = mb.id AND ms.stream_type = 'video'
+                JOIN metadata.video_stream_details vsd ON vsd.media_stream_id = ms.id
+                WHERE mb.media_guid = mm.media_guid
+                ORDER BY ms.is_primary DESC, ms.id
+                LIMIT 1
+            ) v ON true
+            LEFT JOIN LATERAL (
+                SELECT ms.codec_name AS audio_codec, asd.channels AS audio_channels
+                FROM metadata.media_base mb
+                JOIN metadata.media_streams ms
+                    ON ms.media_base_id = mb.id AND ms.stream_type = 'audio'
+                JOIN metadata.audio_stream_details asd ON asd.media_stream_id = ms.id
+                WHERE mb.media_guid = mm.media_guid
+                ORDER BY ms.is_primary DESC, ms.id
+                LIMIT 1
+            ) au ON true
             {whereClause}
             """);
 
@@ -159,7 +210,7 @@ public sealed class MediaDocumentQuery(NpgsqlDataSource dataSource) : IMediaDocu
                 a.platform,
                 a.avatar_storage_path AS account_avatar_storage_path
             FROM metadata.media_comments mc
-            JOIN media m ON m.media_guid = mc.media_guid
+            JOIN media.media m ON m.media_guid = mc.media_guid
             JOIN metadata.accounts a ON a.id = mc.account_id
             {whereClause}
             """);
@@ -173,9 +224,10 @@ public sealed class MediaDocumentQuery(NpgsqlDataSource dataSource) : IMediaDocu
                 mc.two_digit_language_code AS language_code,
                 mc.caption_type::text AS caption_type,
                 mc.name,
-                mc.storage_path
+                mc.storage_path,
+                mc.text_content
             FROM metadata.media_captions mc
-            JOIN media m ON m.media_guid = mc.media_guid
+            JOIN media.media m ON m.media_guid = mc.media_guid
             {whereClause}
             """);
 
@@ -207,6 +259,13 @@ public sealed class MediaDocumentQuery(NpgsqlDataSource dataSource) : IMediaDocu
                 WasLive = GetBoolean(reader, "was_live"),
                 Availability = GetNullableString(reader, "availability"),
                 AgeLimit = GetNullableInt32(reader, "age_limit"),
+                VideoCodec = GetNullableString(reader, "video_codec"),
+                AudioCodec = GetNullableString(reader, "audio_codec"),
+                VideoWidth = GetNullableInt32(reader, "video_width"),
+                VideoHeight = GetNullableInt32(reader, "video_height"),
+                ResolutionLabel = GetNullableString(reader, "resolution_label"),
+                HdrType = GetNullableString(reader, "hdr_type"),
+                AudioChannels = GetNullableInt32(reader, "audio_channels"),
                 Platform = GetString(reader, "platform"),
                 AccountId = GetInt64(reader, "account_id"),
                 AccountName = GetString(reader, "account_name"),
@@ -274,7 +333,8 @@ public sealed class MediaDocumentQuery(NpgsqlDataSource dataSource) : IMediaDocu
                 LanguageCode = GetString(reader, "language_code"),
                 CaptionType = GetString(reader, "caption_type"),
                 Name = GetNullableString(reader, "name"),
-                StoragePath = GetString(reader, "storage_path")
+                StoragePath = GetString(reader, "storage_path"),
+                Text = GetNullableString(reader, "text_content")
             });
         }
 

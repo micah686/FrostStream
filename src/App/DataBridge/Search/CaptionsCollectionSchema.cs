@@ -15,6 +15,7 @@ public static class CaptionsCollectionSchema
                 new Field("language_code", FieldType.String) { Facet = true },
                 new Field("caption_type", FieldType.String) { Facet = true },
                 new Field("name", FieldType.String) { Optional = true },
-                new Field("storage_path", FieldType.String) { Index = false }
+                new Field("storage_path", FieldType.String) { Index = false },
+                new Field("text", FieldType.String) { Optional = true }
             ]);
 }

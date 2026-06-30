@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using NodaTime;
 using Shared.Database;
+using Shared.Downloads;
 using Shared.Messaging;
 
 namespace DataBridge.Data;
@@ -48,6 +49,33 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
         return source;
     }
 
+    public async Task<CreatorSourceEntity> CreateOrReuseSourceAsync(CreatorSourceEntity source, CancellationToken cancellationToken = default)
+    {
+        var existing = await db.CreatorSources.FirstOrDefaultAsync(x => x.SourceUrl == source.SourceUrl, cancellationToken);
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        db.CreatorSources.Add(source);
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+            return source;
+        }
+        catch (DbUpdateException)
+        {
+            db.Entry(source).State = EntityState.Detached;
+            existing = await db.CreatorSources.FirstOrDefaultAsync(x => x.SourceUrl == source.SourceUrl, cancellationToken);
+            if (existing is not null)
+            {
+                return existing;
+            }
+
+            throw;
+        }
+    }
+
     public async Task<CreatorSourceEntity?> UpdateSourceAsync(CreatorSourceEntity source, CancellationToken cancellationToken = default)
     {
         var existing = await db.CreatorSources.FirstOrDefaultAsync(x => x.Id == source.Id, cancellationToken);
@@ -68,6 +96,7 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
         existing.ConsecutiveKnownThreshold = source.ConsecutiveKnownThreshold;
         existing.FullRescanIntervalDays = source.FullRescanIntervalDays;
         existing.MetadataRefreshWindow = source.MetadataRefreshWindow;
+        existing.ProviderQueryLimitsJson = source.ProviderQueryLimitsJson;
         if (sourceChanged)
         {
             existing.LastFullScanAt = null;
@@ -104,6 +133,10 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
         var enqueued = new List<DiscoveredMediaCandidate>();
         var seenKeys = new HashSet<(string Platform, string Extractor, string ExternalMediaId)>();
 
+        // Ignore keywords only apply to user-initiated full downloads, never to background
+        // (incremental) monitoring scans, which carry no requesting user.
+        var ignoreKeywords = await LoadIgnoreKeywordsAsync(request, cancellationToken);
+
         foreach (var candidate in request.Items)
         {
             var platform = NormalizeRequired(candidate.Platform);
@@ -121,6 +154,7 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
 
             if (existing is null)
             {
+                var ignoreMatch = IgnoreKeywordMatcher.FirstMatch(candidate.Title, ignoreKeywords);
                 db.DiscoveredMedia.Add(new DiscoveredMediaEntity
                 {
                     CreatorSourceId = source.Id,
@@ -133,7 +167,8 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
                     ThumbnailUrl = NormalizeOptional(candidate.ThumbnailUrl),
                     LiveStatus = NormalizeOptional(candidate.LiveStatus),
                     Availability = NormalizeOptional(candidate.Availability),
-                    DiscoveryStatus = MediaDiscoveryStatus.Queued,
+                    DiscoveryStatus = ignoreMatch is null ? MediaDiscoveryStatus.Queued : MediaDiscoveryStatus.Ignored,
+                    IgnoredKeyword = ignoreMatch?.Pattern,
                     MetadataStatus = MediaMetadataStatus.RefreshRequested,
                     FirstSeenAt = now,
                     LastSeenAt = now,
@@ -141,7 +176,20 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
                     LastEnqueuedAt = now
                 });
                 newCount++;
-                enqueued.Add(candidate);
+                if (ignoreMatch is null)
+                {
+                    enqueued.Add(candidate);
+                }
+
+                continue;
+            }
+
+            // A video suppressed by an ignore keyword stays ignored across later scans (manual or
+            // background) until it is explicitly force-queued — never re-enqueue it here.
+            if (existing.DiscoveryStatus == MediaDiscoveryStatus.Ignored)
+            {
+                existing.LastSeenAt = now;
+                existing.MissedFullScanCount = 0;
                 continue;
             }
 
@@ -187,6 +235,56 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
 
         await db.SaveChangesAsync(cancellationToken);
         return new DiscoveredMediaUpsertResult(request.Items.Count, newCount, changedCount, enqueued);
+    }
+
+    public async Task<IReadOnlyList<DiscoveredMediaEntity>> ListIgnoredMediaAsync(
+        long creatorSourceId,
+        CancellationToken cancellationToken = default)
+        => await db.DiscoveredMedia
+            .AsNoTracking()
+            .Where(x => x.CreatorSourceId == creatorSourceId && x.DiscoveryStatus == MediaDiscoveryStatus.Ignored)
+            .OrderByDescending(x => x.FirstSeenAt)
+            .ToListAsync(cancellationToken);
+
+    public async Task<DiscoveredMediaEntity?> RequeueIgnoredMediaAsync(
+        long discoveredMediaId,
+        CancellationToken cancellationToken = default)
+    {
+        var entity = await db.DiscoveredMedia.FirstOrDefaultAsync(x => x.Id == discoveredMediaId, cancellationToken);
+        if (entity is null)
+        {
+            return null;
+        }
+
+        var now = clock.GetCurrentInstant();
+        entity.DiscoveryStatus = MediaDiscoveryStatus.Queued;
+        entity.IgnoredKeyword = null;
+        entity.MetadataStatus = MediaMetadataStatus.RefreshRequested;
+        entity.LastChangedAt = now;
+        entity.LastEnqueuedAt = now;
+        entity.LastUpdated = now;
+        await db.SaveChangesAsync(cancellationToken);
+        return entity;
+    }
+
+    private async Task<IReadOnlyList<IgnoreKeyword>> LoadIgnoreKeywordsAsync(
+        UpsertDiscoveredMediaBatchRequestMessage request,
+        CancellationToken cancellationToken)
+    {
+        if (request.ScanMode != CreatorSourceScanMode.Full
+            || string.IsNullOrWhiteSpace(request.RequestedBy)
+            || string.IsNullOrWhiteSpace(request.ConfigSetKey))
+        {
+            return [];
+        }
+
+        var json = await db.DownloadConfigSets
+            .AsNoTracking()
+            .Where(x => x.OwnerSubject == request.RequestedBy && x.Key == request.ConfigSetKey)
+            .Select(x => x.IgnoreKeywordsJson)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return IgnoreKeywordMatcher.Deserialize(json);
     }
 
     public async Task<CreatorSourceEntity?> UpdateAssetsAsync(

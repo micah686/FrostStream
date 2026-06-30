@@ -39,6 +39,15 @@ public interface IPlaylistsRepository
 
     Task<bool> TryLinkMediaGuidAsync(Guid jobId, Guid mediaGuid, CancellationToken ct = default);
 
+    /// <summary>
+    /// Clears the ignored state of a playlist entry's job (state back to
+    /// <see cref="DownloadJobState.Queued"/>, keyword cleared) and returns its entry URL so the caller
+    /// can publish a forced download. Returns null when the job is not part of the playlist.
+    /// </summary>
+    Task<string?> RequeuePlaylistItemAsync(Guid playlistId, Guid jobId, CancellationToken ct = default);
+
+    Task<PlaylistAudioPreference?> GetAudioPreferenceForJobAsync(Guid jobId, CancellationToken ct = default);
+
     Task<IReadOnlyList<PlaylistSummary>> ListAsync(int pageSize, int pageOffset, CancellationToken ct = default);
 
     Task<PlaylistDetail?> GetDetailAsync(Guid playlistId, CancellationToken ct = default);
@@ -54,7 +63,9 @@ public sealed record FanOutEntryRequest(
     string EntryUrl,
     string? EntryTitle,
     string? RequestedBy,
-    string? StorageKey);
+    string? StorageKey,
+    DownloadJobState InitialState = DownloadJobState.Queued,
+    string? IgnoredKeyword = null);
 
 public sealed record PlaylistSummary(
     PlaylistEntity Playlist,
@@ -75,4 +86,7 @@ public sealed record PlaylistDetailItem(
     string EntryUrl,
     string? EntryTitle,
     DownloadJobState JobState,
-    Guid? MediaGuid);
+    Guid? MediaGuid,
+    string? IgnoredKeyword);
+
+public sealed record PlaylistAudioPreference(bool EncodeForPlaylist, AudioRenditionFormat AudioFormat, string? StorageKey);

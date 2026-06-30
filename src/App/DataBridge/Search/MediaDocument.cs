@@ -37,6 +37,27 @@ public sealed record MediaDocument
     [JsonPropertyName("duration_seconds")]
     public double? DurationSeconds { get; init; }
 
+    [JsonPropertyName("video_codec")]
+    public string? VideoCodec { get; init; }
+
+    [JsonPropertyName("audio_codec")]
+    public string? AudioCodec { get; init; }
+
+    [JsonPropertyName("video_width")]
+    public int? VideoWidth { get; init; }
+
+    [JsonPropertyName("video_height")]
+    public int? VideoHeight { get; init; }
+
+    [JsonPropertyName("resolution_label")]
+    public string? ResolutionLabel { get; init; }
+
+    [JsonPropertyName("hdr_type")]
+    public string? HdrType { get; init; }
+
+    [JsonPropertyName("audio_channels")]
+    public int? AudioChannels { get; init; }
+
     [JsonPropertyName("was_live")]
     public bool WasLive { get; init; }
 

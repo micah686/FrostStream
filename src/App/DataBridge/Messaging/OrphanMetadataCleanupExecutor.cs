@@ -8,7 +8,7 @@ namespace DataBridge.Messaging;
 
 public sealed class OrphanMetadataCleanupExecutor
 {
-    private const int RetentionDays = 30;
+    private const int MaxAllowedRetentionDays = 3650;
     private const int MaxPageSize = 500;
     private static readonly TimeSpan WorkerRequestTimeout = TimeSpan.FromMinutes(5);
     private readonly NpgsqlDataSource _dataSource;
@@ -30,11 +30,31 @@ public sealed class OrphanMetadataCleanupExecutor
         Instant now,
         CancellationToken cancellationToken = default)
     {
-        var detected = await RecordCurrentFindingsAsync(now, cancellationToken);
+        var policy = await LoadPolicyAsync(cancellationToken);
+
+        // Detection and resolution are non-destructive bookkeeping; run them regardless of the
+        // master switch so operators retain visibility into orphans even when cleanup is disabled.
+        var detected = await RecordCurrentFindingsAsync(now, policy, cancellationToken);
         var resolvedCount = await ResolveDisappearedFindingsAsync(now, cancellationToken);
-        var moveResult = await MoveDetectedFileOrphansAsync(now, cancellationToken);
-        var deleteResult = await DeleteExpiredFileOrphansAsync(now, cancellationToken);
-        var deletedMediaCount = await FinalizeExpiredMetadataOrphansAsync(now, cancellationToken);
+
+        if (!policy.Enabled)
+        {
+            return new OrphanMetadataCleanupResult(
+                detected.MetadataWithoutMediaCount,
+                detected.MediaWithoutMetadataCount,
+                resolvedCount,
+                0,
+                0,
+                0,
+                0,
+                0);
+        }
+
+        var moveResult = await MoveDetectedFileOrphansAsync(now, policy, cancellationToken);
+        var deleteResult = await DeleteExpiredFileOrphansAsync(now, policy, cancellationToken);
+        var deletedMediaCount = await FinalizeExpiredMetadataOrphansAsync(now, policy, cancellationToken);
+
+        await RecordRunAsync(now, moveResult.Succeeded, deleteResult.Succeeded, deletedMediaCount, cancellationToken);
 
         return new OrphanMetadataCleanupResult(
             detected.MetadataWithoutMediaCount,
@@ -45,6 +65,133 @@ public sealed class OrphanMetadataCleanupExecutor
             deleteResult.Succeeded,
             deleteResult.Failed,
             deletedMediaCount);
+    }
+
+    public async Task<OrphanCleanupPolicyResponse> GetPolicyAsync(CancellationToken cancellationToken = default)
+        => new()
+        {
+            Success = true,
+            Policy = await LoadPolicyAsync(cancellationToken)
+        };
+
+    public async Task<OrphanCleanupPolicyResponse> UpdatePolicyAsync(
+        OrphanCleanupPolicyUpdateRequest request,
+        Instant now,
+        CancellationToken cancellationToken = default)
+    {
+        var validationError = ValidateRetentionDays(request.FileMoveAfterDays, "fileMoveAfterDays")
+            ?? ValidateRetentionDays(request.FilePurgeAfterDays, "filePurgeAfterDays")
+            ?? ValidateRetentionDays(request.MetadataDeleteAfterDays, "metadataDeleteAfterDays");
+        if (validationError is not null)
+        {
+            return validationError;
+        }
+
+        await using var command = _dataSource.CreateCommand("""
+            INSERT INTO maintenance.orphan_cleanup_policy
+                (id, enabled, file_move_after_days, file_purge_after_days, metadata_delete_after_days, updated_by, updated_at)
+            VALUES
+                (1, @enabled, @file_move_after_days, @file_purge_after_days, @metadata_delete_after_days, @updated_by, @updated_at)
+            ON CONFLICT (id)
+            DO UPDATE SET
+                enabled = EXCLUDED.enabled,
+                file_move_after_days = EXCLUDED.file_move_after_days,
+                file_purge_after_days = EXCLUDED.file_purge_after_days,
+                metadata_delete_after_days = EXCLUDED.metadata_delete_after_days,
+                updated_by = EXCLUDED.updated_by,
+                updated_at = EXCLUDED.updated_at;
+            """);
+        command.Parameters.AddWithValue("enabled", request.Enabled);
+        command.Parameters.AddWithValue("file_move_after_days", request.FileMoveAfterDays);
+        command.Parameters.AddWithValue("file_purge_after_days", request.FilePurgeAfterDays);
+        command.Parameters.AddWithValue("metadata_delete_after_days", request.MetadataDeleteAfterDays);
+        command.Parameters.AddWithValue("updated_by", (object?)request.UpdatedBy ?? DBNull.Value);
+        command.Parameters.AddWithValue("updated_at", now.ToDateTimeOffset());
+        await command.ExecuteNonQueryAsync(cancellationToken);
+
+        return new OrphanCleanupPolicyResponse
+        {
+            Success = true,
+            Policy = await LoadPolicyAsync(cancellationToken)
+        };
+    }
+
+    private static OrphanCleanupPolicyResponse? ValidateRetentionDays(int value, string field)
+        => value is < 1 or > MaxAllowedRetentionDays
+            ? new OrphanCleanupPolicyResponse
+            {
+                Success = false,
+                ErrorCode = "validation",
+                ErrorMessage = $"{field} must be between 1 and {MaxAllowedRetentionDays}."
+            }
+            : null;
+
+    private async Task<OrphanCleanupPolicyDto> LoadPolicyAsync(CancellationToken cancellationToken)
+    {
+        await using var command = _dataSource.CreateCommand("""
+            SELECT
+                enabled,
+                file_move_after_days,
+                file_purge_after_days,
+                metadata_delete_after_days,
+                updated_by,
+                updated_at,
+                last_run_at,
+                last_moved_count,
+                last_deleted_files_count,
+                last_deleted_metadata_count
+            FROM maintenance.orphan_cleanup_policy
+            WHERE id = 1;
+            """);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            return new OrphanCleanupPolicyDto
+            {
+                Enabled = false,
+                FileMoveAfterDays = 30,
+                FilePurgeAfterDays = 30,
+                MetadataDeleteAfterDays = 30
+            };
+        }
+
+        return new OrphanCleanupPolicyDto
+        {
+            Enabled = reader.GetBoolean(0),
+            FileMoveAfterDays = reader.GetInt32(1),
+            FilePurgeAfterDays = reader.GetInt32(2),
+            MetadataDeleteAfterDays = reader.GetInt32(3),
+            UpdatedBy = reader.IsDBNull(4) ? null : reader.GetString(4),
+            UpdatedAt = reader.IsDBNull(5) ? null : Instant.FromDateTimeOffset(reader.GetFieldValue<DateTimeOffset>(5)),
+            LastRunAt = reader.IsDBNull(6) ? null : Instant.FromDateTimeOffset(reader.GetFieldValue<DateTimeOffset>(6)),
+            LastMovedCount = reader.GetInt32(7),
+            LastDeletedFilesCount = reader.GetInt32(8),
+            LastDeletedMetadataCount = reader.GetInt32(9)
+        };
+    }
+
+    private async Task RecordRunAsync(
+        Instant now,
+        long movedCount,
+        long deletedFilesCount,
+        long deletedMetadataCount,
+        CancellationToken cancellationToken)
+    {
+        await using var command = _dataSource.CreateCommand("""
+            UPDATE maintenance.orphan_cleanup_policy
+            SET
+                last_run_at = @last_run_at,
+                last_moved_count = @last_moved_count,
+                last_deleted_files_count = @last_deleted_files_count,
+                last_deleted_metadata_count = @last_deleted_metadata_count
+            WHERE id = 1;
+            """);
+        command.Parameters.AddWithValue("last_run_at", now.ToDateTimeOffset());
+        command.Parameters.AddWithValue("last_moved_count", (int)movedCount);
+        command.Parameters.AddWithValue("last_deleted_files_count", (int)deletedFilesCount);
+        command.Parameters.AddWithValue("last_deleted_metadata_count", (int)deletedMetadataCount);
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     public async Task<OrphanCleanupListResponse> ListAsync(
@@ -81,7 +228,7 @@ public sealed class OrphanMetadataCleanupExecutor
                 last_error,
                 created_at,
                 updated_at
-            FROM orphan_cleanup_items
+            FROM maintenance.orphan_cleanup_items
             WHERE (@kind IS NULL OR item_kind = @kind)
               AND (@state IS NULL OR state = @state)
             ORDER BY detected_at DESC, id DESC
@@ -220,11 +367,12 @@ public sealed class OrphanMetadataCleanupExecutor
 
     private async Task<(long MetadataWithoutMediaCount, long MediaWithoutMetadataCount)> RecordCurrentFindingsAsync(
         Instant now,
+        OrphanCleanupPolicyDto policy,
         CancellationToken cancellationToken)
     {
         await using var command = _dataSource.CreateCommand("""
             WITH metadata_without_media AS (
-                INSERT INTO orphan_cleanup_items
+                INSERT INTO maintenance.orphan_cleanup_items
                     (item_kind, state, storage_key, original_storage_path, media_guid, detected_at, last_seen_at, delete_after, created_at, updated_at)
                 SELECT
                     'metadata_without_media',
@@ -234,11 +382,11 @@ public sealed class OrphanMetadataCleanupExecutor
                     finding.media_guid,
                     finding.detected_at,
                     finding.last_seen_at,
-                    finding.detected_at + (@retention_days * INTERVAL '1 day'),
+                    finding.detected_at + (@metadata_delete_after_days * INTERVAL '1 day'),
                     @now,
                     @now
-                FROM filesystem_rescan_findings finding
-                JOIN media_content_id_versions civ
+                FROM maintenance.filesystem_rescan_findings finding
+                JOIN media.media_content_id_versions civ
                   ON civ.media_guid = finding.media_guid
                  AND civ.storage_key = finding.storage_key
                  AND civ.storage_path = finding.storage_path
@@ -261,7 +409,7 @@ public sealed class OrphanMetadataCleanupExecutor
                 RETURNING 1
             ),
             media_without_metadata AS (
-                INSERT INTO orphan_cleanup_items
+                INSERT INTO maintenance.orphan_cleanup_items
                     (item_kind, state, storage_key, original_storage_path, detected_at, last_seen_at, delete_after, created_at, updated_at)
                 SELECT
                     'media_without_metadata',
@@ -270,10 +418,10 @@ public sealed class OrphanMetadataCleanupExecutor
                     finding.storage_path,
                     finding.detected_at,
                     finding.last_seen_at,
-                    finding.detected_at + (@retention_days * INTERVAL '1 day'),
+                    finding.detected_at + (@file_move_after_days * INTERVAL '1 day'),
                     @now,
                     @now
-                FROM filesystem_rescan_findings finding
+                FROM maintenance.filesystem_rescan_findings finding
                 WHERE finding.finding_type = 'UnexpectedFile'
                   AND finding.resolved_at IS NULL
                   AND lower(finding.storage_path) NOT LIKE 'orphaned/%'
@@ -298,7 +446,8 @@ public sealed class OrphanMetadataCleanupExecutor
                 (SELECT count(*)::bigint FROM media_without_metadata);
             """);
         command.Parameters.AddWithValue("now", now.ToDateTimeOffset());
-        command.Parameters.AddWithValue("retention_days", RetentionDays);
+        command.Parameters.AddWithValue("metadata_delete_after_days", policy.MetadataDeleteAfterDays);
+        command.Parameters.AddWithValue("file_move_after_days", policy.FileMoveAfterDays);
         command.CommandTimeout = 0;
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -314,7 +463,7 @@ public sealed class OrphanMetadataCleanupExecutor
     {
         await using var command = _dataSource.CreateCommand("""
             WITH resolved AS (
-                UPDATE orphan_cleanup_items item
+                UPDATE maintenance.orphan_cleanup_items item
                 SET
                     state = 'resolved',
                     resolved_at = @now,
@@ -326,7 +475,7 @@ public sealed class OrphanMetadataCleanupExecutor
                           item.item_kind = 'metadata_without_media'
                           AND NOT EXISTS (
                               SELECT 1
-                              FROM filesystem_rescan_findings finding
+                              FROM maintenance.filesystem_rescan_findings finding
                               WHERE finding.finding_type = 'MissingFile'
                                 AND finding.resolved_at IS NULL
                                 AND finding.media_guid = item.media_guid
@@ -340,7 +489,7 @@ public sealed class OrphanMetadataCleanupExecutor
                           AND item.orphan_storage_path IS NULL
                           AND NOT EXISTS (
                               SELECT 1
-                              FROM filesystem_rescan_findings finding
+                              FROM maintenance.filesystem_rescan_findings finding
                               WHERE finding.finding_type = 'UnexpectedFile'
                                 AND finding.resolved_at IS NULL
                                 AND finding.storage_key = item.storage_key
@@ -360,9 +509,10 @@ public sealed class OrphanMetadataCleanupExecutor
 
     private async Task<(long Succeeded, long Failed)> MoveDetectedFileOrphansAsync(
         Instant now,
+        OrphanCleanupPolicyDto policy,
         CancellationToken cancellationToken)
     {
-        var candidates = await LoadMoveCandidatesAsync(cancellationToken);
+        var candidates = await LoadMoveCandidatesAsync(now, policy.FileMoveAfterDays, cancellationToken);
         long succeeded = 0;
         long failed = 0;
 
@@ -405,9 +555,10 @@ public sealed class OrphanMetadataCleanupExecutor
 
     private async Task<(long Succeeded, long Failed)> DeleteExpiredFileOrphansAsync(
         Instant now,
+        OrphanCleanupPolicyDto policy,
         CancellationToken cancellationToken)
     {
-        var candidates = await LoadDeleteFileCandidatesAsync(now, cancellationToken);
+        var candidates = await LoadDeleteFileCandidatesAsync(now, policy.FilePurgeAfterDays, cancellationToken);
         long succeeded = 0;
         long failed = 0;
 
@@ -446,45 +597,48 @@ public sealed class OrphanMetadataCleanupExecutor
         return (succeeded, failed);
     }
 
-    private async Task<long> FinalizeExpiredMetadataOrphansAsync(Instant now, CancellationToken cancellationToken)
+    private async Task<long> FinalizeExpiredMetadataOrphansAsync(
+        Instant now,
+        OrphanCleanupPolicyDto policy,
+        CancellationToken cancellationToken)
     {
         await using var command = _dataSource.CreateCommand("""
             WITH due_media AS (
                 SELECT DISTINCT media_guid
-                FROM orphan_cleanup_items
+                FROM maintenance.orphan_cleanup_items
                 WHERE item_kind = 'metadata_without_media'
                   AND state IN ('detected', 'delete_failed')
-                  AND delete_after <= @now
+                  AND detected_at + (@metadata_delete_after_days * INTERVAL '1 day') <= @now
                   AND media_guid IS NOT NULL
             ),
             candidates AS (
                 SELECT m.media_guid
-                FROM media m
+                FROM media.media m
                 JOIN due_media due ON due.media_guid = m.media_guid
                 WHERE EXISTS (
                     SELECT 1
-                    FROM media_content_id_versions civ
+                    FROM media.media_content_id_versions civ
                     WHERE civ.media_guid = m.media_guid
                 )
                 AND NOT EXISTS (
                     SELECT 1
-                    FROM media_content_id_versions civ
+                    FROM media.media_content_id_versions civ
                     WHERE civ.media_guid = m.media_guid
                     AND NOT EXISTS (
                         SELECT 1
-                        FROM filesystem_rescan_findings finding
+                        FROM maintenance.filesystem_rescan_findings finding
                         WHERE finding.media_guid = civ.media_guid
                           AND finding.storage_key = civ.storage_key
                           AND finding.storage_path = civ.storage_path
                           AND finding.finding_type = 'MissingFile'
                           AND finding.resolved_at IS NULL
-                          AND finding.detected_at + (@retention_days * INTERVAL '1 day') <= @now
+                          AND finding.detected_at + (@metadata_delete_after_days * INTERVAL '1 day') <= @now
                     )
                 )
                 AND NOT EXISTS (
                     SELECT 1
-                    FROM media_source_versions sv
-                    JOIN download_jobs dj ON dj.job_id = sv.latest_job_id
+                    FROM media.media_source_versions sv
+                    JOIN downloads.download_jobs dj ON dj.job_id = sv.latest_job_id
                     WHERE sv.media_guid = m.media_guid
                     AND dj.state::text = ANY(@active_download_job_states)
                 )
@@ -493,13 +647,13 @@ public sealed class OrphanMetadataCleanupExecutor
                 SELECT count(*)::bigint AS count FROM candidates
             ),
             deleted AS (
-                DELETE FROM media m
+                DELETE FROM media.media m
                 USING candidates c
                 WHERE m.media_guid = c.media_guid
                 RETURNING m.media_guid
             ),
             finalized AS (
-                UPDATE orphan_cleanup_items item
+                UPDATE maintenance.orphan_cleanup_items item
                 SET
                     state = 'finalized',
                     finalized_at = @now,
@@ -514,26 +668,32 @@ public sealed class OrphanMetadataCleanupExecutor
             SELECT count(*)::bigint FROM deleted;
             """);
         command.Parameters.AddWithValue("now", now.ToDateTimeOffset());
-        command.Parameters.AddWithValue("retention_days", RetentionDays);
+        command.Parameters.AddWithValue("metadata_delete_after_days", policy.MetadataDeleteAfterDays);
         DownloadJobStateSql.AddActiveStatesParameter(command);
         command.CommandTimeout = 0;
 
         return (long)(await command.ExecuteScalarAsync(cancellationToken) ?? 0L);
     }
 
-    private async Task<IReadOnlyList<MoveCandidate>> LoadMoveCandidatesAsync(CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<MoveCandidate>> LoadMoveCandidatesAsync(
+        Instant now,
+        int fileMoveAfterDays,
+        CancellationToken cancellationToken)
     {
         var candidates = new List<MoveCandidate>();
         await using var command = _dataSource.CreateCommand("""
             SELECT id, storage_key, original_storage_path, detected_at
-            FROM orphan_cleanup_items
+            FROM maintenance.orphan_cleanup_items
             WHERE item_kind = 'media_without_metadata'
               AND state IN ('detected', 'move_failed')
               AND resolved_at IS NULL
               AND finalized_at IS NULL
+              AND detected_at + (@file_move_after_days * INTERVAL '1 day') <= @now
             ORDER BY detected_at, id
             LIMIT 100;
             """);
+        command.Parameters.AddWithValue("now", now.ToDateTimeOffset());
+        command.Parameters.AddWithValue("file_move_after_days", fileMoveAfterDays);
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
@@ -548,21 +708,26 @@ public sealed class OrphanMetadataCleanupExecutor
         return candidates;
     }
 
-    private async Task<IReadOnlyList<DeleteFileCandidate>> LoadDeleteFileCandidatesAsync(Instant now, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<DeleteFileCandidate>> LoadDeleteFileCandidatesAsync(
+        Instant now,
+        int filePurgeAfterDays,
+        CancellationToken cancellationToken)
     {
         var candidates = new List<DeleteFileCandidate>();
         await using var command = _dataSource.CreateCommand("""
             SELECT id, storage_key, orphan_storage_path
-            FROM orphan_cleanup_items
+            FROM maintenance.orphan_cleanup_items
             WHERE item_kind = 'media_without_metadata'
               AND state IN ('moved', 'delete_failed')
-              AND delete_after <= @now
+              AND moved_at IS NOT NULL
+              AND moved_at + (@file_purge_after_days * INTERVAL '1 day') <= @now
               AND orphan_storage_path IS NOT NULL
               AND finalized_at IS NULL
-            ORDER BY delete_after, id
+            ORDER BY moved_at, id
             LIMIT 100;
             """);
         command.Parameters.AddWithValue("now", now.ToDateTimeOffset());
+        command.Parameters.AddWithValue("file_purge_after_days", filePurgeAfterDays);
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
@@ -596,7 +761,7 @@ public sealed class OrphanMetadataCleanupExecutor
     {
         await using var command = _dataSource.CreateCommand("""
             WITH restored AS (
-                UPDATE orphan_cleanup_items
+                UPDATE maintenance.orphan_cleanup_items
                 SET
                     state = 'resolved',
                     resolved_at = @now,
@@ -609,7 +774,7 @@ public sealed class OrphanMetadataCleanupExecutor
                   AND orphan_storage_path IS NOT NULL
                 RETURNING storage_key, original_storage_path
             )
-            UPDATE filesystem_rescan_findings finding
+            UPDATE maintenance.filesystem_rescan_findings finding
             SET resolved_at = @now
             FROM restored
             WHERE finding.finding_type = 'UnexpectedFile'
@@ -626,7 +791,7 @@ public sealed class OrphanMetadataCleanupExecutor
     {
         await using var command = _dataSource.CreateCommand("""
             WITH restored AS (
-                UPDATE orphan_cleanup_items
+                UPDATE maintenance.orphan_cleanup_items
                 SET
                     state = 'resolved',
                     resolved_at = @now,
@@ -639,7 +804,7 @@ public sealed class OrphanMetadataCleanupExecutor
                   AND media_guid IS NOT NULL
                 RETURNING storage_key, original_storage_path, media_guid
             )
-            UPDATE filesystem_rescan_findings finding
+            UPDATE maintenance.filesystem_rescan_findings finding
             SET resolved_at = @now
             FROM restored
             WHERE finding.finding_type = 'MissingFile'
@@ -666,7 +831,7 @@ public sealed class OrphanMetadataCleanupExecutor
                 media_guid,
                 finalized_at,
                 resolved_at
-            FROM orphan_cleanup_items
+            FROM maintenance.orphan_cleanup_items
             WHERE id = @id;
             """);
         command.Parameters.AddWithValue("id", orphanId);
@@ -694,7 +859,7 @@ public sealed class OrphanMetadataCleanupExecutor
         await using var command = _dataSource.CreateCommand("""
             SELECT EXISTS (
                 SELECT 1
-                FROM media_content_id_versions
+                FROM media.media_content_id_versions
                 WHERE media_guid = @media_guid
                   AND storage_key = @storage_key
                   AND storage_path = @storage_path
@@ -717,7 +882,7 @@ public sealed class OrphanMetadataCleanupExecutor
         string? error = null)
     {
         await using var command = _dataSource.CreateCommand("""
-            UPDATE orphan_cleanup_items
+            UPDATE maintenance.orphan_cleanup_items
             SET
                 state = @state,
                 orphan_storage_path = COALESCE(@orphan_storage_path, orphan_storage_path),

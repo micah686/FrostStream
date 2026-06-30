@@ -20,10 +20,14 @@ public sealed class TypesenseStartupService(
             MediaCollectionSchema.CollectionName,
             cancellationToken);
 
-        if (createdAny || mediaDocumentCount == 0)
+        // A pre-existing collection from an earlier schema lacks the technical fields; a rebuild
+        // recreates it with the current schema and backfills.
+        var hasTechnicalFields = await indexService.MediaCollectionHasFieldAsync("resolution_label", cancellationToken);
+
+        if (createdAny || mediaDocumentCount == 0 || !hasTechnicalFields)
         {
-            var reason = createdAny
-                ? "missing collection created at startup"
+            var reason = createdAny ? "missing collection created at startup"
+                : !hasTechnicalFields ? "media collection schema is missing technical fields"
                 : "media collection is empty at startup";
             var result = await rebuildCoordinator.RebuildAsync(reason, cancellationToken);
             logger.LogInformation(

@@ -1,4 +1,7 @@
+using DataBridge;
+using DataBridge.Data;
 using FlySwattr.NATS.Abstractions;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Shared.Messaging;
 using Typesense;
@@ -8,6 +11,7 @@ namespace DataBridge.Search;
 public sealed class MetadataSearchConsumerService(
     IMessageBus messageBus,
     ITypesenseClient typesense,
+    IServiceScopeFactory scopeFactory,
     ILogger<MetadataSearchConsumerService> logger) : SubscriptionBackgroundService
 {
     protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
@@ -68,14 +72,18 @@ public sealed class MetadataSearchConsumerService(
                 MediaCollectionSchema.CollectionName,
                 parameters);
 
-            var items = result.Hits.Select(x => TypesenseSearchHelpers.ToCardDto(x.Document)).ToArray();
+            var documents = result.Hits.Select(x => x.Document).ToList();
+            var noteMatchedDocuments = await GetPrivateVideoNoteMatchesAsync(request, pageSize, documents);
+            documents.AddRange(noteMatchedDocuments);
+
+            var items = await ToCardsAsync(documents, request.OwnerSubject);
             await context.RespondAsync(new MetadataSearchResponseMessage
             {
                 Success = true,
                 Items = items,
                 Page = page,
-                TotalCount = result.Found,
-                HasMore = page * pageSize < result.Found
+                TotalCount = result.Found + noteMatchedDocuments.Count,
+                HasMore = page * pageSize < result.Found || noteMatchedDocuments.Count >= pageSize
             });
         }
         catch (Exception ex)
@@ -89,5 +97,64 @@ public sealed class MetadataSearchConsumerService(
                 Page = page
             });
         }
+    }
+
+    private async Task<IReadOnlyList<MediaDocument>> GetPrivateVideoNoteMatchesAsync(
+        MetadataSearchRequestMessage request,
+        int pageSize,
+        IReadOnlyCollection<MediaDocument> existingDocuments)
+    {
+        if (string.IsNullOrWhiteSpace(request.OwnerSubject))
+            return [];
+
+        var existingIds = existingDocuments
+            .Select(x => Guid.ParseExact(x.Id, "N"))
+            .ToHashSet();
+
+        return await scopeFactory.WithScopedAsync<IUserNotesRepository, IReadOnlyList<MediaDocument>>(async notes =>
+        {
+            var noteIds = await notes.SearchVideoNoteTargetsAsync(request.OwnerSubject, request.Query, pageSize);
+            var missingIds = noteIds.Where(x => !existingIds.Contains(x)).ToArray();
+            if (missingIds.Length == 0)
+                return [];
+
+            var documents = await scopeFactory.WithScopedAsync<IMediaDocumentQuery, IReadOnlyList<MediaDocument>>(
+                query => query.GetMediaByGuidsAsync(missingIds));
+            var byId = documents.ToDictionary(x => Guid.ParseExact(x.Id, "N"));
+            return missingIds
+                .Where(byId.ContainsKey)
+                .Select(x => byId[x])
+                .ToArray();
+        });
+    }
+
+    private async Task<IReadOnlyList<MetadataCardDto>> ToCardsAsync(
+        IReadOnlyList<MediaDocument> documents,
+        string? ownerSubject)
+    {
+        if (documents.Count == 0)
+            return [];
+
+        if (string.IsNullOrWhiteSpace(ownerSubject))
+            return documents.Select(TypesenseSearchHelpers.ToCardDto).ToArray();
+
+        var mediaGuids = documents
+            .Select(x => Guid.ParseExact(x.Id, "N"))
+            .ToArray();
+        var notes = await scopeFactory.WithScopedAsync<IUserNotesRepository, IReadOnlyDictionary<Guid, string>>(
+            repository => repository.GetVideoNotesAsync(ownerSubject, mediaGuids));
+        var channelNotes = await scopeFactory.WithScopedAsync<IUserNotesRepository, IReadOnlyDictionary<long, string>>(
+            repository => repository.GetChannelNotesAsync(ownerSubject, documents.Select(x => x.AccountId).ToArray()));
+
+        return documents
+            .Select(x =>
+            {
+                var mediaGuid = Guid.ParseExact(x.Id, "N");
+                return TypesenseSearchHelpers.ToCardDto(
+                    x,
+                    notes.GetValueOrDefault(mediaGuid),
+                    channelNotes.GetValueOrDefault(x.AccountId));
+            })
+            .ToArray();
     }
 }

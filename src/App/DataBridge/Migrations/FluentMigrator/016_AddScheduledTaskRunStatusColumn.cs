@@ -7,12 +7,12 @@ public sealed class M016_AddScheduledTaskRunStatusColumn : Migration
 {
     public override void Up()
     {
-        Alter.Table("scheduled_tasks")
+        Alter.Table("scheduled_tasks").InSchema("scheduling")
             .AddColumn("last_run_status").AsString(32).Nullable();
     }
 
     public override void Down()
     {
-        Delete.Column("last_run_status").FromTable("scheduled_tasks");
+        Delete.Column("last_run_status").FromTable("scheduled_tasks").InSchema("scheduling");
     }
 }

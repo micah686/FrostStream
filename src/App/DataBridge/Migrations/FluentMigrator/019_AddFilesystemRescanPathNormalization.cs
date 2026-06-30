@@ -24,13 +24,13 @@ public sealed class M019_AddFilesystemRescanPathNormalization : Migration
 
         Execute.Sql("""
             CREATE INDEX IF NOT EXISTS ix_mciv_storage_key_norm_path
-            ON media_content_id_versions (storage_key, fs_normalize_path(storage_path));
+            ON media.media_content_id_versions (storage_key, fs_normalize_path(storage_path));
             """);
     }
 
     public override void Down()
     {
-        Execute.Sql("DROP INDEX IF EXISTS ix_mciv_storage_key_norm_path;");
+        Execute.Sql("DROP INDEX IF EXISTS media.ix_mciv_storage_key_norm_path;");
         Execute.Sql("DROP FUNCTION IF EXISTS fs_normalize_path(text);");
     }
 }

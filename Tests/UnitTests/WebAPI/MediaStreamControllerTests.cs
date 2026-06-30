@@ -122,10 +122,44 @@ public sealed class MediaStreamControllerTests
         failed.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status502BadGateway);
     }
 
+    [Test]
+    public async Task GetStream_Returns_403_When_Watch_Access_Is_Denied()
+    {
+        var mediaGuid = Guid.NewGuid();
+        var bus = Substitute.For<IMessageBus>();
+        var provider = Substitute.For<IBlobStorageProvider>();
+        ArrangeResolved(bus, mediaGuid, Location(mediaGuid, "storage-a", "media/video.mp4", 1));
+
+        // Override the default-allowed access check with a denial.
+        var controller = CreateController(bus, provider);
+        bus.RequestAsync<MediaAccessCheckRequestMessage, MediaAccessCheckResponseMessage>(
+                MediaAccessSubjects.Check,
+                Arg.Any<MediaAccessCheckRequestMessage>(),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new MediaAccessCheckResponseMessage { IsAllowed = false, FailureReason = "media-restricted" });
+
+        var result = await controller.GetStream(mediaGuid);
+
+        result.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status403Forbidden);
+        await provider.DidNotReceive().GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
     private static MediaStreamController CreateController(
         IMessageBus bus,
         IBlobStorageProvider provider)
-        => new(bus, provider, Substitute.For<ILogger<MediaStreamController>>());
+    {
+        // The stream endpoints gate on a watch-time access check; default it to allowed so these tests
+        // exercise the streaming path. See MediaAccessControllerTests for the restriction behaviour.
+        bus.RequestAsync<MediaAccessCheckRequestMessage, MediaAccessCheckResponseMessage>(
+                MediaAccessSubjects.Check,
+                Arg.Any<MediaAccessCheckRequestMessage>(),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new MediaAccessCheckResponseMessage { IsAllowed = true });
+
+        return new MediaStreamController(bus, provider, Substitute.For<ILogger<MediaStreamController>>());
+    }
 
     private static void ArrangeResolved(
         IMessageBus bus,

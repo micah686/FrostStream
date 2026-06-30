@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using YtDlpSharpLib.Provisioning;
 
 namespace Worker.Services;
@@ -12,11 +13,18 @@ namespace Worker.Services;
 /// </summary>
 public sealed class StartupService(
     IYtDlpBinaryDownloader downloader,
+    IOptions<PotProviderOptions> potOptions,
     ILogger<StartupService> logger) : IHostedService
 {
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        logger.LogInformation("Provisioning yt-dlp/ffmpeg/ffprobe binaries...");
+        // Only provision the bgutil POT plugin when POT is enabled — otherwise its release download
+        // would become an unnecessary startup dependency that could block the host.
+        var downloadPotPlugin = potOptions.Value.Enabled;
+
+        logger.LogInformation(
+            "Provisioning yt-dlp/ffmpeg/ffprobe binaries{PluginSuffix}...",
+            downloadPotPlugin ? " and the bgutil POT plugin" : string.Empty);
 
         var result = await downloader.DownloadAllAsync(
             new BinaryDownloadOptions
@@ -26,13 +34,14 @@ public sealed class StartupService(
                 DownloadFfmpeg = true,
                 DownloadFfprobe = true,
                 DownloadDeno = true,
+                DownloadBgUtilPlugin = downloadPotPlugin,
             },
             progress: null,
             ct: cancellationToken);
 
         logger.LogInformation(
-            "Binaries ready: yt-dlp={YtDlpPath} ffmpeg={FfmpegPath} ffprobe={FfprobePath}",
-            result.YtDlpPath, result.FfmpegPath, result.FfprobePath);
+            "Binaries ready: yt-dlp={YtDlpPath} ffmpeg={FfmpegPath} ffprobe={FfprobePath} potPlugin={PotPluginDir}",
+            result.YtDlpPath, result.FfmpegPath, result.FfprobePath, result.BgUtilPluginDir);
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;

@@ -7,7 +7,7 @@ public sealed class M014_AddCreatorSourceAssetColumns : Migration
 {
     public override void Up()
     {
-        Alter.Table("creator_sources")
+        Alter.Table("creator_sources").InSchema("discovery")
             .AddColumn("avatar_url").AsString(4096).Nullable()
             .AddColumn("avatar_cache_path").AsString(1024).Nullable()
             .AddColumn("avatar_content_hash").AsString(64).Nullable()
@@ -32,6 +32,6 @@ public sealed class M014_AddCreatorSourceAssetColumns : Migration
             .Column("assets_last_attempt_at")
             .Column("assets_attempt_count")
             .Column("assets_last_error")
-            .FromTable("creator_sources");
+            .FromTable("creator_sources").InSchema("discovery");
     }
 }

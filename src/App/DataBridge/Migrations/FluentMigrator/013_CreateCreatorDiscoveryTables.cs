@@ -5,9 +5,13 @@ namespace DataBridge.Migrations.FluentMigrator;
 [Migration(13, "Create creator source discovery tables")]
 public sealed class M013_CreateCreatorDiscoveryTables : Migration
 {
+    private const string SchemaName = "discovery";
+
     public override void Up()
     {
-        Create.Table("creator_sources")
+        Create.Schema(SchemaName);
+
+        Create.Table("creator_sources").InSchema(SchemaName)
             .WithColumn("id").AsInt64().PrimaryKey().Identity()
             .WithColumn("platform").AsString(50).NotNullable()
             .WithColumn("source_type").AsString(50).NotNullable()
@@ -24,18 +28,18 @@ public sealed class M013_CreateCreatorDiscoveryTables : Migration
             .WithColumn("last_updated").AsCustom("timestamp with time zone").Nullable();
 
         Create.UniqueConstraint("uq_creator_sources_source_url")
-            .OnTable("creator_sources")
+            .OnTable("creator_sources").WithSchema(SchemaName)
             .Column("source_url");
 
         Create.Index("ix_creator_sources_scan_enabled")
-            .OnTable("creator_sources")
+            .OnTable("creator_sources").InSchema(SchemaName)
             .OnColumn("scan_enabled").Ascending();
 
         Execute.Sql(
-            "ALTER TABLE creator_sources ADD CONSTRAINT ck_creator_sources_scan_settings_positive " +
+            "ALTER TABLE discovery.creator_sources ADD CONSTRAINT ck_creator_sources_scan_settings_positive " +
             "CHECK (incremental_page_size > 0 AND consecutive_known_threshold > 0 AND full_rescan_interval_days > 0 AND metadata_refresh_window > 0);");
 
-        Create.Table("discovered_media")
+        Create.Table("discovered_media").InSchema(SchemaName)
             .WithColumn("id").AsInt64().PrimaryKey().Identity()
             .WithColumn("creator_source_id").AsInt64().NotNullable()
             .WithColumn("platform").AsString(50).NotNullable()
@@ -57,33 +61,35 @@ public sealed class M013_CreateCreatorDiscoveryTables : Migration
             .WithColumn("last_updated").AsCustom("timestamp with time zone").Nullable();
 
         Create.ForeignKey("fk_discovered_media_creator_source_id")
-            .FromTable("discovered_media").ForeignColumn("creator_source_id")
-            .ToTable("creator_sources").PrimaryColumn("id")
+            .FromTable("discovered_media").InSchema(SchemaName).ForeignColumn("creator_source_id")
+            .ToTable("creator_sources").InSchema(SchemaName).PrimaryColumn("id")
             .OnDelete(System.Data.Rule.Cascade);
 
         Execute.Sql(
             "CREATE UNIQUE INDEX ux_discovered_media_identity " +
-            "ON discovered_media (platform, extractor, external_media_id);");
+            "ON discovery.discovered_media (platform, extractor, external_media_id);");
 
         Create.Index("ix_discovered_media_creator_source_id")
-            .OnTable("discovered_media")
+            .OnTable("discovered_media").InSchema(SchemaName)
             .OnColumn("creator_source_id").Ascending();
 
         Create.Index("ix_discovered_media_metadata_status")
-            .OnTable("discovered_media")
+            .OnTable("discovered_media").InSchema(SchemaName)
             .OnColumn("metadata_status").Ascending();
     }
 
     public override void Down()
     {
-        Delete.Index("ix_discovered_media_metadata_status").OnTable("discovered_media");
-        Delete.Index("ix_discovered_media_creator_source_id").OnTable("discovered_media");
-        Execute.Sql("DROP INDEX IF EXISTS ux_discovered_media_identity;");
-        Delete.ForeignKey("fk_discovered_media_creator_source_id").OnTable("discovered_media");
-        Delete.Table("discovered_media");
+        Delete.Index("ix_discovered_media_metadata_status").OnTable("discovered_media").InSchema(SchemaName);
+        Delete.Index("ix_discovered_media_creator_source_id").OnTable("discovered_media").InSchema(SchemaName);
+        Execute.Sql("DROP INDEX IF EXISTS discovery.ux_discovered_media_identity;");
+        Delete.ForeignKey("fk_discovered_media_creator_source_id").OnTable("discovered_media").InSchema(SchemaName);
+        Delete.Table("discovered_media").InSchema(SchemaName);
 
-        Delete.Index("ix_creator_sources_scan_enabled").OnTable("creator_sources");
-        Delete.UniqueConstraint("uq_creator_sources_source_url").FromTable("creator_sources");
-        Delete.Table("creator_sources");
+        Delete.Index("ix_creator_sources_scan_enabled").OnTable("creator_sources").InSchema(SchemaName);
+        Delete.UniqueConstraint("uq_creator_sources_source_url").FromTable("creator_sources").InSchema(SchemaName);
+        Delete.Table("creator_sources").InSchema(SchemaName);
+
+        Delete.Schema(SchemaName);
     }
 }

@@ -17,6 +17,10 @@ public class DownloadJobEntity
 
     public string? StorageKey { get; set; }
 
+    /// <summary>When <see cref="State"/> is <see cref="DownloadJobState.Ignored"/>, the config-set
+    /// keyword pattern that suppressed this entry (for reporting). Null otherwise.</summary>
+    public string? IgnoredKeyword { get; set; }
+
     public int AttemptMetadata { get; set; }
 
     public int AttemptDownload { get; set; }
@@ -36,6 +40,18 @@ public class DownloadJobEntity
     public string? InfoJsonContentHashXxh128 { get; set; }
 
     public long? InfoJsonSizeBytes { get; set; }
+
+    public string? MetaStoragePath { get; set; }
+
+    public int Priority { get; set; }
+
+    public DownloadSourceKind SourceKind { get; set; } = DownloadSourceKind.Direct;
+
+    public Instant? ProviderHaltRetryAt { get; set; }
+
+    public Instant? ProviderHaltRetryDispatchedAt { get; set; }
+
+    public IngestOrigin IngestOrigin { get; set; } = IngestOrigin.Download;
 
     public FailureKind? FailureKind { get; set; }
 
@@ -132,4 +148,35 @@ public class MediaContentIdVersionEntity
     public required string StoragePath { get; set; }
 
     public int VersionNum { get; set; }
+
+    public IngestOrigin IngestOrigin { get; set; } = IngestOrigin.Download;
+}
+
+public class AudioRenditionEntity
+{
+    public Guid RenditionId { get; set; }
+
+    public Guid MediaGuid { get; set; }
+
+    public int SourceVersionNum { get; set; }
+
+    public AudioRenditionFormat Format { get; set; }
+
+    public AudioRenditionStatus Status { get; set; }
+
+    public required string StorageKey { get; set; }
+
+    public string? StoragePath { get; set; }
+
+    public string? ContentHashXxh128 { get; set; }
+
+    public long? SizeBytes { get; set; }
+
+    public int? DurationSeconds { get; set; }
+
+    public string? ErrorMessage { get; set; }
+
+    public Instant CreatedAt { get; private set; } = SystemClock.Instance.GetCurrentInstant();
+
+    public Instant UpdatedAt { get; set; } = SystemClock.Instance.GetCurrentInstant();
 }

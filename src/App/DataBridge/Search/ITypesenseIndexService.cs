@@ -6,11 +6,16 @@ public interface ITypesenseIndexService
 
     Task<int> GetDocumentCountAsync(string collection, CancellationToken ct = default);
 
+    /// <summary>True when the live <c>media</c> collection already declares <paramref name="fieldName"/>.</summary>
+    Task<bool> MediaCollectionHasFieldAsync(string fieldName, CancellationToken ct = default);
+
     Task RecreateAllCollectionsAsync(CancellationToken ct = default);
 
     Task UpsertMediaAsync(MediaDocument document, CancellationToken ct = default);
 
     Task BulkImportMediaAsync(IReadOnlyList<MediaDocument> documents, CancellationToken ct = default);
+
+    Task DeleteMediaByGuidAsync(string mediaGuid, CancellationToken ct = default);
 
     Task DeleteCommentsByMediaGuidAsync(string mediaGuid, CancellationToken ct = default);
 

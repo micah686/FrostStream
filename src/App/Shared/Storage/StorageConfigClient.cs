@@ -59,7 +59,8 @@ public sealed class NatsStorageConfigClient(IMessageBus messageBus, ISecretStore
             Key: response.Entity.Key,
             Method: response.Entity.Method,
             Parameters: StorageParametersSerializer.Serialize(response.Entity.Method, hydrated),
-            Description: response.Entity.Description);
+            Description: response.Entity.Description,
+            WorkerTag: response.Entity.WorkerTag);
     }
 
     private static StorageParametersStoredBase? ResolveStored(StorageConfigDto entity)

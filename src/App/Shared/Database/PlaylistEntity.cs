@@ -17,6 +17,20 @@ public class PlaylistEntity
 
     public string? StorageKey { get; set; }
 
+    public string? ConfigSetKey { get; set; }
+
+    public bool EncodeForPlaylist { get; set; }
+
+    public AudioRenditionFormat AudioFormat { get; set; } = AudioRenditionFormat.Aac;
+
+    public string? CookieSecretPath { get; set; }
+
+    public string? YtDlpOptionsJson { get; set; }
+
+    public int Priority { get; set; }
+
+    public bool FetchComments { get; set; }
+
     public string? ProviderPlaylistId { get; set; }
 
     public string? Title { get; set; }
@@ -78,4 +92,32 @@ public class PlaylistMetadataEntity
     public Guid PlaylistId { get; set; }
 
     public string? Title { get; set; }
+}
+
+public class UserPlaylistEntity
+{
+    public Guid PlaylistId { get; set; }
+
+    public required string OwnerSubject { get; set; }
+
+    public required string Name { get; set; }
+
+    public string? Description { get; set; }
+
+    public Instant CreatedAt { get; private set; } = SystemClock.Instance.GetCurrentInstant();
+
+    public Instant UpdatedAt { get; set; } = SystemClock.Instance.GetCurrentInstant();
+}
+
+public class UserPlaylistItemEntity
+{
+    public long Id { get; set; }
+
+    public Guid PlaylistId { get; set; }
+
+    public Guid MediaGuid { get; set; }
+
+    public int Position { get; set; }
+
+    public Instant AddedAt { get; private set; } = SystemClock.Instance.GetCurrentInstant();
 }

@@ -9,6 +9,8 @@ public sealed class StorageConfigDto
     public required string Key { get; init; }
     public StorageMethod Method { get; init; }
     public string? Description { get; init; }
+    /// <summary>Worker tag constraining which worker instances may access this backend. Null means any worker.</summary>
+    public string? WorkerTag { get; init; }
     public Instant CreatedAt { get; init; }
     public Instant? LastUpdated { get; init; }
     public PosixLocalStorageStored? Local { get; init; }

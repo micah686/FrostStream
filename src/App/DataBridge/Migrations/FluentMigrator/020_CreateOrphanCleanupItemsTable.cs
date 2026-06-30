@@ -5,9 +5,11 @@ namespace DataBridge.Migrations.FluentMigrator;
 [Migration(20, "Create orphan cleanup lifecycle table")]
 public sealed class M020_CreateOrphanCleanupItemsTable : Migration
 {
+    private const string SchemaName = "maintenance";
+
     public override void Up()
     {
-        Create.Table("orphan_cleanup_items")
+        Create.Table("orphan_cleanup_items").InSchema(SchemaName)
             .WithColumn("id").AsInt64().PrimaryKey().Identity()
             .WithColumn("item_kind").AsString(64).NotNullable()
             .WithColumn("state").AsString(64).NotNullable()
@@ -27,7 +29,7 @@ public sealed class M020_CreateOrphanCleanupItemsTable : Migration
 
         Execute.Sql("""
             CREATE UNIQUE INDEX uq_orphan_cleanup_items_identity
-            ON orphan_cleanup_items (
+            ON maintenance.orphan_cleanup_items (
                 item_kind,
                 storage_key,
                 original_storage_path,
@@ -36,20 +38,20 @@ public sealed class M020_CreateOrphanCleanupItemsTable : Migration
             """);
 
         Create.Index("ix_orphan_cleanup_items_state_delete_after")
-            .OnTable("orphan_cleanup_items")
+            .OnTable("orphan_cleanup_items").InSchema(SchemaName)
             .OnColumn("state").Ascending()
             .OnColumn("delete_after").Ascending();
 
         Create.Index("ix_orphan_cleanup_items_media_guid")
-            .OnTable("orphan_cleanup_items")
+            .OnTable("orphan_cleanup_items").InSchema(SchemaName)
             .OnColumn("media_guid").Ascending();
     }
 
     public override void Down()
     {
-        Delete.Index("ix_orphan_cleanup_items_media_guid").OnTable("orphan_cleanup_items");
-        Delete.Index("ix_orphan_cleanup_items_state_delete_after").OnTable("orphan_cleanup_items");
-        Execute.Sql("DROP INDEX IF EXISTS uq_orphan_cleanup_items_identity;");
-        Delete.Table("orphan_cleanup_items");
+        Delete.Index("ix_orphan_cleanup_items_media_guid").OnTable("orphan_cleanup_items").InSchema(SchemaName);
+        Delete.Index("ix_orphan_cleanup_items_state_delete_after").OnTable("orphan_cleanup_items").InSchema(SchemaName);
+        Execute.Sql("DROP INDEX IF EXISTS maintenance.uq_orphan_cleanup_items_identity;");
+        Delete.Table("orphan_cleanup_items").InSchema(SchemaName);
     }
 }

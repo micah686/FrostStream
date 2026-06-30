@@ -1,0 +1,23 @@
+model
+  schema 1.1
+
+type user
+
+type group
+  relations
+    define member: [user]
+
+# A capability_group bundles a set of endpoints. Granting a bundle to a user-group (or user) lets
+# them invoke every endpoint that names the bundle. Seeded baseline bundles are system-owned;
+# runtime-composed bundles use the `user.` id prefix.
+type capability_group
+  relations
+    define grantee: [user, group#member]
+
+# Every API route is an endpoint object (e.g. endpoint:downloads.create). `bundle` links it to the
+# capability_groups that include it; `invoke` is the per-request check and is satisfied either by a
+# direct grant or by being a grantee of one of the endpoint's bundles.
+type endpoint
+  relations
+    define bundle: [capability_group]
+    define invoke: [user, group#member] or grantee from bundle

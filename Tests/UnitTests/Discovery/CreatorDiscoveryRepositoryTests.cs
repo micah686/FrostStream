@@ -43,6 +43,25 @@ public sealed class CreatorDiscoveryRepositoryTests
     }
 
     [Test]
+    public async Task CreateOrReuseSource_Reuses_Existing_Source_By_Url()
+    {
+        await using var db = CreateDb();
+        var repo = new CreatorDiscoveryRepository(db, SystemClock.Instance);
+        var created = await repo.CreateOrReuseSourceAsync(CreateSource());
+
+        var reused = await repo.CreateOrReuseSourceAsync(new CreatorSourceEntity
+        {
+            Platform = "youtube",
+            SourceType = CreatorSourceType.Streams,
+            SourceUrl = created.SourceUrl
+        });
+
+        reused.Id.ShouldBe(created.Id);
+        reused.SourceType.ShouldBe(CreatorSourceType.Videos);
+        (await db.CreatorSources.CountAsync()).ShouldBe(1);
+    }
+
+    [Test]
     public async Task UpsertDiscoveredMediaBatch_Does_Not_Enqueue_Unchanged_Known_Candidates()
     {
         await using var db = CreateDb();

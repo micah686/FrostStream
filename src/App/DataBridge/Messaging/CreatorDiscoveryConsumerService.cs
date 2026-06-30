@@ -20,10 +20,12 @@ public sealed class CreatorDiscoveryConsumerService(
     ILogger<CreatorDiscoveryConsumerService> logger) : SubscriptionBackgroundService
 {
     private const string QueueGroup = "databridge-creator-discovery";
+    private const int MaxProviderQueryLimit = 5_000;
 
     protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
     {
         await SubscribeAsync<CreatorSourceCreateRequestMessage>(messageBus, CreatorDiscoverySubjects.CreateSource, HandleCreateAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<CreatorSourceCreateOrReuseRequestMessage>(messageBus, CreatorDiscoverySubjects.CreateOrReuseSource, HandleCreateOrReuseAsync, QueueGroup, stoppingToken);
         await SubscribeAsync<CreatorSourceUpdateRequestMessage>(messageBus, CreatorDiscoverySubjects.UpdateSource, HandleUpdateAsync, QueueGroup, stoppingToken);
         await SubscribeAsync<CreatorSourceGetRequestMessage>(messageBus, CreatorDiscoverySubjects.GetSource, HandleGetAsync, QueueGroup, stoppingToken);
         await SubscribeAsync<CreatorSourceListRequestMessage>(messageBus, CreatorDiscoverySubjects.ListSources, HandleListAsync, QueueGroup, stoppingToken);
@@ -31,6 +33,8 @@ public sealed class CreatorDiscoveryConsumerService(
         await SubscribeAsync<CreatorSourceDeleteRequestMessage>(messageBus, CreatorDiscoverySubjects.DeleteSource, HandleDeleteAsync, QueueGroup, stoppingToken);
         await SubscribeAsync<UpsertDiscoveredMediaBatchRequestMessage>(messageBus, CreatorDiscoverySubjects.UpsertDiscoveredMediaBatch, HandleUpsertBatchAsync, QueueGroup, stoppingToken);
         await SubscribeAsync<UpdateCreatorSourceAssetsRequestMessage>(messageBus, CreatorDiscoverySubjects.UpdateAssets, HandleUpdateAssetsAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<ListIgnoredMediaRequestMessage>(messageBus, CreatorDiscoverySubjects.ListIgnoredMedia, HandleListIgnoredMediaAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<ForceQueueDiscoveredMediaRequestMessage>(messageBus, CreatorDiscoverySubjects.ForceQueueDiscoveredMedia, HandleForceQueueDiscoveredMediaAsync, QueueGroup, stoppingToken);
 
         logger.LogInformation("Subscribed to creator discovery subjects.");
     }
@@ -40,7 +44,7 @@ public sealed class CreatorDiscoveryConsumerService(
         var msg = context.Message;
         try
         {
-            if (Validate(msg.Platform, msg.SourceUrl, msg.IncrementalPageSize, msg.ConsecutiveKnownThreshold, msg.FullRescanIntervalDays, msg.MetadataRefreshWindow) is { } validationError)
+            if (Validate(msg.Platform, msg.SourceUrl, msg.IncrementalPageSize, msg.ConsecutiveKnownThreshold, msg.FullRescanIntervalDays, msg.MetadataRefreshWindow, msg.ProviderQueryLimits) is { } validationError)
             {
                 await context.RespondAsync(Failure(validationError));
                 return;
@@ -55,7 +59,8 @@ public sealed class CreatorDiscoveryConsumerService(
                 IncrementalPageSize = msg.IncrementalPageSize,
                 ConsecutiveKnownThreshold = msg.ConsecutiveKnownThreshold,
                 FullRescanIntervalDays = msg.FullRescanIntervalDays,
-                MetadataRefreshWindow = msg.MetadataRefreshWindow
+                MetadataRefreshWindow = msg.MetadataRefreshWindow,
+                ProviderQueryLimitsJson = msg.ProviderQueryLimits?.ToJson()
             }));
             await context.RespondAsync(new CreatorSourceOperationResponseMessage { Success = true, Entity = Map(entity) });
         }
@@ -76,12 +81,44 @@ public sealed class CreatorDiscoveryConsumerService(
         }
     }
 
+    private async Task HandleCreateOrReuseAsync(IMessageContext<CreatorSourceCreateOrReuseRequestMessage> context)
+    {
+        var msg = context.Message;
+        try
+        {
+            if (Validate(msg.Platform, msg.SourceUrl, msg.IncrementalPageSize, msg.ConsecutiveKnownThreshold, msg.FullRescanIntervalDays, msg.MetadataRefreshWindow, msg.ProviderQueryLimits) is { } validationError)
+            {
+                await context.RespondAsync(Failure(validationError));
+                return;
+            }
+
+            var entity = await WithRepo(repo => repo.CreateOrReuseSourceAsync(new CreatorSourceEntity
+            {
+                Platform = msg.Platform.Trim(),
+                SourceType = msg.SourceType,
+                SourceUrl = msg.SourceUrl.Trim(),
+                ScanEnabled = msg.ScanEnabled,
+                IncrementalPageSize = msg.IncrementalPageSize,
+                ConsecutiveKnownThreshold = msg.ConsecutiveKnownThreshold,
+                FullRescanIntervalDays = msg.FullRescanIntervalDays,
+                MetadataRefreshWindow = msg.MetadataRefreshWindow,
+                ProviderQueryLimitsJson = msg.ProviderQueryLimits?.ToJson()
+            }));
+            await context.RespondAsync(new CreatorSourceOperationResponseMessage { Success = true, Entity = Map(entity) });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed creating or reusing creator source {SourceUrl}", msg.SourceUrl);
+            await context.RespondAsync(InternalFailure("Failed to create or reuse creator source."));
+        }
+    }
+
     private async Task HandleUpdateAsync(IMessageContext<CreatorSourceUpdateRequestMessage> context)
     {
         var msg = context.Message;
         try
         {
-            if (Validate(msg.Platform, msg.SourceUrl, msg.IncrementalPageSize, msg.ConsecutiveKnownThreshold, msg.FullRescanIntervalDays, msg.MetadataRefreshWindow) is { } validationError)
+            if (Validate(msg.Platform, msg.SourceUrl, msg.IncrementalPageSize, msg.ConsecutiveKnownThreshold, msg.FullRescanIntervalDays, msg.MetadataRefreshWindow, msg.ProviderQueryLimits) is { } validationError)
             {
                 await context.RespondAsync(Failure(validationError));
                 return;
@@ -97,7 +134,8 @@ public sealed class CreatorDiscoveryConsumerService(
                 IncrementalPageSize = msg.IncrementalPageSize,
                 ConsecutiveKnownThreshold = msg.ConsecutiveKnownThreshold,
                 FullRescanIntervalDays = msg.FullRescanIntervalDays,
-                MetadataRefreshWindow = msg.MetadataRefreshWindow
+                MetadataRefreshWindow = msg.MetadataRefreshWindow,
+                ProviderQueryLimitsJson = msg.ProviderQueryLimits?.ToJson()
             }));
             if (updated is null)
             {
@@ -286,6 +324,96 @@ public sealed class CreatorDiscoveryConsumerService(
         }
     }
 
+    private async Task HandleListIgnoredMediaAsync(IMessageContext<ListIgnoredMediaRequestMessage> context)
+    {
+        try
+        {
+            var items = await WithRepo(repo => repo.ListIgnoredMediaAsync(context.Message.CreatorSourceId));
+            await context.RespondAsync(new ListIgnoredMediaResponseMessage
+            {
+                Success = true,
+                Items = items.Select(x => new IgnoredMediaDto
+                {
+                    Id = x.Id,
+                    CreatorSourceId = x.CreatorSourceId,
+                    Title = x.Title,
+                    CanonicalUrl = x.CanonicalUrl,
+                    IgnoredKeyword = x.IgnoredKeyword,
+                    FirstSeenAt = x.FirstSeenAt,
+                    LastSeenAt = x.LastSeenAt
+                }).ToArray()
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed listing ignored media for source {SourceId}", context.Message.CreatorSourceId);
+            await context.RespondAsync(new ListIgnoredMediaResponseMessage
+            {
+                Success = false,
+                ErrorCode = "internal",
+                ErrorMessage = "Failed to list ignored media."
+            });
+        }
+    }
+
+    private async Task HandleForceQueueDiscoveredMediaAsync(IMessageContext<ForceQueueDiscoveredMediaRequestMessage> context)
+    {
+        var msg = context.Message;
+        try
+        {
+            var entity = await WithRepo(repo => repo.RequeueIgnoredMediaAsync(msg.DiscoveredMediaId));
+            if (entity is null)
+            {
+                await context.RespondAsync(new ForceQueueOperationResponseMessage
+                {
+                    Success = false,
+                    ErrorCode = "not_found",
+                    ErrorMessage = $"Discovered media '{msg.DiscoveredMediaId}' was not found."
+                });
+                return;
+            }
+
+            var jobId = Guid.NewGuid();
+            await publisher.PublishAsync(
+                DownloadSubjects.DownloadRequested,
+                new DownloadRequested
+                {
+                    JobId = jobId,
+                    CorrelationId = jobId,
+                    CausationId = null,
+                    MessageId = Guid.NewGuid(),
+                    OperationKey = $"force-queue/discovered-media/{entity.Id}/{jobId:N}",
+                    OccurredAt = clock.GetCurrentInstant(),
+                    Attempt = 1,
+                    SourceUrl = entity.CanonicalUrl,
+                    RequestedBy = msg.RequestedBy,
+                    StorageKey = msg.StorageKey,
+                    ForceDownload = true,
+                    MediaKind = MediaKind.Video,
+                    YtDlpOptions = msg.YtDlpOptions,
+                    CookieSecretPath = msg.CookieSecretPath,
+                    Priority = msg.Priority,
+                    FetchComments = msg.FetchComments,
+                    EncodeAudioRendition = msg.EncodeForPlaylist,
+                    AudioRenditionFormat = msg.AudioFormat,
+                    SourceKind = DownloadSourceKind.Channel
+                },
+                messageId: jobId.ToString("N"));
+
+            await context.RespondAsync(new ForceQueueOperationResponseMessage { Success = true, JobId = jobId });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed force-queueing discovered media {DiscoveredMediaId}", msg.DiscoveredMediaId);
+            await context.RespondAsync(new ForceQueueOperationResponseMessage
+            {
+                Success = false,
+                ErrorCode = "internal",
+                ErrorMessage = "Failed to force-queue discovered media."
+            });
+        }
+    }
+
     private Task PublishDownloadRequestedAsync(UpsertDiscoveredMediaBatchRequestMessage request, DiscoveredMediaCandidate candidate)
     {
         var seed = $"{request.CreatorSourceId}:{candidate.Platform}:{candidate.Extractor}:{candidate.ExternalMediaId}";
@@ -304,9 +432,17 @@ public sealed class CreatorDiscoveryConsumerService(
                 OccurredAt = clock.GetCurrentInstant(),
                 Attempt = 1,
                 SourceUrl = candidate.CanonicalUrl,
-                RequestedBy = $"schedule:{request.ScheduleKey}",
+                RequestedBy = request.RequestedBy ?? $"schedule:{request.ScheduleKey}",
+                StorageKey = request.StorageKey,
                 ForceDownload = false,
-                MediaKind = MediaKind.Video
+                MediaKind = MediaKind.Video,
+                YtDlpOptions = request.YtDlpOptions,
+                CookieSecretPath = request.CookieSecretPath,
+                Priority = request.Priority,
+                FetchComments = request.FetchComments,
+                EncodeAudioRendition = request.EncodeForPlaylist,
+                AudioRenditionFormat = request.AudioFormat,
+                SourceKind = DownloadSourceKind.Channel
             },
             messageId: messageId.ToString("N"));
     }
@@ -320,7 +456,8 @@ public sealed class CreatorDiscoveryConsumerService(
         int incrementalPageSize,
         int consecutiveKnownThreshold,
         int fullRescanIntervalDays,
-        int metadataRefreshWindow)
+        int metadataRefreshWindow,
+        CreatorSourceProviderQueryLimits? providerQueryLimits)
     {
         if (string.IsNullOrWhiteSpace(platform))
             return "platform is required.";
@@ -336,6 +473,8 @@ public sealed class CreatorDiscoveryConsumerService(
             return "full_rescan_interval_days must be greater than zero.";
         if (metadataRefreshWindow <= 0)
             return "metadata_refresh_window must be greater than zero.";
+        if (providerQueryLimits?.Validate(MaxProviderQueryLimit) is { Count: > 0 } errors)
+            return errors[0];
         return null;
     }
 
@@ -363,6 +502,7 @@ public sealed class CreatorDiscoveryConsumerService(
         LastFullScanAt = entity.LastFullScanAt,
         LastSeenHighWatermark = entity.LastSeenHighWatermark,
         NextFullScanStartIndex = entity.NextFullScanStartIndex,
+        ProviderQueryLimits = CreatorSourceProviderQueryLimits.FromJson(entity.ProviderQueryLimitsJson),
         CreatedAt = entity.CreatedAt,
         LastUpdated = entity.LastUpdated,
         AvatarUrl = entity.AvatarUrl,

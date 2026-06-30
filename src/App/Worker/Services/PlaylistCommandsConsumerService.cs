@@ -20,6 +20,7 @@ public sealed class PlaylistCommandsConsumerService(
     IJetStreamConsumer consumer,
     IJetStreamPublisher publisher,
     IYtDlpClient ytDlp,
+    PotOptionsApplier potOptionsApplier,
     IClock clock,
     ILogger<PlaylistCommandsConsumerService> logger) : BackgroundService
 {
@@ -55,7 +56,7 @@ public sealed class PlaylistCommandsConsumerService(
             var playlistOptions = BuildPlaylistOptions(pageStartIndex, pageSize);
 
             // First, get the top-level playlist metadata (with flat entries embedded).
-            var topResult = await ytDlp.TryGetVideoInfoAsync(cmd.SourceUrl, flat: true, overrideOptions: playlistOptions);
+            var topResult = await ytDlp.TryGetVideoInfoAsync(cmd.SourceUrl, flat: true, overrideOptions: potOptionsApplier.Apply(playlistOptions));
             if (topResult.Success && topResult.Data is { } container)
             {
                 title = container.PlaylistTitle ?? container.Title;
@@ -84,7 +85,7 @@ public sealed class PlaylistCommandsConsumerService(
                     // Fall back to the streaming flat-playlist endpoint when the top-level
                     // dump did not embed the entries (some extractors return them piecemeal).
                     var streamedIndex = 0;
-                    await foreach (var entry in ytDlp.GetPlaylistInfoAsync(cmd.SourceUrl))
+                    await foreach (var entry in ytDlp.GetPlaylistInfoAsync(cmd.SourceUrl, overrideOptions: potOptionsApplier.Apply(null)))
                     {
                         streamedIndex++;
                         var resolvedIndex = entry.PlaylistIndex ?? streamedIndex;

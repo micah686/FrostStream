@@ -60,6 +60,23 @@ public sealed record PlaylistRequested : IPlaylistFlowMessage
 
     /// <summary>FluentStorage backend key used for every per-item job. Defaults to "default".</summary>
     public string? StorageKey { get; init; }
+
+    /// <summary>User-owned reusable download config key used to submit this playlist, if any.</summary>
+    public string? ConfigSetKey { get; init; }
+
+    /// <summary>When true, playlist fan-out asks for cached audio renditions for stream mode.</summary>
+    public bool EncodeForPlaylist { get; init; }
+
+    /// <summary>Preferred audio format for playlist audio stream mode.</summary>
+    public AudioRenditionFormat AudioFormat { get; init; } = AudioRenditionFormat.Aac;
+
+    public string? CookieSecretPath { get; init; }
+
+    public int Priority { get; init; }
+
+    public bool FetchComments { get; init; }
+
+    public YtDlpSharpLib.Options.YtDlpOptions? YtDlpOptions { get; init; }
 }
 
 /// <summary>
@@ -176,12 +193,14 @@ public sealed record ProcessPlaylistStagedEntriesCommand : IPlaylistFlowMessage
 public sealed class PlaylistGetRequestMessage
 {
     public required Guid PlaylistId { get; init; }
+    public string? OwnerSubject { get; init; }
 }
 
 public sealed class PlaylistListRequestMessage
 {
     public int PageSize { get; init; } = 50;
     public int PageOffset { get; init; }
+    public string? OwnerSubject { get; init; }
 }
 
 public sealed class PlaylistItemDto
@@ -192,9 +211,13 @@ public sealed class PlaylistItemDto
     public string? EntryTitle { get; init; }
     public required DownloadJobState JobState { get; init; }
     public Guid? MediaGuid { get; init; }
+
+    /// <summary>When <see cref="JobState"/> is <see cref="DownloadJobState.Ignored"/>, the config-set
+    /// keyword that suppressed this entry. Null otherwise.</summary>
+    public string? IgnoredKeyword { get; init; }
 }
 
-public sealed class PlaylistDto
+public sealed record PlaylistDto
 {
     public required Guid PlaylistId { get; init; }
     public required Guid CorrelationId { get; init; }
@@ -213,6 +236,7 @@ public sealed class PlaylistDto
     public int CompletedItems { get; init; }
     public int FailedItems { get; init; }
     public int PendingItems { get; init; }
+    public string? UserNote { get; init; }
 
     /// <summary>Populated only by the GET-by-id query; null on list responses.</summary>
     public IReadOnlyList<PlaylistItemDto>? Items { get; init; }
@@ -232,4 +256,97 @@ public sealed class PlaylistListResponseMessage
     public string? ErrorCode { get; init; }
     public string? ErrorMessage { get; init; }
     public IReadOnlyList<PlaylistDto>? Items { get; init; }
+}
+
+// ── NATS request/reply (non-JetStream) for owner-scoped user playlists ────────
+
+public sealed class UserPlaylistCreateRequestMessage
+{
+    public required string OwnerSubject { get; init; }
+    public required string Name { get; init; }
+    public string? Description { get; init; }
+}
+
+public sealed class UserPlaylistUpdateRequestMessage
+{
+    public required string OwnerSubject { get; init; }
+    public required Guid PlaylistId { get; init; }
+    public required string Name { get; init; }
+    public string? Description { get; init; }
+}
+
+public sealed class UserPlaylistDeleteRequestMessage
+{
+    public required string OwnerSubject { get; init; }
+    public required Guid PlaylistId { get; init; }
+}
+
+public sealed class UserPlaylistGetRequestMessage
+{
+    public required string OwnerSubject { get; init; }
+    public required Guid PlaylistId { get; init; }
+}
+
+public sealed class UserPlaylistListRequestMessage
+{
+    public required string OwnerSubject { get; init; }
+    public int PageSize { get; init; } = 50;
+    public int PageOffset { get; init; }
+}
+
+public sealed class UserPlaylistAddItemRequestMessage
+{
+    public required string OwnerSubject { get; init; }
+    public required Guid PlaylistId { get; init; }
+    public required Guid MediaGuid { get; init; }
+    public int? Position { get; init; }
+}
+
+public sealed class UserPlaylistRemoveItemRequestMessage
+{
+    public required string OwnerSubject { get; init; }
+    public required Guid PlaylistId { get; init; }
+    public required Guid MediaGuid { get; init; }
+}
+
+public sealed class UserPlaylistReorderItemsRequestMessage
+{
+    public required string OwnerSubject { get; init; }
+    public required Guid PlaylistId { get; init; }
+    public required IReadOnlyList<Guid> MediaGuids { get; init; }
+}
+
+public sealed class UserPlaylistItemDto
+{
+    public required Guid MediaGuid { get; init; }
+    public required int Position { get; init; }
+    public required Instant AddedAt { get; init; }
+}
+
+public sealed record UserPlaylistDto
+{
+    public required Guid PlaylistId { get; init; }
+    public required string Name { get; init; }
+    public string? Description { get; init; }
+    public required Instant CreatedAt { get; init; }
+    public required Instant UpdatedAt { get; init; }
+    public int ItemCount { get; init; }
+    public string? UserNote { get; init; }
+    public IReadOnlyList<UserPlaylistItemDto>? Items { get; init; }
+}
+
+public sealed class UserPlaylistResponseMessage
+{
+    public bool Success { get; init; }
+    public string? ErrorCode { get; init; }
+    public string? ErrorMessage { get; init; }
+    public UserPlaylistDto? Playlist { get; init; }
+}
+
+public sealed class UserPlaylistListResponseMessage
+{
+    public bool Success { get; init; }
+    public string? ErrorCode { get; init; }
+    public string? ErrorMessage { get; init; }
+    public IReadOnlyList<UserPlaylistDto>? Items { get; init; }
 }

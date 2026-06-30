@@ -9,6 +9,7 @@ public sealed record MetadataAccountCardDto
     public required string AccountName { get; init; }
     public required string AccountHandle { get; init; }
     public string? AvatarStoragePath { get; init; }
+    public string? UserNote { get; init; }
 }
 
 public sealed record MetadataCardDto
@@ -22,6 +23,7 @@ public sealed record MetadataCardDto
     public string? Availability { get; init; }
     public bool WasLive { get; init; }
     public required MetadataAccountCardDto Account { get; init; }
+    public string? UserNote { get; init; }
 }
 
 public sealed record AccountDto
@@ -38,6 +40,7 @@ public sealed record AccountDto
     public string? AvatarStoragePath { get; init; }
     public string? BannerStoragePath { get; init; }
     public long MediaCount { get; init; }
+    public string? UserNote { get; init; }
 }
 
 public sealed record AccountSummaryDto
@@ -51,6 +54,7 @@ public sealed record AccountSummaryDto
     public bool IsVerified { get; init; }
     public string? AvatarStoragePath { get; init; }
     public long MediaCount { get; init; }
+    public string? UserNote { get; init; }
 }
 
 public sealed record CaptionLanguageDto
@@ -111,6 +115,7 @@ public sealed record MetadataDetailDto
     public SeriesDto? Series { get; init; }
     public MusicDto? Music { get; init; }
     public IReadOnlyList<CaptionLanguageDto> CaptionLanguages { get; init; } = [];
+    public string? UserNote { get; init; }
 }
 
 public sealed record TechnicalFormatDto
@@ -210,6 +215,7 @@ public sealed record MetadataListRequestMessage
     public string? Category { get; init; }
     public string? Genre { get; init; }
     public string? CaptionLanguage { get; init; }
+    public string? OwnerSubject { get; init; }
 }
 
 public sealed record MetadataListResponseMessage
@@ -234,6 +240,7 @@ public sealed record MetadataSearchRequestMessage
     public string? Genre { get; init; }
     public string? SortBy { get; init; }
     public string SortOrder { get; init; } = "desc";
+    public string? OwnerSubject { get; init; }
 }
 
 public sealed record MetadataSearchResponseMessage
@@ -250,6 +257,7 @@ public sealed record MetadataSearchResponseMessage
 public sealed record MetadataGetRequestMessage
 {
     public required Guid MediaGuid { get; init; }
+    public string? OwnerSubject { get; init; }
 }
 
 public sealed record MetadataGetResponseMessage
@@ -316,6 +324,7 @@ public sealed record MetadataAccountsListRequestMessage
     public int PageSize { get; init; } = 24;
     public string? After { get; init; }
     public string? Platform { get; init; }
+    public string? OwnerSubject { get; init; }
 }
 
 public sealed record MetadataAccountsListResponseMessage
@@ -331,6 +340,7 @@ public sealed record MetadataAccountsListResponseMessage
 public sealed record MetadataAccountGetRequestMessage
 {
     public required long AccountId { get; init; }
+    public string? OwnerSubject { get; init; }
 }
 
 public sealed record MetadataAccountGetResponseMessage

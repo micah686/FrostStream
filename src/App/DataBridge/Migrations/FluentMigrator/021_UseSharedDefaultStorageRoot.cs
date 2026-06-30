@@ -9,11 +9,11 @@ public sealed class M021_UseSharedDefaultStorageRoot : Migration
     {
         Execute.Sql(
             """
-            UPDATE storage_keys_local AS local
+            UPDATE storage.storage_keys_local AS local
             SET path = '${FROSTSTREAM_STORAGE_ROOT}'
-            FROM storage_keys AS storage
-            WHERE local.storage_key_id = storage.id
-              AND storage.key = 'default'
+            FROM storage.storage_keys AS sk
+            WHERE local.storage_key_id = sk.id
+              AND sk.key = 'default'
               AND local.path IN ('./data', './data/', 'data', 'data/');
             """);
     }
@@ -22,11 +22,11 @@ public sealed class M021_UseSharedDefaultStorageRoot : Migration
     {
         Execute.Sql(
             """
-            UPDATE storage_keys_local AS local
+            UPDATE storage.storage_keys_local AS local
             SET path = './data/'
-            FROM storage_keys AS storage
-            WHERE local.storage_key_id = storage.id
-              AND storage.key = 'default'
+            FROM storage.storage_keys AS sk
+            WHERE local.storage_key_id = sk.id
+              AND sk.key = 'default'
               AND local.path = '${FROSTSTREAM_STORAGE_ROOT}';
             """);
     }

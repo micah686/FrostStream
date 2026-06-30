@@ -24,21 +24,23 @@
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="13.2.4" />
+      <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="13.4.6" />
       <PackageReference Include="Cleipnir.Flows" Version="4.2.5" />
       <PackageReference Include="Cleipnir.Flows.PostgresSql" Version="4.2.5" />
       <PackageReference Include="FluentMigrator" Version="8.0.1" />
       <PackageReference Include="FluentMigrator.Runner.Core" Version="8.0.1" />
       <PackageReference Include="FluentMigrator.Runner.Postgres" Version="8.0.1" />
-      <PackageReference Include="Npgsql.DependencyInjection" Version="10.0.1" />
-      <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1" />
+      <PackageReference Include="Npgsql.DependencyInjection" Version="10.0.3" />
+      <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.2" />
       <PackageReference Include="EFCore.NamingConventions" Version="10.0.1" />
-      <PackageReference Include="FluentStorage" Version="6.0.3" />
-      <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime" Version="10.0.1" />
-      <PackageReference Include="Polly.Core" Version="8.6.6" />
-      <PackageReference Include="Quartz" Version="3.14.0" />
-      <PackageReference Include="System.IO.Hashing" Version="10.0.7" />
-      <PackageReference Include="Typesense" Version="8.3.0" />
+      <PackageReference Include="FluentStorage" Version="6.0.4" />
+      <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime" Version="10.0.2" />
+      <PackageReference Include="NodaTime.Serialization.SystemTextJson" Version="1.4.0" />
+      <PackageReference Include="Polly.Core" Version="8.7.0" />
+      <PackageReference Include="Quartz" Version="3.18.2" />
+      <PackageReference Include="RecurPixel.Notify.Sdk" Version="0.3.0" />
+      <PackageReference Include="System.IO.Hashing" Version="10.0.9" />
+      <PackageReference Include="Typesense" Version="8.5.0" />
     </ItemGroup>
 
 </Project>

@@ -1,0 +1,136 @@
+# yaml-language-server: $schema=https://goauthentik.io/blueprints/schema.json
+version: 1
+metadata:
+  name: froststream-oidc
+  labels:
+    blueprints.goauthentik.io/description: FrostStream development OIDC application and provider.
+entries:
+  # Emits a `groups` claim containing the user's Authentik group names. WebAPI maps this
+  # claim to OpenFGA membership tuples (see Section 3 session sync). Keep the scope_name as
+  # `groups` so it lines up with AUTH_SCOPES (`openid profile email groups`).
+  - id: froststream-scope-groups
+    model: authentik_providers_oauth2.scopemapping
+    identifiers:
+      scope_name: groups
+      name: FrostStream groups
+    attrs:
+      scope_name: groups
+      name: FrostStream groups
+      description: FrostStream group membership claim used for OpenFGA authorization.
+      expression: |
+        return {
+            "groups": [group.name for group in request.user.ak_groups.all()],
+        }
+
+  # Authentik defaults the `aud` claim to the client_id. WebAPI validates the audience as
+  # `froststream-api`, so this mapping injects that audience into issued tokens.
+  - id: froststream-scope-audience
+    model: authentik_providers_oauth2.scopemapping
+    identifiers:
+      scope_name: froststream-audience
+      name: FrostStream audience
+    attrs:
+      scope_name: froststream-audience
+      name: FrostStream audience
+      description: Adds the froststream-api audience claim expected by the WebAPI JWT validation.
+      expression: |
+        return {
+            "aud": "froststream-api",
+        }
+
+  - id: froststream-oauth-provider
+    model: authentik_providers_oauth2.oauth2provider
+    identifiers:
+      name: FrostStream
+    attrs:
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      # Without an RSA signing key, authentik signs access tokens with HS256 (the client secret) and
+      # publishes an empty JWKS, so the WebAPI JwtBearer validation can never find a key
+      # ("The signature key was not found"). Bind authentik's built-in self-signed keypair so tokens
+      # are RS256-signed and the public key is exposed at the provider's jwks_uri. Production can set
+      # AUTHENTIK_SIGNING_KEY_NAME to a dedicated rotated certificate keypair; development falls back
+      # to authentik's built-in self-signed keypair.
+      signing_key: !Find [authentik_crypto.certificatekeypair, [name, !Env [AUTHENTIK_SIGNING_KEY_NAME, authentik Self-signed Certificate]]]
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
+        - !KeyOf froststream-scope-groups
+        - !KeyOf froststream-scope-audience
+      client_type: confidential
+      client_id: !Env [AUTHENTIK_CLIENT_ID, froststream-bff]
+      client_secret: !Env [AUTHENTIK_CLIENT_SECRET, froststream-dev-client-secret]
+      grant_types:
+        - authorization_code
+        - refresh_token
+      include_claims_in_id_token: true
+      issuer_mode: per_provider
+      sub_mode: user_uuid
+      access_code_validity: minutes=5
+      access_token_validity: hours=1
+      refresh_token_validity: days=30
+      redirect_uris:
+        - matching_mode: regex
+          url: ^http://localhost:[0-9]+/auth/callback$
+          redirect_uri_type: authorization
+        - matching_mode: regex
+          url: ^https://localhost:[0-9]+/auth/callback$
+          redirect_uri_type: authorization
+        - matching_mode: regex
+          url: ^http://127\.0\.0\.1:[0-9]+/auth/callback$
+          redirect_uri_type: authorization
+        - matching_mode: regex
+          url: ^https://127\.0\.0\.1:[0-9]+/auth/callback$
+          redirect_uri_type: authorization
+        - matching_mode: regex
+          url: ^http://localhost:[0-9]+/$
+          redirect_uri_type: logout
+        - matching_mode: regex
+          url: ^https://localhost:[0-9]+/$
+          redirect_uri_type: logout
+
+  - model: authentik_core.application
+    identifiers:
+      slug: froststream
+    attrs:
+      name: FrostStream
+      provider: !KeyOf froststream-oauth-provider
+      meta_description: FrostStream development authentication client.
+
+  # Role groups consumed by OpenFGA authorization. The tuple writer maps each membership to
+  # `group:<name>#member@user:<sub>`, and the OpenFgaProvisioner seeds the bootstrap tuples
+  # (`group:admins#member -> admin`, `users -> member`, `viewers -> viewer`, `owner -> owner`).
+  # Names must be valid OpenFGA object ids (no spaces), so these canonical names are required —
+  # Authentik's default `authentik Admins` group is silently skipped by the tuple writer.
+  # `akadmin` (the Authentik bootstrap admin) is added to `admins` so the deployer has a working
+  # privileged account on first login without any manual OpenFGA tuple writes.
+  - id: froststream-group-admins
+    model: authentik_core.group
+    identifiers:
+      name: admins
+    attrs:
+      name: admins
+      users:
+        - !Find [authentik_core.user, [username, akadmin]]
+
+  - id: froststream-group-users
+    model: authentik_core.group
+    identifiers:
+      name: users
+    attrs:
+      name: users
+
+  - id: froststream-group-viewers
+    model: authentik_core.group
+    identifiers:
+      name: viewers
+    attrs:
+      name: viewers
+
+  - id: froststream-group-owner
+    model: authentik_core.group
+    identifiers:
+      name: owner
+    attrs:
+      name: owner

@@ -18,6 +18,7 @@ public sealed record CreatorSourceDto
     public Instant? LastFullScanAt { get; init; }
     public string? LastSeenHighWatermark { get; init; }
     public int? NextFullScanStartIndex { get; init; }
+    public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
     public required Instant CreatedAt { get; init; }
     public Instant? LastUpdated { get; init; }
     public string? AvatarUrl { get; init; }
@@ -40,6 +41,20 @@ public sealed record CreatorSourceCreateRequestMessage
     public int ConsecutiveKnownThreshold { get; init; } = 25;
     public int FullRescanIntervalDays { get; init; } = 30;
     public int MetadataRefreshWindow { get; init; } = 25;
+    public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
+}
+
+public sealed record CreatorSourceCreateOrReuseRequestMessage
+{
+    public required string Platform { get; init; }
+    public required CreatorSourceType SourceType { get; init; }
+    public required string SourceUrl { get; init; }
+    public bool ScanEnabled { get; init; } = true;
+    public int IncrementalPageSize { get; init; } = 50;
+    public int ConsecutiveKnownThreshold { get; init; } = 25;
+    public int FullRescanIntervalDays { get; init; } = 30;
+    public int MetadataRefreshWindow { get; init; } = 25;
+    public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
 }
 
 public sealed record CreatorSourceUpdateRequestMessage
@@ -53,6 +68,7 @@ public sealed record CreatorSourceUpdateRequestMessage
     public int ConsecutiveKnownThreshold { get; init; } = 25;
     public int FullRescanIntervalDays { get; init; } = 30;
     public int MetadataRefreshWindow { get; init; } = 25;
+    public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
 }
 
 public sealed record CreatorSourceGetRequestMessage
@@ -106,6 +122,15 @@ public sealed record UpsertDiscoveredMediaBatchRequestMessage
     public int? NextScanPageStartIndex { get; init; }
     public bool ScanPageComplete { get; init; } = true;
     public bool IsScanPageFinalBatch { get; init; } = true;
+    public string? StorageKey { get; init; }
+    public string? RequestedBy { get; init; }
+    public string? ConfigSetKey { get; init; }
+    public bool EncodeForPlaylist { get; init; }
+    public AudioRenditionFormat AudioFormat { get; init; } = AudioRenditionFormat.Aac;
+    public string? CookieSecretPath { get; init; }
+    public int Priority { get; init; }
+    public bool FetchComments { get; init; }
+    public YtDlpSharpLib.Options.YtDlpOptions? YtDlpOptions { get; init; }
     public required IReadOnlyList<DiscoveredMediaCandidate> Items { get; init; }
 }
 

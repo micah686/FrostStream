@@ -64,6 +64,8 @@ public sealed class CreatorSourceEntity
 
     public int? NextFullScanStartIndex { get; set; }
 
+    public string? ProviderQueryLimitsJson { get; set; }
+
     public Instant CreatedAt { get; private set; } = SystemClock.Instance.GetCurrentInstant();
 
     public Instant? LastUpdated { get; set; }
@@ -110,6 +112,10 @@ public sealed class DiscoveredMediaEntity
     public string? Availability { get; set; }
 
     public MediaDiscoveryStatus DiscoveryStatus { get; set; } = MediaDiscoveryStatus.Discovered;
+
+    /// <summary>When <see cref="DiscoveryStatus"/> is <see cref="MediaDiscoveryStatus.Ignored"/>,
+    /// the config-set keyword pattern that suppressed this video (for reporting). Null otherwise.</summary>
+    public string? IgnoredKeyword { get; set; }
 
     public MediaMetadataStatus MetadataStatus { get; set; } = MediaMetadataStatus.PendingEnrichment;
 

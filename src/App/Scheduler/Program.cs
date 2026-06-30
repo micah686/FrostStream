@@ -72,20 +72,24 @@ internal static class Program
         builder.Services.AddTransient<Jobs.ChannelAssetRefreshJob>();
         builder.Services.AddTransient<Jobs.ChannelMediaListJob>();
         builder.Services.AddTransient<Jobs.StaleDatabaseCleanupJob>();
+        builder.Services.AddTransient<Jobs.WatchedItemAutoDeleteJob>();
         builder.Services.AddTransient<Jobs.DatabaseMaintenanceJob>();
         builder.Services.AddTransient<Jobs.SearchReindexJob>();
         builder.Services.AddTransient<Jobs.FilesystemRescanJob>();
         builder.Services.AddTransient<Jobs.ProcessedMessageCleanupJob>();
+        builder.Services.AddTransient<Jobs.BackupJob>();
 
         builder.Services.AddSingleton<IChannelUpdateChecker, ChannelUpdateChecker>();
         builder.Services.AddSingleton<IChannelAssetRefresher, ChannelAssetRefresher>();
         builder.Services.AddSingleton<IChannelMediaLister, ChannelMediaLister>();
         builder.Services.AddSingleton<IOrphanMetadataCleanupScheduler, OrphanMetadataCleanupScheduler>();
         builder.Services.AddSingleton<IStaleEntryCleanupScheduler, StaleEntryCleanupScheduler>();
+        builder.Services.AddSingleton<IWatchedItemAutoDeleteScheduler, WatchedItemAutoDeleteScheduler>();
         builder.Services.AddSingleton<IDatabaseMaintenanceScheduler, DatabaseMaintenanceScheduler>();
         builder.Services.AddSingleton<ISearchReindexScheduler, SearchReindexScheduler>();
         builder.Services.AddSingleton<IFilesystemRescanScheduler, FilesystemRescanScheduler>();
         builder.Services.AddSingleton<IProcessedMessageCleanupScheduler, ProcessedMessageCleanupScheduler>();
+        builder.Services.AddSingleton<IBackupScheduler, BackupScheduler>();
 
         builder.Services.AddHostedService<ScheduleHydrationService>();
         builder.Services.AddHostedService<ScheduleChangeListener>();

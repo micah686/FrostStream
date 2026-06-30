@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using NodaTime;
 using Npgsql;
+using Shared.Database;
 using Shared.Messaging;
 using Shared.Storage;
 using Shouldly;
@@ -122,10 +123,62 @@ public sealed class DownloadJobsRepositoryTests
         (await Fixture.CountAsync("processed_messages")).ShouldBe(0);
     }
 
+    [Test]
+    public async Task TryBeginCancellationAsync_Marks_Queued_Job_Cancelling()
+    {
+        var jobId = Guid.NewGuid();
+        await using var db = Fixture.CreateDb();
+        db.DownloadJobs.Add(Job(jobId, DownloadJobState.DownloadQueued));
+        await db.SaveChangesAsync();
+
+        var repository = new DownloadJobsRepository(db, SystemClock.Instance);
+
+        var decision = await repository.TryBeginCancellationAsync(jobId, "tester", "stop requested");
+
+        decision.Accepted.ShouldBeTrue();
+        decision.State.ShouldBe(DownloadJobState.Cancelling);
+        decision.PreviousState.ShouldBe(DownloadJobState.DownloadQueued);
+        var job = await db.DownloadJobs.SingleAsync(x => x.JobId == jobId);
+        job.State.ShouldBe(DownloadJobState.Cancelling);
+        job.FailureKind.ShouldBe(FailureKind.Cancelled);
+        job.FailureCode.ShouldBe("cancel_requested");
+    }
+
+    [Test]
+    public async Task MarkCancelledAsync_Writes_Terminal_State_And_Failed_Row()
+    {
+        var jobId = Guid.NewGuid();
+        await using var db = Fixture.CreateDb();
+        db.DownloadJobs.Add(Job(jobId, DownloadJobState.Cancelling));
+        await db.SaveChangesAsync();
+
+        var repository = new DownloadJobsRepository(db, SystemClock.Instance);
+
+        await repository.MarkCancelledAsync(jobId, "cancelled cleanly");
+
+        var job = await db.DownloadJobs.SingleAsync(x => x.JobId == jobId);
+        job.State.ShouldBe(DownloadJobState.Cancelled);
+        job.CompletedAt.ShouldNotBeNull();
+        var failed = await db.FailedDownloadJobs.SingleAsync(x => x.JobId == jobId);
+        failed.FailedState.ShouldBe(DownloadJobState.Cancelled);
+        failed.FailureKind.ShouldBe(FailureKind.Cancelled);
+        failed.FailureMessage.ShouldBe("cancelled cleanly");
+    }
+
+    private static DownloadJobEntity Job(Guid jobId, DownloadJobState state)
+        => new()
+        {
+            JobId = jobId,
+            CorrelationId = Guid.NewGuid(),
+            State = state,
+            SourceUrl = "https://example.test/video",
+            StorageKey = "default",
+            IngestOrigin = IngestOrigin.Download
+        };
+
     private sealed class PostgresFixture : IAsyncDisposable
     {
-        private readonly IContainer _postgresContainer = new ContainerBuilder()
-            .WithImage("postgres:17")
+        private readonly IContainer _postgresContainer = new ContainerBuilder("postgres:17")
             .WithEnvironment("POSTGRES_DB", "froststream_download_jobs_repository_tests")
             .WithEnvironment("POSTGRES_USER", "postgres")
             .WithEnvironment("POSTGRES_PASSWORD", "postgres")
@@ -137,7 +190,15 @@ public sealed class DownloadJobsRepositoryTests
         public Instant Now { get; } = Instant.FromUtc(2026, 6, 1, 0, 0);
 
         private string ConnectionString =>
-            $"Host=127.0.0.1;Port={_postgresContainer.GetMappedPublicPort(5432)};Database=froststream_download_jobs_repository_tests;Username=postgres;Password=postgres";
+            new NpgsqlConnectionStringBuilder
+            {
+                Host = _postgresContainer.Hostname,
+                Port = _postgresContainer.GetMappedPublicPort(5432),
+                Database = "froststream_download_jobs_repository_tests",
+                Username = "postgres",
+                Password = "postgres",
+                SearchPath = "storage,downloads,media,maintenance,metadata,auth,public"
+            }.ConnectionString;
 
         public async Task InitializeAsync()
         {
@@ -169,14 +230,15 @@ public sealed class DownloadJobsRepositoryTests
                     ConnectionString,
                     npgsqlOptions => npgsqlOptions
                         .UseNodaTime()
-                        .MapEnum<LocalStorageProtocol>("local_storage_protocol")
-                        .MapEnum<NetworkStorageProtocol>("network_storage_protocol")
-                        .MapEnum<S3CompatibleObjectStorageProvider>("s3_compatible_object_storage_provider")
-                        .MapEnum<AzureBlobCredentialMode>("azure_blob_credential_mode")
-                        .MapEnum<GoogleCloudStorageCredentialMode>("google_cloud_storage_credential_mode")
-                        .MapEnum<DownloadJobState>("download_job_state")
-                        .MapEnum<FailureKind>("failure_kind")
-                        .MapEnum<PlaylistState>("playlist_state"))
+                        .MapEnum<LocalStorageProtocol>("local_storage_protocol", "storage")
+                        .MapEnum<NetworkStorageProtocol>("network_storage_protocol", "storage")
+                        .MapEnum<S3CompatibleObjectStorageProvider>("s3_compatible_object_storage_provider", "storage")
+                        .MapEnum<AzureBlobCredentialMode>("azure_blob_credential_mode", "storage")
+                        .MapEnum<GoogleCloudStorageCredentialMode>("google_cloud_storage_credential_mode", "storage")
+                        .MapEnum<DownloadJobState>("download_job_state", "downloads")
+                        .MapEnum<FailureKind>("failure_kind", "downloads")
+                        .MapEnum<IngestOrigin>("ingest_origin", "media")
+                        .MapEnum<PlaylistState>("playlist_state", "playlists"))
                 .UseSnakeCaseNamingConvention();
 
             if (interceptor is not null)

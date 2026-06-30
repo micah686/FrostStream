@@ -20,6 +20,13 @@ public sealed class PlaylistsRepository(DataBridgeDbContext db, IClock clock) : 
         {
             existingById.State = PlaylistState.PendingMetadata;
             existingById.UpdatedAt = clock.GetCurrentInstant();
+            existingById.ConfigSetKey = request.ConfigSetKey;
+            existingById.EncodeForPlaylist = request.EncodeForPlaylist;
+            existingById.AudioFormat = request.AudioFormat;
+            existingById.CookieSecretPath = request.CookieSecretPath;
+            existingById.YtDlpOptionsJson = request.YtDlpOptions is null ? null : System.Text.Json.JsonSerializer.Serialize(request.YtDlpOptions);
+            existingById.Priority = request.Priority;
+            existingById.FetchComments = request.FetchComments;
             await db.SaveChangesAsync(ct);
             return new UpsertResult(existingById, WasReused: true);
         }
@@ -31,6 +38,13 @@ public sealed class PlaylistsRepository(DataBridgeDbContext db, IClock clock) : 
             existingByUrl.UpdatedAt = clock.GetCurrentInstant();
             existingByUrl.RequestedBy = request.RequestedBy ?? existingByUrl.RequestedBy;
             existingByUrl.StorageKey = request.StorageKey ?? existingByUrl.StorageKey;
+            existingByUrl.ConfigSetKey = request.ConfigSetKey;
+            existingByUrl.EncodeForPlaylist = request.EncodeForPlaylist;
+            existingByUrl.AudioFormat = request.AudioFormat;
+            existingByUrl.CookieSecretPath = request.CookieSecretPath;
+            existingByUrl.YtDlpOptionsJson = request.YtDlpOptions is null ? null : System.Text.Json.JsonSerializer.Serialize(request.YtDlpOptions);
+            existingByUrl.Priority = request.Priority;
+            existingByUrl.FetchComments = request.FetchComments;
             await db.SaveChangesAsync(ct);
             return new UpsertResult(existingByUrl, WasReused: true);
         }
@@ -42,7 +56,14 @@ public sealed class PlaylistsRepository(DataBridgeDbContext db, IClock clock) : 
             State = PlaylistState.PendingMetadata,
             SourceUrl = request.SourceUrl,
             RequestedBy = request.RequestedBy,
-            StorageKey = request.StorageKey
+            StorageKey = request.StorageKey,
+            ConfigSetKey = request.ConfigSetKey,
+            EncodeForPlaylist = request.EncodeForPlaylist,
+            AudioFormat = request.AudioFormat,
+            CookieSecretPath = request.CookieSecretPath,
+            YtDlpOptionsJson = request.YtDlpOptions is null ? null : System.Text.Json.JsonSerializer.Serialize(request.YtDlpOptions),
+            Priority = request.Priority,
+            FetchComments = request.FetchComments
         };
         db.Playlists.Add(entity);
         await db.SaveChangesAsync(ct);
@@ -170,10 +191,11 @@ public sealed class PlaylistsRepository(DataBridgeDbContext db, IClock clock) : 
             {
                 JobId = request.JobId,
                 CorrelationId = request.CorrelationId,
-                State = DownloadJobState.Queued,
+                State = request.InitialState,
                 SourceUrl = request.EntryUrl,
                 RequestedBy = request.RequestedBy,
-                StorageKey = request.StorageKey
+                StorageKey = request.StorageKey,
+                IgnoredKeyword = request.IgnoredKeyword
             });
         }
 
@@ -190,6 +212,25 @@ public sealed class PlaylistsRepository(DataBridgeDbContext db, IClock clock) : 
             db.PlaylistScanEntries.Remove(staging);
 
         await db.SaveChangesAsync(ct);
+    }
+
+    public async Task<string?> RequeuePlaylistItemAsync(Guid playlistId, Guid jobId, CancellationToken ct = default)
+    {
+        var item = await db.PlaylistItems
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.PlaylistId == playlistId && x.JobId == jobId, ct);
+        if (item is null)
+            return null;
+
+        var job = await db.DownloadJobs.FirstOrDefaultAsync(x => x.JobId == jobId, ct);
+        if (job is null)
+            return null;
+
+        job.State = DownloadJobState.Queued;
+        job.IgnoredKeyword = null;
+        job.UpdatedAt = clock.GetCurrentInstant();
+        await db.SaveChangesAsync(ct);
+        return item.EntryUrl;
     }
 
     public async Task<bool> TryLinkMediaGuidAsync(Guid jobId, Guid mediaGuid, CancellationToken ct = default)
@@ -223,6 +264,14 @@ public sealed class PlaylistsRepository(DataBridgeDbContext db, IClock clock) : 
 
         return true;
     }
+
+    public async Task<PlaylistAudioPreference?> GetAudioPreferenceForJobAsync(Guid jobId, CancellationToken ct = default)
+        => await (
+            from item in db.PlaylistItems.AsNoTracking()
+            where item.JobId == jobId
+            join playlist in db.Playlists.AsNoTracking() on item.PlaylistId equals playlist.PlaylistId
+            select new PlaylistAudioPreference(playlist.EncodeForPlaylist, playlist.AudioFormat, playlist.StorageKey))
+            .FirstOrDefaultAsync(ct);
 
     public async Task<IReadOnlyList<PlaylistSummary>> ListAsync(int pageSize, int pageOffset, CancellationToken ct = default)
     {
@@ -284,7 +333,8 @@ public sealed class PlaylistsRepository(DataBridgeDbContext db, IClock clock) : 
                 item.EntryUrl,
                 item.EntryTitle,
                 job.State,
-                m == null ? (Guid?)null : m.MediaGuid))
+                m == null ? (Guid?)null : m.MediaGuid,
+                job.IgnoredKeyword))
             .ToListAsync(ct);
 
         var (completed, failed, pending) = ClassifyCounts(items.Select(i => (i.JobState, 1)));
@@ -307,6 +357,7 @@ public sealed class PlaylistsRepository(DataBridgeDbContext db, IClock clock) : 
                 case DownloadJobState.FailedPermanent:
                 case DownloadJobState.FailedTransient:
                 case DownloadJobState.DeadLettered:
+                case DownloadJobState.ProviderHalted:
                     failed += count;
                     break;
                 default:
