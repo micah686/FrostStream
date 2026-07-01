@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using System.Linq.Expressions;
 using System.Text.Json;
 using NodaTime;
 using Shared.Database;
@@ -8,6 +9,9 @@ namespace DataBridge.Data;
 
 public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock) : IDownloadJobsRepository
 {
+    private const int DefaultQueueLimit = 50;
+    private const int MaxQueueLimit = 200;
+
     public Task<bool> IsMessageProcessedAsync(Guid messageId, CancellationToken ct = default)
         => db.ProcessedMessages.AsNoTracking().AnyAsync(x => x.MessageId == messageId, ct);
 
@@ -538,6 +542,139 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
             .ToListAsync(ct);
         return rows;
     }
+
+    public async Task<DownloadQueuePage> QueryQueueAsync(DownloadQueueListRequest request, CancellationToken ct = default)
+    {
+        var limit = Math.Clamp(request.Limit <= 0 ? DefaultQueueLimit : request.Limit, 1, MaxQueueLimit);
+        var offset = DecodeCursor(request.Cursor);
+
+        var query = db.DownloadJobs.AsNoTracking().AsQueryable();
+
+        if (request.State is { } state)
+            query = query.Where(x => x.State == state);
+        if (request.SourceKind is { } sourceKind)
+            query = query.Where(x => x.SourceKind == sourceKind);
+
+        var requestedBy = NormalizeOptional(request.RequestedBy);
+        if (requestedBy is not null)
+            query = query.Where(x => x.RequestedBy == requestedBy);
+
+        var storageKey = NormalizeOptional(request.StorageKey);
+        if (storageKey is not null)
+            query = query.Where(x => x.StorageKey == storageKey);
+
+        if (request.CreatedFrom is { } from)
+            query = query.Where(x => x.CreatedAt >= from);
+        if (request.CreatedTo is { } to)
+            query = query.Where(x => x.CreatedAt <= to);
+
+        var search = NormalizeOptional(request.Query);
+        if (search is not null)
+        {
+            var pattern = $"%{EscapeLike(search)}%";
+            query = query.Where(x => EF.Functions.ILike(x.SourceUrl, pattern, "\\"));
+        }
+
+        var totalCount = await query.CountAsync(ct);
+
+        // Total, deterministic ordering (job_id is the unique tiebreak) so offset paging is stable.
+        var ordered = request.Sort == DownloadQueueSort.Priority
+            ? query.OrderByDescending(x => x.Priority).ThenByDescending(x => x.CreatedAt).ThenByDescending(x => x.JobId)
+            : query.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.JobId);
+
+        var rows = await ordered
+            .Skip(offset)
+            .Take(limit)
+            .Select(QueueDtoProjection)
+            .ToListAsync(ct);
+
+        var nextOffset = offset + rows.Count;
+        var nextCursor = nextOffset < totalCount ? EncodeCursor(nextOffset) : null;
+
+        return new DownloadQueuePage(rows, nextCursor, totalCount);
+    }
+
+    public async Task<DownloadQueueJobDto?> GetQueueJobAsync(Guid jobId, CancellationToken ct = default)
+    {
+        return await db.DownloadJobs
+            .AsNoTracking()
+            .Where(x => x.JobId == jobId)
+            .Select(QueueDtoProjection)
+            .FirstOrDefaultAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<DownloadQueueHistoryEntryDto>?> GetQueueHistoryAsync(Guid jobId, CancellationToken ct = default)
+    {
+        var exists = await db.DownloadJobs.AsNoTracking().AnyAsync(x => x.JobId == jobId, ct);
+        if (!exists)
+            return null;
+
+        return await db.DownloadJobHistory
+            .AsNoTracking()
+            .Where(x => x.JobId == jobId)
+            .OrderBy(x => x.RecordedAt)
+            .ThenBy(x => x.Id)
+            .Select(x => new DownloadQueueHistoryEntryDto
+            {
+                Id = x.Id,
+                MessageId = x.MessageId,
+                OperationKey = x.OperationKey,
+                EventName = x.EventName,
+                PayloadJson = x.PayloadJson,
+                RecordedAt = x.RecordedAt
+            })
+            .ToListAsync(ct);
+    }
+
+    // Shared projection (as an expression tree so EF can translate it) — list and detail
+    // return identical snapshots.
+    private static readonly Expression<Func<DownloadJobEntity, DownloadQueueJobDto>> QueueDtoProjection = x => new DownloadQueueJobDto
+    {
+        JobId = x.JobId,
+        CorrelationId = x.CorrelationId,
+        State = x.State,
+        SourceUrl = x.SourceUrl,
+        RequestedBy = x.RequestedBy,
+        StorageKey = x.StorageKey,
+        SourceKind = x.SourceKind,
+        Priority = x.Priority,
+        AttemptMetadata = x.AttemptMetadata,
+        AttemptDownload = x.AttemptDownload,
+        AttemptUpload = x.AttemptUpload,
+        FileSizeBytes = x.FileSizeBytes,
+        ContentHashXxh128 = x.ContentHashXxh128,
+        FailureKind = x.FailureKind,
+        FailureCode = x.FailureCode,
+        FailureMessage = x.FailureMessage,
+        ProviderHaltRetryAt = x.ProviderHaltRetryAt,
+        ProviderHaltRetryDispatchedAt = x.ProviderHaltRetryDispatchedAt,
+        CreatedAt = x.CreatedAt,
+        UpdatedAt = x.UpdatedAt,
+        CompletedAt = x.CompletedAt
+    };
+
+    private static string EncodeCursor(int offset)
+        => Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(offset.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+
+    private static int DecodeCursor(string? cursor)
+    {
+        if (string.IsNullOrWhiteSpace(cursor))
+            return 0;
+        try
+        {
+            var text = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(cursor));
+            return int.TryParse(text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var offset) && offset >= 0
+                ? offset
+                : 0;
+        }
+        catch (FormatException)
+        {
+            return 0;
+        }
+    }
+
+    private static string EscapeLike(string value)
+        => value.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
 
     private static string BuildStoragePath(Guid mediaGuid, int versionNum, string fileName)
     {

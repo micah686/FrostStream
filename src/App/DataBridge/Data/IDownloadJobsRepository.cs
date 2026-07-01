@@ -113,7 +113,30 @@ public interface IDownloadJobsRepository
     Task ClearProviderHaltRetryDispatchedAsync(Guid jobId, CancellationToken ct = default);
 
     Task<IReadOnlyList<ProviderHaltRetryCandidate>> GetDueProviderHaltRetriesAsync(Instant now, CancellationToken ct = default);
+
+    // ── Admin queue read surface (read-only; no schema migration) ────────────────────
+
+    /// <summary>
+    /// Returns a filtered, paged slice of the full download-job history for the admin queue view.
+    /// Ordering is total and deterministic so paging with the returned opaque cursor is stable.
+    /// </summary>
+    Task<DownloadQueuePage> QueryQueueAsync(DownloadQueueListRequest request, CancellationToken ct = default);
+
+    /// <summary>Returns the queue snapshot for a single job, or null when the job does not exist.</summary>
+    Task<DownloadQueueJobDto?> GetQueueJobAsync(Guid jobId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns the persisted event timeline for a job ordered by recorded time/id, or null when
+    /// the job does not exist (so callers can distinguish 404 from an empty timeline).
+    /// </summary>
+    Task<IReadOnlyList<DownloadQueueHistoryEntryDto>?> GetQueueHistoryAsync(Guid jobId, CancellationToken ct = default);
 }
+
+/// <summary>Result of <see cref="IDownloadJobsRepository.QueryQueueAsync"/>.</summary>
+public sealed record DownloadQueuePage(
+    IReadOnlyList<DownloadQueueJobDto> Items,
+    string? NextCursor,
+    int TotalCount);
 
 /// <summary>
 /// Result of <see cref="IDownloadJobsRepository.CheckSourceVersionAsync"/>.

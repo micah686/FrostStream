@@ -38,6 +38,14 @@ public static class EndpointIds
     public const string DownloadsCancel = "downloads.cancel";
     public const string DownloadsRestartHalted = "downloads.restart-halted";
     public const string DownloadsProgress = "downloads.progress";
+    public const string DownloadsQueueList = "downloads.queue.list";
+    public const string DownloadsQueueGet = "downloads.queue.get";
+    public const string DownloadsQueueHistory = "downloads.queue.history";
+    public const string DownloadsQueueStream = "downloads.queue.stream";
+    public const string DownloadsQueueProgress = "downloads.queue.progress";
+    public const string DownloadsQueuePriority = "downloads.queue.priority";
+    public const string DownloadsQueueCancel = "downloads.queue.cancel";
+    public const string DownloadsQueueRestart = "downloads.queue.restart";
     public const string ImportsLocalMedia = "imports.local-media";
 
     // Storage
@@ -221,6 +229,14 @@ public static class EndpointCatalog
         new(EndpointIds.DownloadsCancel, Bundles.Downloading),
         new(EndpointIds.DownloadsRestartHalted, Bundles.Downloading),
         new(EndpointIds.DownloadsProgress, Bundles.Downloading),
+        new(EndpointIds.DownloadsQueueList, Bundles.Downloading),
+        new(EndpointIds.DownloadsQueueGet, Bundles.Downloading),
+        new(EndpointIds.DownloadsQueueHistory, Bundles.Downloading),
+        new(EndpointIds.DownloadsQueueStream, Bundles.Downloading),
+        new(EndpointIds.DownloadsQueueProgress, Bundles.Downloading),
+        new(EndpointIds.DownloadsQueuePriority, Bundles.Downloading),
+        new(EndpointIds.DownloadsQueueCancel, Bundles.Downloading),
+        new(EndpointIds.DownloadsQueueRestart, Bundles.Downloading),
         new(EndpointIds.ImportsLocalMedia, Bundles.Downloading),
 
         new(EndpointIds.StorageLocalCreate, Bundles.Storage),

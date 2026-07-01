@@ -165,6 +165,7 @@ class Program
         builder.Services.AddHostedService<BackgroundJobConsumerService>();
         builder.Services.AddHostedService<DownloadSlotCoordinator>(p => p.GetRequiredService<DownloadSlotCoordinator>());
         builder.Services.AddHostedService<DownloadAdminConsumerService>();
+        builder.Services.AddHostedService<DownloadQueueConsumerService>();
         builder.Services.AddHostedService<DownloadRequestedIngressService>();
         builder.Services.AddHostedService<ProviderHaltRetryService>();
         builder.Services.AddHostedService<DownloadEventsConsumerService>();
