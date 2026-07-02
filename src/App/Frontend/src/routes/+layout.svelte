@@ -19,6 +19,7 @@
     RectangleListOutline,
     SearchOutline,
     ServerOutline,
+    ShieldCheckOutline,
     UserOutline
   } from 'flowbite-svelte-icons';
 
@@ -225,6 +226,15 @@
       <BellOutline class="h-5 w-5" />
     </Button>
     {#if data.user}
+      <Button
+        href="/admin"
+        color="dark"
+        class="h-10 w-10 border-0! bg-transparent! p-2.5! text-slate-400 hover:bg-slate-800! hover:text-white!"
+        aria-label="Administration"
+        title="Administration"
+      >
+        <ShieldCheckOutline class="h-5 w-5" />
+      </Button>
       <a
         href="/profile"
         aria-label={`Open profile for ${data.user.name}`}
