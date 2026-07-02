@@ -28,13 +28,24 @@ public sealed class BackgroundJobsTopology : ITopologySource
         yield return new StreamSpec
         {
             Name = StreamName.From(StreamNameValue),
+            // Only the JetStream background-job subjects may be captured here. Broad wildcards
+            // (e.g. "fs.cleanup.>") must not be used: they also capture core request/reply
+            // subjects (orphan admin, worker file ops, filesystem reconcile), and JetStream's
+            // publish-ack then races the responder's reply on the request inbox.
             Subjects =
             [
-                "fs.cleanup.>",
-                "fs.db.>",
-                "fs.index.>",
-                "fs.media.>",
-                "fs.channel.>"
+                BackgroundJobSubjects.ChannelUpdateCheckRequest,
+                BackgroundJobSubjects.ChannelAssetRefreshRequest,
+                BackgroundJobSubjects.ChannelMediaListRequest,
+                BackgroundJobSubjects.StaleDatabaseCleanupRequest,
+                BackgroundJobSubjects.WatchedItemAutoDeleteRequest,
+                BackgroundJobSubjects.ProcessedMessageCleanupRequest,
+                BackgroundJobSubjects.DatabaseMaintenanceRequest,
+                BackgroundJobSubjects.SearchReindexRequest,
+                BackgroundJobSubjects.FilesystemRescanRequest,
+                BackgroundJobSubjects.AudioRenditionEncodeRequest,
+                BackgroundJobSubjects.BackupRequest,
+                ScheduleSubjects.OrphanMetadataCleanupRequest
             ],
             MaxAge = TimeSpan.FromDays(7),
             RetentionPolicy = StreamRetention.WorkQueue,
