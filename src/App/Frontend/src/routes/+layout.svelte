@@ -54,7 +54,7 @@
   ];
 
   const serverNavigation: NavItem[] = [
-    { label: 'Download', icon: DownloadOutline },
+    { label: 'Download', icon: DownloadOutline, href: '/download' },
     { label: 'Jobs', icon: ServerOutline, count: 4 }
   ];
 
@@ -209,6 +209,7 @@
 
   <div class="ml-auto flex shrink-0 items-center gap-1.5 pl-3 sm:gap-2">
     <Button
+      href="/download"
       pill
       color="blue"
       class="hidden border-0! bg-blue-500! px-4! py-2! text-xs! font-semibold! hover:bg-blue-400! sm:flex"

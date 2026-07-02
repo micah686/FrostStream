@@ -25,7 +25,8 @@ public static class StartPostgres
         // WithDbGate requires CommunityToolkit.Aspire.Hosting.DbGate and
         // CommunityToolkit.Aspire.Hosting.PostgreSQL.Extensions at the same version.
         var server = builder.AddPostgres("postgres", user, password)
-            .WithDbGate();
+            .WithDbGate()
+            .WithDataVolume();
 
         return new PostgresResources(
             user,
