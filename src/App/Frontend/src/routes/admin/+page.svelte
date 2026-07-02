@@ -13,6 +13,7 @@
     TagOutline,
     TrashBinOutline
   } from 'flowbite-svelte-icons';
+  import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
   import {
     deleteStorage,
     listStorage,
@@ -42,6 +43,8 @@
   let storageLoading = $state(true);
   let storageError = $state<string | null>(null);
   let deletingKey = $state<string | null>(null);
+  let deleteTarget = $state<StorageConfig | null>(null);
+  let deleteModalOpen = $state(false);
 
   onMount(() => {
     void loadStorage();
@@ -60,18 +63,13 @@
   }
 
   async function removeStorage(storage: StorageConfig) {
-    const confirmed = window.confirm(
-      `Delete storage target "${storage.key}"? Media already stored there will no longer be reachable through this key.`
-    );
-    if (!confirmed) {
-      return;
-    }
-
-    deletingKey = storage.key;
-    storageError = null;
     try {
+      deletingKey = storage.key;
+      storageError = null;
       await deleteStorage(storage.key);
       storageTargets = storageTargets.filter((item) => item.key !== storage.key);
+      deleteTarget = null;
+      deleteModalOpen = false;
     } catch (err) {
       storageError = err instanceof Error ? err.message : 'Could not delete the storage target.';
     } finally {
@@ -198,7 +196,10 @@
                         title="Delete storage target"
                         aria-label={`Delete storage target ${storage.key}`}
                         disabled={deletingKey === storage.key}
-                        onclick={() => removeStorage(storage)}
+                        onclick={() => {
+                          deleteTarget = storage;
+                          deleteModalOpen = true;
+                        }}
                       >
                         {#if deletingKey === storage.key}
                           <Spinner size="4" />
@@ -237,4 +238,16 @@
       {/if}
     </div>
   </div>
+
+  <ConfirmDeleteModal
+    bind:open={deleteModalOpen}
+    title="Delete storage target"
+    message={deleteTarget ? `Delete storage target "${deleteTarget.key}"? Media already stored there will no longer be reachable through this key.` : ''}
+    confirmLabel="Delete storage"
+    onConfirm={async () => {
+      if (deleteTarget) {
+        await removeStorage(deleteTarget);
+      }
+    }}
+  />
 </section>

@@ -3,6 +3,7 @@
   import { goto } from '$app/navigation';
   import { Button, Spinner } from 'flowbite-svelte';
   import { ArrowLeftOutline, ExclamationCircleOutline, TrashBinOutline } from 'flowbite-svelte-icons';
+  import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
   import {
     deleteStorage,
     displayLocalPath,
@@ -23,6 +24,7 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
   let deleting = $state(false);
+  let deleteModalOpen = $state(false);
 
   onMount(async () => {
     try {
@@ -38,17 +40,11 @@
     if (!storage) {
       return;
     }
-    const confirmed = window.confirm(
-      `Delete storage target "${storage.key}"? Media already stored there will no longer be reachable through this key.`
-    );
-    if (!confirmed) {
-      return;
-    }
-
     deleting = true;
     error = null;
     try {
       await deleteStorage(storage.key);
+      deleteModalOpen = false;
       await goto('/admin');
     } catch (err) {
       error = err instanceof Error ? err.message : 'Could not delete the storage target.';
@@ -164,7 +160,7 @@
           color="dark"
           disabled={deleting}
           class="shrink-0 border-slate-700! bg-[#0f1420]! px-4! py-2! text-xs! font-semibold! text-slate-200! hover:border-red-500/60! hover:bg-red-500/10! hover:text-red-200! disabled:opacity-60"
-          onclick={removeStorage}
+          onclick={() => (deleteModalOpen = true)}
         >
           {#if deleting}
             <Spinner size="4" class="mr-1.5" />
@@ -220,4 +216,12 @@
       </div>
     </section>
   {/if}
+
+  <ConfirmDeleteModal
+    bind:open={deleteModalOpen}
+    title="Delete storage target"
+    message={storage ? `Delete storage target "${storage.key}"? Media already stored there will no longer be reachable through this key.` : ''}
+    confirmLabel="Delete storage"
+    onConfirm={removeStorage}
+  />
 </section>
