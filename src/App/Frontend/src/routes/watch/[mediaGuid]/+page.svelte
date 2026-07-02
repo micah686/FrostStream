@@ -27,6 +27,7 @@
     mediaGuid: string;
     title: string;
     description?: string | null;
+    thumbnailStoragePath?: string | null;
     durationSeconds?: number | null;
     releaseDate?: string | null;
     viewCount?: number | null;
@@ -57,6 +58,7 @@
   interface UpNextCard {
     mediaGuid: string;
     title: string;
+    thumbnailStoragePath?: string | null;
     durationSeconds?: number | null;
     releaseDate?: string | null;
     viewCount?: number | null;
@@ -81,6 +83,7 @@
 
   const mediaGuid = $derived(page.params.mediaGuid ?? '');
   const streamUrl = $derived(`/stream/${mediaGuid}`);
+  const posterUrl = $derived(detail?.thumbnailStoragePath ? `/stream/${mediaGuid}/thumbnail` : null);
 
   $effect(() => {
     if (mediaGuid) {
@@ -157,6 +160,16 @@
       .filter(Boolean)
       .join(' · ');
   }
+
+  function thumbnailUrl(card: UpNextCard): string | null {
+    return card.thumbnailStoragePath ? `/stream/${card.mediaGuid}/thumbnail` : null;
+  }
+
+  function hideBrokenImage(event: Event) {
+    if (event.currentTarget instanceof HTMLImageElement) {
+      event.currentTarget.hidden = true;
+    }
+  }
 </script>
 
 <svelte:head>
@@ -196,9 +209,9 @@
       <div class="aspect-video overflow-hidden rounded-2xl bg-black shadow-2xl shadow-black/30">
         {#key `${mediaGuid}:${playerTab}`}
           {#if playerTab === 'videojs'}
-            <VideoJs10Player src={streamUrl} />
+            <VideoJs10Player src={streamUrl} poster={posterUrl} />
           {:else}
-            <SveltePlayer src={streamUrl} />
+            <SveltePlayer src={streamUrl} poster={posterUrl} />
           {/if}
         {/key}
       </div>
@@ -381,6 +394,16 @@
               <span class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-xl font-black text-white/15">
                 {initialsFor(card.account.accountName)}
               </span>
+              {#if thumbnailUrl(card)}
+                <img
+                  src={thumbnailUrl(card)}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  class="absolute inset-0 h-full w-full object-cover"
+                  onerror={hideBrokenImage}
+                />
+              {/if}
               {#if formatDuration(card.durationSeconds)}
                 <span class="absolute bottom-1.5 right-1.5 rounded bg-black/75 px-1.5 py-0.5 text-[10px] font-semibold text-white">
                   {formatDuration(card.durationSeconds)}

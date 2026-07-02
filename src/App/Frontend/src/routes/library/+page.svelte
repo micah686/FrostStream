@@ -140,6 +140,16 @@
       .filter(Boolean)
       .join(' · ');
   }
+
+  function thumbnailUrl(card: MediaCard): string | null {
+    return card.thumbnailStoragePath ? `/stream/${card.mediaGuid}/thumbnail` : null;
+  }
+
+  function hideBrokenImage(event: Event) {
+    if (event.currentTarget instanceof HTMLImageElement) {
+      event.currentTarget.hidden = true;
+    }
+  }
 </script>
 
 <svelte:head>
@@ -272,6 +282,16 @@
               >
                 {initialsFor(card.account.accountName)}
               </span>
+              {#if thumbnailUrl(card)}
+                <img
+                  src={thumbnailUrl(card)}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  class="absolute inset-0 h-full w-full object-cover"
+                  onerror={hideBrokenImage}
+                />
+              {/if}
               <span
                 class="absolute left-3 top-3 rounded-md bg-black/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-300"
               >

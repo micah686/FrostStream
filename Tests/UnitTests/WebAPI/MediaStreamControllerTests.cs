@@ -145,6 +145,65 @@ public sealed class MediaStreamControllerTests
         await provider.DidNotReceive().GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
+    [Test]
+    public async Task GetThumbnail_Resolves_And_Returns_Cached_Image()
+    {
+        var mediaGuid = Guid.NewGuid();
+        var bus = Substitute.For<IMessageBus>();
+        var provider = Substitute.For<IBlobStorageProvider>();
+        var storage = Substitute.For<IBlobStorage>();
+        var stream = new MemoryStream([1, 2, 3]);
+        var location = ThumbnailLocation(mediaGuid, "storage-a", "thumbs/poster.jpg");
+
+        ArrangeThumbnailResolved(bus, mediaGuid, location);
+        provider.GetAsync("storage-a", Arg.Any<CancellationToken>()).Returns(storage);
+        storage.OpenReadAsync("thumbs/poster.jpg", Arg.Any<CancellationToken>()).Returns(stream);
+
+        var controller = CreateController(bus, provider);
+        var result = await controller.GetThumbnail(mediaGuid, CancellationToken.None);
+
+        var file = result.ShouldBeOfType<FileStreamResult>();
+        file.FileStream.ShouldBeSameAs(stream);
+        file.ContentType.ShouldBe("image/jpeg");
+        controller.Response.Headers.CacheControl.ToString().ShouldBe("private, max-age=86400");
+    }
+
+    [Test]
+    public async Task GetThumbnail_Maps_Missing_Thumbnail_And_Denies_Access()
+    {
+        var mediaGuid = Guid.NewGuid();
+        var bus = Substitute.For<IMessageBus>();
+        var provider = Substitute.For<IBlobStorageProvider>();
+
+        bus.RequestAsync<MediaThumbnailResolveRequestMessage, MediaThumbnailResolveResponseMessage>(
+                MediaStreamSubjects.ResolveThumbnail,
+                Arg.Any<MediaThumbnailResolveRequestMessage>(),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new MediaThumbnailResolveResponseMessage
+            {
+                Success = false,
+                ErrorCode = "not_found",
+                ErrorMessage = "missing"
+            });
+
+        var controller = CreateController(bus, provider);
+        var missing = await controller.GetThumbnail(mediaGuid, CancellationToken.None);
+        missing.ShouldBeOfType<NotFoundObjectResult>().Value.ShouldBe("missing");
+
+        bus.RequestAsync<MediaAccessCheckRequestMessage, MediaAccessCheckResponseMessage>(
+                MediaAccessSubjects.Check,
+                Arg.Any<MediaAccessCheckRequestMessage>(),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new MediaAccessCheckResponseMessage { IsAllowed = false, FailureReason = "media-restricted" });
+
+        var denied = await controller.GetThumbnail(mediaGuid, CancellationToken.None);
+
+        denied.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status403Forbidden);
+        await provider.DidNotReceive().GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
     private static MediaStreamController CreateController(
         IMessageBus bus,
         IBlobStorageProvider provider)
@@ -158,7 +217,13 @@ public sealed class MediaStreamControllerTests
                 Arg.Any<CancellationToken>())
             .Returns(new MediaAccessCheckResponseMessage { IsAllowed = true });
 
-        return new MediaStreamController(bus, provider, Substitute.For<ILogger<MediaStreamController>>());
+        return new MediaStreamController(bus, provider, Substitute.For<ILogger<MediaStreamController>>())
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext()
+            }
+        };
     }
 
     private static void ArrangeResolved(
@@ -189,6 +254,34 @@ public sealed class MediaStreamControllerTests
             StorageKey = storageKey,
             StoragePath = storagePath,
             Version = version
+        };
+
+    private static void ArrangeThumbnailResolved(
+        IMessageBus bus,
+        Guid mediaGuid,
+        MediaThumbnailLocationDto location)
+    {
+        bus.RequestAsync<MediaThumbnailResolveRequestMessage, MediaThumbnailResolveResponseMessage>(
+                MediaStreamSubjects.ResolveThumbnail,
+                Arg.Is<MediaThumbnailResolveRequestMessage>(request => request.MediaGuid == mediaGuid),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new MediaThumbnailResolveResponseMessage
+            {
+                Success = true,
+                Item = location
+            });
+    }
+
+    private static MediaThumbnailLocationDto ThumbnailLocation(
+        Guid mediaGuid,
+        string storageKey,
+        string storagePath)
+        => new()
+        {
+            MediaGuid = mediaGuid,
+            StorageKey = storageKey,
+            StoragePath = storagePath
         };
 
     private sealed class NonSeekableReadStream(byte[] bytes) : Stream

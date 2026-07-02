@@ -10,13 +10,22 @@ public sealed class MediaStreamQueryConsumerService(
     IServiceScopeFactory scopeFactory,
     ILogger<MediaStreamQueryConsumerService> logger) : SubscriptionBackgroundService
 {
-    protected override Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
-        => SubscribeAsync<MediaStreamResolveRequestMessage>(
+    protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
+    {
+        await SubscribeAsync<MediaStreamResolveRequestMessage>(
             messageBus,
             MediaStreamSubjects.Resolve,
             HandleResolveAsync,
             queueGroup: MediaStreamSubjects.ProcessorsQueueGroup,
             cancellationToken: stoppingToken);
+
+        await SubscribeAsync<MediaThumbnailResolveRequestMessage>(
+            messageBus,
+            MediaStreamSubjects.ResolveThumbnail,
+            HandleResolveThumbnailAsync,
+            queueGroup: MediaStreamSubjects.ProcessorsQueueGroup,
+            cancellationToken: stoppingToken);
+    }
 
     private async Task HandleResolveAsync(IMessageContext<MediaStreamResolveRequestMessage> context)
     {
@@ -54,6 +63,43 @@ public sealed class MediaStreamQueryConsumerService(
                 Success = false,
                 ErrorCode = "internal_error",
                 ErrorMessage = "Internal media stream service error."
+            });
+        }
+    }
+
+    private async Task HandleResolveThumbnailAsync(IMessageContext<MediaThumbnailResolveRequestMessage> context)
+    {
+        try
+        {
+            var request = context.Message;
+            var item = await scopeFactory.WithScopedAsync<IMediaThumbnailReadService, MediaThumbnailLocationDto?>(
+                service => service.ResolveAsync(request.MediaGuid));
+
+            await context.RespondAsync(item is null
+                ? new MediaThumbnailResolveResponseMessage
+                {
+                    Success = false,
+                    ErrorCode = "not_found",
+                    ErrorMessage = $"Thumbnail for '{request.MediaGuid}' was not found."
+                }
+                : new MediaThumbnailResolveResponseMessage
+                {
+                    Success = true,
+                    Item = item
+                });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                ex,
+                "Failed resolving thumbnail for {MediaGuid}.",
+                context.Message.MediaGuid);
+
+            await context.RespondAsync(new MediaThumbnailResolveResponseMessage
+            {
+                Success = false,
+                ErrorCode = "internal_error",
+                ErrorMessage = "Internal thumbnail service error."
             });
         }
     }

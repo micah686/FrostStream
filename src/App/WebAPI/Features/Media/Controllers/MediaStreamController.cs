@@ -175,6 +175,106 @@ public sealed class MediaStreamController(
         }
     }
 
+    [HttpGet("{mediaGuid:guid}/thumbnail")]
+    [HttpHead("{mediaGuid:guid}/thumbnail")]
+    [Endpoint(EndpointIds.MediaThumbnail)]
+    [EndpointSummary("Get an archived media thumbnail")]
+    [EndpointDescription("Resolves the stored thumbnail for an archived media item by GUID and streams it from the configured storage backend. The same watch-time access policy used for media playback is applied before the thumbnail is served.")]
+    public async Task<IActionResult> GetThumbnail(
+        Guid mediaGuid,
+        CancellationToken cancellationToken = default)
+    {
+        if (await CheckWatchAccessAsync(mediaGuid, cancellationToken) is { } denied)
+        {
+            return denied;
+        }
+
+        MediaThumbnailResolveResponseMessage? response;
+        try
+        {
+            response = await messageBus.RequestAsync<
+                MediaThumbnailResolveRequestMessage,
+                MediaThumbnailResolveResponseMessage>(
+                MediaStreamSubjects.ResolveThumbnail,
+                new MediaThumbnailResolveRequestMessage { MediaGuid = mediaGuid },
+                QueryTimeout,
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed resolving thumbnail for {MediaGuid}.", mediaGuid);
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable.");
+        }
+
+        if (response is null)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable.");
+        }
+
+        if (!response.Success)
+        {
+            return response.ErrorCode == "not_found"
+                ? NotFound(response.ErrorMessage ?? "Thumbnail was not found.")
+                : StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    response.ErrorMessage ?? "Thumbnail lookup failed.");
+        }
+
+        if (response.Item is null)
+        {
+            return StatusCode(
+                StatusCodes.Status502BadGateway,
+                "DataBridge returned an invalid thumbnail response.");
+        }
+
+        var location = response.Item;
+        try
+        {
+            var storage = await blobStorageProvider.GetAsync(location.StorageKey, cancellationToken);
+            var stream = await storage.OpenReadAsync(location.StoragePath, cancellationToken);
+            if (stream is null)
+            {
+                return NotFound("The selected thumbnail is missing from storage.");
+            }
+
+            var contentType = ContentTypeProvider.TryGetContentType(location.StoragePath, out var resolvedContentType)
+                ? resolvedContentType
+                : "application/octet-stream";
+
+            Response.Headers.CacheControl = "private, max-age=86400";
+            return File(stream, contentType);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (FileNotFoundException)
+        {
+            return NotFound("The selected thumbnail is missing from storage.");
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return NotFound("The selected thumbnail is missing from storage.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                ex,
+                "Failed opening thumbnail {MediaGuid} from storage {StorageKey} at {StoragePath}.",
+                location.MediaGuid,
+                location.StorageKey,
+                location.StoragePath);
+
+            return StatusCode(
+                StatusCodes.Status502BadGateway,
+                "The selected thumbnail could not be opened.");
+        }
+    }
+
     [HttpGet("audio/{mediaGuid:guid}/")]
     [Endpoint(EndpointIds.MediaAudioStream)]
     [EndpointSummary("Stream a cached audio rendition")]
