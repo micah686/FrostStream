@@ -594,7 +594,38 @@ public sealed class DownloadJobsRepository(
         var query = db.DownloadJobs.AsNoTracking().AsQueryable();
 
         if (request.State is { } state)
+        {
             query = query.Where(x => x.State == state);
+        }
+        else
+        {
+            query = request.StateGroup switch
+            {
+                DownloadQueueStateGroup.Active => query.Where(x =>
+                    x.State == DownloadJobState.MetadataPending
+                    || x.State == DownloadJobState.MetadataResolved
+                    || x.State == DownloadJobState.DownloadPending
+                    || x.State == DownloadJobState.UploadPending
+                    || x.State == DownloadJobState.CommitPending
+                    || x.State == DownloadJobState.Compensating
+                    || x.State == DownloadJobState.Cancelling),
+                DownloadQueueStateGroup.Queued => query.Where(x =>
+                    x.State == DownloadJobState.Queued
+                    || x.State == DownloadJobState.DownloadQueued),
+                DownloadQueueStateGroup.Failed => query.Where(x =>
+                    x.State == DownloadJobState.FailedTransient
+                    || x.State == DownloadJobState.FailedPermanent
+                    || x.State == DownloadJobState.DeadLettered
+                    || x.State == DownloadJobState.ProviderHalted),
+                DownloadQueueStateGroup.Done => query.Where(x =>
+                    x.State == DownloadJobState.Completed
+                    || x.State == DownloadJobState.AlreadyDownloaded),
+                DownloadQueueStateGroup.Cancelled => query.Where(x =>
+                    x.State == DownloadJobState.Cancelled
+                    || x.State == DownloadJobState.Ignored),
+                _ => query
+            };
+        }
         if (request.SourceKind is { } sourceKind)
             query = query.Where(x => x.SourceKind == sourceKind);
 
@@ -615,7 +646,13 @@ public sealed class DownloadJobsRepository(
         if (search is not null)
         {
             var pattern = $"%{EscapeLike(search)}%";
-            query = query.Where(x => EF.Functions.ILike(x.SourceUrl, pattern, "\\"));
+            query = query.Where(x =>
+                EF.Functions.ILike(x.SourceUrl, pattern, "\\")
+                || EF.Functions.ILike(x.JobId.ToString(), pattern, "\\")
+                || (x.RequestedBy != null && EF.Functions.ILike(x.RequestedBy, pattern, "\\"))
+                || (x.StorageKey != null && EF.Functions.ILike(x.StorageKey, pattern, "\\"))
+                || (x.FailureCode != null && EF.Functions.ILike(x.FailureCode, pattern, "\\"))
+                || (x.FailureMessage != null && EF.Functions.ILike(x.FailureMessage, pattern, "\\")));
         }
 
         var totalCount = await query.CountAsync(ct);

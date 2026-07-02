@@ -192,10 +192,20 @@ public sealed class DownloadJobsRepositoryTests
     public async Task QueryQueueAsync_Filters_By_State_SourceKind_RequestedBy_StorageKey_And_Query()
     {
         await using var db = Fixture.CreateDb();
-        db.DownloadJobs.Add(Job(Guid.NewGuid(), DownloadJobState.Completed, sourceUrl: "https://example.test/cats", requestedBy: "alice", storageKey: "nas", sourceKind: DownloadSourceKind.Playlist));
+        var completedId = Guid.NewGuid();
+        var failedId = Guid.NewGuid();
+        db.DownloadJobs.Add(Job(completedId, DownloadJobState.Completed, sourceUrl: "https://example.test/cats", requestedBy: "alice", storageKey: "nas", sourceKind: DownloadSourceKind.Playlist));
         db.DownloadJobs.Add(Job(Guid.NewGuid(), DownloadJobState.Completed, sourceUrl: "https://example.test/dogs", requestedBy: "bob", storageKey: "s3", sourceKind: DownloadSourceKind.Direct));
         db.DownloadJobs.Add(Job(Guid.NewGuid(), DownloadJobState.Cancelled, sourceUrl: "https://example.test/cats-2", requestedBy: "alice", storageKey: "nas", sourceKind: DownloadSourceKind.Playlist));
+        db.DownloadJobs.Add(Job(Guid.NewGuid(), DownloadJobState.DownloadPending, sourceUrl: "https://example.test/active"));
+        db.DownloadJobs.Add(Job(Guid.NewGuid(), DownloadJobState.DownloadQueued, sourceUrl: "https://example.test/queued"));
+        db.DownloadJobs.Add(Job(failedId, DownloadJobState.ProviderHalted, sourceUrl: "https://example.test/halted"));
         await db.SaveChangesAsync();
+        await db.DownloadJobs
+            .Where(x => x.JobId == failedId)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.FailureCode, "bot_check")
+                .SetProperty(x => x.FailureMessage, "Provider requested verification"));
         var repository = new DownloadJobsRepository(db, SystemClock.Instance);
 
         (await repository.QueryQueueAsync(new DownloadQueueListRequest { State = DownloadJobState.Completed }))
@@ -209,6 +219,20 @@ public sealed class DownloadJobsRepositoryTests
         // Case-insensitive substring match against the source URL.
         (await repository.QueryQueueAsync(new DownloadQueueListRequest { Query = "CATS" }))
             .TotalCount.ShouldBe(2);
+        (await repository.QueryQueueAsync(new DownloadQueueListRequest { Query = completedId.ToString()[..8] }))
+            .Items.ShouldHaveSingleItem().JobId.ShouldBe(completedId);
+        (await repository.QueryQueueAsync(new DownloadQueueListRequest { Query = "bot_check" }))
+            .Items.ShouldHaveSingleItem().JobId.ShouldBe(failedId);
+        (await repository.QueryQueueAsync(new DownloadQueueListRequest { StateGroup = DownloadQueueStateGroup.Active }))
+            .Items.ShouldHaveSingleItem().State.ShouldBe(DownloadJobState.DownloadPending);
+        (await repository.QueryQueueAsync(new DownloadQueueListRequest { StateGroup = DownloadQueueStateGroup.Queued }))
+            .Items.ShouldHaveSingleItem().State.ShouldBe(DownloadJobState.DownloadQueued);
+        (await repository.QueryQueueAsync(new DownloadQueueListRequest { StateGroup = DownloadQueueStateGroup.Failed }))
+            .Items.ShouldHaveSingleItem().JobId.ShouldBe(failedId);
+        (await repository.QueryQueueAsync(new DownloadQueueListRequest { StateGroup = DownloadQueueStateGroup.Done }))
+            .TotalCount.ShouldBe(2);
+        (await repository.QueryQueueAsync(new DownloadQueueListRequest { StateGroup = DownloadQueueStateGroup.Cancelled }))
+            .Items.ShouldHaveSingleItem().State.ShouldBe(DownloadJobState.Cancelled);
 
         var combined = await repository.QueryQueueAsync(new DownloadQueueListRequest
         {

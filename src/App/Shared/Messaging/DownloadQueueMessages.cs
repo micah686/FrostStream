@@ -46,6 +46,16 @@ public enum DownloadQueueSort
     Priority = 1
 }
 
+public enum DownloadQueueStateGroup
+{
+    All = 0,
+    Active = 1,
+    Queued = 2,
+    Failed = 3,
+    Done = 4,
+    Cancelled = 5
+}
+
 /// <summary>
 /// Request for a paged slice of the full download-job history with optional filters
 /// (NATS Core request/reply). Progress is intentionally excluded — it is live-only.
@@ -53,6 +63,7 @@ public enum DownloadQueueSort
 public sealed record DownloadQueueListRequest
 {
     public DownloadJobState? State { get; init; }
+    public DownloadQueueStateGroup StateGroup { get; init; } = DownloadQueueStateGroup.All;
     public DownloadSourceKind? SourceKind { get; init; }
     public string? RequestedBy { get; init; }
     public string? StorageKey { get; init; }

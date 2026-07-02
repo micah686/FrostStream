@@ -33,6 +33,7 @@ export interface DownloadQueueListResponse {
 
 export interface QueueListParams {
   state?: DownloadJobState;
+  stateGroup?: 'all' | 'active' | 'queued' | 'failed' | 'done' | 'cancelled';
   sourceKind?: DownloadSourceKind;
   requestedBy?: string;
   storageKey?: string;

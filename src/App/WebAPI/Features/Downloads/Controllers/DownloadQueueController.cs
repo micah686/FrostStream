@@ -57,6 +57,7 @@ public sealed class DownloadQueueController(
         [FromQuery] int limit = 50,
         [FromQuery] string? cursor = null,
         [FromQuery] string sort = "createdAt",
+        [FromQuery] DownloadQueueStateGroup stateGroup = DownloadQueueStateGroup.All,
         CancellationToken cancellationToken = default)
     {
         var normalizedSort = sort.Trim().ToLowerInvariant() switch
@@ -71,6 +72,7 @@ public sealed class DownloadQueueController(
         var request = new DownloadQueueListRequest
         {
             State = state,
+            StateGroup = stateGroup,
             SourceKind = sourceKind,
             RequestedBy = requestedBy,
             StorageKey = storageKey,

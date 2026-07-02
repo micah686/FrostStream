@@ -1,9 +1,11 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import { Button, Input, Spinner } from 'flowbite-svelte';
+  import { Button, Input, Select, Spinner } from 'flowbite-svelte';
   import {
     ArrowsRepeatOutline,
     ArrowUpRightFromSquareOutline,
+    ChevronLeftOutline,
+    ChevronRightOutline,
     FireOutline,
     CheckCircleOutline,
     ClockOutline,
@@ -23,22 +25,35 @@
   let queueState = $state<DownloadQueueState>({
     rows: [],
     totalCount: 0,
+    nextCursor: null,
     connected: false,
     loading: true,
     error: null
   });
   let activeFilter = $state<FilterKey>('all');
   let query = $state('');
+  let pageSize = $state(50);
+  let page = $state(1);
+  let cursor = $state<string | undefined>(undefined);
+  let cursorStack = $state<string[]>([]);
   let actionBusy = $state<Record<string, string>>({});
   let actionError = $state<string | null>(null);
   let now = $state(Date.now());
+  let searchTimer: number | undefined;
 
   const unsubscribe = queue.subscribe((value) => {
     queueState = value;
   });
 
+  const pageSizeOptions = [
+    { value: 25, name: '25 per page' },
+    { value: 50, name: '50 per page' },
+    { value: 100, name: '100 per page' },
+    { value: 200, name: '200 per page' }
+  ];
+
   const tabs = $derived([
-    { key: 'all' as const, label: 'All', count: queueState.rows.length },
+    { key: 'all' as const, label: 'All', count: activeFilter === 'all' ? queueState.totalCount : null },
     { key: 'active' as const, label: 'Active', count: queueState.rows.filter((row) => isActive(row.job.state)).length },
     { key: 'queued' as const, label: 'Queued', count: queueState.rows.filter((row) => isQueued(row.job.state)).length },
     { key: 'failed' as const, label: 'Failed', count: queueState.rows.filter((row) => isFailed(row.job.state)).length },
@@ -49,10 +64,6 @@
       count: queueState.rows.filter((row) => isCancelled(row.job.state)).length
     }
   ]);
-
-  const filteredRows = $derived(
-    queueState.rows.filter((row) => matchesFilter(row, activeFilter) && matchesQuery(row, query))
-  );
 
   const activeCount = $derived(queueState.rows.filter((row) => isActive(row.job.state)).length);
   const queuedCount = $derived(queueState.rows.filter((row) => isQueued(row.job.state)).length);
@@ -66,7 +77,12 @@
     const timer = window.setInterval(() => {
       now = Date.now();
     }, 1000);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearInterval(timer);
+      if (searchTimer) {
+        window.clearTimeout(searchTimer);
+      }
+    };
   });
 
   onDestroy(() => {
@@ -81,6 +97,69 @@
     } catch (err) {
       actionError = err instanceof Error ? err.message : 'Could not refresh the queue.';
     }
+  }
+
+  async function applyQueueParams() {
+    await queue.setParams({
+      stateGroup: activeFilter,
+      q: query.trim() || undefined,
+      limit: pageSize,
+      cursor,
+      sort: activeFilter === 'queued' ? 'priority' : 'createdAt'
+    });
+  }
+
+  function resetPaging(): void {
+    page = 1;
+    cursor = undefined;
+    cursorStack = [];
+  }
+
+  async function changeFilter(filter: FilterKey): Promise<void> {
+    if (activeFilter === filter) {
+      return;
+    }
+    activeFilter = filter;
+    resetPaging();
+    await applyQueueParams();
+  }
+
+  function scheduleSearch(): void {
+    resetPaging();
+    if (searchTimer) {
+      window.clearTimeout(searchTimer);
+    }
+    searchTimer = window.setTimeout(() => {
+      void applyQueueParams();
+    }, 300);
+  }
+
+  async function changePageSize(): Promise<void> {
+    pageSize = Number(pageSize);
+    resetPaging();
+    await applyQueueParams();
+  }
+
+  async function nextPage(): Promise<void> {
+    if (!queueState.nextCursor) {
+      return;
+    }
+    cursorStack = [...cursorStack, cursor ?? ''];
+    cursor = queueState.nextCursor;
+    page += 1;
+    await applyQueueParams();
+  }
+
+  async function previousPage(): Promise<void> {
+    if (page <= 1) {
+      return;
+    }
+    const previousStack = cursorStack.slice(0, -1);
+    const previousCursor = cursorStack.at(-1);
+    cursorStack = previousStack;
+    cursor = previousCursor || undefined;
+    page = Math.max(1, page - 1);
+    await applyQueueParams();
   }
 
   async function cancelDownload(row: QueueRow) {
@@ -117,53 +196,13 @@
     actionBusy = { ...actionBusy, [jobId]: action };
     try {
       await fn();
-      await queue.refresh();
+      await applyQueueParams();
     } catch (err) {
       actionError = err instanceof Error ? err.message : `Could not ${action} the job.`;
     } finally {
       const { [jobId]: _removed, ...rest } = actionBusy;
       actionBusy = rest;
     }
-  }
-
-  function matchesFilter(row: QueueRow, filter: FilterKey): boolean {
-    if (filter === 'all') {
-      return true;
-    }
-    if (filter === 'active') {
-      return isActive(row.job.state);
-    }
-    if (filter === 'queued') {
-      return isQueued(row.job.state);
-    }
-    if (filter === 'failed') {
-      return isFailed(row.job.state);
-    }
-    if (filter === 'done') {
-      return isDone(row.job.state);
-    }
-    return isCancelled(row.job.state);
-  }
-
-  function matchesQuery(row: QueueRow, value: string): boolean {
-    const needle = value.trim().toLowerCase();
-    if (!needle) {
-      return true;
-    }
-
-    const job = row.job;
-    return [
-      job.sourceUrl,
-      job.storageKey,
-      job.sourceKind,
-      job.state,
-      job.jobId,
-      job.requestedBy,
-      job.failureCode,
-      job.failureMessage
-    ]
-      .filter(Boolean)
-      .some((field) => String(field).toLowerCase().includes(needle));
   }
 
   function normalizeState(state: string): string {
@@ -374,7 +413,7 @@
     <div>
       <h1 id="jobs-title" class="text-2xl font-bold tracking-tight text-white">Jobs</h1>
       <p class="mt-1 text-sm text-slate-500">
-        Download queue · {activeCount} active · {queuedCount} queued · {failedCount} failed
+        Download queue · page {page} · {queueState.rows.length} shown · {queueState.totalCount} matching
       </p>
     </div>
 
@@ -447,7 +486,7 @@
       {#each tabs as tab}
         <button
           type="button"
-          onclick={() => (activeFilter = tab.key)}
+          onclick={() => changeFilter(tab.key)}
           class={[
             'inline-flex h-9 shrink-0 items-center gap-2 rounded-full px-4 text-xs font-semibold transition',
             activeFilter === tab.key
@@ -457,25 +496,37 @@
           aria-current={activeFilter === tab.key ? 'page' : undefined}
         >
           {tab.label}
-          <span
-            class={[
-              'rounded-full px-1.5 py-0.5 text-[10px]',
-              activeFilter === tab.key ? 'bg-slate-300 text-slate-800' : 'bg-slate-950/50 text-slate-500'
-            ]}
-          >
-            {tab.count}
-          </span>
+          {#if tab.count !== null}
+            <span
+              class={[
+                'rounded-full px-1.5 py-0.5 text-[10px]',
+                activeFilter === tab.key ? 'bg-slate-300 text-slate-800' : 'bg-slate-950/50 text-slate-500'
+              ]}
+            >
+              {tab.count}
+            </span>
+          {/if}
         </button>
       {/each}
     </div>
 
-    <Input
-      type="search"
-      bind:value={query}
-      aria-label="Search jobs"
-      placeholder="Search source, job id, storage..."
-      class="h-10 w-full border-slate-800! bg-slate-900/80! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500! lg:w-80"
-    />
+    <div class="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
+      <Select
+        items={pageSizeOptions}
+        bind:value={pageSize}
+        onchange={changePageSize}
+        aria-label="Jobs per page"
+        class="h-10 w-full border-slate-800! bg-slate-900/80! text-sm! text-slate-300! focus:border-blue-500! focus:ring-blue-500! sm:w-40"
+      />
+      <Input
+        type="search"
+        bind:value={query}
+        oninput={scheduleSearch}
+        aria-label="Search jobs"
+        placeholder="Search source, job id, storage..."
+        class="h-10 w-full border-slate-800! bg-slate-900/80! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500! lg:w-80"
+      />
+    </div>
   </div>
 
   {#if queueState.error || actionError}
@@ -492,7 +543,7 @@
     <div class="mt-16 flex justify-center">
       <Spinner size="8" />
     </div>
-  {:else if filteredRows.length === 0}
+  {:else if queueState.rows.length === 0}
     <div class="mt-8 rounded-xl border border-slate-800/80 bg-slate-900/40 p-10 text-center">
       <ServerOutline class="mx-auto h-10 w-10 text-slate-700" />
       <p class="mt-4 text-sm font-semibold text-slate-300">No jobs match this view</p>
@@ -500,7 +551,7 @@
     </div>
   {:else}
     <div class="mt-5 space-y-2">
-      {#each filteredRows as row (row.job.jobId)}
+      {#each queueState.rows as row (row.job.jobId)}
         {@const job = row.job}
         {@const provider = providerFor(job.sourceUrl)}
         {@const percent = percentFor(row)}
@@ -663,6 +714,33 @@
           </div>
         </article>
       {/each}
+    </div>
+
+    <div class="mt-6 flex flex-col gap-3 border-t border-slate-800/70 pt-5 sm:flex-row sm:items-center sm:justify-between">
+      <p class="text-xs text-slate-600">
+        Showing {Math.min((page - 1) * pageSize + 1, queueState.totalCount)}-{Math.min(page * pageSize, queueState.totalCount)}
+        of {queueState.totalCount}
+      </p>
+      <div class="flex gap-2">
+        <Button
+          color="dark"
+          disabled={page <= 1 || queueState.loading}
+          onclick={previousPage}
+          class="border-slate-700! bg-slate-900! px-3! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800! disabled:opacity-40"
+        >
+          <ChevronLeftOutline class="mr-1 h-3.5 w-3.5" />
+          Previous
+        </Button>
+        <Button
+          color="dark"
+          disabled={!queueState.nextCursor || queueState.loading}
+          onclick={nextPage}
+          class="border-slate-700! bg-slate-900! px-3! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800! disabled:opacity-40"
+        >
+          Next
+          <ChevronRightOutline class="ml-1 h-3.5 w-3.5" />
+        </Button>
+      </div>
     </div>
   {/if}
 </section>
