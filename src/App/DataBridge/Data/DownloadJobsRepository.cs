@@ -94,8 +94,25 @@ public sealed class DownloadJobsRepository(
     public async Task UpdateStateAsync(Guid jobId, DownloadJobState state, CancellationToken ct = default)
     {
         var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
-        if ((job.State is DownloadJobState.Cancelling or DownloadJobState.Cancelled) && state != DownloadJobState.Cancelled)
+        if (job.State is DownloadJobState.Cancelled && state is DownloadJobState.Queued)
+        {
+            job.FailureKind = null;
+            job.FailureCode = null;
+            job.FailureMessage = null;
+            job.CompletedAt = null;
+        }
+        else if (job.State is DownloadJobState.ProviderHalted && state is DownloadJobState.Queued)
+        {
+            job.FailureKind = null;
+            job.FailureCode = null;
+            job.FailureMessage = null;
+            job.ProviderHaltRetryAt = null;
+            job.ProviderHaltRetryDispatchedAt = null;
+        }
+        else if ((job.State is DownloadJobState.Cancelling or DownloadJobState.Cancelled) && state != DownloadJobState.Cancelled)
+        {
             return;
+        }
 
         var previousState = job.State;
         job.State = state;

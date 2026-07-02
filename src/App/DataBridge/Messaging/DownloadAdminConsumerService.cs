@@ -1,5 +1,7 @@
 using DataBridge.Data;
 using DataBridge.Flows;
+using Cleipnir.ResilientFunctions.Domain;
+using Cleipnir.ResilientFunctions.Domain.Exceptions;
 using Conduit.NATS;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -14,7 +16,6 @@ namespace DataBridge.Messaging;
 /// </summary>
 public sealed class DownloadAdminConsumerService(
     IMessageBus messageBus,
-    IJetStreamPublisher publisher,
     IServiceScopeFactory scopeFactory,
     DownloadSlotCoordinator slotCoordinator,
     DownloadArchiveFlows flows,
@@ -99,6 +100,7 @@ public sealed class DownloadAdminConsumerService(
         try
         {
             DownloadRequested? originalRequest;
+            DownloadJobState restartFromState;
             using (var scope = scopeFactory.CreateScope())
             {
                 var repo = scope.ServiceProvider.GetRequiredService<IDownloadJobsRepository>();
@@ -114,16 +116,17 @@ public sealed class DownloadAdminConsumerService(
                     return;
                 }
 
-                if (job.State is not DownloadJobState.ProviderHalted)
+                if (job.State is not (DownloadJobState.ProviderHalted or DownloadJobState.Cancelled))
                 {
                     await context.RespondAsync(new RestartHaltedDownloadResponse
                     {
                         Success = false,
                         ErrorCode = "not_halted",
-                        ErrorMessage = $"Job '{req.JobId}' is not halted."
+                        ErrorMessage = $"Job '{req.JobId}' cannot be restarted from state {job.State}."
                     });
                     return;
                 }
+                restartFromState = job.State.Value;
 
                 originalRequest = await repo.GetOriginalRequestAsync(req.JobId);
                 if (originalRequest is null)
@@ -137,7 +140,8 @@ public sealed class DownloadAdminConsumerService(
                     return;
                 }
 
-                await repo.MarkProviderHaltRetryDispatchedAsync(req.JobId);
+                if (restartFromState is DownloadJobState.ProviderHalted)
+                    await repo.MarkProviderHaltRetryDispatchedAsync(req.JobId);
             }
 
             var replay = originalRequest with
@@ -147,15 +151,36 @@ public sealed class DownloadAdminConsumerService(
                 OperationKey = $"job/{req.JobId:N}/restart/{Guid.NewGuid():N}",
                 OccurredAt = clock.GetCurrentInstant(),
                 Attempt = originalRequest.Attempt + 1,
-                ResumeFromHaltedState = true
+                ResumeFromHaltedState = restartFromState is DownloadJobState.ProviderHalted
             };
 
-            await publisher.PublishAsync(
-                DownloadSubjects.DownloadRequested,
-                replay,
-                messageId: replay.MessageId.ToString("N"));
+            try
+            {
+                var controlPanel = (await flows.ControlPanel(new FlowInstance(req.JobId.ToString("N"))))!;
+                if (restartFromState is DownloadJobState.Cancelled)
+                    await ClearReplayStateAsync(controlPanel);
+                controlPanel.Param = replay;
+                await controlPanel.Restart(clearFailures: restartFromState is DownloadJobState.ProviderHalted, refresh: false);
+            }
+            catch (InvocationSuspendedException)
+            {
+                logger.LogWarning(
+                    "DownloadArchiveFlow suspended after restart for JobId {JobId}; treating restart as accepted.",
+                    req.JobId);
+            }
 
-            logger.LogInformation("Restarted halted download JobId {JobId}.", req.JobId);
+            using (var scope = scopeFactory.CreateScope())
+            {
+                var repo = scope.ServiceProvider.GetRequiredService<IDownloadJobsRepository>();
+                await repo.RecordHistoryAsync(
+                    replay.JobId,
+                    replay.MessageId,
+                    replay.OperationKey,
+                    nameof(DownloadRequested),
+                    System.Text.Json.JsonSerializer.Serialize(replay));
+            }
+
+            logger.LogInformation("Restarted download JobId {JobId} from state {State}.", req.JobId, restartFromState);
 
             await context.RespondAsync(new RestartHaltedDownloadResponse
             {
@@ -184,6 +209,15 @@ public sealed class DownloadAdminConsumerService(
                 ErrorMessage = "Failed to restart halted download."
             });
         }
+    }
+
+    private static async Task ClearReplayStateAsync(Cleipnir.ResilientFunctions.Domain.ControlPanel<DownloadRequested> controlPanel)
+    {
+        var effectIds = (await controlPanel.Effects.AllIds).ToList();
+        foreach (var effectId in effectIds)
+            await controlPanel.Effects.Remove(effectId);
+
+        await controlPanel.Messages.Clear();
     }
 
     private async Task HandleCancelAsync(IMessageContext<CancelDownloadRequest> context)
@@ -215,7 +249,7 @@ public sealed class DownloadAdminConsumerService(
                 await SendCancelToFlowAsync(req, decision.CorrelationId!.Value);
             }
 
-            if (decision.PreviousState is DownloadJobState.DownloadPending or DownloadJobState.Cancelling)
+            if (decision.PreviousState is DownloadJobState.DownloadQueued or DownloadJobState.DownloadPending or DownloadJobState.Cancelling)
             {
                 await messageBus.PublishAsync(
                     DownloadSubjects.CancelActiveDownloadCommand,

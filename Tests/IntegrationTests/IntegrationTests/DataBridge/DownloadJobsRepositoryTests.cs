@@ -166,6 +166,29 @@ public sealed class DownloadJobsRepositoryTests
     }
 
     [Test]
+    public async Task UpdateStateAsync_Allows_Cancelled_Job_To_Requeue_For_Restart()
+    {
+        var jobId = Guid.NewGuid();
+        await using var db = Fixture.CreateDb();
+        db.DownloadJobs.Add(Job(jobId, DownloadJobState.Cancelling));
+        await db.SaveChangesAsync();
+
+        var notifier = new CapturingStateNotifier();
+        var repository = new DownloadJobsRepository(db, SystemClock.Instance, notifier);
+
+        await repository.MarkCancelledAsync(jobId, "cancelled cleanly");
+        await repository.UpdateStateAsync(jobId, DownloadJobState.Queued);
+
+        var job = await db.DownloadJobs.SingleAsync(x => x.JobId == jobId);
+        job.State.ShouldBe(DownloadJobState.Queued);
+        job.FailureKind.ShouldBeNull();
+        job.FailureCode.ShouldBeNull();
+        job.FailureMessage.ShouldBeNull();
+        job.CompletedAt.ShouldBeNull();
+        notifier.Calls[^1].ShouldBe((jobId, DownloadJobState.Queued, DownloadJobState.Cancelled));
+    }
+
+    [Test]
     public async Task QueryQueueAsync_Filters_By_State_SourceKind_RequestedBy_StorageKey_And_Query()
     {
         await using var db = Fixture.CreateDb();

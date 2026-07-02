@@ -122,6 +122,12 @@ public class DownloadArchiveFlow(
 
         // STEP 3: download ----------------------------------------------------
         await Capture(() => Update(jobId, DownloadJobState.DownloadPending));
+        if (await Capture(() => IsCancelling(jobId)))
+        {
+            await Capture(() => slotCoordinator.ReleaseSlotAsync(workerTag));
+            await Capture(() => Cancel(jobId, "Download cancelled by request."));
+            return;
+        }
         var downloaded = await RunDownloadStep(request, jobInstance, workerTag);
         // Release immediately after the download (regardless of outcome) so the next
         // highest-priority job can start while we finish upload/commit for this one.

@@ -568,9 +568,9 @@ public sealed record DownloadFailed : IFlowMessage
 }
 
 /// <summary>
-/// Request to restart a download job that was halted because the provider demanded bot
-/// verification. The DataBridge admin service replays the original request payload with
-/// <see cref="DownloadRequested.ResumeFromHaltedState"/> enabled.
+/// Request to restart a download job from a restartable terminal state. Provider-halted jobs
+/// replay with <see cref="DownloadRequested.ResumeFromHaltedState"/> enabled; cancelled jobs
+/// replay as a fresh run.
 /// </summary>
 public sealed record RestartHaltedDownloadRequest
 {

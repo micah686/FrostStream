@@ -52,7 +52,9 @@ public sealed class DownloadCommandsConsumerService(
     private const string MediaFileBase = "media";
     private static readonly StreamName Stream = StreamName.From(DownloadTopology.StreamNameValue);
     private static readonly TimeSpan StorageProbeTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan PendingCancellationTtl = TimeSpan.FromMinutes(30);
     private readonly ConcurrentDictionary<Guid, CancellationTokenSource> _activeDownloadCancellations = new();
+    private readonly ConcurrentDictionary<Guid, DateTimeOffset> _pendingDownloadCancellations = new();
     private ISubscription? _cancelSubscription;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -292,6 +294,11 @@ public sealed class DownloadCommandsConsumerService(
 
             if (!_activeDownloadCancellations.TryAdd(cmd.JobId, downloadCts))
                 throw new InvalidOperationException($"Download job {cmd.JobId} is already active on this worker.");
+            if (_pendingDownloadCancellations.TryRemove(cmd.JobId, out _))
+            {
+                logger.LogInformation("Applying pending cancellation to active download for JobId {JobId}.", cmd.JobId);
+                downloadCts.Cancel();
+            }
 
             Directory.CreateDirectory(tempDirectory);
 
@@ -400,6 +407,7 @@ public sealed class DownloadCommandsConsumerService(
         finally
         {
             _activeDownloadCancellations.TryRemove(cmd.JobId, out _);
+            _pendingDownloadCancellations.TryRemove(cmd.JobId, out _);
             DeleteCookieScratch(cookieScratch);
         }
     }
@@ -418,10 +426,22 @@ public sealed class DownloadCommandsConsumerService(
         }
         else
         {
-            logger.LogDebug("Ignoring cancel request for JobId {JobId}; no active download on this worker.", cmd.JobId);
+            CleanupPendingDownloadCancellations();
+            _pendingDownloadCancellations[cmd.JobId] = DateTimeOffset.UtcNow;
+            logger.LogDebug("Recorded pending cancel request for JobId {JobId}; no active download on this worker.", cmd.JobId);
         }
 
         return Task.CompletedTask;
+    }
+
+    private void CleanupPendingDownloadCancellations()
+    {
+        var cutoff = DateTimeOffset.UtcNow.Subtract(PendingCancellationTtl);
+        foreach (var (jobId, recordedAt) in _pendingDownloadCancellations)
+        {
+            if (recordedAt < cutoff)
+                _pendingDownloadCancellations.TryRemove(jobId, out _);
+        }
     }
 
     private async Task HandleUploadObjectAsync(IJsMessageContext<UploadObjectCommand> context)

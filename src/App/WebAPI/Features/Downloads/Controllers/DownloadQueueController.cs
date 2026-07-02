@@ -346,8 +346,8 @@ public sealed class DownloadQueueController(
 
     [HttpPost("{jobId:guid}/restart")]
     [Endpoint(EndpointIds.DownloadsQueueRestart)]
-    [EndpointSummary("Restart a halted download job")]
-    [EndpointDescription("Queue-oriented alias for restarting a download job that was halted by provider bot-detection. The original request is replayed and the worker resumes from the last recorded successful step when possible.")]
+    [EndpointSummary("Restart a download job")]
+    [EndpointDescription("Queue-oriented alias for restarting a download job from a restartable terminal state. Cancelled jobs replay as a fresh run. Provider-halted jobs replay the original request and resume from the last recorded successful step when possible.")]
     public async Task<ActionResult> RestartHalted(
         [FromRoute] Guid jobId,
         CancellationToken cancellationToken)

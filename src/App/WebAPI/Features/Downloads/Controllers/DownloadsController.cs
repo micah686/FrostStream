@@ -207,14 +207,14 @@ public class DownloadsController(
     }
 
     /// <summary>
-    /// Restarts a download job that was halted because the provider demanded bot verification.
-    /// The restart replays the original request payload and resumes from the last recorded
-    /// successful step when the flow has one available.
+    /// Restarts a download job from a restartable terminal state. Cancelled jobs replay as a
+    /// fresh run; provider-halted jobs replay the original request payload and resume from the
+    /// last recorded successful step when the flow has one available.
     /// </summary>
     [HttpPost("{jobId:guid}/restart")]
     [Endpoint(EndpointIds.DownloadsCancel)]
-    [EndpointSummary("Restart a halted download job")]
-    [EndpointDescription("Restarts a download job that was halted by provider bot-detection. The original request is replayed and the worker resumes from the last recorded successful step when possible.")]
+    [EndpointSummary("Restart a download job")]
+    [EndpointDescription("Restarts a download job from a restartable terminal state. Cancelled jobs replay as a fresh run. Provider-halted jobs replay the original request and resume from the last recorded successful step when possible.")]
     public async Task<ActionResult> RestartHalted(
         [FromRoute] Guid jobId,
         CancellationToken cancellationToken)

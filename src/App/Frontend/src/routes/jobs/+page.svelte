@@ -4,6 +4,7 @@
   import {
     ArrowsRepeatOutline,
     ArrowUpRightFromSquareOutline,
+    FireOutline,
     CheckCircleOutline,
     ClockOutline,
     DownloadOutline,
@@ -12,7 +13,7 @@
     ServerOutline,
     StopOutline,
   } from 'flowbite-svelte-icons';
-  import { cancelJob, restartJob, type DownloadQueueJob, type ProgressFrame } from '$lib/api/downloadQueue';
+  import { cancelJob, restartJob, setPriority, type DownloadQueueJob, type ProgressFrame } from '$lib/api/downloadQueue';
   import { createDownloadQueueStore, type DownloadQueueState, type QueueRow } from '$lib/stores/downloadQueue';
   import { formatBytes } from '$lib/media';
 
@@ -91,6 +92,23 @@
   async function restartDownload(row: QueueRow) {
     await runAction(row.job.jobId, 'restart', async () => {
       await restartJob(row.job.jobId);
+    });
+  }
+
+  async function updatePriority(row: QueueRow) {
+    const requested = window.prompt('Set priority from 0 to 100', String(row.job.priority));
+    if (requested === null) {
+      return;
+    }
+
+    const priority = Number(requested.trim());
+    if (!Number.isInteger(priority) || priority < 0 || priority > 100) {
+      actionError = 'Priority must be a whole number from 0 to 100.';
+      return;
+    }
+
+    await runAction(row.job.jobId, 'priority', async () => {
+      await setPriority(row.job.jobId, priority);
     });
   }
 
@@ -185,7 +203,11 @@
   }
 
   function canRestart(job: DownloadQueueJob): boolean {
-    return isFailed(job.state) || isCancelled(job.state);
+    return normalizeState(job.state) === 'providerhalted' || isCancelled(job.state);
+  }
+
+  function canUpdatePriority(job: DownloadQueueJob): boolean {
+    return isQueued(job.state);
   }
 
   function percentFor(row: QueueRow): number {
@@ -234,11 +256,21 @@
 
   function formatElapsed(job: DownloadQueueJob): string {
     const started = Date.parse(job.createdAt);
-    const ended = job.completedAt ? Date.parse(job.completedAt) : now;
+    const ended = terminalEndedAt(job);
     if (Number.isNaN(started) || Number.isNaN(ended) || ended < started) {
       return '-';
     }
     return formatDurationMs(ended - started);
+  }
+
+  function terminalEndedAt(job: DownloadQueueJob): number {
+    if (job.completedAt) {
+      return Date.parse(job.completedAt);
+    }
+    if (isDone(job.state) || isCancelled(job.state) || isFailed(job.state)) {
+      return Date.parse(job.updatedAt);
+    }
+    return now;
   }
 
   function formatEta(seconds: number | null | undefined): string {
@@ -286,12 +318,6 @@
     }
   }
 
-  function resolutionFor(row: QueueRow): string {
-    const text = `${row.progress?.message ?? ''} ${row.job.sourceUrl}`;
-    const match = text.match(/\b(2160p|1440p|1080p|720p|480p|360p|4k|8k)\b/i);
-    return match?.[1].toUpperCase().replace('P', 'p') ?? 'Unreported';
-  }
-
   function stateTone(state: string): string {
     if (isDone(state)) {
       return 'bg-emerald-500/12 text-emerald-300 ring-emerald-500/20';
@@ -320,6 +346,22 @@
 
   function sourceInitial(provider: string): string {
     return provider.slice(0, 1).toUpperCase();
+  }
+
+  function displayState(row: QueueRow): string {
+    const state = row.job.state;
+    if (normalizeState(state) === 'downloadpending' && hasActiveDownloadProgress(row.progress)) {
+      return row.progress?.phase?.trim() || 'Downloading';
+    }
+    return state;
+  }
+
+  function hasActiveDownloadProgress(progress: ProgressFrame | undefined): boolean {
+    if (!progress) {
+      return false;
+    }
+    const phase = progress.phase.trim().toLowerCase();
+    return phase === 'downloading' || progress.percent !== null || progress.downloadedBytes !== null;
   }
 </script>
 
@@ -463,7 +505,7 @@
         {@const provider = providerFor(job.sourceUrl)}
         {@const percent = percentFor(row)}
         <article class={['rounded-xl border p-4 shadow-lg shadow-black/10 transition', rowTone(job.state)]}>
-          <div class="grid gap-4 xl:grid-cols-[minmax(20rem,1.7fr)_8rem_8rem_9rem_9rem_8rem_9rem_auto] xl:items-center">
+          <div class="grid gap-4 xl:grid-cols-[minmax(22rem,1.8fr)_8rem_9rem_9rem_8rem_9rem_minmax(17rem,auto)] xl:items-center">
             <div class="flex min-w-0 items-start gap-3">
               <span
                 class="mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-slate-800 text-sm font-bold text-blue-300 ring-1 ring-slate-700"
@@ -479,20 +521,23 @@
                   <span
                     class={['rounded-full px-2 py-0.5 text-[10px] font-bold ring-1', stateTone(job.state)]}
                   >
-                    {job.state}
+                    {displayState(row)}
                   </span>
                 </div>
                 <p class="mt-1 truncate text-xs text-slate-500">
                   {provider} · {compactUrl(job.sourceUrl)}
                 </p>
                 <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
+                  <span class="inline-flex min-w-0 items-center gap-1">
+                    <span class="shrink-0 text-slate-600">Job ID</span>
+                    <span class="break-all font-mono text-slate-400">{job.jobId}</span>
+                  </span>
                   <span class="inline-flex items-center gap-1">
                     <ServerOutline class="h-3.5 w-3.5 text-slate-600" />
                     {job.storageKey ?? 'default'}
                   </span>
                   <span>{job.sourceKind}</span>
                   <span>priority {job.priority}</span>
-                  <span class="font-mono text-slate-600">{job.jobId.slice(0, 8)}</span>
                 </div>
                 {#if job.failureMessage}
                   <p class="mt-2 line-clamp-1 text-xs text-red-300">
@@ -502,11 +547,6 @@
                   <p class="mt-2 line-clamp-1 text-xs text-slate-500">{row.progress.message}</p>
                 {/if}
               </div>
-            </div>
-
-            <div>
-              <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-600 xl:hidden">Resolution</p>
-              <p class="mt-1 text-sm font-medium text-slate-300 xl:mt-0">{resolutionFor(row)}</p>
             </div>
 
             <div>
@@ -550,14 +590,34 @@
               </p>
             </div>
 
-            <div class="flex items-center gap-1 xl:justify-end">
+            <div class="flex flex-wrap items-center gap-2 xl:justify-end">
               {#if isDone(job.state)}
-                <CheckCircleOutline class="h-5 w-5 text-emerald-400" aria-label="Complete" />
+                <span class="inline-flex h-11 min-w-28 items-center justify-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 text-sm font-semibold text-emerald-300">
+                  <CheckCircleOutline class="h-4 w-4" />
+                  Done
+                </span>
+              {/if}
+              {#if canUpdatePriority(job)}
+                <button
+                  type="button"
+                  class="inline-flex h-11 min-w-28 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-900/70 px-3 text-sm font-semibold text-slate-200 transition hover:border-blue-500/60 hover:bg-blue-500/10 hover:text-blue-200 disabled:opacity-40"
+                  title="Set priority"
+                  aria-label="Set priority"
+                  disabled={Boolean(actionBusy[job.jobId])}
+                  onclick={() => updatePriority(row)}
+                >
+                  {#if actionBusy[job.jobId] === 'priority'}
+                    <Spinner size="4" />
+                  {:else}
+                    <FireOutline class="h-4 w-4" />
+                  {/if}
+                  Priority
+                </button>
               {/if}
               {#if canRestart(job)}
                 <button
                   type="button"
-                  class="grid h-9 w-9 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-800 hover:text-white disabled:opacity-40"
+                  class="inline-flex h-11 min-w-28 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-900/70 px-3 text-sm font-semibold text-slate-200 transition hover:border-blue-500/60 hover:bg-slate-800 hover:text-white disabled:opacity-40"
                   title="Restart job"
                   aria-label="Restart job"
                   disabled={Boolean(actionBusy[job.jobId])}
@@ -568,12 +628,13 @@
                   {:else}
                     <ArrowsRepeatOutline class="h-4 w-4" />
                   {/if}
+                  Restart
                 </button>
               {/if}
               {#if canCancel(job)}
                 <button
                   type="button"
-                  class="grid h-9 w-9 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-800 hover:text-red-300 disabled:opacity-40"
+                  class="inline-flex h-11 min-w-28 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-900/70 px-3 text-sm font-semibold text-slate-200 transition hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-200 disabled:opacity-40"
                   title="Cancel job"
                   aria-label="Cancel job"
                   disabled={Boolean(actionBusy[job.jobId])}
@@ -584,17 +645,19 @@
                   {:else}
                     <StopOutline class="h-4 w-4" />
                   {/if}
+                  Cancel
                 </button>
               {/if}
               <a
                 href={job.sourceUrl}
                 target="_blank"
                 rel="noreferrer"
-                class="grid h-9 w-9 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-800 hover:text-white"
-                title="Open source"
-                aria-label="Open source"
+                class="inline-flex h-11 min-w-32 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-900/70 px-3 text-sm font-semibold text-slate-200 transition hover:border-slate-500 hover:bg-slate-800 hover:text-white"
+                title="View source"
+                aria-label="View source"
               >
                 <ArrowUpRightFromSquareOutline class="h-4 w-4" />
+                View Source
               </a>
             </div>
           </div>
