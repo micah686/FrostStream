@@ -47,7 +47,7 @@
   ];
 
   const libraryNavigation: NavItem[] = [
-    { label: 'Library', icon: RectangleListOutline },
+    { label: 'Library', icon: RectangleListOutline, href: '/library' },
     { label: 'History', icon: ClockArrowOutline },
     { label: 'Watch later', icon: ClockOutline },
     { label: 'Liked', icon: HeartOutline }
