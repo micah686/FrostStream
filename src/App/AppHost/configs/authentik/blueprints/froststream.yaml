@@ -78,6 +78,9 @@ entries:
         - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
         - !KeyOf froststream-scope-profile
         - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
+        # Authentik only issues refresh tokens when offline_access is granted; without it every
+        # session hard-expires with the 1-hour access token.
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, offline_access]]
         - !KeyOf froststream-scope-groups
         - !KeyOf froststream-scope-audience
       client_type: confidential

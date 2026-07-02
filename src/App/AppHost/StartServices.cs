@@ -165,7 +165,7 @@ public static class StartServices
             .WithEnvironment("VITE_AUTH_MODE", hardening.SingleUserMode ? "single-user" : "multi-user")
             .WithEnvironment("AUTH_CLIENT_ID", authentik.ClientId)
             .WithEnvironment("AUTH_CLIENT_SECRET", authentik.ClientSecret)
-            .WithEnvironment("AUTH_SCOPES", Environment.GetEnvironmentVariable("AUTH_SCOPES") ?? "openid profile email groups");
+            .WithEnvironment("AUTH_SCOPES", Environment.GetEnvironmentVariable("AUTH_SCOPES") ?? "openid profile email groups offline_access");
 
         authTester = authTester.WithAuthAuthority("VITE_AUTH_AUTHORITY", hardening.SingleUserMode, authentik);
         authTester = authTester.WithAuthAuthority("AUTH_AUTHORITY", hardening.SingleUserMode, authentik);
@@ -194,7 +194,7 @@ public static class StartServices
     //         .WithEnvironment("VITE_AUTH_MODE", hardening.SingleUserMode ? "single-user" : "multi-user")
     //         .WithEnvironment("AUTH_CLIENT_ID", authentik.ClientId)
     //         .WithEnvironment("AUTH_CLIENT_SECRET", authentik.ClientSecret)
-    //         .WithEnvironment("AUTH_SCOPES", Environment.GetEnvironmentVariable("AUTH_SCOPES") ?? "openid profile email groups");
+    //         .WithEnvironment("AUTH_SCOPES", Environment.GetEnvironmentVariable("AUTH_SCOPES") ?? "openid profile email groups offline_access");
     //
     //     frontend = frontend.WithAuthAuthority("VITE_AUTH_AUTHORITY", hardening.SingleUserMode, authentik);
     //     frontend = frontend.WithAuthAuthority("AUTH_AUTHORITY", hardening.SingleUserMode, authentik);

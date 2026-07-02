@@ -9,6 +9,14 @@
     PlusOutline,
     RectangleListOutline
   } from 'flowbite-svelte-icons';
+  import {
+    accentFor,
+    formatBytes,
+    formatDuration,
+    formatRelativeDate,
+    formatViews,
+    initialsFor
+  } from '$lib/media';
 
   interface MediaCard {
     mediaGuid: string;
@@ -68,6 +76,7 @@
   let hasMore = $state(false);
   let loading = $state(true);
   let loadError = $state<string | null>(null);
+  let needsLogin = $state(false);
   let overview = $state<Overview | null>(null);
 
   const totalPages = $derived(Math.max(1, Math.ceil(totalCount / pageSize)));
@@ -101,6 +110,11 @@
 
     try {
       const response = await fetch(`/api/metadata?${query}`);
+      if (response.status === 401) {
+        needsLogin = true;
+        loadError = 'Your session has expired.';
+        return;
+      }
       if (!response.ok) {
         loadError = `Could not load your library (status ${response.status}).`;
         return;
@@ -119,101 +133,6 @@
 
   function changeSort() {
     void loadPage(1);
-  }
-
-  // Deterministic placeholder art until the thumbnail asset endpoint exists.
-  const accents = [
-    'from-slate-800 to-blue-950',
-    'from-purple-950 to-violet-700',
-    'from-red-950 to-orange-900',
-    'from-blue-950 to-slate-800',
-    'from-emerald-950 to-teal-800',
-    'from-fuchsia-950 to-pink-800'
-  ];
-
-  function hashOf(value: string): number {
-    let hash = 0;
-    for (let i = 0; i < value.length; i += 1) {
-      hash = (hash * 31 + value.charCodeAt(i)) | 0;
-    }
-    return Math.abs(hash);
-  }
-
-  function accentFor(card: MediaCard): string {
-    return accents[hashOf(card.mediaGuid) % accents.length];
-  }
-
-  function initialsFor(name: string): string {
-    const words = name.trim().split(/\s+/).filter(Boolean);
-    if (words.length === 0) {
-      return '?';
-    }
-    return (words[0][0] + (words.length > 1 ? words[words.length - 1][0] : '')).toUpperCase();
-  }
-
-  function formatDuration(seconds: number | null | undefined): string | null {
-    if (!seconds || seconds <= 0) {
-      return null;
-    }
-    const total = Math.round(seconds);
-    const h = Math.floor(total / 3600);
-    const m = Math.floor((total % 3600) / 60);
-    const s = total % 60;
-    return h > 0
-      ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
-      : `${m}:${String(s).padStart(2, '0')}`;
-  }
-
-  function formatViews(count: number | null | undefined): string | null {
-    if (count === null || count === undefined) {
-      return null;
-    }
-    if (count >= 1_000_000) {
-      return `${(count / 1_000_000).toFixed(1)}M views`;
-    }
-    if (count >= 1_000) {
-      return `${(count / 1_000).toFixed(1)}K views`;
-    }
-    return `${count} views`;
-  }
-
-  function formatDate(iso: string | null | undefined): string | null {
-    if (!iso) {
-      return null;
-    }
-    const date = new Date(iso);
-    if (Number.isNaN(date.getTime())) {
-      return null;
-    }
-    const days = Math.floor((Date.now() - date.getTime()) / 86_400_000);
-    if (days <= 0) {
-      return 'Today';
-    }
-    if (days === 1) {
-      return 'Yesterday';
-    }
-    if (days < 30) {
-      return `${days} days ago`;
-    }
-    return date.toLocaleDateString();
-  }
-
-  function formatBytes(bytes: number): string {
-    if (bytes >= 1_099_511_627_776) {
-      return `${(bytes / 1_099_511_627_776).toFixed(1)} TB`;
-    }
-    if (bytes >= 1_073_741_824) {
-      return `${(bytes / 1_073_741_824).toFixed(1)} GB`;
-    }
-    if (bytes >= 1_048_576) {
-      return `${(bytes / 1_048_576).toFixed(0)} MB`;
-    }
-    return `${bytes} B`;
-  }
-
-  function formatHours(seconds: number): string {
-    const hours = seconds / 3600;
-    return hours >= 1 ? `${Math.round(hours)}h` : `${Math.round(seconds / 60)}m`;
   }
 
   function metaLine(card: MediaCard): string {
@@ -305,11 +224,20 @@
 
     {#if loadError}
       <div
-        class="mt-6 flex items-start gap-2 rounded-xl border border-red-900/60 bg-red-950/40 p-4 text-sm text-red-300"
+        class="mt-6 flex items-center gap-3 rounded-xl border border-red-900/60 bg-red-950/40 p-4 text-sm text-red-300"
         role="alert"
       >
-        <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+        <ExclamationCircleOutline class="h-4 w-4 shrink-0" />
         <span>{loadError}</span>
+        {#if needsLogin}
+          <Button
+            href="/auth/login"
+            color="blue"
+            class="ml-auto border-0! bg-blue-500! px-4! py-1.5! text-xs! font-semibold! hover:bg-blue-400!"
+          >
+            Log in again
+          </Button>
+        {/if}
       </div>
     {:else if loading}
       <div class="mt-16 flex justify-center">
@@ -334,9 +262,9 @@
       <div class="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
         {#each items as card (card.mediaGuid)}
           <article class="group min-w-0">
-            <button
-              type="button"
-              class={`relative block aspect-video w-full overflow-hidden rounded-2xl bg-gradient-to-br ${accentFor(card)} text-left shadow-lg shadow-black/20 transition duration-300 group-hover:-translate-y-1 group-hover:shadow-xl group-hover:shadow-black/30`}
+            <a
+              href={`/watch/${card.mediaGuid}`}
+              class={`relative block aspect-video w-full overflow-hidden rounded-2xl bg-gradient-to-br ${accentFor(card.mediaGuid)} text-left shadow-lg shadow-black/20 transition duration-300 group-hover:-translate-y-1 group-hover:shadow-xl group-hover:shadow-black/30`}
               aria-label={`Play ${card.title}`}
             >
               <span
@@ -361,10 +289,10 @@
               >
                 <PlaySolid class="ml-0.5 h-5 w-5" />
               </span>
-            </button>
+            </a>
             <div class="mt-3 flex min-w-0 gap-3 px-1">
               <span
-                class={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br ${accentFor(card)} text-[10px] font-bold text-white`}
+                class={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br ${accentFor(card.mediaGuid)} text-[10px] font-bold text-white`}
               >
                 {initialsFor(card.account.accountName)}
               </span>
@@ -374,7 +302,7 @@
                 </h3>
                 <p class="mt-1 truncate text-xs text-slate-500">{card.account.accountName}</p>
                 <p class="mt-0.5 truncate text-xs text-slate-600">
-                  {[metaLine(card), formatDate(card.releaseDate)].filter(Boolean).join(' · ')}
+                  {[metaLine(card), formatRelativeDate(card.releaseDate)].filter(Boolean).join(' · ')}
                 </p>
               </div>
             </div>

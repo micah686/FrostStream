@@ -57,7 +57,8 @@ export function clientSecret(): string | undefined {
 }
 
 export function scopes(): string {
-  return env.AUTH_SCOPES || 'openid profile email groups';
+  // offline_access is required for Authentik to issue a refresh token.
+  return env.AUTH_SCOPES || 'openid profile email groups offline_access';
 }
 
 export function redirectUri(origin: string): string {
@@ -101,8 +102,19 @@ export function readTokens(cookies: Cookies): TokenSet | null {
   }
 }
 
+// How close to access-token expiry the proxy refreshes, and how long the session cookie lives
+// when a refresh token is present (matches Authentik's refresh_token_validity of 30 days).
+const refreshSkewMs = 60_000;
+const refreshWindowSeconds = 30 * 24 * 3600;
+
 export function writeTokens(cookies: Cookies, tokens: TokenSet, secure: boolean): void {
-  const maxAge = tokens.expiresAt ? Math.max(60, Math.floor((tokens.expiresAt - Date.now()) / 1000)) : 3600;
+  // The cookie must outlive the access token when a refresh token exists, otherwise the
+  // refresh token is thrown away with the cookie and every session hard-expires after an hour.
+  const maxAge = tokens.refreshToken
+    ? refreshWindowSeconds
+    : tokens.expiresAt
+      ? Math.max(60, Math.floor((tokens.expiresAt - Date.now()) / 1000))
+      : 3600;
   cookies.set(tokenCookie, JSON.stringify(tokens), {
     httpOnly: true,
     sameSite: 'lax',
@@ -152,6 +164,58 @@ export async function syncSession(accessToken: string): Promise<void> {
     }
   } catch (err) {
     console.warn('Session sync failed:', err);
+  }
+}
+
+/**
+ * Returns a valid token set, transparently refreshing via the OIDC refresh_token grant when the
+ * access token is expired or within {@link refreshSkewMs} of expiry. Persists rotated tokens back
+ * to the httpOnly cookie. Returns null when there is no usable session.
+ */
+export async function ensureFreshTokens(cookies: Cookies, secure: boolean): Promise<TokenSet | null> {
+  const tokens = readTokens(cookies);
+  if (!tokens?.accessToken) {
+    return null;
+  }
+
+  const expiresAt = tokens.expiresAt ?? 0;
+  if (!tokens.refreshToken || expiresAt - Date.now() > refreshSkewMs) {
+    return tokens;
+  }
+
+  try {
+    const discovery = await discover();
+    const body = new URLSearchParams({
+      grant_type: 'refresh_token',
+      client_id: clientId(),
+      refresh_token: tokens.refreshToken
+    });
+    const secret = clientSecret();
+    if (secret) {
+      body.set('client_secret', secret);
+    }
+
+    const response = await fetch(discovery.token_endpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body
+    });
+
+    if (!response.ok) {
+      console.warn(`Token refresh failed with status ${response.status}.`);
+      return expiresAt > Date.now() ? tokens : null;
+    }
+
+    const refreshed = tokenSetFromResponse((await response.json()) as Record<string, unknown>);
+    // Authentik may omit a rotated refresh token; keep the previous one when it does.
+    if (!refreshed.refreshToken) {
+      refreshed.refreshToken = tokens.refreshToken;
+    }
+    writeTokens(cookies, refreshed, secure);
+    return refreshed;
+  } catch (err) {
+    console.warn('Token refresh error:', err);
+    return expiresAt > Date.now() ? tokens : null;
   }
 }
 

@@ -49,7 +49,8 @@ export function clientSecret(): string | undefined {
 }
 
 export function scopes(): string {
-  return process.env.AUTH_SCOPES || 'openid profile email groups';
+  // offline_access is required for Authentik to issue a refresh token.
+  return process.env.AUTH_SCOPES || 'openid profile email groups offline_access';
 }
 
 export function redirectUri(origin: string): string {
