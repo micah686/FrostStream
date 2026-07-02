@@ -5,8 +5,13 @@ using Shared.Messaging;
 
 namespace DataBridge.Data;
 
-public sealed class PlaylistsRepository(DataBridgeDbContext db, IClock clock) : IPlaylistsRepository
+public sealed class PlaylistsRepository(
+    DataBridgeDbContext db,
+    IClock clock,
+    IDownloadJobStateNotifier? stateNotifier = null) : IPlaylistsRepository
 {
+    private readonly IDownloadJobStateNotifier _stateNotifier = stateNotifier ?? NullDownloadJobStateNotifier.Instance;
+
     public Task<PlaylistEntity?> GetByIdAsync(Guid playlistId, CancellationToken ct = default)
         => db.Playlists.AsNoTracking().FirstOrDefaultAsync(x => x.PlaylistId == playlistId, ct);
 
@@ -226,10 +231,13 @@ public sealed class PlaylistsRepository(DataBridgeDbContext db, IClock clock) : 
         if (job is null)
             return null;
 
+        var previousState = job.State;
         job.State = DownloadJobState.Queued;
         job.IgnoredKeyword = null;
         job.UpdatedAt = clock.GetCurrentInstant();
         await db.SaveChangesAsync(ct);
+        if (previousState != job.State)
+            await _stateNotifier.NotifyAsync(job.JobId, job.State, previousState, job.CorrelationId, ct);
         return item.EntryUrl;
     }
 

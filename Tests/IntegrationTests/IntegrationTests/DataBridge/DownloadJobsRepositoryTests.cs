@@ -300,6 +300,50 @@ public sealed class DownloadJobsRepositoryTests
         (await repository.GetQueueHistoryAsync(Guid.NewGuid())).ShouldBeNull();
     }
 
+    [Test]
+    public async Task QueryQueueAsync_On_Empty_Table_Returns_Empty_Page()
+    {
+        await using var db = Fixture.CreateDb();
+        var repository = new DownloadJobsRepository(db, SystemClock.Instance);
+
+        var page = await repository.QueryQueueAsync(new DownloadQueueListRequest());
+
+        page.TotalCount.ShouldBe(0);
+        page.Items.ShouldBeEmpty();
+        page.NextCursor.ShouldBeNull();
+    }
+
+    [Test]
+    public async Task State_Transitions_Publish_State_Changed_Only_On_Actual_Change()
+    {
+        var jobId = Guid.NewGuid();
+        await using var db = Fixture.CreateDb();
+        db.DownloadJobs.Add(Job(jobId, DownloadJobState.Queued));
+        await db.SaveChangesAsync();
+
+        var notifier = new CapturingStateNotifier();
+        var repository = new DownloadJobsRepository(db, SystemClock.Instance, notifier);
+
+        await repository.UpdateStateAsync(jobId, DownloadJobState.MetadataPending);
+        await repository.UpdateStateAsync(jobId, DownloadJobState.MetadataPending); // no-op, unchanged
+        await repository.RecordTerminalFailureAsync(jobId, FailureKind.Permanent, "gone", "source removed", DownloadJobState.FailedPermanent, null);
+
+        notifier.Calls.Count.ShouldBe(2);
+        notifier.Calls[0].ShouldBe((jobId, DownloadJobState.MetadataPending, DownloadJobState.Queued));
+        notifier.Calls[1].ShouldBe((jobId, DownloadJobState.FailedPermanent, DownloadJobState.MetadataPending));
+    }
+
+    private sealed class CapturingStateNotifier : IDownloadJobStateNotifier
+    {
+        public List<(Guid JobId, DownloadJobState NewState, DownloadJobState PreviousState)> Calls { get; } = [];
+
+        public Task NotifyAsync(Guid jobId, DownloadJobState newState, DownloadJobState previousState, Guid correlationId, CancellationToken ct = default)
+        {
+            Calls.Add((jobId, newState, previousState));
+            return Task.CompletedTask;
+        }
+    }
+
     private static Task SetCreatedAtAsync(DataBridgeDbContext db, Guid jobId, Instant createdAt)
         => db.Database.ExecuteSqlInterpolatedAsync(
             $"UPDATE download_jobs SET created_at = {createdAt} WHERE job_id = {jobId}");

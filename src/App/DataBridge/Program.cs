@@ -104,6 +104,7 @@ class Program
             var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
             return dataSourceBuilder.Build();
         });
+        builder.Services.AddSingleton<IDownloadJobStateNotifier, DownloadJobStateNotifier>();
         builder.Services.AddScoped<IDownloadJobsRepository, DownloadJobsRepository>();
         builder.Services.AddScoped<ILocalImportRepository, LocalImportRepository>();
         builder.Services.AddScoped<IMetadataRepository, MetadataRepository>();

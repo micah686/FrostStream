@@ -7,10 +7,21 @@ using Shared.Messaging;
 
 namespace DataBridge.Data;
 
-public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock) : IDownloadJobsRepository
+public sealed class DownloadJobsRepository(
+    DataBridgeDbContext db,
+    IClock clock,
+    IDownloadJobStateNotifier? stateNotifier = null) : IDownloadJobsRepository
 {
     private const int DefaultQueueLimit = 50;
     private const int MaxQueueLimit = 200;
+
+    private readonly IDownloadJobStateNotifier _stateNotifier = stateNotifier ?? NullDownloadJobStateNotifier.Instance;
+
+    /// <summary>Fires a live state-changed notification when a transition actually occurred. Best-effort.</summary>
+    private Task NotifyStateAsync(DownloadJobEntity job, DownloadJobState previousState, CancellationToken ct)
+        => previousState == job.State
+            ? Task.CompletedTask
+            : _stateNotifier.NotifyAsync(job.JobId, job.State, previousState, job.CorrelationId, ct);
 
     public Task<bool> IsMessageProcessedAsync(Guid messageId, CancellationToken ct = default)
         => db.ProcessedMessages.AsNoTracking().AnyAsync(x => x.MessageId == messageId, ct);
@@ -86,19 +97,23 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
         if ((job.State is DownloadJobState.Cancelling or DownloadJobState.Cancelled) && state != DownloadJobState.Cancelled)
             return;
 
+        var previousState = job.State;
         job.State = state;
         job.UpdatedAt = clock.GetCurrentInstant();
         if (state is DownloadJobState.Completed or DownloadJobState.AlreadyDownloaded)
             job.CompletedAt = job.UpdatedAt;
         await db.SaveChangesAsync(ct);
+        await NotifyStateAsync(job, previousState, ct);
     }
 
     public async Task ApplyMetadataAsync(Guid jobId, MetadataFetched evt, CancellationToken ct = default)
     {
         var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
+        var previousState = job.State;
         job.State = DownloadJobState.MetadataResolved;
         job.UpdatedAt = clock.GetCurrentInstant();
         await db.SaveChangesAsync(ct);
+        await NotifyStateAsync(job, previousState, ct);
     }
 
     public async Task<SourceVersionDecision> CheckSourceVersionAsync(MetadataFetched evt, bool forceDownload, CancellationToken ct = default)
@@ -129,6 +144,7 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
             .OrderByDescending(x => x.VersionNum)
             .FirstOrDefaultAsync(ct);
 
+        var previousState = job.State;
         job.State = DownloadJobState.AlreadyDownloaded;
         if (latest is not null)
         {
@@ -138,6 +154,7 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
         job.UpdatedAt = clock.GetCurrentInstant();
         job.CompletedAt = job.UpdatedAt;
         await db.SaveChangesAsync(ct);
+        await NotifyStateAsync(job, previousState, ct);
     }
 
     public async Task DeleteReservedVersionAsync(Guid mediaGuid, int versionNum, CancellationToken ct = default)
@@ -153,12 +170,14 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
     public async Task ApplyDownloadCompletedAsync(Guid jobId, DownloadCompleted evt, CancellationToken ct = default)
     {
         var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
+        var previousState = job.State;
         job.TempFileRef = evt.TempFileRef;
         job.FileSizeBytes = evt.FileSizeBytes;
         job.ContentHashXxh128 = NormalizeHash(evt.ContentHashXxh128);
         job.State = DownloadJobState.DownloadedTemp;
         job.UpdatedAt = clock.GetCurrentInstant();
         await db.SaveChangesAsync(ct);
+        await NotifyStateAsync(job, previousState, ct);
     }
 
     public async Task<VersionReservation> ReserveVersionAsync(VersionReservationRequest request, CancellationToken ct = default)
@@ -296,6 +315,7 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
     public async Task CommitUploadAsync(Guid jobId, UploadCompleted evt, CancellationToken ct = default)
     {
         var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
+        var previousState = job.State;
         job.StorageKey = evt.StorageKey;
         job.StorageVersion = evt.StorageVersion;
         var contentHash = NormalizeHash(evt.ContentHashXxh128);
@@ -306,6 +326,7 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
         job.State = DownloadJobState.Uploaded;
         job.UpdatedAt = clock.GetCurrentInstant();
         await db.SaveChangesAsync(ct);
+        await NotifyStateAsync(job, previousState, ct);
     }
 
     public async Task ApplySidecarUploadCompletedAsync(Guid jobId, UploadCompleted evt, CancellationToken ct = default)
@@ -395,6 +416,7 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
             job.FailureMessage = BuildCancellationMessage(requestedBy, reason);
             job.UpdatedAt = clock.GetCurrentInstant();
             await db.SaveChangesAsync(ct);
+            await NotifyStateAsync(job, previousState, ct);
         }
 
         return CancelDownloadDecision.AcceptedFor(job.CorrelationId, job.State, previousState, workerTag);
@@ -403,6 +425,7 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
     public async Task MarkCancelledAsync(Guid jobId, string? message, CancellationToken ct = default)
     {
         var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
+        var previousState = job.State;
         job.State = DownloadJobState.Cancelled;
         job.FailureKind = FailureKind.Cancelled;
         job.FailureCode = "cancel_requested";
@@ -426,6 +449,7 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
         }
 
         await db.SaveChangesAsync(ct);
+        await NotifyStateAsync(job, previousState, ct);
     }
 
     public async Task<IReadOnlyList<DownloadQueuedEntry>> GetDownloadQueuedJobsAsync(CancellationToken ct = default)
@@ -480,6 +504,7 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
     public async Task RecordTerminalFailureAsync(Guid jobId, FailureKind kind, string? code, string message, DownloadJobState terminalState, string? lastPayloadJson, CancellationToken ct = default)
     {
         var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
+        var previousState = job.State;
         job.State = terminalState;
         job.FailureKind = kind;
         job.FailureCode = code;
@@ -502,6 +527,7 @@ public sealed class DownloadJobsRepository(DataBridgeDbContext db, IClock clock)
         }
 
         await db.SaveChangesAsync(ct);
+        await NotifyStateAsync(job, previousState, ct);
     }
 
     public async Task ScheduleProviderHaltRetryAsync(Guid jobId, Instant retryAt, CancellationToken ct = default)

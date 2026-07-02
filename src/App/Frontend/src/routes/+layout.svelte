@@ -55,7 +55,7 @@
 
   const serverNavigation: NavItem[] = [
     { label: 'Download', icon: DownloadOutline, href: '/download' },
-    { label: 'Jobs', icon: ServerOutline, count: 4 }
+    { label: 'Jobs', icon: ServerOutline, href: '/jobs' }
   ];
 
   const accountNavigation: NavItem[] = [

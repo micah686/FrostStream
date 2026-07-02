@@ -9,12 +9,32 @@ namespace Shared.Messaging;
 /// </summary>
 public static class DownloadQueueSubjects
 {
-    public const string List = "download.queue.list";
-    public const string Get = "download.queue.get";
-    public const string History = "download.queue.history";
+    public const string List = "download-queue.list";
+    public const string Get = "download-queue.get";
+    public const string History = "download-queue.history";
+
+    /// <summary>
+    /// Non-persistent broadcast published by DataBridge whenever a download job's state changes.
+    /// The authoritative record stays the <c>state</c> column; this is a live notification only
+    /// (no JetStream, no replay). WebAPI's queue hub fans it into the SSE streams as a state event.
+    /// </summary>
+    public const string StateChanged = "download-queue.state-changed";
 
     /// <summary>Queue group so a single DataBridge instance answers each query.</summary>
     public const string QueueGroup = "databridge-download-queue";
+}
+
+/// <summary>
+/// Live notification that a download job transitioned to a new lifecycle state. Non-persistent —
+/// clients treat it as a delta on top of the authoritative snapshot from <c>GET /queue</c>.
+/// </summary>
+public sealed record DownloadQueueStateChanged
+{
+    public required Guid JobId { get; init; }
+    public required DownloadJobState State { get; init; }
+    public required DownloadJobState PreviousState { get; init; }
+    public Guid CorrelationId { get; init; }
+    public required Instant OccurredAt { get; init; }
 }
 
 /// <summary>Sort order for the queue list. Default view is newest-first.</summary>

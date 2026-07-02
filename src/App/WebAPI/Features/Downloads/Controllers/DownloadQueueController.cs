@@ -1,8 +1,11 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Threading.Channels;
 using Conduit.NATS;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 using NodaTime;
+using NodaTime.Serialization.SystemTextJson;
 using Shared.Auth;
 using Shared.Messaging;
 using WebAPI.Auth;
@@ -24,7 +27,18 @@ public sealed class DownloadQueueController(
 {
     private static readonly TimeSpan QueryTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan AdminRequestTimeout = TimeSpan.FromSeconds(10);
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(20);
+    private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
+
+    private static JsonSerializerOptions CreateJsonOptions()
+    {
+        // Match the MVC JSON contract (camelCase, string enums, ISO NodaTime) so SSE payloads are
+        // shaped exactly like the REST DTOs the client also consumes.
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        options.ConfigureForNodaTime(DateTimeZoneProviders.Tzdb);
+        options.Converters.Add(new JsonStringEnumConverter());
+        return options;
+    }
 
     // ── Read surface ─────────────────────────────────────────────────────────────────
 
@@ -137,7 +151,7 @@ public sealed class DownloadQueueController(
         return StreamAsync(id, reader, cancellationToken);
     }
 
-    private async Task StreamAsync(Guid subscriptionId, System.Threading.Channels.ChannelReader<DownloadProgress> reader, CancellationToken cancellationToken)
+    private async Task StreamAsync(Guid subscriptionId, ChannelReader<QueueStreamEvent> reader, CancellationToken cancellationToken)
     {
         Response.Headers.ContentType = "text/event-stream";
         Response.Headers.CacheControl = "no-cache";
@@ -146,13 +160,17 @@ public sealed class DownloadQueueController(
         var feature = HttpContext.Features.Get<IHttpResponseBodyFeature>();
         feature?.DisableBuffering();
 
+        // Serialize all writes to the response body — the heartbeat timer and the event loop both write.
+        var writeLock = new SemaphoreSlim(1, 1);
+        using var heartbeatCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var heartbeatTask = SendHeartbeatsAsync(writeLock, heartbeatCts.Token);
+
         try
         {
-            await foreach (var progress in reader.ReadAllAsync(cancellationToken))
+            await foreach (var evt in reader.ReadAllAsync(cancellationToken))
             {
-                var json = JsonSerializer.Serialize(MapToEvent(progress), JsonOptions);
-                await Response.WriteAsync($"data: {json}\n\n", cancellationToken);
-                await Response.Body.FlushAsync(cancellationToken);
+                var (name, json) = Serialize(evt);
+                await WriteFrameAsync(writeLock, $"event: {name}\ndata: {json}\n\n", cancellationToken);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -160,9 +178,89 @@ public sealed class DownloadQueueController(
         }
         finally
         {
+            await heartbeatCts.CancelAsync();
+            try { await heartbeatTask; } catch { /* best-effort cleanup */ }
             hub.Unsubscribe(subscriptionId);
+            writeLock.Dispose();
         }
     }
+
+    private async Task SendHeartbeatsAsync(SemaphoreSlim writeLock, CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(HeartbeatInterval, ct);
+                // SSE comment line — keeps intermediaries from idling the connection out.
+                await WriteFrameAsync(writeLock, ": keepalive\n\n", ct);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch
+            {
+                // Client went away mid-write; the main loop's cancellation handles teardown.
+                return;
+            }
+        }
+    }
+
+    private async Task WriteFrameAsync(SemaphoreSlim writeLock, string frame, CancellationToken ct)
+    {
+        await writeLock.WaitAsync(ct);
+        try
+        {
+            await Response.WriteAsync(frame, ct);
+            await Response.Body.FlushAsync(ct);
+        }
+        finally
+        {
+            writeLock.Release();
+        }
+    }
+
+    private static (string Name, string Json) Serialize(QueueStreamEvent evt) => evt switch
+    {
+        QueueStreamEvent.Progress p => ("progress", JsonSerializer.Serialize(MapProgress(p.Value), JsonOptions)),
+        QueueStreamEvent.State s => ("state", JsonSerializer.Serialize(MapState(s.Value), JsonOptions)),
+        _ => throw new InvalidOperationException($"Unsupported queue stream event {evt.GetType().Name}.")
+    };
+
+    private static ProgressEvent MapProgress(DownloadProgress p) => new(
+        p.JobId,
+        p.Sequence,
+        p.Phase,
+        p.Percent,
+        p.DownloadedBytes,
+        p.TotalBytes,
+        p.Speed,
+        p.EtaSeconds,
+        p.Message);
+
+    private static StateEvent MapState(DownloadQueueStateChanged s) => new(
+        s.JobId,
+        s.State,
+        s.PreviousState,
+        s.OccurredAt);
+
+    private sealed record ProgressEvent(
+        Guid JobId,
+        int Sequence,
+        string Phase,
+        double? Percent,
+        long? DownloadedBytes,
+        long? TotalBytes,
+        string? Speed,
+        double? EtaSeconds,
+        string? Message);
+
+    private sealed record StateEvent(
+        Guid JobId,
+        DownloadJobState State,
+        DownloadJobState PreviousState,
+        Instant OccurredAt);
 
     // ── Control aliases (reuse existing DataBridge request/reply behavior) ──────────────
 
@@ -324,26 +422,4 @@ public sealed class DownloadQueueController(
             Detail = detail,
             Status = StatusCodes.Status502BadGateway
         });
-
-    private static ProgressEvent MapToEvent(DownloadProgress p) => new(
-        p.JobId,
-        p.Sequence,
-        p.Phase,
-        p.Percent,
-        p.DownloadedBytes,
-        p.TotalBytes,
-        p.Speed,
-        p.EtaSeconds,
-        p.Message);
-
-    private sealed record ProgressEvent(
-        Guid JobId,
-        int Sequence,
-        string Phase,
-        double? Percent,
-        long? DownloadedBytes,
-        long? TotalBytes,
-        string? Speed,
-        double? EtaSeconds,
-        string? Message);
 }
