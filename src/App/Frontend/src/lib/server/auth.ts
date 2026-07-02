@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
+import { env } from '$env/dynamic/private';
 import type { Cookies } from '@sveltejs/kit';
 
 const tokenCookie = 'fs_auth_tokens';
@@ -10,6 +11,15 @@ export interface TokenSet {
   refreshToken?: string;
   idToken?: string;
   expiresAt?: number;
+}
+
+export interface UserProfile {
+  subject?: string;
+  name: string;
+  username?: string;
+  email?: string;
+  groups: string[];
+  initials: string;
 }
 
 interface DiscoveryDocument {
@@ -24,32 +34,34 @@ export const authCookies = {
   verifier: verifierCookie
 };
 
+// Config is read through $env/dynamic/private (not process.env) so that a local .env file works
+// when the app runs standalone via `pnpm dev`; real environment variables still take precedence.
 export function isSingleUserMode(): boolean {
-  return isTruthy(process.env.SINGLE_USER_MODE) || isTruthy(process.env.VITE_SINGLE_USER_MODE);
+  return isTruthy(env.SINGLE_USER_MODE) || isTruthy(env.VITE_SINGLE_USER_MODE);
 }
 
 export function apiBaseUrl(): string {
-  return process.env.API_BASE_URL || process.env.VITE_API_BASE_URL || 'https://localhost:7243';
+  return env.API_BASE_URL || env.VITE_API_BASE_URL || 'https://localhost:7035';
 }
 
 export function authority(): string {
-  return trimTrailingSlash(process.env.AUTH_AUTHORITY || process.env.VITE_AUTH_AUTHORITY || '');
+  return trimTrailingSlash(env.AUTH_AUTHORITY || env.VITE_AUTH_AUTHORITY || '');
 }
 
 export function clientId(): string {
-  return process.env.AUTH_CLIENT_ID || 'froststream-bff';
+  return env.AUTH_CLIENT_ID || 'froststream-bff';
 }
 
 export function clientSecret(): string | undefined {
-  return nonBlank(process.env.AUTH_CLIENT_SECRET);
+  return nonBlank(env.AUTH_CLIENT_SECRET);
 }
 
 export function scopes(): string {
-  return process.env.AUTH_SCOPES || 'openid profile email groups';
+  return env.AUTH_SCOPES || 'openid profile email groups';
 }
 
 export function redirectUri(origin: string): string {
-  return process.env.AUTH_REDIRECT_URI || `${origin}/auth/callback`;
+  return env.AUTH_REDIRECT_URI || `${origin}/auth/callback`;
 }
 
 export async function discover(): Promise<DiscoveryDocument> {
@@ -143,6 +155,39 @@ export async function syncSession(accessToken: string): Promise<void> {
   }
 }
 
+export function singleUserProfile(): UserProfile {
+  const name = env.SINGLE_USER_NAME || 'FrostStream User';
+  return {
+    name,
+    username: 'local',
+    groups: ['owner'],
+    initials: initialsFrom(name)
+  };
+}
+
+/**
+ * Builds a display profile from the id token (falling back to the access token). The JWT is not
+ * verified here: it was issued to this BFF and stored in our own httpOnly cookie, and it is only
+ * used for display — the WebAPI verifies signatures on every real request.
+ */
+export function profileFromTokens(tokens: TokenSet): UserProfile | null {
+  const claims = decodeJwtPayload(tokens.idToken) ?? decodeJwtPayload(tokens.accessToken);
+  if (!claims) {
+    return null;
+  }
+
+  const username = stringClaim(claims.preferred_username) ?? stringClaim(claims.nickname);
+  const name = stringClaim(claims.name) ?? username ?? stringClaim(claims.email) ?? 'Signed in';
+  return {
+    subject: stringClaim(claims.sub),
+    name,
+    username,
+    email: stringClaim(claims.email),
+    groups: Array.isArray(claims.groups) ? claims.groups.filter((g): g is string => typeof g === 'string') : [],
+    initials: initialsFrom(name)
+  };
+}
+
 export function tokenSetFromResponse(body: Record<string, unknown>): TokenSet {
   const accessToken = typeof body.access_token === 'string' ? body.access_token : '';
   if (!accessToken) {
@@ -172,4 +217,35 @@ function nonBlank(value: string | undefined): string | undefined {
 
 function base64Url(value: Buffer): string {
   return value.toString('base64url');
+}
+
+function decodeJwtPayload(jwt: string | undefined): Record<string, unknown> | null {
+  if (!jwt) {
+    return null;
+  }
+
+  const parts = jwt.split('.');
+  if (parts.length !== 3) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function stringClaim(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
+}
+
+function initialsFrom(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) {
+    return '?';
+  }
+  const first = words[0][0];
+  const last = words.length > 1 ? words[words.length - 1][0] : '';
+  return (first + last).toUpperCase();
 }

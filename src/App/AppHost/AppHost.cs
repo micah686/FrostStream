@@ -5,7 +5,7 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 
 //Test with single-user-mode for easy dev
-Environment.SetEnvironmentVariable("SINGLE_USER_MODE", "true");
+//Environment.SetEnvironmentVariable("SINGLE_USER_MODE", "true");
 
 
 

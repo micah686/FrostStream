@@ -54,5 +54,5 @@ export const GET: RequestHandler = async ({ cookies, url }) => {
   // Upsert the local user and refresh OpenFGA group tuples before landing on the app.
   await syncSession(tokens.accessToken);
 
-  throw redirect(303, '/');
+  throw redirect(303, '/profile');
 };

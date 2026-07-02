@@ -1,7 +1,282 @@
 <script lang="ts">
   import '../app.css';
+  import { page } from '$app/state';
+  import { Button, Drawer, Input } from 'flowbite-svelte';
+  import {
+    ArrowRightToBracketOutline,
+    BarsOutline,
+    BellOutline,
+    ClockArrowOutline,
+    ClockOutline,
+    CloseOutline,
+    CogOutline,
+    DownloadOutline,
+    FireOutline,
+    GlobeOutline,
+    HeartOutline,
+    HomeOutline,
+    PlaySolid,
+    RectangleListOutline,
+    SearchOutline,
+    ServerOutline,
+    UserOutline
+  } from 'flowbite-svelte-icons';
 
-  let { children } = $props();
+  type IconComponent = typeof HomeOutline;
+
+  interface NavItem {
+    label: string;
+    icon: IconComponent;
+    href?: string;
+    count?: number;
+  }
+
+  interface Subscription {
+    name: string;
+    initials: string;
+    color: string;
+    live?: boolean;
+  }
+
+  let { children, data } = $props();
+
+  const primaryNavigation: NavItem[] = [
+    { label: 'Home', icon: HomeOutline, href: '/' },
+    { label: 'Explore', icon: GlobeOutline },
+    { label: 'Trending', icon: FireOutline }
+  ];
+
+  const libraryNavigation: NavItem[] = [
+    { label: 'Library', icon: RectangleListOutline },
+    { label: 'History', icon: ClockArrowOutline },
+    { label: 'Watch later', icon: ClockOutline },
+    { label: 'Liked', icon: HeartOutline }
+  ];
+
+  const serverNavigation: NavItem[] = [
+    { label: 'Download', icon: DownloadOutline },
+    { label: 'Jobs', icon: ServerOutline, count: 4 }
+  ];
+
+  const accountNavigation: NavItem[] = [
+    { label: 'Profile', icon: UserOutline, href: '/profile' },
+    { label: 'Settings', icon: CogOutline }
+  ];
+
+  const subscriptions: Subscription[] = [
+    { name: 'Miles Lab', initials: 'ML', color: 'from-indigo-500 to-violet-500' },
+    { name: 'Darkroom Diaries', initials: 'DD', color: 'from-rose-500 to-orange-500', live: true },
+    { name: 'Fieldnotes', initials: 'FN', color: 'from-emerald-400 to-teal-600' }
+  ];
+
+  let drawerOpen = $state(false);
+
+  const closeDrawer = () => {
+    drawerOpen = false;
+  };
+
+  const isActive = (item: NavItem) => item.href !== undefined && page.url.pathname === item.href;
 </script>
 
-{@render children()}
+{#snippet navigationGroup(items: NavItem[])}
+  <ul class="space-y-1">
+    {#each items as item}
+      {@const { label, icon: Icon, href, count } = item}
+      {@const active = isActive(item)}
+      {@const itemClass = [
+        'group flex min-h-10 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium transition',
+        active
+          ? 'bg-blue-500/18 text-blue-400'
+          : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-100'
+      ]}
+      <li>
+        {#snippet itemContent()}
+          <Icon class="h-5 w-5 shrink-0 transition group-hover:text-blue-400" />
+          <span>{label}</span>
+          {#if count}
+            <span
+              class="ml-auto rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-500"
+            >
+              {count}
+            </span>
+          {/if}
+        {/snippet}
+        {#if href}
+          <a {href} onclick={closeDrawer} class={itemClass} aria-current={active ? 'page' : undefined}>
+            {@render itemContent()}
+          </a>
+        {:else}
+          <button type="button" onclick={closeDrawer} class={itemClass}>
+            {@render itemContent()}
+          </button>
+        {/if}
+      </li>
+    {/each}
+  </ul>
+{/snippet}
+
+{#snippet sidebarContent()}
+  <div class="flex h-full flex-col">
+    <div class="space-y-4 p-2">
+      {@render navigationGroup(primaryNavigation)}
+      <div class="border-t border-slate-800/70 pt-4">
+        {@render navigationGroup(libraryNavigation)}
+      </div>
+      <div class="border-t border-slate-800/70 pt-3">
+        <p class="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.08em] text-slate-600">
+          Server
+        </p>
+        {@render navigationGroup(serverNavigation)}
+      </div>
+      <div class="border-t border-slate-800/70 pt-3">
+        <p class="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.08em] text-slate-600">
+          You
+        </p>
+        {@render navigationGroup(accountNavigation)}
+      </div>
+      <div class="border-t border-slate-800/70 pt-3">
+        <p class="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.08em] text-slate-600">
+          Subscriptions
+        </p>
+        <ul class="space-y-1">
+          {#each subscriptions as subscription}
+            <li>
+              <button
+                type="button"
+                onclick={closeDrawer}
+                class="flex min-h-9 w-full items-center gap-3 rounded-xl px-3 text-left text-sm text-slate-400 transition hover:bg-slate-800/70 hover:text-white"
+              >
+                <span
+                  class={`grid h-6 w-6 shrink-0 place-items-center rounded-full bg-gradient-to-br ${subscription.color} text-[9px] font-bold text-white`}
+                >
+                  {subscription.initials}
+                </span>
+                <span class="truncate">{subscription.name}</span>
+                {#if subscription.live}
+                  <span class="ml-auto h-2 w-2 rounded-full bg-red-500 ring-4 ring-red-500/10">
+                    <span class="sr-only">Live now</span>
+                  </span>
+                {/if}
+              </button>
+            </li>
+          {/each}
+        </ul>
+      </div>
+    </div>
+    <div class="mt-auto border-t border-slate-800/70 p-4 text-xs text-slate-600">
+      FrostStream preview
+    </div>
+  </div>
+{/snippet}
+
+<header
+  class="fixed inset-x-0 top-0 z-40 flex h-14 items-center border-b border-slate-800/70 bg-[#0d1017]/95 px-3 backdrop-blur-xl sm:px-5"
+>
+  <Button
+    color="dark"
+    class="mr-2 h-10 w-10 border-0! bg-transparent! p-2.5! text-slate-400 hover:bg-slate-800! hover:text-white! lg:hidden"
+    aria-label="Open navigation"
+    onclick={() => (drawerOpen = true)}
+  >
+    <BarsOutline class="h-5 w-5" />
+  </Button>
+
+  <a href="/" class="flex shrink-0 items-center gap-2.5 rounded-lg focus-visible:outline-offset-4">
+    <span
+      class="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-blue-400 to-blue-700 shadow-[0_0_18px_rgba(59,130,246,0.4)]"
+    >
+      <PlaySolid class="h-4 w-4 text-white" />
+    </span>
+    <span class="hidden text-base font-bold tracking-tight text-slate-100 sm:block">FrostStream</span>
+  </a>
+
+  <div class="relative ml-3 w-full max-w-[39rem] sm:ml-4">
+    <SearchOutline
+      class="pointer-events-none absolute left-4 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-slate-500"
+    />
+    <Input
+      type="search"
+      aria-label="Search your library"
+      placeholder="Search your library, channels, comments..."
+      class="h-10 rounded-2xl! border-slate-800! bg-slate-900/80! py-2! pl-11! pr-11! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!"
+    />
+    <kbd
+      class="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-md border border-slate-700/70 bg-slate-800/80 px-2 py-0.5 text-[10px] text-slate-500 sm:block"
+    >
+      /
+    </kbd>
+  </div>
+
+  <div class="ml-auto flex shrink-0 items-center gap-1.5 pl-3 sm:gap-2">
+    <Button
+      pill
+      color="blue"
+      class="hidden border-0! bg-blue-500! px-4! py-2! text-xs! font-semibold! hover:bg-blue-400! sm:flex"
+    >
+      <DownloadOutline class="mr-1.5 h-4 w-4" />
+      Download
+    </Button>
+    <Button
+      color="dark"
+      class="hidden h-10 w-10 border-0! bg-transparent! p-2.5! text-slate-400 hover:bg-slate-800! hover:text-white! sm:flex"
+      aria-label="Notifications"
+    >
+      <BellOutline class="h-5 w-5" />
+    </Button>
+    {#if data.user}
+      <a
+        href="/profile"
+        aria-label={`Open profile for ${data.user.name}`}
+        title={data.user.name}
+        class="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-fuchsia-500 to-purple-600 text-xs font-bold text-white ring-2 ring-transparent transition hover:ring-fuchsia-400/60 focus-visible:outline-offset-4"
+      >
+        {data.user.initials}
+      </a>
+    {:else}
+      <Button
+        href="/auth/login"
+        pill
+        color="blue"
+        class="border-0! bg-blue-500! px-4! py-2! text-xs! font-semibold! hover:bg-blue-400!"
+      >
+        <ArrowRightToBracketOutline class="mr-1.5 h-4 w-4" />
+        Login
+      </Button>
+    {/if}
+  </div>
+</header>
+
+<aside
+  class="fixed bottom-0 left-0 top-14 z-30 hidden w-[232px] overflow-y-auto border-r border-slate-800/70 bg-[#0d1017] lg:block"
+  aria-label="Primary navigation"
+>
+  {@render sidebarContent()}
+</aside>
+
+<Drawer
+  bind:open={drawerOpen}
+  placement="left"
+  class="w-[min(19rem,88vw)]! border-r! border-slate-800! bg-[#0d1017]! p-0!"
+  aria-label="Mobile navigation"
+>
+  <div class="flex h-14 items-center justify-between border-b border-slate-800/70 px-4">
+    <span class="font-bold text-white">Navigation</span>
+    <Button
+      color="dark"
+      class="h-9 w-9 border-0! bg-transparent! p-2! text-slate-400 hover:bg-slate-800! hover:text-white!"
+      aria-label="Close navigation"
+      onclick={closeDrawer}
+    >
+      <CloseOutline class="h-5 w-5" />
+    </Button>
+  </div>
+  <div class="h-[calc(100vh-3.5rem)] overflow-y-auto">
+    {@render sidebarContent()}
+  </div>
+</Drawer>
+
+<main class="min-h-screen pt-14 lg:pl-[232px]">
+  <div class="mx-auto max-w-[1560px] px-4 pb-12 pt-5 sm:px-6 sm:pt-7 xl:px-10">
+    {@render children()}
+  </div>
+</main>
