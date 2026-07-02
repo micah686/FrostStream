@@ -206,9 +206,20 @@ export function storageMethodLabel(storage: StorageConfig): string {
   return 'Local filesystem';
 }
 
+/**
+ * The default local target stores its path relative to the server-side
+ * FROSTSTREAM_STORAGE_ROOT environment variable. The API never resolves the
+ * token, so render it as a readable name instead of the raw placeholder.
+ */
+const STORAGE_ROOT_TOKEN = '${FROSTSTREAM_STORAGE_ROOT}';
+
+export function displayLocalPath(path: string): string {
+  return path.replaceAll(STORAGE_ROOT_TOKEN, '<storage root>');
+}
+
 export function storageSummary(storage: StorageConfig): string {
   if (storage.local) {
-    return storage.local.path;
+    return displayLocalPath(storage.local.path);
   }
   if (storage.network) {
     const { protocol, host, port, basePath } = storage.network;

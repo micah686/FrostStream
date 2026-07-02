@@ -191,20 +191,22 @@
                       <EyeOutline class="h-4 w-4" />
                       Settings
                     </a>
-                    <button
-                      type="button"
-                      class="inline-flex h-10 min-w-10 items-center justify-center rounded-lg border border-slate-700 bg-slate-900/70 px-3 text-slate-300 transition hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-200 disabled:opacity-50"
-                      title="Delete storage target"
-                      aria-label={`Delete storage target ${storage.key}`}
-                      disabled={deletingKey === storage.key}
-                      onclick={() => removeStorage(storage)}
-                    >
-                      {#if deletingKey === storage.key}
-                        <Spinner size="4" />
-                      {:else}
-                        <TrashBinOutline class="h-4 w-4" />
-                      {/if}
-                    </button>
+                    {#if storage.key !== 'default'}
+                      <button
+                        type="button"
+                        class="inline-flex h-10 min-w-10 items-center justify-center rounded-lg border border-slate-700 bg-slate-900/70 px-3 text-slate-300 transition hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-200 disabled:opacity-50"
+                        title="Delete storage target"
+                        aria-label={`Delete storage target ${storage.key}`}
+                        disabled={deletingKey === storage.key}
+                        onclick={() => removeStorage(storage)}
+                      >
+                        {#if deletingKey === storage.key}
+                          <Spinner size="4" />
+                        {:else}
+                          <TrashBinOutline class="h-4 w-4" />
+                        {/if}
+                      </button>
+                    {/if}
                   </div>
                 </article>
               {/each}

@@ -5,24 +5,26 @@
     ArchiveOutline,
     ArrowLeftOutline,
     CloudArrowUpOutline,
-    CubesStackedOutline,
     DatabaseOutline,
     ExclamationCircleOutline,
     GlobeOutline,
+    LayersOutline,
     PlusOutline
   } from 'flowbite-svelte-icons';
   import {
+    createAzureBlobStorage,
     createGoogleCloudStorage,
     createLocalStorage,
     createNetworkStorage,
     createS3CompatibleStorage,
+    type AzureBlobCredentialMode,
     type GoogleCloudStorageCredentialMode,
     type NetworkStorageProtocol,
     type S3CompatibleObjectStorageProvider
   } from '$lib/api/storage';
 
   type IconComponent = typeof DatabaseOutline;
-  type TargetType = 'local' | 'network' | 's3' | 'gcs' | 'aws';
+  type TargetType = 'local' | 'network' | 's3' | 'azure' | 'gcs';
   type NetworkAuthMode = 'anonymous' | 'password' | 'privateKey';
 
   interface TargetOption {
@@ -35,9 +37,9 @@
   const targetOptions: TargetOption[] = [
     { type: 'local', label: 'Local', icon: DatabaseOutline, summary: 'Directory on the server filesystem' },
     { type: 'network', label: 'Network', icon: GlobeOutline, summary: 'FTP, FTPS, SFTP, NFS, SMB, or CIFS' },
-    { type: 's3', label: 'S3 compatible', icon: ArchiveOutline, summary: 'MinIO or DigitalOcean Spaces' },
-    { type: 'gcs', label: 'Google Cloud', icon: CloudArrowUpOutline, summary: 'Google Cloud Storage bucket' },
-    { type: 'aws', label: 'AWS S3', icon: CubesStackedOutline, summary: 'Amazon S3 bucket' }
+    { type: 's3', label: 'S3', icon: ArchiveOutline, summary: 'AWS S3, MinIO, or DigitalOcean Spaces' },
+    { type: 'azure', label: 'Azure Blob', icon: LayersOutline, summary: 'Azure Blob Storage container' },
+    { type: 'gcs', label: 'Google Cloud', icon: CloudArrowUpOutline, summary: 'Google Cloud Storage bucket' }
   ];
 
   const networkProtocolOptions = [
@@ -56,8 +58,15 @@
   ];
 
   const s3ProviderOptions = [
+    { value: 'AwsS3', name: 'AWS S3' },
     { value: 'MinIo', name: 'MinIO' },
     { value: 'DigitalOceanSpaces', name: 'DigitalOcean Spaces' }
+  ];
+
+  const azureCredentialOptions = [
+    { value: 'AccountKey', name: 'Account name and key' },
+    { value: 'ConnectionString', name: 'Connection string' },
+    { value: 'SasUrl', name: 'SAS URL' }
   ];
 
   const gcsCredentialOptions = [
@@ -85,8 +94,8 @@
   let networkPrivateKey = $state('');
   let networkBasePath = $state('');
 
-  // S3-compatible (shared by "S3 compatible" and "AWS S3")
-  let s3Provider = $state<S3CompatibleObjectStorageProvider>('MinIo');
+  // S3-compatible object storage
+  let s3Provider = $state<S3CompatibleObjectStorageProvider>('AwsS3');
   let s3Bucket = $state('');
   let s3Region = $state('');
   let s3Endpoint = $state('');
@@ -95,6 +104,14 @@
   let s3SessionToken = $state('');
   let s3ForcePathStyle = $state(false);
   let s3UseSsl = $state(true);
+
+  // Azure Blob
+  let azureCredentialMode = $state<AzureBlobCredentialMode>('AccountKey');
+  let azureContainerName = $state('');
+  let azureAccountName = $state('');
+  let azureAccountKey = $state('');
+  let azureConnectionString = $state('');
+  let azureSasUrl = $state('');
 
   // Google Cloud Storage
   let gcsBucket = $state('');
@@ -107,9 +124,8 @@
   let submitError = $state<string | null>(null);
 
   const activeOption = $derived(targetOptions.find((option) => option.type === targetType) ?? targetOptions[0]);
-  const effectiveS3Provider = $derived<S3CompatibleObjectStorageProvider>(targetType === 'aws' ? 'AwsS3' : s3Provider);
-  const s3RegionRequired = $derived(effectiveS3Provider !== 'MinIo');
-  const s3EndpointRequired = $derived(effectiveS3Provider === 'MinIo');
+  const s3RegionRequired = $derived(s3Provider !== 'MinIo');
+  const s3EndpointRequired = $derived(s3Provider === 'MinIo');
 
   async function save(event: SubmitEvent) {
     event.preventDefault();
@@ -161,11 +177,10 @@
       }
 
       case 's3':
-      case 'aws':
         await createS3CompatibleStorage({
           key: trimmedKey,
           description: trimmedDescription,
-          provider: effectiveS3Provider,
+          provider: s3Provider,
           bucketName: s3Bucket.trim(),
           region: s3Region.trim() || null,
           endpoint: s3Endpoint.trim() || null,
@@ -174,6 +189,20 @@
           sessionTokenSecretId: s3SessionToken.trim() || null,
           forcePathStyle: s3ForcePathStyle,
           useSsl: s3UseSsl
+        });
+        break;
+
+      case 'azure':
+        await createAzureBlobStorage({
+          key: trimmedKey,
+          description: trimmedDescription,
+          credentialMode: azureCredentialMode,
+          containerName: azureContainerName.trim() || null,
+          azureAccountName: azureCredentialMode === 'AccountKey' ? azureAccountName.trim() || null : null,
+          azureAccountKeySecretId: azureCredentialMode === 'AccountKey' ? azureAccountKey || null : null,
+          azureConnectionStringSecretId:
+            azureCredentialMode === 'ConnectionString' ? azureConnectionString.trim() || null : null,
+          azureSasUrlSecretId: azureCredentialMode === 'SasUrl' ? azureSasUrl.trim() || null : null
         });
         break;
 
@@ -350,14 +379,12 @@
           />
         </div>
       {/if}
-    {:else if targetType === 's3' || targetType === 'aws'}
+    {:else if targetType === 's3'}
       <div class="grid gap-5 sm:grid-cols-2">
-        {#if targetType === 's3'}
-          <div>
-            <Label for="s3-provider" class="mb-2 text-sm font-medium text-slate-300">Provider</Label>
-            <Select id="s3-provider" items={s3ProviderOptions} bind:value={s3Provider} class={inputClass} />
-          </div>
-        {/if}
+        <div>
+          <Label for="s3-provider" class="mb-2 text-sm font-medium text-slate-300">Provider</Label>
+          <Select id="s3-provider" items={s3ProviderOptions} bind:value={s3Provider} class={inputClass} />
+        </div>
         <div>
           <Label for="s3-bucket" class="mb-2 text-sm font-medium text-slate-300">Bucket</Label>
           <Input id="s3-bucket" required bind:value={s3Bucket} placeholder="froststream-media" class={inputClass} />
@@ -374,20 +401,18 @@
             class={inputClass}
           />
         </div>
-        {#if targetType === 's3'}
-          <div>
-            <Label for="s3-endpoint" class="mb-2 text-sm font-medium text-slate-300">
-              Endpoint {#if !s3EndpointRequired}<span class="font-normal text-slate-500">(optional)</span>{/if}
-            </Label>
-            <Input
-              id="s3-endpoint"
-              required={s3EndpointRequired}
-              bind:value={s3Endpoint}
-              placeholder="https://minio.local:9000"
-              class={inputClass}
-            />
-          </div>
-        {/if}
+        <div>
+          <Label for="s3-endpoint" class="mb-2 text-sm font-medium text-slate-300">
+            Endpoint {#if !s3EndpointRequired}<span class="font-normal text-slate-500">(optional)</span>{/if}
+          </Label>
+          <Input
+            id="s3-endpoint"
+            required={s3EndpointRequired}
+            bind:value={s3Endpoint}
+            placeholder="https://minio.local:9000"
+            class={inputClass}
+          />
+        </div>
       </div>
 
       <div class="grid gap-5 sm:grid-cols-2">
@@ -412,6 +437,61 @@
         <Checkbox bind:checked={s3UseSsl} class="text-sm text-slate-300">Use SSL</Checkbox>
         <Checkbox bind:checked={s3ForcePathStyle} class="text-sm text-slate-300">Force path-style addressing</Checkbox>
       </div>
+    {:else if targetType === 'azure'}
+      <div class="grid gap-5 sm:grid-cols-2">
+        <div>
+          <Label for="azure-credential-mode" class="mb-2 text-sm font-medium text-slate-300">Authentication</Label>
+          <Select
+            id="azure-credential-mode"
+            items={azureCredentialOptions}
+            bind:value={azureCredentialMode}
+            class={inputClass}
+          />
+        </div>
+        <div>
+          <Label for="azure-container" class="mb-2 text-sm font-medium text-slate-300">
+            Container <span class="font-normal text-slate-500">(optional)</span>
+          </Label>
+          <Input id="azure-container" bind:value={azureContainerName} placeholder="froststream-media" class={inputClass} />
+        </div>
+      </div>
+
+      {#if azureCredentialMode === 'AccountKey'}
+        <div class="grid gap-5 sm:grid-cols-2">
+          <div>
+            <Label for="azure-account-name" class="mb-2 text-sm font-medium text-slate-300">Account name</Label>
+            <Input id="azure-account-name" required bind:value={azureAccountName} class={inputClass} />
+          </div>
+          <div>
+            <Label for="azure-account-key" class="mb-2 text-sm font-medium text-slate-300">Account key</Label>
+            <Input id="azure-account-key" type="password" required bind:value={azureAccountKey} class={inputClass} />
+          </div>
+        </div>
+      {:else if azureCredentialMode === 'ConnectionString'}
+        <div>
+          <Label for="azure-connection-string" class="mb-2 text-sm font-medium text-slate-300">Connection string</Label>
+          <Input
+            id="azure-connection-string"
+            type="password"
+            required
+            bind:value={azureConnectionString}
+            placeholder="DefaultEndpointsProtocol=https;AccountName=..."
+            class={inputClass}
+          />
+        </div>
+      {:else if azureCredentialMode === 'SasUrl'}
+        <div>
+          <Label for="azure-sas-url" class="mb-2 text-sm font-medium text-slate-300">SAS URL</Label>
+          <Input
+            id="azure-sas-url"
+            type="password"
+            required
+            bind:value={azureSasUrl}
+            placeholder="https://account.blob.core.windows.net/container?sv=..."
+            class={inputClass}
+          />
+        </div>
+      {/if}
     {:else if targetType === 'gcs'}
       <div class="grid gap-5 sm:grid-cols-2">
         <div>

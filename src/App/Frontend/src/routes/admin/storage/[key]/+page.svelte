@@ -5,6 +5,7 @@
   import { ArrowLeftOutline, ExclamationCircleOutline, TrashBinOutline } from 'flowbite-svelte-icons';
   import {
     deleteStorage,
+    displayLocalPath,
     getStorage,
     storageMethodLabel,
     type StorageConfig
@@ -70,7 +71,7 @@
     }
 
     if (storage.local) {
-      return [{ label: 'Path', value: storage.local.path, mono: true }];
+      return [{ label: 'Path', value: displayLocalPath(storage.local.path), mono: true }];
     }
 
     if (storage.network) {
@@ -158,19 +159,21 @@
         <p class="mt-2 text-sm text-slate-400">{storage.description || 'No description'}</p>
       </div>
 
-      <Button
-        color="dark"
-        disabled={deleting}
-        class="shrink-0 border-slate-700! bg-[#0f1420]! px-4! py-2! text-xs! font-semibold! text-slate-200! hover:border-red-500/60! hover:bg-red-500/10! hover:text-red-200! disabled:opacity-60"
-        onclick={removeStorage}
-      >
-        {#if deleting}
-          <Spinner size="4" class="mr-1.5" />
-        {:else}
-          <TrashBinOutline class="mr-1.5 h-4 w-4" />
-        {/if}
-        Delete
-      </Button>
+      {#if storage.key !== 'default'}
+        <Button
+          color="dark"
+          disabled={deleting}
+          class="shrink-0 border-slate-700! bg-[#0f1420]! px-4! py-2! text-xs! font-semibold! text-slate-200! hover:border-red-500/60! hover:bg-red-500/10! hover:text-red-200! disabled:opacity-60"
+          onclick={removeStorage}
+        >
+          {#if deleting}
+            <Spinner size="4" class="mr-1.5" />
+          {:else}
+            <TrashBinOutline class="mr-1.5 h-4 w-4" />
+          {/if}
+          Delete
+        </Button>
+      {/if}
     </div>
 
     {#if error}
