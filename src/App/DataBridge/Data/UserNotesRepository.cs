@@ -118,7 +118,8 @@ public sealed class UserNotesRepository(DataBridgeDbContext db, IClock clock) : 
         if (normalizedType is not null)
             notes = notes.Where(x => x.TargetType == normalizedType);
 
-        notes = ApplyNoteSearch(notes, normalizedQuery);
+        if (!string.IsNullOrWhiteSpace(normalizedQuery))
+            notes = ApplyNoteSearch(notes, normalizedQuery);
 
         var total = await notes.CountAsync(ct);
         var items = await notes

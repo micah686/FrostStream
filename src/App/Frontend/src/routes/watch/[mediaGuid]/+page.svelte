@@ -7,6 +7,7 @@
     ChevronDownOutline,
     ChevronUpOutline,
     DotsHorizontalOutline,
+    EditOutline,
     ExclamationCircleOutline,
     SearchOutline,
     ShareNodesOutline,
@@ -18,6 +19,7 @@
   import CastButton from '$lib/components/players/CastButton.svelte';
   import SaveToPlaylistButton from '$lib/components/SaveToPlaylistButton.svelte';
   import PlaylistPanel from '$lib/components/PlaylistPanel.svelte';
+  import TargetNotePanel from '$lib/components/TargetNotePanel.svelte';
   import {
     getWatchState,
     markUnwatched,
@@ -189,6 +191,7 @@
   let lastProgressSentAt = 0;
   let lastSentPosition = -1;
   let moreMenuOpen = $state(false);
+  let noteMenuOpen = $state(false);
   let moreMenuContainer = $state<HTMLDivElement | null>(null);
   let selectedVersion = $state('');
   let mediaVersionOptions = $state<MediaVersionOption[]>([{ value: '', name: 'Latest version' }]);
@@ -196,6 +199,7 @@
 
   $effect(() => {
     if (!moreMenuOpen) {
+      noteMenuOpen = false;
       return;
     }
     const onPointerDown = (event: PointerEvent) => {
@@ -765,7 +769,7 @@
 
             {#if moreMenuOpen}
               <div
-                class="absolute right-0 top-full z-40 mt-2 w-48 rounded-xl border border-slate-700/80 bg-[#151a26] p-1.5 shadow-2xl shadow-black/50"
+                class="absolute right-0 top-full z-40 mt-2 w-80 rounded-xl border border-slate-700/80 bg-[#151a26] p-1.5 shadow-2xl shadow-black/50"
                 role="menu"
                 aria-label="More actions"
               >
@@ -778,6 +782,39 @@
                   <SearchOutline class="h-4 w-4 text-slate-500" />
                   Find similar
                 </a>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onclick={() => (noteMenuOpen = !noteMenuOpen)}
+                  class="flex w-full items-center justify-between gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-200 transition hover:bg-slate-800/70"
+                >
+                  <span class="flex items-center gap-2.5">
+                    <EditOutline class={['h-4 w-4', detail.userNote ? 'text-blue-400' : 'text-slate-500']} />
+                    Note
+                  </span>
+                  {#if noteMenuOpen}
+                    <ChevronUpOutline class="h-3.5 w-3.5 text-slate-500" />
+                  {:else}
+                    <ChevronDownOutline class="h-3.5 w-3.5 text-slate-500" />
+                  {/if}
+                </button>
+                {#if noteMenuOpen}
+                  <div class="mt-1 rounded-lg border border-slate-700/70 bg-slate-950/45 p-3">
+                    <TargetNotePanel
+                      targetType="video"
+                      targetId={mediaGuid}
+                      targetLabel="Video"
+                      initialNote={detail.userNote ?? null}
+                      embedded
+                      initialOpen
+                      onChange={(note) => {
+                        if (detail) {
+                          detail = { ...detail, userNote: note };
+                        }
+                      }}
+                    />
+                  </div>
+                {/if}
               </div>
             {/if}
           </div>
@@ -912,12 +949,6 @@
               {/if}
             {/each}
 
-            {#if detail.userNote}
-              <div>
-                <h3 class="text-xs font-bold uppercase tracking-[0.08em] text-slate-500">Your note</h3>
-                <p class="mt-1.5 whitespace-pre-line text-sm text-slate-300">{detail.userNote}</p>
-              </div>
-            {/if}
           </div>
         {:else}
           <div class="space-y-5 p-5">

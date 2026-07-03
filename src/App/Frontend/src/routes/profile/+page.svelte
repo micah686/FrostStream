@@ -12,6 +12,7 @@
     CookieSolid,
     ExclamationCircleOutline,
     EyeOutline,
+    FileSearchOutline,
     ListMusicOutline,
     MusicAltOutline,
     PlusOutline,
@@ -31,6 +32,7 @@
   } from '$lib/api/optionPresets';
   import CookieManagementSection from '$lib/components/profile/CookieManagementSection.svelte';
   import NotificationsSection from '$lib/components/profile/NotificationsSection.svelte';
+  import UserNotesSection from '$lib/components/profile/UserNotesSection.svelte';
   import UserPlaylistsSection from '$lib/components/profile/UserPlaylistsSection.svelte';
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
 
@@ -67,7 +69,8 @@
     { label: 'Option presets', icon: AdjustmentsVerticalOutline },
     { label: 'Cookie management', icon: CookieSolid },
     { label: 'Notifications', icon: BellOutline },
-    { label: 'Playlists', icon: ListMusicOutline }
+    { label: 'Playlists', icon: ListMusicOutline },
+    { label: 'Notes', icon: FileSearchOutline }
   ];
 
   const requestedSection = page.url.searchParams.get('section');
@@ -422,6 +425,8 @@
         <NotificationsSection />
       {:else if activeSection === 'Playlists'}
         <UserPlaylistsSection />
+      {:else if activeSection === 'Notes'}
+        <UserNotesSection />
       {:else if activeSection !== 'Overview'}
         <section class="rounded-2xl border border-slate-800 bg-[#151a26] p-8 text-center shadow-xl shadow-black/15">
           <p class="text-sm font-semibold text-slate-300">{activeSection}</p>

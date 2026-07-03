@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { page } from '$app/state';
   import { Badge, Button, Checkbox, Input, Label, Modal, Select, Spinner } from 'flowbite-svelte';
   import {
     BanOutline,
@@ -22,6 +23,7 @@
     type PlatformPlaylistItem
   } from '$lib/api/playlists';
   import { listDownloadConfigSets, type DownloadConfigSet } from '$lib/api/downloadConfigSets';
+  import TargetNotePanel from '$lib/components/TargetNotePanel.svelte';
   import { formatRelativeDate } from '$lib/media';
 
   const fieldClass =
@@ -73,6 +75,17 @@
     loadError = null;
     try {
       playlists = await listPlatformPlaylists();
+      const requestedPlaylistId = page.url.searchParams.get('playlist');
+      if (
+        requestedPlaylistId &&
+        expandedId !== requestedPlaylistId &&
+        playlists.some((playlist) => playlist.playlistId === requestedPlaylistId)
+      ) {
+        const requestedPlaylist = playlists.find((playlist) => playlist.playlistId === requestedPlaylistId);
+        if (requestedPlaylist) {
+          await toggleDetail(requestedPlaylist);
+        }
+      }
     } catch (err) {
       loadError = err instanceof Error ? err.message : 'Could not load playlists.';
     } finally {
@@ -446,6 +459,23 @@
               <dd class="mt-0.5 text-slate-300">{formatRelativeDate(playlist.lastScannedAt) ?? 'never'}</dd>
             </div>
           </dl>
+
+          <div class="mt-4">
+            <TargetNotePanel
+              targetType="playlist"
+              targetId={playlist.playlistId}
+              targetLabel="Playlist"
+              initialNote={playlist.userNote}
+              onChange={(note) => {
+                playlists = playlists.map((item) =>
+                  item.playlistId === playlist.playlistId ? { ...item, userNote: note } : item
+                );
+                if (detail?.playlistId === playlist.playlistId) {
+                  detail = { ...detail, userNote: note };
+                }
+              }}
+            />
+          </div>
 
           {#if expanded}
             <div class="mt-4 border-t border-slate-800/70 pt-4">

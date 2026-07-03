@@ -77,6 +77,30 @@ public sealed class UserNotesControllerTests
     }
 
     [Test]
+    public async Task List_Sends_Paginated_Request_With_Blank_Query()
+    {
+        var bus = Substitute.For<IMessageBus>();
+        var controller = CreateController(bus, "micah");
+
+        bus.RequestAsync<UserNoteSearchRequestMessage, UserNoteSearchResponseMessage>(
+                UserNoteSubjects.Search,
+                Arg.Is<UserNoteSearchRequestMessage>(x =>
+                    x.OwnerSubject == "micah" &&
+                    x.Query == string.Empty &&
+                    x.TargetType == "video" &&
+                    x.PageSize == 25 &&
+                    x.PageOffset == 50),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new UserNoteSearchResponseMessage { Success = true });
+
+        var result = await controller.List("video", 25, 50, CancellationToken.None);
+
+        result.Result.ShouldBeOfType<OkObjectResult>().Value
+            .ShouldBeOfType<UserNoteSearchResponseMessage>().Success.ShouldBeTrue();
+    }
+
+    [Test]
     public async Task Delete_Maps_NotFound()
     {
         var bus = Substitute.For<IMessageBus>();

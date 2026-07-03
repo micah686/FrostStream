@@ -5,6 +5,7 @@
   import { ArrowLeftOutline, CheckOutline, ExclamationCircleOutline, TrashBinOutline } from 'flowbite-svelte-icons';
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
   import PlaylistItemsManager from '$lib/components/profile/PlaylistItemsManager.svelte';
+  import TargetNotePanel from '$lib/components/TargetNotePanel.svelte';
   import {
     deleteUserPlaylist,
     getUserPlaylist,
@@ -180,6 +181,18 @@
           </div>
         </form>
       </section>
+
+      <TargetNotePanel
+        targetType="playlist"
+        targetId={playlist.playlistId}
+        targetLabel="Playlist"
+        initialNote={playlist.userNote}
+        onChange={(note) => {
+          if (playlist) {
+            playlist = { ...playlist, userNote: note };
+          }
+        }}
+      />
 
       <section class="rounded-2xl border border-slate-800 bg-[#151a26] p-5 shadow-xl shadow-black/15 sm:p-6" aria-label="Playlist items">
         <div class="flex flex-wrap items-center justify-between gap-2">

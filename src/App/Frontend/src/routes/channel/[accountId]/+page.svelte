@@ -12,6 +12,7 @@
     RectangleListOutline
   } from 'flowbite-svelte-icons';
   import { accentFor, formatBytes, formatCount, formatDuration, formatRelativeDate, formatViews, initialsFor } from '$lib/media';
+  import TargetNotePanel from '$lib/components/TargetNotePanel.svelte';
   import {
     getChannelStatistics,
     listChannelStatistics,
@@ -349,12 +350,19 @@
           </button>
         {/if}
 
-        {#if account.userNote}
-          <div class="mt-3 max-w-3xl rounded-xl border border-slate-800/80 bg-slate-900/40 px-4 py-3">
-            <h2 class="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-600">Your note</h2>
-            <p class="mt-1 whitespace-pre-line text-sm text-slate-300">{account.userNote}</p>
-          </div>
-        {/if}
+        <div class="mt-4 max-w-3xl">
+          <TargetNotePanel
+            targetType="channel"
+            targetId={String(account.accountId)}
+            targetLabel="Channel"
+            initialNote={account.userNote ?? null}
+            onChange={(note) => {
+              if (account) {
+                account = { ...account, userNote: note };
+              }
+            }}
+          />
+        </div>
       </div>
 
       {#if account.accountUrl}

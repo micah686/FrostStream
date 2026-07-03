@@ -138,6 +138,40 @@ public sealed class UserNotesController(
         return Ok(response);
     }
 
+    [HttpGet]
+    [Endpoint(EndpointIds.UserNotesList)]
+    [EndpointSummary("List user notes")]
+    [EndpointDescription("Lists the authenticated user's private notes across videos, channels, and playlists. The optional targetType filter accepts video, channel, or playlist.")]
+    public async Task<ActionResult<UserNoteSearchResponseMessage>> List(
+        [FromQuery] string? targetType = null,
+        [FromQuery] int pageSize = 50,
+        [FromQuery] int pageOffset = 0,
+        CancellationToken cancellationToken = default)
+    {
+        if (ResolveSubject() is not { } owner)
+            return Unauthorized();
+
+        var response = await SendAsync<UserNoteSearchRequestMessage, UserNoteSearchResponseMessage>(
+            UserNoteSubjects.Search,
+            new UserNoteSearchRequestMessage
+            {
+                OwnerSubject = owner,
+                Query = string.Empty,
+                TargetType = targetType,
+                PageSize = pageSize,
+                PageOffset = pageOffset
+            },
+            "list user notes",
+            cancellationToken);
+
+        if (response is null)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable.");
+        if (!response.Success)
+            return MapError(response.ErrorCode, response.ErrorMessage);
+
+        return Ok(response);
+    }
+
     private string? ResolveSubject()
         => AuthConstants.FindSubject(User);
 

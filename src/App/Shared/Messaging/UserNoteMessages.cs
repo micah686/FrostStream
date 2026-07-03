@@ -60,7 +60,7 @@ public sealed record UserNoteDeleteRequestMessage
 public sealed record UserNoteSearchRequestMessage
 {
     public required string OwnerSubject { get; init; }
-    public required string Query { get; init; }
+    public string Query { get; init; } = string.Empty;
     public string? TargetType { get; init; }
     public int PageSize { get; init; } = 50;
     public int PageOffset { get; init; }

@@ -82,6 +82,7 @@ public static class EndpointIds
     public const string UserNotesUpsert = "user-notes.upsert";
     public const string UserNotesGet = "user-notes.get";
     public const string UserNotesDelete = "user-notes.delete";
+    public const string UserNotesList = "user-notes.list";
     public const string UserNotesSearch = "user-notes.search";
 
     // Unified search
@@ -274,6 +275,7 @@ public static class EndpointCatalog
         new(EndpointIds.UserNotesUpsert, Bundles.Metadata),
         new(EndpointIds.UserNotesGet, Bundles.Metadata),
         new(EndpointIds.UserNotesDelete, Bundles.Metadata),
+        new(EndpointIds.UserNotesList, Bundles.Metadata),
         new(EndpointIds.UserNotesSearch, Bundles.Metadata),
         new(EndpointIds.SearchQuery, Bundles.Metadata),
         new(EndpointIds.SearchSimilar, Bundles.Metadata),
