@@ -149,7 +149,7 @@
             </span>
             {#if item.hasThumbnail}
               <img
-                src={`/stream/${item.mediaGuid}/thumbnail`}
+                src={`/api/watch/${item.mediaGuid}/thumbnail`}
                 alt=""
                 loading="lazy"
                 decoding="async"

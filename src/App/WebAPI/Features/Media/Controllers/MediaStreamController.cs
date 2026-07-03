@@ -1,627 +1,75 @@
 using Conduit.NATS;
-using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.StaticFiles;
-using Shared.Auth;
 using Shared.Messaging;
 using Shared.Storage;
 using WebAPI.Auth;
 
 namespace WebAPI.Features.Media.Controllers;
 
+/// <summary>
+/// HLS streaming surface: per-media manifests, their segments, and combined playlist streams.
+/// Today only audio renditions exist, so manifests require <c>audio=true</c> and the segment route
+/// pins <c>kind</c> to <c>audio</c>; video HLS can slot into the same URL scheme later (master
+/// playlist from <c>index.m3u8</c>, <c>kind=video</c> segments) without breaking clients.
+/// Progressive playback lives in <see cref="MediaWatchController"/>.
+/// </summary>
 [ApiController]
 [Route("stream")]
 public sealed class MediaStreamController(
     IMessageBus messageBus,
     IBlobStorageProvider blobStorageProvider,
+    MediaAccessChecker accessChecker,
+    AudioRenditionResolver audioRenditions,
     ILogger<MediaStreamController> logger) : ControllerBase
 {
     private static readonly TimeSpan QueryTimeout = TimeSpan.FromSeconds(10);
-    private static readonly TimeSpan AudioQueryTimeout = TimeSpan.FromSeconds(30);
-    private static readonly FileExtensionContentTypeProvider ContentTypeProvider = new();
 
-    /// <summary>
-    /// Evaluates the caller's watch-time access to a media item via DataBridge. Returns <c>null</c> when
-    /// playback is permitted, or a non-null result (403 when restricted, 503 when the check is
-    /// unreachable) that the caller must return instead of serving the stream. Fails closed.
-    /// </summary>
-    private async Task<IActionResult?> CheckWatchAccessAsync(Guid mediaGuid, CancellationToken cancellationToken)
-    {
-        var groups = (User?.FindAll(AuthConstants.GroupsClaim) ?? [])
-            .Select(claim => claim.Value)
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
+    private const string AudioKind = "audio";
 
-        MediaAccessCheckResponseMessage? response;
-        try
-        {
-            response = await messageBus.RequestAsync<MediaAccessCheckRequestMessage, MediaAccessCheckResponseMessage>(
-                MediaAccessSubjects.Check,
-                new MediaAccessCheckRequestMessage { MediaGuid = mediaGuid, UserGroups = groups },
-                QueryTimeout,
-                cancellationToken);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed checking media access for {MediaGuid}.", mediaGuid);
-            return StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable.");
-        }
-
-        if (response is null)
-        {
-            return StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable.");
-        }
-
-        return response.IsAllowed
-            ? null
-            : StatusCode(StatusCodes.Status403Forbidden, "You are not allowed to watch this media item.");
-    }
-
-    [HttpGet("{mediaGuid:guid}")]
-    [Endpoint(EndpointIds.MediaStream)]
-    [EndpointSummary("Stream an archived media file")]
-    [EndpointDescription("Resolves an archived media file by media GUID and streams it directly from the configured storage backend. Optional storageKey and positive version parameters select a specific stored copy; otherwise the latest matching version is used. Seekable streams support HTTP range requests for efficient playback, and the response content type is inferred from the stored file extension.")]
-    public async Task<IActionResult> GetStream(
+    [HttpGet("{mediaGuid:guid}/index.m3u8")]
+    [EnableCors(MediaCors.Policy)]
+    [Endpoint(EndpointIds.MediaHlsManifest)]
+    [EndpointSummary("Get an HLS playlist for a media item")]
+    [EndpointDescription("Returns an HLS media playlist for a media item, rewriting segment URLs through FrostStream so authorized clients can fetch the generated HLS assets. Currently only audio-only streams are available, so audio=true is required; the requested rendition ('aac', 'opus', or 'mp3'; default aac) is queued through MediaProcessor when missing and the endpoint returns 202 while it is prepared.")]
+    public async Task<IActionResult> GetManifest(
         Guid mediaGuid,
-        [FromQuery] string? storageKey = null,
-        [FromQuery] int? version = null,
-        CancellationToken cancellationToken = default)
-    {
-        if (version is <= 0)
-        {
-            return BadRequest("Query parameter 'version' must be greater than zero.");
-        }
-
-        if (await CheckWatchAccessAsync(mediaGuid, cancellationToken) is { } denied)
-        {
-            return denied;
-        }
-
-        storageKey = string.IsNullOrWhiteSpace(storageKey) ? null : storageKey.Trim();
-
-        MediaStreamResolveResponseMessage? response;
-        try
-        {
-            response = await messageBus.RequestAsync<
-                MediaStreamResolveRequestMessage,
-                MediaStreamResolveResponseMessage>(
-                MediaStreamSubjects.Resolve,
-                new MediaStreamResolveRequestMessage
-                {
-                    MediaGuid = mediaGuid,
-                    StorageKey = storageKey,
-                    Version = version
-                },
-                QueryTimeout,
-                cancellationToken);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed resolving media stream for {MediaGuid}.", mediaGuid);
-            return StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable.");
-        }
-
-        if (response is null)
-        {
-            return StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable.");
-        }
-
-        if (!response.Success)
-        {
-            return response.ErrorCode == "not_found"
-                ? NotFound(response.ErrorMessage ?? "Media stream was not found.")
-                : StatusCode(
-                    StatusCodes.Status500InternalServerError,
-                    response.ErrorMessage ?? "Media stream lookup failed.");
-        }
-
-        if (response.Item is null)
-        {
-            return StatusCode(
-                StatusCodes.Status502BadGateway,
-                "DataBridge returned an invalid media stream response.");
-        }
-
-        var location = response.Item;
-        try
-        {
-            var storage = await blobStorageProvider.GetAsync(location.StorageKey, cancellationToken);
-            var stream = await storage.OpenReadAsync(location.StoragePath, cancellationToken);
-            if (stream is null)
-            {
-                return NotFound("The selected media stream is missing from storage.");
-            }
-
-            var contentType = ContentTypeProvider.TryGetContentType(location.StoragePath, out var resolvedContentType)
-                ? resolvedContentType
-                : "application/octet-stream";
-
-            return File(stream, contentType, enableRangeProcessing: stream.CanSeek);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (FileNotFoundException)
-        {
-            return NotFound("The selected media stream is missing from storage.");
-        }
-        catch (DirectoryNotFoundException)
-        {
-            return NotFound("The selected media stream is missing from storage.");
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(
-                ex,
-                "Failed opening media stream {MediaGuid} version {Version} from storage {StorageKey} at {StoragePath}.",
-                location.MediaGuid,
-                location.Version,
-                location.StorageKey,
-                location.StoragePath);
-
-            return StatusCode(
-                StatusCodes.Status502BadGateway,
-                "The selected media stream could not be opened.");
-        }
-    }
-
-    [HttpGet("{mediaGuid:guid}/thumbnail")]
-    [HttpHead("{mediaGuid:guid}/thumbnail")]
-    [Endpoint(EndpointIds.MediaThumbnail)]
-    [EndpointSummary("Get an archived media thumbnail")]
-    [EndpointDescription("Resolves the stored thumbnail for an archived media item by GUID and streams it from the configured storage backend. The same watch-time access policy used for media playback is applied before the thumbnail is served.")]
-    public async Task<IActionResult> GetThumbnail(
-        Guid mediaGuid,
-        CancellationToken cancellationToken = default)
-    {
-        if (await CheckWatchAccessAsync(mediaGuid, cancellationToken) is { } denied)
-        {
-            return denied;
-        }
-
-        MediaThumbnailResolveResponseMessage? response;
-        try
-        {
-            response = await messageBus.RequestAsync<
-                MediaThumbnailResolveRequestMessage,
-                MediaThumbnailResolveResponseMessage>(
-                MediaStreamSubjects.ResolveThumbnail,
-                new MediaThumbnailResolveRequestMessage { MediaGuid = mediaGuid },
-                QueryTimeout,
-                cancellationToken);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed resolving thumbnail for {MediaGuid}.", mediaGuid);
-            return StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable.");
-        }
-
-        if (response is null)
-        {
-            return StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable.");
-        }
-
-        if (!response.Success)
-        {
-            return response.ErrorCode == "not_found"
-                ? NotFound(response.ErrorMessage ?? "Thumbnail was not found.")
-                : StatusCode(
-                    StatusCodes.Status500InternalServerError,
-                    response.ErrorMessage ?? "Thumbnail lookup failed.");
-        }
-
-        if (response.Item is null)
-        {
-            return StatusCode(
-                StatusCodes.Status502BadGateway,
-                "DataBridge returned an invalid thumbnail response.");
-        }
-
-        var location = response.Item;
-        try
-        {
-            var storage = await blobStorageProvider.GetAsync(location.StorageKey, cancellationToken);
-            var stream = await storage.OpenReadAsync(location.StoragePath, cancellationToken);
-            if (stream is null)
-            {
-                return NotFound("The selected thumbnail is missing from storage.");
-            }
-
-            var contentType = ContentTypeProvider.TryGetContentType(location.StoragePath, out var resolvedContentType)
-                ? resolvedContentType
-                : "application/octet-stream";
-
-            Response.Headers.CacheControl = "private, max-age=86400";
-            return File(stream, contentType);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (FileNotFoundException)
-        {
-            return NotFound("The selected thumbnail is missing from storage.");
-        }
-        catch (DirectoryNotFoundException)
-        {
-            return NotFound("The selected thumbnail is missing from storage.");
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(
-                ex,
-                "Failed opening thumbnail {MediaGuid} from storage {StorageKey} at {StoragePath}.",
-                location.MediaGuid,
-                location.StorageKey,
-                location.StoragePath);
-
-            return StatusCode(
-                StatusCodes.Status502BadGateway,
-                "The selected thumbnail could not be opened.");
-        }
-    }
-
-    [HttpGet("accounts/{accountId:long}/{assetType:regex(^(avatar|banner)$)}")]
-    [HttpHead("accounts/{accountId:long}/{assetType:regex(^(avatar|banner)$)}")]
-    [Endpoint(EndpointIds.MediaAccountAsset)]
-    [EndpointSummary("Get a creator account avatar or banner")]
-    [EndpointDescription("Resolves the stored avatar or banner image for a creator account by its internal numeric identifier and streams it from the configured storage backend. Returns 404 when the account has no stored asset of the requested kind.")]
-    public async Task<IActionResult> GetAccountAsset(
-        long accountId,
-        string assetType,
-        CancellationToken cancellationToken = default)
-    {
-        var kind = string.Equals(assetType, "banner", StringComparison.OrdinalIgnoreCase)
-            ? AccountAssetType.Banner
-            : AccountAssetType.Avatar;
-
-        AccountAssetResolveResponseMessage? response;
-        try
-        {
-            response = await messageBus.RequestAsync<
-                AccountAssetResolveRequestMessage,
-                AccountAssetResolveResponseMessage>(
-                MediaStreamSubjects.ResolveAccountAsset,
-                new AccountAssetResolveRequestMessage { AccountId = accountId, AssetType = kind },
-                QueryTimeout,
-                cancellationToken);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed resolving {AssetType} for account {AccountId}.", kind, accountId);
-            return StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable.");
-        }
-
-        if (response is null)
-        {
-            return StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable.");
-        }
-
-        if (!response.Success)
-        {
-            return response.ErrorCode == "not_found"
-                ? NotFound(response.ErrorMessage ?? "Account asset was not found.")
-                : StatusCode(
-                    StatusCodes.Status500InternalServerError,
-                    response.ErrorMessage ?? "Account asset lookup failed.");
-        }
-
-        if (response.Item is null)
-        {
-            return StatusCode(
-                StatusCodes.Status502BadGateway,
-                "DataBridge returned an invalid account asset response.");
-        }
-
-        var location = response.Item;
-        try
-        {
-            var storage = await blobStorageProvider.GetAsync(location.StorageKey, cancellationToken);
-            var stream = await storage.OpenReadAsync(location.StoragePath, cancellationToken);
-            if (stream is null)
-            {
-                return NotFound("The selected account asset is missing from storage.");
-            }
-
-            var contentType = ContentTypeProvider.TryGetContentType(location.StoragePath, out var resolvedContentType)
-                ? resolvedContentType
-                : "application/octet-stream";
-
-            Response.Headers.CacheControl = "private, max-age=86400";
-            return File(stream, contentType);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (FileNotFoundException)
-        {
-            return NotFound("The selected account asset is missing from storage.");
-        }
-        catch (DirectoryNotFoundException)
-        {
-            return NotFound("The selected account asset is missing from storage.");
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(
-                ex,
-                "Failed opening {AssetType} for account {AccountId} from storage {StorageKey} at {StoragePath}.",
-                kind,
-                location.AccountId,
-                location.StorageKey,
-                location.StoragePath);
-
-            return StatusCode(
-                StatusCodes.Status502BadGateway,
-                "The selected account asset could not be opened.");
-        }
-    }
-
-    [HttpGet("{mediaGuid:guid}/captions/{languageCode}")]
-    [Endpoint(EndpointIds.MediaCaption)]
-    [EndpointSummary("Stream an archived caption track")]
-    [EndpointDescription("Resolves a stored caption file for an archived media item by GUID and two-letter language code, applying the same watch-time access policy as media playback. The optional captionType parameter ('subtitles' or 'automatic_captions') pins a specific track; otherwise manual subtitles are preferred. SubRip files are converted to WebVTT on the fly so browsers can render them as text tracks.")]
-    public async Task<IActionResult> GetCaption(
-        Guid mediaGuid,
-        string languageCode,
-        [FromQuery] string? captionType = null,
-        CancellationToken cancellationToken = default)
-    {
-        languageCode = languageCode.Trim();
-        if (languageCode.Length == 0)
-        {
-            return BadRequest("Route parameter 'languageCode' is required.");
-        }
-
-        captionType = string.IsNullOrWhiteSpace(captionType) ? null : captionType.Trim();
-        if (captionType is not (null or "subtitles" or "automatic_captions"))
-        {
-            return BadRequest("Query parameter 'captionType' must be 'subtitles' or 'automatic_captions'.");
-        }
-
-        if (await CheckWatchAccessAsync(mediaGuid, cancellationToken) is { } denied)
-        {
-            return denied;
-        }
-
-        MediaCaptionResolveResponseMessage? response;
-        try
-        {
-            response = await messageBus.RequestAsync<
-                MediaCaptionResolveRequestMessage,
-                MediaCaptionResolveResponseMessage>(
-                MediaStreamSubjects.ResolveCaption,
-                new MediaCaptionResolveRequestMessage
-                {
-                    MediaGuid = mediaGuid,
-                    LanguageCode = languageCode,
-                    CaptionType = captionType
-                },
-                QueryTimeout,
-                cancellationToken);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed resolving caption for {MediaGuid}.", mediaGuid);
-            return StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable.");
-        }
-
-        if (response is null)
-        {
-            return StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable.");
-        }
-
-        if (!response.Success)
-        {
-            return response.ErrorCode == "not_found"
-                ? NotFound(response.ErrorMessage ?? "Caption track was not found.")
-                : StatusCode(
-                    StatusCodes.Status500InternalServerError,
-                    response.ErrorMessage ?? "Caption lookup failed.");
-        }
-
-        if (response.Item is null)
-        {
-            return StatusCode(
-                StatusCodes.Status502BadGateway,
-                "DataBridge returned an invalid caption response.");
-        }
-
-        var location = response.Item;
-        try
-        {
-            var storage = await blobStorageProvider.GetAsync(location.StorageKey, cancellationToken);
-            var stream = await storage.OpenReadAsync(location.StoragePath, cancellationToken);
-            if (stream is null)
-            {
-                return NotFound("The selected caption track is missing from storage.");
-            }
-
-            Response.Headers.CacheControl = "private, max-age=86400";
-
-            var extension = Path.GetExtension(location.StoragePath).ToLowerInvariant();
-            if (extension == ".srt")
-            {
-                string srt;
-                await using (stream)
-                {
-                    using var reader = new StreamReader(stream);
-                    srt = await reader.ReadToEndAsync(cancellationToken);
-                }
-
-                return Content(ConvertSrtToWebVtt(srt), "text/vtt; charset=utf-8");
-            }
-
-            var contentType = extension == ".vtt"
-                ? "text/vtt; charset=utf-8"
-                : ContentTypeProvider.TryGetContentType(location.StoragePath, out var resolvedContentType)
-                    ? resolvedContentType
-                    : "application/octet-stream";
-
-            return File(stream, contentType);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (FileNotFoundException)
-        {
-            return NotFound("The selected caption track is missing from storage.");
-        }
-        catch (DirectoryNotFoundException)
-        {
-            return NotFound("The selected caption track is missing from storage.");
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(
-                ex,
-                "Failed opening caption {MediaGuid} ({LanguageCode}) from storage {StorageKey} at {StoragePath}.",
-                location.MediaGuid,
-                location.LanguageCode,
-                location.StorageKey,
-                location.StoragePath);
-
-            return StatusCode(
-                StatusCodes.Status502BadGateway,
-                "The selected caption track could not be opened.");
-        }
-    }
-
-    /// <summary>
-    /// Minimal SubRip → WebVTT conversion: prepends the WEBVTT header and switches the
-    /// millisecond separator in cue timings from comma to dot. Cue numbers are valid VTT
-    /// cue identifiers, so the rest of the file passes through untouched.
-    /// </summary>
-    private static string ConvertSrtToWebVtt(string srt)
-    {
-        var lines = srt.TrimStart('\uFEFF').Replace("\r\n", "\n").Split('\n');
-        for (var i = 0; i < lines.Length; i++)
-        {
-            if (lines[i].Contains("-->", StringComparison.Ordinal))
-            {
-                lines[i] = lines[i].Replace(',', '.');
-            }
-        }
-
-        return "WEBVTT\n\n" + string.Join('\n', lines);
-    }
-
-    [HttpGet("audio/{mediaGuid:guid}/")]
-    [Endpoint(EndpointIds.MediaAudioStream)]
-    [EndpointSummary("Stream a cached audio rendition")]
-    [EndpointDescription("Streams a cached audio file rendition for a media item. When the requested rendition is missing, DataBridge queues MediaProcessor work and the endpoint returns 202 while the audio is prepared.")]
-    public async Task<IActionResult> GetAudioFile(
-        Guid mediaGuid,
-        [FromQuery] string format = "opus",
+        [FromQuery] bool audio = false,
+        [FromQuery] string format = AudioRenditionHelpers.DefaultFormat,
         [FromQuery] string? storageKey = null,
         [FromQuery] int? sourceVersion = null,
-        [FromQuery] bool cacheAudio = true,
+        [FromQuery] bool prepare = true,
         CancellationToken cancellationToken = default)
     {
-        if (!TryParseAudioFormat(format, out var audioFormat))
+        if (!audio)
+        {
+            return BadRequest("Video HLS is not available yet; request the audio-only stream with audio=true.");
+        }
+
+        if (!AudioRenditionHelpers.TryParseAudioFormat(format, out var audioFormat))
+        {
             return BadRequest("Audio format must be 'aac', 'opus', or 'mp3'.");
+        }
 
-        if (await CheckWatchAccessAsync(mediaGuid, cancellationToken) is { } denied)
+        if (await accessChecker.CheckWatchAccessAsync(User, mediaGuid, cancellationToken) is { } denied)
+        {
             return denied;
+        }
 
-        var response = await ResolveAudioRenditionAsync(
+        var (error, rendition) = await audioRenditions.ResolveAsync(
             mediaGuid,
             audioFormat,
             storageKey,
             sourceVersion,
-            createIfMissing: cacheAudio,
+            createIfMissing: prepare,
             cancellationToken);
 
-        if (response.Result is not null)
-            return response.Result;
-
-        var rendition = response.Rendition!;
-        if (rendition.Status != AudioRenditionStatus.Ready || string.IsNullOrWhiteSpace(rendition.StoragePath))
+        if (error is not null)
         {
-            return Accepted(new
-            {
-                rendition.RenditionId,
-                rendition.MediaGuid,
-                rendition.SourceVersion,
-                Format = rendition.Format.ToString().ToLowerInvariant(),
-                Status = rendition.Status.ToString().ToLowerInvariant()
-            });
+            return error;
         }
 
-        try
-        {
-            var storage = await blobStorageProvider.GetAsync(rendition.StorageKey, cancellationToken);
-            var stream = await storage.OpenReadAsync(rendition.StoragePath, cancellationToken);
-            if (stream is null)
-                return NotFound("The selected audio rendition is missing from storage.");
-
-            return File(stream, AudioContentType(rendition.Format), enableRangeProcessing: stream.CanSeek);
-        }
-        catch (FileNotFoundException)
-        {
-            return NotFound("The selected audio rendition is missing from storage.");
-        }
-        catch (DirectoryNotFoundException)
-        {
-            return NotFound("The selected audio rendition is missing from storage.");
-        }
-    }
-
-    [HttpGet("audio/{mediaGuid:guid}/index.m3u8")]
-    [Endpoint(EndpointIds.MediaAudioPlaylist)]
-    [EndpointSummary("Get an audio-only HLS media playlist")]
-    [EndpointDescription("Returns the stored HLS media playlist for a cached audio rendition, rewriting segment URLs through FrostStream so authenticated clients can fetch the generated HLS asset.")]
-    public async Task<IActionResult> GetAudioPlaylist(
-        Guid mediaGuid,
-        [FromQuery] string format = "aac",
-        [FromQuery] string? storageKey = null,
-        [FromQuery] int? sourceVersion = null,
-        [FromQuery] bool cacheAudio = true,
-        CancellationToken cancellationToken = default)
-    {
-        if (!TryParseAudioFormat(format, out var audioFormat))
-            return BadRequest("Audio format must be 'aac', 'opus', or 'mp3'.");
-
-        if (await CheckWatchAccessAsync(mediaGuid, cancellationToken) is { } denied)
-            return denied;
-
-        var response = await ResolveAudioRenditionAsync(
-            mediaGuid,
-            audioFormat,
-            storageKey,
-            sourceVersion,
-            createIfMissing: cacheAudio,
-            cancellationToken);
-
-        if (response.Result is not null)
-            return response.Result;
-
-        var rendition = response.Rendition!;
-        if (rendition.Status != AudioRenditionStatus.Ready)
+        if (rendition!.Status != AudioRenditionStatus.Ready)
         {
             return Accepted(new
             {
@@ -633,27 +81,35 @@ public sealed class MediaStreamController(
         return await ServeAudioManifestAsync(rendition, cancellationToken);
     }
 
-    [HttpGet("audio/{mediaGuid:guid}/hls/{format}/{sourceVersion:int}/{fileName}")]
-    [Endpoint(EndpointIds.MediaAudioSegment)]
-    [EndpointSummary("Stream an audio HLS segment")]
-    [EndpointDescription("Streams a cached HLS media segment or fMP4 initialization file belonging to a prepared audio rendition. Segment paths are resolved from rendition metadata and validated so clients can fetch only files generated beside the stored manifest.")]
-    public async Task<IActionResult> GetAudioSegment(
+    [HttpGet("{mediaGuid:guid}/hls/{kind:regex(^audio$)}/{format}/{sourceVersion:int}/{fileName}")]
+    [EnableCors(MediaCors.Policy)]
+    [Endpoint(EndpointIds.MediaHlsSegment)]
+    [EndpointSummary("Stream an HLS segment")]
+    [EndpointDescription("Streams a cached HLS media segment or fMP4 initialization file belonging to a prepared rendition. Segment paths are resolved from rendition metadata and validated so clients can fetch only files generated beside the stored manifest. Only audio renditions exist today, so the kind route segment must be 'audio'.")]
+    public async Task<IActionResult> GetSegment(
         Guid mediaGuid,
+        string kind,
         string format,
         int sourceVersion,
         string fileName,
         CancellationToken cancellationToken = default)
     {
-        if (!TryParseAudioFormat(format, out var audioFormat))
+        if (!AudioRenditionHelpers.TryParseAudioFormat(format, out var audioFormat))
+        {
             return BadRequest("Audio format must be 'aac', 'opus', or 'mp3'.");
+        }
 
-        if (!IsSafeHlsFileName(fileName))
+        if (!AudioRenditionHelpers.IsSafeHlsFileName(fileName))
+        {
             return BadRequest("Invalid HLS file name.");
+        }
 
-        if (await CheckWatchAccessAsync(mediaGuid, cancellationToken) is { } denied)
+        if (await accessChecker.CheckWatchAccessAsync(User, mediaGuid, cancellationToken) is { } denied)
+        {
             return denied;
+        }
 
-        var response = await ResolveAudioRenditionAsync(
+        var (error, rendition) = await audioRenditions.ResolveAsync(
             mediaGuid,
             audioFormat,
             storageKey: null,
@@ -661,44 +117,44 @@ public sealed class MediaStreamController(
             createIfMissing: false,
             cancellationToken);
 
-        if (response.Result is not null)
-            return response.Result;
-
-        var rendition = response.Rendition!;
-        if (rendition.Status != AudioRenditionStatus.Ready || string.IsNullOrWhiteSpace(rendition.StoragePath))
-            return NotFound("The selected audio segment is not ready.");
-
-        var segmentPath = CombineStoragePath(HlsStorageDirectory(rendition), fileName);
-        try
+        if (error is not null)
         {
-            var storage = await blobStorageProvider.GetAsync(rendition.StorageKey, cancellationToken);
-            var stream = await storage.OpenReadAsync(segmentPath, cancellationToken);
-            if (stream is null)
-                return NotFound("The selected audio segment is missing from storage.");
+            return error;
+        }
 
-            return File(stream, HlsFileContentType(fileName), enableRangeProcessing: stream.CanSeek);
-        }
-        catch (FileNotFoundException)
+        if (rendition!.Status != AudioRenditionStatus.Ready || string.IsNullOrWhiteSpace(rendition.StoragePath))
         {
-            return NotFound("The selected audio segment is missing from storage.");
+            return NotFound("The selected segment is not ready.");
         }
-        catch (DirectoryNotFoundException)
-        {
-            return NotFound("The selected audio segment is missing from storage.");
-        }
+
+        var segmentPath = AudioRenditionHelpers.CombineStoragePath(
+            AudioRenditionHelpers.HlsStorageDirectory(rendition),
+            fileName);
+
+        return await this.ServeBlobAsync(
+            blobStorageProvider,
+            logger,
+            rendition.StorageKey,
+            segmentPath,
+            subject: "HLS segment",
+            contentType: AudioRenditionHelpers.HlsFileContentType(fileName),
+            cancellationToken: cancellationToken);
     }
 
     [HttpGet("playlists/{playlistId:guid}/audio.m3u8")]
+    [EnableCors(MediaCors.Policy)]
     [Endpoint(EndpointIds.PlaylistAudioStream)]
     [EndpointSummary("Get an audio-only playlist stream")]
     [EndpointDescription("Returns an M3U8 playlist for the ready audio renditions in a downloaded playlist and queues missing audio renditions through MediaProcessor.")]
     public async Task<IActionResult> GetPlaylistAudio(
         Guid playlistId,
-        [FromQuery] string format = "aac",
+        [FromQuery] string format = AudioRenditionHelpers.DefaultFormat,
         CancellationToken cancellationToken = default)
     {
-        if (!TryParseAudioFormat(format, out var audioFormat))
+        if (!AudioRenditionHelpers.TryParseAudioFormat(format, out var audioFormat))
+        {
             return BadRequest("Audio format must be 'aac', 'opus', or 'mp3'.");
+        }
 
         PlaylistGetResponseMessage? playlistResponse;
         try
@@ -716,17 +172,21 @@ public sealed class MediaStreamController(
         }
 
         if (playlistResponse?.Success != true || playlistResponse.Playlist is null)
+        {
             return NotFound(playlistResponse?.ErrorMessage ?? "Playlist was not found.");
+        }
 
         var readyManifests = new List<(AudioRenditionDto Rendition, string Manifest)>();
         foreach (var item in playlistResponse.Playlist.Items?.Where(x => x.MediaGuid is not null).OrderBy(x => x.PlaylistIndex)
                      ?? Enumerable.Empty<PlaylistItemDto>())
         {
             // Skip items the caller is not allowed to watch rather than failing the whole playlist.
-            if (await CheckWatchAccessAsync(item.MediaGuid!.Value, cancellationToken) is not null)
+            if (await accessChecker.CheckWatchAccessAsync(User, item.MediaGuid!.Value, cancellationToken) is not null)
+            {
                 continue;
+            }
 
-            var resolved = await ResolveAudioRenditionAsync(
+            var (_, rendition) = await audioRenditions.ResolveAsync(
                 item.MediaGuid!.Value,
                 audioFormat,
                 storageKey: null,
@@ -734,19 +194,24 @@ public sealed class MediaStreamController(
                 createIfMissing: true,
                 cancellationToken);
 
-            if (resolved.Rendition?.Status == AudioRenditionStatus.Ready)
+            if (rendition?.Status == AudioRenditionStatus.Ready)
             {
-                var manifest = await ReadStorageTextAsync(
-                    resolved.Rendition.StorageKey,
-                    HlsManifestStoragePath(resolved.Rendition),
+                var manifest = await MediaBlobServing.ReadBlobTextAsync(
+                    blobStorageProvider,
+                    rendition.StorageKey,
+                    AudioRenditionHelpers.HlsManifestStoragePath(rendition),
                     cancellationToken);
                 if (manifest is not null)
-                    readyManifests.Add((resolved.Rendition, manifest));
+                {
+                    readyManifests.Add((rendition, manifest));
+                }
             }
         }
 
         if (readyManifests.Count == 0)
+        {
             return Accepted(new { playlistId, Status = "preparing" });
+        }
 
         return Content(BuildCombinedPlaylistM3u8(readyManifests), "application/vnd.apple.mpegurl");
     }
@@ -754,119 +219,22 @@ public sealed class MediaStreamController(
     private async Task<IActionResult> ServeAudioManifestAsync(AudioRenditionDto rendition, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(rendition.StoragePath))
+        {
             return NotFound("The selected audio rendition has no HLS manifest.");
+        }
 
-        var manifest = await ReadStorageTextAsync(rendition.StorageKey, HlsManifestStoragePath(rendition), cancellationToken);
+        var manifest = await MediaBlobServing.ReadBlobTextAsync(
+            blobStorageProvider,
+            rendition.StorageKey,
+            AudioRenditionHelpers.HlsManifestStoragePath(rendition),
+            cancellationToken);
         if (manifest is null)
+        {
             return NotFound("The selected audio HLS manifest is missing from storage.");
+        }
 
         return Content(RewriteManifestSegmentUris(rendition, manifest), "application/vnd.apple.mpegurl");
     }
-
-    private async Task<string?> ReadStorageTextAsync(string storageKey, string? storagePath, CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(storagePath))
-            return null;
-
-        try
-        {
-            var storage = await blobStorageProvider.GetAsync(storageKey, cancellationToken);
-            await using var stream = await storage.OpenReadAsync(storagePath, cancellationToken);
-            if (stream is null)
-                return null;
-
-            using var reader = new StreamReader(stream);
-            return await reader.ReadToEndAsync(cancellationToken);
-        }
-        catch (FileNotFoundException)
-        {
-            return null;
-        }
-        catch (DirectoryNotFoundException)
-        {
-            return null;
-        }
-    }
-
-    private async Task<(IActionResult? Result, AudioRenditionDto? Rendition)> ResolveAudioRenditionAsync(
-        Guid mediaGuid,
-        AudioRenditionFormat format,
-        string? storageKey,
-        int? sourceVersion,
-        bool createIfMissing,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            var response = await messageBus.RequestAsync<AudioRenditionResolveRequest, AudioRenditionResolveResponse>(
-                AudioRenditionSubjects.Resolve,
-                new AudioRenditionResolveRequest
-                {
-                    MediaGuid = mediaGuid,
-                    Format = format,
-                    StorageKey = string.IsNullOrWhiteSpace(storageKey) ? null : storageKey.Trim(),
-                    SourceVersion = sourceVersion,
-                    CreateIfMissing = createIfMissing
-                },
-                AudioQueryTimeout,
-                cancellationToken);
-
-            if (response is null)
-                return (StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable."), null);
-
-            if (!response.Success)
-            {
-                return (response.ErrorCode == "not_found"
-                    ? NotFound(response.ErrorMessage ?? "Audio rendition source was not found.")
-                    : StatusCode(StatusCodes.Status500InternalServerError, response.ErrorMessage ?? "Audio rendition lookup failed."), null);
-            }
-
-            return response.Item is null
-                ? (StatusCode(StatusCodes.Status502BadGateway, "DataBridge returned an invalid audio rendition response."), null)
-                : (null, response.Item);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed resolving audio rendition for {MediaGuid}.", mediaGuid);
-            return (StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable."), null);
-        }
-    }
-
-    private static bool TryParseAudioFormat(string? value, out AudioRenditionFormat format)
-    {
-        format = AudioRenditionFormat.Opus;
-        return value?.Trim().ToLowerInvariant() switch
-        {
-            "aac" or "m4a" => Set(out format, AudioRenditionFormat.Aac),
-            "opus" => Set(out format, AudioRenditionFormat.Opus),
-            "mp3" => Set(out format, AudioRenditionFormat.Mp3),
-            _ => false
-        };
-    }
-
-    private static bool Set(out AudioRenditionFormat target, AudioRenditionFormat value)
-    {
-        target = value;
-        return true;
-    }
-
-    private static string AudioFormatToken(AudioRenditionFormat format)
-        => format switch
-        {
-            AudioRenditionFormat.Aac => "aac",
-            AudioRenditionFormat.Opus => "opus",
-            AudioRenditionFormat.Mp3 => "mp3",
-            _ => "opus"
-        };
-
-    private static string AudioContentType(AudioRenditionFormat format)
-        => format switch
-        {
-            AudioRenditionFormat.Aac => "audio/mp4",
-            AudioRenditionFormat.Opus => "audio/ogg",
-            AudioRenditionFormat.Mp3 => "audio/mpeg",
-            _ => "application/octet-stream"
-        };
 
     private string RewriteManifestSegmentUris(AudioRenditionDto rendition, string manifest)
     {
@@ -968,53 +336,26 @@ public sealed class MediaStreamController(
     private string BuildSegmentUrl(AudioRenditionDto rendition, string fileName)
     {
         fileName = Path.GetFileName(fileName.Trim());
+        var formatToken = AudioRenditionHelpers.AudioFormatToken(rendition.Format);
+
+        // Sessionless clients (cast devices) authenticate every request with the manifest's cast
+        // token, so segment URLs must carry it forward.
+        var castToken = Request.Query[CastTokenDefaults.QueryParameter].ToString();
+
         var uri = Url.ActionLink(
-            action: nameof(GetAudioSegment),
+            action: nameof(GetSegment),
             values: new
             {
                 mediaGuid = rendition.MediaGuid,
-                format = AudioFormatToken(rendition.Format),
+                kind = AudioKind,
+                format = formatToken,
                 sourceVersion = rendition.SourceVersion,
                 fileName
             });
 
-        return uri ?? $"/stream/audio/{rendition.MediaGuid:D}/hls/{AudioFormatToken(rendition.Format)}/{rendition.SourceVersion}/{Uri.EscapeDataString(fileName)}";
+        uri ??= $"/stream/{rendition.MediaGuid:D}/hls/{AudioKind}/{formatToken}/{rendition.SourceVersion}/{Uri.EscapeDataString(fileName)}";
+        return string.IsNullOrEmpty(castToken)
+            ? uri
+            : $"{uri}{(uri.Contains('?') ? '&' : '?')}{CastTokenDefaults.QueryParameter}={Uri.EscapeDataString(castToken)}";
     }
-
-    private static bool IsSafeHlsFileName(string fileName)
-    {
-        if (string.IsNullOrWhiteSpace(fileName) || fileName != Path.GetFileName(fileName))
-            return false;
-
-        var extension = Path.GetExtension(fileName).ToLowerInvariant();
-        return extension is ".ts" or ".m4s" or ".mp4";
-    }
-
-    private static string HlsFileContentType(string fileName)
-        => Path.GetExtension(fileName).ToLowerInvariant() switch
-        {
-            ".ts" => "video/mp2t",
-            ".m4s" => "video/iso.segment",
-            ".mp4" => "video/mp4",
-            _ => "application/octet-stream"
-        };
-
-    private static string StorageDirectory(string storagePath)
-    {
-        var slash = storagePath.LastIndexOf('/');
-        return slash < 0 ? string.Empty : storagePath[..slash];
-    }
-
-    private static string CombineStoragePath(string directory, string fileName)
-        => string.IsNullOrWhiteSpace(directory) ? fileName : $"{directory.TrimEnd('/')}/{fileName}";
-
-    private static string HlsStorageDirectory(AudioRenditionDto rendition)
-        => string.IsNullOrWhiteSpace(rendition.StoragePath)
-            ? "hls"
-            : CombineStoragePath(StorageDirectory(rendition.StoragePath), "hls");
-
-    private static string? HlsManifestStoragePath(AudioRenditionDto rendition)
-        => string.IsNullOrWhiteSpace(rendition.StoragePath)
-            ? null
-            : CombineStoragePath(HlsStorageDirectory(rendition), "index.m3u8");
 }

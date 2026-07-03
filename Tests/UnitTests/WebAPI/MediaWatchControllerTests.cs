@@ -3,19 +3,21 @@ using Conduit.NATS;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using Shared.Messaging;
 using Shared.Storage;
 using Shouldly;
 using TUnit.Core;
+using WebAPI.Features.Media;
 using WebAPI.Features.Media.Controllers;
 
 namespace UnitTests.WebAPI;
 
-public sealed class MediaStreamControllerTests
+public sealed class MediaWatchControllerTests
 {
     [Test]
-    public async Task GetStream_Resolves_Filters_And_Returns_Range_Enabled_Stream()
+    public async Task GetWatch_Resolves_Filters_And_Returns_Range_Enabled_Stream()
     {
         var mediaGuid = Guid.NewGuid();
         var bus = Substitute.For<IMessageBus>();
@@ -39,11 +41,11 @@ public sealed class MediaStreamControllerTests
         provider.GetAsync("storage-a", Arg.Any<CancellationToken>()).Returns(storage);
         storage.OpenReadAsync("media/video.mp4", Arg.Any<CancellationToken>()).Returns(stream);
 
-        var result = await CreateController(bus, provider).GetStream(
+        var result = await CreateController(bus, provider).GetWatch(
             mediaGuid,
-            " storage-a ",
-            2,
-            CancellationToken.None);
+            storageKey: " storage-a ",
+            version: 2,
+            cancellationToken: CancellationToken.None);
 
         var file = result.ShouldBeOfType<FileStreamResult>();
         file.FileStream.ShouldBeSameAs(stream);
@@ -52,7 +54,7 @@ public sealed class MediaStreamControllerTests
     }
 
     [Test]
-    public async Task GetStream_Disables_Ranges_For_NonSeekable_Stream_And_Uses_Binary_Mime()
+    public async Task GetWatch_Disables_Ranges_For_NonSeekable_Stream_And_Uses_Binary_Mime()
     {
         var mediaGuid = Guid.NewGuid();
         var bus = Substitute.For<IMessageBus>();
@@ -64,7 +66,7 @@ public sealed class MediaStreamControllerTests
         provider.GetAsync("storage-a", Arg.Any<CancellationToken>()).Returns(storage);
         storage.OpenReadAsync("media/content.unknown", Arg.Any<CancellationToken>()).Returns(stream);
 
-        var result = await CreateController(bus, provider).GetStream(mediaGuid);
+        var result = await CreateController(bus, provider).GetWatch(mediaGuid);
 
         var file = result.ShouldBeOfType<FileStreamResult>();
         file.ContentType.ShouldBe("application/octet-stream");
@@ -72,14 +74,14 @@ public sealed class MediaStreamControllerTests
     }
 
     [Test]
-    public async Task GetStream_Validates_Version_And_Maps_Lookup_Failures()
+    public async Task GetWatch_Validates_Version_And_Maps_Lookup_Failures()
     {
         var mediaGuid = Guid.NewGuid();
         var bus = Substitute.For<IMessageBus>();
         var provider = Substitute.For<IBlobStorageProvider>();
         var controller = CreateController(bus, provider);
 
-        var invalid = await controller.GetStream(mediaGuid, version: 0);
+        var invalid = await controller.GetWatch(mediaGuid, version: 0);
         invalid.ShouldBeOfType<BadRequestObjectResult>();
 
         bus.RequestAsync<MediaStreamResolveRequestMessage, MediaStreamResolveResponseMessage>(
@@ -94,12 +96,57 @@ public sealed class MediaStreamControllerTests
                 ErrorMessage = "missing"
             });
 
-        var missing = await controller.GetStream(mediaGuid);
+        var missing = await controller.GetWatch(mediaGuid);
         missing.ShouldBeOfType<NotFoundObjectResult>().Value.ShouldBe("missing");
     }
 
     [Test]
-    public async Task GetStream_Maps_Missing_Object_And_Provider_Failure()
+    public async Task GetWatch_Rejects_Invalid_Audio_Format()
+    {
+        var bus = Substitute.For<IMessageBus>();
+        var provider = Substitute.For<IBlobStorageProvider>();
+
+        var result = await CreateController(bus, provider).GetWatch(Guid.NewGuid(), audio: true, format: "flac");
+
+        result.ShouldBeOfType<BadRequestObjectResult>();
+    }
+
+    [Test]
+    public async Task GetWatch_Audio_Returns_202_While_Rendition_Prepares()
+    {
+        var mediaGuid = Guid.NewGuid();
+        var bus = Substitute.For<IMessageBus>();
+        var provider = Substitute.For<IBlobStorageProvider>();
+
+        bus.RequestAsync<AudioRenditionResolveRequest, AudioRenditionResolveResponse>(
+                AudioRenditionSubjects.Resolve,
+                Arg.Is<AudioRenditionResolveRequest>(request =>
+                    request.MediaGuid == mediaGuid &&
+                    request.Format == AudioRenditionFormat.Aac &&
+                    request.CreateIfMissing),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new AudioRenditionResolveResponse
+            {
+                Success = true,
+                Item = new AudioRenditionDto
+                {
+                    RenditionId = Guid.NewGuid(),
+                    MediaGuid = mediaGuid,
+                    SourceVersion = 1,
+                    Format = AudioRenditionFormat.Aac,
+                    Status = AudioRenditionStatus.Pending,
+                    StorageKey = "storage-a"
+                }
+            });
+
+        var result = await CreateController(bus, provider).GetWatch(mediaGuid, audio: true);
+
+        result.ShouldBeOfType<AcceptedResult>();
+    }
+
+    [Test]
+    public async Task GetWatch_Maps_Missing_Object_And_Provider_Failure()
     {
         var mediaGuid = Guid.NewGuid();
         var bus = Substitute.For<IMessageBus>();
@@ -112,18 +159,18 @@ public sealed class MediaStreamControllerTests
             .Returns(Task.FromResult<Stream>(null!));
 
         var controller = CreateController(bus, provider);
-        var missing = await controller.GetStream(mediaGuid);
+        var missing = await controller.GetWatch(mediaGuid);
         missing.ShouldBeOfType<NotFoundObjectResult>();
 
         provider.GetAsync("storage-a", Arg.Any<CancellationToken>())
             .Returns<Task<IBlobStorage>>(_ => throw new InvalidOperationException("storage failed"));
 
-        var failed = await controller.GetStream(mediaGuid);
+        var failed = await controller.GetWatch(mediaGuid);
         failed.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status502BadGateway);
     }
 
     [Test]
-    public async Task GetStream_Returns_403_When_Watch_Access_Is_Denied()
+    public async Task GetWatch_Returns_403_When_Watch_Access_Is_Denied()
     {
         var mediaGuid = Guid.NewGuid();
         var bus = Substitute.For<IMessageBus>();
@@ -139,7 +186,7 @@ public sealed class MediaStreamControllerTests
                 Arg.Any<CancellationToken>())
             .Returns(new MediaAccessCheckResponseMessage { IsAllowed = false, FailureReason = "media-restricted" });
 
-        var result = await controller.GetStream(mediaGuid);
+        var result = await controller.GetWatch(mediaGuid);
 
         result.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status403Forbidden);
         await provider.DidNotReceive().GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
@@ -204,11 +251,11 @@ public sealed class MediaStreamControllerTests
         await provider.DidNotReceive().GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
-    private static MediaStreamController CreateController(
+    private static MediaWatchController CreateController(
         IMessageBus bus,
         IBlobStorageProvider provider)
     {
-        // The stream endpoints gate on a watch-time access check; default it to allowed so these tests
+        // The watch endpoints gate on a watch-time access check; default it to allowed so these tests
         // exercise the streaming path. See MediaAccessControllerTests for the restriction behaviour.
         bus.RequestAsync<MediaAccessCheckRequestMessage, MediaAccessCheckResponseMessage>(
                 MediaAccessSubjects.Check,
@@ -217,7 +264,15 @@ public sealed class MediaStreamControllerTests
                 Arg.Any<CancellationToken>())
             .Returns(new MediaAccessCheckResponseMessage { IsAllowed = true });
 
-        return new MediaStreamController(bus, provider, Substitute.For<ILogger<MediaStreamController>>())
+        return new MediaWatchController(
+            bus,
+            provider,
+            new MediaAccessChecker(bus, Substitute.For<ILogger<MediaAccessChecker>>()),
+            new AudioRenditionResolver(bus, Substitute.For<ILogger<AudioRenditionResolver>>()),
+            new CastTokenService(
+                Options.Create(new CastTokenOptions()),
+                Substitute.For<ILogger<CastTokenService>>()),
+            Substitute.For<ILogger<MediaWatchController>>())
         {
             ControllerContext = new ControllerContext
             {

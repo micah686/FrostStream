@@ -169,9 +169,9 @@ public static class EndpointIds
     public const string MediaThumbnail = "media.thumbnail";
     public const string MediaCaption = "media.caption";
     public const string MediaAccountAsset = "media.account-asset";
-    public const string MediaAudioStream = "media.audio-stream";
-    public const string MediaAudioPlaylist = "media.audio-playlist";
-    public const string MediaAudioSegment = "media.audio-segment";
+    public const string MediaCastToken = "media.cast-token";
+    public const string MediaHlsManifest = "media.hls-manifest";
+    public const string MediaHlsSegment = "media.hls-segment";
     public const string MediaWatchStateGet = "media.watch-state.get";
     public const string MediaWatchStateUpsert = "media.watch-state.upsert";
     public const string MediaWatchStateListInProgress = "media.watch-state.list-in-progress";
@@ -349,9 +349,9 @@ public static class EndpointCatalog
         new(EndpointIds.MediaThumbnail, Bundles.Media),
         new(EndpointIds.MediaCaption, Bundles.Media),
         new(EndpointIds.MediaAccountAsset, Bundles.Media),
-        new(EndpointIds.MediaAudioStream, Bundles.Media),
-        new(EndpointIds.MediaAudioPlaylist, Bundles.Media),
-        new(EndpointIds.MediaAudioSegment, Bundles.Media),
+        new(EndpointIds.MediaCastToken, Bundles.Media),
+        new(EndpointIds.MediaHlsManifest, Bundles.Media),
+        new(EndpointIds.MediaHlsSegment, Bundles.Media),
         new(EndpointIds.MediaWatchStateGet, Bundles.Media),
         new(EndpointIds.MediaWatchStateUpsert, Bundles.Media),
         new(EndpointIds.MediaWatchStateMarkWatched, Bundles.Media),

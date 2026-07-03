@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { Button, Spinner } from 'flowbite-svelte';
+  import { Button, Select, Spinner } from 'flowbite-svelte';
   import {
     CheckCircleOutline,
     CheckCircleSolid,
@@ -8,7 +8,6 @@
     ChevronUpOutline,
     DotsHorizontalOutline,
     ExclamationCircleOutline,
-    PlusOutline,
     SearchOutline,
     ShareNodesOutline,
     ThumbsDownOutline,
@@ -16,6 +15,7 @@
   } from 'flowbite-svelte-icons';
   import VideoJs10Player, { type TextTrackSource } from '$lib/components/players/VideoJs10Player.svelte';
   import SveltePlayer from '$lib/components/players/SveltePlayer.svelte';
+  import CastButton from '$lib/components/players/CastButton.svelte';
   import SaveToPlaylistButton from '$lib/components/SaveToPlaylistButton.svelte';
   import PlaylistPanel from '$lib/components/PlaylistPanel.svelte';
   import {
@@ -156,6 +156,11 @@
     account: { accountName: string };
   }
 
+  interface MediaVersionOption {
+    value: string;
+    name: string;
+  }
+
   const players = [
     { id: 'videojs', label: 'Video.js 10 (beta)' },
     { id: 'svelte', label: 'Svelte Video Player' }
@@ -185,6 +190,9 @@
   let lastSentPosition = -1;
   let moreMenuOpen = $state(false);
   let moreMenuContainer = $state<HTMLDivElement | null>(null);
+  let selectedVersion = $state('');
+  let mediaVersionOptions = $state<MediaVersionOption[]>([{ value: '', name: 'Latest version' }]);
+  let versionsLoading = $state(false);
 
   $effect(() => {
     if (!moreMenuOpen) {
@@ -213,7 +221,10 @@
   // platform (downloaded provider) playlist. Only one panel is shown; ulist wins.
   const userListId = $derived(page.url.searchParams.get('ulist'));
   const platformListId = $derived(page.url.searchParams.get('list'));
-  const streamUrl = $derived(`/stream/${mediaGuid}`);
+  const streamUrl = $derived.by(() => {
+    const query = selectedVersion ? `?version=${encodeURIComponent(selectedVersion)}` : '';
+    return `/api/watch/${mediaGuid}${query}`;
+  });
   const watched = $derived(watchState?.completed === true);
   // ?t= wins over the saved position; positions within the first 5s or last 5% are
   // treated as "start over" so a finished video doesn't resume at the outro.
@@ -235,14 +246,14 @@
     }
     return state.positionSeconds;
   });
-  const posterUrl = $derived(detail?.thumbnailStoragePath ? `/stream/${mediaGuid}/thumbnail` : null);
+  const posterUrl = $derived(detail?.thumbnailStoragePath ? `/api/watch/${mediaGuid}/thumbnail` : null);
   const captionTracks = $derived.by((): TextTrackSource[] => {
     const current = detail;
     if (!current) {
       return [];
     }
     return current.captionLanguages.map((caption) => ({
-      src: `/stream/${current.mediaGuid}/captions/${encodeURIComponent(caption.languageCode)}?captionType=${encodeURIComponent(caption.captionType)}`,
+      src: `/api/watch/${current.mediaGuid}/captions/${encodeURIComponent(caption.languageCode)}?captionType=${encodeURIComponent(caption.captionType)}`,
       srclang: caption.languageCode,
       label: captionSummary(caption),
       kind: caption.captionType === 'automatic_captions' ? 'captions' : 'subtitles'
@@ -272,8 +283,36 @@
     suppressAutoComplete = false;
     lastProgressSentAt = 0;
     lastSentPosition = -1;
+    selectedVersion = '';
+    mediaVersionOptions = [{ value: '', name: 'Latest version' }];
+    versionsLoading = false;
 
-    await Promise.all([loadDetail(guid), loadComments(guid, 1), loadUpNext(guid), loadWatchState(guid)]);
+    await Promise.all([loadDetail(guid), loadComments(guid, 1), loadUpNext(guid), loadWatchState(guid), loadVersions(guid)]);
+  }
+
+  async function loadVersions(guid: string) {
+    versionsLoading = true;
+    const versions: number[] = [];
+    try {
+      for (let version = 1; version <= 50; version += 1) {
+        const response = await fetch(`/api/watch/${guid}?version=${version}`, { method: 'HEAD' });
+        if (response.ok) {
+          versions.push(version);
+          continue;
+        }
+        if (versions.length > 0 || response.status === 400 || response.status === 401 || response.status === 403) {
+          break;
+        }
+      }
+      mediaVersionOptions = [
+        { value: '', name: 'Latest version' },
+        ...versions.map((version) => ({ value: String(version), name: `Version ${version}` }))
+      ];
+    } catch {
+      mediaVersionOptions = [{ value: '', name: 'Latest version' }];
+    } finally {
+      versionsLoading = false;
+    }
   }
 
   async function loadWatchState(guid: string) {
@@ -533,7 +572,7 @@
   }
 
   function thumbnailUrl(card: UpNextCard): string | null {
-    return card.thumbnailStoragePath ? `/stream/${card.mediaGuid}/thumbnail` : null;
+    return card.thumbnailStoragePath ? `/api/watch/${card.mediaGuid}/thumbnail` : null;
   }
 
   function hideBrokenImage(event: Event) {
@@ -549,23 +588,40 @@
 
 <div class="grid gap-8 xl:grid-cols-[minmax(0,1fr)_360px]">
   <section class="min-w-0" aria-label="Video player">
-    <div class="mb-3 flex gap-1 rounded-xl border border-slate-800/70 bg-slate-900/40 p-1" role="tablist" aria-label="Player implementation">
-      {#each players as p}
-        <button
-          type="button"
-          role="tab"
-          aria-selected={playerTab === p.id}
-          onclick={() => (playerTab = p.id)}
-          class={[
-            'flex-1 rounded-lg px-4 py-2 text-xs font-semibold transition',
-            playerTab === p.id
-              ? 'bg-blue-500/15 text-blue-400'
-              : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-300'
-          ]}
-        >
-          {p.label}
-        </button>
-      {/each}
+    <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+      <div class="flex flex-1 gap-1 rounded-xl border border-slate-800/70 bg-slate-900/40 p-1" role="tablist" aria-label="Player implementation">
+        {#each players as p}
+          <button
+            type="button"
+            role="tab"
+            aria-selected={playerTab === p.id}
+            onclick={() => (playerTab = p.id)}
+            class={[
+              'flex-1 rounded-lg px-4 py-2 text-xs font-semibold transition',
+              playerTab === p.id
+                ? 'bg-blue-500/15 text-blue-400'
+                : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-300'
+            ]}
+          >
+            {p.label}
+          </button>
+        {/each}
+      </div>
+      <div class="flex items-center gap-2">
+        {#if versionsLoading}
+          <span class="flex items-center gap-2 rounded-xl border border-slate-800/70 bg-slate-900/40 px-3 py-2 text-xs text-slate-500">
+            <Spinner size="4" />
+            Versions
+          </span>
+        {:else}
+          <Select
+            items={mediaVersionOptions}
+            bind:value={selectedVersion}
+            aria-label="Media version"
+            class="w-full border-slate-800! bg-slate-900/80! text-sm! text-slate-300! focus:border-blue-500! focus:ring-blue-500! sm:w-44!"
+          />
+        {/if}
+      </div>
     </div>
 
     {#if loadError}
@@ -579,7 +635,7 @@
     {:else}
       <div class="aspect-video overflow-hidden rounded-2xl bg-black shadow-2xl shadow-black/30">
         {#if watchStateLoaded}
-          {#key `${mediaGuid}:${playerTab}`}
+          {#key `${mediaGuid}:${playerTab}:${selectedVersion}`}
             {#if playerTab === 'videojs'}
               <VideoJs10Player
                 src={streamUrl}
@@ -619,7 +675,7 @@
           >
             {initialsFor(detail.account.accountName)}
             <img
-              src={`/stream/accounts/${detail.account.accountId}/avatar`}
+              src={`/api/watch/accounts/${detail.account.accountId}/avatar`}
               alt=""
               loading="lazy"
               decoding="async"
@@ -642,13 +698,6 @@
               <p class="text-xs text-slate-500">@{detail.account.accountHandle}</p>
             {/if}
           </div>
-          <Button
-            color="blue"
-            class="ml-2 border-0! bg-blue-500! px-4! py-2! text-xs! font-semibold! hover:bg-blue-400!"
-          >
-            <PlusOutline class="mr-1 h-3.5 w-3.5" />
-            Subscribe
-          </Button>
         </div>
 
         <div class="flex items-center gap-2">
@@ -690,6 +739,7 @@
               Mark watched
             {/if}
           </button>
+          <CastButton {mediaGuid} title={detail.title} posterUrl={posterUrl} />
           <Button
             color="dark"
             class="border-slate-800! bg-slate-900/70! px-4! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800!"

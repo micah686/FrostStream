@@ -14,6 +14,7 @@ using System.Text.Json.Serialization;
 using WebAPI.Auth;
 using WebAPI.Features.Backups;
 using WebAPI.Features.Downloads;
+using WebAPI.Features.Media;
 
 namespace WebAPI;
 
@@ -37,10 +38,34 @@ public class Program
         builder.Services.Configure<OpenFgaOptions>(builder.Configuration.GetSection(OpenFgaOptions.SectionName));
         builder.Services.Configure<BackupOptions>(builder.Configuration.GetSection(BackupOptions.SectionName));
 
+        // Default scheme is a selector: requests carrying a cast token (sessionless cast devices)
+        // authenticate through the CastToken scheme; everything else uses the session scheme for
+        // the current mode (SingleUser or JwtBearer).
+        const string schemeSelector = "FrostStream";
+        var sessionScheme = singleUserMode ? AuthConstants.SingleUserScheme : JwtBearerDefaults.AuthenticationScheme;
+        var authBuilder = builder.Services
+            .AddAuthentication(schemeSelector)
+            .AddPolicyScheme(schemeSelector, "FrostStream scheme selector", options =>
+            {
+                options.ForwardDefaultSelector = context =>
+                    context.Request.Query.ContainsKey(CastTokenDefaults.QueryParameter)
+                        ? CastTokenDefaults.Scheme
+                        : sessionScheme;
+            })
+            .AddScheme<AuthenticationSchemeOptions, CastTokenAuthenticationHandler>(
+                CastTokenDefaults.Scheme,
+                _ => { });
+
+        builder.Services.Configure<CastTokenOptions>(builder.Configuration.GetSection(CastTokenOptions.SectionName));
+        builder.Services.AddSingleton<CastTokenService>();
+        builder.Services.AddScoped<MediaAccessChecker>();
+        builder.Services.AddScoped<AudioRenditionResolver>();
+        builder.Services.AddCors(options => options.AddPolicy(MediaCors.Policy, policy =>
+            policy.AllowAnyOrigin().AllowAnyHeader().WithMethods("GET", "HEAD")));
+
         if (singleUserMode)
         {
-            builder.Services
-                .AddAuthentication(AuthConstants.SingleUserScheme)
+            authBuilder
                 .AddScheme<AuthenticationSchemeOptions, SingleUserAuthenticationHandler>(
                     AuthConstants.SingleUserScheme,
                     _ => { });
@@ -66,8 +91,7 @@ public class Program
                 .Distinct(StringComparer.Ordinal)
                 .ToArray();
 
-            builder.Services
-                .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            authBuilder
                 .AddJwtBearer(options =>
                 {
                     options.Authority = authority;
@@ -153,6 +177,7 @@ public class Program
         }
 
         app.UseHttpsRedirection();
+        app.UseCors();
         app.UseAuthentication();
         app.UseAuthorization();
         app.MapControllers();

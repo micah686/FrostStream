@@ -95,7 +95,7 @@
   }
 
   function thumbnailUrl(mediaGuid: string): string | null {
-    return mediaCards[mediaGuid]?.thumbnailStoragePath ? `/stream/${mediaGuid}/thumbnail` : null;
+    return mediaCards[mediaGuid]?.thumbnailStoragePath ? `/api/watch/${mediaGuid}/thumbnail` : null;
   }
 
   function hideBrokenImage(event: Event) {

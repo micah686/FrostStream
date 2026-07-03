@@ -3,7 +3,9 @@ import type { RequestHandler } from './$types';
 
 const proxy: RequestHandler = ({ request, params, url, cookies }) =>
   proxyRequest(request, cookies, `/api/${params.path ?? ''}${url.search}`, {
-    anonymous: params.path === 'auth/config'
+    // Cast devices fetch media with a signed castToken and no session cookies; the
+    // WebAPI authenticates the token itself, so don't require a session here.
+    anonymous: params.path === 'auth/config' || url.searchParams.has('castToken')
   });
 
 export const GET: RequestHandler = proxy;

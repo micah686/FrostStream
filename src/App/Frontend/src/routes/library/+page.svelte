@@ -240,7 +240,7 @@
   }
 
   function thumbnailUrl(card: MediaCard): string | null {
-    return card.thumbnailStoragePath ? `/stream/${card.mediaGuid}/thumbnail` : null;
+    return card.thumbnailStoragePath ? `/api/watch/${card.mediaGuid}/thumbnail` : null;
   }
 
   function hideBrokenImage(event: Event) {
@@ -417,7 +417,7 @@
               >
                 {initialsFor(card.account.accountName)}
                 <img
-                  src={`/stream/accounts/${card.account.accountId}/avatar`}
+                  src={`/api/watch/accounts/${card.account.accountId}/avatar`}
                   alt=""
                   loading="lazy"
                   decoding="async"
@@ -517,7 +517,7 @@
                 />
                 {#if card.firstGuid}
                   <img
-                    src={`/stream/${card.firstGuid}/thumbnail`}
+                    src={`/api/watch/${card.firstGuid}/thumbnail`}
                     alt=""
                     loading="lazy"
                     decoding="async"
@@ -601,7 +601,7 @@
                     class="absolute left-1/2 top-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 text-white/15"
                   />
                   <img
-                    src={`/stream/${card.firstGuid}/thumbnail`}
+                    src={`/api/watch/${card.firstGuid}/thumbnail`}
                     alt=""
                     loading="lazy"
                     decoding="async"
