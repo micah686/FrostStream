@@ -23,7 +23,8 @@
     SearchOutline,
     ServerOutline,
     ShieldCheckOutline,
-    UserOutline
+    UserOutline,
+    UsersGroupOutline
   } from 'flowbite-svelte-icons';
 
   type IconComponent = typeof HomeOutline;
@@ -59,7 +60,8 @@
 
   const serverNavigation: NavItem[] = [
     { label: 'Download', icon: DownloadOutline, href: '/download' },
-    { label: 'Jobs', icon: ServerOutline, href: '/jobs' }
+    { label: 'Jobs', icon: ServerOutline, href: '/jobs' },
+    { label: 'Creators', icon: UsersGroupOutline, href: '/creators' }
   ];
 
   const accountNavigation: NavItem[] = [
