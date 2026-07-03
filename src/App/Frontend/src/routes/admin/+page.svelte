@@ -4,6 +4,7 @@
   import {
     ApiKeyOutline,
     ChartMixedOutline,
+    ClockOutline,
     CloudArrowUpOutline,
     CubesStackedOutline,
     DatabaseOutline,
@@ -21,6 +22,7 @@
   import ImportsSection from '$lib/components/admin/ImportsSection.svelte';
   import MediaAccessSection from '$lib/components/admin/MediaAccessSection.svelte';
   import MetadataSection from '$lib/components/admin/MetadataSection.svelte';
+  import SchedulesSection from '$lib/components/admin/SchedulesSection.svelte';
   import StatisticsSection from '$lib/components/admin/StatisticsSection.svelte';
   import {
     deleteStorage,
@@ -44,7 +46,8 @@
     { label: 'Import', icon: FileImportOutline },
     { label: 'Media access', icon: ApiKeyOutline },
     { label: 'Bundle management', icon: CubesStackedOutline },
-    { label: 'Backups', icon: CloudArrowUpOutline }
+    { label: 'Backups', icon: CloudArrowUpOutline },
+    { label: 'Schedules', icon: ClockOutline }
   ];
 
   let activeSection = $state('Storage');
@@ -247,6 +250,8 @@
         <BundleManagementSection />
       {:else if activeSection === 'Backups'}
         <BackupsSection />
+      {:else if activeSection === 'Schedules'}
+        <SchedulesSection />
       {:else}
         {@const Icon = sections.find((section) => section.label === activeSection)?.icon ?? DatabaseOutline}
         <section class="rounded-2xl border border-slate-800 bg-[#151a26] p-5 shadow-xl shadow-black/15 sm:p-6">
