@@ -26,12 +26,25 @@
   let name = $state(untrack(() => initial?.name ?? ''));
   let description = $state(untrack(() => initial?.description ?? ''));
   let ytDlpOptions = $state<Record<string, unknown>>(
-    untrack(() => structuredClone(initial?.ytDlpOptions ?? {}))
+    untrack(() => clonePlainOptions(initial?.ytDlpOptions))
   );
   let submitting = $state(false);
   let submitError = $state<string | null>(null);
 
   const isUpdate = $derived(mode === 'update');
+  const profileReturnHref = '/profile?section=Option%20presets';
+
+  function clonePlainOptions(value: unknown): Record<string, unknown> {
+    if (!value || typeof value !== 'object') {
+      return {};
+    }
+
+    try {
+      return JSON.parse(JSON.stringify($state.snapshot(value))) as Record<string, unknown>;
+    } catch {
+      return {};
+    }
+  }
 
   async function save(event: SubmitEvent) {
     event.preventDefault();
@@ -53,7 +66,7 @@
           ytDlpOptions
         });
       }
-      await goto('/profile');
+      await goto(profileReturnHref);
     } catch (err) {
       submitError = err instanceof Error ? err.message : 'Could not save the option preset.';
     } finally {
@@ -125,7 +138,7 @@
 
   <div class="flex flex-col-reverse gap-3 border-t border-slate-800/70 pt-5 sm:flex-row sm:justify-between">
     <Button
-      href="/profile"
+      href={profileReturnHref}
       color="dark"
       class="border-slate-700! bg-transparent! px-4! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800!"
     >

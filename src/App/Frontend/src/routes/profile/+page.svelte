@@ -32,6 +32,7 @@
   import CookieManagementSection from '$lib/components/profile/CookieManagementSection.svelte';
   import NotificationsSection from '$lib/components/profile/NotificationsSection.svelte';
   import UserPlaylistsSection from '$lib/components/profile/UserPlaylistsSection.svelte';
+  import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
 
   type IconComponent = typeof UserOutline;
 
@@ -46,11 +47,15 @@
   let configSetsLoading = $state(true);
   let configSetsError = $state<string | null>(null);
   let deletingKey = $state<string | null>(null);
+  let configPendingDelete = $state<DownloadConfigSet | null>(null);
+  let configDeleteModalOpen = $state(false);
 
   let optionPresets = $state<OptionPreset[]>([]);
   let optionPresetsLoading = $state(true);
   let optionPresetsError = $state<string | null>(null);
   let deletingPresetKey = $state<string | null>(null);
+  let presetPendingDelete = $state<OptionPreset | null>(null);
+  let presetDeleteModalOpen = $state(false);
 
   const authLabel = $derived(data.singleUser ? 'Owner' : 'Signed in');
   const sessionLabel = $derived(data.singleUser ? 'local profile' : 'FrostStream account');
@@ -88,16 +93,12 @@
   }
 
   async function deleteConfigSet(config: DownloadConfigSet) {
-    const confirmed = window.confirm(`Delete config set "${config.name}"? This will not affect existing jobs.`);
-    if (!confirmed) {
-      return;
-    }
-
     deletingKey = config.key;
     configSetsError = null;
     try {
       await deleteDownloadConfigSet(config.key);
       configSets = configSets.filter((item) => item.key !== config.key);
+      configPendingDelete = null;
     } catch (err) {
       configSetsError = err instanceof Error ? err.message : 'Could not delete the config set.';
     } finally {
@@ -118,16 +119,12 @@
   }
 
   async function deletePreset(preset: OptionPreset) {
-    const confirmed = window.confirm(`Delete option preset "${preset.name}"? This will not affect existing jobs.`);
-    if (!confirmed) {
-      return;
-    }
-
     deletingPresetKey = preset.key;
     optionPresetsError = null;
     try {
       await deleteOptionPreset(preset.key);
       optionPresets = optionPresets.filter((item) => item.key !== preset.key);
+      presetPendingDelete = null;
     } catch (err) {
       optionPresetsError = err instanceof Error ? err.message : 'Could not delete the option preset.';
     } finally {
@@ -291,7 +288,10 @@
                     title="Delete config set"
                     aria-label={`Delete config set ${config.name}`}
                     disabled={deletingKey === config.key}
-                    onclick={() => deleteConfigSet(config)}
+                    onclick={() => {
+                      configPendingDelete = config;
+                      configDeleteModalOpen = true;
+                    }}
                   >
                     {#if deletingKey === config.key}
                       <Spinner size="4" />
@@ -377,10 +377,10 @@
                   <a
                     href={`/profile/option-presets/${encodeURIComponent(preset.key)}`}
                     class="inline-flex h-10 min-w-24 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-900/70 px-3 text-xs font-semibold text-slate-200 transition hover:border-blue-500/60 hover:bg-blue-500/10 hover:text-blue-200"
-                    aria-label={`View option preset ${preset.name}`}
+                    aria-label={`Edit option preset ${preset.name}`}
                   >
                     <EyeOutline class="h-4 w-4" />
-                    View
+                    Edit
                   </a>
                   <button
                     type="button"
@@ -388,7 +388,10 @@
                     title="Delete option preset"
                     aria-label={`Delete option preset ${preset.name}`}
                     disabled={deletingPresetKey === preset.key}
-                    onclick={() => deletePreset(preset)}
+                    onclick={() => {
+                      presetPendingDelete = preset;
+                      presetDeleteModalOpen = true;
+                    }}
                   >
                     {#if deletingPresetKey === preset.key}
                       <Spinner size="4" />
@@ -458,3 +461,27 @@
     </div>
   </div>
 </section>
+
+<ConfirmDeleteModal
+  bind:open={configDeleteModalOpen}
+  title="Delete config set"
+  message={configPendingDelete ? `Delete config set "${configPendingDelete.name}"? This will not affect existing jobs.` : ''}
+  confirmLabel="Delete config set"
+  onConfirm={async () => {
+    if (configPendingDelete) {
+      await deleteConfigSet(configPendingDelete);
+    }
+  }}
+/>
+
+<ConfirmDeleteModal
+  bind:open={presetDeleteModalOpen}
+  title="Delete option preset"
+  message={presetPendingDelete ? `Delete option preset "${presetPendingDelete.name}"? This will not affect existing jobs.` : ''}
+  confirmLabel="Delete preset"
+  onConfirm={async () => {
+    if (presetPendingDelete) {
+      await deletePreset(presetPendingDelete);
+    }
+  }}
+/>

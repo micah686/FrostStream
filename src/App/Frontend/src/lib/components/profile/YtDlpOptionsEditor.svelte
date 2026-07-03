@@ -24,7 +24,7 @@
     'border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!';
 
   // Options the GUI does not manage are carried through from the loaded preset.
-  const base = untrack(() => structuredClone($state.snapshot(value)) as Record<string, unknown>);
+  const base = untrack(() => clonePlainOptions(value));
   let opts = $state(untrack(() => stateFromOptions(base)));
 
   $effect(() => {
@@ -32,6 +32,18 @@
   });
 
   const markCategories = [...sponsorBlockCategories, ...sponsorBlockMarkOnlyCategories];
+
+  function clonePlainOptions(value: unknown): Record<string, unknown> {
+    if (!value || typeof value !== 'object') {
+      return {};
+    }
+
+    try {
+      return JSON.parse(JSON.stringify($state.snapshot(value))) as Record<string, unknown>;
+    } catch {
+      return {};
+    }
+  }
 
   function toggleCategory(list: string[], category: string, checked: boolean): string[] {
     const without = list.filter((entry) => entry !== category);
