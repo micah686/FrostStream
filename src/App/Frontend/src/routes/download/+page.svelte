@@ -4,9 +4,17 @@
   import {
     CheckCircleOutline,
     DownloadOutline,
-    ExclamationCircleOutline
+    ExclamationCircleOutline,
+    ListOutline,
+    UsersGroupOutline,
+    VideoCameraOutline
   } from 'flowbite-svelte-icons';
   import { listOptionPresets, type OptionPreset } from '$lib/api/optionPresets';
+  import { listDownloadConfigSets, type DownloadConfigSet } from '$lib/api/downloadConfigSets';
+  import { queuePlaylistDownload } from '$lib/api/playlists';
+  import { creatorSourceTypes, queueChannelDownload, type CreatorSourceType } from '$lib/api/creatorSources';
+
+  type TabKey = 'video' | 'playlist' | 'creator';
 
   interface SelectItem {
     value: string;
@@ -14,18 +22,36 @@
   }
 
   interface QueuedJob {
-    jobId: string;
+    kind: TabKey;
+    id: string;
     sourceUrl: string;
     storageKey: string;
     queuedAt: Date;
   }
 
+  const fieldClass =
+    'border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!';
+
+  const tabs: { key: TabKey; label: string; icon: typeof VideoCameraOutline }[] = [
+    { key: 'video', label: 'Video', icon: VideoCameraOutline },
+    { key: 'playlist', label: 'Playlist', icon: ListOutline },
+    { key: 'creator', label: 'Creator', icon: UsersGroupOutline }
+  ];
+
+  const kindLabels: Record<TabKey, string> = {
+    video: 'Video',
+    playlist: 'Playlist',
+    creator: 'Creator'
+  };
+
+  const sourceTypeOptions = creatorSourceTypes.map((type) => ({ value: type, name: type }));
+
+  let activeTab = $state<TabKey>('video');
+
+  // Video form
   let sourceUrl = $state('');
-  let storageKey = $state('default');
   let forceDownload = $state(false);
   let tags = $state('');
-  let cookieProfileKey = $state('');
-  let priority = $state(0);
   let fetchComments = $state(false);
 
   let optionPresets = $state<OptionPreset[]>([]);
@@ -41,18 +67,43 @@
   let sbChapterTitleTemplate = $state('');
   let sbApiUrl = $state('');
 
+  // Playlist form
+  let playlistUrl = $state('');
+  let playlistConfigSetKey = $state('');
+  let playlistEncode = $state(false);
+  let playlistFetchComments = $state(false);
+
+  // Creator form
+  let creatorUrl = $state('');
+  let creatorPlatform = $state('youtube');
+  let creatorSourceType = $state<CreatorSourceType>('Videos');
+  let creatorConfigSetKey = $state('');
+  let creatorFetchComments = $state(false);
+
+  // Shared fields
+  let storageKey = $state('default');
+  let cookieProfileKey = $state('');
+  let priority = $state(0);
+
   let storageOptions = $state<SelectItem[]>([{ value: 'default', name: 'default' }]);
   let storageLoadFailed = $state(false);
   let cookieOptions = $state<SelectItem[]>([]);
+  let configSets = $state<DownloadConfigSet[]>([]);
 
   let submitting = $state(false);
   let submitError = $state<string | null>(null);
   let queued = $state<QueuedJob[]>([]);
 
+  const configSetOptions = $derived([
+    { value: '', name: 'None (use per-request settings)' },
+    ...configSets.map((set) => ({ value: set.key, name: set.name }))
+  ]);
+
   onMount(() => {
     void loadStorageTargets();
     void loadCookieProfiles();
     void loadOptionPresets();
+    void loadConfigSets();
   });
 
   async function loadStorageTargets() {
@@ -105,6 +156,19 @@
     }
   }
 
+  async function loadConfigSets() {
+    try {
+      configSets = await listDownloadConfigSets();
+    } catch {
+      // Config sets are optional; playlist and creator downloads work without them.
+    }
+  }
+
+  function switchTab(tab: TabKey) {
+    activeTab = tab;
+    submitError = null;
+  }
+
   function selectedPreset(): OptionPreset | null {
     return optionPresets.find((preset) => preset.key === optionPresetKey) ?? null;
   }
@@ -150,14 +214,22 @@
       .filter(Boolean);
   }
 
-  async function queueDownload(event: SubmitEvent) {
+  function resolvedStorageKey(): string {
+    return storageKey.trim() || 'default';
+  }
+
+  function recordQueued(kind: TabKey, id: string, url: string) {
+    queued = [{ kind, id, sourceUrl: url, storageKey: resolvedStorageKey(), queuedAt: new Date() }, ...queued];
+  }
+
+  async function queueVideoDownload(event: SubmitEvent) {
     event.preventDefault();
     submitting = true;
     submitError = null;
 
     const body = {
       sourceUrl: sourceUrl.trim(),
-      storageKey: storageKey.trim() || 'default',
+      storageKey: resolvedStorageKey(),
       forceDownload,
       tags: parseTags(tags),
       cookieProfileKey: cookieProfileKey || null,
@@ -194,13 +266,61 @@
       }
 
       const result = (await response.json()) as { jobId: string };
-      queued = [
-        { jobId: result.jobId, sourceUrl: body.sourceUrl, storageKey: body.storageKey, queuedAt: new Date() },
-        ...queued
-      ];
+      recordQueued('video', `job ${result.jobId}`, body.sourceUrl);
       sourceUrl = '';
     } catch (err) {
       submitError = err instanceof Error ? err.message : 'The download request failed.';
+    } finally {
+      submitting = false;
+    }
+  }
+
+  async function queuePlaylist(event: SubmitEvent) {
+    event.preventDefault();
+    submitting = true;
+    submitError = null;
+
+    const url = playlistUrl.trim();
+    try {
+      const result = await queuePlaylistDownload({
+        sourceUrl: url,
+        storageKey: resolvedStorageKey(),
+        configSetKey: playlistConfigSetKey || null,
+        cookieProfileKey: cookieProfileKey || null,
+        encodeForPlaylist: playlistEncode,
+        priority,
+        fetchComments: playlistFetchComments
+      });
+      recordQueued('playlist', `playlist ${result.playlistId}`, url);
+      playlistUrl = '';
+    } catch (err) {
+      submitError = err instanceof Error ? err.message : 'The playlist request failed.';
+    } finally {
+      submitting = false;
+    }
+  }
+
+  async function queueCreator(event: SubmitEvent) {
+    event.preventDefault();
+    submitting = true;
+    submitError = null;
+
+    const url = creatorUrl.trim();
+    try {
+      const result = await queueChannelDownload({
+        sourceUrl: url,
+        platform: creatorPlatform.trim() || 'youtube',
+        sourceType: creatorSourceType,
+        storageKey: resolvedStorageKey(),
+        configSetKey: creatorConfigSetKey || null,
+        cookieProfileKey: cookieProfileKey || null,
+        priority,
+        fetchComments: creatorFetchComments
+      });
+      recordQueued('creator', `source ${result.sourceId}`, url);
+      creatorUrl = '';
+    } catch (err) {
+      submitError = err instanceof Error ? err.message : 'The channel download request failed.';
     } finally {
       submitting = false;
     }
@@ -225,6 +345,78 @@
   <title>Download · FrostStream</title>
 </svelte:head>
 
+{#snippet sharedFields()}
+  <div class="grid gap-5 sm:grid-cols-2">
+    <div>
+      <Label for="storage-key" class="mb-2 text-sm font-medium text-slate-300">Storage target</Label>
+      {#if storageLoadFailed}
+        <Input id="storage-key" bind:value={storageKey} placeholder="default" class={fieldClass} />
+        <p class="mt-1.5 text-xs text-amber-500/80">
+          Could not load storage targets; enter a storage key manually.
+        </p>
+      {:else}
+        <Select id="storage-key" items={storageOptions} bind:value={storageKey} class={fieldClass} />
+      {/if}
+    </div>
+
+    <div>
+      <Label for="cookie-profile" class="mb-2 text-sm font-medium text-slate-300">Cookie profile</Label>
+      <Select
+        id="cookie-profile"
+        items={[{ value: '', name: 'None' }, ...cookieOptions]}
+        bind:value={cookieProfileKey}
+        class={fieldClass}
+      />
+    </div>
+  </div>
+{/snippet}
+
+{#snippet prioritySlider()}
+  <div>
+    <Label for="priority" class="mb-2 text-sm font-medium text-slate-300">
+      Priority <span class="font-normal text-slate-500">({priority})</span>
+    </Label>
+    <input
+      id="priority"
+      type="range"
+      min="0"
+      max="100"
+      step="1"
+      bind:value={priority}
+      class="h-2 w-full cursor-pointer appearance-none rounded-full bg-slate-800 accent-blue-500"
+    />
+    <p class="mt-1.5 text-xs text-slate-600">Higher runs first while jobs wait for a slot.</p>
+  </div>
+{/snippet}
+
+{#snippet submitRow(label: string)}
+  {#if submitError}
+    <div
+      class="flex items-start gap-2 rounded-xl border border-red-900/60 bg-red-950/40 p-3 text-sm text-red-300"
+      role="alert"
+    >
+      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <span>{submitError}</span>
+    </div>
+  {/if}
+
+  <div class="flex justify-end border-t border-slate-800/70 pt-5">
+    <Button
+      type="submit"
+      color="blue"
+      disabled={submitting}
+      class="border-0! bg-blue-500! px-6! py-2.5! font-semibold! shadow-lg shadow-blue-950/30 hover:bg-blue-400! disabled:opacity-60"
+    >
+      {#if submitting}
+        <Spinner size="4" class="mr-2" />
+      {:else}
+        <DownloadOutline class="mr-2 h-4 w-4" />
+      {/if}
+      {label}
+    </Button>
+  </div>
+{/snippet}
+
 <section class="mx-auto max-w-3xl" aria-labelledby="download-title">
   <div class="mb-6">
     <h1 id="download-title" class="text-2xl font-bold tracking-tight text-white">Download</h1>
@@ -233,214 +425,275 @@
     </p>
   </div>
 
-  <form
-    onsubmit={queueDownload}
-    class="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-6 shadow-2xl shadow-black/20 sm:p-8"
-  >
-    <div class="space-y-5">
-      <div>
-        <Label for="source-url" class="mb-2 text-sm font-medium text-slate-300">Source URL</Label>
-        <Input
-          id="source-url"
-          type="url"
-          required
-          bind:value={sourceUrl}
-          placeholder="https://www.youtube.com/watch?v=..."
-          class="border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!"
-        />
-      </div>
+  <div class="mb-5 flex gap-2" role="tablist" aria-label="Download type">
+    {#each tabs as tab (tab.key)}
+      {@const Icon = tab.icon}
+      <button
+        type="button"
+        role="tab"
+        aria-selected={activeTab === tab.key}
+        onclick={() => switchTab(tab.key)}
+        class={[
+          'inline-flex h-10 items-center gap-2 rounded-full px-5 text-sm font-semibold transition',
+          activeTab === tab.key
+            ? 'bg-slate-100 text-slate-950'
+            : 'bg-slate-800/75 text-slate-300 hover:bg-slate-700'
+        ]}
+      >
+        <Icon class="h-4 w-4" />
+        {tab.label}
+      </button>
+    {/each}
+  </div>
 
-      <div class="grid gap-5 sm:grid-cols-2">
+  {#if activeTab === 'video'}
+    <form
+      onsubmit={queueVideoDownload}
+      class="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-6 shadow-2xl shadow-black/20 sm:p-8"
+    >
+      <div class="space-y-5">
         <div>
-          <Label for="storage-key" class="mb-2 text-sm font-medium text-slate-300">Storage target</Label>
-          {#if storageLoadFailed}
-            <Input
-              id="storage-key"
-              bind:value={storageKey}
-              placeholder="default"
-              class="border-slate-800! bg-slate-950/60! text-sm! text-slate-200! focus:border-blue-500! focus:ring-blue-500!"
-            />
-            <p class="mt-1.5 text-xs text-amber-500/80">
-              Could not load storage targets; enter a storage key manually.
-            </p>
-          {:else}
+          <Label for="source-url" class="mb-2 text-sm font-medium text-slate-300">Source URL</Label>
+          <Input
+            id="source-url"
+            type="url"
+            required
+            bind:value={sourceUrl}
+            placeholder="https://www.youtube.com/watch?v=..."
+            class={fieldClass}
+          />
+        </div>
+
+        {@render sharedFields()}
+
+        <div class="grid gap-5 sm:grid-cols-2">
+          <div>
+            <Label for="tags" class="mb-2 text-sm font-medium text-slate-300">Tags</Label>
+            <Input id="tags" bind:value={tags} placeholder="music, live, archive" class={fieldClass} />
+            <p class="mt-1.5 text-xs text-slate-600">Comma separated, optional.</p>
+          </div>
+
+          {@render prioritySlider()}
+        </div>
+
+        <div class="flex flex-wrap gap-x-8 gap-y-3 border-t border-slate-800/70 pt-5">
+          <Checkbox bind:checked={forceDownload} class="text-sm text-slate-300">
+            Force download <span class="ml-1 text-xs text-slate-600">(re-download even if it already exists)</span>
+          </Checkbox>
+          <Checkbox bind:checked={fetchComments} class="text-sm text-slate-300">
+            Fetch comments
+          </Checkbox>
+        </div>
+
+        <div class="rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
+          <div class="max-w-sm">
+            <Label for="option-preset" class="mb-2 text-sm font-medium text-slate-300">Option preset</Label>
             <Select
-              id="storage-key"
-              items={storageOptions}
-              bind:value={storageKey}
-              class="border-slate-800! bg-slate-950/60! text-sm! text-slate-200! focus:border-blue-500! focus:ring-blue-500!"
+              id="option-preset"
+              items={[
+                { value: '', name: 'None' },
+                ...optionPresets.map((preset) => ({ value: preset.key, name: preset.name }))
+              ]}
+              bind:value={optionPresetKey}
+              onchange={syncTogglesFromPreset}
+              class={fieldClass}
             />
+            <p class="mt-1.5 text-xs text-slate-600">
+              yt-dlp options from the preset are applied to this download; the toggles below override the matching values.
+            </p>
+          </div>
+
+          <div class="mt-4 flex flex-wrap gap-x-8 gap-y-3 border-t border-slate-800/70 pt-4">
+            <Toggle bind:checked={audioOnly} class="text-sm text-slate-300">
+              Audio only
+            </Toggle>
+            <Toggle bind:checked={downloadInfoJson} class="text-sm text-slate-300">
+              Download info JSON
+            </Toggle>
+            <Toggle bind:checked={downloadThumbnail} class="text-sm text-slate-300">
+              Download thumbnail
+            </Toggle>
+            <Toggle bind:checked={downloadSubtitles} class="text-sm text-slate-300">
+              Download subtitles (all)
+            </Toggle>
+          </div>
+        </div>
+
+        <div class="rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
+          <Toggle bind:checked={sponsorBlockEnabled} class="text-sm font-medium text-slate-300">
+            SponsorBlock
+          </Toggle>
+          {#if sponsorBlockEnabled}
+            <div class="mt-4 grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label for="sb-mark" class="mb-2 text-xs font-medium text-slate-400">Mark categories</Label>
+                <Input id="sb-mark" bind:value={sbMarkCategories} placeholder="all,-preview" class={fieldClass} />
+              </div>
+              <div>
+                <Label for="sb-remove" class="mb-2 text-xs font-medium text-slate-400">Remove categories</Label>
+                <Input
+                  id="sb-remove"
+                  bind:value={sbRemoveCategories}
+                  placeholder="sponsor,selfpromo"
+                  class={fieldClass}
+                />
+              </div>
+              <div>
+                <Label for="sb-template" class="mb-2 text-xs font-medium text-slate-400">Chapter title template</Label>
+                <Input id="sb-template" bind:value={sbChapterTitleTemplate} class={fieldClass} />
+              </div>
+              <div>
+                <Label for="sb-api" class="mb-2 text-xs font-medium text-slate-400">API URL</Label>
+                <Input
+                  id="sb-api"
+                  type="url"
+                  bind:value={sbApiUrl}
+                  placeholder="https://sponsor.ajay.app"
+                  class={fieldClass}
+                />
+              </div>
+            </div>
           {/if}
         </div>
 
-        <div>
-          <Label for="cookie-profile" class="mb-2 text-sm font-medium text-slate-300">Cookie profile</Label>
-          <Select
-            id="cookie-profile"
-            items={[{ value: '', name: 'None' }, ...cookieOptions]}
-            bind:value={cookieProfileKey}
-            class="border-slate-800! bg-slate-950/60! text-sm! text-slate-200! focus:border-blue-500! focus:ring-blue-500!"
-          />
-        </div>
+        {@render submitRow('Queue download')}
       </div>
-
-      <div class="grid gap-5 sm:grid-cols-2">
+    </form>
+  {:else if activeTab === 'playlist'}
+    <form
+      onsubmit={queuePlaylist}
+      class="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-6 shadow-2xl shadow-black/20 sm:p-8"
+    >
+      <div class="space-y-5">
         <div>
-          <Label for="tags" class="mb-2 text-sm font-medium text-slate-300">Tags</Label>
+          <Label for="playlist-url" class="mb-2 text-sm font-medium text-slate-300">Playlist URL</Label>
           <Input
-            id="tags"
-            bind:value={tags}
-            placeholder="music, live, archive"
-            class="border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!"
-          />
-          <p class="mt-1.5 text-xs text-slate-600">Comma separated, optional.</p>
-        </div>
-
-        <div>
-          <Label for="priority" class="mb-2 text-sm font-medium text-slate-300">
-            Priority <span class="font-normal text-slate-500">({priority})</span>
-          </Label>
-          <input
-            id="priority"
-            type="range"
-            min="0"
-            max="100"
-            step="1"
-            bind:value={priority}
-            class="h-2 w-full cursor-pointer appearance-none rounded-full bg-slate-800 accent-blue-500"
-          />
-          <p class="mt-1.5 text-xs text-slate-600">Higher runs first while jobs wait for a slot.</p>
-        </div>
-      </div>
-
-      <div class="flex flex-wrap gap-x-8 gap-y-3 border-t border-slate-800/70 pt-5">
-        <Checkbox bind:checked={forceDownload} class="text-sm text-slate-300">
-          Force download <span class="ml-1 text-xs text-slate-600">(re-download even if it already exists)</span>
-        </Checkbox>
-        <Checkbox bind:checked={fetchComments} class="text-sm text-slate-300">
-          Fetch comments
-        </Checkbox>
-      </div>
-
-      <div class="rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
-        <div class="max-w-sm">
-          <Label for="option-preset" class="mb-2 text-sm font-medium text-slate-300">Option preset</Label>
-          <Select
-            id="option-preset"
-            items={[
-              { value: '', name: 'None' },
-              ...optionPresets.map((preset) => ({ value: preset.key, name: preset.name }))
-            ]}
-            bind:value={optionPresetKey}
-            onchange={syncTogglesFromPreset}
-            class="border-slate-800! bg-slate-950/60! text-sm! text-slate-200! focus:border-blue-500! focus:ring-blue-500!"
+            id="playlist-url"
+            type="url"
+            required
+            bind:value={playlistUrl}
+            placeholder="https://www.youtube.com/playlist?list=..."
+            class={fieldClass}
           />
           <p class="mt-1.5 text-xs text-slate-600">
-            yt-dlp options from the preset are applied to this download; the toggles below override the matching values.
+            Every entry in the playlist is queued as its own download job, keeping the provider's order.
           </p>
         </div>
 
-        <div class="mt-4 flex flex-wrap gap-x-8 gap-y-3 border-t border-slate-800/70 pt-4">
-          <Toggle bind:checked={audioOnly} class="text-sm text-slate-300">
-            Audio only
-          </Toggle>
-          <Toggle bind:checked={downloadInfoJson} class="text-sm text-slate-300">
-            Download info JSON
-          </Toggle>
-          <Toggle bind:checked={downloadThumbnail} class="text-sm text-slate-300">
-            Download thumbnail
-          </Toggle>
-          <Toggle bind:checked={downloadSubtitles} class="text-sm text-slate-300">
-            Download subtitles (all)
-          </Toggle>
-        </div>
-      </div>
+        {@render sharedFields()}
 
-      <div class="rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
-        <Toggle bind:checked={sponsorBlockEnabled} class="text-sm font-medium text-slate-300">
-          SponsorBlock
-        </Toggle>
-        {#if sponsorBlockEnabled}
-          <div class="mt-4 grid gap-4 sm:grid-cols-2">
-            <div>
-              <Label for="sb-mark" class="mb-2 text-xs font-medium text-slate-400">Mark categories</Label>
-              <Input
-                id="sb-mark"
-                bind:value={sbMarkCategories}
-                placeholder="all,-preview"
-                class="border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600!"
-              />
-            </div>
-            <div>
-              <Label for="sb-remove" class="mb-2 text-xs font-medium text-slate-400">Remove categories</Label>
-              <Input
-                id="sb-remove"
-                bind:value={sbRemoveCategories}
-                placeholder="sponsor,selfpromo"
-                class="border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600!"
-              />
-            </div>
-            <div>
-              <Label for="sb-template" class="mb-2 text-xs font-medium text-slate-400">Chapter title template</Label>
-              <Input
-                id="sb-template"
-                bind:value={sbChapterTitleTemplate}
-                class="border-slate-800! bg-slate-950/60! text-sm! text-slate-200!"
-              />
-            </div>
-            <div>
-              <Label for="sb-api" class="mb-2 text-xs font-medium text-slate-400">API URL</Label>
-              <Input
-                id="sb-api"
-                type="url"
-                bind:value={sbApiUrl}
-                placeholder="https://sponsor.ajay.app"
-                class="border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600!"
-              />
-            </div>
+        <div class="grid gap-5 sm:grid-cols-2">
+          <div>
+            <Label for="playlist-config-set" class="mb-2 text-sm font-medium text-slate-300">Config set</Label>
+            <Select
+              id="playlist-config-set"
+              items={configSetOptions}
+              bind:value={playlistConfigSetKey}
+              class={fieldClass}
+            />
+            <p class="mt-1.5 text-xs text-slate-600">
+              Applies its saved yt-dlp options and ignore keywords to every entry.
+            </p>
           </div>
-        {/if}
-      </div>
 
-      {#if submitError}
-        <div
-          class="flex items-start gap-2 rounded-xl border border-red-900/60 bg-red-950/40 p-3 text-sm text-red-300"
-          role="alert"
-        >
-          <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
-          <span>{submitError}</span>
+          {@render prioritySlider()}
         </div>
-      {/if}
 
-      <div class="flex justify-end border-t border-slate-800/70 pt-5">
-        <Button
-          type="submit"
-          color="blue"
-          disabled={submitting}
-          class="border-0! bg-blue-500! px-6! py-2.5! font-semibold! shadow-lg shadow-blue-950/30 hover:bg-blue-400! disabled:opacity-60"
-        >
-          {#if submitting}
-            <Spinner size="4" class="mr-2" />
-          {:else}
-            <DownloadOutline class="mr-2 h-4 w-4" />
-          {/if}
-          Queue download
-        </Button>
+        <div class="flex flex-wrap gap-x-8 gap-y-3 border-t border-slate-800/70 pt-5">
+          <Checkbox bind:checked={playlistEncode} class="text-sm text-slate-300">
+            Encode for playlist <span class="ml-1 text-xs text-slate-600">(re-encode for gapless playback)</span>
+          </Checkbox>
+          <Checkbox bind:checked={playlistFetchComments} class="text-sm text-slate-300">
+            Fetch comments
+          </Checkbox>
+        </div>
+
+        {@render submitRow('Queue playlist')}
       </div>
-    </div>
-  </form>
+    </form>
+  {:else}
+    <form
+      onsubmit={queueCreator}
+      class="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-6 shadow-2xl shadow-black/20 sm:p-8"
+    >
+      <div class="space-y-5">
+        <div>
+          <Label for="creator-url" class="mb-2 text-sm font-medium text-slate-300">Channel URL</Label>
+          <Input
+            id="creator-url"
+            type="url"
+            required
+            bind:value={creatorUrl}
+            placeholder="https://www.youtube.com/@creator/videos"
+            class={fieldClass}
+          />
+          <p class="mt-1.5 text-xs text-slate-600">
+            Downloads the channel's full backlog and registers it as a tracked creator, so new uploads are
+            discovered automatically. Manage tracked creators on the
+            <a href="/creators" class="font-semibold text-blue-400 hover:underline">Creators</a> page.
+          </p>
+        </div>
+
+        <div class="grid gap-5 sm:grid-cols-2">
+          <div>
+            <Label for="creator-platform" class="mb-2 text-sm font-medium text-slate-300">Platform</Label>
+            <Input id="creator-platform" required bind:value={creatorPlatform} placeholder="youtube" class={fieldClass} />
+          </div>
+          <div>
+            <Label for="creator-source-type" class="mb-2 text-sm font-medium text-slate-300">Content type</Label>
+            <Select
+              id="creator-source-type"
+              items={sourceTypeOptions}
+              bind:value={creatorSourceType}
+              class={fieldClass}
+            />
+          </div>
+        </div>
+
+        {@render sharedFields()}
+
+        <div class="grid gap-5 sm:grid-cols-2">
+          <div>
+            <Label for="creator-config-set" class="mb-2 text-sm font-medium text-slate-300">Config set</Label>
+            <Select
+              id="creator-config-set"
+              items={configSetOptions}
+              bind:value={creatorConfigSetKey}
+              class={fieldClass}
+            />
+            <p class="mt-1.5 text-xs text-slate-600">
+              Applies its saved yt-dlp options and ignore keywords to every discovered video.
+            </p>
+          </div>
+
+          {@render prioritySlider()}
+        </div>
+
+        <div class="flex flex-wrap gap-x-8 gap-y-3 border-t border-slate-800/70 pt-5">
+          <Checkbox bind:checked={creatorFetchComments} class="text-sm text-slate-300">
+            Fetch comments
+          </Checkbox>
+        </div>
+
+        {@render submitRow('Queue channel download')}
+      </div>
+    </form>
+  {/if}
 
   {#if queued.length > 0}
     <div class="mt-6 rounded-2xl border border-slate-800/80 bg-slate-900/40 p-5">
       <h2 class="text-sm font-bold uppercase tracking-[0.08em] text-slate-500">Queued this session</h2>
       <ul class="mt-3 space-y-2">
-        {#each queued as job (job.jobId)}
+        {#each queued as job (job.id)}
           <li class="flex items-center gap-3 rounded-xl bg-slate-950/40 px-4 py-3">
             <CheckCircleOutline class="h-5 w-5 shrink-0 text-emerald-400" />
             <div class="min-w-0 flex-1">
               <p class="truncate text-sm text-slate-200">{job.sourceUrl}</p>
-              <p class="mt-0.5 truncate font-mono text-xs text-slate-600">job {job.jobId}</p>
+              <p class="mt-0.5 truncate font-mono text-xs text-slate-600">{job.id}</p>
             </div>
+            <Badge rounded color="blue" class="shrink-0 bg-blue-500/12! px-2.5! py-0.5! text-xs! text-blue-300!">
+              {kindLabels[job.kind]}
+            </Badge>
             <Badge rounded color="gray" class="shrink-0 bg-slate-800! px-2.5! py-0.5! text-xs! text-slate-400!">
               {job.storageKey}
             </Badge>

@@ -42,6 +42,27 @@ export interface CreatorSourceRequest {
   providerQueryLimits?: Record<string, unknown> | null;
 }
 
+export interface ChannelDownloadRequest {
+  sourceUrl: string;
+  platform?: string;
+  sourceType?: CreatorSourceType;
+  storageKey?: string | null;
+  configSetKey?: string | null;
+  cookieProfileKey?: string | null;
+  encodeForPlaylist?: boolean | null;
+  priority?: number | null;
+  fetchComments?: boolean | null;
+}
+
+export interface ChannelDownloadResponse {
+  sourceId: number;
+  sourceUrl: string;
+  platform: string;
+  sourceType: CreatorSourceType;
+  queued: boolean;
+  idempotencyKey: string;
+}
+
 export interface IgnoredMedia {
   id: number;
   creatorSourceId: number;
@@ -91,4 +112,11 @@ export async function refreshCreatorAssets(
 
 export async function listIgnoredMedia(id: number, fetchImpl: typeof fetch = fetch): Promise<IgnoredMedia[]> {
   return getJson<IgnoredMedia[]>(`${BASE}/${id}/ignored-media`, fetchImpl);
+}
+
+export async function queueChannelDownload(
+  request: ChannelDownloadRequest,
+  fetchImpl: typeof fetch = fetch
+): Promise<ChannelDownloadResponse> {
+  return sendJson<ChannelDownloadResponse>(`${BASE}/channel-downloads`, 'POST', request, fetchImpl);
 }

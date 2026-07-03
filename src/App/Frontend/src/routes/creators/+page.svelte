@@ -1,9 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Badge, Button, Input, Label, Modal, Select, Spinner, Toggle } from 'flowbite-svelte';
+  import { Badge, Button, Checkbox, Input, Label, Modal, Select, Spinner, Toggle } from 'flowbite-svelte';
   import {
     BanOutline,
     CirclePlusOutline,
+    DownloadOutline,
     EditOutline,
     ExclamationCircleOutline,
     EyeSlashOutline,
@@ -21,6 +22,7 @@
     deleteCreatorSource,
     listCreatorSources,
     listIgnoredMedia,
+    queueChannelDownload,
     refreshCreatorAssets,
     updateCreatorSource,
     type CreatorSource,
@@ -28,6 +30,7 @@
     type CreatorSourceType,
     type IgnoredMedia
   } from '$lib/api/creatorSources';
+  import { listDownloadConfigSets, type DownloadConfigSet } from '$lib/api/downloadConfigSets';
   import { formatRelativeDate } from '$lib/media';
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
 
@@ -77,6 +80,24 @@
 
   let deleteModalOpen = $state(false);
   let sourcePendingDelete = $state<CreatorSource | null>(null);
+
+  let downloadModalOpen = $state(false);
+  let sourcePendingDownload = $state<CreatorSource | null>(null);
+  let downloadBusy = $state(false);
+  let downloadError = $state<string | null>(null);
+  let downloadStorageKey = $state('default');
+  let downloadConfigSetKey = $state('');
+  let downloadFetchComments = $state(false);
+  let downloadOptionsLoaded = $state(false);
+  let storageOptions = $state<Array<{ value: string; name: string }>>([
+    { value: 'default', name: 'default' }
+  ]);
+  let configSets = $state<DownloadConfigSet[]>([]);
+
+  const configSetOptions = $derived([
+    { value: '', name: 'None (use per-request settings)' },
+    ...configSets.map((set) => ({ value: set.key, name: set.name }))
+  ]);
 
   let expandedIgnoredId = $state<number | null>(null);
   let ignoredItems = $state<IgnoredMedia[]>([]);
@@ -219,6 +240,69 @@
       await refreshCreatorAssets(source.id, force);
       actionNotice = `Asset refresh queued for ${displayName(source)}${force ? ' (forced)' : ''}.`;
     });
+  }
+
+  function openDownloadModal(source: CreatorSource) {
+    sourcePendingDownload = source;
+    downloadError = null;
+    downloadModalOpen = true;
+    if (!downloadOptionsLoaded) {
+      downloadOptionsLoaded = true;
+      void loadDownloadOptions();
+    }
+  }
+
+  async function loadDownloadOptions() {
+    try {
+      const response = await fetch('/api/storage/list');
+      if (response.ok) {
+        const items = (await response.json()) as { key: string; description?: string | null }[];
+        if (items.length > 0) {
+          storageOptions = items.map((item) => ({
+            value: item.key,
+            name: item.description ? `${item.key} — ${item.description}` : item.key
+          }));
+          if (!storageOptions.some((option) => option.value === downloadStorageKey)) {
+            downloadStorageKey = storageOptions[0].value;
+          }
+        }
+      }
+    } catch {
+      // Keep the default storage key when the list is unavailable.
+    }
+    try {
+      configSets = await listDownloadConfigSets();
+    } catch {
+      // Config sets are optional; channel downloads work without them.
+    }
+  }
+
+  async function submitChannelDownload(event: SubmitEvent) {
+    event.preventDefault();
+    const source = sourcePendingDownload;
+    if (!source) {
+      return;
+    }
+
+    downloadBusy = true;
+    downloadError = null;
+    try {
+      const result = await queueChannelDownload({
+        sourceUrl: source.sourceUrl,
+        platform: source.platform,
+        sourceType: source.sourceType,
+        storageKey: downloadStorageKey.trim() || 'default',
+        configSetKey: downloadConfigSetKey || null,
+        fetchComments: downloadFetchComments
+      });
+      actionNotice = `Full channel download queued for ${displayName(source)} (source ${result.sourceId}).`;
+      actionError = null;
+      downloadModalOpen = false;
+    } catch (err) {
+      downloadError = err instanceof Error ? err.message : 'Could not queue the channel download.';
+    } finally {
+      downloadBusy = false;
+    }
   }
 
   function requestDelete(source: CreatorSource) {
@@ -488,6 +572,16 @@
                 type="button"
                 class={rowActionClass}
                 disabled={Boolean(busyAction)}
+                onclick={() => openDownloadModal(source)}
+                title="Queue a one-off download of the channel's full backlog"
+              >
+                <DownloadOutline class="h-4 w-4" />
+                Download channel
+              </button>
+              <button
+                type="button"
+                class={rowActionClass}
+                disabled={Boolean(busyAction)}
                 onclick={() => openEditForm(source)}
               >
                 <EditOutline class="h-4 w-4" />
@@ -751,6 +845,85 @@
           <Spinner size="4" class="mr-1.5" />
         {/if}
         {editingSource ? 'Save changes' : 'Track creator'}
+      </Button>
+    </div>
+  {/snippet}
+</Modal>
+
+<Modal bind:open={downloadModalOpen} title="Queue full channel download" size="md" class="z-50">
+  <form id="channel-download-form" class="space-y-4" onsubmit={submitChannelDownload}>
+    <p class="text-sm text-slate-400">
+      Queue a full scan and download of
+      <span class="font-semibold text-slate-200">
+        {sourcePendingDownload ? displayName(sourcePendingDownload) : 'this channel'}
+      </span>. Videos already in the library are skipped, and config-set ignore keywords are applied.
+    </p>
+
+    <div>
+      <Label for="channel-download-storage" class="mb-1.5 text-xs font-semibold text-slate-400">
+        Storage target
+      </Label>
+      <Select
+        id="channel-download-storage"
+        items={storageOptions}
+        bind:value={downloadStorageKey}
+        class={fieldClass}
+      />
+    </div>
+
+    <div>
+      <Label for="channel-download-config-set" class="mb-1.5 text-xs font-semibold text-slate-400">
+        Config set
+      </Label>
+      <Select
+        id="channel-download-config-set"
+        items={configSetOptions}
+        bind:value={downloadConfigSetKey}
+        class={fieldClass}
+      />
+      <p class="mt-1.5 text-[11px] text-slate-600">
+        Applies its saved yt-dlp options and ignore keywords to every discovered video.
+      </p>
+    </div>
+
+    <Checkbox bind:checked={downloadFetchComments} class="text-sm text-slate-300">
+      Fetch comments
+    </Checkbox>
+
+    {#if downloadError}
+      <div
+        class="flex items-start gap-2 rounded-lg border border-red-900/60 bg-red-950/35 p-3 text-sm text-red-300"
+        role="alert"
+      >
+        <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+        <span>{downloadError}</span>
+      </div>
+    {/if}
+  </form>
+
+  {#snippet footer()}
+    <div class="flex w-full flex-wrap justify-end gap-2">
+      <Button
+        color="dark"
+        class="border-slate-700! bg-transparent! px-4! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800!"
+        disabled={downloadBusy}
+        onclick={() => (downloadModalOpen = false)}
+      >
+        Cancel
+      </Button>
+      <Button
+        type="submit"
+        form="channel-download-form"
+        color="blue"
+        class="border-0! bg-blue-500! px-4! py-2! text-xs! font-semibold! hover:bg-blue-400! disabled:opacity-60"
+        disabled={downloadBusy}
+      >
+        {#if downloadBusy}
+          <Spinner size="4" class="mr-1.5" />
+        {:else}
+          <DownloadOutline class="mr-1.5 h-4 w-4" />
+        {/if}
+        Queue download
       </Button>
     </div>
   {/snippet}

@@ -31,7 +31,38 @@ export interface PlatformPlaylist {
   items: PlatformPlaylistItem[] | null;
 }
 
+export interface PlaylistDownloadRequest {
+  sourceUrl: string;
+  storageKey?: string | null;
+  configSetKey?: string | null;
+  cookieProfileKey?: string | null;
+  encodeForPlaylist?: boolean | null;
+  priority?: number | null;
+  fetchComments?: boolean | null;
+}
+
+export interface PlaylistDownloadResponse {
+  playlistId: string;
+  correlationId: string;
+}
+
 const BASE = '/api/playlists';
+
+export async function queuePlaylistDownload(
+  request: PlaylistDownloadRequest,
+  fetchImpl: typeof fetch = fetch
+): Promise<PlaylistDownloadResponse> {
+  const response = await fetchImpl(BASE, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(request)
+  });
+  if (!response.ok) {
+    throw new Error(await describeError(response, `POST ${BASE} failed with status ${response.status}.`));
+  }
+  return (await response.json()) as PlaylistDownloadResponse;
+}
 
 export async function listPlatformPlaylists(
   pageSize = 50,
