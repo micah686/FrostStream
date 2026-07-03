@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { goto } from '$app/navigation';
-  import { Button, Checkbox, Input, Label, Select, Spinner, Textarea } from 'flowbite-svelte';
+  import { Alert, Button, Checkbox, Input, Label, Select, Spinner, Textarea } from 'flowbite-svelte';
   import {
     ArrowLeftOutline,
     CheckCircleOutline,
@@ -16,6 +16,7 @@
     type DownloadConfigSetRequest,
     type IgnoreKeyword
   } from '$lib/api/downloadConfigSets';
+  import { listOptionPresets, type OptionPreset } from '$lib/api/optionPresets';
 
   interface Props {
     mode: 'create' | 'update';
@@ -40,11 +41,38 @@
   let audioFormat = $state<AudioRenditionFormat>(untrack(() => initial?.audioFormat ?? 'Aac'));
   let fetchComments = $state(untrack(() => initial?.fetchComments ?? false));
   let ignoreKeywordsText = $state(untrack(() => formatIgnoreKeywords(initial?.ignoreKeywords ?? [])));
-  let ytDlpOptionsText = $state(untrack(() => formatJson(initial?.ytDlpOptions ?? null)));
+  let selectedOptionPresetKey = $state(untrack(() => (initial?.ytDlpOptions ? '__existing' : '')));
+  let optionPresets = $state<OptionPreset[]>([]);
+  let optionPresetsLoading = $state(true);
+  let optionPresetsError = $state<string | null>(null);
   let submitting = $state(false);
   let submitError = $state<string | null>(null);
 
   const isUpdate = $derived(mode === 'update');
+  const optionPresetItems = $derived([
+    { value: '', name: 'None (server defaults)' },
+    ...(initial?.ytDlpOptions ? [{ value: '__existing', name: 'Existing options on this config set' }] : []),
+    ...optionPresets.map((preset) => ({
+      value: preset.key,
+      name: preset.description ? `${preset.name} — ${preset.description}` : preset.name
+    }))
+  ]);
+
+  onMount(() => {
+    void loadOptionPresets();
+  });
+
+  async function loadOptionPresets() {
+    optionPresetsLoading = true;
+    optionPresetsError = null;
+    try {
+      optionPresets = await listOptionPresets();
+    } catch (err) {
+      optionPresetsError = err instanceof Error ? err.message : 'Could not load option presets.';
+    } finally {
+      optionPresetsLoading = false;
+    }
+  }
 
   async function save(event: SubmitEvent) {
     event.preventDefault();
@@ -78,7 +106,7 @@
       description: description.trim() || null,
       storageKey: storageKey.trim() || 'default',
       cookieProfileKey: cookieProfileKey.trim() || null,
-      ytDlpOptions: parseYtDlpOptions(ytDlpOptionsText),
+      ytDlpOptions: selectedYtDlpOptions(),
       ignoreKeywords: parseIgnoreKeywords(ignoreKeywordsText),
       encodeForPlaylist,
       audioFormat,
@@ -87,17 +115,18 @@
     };
   }
 
-  function parseYtDlpOptions(value: string): Record<string, unknown> | null {
-    const trimmed = value.trim();
-    if (!trimmed) {
+  function selectedYtDlpOptions(): Record<string, unknown> | null {
+    if (!selectedOptionPresetKey) {
       return null;
     }
-
-    const parsed = JSON.parse(trimmed) as unknown;
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      throw new Error('yt-dlp options must be a JSON object.');
+    if (selectedOptionPresetKey === '__existing') {
+      return clonePlainOptions(initial?.ytDlpOptions ?? null);
     }
-    return parsed as Record<string, unknown>;
+    const preset = optionPresets.find((item) => item.key === selectedOptionPresetKey);
+    if (!preset) {
+      throw new Error('Selected option preset could not be found.');
+    }
+    return clonePlainOptions(preset.ytDlpOptions);
   }
 
   function parseIgnoreKeywords(value: string): IgnoreKeyword[] {
@@ -123,8 +152,16 @@
       .join('\n');
   }
 
-  function formatJson(value: Record<string, unknown> | null): string {
-    return value ? JSON.stringify(value, null, 2) : '';
+  function clonePlainOptions(value: unknown): Record<string, unknown> | null {
+    if (!value || typeof value !== 'object') {
+      return null;
+    }
+
+    try {
+      return JSON.parse(JSON.stringify($state.snapshot(value))) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
   }
 </script>
 
@@ -243,14 +280,32 @@
   </div>
 
   <div>
-    <Label for="yt-dlp-options" class="mb-2 text-sm font-medium text-slate-300">yt-dlp options JSON</Label>
-    <Textarea
-      id="yt-dlp-options"
-      rows={9}
-      bind:value={ytDlpOptionsText}
-      placeholder={'{\n  "format": "bestvideo[height<=1080]+bestaudio/best"\n}'}
-      class="font-mono! border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!"
-    />
+    <Label for="option-preset" class="mb-2 text-sm font-medium text-slate-300">Option preset</Label>
+    {#if optionPresetsLoading}
+      <div class="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-500">
+        <Spinner size="4" />
+        Loading option presets...
+      </div>
+    {:else}
+      <Select
+        id="option-preset"
+        items={optionPresetItems}
+        bind:value={selectedOptionPresetKey}
+        class="border-slate-800! bg-slate-950/60! text-sm! text-slate-200! focus:border-blue-500! focus:ring-blue-500!"
+      />
+    {/if}
+    <p class="mt-1.5 text-xs text-slate-600">
+      Pick a saved option preset to apply its yt-dlp options to this config set. Choose none to use server defaults.
+    </p>
+    {#if optionPresetsError}
+      <Alert color="red" class="mt-3 border-red-900/60! bg-red-950/35! text-red-300!">
+        {optionPresetsError}
+      </Alert>
+    {:else if !optionPresetsLoading && optionPresets.length === 0 && !initial?.ytDlpOptions}
+      <Alert color="gray" class="mt-3 border-slate-800! bg-slate-950/35! text-slate-400!">
+        No option presets exist yet. Create one from Profile → Option presets if this config set needs custom yt-dlp options.
+      </Alert>
+    {/if}
   </div>
 
   {#if submitError}

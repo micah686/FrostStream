@@ -5,12 +5,14 @@ namespace Shared.Messaging;
 
 public static class DownloadConfigSetSubjects
 {
-    public const string Create = "download.config-set.create";
-    public const string Update = "download.config-set.update";
-    public const string Get = "download.config-set.get";
-    public const string List = "download.config-set.list";
-    public const string Delete = "download.config-set.delete";
-    public const string Resolve = "download.config-set.resolve";
+    // Must stay outside the FROSTSTREAM_DOWNLOAD stream's "download.>" subject filter:
+    // JetStream pub-acks on captured subjects win the request/reply race against the consumer.
+    public const string Create = "download-config-set.create";
+    public const string Update = "download-config-set.update";
+    public const string Get = "download-config-set.get";
+    public const string List = "download-config-set.list";
+    public const string Delete = "download-config-set.delete";
+    public const string Resolve = "download-config-set.resolve";
     public const string ProcessorsQueueGroup = "databridge-download-config-sets";
 }
 

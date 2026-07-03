@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
 using Shared.Downloads;
 using Shared.Messaging;
 using YtDlpSharpLib.Options;
@@ -56,7 +57,7 @@ public sealed class DownloadConfigSetResponse
     public string? Description { get; init; }
     public string? StorageKey { get; init; }
     public string? CookieProfileKey { get; init; }
-    public YtDlpOptions? YtDlpOptions { get; init; }
+    public JsonElement? YtDlpOptions { get; init; }
     public IReadOnlyList<IgnoreKeyword> IgnoreKeywords { get; init; } = [];
     public bool EncodeForPlaylist { get; init; }
     public AudioRenditionFormat AudioFormat { get; init; }

@@ -201,7 +201,7 @@ public sealed class DownloadConfigSetsController(
             Description = dto.Description,
             StorageKey = dto.StorageKey,
             CookieProfileKey = dto.CookieProfileKey,
-            YtDlpOptions = Deserialize(dto.YtDlpOptionsJson),
+            YtDlpOptions = ParseOptionsJson(dto.YtDlpOptionsJson),
             IgnoreKeywords = dto.IgnoreKeywords,
             EncodeForPlaylist = dto.EncodeForPlaylist,
             AudioFormat = dto.AudioFormat,
@@ -209,14 +209,15 @@ public sealed class DownloadConfigSetsController(
             FetchComments = dto.FetchComments
         };
 
-    private static YtDlpOptions? Deserialize(string? json)
+    private static JsonElement? ParseOptionsJson(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))
             return null;
 
         try
         {
-            return JsonSerializer.Deserialize<YtDlpOptions>(json);
+            using var document = JsonDocument.Parse(json);
+            return document.RootElement.Clone();
         }
         catch (JsonException)
         {
