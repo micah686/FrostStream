@@ -1,15 +1,15 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Badge, Button, Spinner } from 'flowbite-svelte';
+  import { Spinner } from 'flowbite-svelte';
   import {
-    BookmarkOutline,
     CameraPhotoOutline,
     ChevronRightOutline,
     ClockOutline,
     GlobeOutline,
     PlaySolid
   } from 'flowbite-svelte-icons';
-  import { accentFor, formatDuration, formatRelativeDate, initialsFor } from '$lib/media';
+  import { accentFor, formatBytes, formatDuration, formatRelativeDate, initialsFor } from '$lib/media';
+  import { getGlobalStatistics, type StatisticsOverview } from '$lib/api/statistics';
   import { listInProgress } from '$lib/api/watchState';
 
   interface ContinueCard {
@@ -30,25 +30,23 @@
     account: { accountName: string };
   }
 
-  const categories: string[] = [
-    'All',
-    'Continue watching',
-    'Subscriptions',
-    'Music',
-    'Field recordings',
-    'Tech',
-    'Photography',
-    'Pixel art',
-    'Long-form',
-    'Live'
-  ];
-
   let continueCards = $state<ContinueCard[]>([]);
   let continueLoading = $state(true);
+  let overview = $state<StatisticsOverview | null>(null);
 
   onMount(() => {
     void loadContinueWatching();
+    void loadOverview();
   });
+
+  async function loadOverview() {
+    try {
+      overview = await getGlobalStatistics();
+    } catch {
+      // The overview cards are secondary; continue watching remains the primary page content.
+      overview = null;
+    }
+  }
 
   async function loadContinueWatching() {
     try {
@@ -108,104 +106,7 @@
   />
 </svelte:head>
 
-<section
-  class="relative overflow-hidden rounded-2xl border border-blue-400/5 bg-[linear-gradient(115deg,#1b3154_0%,#203f75_44%,#271534_100%)] shadow-2xl shadow-black/20"
-  aria-labelledby="featured-title"
->
-  <div
-    class="pointer-events-none absolute inset-0 opacity-20 [background-image:linear-gradient(rgba(255,255,255,.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.04)_1px,transparent_1px)] [background-size:4px_4px]"
-  ></div>
-  <div class="relative grid min-h-[360px] gap-8 p-7 sm:p-10 xl:grid-cols-[1.1fr_1fr] xl:p-10">
-    <div class="flex max-w-2xl flex-col justify-center">
-      <div class="mb-5 flex items-center gap-2">
-        <Badge
-          rounded
-          color="blue"
-          class="bg-blue-300/12! px-3! py-1.5! text-[10px]! font-bold! tracking-[0.08em]! text-blue-100!"
-        >
-          FEATURED
-        </Badge>
-        <span class="text-[11px] font-semibold tracking-wide text-blue-200/80">PIXELFORGE</span>
-      </div>
-      <h1
-        id="featured-title"
-        class="max-w-xl text-4xl font-black leading-[1.08] tracking-[-0.04em] text-white sm:text-5xl"
-      >
-        CRT pixel art workflow without the eye strain
-      </h1>
-      <p class="mt-4 max-w-xl text-sm leading-6 text-blue-100/75 sm:text-base">
-        A patient 17-minute walkthrough of the workflow used to make all the pixel art on this
-        server. CRT-friendly palettes, no eye strain, no hype, just small decisions that compound.
-      </p>
-      <div class="mt-6 flex flex-wrap gap-3">
-        <Button
-          color="blue"
-          class="border-0! bg-blue-500! px-5! py-2.5! font-semibold! shadow-lg shadow-blue-950/30 hover:bg-blue-400!"
-        >
-          <PlaySolid class="mr-2 h-4 w-4" />
-          Watch now
-        </Button>
-        <Button
-          color="dark"
-          class="border-blue-200/10! bg-white/6! px-5! py-2.5! font-semibold! text-blue-50! hover:bg-white/12!"
-        >
-          <BookmarkOutline class="mr-2 h-4 w-4" />
-          Watch later
-        </Button>
-      </div>
-    </div>
-
-    <div
-      class="relative hidden min-h-[280px] overflow-hidden rounded-2xl border border-lime-300/5 bg-[#294d0f] shadow-xl shadow-black/20 sm:block"
-      aria-label="Featured media preview placeholder"
-    >
-      <Badge
-        color="blue"
-        class="absolute left-3 top-3 z-10 rounded-md! px-2! py-1! text-[10px]! font-bold!"
-      >
-        NEW
-      </Badge>
-      <div
-        class="absolute inset-[15%_12%] overflow-hidden rounded-xl bg-lime-100/[0.035] shadow-inner shadow-black/10"
-      >
-        <div class="absolute inset-x-0 top-1/3 border-t border-lime-100/10"></div>
-        <div class="absolute inset-x-0 top-2/3 border-t border-lime-100/10"></div>
-        <button
-          type="button"
-          aria-label="Play featured media"
-          class="absolute left-1/2 top-1/2 grid h-16 w-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white text-[#11151c] shadow-xl transition hover:scale-105 hover:bg-blue-50"
-        >
-          <PlaySolid class="ml-1 h-7 w-7" />
-        </button>
-      </div>
-      <span
-        class="absolute bottom-3 right-3 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold text-white"
-      >
-        17:32
-      </span>
-    </div>
-  </div>
-</section>
-
-<nav class="mt-7 flex gap-2 overflow-x-auto pb-2" aria-label="Media categories">
-  {#each categories as category, index}
-    <Button
-      pill
-      color={index === 0 ? 'light' : 'dark'}
-      size="xs"
-      class={[
-        'shrink-0 border-0! px-4! py-2! text-xs! font-medium!',
-        index === 0
-          ? 'bg-slate-100! text-slate-900! hover:bg-white!'
-          : 'bg-slate-800/80! text-slate-300! hover:bg-slate-700!'
-      ]}
-    >
-      {category}
-    </Button>
-  {/each}
-</nav>
-
-<section class="mt-5" aria-labelledby="continue-watching-title">
+<section aria-labelledby="continue-watching-title">
   <div class="mb-4 flex items-end justify-between gap-4">
     <div>
       <h2 id="continue-watching-title" class="text-xl font-bold tracking-tight text-slate-100">
@@ -293,17 +194,17 @@
 <section class="mt-10 grid gap-4 md:grid-cols-3" aria-label="Library overview">
   <div class="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-5">
     <CameraPhotoOutline class="h-5 w-5 text-blue-400" />
-    <p class="mt-4 text-2xl font-bold text-white">248</p>
+    <p class="mt-4 text-2xl font-bold text-white">{overview?.inventory.totalMedia.toLocaleString() ?? '-'}</p>
     <p class="mt-1 text-xs text-slate-500">Videos in your library</p>
   </div>
   <div class="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-5">
     <GlobeOutline class="h-5 w-5 text-violet-400" />
-    <p class="mt-4 text-2xl font-bold text-white">12</p>
+    <p class="mt-4 text-2xl font-bold text-white">{overview?.inventory.totalChannels.toLocaleString() ?? '-'}</p>
     <p class="mt-1 text-xs text-slate-500">Channels followed</p>
   </div>
   <div class="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-5">
     <ClockOutline class="h-5 w-5 text-emerald-400" />
-    <p class="mt-4 text-2xl font-bold text-white">36h</p>
+    <p class="mt-4 text-2xl font-bold text-white">{overview ? formatBytes(overview.inventory.totalBytes) : '-'}</p>
     <p class="mt-1 text-xs text-slate-500">Ready to watch offline</p>
   </div>
 </section>

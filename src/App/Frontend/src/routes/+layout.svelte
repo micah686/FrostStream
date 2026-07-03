@@ -15,8 +15,6 @@
     CloseOutline,
     CogOutline,
     DownloadOutline,
-    FireOutline,
-    GlobeOutline,
     HeartOutline,
     HomeOutline,
     PlaySolid,
@@ -37,19 +35,10 @@
     count?: number;
   }
 
-  interface Subscription {
-    name: string;
-    initials: string;
-    color: string;
-    live?: boolean;
-  }
-
   let { children, data } = $props();
 
   const primaryNavigation: NavItem[] = [
-    { label: 'Home', icon: HomeOutline, href: '/' },
-    { label: 'Explore', icon: GlobeOutline },
-    { label: 'Trending', icon: FireOutline }
+    { label: 'Home', icon: HomeOutline, href: '/' }
   ];
 
   const libraryNavigation: NavItem[] = [
@@ -69,12 +58,6 @@
   const accountNavigation: NavItem[] = [
     { label: 'Profile', icon: UserOutline, href: '/profile' },
     { label: 'Settings', icon: CogOutline }
-  ];
-
-  const subscriptions: Subscription[] = [
-    { name: 'Miles Lab', initials: 'ML', color: 'from-indigo-500 to-violet-500' },
-    { name: 'Darkroom Diaries', initials: 'DD', color: 'from-rose-500 to-orange-500', live: true },
-    { name: 'Fieldnotes', initials: 'FN', color: 'from-emerald-400 to-teal-600' }
   ];
 
   let drawerOpen = $state(false);
@@ -255,34 +238,6 @@
           You
         </p>
         {@render navigationGroup(accountNavigation)}
-      </div>
-      <div class="border-t border-slate-800/70 pt-3">
-        <p class="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.08em] text-slate-600">
-          Subscriptions
-        </p>
-        <ul class="space-y-1">
-          {#each subscriptions as subscription}
-            <li>
-              <button
-                type="button"
-                onclick={closeDrawer}
-                class="flex min-h-9 w-full items-center gap-3 rounded-xl px-3 text-left text-sm text-slate-400 transition hover:bg-slate-800/70 hover:text-white"
-              >
-                <span
-                  class={`grid h-6 w-6 shrink-0 place-items-center rounded-full bg-gradient-to-br ${subscription.color} text-[9px] font-bold text-white`}
-                >
-                  {subscription.initials}
-                </span>
-                <span class="truncate">{subscription.name}</span>
-                {#if subscription.live}
-                  <span class="ml-auto h-2 w-2 rounded-full bg-red-500 ring-4 ring-red-500/10">
-                    <span class="sr-only">Live now</span>
-                  </span>
-                {/if}
-              </button>
-            </li>
-          {/each}
-        </ul>
       </div>
     </div>
     <div class="mt-auto border-t border-slate-800/70 p-4 text-xs text-slate-600">
