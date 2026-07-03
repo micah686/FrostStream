@@ -11,7 +11,13 @@
     PlaySolid,
     RectangleListOutline
   } from 'flowbite-svelte-icons';
-  import { accentFor, formatCount, formatDuration, formatRelativeDate, formatViews, initialsFor } from '$lib/media';
+  import { accentFor, formatBytes, formatCount, formatDuration, formatRelativeDate, formatViews, initialsFor } from '$lib/media';
+  import {
+    getChannelStatistics,
+    listChannelStatistics,
+    type ChannelStatisticsDetail,
+    type ChannelStatisticsSummary
+  } from '$lib/api/statistics';
 
   interface Account {
     accountId: number;
@@ -69,6 +75,10 @@
   let hasMore = $state(false);
   let mediaLoading = $state(true);
   let mediaError = $state<string | null>(null);
+  let statistics = $state<ChannelStatisticsDetail | null>(null);
+  let statisticsLoading = $state(false);
+  let statisticsError = $state<string | null>(null);
+  let statisticsExpanded = $state(false);
 
   const accountId = $derived(page.params.accountId ?? '');
   const totalPages = $derived(Math.max(1, Math.ceil(totalCount / pageSize)));
@@ -91,12 +101,13 @@
     descriptionExpanded = false;
     bannerBroken = false;
     avatarBroken = false;
+    statisticsExpanded = false;
     sort = 'release_date:desc';
     items = [];
     totalCount = 0;
     hasMore = false;
 
-    await Promise.all([loadAccount(id), loadMedia(id, 1)]);
+    await Promise.all([loadAccount(id), loadMedia(id, 1), loadStatistics(id)]);
   }
 
   async function loadAccount(id: string) {
@@ -146,6 +157,49 @@
     }
   }
 
+  async function loadStatistics(id: string) {
+    statisticsLoading = true;
+    statisticsError = null;
+    statistics = null;
+
+    try {
+      const source = await findChannelSource(Number(id));
+      if (!source) {
+        return;
+      }
+      statistics = await getChannelStatistics(source.creatorSourceId);
+    } catch (err) {
+      statisticsError = err instanceof Error ? err.message : 'Could not load this creator statistics.';
+    } finally {
+      statisticsLoading = false;
+    }
+  }
+
+  async function findChannelSource(id: number): Promise<ChannelStatisticsSummary | null> {
+    if (!Number.isFinite(id)) {
+      return null;
+    }
+
+    let currentPage = 1;
+    let hasNextPage = true;
+    while (hasNextPage) {
+      const response = await listChannelStatistics({
+        page: currentPage,
+        pageSize: 100,
+        sortBy: 'name',
+        sortOrder: 'asc'
+      });
+      const match = response.items.find((item) => item.accountId === id);
+      if (match) {
+        return match;
+      }
+      hasNextPage = response.hasMore;
+      currentPage += 1;
+    }
+
+    return null;
+  }
+
   function changeSort() {
     void loadMedia(accountId, 1);
   }
@@ -179,6 +233,19 @@
 
   function thumbnailUrl(card: MediaCard): string | null {
     return card.thumbnailStoragePath ? `/stream/${card.mediaGuid}/thumbnail` : null;
+  }
+
+  function percent(value: number): string {
+    return `${Math.round(value)}%`;
+  }
+
+  function statusTotal(current: ChannelStatisticsDetail): number {
+    return (
+      current.summary.availableCount +
+      current.ignoredCount +
+      current.unavailableCount +
+      current.removedCount
+    );
   }
 
   function hideBrokenImage(event: Event) {
@@ -305,17 +372,156 @@
     </div>
 
     <div class="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-slate-800/70 pt-5">
-      <p class="text-sm text-slate-500">
-        {mediaLoading ? 'Loading…' : `${totalCount} ${totalCount === 1 ? 'video' : 'videos'} on the server`}
-      </p>
-      <Select
-        items={sortOptions}
-        bind:value={sort}
-        onchange={changeSort}
-        aria-label="Sort videos"
-        class="w-48! border-slate-800! bg-slate-900/80! text-sm! text-slate-300! focus:border-blue-500! focus:ring-blue-500!"
-      />
+      <div class="min-w-0">
+        <p class="text-sm text-slate-500">
+          {mediaLoading ? 'Loading…' : `${totalCount} ${totalCount === 1 ? 'video' : 'videos'} on the server`}
+        </p>
+        {#if statistics}
+          <p class="mt-1 text-xs text-slate-600">
+            {percent(statistics.summary.downloadedPercent)} downloaded · {formatBytes(statistics.summary.totalBytes)}
+          </p>
+        {:else if statisticsLoading}
+          <p class="mt-1 text-xs text-slate-600">Loading channel statistics…</p>
+        {:else if statisticsError}
+          <p class="mt-1 text-xs text-red-400">Channel statistics unavailable</p>
+        {/if}
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        {#if statistics || statisticsLoading || statisticsError}
+          <Button
+            color="dark"
+            disabled={statisticsLoading && !statistics}
+            aria-expanded={statisticsExpanded}
+            aria-controls="channel-statistics-panel"
+            onclick={() => (statisticsExpanded = !statisticsExpanded)}
+            class="border-slate-700! bg-slate-900! px-3! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800! disabled:opacity-40"
+          >
+            {#if statisticsLoading && !statistics}
+              <Spinner size="4" class="mr-1.5" />
+            {:else if statisticsExpanded}
+              <ChevronUpOutline class="mr-1 h-3.5 w-3.5" />
+            {:else}
+              <ChevronDownOutline class="mr-1 h-3.5 w-3.5" />
+            {/if}
+            Statistics
+          </Button>
+        {/if}
+        <Select
+          items={sortOptions}
+          bind:value={sort}
+          onchange={changeSort}
+          aria-label="Sort videos"
+          class="w-48! border-slate-800! bg-slate-900/80! text-sm! text-slate-300! focus:border-blue-500! focus:ring-blue-500!"
+        />
+      </div>
     </div>
+
+    {#if statisticsExpanded}
+      {#if statisticsError}
+        <div
+          id="channel-statistics-panel"
+          class="mt-4 flex items-center gap-3 rounded-xl border border-red-900/60 bg-red-950/40 p-4 text-sm text-red-300"
+          role="alert"
+        >
+          <ExclamationCircleOutline class="h-4 w-4 shrink-0" />
+          <span>{statisticsError}</span>
+        </div>
+      {:else if statistics}
+        <section id="channel-statistics-panel" class="mt-4 rounded-2xl border border-slate-800/80 bg-slate-900/35 p-5" aria-labelledby="channel-statistics-title">
+        <div class="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 id="channel-statistics-title" class="text-base font-bold text-slate-100">Channel statistics</h2>
+            <p class="mt-1 text-sm text-slate-500">
+              {statistics.summary.downloadedCount.toLocaleString()} of {statistics.summary.availableCount.toLocaleString()} available items downloaded
+            </p>
+          </div>
+          <p class="text-sm font-semibold text-blue-300">{percent(statistics.summary.downloadedPercent)} coverage</p>
+        </div>
+
+        <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <article class="rounded-xl border border-slate-800/80 bg-slate-950/30 p-4">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Downloaded</p>
+            <p class="mt-3 text-3xl font-bold text-white">{statistics.summary.downloadedCount.toLocaleString()}</p>
+            <p class="mt-1 text-xs text-slate-500">{formatDuration(statistics.summary.downloadedDurationSeconds) ?? 'no duration'} archived</p>
+          </article>
+          <article class="rounded-xl border border-slate-800/80 bg-slate-950/30 p-4">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Available</p>
+            <p class="mt-3 text-3xl font-bold text-white">{statistics.summary.availableCount.toLocaleString()}</p>
+            <p class="mt-1 text-xs text-slate-500">{formatDuration(statistics.summary.totalDurationSeconds) ?? 'no duration'} discovered</p>
+          </article>
+          <article class="rounded-xl border border-slate-800/80 bg-slate-950/30 p-4">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Storage</p>
+            <p class="mt-3 text-3xl font-bold text-white">{formatBytes(statistics.summary.totalBytes)}</p>
+            <p class="mt-1 text-xs text-slate-500">downloaded bytes</p>
+          </article>
+          <article class="rounded-xl border border-slate-800/80 bg-slate-950/30 p-4">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Last scan</p>
+            <p class="mt-3 text-3xl font-bold text-white">{formatRelativeDate(statistics.summary.lastSuccessfulScanAt) ?? '-'}</p>
+            <p class="mt-1 text-xs text-slate-500">successful discovery scan</p>
+          </article>
+        </div>
+
+        <div class="mt-5 grid gap-5 xl:grid-cols-3">
+          <section class="rounded-xl border border-slate-800/80 bg-slate-950/25 p-4" aria-labelledby="channel-status-title">
+            <h3 id="channel-status-title" class="text-sm font-bold text-slate-200">Discovery status</h3>
+            <div class="mt-4 grid gap-2">
+              {#each [
+                { label: 'Available', value: statistics.summary.availableCount },
+                { label: 'Ignored', value: statistics.ignoredCount },
+                { label: 'Unavailable', value: statistics.unavailableCount },
+                { label: 'Removed', value: statistics.removedCount }
+              ] as item (item.label)}
+                {@const total = Math.max(statusTotal(statistics), 1)}
+                <div>
+                  <div class="flex justify-between gap-3 text-xs">
+                    <span class="font-semibold text-slate-300">{item.label}</span>
+                    <span class="text-slate-500">{item.value.toLocaleString()}</span>
+                  </div>
+                  <div class="mt-1 h-2 overflow-hidden rounded-full bg-slate-800">
+                    <div class="h-full rounded-full bg-blue-500" style={`width: ${Math.max(3, (item.value / total) * 100)}%`}></div>
+                  </div>
+                </div>
+              {/each}
+            </div>
+          </section>
+
+          <section class="rounded-xl border border-slate-800/80 bg-slate-950/25 p-4" aria-labelledby="channel-media-types-title">
+            <h3 id="channel-media-types-title" class="text-sm font-bold text-slate-200">Media types</h3>
+            <div class="mt-4 space-y-3">
+              {#each statistics.mediaTypes as item (item.type)}
+                {@const maxCount = Math.max(...statistics.mediaTypes.map((type) => type.count), 1)}
+                <div>
+                  <div class="flex justify-between gap-3 text-xs">
+                    <span class="font-semibold text-slate-300">{item.type || 'Unknown'}</span>
+                    <span class="text-slate-500">{item.count.toLocaleString()} · {formatBytes(item.bytes)}</span>
+                  </div>
+                  <div class="mt-1 h-2 overflow-hidden rounded-full bg-slate-800">
+                    <div class="h-full rounded-full bg-emerald-500" style={`width: ${Math.max(3, (item.count / maxCount) * 100)}%`}></div>
+                  </div>
+                </div>
+              {:else}
+                <p class="text-sm text-slate-500">No media type statistics yet.</p>
+              {/each}
+            </div>
+          </section>
+
+          <section class="rounded-xl border border-slate-800/80 bg-slate-950/25 p-4" aria-labelledby="channel-download-states-title">
+            <h3 id="channel-download-states-title" class="text-sm font-bold text-slate-200">Recent download states</h3>
+            <div class="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+              {#each statistics.recentDownloadStates as state (state.state)}
+                <div class="rounded-lg border border-slate-800/70 bg-slate-900/45 p-3">
+                  <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{state.state}</p>
+                  <p class="mt-2 text-xl font-bold text-white">{state.count.toLocaleString()}</p>
+                </div>
+              {:else}
+                <p class="text-sm text-slate-500">No recent download states yet.</p>
+              {/each}
+            </div>
+          </section>
+        </div>
+      </section>
+      {/if}
+    {/if}
 
     {#if mediaError}
       <div

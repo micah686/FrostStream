@@ -3,6 +3,7 @@
   import { Button, Spinner } from 'flowbite-svelte';
   import {
     ApiKeyOutline,
+    ChartMixedOutline,
     CloudArrowUpOutline,
     CubesStackedOutline,
     DatabaseOutline,
@@ -20,6 +21,7 @@
   import ImportsSection from '$lib/components/admin/ImportsSection.svelte';
   import MediaAccessSection from '$lib/components/admin/MediaAccessSection.svelte';
   import MetadataSection from '$lib/components/admin/MetadataSection.svelte';
+  import StatisticsSection from '$lib/components/admin/StatisticsSection.svelte';
   import {
     deleteStorage,
     listStorage,
@@ -37,6 +39,7 @@
 
   const sections: AdminSection[] = [
     { label: 'Storage', icon: DatabaseOutline },
+    { label: 'Statistics', icon: ChartMixedOutline },
     { label: 'Metadata', icon: TagOutline },
     { label: 'Import', icon: FileImportOutline },
     { label: 'Media access', icon: ApiKeyOutline },
@@ -232,6 +235,8 @@
             </Button>
           </div>
         </section>
+      {:else if activeSection === 'Statistics'}
+        <StatisticsSection />
       {:else if activeSection === 'Metadata'}
         <MetadataSection />
       {:else if activeSection === 'Import'}
