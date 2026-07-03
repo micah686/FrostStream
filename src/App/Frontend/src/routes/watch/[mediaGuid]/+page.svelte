@@ -12,7 +12,7 @@
     ThumbsDownOutline,
     ThumbsUpOutline
   } from 'flowbite-svelte-icons';
-  import VideoJs10Player from '$lib/components/players/VideoJs10Player.svelte';
+  import VideoJs10Player, { type TextTrackSource } from '$lib/components/players/VideoJs10Player.svelte';
   import SveltePlayer from '$lib/components/players/SveltePlayer.svelte';
   import {
     accentFor,
@@ -168,6 +168,18 @@
   const mediaGuid = $derived(page.params.mediaGuid ?? '');
   const streamUrl = $derived(`/stream/${mediaGuid}`);
   const posterUrl = $derived(detail?.thumbnailStoragePath ? `/stream/${mediaGuid}/thumbnail` : null);
+  const captionTracks = $derived.by((): TextTrackSource[] => {
+    const current = detail;
+    if (!current) {
+      return [];
+    }
+    return current.captionLanguages.map((caption) => ({
+      src: `/stream/${current.mediaGuid}/captions/${encodeURIComponent(caption.languageCode)}?captionType=${encodeURIComponent(caption.captionType)}`,
+      srclang: caption.languageCode,
+      label: captionSummary(caption),
+      kind: caption.captionType === 'automatic_captions' ? 'captions' : 'subtitles'
+    }));
+  });
 
   $effect(() => {
     if (mediaGuid) {
@@ -309,7 +321,7 @@
 
   function captionSummary(caption: CaptionLanguage): string {
     const label = caption.name || caption.languageCode;
-    return caption.captionType === 'automatic' ? `${label} (auto)` : label;
+    return caption.captionType === 'automatic_captions' ? `${label} (auto)` : label;
   }
 
   function streamSummary(stream: TechnicalStream): string {
@@ -430,7 +442,7 @@
       <div class="aspect-video overflow-hidden rounded-2xl bg-black shadow-2xl shadow-black/30">
         {#key `${mediaGuid}:${playerTab}`}
           {#if playerTab === 'videojs'}
-            <VideoJs10Player src={streamUrl} poster={posterUrl} />
+            <VideoJs10Player src={streamUrl} poster={posterUrl} tracks={captionTracks} />
           {:else}
             <SveltePlayer src={streamUrl} poster={posterUrl} />
           {/if}

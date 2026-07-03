@@ -167,6 +167,7 @@ public static class EndpointIds
     // Media
     public const string MediaStream = "media.stream";
     public const string MediaThumbnail = "media.thumbnail";
+    public const string MediaCaption = "media.caption";
     public const string MediaAudioStream = "media.audio-stream";
     public const string MediaAudioPlaylist = "media.audio-playlist";
     public const string MediaAudioSegment = "media.audio-segment";
@@ -344,6 +345,7 @@ public static class EndpointCatalog
 
         new(EndpointIds.MediaStream, Bundles.Media),
         new(EndpointIds.MediaThumbnail, Bundles.Media),
+        new(EndpointIds.MediaCaption, Bundles.Media),
         new(EndpointIds.MediaAudioStream, Bundles.Media),
         new(EndpointIds.MediaAudioPlaylist, Bundles.Media),
         new(EndpointIds.MediaAudioSegment, Bundles.Media),

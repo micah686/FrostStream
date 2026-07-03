@@ -25,6 +25,13 @@ public sealed class MediaStreamQueryConsumerService(
             HandleResolveThumbnailAsync,
             queueGroup: MediaStreamSubjects.ProcessorsQueueGroup,
             cancellationToken: stoppingToken);
+
+        await SubscribeAsync<MediaCaptionResolveRequestMessage>(
+            messageBus,
+            MediaStreamSubjects.ResolveCaption,
+            HandleResolveCaptionAsync,
+            queueGroup: MediaStreamSubjects.ProcessorsQueueGroup,
+            cancellationToken: stoppingToken);
     }
 
     private async Task HandleResolveAsync(IMessageContext<MediaStreamResolveRequestMessage> context)
@@ -63,6 +70,46 @@ public sealed class MediaStreamQueryConsumerService(
                 Success = false,
                 ErrorCode = "internal_error",
                 ErrorMessage = "Internal media stream service error."
+            });
+        }
+    }
+
+    private async Task HandleResolveCaptionAsync(IMessageContext<MediaCaptionResolveRequestMessage> context)
+    {
+        try
+        {
+            var request = context.Message;
+            var item = await scopeFactory.WithScopedAsync<IMediaCaptionReadService, MediaCaptionLocationDto?>(
+                service => service.ResolveAsync(
+                    request.MediaGuid,
+                    request.LanguageCode,
+                    request.CaptionType));
+
+            await context.RespondAsync(item is null
+                ? new MediaCaptionResolveResponseMessage
+                {
+                    Success = false,
+                    ErrorCode = "not_found",
+                    ErrorMessage = $"Caption '{request.LanguageCode}' for '{request.MediaGuid}' was not found."
+                }
+                : new MediaCaptionResolveResponseMessage
+                {
+                    Success = true,
+                    Item = item
+                });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                ex,
+                "Failed resolving caption for {MediaGuid}.",
+                context.Message.MediaGuid);
+
+            await context.RespondAsync(new MediaCaptionResolveResponseMessage
+            {
+                Success = false,
+                ErrorCode = "internal_error",
+                ErrorMessage = "Internal caption service error."
             });
         }
     }

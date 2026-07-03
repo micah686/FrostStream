@@ -275,6 +275,160 @@ public sealed class MediaStreamController(
         }
     }
 
+    [HttpGet("{mediaGuid:guid}/captions/{languageCode}")]
+    [Endpoint(EndpointIds.MediaCaption)]
+    [EndpointSummary("Stream an archived caption track")]
+    [EndpointDescription("Resolves a stored caption file for an archived media item by GUID and two-letter language code, applying the same watch-time access policy as media playback. The optional captionType parameter ('subtitles' or 'automatic_captions') pins a specific track; otherwise manual subtitles are preferred. SubRip files are converted to WebVTT on the fly so browsers can render them as text tracks.")]
+    public async Task<IActionResult> GetCaption(
+        Guid mediaGuid,
+        string languageCode,
+        [FromQuery] string? captionType = null,
+        CancellationToken cancellationToken = default)
+    {
+        languageCode = languageCode.Trim();
+        if (languageCode.Length == 0)
+        {
+            return BadRequest("Route parameter 'languageCode' is required.");
+        }
+
+        captionType = string.IsNullOrWhiteSpace(captionType) ? null : captionType.Trim();
+        if (captionType is not (null or "subtitles" or "automatic_captions"))
+        {
+            return BadRequest("Query parameter 'captionType' must be 'subtitles' or 'automatic_captions'.");
+        }
+
+        if (await CheckWatchAccessAsync(mediaGuid, cancellationToken) is { } denied)
+        {
+            return denied;
+        }
+
+        MediaCaptionResolveResponseMessage? response;
+        try
+        {
+            response = await messageBus.RequestAsync<
+                MediaCaptionResolveRequestMessage,
+                MediaCaptionResolveResponseMessage>(
+                MediaStreamSubjects.ResolveCaption,
+                new MediaCaptionResolveRequestMessage
+                {
+                    MediaGuid = mediaGuid,
+                    LanguageCode = languageCode,
+                    CaptionType = captionType
+                },
+                QueryTimeout,
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed resolving caption for {MediaGuid}.", mediaGuid);
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable.");
+        }
+
+        if (response is null)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable.");
+        }
+
+        if (!response.Success)
+        {
+            return response.ErrorCode == "not_found"
+                ? NotFound(response.ErrorMessage ?? "Caption track was not found.")
+                : StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    response.ErrorMessage ?? "Caption lookup failed.");
+        }
+
+        if (response.Item is null)
+        {
+            return StatusCode(
+                StatusCodes.Status502BadGateway,
+                "DataBridge returned an invalid caption response.");
+        }
+
+        var location = response.Item;
+        try
+        {
+            var storage = await blobStorageProvider.GetAsync(location.StorageKey, cancellationToken);
+            var stream = await storage.OpenReadAsync(location.StoragePath, cancellationToken);
+            if (stream is null)
+            {
+                return NotFound("The selected caption track is missing from storage.");
+            }
+
+            Response.Headers.CacheControl = "private, max-age=86400";
+
+            var extension = Path.GetExtension(location.StoragePath).ToLowerInvariant();
+            if (extension == ".srt")
+            {
+                string srt;
+                await using (stream)
+                {
+                    using var reader = new StreamReader(stream);
+                    srt = await reader.ReadToEndAsync(cancellationToken);
+                }
+
+                return Content(ConvertSrtToWebVtt(srt), "text/vtt; charset=utf-8");
+            }
+
+            var contentType = extension == ".vtt"
+                ? "text/vtt; charset=utf-8"
+                : ContentTypeProvider.TryGetContentType(location.StoragePath, out var resolvedContentType)
+                    ? resolvedContentType
+                    : "application/octet-stream";
+
+            return File(stream, contentType);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (FileNotFoundException)
+        {
+            return NotFound("The selected caption track is missing from storage.");
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return NotFound("The selected caption track is missing from storage.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                ex,
+                "Failed opening caption {MediaGuid} ({LanguageCode}) from storage {StorageKey} at {StoragePath}.",
+                location.MediaGuid,
+                location.LanguageCode,
+                location.StorageKey,
+                location.StoragePath);
+
+            return StatusCode(
+                StatusCodes.Status502BadGateway,
+                "The selected caption track could not be opened.");
+        }
+    }
+
+    /// <summary>
+    /// Minimal SubRip → WebVTT conversion: prepends the WEBVTT header and switches the
+    /// millisecond separator in cue timings from comma to dot. Cue numbers are valid VTT
+    /// cue identifiers, so the rest of the file passes through untouched.
+    /// </summary>
+    private static string ConvertSrtToWebVtt(string srt)
+    {
+        var lines = srt.TrimStart('\uFEFF').Replace("\r\n", "\n").Split('\n');
+        for (var i = 0; i < lines.Length; i++)
+        {
+            if (lines[i].Contains("-->", StringComparison.Ordinal))
+            {
+                lines[i] = lines[i].Replace(',', '.');
+            }
+        }
+
+        return "WEBVTT\n\n" + string.Join('\n', lines);
+    }
+
     [HttpGet("audio/{mediaGuid:guid}/")]
     [Endpoint(EndpointIds.MediaAudioStream)]
     [EndpointSummary("Stream a cached audio rendition")]
