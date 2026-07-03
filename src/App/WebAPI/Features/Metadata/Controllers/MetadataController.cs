@@ -63,6 +63,7 @@ public sealed class MetadataController(
             response.HasMore));
     }
 
+    [Obsolete("remove this endpoint later")]
     [HttpGet("search")]
     [Endpoint(EndpointIds.MetadataSearch)]
     [EndpointSummary("Search archived media metadata")]

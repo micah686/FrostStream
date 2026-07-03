@@ -43,6 +43,7 @@
 
   const libraryNavigation: NavItem[] = [
     { label: 'Library', icon: RectangleListOutline, href: '/library' },
+    { label: 'Channels', icon: UsersGroupOutline, href: '/library/creators' },
     { label: 'History', icon: ClockArrowOutline },
     { label: 'Watch later', icon: ClockOutline },
     { label: 'Liked', icon: HeartOutline }
@@ -66,7 +67,10 @@
     drawerOpen = false;
   };
 
-  const isActive = (item: NavItem) => item.href !== undefined && page.url.pathname === item.href;
+  const isActive = (item: NavItem) =>
+    item.href !== undefined &&
+    (page.url.pathname === item.href ||
+      (item.href !== '/' && item.href !== '/library' && page.url.pathname.startsWith(`${item.href}/`)));
 
   // Global search
   const SUGGESTION_DEBOUNCE_MS = 250;
