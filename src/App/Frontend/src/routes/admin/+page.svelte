@@ -8,6 +8,7 @@
     DatabaseOutline,
     ExclamationCircleOutline,
     EyeOutline,
+    FileImportOutline,
     GlobeOutline,
     PlusOutline,
     TagOutline,
@@ -15,6 +16,7 @@
   } from 'flowbite-svelte-icons';
   import BackupsSection from '$lib/components/admin/BackupsSection.svelte';
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
+  import ImportsSection from '$lib/components/admin/ImportsSection.svelte';
   import MetadataSection from '$lib/components/admin/MetadataSection.svelte';
   import {
     deleteStorage,
@@ -34,6 +36,7 @@
   const sections: AdminSection[] = [
     { label: 'Storage', icon: DatabaseOutline },
     { label: 'Metadata', icon: TagOutline },
+    { label: 'Import', icon: FileImportOutline },
     { label: 'Media access', icon: ApiKeyOutline },
     { label: 'Bundle management', icon: CubesStackedOutline },
     { label: 'Backups', icon: CloudArrowUpOutline }
@@ -229,6 +232,8 @@
         </section>
       {:else if activeSection === 'Metadata'}
         <MetadataSection />
+      {:else if activeSection === 'Import'}
+        <ImportsSection />
       {:else if activeSection === 'Backups'}
         <BackupsSection />
       {:else}
