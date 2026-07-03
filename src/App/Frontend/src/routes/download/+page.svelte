@@ -6,6 +6,7 @@
     DownloadOutline,
     ExclamationCircleOutline
   } from 'flowbite-svelte-icons';
+  import { listOptionPresets, type OptionPreset } from '$lib/api/optionPresets';
 
   interface SelectItem {
     value: string;
@@ -27,6 +28,13 @@
   let priority = $state(0);
   let fetchComments = $state(false);
 
+  let optionPresets = $state<OptionPreset[]>([]);
+  let optionPresetKey = $state('');
+  let audioOnly = $state(false);
+  let downloadInfoJson = $state(false);
+  let downloadThumbnail = $state(true);
+  let downloadSubtitles = $state(false);
+
   let sponsorBlockEnabled = $state(false);
   let sbMarkCategories = $state('');
   let sbRemoveCategories = $state('');
@@ -44,6 +52,7 @@
   onMount(() => {
     void loadStorageTargets();
     void loadCookieProfiles();
+    void loadOptionPresets();
   });
 
   async function loadStorageTargets() {
@@ -88,6 +97,52 @@
     }
   }
 
+  async function loadOptionPresets() {
+    try {
+      optionPresets = await listOptionPresets();
+    } catch {
+      // Option presets are optional; downloads work without them.
+    }
+  }
+
+  function selectedPreset(): OptionPreset | null {
+    return optionPresets.find((preset) => preset.key === optionPresetKey) ?? null;
+  }
+
+  function optionGroup(options: Record<string, unknown> | null | undefined, name: string): Record<string, unknown> {
+    const group = options?.[name];
+    return group && typeof group === 'object' && !Array.isArray(group) ? (group as Record<string, unknown>) : {};
+  }
+
+  // Reflect the newly selected preset's values in the toggles; the toggles then override
+  // the matching preset values when the download is submitted.
+  function syncTogglesFromPreset() {
+    const options = selectedPreset()?.ytDlpOptions ?? null;
+    audioOnly = optionGroup(options, 'postProcessing').extractAudio === true;
+    downloadInfoJson = optionGroup(options, 'filesystem').writeInfoJson === true;
+    downloadThumbnail = optionGroup(options, 'thumbnail').noWriteThumbnail !== true;
+    downloadSubtitles = optionGroup(options, 'subtitle').writeSubs === true;
+  }
+
+  function buildYtDlpOptions(): Record<string, unknown> {
+    const base: Record<string, unknown> = structuredClone($state.snapshot(selectedPreset()?.ytDlpOptions ?? {}));
+
+    base.postProcessing = { ...optionGroup(base, 'postProcessing'), extractAudio: audioOnly };
+    base.filesystem = { ...optionGroup(base, 'filesystem'), writeInfoJson: downloadInfoJson };
+    base.thumbnail = {
+      ...optionGroup(base, 'thumbnail'),
+      writeThumbnail: downloadThumbnail,
+      noWriteThumbnail: !downloadThumbnail
+    };
+    base.subtitle = {
+      ...optionGroup(base, 'subtitle'),
+      writeSubs: downloadSubtitles,
+      ...(downloadSubtitles ? { subLangs: 'all' } : {})
+    };
+
+    return base;
+  }
+
   function parseTags(value: string): string[] {
     return value
       .split(',')
@@ -107,6 +162,7 @@
       tags: parseTags(tags),
       cookieProfileKey: cookieProfileKey || null,
       priority,
+      ytDlpOptions: buildYtDlpOptions(),
       sponsorBlock: sponsorBlockEnabled
         ? {
             markCategories: sbMarkCategories.trim() || null,
@@ -126,7 +182,7 @@
     };
 
     try {
-      const response = await fetch('/api/downloads', {
+      const response = await fetch('/api/downloads/video', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body)
@@ -264,6 +320,40 @@
         <Checkbox bind:checked={fetchComments} class="text-sm text-slate-300">
           Fetch comments
         </Checkbox>
+      </div>
+
+      <div class="rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
+        <div class="max-w-sm">
+          <Label for="option-preset" class="mb-2 text-sm font-medium text-slate-300">Option preset</Label>
+          <Select
+            id="option-preset"
+            items={[
+              { value: '', name: 'None' },
+              ...optionPresets.map((preset) => ({ value: preset.key, name: preset.name }))
+            ]}
+            bind:value={optionPresetKey}
+            onchange={syncTogglesFromPreset}
+            class="border-slate-800! bg-slate-950/60! text-sm! text-slate-200! focus:border-blue-500! focus:ring-blue-500!"
+          />
+          <p class="mt-1.5 text-xs text-slate-600">
+            yt-dlp options from the preset are applied to this download; the toggles below override the matching values.
+          </p>
+        </div>
+
+        <div class="mt-4 flex flex-wrap gap-x-8 gap-y-3 border-t border-slate-800/70 pt-4">
+          <Toggle bind:checked={audioOnly} class="text-sm text-slate-300">
+            Audio only
+          </Toggle>
+          <Toggle bind:checked={downloadInfoJson} class="text-sm text-slate-300">
+            Download info JSON
+          </Toggle>
+          <Toggle bind:checked={downloadThumbnail} class="text-sm text-slate-300">
+            Download thumbnail
+          </Toggle>
+          <Toggle bind:checked={downloadSubtitles} class="text-sm text-slate-300">
+            Download subtitles (all)
+          </Toggle>
+        </div>
       </div>
 
       <div class="rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">

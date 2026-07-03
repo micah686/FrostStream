@@ -23,14 +23,14 @@ public class DownloadsController(
 {
     private static readonly TimeSpan AdminRequestTimeout = TimeSpan.FromSeconds(10);
     /// <summary>
-    /// Submits a simple video download. Supports only the small set of request fields exposed here,
-    /// including optional SponsorBlock categories. Use <see cref="DownloadWithPreset"/> for full yt-dlp
+    /// Submits a video download. Callers may supply yt-dlp options directly (merged with the
+    /// optional SponsorBlock section); use <see cref="DownloadWithPreset"/> for stored yt-dlp
     /// option presets.
     /// </summary>
-    [HttpPost]
+    [HttpPost("video")]
     [Endpoint(EndpointIds.DownloadsCreate)]
     [EndpointSummary("Queue a video download")]
-    [EndpointDescription("Creates a new video download job and publishes it to the durable download stream. Blank storage keys use the default storage target; optional requester, tags, cookie credentials, and force-download behavior are included in the queued command. Returns job and correlation identifiers immediately without waiting for the download to complete.")]
+    [EndpointDescription("Creates a new video download job and publishes it to the durable download stream. Blank storage keys use the default storage target; optional requester, tags, cookie credentials, yt-dlp options, and force-download behavior are included in the queued command. Supplied yt-dlp options are passed through to the worker's yt-dlp invocation. Returns job and correlation identifiers immediately without waiting for the download to complete.")]
     public Task<ActionResult<DownloadRequestResponse>> Download(
         [FromBody] DownloadRequest request,
         CancellationToken cancellationToken)
@@ -41,7 +41,7 @@ public class DownloadsController(
             tags: request.Tags,
             mediaKind: MediaKind.Video,
             audioFormat: null,
-            ytDlpOptions: BuildYtDlpOptions(request.SponsorBlock),
+            ytDlpOptions: CombineOptions(request.YtDlpOptions, request.SponsorBlock),
             presetKey: null,
             cookieProfileKey: request.CookieProfileKey,
             priority: request.Priority,
@@ -361,6 +361,18 @@ public class DownloadsController(
         }
 
         return Accepted(new DownloadRequestResponse(jobId, correlationId));
+    }
+
+    /// <summary>Caller-supplied options form the base; a SponsorBlock section replaces their SponsorBlock group.</summary>
+    private static YtDlpOptions? CombineOptions(YtDlpOptions? baseOptions, SponsorBlockRequest? sponsorBlock)
+    {
+        var sponsorBlockOptions = BuildYtDlpOptions(sponsorBlock);
+        if (baseOptions is null)
+            return sponsorBlockOptions;
+        if (sponsorBlockOptions is null)
+            return baseOptions;
+
+        return baseOptions with { SponsorBlock = sponsorBlockOptions.SponsorBlock };
     }
 
     private static YtDlpOptions? BuildYtDlpOptions(SponsorBlockRequest? sponsorBlock)
