@@ -6,6 +6,7 @@ public static class WatchStateSubjects
 {
     public const string Upsert = "media.watch-state.upsert";
     public const string Get = "media.watch-state.get";
+    public const string ListInProgress = "media.watch-state.list-in-progress";
 }
 
 public sealed record WatchStateUpsertRequest
@@ -29,6 +30,20 @@ public sealed record WatchStateResponse
     public string? ErrorCode { get; init; }
     public string? ErrorMessage { get; init; }
     public WatchStateDto? State { get; init; }
+}
+
+public sealed record WatchStateInProgressListRequest
+{
+    public required string OwnerSubject { get; init; }
+    public int Limit { get; init; } = 12;
+}
+
+public sealed record WatchStateListResponse
+{
+    public required bool Success { get; init; }
+    public string? ErrorCode { get; init; }
+    public string? ErrorMessage { get; init; }
+    public IReadOnlyList<WatchStateDto>? Items { get; init; }
 }
 
 public sealed record WatchStateDto

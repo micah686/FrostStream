@@ -78,6 +78,40 @@ public sealed class MediaWatchStateController(
             completed: false,
             cancellationToken);
 
+    // Absolute route: this is a cross-media collection query, so it escapes the controller's
+    // per-media `api/media/{mediaGuid}/watch-state` template.
+    [HttpGet("/api/media/watch-states/in-progress")]
+    [Endpoint(EndpointIds.MediaWatchStateListInProgress)]
+    [EndpointSummary("List the caller's in-progress videos")]
+    [EndpointDescription("Returns the authenticated caller's partially watched media items (playback started but not completed), newest first by last play time. Results are scoped to the caller and never include another user's watch history.")]
+    public async Task<IActionResult> ListInProgress(
+        [FromQuery] int limit = 12,
+        CancellationToken cancellationToken = default)
+    {
+        var subject = AuthConstants.FindSubject(User);
+        if (string.IsNullOrWhiteSpace(subject))
+            return Unauthorized();
+
+        var response = await SendAsync<WatchStateInProgressListRequest, WatchStateListResponse>(
+            WatchStateSubjects.ListInProgress,
+            new WatchStateInProgressListRequest { OwnerSubject = subject, Limit = limit },
+            cancellationToken);
+
+        if (response is null)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to list in-progress watch states.");
+
+        if (!response.Success)
+        {
+            return response.ErrorCode switch
+            {
+                "validation" => BadRequest(response.ErrorMessage),
+                _ => StatusCode(StatusCodes.Status500InternalServerError, response.ErrorMessage ?? "Watch-state request failed.")
+            };
+        }
+
+        return Ok(response.Items ?? Array.Empty<WatchStateDto>());
+    }
+
     private async Task<IActionResult> UpsertForCurrentUserAsync(
         Guid mediaGuid,
         double? positionSeconds,

@@ -18,6 +18,7 @@ public sealed class WatchStateConsumerService(
     {
         await SubscribeAsync<WatchStateUpsertRequest>(messageBus, WatchStateSubjects.Upsert, HandleUpsertAsync, QueueGroup, stoppingToken);
         await SubscribeAsync<WatchStateGetRequest>(messageBus, WatchStateSubjects.Get, HandleGetAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<WatchStateInProgressListRequest>(messageBus, WatchStateSubjects.ListInProgress, HandleListInProgressAsync, QueueGroup, stoppingToken);
 
         logger.LogInformation("Subscribed to watch-state subjects.");
     }
@@ -131,6 +132,61 @@ public sealed class WatchStateConsumerService(
                 Success = false,
                 ErrorCode = "internal",
                 ErrorMessage = "Failed to get watch state."
+            });
+        }
+    }
+
+    private async Task HandleListInProgressAsync(IMessageContext<WatchStateInProgressListRequest> context)
+    {
+        var request = context.Message;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(request.OwnerSubject))
+            {
+                await context.RespondAsync(new WatchStateListResponse
+                {
+                    Success = false,
+                    ErrorCode = "validation",
+                    ErrorMessage = "ownerSubject is required."
+                });
+                return;
+            }
+
+            var limit = Math.Clamp(request.Limit, 1, 100);
+            await using var command = dataSource.CreateCommand("""
+                SELECT ws.owner_subject, ws.media_guid, ws.position_seconds, ws.duration_seconds,
+                       ws.completed, ws.watched_at, ws.last_played_at, ws.updated_at
+                FROM media.watch_states ws
+                JOIN media.media m ON m.media_guid = ws.media_guid
+                WHERE ws.owner_subject = @owner_subject
+                  AND NOT ws.completed
+                  AND ws.position_seconds IS NOT NULL
+                  AND ws.position_seconds > 0
+                ORDER BY ws.last_played_at DESC
+                LIMIT @limit;
+                """);
+            command.Parameters.AddWithValue("owner_subject", request.OwnerSubject.Trim());
+            command.Parameters.AddWithValue("limit", limit);
+
+            var items = new List<WatchStateDto>();
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+                items.Add(Map(reader));
+
+            await context.RespondAsync(new WatchStateListResponse
+            {
+                Success = true,
+                Items = items
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed listing in-progress watch states for {OwnerSubject}.", request.OwnerSubject);
+            await context.RespondAsync(new WatchStateListResponse
+            {
+                Success = false,
+                ErrorCode = "internal",
+                ErrorMessage = "Failed to list in-progress watch states."
             });
         }
     }

@@ -2,6 +2,8 @@
   import { page } from '$app/state';
   import { Button, Spinner } from 'flowbite-svelte';
   import {
+    CheckCircleOutline,
+    CheckCircleSolid,
     ChevronDownOutline,
     ChevronUpOutline,
     DotsHorizontalOutline,
@@ -15,6 +17,13 @@
   import SveltePlayer from '$lib/components/players/SveltePlayer.svelte';
   import SaveToPlaylistButton from '$lib/components/SaveToPlaylistButton.svelte';
   import PlaylistPanel from '$lib/components/PlaylistPanel.svelte';
+  import {
+    getWatchState,
+    markUnwatched,
+    markWatched,
+    updateWatchState,
+    type WatchState
+  } from '$lib/api/watchState';
   import {
     accentFor,
     formatCount,
@@ -165,6 +174,14 @@
   let technical = $state<Technical | null>(null);
   let technicalError = $state<string | null>(null);
   let technicalRequested = $state(false);
+  let watchState = $state<WatchState | null>(null);
+  let watchStateLoaded = $state(false);
+  let watchedBusy = $state(false);
+  // After a manual "mark unwatched", don't let the 95% rule silently re-complete
+  // the video during this visit; a natural end still marks it watched.
+  let suppressAutoComplete = false;
+  let lastProgressSentAt = 0;
+  let lastSentPosition = -1;
 
   const mediaGuid = $derived(page.params.mediaGuid ?? '');
   // Playlist context: ?ulist= plays through a user playlist, ?list= through a
@@ -172,6 +189,27 @@
   const userListId = $derived(page.url.searchParams.get('ulist'));
   const platformListId = $derived(page.url.searchParams.get('list'));
   const streamUrl = $derived(`/stream/${mediaGuid}`);
+  const watched = $derived(watchState?.completed === true);
+  // ?t= wins over the saved position; positions within the first 5s or last 5% are
+  // treated as "start over" so a finished video doesn't resume at the outro.
+  const startAtParam = $derived.by(() => {
+    const raw = page.url.searchParams.get('t');
+    const value = raw === null ? NaN : Number(raw);
+    return Number.isFinite(value) && value > 0 ? value : null;
+  });
+  const resumeTime = $derived.by(() => {
+    if (startAtParam !== null) {
+      return startAtParam;
+    }
+    const state = watchState;
+    if (!state || state.completed || !state.positionSeconds || state.positionSeconds < 5) {
+      return null;
+    }
+    if (state.durationSeconds && state.positionSeconds >= state.durationSeconds * 0.95) {
+      return null;
+    }
+    return state.positionSeconds;
+  });
   const posterUrl = $derived(detail?.thumbnailStoragePath ? `/stream/${mediaGuid}/thumbnail` : null);
   const captionTracks = $derived.by((): TextTrackSource[] => {
     const current = detail;
@@ -204,8 +242,78 @@
     technical = null;
     technicalError = null;
     technicalRequested = false;
+    watchState = null;
+    watchStateLoaded = false;
+    suppressAutoComplete = false;
+    lastProgressSentAt = 0;
+    lastSentPosition = -1;
 
-    await Promise.all([loadDetail(guid), loadComments(guid, 1), loadUpNext(guid)]);
+    await Promise.all([loadDetail(guid), loadComments(guid, 1), loadUpNext(guid), loadWatchState(guid)]);
+  }
+
+  async function loadWatchState(guid: string) {
+    try {
+      watchState = await getWatchState(guid);
+    } catch {
+      // Playback works without a saved state; resume and the toggle just start blank.
+      watchState = null;
+    } finally {
+      watchStateLoaded = true;
+    }
+  }
+
+  function handlePlaybackProgress(positionSeconds: number, durationSeconds: number | null) {
+    const now = Date.now();
+    if (now - lastProgressSentAt < 10_000 || Math.abs(positionSeconds - lastSentPosition) < 2) {
+      return;
+    }
+    lastProgressSentAt = now;
+    lastSentPosition = positionSeconds;
+
+    const nearEnd = durationSeconds !== null && positionSeconds >= durationSeconds * 0.95;
+    const completed = watched || (nearEnd && !suppressAutoComplete);
+    const guid = mediaGuid;
+    updateWatchState(guid, { positionSeconds, durationSeconds, completed })
+      .then((state) => {
+        if (guid === mediaGuid) {
+          watchState = state;
+        }
+      })
+      .catch(() => {
+        // Progress reporting is best-effort; the next tick retries.
+      });
+  }
+
+  function handlePlaybackEnded() {
+    suppressAutoComplete = false;
+    const guid = mediaGuid;
+    const duration = watchState?.durationSeconds ?? detail?.durationSeconds ?? null;
+    updateWatchState(guid, { positionSeconds: duration, durationSeconds: duration, completed: true })
+      .then((state) => {
+        if (guid === mediaGuid) {
+          watchState = state;
+        }
+      })
+      .catch(() => {});
+  }
+
+  async function toggleWatched() {
+    if (watchedBusy || !watchStateLoaded) {
+      return;
+    }
+    watchedBusy = true;
+    const guid = mediaGuid;
+    try {
+      const state = watched ? await markUnwatched(guid) : await markWatched(guid);
+      suppressAutoComplete = !state.completed;
+      if (guid === mediaGuid) {
+        watchState = state;
+      }
+    } catch {
+      // Leave the current toggle state; the user can retry.
+    } finally {
+      watchedBusy = false;
+    }
   }
 
   async function loadDetail(guid: string) {
@@ -445,13 +553,32 @@
       </div>
     {:else}
       <div class="aspect-video overflow-hidden rounded-2xl bg-black shadow-2xl shadow-black/30">
-        {#key `${mediaGuid}:${playerTab}`}
-          {#if playerTab === 'videojs'}
-            <VideoJs10Player src={streamUrl} poster={posterUrl} tracks={captionTracks} />
-          {:else}
-            <SveltePlayer src={streamUrl} poster={posterUrl} />
-          {/if}
-        {/key}
+        {#if watchStateLoaded}
+          {#key `${mediaGuid}:${playerTab}`}
+            {#if playerTab === 'videojs'}
+              <VideoJs10Player
+                src={streamUrl}
+                poster={posterUrl}
+                tracks={captionTracks}
+                startTime={resumeTime}
+                onProgress={handlePlaybackProgress}
+                onEnded={handlePlaybackEnded}
+              />
+            {:else}
+              <SveltePlayer
+                src={streamUrl}
+                poster={posterUrl}
+                startTime={resumeTime}
+                onProgress={handlePlaybackProgress}
+                onEnded={handlePlaybackEnded}
+              />
+            {/if}
+          {/key}
+        {:else}
+          <div class="grid h-full w-full place-items-center">
+            <Spinner size="8" />
+          </div>
+        {/if}
       </div>
     {/if}
 
@@ -517,6 +644,27 @@
               <ThumbsDownOutline class="h-4 w-4" />
             </button>
           </div>
+          <button
+            type="button"
+            onclick={toggleWatched}
+            disabled={!watchStateLoaded || watchedBusy}
+            aria-pressed={watched}
+            title={watched ? 'Mark as unwatched' : 'Mark as watched'}
+            class={[
+              'flex items-center gap-1.5 rounded-lg border px-4 py-2 text-xs font-semibold transition disabled:opacity-60',
+              watched
+                ? 'border-blue-500/50 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20'
+                : 'border-slate-800 bg-slate-900/70 text-slate-300 hover:bg-slate-800'
+            ]}
+          >
+            {#if watched}
+              <CheckCircleSolid class="h-4 w-4" />
+              Watched
+            {:else}
+              <CheckCircleOutline class="h-4 w-4" />
+              Mark watched
+            {/if}
+          </button>
           <Button
             color="dark"
             class="border-slate-800! bg-slate-900/70! px-4! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800!"

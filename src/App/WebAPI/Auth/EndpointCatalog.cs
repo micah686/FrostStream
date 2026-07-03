@@ -174,6 +174,7 @@ public static class EndpointIds
     public const string MediaAudioSegment = "media.audio-segment";
     public const string MediaWatchStateGet = "media.watch-state.get";
     public const string MediaWatchStateUpsert = "media.watch-state.upsert";
+    public const string MediaWatchStateListInProgress = "media.watch-state.list-in-progress";
     public const string MediaWatchStateMarkWatched = "media.watch-state.mark-watched";
     public const string MediaWatchStateMarkUnwatched = "media.watch-state.mark-unwatched";
     public const string PlaylistAudioStream = "playlists.audio-stream";
@@ -355,6 +356,7 @@ public static class EndpointCatalog
         new(EndpointIds.MediaWatchStateUpsert, Bundles.Media),
         new(EndpointIds.MediaWatchStateMarkWatched, Bundles.Media),
         new(EndpointIds.MediaWatchStateMarkUnwatched, Bundles.Media),
+        new(EndpointIds.MediaWatchStateListInProgress, Bundles.Media),
         new(EndpointIds.PlaylistAudioStream, Bundles.Playlists),
 
         new(EndpointIds.MediaAccessMediaList, Bundles.MediaAccessAdmin),
