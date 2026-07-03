@@ -311,16 +311,30 @@
               </span>
             </a>
             <div class="mt-3 flex min-w-0 gap-3 px-1">
-              <span
-                class={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br ${accentFor(card.mediaGuid)} text-[10px] font-bold text-white`}
+              <a
+                href={`/channel/${card.account.accountId}`}
+                aria-label={`Open ${card.account.accountName}'s channel`}
+                class={`relative mt-0.5 grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br ${accentFor(card.mediaGuid)} text-[10px] font-bold text-white`}
               >
                 {initialsFor(card.account.accountName)}
-              </span>
+                <img
+                  src={`/stream/accounts/${card.account.accountId}/avatar`}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  class="absolute inset-0 h-full w-full object-cover"
+                  onerror={hideBrokenImage}
+                />
+              </a>
               <div class="min-w-0">
                 <h3 class="line-clamp-2 text-sm font-semibold leading-snug text-slate-200">
                   {card.title}
                 </h3>
-                <p class="mt-1 truncate text-xs text-slate-500">{card.account.accountName}</p>
+                <p class="mt-1 truncate text-xs text-slate-500">
+                  <a href={`/channel/${card.account.accountId}`} class="hover:text-slate-300">
+                    {card.account.accountName}
+                  </a>
+                </p>
                 <p class="mt-0.5 truncate text-xs text-slate-600">
                   {[metaLine(card), formatRelativeDate(card.releaseDate)].filter(Boolean).join(' · ')}
                 </p>

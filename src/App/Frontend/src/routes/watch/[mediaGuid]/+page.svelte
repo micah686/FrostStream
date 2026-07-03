@@ -455,14 +455,26 @@
 
       <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
         <div class="flex items-center gap-3">
-          <span
-            class={`grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br ${accentFor(detail.account.accountName)} text-xs font-bold text-white`}
+          <a
+            href={`/channel/${detail.account.accountId}`}
+            aria-label={`Open ${detail.account.accountName}'s channel`}
+            class={`relative grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br ${accentFor(detail.account.accountName)} text-xs font-bold text-white`}
           >
             {initialsFor(detail.account.accountName)}
-          </span>
+            <img
+              src={`/stream/accounts/${detail.account.accountId}/avatar`}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              class="absolute inset-0 h-full w-full object-cover"
+              onerror={hideBrokenImage}
+            />
+          </a>
           <div class="min-w-0">
             <p class="flex items-center gap-1 text-sm font-semibold text-slate-200">
-              {detail.account.accountName}
+              <a href={`/channel/${detail.account.accountId}`} class="hover:text-white">
+                {detail.account.accountName}
+              </a>
               {#if detail.account.isVerified}
                 <span class="text-blue-400" title="Verified">✓</span>
               {/if}

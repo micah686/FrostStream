@@ -113,6 +113,7 @@ class Program
         builder.Services.AddScoped<IMediaStreamReadService, MediaStreamReadService>();
         builder.Services.AddScoped<IMediaThumbnailReadService, MediaThumbnailReadService>();
         builder.Services.AddScoped<IMediaCaptionReadService, MediaCaptionReadService>();
+        builder.Services.AddScoped<IAccountAssetReadService, AccountAssetReadService>();
         builder.Services.AddScoped<IAudioRenditionRepository, AudioRenditionRepository>();
         builder.Services.AddScoped<IPlaylistsRepository, PlaylistsRepository>();
         builder.Services.AddScoped<IUserPlaylistsRepository, UserPlaylistsRepository>();

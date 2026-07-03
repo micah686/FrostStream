@@ -32,6 +32,13 @@ public sealed class MediaStreamQueryConsumerService(
             HandleResolveCaptionAsync,
             queueGroup: MediaStreamSubjects.ProcessorsQueueGroup,
             cancellationToken: stoppingToken);
+
+        await SubscribeAsync<AccountAssetResolveRequestMessage>(
+            messageBus,
+            MediaStreamSubjects.ResolveAccountAsset,
+            HandleResolveAccountAssetAsync,
+            queueGroup: MediaStreamSubjects.ProcessorsQueueGroup,
+            cancellationToken: stoppingToken);
     }
 
     private async Task HandleResolveAsync(IMessageContext<MediaStreamResolveRequestMessage> context)
@@ -147,6 +154,44 @@ public sealed class MediaStreamQueryConsumerService(
                 Success = false,
                 ErrorCode = "internal_error",
                 ErrorMessage = "Internal thumbnail service error."
+            });
+        }
+    }
+
+    private async Task HandleResolveAccountAssetAsync(IMessageContext<AccountAssetResolveRequestMessage> context)
+    {
+        try
+        {
+            var request = context.Message;
+            var item = await scopeFactory.WithScopedAsync<IAccountAssetReadService, AccountAssetLocationDto?>(
+                service => service.ResolveAsync(request.AccountId, request.AssetType));
+
+            await context.RespondAsync(item is null
+                ? new AccountAssetResolveResponseMessage
+                {
+                    Success = false,
+                    ErrorCode = "not_found",
+                    ErrorMessage = $"{request.AssetType} for account '{request.AccountId}' was not found."
+                }
+                : new AccountAssetResolveResponseMessage
+                {
+                    Success = true,
+                    Item = item
+                });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                ex,
+                "Failed resolving {AssetType} for account {AccountId}.",
+                context.Message.AssetType,
+                context.Message.AccountId);
+
+            await context.RespondAsync(new AccountAssetResolveResponseMessage
+            {
+                Success = false,
+                ErrorCode = "internal_error",
+                ErrorMessage = "Internal account asset service error."
             });
         }
     }

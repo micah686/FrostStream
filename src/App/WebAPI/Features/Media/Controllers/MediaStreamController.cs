@@ -275,6 +275,107 @@ public sealed class MediaStreamController(
         }
     }
 
+    [HttpGet("accounts/{accountId:long}/{assetType:regex(^(avatar|banner)$)}")]
+    [HttpHead("accounts/{accountId:long}/{assetType:regex(^(avatar|banner)$)}")]
+    [Endpoint(EndpointIds.MediaAccountAsset)]
+    [EndpointSummary("Get a creator account avatar or banner")]
+    [EndpointDescription("Resolves the stored avatar or banner image for a creator account by its internal numeric identifier and streams it from the configured storage backend. Returns 404 when the account has no stored asset of the requested kind.")]
+    public async Task<IActionResult> GetAccountAsset(
+        long accountId,
+        string assetType,
+        CancellationToken cancellationToken = default)
+    {
+        var kind = string.Equals(assetType, "banner", StringComparison.OrdinalIgnoreCase)
+            ? AccountAssetType.Banner
+            : AccountAssetType.Avatar;
+
+        AccountAssetResolveResponseMessage? response;
+        try
+        {
+            response = await messageBus.RequestAsync<
+                AccountAssetResolveRequestMessage,
+                AccountAssetResolveResponseMessage>(
+                MediaStreamSubjects.ResolveAccountAsset,
+                new AccountAssetResolveRequestMessage { AccountId = accountId, AssetType = kind },
+                QueryTimeout,
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed resolving {AssetType} for account {AccountId}.", kind, accountId);
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable.");
+        }
+
+        if (response is null)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable.");
+        }
+
+        if (!response.Success)
+        {
+            return response.ErrorCode == "not_found"
+                ? NotFound(response.ErrorMessage ?? "Account asset was not found.")
+                : StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    response.ErrorMessage ?? "Account asset lookup failed.");
+        }
+
+        if (response.Item is null)
+        {
+            return StatusCode(
+                StatusCodes.Status502BadGateway,
+                "DataBridge returned an invalid account asset response.");
+        }
+
+        var location = response.Item;
+        try
+        {
+            var storage = await blobStorageProvider.GetAsync(location.StorageKey, cancellationToken);
+            var stream = await storage.OpenReadAsync(location.StoragePath, cancellationToken);
+            if (stream is null)
+            {
+                return NotFound("The selected account asset is missing from storage.");
+            }
+
+            var contentType = ContentTypeProvider.TryGetContentType(location.StoragePath, out var resolvedContentType)
+                ? resolvedContentType
+                : "application/octet-stream";
+
+            Response.Headers.CacheControl = "private, max-age=86400";
+            return File(stream, contentType);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (FileNotFoundException)
+        {
+            return NotFound("The selected account asset is missing from storage.");
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return NotFound("The selected account asset is missing from storage.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                ex,
+                "Failed opening {AssetType} for account {AccountId} from storage {StorageKey} at {StoragePath}.",
+                kind,
+                location.AccountId,
+                location.StorageKey,
+                location.StoragePath);
+
+            return StatusCode(
+                StatusCodes.Status502BadGateway,
+                "The selected account asset could not be opened.");
+        }
+    }
+
     [HttpGet("{mediaGuid:guid}/captions/{languageCode}")]
     [Endpoint(EndpointIds.MediaCaption)]
     [EndpointSummary("Stream an archived caption track")]
