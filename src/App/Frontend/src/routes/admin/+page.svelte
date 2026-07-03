@@ -13,6 +13,7 @@
     TagOutline,
     TrashBinOutline
   } from 'flowbite-svelte-icons';
+  import BackupsSection from '$lib/components/admin/BackupsSection.svelte';
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
   import MetadataSection from '$lib/components/admin/MetadataSection.svelte';
   import {
@@ -228,6 +229,8 @@
         </section>
       {:else if activeSection === 'Metadata'}
         <MetadataSection />
+      {:else if activeSection === 'Backups'}
+        <BackupsSection />
       {:else}
         {@const Icon = sections.find((section) => section.label === activeSection)?.icon ?? DatabaseOutline}
         <section class="rounded-2xl border border-slate-800 bg-[#151a26] p-5 shadow-xl shadow-black/15 sm:p-6">
