@@ -30,6 +30,7 @@
     type OptionPreset
   } from '$lib/api/optionPresets';
   import CookieManagementSection from '$lib/components/profile/CookieManagementSection.svelte';
+  import NotificationsSection from '$lib/components/profile/NotificationsSection.svelte';
   import UserPlaylistsSection from '$lib/components/profile/UserPlaylistsSection.svelte';
 
   type IconComponent = typeof UserOutline;
@@ -414,6 +415,8 @@
       </section>
       {:else if activeSection === 'Cookie management'}
         <CookieManagementSection />
+      {:else if activeSection === 'Notifications'}
+        <NotificationsSection />
       {:else if activeSection === 'Playlists'}
         <UserPlaylistsSection />
       {:else if activeSection !== 'Overview'}

@@ -53,6 +53,19 @@ export const NOTIFICATION_PROVIDER_KINDS = [
 
 const BASE = '/api/notifications';
 
+export async function getNotificationPreferences(
+  fetchImpl: typeof fetch = fetch
+): Promise<NotificationPreferences> {
+  return getJson<NotificationPreferences>(`${BASE}/preferences`, fetchImpl);
+}
+
+export async function updateNotificationPreferences(
+  request: NotificationPreferences,
+  fetchImpl: typeof fetch = fetch
+): Promise<NotificationPreferences> {
+  return sendJson<NotificationPreferences>(`${BASE}/preferences`, 'PUT', request, fetchImpl);
+}
+
 export async function listNotificationProviders(fetchImpl: typeof fetch = fetch): Promise<NotificationProvider[]> {
   return getJson<NotificationProvider[]>(`${BASE}/providers`, fetchImpl);
 }

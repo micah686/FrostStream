@@ -3,7 +3,6 @@
   import { Button, Spinner } from 'flowbite-svelte';
   import {
     ApiKeyOutline,
-    BellOutline,
     CloudArrowUpOutline,
     CubesStackedOutline,
     DatabaseOutline,
@@ -21,7 +20,6 @@
   import ImportsSection from '$lib/components/admin/ImportsSection.svelte';
   import MediaAccessSection from '$lib/components/admin/MediaAccessSection.svelte';
   import MetadataSection from '$lib/components/admin/MetadataSection.svelte';
-  import NotificationsSection from '$lib/components/admin/NotificationsSection.svelte';
   import {
     deleteStorage,
     listStorage,
@@ -42,7 +40,6 @@
     { label: 'Metadata', icon: TagOutline },
     { label: 'Import', icon: FileImportOutline },
     { label: 'Media access', icon: ApiKeyOutline },
-    { label: 'Notifications', icon: BellOutline },
     { label: 'Bundle management', icon: CubesStackedOutline },
     { label: 'Backups', icon: CloudArrowUpOutline }
   ];
@@ -241,8 +238,6 @@
         <ImportsSection />
       {:else if activeSection === 'Media access'}
         <MediaAccessSection />
-      {:else if activeSection === 'Notifications'}
-        <NotificationsSection />
       {:else if activeSection === 'Bundle management'}
         <BundleManagementSection />
       {:else if activeSection === 'Backups'}
