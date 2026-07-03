@@ -331,6 +331,7 @@ public sealed class CreatorSourcesController(
         }).ToArray());
     }
 
+    [Obsolete("remove this endpoint later")]
     [HttpPost("discovered-media/{id:long}/force-queue")]
     [Endpoint(EndpointIds.CreatorSourcesForceQueueMedia)]
     [EndpointSummary("Force-queue an ignored video")]

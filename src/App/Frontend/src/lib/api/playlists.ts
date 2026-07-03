@@ -79,6 +79,18 @@ export async function getPlatformPlaylist(
   return getJson<PlatformPlaylist>(`${BASE}/${encodeURIComponent(playlistId)}`, fetchImpl);
 }
 
+export async function forceQueuePlaylistItem(
+  playlistId: string,
+  jobId: string,
+  fetchImpl: typeof fetch = fetch
+): Promise<void> {
+  const url = `${BASE}/${encodeURIComponent(playlistId)}/items/${encodeURIComponent(jobId)}/force-queue`;
+  const response = await fetchImpl(url, { method: 'POST', credentials: 'same-origin' });
+  if (!response.ok) {
+    throw new Error(await describeError(response, `POST ${url} failed with status ${response.status}.`));
+  }
+}
+
 async function getJson<T>(url: string, fetchImpl: typeof fetch): Promise<T> {
   const response = await fetchImpl(url, { credentials: 'same-origin' });
   if (!response.ok) {

@@ -20,6 +20,7 @@
   import { formatBytes } from '$lib/media';
 
   type FilterKey = 'all' | 'active' | 'queued' | 'failed' | 'done' | 'cancelled';
+  type SourceFilterKey = 'all' | 'Direct' | 'Playlist' | 'Channel';
 
   const queue = createDownloadQueueStore();
   let queueState = $state<DownloadQueueState>({
@@ -31,6 +32,7 @@
     error: null
   });
   let activeFilter = $state<FilterKey>('all');
+  let sourceFilter = $state<SourceFilterKey>('all');
   let query = $state('');
   let pageSize = $state(50);
   let page = $state(1);
@@ -50,6 +52,13 @@
     { value: 50, name: '50 per page' },
     { value: 100, name: '100 per page' },
     { value: 200, name: '200 per page' }
+  ];
+
+  const sourceTabs: Array<{ key: SourceFilterKey; label: string }> = [
+    { key: 'all', label: 'All sources' },
+    { key: 'Direct', label: 'Direct' },
+    { key: 'Playlist', label: 'Playlists' },
+    { key: 'Channel', label: 'Channels' }
   ];
 
   const tabs = $derived([
@@ -102,6 +111,7 @@
   async function applyQueueParams() {
     await queue.setParams({
       stateGroup: activeFilter,
+      sourceKind: sourceFilter === 'all' ? undefined : sourceFilter,
       q: query.trim() || undefined,
       limit: pageSize,
       cursor,
@@ -120,6 +130,15 @@
       return;
     }
     activeFilter = filter;
+    resetPaging();
+    await applyQueueParams();
+  }
+
+  async function changeSourceFilter(filter: SourceFilterKey): Promise<void> {
+    if (sourceFilter === filter) {
+      return;
+    }
+    sourceFilter = filter;
     resetPaging();
     await applyQueueParams();
   }
@@ -387,6 +406,17 @@
     return provider.slice(0, 1).toUpperCase();
   }
 
+  function originBadge(sourceKind: string): { label: string; tone: string } | null {
+    switch (sourceKind.toLowerCase()) {
+      case 'playlist':
+        return { label: 'PLAYLIST', tone: 'bg-violet-500/12 text-violet-300 ring-violet-500/25' };
+      case 'channel':
+        return { label: 'CHANNEL', tone: 'bg-cyan-500/12 text-cyan-300 ring-cyan-500/25' };
+      default:
+        return null;
+    }
+  }
+
   function displayState(row: QueueRow): string {
     const state = row.job.state;
     if (normalizeState(state) === 'downloadpending' && hasActiveDownloadProgress(row.progress)) {
@@ -481,7 +511,25 @@
     </div>
   </div>
 
-  <div class="mt-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+  <div class="mt-6 flex gap-2 overflow-x-auto pb-1" aria-label="Job source filters">
+    {#each sourceTabs as tab}
+      <button
+        type="button"
+        onclick={() => changeSourceFilter(tab.key)}
+        class={[
+          'inline-flex h-8 shrink-0 items-center rounded-lg border px-3 text-xs font-semibold transition',
+          sourceFilter === tab.key
+            ? 'border-blue-500/60 bg-blue-500/15 text-blue-200'
+            : 'border-slate-800 bg-slate-900/60 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+        ]}
+        aria-pressed={sourceFilter === tab.key}
+      >
+        {tab.label}
+      </button>
+    {/each}
+  </div>
+
+  <div class="mt-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
     <div class="flex gap-2 overflow-x-auto pb-1" aria-label="Job filters">
       {#each tabs as tab}
         <button
@@ -574,6 +622,12 @@
                   >
                     {displayState(row)}
                   </span>
+                  {#if originBadge(job.sourceKind)}
+                    {@const origin = originBadge(job.sourceKind)!}
+                    <span class={['rounded-full px-2 py-0.5 text-[10px] font-bold ring-1', origin.tone]}>
+                      {origin.label}
+                    </span>
+                  {/if}
                 </div>
                 <p class="mt-1 truncate text-xs text-slate-500">
                   {provider} · {compactUrl(job.sourceUrl)}
@@ -587,7 +641,6 @@
                     <ServerOutline class="h-3.5 w-3.5 text-slate-600" />
                     {job.storageKey ?? 'default'}
                   </span>
-                  <span>{job.sourceKind}</span>
                   <span>priority {job.priority}</span>
                 </div>
                 {#if job.failureMessage}

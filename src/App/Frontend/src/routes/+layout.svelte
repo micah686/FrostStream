@@ -9,6 +9,7 @@
     ArrowRightToBracketOutline,
     BarsOutline,
     BellOutline,
+    ClipboardListOutline,
     ClockArrowOutline,
     ClockOutline,
     CloseOutline,
@@ -61,6 +62,7 @@
   const serverNavigation: NavItem[] = [
     { label: 'Download', icon: DownloadOutline, href: '/download' },
     { label: 'Jobs', icon: ServerOutline, href: '/jobs' },
+    { label: 'Playlists', icon: ClipboardListOutline, href: '/playlists' },
     { label: 'Creators', icon: UsersGroupOutline, href: '/creators' }
   ];
 
