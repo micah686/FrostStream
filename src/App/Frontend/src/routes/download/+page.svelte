@@ -13,6 +13,7 @@
   import { listDownloadConfigSets, type DownloadConfigSet } from '$lib/api/downloadConfigSets';
   import { queuePlaylistDownload } from '$lib/api/playlists';
   import { creatorSourceTypes, queueChannelDownload, type CreatorSourceType } from '$lib/api/creatorSources';
+  import RangeSlider from '$lib/components/RangeSlider.svelte';
 
   type TabKey = 'video' | 'playlist' | 'creator';
 
@@ -376,15 +377,7 @@
     <Label for="priority" class="mb-2 text-sm font-medium text-slate-300">
       Priority <span class="font-normal text-slate-500">({priority})</span>
     </Label>
-    <input
-      id="priority"
-      type="range"
-      min="0"
-      max="100"
-      step="1"
-      bind:value={priority}
-      class="h-2 w-full cursor-pointer appearance-none rounded-full bg-slate-800 accent-blue-500"
-    />
+    <RangeSlider id="priority" min={0} max={100} step={1} bind:value={priority} />
     <p class="mt-1.5 text-xs text-slate-600">Higher runs first while jobs wait for a slot.</p>
   </div>
 {/snippet}

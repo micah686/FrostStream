@@ -17,6 +17,7 @@
     type IgnoreKeyword
   } from '$lib/api/downloadConfigSets';
   import { listOptionPresets, type OptionPreset } from '$lib/api/optionPresets';
+  import RangeSlider from '$lib/components/RangeSlider.svelte';
 
   interface Props {
     mode: 'create' | 'update';
@@ -236,15 +237,7 @@
       <Label for="priority" class="mb-2 text-sm font-medium text-slate-300">
         Priority <span class="font-normal text-slate-500">({priority})</span>
       </Label>
-      <input
-        id="priority"
-        type="range"
-        min="0"
-        max="100"
-        step="1"
-        bind:value={priority}
-        class="h-2 w-full cursor-pointer appearance-none rounded-full bg-slate-800 accent-blue-500"
-      />
+      <RangeSlider id="priority" min={0} max={100} step={1} bind:value={priority} />
     </div>
 
     <div>
