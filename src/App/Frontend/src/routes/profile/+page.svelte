@@ -22,13 +22,13 @@
     listDownloadConfigSets,
     type DownloadConfigSet
   } from '$lib/api/downloadConfigSets';
+  import CookieManagementSection from '$lib/components/profile/CookieManagementSection.svelte';
 
   type IconComponent = typeof UserOutline;
 
   interface ProfileSection {
     label: string;
     icon: IconComponent;
-    active?: boolean;
   }
 
   let { data } = $props();
@@ -44,11 +44,13 @@
 
   const sections: ProfileSection[] = [
     { label: 'Overview', icon: UserOutline },
-    { label: 'Config sets', icon: AdjustmentsHorizontalOutline, active: true },
+    { label: 'Config sets', icon: AdjustmentsHorizontalOutline },
     { label: 'Cookie management', icon: CookieSolid },
     { label: 'Notifications', icon: BellOutline },
     { label: 'Playlists', icon: ListMusicOutline }
   ];
+
+  let activeSection = $state('Config sets');
 
   onMount(() => {
     void loadConfigSets();
@@ -143,11 +145,12 @@
             type="button"
             class={[
               'flex h-10 shrink-0 items-center gap-3 rounded-lg px-4 text-sm font-medium transition xl:w-full',
-              section.active
+              section.label === activeSection
                 ? 'bg-blue-500/18 text-blue-400'
                 : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-100'
             ]}
-            aria-current={section.active ? 'page' : undefined}
+            aria-current={section.label === activeSection ? 'page' : undefined}
+            onclick={() => (activeSection = section.label)}
           >
             <Icon class="h-4.5 w-4.5 shrink-0" />
             <span>{section.label}</span>
@@ -157,6 +160,7 @@
     </aside>
 
     <div class="min-w-0 space-y-5">
+      {#if activeSection === 'Config sets'}
       <section class="rounded-2xl border border-slate-800 bg-[#151a26] p-5 shadow-xl shadow-black/15 sm:p-6">
         <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -254,6 +258,14 @@
           </Button>
         </div>
       </section>
+      {:else if activeSection === 'Cookie management'}
+        <CookieManagementSection />
+      {:else if activeSection !== 'Overview'}
+        <section class="rounded-2xl border border-slate-800 bg-[#151a26] p-8 text-center shadow-xl shadow-black/15">
+          <p class="text-sm font-semibold text-slate-300">{activeSection}</p>
+          <p class="mt-1 text-sm text-slate-500">This section is not available yet.</p>
+        </section>
+      {/if}
 
       <section class="grid gap-3 lg:grid-cols-3" aria-label="Account details">
         {#if data.user.email}
