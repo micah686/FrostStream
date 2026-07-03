@@ -1,7 +1,10 @@
 <script lang="ts">
   import '../app.css';
+  import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { Button, Drawer, Input } from 'flowbite-svelte';
+  import { Button, Drawer, Input, Spinner } from 'flowbite-svelte';
+  import { searchMedia, type SearchHit } from '$lib/api/search';
+  import { accentFor, formatDuration, initialsFor } from '$lib/media';
   import {
     ArrowRightToBracketOutline,
     BarsOutline,
@@ -77,7 +80,121 @@
   };
 
   const isActive = (item: NavItem) => item.href !== undefined && page.url.pathname === item.href;
+
+  // Global search
+  const SUGGESTION_DEBOUNCE_MS = 250;
+  const SUGGESTION_COUNT = 6;
+
+  let searchQuery = $state('');
+  let suggestions = $state<SearchHit[]>([]);
+  let suggestionsOpen = $state(false);
+  let suggestionsLoading = $state(false);
+  let suggestionTimer: ReturnType<typeof setTimeout> | null = null;
+  let suggestionRequestId = 0;
+
+  $effect(() => {
+    // Keep the box in sync with the query while on the results page.
+    if (page.url.pathname === '/search') {
+      searchQuery = page.url.searchParams.get('q') ?? '';
+    }
+  });
+
+  function submitSearch(event: SubmitEvent) {
+    event.preventDefault();
+    const q = searchQuery.trim();
+    if (!q) {
+      return;
+    }
+    closeSuggestions();
+    void goto(`/search?q=${encodeURIComponent(q)}`);
+  }
+
+  function onSearchInput() {
+    if (suggestionTimer !== null) {
+      clearTimeout(suggestionTimer);
+    }
+    const q = searchQuery.trim();
+    if (q.length < 2) {
+      closeSuggestions();
+      return;
+    }
+    suggestionTimer = setTimeout(() => void loadSuggestions(q), SUGGESTION_DEBOUNCE_MS);
+  }
+
+  async function loadSuggestions(q: string) {
+    const id = ++suggestionRequestId;
+    suggestionsLoading = true;
+    suggestionsOpen = true;
+    try {
+      const result = await searchMedia(q, { pageSize: SUGGESTION_COUNT });
+      if (id === suggestionRequestId) {
+        suggestions = result.items;
+      }
+    } catch {
+      if (id === suggestionRequestId) {
+        suggestions = [];
+        suggestionsOpen = false;
+      }
+    } finally {
+      if (id === suggestionRequestId) {
+        suggestionsLoading = false;
+      }
+    }
+  }
+
+  function closeSuggestions() {
+    if (suggestionTimer !== null) {
+      clearTimeout(suggestionTimer);
+      suggestionTimer = null;
+    }
+    suggestionRequestId += 1;
+    suggestionsOpen = false;
+    suggestionsLoading = false;
+    suggestions = [];
+  }
+
+  function onSearchKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape') {
+      closeSuggestions();
+      (event.currentTarget as HTMLInputElement).blur();
+    }
+  }
+
+  function onSearchFocusOut(event: FocusEvent) {
+    const container = event.currentTarget as HTMLElement;
+    if (!(event.relatedTarget instanceof Node) || !container.contains(event.relatedTarget)) {
+      closeSuggestions();
+    }
+  }
+
+  function onGlobalKeydown(event: KeyboardEvent) {
+    if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey) {
+      return;
+    }
+    const target = event.target;
+    if (
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement ||
+      (target instanceof HTMLElement && target.isContentEditable)
+    ) {
+      return;
+    }
+    event.preventDefault();
+    document.getElementById('global-search')?.focus();
+  }
+
+  function suggestionThumbnail(hit: SearchHit): string | null {
+    return hit.media.thumbnailStoragePath ? `/stream/${hit.media.mediaGuid}/thumbnail` : null;
+  }
+
+  function hideBrokenImage(event: Event) {
+    if (event.currentTarget instanceof HTMLImageElement) {
+      event.currentTarget.hidden = true;
+    }
+  }
 </script>
+
+<svelte:window onkeydown={onGlobalKeydown} />
 
 {#snippet navigationGroup(items: NavItem[])}
   <ul class="space-y-1">
@@ -191,21 +308,93 @@
     <span class="hidden text-base font-bold tracking-tight text-slate-100 sm:block">FrostStream</span>
   </a>
 
-  <div class="relative ml-3 w-full max-w-[39rem] sm:ml-4">
-    <SearchOutline
-      class="pointer-events-none absolute left-4 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-slate-500"
-    />
-    <Input
-      type="search"
-      aria-label="Search your library"
-      placeholder="Search your library, channels, comments..."
-      class="h-10 rounded-2xl! border-slate-800! bg-slate-900/80! py-2! pl-11! pr-11! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!"
-    />
-    <kbd
-      class="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-md border border-slate-700/70 bg-slate-800/80 px-2 py-0.5 text-[10px] text-slate-500 sm:block"
-    >
-      /
-    </kbd>
+  <div class="relative ml-3 w-full max-w-[39rem] sm:ml-4" onfocusout={onSearchFocusOut}>
+    <form role="search" onsubmit={submitSearch}>
+      <SearchOutline
+        class="pointer-events-none absolute left-4 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-slate-500"
+      />
+      <Input
+        id="global-search"
+        type="search"
+        autocomplete="off"
+        aria-label="Search your library"
+        placeholder="Search your library, channels, comments..."
+        bind:value={searchQuery}
+        oninput={onSearchInput}
+        onkeydown={onSearchKeydown}
+        class="h-10 rounded-2xl! border-slate-800! bg-slate-900/80! py-2! pl-11! pr-11! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!"
+      />
+      <kbd
+        class="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-md border border-slate-700/70 bg-slate-800/80 px-2 py-0.5 text-[10px] text-slate-500 sm:block"
+      >
+        /
+      </kbd>
+    </form>
+
+    {#if suggestionsOpen}
+      <div
+        class="absolute inset-x-0 top-full z-50 mt-2 overflow-hidden rounded-2xl border border-slate-800 bg-[#12161f] shadow-2xl shadow-black/40"
+        role="listbox"
+        aria-label="Search suggestions"
+      >
+        {#if suggestionsLoading && suggestions.length === 0}
+          <div class="flex justify-center p-5">
+            <Spinner size="5" />
+          </div>
+        {:else if suggestions.length === 0}
+          <p class="p-4 text-sm text-slate-500">No matches yet — press Enter for a full search.</p>
+        {:else}
+          <ul>
+            {#each suggestions as hit (hit.media.mediaGuid)}
+              <li>
+                <a
+                  href={`/watch/${hit.media.mediaGuid}`}
+                  class="flex items-center gap-3 px-3 py-2 transition hover:bg-slate-800/70"
+                  onclick={closeSuggestions}
+                >
+                  <span
+                    class={`relative grid h-9 w-16 shrink-0 place-items-center overflow-hidden rounded-md bg-gradient-to-br ${accentFor(hit.media.mediaGuid)}`}
+                  >
+                    <span class="text-[10px] font-black text-white/30">
+                      {initialsFor(hit.media.account.accountName)}
+                    </span>
+                    {#if suggestionThumbnail(hit)}
+                      <img
+                        src={suggestionThumbnail(hit)}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                        class="absolute inset-0 h-full w-full object-cover"
+                        onerror={hideBrokenImage}
+                      />
+                    {/if}
+                  </span>
+                  <span class="min-w-0">
+                    <span class="block truncate text-sm font-medium text-slate-200">{hit.media.title}</span>
+                    <span class="mt-0.5 block truncate text-xs text-slate-500">
+                      {[hit.media.account.accountName, formatDuration(hit.media.durationSeconds)]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </span>
+                  </span>
+                </a>
+              </li>
+            {/each}
+          </ul>
+          <button
+            type="button"
+            class="flex w-full items-center gap-2 border-t border-slate-800/70 px-4 py-2.5 text-left text-xs font-semibold text-blue-400 transition hover:bg-slate-800/70"
+            onclick={() => {
+              closeSuggestions();
+              void goto(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+            }}
+          >
+            <SearchOutline class="h-3.5 w-3.5" />
+            See all results for "{searchQuery.trim()}"
+          </button>
+        {/if}
+      </div>
+    {/if}
   </div>
 
   <div class="ml-auto flex shrink-0 items-center gap-1.5 pl-3 sm:gap-2">
