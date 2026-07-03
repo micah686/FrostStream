@@ -15,8 +15,10 @@
     TrashBinOutline
   } from 'flowbite-svelte-icons';
   import BackupsSection from '$lib/components/admin/BackupsSection.svelte';
+  import BundleManagementSection from '$lib/components/admin/BundleManagementSection.svelte';
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
   import ImportsSection from '$lib/components/admin/ImportsSection.svelte';
+  import MediaAccessSection from '$lib/components/admin/MediaAccessSection.svelte';
   import MetadataSection from '$lib/components/admin/MetadataSection.svelte';
   import {
     deleteStorage,
@@ -234,6 +236,10 @@
         <MetadataSection />
       {:else if activeSection === 'Import'}
         <ImportsSection />
+      {:else if activeSection === 'Media access'}
+        <MediaAccessSection />
+      {:else if activeSection === 'Bundle management'}
+        <BundleManagementSection />
       {:else if activeSection === 'Backups'}
         <BackupsSection />
       {:else}
