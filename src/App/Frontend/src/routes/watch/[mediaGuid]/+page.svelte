@@ -14,6 +14,7 @@
   import VideoJs10Player, { type TextTrackSource } from '$lib/components/players/VideoJs10Player.svelte';
   import SveltePlayer from '$lib/components/players/SveltePlayer.svelte';
   import SaveToPlaylistButton from '$lib/components/SaveToPlaylistButton.svelte';
+  import PlaylistPanel from '$lib/components/PlaylistPanel.svelte';
   import {
     accentFor,
     formatCount,
@@ -166,6 +167,10 @@
   let technicalRequested = $state(false);
 
   const mediaGuid = $derived(page.params.mediaGuid ?? '');
+  // Playlist context: ?ulist= plays through a user playlist, ?list= through a
+  // platform (downloaded provider) playlist. Only one panel is shown; ulist wins.
+  const userListId = $derived(page.url.searchParams.get('ulist'));
+  const platformListId = $derived(page.url.searchParams.get('list'));
   const streamUrl = $derived(`/stream/${mediaGuid}`);
   const posterUrl = $derived(detail?.thumbnailStoragePath ? `/stream/${mediaGuid}/thumbnail` : null);
   const captionTracks = $derived.by((): TextTrackSource[] => {
@@ -805,6 +810,18 @@
   </section>
 
   <aside aria-label="Up next">
+    {#if userListId || platformListId}
+      <div class="mb-6">
+        {#key `${userListId ?? platformListId}`}
+          <PlaylistPanel
+            {mediaGuid}
+            playlistId={userListId ?? platformListId ?? ''}
+            kind={userListId ? 'user' : 'platform'}
+          />
+        {/key}
+      </div>
+    {/if}
+
     <h2 class="text-sm font-bold uppercase tracking-[0.08em] text-slate-500">Up next</h2>
     <ul class="mt-4 space-y-4">
       {#each upNext as card (card.mediaGuid)}

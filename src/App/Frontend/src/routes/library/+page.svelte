@@ -5,10 +5,18 @@
     ChevronLeftOutline,
     ChevronRightOutline,
     ExclamationCircleOutline,
+    ListMusicOutline,
+    PenOutline,
     PlaySolid,
     PlusOutline,
     RectangleListOutline
   } from 'flowbite-svelte-icons';
+  import { getUserPlaylist, listUserPlaylists, type UserPlaylist } from '$lib/api/userPlaylists';
+  import {
+    getPlatformPlaylist,
+    listPlatformPlaylists,
+    type PlatformPlaylist
+  } from '$lib/api/playlists';
   import {
     accentFor,
     formatBytes,
@@ -68,8 +76,25 @@
     { value: 'duration:desc', name: 'Longest first' }
   ];
 
+  interface UserPlaylistCard {
+    playlist: UserPlaylist;
+    firstGuid: string | null;
+  }
+
+  interface PlatformPlaylistCard {
+    playlist: PlatformPlaylist;
+    firstGuid: string | null;
+  }
+
   let activeTab = $state<Tab>('Videos');
   let sort = $state('release_date:desc');
+  let playlistsRequested = $state(false);
+  let userPlaylistCards = $state<UserPlaylistCard[]>([]);
+  let userPlaylistsLoading = $state(false);
+  let userPlaylistsError = $state<string | null>(null);
+  let platformPlaylistCards = $state<PlatformPlaylistCard[]>([]);
+  let platformPlaylistsLoading = $state(false);
+  let platformPlaylistsError = $state<string | null>(null);
   let page = $state(1);
   let items = $state<MediaCard[]>([]);
   let totalCount = $state(0);
@@ -135,6 +160,79 @@
     void loadPage(1);
   }
 
+  function selectTab(tab: Tab) {
+    activeTab = tab;
+    if (tab === 'Playlists' && !playlistsRequested) {
+      playlistsRequested = true;
+      void loadUserPlaylistCards();
+      void loadPlatformPlaylistCards();
+    }
+  }
+
+  async function loadUserPlaylistCards() {
+    userPlaylistsLoading = true;
+    userPlaylistsError = null;
+    try {
+      const list = await listUserPlaylists();
+      // The list endpoint omits items; each detail supplies the first video for the
+      // card thumbnail and the ?ulist= entry point.
+      const details = await Promise.all(
+        list.map((playlist) => getUserPlaylist(playlist.playlistId).catch(() => playlist))
+      );
+      userPlaylistCards = details.map((playlist) => ({
+        playlist,
+        firstGuid: playlist.items?.[0]?.mediaGuid ?? null
+      }));
+    } catch (err) {
+      userPlaylistsError = err instanceof Error ? err.message : 'Could not load your playlists.';
+    } finally {
+      userPlaylistsLoading = false;
+    }
+  }
+
+  async function loadPlatformPlaylistCards() {
+    platformPlaylistsLoading = true;
+    platformPlaylistsError = null;
+    try {
+      const list = await listPlatformPlaylists();
+      const details = await Promise.all(
+        list.map((playlist) => getPlatformPlaylist(playlist.playlistId).catch(() => playlist))
+      );
+      platformPlaylistCards = details.map((playlist) => ({
+        playlist,
+        firstGuid:
+          (playlist.items ?? [])
+            .slice()
+            .sort((a, b) => a.playlistIndex - b.playlistIndex)
+            .find((item) => item.mediaGuid)?.mediaGuid ?? null
+      }));
+    } catch (err) {
+      platformPlaylistsError = err instanceof Error ? err.message : 'Could not load downloaded playlists.';
+    } finally {
+      platformPlaylistsLoading = false;
+    }
+  }
+
+  function userPlaylistMeta(card: UserPlaylistCard): string {
+    const count = card.playlist.itemCount;
+    return [
+      `${count} ${count === 1 ? 'video' : 'videos'}`,
+      formatRelativeDate(card.playlist.updatedAt) ? `updated ${formatRelativeDate(card.playlist.updatedAt)}` : null
+    ]
+      .filter(Boolean)
+      .join(' · ');
+  }
+
+  function platformPlaylistMeta(card: PlatformPlaylistCard): string {
+    const playlist = card.playlist;
+    return [
+      `${playlist.completedItems} of ${playlist.totalItems} downloaded`,
+      formatRelativeDate(playlist.updatedAt) ? `updated ${formatRelativeDate(playlist.updatedAt)}` : null
+    ]
+      .filter(Boolean)
+      .join(' · ');
+  }
+
   function metaLine(card: MediaCard): string {
     return [formatViews(card.viewCount), card.wasLive ? 'was live' : null]
       .filter(Boolean)
@@ -163,6 +261,7 @@
       <p class="mt-1 text-sm text-slate-500">Your playlists, saved videos, and files on this server.</p>
     </div>
     <Button
+      href="/profile?section=Playlists"
       color="dark"
       class="border-slate-700! bg-slate-900! px-4! py-2! text-xs! font-semibold! text-slate-200! hover:bg-slate-800!"
     >
@@ -204,7 +303,7 @@
     {#each tabs as tab}
       <button
         type="button"
-        onclick={() => (activeTab = tab)}
+        onclick={() => selectTab(tab)}
         class={[
           '-mb-px border-b-2 pb-2.5 text-sm font-medium transition',
           activeTab === tab
@@ -370,6 +469,185 @@
         </div>
       </div>
     {/if}
+  {:else if activeTab === 'Playlists'}
+    <section class="mt-6" aria-labelledby="your-playlists-title">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <h2 id="your-playlists-title" class="text-lg font-bold text-white">Your playlists</h2>
+        <a
+          href="/profile?section=Playlists"
+          class="text-xs font-semibold text-slate-500 transition hover:text-slate-300"
+        >
+          Manage in profile
+        </a>
+      </div>
+
+      {#if userPlaylistsError}
+        <div
+          class="mt-4 flex items-center gap-3 rounded-xl border border-red-900/60 bg-red-950/40 p-4 text-sm text-red-300"
+          role="alert"
+        >
+          <ExclamationCircleOutline class="h-4 w-4 shrink-0" />
+          <span>{userPlaylistsError}</span>
+        </div>
+      {:else if userPlaylistsLoading}
+        <div class="mt-10 flex justify-center">
+          <Spinner size="8" />
+        </div>
+      {:else if userPlaylistCards.length === 0}
+        <div class="mt-4 rounded-2xl border border-slate-800/80 bg-slate-900/40 p-10 text-center">
+          <ListMusicOutline class="mx-auto h-10 w-10 text-slate-700" />
+          <p class="mt-4 text-sm font-semibold text-slate-300">No playlists yet</p>
+          <p class="mt-1 text-sm text-slate-500">
+            Create one from your profile, or save a video to a playlist from the watch page.
+          </p>
+        </div>
+      {:else}
+        <div class="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+          {#each userPlaylistCards as card (card.playlist.playlistId)}
+            <article class="group min-w-0">
+              <a
+                href={card.firstGuid
+                  ? `/watch/${card.firstGuid}?ulist=${encodeURIComponent(card.playlist.playlistId)}`
+                  : `/profile/playlists/${encodeURIComponent(card.playlist.playlistId)}`}
+                class={`relative block aspect-video w-full overflow-hidden rounded-2xl bg-gradient-to-br ${accentFor(card.playlist.playlistId)} text-left shadow-lg shadow-black/20 transition duration-300 group-hover:-translate-y-1 group-hover:shadow-xl group-hover:shadow-black/30`}
+                aria-label={card.firstGuid ? `Play playlist ${card.playlist.name}` : `Edit playlist ${card.playlist.name}`}
+              >
+                <ListMusicOutline
+                  class="absolute left-1/2 top-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 text-white/15"
+                />
+                {#if card.firstGuid}
+                  <img
+                    src={`/stream/${card.firstGuid}/thumbnail`}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    class="absolute inset-0 h-full w-full object-cover"
+                    onerror={hideBrokenImage}
+                  />
+                {/if}
+                <span
+                  class="absolute bottom-0 left-0 right-0 flex items-center justify-between bg-black/60 px-3 py-1.5 text-[11px] font-semibold text-slate-200 backdrop-blur-sm"
+                >
+                  <span class="flex items-center gap-1.5">
+                    <ListMusicOutline class="h-3.5 w-3.5" />
+                    Playlist
+                  </span>
+                  {card.playlist.itemCount} {card.playlist.itemCount === 1 ? 'video' : 'videos'}
+                </span>
+                {#if card.firstGuid}
+                  <span
+                    class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-white/95 text-slate-950 opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
+                  >
+                    <PlaySolid class="ml-0.5 h-5 w-5" />
+                  </span>
+                {/if}
+              </a>
+              <div class="mt-3 flex min-w-0 items-start justify-between gap-2 px-1">
+                <div class="min-w-0">
+                  <h3 class="line-clamp-2 text-sm font-semibold leading-snug text-slate-200">
+                    {card.playlist.name}
+                  </h3>
+                  <p class="mt-1 truncate text-xs text-slate-600">{userPlaylistMeta(card)}</p>
+                </div>
+                <a
+                  href={`/profile/playlists/${encodeURIComponent(card.playlist.playlistId)}`}
+                  class="mt-0.5 shrink-0 text-slate-600 transition hover:text-slate-300"
+                  title="Edit playlist"
+                  aria-label={`Edit playlist ${card.playlist.name}`}
+                >
+                  <PenOutline class="h-3.5 w-3.5" />
+                </a>
+              </div>
+            </article>
+          {/each}
+        </div>
+      {/if}
+    </section>
+
+    <section class="mt-10" aria-labelledby="downloaded-playlists-title">
+      <h2 id="downloaded-playlists-title" class="text-lg font-bold text-white">Downloaded playlists</h2>
+
+      {#if platformPlaylistsError}
+        <div
+          class="mt-4 flex items-center gap-3 rounded-xl border border-red-900/60 bg-red-950/40 p-4 text-sm text-red-300"
+          role="alert"
+        >
+          <ExclamationCircleOutline class="h-4 w-4 shrink-0" />
+          <span>{platformPlaylistsError}</span>
+        </div>
+      {:else if platformPlaylistsLoading}
+        <div class="mt-10 flex justify-center">
+          <Spinner size="8" />
+        </div>
+      {:else if platformPlaylistCards.length === 0}
+        <div class="mt-4 rounded-2xl border border-slate-800/80 bg-slate-900/40 p-10 text-center">
+          <ListMusicOutline class="mx-auto h-10 w-10 text-slate-700" />
+          <p class="mt-4 text-sm font-semibold text-slate-300">No downloaded playlists</p>
+          <p class="mt-1 text-sm text-slate-500">
+            Queue a provider playlist from the Download page and it will show up here.
+          </p>
+        </div>
+      {:else}
+        <div class="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+          {#each platformPlaylistCards as card (card.playlist.playlistId)}
+            <article class="group min-w-0">
+              {#if card.firstGuid}
+                <a
+                  href={`/watch/${card.firstGuid}?list=${encodeURIComponent(card.playlist.playlistId)}`}
+                  class={`relative block aspect-video w-full overflow-hidden rounded-2xl bg-gradient-to-br ${accentFor(card.playlist.playlistId)} text-left shadow-lg shadow-black/20 transition duration-300 group-hover:-translate-y-1 group-hover:shadow-xl group-hover:shadow-black/30`}
+                  aria-label={`Play playlist ${card.playlist.title ?? card.playlist.sourceUrl}`}
+                >
+                  <ListMusicOutline
+                    class="absolute left-1/2 top-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 text-white/15"
+                  />
+                  <img
+                    src={`/stream/${card.firstGuid}/thumbnail`}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    class="absolute inset-0 h-full w-full object-cover"
+                    onerror={hideBrokenImage}
+                  />
+                  <span
+                    class="absolute bottom-0 left-0 right-0 flex items-center justify-between bg-black/60 px-3 py-1.5 text-[11px] font-semibold text-slate-200 backdrop-blur-sm"
+                  >
+                    <span class="flex items-center gap-1.5">
+                      <ListMusicOutline class="h-3.5 w-3.5" />
+                      Playlist
+                    </span>
+                    {card.playlist.completedItems} / {card.playlist.totalItems}
+                  </span>
+                  <span
+                    class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-white/95 text-slate-950 opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
+                  >
+                    <PlaySolid class="ml-0.5 h-5 w-5" />
+                  </span>
+                </a>
+              {:else}
+                <div
+                  class="relative block aspect-video w-full overflow-hidden rounded-2xl bg-slate-900/60 opacity-70"
+                >
+                  <ListMusicOutline
+                    class="absolute left-1/2 top-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 text-white/10"
+                  />
+                  <span
+                    class="absolute bottom-0 left-0 right-0 bg-black/60 px-3 py-1.5 text-[11px] font-semibold text-slate-400"
+                  >
+                    Nothing downloaded yet
+                  </span>
+                </div>
+              {/if}
+              <div class="mt-3 min-w-0 px-1">
+                <h3 class="line-clamp-2 text-sm font-semibold leading-snug text-slate-200">
+                  {card.playlist.title ?? card.playlist.sourceUrl}
+                </h3>
+                <p class="mt-1 truncate text-xs text-slate-600">{platformPlaylistMeta(card)}</p>
+              </div>
+            </article>
+          {/each}
+        </div>
+      {/if}
+    </section>
   {:else}
     <div class="mt-10 rounded-2xl border border-slate-800/80 bg-slate-900/40 p-10 text-center">
       <p class="text-sm font-semibold text-slate-300">{activeTab} is not wired up yet</p>
