@@ -182,7 +182,8 @@ public sealed class DownloadCommandsConsumerService(
             var metadataOptions = YtDlpOptionsMerger.Merge(
                 cmd.YtDlpOptions,
                 ffmpegLocation: GetFfmpegLocation(),
-                cookieFilePath: cookies.FilePath);
+                cookieFilePath: cookies.FilePath,
+                logger);
 
             var metadataResult = await ytDlp.TryGetVideoInfoAsync(
                 cmd.SourceUrl,
@@ -914,7 +915,8 @@ public sealed class DownloadCommandsConsumerService(
         var ytDlpOptions = ApplyOperationalDefaults(YtDlpOptionsMerger.Merge(
             cmd.YtDlpOptions,
             ffmpegLocation: GetFfmpegLocation(),
-            cookieFilePath: cookieFilePath));
+            cookieFilePath: cookieFilePath,
+            logger));
 
         var outputTemplate = $"{MediaFileBase}.%(ext)s";
 

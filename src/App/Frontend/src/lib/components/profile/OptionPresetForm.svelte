@@ -13,6 +13,7 @@
     updateOptionPreset,
     type OptionPreset
   } from '$lib/api/optionPresets';
+  import YtDlpOptionsEditor from './YtDlpOptionsEditor.svelte';
 
   interface Props {
     mode: 'create' | 'update';
@@ -24,7 +25,9 @@
   let key = $state(untrack(() => initial?.key ?? ''));
   let name = $state(untrack(() => initial?.name ?? ''));
   let description = $state(untrack(() => initial?.description ?? ''));
-  let ytDlpOptionsText = $state(untrack(() => formatJson(initial?.ytDlpOptions ?? null)));
+  let ytDlpOptions = $state<Record<string, unknown>>(
+    untrack(() => structuredClone(initial?.ytDlpOptions ?? {}))
+  );
   let submitting = $state(false);
   let submitError = $state<string | null>(null);
 
@@ -36,7 +39,6 @@
     submitError = null;
 
     try {
-      const ytDlpOptions = parseYtDlpOptions(ytDlpOptionsText);
       if (isUpdate) {
         await updateOptionPreset(initial!.key, {
           name: name.trim(),
@@ -59,27 +61,6 @@
     }
   }
 
-  function parseYtDlpOptions(value: string): Record<string, unknown> {
-    const trimmed = value.trim();
-    if (!trimmed) {
-      return {};
-    }
-
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(trimmed);
-    } catch {
-      throw new Error('yt-dlp options must be valid JSON.');
-    }
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      throw new Error('yt-dlp options must be a JSON object.');
-    }
-    return parsed as Record<string, unknown>;
-  }
-
-  function formatJson(value: Record<string, unknown> | null): string {
-    return value ? JSON.stringify(value, null, 2) : '';
-  }
 </script>
 
 <form onsubmit={save} class="space-y-5">
@@ -126,15 +107,10 @@
   </div>
 
   <div>
-    <Label for="preset-yt-dlp-options" class="mb-2 text-sm font-medium text-slate-300">yt-dlp options JSON</Label>
-    <Textarea
-      id="preset-yt-dlp-options"
-      rows={12}
-      bind:value={ytDlpOptionsText}
-      placeholder={'{\n  "format": "bestvideo[height<=1080]+bestaudio/best"\n}'}
-      class="font-mono! border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!"
-    />
-    <p class="mt-1.5 text-xs text-slate-600">Leave empty to store a preset with no overrides.</p>
+    <h2 class="mb-3 border-t border-slate-800/70 pt-5 text-sm font-semibold text-slate-200">
+      Download options
+    </h2>
+    <YtDlpOptionsEditor bind:value={ytDlpOptions} />
   </div>
 
   {#if submitError}

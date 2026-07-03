@@ -74,7 +74,9 @@ public sealed class MetadataControllerTests
         var bus = Substitute.For<IMessageBus>();
         var controller = CreateController(bus);
 
+#pragma warning disable CS0618 // Search is obsolete but still shipped; keep coverage until it is removed.
         var result = await controller.Search(" ", cancellationToken: CancellationToken.None);
+#pragma warning restore CS0618
 
         result.Result.ShouldBeOfType<BadRequestObjectResult>().Value.ShouldBe("Query parameter 'q' is required.");
         await bus.DidNotReceive().RequestAsync<MetadataSearchRequestMessage, MetadataSearchResponseMessage>(
@@ -114,6 +116,7 @@ public sealed class MetadataControllerTests
                 HasMore = false
             });
 
+#pragma warning disable CS0618 // Search is obsolete but still shipped; keep coverage until it is removed.
         var result = await controller.Search(
             q: "needle",
             pageSize: 5,
@@ -125,6 +128,7 @@ public sealed class MetadataControllerTests
             sortBy: "release_date",
             sortOrder: "desc",
             cancellationToken: CancellationToken.None);
+#pragma warning restore CS0618
 
         result.Result.ShouldBeOfType<OkObjectResult>().Value
             .ShouldBeOfType<PagedMetadataResponse<MetadataCardDto>>()
