@@ -23,6 +23,31 @@
     initialsFor
   } from '$lib/media';
 
+  interface Series {
+    seriesName: string;
+    seasonCount?: number | null;
+    seasonNumber: number;
+    seasonName?: string | null;
+    episodeNumber: number;
+    episodeName: string;
+  }
+
+  interface Music {
+    albumTitle: string;
+    albumType?: string | null;
+    discNumber?: number | null;
+    releaseYear?: number | null;
+    trackTitle: string;
+    trackNumber: number;
+    composer?: string | null;
+  }
+
+  interface CaptionLanguage {
+    languageCode: string;
+    captionType: string;
+    name?: string | null;
+  }
+
   interface Detail {
     mediaGuid: string;
     title: string;
@@ -33,8 +58,15 @@
     viewCount?: number | null;
     likeCount?: number | null;
     dislikeCount?: number | null;
+    averageRating?: number | null;
     commentCount?: number | null;
+    ageLimit?: number | null;
     wasLive: boolean;
+    availability?: string | null;
+    location?: string | null;
+    webpageUrl?: string | null;
+    externalMediaId?: string | null;
+    metadataScrapedAt: string;
     account: {
       accountId: number;
       accountName: string;
@@ -43,6 +75,54 @@
       isVerified: boolean;
     };
     tags: string[];
+    categories: string[];
+    genres: string[];
+    cast: string[];
+    artists: string[];
+    albumArtists: string[];
+    series?: Series | null;
+    music?: Music | null;
+    captionLanguages: CaptionLanguage[];
+    userNote?: string | null;
+  }
+
+  interface TechnicalStream {
+    streamType: string;
+    isPrimary: boolean;
+    codecName: string;
+    codecLongName: string;
+    bitRate: number;
+    bitDepth?: number | null;
+    durationTicks: number;
+    language?: string | null;
+    video?: {
+      width: number;
+      height: number;
+      avgFrameRate: number;
+      hdrType: string;
+      colorSpace: string;
+      profile: string;
+    } | null;
+    audio?: {
+      channels: number;
+      channelLayout: string;
+      sampleRateHz: number;
+      profile: string;
+    } | null;
+  }
+
+  interface Technical {
+    mediaGuid: string;
+    durationTicks: number;
+    format?: {
+      durationTicks: number;
+      startTimeTicks: number;
+      formatLongNames: string;
+      streamCount: number;
+      bitRate: number;
+    } | null;
+    streams: TechnicalStream[];
+    chapters: { title: string; startTicks: number; endTicks: number }[];
   }
 
   interface Comment {
@@ -80,6 +160,10 @@
   let commentPage = $state(1);
   let upNext = $state<UpNextCard[]>([]);
   let descriptionExpanded = $state(false);
+  let metaTab = $state<'details' | 'technical'>('details');
+  let technical = $state<Technical | null>(null);
+  let technicalError = $state<string | null>(null);
+  let technicalRequested = $state(false);
 
   const mediaGuid = $derived(page.params.mediaGuid ?? '');
   const streamUrl = $derived(`/stream/${mediaGuid}`);
@@ -99,6 +183,10 @@
     commentsHaveMore = false;
     commentPage = 1;
     descriptionExpanded = false;
+    metaTab = 'details';
+    technical = null;
+    technicalError = null;
+    technicalRequested = false;
 
     await Promise.all([loadDetail(guid), loadComments(guid, 1), loadUpNext(guid)]);
   }
@@ -154,6 +242,139 @@
       // The rail is optional.
     }
   }
+
+  function openTechnicalTab() {
+    metaTab = 'technical';
+    if (!technicalRequested) {
+      technicalRequested = true;
+      void loadTechnical(mediaGuid);
+    }
+  }
+
+  async function loadTechnical(guid: string) {
+    try {
+      const response = await fetch(`/api/metadata/${guid}/technical`);
+      if (!response.ok) {
+        technicalError =
+          response.status === 404
+            ? 'No technical metadata was archived for this video.'
+            : `Could not load technical metadata (status ${response.status}).`;
+        return;
+      }
+      technical = (await response.json()) as Technical;
+    } catch (err) {
+      technicalError = err instanceof Error ? err.message : 'Could not load technical metadata.';
+    }
+  }
+
+  function formatFullDate(iso: string | null | undefined): string | null {
+    if (!iso) {
+      return null;
+    }
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) {
+      return null;
+    }
+    return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+  }
+
+  function formatTicks(ticks: number | null | undefined): string | null {
+    return ticks && ticks > 0 ? formatDuration(ticks / 10_000_000) : null;
+  }
+
+  function formatBitRate(bps: number | null | undefined): string | null {
+    if (!bps || bps <= 0) {
+      return null;
+    }
+    return bps >= 1_000_000 ? `${(bps / 1_000_000).toFixed(1)} Mbps` : `${Math.round(bps / 1000)} kbps`;
+  }
+
+  function seriesSummary(series: Series): string {
+    const season = series.seasonName
+      ? `${series.seasonName} (Season ${series.seasonNumber})`
+      : `Season ${series.seasonNumber}`;
+    return `${series.seriesName} · ${season} · Episode ${series.episodeNumber}: ${series.episodeName}`;
+  }
+
+  function musicSummary(music: Music): string {
+    return [
+      `${music.trackTitle} (track ${music.trackNumber})`,
+      music.albumTitle,
+      music.composer ? `composed by ${music.composer}` : null,
+      music.releaseYear ? String(music.releaseYear) : null
+    ]
+      .filter(Boolean)
+      .join(' · ');
+  }
+
+  function captionSummary(caption: CaptionLanguage): string {
+    const label = caption.name || caption.languageCode;
+    return caption.captionType === 'automatic' ? `${label} (auto)` : label;
+  }
+
+  function streamSummary(stream: TechnicalStream): string {
+    const parts: (string | null)[] = [];
+    if (stream.video) {
+      parts.push(`${stream.video.width}×${stream.video.height}`);
+      if (stream.video.avgFrameRate > 0) {
+        parts.push(`${Math.round(stream.video.avgFrameRate * 100) / 100} fps`);
+      }
+      if (stream.video.hdrType && stream.video.hdrType.toLowerCase() !== 'none') {
+        parts.push(stream.video.hdrType);
+      }
+      if (stream.video.profile) {
+        parts.push(stream.video.profile);
+      }
+    }
+    if (stream.audio) {
+      parts.push(stream.audio.channelLayout || `${stream.audio.channels}ch`);
+      if (stream.audio.sampleRateHz > 0) {
+        parts.push(`${(stream.audio.sampleRateHz / 1000).toFixed(1)} kHz`);
+      }
+      if (stream.audio.profile) {
+        parts.push(stream.audio.profile);
+      }
+    }
+    parts.push(formatBitRate(stream.bitRate));
+    if (stream.bitDepth) {
+      parts.push(`${stream.bitDepth}-bit`);
+    }
+    if (stream.language) {
+      parts.push(stream.language);
+    }
+    return parts.filter(Boolean).join(' · ');
+  }
+
+  const detailRows = $derived.by(() => {
+    if (!detail) {
+      return [] as { label: string; value: string; href?: string }[];
+    }
+    const rows: { label: string; value: string; href?: string }[] = [];
+    const push = (label: string, value: string | null | undefined, href?: string) => {
+      if (value) {
+        rows.push(href ? { label, value, href } : { label, value });
+      }
+    };
+    push('Released', formatFullDate(detail.releaseDate));
+    push('Duration', formatDuration(detail.durationSeconds));
+    push('Views', detail.viewCount?.toLocaleString());
+    push('Likes', detail.likeCount?.toLocaleString());
+    push('Dislikes', detail.dislikeCount?.toLocaleString());
+    push('Rating', detail.averageRating != null ? detail.averageRating.toFixed(1) : null);
+    push('Comments', detail.commentCount?.toLocaleString());
+    push('Age limit', detail.ageLimit ? `${detail.ageLimit}+` : null);
+    push('Availability', detail.availability);
+    push('Live broadcast', detail.wasLive ? 'Yes' : null);
+    push('Location', detail.location);
+    push('Source', detail.webpageUrl, detail.webpageUrl ?? undefined);
+    push('External ID', detail.externalMediaId);
+    push(
+      'Captions',
+      detail.captionLanguages.length > 0 ? detail.captionLanguages.map(captionSummary).join(', ') : null
+    );
+    push('Metadata archived', formatFullDate(detail.metadataScrapedAt));
+    return rows;
+  });
 
   function upNextMeta(card: UpNextCard): string {
     return [formatCount(card.viewCount), formatRelativeDate(card.releaseDate)]
@@ -324,6 +545,189 @@
           </button>
         {/if}
       </div>
+
+      <section class="mt-4 rounded-2xl border border-slate-800/80 bg-slate-900/40" aria-label="Media metadata">
+        <div class="flex gap-1 border-b border-slate-800/80 p-2" role="tablist" aria-label="Metadata sections">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={metaTab === 'details'}
+            onclick={() => (metaTab = 'details')}
+            class={[
+              'rounded-lg px-4 py-2 text-xs font-semibold transition',
+              metaTab === 'details'
+                ? 'bg-blue-500/15 text-blue-400'
+                : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-300'
+            ]}
+          >
+            Details
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={metaTab === 'technical'}
+            onclick={openTechnicalTab}
+            class={[
+              'rounded-lg px-4 py-2 text-xs font-semibold transition',
+              metaTab === 'technical'
+                ? 'bg-blue-500/15 text-blue-400'
+                : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-300'
+            ]}
+          >
+            Technical
+          </button>
+        </div>
+
+        {#if metaTab === 'details'}
+          <div class="space-y-5 p-5">
+            {#if detailRows.length > 0}
+              <dl class="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+                {#each detailRows as row (row.label)}
+                  <div class="flex min-w-0 gap-2">
+                    <dt class="w-32 shrink-0 text-slate-500">{row.label}</dt>
+                    <dd class="min-w-0 flex-1 truncate text-slate-300">
+                      {#if row.href}
+                        <a
+                          href={row.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="text-blue-400 hover:underline"
+                        >
+                          {row.value}
+                        </a>
+                      {:else}
+                        {row.value}
+                      {/if}
+                    </dd>
+                  </div>
+                {/each}
+              </dl>
+            {/if}
+
+            {#if detail.series}
+              <div>
+                <h3 class="text-xs font-bold uppercase tracking-[0.08em] text-slate-500">Series</h3>
+                <p class="mt-1.5 text-sm text-slate-300">{seriesSummary(detail.series)}</p>
+              </div>
+            {/if}
+
+            {#if detail.music}
+              <div>
+                <h3 class="text-xs font-bold uppercase tracking-[0.08em] text-slate-500">Music</h3>
+                <p class="mt-1.5 text-sm text-slate-300">{musicSummary(detail.music)}</p>
+              </div>
+            {/if}
+
+            {#each [
+              { label: 'Tags', values: detail.tags, prefix: '#', chip: 'bg-slate-800/80 text-slate-400' },
+              { label: 'Categories', values: detail.categories, prefix: '', chip: 'bg-blue-500/10 text-blue-300' },
+              { label: 'Genres', values: detail.genres, prefix: '', chip: 'bg-purple-500/10 text-purple-300' },
+              { label: 'Cast', values: detail.cast, prefix: '', chip: 'bg-slate-800/80 text-slate-400' },
+              { label: 'Artists', values: detail.artists, prefix: '', chip: 'bg-slate-800/80 text-slate-400' },
+              { label: 'Album artists', values: detail.albumArtists, prefix: '', chip: 'bg-slate-800/80 text-slate-400' }
+            ] as group (group.label)}
+              {#if group.values.length > 0}
+                <div>
+                  <h3 class="text-xs font-bold uppercase tracking-[0.08em] text-slate-500">{group.label}</h3>
+                  <div class="mt-1.5 flex flex-wrap gap-1.5">
+                    {#each group.values as value}
+                      <span class={`rounded-full px-2.5 py-0.5 text-xs font-medium ${group.chip}`}>
+                        {group.prefix}{value}
+                      </span>
+                    {/each}
+                  </div>
+                </div>
+              {/if}
+            {/each}
+
+            {#if detail.userNote}
+              <div>
+                <h3 class="text-xs font-bold uppercase tracking-[0.08em] text-slate-500">Your note</h3>
+                <p class="mt-1.5 whitespace-pre-line text-sm text-slate-300">{detail.userNote}</p>
+              </div>
+            {/if}
+          </div>
+        {:else}
+          <div class="space-y-5 p-5">
+            {#if technicalError}
+              <p class="text-sm text-slate-500">{technicalError}</p>
+            {:else if !technical}
+              <div class="flex justify-center py-4">
+                <Spinner size="5" />
+              </div>
+            {:else}
+              {#if technical.format}
+                <dl class="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+                  <div class="flex gap-2">
+                    <dt class="w-32 shrink-0 text-slate-500">Container</dt>
+                    <dd class="min-w-0 text-slate-300">{technical.format.formatLongNames}</dd>
+                  </div>
+                  {#if formatTicks(technical.format.durationTicks)}
+                    <div class="flex gap-2">
+                      <dt class="w-32 shrink-0 text-slate-500">Duration</dt>
+                      <dd class="text-slate-300">{formatTicks(technical.format.durationTicks)}</dd>
+                    </div>
+                  {/if}
+                  {#if formatBitRate(technical.format.bitRate)}
+                    <div class="flex gap-2">
+                      <dt class="w-32 shrink-0 text-slate-500">Overall bitrate</dt>
+                      <dd class="text-slate-300">{formatBitRate(technical.format.bitRate)}</dd>
+                    </div>
+                  {/if}
+                  <div class="flex gap-2">
+                    <dt class="w-32 shrink-0 text-slate-500">Streams</dt>
+                    <dd class="text-slate-300">{technical.format.streamCount}</dd>
+                  </div>
+                </dl>
+              {/if}
+
+              {#if technical.streams.length > 0}
+                <div>
+                  <h3 class="text-xs font-bold uppercase tracking-[0.08em] text-slate-500">Streams</h3>
+                  <ul class="mt-2 space-y-2">
+                    {#each technical.streams as stream}
+                      <li class="rounded-xl border border-slate-800/80 bg-slate-950/40 px-4 py-3">
+                        <p class="flex flex-wrap items-center gap-2 text-xs">
+                          <span class="rounded-full bg-slate-800 px-2 py-0.5 font-semibold uppercase tracking-wide text-slate-300">
+                            {stream.streamType}
+                          </span>
+                          {#if stream.isPrimary}
+                            <span class="rounded-full bg-blue-500/15 px-2 py-0.5 font-semibold text-blue-400">Primary</span>
+                          {/if}
+                          <span class="font-semibold text-slate-300" title={stream.codecLongName}>{stream.codecName}</span>
+                        </p>
+                        {#if streamSummary(stream)}
+                          <p class="mt-1 text-xs text-slate-500">{streamSummary(stream)}</p>
+                        {/if}
+                      </li>
+                    {/each}
+                  </ul>
+                </div>
+              {/if}
+
+              {#if technical.chapters.length > 0}
+                <div>
+                  <h3 class="text-xs font-bold uppercase tracking-[0.08em] text-slate-500">Chapters</h3>
+                  <ul class="mt-2 space-y-1">
+                    {#each technical.chapters as chapter}
+                      <li class="flex gap-3 text-sm">
+                        <span class="w-16 shrink-0 font-mono text-xs leading-6 text-slate-500">
+                          {formatTicks(chapter.startTicks) ?? '0:00'}
+                        </span>
+                        <span class="min-w-0 truncate text-slate-300">{chapter.title}</span>
+                      </li>
+                    {/each}
+                  </ul>
+                </div>
+              {/if}
+
+              {#if !technical.format && technical.streams.length === 0 && technical.chapters.length === 0}
+                <p class="text-sm text-slate-500">No technical metadata was archived for this video.</p>
+              {/if}
+            {/if}
+          </div>
+        {/if}
+      </section>
 
       <section class="mt-8" aria-label="Comments">
         <h2 class="text-lg font-bold text-white">
