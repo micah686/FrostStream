@@ -6,7 +6,6 @@
     ChevronUpOutline,
     DotsHorizontalOutline,
     ExclamationCircleOutline,
-    FolderOutline,
     PlusOutline,
     ShareNodesOutline,
     ThumbsDownOutline,
@@ -14,6 +13,7 @@
   } from 'flowbite-svelte-icons';
   import VideoJs10Player, { type TextTrackSource } from '$lib/components/players/VideoJs10Player.svelte';
   import SveltePlayer from '$lib/components/players/SveltePlayer.svelte';
+  import SaveToPlaylistButton from '$lib/components/SaveToPlaylistButton.svelte';
   import {
     accentFor,
     formatCount,
@@ -519,13 +519,7 @@
             <ShareNodesOutline class="mr-1.5 h-4 w-4" />
             Share
           </Button>
-          <Button
-            color="dark"
-            class="border-slate-800! bg-slate-900/70! px-4! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800!"
-          >
-            <FolderOutline class="mr-1.5 h-4 w-4" />
-            Save
-          </Button>
+          <SaveToPlaylistButton {mediaGuid} />
           <Button
             color="dark"
             class="h-9 w-9 border-slate-800! bg-slate-900/70! p-2! text-slate-400! hover:bg-slate-800!"

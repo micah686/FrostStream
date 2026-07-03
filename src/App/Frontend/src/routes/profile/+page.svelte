@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { page } from '$app/state';
   import { Badge, Button, Spinner } from 'flowbite-svelte';
   import {
     AdjustmentsHorizontalOutline,
@@ -63,7 +64,10 @@
     { label: 'Playlists', icon: ListMusicOutline }
   ];
 
-  let activeSection = $state('Config sets');
+  const requestedSection = page.url.searchParams.get('section');
+  let activeSection = $state(
+    sections.some((section) => section.label === requestedSection) ? requestedSection! : 'Config sets'
+  );
 
   onMount(() => {
     void loadConfigSets();
