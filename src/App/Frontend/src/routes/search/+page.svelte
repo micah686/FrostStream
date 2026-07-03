@@ -10,7 +10,7 @@
     SearchOutline
   } from 'flowbite-svelte-icons';
   import { accentFor, formatDuration, formatRelativeDate, formatViews, initialsFor } from '$lib/media';
-  import { searchMedia, searchMatchLabel, type SearchHit, type SearchScope } from '$lib/api/search';
+  import { findSimilarMedia, searchMedia, searchMatchLabel, type SearchHit, type SearchScope } from '$lib/api/search';
 
   const pageSize = 24;
 
@@ -31,6 +31,8 @@
   ];
 
   const query = $derived(pageState.url.searchParams.get('q')?.trim() ?? '');
+  // Similar mode: ?similar=<mediaGuid> shows more-like-this results instead of a text search.
+  const similarGuid = $derived(pageState.url.searchParams.get('similar')?.trim() ?? '');
   const scope = $derived((pageState.url.searchParams.get('scope') as SearchScope) || 'all');
   const currentPage = $derived(Math.max(1, Number(pageState.url.searchParams.get('page')) || 1));
   const sort = $derived(pageState.url.searchParams.get('sort') || 'relevance');
@@ -40,17 +42,66 @@
   let hasMore = $state(false);
   let loading = $state(false);
   let loadError = $state<string | null>(null);
+  let similarSourceTitle = $state<string | null>(null);
 
   const totalPages = $derived(Math.max(1, Math.ceil(totalCount / pageSize)));
 
   let requestId = 0;
 
   $effect(() => {
+    const similar = similarGuid;
+    similarSourceTitle = null;
+    if (!similar) {
+      return;
+    }
+    // Names the header ("Similar to …"); the results don't depend on it.
+    fetch(`/api/metadata/${similar}`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((detail: { title?: string } | null) => {
+        if (detail?.title && similarGuid === similar) {
+          similarSourceTitle = detail.title;
+        }
+      })
+      .catch(() => {});
+  });
+
+  $effect(() => {
     // Re-run whenever the URL-derived inputs change.
     const q = query;
+    const similar = similarGuid;
     const currentScope = scope;
     const target = currentPage;
     const currentSort = sort;
+
+    if (similar) {
+      const id = ++requestId;
+      loading = true;
+      loadError = null;
+      findSimilarMedia(similar, 30)
+        .then((items) => {
+          if (id !== requestId) {
+            return;
+          }
+          hits = items;
+          totalCount = items.length;
+          hasMore = false;
+        })
+        .catch((err: unknown) => {
+          if (id !== requestId) {
+            return;
+          }
+          loadError = err instanceof Error ? err.message : 'Similar-media lookup failed.';
+          hits = [];
+          totalCount = 0;
+          hasMore = false;
+        })
+        .finally(() => {
+          if (id === requestId) {
+            loading = false;
+          }
+        });
+      return;
+    }
 
     if (!q) {
       hits = [];
@@ -127,17 +178,30 @@
 </script>
 
 <svelte:head>
-  <title>{query ? `${query} · Search` : 'Search'} · FrostStream</title>
+  <title>{similarGuid ? 'Similar videos · Search' : query ? `${query} · Search` : 'Search'} · FrostStream</title>
 </svelte:head>
 
 <section aria-labelledby="search-title">
   <div class="flex flex-wrap items-start justify-between gap-4">
     <div class="min-w-0">
       <h1 id="search-title" class="text-2xl font-bold tracking-tight text-white">
-        {query ? `Results for "${query}"` : 'Search'}
+        {similarGuid ? 'Similar videos' : query ? `Results for "${query}"` : 'Search'}
       </h1>
       <p class="mt-1 text-sm text-slate-500">
-        {#if !query}
+        {#if similarGuid}
+          {#if loading}
+            Finding similar videos…
+          {:else}
+            {totalCount} {totalCount === 1 ? 'video' : 'videos'} similar to
+            {#if similarSourceTitle}
+              <a href={`/watch/${similarGuid}`} class="text-slate-400 hover:text-slate-200 hover:underline">
+                "{similarSourceTitle}"
+              </a>
+            {:else}
+              this video
+            {/if}
+          {/if}
+        {:else if !query}
           Type in the search box above. Advanced syntax is supported, e.g.
           <code class="rounded bg-slate-800/80 px-1.5 py-0.5 font-mono text-xs text-slate-400">channel:LinusTechTips codec:h264 after:2023 duration:&gt;600</code>
         {:else if loading}
@@ -189,6 +253,14 @@
   {:else if loading}
     <div class="mt-16 flex justify-center">
       <Spinner size="8" />
+    </div>
+  {:else if similarGuid && hits.length === 0}
+    <div class="mt-10 rounded-2xl border border-slate-800/80 bg-slate-900/40 p-10 text-center">
+      <SearchOutline class="mx-auto h-10 w-10 text-slate-700" />
+      <p class="mt-4 text-sm font-semibold text-slate-300">No similar videos found</p>
+      <p class="mt-1 text-sm text-slate-500">
+        Nothing else on the server is close enough to this video yet.
+      </p>
     </div>
   {:else if query && hits.length === 0}
     <div class="mt-10 rounded-2xl border border-slate-800/80 bg-slate-900/40 p-10 text-center">
@@ -270,6 +342,7 @@
       {/each}
     </div>
 
+    {#if !similarGuid}
     <div class="mt-8 flex items-center justify-between border-t border-slate-800/70 pt-5">
       <p class="text-xs text-slate-600">
         Page {currentPage} of {totalPages}
@@ -295,5 +368,6 @@
         </Button>
       </div>
     </div>
+    {/if}
   {/if}
 </section>

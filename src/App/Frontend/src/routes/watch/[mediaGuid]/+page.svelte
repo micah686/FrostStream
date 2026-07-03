@@ -9,6 +9,7 @@
     DotsHorizontalOutline,
     ExclamationCircleOutline,
     PlusOutline,
+    SearchOutline,
     ShareNodesOutline,
     ThumbsDownOutline,
     ThumbsUpOutline
@@ -182,6 +183,30 @@
   let suppressAutoComplete = false;
   let lastProgressSentAt = 0;
   let lastSentPosition = -1;
+  let moreMenuOpen = $state(false);
+  let moreMenuContainer = $state<HTMLDivElement | null>(null);
+
+  $effect(() => {
+    if (!moreMenuOpen) {
+      return;
+    }
+    const onPointerDown = (event: PointerEvent) => {
+      if (moreMenuContainer && event.target instanceof Node && !moreMenuContainer.contains(event.target)) {
+        moreMenuOpen = false;
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        moreMenuOpen = false;
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  });
 
   const mediaGuid = $derived(page.params.mediaGuid ?? '');
   // Playlist context: ?ulist= plays through a user playlist, ?list= through a
@@ -673,13 +698,39 @@
             Share
           </Button>
           <SaveToPlaylistButton {mediaGuid} />
-          <Button
-            color="dark"
-            class="h-9 w-9 border-slate-800! bg-slate-900/70! p-2! text-slate-400! hover:bg-slate-800!"
-            aria-label="More actions"
-          >
-            <DotsHorizontalOutline class="h-4 w-4" />
-          </Button>
+          <div class="relative" bind:this={moreMenuContainer}>
+            <button
+              type="button"
+              aria-label="More actions"
+              aria-haspopup="menu"
+              aria-expanded={moreMenuOpen}
+              onclick={() => (moreMenuOpen = !moreMenuOpen)}
+              class={[
+                'grid h-9 w-9 place-items-center rounded-lg border border-slate-800 text-slate-400 transition hover:bg-slate-800',
+                moreMenuOpen ? 'bg-slate-800' : 'bg-slate-900/70'
+              ]}
+            >
+              <DotsHorizontalOutline class="h-4 w-4" />
+            </button>
+
+            {#if moreMenuOpen}
+              <div
+                class="absolute right-0 top-full z-40 mt-2 w-48 rounded-xl border border-slate-700/80 bg-[#151a26] p-1.5 shadow-2xl shadow-black/50"
+                role="menu"
+                aria-label="More actions"
+              >
+                <a
+                  role="menuitem"
+                  href={`/search?similar=${mediaGuid}`}
+                  onclick={() => (moreMenuOpen = false)}
+                  class="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-slate-200 transition hover:bg-slate-800/70"
+                >
+                  <SearchOutline class="h-4 w-4 text-slate-500" />
+                  Find similar
+                </a>
+              </div>
+            {/if}
+          </div>
         </div>
       </div>
 
