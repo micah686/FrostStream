@@ -27,6 +27,7 @@
     updateWatchState,
     type WatchState
   } from '$lib/api/watchState';
+  import { getMetadataVersions, type MetadataVersion } from '$lib/api/metadata';
   import {
     accentFor,
     formatCount,
@@ -298,21 +299,15 @@
 
   async function loadVersions(guid: string) {
     versionsLoading = true;
-    const versions: number[] = [];
     try {
-      for (let version = 1; version <= 50; version += 1) {
-        const response = await fetch(`/api/watch/${guid}?version=${version}`, { method: 'HEAD' });
-        if (response.ok) {
-          versions.push(version);
-          continue;
-        }
-        if (versions.length > 0 || response.status === 400 || response.status === 401 || response.status === 403) {
-          break;
-        }
-      }
+      const response = await getMetadataVersions(guid);
+      const versions = response.versions;
       mediaVersionOptions = [
         { value: '', name: 'Latest version' },
-        ...versions.map((version) => ({ value: String(version), name: `Version ${version}` }))
+        ...versions.map((version: MetadataVersion) => ({
+          value: String(version.versionNum),
+          name: `Version ${version.versionNum}`
+        }))
       ];
     } catch {
       mediaVersionOptions = [{ value: '', name: 'Latest version' }];

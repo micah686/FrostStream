@@ -28,6 +28,13 @@ public sealed class MetadataQueryConsumerService(
             queueGroup: MetadataSubjects.ProcessorsQueueGroup,
             cancellationToken: stoppingToken);
 
+        await SubscribeAsync<MetadataVersionsRequestMessage>(
+            messageBus,
+            MetadataSubjects.Versions,
+            HandleVersionsAsync,
+            queueGroup: MetadataSubjects.ProcessorsQueueGroup,
+            cancellationToken: stoppingToken);
+
         await SubscribeAsync<MetadataAccountsListRequestMessage>(
             messageBus,
             MetadataSubjects.AccountsList,
@@ -113,6 +120,30 @@ public sealed class MetadataQueryConsumerService(
         {
             logger.LogError(ex, "Failed handling technical metadata query for {MediaGuid}", context.Message.MediaGuid);
             await context.RespondAsync(new MetadataTechnicalResponseMessage
+            {
+                Success = false,
+                ErrorCode = "internal_error",
+                ErrorMessage = "Internal metadata service error."
+            });
+        }
+    }
+
+    private async Task HandleVersionsAsync(IMessageContext<MetadataVersionsRequestMessage> context)
+    {
+        try
+        {
+            var items = await WithQuery(query => query.ListVersionsAsync(context.Message.MediaGuid));
+            await context.RespondAsync(new MetadataVersionsResponseMessage
+            {
+                Success = true,
+                Items = context.Message.CountOnly ? [] : items,
+                TotalCount = items.Count
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed handling version list query for {MediaGuid}", context.Message.MediaGuid);
+            await context.RespondAsync(new MetadataVersionsResponseMessage
             {
                 Success = false,
                 ErrorCode = "internal_error",

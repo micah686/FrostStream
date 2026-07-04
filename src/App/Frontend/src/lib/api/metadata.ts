@@ -74,6 +74,20 @@ export interface MediaDeleteResult {
   mediaRemoved: boolean;
 }
 
+export interface MetadataVersion {
+  mediaGuid: string;
+  versionNum: number;
+  storageKey: string;
+  storagePath: string;
+  contentHashXxh128: string;
+  ingestOrigin: string;
+}
+
+export interface MetadataVersionsResponse {
+  totalCount: number;
+  versions: MetadataVersion[];
+}
+
 export interface ListOrphansOptions {
   kind?: OrphanKind;
   state?: OrphanState;
@@ -149,6 +163,20 @@ export async function deleteMediaForStorageKey(
     undefined,
     fetchImpl
   );
+}
+
+export async function getMetadataVersions(
+  mediaGuid: string,
+  fetchImpl: typeof fetch = fetch
+): Promise<MetadataVersionsResponse> {
+  return getJson<MetadataVersionsResponse>(`/api/metadata/${encodeURIComponent(mediaGuid)}/versions`, fetchImpl);
+}
+
+export async function getMetadataVersionCount(
+  mediaGuid: string,
+  fetchImpl: typeof fetch = fetch
+): Promise<number> {
+  return getJson<number>(`/api/metadata/${encodeURIComponent(mediaGuid)}/versions?countOnly=true`, fetchImpl);
 }
 
 export function orphanKindLabel(kind: OrphanKind | string): string {

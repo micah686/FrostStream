@@ -177,6 +177,66 @@ public sealed class MetadataControllerTests
     }
 
     [Test]
+    public async Task ListVersions_Returns_Count_When_Requested()
+    {
+        var bus = Substitute.For<IMessageBus>();
+        var controller = CreateController(bus);
+        var mediaGuid = Guid.NewGuid();
+
+        bus.RequestAsync<MetadataVersionsRequestMessage, MetadataVersionsResponseMessage>(
+                MetadataSubjects.Versions,
+                Arg.Is<MetadataVersionsRequestMessage>(x => x.MediaGuid == mediaGuid && x.CountOnly),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new MetadataVersionsResponseMessage
+            {
+                Success = true,
+                TotalCount = 3,
+                Items = []
+            });
+
+        var result = await controller.ListVersions(mediaGuid, countOnly: true, CancellationToken.None);
+
+        result.Result.ShouldBeOfType<OkObjectResult>().Value.ShouldBe(3);
+    }
+
+    [Test]
+    public async Task ListVersions_Returns_Array_By_Default()
+    {
+        var bus = Substitute.For<IMessageBus>();
+        var controller = CreateController(bus);
+        var mediaGuid = Guid.NewGuid();
+        var version = new MetadataVersionDto
+        {
+            MediaGuid = mediaGuid,
+            VersionNum = 2,
+            StorageKey = "default",
+            StoragePath = "media/x/v2.webm",
+            ContentHashXxh128 = "abcd",
+            IngestOrigin = "download"
+        };
+
+        bus.RequestAsync<MetadataVersionsRequestMessage, MetadataVersionsResponseMessage>(
+                MetadataSubjects.Versions,
+                Arg.Is<MetadataVersionsRequestMessage>(x => x.MediaGuid == mediaGuid && !x.CountOnly),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new MetadataVersionsResponseMessage
+            {
+                Success = true,
+                TotalCount = 1,
+                Items = [version]
+            });
+
+        var result = await controller.ListVersions(mediaGuid, cancellationToken: CancellationToken.None);
+
+        var payload = result.Result.ShouldBeOfType<OkObjectResult>().Value
+            .ShouldBeOfType<MetadataVersionsResponse>();
+        payload.TotalCount.ShouldBe(1);
+        payload.Versions.Single().VersionNum.ShouldBe(2);
+    }
+
+    [Test]
     public async Task ListComments_Sends_Query_And_Returns_Paged_Response()
     {
         var bus = Substitute.For<IMessageBus>();

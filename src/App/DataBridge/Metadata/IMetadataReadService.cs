@@ -8,6 +8,8 @@ public interface IMetadataReadService
 
     Task<MetadataTechnicalDto?> GetTechnicalAsync(Guid mediaGuid, CancellationToken ct = default);
 
+    Task<IReadOnlyList<MetadataVersionDto>> ListVersionsAsync(Guid mediaGuid, CancellationToken ct = default);
+
     Task<AccountsListResult> ListAccountsAsync(int pageSize, string? after, string? platform, CancellationToken ct = default);
 
     Task<AccountDto?> GetAccountAsync(long accountId, CancellationToken ct = default);

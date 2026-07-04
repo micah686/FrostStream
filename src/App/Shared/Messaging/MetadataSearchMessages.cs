@@ -175,6 +175,16 @@ public sealed record MetadataTechnicalDto
     public IReadOnlyList<TechnicalChapterDto> Chapters { get; init; } = [];
 }
 
+public sealed record MetadataVersionDto
+{
+    public required Guid MediaGuid { get; init; }
+    public required int VersionNum { get; init; }
+    public required string StorageKey { get; init; }
+    public required string StoragePath { get; init; }
+    public required string ContentHashXxh128 { get; init; }
+    public required string IngestOrigin { get; init; }
+}
+
 public sealed record CommentDto
 {
     public required string CommentId { get; init; }
@@ -279,6 +289,21 @@ public sealed record MetadataTechnicalResponseMessage
     public string? ErrorCode { get; init; }
     public string? ErrorMessage { get; init; }
     public MetadataTechnicalDto? Item { get; init; }
+}
+
+public sealed record MetadataVersionsRequestMessage
+{
+    public required Guid MediaGuid { get; init; }
+    public bool CountOnly { get; init; }
+}
+
+public sealed record MetadataVersionsResponseMessage
+{
+    public bool Success { get; init; }
+    public string? ErrorCode { get; init; }
+    public string? ErrorMessage { get; init; }
+    public IReadOnlyList<MetadataVersionDto> Items { get; init; } = [];
+    public int TotalCount { get; init; }
 }
 
 public sealed record MetadataCommentsListRequestMessage

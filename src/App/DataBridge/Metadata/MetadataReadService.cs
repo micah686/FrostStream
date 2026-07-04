@@ -327,6 +327,40 @@ public sealed class MetadataReadService(NpgsqlDataSource dataSource) : IMetadata
         };
     }
 
+    public async Task<IReadOnlyList<MetadataVersionDto>> ListVersionsAsync(Guid mediaGuid, CancellationToken ct = default)
+    {
+        await using var command = dataSource.CreateCommand("""
+            SELECT
+                media_guid,
+                version_num,
+                storage_key,
+                storage_path,
+                content_hash_xxh128,
+                ingest_origin::text AS ingest_origin
+            FROM media.media_content_id_versions
+            WHERE media_guid = @media_guid
+            ORDER BY version_num
+            """);
+        command.Parameters.AddWithValue("@media_guid", mediaGuid);
+
+        var items = new List<MetadataVersionDto>();
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            items.Add(new MetadataVersionDto
+            {
+                MediaGuid = GetGuid(reader, "media_guid"),
+                VersionNum = GetInt32(reader, "version_num"),
+                StorageKey = GetString(reader, "storage_key"),
+                StoragePath = GetString(reader, "storage_path"),
+                ContentHashXxh128 = GetString(reader, "content_hash_xxh128"),
+                IngestOrigin = GetString(reader, "ingest_origin")
+            });
+        }
+
+        return items;
+    }
+
     public async Task<AccountsListResult> ListAccountsAsync(int pageSize, string? after, string? platform, CancellationToken ct = default)
     {
         var cursor = DecodeCursor(after);

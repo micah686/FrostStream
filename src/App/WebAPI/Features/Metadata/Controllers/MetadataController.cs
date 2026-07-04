@@ -154,6 +154,34 @@ public sealed class MetadataController(
         return Ok(response.Item);
     }
 
+    [HttpGet("{mediaGuid:guid}/versions")]
+    [Endpoint(EndpointIds.MetadataVersions)]
+    [EndpointSummary("List media versions")]
+    [EndpointDescription("Returns either the total number of stored versions for a media GUID or the full ordered list of available content versions, depending on the countOnly query parameter.")]
+    public async Task<ActionResult<object>> ListVersions(
+        Guid mediaGuid,
+        [FromQuery] bool countOnly = false,
+        CancellationToken cancellationToken = default)
+    {
+        var response = await SendRequestAsync<MetadataVersionsRequestMessage, MetadataVersionsResponseMessage>(
+            MetadataSubjects.Versions,
+            new MetadataVersionsRequestMessage
+            {
+                MediaGuid = mediaGuid,
+                CountOnly = countOnly
+            },
+            cancellationToken);
+
+        if (response is null)
+            return ServiceUnavailable();
+        if (!response.Success)
+            return MetadataError(response.ErrorCode, response.ErrorMessage);
+
+        return countOnly
+            ? Ok(response.TotalCount)
+            : Ok(new MetadataVersionsResponse(response.TotalCount, response.Items));
+    }
+
     [HttpGet("{mediaGuid:guid}/comments")]
     [Endpoint(EndpointIds.MetadataComments)]
     [EndpointSummary("List comments for a media item")]

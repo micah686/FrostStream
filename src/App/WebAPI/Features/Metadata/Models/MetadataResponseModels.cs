@@ -20,3 +20,7 @@ public sealed record AccountListResponse(
 public sealed record TaxonomyListResponse(
     IReadOnlyList<TaxonomyItemDto> Items,
     int Total);
+
+public sealed record MetadataVersionsResponse(
+    int TotalCount,
+    IReadOnlyList<MetadataVersionDto> Versions);
