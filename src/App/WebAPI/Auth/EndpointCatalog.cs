@@ -180,6 +180,19 @@ public static class EndpointIds
     public const string MediaWatchStateMarkUnwatched = "media.watch-state.mark-unwatched";
     public const string PlaylistAudioStream = "playlists.audio-stream";
 
+    // Server-side casting (Chromecast driven by the server via mDNS + Sharpcaster)
+    public const string CastDevicesList = "cast.devices.list";
+    public const string CastSessionsStart = "cast.sessions.start";
+    public const string CastSessionsList = "cast.sessions.list";
+    public const string CastSessionsGet = "cast.sessions.get";
+    public const string CastSessionsPlay = "cast.sessions.play";
+    public const string CastSessionsPause = "cast.sessions.pause";
+    public const string CastSessionsStop = "cast.sessions.stop";
+    public const string CastSessionsSeek = "cast.sessions.seek";
+    public const string CastSessionsVolume = "cast.sessions.volume";
+    public const string CastSessionsDisconnect = "cast.sessions.disconnect";
+    public const string CastSessionsEvents = "cast.sessions.events";
+
     // Media access control (watch-time restrictions). The internal `media-access.check` gate has no
     // endpoint id — it is server-to-server only and never reachable as a route.
     public const string MediaAccessMediaList = "media-access.media.list";
@@ -359,6 +372,17 @@ public static class EndpointCatalog
         new(EndpointIds.MediaWatchStateMarkWatched, Bundles.Media),
         new(EndpointIds.MediaWatchStateMarkUnwatched, Bundles.Media),
         new(EndpointIds.MediaWatchStateListInProgress, Bundles.Media),
+        new(EndpointIds.CastDevicesList, Bundles.Media),
+        new(EndpointIds.CastSessionsStart, Bundles.Media),
+        new(EndpointIds.CastSessionsList, Bundles.Media),
+        new(EndpointIds.CastSessionsGet, Bundles.Media),
+        new(EndpointIds.CastSessionsPlay, Bundles.Media),
+        new(EndpointIds.CastSessionsPause, Bundles.Media),
+        new(EndpointIds.CastSessionsStop, Bundles.Media),
+        new(EndpointIds.CastSessionsSeek, Bundles.Media),
+        new(EndpointIds.CastSessionsVolume, Bundles.Media),
+        new(EndpointIds.CastSessionsDisconnect, Bundles.Media),
+        new(EndpointIds.CastSessionsEvents, Bundles.Media),
         new(EndpointIds.PlaylistAudioStream, Bundles.Playlists),
 
         new(EndpointIds.MediaAccessMediaList, Bundles.MediaAccessAdmin),

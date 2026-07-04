@@ -15,6 +15,7 @@ using WebAPI.Auth;
 using WebAPI.Features.Backups;
 using WebAPI.Features.Downloads;
 using WebAPI.Features.Media;
+using WebAPI.Features.Media.Casting;
 
 namespace WebAPI;
 
@@ -58,6 +59,11 @@ public class Program
 
         builder.Services.Configure<CastTokenOptions>(builder.Configuration.GetSection(CastTokenOptions.SectionName));
         builder.Services.AddSingleton<CastTokenService>();
+        builder.Services.Configure<CastingOptions>(builder.Configuration.GetSection(CastingOptions.SectionName));
+        builder.Services.AddSingleton<CastMediaUrlBuilder>();
+        builder.Services.AddSingleton<ICastDeviceLocator, SharpcasterDeviceLocator>();
+        builder.Services.AddSingleton<ICastSessionClientFactory, SharpcasterSessionClientFactory>();
+        builder.Services.AddSingleton<CastSessionManager>();
         builder.Services.AddScoped<MediaAccessChecker>();
         builder.Services.AddScoped<AudioRenditionResolver>();
         builder.Services.AddCors(options => options.AddPolicy(MediaCors.Policy, policy =>

@@ -93,6 +93,9 @@ public static class StartServices
             .WithEnvironment("OpenFga__AuthorizationModelId", Environment.GetEnvironmentVariable("OPENFGA_AUTHORIZATION_MODEL_ID") ?? "")
             .WithEnvironment("OpenFga__AutoProvision", Environment.GetEnvironmentVariable("OPENFGA_AUTO_PROVISION") ?? "true")
             .WithEnvironment("OpenFga__BootstrapOwnerSubjects", Environment.GetEnvironmentVariable("OPENFGA_BOOTSTRAP_OWNER_SUB") ?? "")
+            // LAN-reachable base URL that cast devices use to fetch media. Required for real-device
+            // casting under Aspire, whose proxied endpoints bind to localhost.
+            .WithEnvironment("Cast__AdvertisedBaseUrl", Environment.GetEnvironmentVariable("CAST_ADVERTISED_BASE_URL") ?? "")
             .WaitFor(openBao);
 
         webapi = webapi.WithAuthAuthority("Auth__Authority", hardening.SingleUserMode, authentik);

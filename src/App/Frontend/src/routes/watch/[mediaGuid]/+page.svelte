@@ -17,6 +17,7 @@
   import VideoJs10Player, { type TextTrackSource } from '$lib/components/players/VideoJs10Player.svelte';
   import SveltePlayer from '$lib/components/players/SveltePlayer.svelte';
   import CastButton from '$lib/components/players/CastButton.svelte';
+  import ServerCastMenu from '$lib/components/players/ServerCastMenu.svelte';
   import SaveToPlaylistButton from '$lib/components/SaveToPlaylistButton.svelte';
   import PlaylistPanel from '$lib/components/PlaylistPanel.svelte';
   import TargetNotePanel from '$lib/components/TargetNotePanel.svelte';
@@ -190,6 +191,8 @@
   let suppressAutoComplete = false;
   let lastProgressSentAt = 0;
   let lastSentPosition = -1;
+  // Live local playback position for the server cast menu's "start from current position".
+  let livePosition = $state(0);
   let moreMenuOpen = $state(false);
   let noteMenuOpen = $state(false);
   let moreMenuContainer = $state<HTMLDivElement | null>(null);
@@ -331,6 +334,7 @@
   }
 
   function handlePlaybackProgress(positionSeconds: number, durationSeconds: number | null) {
+    livePosition = positionSeconds;
     const now = Date.now();
     if (now - lastProgressSentAt < 10_000 || Math.abs(positionSeconds - lastSentPosition) < 2) {
       return;
@@ -744,6 +748,12 @@
             {/if}
           </button>
           <CastButton {mediaGuid} title={detail.title} posterUrl={posterUrl} />
+          <ServerCastMenu
+            {mediaGuid}
+            title={detail.title}
+            captionLanguages={detail.captionLanguages}
+            position={livePosition}
+          />
           <Button
             color="dark"
             class="border-slate-800! bg-slate-900/70! px-4! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800!"
