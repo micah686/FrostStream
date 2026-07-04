@@ -10,7 +10,10 @@ public sealed record PostgresResources(
 
 public static class StartPostgres
 {
-    public static PostgresResources Start(IDistributedApplicationBuilder builder, AppHostHardeningOptions hardening)
+    public static PostgresResources Start(
+        IDistributedApplicationBuilder builder,
+        AppHostHardeningOptions hardening,
+        string sharedStorageRoot)
     {
         var user = builder.AddParameter(
             "postgres-user",
@@ -22,11 +25,31 @@ public static class StartPostgres
             publishValueAsDefault: false,
             secret: true);
 
+        // Shared WAL archive store: written by the server's archive_command (mounted at
+        // /wal-archive) and read by BackupTool for wal-archive verification / PITR restore.
+        // Made world-writable so the container's postgres user can write regardless of the
+        // rootless-podman uid mapping.
+        var walArchiveDir = BackupPaths.WalArchiveDirectory(sharedStorageRoot);
+        Directory.CreateDirectory(walArchiveDir);
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(
+                walArchiveDir,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
+                | UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute
+                | UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute);
+        }
+
+        var postgresConf = Path.Combine(builder.AppHostDirectory, "configs", "postgres", "postgresql.conf");
+
         // WithDbGate requires CommunityToolkit.Aspire.Hosting.DbGate and
         // CommunityToolkit.Aspire.Hosting.PostgreSQL.Extensions at the same version.
         var server = builder.AddPostgres("postgres", user, password)
             .WithDbGate()
-            .WithDataVolume();
+            .WithDataVolume()
+            .WithBindMount(postgresConf, "/etc/postgresql/postgresql.conf", isReadOnly: true)
+            .WithBindMount(walArchiveDir, "/wal-archive")
+            .WithArgs("-c", "config_file=/etc/postgresql/postgresql.conf");
 
         return new PostgresResources(
             user,

@@ -34,7 +34,7 @@ public static class StartServices
         IResourceBuilder<ContainerResource> typesense,
         IResourceBuilder<ContainerResource> potProvider)
     {
-        return builder.AddProject<Projects.DataBridge>("databridge")
+        var databridge = builder.AddProject<Projects.DataBridge>("databridge")
             .WithReference(postgres.FrostStreamDb).WaitFor(postgres.FrostStreamDb)
             .WithReference(nats).WaitFor(nats)
             .WithEnvironment("OpenBao__Address", openBao.GetEndpoint("http"))
@@ -49,6 +49,37 @@ public static class StartServices
             .WaitFor(openBao)
             .WaitFor(typesense)
             .WaitFor(potProvider);
+
+        // Scheduled backups run in DataBridge, so it needs the same BackupTool wiring as WebAPI.
+        return ApplyBackupEnvironment(databridge, builder.AppHostDirectory, sharedStorageRoot, hardening, openBao);
+    }
+
+    /// <summary>
+    /// Applies the shared BackupTool environment (`Backup__*`) to a service that shells out to the
+    /// tool. Both WebAPI (on-demand) and DataBridge (scheduled) use this so their configuration stays
+    /// in lockstep, including the WAL archive directory shared with the Postgres container.
+    /// </summary>
+    private static IResourceBuilder<ProjectResource> ApplyBackupEnvironment(
+        IResourceBuilder<ProjectResource> resource,
+        string appHostDirectory,
+        string sharedStorageRoot,
+        AppHostHardeningOptions hardening,
+        IResourceBuilder<ContainerResource> openBao)
+    {
+        var backupToolProject = Path.GetFullPath(Path.Combine(
+            appHostDirectory,
+            "..",
+            "BackupTool",
+            "BackupTool.csproj"));
+
+        return resource
+            .WithEnvironment("Backup__Directory", BackupPaths.BackupRoot(sharedStorageRoot))
+            .WithEnvironment("Backup__ToolPath", "dotnet")
+            .WithEnvironment("Backup__ToolBaseArguments", $"run --project {backupToolProject} --")
+            .WithEnvironment("Backup__ArchiveDir", BackupPaths.WalArchiveDirectory(sharedStorageRoot))
+            .WithEnvironment("Backup__OpenBaoAddress", openBao.GetEndpoint("http"))
+            .WithEnvironment("Backup__OpenBaoToken", hardening.OpenBaoToken)
+            .WithEnvironment("Backup__OpenBaoKvMount", "secret");
     }
 
     private static IResourceBuilder<ProjectResource> WireWebApi(
@@ -62,13 +93,6 @@ public static class StartServices
         OpenFgaResources openFga,
         string webApiEndpointName)
     {
-        var backupToolProject = Path.GetFullPath(Path.Combine(
-            builder.AppHostDirectory,
-            "..",
-            "BackupTool",
-            "BackupTool.csproj"));
-        var backupRoot = Environment.GetEnvironmentVariable("FROSTSTREAM_BACKUP_ROOT")
-                         ?? Path.Combine(sharedStorageRoot, "core-backups");
         var webApiUrls = hardening.EnableHttps
             ? "http://0.0.0.0:5041;https://0.0.0.0:7035"
             : "http://0.0.0.0:5041";
@@ -79,12 +103,6 @@ public static class StartServices
             .WithEnvironment("ASPNETCORE_URLS", webApiUrls)
             .WithEnvironment("OpenBao__Address", openBao.GetEndpoint("http"))
             .WithEnvironment("OpenBao__Token", hardening.OpenBaoToken)
-            .WithEnvironment("Backup__Directory", backupRoot)
-            .WithEnvironment("Backup__ToolPath", "dotnet")
-            .WithEnvironment("Backup__ToolBaseArguments", $"run --project {backupToolProject} --")
-            .WithEnvironment("Backup__OpenBaoAddress", openBao.GetEndpoint("http"))
-            .WithEnvironment("Backup__OpenBaoToken", hardening.OpenBaoToken)
-            .WithEnvironment("Backup__OpenBaoKvMount", "secret")
             .WithEnvironment("FROSTSTREAM_STORAGE_ROOT", sharedStorageRoot)
             .WithEnvironment("SINGLE_USER_MODE", hardening.SingleUserMode ? "true" : "false")
             .WithEnvironment("Auth__SingleUserMode", hardening.SingleUserMode ? "true" : "false")
@@ -101,6 +119,8 @@ public static class StartServices
             // casting under Aspire, whose proxied endpoints bind to localhost.
             .WithEnvironment("Cast__AdvertisedBaseUrl", Environment.GetEnvironmentVariable("CAST_ADVERTISED_BASE_URL") ?? "")
             .WaitFor(openBao);
+
+        webapi = ApplyBackupEnvironment(webapi, builder.AppHostDirectory, sharedStorageRoot, hardening, openBao);
 
         webapi.WithEndpointProxySupport(false);
         webapi.WithEndpoint("http", endpoint =>

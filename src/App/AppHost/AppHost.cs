@@ -15,7 +15,7 @@ AppHostHardening.Validate(hardening);
 var sharedStorageRoot = ResolveStorageRoot(builder);
 
 var nats      = StartNats.Start(builder);
-var postgres  = StartPostgres.Start(builder, hardening);
+var postgres  = StartPostgres.Start(builder, hardening, sharedStorageRoot);
 var openBao   = StartOpenBao.Start(builder, hardening);
 var typesense = StartTypesense.Start(builder, hardening);
 var authentik = StartAuthentik.Start(builder, postgres, hardening);

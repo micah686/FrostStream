@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import { Badge, Button, Input, Label, Spinner } from 'flowbite-svelte';
+  import { Badge, Button, Input, Label, Select, Spinner } from 'flowbite-svelte';
   import {
     CheckCircleOutline,
     CloseCircleOutline,
@@ -18,10 +18,23 @@
     startBackup,
     verifyBackup,
     type BackupJob,
+    type BackupMode,
     type BackupSummary,
     type RestorePlan,
     type VerifyBackupResult
   } from '$lib/api/backups';
+
+  const backupModeOptions: { value: BackupMode; name: string }[] = [
+    { value: 'snapshot', name: 'Snapshot — quick logical pg_dump (default)' },
+    { value: 'full', name: 'Full — physical pg_basebackup (PITR base)' },
+    { value: 'wal-archive', name: 'WAL archive — initialize continuous archiving' }
+  ];
+
+  const backupModeHints: Record<BackupMode, string> = {
+    snapshot: 'Per-database logical dump plus OpenBao secrets. Best for routine restores.',
+    full: 'Physical cluster base backup. Pair with WAL archiving for point-in-time recovery.',
+    'wal-archive': 'Initializes the continuous WAL archive store and prints the server settings to apply.'
+  };
 
   const inputClass =
     'border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!';
@@ -35,6 +48,7 @@
 
   // Run backup
   let backupName = $state('');
+  let backupMode = $state<BackupMode>('snapshot');
   let startBusy = $state(false);
   let startError = $state<string | null>(null);
 
@@ -120,7 +134,7 @@
     startBusy = true;
     startError = null;
     try {
-      const job = await startBackup(backupName);
+      const job = await startBackup(backupName, backupMode);
       backupName = '';
       jobs = [job, ...jobs.filter((item) => item.jobId !== job.jobId)];
       startPolling();
@@ -197,6 +211,18 @@
     const segments = path.split(/[\\/]/);
     return segments[segments.length - 1] || path;
   }
+
+  function formatMode(mode: string): string {
+    switch (mode?.toLowerCase()) {
+      case 'full':
+        return 'full';
+      case 'walarchive':
+      case 'wal-archive':
+        return 'wal-archive';
+      default:
+        return 'snapshot';
+    }
+  }
 </script>
 
 <!-- Run backup -->
@@ -222,6 +248,10 @@
       <Label for="backup-name" class="mb-2 text-sm font-medium text-slate-300">Backup name (optional)</Label>
       <Input id="backup-name" maxlength={100} bind:value={backupName} placeholder="pre-upgrade" class={inputClass} />
     </div>
+    <div class="min-w-0 flex-1 sm:max-w-xs">
+      <Label for="backup-mode" class="mb-2 text-sm font-medium text-slate-300">Mode</Label>
+      <Select id="backup-mode" bind:value={backupMode} items={backupModeOptions} class={inputClass} />
+    </div>
     <Button
       type="submit"
       color="blue"
@@ -236,6 +266,7 @@
       Run backup now
     </Button>
   </form>
+  <p class="mt-2 text-xs text-slate-500">{backupModeHints[backupMode]}</p>
 </section>
 
 <!-- Jobs -->
@@ -354,6 +385,9 @@
                   <h3 class="truncate text-sm font-semibold text-slate-100" title={archive.archivePath}>
                     {archiveName(archive.archivePath)}
                   </h3>
+                  <span class="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-semibold text-blue-300">
+                    {formatMode(archive.mode)}
+                  </span>
                   <span class="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-400">
                     schema v{archive.schemaVersion}
                   </span>

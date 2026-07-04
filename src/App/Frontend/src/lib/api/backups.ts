@@ -1,5 +1,7 @@
 export type BackupJobStatus = 'queued' | 'running' | 'completed' | 'failed';
 
+export type BackupMode = 'snapshot' | 'full' | 'wal-archive';
+
 export interface BackupJob {
   jobId: string;
   status: BackupJobStatus;
@@ -14,6 +16,7 @@ export interface BackupSummary {
   createdAt: string | null;
   mediaIncluded: boolean;
   schemaVersion: number;
+  mode: string;
 }
 
 export interface VerifyBackupResult {
@@ -29,8 +32,12 @@ export interface RestorePlan {
 
 const BASE = '/api/admin/backups';
 
-export async function startBackup(name?: string, fetchImpl: typeof fetch = fetch): Promise<BackupJob> {
-  return sendJson<BackupJob>(BASE, { name: name?.trim() || null }, fetchImpl);
+export async function startBackup(
+  name?: string,
+  mode: BackupMode = 'snapshot',
+  fetchImpl: typeof fetch = fetch
+): Promise<BackupJob> {
+  return sendJson<BackupJob>(BASE, { name: name?.trim() || null, mode }, fetchImpl);
 }
 
 export async function listBackupJobs(fetchImpl: typeof fetch = fetch): Promise<BackupJob[]> {

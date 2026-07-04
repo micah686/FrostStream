@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using Shared.Backups;
 using WebAPI.Features.Backups.Models;
 
 namespace WebAPI.Features.Backups;
@@ -11,7 +11,10 @@ public sealed class BackupJobService(
     IConfiguration configuration,
     ILogger<BackupJobService> logger)
 {
+    private static readonly string[] KnownModes = ["snapshot", "full", "wal-archive"];
+
     private readonly ConcurrentDictionary<Guid, BackupJobRecord> _jobs = new();
+    private readonly BackupToolClient _client = new(options.Value, configuration);
 
     public IReadOnlyList<BackupJobResponse> ListJobs()
         => _jobs.Values
@@ -22,10 +25,11 @@ public sealed class BackupJobService(
     public BackupJobResponse? GetJob(Guid jobId)
         => _jobs.TryGetValue(jobId, out var job) ? ToResponse(job) : null;
 
-    public BackupJobResponse StartBackup(string? requestedName)
+    public BackupJobResponse StartBackup(string? requestedName, string? requestedMode = null)
     {
         Directory.CreateDirectory(options.Value.Directory);
 
+        var mode = NormalizeMode(requestedMode);
         var jobId = Guid.NewGuid();
         var name = string.IsNullOrWhiteSpace(requestedName)
             ? jobId.ToString("N")
@@ -38,7 +42,7 @@ public sealed class BackupJobService(
             Update(jobId, job with { Status = "running" });
             try
             {
-                var output = await RunToolAsync(["create", "--output", options.Value.Directory, "--name", name]);
+                var output = await _client.RunAsync(["create", "--output", options.Value.Directory, "--name", name, "--mode", mode]);
                 var archivePath = output.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
                 Update(jobId, job with
                 {
@@ -78,7 +82,8 @@ public sealed class BackupJobService(
                     Path.GetDirectoryName(manifestPath) ?? options.Value.Directory,
                     root.TryGetProperty("createdAtUtc", out var created) && created.TryGetDateTimeOffset(out var createdAt) ? createdAt : null,
                     root.TryGetProperty("mediaIncluded", out var mediaIncluded) && mediaIncluded.GetBoolean(),
-                    root.TryGetProperty("schemaVersion", out var version) ? version.GetInt32() : 0));
+                    root.TryGetProperty("schemaVersion", out var version) ? version.GetInt32() : 0,
+                    root.TryGetProperty("mode", out var mode) ? mode.GetString() ?? "Snapshot" : "Snapshot"));
             }
             catch (Exception ex)
             {
@@ -93,7 +98,7 @@ public sealed class BackupJobService(
     {
         try
         {
-            await RunToolAsync(["verify", "--archive", archivePath]);
+            await _client.RunAsync(["verify", "--archive", archivePath]);
             return new VerifyBackupResponse(true, null);
         }
         catch (Exception ex)
@@ -105,146 +110,57 @@ public sealed class BackupJobService(
     public async Task<RestorePlanResponse> BuildRestorePlanAsync(string archivePath)
     {
         var verify = await VerifyAsync(archivePath);
-        var command = BuildCommandString(["restore", "--archive", archivePath, "--force"]);
+        var command = _client.BuildCommandString(BuildRestoreArguments(archivePath));
         return new RestorePlanResponse(verify.Success, command, verify.ErrorMessage);
+    }
+
+    /// <summary>
+    /// Restore arguments differ by backup mode. Snapshot restores run against a live server;
+    /// full/PITR restores rebuild a data directory offline and need operator-supplied placeholders.
+    /// </summary>
+    private IReadOnlyList<string> BuildRestoreArguments(string archivePath)
+    {
+        var mode = ReadManifestMode(archivePath);
+        return mode.ToLowerInvariant() switch
+        {
+            "full" or "walarchive" or "wal-archive" =>
+            [
+                "restore", "--archive", archivePath, "--force",
+                "--pgdata", "<PGDATA>", "--pg-ctl", "<pg_ctl>",
+                "--target-time", "<YYYY-MM-DD HH:MM:SS+00>"
+            ],
+            _ => ["restore", "--archive", archivePath, "--force"]
+        };
+    }
+
+    private string ReadManifestMode(string archivePath)
+    {
+        try
+        {
+            var manifestPath = Path.Combine(archivePath, "manifest.json");
+            if (!File.Exists(manifestPath))
+                return "Snapshot";
+            using var doc = JsonDocument.Parse(File.ReadAllText(manifestPath));
+            return doc.RootElement.TryGetProperty("mode", out var mode) ? mode.GetString() ?? "Snapshot" : "Snapshot";
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not read backup mode from manifest at {ArchivePath}.", archivePath);
+            return "Snapshot";
+        }
+    }
+
+    private static string NormalizeMode(string? requestedMode)
+    {
+        var mode = requestedMode?.Trim().ToLowerInvariant();
+        return string.IsNullOrEmpty(mode) || !KnownModes.Contains(mode) ? "snapshot" : mode;
     }
 
     private void Update(Guid jobId, BackupJobRecord record)
         => _jobs[jobId] = record;
 
-    private async Task<string> RunToolAsync(IReadOnlyList<string> commandArguments)
-    {
-        var args = BuildArguments(commandArguments);
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = BuildEffectiveOptions().ToolPath,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        };
-        foreach (var argument in args)
-            startInfo.ArgumentList.Add(argument);
-
-        AddToolEnvironment(startInfo);
-
-        using var process = Process.Start(startInfo)
-            ?? throw new InvalidOperationException("Backup tool failed to start.");
-        var stdoutTask = process.StandardOutput.ReadToEndAsync();
-        var stderrTask = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
-        var stdout = await stdoutTask;
-        var stderr = await stderrTask;
-        if (process.ExitCode != 0)
-            throw new InvalidOperationException(string.IsNullOrWhiteSpace(stderr) ? stdout : stderr);
-        return stdout;
-    }
-
-    private IReadOnlyList<string> BuildArguments(IReadOnlyList<string> commandArguments)
-    {
-        var effective = BuildEffectiveOptions();
-        var args = SplitArguments(effective.ToolBaseArguments);
-        args.AddRange(commandArguments);
-        args.AddRange(PostgresArguments(effective));
-        args.AddRange(OpenBaoArguments(effective));
-        return args;
-    }
-
-    private string BuildCommandString(IReadOnlyList<string> commandArguments)
-    {
-        var effective = BuildEffectiveOptions();
-        return string.Join(' ', new[] { effective.ToolPath }.Concat(BuildArguments(commandArguments)).Select(Quote));
-    }
-
-    private IEnumerable<string> PostgresArguments(EffectiveBackupOptions effective)
-    {
-        yield return "--postgres-host";
-        yield return effective.PostgresHost;
-        yield return "--postgres-port";
-        yield return effective.PostgresPort.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        yield return "--postgres-user";
-        yield return effective.PostgresUser;
-        if (!string.IsNullOrWhiteSpace(effective.PostgresBinDir))
-        {
-            yield return "--postgres-bin-dir";
-            yield return effective.PostgresBinDir!;
-        }
-    }
-
-    private IEnumerable<string> OpenBaoArguments(EffectiveBackupOptions effective)
-    {
-        yield return "--openbao-address";
-        yield return effective.OpenBaoAddress;
-        yield return "--openbao-kv-mount";
-        yield return effective.OpenBaoKvMount;
-    }
-
-    private void AddToolEnvironment(ProcessStartInfo startInfo)
-    {
-        var effective = BuildEffectiveOptions();
-        if (!string.IsNullOrWhiteSpace(effective.PostgresPassword))
-            startInfo.Environment["POSTGRES_PASSWORD"] = effective.PostgresPassword;
-        if (!string.IsNullOrWhiteSpace(effective.OpenBaoToken))
-            startInfo.Environment["OPENBAO_TOKEN"] = effective.OpenBaoToken;
-    }
-
-    private EffectiveBackupOptions BuildEffectiveOptions()
-    {
-        var configuredConnection = configuration.GetConnectionString("froststreamdb");
-        var connectionParts = ParseConnectionString(configuredConnection);
-        var backupSection = configuration.GetSection(BackupOptions.SectionName);
-
-        return new EffectiveBackupOptions(
-            options.Value.ToolPath,
-            options.Value.ToolBaseArguments,
-            backupSection["PostgresHost"] ?? GetPart(connectionParts, "Host", "Server") ?? options.Value.PostgresHost,
-            int.TryParse(backupSection["PostgresPort"] ?? GetPart(connectionParts, "Port"), out var port) ? port : options.Value.PostgresPort,
-            backupSection["PostgresUser"] ?? GetPart(connectionParts, "Username", "User ID", "User") ?? options.Value.PostgresUser,
-            backupSection["PostgresPassword"] ?? GetPart(connectionParts, "Password") ?? options.Value.PostgresPassword,
-            options.Value.PostgresBinDir,
-            options.Value.OpenBaoAddress,
-            options.Value.OpenBaoToken,
-            options.Value.OpenBaoKvMount);
-    }
-
-    private static Dictionary<string, string> ParseConnectionString(string? connectionString)
-    {
-        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        if (string.IsNullOrWhiteSpace(connectionString))
-            return result;
-
-        foreach (var segment in connectionString.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            var parts = segment.Split('=', 2);
-            if (parts.Length == 2)
-                result[parts[0].Trim()] = parts[1].Trim();
-        }
-
-        return result;
-    }
-
-    private static string? GetPart(IReadOnlyDictionary<string, string> parts, params string[] keys)
-    {
-        foreach (var key in keys)
-        {
-            if (parts.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value))
-                return value;
-        }
-
-        return null;
-    }
-
     private static BackupJobResponse ToResponse(BackupJobRecord record)
         => new(record.JobId, record.Status, record.ArchivePath, record.ErrorMessage, record.CreatedAt, record.CompletedAt);
-
-    private static List<string> SplitArguments(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return [];
-
-        return value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
-    }
-
-    private static string Quote(string value)
-        => value.Contains(' ', StringComparison.Ordinal) ? $"\"{value.Replace("\"", "\\\"", StringComparison.Ordinal)}\"" : value;
 
     private sealed record BackupJobRecord(
         Guid JobId,
@@ -253,16 +169,4 @@ public sealed class BackupJobService(
         string? ErrorMessage,
         DateTimeOffset CreatedAt,
         DateTimeOffset? CompletedAt);
-
-    private sealed record EffectiveBackupOptions(
-        string ToolPath,
-        string ToolBaseArguments,
-        string PostgresHost,
-        int PostgresPort,
-        string PostgresUser,
-        string? PostgresPassword,
-        string? PostgresBinDir,
-        string OpenBaoAddress,
-        string? OpenBaoToken,
-        string OpenBaoKvMount);
 }

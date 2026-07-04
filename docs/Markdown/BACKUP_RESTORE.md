@@ -160,6 +160,29 @@ When `Backup` options are configured, WebAPI exposes:
 - `POST /api/admin/backups/verify`
 - `POST /api/admin/backups/restore-plan`
 
-The API can start and verify backups, but it does not perform restore. `restore-plan` returns the offline CLI command operators should run after stopping services.
+`POST /api/admin/backups` accepts an optional `mode` (`snapshot` \| `full` \| `wal-archive`,
+default `snapshot`), selectable from the **Admin → Backups** panel. Each archive's mode is shown in
+the list, and `restore-plan` tailors the offline command to the backup's mode (full/PITR restores
+include `--pgdata`/`--pg-ctl` and a recovery-target placeholder).
 
-The admin surface currently drives only the default `snapshot` mode. `full` and `wal-archive` are CLI-only for now.
+The API can start and verify backups, but it does not perform restore. `restore-plan` returns the
+offline CLI command operators should run after stopping services — physical restores are always an
+operator action on the database host.
+
+## AppHost / Aspire Configuration
+
+The AppHost wires the physical-backup prerequisites automatically:
+
+- `src/App/AppHost/configs/postgres/postgresql.conf` is mounted into the Postgres container
+  (`-c config_file=…`) and sets `wal_level=replica`, `max_wal_senders`, `archive_mode=on`, and an
+  `archive_command` that copies each completed segment — with a matching `<segment>.sha256` sidecar —
+  into a shared `/wal-archive` bind mount (`<storage-root>/wal-archive` on the host).
+- The `archive_command` `chmod 0644`s the archived files so the BackupTool process (which runs as the
+  host user, not the container's postgres user under rootless podman) can read them.
+- Both WebAPI and DataBridge receive `Backup__ArchiveDir` pointing at that same host directory, so
+  `wal-archive` verification and PITR restores line up with what the server archives.
+
+Because the containerized Postgres invokes its own `archive_command` (a shell `cp` + `sha256sum`), it
+produces the same on-disk format as `BackupTool wal-archive receive`. On a bare-metal server where the
+tool is on PATH, you can instead point `archive_command` directly at `wal-archive receive` (see
+`wal-archive setup`).

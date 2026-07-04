@@ -1,6 +1,8 @@
+using Shared.Backups;
+
 namespace DataBridge.Backup;
 
-public sealed class BackupRunnerOptions
+public sealed class BackupRunnerOptions : IBackupToolSettings
 {
     public const string SectionName = "Backup";
 
@@ -19,6 +21,8 @@ public sealed class BackupRunnerOptions
     public string? PostgresPassword { get; init; }
 
     public string? PostgresBinDir { get; init; }
+
+    public string? ArchiveDir { get; init; }
 
     public string OpenBaoAddress { get; init; } = "http://127.0.0.1:8200";
 
