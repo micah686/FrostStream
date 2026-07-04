@@ -39,6 +39,18 @@ public sealed class MediaWatchController(
         [FromQuery] int? version = null,
         CancellationToken cancellationToken = default)
     {
+        if (Request.Query.ContainsKey(CastTokenDefaults.QueryParameter))
+        {
+            logger.LogInformation(
+                "Cast device requested media {MediaGuid} from {RemoteIp}; audio={Audio}, format={Format}, range={Range}, userAgent={UserAgent}.",
+                mediaGuid,
+                HttpContext.Connection.RemoteIpAddress,
+                audio,
+                format,
+                Request.Headers.Range.ToString(),
+                Request.Headers.UserAgent.ToString());
+        }
+
         if (version is <= 0)
         {
             return BadRequest("Query parameter 'version' must be greater than zero.");

@@ -69,10 +69,14 @@ public static class StartServices
             "BackupTool.csproj"));
         var backupRoot = Environment.GetEnvironmentVariable("FROSTSTREAM_BACKUP_ROOT")
                          ?? Path.Combine(sharedStorageRoot, "core-backups");
+        var webApiUrls = hardening.EnableHttps
+            ? "http://0.0.0.0:5041;https://0.0.0.0:7035"
+            : "http://0.0.0.0:5041";
 
         var webapi = builder.AddProject<Projects.WebAPI>("webapi", launchProfileName: webApiEndpointName)
             .WithReference(postgres.FrostStreamDb).WaitFor(postgres.FrostStreamDb)
             .WithReference(nats).WaitFor(nats)
+            .WithEnvironment("ASPNETCORE_URLS", webApiUrls)
             .WithEnvironment("OpenBao__Address", openBao.GetEndpoint("http"))
             .WithEnvironment("OpenBao__Token", hardening.OpenBaoToken)
             .WithEnvironment("Backup__Directory", backupRoot)
@@ -97,6 +101,18 @@ public static class StartServices
             // casting under Aspire, whose proxied endpoints bind to localhost.
             .WithEnvironment("Cast__AdvertisedBaseUrl", Environment.GetEnvironmentVariable("CAST_ADVERTISED_BASE_URL") ?? "")
             .WaitFor(openBao);
+
+        webapi.WithEndpointProxySupport(false);
+        webapi.WithEndpoint("http", endpoint =>
+        {
+            endpoint.TargetHost = "0.0.0.0";
+            endpoint.IsProxied = false;
+        }, createIfNotExists: false);
+        webapi.WithEndpoint("https", endpoint =>
+        {
+            endpoint.TargetHost = "0.0.0.0";
+            endpoint.IsProxied = false;
+        }, createIfNotExists: false);
 
         webapi = webapi.WithAuthAuthority("Auth__Authority", hardening.SingleUserMode, authentik);
 

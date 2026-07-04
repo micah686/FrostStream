@@ -104,6 +104,38 @@ public sealed class CastSessionManagerTests
     }
 
     [Test]
+    public async Task Transport_Command_Refreshes_Missing_Media_Session_Before_Command()
+    {
+        var fixture = CreateFixture();
+        await fixture.Manager.StartAsync(DeviceId, Spec(), CancellationToken.None);
+        fixture.Client.HasMediaSession.Returns(false, true);
+        fixture.Client.GetMediaStatusAsync().Returns(Status(PlayerStateType.Paused, currentTime: 12));
+        fixture.Client.PlayAsync().Returns(Status(PlayerStateType.Playing, currentTime: 12));
+
+        var session = await fixture.Manager.PlayAsync(DeviceId, CancellationToken.None);
+
+        await fixture.Client.Received(1).GetMediaStatusAsync();
+        await fixture.Client.Received(1).PlayAsync();
+        session.Snapshot.PlayerState.ShouldBe("Playing");
+        session.Snapshot.CurrentTime.ShouldBe(12);
+    }
+
+    [Test]
+    public async Task Transport_Command_Fails_Clearly_When_Refresh_Finds_No_Media_Session()
+    {
+        var fixture = CreateFixture();
+        await fixture.Manager.StartAsync(DeviceId, Spec(), CancellationToken.None);
+        fixture.Client.HasMediaSession.Returns(false);
+        fixture.Client.GetMediaStatusAsync().Returns((MediaStatus?)null);
+
+        var error = await Should.ThrowAsync<CastDeviceUnreachableException>(
+            () => fixture.Manager.PlayAsync(DeviceId, CancellationToken.None));
+
+        error.Message.ShouldBe("No media session is active on 'Living Room TV'. Start casting the media again.");
+        await fixture.Client.DidNotReceive().PlayAsync();
+    }
+
+    [Test]
     public async Task Subscribe_Delivers_The_Current_Snapshot_Immediately()
     {
         var fixture = CreateFixture();
@@ -208,6 +240,9 @@ public sealed class CastSessionManagerTests
             .Returns((ChromecastReceiver?)null);
 
         var client = Substitute.For<ICastSessionClient>();
+        client.HasMediaSession.Returns(true);
+        client.GetMediaStatusAsync()
+            .Returns(Status(PlayerStateType.Buffering, currentTime: 0));
         client.LoadAsync(Arg.Any<CastMedia>(), Arg.Any<int[]?>())
             .Returns(Status(PlayerStateType.Buffering, currentTime: 0));
         client.SeekAsync(Arg.Any<double>())

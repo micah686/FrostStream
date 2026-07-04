@@ -227,6 +227,7 @@ public sealed class CastSessionManager(
                 "load media on",
                 session.Device,
                 cancellationToken);
+            status ??= await RequireMediaStatusAsync(session, "confirm the loaded media session on", cancellationToken);
             ApplyMediaStatus(session, status);
 
             // The load request has no start position, so seek right after the media is loaded.
@@ -258,7 +259,9 @@ public sealed class CastSessionManager(
         await session.CommandLock.WaitAsync(cancellationToken);
         try
         {
+            await EnsureMediaSessionAsync(session, cancellationToken);
             var status = await GuardAsync(command(session.Client), actionDescription, session.Device, cancellationToken);
+            status ??= await RequireMediaStatusAsync(session, "refresh media status on", cancellationToken);
             ApplyMediaStatus(session, status);
         }
         finally
@@ -272,6 +275,37 @@ public sealed class CastSessionManager(
 
     private CastSession RequireSession(string deviceId)
         => _sessions.TryGetValue(deviceId, out var session) ? session : throw new CastSessionNotFoundException(deviceId);
+
+    private async Task EnsureMediaSessionAsync(CastSession session, CancellationToken cancellationToken)
+    {
+        if (session.Client.HasMediaSession)
+        {
+            return;
+        }
+
+        await RequireMediaStatusAsync(session, "refresh media status on", cancellationToken);
+    }
+
+    private async Task<MediaStatus> RequireMediaStatusAsync(
+        CastSession session,
+        string actionDescription,
+        CancellationToken cancellationToken)
+    {
+        var status = await GuardAsync(
+            session.Client.GetMediaStatusAsync(),
+            actionDescription,
+            session.Device,
+            cancellationToken);
+
+        if (status is null)
+        {
+            throw new CastDeviceUnreachableException(
+                $"No media session is active on '{session.Device.Name}'. Start casting the media again.");
+        }
+
+        ApplyMediaStatus(session, status);
+        return status;
+    }
 
     private async Task<T> GuardAsync<T>(
         Task<T> command,

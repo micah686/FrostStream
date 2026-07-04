@@ -193,6 +193,13 @@ public sealed class CastController(
             TokenExpiresAt = tokenExpiresAt
         };
 
+        logger.LogInformation(
+            "Starting cast session for {DeviceId} using {ContentType} media URL {ContentUrl} (audioOnly: {AudioOnly}).",
+            deviceId,
+            media.ContentType,
+            media.ContentUrl,
+            request.AudioOnly);
+
         try
         {
             var session = await sessions.StartAsync(deviceId, spec, cancellationToken);
