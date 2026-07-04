@@ -3,6 +3,7 @@ using System.Text;
 using Microsoft.EntityFrameworkCore;
 using NodaTime;
 using Shared.Database;
+using Shared.Imports;
 using Shared.Messaging;
 
 namespace DataBridge.Data;
@@ -19,9 +20,11 @@ public sealed class LocalImportRepository(DataBridgeDbContext db, IClock clock) 
             BatchId = request.BatchId,
             CorrelationId = request.CorrelationId,
             Status = LocalImportStatus.Queued,
-            ManifestObjectBucket = request.ManifestObjectBucket,
-            ManifestObjectKey = request.ManifestObjectKey,
-            SourceRoot = request.SourceRoot,
+            // Manifest now lives on the worker's incoming folder, not an object store; these
+            // columns are retained for schema stability but no longer carry a reference.
+            ManifestObjectBucket = string.Empty,
+            ManifestObjectKey = string.Empty,
+            SourceRoot = LocalImportIncoming.SourceRootMarker,
             StorageKey = request.StorageKey,
             RequestedBy = request.RequestedBy,
             RequestedByContext = request.RequestedByContext

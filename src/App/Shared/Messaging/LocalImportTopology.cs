@@ -12,8 +12,11 @@ public sealed class LocalImportTopology : ITopologySource
     public const string WorkerQueueGroup = "workers-imports";
 
     public const string LocalMediaImportRequestedConsumer = "databridge-local-media-import-requested";
+    public const string LocalImportManifestReadConsumer = "databridge-local-import-manifest-read";
+    public const string LocalImportManifestReadFailedConsumer = "databridge-local-import-manifest-read-failed";
     public const string LocalImportFilePreparedConsumer = "databridge-local-import-file-prepared";
     public const string LocalImportFilePrepareFailedConsumer = "databridge-local-import-file-prepare-failed";
+    public const string WorkerReadLocalImportManifestConsumer = "worker-read-local-import-manifest";
     public const string WorkerPrepareLocalImportFileConsumer = "worker-prepare-local-import-file";
 
     public IEnumerable<StreamSpec> GetStreams()
@@ -32,8 +35,11 @@ public sealed class LocalImportTopology : ITopologySource
     public IEnumerable<ConsumerSpec> GetConsumers()
     {
         yield return DataBridgeConsumer(LocalMediaImportRequestedConsumer, LocalImportSubjects.LocalMediaImportRequested);
+        yield return DataBridgeConsumer(LocalImportManifestReadConsumer, LocalImportSubjects.LocalImportManifestRead);
+        yield return DataBridgeConsumer(LocalImportManifestReadFailedConsumer, LocalImportSubjects.LocalImportManifestReadFailed);
         yield return DataBridgeConsumer(LocalImportFilePreparedConsumer, LocalImportSubjects.LocalImportFilePrepared);
         yield return DataBridgeConsumer(LocalImportFilePrepareFailedConsumer, LocalImportSubjects.LocalImportFilePrepareFailed);
+        yield return WorkerConsumer(WorkerReadLocalImportManifestConsumer, LocalImportSubjects.ReadLocalImportManifestCommand);
         yield return WorkerConsumer(WorkerPrepareLocalImportFileConsumer, LocalImportSubjects.PrepareLocalImportFileCommand);
     }
 

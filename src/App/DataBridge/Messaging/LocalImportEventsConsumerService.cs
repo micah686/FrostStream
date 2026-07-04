@@ -18,6 +18,8 @@ public sealed class LocalImportEventsConsumerService(
     {
         var consumers = new[]
         {
+            ConsumeImport<LocalImportManifestRead>(LocalImportTopology.LocalImportManifestReadConsumer, stoppingToken),
+            ConsumeImport<LocalImportManifestReadFailed>(LocalImportTopology.LocalImportManifestReadFailedConsumer, stoppingToken),
             ConsumeImport<LocalImportFilePrepared>(LocalImportTopology.LocalImportFilePreparedConsumer, stoppingToken),
             ConsumeImport<LocalImportFilePrepareFailed>(LocalImportTopology.LocalImportFilePrepareFailedConsumer, stoppingToken),
             ConsumeDownload<UploadCompleted>(DownloadTopology.LocalImportUploadCompletedConsumer, stoppingToken),

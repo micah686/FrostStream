@@ -67,6 +67,10 @@ class Program
             .GetSection(WorkerOptions.SectionName)
             .Get<WorkerOptions>() ?? new WorkerOptions();
 
+        // Static local-import discovery folder: created up front and seeded with a
+        // manifest.json.template so operators know where to drop content + manifest.json.
+        Shared.Imports.LocalImportIncoming.EnsureScaffold(configuredWorkerOptions.IncomingRoot);
+
         var binaryDownloaderOptions = new YtDlpSharpLib.Provisioning.YtDlpBinaryDownloaderOptions
         {
             DefaultDirectory = toolsDirectory,

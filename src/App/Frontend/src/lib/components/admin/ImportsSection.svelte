@@ -16,15 +16,13 @@
   const cardClass = 'rounded-2xl border border-slate-800 bg-[#151a26] p-5 shadow-xl shadow-black/15 sm:p-6';
 
   interface SubmittedBatch extends LocalMediaImportReceipt {
-    manifestName: string;
-    sourceRoot: string;
     storageKey: string;
+    workerTag: string;
     submittedAt: Date;
   }
 
-  let manifestFiles = $state<FileList | undefined>();
-  let sourceRoot = $state('');
   let storageKey = $state('');
+  let workerTag = $state('');
   let requestedBy = $state('');
   let submitBusy = $state(false);
   let submitError = $state<string | null>(null);
@@ -34,7 +32,6 @@
   let storageKeys = $state<string[]>([]);
   let storageKeysError = $state<string | null>(null);
 
-  const manifest = $derived(manifestFiles?.item(0) ?? null);
   const storageItems = $derived(storageKeys.map((key) => ({ value: key, name: key })));
 
   const manifestExample = `{
@@ -74,14 +71,6 @@
 
   async function submit(event: SubmitEvent) {
     event.preventDefault();
-    if (!manifest) {
-      submitError = 'Choose a manifest file first.';
-      return;
-    }
-    if (!sourceRoot.trim()) {
-      submitError = 'Enter the source root directory.';
-      return;
-    }
     if (!storageKey.trim()) {
       submitError = 'Choose a destination storage target.';
       return;
@@ -91,22 +80,19 @@
     submitError = null;
     try {
       const receipt = await submitLocalMediaImport({
-        manifest,
-        sourceRoot: sourceRoot.trim(),
         storageKey: storageKey.trim(),
+        workerTag: workerTag.trim() || undefined,
         requestedBy: requestedBy.trim() || undefined
       });
       submitted = [
         {
           ...receipt,
-          manifestName: manifest.name,
-          sourceRoot: sourceRoot.trim(),
           storageKey: storageKey.trim(),
+          workerTag: workerTag.trim(),
           submittedAt: new Date()
         },
         ...submitted
       ];
-      manifestFiles = undefined;
       requestedBy = '';
     } catch (err) {
       submitError = err instanceof Error ? err.message : 'Could not submit the import.';
@@ -119,9 +105,10 @@
 <section class={cardClass} aria-labelledby="imports-title">
   <h2 id="imports-title" class="text-base font-bold text-slate-100">Import local media</h2>
   <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-    Queue a background import of media files that already exist on a worker's filesystem. Upload a JSON manifest
-    describing the files, point at the directory they live under, and pick the storage target they should be copied
-    into. The import runs asynchronously — this page only hands the batch off.
+    Queue a background import of media files that already sit in a worker's static
+    <code class="text-slate-300">incoming</code> folder. Drop your media files plus a
+    <code class="text-slate-300">manifest.json</code> into that folder on the worker, then pick the destination storage
+    target below and queue the import. The import runs asynchronously — this page only hands the batch off.
   </p>
 
   {#if submitError}
@@ -136,18 +123,6 @@
 
   <form onsubmit={submit} class="mt-5 space-y-4">
     <div class="grid gap-4 sm:grid-cols-2">
-      <div class="min-w-0">
-        <Label for="import-manifest" class="mb-2 text-sm font-medium text-slate-300">Manifest (JSON)</Label>
-        <input
-          id="import-manifest"
-          type="file"
-          accept=".json,application/json"
-          bind:files={manifestFiles}
-          class="block w-full cursor-pointer rounded-lg border border-slate-800 bg-slate-950/60 text-sm text-slate-400 file:mr-3 file:cursor-pointer file:rounded-l-lg file:border-0 file:bg-slate-800 file:px-3 file:py-2.5 file:text-xs file:font-semibold file:text-slate-200 hover:file:bg-slate-700"
-        />
-        <Helper class="mt-1.5 text-xs! text-slate-500!">Lists the files to import, with optional sidecars.</Helper>
-      </div>
-
       <div class="min-w-0">
         <Label for="import-storage-key" class="mb-2 text-sm font-medium text-slate-300">Destination storage</Label>
         {#if storageKeys.length > 0}
@@ -171,15 +146,15 @@
       </div>
 
       <div class="min-w-0">
-        <Label for="import-source-root" class="mb-2 text-sm font-medium text-slate-300">Source root</Label>
+        <Label for="import-worker-tag" class="mb-2 text-sm font-medium text-slate-300">Worker tag (optional)</Label>
         <Input
-          id="import-source-root"
-          bind:value={sourceRoot}
-          placeholder="/mnt/archive/incoming"
+          id="import-worker-tag"
+          bind:value={workerTag}
+          placeholder="nas"
           class="{inputClass} font-mono!"
         />
         <Helper class="mt-1.5 text-xs! text-slate-500!">
-          Directory on the worker that manifest file paths are relative to.
+          Runs the import on a worker advertising this tag. Leave blank to use the storage target's worker.
         </Helper>
       </div>
 
@@ -225,9 +200,12 @@
   {#if manifestHelpOpen}
     <div class="mt-2 rounded-lg border border-slate-800 bg-slate-950/60 p-3">
       <p class="text-xs text-slate-400">
-        Each item's <code class="text-slate-300">file</code> path is resolved against the source root. Everything
-        except <code class="text-slate-300">file</code> is optional: provider and source IDs link the media back to its
-        origin, and sidecars attach an info.json, thumbnail, and caption files.
+        Place a <code class="text-slate-300">manifest.json</code> in the worker's
+        <code class="text-slate-300">incoming</code> folder — a
+        <code class="text-slate-300">manifest.json.template</code> is created there at startup as a starting point. Each
+        item's <code class="text-slate-300">file</code> path is resolved relative to that folder. Everything except
+        <code class="text-slate-300">file</code> is optional: provider and source IDs link the media back to its origin,
+        and sidecars attach an info.json, thumbnail, and caption files.
       </p>
       <pre class="mt-2 overflow-x-auto rounded bg-black/40 p-2.5 font-mono text-xs leading-5 text-slate-300">{manifestExample}</pre>
     </div>
@@ -253,14 +231,15 @@
         <article class="rounded-lg border border-slate-700/70 bg-[#151a26] px-3 py-3 sm:px-4">
           <div class="flex flex-wrap items-center gap-2">
             <CheckCircleOutline class="h-4 w-4 shrink-0 text-emerald-400" />
-            <span class="text-sm font-semibold text-slate-100">{batch.manifestName}</span>
-            <span class="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-400">
-              {batch.storageKey}
-            </span>
+            <span class="text-sm font-semibold text-slate-100">{batch.storageKey}</span>
+            {#if batch.workerTag}
+              <span class="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-400">
+                {batch.workerTag}
+              </span>
+            {/if}
             <span class="ml-auto text-xs text-slate-500">{batch.submittedAt.toLocaleTimeString()}</span>
           </div>
-          <p class="mt-1.5 truncate font-mono text-xs text-slate-400" title={batch.sourceRoot}>{batch.sourceRoot}</p>
-          <p class="mt-1 font-mono text-[10px] text-slate-600">
+          <p class="mt-1.5 font-mono text-[10px] text-slate-600">
             batch {batch.batchId} · correlation {batch.correlationId}
           </p>
         </article>

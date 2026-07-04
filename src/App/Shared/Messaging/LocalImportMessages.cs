@@ -25,17 +25,64 @@ public sealed record LocalMediaImportRequested : IFlowMessage
 
     public Guid BatchId => JobId;
 
-    public required string ManifestObjectBucket { get; init; }
-
-    public required string ManifestObjectKey { get; init; }
-
-    public required string SourceRoot { get; init; }
-
     public required string StorageKey { get; init; }
+
+    /// <summary>
+    /// Worker tag the import should run on. When null/empty the flow falls back to the tag
+    /// configured on the destination storage target (or any worker if that is also unset).
+    /// </summary>
+    public string? WorkerTag { get; init; }
 
     public string? RequestedBy { get; init; }
 
     public string? RequestedByContext { get; init; }
+}
+
+public sealed record ReadLocalImportManifestCommand : IFlowMessage
+{
+    public required Guid JobId { get; init; }
+    public required Guid CorrelationId { get; init; }
+    public Guid? CausationId { get; init; }
+    public required Guid MessageId { get; init; }
+    public required string OperationKey { get; init; }
+    public required Instant OccurredAt { get; init; }
+    public required int Attempt { get; init; }
+
+    public required Guid BatchId { get; init; }
+
+    public string? RequiredWorkerTag { get; init; }
+}
+
+public sealed record LocalImportManifestRead : IFlowMessage
+{
+    public required Guid JobId { get; init; }
+    public required Guid CorrelationId { get; init; }
+    public Guid? CausationId { get; init; }
+    public required Guid MessageId { get; init; }
+    public required string OperationKey { get; init; }
+    public required Instant OccurredAt { get; init; }
+    public required int Attempt { get; init; }
+
+    public required Guid BatchId { get; init; }
+
+    public required LocalMediaImportManifest Manifest { get; init; }
+}
+
+public sealed record LocalImportManifestReadFailed : IFlowMessage
+{
+    public required Guid JobId { get; init; }
+    public required Guid CorrelationId { get; init; }
+    public Guid? CausationId { get; init; }
+    public required Guid MessageId { get; init; }
+    public required string OperationKey { get; init; }
+    public required Instant OccurredAt { get; init; }
+    public required int Attempt { get; init; }
+
+    public required Guid BatchId { get; init; }
+
+    public string? ErrorCode { get; init; }
+
+    public required string ErrorMessage { get; init; }
 }
 
 public sealed record PrepareLocalImportFileCommand : IFlowMessage
@@ -51,8 +98,6 @@ public sealed record PrepareLocalImportFileCommand : IFlowMessage
     public required Guid BatchId { get; init; }
 
     public required Guid ItemId { get; init; }
-
-    public required string SourceRoot { get; init; }
 
     public required string File { get; init; }
 

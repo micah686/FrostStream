@@ -27,10 +27,12 @@ public sealed class WorkerOptions
     public bool AcceptsUntaggedJobs { get; init; } = true;
 
     /// <summary>
-    /// Absolute filesystem roots this worker is allowed to read for v1 local media imports.
-    /// Empty means local imports are rejected by this worker.
+    /// Static filesystem folder this worker discovers local-import content in. The worker creates
+    /// it at startup (with a <c>manifest.json.template</c>) and reads <c>manifest.json</c> plus the
+    /// listed media files from it. Manifest paths are resolved relative to this root.
     /// </summary>
-    public IReadOnlyList<string> AllowedImportRoots { get; init; } = [];
+    public string IncomingRoot { get; init; } =
+        Path.Combine(AppContext.BaseDirectory, Shared.Imports.LocalImportIncoming.FolderName);
 
     /// <summary>Worker-wide yt-dlp <c>--limit-rate</c> value, e.g. <c>500K</c> or <c>4.2M</c>.</summary>
     public string? YtDlpLimitRate { get; init; }

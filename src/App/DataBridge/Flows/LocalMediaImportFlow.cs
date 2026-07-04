@@ -20,7 +20,6 @@ namespace DataBridge.Flows;
 public class LocalMediaImportFlow(
     IJetStreamPublisher bus,
     IMessageBus messageBus,
-    Func<string, IObjectStore> objectStoreFactory,
     IServiceScopeFactory scopeFactory,
     IClock clock,
     ILogger<LocalMediaImportFlow> logger
@@ -30,34 +29,38 @@ public class LocalMediaImportFlow(
 
     private static readonly JsonSerializerOptions ManifestJsonOptions = CreateManifestJsonOptions();
 
+    // Cleipnir signals flow suspension/postponement by throwing control-flow exceptions
+    // (SuspendInvocationException / PostponeInvocationException). These derive directly from
+    // System.Exception and MUST propagate out of the flow so the framework can park and later
+    // resume the invocation. A broad catch (Exception) that swallows them turns a normal suspend
+    // (e.g. awaiting UploadCompleted before the message has been appended) into a spurious failure.
+    private static bool IsControlFlowException(Exception ex)
+        => ex is Cleipnir.ResilientFunctions.Domain.Exceptions.Commands.SuspendInvocationException
+            or Cleipnir.ResilientFunctions.Domain.Exceptions.Commands.PostponeInvocationException;
+
     public override async Task Run(LocalMediaImportRequested request)
     {
         var batchId = request.BatchId;
         var batchInstance = batchId.ToString("N");
         var storageKey = string.IsNullOrWhiteSpace(request.StorageKey) ? "default" : request.StorageKey.Trim();
-        var sourceRoot = request.SourceRoot.Trim();
-        var workerTag = await Capture(() => ResolveWorkerTagAsync(storageKey));
+
+        // Prefer the explicitly requested worker tag; fall back to the destination storage
+        // target's configured tag so the manifest is read on a worker that can reach the files.
+        var workerTag = string.IsNullOrWhiteSpace(request.WorkerTag)
+            ? await Capture(() => ResolveWorkerTagAsync(storageKey))
+            : request.WorkerTag.Trim();
 
         logger.LogInformation(
-            "Local media import flow started for BatchId {BatchId} StorageKey {StorageKey} SourceRoot {SourceRoot} WorkerTag {WorkerTag}",
+            "Local media import flow started for BatchId {BatchId} StorageKey {StorageKey} WorkerTag {WorkerTag}",
             batchId,
             storageKey,
-            sourceRoot,
             workerTag);
 
         await Capture(() => ImportRepoCall(r => r.CreateBatchIfMissingAsync(request)));
 
-        LocalMediaImportManifest manifest;
-        try
-        {
-            manifest = await Capture(() => LoadManifestAsync(request));
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Local media import manifest load failed for BatchId {BatchId}.", batchId);
-            await Capture(() => ImportRepoCall(r => r.MarkBatchFailedAsync(batchId, ex.Message)));
+        var manifest = await RunReadManifestStepAsync(request, batchInstance, workerTag);
+        if (manifest is null)
             return;
-        }
 
         var validation = LocalMediaImportManifestValidator.Validate(manifest);
         if (!validation.IsValid)
@@ -71,7 +74,7 @@ public class LocalMediaImportFlow(
         await Capture(() => ImportRepoCall(r => r.MarkBatchPreparingAsync(batchId, manifest.Items.Count)));
         var createdItems = await Capture(() => ImportRepoCall(r => r.CreateItemsIfMissingAsync(
             batchId,
-            BuildItemCreates(manifest, sourceRoot, storageKey))));
+            BuildItemCreates(manifest, storageKey))));
         var itemIdsByIndex = createdItems.ToDictionary(x => x.ItemIndex, x => x.ItemId);
 
         for (var i = 0; i < manifest.Items.Count; i++)
@@ -82,7 +85,6 @@ public class LocalMediaImportFlow(
                 manifest.Items[i],
                 itemId,
                 i,
-                sourceRoot,
                 storageKey,
                 batchInstance,
                 workerTag);
@@ -98,7 +100,6 @@ public class LocalMediaImportFlow(
         LocalMediaImportManifestItem item,
         Guid itemId,
         int itemIndex,
-        string sourceRoot,
         string storageKey,
         string batchInstance,
         string? workerTag)
@@ -106,7 +107,7 @@ public class LocalMediaImportFlow(
         var itemInstance = $"item/{itemIndex.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
         await Capture(() => ImportRepoCall(r => r.MarkItemPreparingAsync(itemId)));
 
-        var prepared = await RunPrepareStepAsync(request, item, itemId, itemIndex, sourceRoot, batchInstance, workerTag);
+        var prepared = await RunPrepareStepAsync(request, item, itemId, itemIndex, batchInstance, workerTag);
         if (prepared is null)
             return;
 
@@ -128,7 +129,7 @@ public class LocalMediaImportFlow(
                 LinkSourceToDownloadJob = false
             })));
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!IsControlFlowException(ex))
         {
             logger.LogError(ex, "Local media import reservation failed for BatchId {BatchId} ItemId {ItemId}.", request.BatchId, itemId);
             await Capture(() => ImportRepoCall(r => r.MarkItemFailedAsync(itemId, "reservation_failed", ex.Message)));
@@ -285,7 +286,7 @@ public class LocalMediaImportFlow(
             await CompensateAsync(request, item, itemId, itemInstance, reservation, uploadedObjects, workerTag);
             await Capture(() => ImportRepoCall(r => r.MarkItemFailedAsync(itemId, ex.ErrorCode, ex.Message, reservation.MediaGuid, reservation.StoragePath)));
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!IsControlFlowException(ex))
         {
             logger.LogError(
                 ex,
@@ -297,12 +298,46 @@ public class LocalMediaImportFlow(
         }
     }
 
+    private async Task<LocalMediaImportManifest?> RunReadManifestStepAsync(
+        LocalMediaImportRequested request,
+        string batchInstance,
+        string? workerTag)
+    {
+        var msgId = await Capture(Guid.NewGuid);
+        var cmd = new ReadLocalImportManifestCommand
+        {
+            JobId = request.BatchId,
+            CorrelationId = request.CorrelationId,
+            CausationId = request.MessageId,
+            MessageId = msgId,
+            OperationKey = $"local-import/{batchInstance}/read-manifest",
+            OccurredAt = clock.GetCurrentInstant(),
+            Attempt = 1,
+            BatchId = request.BatchId,
+            RequiredWorkerTag = workerTag
+        };
+        var subject = string.IsNullOrWhiteSpace(workerTag)
+            ? LocalImportSubjects.ReadLocalImportManifestCommand
+            : LocalImportSubjects.ReadLocalImportManifestCommandForTag(workerTag);
+
+        await Capture(() => Publish(subject, cmd));
+        var result = await Messages.FirstOfTypes<LocalImportManifestRead, LocalImportManifestReadFailed>();
+        if (result.HasFirst)
+            return result.First.Manifest;
+
+        logger.LogWarning(
+            "Local media import manifest read failed for BatchId {BatchId}: {ErrorMessage}",
+            request.BatchId,
+            result.Second.ErrorMessage);
+        await Capture(() => ImportRepoCall(r => r.MarkBatchFailedAsync(request.BatchId, result.Second.ErrorMessage)));
+        return null;
+    }
+
     private async Task<LocalImportFilePrepared?> RunPrepareStepAsync(
         LocalMediaImportRequested request,
         LocalMediaImportManifestItem item,
         Guid itemId,
         int itemIndex,
-        string sourceRoot,
         string batchInstance,
         string? workerTag)
     {
@@ -318,7 +353,6 @@ public class LocalMediaImportFlow(
             Attempt = 1,
             BatchId = request.BatchId,
             ItemId = itemId,
-            SourceRoot = sourceRoot,
             File = item.File,
             Sidecars = item.Sidecars,
             RequiredWorkerTag = workerTag
@@ -563,7 +597,7 @@ public class LocalMediaImportFlow(
             await Capture(() => MetaRepoCall(r => r.WriteMetadataAsync(mediaGuid, metadata, storageKey)));
             await Capture(() => PublishMetadataSync(mediaGuid));
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!IsControlFlowException(ex))
         {
             logger.LogError(
                 ex,
@@ -579,19 +613,8 @@ public class LocalMediaImportFlow(
         }
     }
 
-    private async Task<LocalMediaImportManifest> LoadManifestAsync(LocalMediaImportRequested request)
-    {
-        var objectStore = objectStoreFactory(request.ManifestObjectBucket);
-        await using var stream = new MemoryStream();
-        await objectStore.GetAsync(request.ManifestObjectKey, stream);
-        stream.Position = 0;
-        return await JsonSerializer.DeserializeAsync<LocalMediaImportManifest>(stream, ManifestJsonOptions)
-               ?? throw new JsonException("Manifest body was empty.");
-    }
-
     private static IReadOnlyList<LocalImportItemCreate> BuildItemCreates(
         LocalMediaImportManifest manifest,
-        string sourceRoot,
         string storageKey)
     {
         var creates = new List<LocalImportItemCreate>(manifest.Items.Count);
@@ -602,7 +625,7 @@ public class LocalMediaImportFlow(
             creates.Add(new LocalImportItemCreate
             {
                 ItemIndex = i,
-                SourceRoot = sourceRoot,
+                SourceRoot = LocalImportIncoming.SourceRootMarker,
                 RelativePath = normalizedPath,
                 StorageKey = storageKey,
                 Provider = item.Provider,
@@ -643,7 +666,7 @@ public class LocalMediaImportFlow(
                 MetadataSyncSubjects.SyncUpsert,
                 new MetadataSyncUpsertMessage { MediaGuid = mediaGuid });
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!IsControlFlowException(ex))
         {
             logger.LogWarning(ex, "Failed publishing metadata sync upsert for {MediaGuid}.", mediaGuid);
         }

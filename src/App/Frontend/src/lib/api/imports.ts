@@ -1,7 +1,6 @@
 export interface LocalMediaImportSubmission {
-  manifest: File;
-  sourceRoot: string;
   storageKey: string;
+  workerTag?: string;
   requestedBy?: string;
 }
 
@@ -16,18 +15,15 @@ export async function submitLocalMediaImport(
   submission: LocalMediaImportSubmission,
   fetchImpl: typeof fetch = fetch
 ): Promise<LocalMediaImportReceipt> {
-  const body = new FormData();
-  body.set('manifest', submission.manifest);
-  body.set('sourceRoot', submission.sourceRoot);
-  body.set('storageKey', submission.storageKey);
-  if (submission.requestedBy) {
-    body.set('requestedBy', submission.requestedBy);
-  }
-
   const response = await fetchImpl(`${BASE}/local-media`, {
     method: 'POST',
     credentials: 'same-origin',
-    body
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      storageKey: submission.storageKey,
+      workerTag: submission.workerTag || undefined,
+      requestedBy: submission.requestedBy || undefined
+    })
   });
 
   if (!response.ok) {
