@@ -96,6 +96,10 @@ class Program
 
         builder.Services.AddFlows(c => c
             .UsePostgresStore(cleipnirConnectionString)
+            // Cleipnir's DefaultSerializer has no NodaTime support and collapses every Instant in a
+            // persisted message/effect to the Unix epoch. Swap in a NodaTime-aware serializer so
+            // dates (OccurredAt, metadata scrape/release dates, …) survive the flow store round-trip.
+            .WithOptions(new Options(serializer: new NodaTimeFlowSerializer()))
             .RegisterFlowsAutomatically());
 
         builder.Services.AddSingleton<IClock>(SystemClock.Instance);
