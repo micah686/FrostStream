@@ -34,7 +34,19 @@ public sealed class MediaWatchStateController(
         if (!response.Success)
             return MapWatchStateError(response);
         if (response.State is null)
-            return NotFound();
+        {
+            return Ok(new WatchStateDto
+            {
+                OwnerSubject = subject,
+                MediaGuid = mediaGuid,
+                PositionSeconds = null,
+                DurationSeconds = null,
+                Completed = false,
+                WatchedAt = null,
+                LastPlayedAt = NodaTime.Instant.FromUtc(1970, 1, 1, 0, 0),
+                UpdatedAt = NodaTime.Instant.FromUtc(1970, 1, 1, 0, 0)
+            });
+        }
 
         return Ok(response.State);
     }

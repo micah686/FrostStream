@@ -55,7 +55,7 @@ public sealed class MediaWatchStateControllerTests
     }
 
     [Test]
-    public async Task Get_Returns_NotFound_For_Missing_State()
+    public async Task Get_Returns_Empty_State_For_Missing_State()
     {
         var bus = Substitute.For<IMessageBus>();
         var controller = CreateController(bus);
@@ -68,7 +68,12 @@ public sealed class MediaWatchStateControllerTests
 
         var result = await controller.Get(MediaGuid, CancellationToken.None);
 
-        result.ShouldBeOfType<NotFoundResult>();
+        var payload = result.ShouldBeOfType<OkObjectResult>().Value.ShouldBeOfType<WatchStateDto>();
+        payload.OwnerSubject.ShouldBe("reader-1");
+        payload.MediaGuid.ShouldBe(MediaGuid);
+        payload.Completed.ShouldBeFalse();
+        payload.WatchedAt.ShouldBeNull();
+        payload.PositionSeconds.ShouldBeNull();
     }
 
     [Test]
