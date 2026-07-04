@@ -16,8 +16,7 @@
   } from 'flowbite-svelte-icons';
   import VideoJs10Player, { type TextTrackSource } from '$lib/components/players/VideoJs10Player.svelte';
   import SveltePlayer from '$lib/components/players/SveltePlayer.svelte';
-  import CastButton from '$lib/components/players/CastButton.svelte';
-  import ServerCastMenu from '$lib/components/players/ServerCastMenu.svelte';
+  import CastDropdown from '$lib/components/players/CastDropdown.svelte';
   import SaveToPlaylistButton from '$lib/components/SaveToPlaylistButton.svelte';
   import PlaylistPanel from '$lib/components/PlaylistPanel.svelte';
   import TargetNotePanel from '$lib/components/TargetNotePanel.svelte';
@@ -747,10 +746,10 @@
               Mark watched
             {/if}
           </button>
-          <CastButton {mediaGuid} title={detail.title} posterUrl={posterUrl} />
-          <ServerCastMenu
+          <CastDropdown
             {mediaGuid}
             title={detail.title}
+            posterUrl={posterUrl}
             captionLanguages={detail.captionLanguages}
             position={livePosition}
           />

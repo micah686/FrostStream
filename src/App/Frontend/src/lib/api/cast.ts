@@ -2,6 +2,7 @@ import { getJson, sendJson, sendEmpty, ApiRequestError } from './http';
 
 export interface CastDevice {
   id: string;
+  protocol: string;
   name: string;
   host: string;
   port: number;

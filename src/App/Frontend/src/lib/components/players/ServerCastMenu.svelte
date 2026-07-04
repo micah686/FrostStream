@@ -31,13 +31,23 @@
     mediaGuid,
     title = null,
     captionLanguages = [],
-    position = 0
+    position = 0,
+    protocolId = 'chromecast',
+    triggerLabel = 'Cast (server)',
+    panelLabel = 'Cast to',
+    emptyMessage = "No cast devices found on the server's network.",
+    embedded = false
   }: {
     mediaGuid: string;
     title?: string | null;
     captionLanguages?: CaptionLanguage[];
     /** Current local player position in seconds, used for "cast from here". */
     position?: number;
+    protocolId?: string;
+    triggerLabel?: string;
+    panelLabel?: string;
+    emptyMessage?: string;
+    embedded?: boolean;
   } = $props();
 
   let open = $state(false);
@@ -100,6 +110,14 @@
   // Tear the SSE stream down with the component.
   $effect(() => () => streamAbort?.abort());
 
+  $effect(() => {
+    if (embedded) {
+      open = true;
+      void loadDevices(false);
+      void adoptExistingSession();
+    }
+  });
+
   async function toggleOpen() {
     open = !open;
     if (!open) {
@@ -112,7 +130,7 @@
   async function loadDevices(refresh: boolean) {
     devicesLoading = true;
     try {
-      devices = await listCastDevices(refresh);
+      devices = (await listCastDevices(refresh)).filter((device) => device.protocol === protocolId);
       error = null;
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'Device discovery failed.';
@@ -128,7 +146,11 @@
     }
     try {
       const sessions = await listCastSessions();
-      const existing = sessions.find((candidate) => candidate.mediaGuid === mediaGuid) ?? sessions[0];
+      const existing =
+        sessions.find((candidate) => candidate.mediaGuid === mediaGuid && candidate.deviceId.startsWith(`${protocolId}:`)) ??
+        sessions.find((candidate) => candidate.mediaGuid === mediaGuid) ??
+        sessions.find((candidate) => candidate.deviceId.startsWith(`${protocolId}:`)) ??
+        sessions[0];
       if (existing) {
         attachSession(existing);
       }
@@ -271,27 +293,33 @@
 </script>
 
 <div class="relative">
-  <button
-    type="button"
-    onclick={toggleOpen}
-    title="Cast via the server (no browser Cast SDK needed)"
-    class={[
-      'flex items-center gap-1.5 rounded-lg border px-4 py-2 text-xs font-semibold transition',
-      session
-        ? 'border-blue-900/60 bg-blue-950/40 text-blue-300 hover:bg-blue-950/60'
-        : 'border-slate-800 bg-slate-900/70 text-slate-300 hover:bg-slate-800'
-    ]}
-  >
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-4 w-4" aria-hidden="true">
-      <path d="M2 16.1A5 5 0 0 1 5.9 20M2 12.05A9 9 0 0 1 9.95 20M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6" />
-      <circle cx="2" cy="20" r="0.5" fill="currentColor" />
-    </svg>
-    {session ? `Casting · ${session.deviceName}` : 'Cast (server)'}
-  </button>
+  {#if !embedded}
+    <button
+      type="button"
+      onclick={toggleOpen}
+      title="Cast via the server (no browser Cast SDK needed)"
+      class={[
+        'flex items-center gap-1.5 rounded-lg border px-4 py-2 text-xs font-semibold transition',
+        session
+          ? 'border-blue-900/60 bg-blue-950/40 text-blue-300 hover:bg-blue-950/60'
+          : 'border-slate-800 bg-slate-900/70 text-slate-300 hover:bg-slate-800'
+      ]}
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-4 w-4" aria-hidden="true">
+        <path d="M2 16.1A5 5 0 0 1 5.9 20M2 12.05A9 9 0 0 1 9.95 20M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6" />
+        <circle cx="2" cy="20" r="0.5" fill="currentColor" />
+      </svg>
+      {session ? `Casting · ${session.deviceName}` : triggerLabel}
+    </button>
+  {/if}
 
-  {#if open}
+  {#if open || embedded}
     <div
-      class="absolute right-0 z-30 mt-2 w-80 rounded-xl border border-slate-800 bg-slate-950/95 p-4 shadow-2xl shadow-black/50 backdrop-blur"
+      class={[
+        embedded
+          ? 'w-full rounded-xl border border-slate-800 bg-slate-950/95 p-4 shadow-2xl shadow-black/50 backdrop-blur'
+          : 'absolute right-0 z-30 mt-2 w-80 rounded-xl border border-slate-800 bg-slate-950/95 p-4 shadow-2xl shadow-black/50 backdrop-blur'
+      ]}
     >
       {#if error}
         <p class="mb-3 rounded-lg border border-red-900/60 bg-red-950/30 px-3 py-2 text-xs text-red-300">{error}</p>
@@ -370,7 +398,7 @@
       {:else}
         <!-- Device picker -->
         <div class="mb-3 flex items-center justify-between">
-          <p class="text-xs font-semibold tracking-wide text-slate-400 uppercase">Cast to</p>
+          <p class="text-xs font-semibold tracking-wide text-slate-400 uppercase">{panelLabel}</p>
           <button
             type="button"
             onclick={() => loadDevices(true)}
@@ -401,7 +429,7 @@
           <p class="py-2 text-xs text-slate-400">Scanning the network…</p>
         {:else if devices.length === 0}
           <p class="py-2 text-xs text-slate-400">
-            No cast devices found on the server's network.
+            {emptyMessage}
           </p>
         {:else}
           <ul class="mb-3 space-y-1">

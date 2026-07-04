@@ -8,104 +8,31 @@
    * Requires a secure context (HTTPS or localhost) — the Cast SDK does not initialize on
    * plain-HTTP origins, in which case the button simply stays hidden.
    */
-  import { env } from '$env/dynamic/public';
+  import { canUseBrowserCast, startBrowserCast } from './browserCast';
 
   let {
     mediaGuid,
     title = null,
     posterUrl = null
   }: {
-    mediaGuid: string;
-    title?: string | null;
-    posterUrl?: string | null;
+      mediaGuid: string;
+      title?: string | null;
+      posterUrl?: string | null;
   } = $props();
 
   let castAvailable = $state(false);
   let castBusy = $state(false);
   let castError = $state<string | null>(null);
 
-  const SDK_URL = 'https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1';
-
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  function castFramework(): any {
-    return (window as any).cast?.framework ?? null;
-  }
-
-  function chromeCast(): any {
-    return (window as any).chrome?.cast ?? null;
-  }
-
   $effect(() => {
-    if (typeof window === 'undefined' || !window.isSecureContext) {
-      return;
-    }
-
-    (window as any).__onGCastApiAvailable = (isAvailable: boolean) => {
-      if (!isAvailable) {
-        return;
-      }
-      const framework = castFramework();
-      framework.CastContext.getInstance().setOptions({
-        receiverApplicationId: chromeCast().media.DEFAULT_MEDIA_RECEIVER_APP_ID,
-        autoJoinPolicy: chromeCast().AutoJoinPolicy.ORIGIN_SCOPED
-      });
-      castAvailable = true;
-    };
-
-    if (!document.querySelector(`script[src="${SDK_URL}"]`)) {
-      const script = document.createElement('script');
-      script.src = SDK_URL;
-      script.async = true;
-      document.head.appendChild(script);
-    } else if (castFramework()) {
-      castAvailable = true;
-    }
+    castAvailable = canUseBrowserCast();
   });
 
   async function startCast() {
     castBusy = true;
     castError = null;
     try {
-      const tokenResponse = await fetch(`/api/watch/${mediaGuid}/cast-token`, { method: 'POST' });
-      if (!tokenResponse.ok) {
-        throw new Error(`Cast token request failed (${tokenResponse.status}).`);
-      }
-      const { token } = (await tokenResponse.json()) as { token: string };
-
-      const base = env.PUBLIC_CAST_BASE_URL || window.location.origin;
-      const mediaUrl = `${base}/api/watch/${mediaGuid}?castToken=${encodeURIComponent(token)}`;
-
-      // The device streams the original file; probe its content type through the session.
-      let contentType = 'video/mp4';
-      try {
-        const head = await fetch(`/api/watch/${mediaGuid}`, { method: 'HEAD' });
-        contentType = head.headers.get('content-type') ?? contentType;
-      } catch {
-        // Fall back to video/mp4; the default receiver sniffs most formats anyway.
-      }
-
-      const context = castFramework().CastContext.getInstance();
-      if (!context.getCurrentSession()) {
-        await context.requestSession();
-      }
-      const session = context.getCurrentSession();
-      if (!session) {
-        return; // User dismissed the device picker.
-      }
-
-      const media = chromeCast().media;
-      const mediaInfo = new media.MediaInfo(mediaUrl, contentType);
-      mediaInfo.metadata = new media.GenericMediaMetadata();
-      if (title) {
-        mediaInfo.metadata.title = title;
-      }
-      if (posterUrl) {
-        mediaInfo.metadata.images = [
-          { url: `${base}${posterUrl}?castToken=${encodeURIComponent(token)}` }
-        ];
-      }
-
-      await session.loadMedia(new media.LoadRequest(mediaInfo));
+      await startBrowserCast(mediaGuid, title, posterUrl);
     } catch (error) {
       castError = error instanceof Error ? error.message : 'Casting failed.';
     } finally {
