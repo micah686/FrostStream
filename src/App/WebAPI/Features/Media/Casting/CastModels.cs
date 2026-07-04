@@ -1,11 +1,33 @@
-using CastMedia = Sharpcaster.Models.Media.Media;
-
 namespace WebAPI.Features.Media.Casting;
 
-/// <summary>A Chromecast-family device discovered on the local network via mDNS.</summary>
+public static class CastProtocolIds
+{
+    public const string Chromecast = "chromecast";
+    public const string FCast = "fcast";
+}
+
+public static class CastDeviceId
+{
+    public static string Create(string protocolId, string localId) => $"{protocolId}:{localId}";
+
+    public static string ProtocolOf(string deviceId)
+    {
+        var separator = deviceId.IndexOf(':', StringComparison.Ordinal);
+        return separator > 0 ? deviceId[..separator] : CastProtocolIds.Chromecast;
+    }
+
+    public static string LocalIdOf(string deviceId)
+    {
+        var separator = deviceId.IndexOf(':', StringComparison.Ordinal);
+        return separator > 0 ? deviceId[(separator + 1)..] : deviceId;
+    }
+}
+
+/// <summary>A receiver discovered on the local network by one of the enabled cast protocols.</summary>
 public sealed record CastDeviceDto
 {
     public required string Id { get; init; }
+    public required string Protocol { get; init; }
     public required string Name { get; init; }
     public required string Host { get; init; }
     public int Port { get; init; }
@@ -71,13 +93,23 @@ public sealed record CastSessionEvent(string Name, CastSessionDto Session)
     public const string EndedEvent = "ended";
 }
 
+public sealed record CastSubtitleTrack
+{
+    public required string Language { get; init; }
+    public required string Url { get; init; }
+    public string ContentType { get; init; } = "text/vtt";
+}
+
 /// <summary>Everything the session manager needs to load media on a device, pre-built by the controller.</summary>
 public sealed record CastLoadSpec
 {
     public required Guid MediaGuid { get; init; }
     public required string Title { get; init; }
-    public required CastMedia Media { get; init; }
-    public int[]? ActiveTrackIds { get; init; }
+    public required string ContentUrl { get; init; }
+    public required string ContentType { get; init; }
+    public double? DurationSeconds { get; init; }
+    public string? ThumbnailUrl { get; init; }
+    public CastSubtitleTrack? Subtitle { get; init; }
     public double? StartPositionSeconds { get; init; }
     public DateTimeOffset TokenExpiresAt { get; init; }
 }

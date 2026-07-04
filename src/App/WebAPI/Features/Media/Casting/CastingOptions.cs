@@ -24,4 +24,13 @@ public sealed class CastingOptions
 
     /// <summary>Upper bound for one progressive mDNS discovery pass.</summary>
     public int DiscoveryTimeoutSeconds { get; init; } = 5;
+
+    public CastProtocolOptions Chromecast { get; init; } = new();
+
+    public CastProtocolOptions FCast { get; init; } = new();
+}
+
+public sealed class CastProtocolOptions
+{
+    public bool Enabled { get; init; } = true;
 }

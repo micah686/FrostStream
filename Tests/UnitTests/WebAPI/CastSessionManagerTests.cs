@@ -1,18 +1,15 @@
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
-using Sharpcaster.Models;
-using Sharpcaster.Models.Media;
 using Shouldly;
 using TUnit.Core;
 using WebAPI.Features.Media.Casting;
-using CastMedia = Sharpcaster.Models.Media.Media;
 
 namespace UnitTests.WebAPI;
 
 public sealed class CastSessionManagerTests
 {
-    private const string DeviceId = "abcdef0123456789";
+    private const string DeviceId = "chromecast:abcdef0123456789";
     private static readonly Guid MediaGuid = Guid.NewGuid();
 
     [Test]
@@ -24,9 +21,8 @@ public sealed class CastSessionManagerTests
 
         Received.InOrder(() =>
         {
-            fixture.Client.ConnectAsync(Arg.Any<ChromecastReceiver>());
-            fixture.Client.LaunchDefaultReceiverAsync();
-            fixture.Client.LoadAsync(Arg.Any<CastMedia>(), Arg.Any<int[]?>());
+            fixture.Client.ConnectAsync();
+            fixture.Client.LoadAsync(Arg.Any<CastLoadSpec>());
         });
         session.DeviceId.ShouldBe(DeviceId);
         session.MediaGuid.ShouldBe(MediaGuid);
@@ -36,13 +32,13 @@ public sealed class CastSessionManagerTests
     }
 
     [Test]
-    public async Task Start_With_Position_Seeks_After_Load()
+    public async Task Start_With_Position_Passes_Position_To_Client()
     {
         var fixture = CreateFixture();
 
         await fixture.Manager.StartAsync(DeviceId, Spec() with { StartPositionSeconds = 90 }, CancellationToken.None);
 
-        await fixture.Client.Received(1).SeekAsync(90);
+        await fixture.Client.Received(1).LoadAsync(Arg.Is<CastLoadSpec>(spec => spec.StartPositionSeconds == 90));
     }
 
     [Test]
@@ -55,9 +51,9 @@ public sealed class CastSessionManagerTests
         var session = await fixture.Manager.StartAsync(
             DeviceId, Spec() with { MediaGuid = otherMedia, Title = "Second" }, CancellationToken.None);
 
-        fixture.Factory.Received(1).Create();
-        await fixture.Client.Received(1).ConnectAsync(Arg.Any<ChromecastReceiver>());
-        await fixture.Client.Received(2).LoadAsync(Arg.Any<CastMedia>(), Arg.Any<int[]?>());
+        await fixture.Registry.Received(1).CreateClientAsync(DeviceId, Arg.Any<CancellationToken>());
+        await fixture.Client.Received(1).ConnectAsync();
+        await fixture.Client.Received(2).LoadAsync(Arg.Any<CastLoadSpec>());
         session.MediaGuid.ShouldBe(otherMedia);
         session.Title.ShouldBe("Second");
         fixture.Manager.ListSessions().ShouldHaveSingleItem();
@@ -67,7 +63,7 @@ public sealed class CastSessionManagerTests
     public async Task Failed_Connect_Leaves_No_Session_And_Disposes_The_Client()
     {
         var fixture = CreateFixture();
-        fixture.Client.ConnectAsync(Arg.Any<ChromecastReceiver>()).ThrowsAsync(new IOException("connection refused"));
+        fixture.Client.ConnectAsync().ThrowsAsync(new IOException("connection refused"));
 
         await Should.ThrowAsync<CastDeviceUnreachableException>(
             () => fixture.Manager.StartAsync(DeviceId, Spec(), CancellationToken.None));
@@ -95,7 +91,7 @@ public sealed class CastSessionManagerTests
     {
         var fixture = CreateFixture();
         await fixture.Manager.StartAsync(DeviceId, Spec(), CancellationToken.None);
-        fixture.Client.PauseAsync().Returns(Status(PlayerStateType.Paused, currentTime: 42));
+        fixture.Client.PauseAsync().Returns(Status("Paused", currentTime: 42));
 
         var session = await fixture.Manager.PauseAsync(DeviceId, CancellationToken.None);
 
@@ -109,12 +105,12 @@ public sealed class CastSessionManagerTests
         var fixture = CreateFixture();
         await fixture.Manager.StartAsync(DeviceId, Spec(), CancellationToken.None);
         fixture.Client.HasMediaSession.Returns(false, true);
-        fixture.Client.GetMediaStatusAsync().Returns(Status(PlayerStateType.Paused, currentTime: 12));
-        fixture.Client.PlayAsync().Returns(Status(PlayerStateType.Playing, currentTime: 12));
+        fixture.Client.GetStatusAsync().Returns(Status("Paused", currentTime: 12));
+        fixture.Client.PlayAsync().Returns(Status("Playing", currentTime: 12));
 
         var session = await fixture.Manager.PlayAsync(DeviceId, CancellationToken.None);
 
-        await fixture.Client.Received(1).GetMediaStatusAsync();
+        await fixture.Client.Received(1).GetStatusAsync();
         await fixture.Client.Received(1).PlayAsync();
         session.Snapshot.PlayerState.ShouldBe("Playing");
         session.Snapshot.CurrentTime.ShouldBe(12);
@@ -126,7 +122,7 @@ public sealed class CastSessionManagerTests
         var fixture = CreateFixture();
         await fixture.Manager.StartAsync(DeviceId, Spec(), CancellationToken.None);
         fixture.Client.HasMediaSession.Returns(false);
-        fixture.Client.GetMediaStatusAsync().Returns((MediaStatus?)null);
+        fixture.Client.GetStatusAsync().Returns((CastSessionSnapshot?)null);
 
         var error = await Should.ThrowAsync<CastDeviceUnreachableException>(
             () => fixture.Manager.PlayAsync(DeviceId, CancellationToken.None));
@@ -157,8 +153,8 @@ public sealed class CastSessionManagerTests
         var subscription = fixture.Manager.Subscribe(DeviceId)!.Value;
         await subscription.Reader.ReadAsync(TestToken()); // drain the on-subscribe snapshot
 
-        fixture.Client.MediaStatusChanged += Raise.Event<EventHandler<MediaStatus?>>(
-            fixture.Client, Status(PlayerStateType.Playing, currentTime: 12));
+        fixture.Client.StatusChanged += Raise.Event<EventHandler<CastSessionSnapshot?>>(
+            fixture.Client, Status("Playing", currentTime: 12));
 
         var evt = await subscription.Reader.ReadAsync(TestToken());
         evt.Name.ShouldBe(CastSessionEvent.StatusEvent);
@@ -224,55 +220,56 @@ public sealed class CastSessionManagerTests
     private sealed record Fixture(
         CastSessionManager Manager,
         ICastSessionClient Client,
-        ICastSessionClientFactory Factory,
-        ICastDeviceLocator Locator);
+        ICastDeviceRegistry Registry);
 
     private static Fixture CreateFixture()
     {
-        var receiver = new ChromecastReceiver { DeviceUri = new Uri("https://192.168.1.50"), Name = "Living Room TV", Port = 8009 };
-        var device = new CastDeviceDto { Id = DeviceId, Name = "Living Room TV", Host = "192.168.1.50", Port = 8009 };
+        var device = new CastDeviceDto
+        {
+            Id = DeviceId,
+            Protocol = CastProtocolIds.Chromecast,
+            Name = "Living Room TV",
+            Host = "192.168.1.50",
+            Port = 8009
+        };
 
-        var locator = Substitute.For<ICastDeviceLocator>();
-        locator.GetDevicesAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        var registry = Substitute.For<ICastDeviceRegistry>();
+        registry.GetDevicesAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns([device]);
-        locator.FindReceiverAsync(DeviceId, Arg.Any<CancellationToken>()).Returns(receiver);
-        locator.FindReceiverAsync(Arg.Is<string>(id => id != DeviceId), Arg.Any<CancellationToken>())
-            .Returns((ChromecastReceiver?)null);
 
         var client = Substitute.For<ICastSessionClient>();
         client.HasMediaSession.Returns(true);
-        client.GetMediaStatusAsync()
-            .Returns(Status(PlayerStateType.Buffering, currentTime: 0));
-        client.LoadAsync(Arg.Any<CastMedia>(), Arg.Any<int[]?>())
-            .Returns(Status(PlayerStateType.Buffering, currentTime: 0));
+        client.GetStatusAsync()
+            .Returns(Status("Buffering", currentTime: 0));
+        client.LoadAsync(Arg.Any<CastLoadSpec>())
+            .Returns(Status("Buffering", currentTime: 0));
         client.SeekAsync(Arg.Any<double>())
-            .Returns(callInfo => Status(PlayerStateType.Playing, currentTime: callInfo.Arg<double>()));
+            .Returns(callInfo => Status("Playing", currentTime: callInfo.Arg<double>()));
+        registry.CreateClientAsync(DeviceId, Arg.Any<CancellationToken>())
+            .Returns(new CastSessionClientHandle(device, client));
+        registry.CreateClientAsync(Arg.Is<string>(id => id != DeviceId), Arg.Any<CancellationToken>())
+            .Returns((CastSessionClientHandle?)null);
 
-        var factory = Substitute.For<ICastSessionClientFactory>();
-        factory.Create().Returns(client);
-
-        var manager = new CastSessionManager(locator, factory, Substitute.For<ILogger<CastSessionManager>>());
-        return new Fixture(manager, client, factory, locator);
+        var manager = new CastSessionManager(registry, Substitute.For<ILogger<CastSessionManager>>());
+        return new Fixture(manager, client, registry);
     }
 
     private static CastLoadSpec Spec() => new()
     {
         MediaGuid = MediaGuid,
         Title = "Test Movie",
-        Media = new CastMedia
-        {
-            ContentUrl = "http://192.168.1.10:5041/api/watch/x?castToken=abc",
-            ContentType = "video/mp4",
-            StreamType = StreamType.Buffered
-        },
+        ContentUrl = "http://192.168.1.10:5041/api/watch/x?castToken=abc",
+        ContentType = "video/mp4",
+        DurationSeconds = 600,
         TokenExpiresAt = DateTimeOffset.UtcNow.AddHours(4)
     };
 
-    private static MediaStatus Status(PlayerStateType state, double currentTime) => new()
+    private static CastSessionSnapshot Status(string state, double currentTime) => new()
     {
         PlayerState = state,
         CurrentTime = currentTime,
-        Media = new CastMedia { Duration = 600 }
+        DurationSeconds = 600,
+        UpdatedAt = DateTimeOffset.UtcNow
     };
 
     private static CancellationToken TestToken() => new CancellationTokenSource(TimeSpan.FromSeconds(5)).Token;

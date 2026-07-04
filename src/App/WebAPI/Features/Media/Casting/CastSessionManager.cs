@@ -1,7 +1,5 @@
 using System.Collections.Concurrent;
 using System.Threading.Channels;
-using Sharpcaster.Models.ChromecastStatus;
-using Sharpcaster.Models.Media;
 
 namespace WebAPI.Features.Media.Casting;
 
@@ -14,8 +12,7 @@ namespace WebAPI.Features.Media.Casting;
 /// <c>ended</c> frame — there is no silent auto-reconnect; the user re-casts.
 /// </summary>
 public sealed class CastSessionManager(
-    ICastDeviceLocator locator,
-    ICastSessionClientFactory clientFactory,
+    ICastDeviceRegistry devices,
     ILogger<CastSessionManager> logger) : IAsyncDisposable
 {
     private static readonly TimeSpan CommandTimeout = TimeSpan.FromSeconds(30);
@@ -55,22 +52,18 @@ public sealed class CastSessionManager(
                 return ToDto(existing);
             }
 
-            var receiver = await locator.FindReceiverAsync(deviceId, cancellationToken)
-                ?? throw new CastDeviceNotFoundException(deviceId);
-            var device = (await locator.GetDevicesAsync(refresh: false, cancellationToken))
-                .FirstOrDefault(candidate => candidate.Id == deviceId)
+            var handle = await devices.CreateClientAsync(deviceId, cancellationToken)
                 ?? throw new CastDeviceNotFoundException(deviceId);
 
-            var client = clientFactory.Create();
+            var device = handle.Device;
+            var client = handle.Client;
             var session = new CastSession(deviceId, device, client);
-            client.MediaStatusChanged += (_, status) => OnMediaStatus(session, status);
-            client.ReceiverStatusChanged += (_, status) => OnReceiverStatus(session, status);
+            client.StatusChanged += (_, status) => OnStatus(session, status);
             client.Disconnected += (_, _) => OnDisconnected(session);
 
             try
             {
-                await GuardAsync(client.ConnectAsync(receiver), "connect to", device, cancellationToken);
-                await GuardAsync(client.LaunchDefaultReceiverAsync(), "launch the media receiver on", device, cancellationToken);
+                await GuardAsync(client.ConnectAsync(), "connect to", device, cancellationToken);
                 await LoadOnSessionAsync(session, spec, cancellationToken);
             }
             catch
@@ -211,35 +204,24 @@ public sealed class CastSessionManager(
         await session.CommandLock.WaitAsync(cancellationToken);
         try
         {
-            session.Media = new SessionMedia(spec.MediaGuid, spec.Title, spec.TokenExpiresAt, spec.Media.Duration);
+            session.Media = new SessionMedia(spec.MediaGuid, spec.Title, spec.TokenExpiresAt, spec.DurationSeconds);
             UpdateSnapshot(session, snapshot => new CastSessionSnapshot
             {
                 PlayerState = "Loading",
                 CurrentTime = spec.StartPositionSeconds ?? 0,
-                DurationSeconds = spec.Media.Duration,
+                DurationSeconds = spec.DurationSeconds,
                 VolumeLevel = snapshot.VolumeLevel,
                 Muted = snapshot.Muted,
                 UpdatedAt = DateTimeOffset.UtcNow
             });
 
             var status = await GuardAsync(
-                session.Client.LoadAsync(spec.Media, spec.ActiveTrackIds),
+                session.Client.LoadAsync(spec),
                 "load media on",
                 session.Device,
                 cancellationToken);
             status ??= await RequireMediaStatusAsync(session, "confirm the loaded media session on", cancellationToken);
-            ApplyMediaStatus(session, status);
-
-            // The load request has no start position, so seek right after the media is loaded.
-            if (spec.StartPositionSeconds is { } position && position > 0)
-            {
-                var seeked = await GuardAsync(
-                    session.Client.SeekAsync(position),
-                    "seek on",
-                    session.Device,
-                    cancellationToken);
-                ApplyMediaStatus(session, seeked);
-            }
+            ApplyStatus(session, status);
         }
         finally
         {
@@ -251,7 +233,7 @@ public sealed class CastSessionManager(
 
     private async Task<CastSessionDto> ExecuteMediaCommandAsync(
         string deviceId,
-        Func<ICastSessionClient, Task<MediaStatus?>> command,
+        Func<ICastSessionClient, Task<CastSessionSnapshot?>> command,
         string actionDescription,
         CancellationToken cancellationToken)
     {
@@ -262,7 +244,7 @@ public sealed class CastSessionManager(
             await EnsureMediaSessionAsync(session, cancellationToken);
             var status = await GuardAsync(command(session.Client), actionDescription, session.Device, cancellationToken);
             status ??= await RequireMediaStatusAsync(session, "refresh media status on", cancellationToken);
-            ApplyMediaStatus(session, status);
+            ApplyStatus(session, status);
         }
         finally
         {
@@ -286,13 +268,13 @@ public sealed class CastSessionManager(
         await RequireMediaStatusAsync(session, "refresh media status on", cancellationToken);
     }
 
-    private async Task<MediaStatus> RequireMediaStatusAsync(
+    private async Task<CastSessionSnapshot> RequireMediaStatusAsync(
         CastSession session,
         string actionDescription,
         CancellationToken cancellationToken)
     {
         var status = await GuardAsync(
-            session.Client.GetMediaStatusAsync(),
+            session.Client.GetStatusAsync(),
             actionDescription,
             session.Device,
             cancellationToken);
@@ -303,7 +285,7 @@ public sealed class CastSessionManager(
                 $"No media session is active on '{session.Device.Name}'. Start casting the media again.");
         }
 
-        ApplyMediaStatus(session, status);
+        ApplyStatus(session, status);
         return status;
     }
 
@@ -344,30 +326,14 @@ public sealed class CastSessionManager(
         return true;
     }
 
-    private void OnMediaStatus(CastSession session, MediaStatus? status)
+    private void OnStatus(CastSession session, CastSessionSnapshot? status)
     {
         if (status is null)
         {
             return;
         }
 
-        ApplyMediaStatus(session, status);
-        Fan(session, CastSessionEvent.StatusEvent);
-    }
-
-    private void OnReceiverStatus(CastSession session, ChromecastStatus? status)
-    {
-        if (status?.Volume is null)
-        {
-            return;
-        }
-
-        UpdateSnapshot(session, snapshot => snapshot with
-        {
-            VolumeLevel = status.Volume.Level ?? snapshot.VolumeLevel,
-            Muted = status.Volume.Muted ?? snapshot.Muted,
-            UpdatedAt = DateTimeOffset.UtcNow
-        });
+        ApplyStatus(session, status);
         Fan(session, CastSessionEvent.StatusEvent);
     }
 
@@ -401,7 +367,7 @@ public sealed class CastSessionManager(
         }
     }
 
-    private void ApplyMediaStatus(CastSession session, MediaStatus? status)
+    private void ApplyStatus(CastSession session, CastSessionSnapshot? status)
     {
         if (status is null)
         {
@@ -410,12 +376,12 @@ public sealed class CastSessionManager(
 
         UpdateSnapshot(session, snapshot => new CastSessionSnapshot
         {
-            PlayerState = status.PlayerState.ToString(),
-            CurrentTime = status.CurrentTime,
-            DurationSeconds = status.Media?.Duration ?? snapshot.DurationSeconds ?? session.Media.DurationHint,
-            VolumeLevel = status.Volume?.Level ?? snapshot.VolumeLevel,
-            Muted = status.Volume?.Muted ?? snapshot.Muted,
-            UpdatedAt = DateTimeOffset.UtcNow
+            PlayerState = status.PlayerState == "Unknown" ? snapshot.PlayerState : status.PlayerState,
+            CurrentTime = status.PlayerState == "Unknown" ? snapshot.CurrentTime : status.CurrentTime,
+            DurationSeconds = status.DurationSeconds ?? snapshot.DurationSeconds ?? session.Media.DurationHint,
+            VolumeLevel = status.VolumeLevel ?? snapshot.VolumeLevel,
+            Muted = status.Muted ?? snapshot.Muted,
+            UpdatedAt = status.UpdatedAt
         });
     }
 

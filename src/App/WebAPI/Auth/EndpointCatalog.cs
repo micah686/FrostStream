@@ -180,7 +180,7 @@ public static class EndpointIds
     public const string MediaWatchStateMarkUnwatched = "media.watch-state.mark-unwatched";
     public const string PlaylistAudioStream = "playlists.audio-stream";
 
-    // Server-side casting (Chromecast driven by the server via mDNS + Sharpcaster)
+    // Server-side casting (protocol providers driven by the server via local discovery)
     public const string CastDevicesList = "cast.devices.list";
     public const string CastSessionsStart = "cast.sessions.start";
     public const string CastSessionsList = "cast.sessions.list";

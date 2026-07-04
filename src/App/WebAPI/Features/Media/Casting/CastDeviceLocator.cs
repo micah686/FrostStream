@@ -6,80 +6,65 @@ using Sharpcaster.Models;
 
 namespace WebAPI.Features.Media.Casting;
 
-public interface ICastDeviceLocator
-{
-    /// <summary>Lists devices, served from cache inside the configured TTL unless <paramref name="refresh"/>.</summary>
-    Task<IReadOnlyList<CastDeviceDto>> GetDevicesAsync(bool refresh, CancellationToken cancellationToken);
-
-    /// <summary>Resolves a device id to its receiver, rescanning once if it is not in the cache.</summary>
-    Task<ChromecastReceiver?> FindReceiverAsync(string deviceId, CancellationToken cancellationToken);
-}
-
 /// <summary>
 /// mDNS discovery via Sharpcaster's <see cref="ChromecastLocator"/> with a TTL cache. Scans are
-/// serialized behind a semaphore so concurrent refresh requests don't stampede the network, and a
-/// waiter that lost the race reuses the scan the winner just completed.
+/// serialized by <see cref="CastDiscoveryCache{T}"/> so concurrent refresh requests don't
+/// stampede the network.
 /// </summary>
-public sealed class SharpcasterDeviceLocator(
+public sealed class ChromecastCastProtocol(
     IOptions<CastingOptions> options,
-    ILogger<SharpcasterDeviceLocator> logger) : ICastDeviceLocator
+    ILoggerFactory loggerFactory,
+    ILogger<ChromecastCastProtocol> logger) : ICastProtocol
 {
-    private readonly SemaphoreSlim _scanLock = new(1, 1);
-    private IReadOnlyList<(CastDeviceDto Device, ChromecastReceiver Receiver)> _cache = [];
-    private DateTimeOffset _cacheExpiresAt = DateTimeOffset.MinValue;
+    private readonly CastDiscoveryCache<(CastDeviceDto Device, ChromecastReceiver Receiver)> _cache =
+        new(TimeSpan.FromSeconds(Math.Max(1, options.Value.DeviceCacheSeconds)));
 
-    public async Task<IReadOnlyList<CastDeviceDto>> GetDevicesAsync(bool refresh, CancellationToken cancellationToken)
+    public string Id => CastProtocolIds.Chromecast;
+
+    public bool Enabled => options.Value.Chromecast.Enabled;
+
+    public async Task<IReadOnlyList<CastDeviceDto>> DiscoverAsync(bool refresh, CancellationToken cancellationToken)
     {
         var entries = await GetEntriesAsync(refresh, cancellationToken);
         return entries.Select(entry => entry.Device).ToArray();
     }
 
-    public async Task<ChromecastReceiver?> FindReceiverAsync(string deviceId, CancellationToken cancellationToken)
+    public async Task<ICastSessionClient?> CreateClientAsync(string deviceId, CancellationToken cancellationToken)
     {
         var entries = await GetEntriesAsync(refresh: false, cancellationToken);
-        var match = entries.FirstOrDefault(entry => entry.Device.Id == deviceId);
+        var localId = CastDeviceId.LocalIdOf(deviceId);
+        var match = entries.FirstOrDefault(entry => entry.Device.Id == deviceId || CastDeviceId.LocalIdOf(entry.Device.Id) == localId);
         if (match.Receiver is not null)
         {
-            return match.Receiver;
+            return CreateClient(match.Receiver);
         }
 
         // Not in the cache — the device may have joined the network since the last scan.
         entries = await GetEntriesAsync(refresh: true, cancellationToken);
-        return entries.FirstOrDefault(entry => entry.Device.Id == deviceId).Receiver;
+        match = entries.FirstOrDefault(entry => entry.Device.Id == deviceId || CastDeviceId.LocalIdOf(entry.Device.Id) == localId);
+        return match.Receiver is null ? null : CreateClient(match.Receiver);
     }
 
-    private async Task<IReadOnlyList<(CastDeviceDto Device, ChromecastReceiver Receiver)>> GetEntriesAsync(
+    private Task<IReadOnlyList<(CastDeviceDto Device, ChromecastReceiver Receiver)>> GetEntriesAsync(
         bool refresh,
         CancellationToken cancellationToken)
-    {
-        if (!refresh && DateTimeOffset.UtcNow < _cacheExpiresAt)
-        {
-            return _cache;
-        }
-
-        var staleExpiry = _cacheExpiresAt;
-        await _scanLock.WaitAsync(cancellationToken);
-        try
-        {
-            // Another caller may have finished a scan while we waited; their result is fresh enough.
-            if (_cacheExpiresAt > staleExpiry && DateTimeOffset.UtcNow < _cacheExpiresAt)
+        => _cache.GetAsync(
+            refresh,
+            async _ =>
             {
-                return _cache;
-            }
+                var receivers = await ScanAsync();
+                return receivers
+                    .Where(receiver => receiver.DeviceUri is not null)
+                    .Select(receiver => (ToDto(receiver), receiver))
+                    .ToArray();
+            },
+            cancellationToken);
 
-            var receivers = await ScanAsync();
-            _cache = receivers
-                .Where(receiver => receiver.DeviceUri is not null)
-                .Select(receiver => (ToDto(receiver), receiver))
-                .ToArray();
-            _cacheExpiresAt = DateTimeOffset.UtcNow.AddSeconds(Math.Max(1, options.Value.DeviceCacheSeconds));
-            return _cache;
-        }
-        finally
-        {
-            _scanLock.Release();
-        }
-    }
+    private SharpcasterSessionClient CreateClient(ChromecastReceiver receiver)
+        => new(
+            receiver,
+            loggerFactory.CreateLogger<ChromecastClient>(),
+            loggerFactory.CreateLogger<SharpcasterSessionClient>());
 
     private async Task<IEnumerable<ChromecastReceiver>> ScanAsync()
     {
@@ -95,6 +80,7 @@ public sealed class SharpcasterDeviceLocator(
         => new()
         {
             Id = DeviceIdOf(receiver),
+            Protocol = CastProtocolIds.Chromecast,
             Name = receiver.Name,
             Host = receiver.DeviceUri.Host,
             Port = receiver.Port,
@@ -109,14 +95,19 @@ public sealed class SharpcasterDeviceLocator(
     /// </summary>
     internal static string DeviceIdOf(ChromecastReceiver receiver)
     {
+        string localId;
         if (receiver.ExtraInformation is not null &&
             receiver.ExtraInformation.TryGetValue("id", out var id) &&
             !string.IsNullOrWhiteSpace(id))
         {
-            return id.Replace("-", "").ToLowerInvariant();
+            localId = id.Replace("-", "").ToLowerInvariant();
+        }
+        else
+        {
+            var bytes = SHA256.HashData(Encoding.UTF8.GetBytes($"{receiver.DeviceUri.Host}:{receiver.Port}"));
+            localId = Convert.ToHexStringLower(bytes)[..16];
         }
 
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes($"{receiver.DeviceUri.Host}:{receiver.Port}"));
-        return Convert.ToHexStringLower(bytes)[..16];
+        return CastDeviceId.Create(CastProtocolIds.Chromecast, localId);
     }
 }

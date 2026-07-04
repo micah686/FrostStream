@@ -61,8 +61,9 @@ public class Program
         builder.Services.AddSingleton<CastTokenService>();
         builder.Services.Configure<CastingOptions>(builder.Configuration.GetSection(CastingOptions.SectionName));
         builder.Services.AddSingleton<CastMediaUrlBuilder>();
-        builder.Services.AddSingleton<ICastDeviceLocator, SharpcasterDeviceLocator>();
-        builder.Services.AddSingleton<ICastSessionClientFactory, SharpcasterSessionClientFactory>();
+        builder.Services.AddSingleton<ICastProtocol, ChromecastCastProtocol>();
+        builder.Services.AddSingleton<ICastProtocol, FCastCastProtocol>();
+        builder.Services.AddSingleton<ICastDeviceRegistry, CastDeviceRegistry>();
         builder.Services.AddSingleton<CastSessionManager>();
         builder.Services.AddScoped<MediaAccessChecker>();
         builder.Services.AddScoped<AudioRenditionResolver>();

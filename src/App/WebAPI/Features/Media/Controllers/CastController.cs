@@ -8,24 +8,22 @@ using NodaTime;
 using NodaTime.Serialization.SystemTextJson;
 using Shared.Auth;
 using Shared.Messaging;
-using Sharpcaster.Models.Media;
 using WebAPI.Auth;
 using WebAPI.Features.Media.Casting;
-using CastMedia = Sharpcaster.Models.Media.Media;
 
 namespace WebAPI.Features.Media.Controllers;
 
 /// <summary>
-/// Server-side casting surface: the WebAPI discovers Chromecast-family devices on its own network
-/// via mDNS and drives them directly (connect, load, transport control), so any browser can cast
-/// without the Google Cast SDK. Media reaches the device through the existing progressive
+/// Server-side casting surface: the WebAPI discovers cast receivers on its own network via each
+/// enabled protocol and drives them directly (connect, load, transport control), so any browser can cast
+/// without vendor browser SDKs. Media reaches the device through the existing progressive
 /// endpoints in <see cref="MediaWatchController"/>, authenticated by a cast token minted here.
 /// </summary>
 [ApiController]
 [Route("api/cast")]
 public sealed class CastController(
     CastSessionManager sessions,
-    ICastDeviceLocator locator,
+    ICastDeviceRegistry devices,
     CastTokenService castTokens,
     MediaAccessChecker accessChecker,
     AudioRenditionResolver audioRenditions,
@@ -52,13 +50,13 @@ public sealed class CastController(
     [HttpGet("devices")]
     [Endpoint(EndpointIds.CastDevicesList)]
     [EndpointSummary("List cast devices on the server's network")]
-    [EndpointDescription("Discovers Chromecast-family devices reachable from the server via mDNS and returns their stable ids, names, and addresses. Results are cached briefly; pass refresh=true to force a new network scan, which takes a few seconds. An empty list means no device answered on the server's network segment.")]
+    [EndpointDescription("Discovers cast receivers reachable from the server via enabled protocols and returns their stable ids, protocol names, display names, and addresses. Results are cached briefly; pass refresh=true to force a new network scan, which takes a few seconds. An empty list means no device answered on the server's network segment.")]
     public async Task<ActionResult<IReadOnlyList<CastDeviceDto>>> ListDevices(
         [FromQuery] bool refresh = false,
         CancellationToken cancellationToken = default)
     {
-        var devices = await locator.GetDevicesAsync(refresh, cancellationToken);
-        return Ok(devices);
+        var discovered = await devices.GetDevicesAsync(refresh, cancellationToken);
+        return Ok(discovered);
     }
 
     // ── Session lifecycle ────────────────────────────────────────────────────────────
@@ -66,7 +64,7 @@ public sealed class CastController(
     [HttpPost("devices/{deviceId}/session")]
     [Endpoint(EndpointIds.CastSessionsStart)]
     [EndpointSummary("Start casting a media item to a device")]
-    [EndpointDescription("Connects to the given cast device, launches the default media receiver, and loads the requested media item from this server's progressive stream endpoints, authenticated with a freshly minted single-media cast token. Supports video (original file) or audio-only (audioOnly=true with format 'aac', 'opus', or 'mp3'; returns 202 while the rendition is being prepared), an optional WebVTT subtitle track by language, and an optional start position. Replaces whatever the device is currently playing when a session already exists.")]
+    [EndpointDescription("Connects to the given cast device and loads the requested media item from this server's progressive stream endpoints, authenticated with a freshly minted single-media cast token. Supports video (original file) or audio-only (audioOnly=true with format 'aac', 'opus', or 'mp3'; returns 202 while the rendition is being prepared), an optional WebVTT subtitle track by language, and an optional start position. Replaces whatever the device is currently playing when a session already exists.")]
     public async Task<IActionResult> StartSession(
         string deviceId,
         [FromBody] StartCastSessionRequest request,
@@ -145,50 +143,38 @@ public sealed class CastController(
         var metadata = await FetchMetadataAsync(request.MediaGuid, cancellationToken);
         var (token, tokenExpiresAt) = castTokens.Issue(User, request.MediaGuid);
 
-        var media = new CastMedia
-        {
-            ContentUrl = CastMediaUrlBuilder.BuildStreamUrl(
-                baseUrl, request.MediaGuid, token, request.AudioOnly, AudioRenditionHelpers.AudioFormatToken(audioFormat)),
-            ContentType = contentType,
-            StreamType = StreamType.Buffered,
-            Duration = metadata?.DurationSeconds,
-            Metadata = new MediaMetadata
-            {
-                MetadataType = MetadataType.Default,
-                Title = metadata?.Title ?? request.MediaGuid.ToString("D"),
-                Images = metadata?.ThumbnailStoragePath is null
-                    ? null
-                    : [new Image { Url = CastMediaUrlBuilder.BuildThumbnailUrl(baseUrl, request.MediaGuid, token) }]
-            }
-        };
+        var contentUrl = CastMediaUrlBuilder.BuildStreamUrl(
+            baseUrl,
+            request.MediaGuid,
+            token,
+            request.AudioOnly,
+            AudioRenditionHelpers.AudioFormatToken(audioFormat));
+        var title = metadata?.Title ?? request.MediaGuid.ToString("D");
+        var thumbnailUrl = metadata?.ThumbnailStoragePath is null
+            ? null
+            : CastMediaUrlBuilder.BuildThumbnailUrl(baseUrl, request.MediaGuid, token);
 
-        int[]? activeTrackIds = null;
+        CastSubtitleTrack? subtitle = null;
         if (!request.AudioOnly && !string.IsNullOrWhiteSpace(request.SubtitleLanguage))
         {
             var language = request.SubtitleLanguage.Trim();
-            media.Tracks =
-            [
-                new Track
-                {
-                    TrackId = 1,
-                    Type = TrackType.TEXT,
-                    Subtype = TextTrackType.SUBTITLES,
-                    Language = language,
-                    Name = language,
-                    TrackContentId = CastMediaUrlBuilder.BuildCaptionUrl(
-                        baseUrl, request.MediaGuid, language, captionType, token),
-                    TrackContentType = "text/vtt"
-                }
-            ];
-            activeTrackIds = [1];
+            subtitle = new CastSubtitleTrack
+            {
+                Language = language,
+                Url = CastMediaUrlBuilder.BuildCaptionUrl(
+                    baseUrl, request.MediaGuid, language, captionType, token)
+            };
         }
 
         var spec = new CastLoadSpec
         {
             MediaGuid = request.MediaGuid,
-            Title = media.Metadata.Title,
-            Media = media,
-            ActiveTrackIds = activeTrackIds,
+            Title = title,
+            ContentUrl = contentUrl,
+            ContentType = contentType,
+            DurationSeconds = metadata?.DurationSeconds,
+            ThumbnailUrl = thumbnailUrl,
+            Subtitle = subtitle,
             StartPositionSeconds = request.StartPositionSeconds,
             TokenExpiresAt = tokenExpiresAt
         };
@@ -196,8 +182,8 @@ public sealed class CastController(
         logger.LogInformation(
             "Starting cast session for {DeviceId} using {ContentType} media URL {ContentUrl} (audioOnly: {AudioOnly}).",
             deviceId,
-            media.ContentType,
-            media.ContentUrl,
+            spec.ContentType,
+            spec.ContentUrl,
             request.AudioOnly);
 
         try
