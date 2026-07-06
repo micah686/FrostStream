@@ -84,7 +84,7 @@ class Program
             FfmpegExecutablePath = Path.Combine(toolsDirectory, YtDlpPaths.FfmpegFileName),
             DownloadLimitRate = configuredWorkerOptions.YtDlpLimitRate,
             DownloadThrottledRate = configuredWorkerOptions.YtDlpThrottledRate,
-            MinimumDelayBetweenProcessStarts = configuredWorkerOptions.YtDlpMinDelayBetweenStarts
+            MinimumDelayBetweenProcessStarts = configuredWorkerOptions.EffectiveYtDlpMinDelay()
         };
         builder.Services.TryAddSingleton(TimeProvider.System);
         builder.Services.TryAddSingleton<IYtDlpArgumentRenderer, YtDlpArgumentRenderer>();

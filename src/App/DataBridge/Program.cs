@@ -175,7 +175,6 @@ class Program
         builder.Services.AddHostedService<DownloadAdminConsumerService>();
         builder.Services.AddHostedService<DownloadQueueConsumerService>();
         builder.Services.AddHostedService<DownloadRequestedIngressService>();
-        builder.Services.AddHostedService<ProviderHaltRetryService>();
         builder.Services.AddHostedService<DownloadEventsConsumerService>();
         builder.Services.AddHostedService<LocalMediaImportRequestedIngressService>();
         builder.Services.AddHostedService<LocalImportEventsConsumerService>();

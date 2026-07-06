@@ -5,6 +5,7 @@ using NodaTime;
 using Shared.Database;
 using Shared.Messaging;
 using YtDlpSharpLib;
+using static Shared.Metadata.CreatorIdentity;
 using YtDlpSharpLib.Models;
 using YtDlpSharpLib.Options;
 
@@ -390,9 +391,6 @@ public sealed class ChannelDiscoveryConsumerService(
     private static string? FirstAbsoluteUrl(params string?[] values)
         => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value) &&
             Uri.TryCreate(value, UriKind.Absolute, out _));
-
-    private static string? FirstNonBlank(params string?[] values)
-        => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
 
     private static IEnumerable<IReadOnlyList<DiscoveredMediaCandidate>> Chunk(
         IReadOnlyList<DiscoveredMediaCandidate> candidates,

@@ -266,8 +266,18 @@
         return;
       }
 
-      const result = (await response.json()) as { jobId: string };
-      recordQueued('video', `job ${result.jobId}`, body.sourceUrl);
+      const result = (await response.json()) as {
+        jobId?: string;
+        playlistId?: string;
+        kind?: string;
+      };
+      // Playlist-container URLs are auto-routed server-side into the playlist pipeline
+      // and return a playlistId instead of a jobId.
+      if (result.kind === 'playlist' && result.playlistId) {
+        recordQueued('playlist', `playlist ${result.playlistId}`, body.sourceUrl);
+      } else {
+        recordQueued('video', `job ${result.jobId}`, body.sourceUrl);
+      }
       sourceUrl = '';
     } catch (err) {
       submitError = err instanceof Error ? err.message : 'The download request failed.';

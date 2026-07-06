@@ -156,3 +156,10 @@ public sealed class SponsorBlockRequest
 }
 
 public sealed record DownloadRequestResponse(Guid JobId, Guid CorrelationId);
+
+/// <summary>
+/// Returned by <c>POST /api/downloads/video</c> when the URL was an unambiguous playlist
+/// container and the request was auto-routed into the playlist pipeline. Carries a playlist
+/// identifier instead of a job identifier; <see cref="Kind"/> lets callers discriminate.
+/// </summary>
+public sealed record DownloadRoutedToPlaylistResponse(Guid PlaylistId, Guid CorrelationId, string Kind = "playlist");

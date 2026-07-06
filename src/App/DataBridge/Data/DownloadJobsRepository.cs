@@ -15,6 +15,22 @@ public sealed class DownloadJobsRepository(
     private const int DefaultQueueLimit = 50;
     private const int MaxQueueLimit = 200;
 
+    /// <summary>
+    /// States a job must never leave via event-derived or flow-derived progress writes.
+    /// The Cleipnir flow and <see cref="Messaging.DownloadEventsConsumerService"/> commit on
+    /// independent connections, so a stale progress state (e.g. Uploaded) can attempt to land
+    /// after the flow already committed a terminal state; these writes must lose.
+    /// </summary>
+    private static readonly DownloadJobState[] TerminalStates =
+    [
+        DownloadJobState.Completed,
+        DownloadJobState.AlreadyDownloaded,
+        DownloadJobState.FailedPermanent,
+        DownloadJobState.DeadLettered,
+        DownloadJobState.Cancelled,
+        DownloadJobState.Ignored
+    ];
+
     private readonly IDownloadJobStateNotifier _stateNotifier = stateNotifier ?? NullDownloadJobStateNotifier.Instance;
 
     /// <summary>Fires a live state-changed notification when a transition actually occurred. Best-effort.</summary>
@@ -113,6 +129,10 @@ public sealed class DownloadJobsRepository(
         {
             return;
         }
+        else if (TerminalStates.Contains(job.State))
+        {
+            return;
+        }
 
         var previousState = job.State;
         job.State = state;
@@ -125,13 +145,42 @@ public sealed class DownloadJobsRepository(
 
     public async Task ApplyMetadataAsync(Guid jobId, MetadataFetched evt, CancellationToken ct = default)
     {
-        var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
-        var previousState = job.State;
-        job.State = DownloadJobState.MetadataResolved;
-        job.UpdatedAt = clock.GetCurrentInstant();
-        await db.SaveChangesAsync(ct);
-        await NotifyStateAsync(job, previousState, ct);
+        var snapshot = await GetStateSnapshotAsync(jobId, ct);
+        var now = clock.GetCurrentInstant();
+        var affected = await db.DownloadJobs
+            .Where(ProgressWritable(jobId))
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(x => x.State, DownloadJobState.MetadataResolved)
+                .SetProperty(x => x.UpdatedAt, now), ct);
+
+        await NotifyProgressAsync(snapshot, affected, DownloadJobState.MetadataResolved, ct);
     }
+
+    /// <summary>
+    /// Predicate for event-derived progress writes. Evaluated inside the UPDATE so that a
+    /// terminal state committed concurrently by the flow wins even when this repository's
+    /// transaction commits last (the UPDATE re-evaluates its predicate after the blocking
+    /// writer commits; an entity-load check would not).
+    /// </summary>
+    private static Expression<Func<DownloadJobEntity, bool>> ProgressWritable(Guid jobId)
+        => x => x.JobId == jobId
+                && !TerminalStates.Contains(x.State)
+                && x.State != DownloadJobState.Cancelling;
+
+    private async Task<(Guid JobId, DownloadJobState State, Guid CorrelationId)> GetStateSnapshotAsync(Guid jobId, CancellationToken ct)
+    {
+        var row = await db.DownloadJobs
+            .AsNoTracking()
+            .Where(x => x.JobId == jobId)
+            .Select(x => new { x.State, x.CorrelationId })
+            .FirstAsync(ct);
+        return (jobId, row.State, row.CorrelationId);
+    }
+
+    private Task NotifyProgressAsync((Guid JobId, DownloadJobState State, Guid CorrelationId) snapshot, int affected, DownloadJobState newState, CancellationToken ct)
+        => affected == 0 || snapshot.State == newState
+            ? Task.CompletedTask
+            : _stateNotifier.NotifyAsync(snapshot.JobId, newState, snapshot.State, snapshot.CorrelationId, ct);
 
     public async Task<SourceVersionDecision> CheckSourceVersionAsync(MetadataFetched evt, bool forceDownload, CancellationToken ct = default)
     {
@@ -186,15 +235,19 @@ public sealed class DownloadJobsRepository(
 
     public async Task ApplyDownloadCompletedAsync(Guid jobId, DownloadCompleted evt, CancellationToken ct = default)
     {
-        var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
-        var previousState = job.State;
-        job.TempFileRef = evt.TempFileRef;
-        job.FileSizeBytes = evt.FileSizeBytes;
-        job.ContentHashXxh128 = NormalizeHash(evt.ContentHashXxh128);
-        job.State = DownloadJobState.DownloadedTemp;
-        job.UpdatedAt = clock.GetCurrentInstant();
-        await db.SaveChangesAsync(ct);
-        await NotifyStateAsync(job, previousState, ct);
+        var snapshot = await GetStateSnapshotAsync(jobId, ct);
+        var now = clock.GetCurrentInstant();
+        var contentHash = NormalizeHash(evt.ContentHashXxh128);
+        var affected = await db.DownloadJobs
+            .Where(ProgressWritable(jobId))
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(x => x.TempFileRef, evt.TempFileRef)
+                .SetProperty(x => x.FileSizeBytes, evt.FileSizeBytes)
+                .SetProperty(x => x.ContentHashXxh128, contentHash)
+                .SetProperty(x => x.State, DownloadJobState.DownloadedTemp)
+                .SetProperty(x => x.UpdatedAt, now), ct);
+
+        await NotifyProgressAsync(snapshot, affected, DownloadJobState.DownloadedTemp, ct);
     }
 
     public async Task<VersionReservation> ReserveVersionAsync(VersionReservationRequest request, CancellationToken ct = default)
@@ -331,19 +384,21 @@ public sealed class DownloadJobsRepository(
 
     public async Task CommitUploadAsync(Guid jobId, UploadCompleted evt, CancellationToken ct = default)
     {
-        var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
-        var previousState = job.State;
-        job.StorageKey = evt.StorageKey;
-        job.StorageVersion = evt.StorageVersion;
+        var snapshot = await GetStateSnapshotAsync(jobId, ct);
+        var now = clock.GetCurrentInstant();
         var contentHash = NormalizeHash(evt.ContentHashXxh128);
-        if (contentHash is not null)
-            job.ContentHashXxh128 = contentHash;
-        if (evt.ContentLengthBytes is { } len)
-            job.FileSizeBytes = len;
-        job.State = DownloadJobState.Uploaded;
-        job.UpdatedAt = clock.GetCurrentInstant();
-        await db.SaveChangesAsync(ct);
-        await NotifyStateAsync(job, previousState, ct);
+        var contentLength = evt.ContentLengthBytes;
+        var affected = await db.DownloadJobs
+            .Where(ProgressWritable(jobId))
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(x => x.StorageKey, evt.StorageKey)
+                .SetProperty(x => x.StorageVersion, evt.StorageVersion)
+                .SetProperty(x => x.ContentHashXxh128, x => contentHash ?? x.ContentHashXxh128)
+                .SetProperty(x => x.FileSizeBytes, x => contentLength ?? x.FileSizeBytes)
+                .SetProperty(x => x.State, DownloadJobState.Uploaded)
+                .SetProperty(x => x.UpdatedAt, now), ct);
+
+        await NotifyProgressAsync(snapshot, affected, DownloadJobState.Uploaded, ct);
     }
 
     public async Task ApplySidecarUploadCompletedAsync(Guid jobId, UploadCompleted evt, CancellationToken ct = default)
@@ -547,15 +602,6 @@ public sealed class DownloadJobsRepository(
         await NotifyStateAsync(job, previousState, ct);
     }
 
-    public async Task ScheduleProviderHaltRetryAsync(Guid jobId, Instant retryAt, CancellationToken ct = default)
-    {
-        var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
-        job.ProviderHaltRetryAt = retryAt;
-        job.ProviderHaltRetryDispatchedAt = null;
-        job.UpdatedAt = clock.GetCurrentInstant();
-        await db.SaveChangesAsync(ct);
-    }
-
     public async Task MarkProviderHaltRetryDispatchedAsync(Guid jobId, CancellationToken ct = default)
     {
         var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
@@ -570,20 +616,6 @@ public sealed class DownloadJobsRepository(
         job.ProviderHaltRetryDispatchedAt = null;
         job.UpdatedAt = clock.GetCurrentInstant();
         await db.SaveChangesAsync(ct);
-    }
-
-    public async Task<IReadOnlyList<ProviderHaltRetryCandidate>> GetDueProviderHaltRetriesAsync(Instant now, CancellationToken ct = default)
-    {
-        var rows = await db.DownloadJobs
-            .AsNoTracking()
-            .Where(x => x.State == DownloadJobState.ProviderHalted
-                        && x.ProviderHaltRetryAt != null
-                        && x.ProviderHaltRetryAt <= now
-                        && x.ProviderHaltRetryDispatchedAt == null)
-            .OrderBy(x => x.ProviderHaltRetryAt)
-            .Select(x => new ProviderHaltRetryCandidate(x.JobId, x.ProviderHaltRetryAt!.Value, x.SourceKind))
-            .ToListAsync(ct);
-        return rows;
     }
 
     public async Task<DownloadQueuePage> QueryQueueAsync(DownloadQueueListRequest request, CancellationToken ct = default)

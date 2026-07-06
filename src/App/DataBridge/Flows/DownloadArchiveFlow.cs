@@ -887,17 +887,6 @@ public class DownloadArchiveFlow(
             message);
         await RepoCall(r => r.RecordTerminalFailureAsync(request.JobId, kind, code, message, terminalState, lastPayloadJson: null));
         await NotifyTerminalFailureAsync(request.JobId, terminalState, code, message);
-
-        if (terminalState == DownloadJobState.ProviderHalted && request.SourceKind is not DownloadSourceKind.Direct)
-        {
-            var retryAt = clock.GetCurrentInstant().Plus(Duration.FromHours(2));
-            logger.LogInformation(
-                "Scheduling provider-halt retry for JobId {JobId} at {RetryAt} SourceKind {SourceKind}.",
-                request.JobId,
-                retryAt,
-                request.SourceKind);
-            await RepoCall(r => r.ScheduleProviderHaltRetryAsync(request.JobId, retryAt));
-        }
     }
 
     private async Task Cancel(Guid jobId, string? message)

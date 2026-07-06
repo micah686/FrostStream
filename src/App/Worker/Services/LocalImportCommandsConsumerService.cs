@@ -12,6 +12,7 @@ using Shared.Messaging;
 using Shared.Metadata;
 using Worker.Metadata;
 using YtDlpSharpLib.Models;
+using static Shared.Metadata.CreatorIdentity;
 
 namespace Worker.Services;
 
@@ -245,17 +246,6 @@ public sealed class LocalImportCommandsConsumerService(
                 batchId);
             return null;
         }
-    }
-
-    private static string? FirstNonBlank(params string?[] values)
-    {
-        foreach (var value in values)
-        {
-            if (!string.IsNullOrWhiteSpace(value))
-                return value;
-        }
-
-        return null;
     }
 
     private async Task HandlePrepareLocalImportFileAsync(IJsMessageContext<PrepareLocalImportFileCommand> context)

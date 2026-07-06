@@ -54,7 +54,7 @@ public sealed class CreatorDiscoveryConsumerService(
             {
                 Platform = msg.Platform.Trim(),
                 SourceType = msg.SourceType,
-                SourceUrl = msg.SourceUrl.Trim(),
+                SourceUrl = Shared.Downloads.SourceUrlCanonicalizer.Canonicalize(msg.SourceUrl),
                 ScanEnabled = msg.ScanEnabled,
                 IncrementalPageSize = msg.IncrementalPageSize,
                 ConsecutiveKnownThreshold = msg.ConsecutiveKnownThreshold,
@@ -96,7 +96,7 @@ public sealed class CreatorDiscoveryConsumerService(
             {
                 Platform = msg.Platform.Trim(),
                 SourceType = msg.SourceType,
-                SourceUrl = msg.SourceUrl.Trim(),
+                SourceUrl = Shared.Downloads.SourceUrlCanonicalizer.Canonicalize(msg.SourceUrl),
                 ScanEnabled = msg.ScanEnabled,
                 IncrementalPageSize = msg.IncrementalPageSize,
                 ConsecutiveKnownThreshold = msg.ConsecutiveKnownThreshold,
@@ -129,7 +129,7 @@ public sealed class CreatorDiscoveryConsumerService(
                 Id = msg.Id,
                 Platform = msg.Platform.Trim(),
                 SourceType = msg.SourceType,
-                SourceUrl = msg.SourceUrl.Trim(),
+                SourceUrl = Shared.Downloads.SourceUrlCanonicalizer.Canonicalize(msg.SourceUrl),
                 ScanEnabled = msg.ScanEnabled,
                 IncrementalPageSize = msg.IncrementalPageSize,
                 ConsecutiveKnownThreshold = msg.ConsecutiveKnownThreshold,

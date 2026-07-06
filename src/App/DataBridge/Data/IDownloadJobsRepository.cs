@@ -106,13 +106,9 @@ public interface IDownloadJobsRepository
 
     Task RecordTerminalFailureAsync(Guid jobId, FailureKind kind, string? code, string message, DownloadJobState terminalState, string? lastPayloadJson, CancellationToken ct = default);
 
-    Task ScheduleProviderHaltRetryAsync(Guid jobId, Instant retryAt, CancellationToken ct = default);
-
     Task MarkProviderHaltRetryDispatchedAsync(Guid jobId, CancellationToken ct = default);
 
     Task ClearProviderHaltRetryDispatchedAsync(Guid jobId, CancellationToken ct = default);
-
-    Task<IReadOnlyList<ProviderHaltRetryCandidate>> GetDueProviderHaltRetriesAsync(Instant now, CancellationToken ct = default);
 
     // ── Admin queue read surface (read-only; no schema migration) ────────────────────
 
@@ -198,8 +194,6 @@ public sealed record VersionReservation(
 
 /// <summary>A job waiting for a download slot, as returned by <see cref="IDownloadJobsRepository.GetDownloadQueuedJobsAsync"/>.</summary>
 public sealed record DownloadQueuedEntry(Guid JobId, int Priority, Instant CreatedAt, string? StorageKey);
-
-public sealed record ProviderHaltRetryCandidate(Guid JobId, Instant RetryAt, DownloadSourceKind SourceKind);
 
 public sealed record CancelDownloadDecision(
     bool Accepted,

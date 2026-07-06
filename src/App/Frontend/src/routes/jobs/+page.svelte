@@ -86,8 +86,17 @@
     const timer = window.setInterval(() => {
       now = Date.now();
     }, 1000);
+    // Resync when the tab wakes up: state changes that fired while the SSE
+    // connection was dead (e.g. laptop sleep) are live-only and never replayed.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        void queue.refresh().catch(() => {});
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
       window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
       if (searchTimer) {
         window.clearTimeout(searchTimer);
       }

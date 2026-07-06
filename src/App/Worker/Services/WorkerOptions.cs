@@ -40,8 +40,22 @@ public sealed class WorkerOptions
     /// <summary>Worker-wide yt-dlp <c>--throttled-rate</c> value, e.g. <c>100K</c>.</summary>
     public string? YtDlpThrottledRate { get; init; }
 
-    /// <summary>Minimum time to wait between yt-dlp process starts on this worker.</summary>
+    /// <summary>
+    /// Minimum time to wait between yt-dlp process starts on this worker. Value is a
+    /// TimeSpan string (e.g. <c>00:00:05</c>, env var <c>Worker__YtDlpMinDelayBetweenStarts</c>),
+    /// not a bare number of seconds. Defaults to 3 seconds when unset; configured values
+    /// below 3 seconds are clamped up to 3 seconds.
+    /// </summary>
     public TimeSpan? YtDlpMinDelayBetweenStarts { get; init; }
+
+    /// <summary>Floor applied to <see cref="YtDlpMinDelayBetweenStarts"/>.</summary>
+    public static readonly TimeSpan YtDlpMinDelayFloor = TimeSpan.FromSeconds(3);
+
+    /// <summary>The delay actually applied between yt-dlp process starts: configured value clamped to at least the 3s floor.</summary>
+    public TimeSpan EffectiveYtDlpMinDelay() =>
+        YtDlpMinDelayBetweenStarts is { } configured && configured > YtDlpMinDelayFloor
+            ? configured
+            : YtDlpMinDelayFloor;
 
     /// <summary>Return YouTube Dislike enrichment settings.</summary>
     public ReturnYouTubeDislikeOptions ReturnYouTubeDislike { get; init; } = new();

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using NodaTime;
 using Shared.Auth;
 using Shared.Database;
+using Shared.Downloads;
 using Shared.Messaging;
 using WebAPI.Auth;
 using WebAPI.Features.Common;
@@ -42,7 +43,7 @@ public sealed class CreatorSourcesController(
             {
                 Platform = request.Platform,
                 SourceType = request.SourceType,
-                SourceUrl = request.SourceUrl,
+                SourceUrl = SourceUrlCanonicalizer.Canonicalize(request.SourceUrl),
                 ScanEnabled = request.ScanEnabled,
                 IncrementalPageSize = request.IncrementalPageSize,
                 ConsecutiveKnownThreshold = request.ConsecutiveKnownThreshold,
@@ -72,7 +73,7 @@ public sealed class CreatorSourcesController(
             {
                 Platform = request.Platform,
                 SourceType = request.SourceType,
-                SourceUrl = request.SourceUrl,
+                SourceUrl = SourceUrlCanonicalizer.Canonicalize(request.SourceUrl),
                 ScanEnabled = true,
                 ProviderQueryLimits = request.ProviderQueryLimits
             },
@@ -175,7 +176,7 @@ public sealed class CreatorSourcesController(
                 Id = id,
                 Platform = request.Platform,
                 SourceType = request.SourceType,
-                SourceUrl = request.SourceUrl,
+                SourceUrl = SourceUrlCanonicalizer.Canonicalize(request.SourceUrl),
                 ScanEnabled = request.ScanEnabled,
                 IncrementalPageSize = request.IncrementalPageSize,
                 ConsecutiveKnownThreshold = request.ConsecutiveKnownThreshold,

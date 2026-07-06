@@ -44,6 +44,7 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
 
     public async Task<CreatorSourceEntity> CreateSourceAsync(CreatorSourceEntity source, CancellationToken cancellationToken = default)
     {
+        source.SourceUrl = SourceUrlCanonicalizer.Canonicalize(source.SourceUrl);
         db.CreatorSources.Add(source);
         await db.SaveChangesAsync(cancellationToken);
         return source;
@@ -51,6 +52,8 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
 
     public async Task<CreatorSourceEntity> CreateOrReuseSourceAsync(CreatorSourceEntity source, CancellationToken cancellationToken = default)
     {
+        // Dedupe is exact string equality on source_url, so both sides must be canonical.
+        source.SourceUrl = SourceUrlCanonicalizer.Canonicalize(source.SourceUrl);
         var existing = await db.CreatorSources.FirstOrDefaultAsync(x => x.SourceUrl == source.SourceUrl, cancellationToken);
         if (existing is not null)
         {

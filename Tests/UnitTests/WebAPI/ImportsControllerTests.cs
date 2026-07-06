@@ -19,17 +19,15 @@ public sealed class ImportsControllerTests
     private static readonly Instant Now = Instant.FromUtc(2026, 6, 3, 12, 0);
 
     [Test]
-    public async Task ImportLocalMedia_Stores_Manifest_And_Publishes_Request()
+    public async Task ImportLocalMedia_Publishes_Request()
     {
         var publisher = Substitute.For<IJetStreamPublisher>();
-        var objectStore = new InMemoryObjectStore();
-        var controller = CreateController(publisher, objectStore);
+        var controller = CreateController(publisher);
 
         var result = await controller.ImportLocalMedia(new LocalMediaImportRequest
         {
-            Manifest = FormFile("""{"items":[{"file":"clip.mp4"}]}"""),
-            SourceRoot = "/mnt/imports/batch-a",
             StorageKey = "storage-a",
+            WorkerTag = " nas ",
             RequestedBy = "operator-note"
         }, CancellationToken.None);
 
@@ -38,21 +36,15 @@ public sealed class ImportsControllerTests
         payload.BatchId.ShouldNotBe(Guid.Empty);
         payload.CorrelationId.ShouldNotBe(Guid.Empty);
 
-        var expectedObjectKey = $"local-media/{payload.BatchId:N}/manifest.json";
-        objectStore.Objects.Keys.ShouldContain(expectedObjectKey);
-
         await publisher.Received(1).PublishAsync(
             LocalImportSubjects.LocalMediaImportRequested,
             Arg.Is<LocalMediaImportRequested>(x =>
                 x.JobId == payload.BatchId &&
-                x.BatchId == payload.BatchId &&
                 x.CorrelationId == payload.CorrelationId &&
                 x.OperationKey == $"local-import/{payload.BatchId:N}/requested" &&
                 x.OccurredAt == Now &&
-                x.ManifestObjectBucket == LocalImportTopology.ManifestObjectStoreBucket &&
-                x.ManifestObjectKey == expectedObjectKey &&
-                x.SourceRoot == "/mnt/imports/batch-a" &&
                 x.StorageKey == "storage-a" &&
+                x.WorkerTag == "nas" &&
                 x.RequestedBy == "unit_test_user" &&
                 x.RequestedByContext == "operator-note"),
             Arg.Is<string>(x => x.Length == 32),
@@ -61,31 +53,27 @@ public sealed class ImportsControllerTests
     }
 
     [Test]
-    public async Task ImportLocalMedia_Rejects_Missing_Manifest()
+    public async Task ImportLocalMedia_Rejects_Missing_StorageKey()
     {
         var publisher = Substitute.For<IJetStreamPublisher>();
-        var objectStore = new InMemoryObjectStore();
-        var controller = CreateController(publisher, objectStore);
+        var controller = CreateController(publisher);
 
         var result = await controller.ImportLocalMedia(new LocalMediaImportRequest
         {
-            SourceRoot = "/mnt/imports",
-            StorageKey = "storage-a"
+            StorageKey = "  "
         }, CancellationToken.None);
 
         result.Result.ShouldBeOfType<BadRequestObjectResult>();
         await publisher.DidNotReceiveWithAnyArgs().PublishAsync(default!, default(LocalMediaImportRequested)!, default, default, default);
-        objectStore.Objects.ShouldBeEmpty();
     }
 
-    private static ImportsController CreateController(IJetStreamPublisher publisher, IObjectStore objectStore)
+    private static ImportsController CreateController(IJetStreamPublisher publisher)
     {
         var clock = Substitute.For<IClock>();
         clock.GetCurrentInstant().Returns(Now);
 
         var controller = new ImportsController(
             publisher,
-            _ => objectStore,
             clock,
             Substitute.For<ILogger<ImportsController>>());
 
@@ -96,38 +84,5 @@ public sealed class ImportsControllerTests
         };
 
         return controller;
-    }
-
-    private static IFormFile FormFile(string body)
-    {
-        var bytes = System.Text.Encoding.UTF8.GetBytes(body);
-        return new FormFile(new MemoryStream(bytes), 0, bytes.Length, "manifest", "manifest.json");
-    }
-
-    private sealed class InMemoryObjectStore : IObjectStore
-    {
-        public Dictionary<string, byte[]> Objects { get; } = new(StringComparer.Ordinal);
-
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
-
-        public async Task<string> PutAsync(string key, Stream data, CancellationToken cancellationToken = default)
-        {
-            await using var copy = new MemoryStream();
-            await data.CopyToAsync(copy, cancellationToken);
-            Objects[key] = copy.ToArray();
-            return key;
-        }
-
-        public Task GetAsync(string key, Stream target, CancellationToken cancellationToken = default)
-        {
-            var bytes = Objects[key];
-            return target.WriteAsync(bytes, cancellationToken).AsTask();
-        }
-
-        public Task DeleteAsync(string key, CancellationToken cancellationToken = default)
-        {
-            Objects.Remove(key);
-            return Task.CompletedTask;
-        }
     }
 }

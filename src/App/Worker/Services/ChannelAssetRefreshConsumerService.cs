@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NodaTime;
 using Shared.Messaging;
+using Shared.Metadata;
 using YtDlpSharpLib;
 using YtDlpSharpLib.Models;
 using YtDlpSharpLib.Options;
@@ -328,13 +329,12 @@ public sealed class ChannelAssetRefreshConsumerService(
     /// </summary>
     private static ChannelAccountIdentity DeriveIdentity(VideoInfo info)
         => new(
-            FirstNonBlank(info.Extractor, info.ExtractorKey),
-            FirstNonBlank(info.UploaderId, info.ChannelId, info.Uploader, info.Channel),
-            FirstNonBlank(info.Uploader, info.Channel, info.Creator),
-            FirstNonBlank(info.UploaderUrl, info.ChannelUrl));
-
-    private static string? FirstNonBlank(params string?[] values)
-        => values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v))?.Trim();
+            // A channel page reports a sub-extractor ("youtube:tab"); normalize so the
+            // (platform, account_handle) key matches what video downloads write ("youtube").
+            CreatorIdentity.NormalizePlatform(info.Extractor, info.ExtractorKey),
+            CreatorIdentity.FirstNonBlank(info.ChannelId, info.UploaderId, info.Uploader, info.Channel),
+            CreatorIdentity.FirstNonBlank(info.Uploader, info.Channel, info.Creator),
+            CreatorIdentity.FirstNonBlank(info.UploaderUrl, info.ChannelUrl));
 
     private sealed record ChannelAccountIdentity(string? Platform, string? Handle, string? Name, string? Url);
 

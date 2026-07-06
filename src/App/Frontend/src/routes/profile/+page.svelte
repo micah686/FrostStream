@@ -75,7 +75,7 @@
 
   const requestedSection = page.url.searchParams.get('section');
   let activeSection = $state(
-    sections.some((section) => section.label === requestedSection) ? requestedSection! : 'Config sets'
+    sections.some((section) => section.label === requestedSection) ? requestedSection! : 'Overview'
   );
 
   onMount(() => {
