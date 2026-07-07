@@ -204,6 +204,8 @@
         {:else if !query}
           Type in the search box above. Advanced syntax is supported, e.g.
           <code class="rounded bg-slate-800/80 px-1.5 py-0.5 font-mono text-xs text-slate-400">channel:LinusTechTips codec:h264 after:2023 duration:&gt;600</code>
+          — or use the
+          <a href="/search/advanced" class="text-blue-400 hover:text-blue-300 hover:underline">advanced search builder</a>.
         {:else if loading}
           Searching…
         {:else}
@@ -212,13 +214,21 @@
       </p>
     </div>
     {#if query}
-      <Select
-        items={sortOptions}
-        value={sort}
-        onchange={(event) => navigate({ sort: (event.currentTarget as HTMLSelectElement).value })}
-        aria-label="Sort results"
-        class="w-48! border-slate-800! bg-slate-900/80! text-sm! text-slate-300! focus:border-blue-500! focus:ring-blue-500!"
-      />
+      <div class="flex shrink-0 items-center gap-3">
+        <a
+          href={`/search/advanced?q=${encodeURIComponent(query)}`}
+          class="text-xs font-medium text-slate-400 transition hover:text-slate-200 hover:underline"
+        >
+          Advanced
+        </a>
+        <Select
+          items={sortOptions}
+          value={sort}
+          onchange={(event) => navigate({ sort: (event.currentTarget as HTMLSelectElement).value })}
+          aria-label="Sort results"
+          class="w-48! border-slate-800! bg-slate-900/80! text-sm! text-slate-300! focus:border-blue-500! focus:ring-blue-500!"
+        />
+      </div>
     {/if}
   </div>
 

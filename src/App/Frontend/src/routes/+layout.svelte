@@ -285,13 +285,22 @@
         bind:value={searchQuery}
         oninput={onSearchInput}
         onkeydown={onSearchKeydown}
-        class="h-10 rounded-2xl! border-slate-800! bg-slate-900/80! py-2! pl-11! pr-11! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!"
+        class="h-10 rounded-2xl! border-slate-800! bg-slate-900/80! py-2! pl-11! pr-11! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500! sm:pr-20!"
       />
       <kbd
-        class="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-md border border-slate-700/70 bg-slate-800/80 px-2 py-0.5 text-[10px] text-slate-500 sm:block"
+        class="pointer-events-none absolute right-11 top-1/2 hidden -translate-y-1/2 rounded-md border border-slate-700/70 bg-slate-800/80 px-2 py-0.5 text-[10px] text-slate-500 sm:block"
       >
         /
       </kbd>
+      <a
+        href="/search/advanced"
+        aria-label="Advanced search"
+        title="Advanced search"
+        onclick={closeSuggestions}
+        class="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-800/80 hover:text-slate-300"
+      >
+        <CogOutline class="h-4 w-4" />
+      </a>
     </form>
 
     {#if suggestionsOpen}
