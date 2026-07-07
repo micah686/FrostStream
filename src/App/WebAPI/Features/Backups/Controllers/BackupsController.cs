@@ -5,7 +5,7 @@ using WebAPI.Features.Backups.Models;
 namespace WebAPI.Features.Backups.Controllers;
 
 [ApiController]
-[Route("api/admin/backups")]
+[Route("api/global/backups")]
 public sealed class BackupsController(BackupJobService backups) : ControllerBase
 {
     [HttpPost]

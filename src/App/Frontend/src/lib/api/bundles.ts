@@ -19,7 +19,7 @@ export interface BundleView {
   grants: BundleGrant[];
 }
 
-const BASE = '/api/management';
+const BASE = '/api/global/management';
 
 export async function listBundles(fetchImpl: typeof fetch = fetch): Promise<BundleView[]> {
   return getJson<BundleView[]>(`${BASE}/bundles`, fetchImpl);

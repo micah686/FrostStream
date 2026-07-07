@@ -10,7 +10,7 @@ using YtDlpSharpLib.Options;
 namespace WebAPI.Features.DownloadConfigSets.Controllers;
 
 [ApiController]
-[Route("api/download-config-sets")]
+[Route("api/user/config-sets")]
 public sealed class DownloadConfigSetsController(
     IMessageBus messageBus,
     ILogger<DownloadConfigSetsController> logger) : ControllerBase

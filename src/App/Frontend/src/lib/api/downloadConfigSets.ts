@@ -35,7 +35,7 @@ export interface DownloadConfigSetRequest {
   fetchComments: boolean;
 }
 
-const BASE = '/api/download-config-sets';
+const BASE = '/api/user/config-sets';
 
 export async function listDownloadConfigSets(fetchImpl: typeof fetch = fetch): Promise<DownloadConfigSet[]> {
   return getJson<DownloadConfigSet[]>(BASE, fetchImpl);

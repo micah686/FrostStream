@@ -9,7 +9,7 @@ using WebAPI.Features.Imports.Models;
 namespace WebAPI.Features.Imports.Controllers;
 
 [ApiController]
-[Route("api/imports")]
+[Route("api/global/imports")]
 public sealed class ImportsController(
     IJetStreamPublisher publisher,
     IClock clock,

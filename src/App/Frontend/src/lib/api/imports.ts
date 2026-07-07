@@ -9,7 +9,7 @@ export interface LocalMediaImportReceipt {
   correlationId: string;
 }
 
-const BASE = '/api/imports';
+const BASE = '/api/global/imports';
 
 export async function submitLocalMediaImport(
   submission: LocalMediaImportSubmission,

@@ -119,7 +119,7 @@
   }
 
   function thumbnailUrl(guid: string): string {
-    return `/api/watch/${guid}/thumbnail`;
+    return `/api/media/watch/${guid}/thumbnail`;
   }
 
   function hideBrokenImage(event: Event) {

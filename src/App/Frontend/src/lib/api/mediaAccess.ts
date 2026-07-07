@@ -10,7 +10,7 @@ export interface AgePolicy {
   groups: string[];
 }
 
-const BASE = '/api/media-access';
+const BASE = '/api/global/media-access';
 
 export async function getMediaGroups(mediaGuid: string, fetchImpl: typeof fetch = fetch): Promise<string[]> {
   return getJson<string[]>(`${BASE}/media/${encodeURIComponent(mediaGuid)}/groups`, fetchImpl);

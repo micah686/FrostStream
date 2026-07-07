@@ -95,7 +95,7 @@ export interface ListOrphansOptions {
   page?: number;
 }
 
-const BASE = '/api/metadata-admin';
+const BASE = '/api/global/metadata';
 
 export async function triggerReindex(fetchImpl: typeof fetch = fetch): Promise<void> {
   await sendEmpty(`${BASE}/reindex`, 'POST', fetchImpl);

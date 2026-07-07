@@ -11,7 +11,7 @@ namespace WebAPI.Features.Management.Controllers;
 /// bundle, so the bootstrap admin can always reach it.
 /// </summary>
 [ApiController]
-[Route("api/management")]
+[Route("api/global/management")]
 public sealed class BundleManagementController(IBundleManagementService bundles) : ControllerBase
 {
     [HttpGet("catalog")]

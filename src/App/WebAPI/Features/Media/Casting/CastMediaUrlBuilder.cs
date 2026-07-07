@@ -39,11 +39,11 @@ public sealed class CastMediaUrlBuilder(IOptions<CastingOptions> options)
 
     public static string BuildStreamUrl(string baseUrl, Guid mediaGuid, string castToken, bool audio, string? format)
         => audio
-            ? $"{baseUrl}/api/watch/{mediaGuid:D}?audio=true&format={Uri.EscapeDataString(format ?? AudioRenditionHelpers.DefaultFormat)}&{TokenQuery(castToken)}"
-            : $"{baseUrl}/api/watch/{mediaGuid:D}?{TokenQuery(castToken)}";
+            ? $"{baseUrl}/api/media/watch/{mediaGuid:D}?audio=true&format={Uri.EscapeDataString(format ?? AudioRenditionHelpers.DefaultFormat)}&{TokenQuery(castToken)}"
+            : $"{baseUrl}/api/media/watch/{mediaGuid:D}?{TokenQuery(castToken)}";
 
     public static string BuildThumbnailUrl(string baseUrl, Guid mediaGuid, string castToken)
-        => $"{baseUrl}/api/watch/{mediaGuid:D}/thumbnail?{TokenQuery(castToken)}";
+        => $"{baseUrl}/api/media/watch/{mediaGuid:D}/thumbnail?{TokenQuery(castToken)}";
 
     public static string BuildCaptionUrl(
         string baseUrl,
@@ -53,7 +53,7 @@ public sealed class CastMediaUrlBuilder(IOptions<CastingOptions> options)
         string castToken)
     {
         var typeQuery = captionType is null ? "" : $"captionType={Uri.EscapeDataString(captionType)}&";
-        return $"{baseUrl}/api/watch/{mediaGuid:D}/captions/{Uri.EscapeDataString(languageCode)}?{typeQuery}{TokenQuery(castToken)}";
+        return $"{baseUrl}/api/media/watch/{mediaGuid:D}/captions/{Uri.EscapeDataString(languageCode)}?{typeQuery}{TokenQuery(castToken)}";
     }
 
     private static string TokenQuery(string castToken)

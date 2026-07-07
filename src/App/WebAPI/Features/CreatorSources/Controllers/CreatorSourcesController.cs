@@ -14,7 +14,7 @@ using WebAPI.Features.CreatorSources.Models;
 namespace WebAPI.Features.CreatorSources.Controllers;
 
 [ApiController]
-[Route("api/creator-sources")]
+[Route("api/creator-monitor")]
 public sealed class CreatorSourcesController(
     IMessageBus messageBus,
     IJetStreamPublisher publisher,

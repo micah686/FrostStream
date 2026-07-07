@@ -9,7 +9,7 @@ using WebAPI.Features.Statistics.Models;
 namespace WebAPI.Features.Statistics.Controllers;
 
 [ApiController]
-[Route("api/statistics")]
+[Route("api/global/statistics")]
 public sealed class StatisticsController(
     IMessageBus messageBus,
     ILogger<StatisticsController> logger) : ControllerBase

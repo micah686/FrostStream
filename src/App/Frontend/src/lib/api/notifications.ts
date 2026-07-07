@@ -51,7 +51,7 @@ export const NOTIFICATION_PROVIDER_KINDS = [
   'rocketchat'
 ] as const;
 
-const BASE = '/api/notifications';
+const BASE = '/api/user/notifications';
 
 export async function getNotificationPreferences(
   fetchImpl: typeof fetch = fetch

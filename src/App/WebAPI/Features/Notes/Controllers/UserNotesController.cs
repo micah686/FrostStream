@@ -8,7 +8,7 @@ using WebAPI.Features.Notes.Models;
 namespace WebAPI.Features.Notes.Controllers;
 
 [ApiController]
-[Route("api/notes")]
+[Route("api/user/notes")]
 public sealed class UserNotesController(
     IMessageBus messageBus,
     ILogger<UserNotesController> logger) : ControllerBase

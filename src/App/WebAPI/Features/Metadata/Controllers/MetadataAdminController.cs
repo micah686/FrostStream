@@ -8,7 +8,7 @@ using WebAPI.Auth;
 namespace WebAPI.Features.Metadata.Controllers;
 
 [ApiController]
-[Route("api/metadata-admin")]
+[Route("api/global/metadata")]
 public sealed class MetadataAdminController(
     IJetStreamPublisher publisher,
     IMessageBus messageBus,

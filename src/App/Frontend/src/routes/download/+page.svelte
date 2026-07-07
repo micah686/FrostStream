@@ -131,7 +131,7 @@
 
   async function loadCookieProfiles() {
     try {
-      const response = await fetch('/api/cookies');
+      const response = await fetch('/api/user/cookies');
       if (!response.ok) {
         return;
       }

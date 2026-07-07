@@ -84,10 +84,10 @@
   const accountId = $derived(page.params.accountId ?? '');
   const totalPages = $derived(Math.max(1, Math.ceil(totalCount / pageSize)));
   const bannerUrl = $derived(
-    account?.bannerStoragePath && !bannerBroken ? `/api/watch/accounts/${account.accountId}/banner` : null
+    account?.bannerStoragePath && !bannerBroken ? `/api/media/watch/accounts/${account.accountId}/banner` : null
   );
   const avatarUrl = $derived(
-    account?.avatarStoragePath && !avatarBroken ? `/api/watch/accounts/${account.accountId}/avatar` : null
+    account?.avatarStoragePath && !avatarBroken ? `/api/media/watch/accounts/${account.accountId}/avatar` : null
   );
 
   $effect(() => {
@@ -233,7 +233,7 @@
   }
 
   function thumbnailUrl(card: MediaCard): string | null {
-    return card.thumbnailStoragePath ? `/api/watch/${card.mediaGuid}/thumbnail` : null;
+    return card.thumbnailStoragePath ? `/api/media/watch/${card.mediaGuid}/thumbnail` : null;
   }
 
   function percent(value: number): string {

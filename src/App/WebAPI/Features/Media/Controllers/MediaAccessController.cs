@@ -13,7 +13,7 @@ namespace WebAPI.Features.Media.Controllers;
 /// watch which media. Enforcement of these rules happens in the stream endpoints.
 /// </summary>
 [ApiController]
-[Route("api/media-access")]
+[Route("api/global/media-access")]
 public sealed class MediaAccessController(
     IMessageBus messageBus,
     ILogger<MediaAccessController> logger) : ControllerBase

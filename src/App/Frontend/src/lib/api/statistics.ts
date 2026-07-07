@@ -1,6 +1,6 @@
 import { getJson } from '$lib/api/http';
 
-const BASE = '/api/statistics';
+const BASE = '/api/global/statistics';
 
 export type StatisticsBucket = 'day' | 'week' | 'month';
 

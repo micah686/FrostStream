@@ -15,7 +15,7 @@ export interface CookieUpsertRequest {
 
 export const COOKIE_PROFILE_KEY_PATTERN = /^[a-z0-9-]{2,100}$/;
 
-const BASE = '/api/cookies';
+const BASE = '/api/user/cookies';
 
 export async function listCookieProfiles(fetchImpl: typeof fetch = fetch): Promise<CookieProfile[]> {
   return getJson<CookieProfile[]>(BASE, fetchImpl);

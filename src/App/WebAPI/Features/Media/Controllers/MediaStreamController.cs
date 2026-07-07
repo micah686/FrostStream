@@ -15,7 +15,7 @@ namespace WebAPI.Features.Media.Controllers;
 /// Progressive playback lives in <see cref="MediaWatchController"/>.
 /// </summary>
 [ApiController]
-[Route("stream")]
+[Route("api/media/stream")]
 public sealed class MediaStreamController(
     IMessageBus messageBus,
     IBlobStorageProvider blobStorageProvider,

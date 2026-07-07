@@ -230,7 +230,7 @@
   const platformListId = $derived(page.url.searchParams.get('list'));
   const streamUrl = $derived.by(() => {
     const query = selectedVersion ? `?version=${encodeURIComponent(selectedVersion)}` : '';
-    return `/api/watch/${mediaGuid}${query}`;
+    return `/api/media/watch/${mediaGuid}${query}`;
   });
   const watched = $derived(watchState?.completed === true);
   // ?t= wins over the saved position; positions within the first 5s or last 5% are
@@ -253,14 +253,14 @@
     }
     return state.positionSeconds;
   });
-  const posterUrl = $derived(detail?.thumbnailStoragePath ? `/api/watch/${mediaGuid}/thumbnail` : null);
+  const posterUrl = $derived(detail?.thumbnailStoragePath ? `/api/media/watch/${mediaGuid}/thumbnail` : null);
   const captionTracks = $derived.by((): TextTrackSource[] => {
     const current = detail;
     if (!current) {
       return [];
     }
     return current.captionLanguages.map((caption) => ({
-      src: `/api/watch/${current.mediaGuid}/captions/${encodeURIComponent(caption.languageCode)}?captionType=${encodeURIComponent(caption.captionType)}`,
+      src: `/api/media/watch/${current.mediaGuid}/captions/${encodeURIComponent(caption.languageCode)}?captionType=${encodeURIComponent(caption.captionType)}`,
       srclang: caption.languageCode,
       label: captionSummary(caption),
       kind: caption.captionType === 'automatic_captions' ? 'captions' : 'subtitles'
@@ -574,7 +574,7 @@
   }
 
   function thumbnailUrl(card: UpNextCard): string | null {
-    return card.thumbnailStoragePath ? `/api/watch/${card.mediaGuid}/thumbnail` : null;
+    return card.thumbnailStoragePath ? `/api/media/watch/${card.mediaGuid}/thumbnail` : null;
   }
 
   function hideBrokenImage(event: Event) {
@@ -677,7 +677,7 @@
           >
             {initialsFor(detail.account.accountName)}
             <img
-              src={`/api/watch/accounts/${detail.account.accountId}/avatar`}
+              src={`/api/media/watch/accounts/${detail.account.accountId}/avatar`}
               alt=""
               loading="lazy"
               decoding="async"

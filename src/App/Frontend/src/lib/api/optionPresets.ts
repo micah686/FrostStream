@@ -21,7 +21,7 @@ export interface OptionPresetUpdateRequest {
   ytDlpOptions: Record<string, unknown>;
 }
 
-const BASE = '/api/option-presets';
+const BASE = '/api/user/option-presets';
 
 export async function listOptionPresets(fetchImpl: typeof fetch = fetch): Promise<OptionPreset[]> {
   return getJson<OptionPreset[]>(BASE, fetchImpl);

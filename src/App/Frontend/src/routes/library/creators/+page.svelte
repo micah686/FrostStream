@@ -206,7 +206,7 @@
               {initialsFor(account.accountName)}
               {#if account.avatarStoragePath}
                 <img
-                  src={`/api/watch/accounts/${account.accountId}/avatar`}
+                  src={`/api/media/watch/accounts/${account.accountId}/avatar`}
                   alt=""
                   loading="lazy"
                   decoding="async"

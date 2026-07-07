@@ -14,7 +14,7 @@ using YtDlpSharpLib.Options;
 namespace WebAPI.Features.Downloads.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/downloads")]
 public class DownloadsController(
     IJetStreamPublisher publisher,
     IMessageBus messageBus,

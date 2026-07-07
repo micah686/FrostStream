@@ -167,7 +167,7 @@
   }
 
   function thumbnailUrl(hit: SearchHit): string | null {
-    return hit.media.thumbnailStoragePath ? `/api/watch/${hit.media.mediaGuid}/thumbnail` : null;
+    return hit.media.thumbnailStoragePath ? `/api/media/watch/${hit.media.mediaGuid}/thumbnail` : null;
   }
 
   function hideBrokenImage(event: Event) {

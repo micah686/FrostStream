@@ -30,7 +30,7 @@ export interface RestorePlan {
   errorMessage: string | null;
 }
 
-const BASE = '/api/admin/backups';
+const BASE = '/api/global/backups';
 
 export async function startBackup(
   name?: string,

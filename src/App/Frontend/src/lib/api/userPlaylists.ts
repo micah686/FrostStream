@@ -21,7 +21,7 @@ export interface UserPlaylistSaveRequest {
   description?: string | null;
 }
 
-const BASE = '/api/user-playlists';
+const BASE = '/api/user/playlists';
 
 export async function listUserPlaylists(
   pageSize = 50,

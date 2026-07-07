@@ -117,18 +117,18 @@ export async function startBrowserCast(
   }
 
   await waitForCastApi();
-  const tokenResponse = await fetch(`/api/watch/${mediaGuid}/cast-token`, { method: 'POST' });
+  const tokenResponse = await fetch(`/api/media/watch/${mediaGuid}/cast-token`, { method: 'POST' });
   if (!tokenResponse.ok) {
     throw new Error(`Cast token request failed (${tokenResponse.status}).`);
   }
 
   const { token } = (await tokenResponse.json()) as { token: string };
   const base = env.PUBLIC_CAST_BASE_URL || window.location.origin;
-  const mediaUrl = `${base}/api/watch/${mediaGuid}?castToken=${encodeURIComponent(token)}`;
+  const mediaUrl = `${base}/api/media/watch/${mediaGuid}?castToken=${encodeURIComponent(token)}`;
 
   let contentType = 'video/mp4';
   try {
-    const head = await fetch(`/api/watch/${mediaGuid}`, { method: 'HEAD' });
+    const head = await fetch(`/api/media/watch/${mediaGuid}`, { method: 'HEAD' });
     contentType = head.headers.get('content-type') ?? contentType;
   } catch {
     // Fall back to video/mp4; the default receiver sniffs most formats anyway.

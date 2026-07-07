@@ -5,7 +5,7 @@ import type { RequestHandler } from './$types';
 // session's bearer token attached (a <video> element cannot send Authorization headers).
 // Cast devices instead authenticate each request with a signed castToken query parameter.
 const proxy: RequestHandler = ({ request, params, url, cookies }) =>
-  proxyRequest(request, cookies, `/stream/${params.path ?? ''}${url.search}`, {
+  proxyRequest(request, cookies, `/api/media/stream/${params.path ?? ''}${url.search}`, {
     anonymous: url.searchParams.has('castToken')
   });
 

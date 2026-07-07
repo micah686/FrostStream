@@ -9,7 +9,7 @@ using WebAPI.Features.Schedules.Models;
 namespace WebAPI.Features.Schedules.Controllers;
 
 [ApiController]
-[Route("api/schedules")]
+[Route("api/global/schedules")]
 public sealed class SchedulesController(IMessageBus messageBus, ILogger<SchedulesController> logger) : ControllerBase
 {
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);

@@ -17,7 +17,7 @@ namespace WebAPI.Features.Cookies.Controllers;
 /// body is never returned over HTTP, even to admins.
 /// </summary>
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/user/cookies")]
 public class CookiesController(ISecretStore secretStore, IMessageBus messageBus, ILogger<CookiesController> logger) : ControllerBase
 {
     private const string CookieField = "content";

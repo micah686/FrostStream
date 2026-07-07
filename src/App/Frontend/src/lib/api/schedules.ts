@@ -45,7 +45,7 @@ export const scheduleTaskTypes = [
   'backup'
 ] as const;
 
-const BASE = '/api/schedules';
+const BASE = '/api/global/schedules';
 
 export async function listSchedules(fetchImpl: typeof fetch = fetch): Promise<ScheduledTask[]> {
   return getJson<ScheduledTask[]>(BASE, fetchImpl);

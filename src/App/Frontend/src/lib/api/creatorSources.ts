@@ -73,7 +73,7 @@ export interface IgnoredMedia {
   lastSeenAt: string;
 }
 
-const BASE = '/api/creator-sources';
+const BASE = '/api/creator-monitor';
 
 export async function listCreatorSources(fetchImpl: typeof fetch = fetch): Promise<CreatorSource[]> {
   return getJson<CreatorSource[]>(BASE, fetchImpl);

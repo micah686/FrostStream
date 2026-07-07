@@ -15,7 +15,7 @@ namespace WebAPI.Features.OptionPresets.Controllers;
 /// <c>download_option_presets</c> table.
 /// </summary>
 [ApiController]
-[Route("api/option-presets")]
+[Route("api/user/option-presets")]
 public class OptionPresetsController(IMessageBus messageBus, ILogger<OptionPresetsController> logger) : ControllerBase
 {
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);

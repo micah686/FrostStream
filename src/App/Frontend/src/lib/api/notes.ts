@@ -88,7 +88,7 @@ export async function searchNotes(
   params.set('pageSize', String(pageSize));
   params.set('pageOffset', String((page - 1) * pageSize));
 
-  const endpoint = query ? '/api/notes/search' : '/api/notes';
+  const endpoint = query ? '/api/user/notes/search' : '/api/user/notes';
   const raw = await getJson<RawNotesSearch | RawUserNote[]>(`${endpoint}?${params}`, fetchImpl);
   if (Array.isArray(raw)) {
     return {
@@ -109,7 +109,7 @@ export async function searchNotes(
 }
 
 function noteUrl(targetType: NoteTargetType, targetId: string): string {
-  return `/api/notes/${encodeURIComponent(targetType)}/${encodeURIComponent(targetId)}`;
+  return `/api/user/notes/${encodeURIComponent(targetType)}/${encodeURIComponent(targetId)}`;
 }
 
 function normalizeNote(raw: RawUserNote, fallbackType: NoteTargetType = 'video', fallbackId = ''): UserNote {

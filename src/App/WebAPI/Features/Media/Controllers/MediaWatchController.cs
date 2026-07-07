@@ -13,7 +13,7 @@ namespace WebAPI.Features.Media.Controllers;
 /// token issuance. HLS/m3u8 streaming lives in <see cref="MediaStreamController"/>.
 /// </summary>
 [ApiController]
-[Route("api/watch")]
+[Route("api/media/watch")]
 public sealed class MediaWatchController(
     IMessageBus messageBus,
     IBlobStorageProvider blobStorageProvider,
