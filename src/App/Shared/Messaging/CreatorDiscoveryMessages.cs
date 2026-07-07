@@ -13,6 +13,7 @@ public sealed record CreatorSourceDto
     public required int IncrementalPageSize { get; init; }
     public required int ConsecutiveKnownThreshold { get; init; }
     public required int FullRescanIntervalDays { get; init; }
+    public required int UpdateCheckIntervalHours { get; init; }
     public required int MetadataRefreshWindow { get; init; }
     public Instant? LastSuccessfulScanAt { get; init; }
     public Instant? LastFullScanAt { get; init; }
@@ -40,6 +41,7 @@ public sealed record CreatorSourceCreateRequestMessage
     public int IncrementalPageSize { get; init; } = 50;
     public int ConsecutiveKnownThreshold { get; init; } = 25;
     public int FullRescanIntervalDays { get; init; } = 30;
+    public int UpdateCheckIntervalHours { get; init; } = 6;
     public int MetadataRefreshWindow { get; init; } = 25;
     public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
 }
@@ -53,6 +55,7 @@ public sealed record CreatorSourceCreateOrReuseRequestMessage
     public int IncrementalPageSize { get; init; } = 50;
     public int ConsecutiveKnownThreshold { get; init; } = 25;
     public int FullRescanIntervalDays { get; init; } = 30;
+    public int UpdateCheckIntervalHours { get; init; } = 6;
     public int MetadataRefreshWindow { get; init; } = 25;
     public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
 }
@@ -67,6 +70,7 @@ public sealed record CreatorSourceUpdateRequestMessage
     public int IncrementalPageSize { get; init; } = 50;
     public int ConsecutiveKnownThreshold { get; init; } = 25;
     public int FullRescanIntervalDays { get; init; } = 30;
+    public int UpdateCheckIntervalHours { get; init; } = 6;
     public int MetadataRefreshWindow { get; init; } = 25;
     public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
 }

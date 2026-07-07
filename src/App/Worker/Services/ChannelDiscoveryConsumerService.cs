@@ -94,7 +94,14 @@ public sealed class ChannelDiscoveryConsumerService(
         CreatorSourceScanMode scanMode,
         CancellationToken cancellationToken)
     {
-        if (request is ChannelMediaListRequested { TargetSourceId: { } targetSourceId })
+        var requestedSourceId = request switch
+        {
+            ChannelMediaListRequested { TargetSourceId: { } id } => (long?)id,
+            ChannelUpdateCheckRequested { TargetSourceId: { } id } => id,
+            _ => null
+        };
+
+        if (requestedSourceId is { } targetSourceId)
         {
             var sourceResponse = await messageBus.RequestAsync<CreatorSourceGetRequestMessage, CreatorSourceOperationResponseMessage>(
                 CreatorDiscoverySubjects.GetSource,

@@ -29,12 +29,23 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
             .ThenBy(x => x.SourceUrl)
             .ToListAsync(cancellationToken);
 
+        var now = clock.GetCurrentInstant();
+
         if (scanMode != CreatorSourceScanMode.Full)
         {
-            return sources;
+            // Per-source incremental cadence: the global channel-update-check schedule ticks every
+            // 30 minutes, and each tick only scans sources due by their UpdateCheckIntervalHours.
+            // The half-tick tolerance keeps an interval that matches the tick from drifting (a scan
+            // finishing just after a tick would otherwise slip a whole extra tick every cycle).
+            var tolerance = Duration.FromMinutes(15);
+            return sources
+                .Where(x => x.LastSuccessfulScanAt is null ||
+                    x.LastSuccessfulScanAt.Value
+                        .Plus(Duration.FromHours(x.UpdateCheckIntervalHours))
+                        .Minus(tolerance) <= now)
+                .ToList();
         }
 
-        var now = clock.GetCurrentInstant();
         return sources
             .Where(x => x.NextFullScanStartIndex is not null ||
                 x.LastFullScanAt is null ||
@@ -98,6 +109,7 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
         existing.IncrementalPageSize = source.IncrementalPageSize;
         existing.ConsecutiveKnownThreshold = source.ConsecutiveKnownThreshold;
         existing.FullRescanIntervalDays = source.FullRescanIntervalDays;
+        existing.UpdateCheckIntervalHours = source.UpdateCheckIntervalHours;
         existing.MetadataRefreshWindow = source.MetadataRefreshWindow;
         existing.ProviderQueryLimitsJson = source.ProviderQueryLimitsJson;
         if (sourceChanged)

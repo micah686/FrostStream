@@ -24,7 +24,9 @@
     listIgnoredMedia,
     queueChannelDownload,
     refreshCreatorAssets,
+    scanCreatorSource,
     updateCreatorSource,
+    type CreatorScanMode,
     type CreatorSource,
     type CreatorSourceRequest,
     type CreatorSourceType,
@@ -47,6 +49,7 @@
     incrementalPageSize: number;
     consecutiveKnownThreshold: number;
     fullRescanIntervalDays: number;
+    updateCheckIntervalHours: number;
     metadataRefreshWindow: number;
   }
 
@@ -61,6 +64,7 @@
       incrementalPageSize: 50,
       consecutiveKnownThreshold: 25,
       fullRescanIntervalDays: 30,
+      updateCheckIntervalHours: 6,
       metadataRefreshWindow: 25
     };
   }
@@ -151,6 +155,7 @@
       incrementalPageSize: source.incrementalPageSize,
       consecutiveKnownThreshold: source.consecutiveKnownThreshold,
       fullRescanIntervalDays: source.fullRescanIntervalDays,
+      updateCheckIntervalHours: source.updateCheckIntervalHours,
       metadataRefreshWindow: source.metadataRefreshWindow
     };
     formError = null;
@@ -166,6 +171,7 @@
       incrementalPageSize: Number(form.incrementalPageSize),
       consecutiveKnownThreshold: Number(form.consecutiveKnownThreshold),
       fullRescanIntervalDays: Number(form.fullRescanIntervalDays),
+      updateCheckIntervalHours: Number(form.updateCheckIntervalHours),
       metadataRefreshWindow: Number(form.metadataRefreshWindow),
       providerQueryLimits: source?.providerQueryLimits ?? null
     };
@@ -182,6 +188,7 @@
       ['Incremental page size', Number(form.incrementalPageSize), 1, 500],
       ['Consecutive known threshold', Number(form.consecutiveKnownThreshold), 1, 500],
       ['Full rescan interval', Number(form.fullRescanIntervalDays), 1, 365],
+      ['Update check interval', Number(form.updateCheckIntervalHours), 1, 168],
       ['Metadata refresh window', Number(form.metadataRefreshWindow), 1, 500]
     ];
     for (const [label, value, min, max] of ranges) {
@@ -228,6 +235,7 @@
         incrementalPageSize: source.incrementalPageSize,
         consecutiveKnownThreshold: source.consecutiveKnownThreshold,
         fullRescanIntervalDays: source.fullRescanIntervalDays,
+        updateCheckIntervalHours: source.updateCheckIntervalHours,
         metadataRefreshWindow: source.metadataRefreshWindow,
         providerQueryLimits: source.providerQueryLimits
       });
@@ -239,6 +247,13 @@
     await runAction(source.id, 'assets', async () => {
       await refreshCreatorAssets(source.id, force);
       actionNotice = `Asset refresh queued for ${displayName(source)}${force ? ' (forced)' : ''}.`;
+    });
+  }
+
+  async function scanNow(source: CreatorSource, mode: CreatorScanMode) {
+    await runAction(source.id, 'scan-now', async () => {
+      await scanCreatorSource(source.id, mode);
+      actionNotice = `${mode === 'full' ? 'Full' : 'Incremental'} scan queued for ${displayName(source)}.`;
     });
   }
 
@@ -572,6 +587,20 @@
                 type="button"
                 class={rowActionClass}
                 disabled={Boolean(busyAction)}
+                onclick={(event) => scanNow(source, event.shiftKey ? 'full' : 'incremental')}
+                title="Queue an immediate scan for new uploads (hold Shift for a full channel rescan)"
+              >
+                {#if busyAction === 'scan-now'}
+                  <Spinner size="4" />
+                {:else}
+                  <RefreshOutline class="h-4 w-4" />
+                {/if}
+                Scan now
+              </button>
+              <button
+                type="button"
+                class={rowActionClass}
+                disabled={Boolean(busyAction)}
                 onclick={() => openDownloadModal(source)}
                 title="Queue a one-off download of the channel's full backlog"
               >
@@ -607,6 +636,10 @@
             <div>
               <dt class="font-bold uppercase tracking-[0.08em] text-slate-600">Last full scan</dt>
               <dd class="mt-0.5 text-slate-300">{formatScan(source.lastFullScanAt)}</dd>
+            </div>
+            <div>
+              <dt class="font-bold uppercase tracking-[0.08em] text-slate-600">Update check</dt>
+              <dd class="mt-0.5 text-slate-300">every {source.updateCheckIntervalHours} h</dd>
             </div>
             <div>
               <dt class="font-bold uppercase tracking-[0.08em] text-slate-600">Full rescan</dt>
@@ -786,6 +819,23 @@
           class={fieldClass}
         />
         <p class="mt-1.5 text-[11px] text-slate-600">How often the entire channel is re-walked (1-365).</p>
+      </div>
+      <div>
+        <Label for="creator-update-check-hours" class="mb-1.5 text-xs font-semibold text-slate-400">
+          Update check interval (hours)
+        </Label>
+        <Input
+          id="creator-update-check-hours"
+          type="number"
+          min="1"
+          max="168"
+          required
+          bind:value={form.updateCheckIntervalHours}
+          class={fieldClass}
+        />
+        <p class="mt-1.5 text-[11px] text-slate-600">
+          Minimum hours between checks for new uploads (1-168).
+        </p>
       </div>
       <div>
         <Label for="creator-metadata-window" class="mb-1.5 text-xs font-semibold text-slate-400">

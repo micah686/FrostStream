@@ -20,6 +20,7 @@ export interface CreatorSource {
   incrementalPageSize: number;
   consecutiveKnownThreshold: number;
   fullRescanIntervalDays: number;
+  updateCheckIntervalHours: number;
   metadataRefreshWindow: number;
   providerQueryLimits: Record<string, unknown> | null;
   lastSuccessfulScanAt: string | null;
@@ -38,6 +39,7 @@ export interface CreatorSourceRequest {
   incrementalPageSize: number;
   consecutiveKnownThreshold: number;
   fullRescanIntervalDays: number;
+  updateCheckIntervalHours: number;
   metadataRefreshWindow: number;
   providerQueryLimits?: Record<string, unknown> | null;
 }
@@ -108,6 +110,16 @@ export async function refreshCreatorAssets(
   fetchImpl: typeof fetch = fetch
 ): Promise<void> {
   await sendJson<unknown>(`${BASE}/${id}/refresh-assets?force=${force}`, 'POST', undefined, fetchImpl);
+}
+
+export type CreatorScanMode = 'incremental' | 'full';
+
+export async function scanCreatorSource(
+  id: number,
+  mode: CreatorScanMode = 'incremental',
+  fetchImpl: typeof fetch = fetch
+): Promise<void> {
+  await sendJson<unknown>(`${BASE}/${id}/scan?mode=${mode}`, 'POST', undefined, fetchImpl);
 }
 
 export async function listIgnoredMedia(id: number, fetchImpl: typeof fetch = fetch): Promise<IgnoredMedia[]> {

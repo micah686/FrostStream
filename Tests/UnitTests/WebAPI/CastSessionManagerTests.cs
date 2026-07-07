@@ -258,7 +258,7 @@ public sealed class CastSessionManagerTests
     {
         MediaGuid = MediaGuid,
         Title = "Test Movie",
-        ContentUrl = "http://192.168.1.10:5041/api/watch/x?castToken=abc",
+        ContentUrl = "http://192.168.1.10:5041/api/media/watch/x?castToken=abc",
         ContentType = "video/mp4",
         DurationSeconds = 600,
         TokenExpiresAt = DateTimeOffset.UtcNow.AddHours(4)

@@ -162,6 +162,7 @@ public static class EndpointIds
     public const string CreatorSourcesGet = "creator-sources.get";
     public const string CreatorSourcesList = "creator-sources.list";
     public const string CreatorSourcesRefreshAssets = "creator-sources.refresh-assets";
+    public const string CreatorSourcesScanNow = "creator-sources.scan-now";
     public const string CreatorSourcesDelete = "creator-sources.delete";
     public const string CreatorSourcesListIgnoredMedia = "creator-sources.list-ignored-media";
     public const string CreatorSourcesForceQueueMedia = "creator-sources.force-queue-media";
@@ -358,6 +359,7 @@ public static class EndpointCatalog
         new(EndpointIds.CreatorSourcesGet, Bundles.CreatorSources),
         new(EndpointIds.CreatorSourcesList, Bundles.CreatorSources),
         new(EndpointIds.CreatorSourcesRefreshAssets, Bundles.CreatorSources),
+        new(EndpointIds.CreatorSourcesScanNow, Bundles.CreatorSources),
         new(EndpointIds.CreatorSourcesDelete, Bundles.CreatorSources),
         new(EndpointIds.CreatorSourcesListIgnoredMedia, Bundles.CreatorSources),
         new(EndpointIds.CreatorSourcesForceQueueMedia, Bundles.CreatorSources),

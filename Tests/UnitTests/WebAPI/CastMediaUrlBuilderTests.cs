@@ -100,8 +100,8 @@ public sealed class CastMediaUrlBuilderTests
         var video = CastMediaUrlBuilder.BuildStreamUrl("http://10.0.0.2:5041", MediaGuid, "tok en", audio: false, format: null);
         var audio = CastMediaUrlBuilder.BuildStreamUrl("http://10.0.0.2:5041", MediaGuid, "abc", audio: true, format: "opus");
 
-        video.ShouldBe($"http://10.0.0.2:5041/api/watch/{MediaGuid:D}?castToken=tok%20en");
-        audio.ShouldBe($"http://10.0.0.2:5041/api/watch/{MediaGuid:D}?audio=true&format=opus&castToken=abc");
+        video.ShouldBe($"http://10.0.0.2:5041/api/media/watch/{MediaGuid:D}?castToken=tok%20en");
+        audio.ShouldBe($"http://10.0.0.2:5041/api/media/watch/{MediaGuid:D}?audio=true&format=opus&castToken=abc");
         await Task.CompletedTask;
     }
 
@@ -112,9 +112,9 @@ public sealed class CastMediaUrlBuilderTests
         var captionNoType = CastMediaUrlBuilder.BuildCaptionUrl("http://10.0.0.2:5041", MediaGuid, "en", null, "abc");
         var thumbnail = CastMediaUrlBuilder.BuildThumbnailUrl("http://10.0.0.2:5041", MediaGuid, "abc");
 
-        caption.ShouldBe($"http://10.0.0.2:5041/api/watch/{MediaGuid:D}/captions/en?captionType=subtitles&castToken=abc");
-        captionNoType.ShouldBe($"http://10.0.0.2:5041/api/watch/{MediaGuid:D}/captions/en?castToken=abc");
-        thumbnail.ShouldBe($"http://10.0.0.2:5041/api/watch/{MediaGuid:D}/thumbnail?castToken=abc");
+        caption.ShouldBe($"http://10.0.0.2:5041/api/media/watch/{MediaGuid:D}/captions/en?captionType=subtitles&castToken=abc");
+        captionNoType.ShouldBe($"http://10.0.0.2:5041/api/media/watch/{MediaGuid:D}/captions/en?castToken=abc");
+        thumbnail.ShouldBe($"http://10.0.0.2:5041/api/media/watch/{MediaGuid:D}/thumbnail?castToken=abc");
         await Task.CompletedTask;
     }
 

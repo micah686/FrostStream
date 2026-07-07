@@ -12,7 +12,11 @@ public abstract record ScheduledBackgroundRequest
     public required Instant OccurredAt { get; init; }
 }
 
-public sealed record ChannelUpdateCheckRequested : ScheduledBackgroundRequest;
+public sealed record ChannelUpdateCheckRequested : ScheduledBackgroundRequest
+{
+    /// <summary>When set, scan only this creator source (manual "scan now"); scheduled sweeps leave it null.</summary>
+    public long? TargetSourceId { get; init; }
+}
 
 public sealed record ChannelAssetRefreshRequested : ScheduledBackgroundRequest
 {

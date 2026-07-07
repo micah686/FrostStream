@@ -315,6 +315,7 @@ public sealed class CreatorSourcesControllerTests
         IncrementalPageSize = 75,
         ConsecutiveKnownThreshold = 15,
         FullRescanIntervalDays = 14,
+        UpdateCheckIntervalHours = 6,
         MetadataRefreshWindow = 50,
         ProviderQueryLimits = YouTubeLimits(videos: 125, streams: 25, shorts: 75),
         CreatedAt = Now,
