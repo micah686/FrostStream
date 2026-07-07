@@ -54,7 +54,7 @@
         <span>{loadError}</span>
       </div>
       <Button
-        href="/profile"
+        href="/profile/option-presets"
         color="dark"
         class="mt-4 border-slate-700! bg-slate-900! px-4! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800!"
       >

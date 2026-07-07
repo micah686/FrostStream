@@ -261,7 +261,7 @@
       <p class="mt-1 text-sm text-slate-500">Your playlists, saved videos, and files on this server.</p>
     </div>
     <Button
-      href="/profile?section=Playlists"
+      href="/profile/playlists"
       color="dark"
       class="border-slate-700! bg-slate-900! px-4! py-2! text-xs! font-semibold! text-slate-200! hover:bg-slate-800!"
     >
@@ -474,7 +474,7 @@
       <div class="flex flex-wrap items-center justify-between gap-3">
         <h2 id="your-playlists-title" class="text-lg font-bold text-white">Your playlists</h2>
         <a
-          href="/profile?section=Playlists"
+          href="/profile/playlists"
           class="text-xs font-semibold text-slate-500 transition hover:text-slate-300"
         >
           Manage in profile

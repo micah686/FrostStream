@@ -85,7 +85,7 @@
       return;
     }
     await deleteUserPlaylist(playlist.playlistId);
-    await goto('/profile?section=Playlists');
+    await goto('/profile/playlists');
   }
 
   function onItemsUpdated(updated: UserPlaylist) {
@@ -119,7 +119,7 @@
         <span>{loadError}</span>
       </div>
       <Button
-        href="/profile?section=Playlists"
+        href="/profile/playlists"
         color="dark"
         class="mt-4 border-slate-700! bg-slate-900! px-4! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800!"
       >
@@ -228,7 +228,7 @@
 
       <div class="border-t border-slate-800/70 pt-5">
         <Button
-          href="/profile?section=Playlists"
+          href="/profile/playlists"
           color="dark"
           class="border-slate-700! bg-transparent! px-4! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800!"
         >

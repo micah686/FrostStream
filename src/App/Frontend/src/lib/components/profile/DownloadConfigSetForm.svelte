@@ -87,7 +87,7 @@
       } else {
         await createDownloadConfigSet(request);
       }
-      await goto('/profile');
+      await goto('/profile/config-sets');
     } catch (err) {
       submitError = err instanceof Error ? err.message : 'Could not save the config set.';
     } finally {
@@ -313,7 +313,7 @@
 
   <div class="flex flex-col-reverse gap-3 border-t border-slate-800/70 pt-5 sm:flex-row sm:justify-between">
     <Button
-      href="/profile"
+      href="/profile/config-sets"
       color="dark"
       class="border-slate-700! bg-transparent! px-4! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800!"
     >

@@ -5,9 +5,9 @@ import {
   readTokens,
   singleUserProfile
 } from '$lib/server/auth';
-import type { PageServerLoad } from './$types';
+import type { LayoutServerLoad } from './$types';
 
-export const load: PageServerLoad = ({ cookies }) => {
+export const load: LayoutServerLoad = ({ cookies }) => {
   if (isSingleUserMode()) {
     return { singleUser: true, user: singleUserProfile(), expiresAt: null };
   }

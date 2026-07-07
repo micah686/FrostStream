@@ -32,7 +32,7 @@
   let submitError = $state<string | null>(null);
 
   const isUpdate = $derived(mode === 'update');
-  const profileReturnHref = '/profile?section=Option%20presets';
+  const profileReturnHref = '/profile/option-presets';
 
   function clonePlainOptions(value: unknown): Record<string, unknown> {
     if (!value || typeof value !== 'object') {

@@ -408,7 +408,7 @@
       if (Object.keys(secrets).length > 0) {
         await upsertNotificationProviderSecrets(key, { secrets });
       }
-      await goto('/profile?section=Notifications');
+      await goto('/profile/notifications');
     } catch (err) {
       submitError = err instanceof Error ? err.message : 'Could not save the notification provider.';
     } finally {
@@ -776,7 +776,7 @@
     <Checkbox bind:checked={providerEnabled} class="text-sm text-slate-300">Enabled</Checkbox>
     <div class="flex flex-col-reverse gap-3 sm:flex-row">
       <Button
-        href="/profile?section=Notifications"
+        href="/profile/notifications"
         color="dark"
         class="border-slate-700! bg-transparent! px-4! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800!"
       >
