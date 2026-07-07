@@ -165,7 +165,7 @@
 
     try {
       const source = await findChannelSource(Number(id));
-      if (!source) {
+      if (!source || source.creatorSourceId === null) {
         return;
       }
       statistics = await getChannelStatistics(source.creatorSourceId);

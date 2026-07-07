@@ -43,10 +43,10 @@ export interface StatisticsOverview {
 }
 
 export interface ChannelStatisticsSummary {
-  creatorSourceId: number;
+  creatorSourceId: number | null;
   platform: string;
-  sourceType: string;
-  sourceUrl: string;
+  sourceType: string | null;
+  sourceUrl: string | null;
   accountId: number | null;
   accountName: string | null;
   accountHandle: string | null;

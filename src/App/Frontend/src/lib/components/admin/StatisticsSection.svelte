@@ -139,7 +139,7 @@
   }
 
   function channelName(channel: ChannelStatisticsSummary): string {
-    return channel.accountName ?? channel.accountHandle ?? channel.sourceUrl;
+    return channel.accountName ?? channel.accountHandle ?? channel.sourceUrl ?? 'Unknown channel';
   }
 
   function percent(value: number): string {
@@ -298,7 +298,7 @@
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 id="channel-stats-title" class="text-sm font-bold text-slate-200">Channel statistics</h3>
-          <p class="mt-1 text-xs text-slate-500">{totalChannels.toLocaleString()} tracked creator sources</p>
+          <p class="mt-1 text-xs text-slate-500">{totalChannels.toLocaleString()} channels in your library</p>
         </div>
         <Select
           items={sortOptions}
@@ -334,7 +334,7 @@
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-800/70">
-              {#each channels as channel (channel.creatorSourceId)}
+              {#each channels as channel (channel.accountId ?? channel.creatorSourceId ?? channel.sourceUrl)}
                 <tr class="text-slate-300">
                   <td class="py-3 pr-4">
                     <div class="flex min-w-56 items-center gap-3">
@@ -347,7 +347,7 @@
                         {:else}
                           <p class="truncate font-semibold text-slate-100">{channelName(channel)}</p>
                         {/if}
-                        <p class="mt-0.5 truncate text-xs text-slate-500">{channel.platform} · {channel.sourceType}</p>
+                        <p class="mt-0.5 truncate text-xs text-slate-500">{channel.platform}{channel.sourceType ? ` · ${channel.sourceType}` : ''}</p>
                       </div>
                     </div>
                   </td>

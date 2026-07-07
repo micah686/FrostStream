@@ -90,8 +90,8 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
         var offset = (page - 1) * pageSize;
         var orderBy = ChannelOrderBy(sortBy, sortOrder);
 
-        var totalCount = await GetCreatorSourceCountAsync(ct);
-        var sql = ChannelSummarySql($"""
+        var totalCount = await GetChannelWithMediaCountAsync(ct);
+        var sql = AccountSummarySql($"""
             ORDER BY {orderBy}
             LIMIT @limit OFFSET @offset
             """);
@@ -321,12 +321,79 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
         };
     }
 
-    private async Task<int> GetCreatorSourceCountAsync(CancellationToken ct)
+    private async Task<int> GetChannelWithMediaCountAsync(CancellationToken ct)
     {
-        await using var command = dataSource.CreateCommand("SELECT COUNT(*) FROM discovery.creator_sources");
+        await using var command = dataSource.CreateCommand("""
+            SELECT COUNT(DISTINCT mm.account_id)
+            FROM metadata.media_metadata mm
+            JOIN metadata.accounts a ON a.id = mm.account_id
+            """);
         var value = await command.ExecuteScalarAsync(ct);
         return Convert.ToInt32(value);
     }
+
+    // Channel statistics are keyed on the accounts that media actually belongs to, so ad-hoc
+    // (non-subscribed) downloads still surface. Scan timestamps and source type are pulled from a
+    // matching creator source when one exists, otherwise left null.
+    private static string AccountSummarySql(string suffix) => $"""
+        {ClassifiedMediaCte},
+        downloaded_guids AS (
+            SELECT DISTINCT msv.media_guid
+            FROM media.media_source_versions msv
+            JOIN downloads.download_jobs dj ON dj.job_id = msv.latest_job_id
+            WHERE dj.state = 'completed'
+        ),
+        account_rollup AS (
+            SELECT
+                a.id AS account_id,
+                a.platform,
+                a.account_name,
+                a.account_handle,
+                a.avatar_storage_path,
+                COUNT(cm.media_guid) AS available_count,
+                COUNT(cm.media_guid) FILTER (WHERE dg.media_guid IS NOT NULL) AS downloaded_count,
+                COALESCE(SUM(cm.duration_seconds), 0) AS total_duration_seconds,
+                COALESCE(SUM(cm.duration_seconds) FILTER (WHERE dg.media_guid IS NOT NULL), 0) AS downloaded_duration_seconds,
+                COALESCE(SUM(cm.size_bytes), 0)::bigint AS total_bytes
+            FROM metadata.accounts a
+            JOIN classified_media cm ON cm.account_id = a.id
+            LEFT JOIN downloaded_guids dg ON dg.media_guid = cm.media_guid
+            GROUP BY a.id, a.platform, a.account_name, a.account_handle, a.avatar_storage_path
+        )
+        SELECT
+            source_link.creator_source_id,
+            account_rollup.platform,
+            source_link.source_type,
+            source_link.source_url,
+            account_rollup.account_id,
+            account_rollup.account_name,
+            account_rollup.account_handle,
+            account_rollup.avatar_storage_path,
+            account_rollup.available_count,
+            account_rollup.downloaded_count,
+            account_rollup.total_duration_seconds,
+            account_rollup.downloaded_duration_seconds,
+            account_rollup.total_bytes,
+            source_link.last_successful_scan_at,
+            source_link.last_full_scan_at
+        FROM account_rollup
+        LEFT JOIN LATERAL (
+            SELECT
+                cs.id AS creator_source_id,
+                cs.source_type,
+                cs.source_url,
+                cs.last_successful_scan_at,
+                cs.last_full_scan_at
+            FROM discovery.discovered_media dm
+            JOIN metadata.media_metadata mm ON mm.external_media_id = dm.external_media_id
+            JOIN discovery.creator_sources cs ON cs.id = dm.creator_source_id AND cs.platform = account_rollup.platform
+            WHERE mm.account_id = account_rollup.account_id
+            GROUP BY cs.id, cs.source_type, cs.source_url, cs.last_successful_scan_at, cs.last_full_scan_at
+            ORDER BY cs.last_successful_scan_at DESC NULLS LAST, cs.id
+            LIMIT 1
+        ) source_link ON true
+        {suffix}
+        """;
 
     private static string ChannelSummarySql(string suffix) => $"""
         {ClassifiedMediaCte},
@@ -399,14 +466,14 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
     {
         var field = sortBy.Trim().ToLowerInvariant() switch
         {
-            "available" => "available_count",
-            "duration" => "downloaded_duration_seconds",
-            "bytes" => "total_bytes",
-            "name" => "COALESCE(account_rollup.account_name, source_rollup.source_url)",
-            _ => "downloaded_count"
+            "available" => "account_rollup.available_count",
+            "duration" => "account_rollup.downloaded_duration_seconds",
+            "bytes" => "account_rollup.total_bytes",
+            "name" => "COALESCE(account_rollup.account_name, account_rollup.account_handle)",
+            _ => "account_rollup.downloaded_count"
         };
         var direction = string.Equals(sortOrder, "asc", StringComparison.OrdinalIgnoreCase) ? "ASC" : "DESC";
-        return $"{field} {direction}, source_rollup.creator_source_id ASC";
+        return $"{field} {direction}, account_rollup.account_id ASC";
     }
 
     private async Task<IReadOnlyDictionary<string, long>> GetChannelStatusCountsAsync(long creatorSourceId, CancellationToken ct)
@@ -511,10 +578,10 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
         var downloadedCount = GetInt64(reader, "downloaded_count");
         return new ChannelStatisticsSummaryDto
         {
-            CreatorSourceId = GetInt64(reader, "creator_source_id"),
+            CreatorSourceId = GetNullableInt64(reader, "creator_source_id"),
             Platform = GetString(reader, "platform"),
-            SourceType = GetString(reader, "source_type"),
-            SourceUrl = GetString(reader, "source_url"),
+            SourceType = GetNullableString(reader, "source_type"),
+            SourceUrl = GetNullableString(reader, "source_url"),
             AccountId = GetNullableInt64(reader, "account_id"),
             AccountName = GetNullableString(reader, "account_name"),
             AccountHandle = GetNullableString(reader, "account_handle"),
