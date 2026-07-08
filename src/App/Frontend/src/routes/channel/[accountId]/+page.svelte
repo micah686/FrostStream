@@ -8,10 +8,12 @@
     ChevronRightOutline,
     ChevronUpOutline,
     ExclamationCircleOutline,
+    ImageOutline,
     PlaySolid,
     RectangleListOutline
   } from 'flowbite-svelte-icons';
   import { accentFor, formatBytes, formatCount, formatDuration, formatRelativeDate, formatViews, initialsFor } from '$lib/media';
+  import { refreshAccountAssets } from '$lib/api/metadata';
   import TargetNotePanel from '$lib/components/TargetNotePanel.svelte';
   import {
     getChannelStatistics,
@@ -76,6 +78,8 @@
   let hasMore = $state(false);
   let mediaLoading = $state(true);
   let mediaError = $state<string | null>(null);
+  let assetRefreshBusy = $state(false);
+  let assetRefreshNotice = $state<string | null>(null);
   let statistics = $state<ChannelStatisticsDetail | null>(null);
   let statisticsLoading = $state(false);
   let statisticsError = $state<string | null>(null);
@@ -203,6 +207,22 @@
 
   function changeSort() {
     void loadMedia(accountId, 1);
+  }
+
+  async function refreshAssets(force: boolean) {
+    if (!account || assetRefreshBusy) {
+      return;
+    }
+    assetRefreshBusy = true;
+    assetRefreshNotice = null;
+    try {
+      await refreshAccountAssets(account.accountId, force);
+      assetRefreshNotice = `Asset refresh queued${force ? ' (forced)' : ''} — the avatar and banner will update shortly.`;
+    } catch (err) {
+      assetRefreshNotice = err instanceof Error ? err.message : 'Could not queue the asset refresh.';
+    } finally {
+      assetRefreshBusy = false;
+    }
   }
 
   function joinedDate(iso: string | null | undefined): string | null {
@@ -365,18 +385,37 @@
         </div>
       </div>
 
-      {#if account.accountUrl}
-        <Button
-          href={account.accountUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          color="dark"
-          class="shrink-0 border-slate-700! bg-slate-900! px-4! py-2! text-xs! font-semibold! text-slate-200! hover:bg-slate-800!"
-        >
-          <ArrowUpRightFromSquareOutline class="mr-1.5 h-3.5 w-3.5" />
-          View on {account.platform}
-        </Button>
-      {/if}
+      <div class="flex shrink-0 flex-col gap-2 sm:items-end">
+        {#if account.accountUrl}
+          <Button
+            href={account.accountUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            color="dark"
+            class="border-slate-700! bg-slate-900! px-4! py-2! text-xs! font-semibold! text-slate-200! hover:bg-slate-800!"
+          >
+            <ArrowUpRightFromSquareOutline class="mr-1.5 h-3.5 w-3.5" />
+            View on {account.platform}
+          </Button>
+          <Button
+            color="dark"
+            disabled={assetRefreshBusy}
+            onclick={(event: MouseEvent) => refreshAssets(event.shiftKey)}
+            title="Queue a refresh of the avatar and banner (hold Shift to force re-download)"
+            class="border-slate-700! bg-slate-900! px-4! py-2! text-xs! font-semibold! text-slate-200! hover:bg-slate-800! disabled:opacity-40"
+          >
+            {#if assetRefreshBusy}
+              <Spinner size="4" class="mr-1.5" />
+            {:else}
+              <ImageOutline class="mr-1.5 h-3.5 w-3.5" />
+            {/if}
+            Refresh assets
+          </Button>
+        {/if}
+        {#if assetRefreshNotice}
+          <p class="max-w-60 text-xs text-slate-500 sm:text-right">{assetRefreshNotice}</p>
+        {/if}
+      </div>
     </div>
 
     <div class="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-slate-800/70 pt-5">

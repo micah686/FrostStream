@@ -376,6 +376,25 @@ public sealed record MetadataAccountGetResponseMessage
     public AccountDto? Item { get; init; }
 }
 
+/// <summary>
+/// Persists freshly downloaded avatar/banner blobs onto an existing <c>metadata.accounts</c> row
+/// by id. Null paths leave the existing value untouched, mirroring the (platform, handle) upsert.
+/// </summary>
+public sealed record MetadataAccountAssetsUpdateRequestMessage
+{
+    public required long AccountId { get; init; }
+    public string? AvatarStoragePath { get; init; }
+    public string? BannerStoragePath { get; init; }
+    public string? StorageKey { get; init; }
+}
+
+public sealed record MetadataAccountAssetsUpdateResponseMessage
+{
+    public bool Success { get; init; }
+    public string? ErrorCode { get; init; }
+    public string? ErrorMessage { get; init; }
+}
+
 public sealed record MetadataTaxonomyListRequestMessage
 {
     public int PageSize { get; init; } = 100;

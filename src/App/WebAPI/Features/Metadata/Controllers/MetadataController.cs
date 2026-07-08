@@ -1,6 +1,7 @@
 using Conduit.NATS;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NodaTime;
 using Shared.Auth;
 using Shared.Messaging;
 using WebAPI.Auth;
@@ -12,8 +13,11 @@ namespace WebAPI.Features.Metadata.Controllers;
 [Route("api/metadata")]
 public sealed class MetadataController(
     IMessageBus messageBus,
+    IJetStreamPublisher publisher,
+    IClock clock,
     ILogger<MetadataController> logger) : ControllerBase
 {
+    private const string ChannelAssetRefreshTaskType = "channel_asset_refresh";
     private static readonly TimeSpan QueryTimeout = TimeSpan.FromSeconds(10);
 
     [HttpGet]
@@ -298,6 +302,59 @@ public sealed class MetadataController(
             return StatusCode(StatusCodes.Status502BadGateway, "DataBridge returned an invalid account response.");
 
         return Ok(response.Item);
+    }
+
+    [HttpPost("accounts/{accountId:long}/refresh-assets")]
+    [Endpoint(EndpointIds.MetadataAccountsRefreshAssets)]
+    [EndpointSummary("Queue a channel asset refresh")]
+    [EndpointDescription("Verifies that the creator account exists and has a stored channel URL, then queues an asynchronous download of its avatar and banner. The force query parameter controls whether cached assets may be replaced; a successful request returns 202 with the queued account identifier.")]
+    public async Task<IActionResult> RefreshAccountAssets(
+        long accountId,
+        [FromQuery] bool force = false,
+        CancellationToken cancellationToken = default)
+    {
+        var response = await SendRequestAsync<MetadataAccountGetRequestMessage, MetadataAccountGetResponseMessage>(
+            MetadataSubjects.AccountsGet,
+            new MetadataAccountGetRequestMessage { AccountId = accountId, OwnerSubject = ResolveSubject() },
+            cancellationToken);
+
+        if (response is null)
+            return ServiceUnavailable();
+        if (!response.Success)
+            return MetadataError(response.ErrorCode, response.ErrorMessage);
+        if (response.Item is null)
+            return StatusCode(StatusCodes.Status502BadGateway, "DataBridge returned an invalid account response.");
+        if (string.IsNullOrWhiteSpace(response.Item.AccountUrl))
+            return BadRequest("This account has no stored channel URL to refresh assets from.");
+
+        var now = clock.GetCurrentInstant();
+        var idempotencyKey = $"manual-account:{accountId}:{Guid.NewGuid():N}";
+        var message = new ChannelAssetRefreshRequested
+        {
+            ScheduleKey = "manual",
+            TaskType = ChannelAssetRefreshTaskType,
+            DueWindowUtc = now,
+            IdempotencyKey = idempotencyKey,
+            OccurredAt = now,
+            TargetAccountId = accountId,
+            Force = force
+        };
+
+        try
+        {
+            await publisher.PublishAsync(
+                BackgroundJobSubjects.ChannelAssetRefreshRequest,
+                message,
+                messageId: idempotencyKey,
+                cancellationToken: cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed enqueueing channel asset refresh for account {AccountId}", accountId);
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to enqueue channel asset refresh.");
+        }
+
+        return Accepted(new { queued = true, accountId, force });
     }
 
     [HttpGet("accounts/{accountId:long}/media")]

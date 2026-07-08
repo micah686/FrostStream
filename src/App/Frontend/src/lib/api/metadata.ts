@@ -165,6 +165,14 @@ export async function deleteMediaForStorageKey(
   );
 }
 
+export async function refreshAccountAssets(
+  accountId: number,
+  force = false,
+  fetchImpl: typeof fetch = fetch
+): Promise<void> {
+  await sendEmpty(`/api/metadata/accounts/${accountId}/refresh-assets?force=${force}`, 'POST', fetchImpl);
+}
+
 export async function getMetadataVersions(
   mediaGuid: string,
   fetchImpl: typeof fetch = fetch

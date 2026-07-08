@@ -49,6 +49,13 @@ public sealed class MetadataQueryConsumerService(
             queueGroup: MetadataSubjects.ProcessorsQueueGroup,
             cancellationToken: stoppingToken);
 
+        await SubscribeAsync<MetadataAccountAssetsUpdateRequestMessage>(
+            messageBus,
+            MetadataSubjects.AccountsUpdateAssets,
+            HandleAccountAssetsUpdateAsync,
+            queueGroup: MetadataSubjects.ProcessorsQueueGroup,
+            cancellationToken: stoppingToken);
+
         await SubscribeAsync<MetadataTaxonomyListRequestMessage>(
             messageBus,
             MetadataSubjects.TaxonomyTagsList,
@@ -212,6 +219,39 @@ public sealed class MetadataQueryConsumerService(
         {
             logger.LogError(ex, "Failed handling account get query for {AccountId}", context.Message.AccountId);
             await context.RespondAsync(new MetadataAccountGetResponseMessage
+            {
+                Success = false,
+                ErrorCode = "internal_error",
+                ErrorMessage = "Internal metadata service error."
+            });
+        }
+    }
+
+    private async Task HandleAccountAssetsUpdateAsync(IMessageContext<MetadataAccountAssetsUpdateRequestMessage> context)
+    {
+        var msg = context.Message;
+        try
+        {
+            var updated = await scopeFactory.WithScopedAsync<IMetadataRepository, bool>(
+                repo => repo.UpdateAccountAssetsByIdAsync(
+                    msg.AccountId,
+                    msg.AvatarStoragePath,
+                    msg.BannerStoragePath,
+                    msg.StorageKey));
+
+            await context.RespondAsync(updated
+                ? new MetadataAccountAssetsUpdateResponseMessage { Success = true }
+                : new MetadataAccountAssetsUpdateResponseMessage
+                {
+                    Success = false,
+                    ErrorCode = "not_found",
+                    ErrorMessage = $"Account '{msg.AccountId}' was not found."
+                });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed handling account assets update for {AccountId}", msg.AccountId);
+            await context.RespondAsync(new MetadataAccountAssetsUpdateResponseMessage
             {
                 Success = false,
                 ErrorCode = "internal_error",

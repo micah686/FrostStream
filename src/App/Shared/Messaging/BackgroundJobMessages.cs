@@ -21,6 +21,9 @@ public sealed record ChannelUpdateCheckRequested : ScheduledBackgroundRequest
 public sealed record ChannelAssetRefreshRequested : ScheduledBackgroundRequest
 {
     public long? TargetSourceId { get; init; }
+    /// <summary>When set, refresh assets for this metadata account directly (channel-page manual
+    /// refresh); the account's stored URL is used instead of a creator source.</summary>
+    public long? TargetAccountId { get; init; }
     public bool Force { get; init; }
 }
 

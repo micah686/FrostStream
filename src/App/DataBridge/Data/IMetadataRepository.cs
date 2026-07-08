@@ -31,4 +31,15 @@ public interface IMetadataRepository
         string? bannerStoragePath,
         string storageKey,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Attaches durable avatar/banner blob paths to an existing account row by id. Null paths
+    /// preserve the current value (COALESCE). Returns false when the account does not exist.
+    /// </summary>
+    Task<bool> UpdateAccountAssetsByIdAsync(
+        long accountId,
+        string? avatarStoragePath,
+        string? bannerStoragePath,
+        string? storageKey,
+        CancellationToken ct = default);
 }

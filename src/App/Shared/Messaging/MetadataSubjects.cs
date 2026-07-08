@@ -11,6 +11,7 @@ public static class MetadataSubjects
     public const string Search = "metadata.search";
     public const string AccountsList = "metadata.accounts.list";
     public const string AccountsGet = "metadata.accounts.get";
+    public const string AccountsUpdateAssets = "metadata.accounts.update-assets";
     public const string AccountsMediaList = "metadata.accounts.media.list";
     public const string TaxonomyTagsList = "metadata.taxonomy.tags.list";
     public const string TaxonomyCategoriesList = "metadata.taxonomy.categories.list";

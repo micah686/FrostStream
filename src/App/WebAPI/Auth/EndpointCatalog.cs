@@ -72,6 +72,7 @@ public static class EndpointIds
     public const string MetadataCaptions = "metadata.captions";
     public const string MetadataAccountsList = "metadata.accounts.list";
     public const string MetadataAccountsGet = "metadata.accounts.get";
+    public const string MetadataAccountsRefreshAssets = "metadata.accounts.refresh-assets";
     public const string MetadataAccountsMedia = "metadata.accounts.media";
     public const string MetadataTaxonomyTags = "metadata.taxonomy.tags";
     public const string MetadataTaxonomyCategories = "metadata.taxonomy.categories";
@@ -359,6 +360,7 @@ public static class EndpointCatalog
         new(EndpointIds.CreatorSourcesGet, Bundles.CreatorSources),
         new(EndpointIds.CreatorSourcesList, Bundles.CreatorSources),
         new(EndpointIds.CreatorSourcesRefreshAssets, Bundles.CreatorSources),
+        new(EndpointIds.MetadataAccountsRefreshAssets, Bundles.CreatorSources),
         new(EndpointIds.CreatorSourcesScanNow, Bundles.CreatorSources),
         new(EndpointIds.CreatorSourcesDelete, Bundles.CreatorSources),
         new(EndpointIds.CreatorSourcesListIgnoredMedia, Bundles.CreatorSources),

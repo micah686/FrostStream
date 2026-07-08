@@ -412,6 +412,101 @@ public sealed class MetadataControllerTests
             .Items.Single().Title.ShouldBe("Video");
     }
 
+    [Test]
+    public async Task RefreshAccountAssets_Gets_Account_And_Publishes_Channel_Asset_Refresh()
+    {
+        var bus = Substitute.For<IMessageBus>();
+        var publisher = Substitute.For<IJetStreamPublisher>();
+        var controller = CreateController(bus, publisher);
+
+        bus.RequestAsync<MetadataAccountGetRequestMessage, MetadataAccountGetResponseMessage>(
+                MetadataSubjects.AccountsGet,
+                Arg.Is<MetadataAccountGetRequestMessage>(x => x.AccountId == 22),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new MetadataAccountGetResponseMessage
+            {
+                Success = true,
+                Item = new AccountDto
+                {
+                    AccountId = 22,
+                    Platform = "youtube",
+                    AccountName = "Creator",
+                    AccountHandle = "@creator",
+                    AccountUrl = "https://example.test/@creator"
+                }
+            });
+
+        var result = await controller.RefreshAccountAssets(22, force: true, CancellationToken.None);
+
+        result.ShouldBeOfType<AcceptedResult>().Value.ShouldNotBeNull();
+        await publisher.Received(1).PublishAsync(
+            BackgroundJobSubjects.ChannelAssetRefreshRequest,
+            Arg.Is<ChannelAssetRefreshRequested>(x =>
+                x.ScheduleKey == "manual" &&
+                x.TaskType == "channel_asset_refresh" &&
+                x.DueWindowUtc == Now &&
+                x.OccurredAt == Now &&
+                x.TargetAccountId == 22 &&
+                x.TargetSourceId == null &&
+                x.Force),
+            Arg.Is<string>(x => x.StartsWith("manual-account:22:", StringComparison.Ordinal)),
+            null,
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task RefreshAccountAssets_Returns_400_When_Account_Has_No_Url()
+    {
+        var bus = Substitute.For<IMessageBus>();
+        var publisher = Substitute.For<IJetStreamPublisher>();
+        var controller = CreateController(bus, publisher);
+
+        bus.RequestAsync<MetadataAccountGetRequestMessage, MetadataAccountGetResponseMessage>(
+                MetadataSubjects.AccountsGet,
+                Arg.Any<MetadataAccountGetRequestMessage>(),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new MetadataAccountGetResponseMessage
+            {
+                Success = true,
+                Item = new AccountDto { AccountId = 22, Platform = "youtube", AccountName = "Creator", AccountHandle = "@creator" }
+            });
+
+        var result = await controller.RefreshAccountAssets(22, force: false, CancellationToken.None);
+
+        result.ShouldBeOfType<BadRequestObjectResult>();
+        await publisher.DidNotReceiveWithAnyArgs().PublishAsync(
+            default!,
+            Arg.Any<ChannelAssetRefreshRequested>(),
+            default,
+            default,
+            default);
+    }
+
+    [Test]
+    public async Task RefreshAccountAssets_Returns_404_When_Account_Missing()
+    {
+        var bus = Substitute.For<IMessageBus>();
+        var controller = CreateController(bus);
+
+        bus.RequestAsync<MetadataAccountGetRequestMessage, MetadataAccountGetResponseMessage>(
+                MetadataSubjects.AccountsGet,
+                Arg.Any<MetadataAccountGetRequestMessage>(),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new MetadataAccountGetResponseMessage
+            {
+                Success = false,
+                ErrorCode = "not_found",
+                ErrorMessage = "missing"
+            });
+
+        var result = await controller.RefreshAccountAssets(22, force: false, CancellationToken.None);
+
+        result.ShouldBeOfType<NotFoundObjectResult>();
+    }
+
     private static async Task<ActionResult<MetadataDetailDto>> GetWith(
         Guid mediaGuid,
         MetadataGetResponseMessage response)
@@ -428,8 +523,17 @@ public sealed class MetadataControllerTests
         return await controller.Get(mediaGuid, CancellationToken.None);
     }
 
-    private static MetadataController CreateController(IMessageBus bus)
-        => new(bus, Substitute.For<ILogger<MetadataController>>());
+    private static MetadataController CreateController(IMessageBus bus, IJetStreamPublisher? publisher = null)
+    {
+        var clock = Substitute.For<IClock>();
+        clock.GetCurrentInstant().Returns(Now);
+
+        return new MetadataController(
+            bus,
+            publisher ?? Substitute.For<IJetStreamPublisher>(),
+            clock,
+            Substitute.For<ILogger<MetadataController>>());
+    }
 
     private static MetadataCardDto CreateCard(Guid mediaGuid) => new()
     {
