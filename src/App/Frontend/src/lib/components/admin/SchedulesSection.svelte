@@ -1,11 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Button, Input, Label, Select, Spinner, Toggle } from 'flowbite-svelte';
+  import { Button, Input, Label, Modal, Select, Spinner, Toggle } from 'flowbite-svelte';
   import {
     ClockOutline,
     CloseOutline,
     EditOutline,
     ExclamationCircleOutline,
+    InfoCircleOutline,
     PlusOutline,
     RefreshOutline,
     ServerOutline,
@@ -41,6 +42,53 @@
     { value: 'Skip', name: 'Skip — wait for the next occurrence' }
   ];
 
+  const taskTypeHelp = [
+    {
+      type: 'orphan_metadata_cleanup',
+      summary: 'Removes metadata rows that no longer point at any live media or imported asset.'
+    },
+    {
+      type: 'channel_update_check',
+      summary: 'Checks followed channels for new uploads and queues any newly discovered media.'
+    },
+    {
+      type: 'channel_asset_refresh',
+      summary: 'Refreshes channel-level assets such as avatars and banners.'
+    },
+    {
+      type: 'channel_media_list',
+      summary: 'Rebuilds the channel media listing used by the library and creator views.'
+    },
+    {
+      type: 'stale_database_cleanup',
+      summary: 'Cleans up stale maintenance records and other aged scheduler data.'
+    },
+    {
+      type: 'watched_item_auto_delete',
+      summary: 'Deletes watched media items that satisfy the watched-item retention policy.'
+    },
+    {
+      type: 'database_maintenance',
+      summary: 'Runs routine database maintenance work such as housekeeping and compaction.'
+    },
+    {
+      type: 'search_reindex',
+      summary: 'Rebuilds the search index from the authoritative metadata store.'
+    },
+    {
+      type: 'filesystem_rescan',
+      summary: 'Scans the filesystem for new, changed, or removed media entries.'
+    },
+    {
+      type: 'processed_message_cleanup',
+      summary: 'Removes old processed-message records so the job history stays small.'
+    },
+    {
+      type: 'backup',
+      summary: 'Runs the configured backup workflow for the current deployment.'
+    }
+  ] as const;
+
   let schedules = $state<ScheduledTask[]>([]);
   let loading = $state(true);
   let loadError = $state<Error | null>(null);
@@ -62,6 +110,7 @@
 
   let deleteTarget = $state<ScheduledTask | null>(null);
   let deleteModalOpen = $state(false);
+  let taskTypeHelpOpen = $state(false);
 
   const bridgeUnavailable = $derived(loadError instanceof ApiRequestError && loadError.status === 503);
 
@@ -263,7 +312,18 @@
           <p class="mt-1.5 text-xs text-slate-600">Lowercase letters, numbers, and hyphens.</p>
         </div>
         <div>
-          <Label for="schedule-task-type" class="mb-2 text-sm font-medium text-slate-300">Task type</Label>
+          <div class="mb-2 flex items-center gap-1.5">
+            <Label for="schedule-task-type" class="text-sm font-medium text-slate-300">Task type</Label>
+            <button
+              type="button"
+              class="inline-flex h-5 w-5 items-center justify-center rounded-full text-slate-500 transition hover:text-slate-200"
+              aria-label="Explain task types"
+              title="Explain task types"
+              onclick={() => (taskTypeHelpOpen = true)}
+            >
+              <InfoCircleOutline class="h-4 w-4" />
+            </button>
+          </div>
           <Select id="schedule-task-type" items={taskTypeItems} bind:value={formTaskType} class={inputClass} />
         </div>
       </div>
@@ -401,6 +461,22 @@
     </div>
   {/if}
 </section>
+
+<Modal bind:open={taskTypeHelpOpen} title="Task type help" size="lg" class="z-50">
+  <div class="space-y-4">
+    <p class="text-sm text-slate-300">
+      Each schedule runs one registered background job. The task type determines what the scheduler queues when the schedule fires.
+    </p>
+    <div class="space-y-3">
+      {#each taskTypeHelp as item}
+        <div class="rounded-xl border border-slate-800/80 bg-slate-950/30 p-3">
+          <p class="font-mono text-xs font-semibold text-blue-300">{item.type}</p>
+          <p class="mt-1 text-sm text-slate-300">{item.summary}</p>
+        </div>
+      {/each}
+    </div>
+  </div>
+</Modal>
 
 <ConfirmDeleteModal
   bind:open={deleteModalOpen}
