@@ -493,7 +493,21 @@ public sealed class DownloadCommandsConsumerService(
 
                 await using (var stream = File.OpenRead(fileInfo.FullName))
                 {
-                    await storage.WriteAsync(cmd.StoragePath, stream, append: false);
+                    if (cmd.VerifyHashWhileStreaming)
+                    {
+                        await using var hashingStream = new XxHash128ReadStream(stream);
+                        await storage.WriteAsync(cmd.StoragePath, hashingStream, append: false);
+                        var observedHash = hashingStream.GetHash();
+                        if (!string.Equals(observedHash, cmd.ContentHashXxh128, StringComparison.OrdinalIgnoreCase))
+                        {
+                            throw new InvalidOperationException(
+                                $"Upload hash verification failed. Expected {cmd.ContentHashXxh128}, observed {observedHash}.");
+                        }
+                    }
+                    else
+                    {
+                        await storage.WriteAsync(cmd.StoragePath, stream, append: false);
+                    }
                 }
                 contentLength = fileInfo.Length;
 
@@ -1252,5 +1266,48 @@ public sealed class DownloadCommandsConsumerService(
         => ex is ArgumentException
             ? FailureKind.Permanent
             : FailureKind.Transient;
+
+    private sealed class XxHash128ReadStream(Stream inner) : Stream
+    {
+        private readonly XxHash128 _hasher = new();
+
+        public override bool CanRead => inner.CanRead;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => inner.Length;
+        public override long Position
+        {
+            get => inner.Position;
+            set => throw new NotSupportedException();
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            var read = inner.Read(buffer, offset, count);
+            if (read > 0)
+                _hasher.Append(buffer.AsSpan(offset, read));
+            return read;
+        }
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            var read = await inner.ReadAsync(buffer, cancellationToken);
+            if (read > 0)
+                _hasher.Append(buffer.Span[..read]);
+            return read;
+        }
+
+        public string GetHash()
+        {
+            Span<byte> hash = stackalloc byte[16];
+            _hasher.GetCurrentHash(hash);
+            return Convert.ToHexString(hash).ToLowerInvariant();
+        }
+
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
     #endregion
 }

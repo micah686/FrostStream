@@ -628,6 +628,12 @@ public sealed record UploadObjectCommand : IFlowMessage
     public required string ContentHashXxh128 { get; init; }
 
     /// <summary>
+    /// When true, the worker hashes bytes as the upload stream is read and fails the command
+    /// if the observed hash differs from <see cref="ContentHashXxh128"/>.
+    /// </summary>
+    public bool VerifyHashWhileStreaming { get; init; }
+
+    /// <summary>
     /// Which artifact this upload represents. Defaults to <see cref="UploadArtifactKind.Primary"/>
     /// for backwards compatibility with callers that don't care about sidecars.
     /// </summary>

@@ -59,6 +59,10 @@ class Program
                         .MapEnum<AudioRenditionFormat>("audio_rendition_format", "media")
                         .MapEnum<AudioRenditionStatus>("audio_rendition_status", "media")
                         .MapEnum<LocalImportStatus>("local_import_status", "imports")
+                        .MapEnum<ImportSessionStatus>("import_session_status", "imports")
+                        .MapEnum<ImportSessionSourceKind>("import_session_source_kind", "imports")
+                        .MapEnum<ImportSessionItemStatus>("import_session_item_status", "imports")
+                        .MapEnum<ImportSessionItemMetadataState>("import_session_item_metadata_state", "imports")
                         .MapEnum<PlaylistState>("playlist_state", "playlists"))
                 .UseSnakeCaseNamingConvention());
 
@@ -110,7 +114,7 @@ class Program
         });
         builder.Services.AddSingleton<IDownloadJobStateNotifier, DownloadJobStateNotifier>();
         builder.Services.AddScoped<IDownloadJobsRepository, DownloadJobsRepository>();
-        builder.Services.AddScoped<ILocalImportRepository, LocalImportRepository>();
+        builder.Services.AddScoped<IImportSessionRepository, ImportSessionRepository>();
         builder.Services.AddScoped<IMetadataRepository, MetadataRepository>();
         builder.Services.AddScoped<IMetadataReadService, MetadataReadService>();
         builder.Services.AddScoped<IStatisticsReadService, StatisticsReadService>();
@@ -137,6 +141,7 @@ class Program
         builder.Services.Configure<BackupRunnerOptions>(
             builder.Configuration.GetSection(BackupRunnerOptions.SectionName));
         builder.Services.AddSingleton<BackupRunner>();
+        builder.Services.AddSingleton<ImportSessionRequestReplyService>();
 
         builder.Services.AddTypesenseClient(config =>
         {
@@ -176,8 +181,10 @@ class Program
         builder.Services.AddHostedService<DownloadQueueConsumerService>();
         builder.Services.AddHostedService<DownloadRequestedIngressService>();
         builder.Services.AddHostedService<DownloadEventsConsumerService>();
-        builder.Services.AddHostedService<LocalMediaImportRequestedIngressService>();
         builder.Services.AddHostedService<LocalImportEventsConsumerService>();
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<ImportSessionRequestReplyService>());
+        builder.Services.AddHostedService<ImportSessionProbeEventsConsumerService>();
+        builder.Services.AddHostedService<ImportDispatcherService>();
         builder.Services.AddHostedService<PlaylistRequestedIngressService>();
         builder.Services.AddHostedService<PlaylistEventsConsumerService>();
         builder.Services.AddHostedService<PlaylistQueryConsumerService>();

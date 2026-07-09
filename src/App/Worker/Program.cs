@@ -136,6 +136,9 @@ class Program
 
         // Command consumers for the download flow.
         builder.Services.AddHostedService<DownloadCommandsConsumerService>();
+        builder.Services.AddHostedService<LocalImportScanConsumerService>();
+        builder.Services.AddHostedService<LocalImportProbeConsumerService>();
+        builder.Services.AddHostedService<LocalImportEnrichConsumerService>();
         builder.Services.AddHostedService<LocalImportCommandsConsumerService>();
         builder.Services.AddHostedService<PlaylistCommandsConsumerService>();
         builder.Services.AddHostedService<ChannelDiscoveryConsumerService>();
