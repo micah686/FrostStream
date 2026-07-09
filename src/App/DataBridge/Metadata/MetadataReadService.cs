@@ -188,6 +188,21 @@ public sealed class MetadataReadService(NpgsqlDataSource dataSource) : IMetadata
         };
     }
 
+    public async Task<Guid?> GetRandomMediaGuidAsync(Guid? excludeMediaGuid, CancellationToken ct = default)
+    {
+        await using var command = dataSource.CreateCommand("""
+            SELECT mm.media_guid
+            FROM metadata.media_metadata mm
+            WHERE @exclude_media_guid IS NULL OR mm.media_guid <> @exclude_media_guid
+            ORDER BY random()
+            LIMIT 1
+            """);
+        command.Parameters.Add("@exclude_media_guid", NpgsqlDbType.Uuid).Value = (object?)excludeMediaGuid ?? DBNull.Value;
+
+        var result = await command.ExecuteScalarAsync(ct);
+        return result is Guid mediaGuid ? mediaGuid : null;
+    }
+
     public async Task<MetadataTechnicalDto?> GetTechnicalAsync(Guid mediaGuid, CancellationToken ct = default)
     {
         await using var baseCommand = dataSource.CreateCommand("""

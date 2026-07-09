@@ -76,6 +76,7 @@ public static class EndpointIds
     public const string MetadataList = "metadata.list";
     public const string MetadataSearch = "metadata.search";
     public const string MetadataGet = "metadata.get";
+    public const string MetadataRandom = "metadata.random";
     public const string MetadataTechnical = "metadata.technical";
     public const string MetadataVersions = "metadata.versions";
     public const string MetadataComments = "metadata.comments";
@@ -300,6 +301,7 @@ public static class EndpointCatalog
         new(EndpointIds.MetadataList, Bundles.Metadata),
         new(EndpointIds.MetadataSearch, Bundles.Metadata),
         new(EndpointIds.MetadataGet, Bundles.Metadata),
+        new(EndpointIds.MetadataRandom, Bundles.Metadata),
         new(EndpointIds.MetadataTechnical, Bundles.Metadata),
         new(EndpointIds.MetadataVersions, Bundles.Metadata),
         new(EndpointIds.MetadataComments, Bundles.Metadata),

@@ -23,9 +23,11 @@
     mediaGuid: string;
     playlistId: string;
     kind: 'user' | 'platform';
+    /** Reports the ordered media guids after each load (null = entry not playable yet). */
+    onEntriesChange?: (mediaGuids: (string | null)[]) => void;
   }
 
-  let { mediaGuid, playlistId, kind }: Props = $props();
+  let { mediaGuid, playlistId, kind, onEntriesChange }: Props = $props();
 
   let loading = $state(true);
   let loadError = $state<string | null>(null);
@@ -69,6 +71,7 @@
       loadError = err instanceof Error ? err.message : 'Could not load the playlist.';
     } finally {
       loading = false;
+      onEntriesChange?.(entries.map((entry) => entry.mediaGuid));
     }
   }
 

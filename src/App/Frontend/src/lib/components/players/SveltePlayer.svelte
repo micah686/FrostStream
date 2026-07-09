@@ -6,6 +6,8 @@
     src,
     poster = null,
     startTime = null,
+    loop = false,
+    autoplay = false,
     onProgress = undefined,
     onEnded = undefined
   }: {
@@ -13,6 +15,10 @@
     poster?: string | null;
     /** Initial playback position in seconds, applied once when metadata loads. */
     startTime?: number | null;
+    /** Replay the same video when it ends (repeat mode). */
+    loop?: boolean;
+    /** Start playback as soon as the media can play. */
+    autoplay?: boolean;
     onProgress?: (positionSeconds: number, durationSeconds: number | null) => void;
     onEnded?: () => void;
   } = $props();
@@ -42,6 +48,13 @@
     const report = () => onProgress?.(video.currentTime, duration());
     const ended = () => onEnded?.();
 
+    if (autoplay) {
+      video.autoplay = true;
+      video.play().catch(() => {
+        // The browser refused unmuted autoplay; the user can press play.
+      });
+    }
+
     if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
       applyStartTime();
     } else {
@@ -57,6 +70,14 @@
       video.removeEventListener('pause', report);
       video.removeEventListener('ended', ended);
     };
+  });
+
+  // Loop can be toggled mid-playback, so mirror it onto the underlying element reactively.
+  $effect(() => {
+    const video = container?.querySelector('video');
+    if (video) {
+      video.loop = loop;
+    }
   });
 </script>
 

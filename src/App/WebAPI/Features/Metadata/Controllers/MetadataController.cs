@@ -116,6 +116,27 @@ public sealed class MetadataController(
             response.HasMore));
     }
 
+    [HttpGet("random")]
+    [Endpoint(EndpointIds.MetadataRandom)]
+    [EndpointSummary("Pick a random archived media item")]
+    [EndpointDescription("Returns the GUID of one uniformly random archived media item, used by the player's shuffle mode. An optional exclude parameter removes the currently playing item from the pool; when no media exists (or only the excluded item does) the endpoint returns 404.")]
+    public async Task<ActionResult<RandomMetadataResponse>> Random(
+        [FromQuery] Guid? exclude = null,
+        CancellationToken cancellationToken = default)
+    {
+        var response = await SendRequestAsync<MetadataRandomRequestMessage, MetadataRandomResponseMessage>(
+            MetadataSubjects.Random,
+            new MetadataRandomRequestMessage { ExcludeMediaGuid = exclude },
+            cancellationToken);
+
+        if (response is null)
+            return ServiceUnavailable();
+        if (!response.Success || response.MediaGuid is null)
+            return MetadataError(response.ErrorCode, response.ErrorMessage);
+
+        return Ok(new RandomMetadataResponse(response.MediaGuid.Value));
+    }
+
     [HttpGet("{mediaGuid:guid}")]
     [Endpoint(EndpointIds.MetadataGet)]
     [EndpointSummary("Get detailed media metadata")]

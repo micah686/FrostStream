@@ -31,7 +31,7 @@
   },
   "packageManager": "pnpm@10.28.1",
   "dependencies": {
-    "@videojs/html": "10.0.0-beta.24",
+    "@videojs/html": "10.0.0-beta.25",
     "svelte-video-player": "^2.2.0"
   }
 }

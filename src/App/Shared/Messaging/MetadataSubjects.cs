@@ -4,6 +4,7 @@ public static class MetadataSubjects
 {
     public const string List = "metadata.list";
     public const string Get = "metadata.get";
+    public const string Random = "metadata.random";
     public const string GetTechnical = "metadata.get-technical";
     public const string Versions = "metadata.versions";
     public const string CommentsList = "metadata.comments.list";

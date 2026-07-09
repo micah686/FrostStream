@@ -278,6 +278,20 @@ public sealed record MetadataGetResponseMessage
     public MetadataDetailDto? Item { get; init; }
 }
 
+public sealed record MetadataRandomRequestMessage
+{
+    /// <summary>Media to exclude from the pick, typically the video currently playing.</summary>
+    public Guid? ExcludeMediaGuid { get; init; }
+}
+
+public sealed record MetadataRandomResponseMessage
+{
+    public bool Success { get; init; }
+    public string? ErrorCode { get; init; }
+    public string? ErrorMessage { get; init; }
+    public Guid? MediaGuid { get; init; }
+}
+
 public sealed record MetadataTechnicalRequestMessage
 {
     public required Guid MediaGuid { get; init; }

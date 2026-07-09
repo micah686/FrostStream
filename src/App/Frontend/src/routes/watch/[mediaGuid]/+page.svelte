@@ -1,7 +1,10 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { goto } from '$app/navigation';
+  import { browser } from '$app/environment';
   import { Button, Select, Spinner } from 'flowbite-svelte';
   import {
+    ArrowsRepeatOutline,
     CheckCircleOutline,
     CheckCircleSolid,
     ChevronDownOutline,
@@ -9,10 +12,12 @@
     DotsHorizontalOutline,
     EditOutline,
     ExclamationCircleOutline,
+    ForwardStepOutline,
     HeartOutline,
     HeartSolid,
     SearchOutline,
     ShareNodesOutline,
+    ShuffleOutline,
     ThumbsDownOutline,
     ThumbsUpOutline
   } from 'flowbite-svelte-icons';
@@ -206,6 +211,64 @@
   let mediaVersionOptions = $state<MediaVersionOption[]>([{ value: '', name: 'Latest version' }]);
   let versionsLoading = $state(false);
 
+  // Playback modes persist across videos and sessions. Repeat wins over autoplay:
+  // a looping video never fires "ended", so autoplay simply never triggers.
+  const playbackModesKey = 'froststream:playback-modes';
+  let autoplayEnabled = $state(false);
+  let repeatEnabled = $state(false);
+  let shuffleEnabled = $state(false);
+  // Ordered guids of the active playlist (null = entry not downloaded yet), reported by PlaylistPanel.
+  let playlistGuids = $state<(string | null)[]>([]);
+
+  if (browser) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(playbackModesKey) ?? '{}') as Record<string, unknown>;
+      autoplayEnabled = saved.autoplay === true;
+      repeatEnabled = saved.repeat === true;
+      shuffleEnabled = saved.shuffle === true;
+    } catch {
+      // Corrupt prefs fall back to everything off.
+    }
+  }
+
+  $effect(() => {
+    const prefs = JSON.stringify({
+      autoplay: autoplayEnabled,
+      repeat: repeatEnabled,
+      shuffle: shuffleEnabled
+    });
+    if (browser) {
+      localStorage.setItem(playbackModesKey, prefs);
+    }
+  });
+
+  const playbackModes = $derived([
+    {
+      id: 'autoplay',
+      label: 'Autoplay',
+      title: 'Autoplay — play the next video when this one ends',
+      icon: ForwardStepOutline,
+      active: autoplayEnabled,
+      toggle: () => (autoplayEnabled = !autoplayEnabled)
+    },
+    {
+      id: 'repeat',
+      label: 'Repeat',
+      title: 'Repeat — keep replaying this video',
+      icon: ArrowsRepeatOutline,
+      active: repeatEnabled,
+      toggle: () => (repeatEnabled = !repeatEnabled)
+    },
+    {
+      id: 'shuffle',
+      label: 'Shuffle',
+      title: 'Shuffle — autoplay picks a random video instead of the next one',
+      icon: ShuffleOutline,
+      active: shuffleEnabled,
+      toggle: () => (shuffleEnabled = !shuffleEnabled)
+    }
+  ]);
+
   $effect(() => {
     if (!moreMenuOpen) {
       noteMenuOpen = false;
@@ -388,6 +451,51 @@
         }
       })
       .catch(() => {});
+    void advanceAfterEnd(guid);
+  }
+
+  async function advanceAfterEnd(current: string) {
+    // Repeat is handled by the video element's loop attribute; "ended" only fires
+    // here if repeat was switched off, in which case autoplay may take over.
+    if (repeatEnabled || !autoplayEnabled) {
+      return;
+    }
+    const target = await pickNextTarget(current);
+    if (target && current === mediaGuid) {
+      await goto(target);
+    }
+  }
+
+  async function pickNextTarget(current: string): Promise<string | null> {
+    if (userListId || platformListId) {
+      const listQuery = userListId
+        ? `?ulist=${encodeURIComponent(userListId)}`
+        : `?list=${encodeURIComponent(platformListId ?? '')}`;
+      if (shuffleEnabled) {
+        const pool = playlistGuids.filter((guid): guid is string => guid !== null && guid !== current);
+        if (pool.length === 0) {
+          return null;
+        }
+        return `/watch/${pool[Math.floor(Math.random() * pool.length)]}${listQuery}`;
+      }
+      const index = playlistGuids.indexOf(current);
+      const next = playlistGuids.slice(index + 1).find((guid) => guid !== null);
+      return next ? `/watch/${next}${listQuery}` : null;
+    }
+
+    if (shuffleEnabled) {
+      try {
+        const response = await fetch(`/api/metadata/random?exclude=${encodeURIComponent(current)}`);
+        if (!response.ok) {
+          return null;
+        }
+        const data = (await response.json()) as { mediaGuid?: string };
+        return data.mediaGuid && data.mediaGuid !== current ? `/watch/${data.mediaGuid}` : null;
+      } catch {
+        return null;
+      }
+    }
+    return upNext.length > 0 ? `/watch/${upNext[0].mediaGuid}` : null;
   }
 
   async function toggleWatched() {
@@ -655,6 +763,29 @@
         {/each}
       </div>
       <div class="flex items-center gap-2">
+        <div
+          class="flex gap-1 rounded-xl border border-slate-800/70 bg-slate-900/40 p-1"
+          role="group"
+          aria-label="Playback modes"
+        >
+          {#each playbackModes as mode (mode.id)}
+            <button
+              type="button"
+              onclick={mode.toggle}
+              aria-pressed={mode.active}
+              aria-label={mode.label}
+              title={mode.title}
+              class={[
+                'grid h-8 w-9 place-items-center rounded-lg transition',
+                mode.active
+                  ? 'bg-blue-500/15 text-blue-400'
+                  : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-300'
+              ]}
+            >
+              <mode.icon class="h-4 w-4" />
+            </button>
+          {/each}
+        </div>
         {#if versionsLoading}
           <span class="flex items-center gap-2 rounded-xl border border-slate-800/70 bg-slate-900/40 px-3 py-2 text-xs text-slate-500">
             <Spinner size="4" />
@@ -689,6 +820,8 @@
                 poster={posterUrl}
                 tracks={captionTracks}
                 startTime={resumeTime}
+                loop={repeatEnabled}
+                autoplay={autoplayEnabled}
                 onProgress={handlePlaybackProgress}
                 onEnded={handlePlaybackEnded}
               />
@@ -697,6 +830,8 @@
                 src={streamUrl}
                 poster={posterUrl}
                 startTime={resumeTime}
+                loop={repeatEnabled}
+                autoplay={autoplayEnabled}
                 onProgress={handlePlaybackProgress}
                 onEnded={handlePlaybackEnded}
               />
@@ -1161,6 +1296,7 @@
             {mediaGuid}
             playlistId={userListId ?? platformListId ?? ''}
             kind={userListId ? 'user' : 'platform'}
+            onEntriesChange={(guids) => (playlistGuids = guids)}
           />
         {/key}
       </div>

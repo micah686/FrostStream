@@ -21,6 +21,13 @@ public sealed class MetadataQueryConsumerService(
             queueGroup: MetadataSubjects.ProcessorsQueueGroup,
             cancellationToken: stoppingToken);
 
+        await SubscribeAsync<MetadataRandomRequestMessage>(
+            messageBus,
+            MetadataSubjects.Random,
+            HandleRandomAsync,
+            queueGroup: MetadataSubjects.ProcessorsQueueGroup,
+            cancellationToken: stoppingToken);
+
         await SubscribeAsync<MetadataTechnicalRequestMessage>(
             messageBus,
             MetadataSubjects.GetTechnical,
@@ -101,6 +108,32 @@ public sealed class MetadataQueryConsumerService(
         {
             logger.LogError(ex, "Failed handling metadata detail query for {MediaGuid}", context.Message.MediaGuid);
             await context.RespondAsync(new MetadataGetResponseMessage
+            {
+                Success = false,
+                ErrorCode = "internal_error",
+                ErrorMessage = "Internal metadata service error."
+            });
+        }
+    }
+
+    private async Task HandleRandomAsync(IMessageContext<MetadataRandomRequestMessage> context)
+    {
+        try
+        {
+            var mediaGuid = await WithQuery(query => query.GetRandomMediaGuidAsync(context.Message.ExcludeMediaGuid));
+            await context.RespondAsync(mediaGuid is null
+                ? new MetadataRandomResponseMessage
+                {
+                    Success = false,
+                    ErrorCode = "not_found",
+                    ErrorMessage = "No archived media is available to pick from."
+                }
+                : new MetadataRandomResponseMessage { Success = true, MediaGuid = mediaGuid });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed handling random media query.");
+            await context.RespondAsync(new MetadataRandomResponseMessage
             {
                 Success = false,
                 ErrorCode = "internal_error",

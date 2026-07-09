@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@videojs/html':
-        specifier: 10.0.0-beta.24
-        version: 10.0.0-beta.24(@svta/cml-cta@1.0.6(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0))(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0)
+        specifier: 10.0.0-beta.25
+        version: 10.0.0-beta.25(@svta/cml-cta@1.0.6(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0))(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0)
       svelte-video-player:
         specifier: ^2.2.0
         version: 2.2.0(hls.js@1.6.16)(svelte@5.56.3)
@@ -442,22 +442,22 @@ packages:
   '@types/trusted-types@2.0.7':
     resolution: {integrity: sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==}
 
-  '@videojs/core@10.0.0-beta.24':
-    resolution: {integrity: sha512-v18EkiyxNkLvCccZ3yPWO5J2OLWehTueNywhLFcLLltfLqO6OvKG2Gg2RUVYFcOEWS5e9CpUmrXOVAWUzYAuMw==}
+  '@videojs/core@10.0.0-beta.25':
+    resolution: {integrity: sha512-Yxd6c+u7LrYl6aKzZRyR5PjDqUt1lUbgFwIhg6pMzI8bJszIGjLS7TDzXdALpEFJpM1Z08dbqCEzCGaMj7Eu6A==}
 
-  '@videojs/element@10.0.0-beta.24':
-    resolution: {integrity: sha512-+sgzpj1JreLtxrGxKMHmJMRPVodbvXtuV5tUNG23URMrRdNJT4ey1ypG5ZoFL2klmpcd/kac7WBo+FZk+rWJRA==}
+  '@videojs/element@10.0.0-beta.25':
+    resolution: {integrity: sha512-TAa0+89mDj+4JEv2F87EG3hEqDqZJMWP/treRzQaC1lR0eeGremaVUfdxNNnyLe/e797dXSWtiu5Q5A1Yka5Qw==}
 
-  '@videojs/html@10.0.0-beta.24':
-    resolution: {integrity: sha512-TQ9fN/nafhGVkCjLpWw3VWOhOdUfocN9geHOOPV19ux1Gj11vqT1bphPbK2UNQeZhfK5QQEIeuAY7tUZwD6Mdg==}
+  '@videojs/html@10.0.0-beta.25':
+    resolution: {integrity: sha512-7qYMJf9Wbu3AF1ZxuEWUw0NBY9pX9yKtaokPhLfBJQc4BO+1xSQu27cqnLjZbuZqnaRpwN0P3+TZ5qYWytfmpQ==}
 
-  '@videojs/spf@10.0.0-beta.24':
-    resolution: {integrity: sha512-ACTOHzhCoTJLndyX5lq+k7A3Q9gaJeEdtjgVfbYvV/F8OwEA1zT5gGJnG/bbHC81yI/w51b+YneB8pGJutUTjw==}
+  '@videojs/spf@10.0.0-beta.25':
+    resolution: {integrity: sha512-SETOzCPbSxuzCoX+bF2u7/Z80AA/Xwpqpy5ki//yslIyPxWkMT0GFydXdoZ/bJpNsBqGmDbDxEBDo1uMjnM4mQ==}
 
-  '@videojs/store@10.0.0-beta.24':
-    resolution: {integrity: sha512-gFAozvxGTviFpKVwsrNAo2cNjTcwRDg/AwLs4Gft/XqxSggD7CxilZ9d6W1nTxAbcSMPvrySmnW8wuGtbbPyEw==}
+  '@videojs/store@10.0.0-beta.25':
+    resolution: {integrity: sha512-XvPC0+MQ6AZ/oKGpSzmjOM56aYESMpPsTg5zddBDXhcqeAOUxpEsXDqhU1rsm751tU4ZavGxHENx70lBOa5dUA==}
     peerDependencies:
-      '@videojs/element': 10.0.0-beta.24
+      '@videojs/element': 10.0.0-beta.25
       react: ^18.0.0 || ^19.0.0
     peerDependenciesMeta:
       '@videojs/element':
@@ -465,8 +465,11 @@ packages:
       react:
         optional: true
 
-  '@videojs/utils@10.0.0-beta.24':
-    resolution: {integrity: sha512-sQvsawB1pQiYJxkGnrdxWrcfmEvjjmGSDcrt47OmI0FQx40GseO+QMzm3XvGuxmy6KOKneCfegHFBt+Ez0MKLw==}
+  '@videojs/utils@10.0.0-beta.25':
+    resolution: {integrity: sha512-tq/848qmzgTncopeYE5iiYs1Pfzj4OEdSe7zE2H6xoOB0PUMlnPOThA3aybHJ8Lh9bmw+wTb6QJ0NZanIzt2Zg==}
+
+  '@vimeo/player@2.30.4':
+    resolution: {integrity: sha512-M8m1UAhJSb+KCWuXDLWHViwj+3YY/0ogwFquRfMHs9e9LYjXT9iB7n+sOCKwUusbiXuU2HKmXx+FEGHtYZfUSg==}
 
   acorn@8.16.0:
     resolution: {integrity: sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==}
@@ -727,6 +730,9 @@ packages:
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
 
+  native-promise-only@0.8.1:
+    resolution: {integrity: sha512-zkVhZUA3y8mbz652WrL5x0fB0ehrBkulWT3TomAQ9iDtyXZvzKeEA6GPxAItBYeNYl5yngKRX612qHOhvMkDeg==}
+
   obug@2.1.2:
     resolution: {integrity: sha512-AWGB9WFcRXOQs48Z/udjI5ZcZMHXwX8XPByNpOydgcGsDLIzjGizhoMWJyKAWze7AVW/2W1i+/gPX4YtKe5cyg==}
     engines: {node: '>=12.20.0'}
@@ -900,6 +906,10 @@ packages:
     peerDependenciesMeta:
       vite:
         optional: true
+
+  weakmap-polyfill@2.0.4:
+    resolution: {integrity: sha512-ZzxBf288iALJseijWelmECm/1x7ZwQn3sMYIkDr2VvZp7r6SEKuT8D0O9Wiq6L9Nl5mazrOMcmiZE/2NCenaxw==}
+    engines: {node: '>=8.10.0'}
 
   zimmerframe@1.1.4:
     resolution: {integrity: sha512-B58NGBEoc8Y9MWWCQGl/gq9xBCe4IiKM0a2x7GZdQKOW5Exr8S1W24J6OgM1njK8xCRGvAJIL/MxXHf6SkmQKQ==}
@@ -1218,11 +1228,12 @@ snapshots:
 
   '@types/trusted-types@2.0.7': {}
 
-  '@videojs/core@10.0.0-beta.24(@svta/cml-cta@1.0.6(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0))(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0)(@videojs/element@10.0.0-beta.24)':
+  '@videojs/core@10.0.0-beta.25(@svta/cml-cta@1.0.6(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0))(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0)(@videojs/element@10.0.0-beta.25)':
     dependencies:
-      '@videojs/spf': 10.0.0-beta.24
-      '@videojs/store': 10.0.0-beta.24(@videojs/element@10.0.0-beta.24)
-      '@videojs/utils': 10.0.0-beta.24
+      '@videojs/spf': 10.0.0-beta.25
+      '@videojs/store': 10.0.0-beta.25(@videojs/element@10.0.0-beta.25)
+      '@videojs/utils': 10.0.0-beta.25
+      '@vimeo/player': 2.30.4
       dashjs: 5.2.0(@svta/cml-cta@1.0.6(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0))(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0)
       hls.js: 1.6.16
       mux-embed: 5.18.1
@@ -1233,35 +1244,40 @@ snapshots:
       - '@videojs/element'
       - react
 
-  '@videojs/element@10.0.0-beta.24':
+  '@videojs/element@10.0.0-beta.25':
     dependencies:
       '@lit/context': 1.1.6
 
-  '@videojs/html@10.0.0-beta.24(@svta/cml-cta@1.0.6(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0))(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0)':
+  '@videojs/html@10.0.0-beta.25(@svta/cml-cta@1.0.6(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0))(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0)':
     dependencies:
-      '@videojs/core': 10.0.0-beta.24(@svta/cml-cta@1.0.6(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0))(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0)(@videojs/element@10.0.0-beta.24)
-      '@videojs/element': 10.0.0-beta.24
-      '@videojs/spf': 10.0.0-beta.24
-      '@videojs/store': 10.0.0-beta.24(@videojs/element@10.0.0-beta.24)
-      '@videojs/utils': 10.0.0-beta.24
+      '@videojs/core': 10.0.0-beta.25(@svta/cml-cta@1.0.6(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0))(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0)(@videojs/element@10.0.0-beta.25)
+      '@videojs/element': 10.0.0-beta.25
+      '@videojs/spf': 10.0.0-beta.25
+      '@videojs/store': 10.0.0-beta.25(@videojs/element@10.0.0-beta.25)
+      '@videojs/utils': 10.0.0-beta.25
     transitivePeerDependencies:
       - '@svta/cml-cta'
       - '@svta/cml-structured-field-values'
       - '@svta/cml-utils'
       - react
 
-  '@videojs/spf@10.0.0-beta.24':
+  '@videojs/spf@10.0.0-beta.25':
     dependencies:
-      '@videojs/utils': 10.0.0-beta.24
+      '@videojs/utils': 10.0.0-beta.25
       signal-polyfill: 0.2.2
 
-  '@videojs/store@10.0.0-beta.24(@videojs/element@10.0.0-beta.24)':
+  '@videojs/store@10.0.0-beta.25(@videojs/element@10.0.0-beta.25)':
     dependencies:
-      '@videojs/utils': 10.0.0-beta.24
+      '@videojs/utils': 10.0.0-beta.25
     optionalDependencies:
-      '@videojs/element': 10.0.0-beta.24
+      '@videojs/element': 10.0.0-beta.25
 
-  '@videojs/utils@10.0.0-beta.24': {}
+  '@videojs/utils@10.0.0-beta.25': {}
+
+  '@vimeo/player@2.30.4':
+    dependencies:
+      native-promise-only: 0.8.1
+      weakmap-polyfill: 2.0.4
 
   acorn@8.16.0: {}
 
@@ -1504,6 +1520,8 @@ snapshots:
 
   nanoid@3.3.12: {}
 
+  native-promise-only@0.8.1: {}
+
   obug@2.1.2: {}
 
   path-browserify@1.0.1: {}
@@ -1651,5 +1669,7 @@ snapshots:
   vitefu@1.1.3(vite@8.0.16(@types/node@25.9.2)(jiti@2.7.0)):
     optionalDependencies:
       vite: 8.0.16(@types/node@25.9.2)(jiti@2.7.0)
+
+  weakmap-polyfill@2.0.4: {}
 
   zimmerframe@1.1.4: {}

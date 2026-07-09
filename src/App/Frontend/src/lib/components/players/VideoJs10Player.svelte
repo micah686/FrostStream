@@ -16,6 +16,8 @@
     poster = null,
     tracks = [],
     startTime = null,
+    loop = false,
+    autoplay = false,
     onProgress = undefined,
     onEnded = undefined
   }: {
@@ -24,6 +26,10 @@
     tracks?: TextTrackSource[];
     /** Initial playback position in seconds, applied once when metadata loads. */
     startTime?: number | null;
+    /** Replay the same video when it ends (repeat mode). */
+    loop?: boolean;
+    /** Start playback as soon as the media can play. */
+    autoplay?: boolean;
     onProgress?: (positionSeconds: number, durationSeconds: number | null) => void;
     onEnded?: () => void;
   } = $props();
@@ -70,6 +76,8 @@
         poster={poster ?? undefined}
         playsinline
         preload="metadata"
+        {loop}
+        {autoplay}
         class="h-full w-full"
         onloadedmetadata={applyStartTime}
         ontimeupdate={reportProgress}
