@@ -96,6 +96,8 @@
       event.currentTarget.hidden = true;
     }
   }
+
+  const libraryTabHref = (tab: 'History' | 'Liked') => `/library?tab=${encodeURIComponent(tab)}`;
 </script>
 
 <svelte:head>
@@ -114,13 +116,24 @@
       </h2>
       <p class="mt-1 text-sm text-slate-500">Pick up where you left off across devices</p>
     </div>
-    <button
-      type="button"
-      class="hidden items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-slate-500 transition hover:text-blue-400 sm:flex"
-    >
-      See all
-      <ChevronRightOutline class="h-3 w-3" />
-    </button>
+    <div class="hidden items-center gap-2 sm:flex">
+      <a
+        href={libraryTabHref('History')}
+        class="rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:bg-slate-800 hover:text-white"
+      >
+        History
+      </a>
+      <a
+        href={libraryTabHref('Liked')}
+        class="rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:bg-slate-800 hover:text-white"
+      >
+        Liked
+      </a>
+      <a href="/library" class="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-slate-500 transition hover:text-blue-400">
+        See all
+        <ChevronRightOutline class="h-3 w-3" />
+      </a>
+    </div>
   </div>
 
   {#if continueLoading}

@@ -189,8 +189,13 @@ public static class EndpointIds
     public const string MediaWatchStateGet = "media.watch-state.get";
     public const string MediaWatchStateUpsert = "media.watch-state.upsert";
     public const string MediaWatchStateListInProgress = "media.watch-state.list-in-progress";
+    public const string MediaWatchStateListHistory = "media.watch-state.list-history";
     public const string MediaWatchStateMarkWatched = "media.watch-state.mark-watched";
     public const string MediaWatchStateMarkUnwatched = "media.watch-state.mark-unwatched";
+    public const string MediaLikeStateGet = "media.like-state.get";
+    public const string MediaLike = "media.like";
+    public const string MediaUnlike = "media.unlike";
+    public const string MediaLikesList = "media.likes.list";
     public const string PlaylistAudioStream = "playlists.audio-stream";
 
     // Server-side casting (protocol providers driven by the server via local discovery)
@@ -398,6 +403,11 @@ public static class EndpointCatalog
         new(EndpointIds.MediaWatchStateMarkWatched, Bundles.Media),
         new(EndpointIds.MediaWatchStateMarkUnwatched, Bundles.Media),
         new(EndpointIds.MediaWatchStateListInProgress, Bundles.Media),
+        new(EndpointIds.MediaWatchStateListHistory, Bundles.Media),
+        new(EndpointIds.MediaLikeStateGet, Bundles.Media),
+        new(EndpointIds.MediaLike, Bundles.Media),
+        new(EndpointIds.MediaUnlike, Bundles.Media),
+        new(EndpointIds.MediaLikesList, Bundles.Media),
         new(EndpointIds.CastDevicesList, Bundles.Media),
         new(EndpointIds.CastSessionsStart, Bundles.Media),
         new(EndpointIds.CastSessionsList, Bundles.Media),

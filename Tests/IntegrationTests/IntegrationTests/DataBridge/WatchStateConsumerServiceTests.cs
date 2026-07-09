@@ -46,7 +46,7 @@ public sealed class WatchStateConsumerServiceTests
         var bus = new FakeMessageBus();
         var service = Fixture.CreateService(bus);
         await service.StartAsync(CancellationToken.None);
-        await WaitForSubscriptionsAsync(bus, expected: 2);
+            await WaitForSubscriptionsAsync(bus, expected: 8);
 
         try
         {
@@ -80,6 +80,100 @@ public sealed class WatchStateConsumerServiceTests
         }
     }
 
+    [Test]
+    public async Task History_List_Includes_InProgress_And_Completed_For_User()
+    {
+        var firstMediaGuid = Guid.NewGuid();
+        var secondMediaGuid = Guid.NewGuid();
+        await Fixture.SeedMediaWithMetadataAsync(firstMediaGuid, "First video");
+        await Fixture.SeedMediaWithMetadataAsync(secondMediaGuid, "Second video");
+
+        var bus = new FakeMessageBus();
+        var service = Fixture.CreateService(bus);
+        await service.StartAsync(CancellationToken.None);
+        await WaitForSubscriptionsAsync(bus, expected: 8);
+
+        try
+        {
+            await UpsertAsync(bus, "reader-a", firstMediaGuid, completed: false);
+            await UpsertAsync(bus, "reader-a", secondMediaGuid, completed: true);
+            await UpsertAsync(bus, "reader-b", Guid.NewGuid(), completed: false);
+
+            var response = await bus.InvokeAsync<WatchStateHistoryListRequest, WatchStateHistoryListResponse>(
+                WatchStateSubjects.ListHistory,
+                new WatchStateHistoryListRequest
+                {
+                    OwnerSubject = "reader-a",
+                    Page = 1,
+                    PageSize = 10
+                });
+
+            response.Success.ShouldBeTrue();
+            response.TotalCount.ShouldBe(2);
+            response.Items.Select(x => x.Media.MediaGuid).OrderBy(x => x).ShouldBe(
+                new[] { firstMediaGuid, secondMediaGuid }.OrderBy(x => x));
+        }
+        finally
+        {
+            await service.StopAsync(CancellationToken.None);
+        }
+    }
+
+    [Test]
+    public async Task Likes_Are_Private_And_Listable_Per_User()
+    {
+        var firstMediaGuid = Guid.NewGuid();
+        var secondMediaGuid = Guid.NewGuid();
+        await Fixture.SeedMediaWithMetadataAsync(firstMediaGuid, "First liked video");
+        await Fixture.SeedMediaWithMetadataAsync(secondMediaGuid, "Second liked video");
+
+        var bus = new FakeMessageBus();
+        var service = Fixture.CreateService(bus);
+        await service.StartAsync(CancellationToken.None);
+        await WaitForSubscriptionsAsync(bus, expected: 8);
+
+        try
+        {
+            var firstLike = await LikeAsync(bus, "reader-a", firstMediaGuid);
+            var secondLike = await LikeAsync(bus, "reader-b", secondMediaGuid);
+
+            firstLike.Success.ShouldBeTrue();
+            firstLike.State!.Liked.ShouldBeTrue();
+            secondLike.Success.ShouldBeTrue();
+
+            var readerAList = await bus.InvokeAsync<MediaLikeListRequest, MediaLikeListResponse>(
+                MediaLikeSubjects.List,
+                new MediaLikeListRequest
+                {
+                    OwnerSubject = "reader-a",
+                    Page = 1,
+                    PageSize = 10
+                });
+
+            readerAList.Success.ShouldBeTrue();
+            readerAList.TotalCount.ShouldBe(1);
+            readerAList.Items.Single().Media.MediaGuid.ShouldBe(firstMediaGuid);
+
+            var unlike = await UnlikeAsync(bus, "reader-a", firstMediaGuid);
+            unlike.Success.ShouldBeTrue();
+            unlike.State!.Liked.ShouldBeFalse();
+
+            var readerBState = await bus.InvokeAsync<MediaLikeStateRequest, MediaLikeStateResponse>(
+                MediaLikeSubjects.Get,
+                new MediaLikeStateRequest
+                {
+                    OwnerSubject = "reader-b",
+                    MediaGuid = secondMediaGuid
+                });
+            readerBState.Success.ShouldBeTrue();
+            readerBState.State!.Liked.ShouldBeTrue();
+        }
+        finally
+        {
+            await service.StopAsync(CancellationToken.None);
+        }
+    }
+
     private static Task<WatchStateResponse> UpsertAsync(
         FakeMessageBus bus,
         string ownerSubject,
@@ -100,6 +194,24 @@ public sealed class WatchStateConsumerServiceTests
         => bus.InvokeAsync<WatchStateGetRequest, WatchStateResponse>(
             WatchStateSubjects.Get,
             new WatchStateGetRequest
+            {
+                OwnerSubject = ownerSubject,
+                MediaGuid = mediaGuid
+            });
+
+    private static Task<MediaLikeStateResponse> LikeAsync(FakeMessageBus bus, string ownerSubject, Guid mediaGuid)
+        => bus.InvokeAsync<MediaLikeStateRequest, MediaLikeStateResponse>(
+            MediaLikeSubjects.Like,
+            new MediaLikeStateRequest
+            {
+                OwnerSubject = ownerSubject,
+                MediaGuid = mediaGuid
+            });
+
+    private static Task<MediaLikeStateResponse> UnlikeAsync(FakeMessageBus bus, string ownerSubject, Guid mediaGuid)
+        => bus.InvokeAsync<MediaLikeStateRequest, MediaLikeStateResponse>(
+            MediaLikeSubjects.Unlike,
+            new MediaLikeStateRequest
             {
                 OwnerSubject = ownerSubject,
                 MediaGuid = mediaGuid
@@ -177,6 +289,28 @@ public sealed class WatchStateConsumerServiceTests
                 "INSERT INTO media (media_guid, created_at) VALUES (@media_guid, @created_at);");
             command.Parameters.AddWithValue("media_guid", mediaGuid);
             command.Parameters.AddWithValue("created_at", Now.ToDateTimeOffset());
+            await command.ExecuteNonQueryAsync();
+        }
+
+        public async Task SeedMediaWithMetadataAsync(Guid mediaGuid, string title)
+        {
+            await SeedMediaAsync(mediaGuid);
+            await using var command = DataSource.CreateCommand("""
+                WITH account_row AS (
+                    INSERT INTO metadata.accounts (platform, account_name, account_handle)
+                    VALUES ('youtube', 'Test Creator', 'test-creator')
+                    ON CONFLICT (platform, account_handle)
+                    DO UPDATE SET account_name = EXCLUDED.account_name
+                    RETURNING id
+                )
+                INSERT INTO metadata.media_metadata
+                    (media_guid, account_id, metadata_scrape_date, title, was_live)
+                SELECT @media_guid, id, @metadata_scrape_date, @title, false
+                FROM account_row;
+                """);
+            command.Parameters.AddWithValue("media_guid", mediaGuid);
+            command.Parameters.AddWithValue("metadata_scrape_date", Now.ToDateTimeOffset());
+            command.Parameters.AddWithValue("title", title);
             await command.ExecuteNonQueryAsync();
         }
 

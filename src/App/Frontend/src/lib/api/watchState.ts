@@ -15,9 +15,39 @@ export interface WatchStateUpdate {
   completed: boolean;
 }
 
+export interface MediaCard {
+  mediaGuid: string;
+  title: string;
+  thumbnailStoragePath?: string | null;
+  durationSeconds?: number | null;
+  releaseDate?: string | null;
+  viewCount?: number | null;
+  availability?: string | null;
+  wasLive: boolean;
+  account: {
+    accountId: number;
+    platform: string;
+    accountName: string;
+    accountHandle: string;
+    avatarStoragePath?: string | null;
+  };
+}
+
+export interface WatchHistoryItem {
+  watchState: WatchState;
+  media: MediaCard;
+}
+
+export interface WatchHistoryResponse {
+  items: WatchHistoryItem[];
+  page: number;
+  totalCount: number;
+  hasMore: boolean;
+}
+
 const base = (mediaGuid: string) => `/api/media/${encodeURIComponent(mediaGuid)}/watch-state`;
 
-/** Returns null when the caller has no recorded state for the media item (404). */
+/** Returns an empty unwatched state when the caller has no recorded state for the media item. */
 export async function getWatchState(mediaGuid: string, fetchImpl: typeof fetch = fetch): Promise<WatchState | null> {
   const url = base(mediaGuid);
   const response = await fetchImpl(url, { credentials: 'same-origin' });
@@ -65,6 +95,20 @@ export async function listInProgress(limit = 12, fetchImpl: typeof fetch = fetch
     throw new Error(await describeError(response, `GET ${url} failed with status ${response.status}.`));
   }
   return (await response.json()) as WatchState[];
+}
+
+export async function listWatchHistory(
+  page = 1,
+  pageSize = 24,
+  fetchImpl: typeof fetch = fetch
+): Promise<WatchHistoryResponse> {
+  const query = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  const url = `/api/media/watch-states/history?${query}`;
+  const response = await fetchImpl(url, { credentials: 'same-origin' });
+  if (!response.ok) {
+    throw new Error(await describeError(response, `GET ${url} failed with status ${response.status}.`));
+  }
+  return (await response.json()) as WatchHistoryResponse;
 }
 
 async function postState(url: string, fetchImpl: typeof fetch): Promise<WatchState> {

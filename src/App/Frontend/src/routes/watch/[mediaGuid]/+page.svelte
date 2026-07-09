@@ -9,6 +9,8 @@
     DotsHorizontalOutline,
     EditOutline,
     ExclamationCircleOutline,
+    HeartOutline,
+    HeartSolid,
     SearchOutline,
     ShareNodesOutline,
     ThumbsDownOutline,
@@ -27,6 +29,7 @@
     updateWatchState,
     type WatchState
   } from '$lib/api/watchState';
+  import { getLikeState, likeMedia, unlikeMedia, type MediaLikeState } from '$lib/api/mediaLikes';
   import { getMetadataVersions, type MetadataVersion } from '$lib/api/metadata';
   import {
     accentFor,
@@ -186,6 +189,9 @@
   let watchState = $state<WatchState | null>(null);
   let watchStateLoaded = $state(false);
   let watchedBusy = $state(false);
+  let likeState = $state<MediaLikeState | null>(null);
+  let likeStateLoaded = $state(false);
+  let likeBusy = $state(false);
   // After a manual "mark unwatched", don't let the 95% rule silently re-complete
   // the video during this visit; a natural end still marks it watched.
   let suppressAutoComplete = false;
@@ -233,6 +239,7 @@
     return `/api/media/watch/${mediaGuid}${query}`;
   });
   const watched = $derived(watchState?.completed === true);
+  const liked = $derived(likeState?.liked === true);
   // ?t= wins over the saved position; positions within the first 5s or last 5% are
   // treated as "start over" so a finished video doesn't resume at the outro.
   const startAtParam = $derived.by(() => {
@@ -287,6 +294,9 @@
     technicalRequested = false;
     watchState = null;
     watchStateLoaded = false;
+    likeState = null;
+    likeStateLoaded = false;
+    likeBusy = false;
     suppressAutoComplete = false;
     lastProgressSentAt = 0;
     lastSentPosition = -1;
@@ -294,7 +304,14 @@
     mediaVersionOptions = [{ value: '', name: 'Latest version' }];
     versionsLoading = false;
 
-    await Promise.all([loadDetail(guid), loadComments(guid, 1), loadUpNext(guid), loadWatchState(guid), loadVersions(guid)]);
+    await Promise.all([
+      loadDetail(guid),
+      loadComments(guid, 1),
+      loadUpNext(guid),
+      loadWatchState(guid),
+      loadLikeState(guid),
+      loadVersions(guid)
+    ]);
   }
 
   async function loadVersions(guid: string) {
@@ -324,6 +341,16 @@
       watchState = null;
     } finally {
       watchStateLoaded = true;
+    }
+  }
+
+  async function loadLikeState(guid: string) {
+    try {
+      likeState = await getLikeState(guid);
+    } catch {
+      likeState = null;
+    } finally {
+      likeStateLoaded = true;
     }
   }
 
@@ -379,6 +406,24 @@
       // Leave the current toggle state; the user can retry.
     } finally {
       watchedBusy = false;
+    }
+  }
+
+  async function toggleLike() {
+    if (likeBusy || !likeStateLoaded) {
+      return;
+    }
+    likeBusy = true;
+    const guid = mediaGuid;
+    try {
+      const state = liked ? await unlikeMedia(guid) : await likeMedia(guid);
+      if (guid === mediaGuid) {
+        likeState = state;
+      }
+    } catch {
+      // Leave the current toggle state; the user can retry.
+    } finally {
+      likeBusy = false;
     }
   }
 
@@ -703,23 +748,26 @@
         </div>
 
         <div class="flex items-center gap-2">
-          <div class="flex overflow-hidden rounded-full border border-slate-800 bg-slate-900/70">
-            <button
-              type="button"
-              class="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-slate-300 transition hover:bg-slate-800"
-            >
-              <ThumbsUpOutline class="h-4 w-4" />
-              {formatCount(detail.likeCount) ?? '—'}
-            </button>
-            <span class="my-1.5 w-px bg-slate-800"></span>
-            <button
-              type="button"
-              class="px-3 py-2 text-slate-400 transition hover:bg-slate-800"
-              aria-label="Dislike"
-            >
-              <ThumbsDownOutline class="h-4 w-4" />
-            </button>
-          </div>
+          <button
+            type="button"
+            onclick={toggleLike}
+            disabled={!likeStateLoaded || likeBusy}
+            aria-pressed={liked}
+            aria-label={liked ? 'Remove from favorites' : 'Add to favorites'}
+            title={liked ? 'Remove from favorites' : 'Add to favorites'}
+            class={[
+              'grid h-9 w-9 place-items-center rounded-lg border transition disabled:opacity-60',
+              liked
+                ? 'border-rose-500/50 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20'
+                : 'border-slate-800 bg-slate-900/70 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+            ]}
+          >
+            {#if liked}
+              <HeartSolid class="h-4 w-4" />
+            {:else}
+              <HeartOutline class="h-4 w-4" />
+            {/if}
+          </button>
           <button
             type="button"
             onclick={toggleWatched}
@@ -829,6 +877,18 @@
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-semibold text-slate-300">
           {#if formatViews(detail.viewCount)}<span>{formatViews(detail.viewCount)}</span>{/if}
           {#if formatRelativeDate(detail.releaseDate)}<span class="text-slate-500">·</span><span>{formatRelativeDate(detail.releaseDate)}</span>{/if}
+          {#if detail.likeCount != null}
+            <span class="inline-flex items-center gap-1 text-slate-400" title="Provider likes at download time">
+              <ThumbsUpOutline class="h-3.5 w-3.5" />
+              {formatCount(detail.likeCount) ?? detail.likeCount.toLocaleString()}
+            </span>
+          {/if}
+          {#if detail.dislikeCount != null}
+            <span class="inline-flex items-center gap-1 text-slate-500" title="Provider dislikes at download time">
+              <ThumbsDownOutline class="h-3.5 w-3.5" />
+              {formatCount(detail.dislikeCount) ?? detail.dislikeCount.toLocaleString()}
+            </span>
+          {/if}
           {#each detail.tags.slice(0, 6) as tag}
             <span class="rounded-full bg-slate-800/80 px-2.5 py-0.5 text-xs font-medium text-slate-400">
               #{tag}

@@ -44,9 +44,9 @@
   const libraryNavigation: NavItem[] = [
     { label: 'Library', icon: RectangleListOutline, href: '/library' },
     { label: 'Channels', icon: UsersGroupOutline, href: '/library/creators' },
-    { label: 'History', icon: ClockArrowOutline },
+    { label: 'History', icon: ClockArrowOutline, href: '/library?tab=History' },
     { label: 'Watch later', icon: ClockOutline },
-    { label: 'Liked', icon: HeartOutline }
+    { label: 'Liked', icon: HeartOutline, href: '/library?tab=Liked' }
   ];
 
   const serverNavigation: NavItem[] = [

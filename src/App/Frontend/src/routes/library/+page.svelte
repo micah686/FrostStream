@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { page } from '$app/state';
   import { onMount } from 'svelte';
   import { Button, Select, Spinner } from 'flowbite-svelte';
   import {
@@ -25,6 +26,8 @@
     formatViews,
     initialsFor
   } from '$lib/media';
+  import { listWatchHistory, type WatchState } from '$lib/api/watchState';
+  import { listLikedMedia } from '$lib/api/mediaLikes';
 
   interface MediaCard {
     mediaGuid: string;
@@ -95,7 +98,7 @@
   let platformPlaylistCards = $state<PlatformPlaylistCard[]>([]);
   let platformPlaylistsLoading = $state(false);
   let platformPlaylistsError = $state<string | null>(null);
-  let page = $state(1);
+  let currentPage = $state(1);
   let items = $state<MediaCard[]>([]);
   let totalCount = $state(0);
   let hasMore = $state(false);
@@ -103,12 +106,29 @@
   let loadError = $state<string | null>(null);
   let needsLogin = $state(false);
   let overview = $state<Overview | null>(null);
+  let historyStates = $state<Record<string, WatchState>>({});
+  let likedAtByGuid = $state<Record<string, string>>({});
 
   const totalPages = $derived(Math.max(1, Math.ceil(totalCount / pageSize)));
+  const tabFromQuery = $derived.by(() => {
+    const value = page.url.searchParams.get('tab');
+    return value === 'Videos' || value === 'Playlists' || value === 'Watch later' || value === 'History' || value === 'Liked'
+      ? value
+      : null;
+  });
 
   onMount(() => {
+    if (tabFromQuery) {
+      activeTab = tabFromQuery;
+    }
     void loadPage(1);
     void loadOverview();
+  });
+
+  $effect(() => {
+    if (tabFromQuery && activeTab !== tabFromQuery) {
+      activeTab = tabFromQuery;
+    }
   });
 
   async function loadOverview() {
@@ -125,15 +145,43 @@
   async function loadPage(target: number) {
     loading = true;
     loadError = null;
-    const [sortBy, sortOrder] = sort.split(':');
-    const query = new URLSearchParams({
-      page: String(target),
-      pageSize: String(pageSize),
-      sortBy,
-      sortOrder
-    });
 
     try {
+      if (activeTab === 'History') {
+        const data = await listWatchHistory(target, pageSize);
+        items = data.items.map((item) => item.media);
+        historyStates = Object.fromEntries(data.items.map((item) => [item.media.mediaGuid, item.watchState]));
+        likedAtByGuid = {};
+        currentPage = data.page;
+        totalCount = data.totalCount;
+        hasMore = data.hasMore;
+        return;
+      }
+
+      if (activeTab === 'Liked') {
+        const data = await listLikedMedia(target, pageSize);
+        items = data.items.map((item) => item.media);
+        likedAtByGuid = Object.fromEntries(
+          data.items
+            .filter((item) => item.like.likedAt)
+            .map((item) => [item.media.mediaGuid, item.like.likedAt as string])
+        );
+        historyStates = {};
+        currentPage = data.page;
+        totalCount = data.totalCount;
+        hasMore = data.hasMore;
+        return;
+      }
+
+      historyStates = {};
+      likedAtByGuid = {};
+      const [sortBy, sortOrder] = sort.split(':');
+      const query = new URLSearchParams({
+        page: String(target),
+        pageSize: String(pageSize),
+        sortBy,
+        sortOrder
+      });
       const response = await fetch(`/api/metadata?${query}`);
       if (response.status === 401) {
         needsLogin = true;
@@ -146,7 +194,7 @@
       }
       const data = (await response.json()) as PagedResponse;
       items = data.items;
-      page = data.page;
+      currentPage = data.page;
       totalCount = data.totalCount;
       hasMore = data.hasMore;
     } catch (err) {
@@ -166,6 +214,10 @@
       playlistsRequested = true;
       void loadUserPlaylistCards();
       void loadPlatformPlaylistCards();
+      return;
+    }
+    if (tab === 'Videos' || tab === 'History' || tab === 'Liked') {
+      void loadPage(1);
     }
   }
 
@@ -237,6 +289,71 @@
     return [formatViews(card.viewCount), card.wasLive ? 'was live' : null]
       .filter(Boolean)
       .join(' · ');
+  }
+
+  function cardHref(card: MediaCard): string {
+    if (activeTab === 'History') {
+      const state = historyStates[card.mediaGuid];
+      const position = state?.positionSeconds ?? 0;
+      if (position > 0 && !state?.completed) {
+        return `/watch/${card.mediaGuid}?t=${Math.floor(position)}`;
+      }
+    }
+    return `/watch/${card.mediaGuid}`;
+  }
+
+  function cardMetaLine(card: MediaCard): string {
+    if (activeTab === 'History') {
+      const state = historyStates[card.mediaGuid];
+      return [
+        state?.positionSeconds ? `at ${formatDuration(state.positionSeconds)}` : null,
+        state?.completed ? 'watched' : null,
+        state?.lastPlayedAt ? formatRelativeDate(state.lastPlayedAt) : null
+      ]
+        .filter(Boolean)
+        .join(' · ');
+    }
+
+    if (activeTab === 'Liked') {
+      return [likedAtByGuid[card.mediaGuid] ? `liked ${formatRelativeDate(likedAtByGuid[card.mediaGuid])}` : null]
+        .filter(Boolean)
+        .join(' · ');
+    }
+
+    return [metaLine(card), formatRelativeDate(card.releaseDate)].filter(Boolean).join(' · ');
+  }
+
+  function gridSummary(): string {
+    if (loading) {
+      return 'Loading...';
+    }
+    if (activeTab === 'History') {
+      return `${totalCount} ${totalCount === 1 ? 'history item' : 'history items'}`;
+    }
+    if (activeTab === 'Liked') {
+      return `${totalCount} liked ${totalCount === 1 ? 'title' : 'titles'}`;
+    }
+    return `${totalCount} ${totalCount === 1 ? 'title' : 'titles'} on the server`;
+  }
+
+  function emptyTitle(): string {
+    if (activeTab === 'History') {
+      return 'No watch history yet';
+    }
+    if (activeTab === 'Liked') {
+      return 'No liked videos yet';
+    }
+    return 'No titles yet';
+  }
+
+  function emptyDescription(): string {
+    if (activeTab === 'History') {
+      return 'Start a video and it will appear here.';
+    }
+    if (activeTab === 'Liked') {
+      return 'Like videos from the watch page and they will show up here.';
+    }
+    return 'Queue something from the Download page and it will show up here once processed.';
   }
 
   function thumbnailUrl(card: MediaCard): string | null {
@@ -317,18 +434,20 @@
     {/each}
   </nav>
 
-  {#if activeTab === 'Videos'}
+  {#if activeTab === 'Videos' || activeTab === 'History' || activeTab === 'Liked'}
     <div class="mt-5 flex flex-wrap items-center justify-between gap-3">
       <p class="text-sm text-slate-500">
-        {loading ? 'Loading…' : `${totalCount} ${totalCount === 1 ? 'title' : 'titles'} on the server`}
+        {gridSummary()}
       </p>
-      <Select
-        items={sortOptions}
-        bind:value={sort}
-        onchange={changeSort}
-        aria-label="Sort library"
-        class="w-48! border-slate-800! bg-slate-900/80! text-sm! text-slate-300! focus:border-blue-500! focus:ring-blue-500!"
-      />
+      {#if activeTab === 'Videos'}
+        <Select
+          items={sortOptions}
+          bind:value={sort}
+          onchange={changeSort}
+          aria-label="Sort library"
+          class="w-48! border-slate-800! bg-slate-900/80! text-sm! text-slate-300! focus:border-blue-500! focus:ring-blue-500!"
+        />
+      {/if}
     </div>
 
     {#if loadError}
@@ -355,24 +474,24 @@
     {:else if items.length === 0}
       <div class="mt-10 rounded-2xl border border-slate-800/80 bg-slate-900/40 p-10 text-center">
         <RectangleListOutline class="mx-auto h-10 w-10 text-slate-700" />
-        <p class="mt-4 text-sm font-semibold text-slate-300">No titles yet</p>
-        <p class="mt-1 text-sm text-slate-500">
-          Queue something from the Download page and it will show up here once processed.
-        </p>
-        <Button
-          href="/download"
-          color="blue"
-          class="mt-5 border-0! bg-blue-500! px-5! py-2! text-xs! font-semibold! hover:bg-blue-400!"
-        >
-          Go to Download
-        </Button>
+        <p class="mt-4 text-sm font-semibold text-slate-300">{emptyTitle()}</p>
+        <p class="mt-1 text-sm text-slate-500">{emptyDescription()}</p>
+        {#if activeTab === 'Videos'}
+          <Button
+            href="/download"
+            color="blue"
+            class="mt-5 border-0! bg-blue-500! px-5! py-2! text-xs! font-semibold! hover:bg-blue-400!"
+          >
+            Go to Download
+          </Button>
+        {/if}
       </div>
     {:else}
       <div class="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
         {#each items as card (card.mediaGuid)}
           <article class="group min-w-0">
             <a
-              href={`/watch/${card.mediaGuid}`}
+              href={cardHref(card)}
               class={`relative block aspect-video w-full overflow-hidden rounded-2xl bg-gradient-to-br ${accentFor(card.mediaGuid)} text-left shadow-lg shadow-black/20 transition duration-300 group-hover:-translate-y-1 group-hover:shadow-xl group-hover:shadow-black/30`}
               aria-label={`Play ${card.title}`}
             >
@@ -435,7 +554,7 @@
                   </a>
                 </p>
                 <p class="mt-0.5 truncate text-xs text-slate-600">
-                  {[metaLine(card), formatRelativeDate(card.releaseDate)].filter(Boolean).join(' · ')}
+                  {cardMetaLine(card)}
                 </p>
               </div>
             </div>
@@ -445,13 +564,13 @@
 
       <div class="mt-8 flex items-center justify-between border-t border-slate-800/70 pt-5">
         <p class="text-xs text-slate-600">
-          Page {page} of {totalPages}
+          Page {currentPage} of {totalPages}
         </p>
         <div class="flex gap-2">
           <Button
             color="dark"
-            disabled={page <= 1 || loading}
-            onclick={() => loadPage(page - 1)}
+            disabled={currentPage <= 1 || loading}
+            onclick={() => loadPage(currentPage - 1)}
             class="border-slate-700! bg-slate-900! px-3! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800! disabled:opacity-40"
           >
             <ChevronLeftOutline class="mr-1 h-3.5 w-3.5" />
@@ -460,7 +579,7 @@
           <Button
             color="dark"
             disabled={!hasMore || loading}
-            onclick={() => loadPage(page + 1)}
+            onclick={() => loadPage(currentPage + 1)}
             class="border-slate-700! bg-slate-900! px-3! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800! disabled:opacity-40"
           >
             Next

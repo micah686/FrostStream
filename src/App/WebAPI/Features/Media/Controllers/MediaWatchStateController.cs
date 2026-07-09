@@ -124,6 +124,46 @@ public sealed class MediaWatchStateController(
         return Ok(response.Items ?? Array.Empty<WatchStateDto>());
     }
 
+    // Absolute route: this is a cross-media collection query, so it escapes the controller's
+    // per-media `api/media/{mediaGuid}/watch-state` template.
+    [HttpGet("/api/media/watch-states/history")]
+    [Endpoint(EndpointIds.MediaWatchStateListHistory)]
+    [EndpointSummary("List the caller's watch history")]
+    [EndpointDescription("Returns the authenticated caller's watch history, newest first by last play time. Results include media cards and are scoped to the caller.")]
+    public async Task<IActionResult> ListHistory(
+        [FromQuery] int pageSize = 24,
+        [FromQuery] int page = 1,
+        CancellationToken cancellationToken = default)
+    {
+        var subject = AuthConstants.FindSubject(User);
+        if (string.IsNullOrWhiteSpace(subject))
+            return Unauthorized();
+
+        var response = await SendAsync<WatchStateHistoryListRequest, WatchStateHistoryListResponse>(
+            WatchStateSubjects.ListHistory,
+            new WatchStateHistoryListRequest
+            {
+                OwnerSubject = subject,
+                PageSize = pageSize,
+                Page = page
+            },
+            cancellationToken);
+
+        if (response is null)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to list watch history.");
+
+        if (!response.Success)
+        {
+            return response.ErrorCode switch
+            {
+                "validation" => BadRequest(response.ErrorMessage),
+                _ => StatusCode(StatusCodes.Status500InternalServerError, response.ErrorMessage ?? "Watch-history request failed.")
+            };
+        }
+
+        return Ok(response);
+    }
+
     private async Task<IActionResult> UpsertForCurrentUserAsync(
         Guid mediaGuid,
         double? positionSeconds,
