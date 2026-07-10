@@ -49,6 +49,11 @@
 
   $effect(() => {
     const incoming = initialNote ?? '';
+    // onChange feeds the loaded note back to the parent, which echoes it here via initialNote;
+    // skip when nothing actually changed so that round-trip doesn't reset and reload the panel.
+    if (incoming === note) {
+      return;
+    }
     note = incoming;
     draft = incoming;
     loadedTarget = '';
@@ -86,6 +91,9 @@
       onChange?.(note.trim() ? note : null);
     } catch (err) {
       error = err instanceof Error ? err.message : 'Could not load this note.';
+      // Mark the target as attempted even on failure: the embedded $effect keys off loadedTarget,
+      // and leaving it unset would re-trigger load() in a loop, hammering the API.
+      loadedTarget = currentKey;
     } finally {
       loading = false;
     }

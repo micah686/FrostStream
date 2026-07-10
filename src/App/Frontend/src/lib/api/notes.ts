@@ -1,4 +1,4 @@
-import { getJson, sendEmpty, sendJson } from './http';
+import { ApiRequestError, getJson, sendEmpty, sendJson } from './http';
 
 export type NoteTargetType = 'video' | 'playlist' | 'channel';
 
@@ -53,8 +53,16 @@ export async function getNote(
   targetId: string,
   fetchImpl: typeof fetch = fetch
 ): Promise<UserNote | null> {
-  const raw = await getJson<RawUserNote | null>(noteUrl(targetType, targetId), fetchImpl);
-  return raw ? normalizeNote(raw, targetType, targetId) : null;
+  try {
+    const raw = await getJson<RawUserNote | null>(noteUrl(targetType, targetId), fetchImpl);
+    return raw ? normalizeNote(raw, targetType, targetId) : null;
+  } catch (err) {
+    // The API answers 404 when no note exists for the target; that is a normal empty result.
+    if (err instanceof ApiRequestError && err.status === 404) {
+      return null;
+    }
+    throw err;
+  }
 }
 
 export async function saveNote(
