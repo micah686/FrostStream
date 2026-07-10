@@ -1,0 +1,13 @@
+# Applies to every service image built with `src/` as the build context.
+**/bin/
+**/obj/
+**/node_modules/
+**/.svelte-kit/
+**/build/
+**/*.user
+HelperTestingApps/
+Modules/YtDlpSharpLib/Tests/
+Modules/YtDlpSharpLib/ConsoleDownloader/
+Modules/Conduit.NATS/Tests/
+App/AppHost/
+App/Frontend/static/.gitkeep
