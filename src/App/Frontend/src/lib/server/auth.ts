@@ -5,6 +5,7 @@ import type { Cookies } from '@sveltejs/kit';
 const tokenCookie = 'fs_auth_tokens';
 const stateCookie = 'fs_oidc_state';
 const verifierCookie = 'fs_oidc_verifier';
+const returnToCookie = 'fs_auth_return';
 
 export interface TokenSet {
   accessToken: string;
@@ -31,8 +32,17 @@ interface DiscoveryDocument {
 export const authCookies = {
   token: tokenCookie,
   state: stateCookie,
-  verifier: verifierCookie
+  verifier: verifierCookie,
+  returnTo: returnToCookie
 };
+
+/**
+ * Validates a post-login return target. Only same-origin absolute paths are accepted so a crafted
+ * login link cannot bounce the user to another site after authentication (open redirect).
+ */
+export function safeReturnTo(value: string | null | undefined): string | null {
+  return value && value.startsWith('/') && !value.startsWith('//') ? value : null;
+}
 
 // Config is read through $env/dynamic/private (not process.env) so that a local .env file works
 // when the app runs standalone via `pnpm dev`; real environment variables still take precedence.
@@ -125,7 +135,7 @@ export function writeTokens(cookies: Cookies, tokens: TokenSet, secure: boolean)
 }
 
 export function clearAuthCookies(cookies: Cookies, secure: boolean): void {
-  for (const name of [tokenCookie, stateCookie, verifierCookie]) {
+  for (const name of [tokenCookie, stateCookie, verifierCookie, returnToCookie]) {
     cookies.delete(name, {
       httpOnly: true,
       sameSite: 'lax',

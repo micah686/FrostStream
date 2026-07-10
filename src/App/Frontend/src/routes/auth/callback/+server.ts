@@ -6,6 +6,7 @@ import {
   cookieSecure,
   discover,
   redirectUri,
+  safeReturnTo,
   syncSession,
   tokenSetFromResponse,
   writeTokens
@@ -51,8 +52,13 @@ export const GET: RequestHandler = async ({ cookies, url }) => {
   cookies.delete(authCookies.state, { path: '/', secure });
   cookies.delete(authCookies.verifier, { path: '/', secure });
 
+  // Land back where the visitor was originally headed (stored by /auth/login), or /profile for
+  // logins started from the account menu.
+  const returnTo = safeReturnTo(cookies.get(authCookies.returnTo));
+  cookies.delete(authCookies.returnTo, { path: '/', secure });
+
   // Upsert the local user and refresh OpenFGA group tuples before landing on the app.
   await syncSession(tokens.accessToken);
 
-  throw redirect(303, '/profile');
+  throw redirect(303, returnTo ?? '/profile');
 };

@@ -9,6 +9,7 @@ import {
   discover,
   isSingleUserMode,
   redirectUri,
+  safeReturnTo,
   scopes,
   setTransientCookie
 } from '$lib/server/auth';
@@ -35,6 +36,10 @@ export const GET: RequestHandler = async ({ cookies, url }) => {
   const secure = cookieSecure(url);
   setTransientCookie(cookies, authCookies.state, state, secure);
   setTransientCookie(cookies, authCookies.verifier, pkce.verifier, secure);
+  const returnTo = safeReturnTo(url.searchParams.get('redirectTo'));
+  if (returnTo) {
+    setTransientCookie(cookies, authCookies.returnTo, returnTo, secure);
+  }
 
   const authorize = new URL(discovery.authorization_endpoint);
   authorize.searchParams.set('client_id', clientId());
