@@ -12,6 +12,7 @@
     UsersGroupOutline
   } from 'flowbite-svelte-icons';
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
+  import UnderDevelopmentBanner from '$lib/components/admin/UnderDevelopmentBanner.svelte';
   import { ApiRequestError } from '$lib/api/http';
   import {
     addAgePolicyGroup,
@@ -283,6 +284,8 @@
     }
   }
 </script>
+
+<UnderDevelopmentBanner />
 
 <section class={cardClass} aria-labelledby="media-access-title">
   <div class="flex flex-wrap items-start justify-between gap-3">

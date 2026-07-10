@@ -18,6 +18,7 @@
     UsersGroupOutline
   } from 'flowbite-svelte-icons';
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
+  import UnderDevelopmentBanner from '$lib/components/admin/UnderDevelopmentBanner.svelte';
   import { ApiRequestError } from '$lib/api/http';
   import {
     addBundleGrant,
@@ -374,6 +375,8 @@
     }
   }
 </script>
+
+<UnderDevelopmentBanner />
 
 <section class={cardClass} aria-labelledby="bundle-management-title">
   <div class="flex flex-wrap items-start justify-between gap-3">

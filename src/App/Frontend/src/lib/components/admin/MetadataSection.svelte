@@ -12,6 +12,7 @@
     UndoOutline
   } from 'flowbite-svelte-icons';
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
+  import UnderDevelopmentBanner from '$lib/components/admin/UnderDevelopmentBanner.svelte';
   import {
     deleteMedia,
     deleteMediaForStorageKey,
@@ -295,6 +296,8 @@
     }
   }
 </script>
+
+<UnderDevelopmentBanner />
 
 <!-- Search index -->
 <section class={cardClass} aria-labelledby="metadata-search-title">

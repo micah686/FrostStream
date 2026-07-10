@@ -13,6 +13,7 @@
     TrashBinOutline
   } from 'flowbite-svelte-icons';
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
+  import UnderDevelopmentBanner from '$lib/components/admin/UnderDevelopmentBanner.svelte';
   import { ApiRequestError } from '$lib/api/http';
   import {
     createSchedule,
@@ -242,6 +243,8 @@
     return Number.isNaN(date.getTime()) ? 'unknown' : date.toLocaleString();
   }
 </script>
+
+<UnderDevelopmentBanner />
 
 <section class={cardClass} aria-labelledby="schedules-title">
   <div class="flex flex-wrap items-start justify-between gap-3">

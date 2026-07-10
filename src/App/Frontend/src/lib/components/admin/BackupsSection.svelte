@@ -23,6 +23,7 @@
     type RestorePlan,
     type VerifyBackupResult
   } from '$lib/api/backups';
+  import UnderDevelopmentBanner from '$lib/components/admin/UnderDevelopmentBanner.svelte';
 
   const backupModeOptions: { value: BackupMode; name: string }[] = [
     { value: 'snapshot', name: 'Snapshot — quick logical pg_dump (default)' },
@@ -224,6 +225,8 @@
     }
   }
 </script>
+
+<UnderDevelopmentBanner />
 
 <!-- Run backup -->
 <section class={cardClass} aria-labelledby="backups-run-title">

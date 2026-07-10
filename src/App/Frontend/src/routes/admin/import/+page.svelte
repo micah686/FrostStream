@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { Button, Helper, Input, Label, Select, Spinner } from 'flowbite-svelte';
   import { ExclamationCircleOutline, FileImportOutline, RefreshOutline } from 'flowbite-svelte-icons';
+  import UnderDevelopmentBanner from '$lib/components/admin/UnderDevelopmentBanner.svelte';
   import { createImportSession, listImportSessions, type ImportSession } from '$lib/api/imports';
   import { listStorage } from '$lib/api/storage';
 
@@ -77,6 +78,8 @@
     return new Date(value).toLocaleString();
   }
 </script>
+
+<UnderDevelopmentBanner />
 
 <section class={cardClass} aria-labelledby="imports-title">
   <div class="flex flex-wrap items-start gap-3">
