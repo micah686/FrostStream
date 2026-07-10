@@ -139,9 +139,6 @@ public sealed class DownloadAdminConsumerService(
                     });
                     return;
                 }
-
-                if (restartFromState is DownloadJobState.ProviderHalted)
-                    await repo.MarkProviderHaltRetryDispatchedAsync(req.JobId);
             }
 
             var replay = originalRequest with
@@ -191,16 +188,6 @@ public sealed class DownloadAdminConsumerService(
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed restarting halted download JobId {JobId}.", req.JobId);
-            try
-            {
-                using var scope = scopeFactory.CreateScope();
-                var repo = scope.ServiceProvider.GetRequiredService<IDownloadJobsRepository>();
-                await repo.ClearProviderHaltRetryDispatchedAsync(req.JobId);
-            }
-            catch
-            {
-                // If cleanup fails, the job stays halted and can still be restarted manually.
-            }
 
             await context.RespondAsync(new RestartHaltedDownloadResponse
             {

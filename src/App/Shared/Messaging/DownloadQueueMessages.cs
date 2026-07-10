@@ -148,9 +148,6 @@ public sealed record DownloadQueueJobDto
     public string? FailureCode { get; init; }
     public string? FailureMessage { get; init; }
 
-    public Instant? ProviderHaltRetryAt { get; init; }
-    public Instant? ProviderHaltRetryDispatchedAt { get; init; }
-
     public Instant CreatedAt { get; init; }
     public Instant UpdatedAt { get; init; }
     public Instant? CompletedAt { get; init; }

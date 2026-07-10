@@ -106,10 +106,6 @@ public interface IDownloadJobsRepository
 
     Task RecordTerminalFailureAsync(Guid jobId, FailureKind kind, string? code, string message, DownloadJobState terminalState, string? lastPayloadJson, CancellationToken ct = default);
 
-    Task MarkProviderHaltRetryDispatchedAsync(Guid jobId, CancellationToken ct = default);
-
-    Task ClearProviderHaltRetryDispatchedAsync(Guid jobId, CancellationToken ct = default);
-
     // ── Admin queue read surface (read-only; no schema migration) ────────────────────
 
     /// <summary>

@@ -18,8 +18,6 @@ export interface DownloadQueueJob {
   failureKind: string | null;
   failureCode: string | null;
   failureMessage: string | null;
-  providerHaltRetryAt: string | null;
-  providerHaltRetryDispatchedAt: string | null;
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;

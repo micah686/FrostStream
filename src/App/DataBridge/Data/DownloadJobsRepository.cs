@@ -122,8 +122,6 @@ public sealed class DownloadJobsRepository(
             job.FailureKind = null;
             job.FailureCode = null;
             job.FailureMessage = null;
-            job.ProviderHaltRetryAt = null;
-            job.ProviderHaltRetryDispatchedAt = null;
         }
         else if ((job.State is DownloadJobState.Cancelling or DownloadJobState.Cancelled) && state != DownloadJobState.Cancelled)
         {
@@ -602,22 +600,6 @@ public sealed class DownloadJobsRepository(
         await NotifyStateAsync(job, previousState, ct);
     }
 
-    public async Task MarkProviderHaltRetryDispatchedAsync(Guid jobId, CancellationToken ct = default)
-    {
-        var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
-        job.ProviderHaltRetryDispatchedAt = clock.GetCurrentInstant();
-        job.UpdatedAt = job.ProviderHaltRetryDispatchedAt.Value;
-        await db.SaveChangesAsync(ct);
-    }
-
-    public async Task ClearProviderHaltRetryDispatchedAsync(Guid jobId, CancellationToken ct = default)
-    {
-        var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
-        job.ProviderHaltRetryDispatchedAt = null;
-        job.UpdatedAt = clock.GetCurrentInstant();
-        await db.SaveChangesAsync(ct);
-    }
-
     public async Task<DownloadQueuePage> QueryQueueAsync(DownloadQueueListRequest request, CancellationToken ct = default)
     {
         var limit = Math.Clamp(request.Limit <= 0 ? DefaultQueueLimit : request.Limit, 1, MaxQueueLimit);
@@ -758,8 +740,6 @@ public sealed class DownloadJobsRepository(
         FailureKind = x.FailureKind,
         FailureCode = x.FailureCode,
         FailureMessage = x.FailureMessage,
-        ProviderHaltRetryAt = x.ProviderHaltRetryAt,
-        ProviderHaltRetryDispatchedAt = x.ProviderHaltRetryDispatchedAt,
         CreatedAt = x.CreatedAt,
         UpdatedAt = x.UpdatedAt,
         CompletedAt = x.CompletedAt

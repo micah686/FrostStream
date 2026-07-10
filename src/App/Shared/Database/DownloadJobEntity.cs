@@ -47,10 +47,6 @@ public class DownloadJobEntity
 
     public DownloadSourceKind SourceKind { get; set; } = DownloadSourceKind.Direct;
 
-    public Instant? ProviderHaltRetryAt { get; set; }
-
-    public Instant? ProviderHaltRetryDispatchedAt { get; set; }
-
     public IngestOrigin IngestOrigin { get; set; } = IngestOrigin.Download;
 
     public FailureKind? FailureKind { get; set; }
