@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { Button, Spinner } from 'flowbite-svelte';
   import { ExclamationCircleOutline } from 'flowbite-svelte-icons';
+  import UnderDevelopmentBanner from '$lib/components/admin/UnderDevelopmentBanner.svelte';
   import DownloadConfigSetForm from '$lib/components/profile/DownloadConfigSetForm.svelte';
   import { getDownloadConfigSet, type DownloadConfigSet } from '$lib/api/downloadConfigSets';
 
@@ -31,6 +32,8 @@
 <svelte:head>
   <title>{config?.name ?? 'Config set'} · FrostStream</title>
 </svelte:head>
+
+<UnderDevelopmentBanner />
 
 <section class="mx-auto max-w-4xl" aria-labelledby="config-set-title">
   <div class="mb-6">

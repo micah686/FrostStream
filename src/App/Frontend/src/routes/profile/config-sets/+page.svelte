@@ -16,6 +16,7 @@
     type DownloadConfigSet
   } from '$lib/api/downloadConfigSets';
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
+  import UnderDevelopmentBanner from '$lib/components/admin/UnderDevelopmentBanner.svelte';
 
   type IconComponent = typeof AdjustmentsHorizontalOutline;
 
@@ -75,6 +76,8 @@
     return config.encodeForPlaylist ? MusicAltOutline : config.ytDlpOptions ? AdjustmentsHorizontalOutline : ArchiveOutline;
   }
 </script>
+
+<UnderDevelopmentBanner />
 
 <section class="rounded-2xl border border-slate-800 bg-[#151a26] p-5 shadow-xl shadow-black/15 sm:p-6">
   <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
