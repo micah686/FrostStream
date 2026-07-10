@@ -210,6 +210,9 @@
   let selectedVersion = $state('');
   let mediaVersionOptions = $state<MediaVersionOption[]>([{ value: '', name: 'Latest version' }]);
   let versionsLoading = $state(false);
+  let streamChecking = $state(false);
+  let streamError = $state<string | null>(null);
+  let streamCheckSeq = 0;
 
   // Playback modes persist across videos and sessions. Repeat wins over autoplay:
   // a looping video never fires "ended", so autoplay simply never triggers.
@@ -343,6 +346,15 @@
     }
   });
 
+  $effect(() => {
+    const guid = mediaGuid;
+    const url = streamUrl;
+    if (!guid || loadError) {
+      return;
+    }
+    void checkStreamAvailability(guid, url);
+  });
+
   async function loadAll(guid: string) {
     detail = null;
     loadError = null;
@@ -366,6 +378,8 @@
     selectedVersion = '';
     mediaVersionOptions = [{ value: '', name: 'Latest version' }];
     versionsLoading = false;
+    streamChecking = false;
+    streamError = null;
 
     await Promise.all([
       loadDetail(guid),
@@ -375,6 +389,43 @@
       loadLikeState(guid),
       loadVersions(guid)
     ]);
+  }
+
+  async function checkStreamAvailability(guid: string, url: string) {
+    const seq = ++streamCheckSeq;
+    streamChecking = true;
+    streamError = null;
+    try {
+      const response = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+      if (seq !== streamCheckSeq || guid !== mediaGuid || url !== streamUrl) {
+        return;
+      }
+      if (response.ok) {
+        return;
+      }
+      if (response.status === 404) {
+        streamError =
+          'The archived media file is missing from storage. If this item was downloaded before the storage mount was fixed, queue it again with Force download enabled.';
+        return;
+      }
+      if (response.status === 401) {
+        streamError = 'Your session has expired. Log in again before playback.';
+        return;
+      }
+      if (response.status === 403) {
+        streamError = 'You do not have permission to play this media.';
+        return;
+      }
+      streamError = `The media stream is not available right now (status ${response.status}).`;
+    } catch (err) {
+      if (seq === streamCheckSeq && guid === mediaGuid && url === streamUrl) {
+        streamError = err instanceof Error ? err.message : 'Could not check media stream availability.';
+      }
+    } finally {
+      if (seq === streamCheckSeq && guid === mediaGuid && url === streamUrl) {
+        streamChecking = false;
+      }
+    }
   }
 
   async function loadVersions(guid: string) {
@@ -812,7 +863,19 @@
       </div>
     {:else}
       <div class="aspect-video overflow-hidden rounded-2xl bg-black shadow-2xl shadow-black/30">
-        {#if watchStateLoaded}
+        {#if !watchStateLoaded || streamChecking}
+          <div class="grid h-full w-full place-items-center">
+            <Spinner size="8" />
+          </div>
+        {:else if streamError}
+          <div class="flex h-full items-center justify-center p-6">
+            <div class="max-w-xl rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5 text-center text-amber-100">
+              <ExclamationCircleOutline class="mx-auto h-8 w-8 text-amber-300" />
+              <h2 class="mt-3 text-base font-bold text-amber-50">Playback file unavailable</h2>
+              <p class="mt-2 text-sm leading-6 text-amber-100/85">{streamError}</p>
+            </div>
+          </div>
+        {:else}
           {#key `${mediaGuid}:${playerTab}:${selectedVersion}`}
             {#if playerTab === 'videojs'}
               <VideoJs10Player
@@ -837,10 +900,6 @@
               />
             {/if}
           {/key}
-        {:else}
-          <div class="grid h-full w-full place-items-center">
-            <Spinner size="8" />
-          </div>
         {/if}
       </div>
     {/if}

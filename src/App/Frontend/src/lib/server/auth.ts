@@ -58,6 +58,10 @@ export function authority(): string {
   return trimTrailingSlash(env.AUTH_AUTHORITY || env.VITE_AUTH_AUTHORITY || '');
 }
 
+export function publicAuthority(): string {
+  return trimTrailingSlash(env.AUTH_PUBLIC_AUTHORITY || env.VITE_AUTH_PUBLIC_AUTHORITY || authority());
+}
+
 export function clientId(): string {
   return env.AUTH_CLIENT_ID || 'froststream-bff';
 }
@@ -86,7 +90,37 @@ export async function discover(): Promise<DiscoveryDocument> {
     throw new Error(`OIDC discovery failed with status ${response.status}.`);
   }
 
-  return response.json() as Promise<DiscoveryDocument>;
+  return rewriteDiscoveryForBrowser(
+    (await response.json()) as DiscoveryDocument,
+    issuer,
+    publicAuthority()
+  );
+}
+
+function rewriteDiscoveryForBrowser(
+  discovery: DiscoveryDocument,
+  internalIssuer: string,
+  browserIssuer: string
+): DiscoveryDocument {
+  if (!browserIssuer || browserIssuer === internalIssuer) {
+    return discovery;
+  }
+
+  return {
+    ...discovery,
+    authorization_endpoint: rewriteEndpointOrigin(discovery.authorization_endpoint, browserIssuer),
+    end_session_endpoint: discovery.end_session_endpoint
+      ? rewriteEndpointOrigin(discovery.end_session_endpoint, browserIssuer)
+      : undefined
+  };
+}
+
+function rewriteEndpointOrigin(endpoint: string, browserIssuer: string): string {
+  const endpointUrl = new URL(endpoint);
+  const browserUrl = new URL(browserIssuer);
+  endpointUrl.protocol = browserUrl.protocol;
+  endpointUrl.host = browserUrl.host;
+  return endpointUrl.toString();
 }
 
 export function createPkce() {
