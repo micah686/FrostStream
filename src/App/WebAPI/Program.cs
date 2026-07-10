@@ -37,6 +37,7 @@ public class Program
         WebApiHardening.ValidateStartup(authOptions, singleUserMode, builder.Environment.IsProduction());
         builder.Services.Configure<FrostStreamAuthOptions>(builder.Configuration.GetSection(FrostStreamAuthOptions.SectionName));
         builder.Services.Configure<OpenFgaOptions>(builder.Configuration.GetSection(OpenFgaOptions.SectionName));
+        builder.Services.Configure<AuthentikOptions>(builder.Configuration.GetSection(AuthentikOptions.SectionName));
         builder.Services.Configure<BackupOptions>(builder.Configuration.GetSection(BackupOptions.SectionName));
 
         // Default scheme is a selector: requests carrying a cast token (sessionless cast devices)
@@ -79,6 +80,7 @@ public class Program
             builder.Services.AddSingleton<IFrostStreamAuthorizer, AllowAllAuthorizer>();
             builder.Services.AddSingleton<IOpenFgaTupleWriter, NullOpenFgaTupleWriter>();
             builder.Services.AddSingleton<IBundleManagementService, NullBundleManagementService>();
+            builder.Services.AddSingleton<IDirectoryService, NullDirectoryService>();
         }
         else
         {
@@ -130,6 +132,8 @@ public class Program
             builder.Services.AddHostedService<OpenFgaProvisioner>();
             builder.Services.AddHttpClient<OpenFgaBundleManagementService>();
             builder.Services.AddScoped<IBundleManagementService>(sp => sp.GetRequiredService<OpenFgaBundleManagementService>());
+            builder.Services.AddHttpClient<AuthentikDirectoryService>();
+            builder.Services.AddScoped<IDirectoryService>(sp => sp.GetRequiredService<AuthentikDirectoryService>());
         }
 
         builder.Services.AddScoped<IAuthorizationHandler, FrostStreamPermissionHandler>();

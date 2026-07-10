@@ -140,8 +140,14 @@ public static class StartServices
         {
             webapi = webapi
                 .WithEnvironment("OpenFga__Endpoint", openFga.Endpoint)
+                .WithEnvironment("Authentik__ApiUrl", authentikServer.GetEndpoint("http"))
                 .WaitFor(authentikServer)
                 .WaitFor(openFga.Server);
+
+            if (authentik.ApiToken is { } authentikApiToken)
+            {
+                webapi = webapi.WithEnvironment("Authentik__ApiToken", authentikApiToken);
+            }
 
             if (hardening.EnableFgaAuthenticatedEndpoints)
             {

@@ -14,7 +14,8 @@ public sealed record AuthentikResources(
     IResourceBuilder<ParameterResource> ClientSecret,
     string? ConfiguredAuthority,
     IResourceBuilder<ContainerResource>? Server,
-    ReferenceExpression? Authority);
+    ReferenceExpression? Authority,
+    IResourceBuilder<ParameterResource>? ApiToken);
 
 public static class StartAuthentik
 {
@@ -42,7 +43,7 @@ public static class StartAuthentik
         // Single-user mode runs without an identity provider, so no authentik containers are added.
         if (hardening.SingleUserMode)
         {
-            return new AuthentikResources(clientId, clientSecret, configuredAuthority, Server: null, Authority: null);
+            return new AuthentikResources(clientId, clientSecret, configuredAuthority, Server: null, Authority: null, ApiToken: null);
         }
 
         var blueprintPath = Path.Combine(
@@ -63,6 +64,13 @@ public static class StartAuthentik
             publishValueAsDefault: false,
             secret: true);
         var signingKeyName = Environment.GetEnvironmentVariable("AUTHENTIK_SIGNING_KEY_NAME");
+        // Authentik's bootstrap creates an akadmin API token with this exact value on first start.
+        // The WebAPI uses it for directory lookups (grantee autocomplete in bundle management).
+        var apiToken = builder.AddParameter(
+            "authentik-bootstrap-token",
+            Environment.GetEnvironmentVariable("AUTHENTIK_BOOTSTRAP_TOKEN") ?? "froststream-dev-api-token",
+            publishValueAsDefault: false,
+            secret: true);
 
         // The server serves the web UI and OIDC endpoints; the worker applies blueprints and
         // runs background tasks. Both run the same image with different args and share config.
@@ -74,6 +82,7 @@ public static class StartAuthentik
             .WithAuthentikPostgresEnv(postgres)
             .WithEnvironment("AUTHENTIK_BOOTSTRAP_EMAIL", Environment.GetEnvironmentVariable("AUTHENTIK_BOOTSTRAP_EMAIL") ?? "admin@localhost")
             .WithEnvironment("AUTHENTIK_BOOTSTRAP_PASSWORD", bootstrapPassword)
+            .WithEnvironment("AUTHENTIK_BOOTSTRAP_TOKEN", apiToken)
             .WithEnvironment("AUTHENTIK_CLIENT_ID", clientId)
             .WithEnvironment("AUTHENTIK_CLIENT_SECRET", clientSecret)
             .WithBindMount(blueprintPath, "/blueprints/froststream.yaml", isReadOnly: true)
@@ -90,6 +99,8 @@ public static class StartAuthentik
             .WithArgs("worker")
             .WithEnvironment("AUTHENTIK_SECRET_KEY", secretKey)
             .WithAuthentikPostgresEnv(postgres)
+            // The worker applies blueprints, so the !Env lookup for the API token resolves here.
+            .WithEnvironment("AUTHENTIK_BOOTSTRAP_TOKEN", apiToken)
             .WithEnvironment("AUTHENTIK_CLIENT_ID", clientId)
             .WithEnvironment("AUTHENTIK_CLIENT_SECRET", clientSecret)
             .WithBindMount(blueprintPath, "/blueprints/froststream.yaml", isReadOnly: true)
@@ -102,7 +113,7 @@ public static class StartAuthentik
 
         var authority = ReferenceExpression.Create($"{server.GetEndpoint("http")}/application/o/froststream/");
 
-        return new AuthentikResources(clientId, clientSecret, configuredAuthority, server, authority);
+        return new AuthentikResources(clientId, clientSecret, configuredAuthority, server, authority, apiToken);
     }
 
     private static IResourceBuilder<ContainerResource> WithAuthentikPostgresEnv(

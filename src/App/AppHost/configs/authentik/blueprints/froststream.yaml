@@ -159,3 +159,18 @@ entries:
       name: owner
     attrs:
       name: owner
+
+  # API token the WebAPI uses for directory lookups (grantee autocomplete in bundle management).
+  # AUTHENTIK_BOOTSTRAP_TOKEN only creates this on a brand-new database, so the blueprint declares
+  # it too — blueprints re-apply on every worker start, covering databases created before the env
+  # was introduced.
+  - id: froststream-api-token
+    model: authentik_core.token
+    identifiers:
+      identifier: froststream-api-token
+    attrs:
+      key: !Env [AUTHENTIK_BOOTSTRAP_TOKEN, froststream-dev-api-token]
+      user: !Find [authentik_core.user, [username, akadmin]]
+      intent: api
+      expiring: false
+      description: FrostStream WebAPI directory lookups.

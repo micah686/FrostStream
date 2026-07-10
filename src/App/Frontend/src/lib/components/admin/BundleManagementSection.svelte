@@ -3,10 +3,13 @@
   import { Button, Input, Label, Modal, Spinner } from 'flowbite-svelte';
   import {
     CheckOutline,
+    ChevronDownOutline,
+    ChevronUpOutline,
     CloseOutline,
     CubesStackedOutline,
     EditOutline,
     ExclamationCircleOutline,
+    LockOutline,
     PlusOutline,
     RefreshOutline,
     ServerOutline,
@@ -24,9 +27,11 @@
     listCatalog,
     replaceBundleEndpoints,
     revokeBundleGrant,
+    searchDirectory,
     type BundleGrant,
     type BundleView,
     type CatalogEntry,
+    type DirectoryEntry,
     type GranteeType
   } from '$lib/api/bundles';
 
@@ -54,9 +59,18 @@
   let grantId = $state('');
   let grantMutation = $state<string | null>(null);
 
+  let suggestions = $state<DirectoryEntry[]>([]);
+  let suggestionsOpen = $state(false);
+  let suggestionsLoading = $state(false);
+  let suggestionTimer: ReturnType<typeof setTimeout> | undefined;
+  let suggestionRequest = 0;
+  let selectedGrantee = $state<DirectoryEntry | null>(null);
+  let expandedGrantIds = $state<string[]>([]);
+
   let pickerOpen = $state(false);
   let pickerMode = $state<'create' | 'edit'>('create');
   let pickerBundleId = $state('');
+  let pickerBundleSuffix = $state('');
   let pickerSearch = $state('');
   let pickerEndpoints = $state<string[]>([]);
   let pickerSaving = $state(false);
@@ -67,6 +81,10 @@
   let deletingBundleId = $state<string | null>(null);
 
   const selectedBundle = $derived(bundles.find((bundle) => bundle.id === selectedBundleId) ?? bundles[0] ?? null);
+  const systemBundles = $derived(bundles.filter((bundle) => bundle.systemOwned));
+  const runtimeBundles = $derived(bundles.filter((bundle) => !bundle.systemOwned));
+  let systemGroupOpen = $state(true);
+  let runtimeGroupOpen = $state(true);
   const openFgaUnavailable = $derived(isStatus(loadError, 503) || isStatus(mutationError, 503) || isStatus(pickerError, 503));
 
   onMount(() => {
@@ -175,7 +193,8 @@
 
   function openCreateModal() {
     pickerMode = 'create';
-    pickerBundleId = 'user.';
+    pickerBundleId = '';
+    pickerBundleSuffix = '';
     pickerSearch = '';
     pickerEndpoints = [];
     pickerError = null;
@@ -193,9 +212,9 @@
   }
 
   async function submitPicker() {
-    const bundleId = pickerBundleId.trim();
-    if (pickerMode === 'create' && !bundleId.startsWith('user.')) {
-      pickerError = new Error('Runtime bundle id must start with user.');
+    const bundleId = pickerMode === 'create' ? `user.${pickerBundleSuffix.trim()}` : pickerBundleId.trim();
+    if (pickerMode === 'create' && !pickerBundleSuffix.trim()) {
+      pickerError = new Error('Enter a bundle name after the user. prefix.');
       return;
     }
     if (!bundleId) {
@@ -224,15 +243,87 @@
     }
   }
 
-  async function addGrant() {
-    if (!selectedBundle || !grantId.trim()) return;
+  function closeSuggestions() {
+    clearTimeout(suggestionTimer);
+    suggestionRequest += 1;
+    suggestions = [];
+    suggestionsOpen = false;
+    suggestionsLoading = false;
+  }
 
-    const grant: BundleGrant = { type: grantType, id: grantId.trim() };
+  function onGrantTypeChange(type: GranteeType) {
+    grantType = type;
+    selectedGrantee = null;
+    grantId = '';
+    closeSuggestions();
+  }
+
+  function clearSelectedGrantee() {
+    selectedGrantee = null;
+    grantId = '';
+    closeSuggestions();
+  }
+
+  function grantKey(grant: BundleGrant): string {
+    return `${grant.type}:${grant.id}`;
+  }
+
+  function toggleGrantExpanded(grant: BundleGrant) {
+    const key = grantKey(grant);
+    expandedGrantIds = expandedGrantIds.includes(key)
+      ? expandedGrantIds.filter((id) => id !== key)
+      : [...expandedGrantIds, key];
+  }
+
+  function onGrantIdInput() {
+    clearTimeout(suggestionTimer);
+    const query = grantId.trim();
+    if (query.length < 2) {
+      closeSuggestions();
+      return;
+    }
+
+    suggestionTimer = setTimeout(() => void fetchSuggestions(query), 250);
+  }
+
+  async function fetchSuggestions(query: string) {
+    const requestId = ++suggestionRequest;
+    suggestionsLoading = true;
+    try {
+      const results = await searchDirectory(grantType, query);
+      if (requestId !== suggestionRequest) return;
+      suggestions = results;
+      suggestionsOpen = results.length > 0;
+    } catch {
+      // Directory search is a typing aid only; manual grantee entry still works without it.
+      if (requestId !== suggestionRequest) return;
+      suggestions = [];
+      suggestionsOpen = false;
+    } finally {
+      if (requestId === suggestionRequest) {
+        suggestionsLoading = false;
+      }
+    }
+  }
+
+  function applySuggestion(entry: DirectoryEntry) {
+    selectedGrantee = entry;
+    grantId = '';
+    closeSuggestions();
+  }
+
+  async function addGrant() {
+    const granteeId = selectedGrantee?.id ?? grantId.trim();
+    if (!selectedBundle || !granteeId) return;
+
+    const grant: BundleGrant = { type: grantType, id: granteeId };
     grantMutation = `add:${grant.type}:${grant.id}`;
     mutationError = null;
     try {
       await addBundleGrant(selectedBundle.id, grant);
       grantId = '';
+      selectedGrantee = null;
+      closeSuggestions();
       await reloadBundles(selectedBundle.id);
     } catch (err) {
       mutationError = err instanceof Error ? err : new Error('Could not add the grant.');
@@ -339,29 +430,61 @@
   {:else}
     <div class="mt-5 grid gap-5 2xl:grid-cols-[21rem_minmax(0,1fr)]">
       <aside class="min-w-0 rounded-xl border border-slate-800 bg-slate-950/20" aria-label="Bundles">
-        <div class="border-b border-slate-800 px-3 py-2 text-xs font-semibold uppercase text-slate-500">Bundles</div>
-        <div class="max-h-[42rem] divide-y divide-slate-800/80 overflow-y-auto">
-          {#each bundles as bundle (bundle.id)}
-            <button
-              type="button"
-              class={[
-                'block w-full px-3 py-3 text-left transition',
-                selectedBundle?.id === bundle.id ? 'bg-blue-500/10' : 'hover:bg-slate-800/45'
-              ]}
-              onclick={() => (selectedBundleId = bundle.id)}
-            >
-              <div class="flex min-w-0 items-center justify-between gap-2">
-                <span class="truncate font-mono text-sm font-semibold text-slate-100">{bundle.id}</span>
-                <span class={['shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold', ownershipClass(bundle)]}>
-                  {ownershipLabel(bundle)}
-                </span>
+        {#snippet bundleRow(bundle: BundleView)}
+          <button
+            type="button"
+            class={[
+              'block w-full px-3 py-3 text-left transition',
+              selectedBundle?.id === bundle.id ? 'bg-blue-500/10' : 'hover:bg-slate-800/45'
+            ]}
+            onclick={() => (selectedBundleId = bundle.id)}
+          >
+            <div class="flex min-w-0 items-center justify-between gap-2">
+              <span class="truncate font-mono text-sm font-semibold text-slate-100">{bundle.id}</span>
+              <span class={['shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold', ownershipClass(bundle)]}>
+                {ownershipLabel(bundle)}
+              </span>
+            </div>
+            <div class="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
+              <span>{bundle.endpoints.length} endpoint{bundle.endpoints.length === 1 ? '' : 's'}</span>
+              <span>{bundle.grants.length} grant{bundle.grants.length === 1 ? '' : 's'}</span>
+            </div>
+          </button>
+        {/snippet}
+
+        {#snippet bundleGroup(label: string, items: BundleView[], open: boolean, toggle: () => void)}
+          <button
+            type="button"
+            class="flex w-full items-center justify-between gap-2 border-b border-slate-800 px-3 py-2 text-left transition hover:bg-slate-800/35"
+            aria-expanded={open}
+            onclick={toggle}
+          >
+            <span class="text-xs font-semibold uppercase text-slate-500">{label}</span>
+            <span class="flex shrink-0 items-center gap-1.5 text-xs text-slate-600">
+              {items.length}
+              {#if open}
+                <ChevronUpOutline class="h-3 w-3" />
+              {:else}
+                <ChevronDownOutline class="h-3 w-3" />
+              {/if}
+            </span>
+          </button>
+          {#if open}
+            {#if items.length === 0}
+              <div class="border-b border-slate-800/80 px-3 py-3 text-xs text-slate-600">No bundles.</div>
+            {:else}
+              <div class="divide-y divide-slate-800/80 border-b border-slate-800/80">
+                {#each items as bundle (bundle.id)}
+                  {@render bundleRow(bundle)}
+                {/each}
               </div>
-              <div class="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
-                <span>{bundle.endpoints.length} endpoint{bundle.endpoints.length === 1 ? '' : 's'}</span>
-                <span>{bundle.grants.length} grant{bundle.grants.length === 1 ? '' : 's'}</span>
-              </div>
-            </button>
-          {/each}
+            {/if}
+          {/if}
+        {/snippet}
+
+        <div class="max-h-[42rem] overflow-y-auto">
+          {@render bundleGroup('System bundles', systemBundles, systemGroupOpen, () => (systemGroupOpen = !systemGroupOpen))}
+          {@render bundleGroup('Runtime bundles', runtimeBundles, runtimeGroupOpen, () => (runtimeGroupOpen = !runtimeGroupOpen))}
         </div>
       </aside>
 
@@ -452,14 +575,85 @@
                       'rounded-md px-3 text-xs font-semibold transition',
                       grantType === type ? 'bg-blue-500/20 text-blue-200' : 'text-slate-400 hover:text-slate-100'
                     ]}
-                    onclick={() => (grantType = type)}
+                    onclick={() => onGrantTypeChange(type)}
                   >
                     {type === 'group' ? 'Group' : 'User'}
                   </button>
                 {/each}
               </div>
-              <Input bind:value={grantId} placeholder={`${grantType} id`} class={inputClass} aria-label="Grant id" />
-              <Button color="blue" type="submit" class={saveButtonClass} disabled={!grantId.trim() || grantMutation?.startsWith('add:')}>
+              <div class="relative min-w-0">
+                {#if selectedGrantee}
+                  <div class="flex h-10 min-w-0 items-center gap-2 rounded-lg border border-blue-500/40 bg-blue-500/10 px-3">
+                    <span class="shrink-0 rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-400">
+                      {selectedGrantee.type}
+                    </span>
+                    <span class="truncate text-sm font-semibold text-slate-100">{selectedGrantee.name}</span>
+                    {#if selectedGrantee.type === 'user'}
+                      <span class="min-w-0 truncate font-mono text-[10px] text-slate-500" title={selectedGrantee.id}>
+                        {selectedGrantee.id}
+                      </span>
+                    {/if}
+                    <button
+                      type="button"
+                      class="ml-auto shrink-0 rounded p-1 text-slate-400 transition hover:bg-slate-800 hover:text-slate-100"
+                      title="Clear selection"
+                      aria-label="Clear selected grantee"
+                      onclick={clearSelectedGrantee}
+                    >
+                      <CloseOutline class="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                {:else}
+                <Input
+                  bind:value={grantId}
+                  placeholder={grantType === 'user' ? 'Search users by name, username, or email' : 'Search groups by name'}
+                  class={inputClass}
+                  aria-label="Grant id"
+                  autocomplete="off"
+                  oninput={onGrantIdInput}
+                  onfocus={onGrantIdInput}
+                  onblur={() => setTimeout(closeSuggestions, 150)}
+                  onkeydown={(event: KeyboardEvent) => {
+                    if (event.key === 'Escape') closeSuggestions();
+                  }}
+                />
+                {#if suggestionsLoading}
+                  <div class="absolute top-1/2 right-3 -translate-y-1/2"><Spinner size="4" /></div>
+                {/if}
+                {#if suggestionsOpen}
+                  <div
+                    class="absolute top-full right-0 left-0 z-20 mt-1 max-h-64 overflow-y-auto rounded-lg border border-slate-700 bg-[#10141e] shadow-xl shadow-black/40"
+                    role="listbox"
+                    aria-label={`${grantType} suggestions`}
+                  >
+                    {#each suggestions as entry (entry.id)}
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected="false"
+                        class="flex w-full items-center gap-2 px-3 py-2 text-left transition hover:bg-blue-500/10"
+                        onmousedown={(event) => event.preventDefault()}
+                        onclick={() => applySuggestion(entry)}
+                      >
+                        <span class="min-w-0 truncate text-sm font-semibold text-slate-100">{entry.name}</span>
+                        {#if entry.description}
+                          <span class="min-w-0 truncate text-xs text-slate-500">{entry.description}</span>
+                        {/if}
+                        {#if entry.type === 'user'}
+                          <span class="ml-auto shrink-0 font-mono text-[10px] text-slate-600">{entry.id}</span>
+                        {/if}
+                      </button>
+                    {/each}
+                  </div>
+                {/if}
+                {/if}
+              </div>
+              <Button
+                color="blue"
+                type="submit"
+                class={saveButtonClass}
+                disabled={(!grantId.trim() && !selectedGrantee) || grantMutation?.startsWith('add:')}
+              >
                 {#if grantMutation?.startsWith('add:')}
                   <Spinner size="4" class="mr-1.5" />
                 {:else}
@@ -486,24 +680,55 @@
                           <span class="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-400">
                             {grant.type}
                           </span>
-                          <span class="truncate font-mono text-sm text-slate-100">{grant.id}</span>
+                          {#if grant.displayName}
+                            <span class="truncate text-sm font-semibold text-slate-100">{grant.displayName}</span>
+                            <button
+                              type="button"
+                              class="inline-flex shrink-0 items-center gap-1 rounded border border-slate-800 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500 transition hover:border-slate-700 hover:text-slate-300"
+                              title={expandedGrantIds.includes(grantKey(grant)) ? 'Hide subject id' : 'Show subject id'}
+                              aria-expanded={expandedGrantIds.includes(grantKey(grant))}
+                              onclick={() => toggleGrantExpanded(grant)}
+                            >
+                              id
+                              {#if expandedGrantIds.includes(grantKey(grant))}
+                                <ChevronUpOutline class="h-3 w-3" />
+                              {:else}
+                                <ChevronDownOutline class="h-3 w-3" />
+                              {/if}
+                            </button>
+                          {:else}
+                            <span class="truncate font-mono text-sm text-slate-100">{grant.id}</span>
+                          {/if}
                         </div>
+                        {#if grant.displayName && expandedGrantIds.includes(grantKey(grant))}
+                          <div class="mt-1 truncate font-mono text-xs text-slate-500" title={grant.id}>{grant.id}</div>
+                        {/if}
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      class="inline-flex h-9 min-w-9 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-900/70 px-3 text-slate-300 transition hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-200 disabled:opacity-50 sm:ml-auto"
-                      title="Revoke grant"
-                      aria-label={`Revoke ${grant.type} grant ${grant.id}`}
-                      disabled={grantMutation === `remove:${grant.type}:${grant.id}`}
-                      onclick={() => void revokeGrant(grant)}
-                    >
-                      {#if grantMutation === `remove:${grant.type}:${grant.id}`}
-                        <Spinner size="4" />
-                      {:else}
-                        <CloseOutline class="h-4 w-4" />
-                      {/if}
-                    </button>
+                    {#if grant.locked}
+                      <span
+                        class="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-950/40 px-3 text-[10px] font-bold uppercase text-slate-500 sm:ml-auto"
+                        title="Seeded lock-out guard: this grant keeps the bootstrap admin group in control and cannot be revoked."
+                      >
+                        <LockOutline class="h-3.5 w-3.5" />
+                        Default
+                      </span>
+                    {:else}
+                      <button
+                        type="button"
+                        class="inline-flex h-9 min-w-9 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-900/70 px-3 text-slate-300 transition hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-200 disabled:opacity-50 sm:ml-auto"
+                        title="Revoke grant"
+                        aria-label={`Revoke ${grant.type} grant ${grant.id}`}
+                        disabled={grantMutation === `remove:${grant.type}:${grant.id}`}
+                        onclick={() => void revokeGrant(grant)}
+                      >
+                        {#if grantMutation === `remove:${grant.type}:${grant.id}`}
+                          <Spinner size="4" />
+                        {:else}
+                          <CloseOutline class="h-4 w-4" />
+                        {/if}
+                      </button>
+                    {/if}
                   </div>
                 {/each}
               </div>
@@ -519,15 +744,24 @@
   <div class="space-y-4">
     <div>
       <Label for="bundle-picker-id" class="mb-2 text-sm font-medium text-slate-300">Bundle id</Label>
-      <Input
-        id="bundle-picker-id"
-        bind:value={pickerBundleId}
-        readonly={pickerMode === 'edit'}
-        placeholder="user.example"
-        class={inputClass}
-      />
       {#if pickerMode === 'create'}
-        <p class="mt-1.5 text-xs text-slate-500">Runtime bundle ids must start with user.</p>
+        <div class="flex overflow-hidden rounded-lg border border-slate-800 bg-slate-950/60 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500">
+          <span class="flex items-center border-r border-slate-800 bg-slate-900/80 px-3 font-mono text-sm text-slate-500 select-none" aria-hidden="true">
+            user.
+          </span>
+          <input
+            id="bundle-picker-id"
+            type="text"
+            bind:value={pickerBundleSuffix}
+            placeholder="example"
+            autocomplete="off"
+            aria-label="Bundle id (after the user. prefix)"
+            class="w-full min-w-0 border-0 bg-transparent px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-600 focus:ring-0 focus:outline-none"
+          />
+        </div>
+        <p class="mt-1.5 text-xs text-slate-500">Runtime bundle ids always start with the fixed user. prefix.</p>
+      {:else}
+        <Input id="bundle-picker-id" bind:value={pickerBundleId} readonly class={inputClass} />
       {/if}
     </div>
 

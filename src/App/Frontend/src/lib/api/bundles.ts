@@ -10,6 +10,17 @@ export interface CatalogEntry {
 export interface BundleGrant {
   type: GranteeType;
   id: string;
+  /** True for the seeded lock-out guard grant (bootstrap admin group on the `all` bundle); it cannot be revoked. */
+  locked?: boolean;
+  /** Friendly name resolved from the identity provider (user grants only; the id is the opaque subject UUID). */
+  displayName?: string | null;
+}
+
+export interface DirectoryEntry {
+  type: GranteeType;
+  id: string;
+  name: string;
+  description?: string | null;
 }
 
 export interface BundleView {
@@ -54,6 +65,15 @@ export async function addBundleGrant(
   fetchImpl: typeof fetch = fetch
 ): Promise<void> {
   await sendJson<void>(`${BASE}/bundles/${encodeURIComponent(bundleId)}/grants`, 'POST', grant, fetchImpl);
+}
+
+export async function searchDirectory(
+  type: GranteeType,
+  query: string,
+  fetchImpl: typeof fetch = fetch
+): Promise<DirectoryEntry[]> {
+  const params = new URLSearchParams({ type, q: query });
+  return getJson<DirectoryEntry[]>(`${BASE}/directory?${params}`, fetchImpl);
 }
 
 export async function revokeBundleGrant(

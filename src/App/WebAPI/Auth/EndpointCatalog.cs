@@ -236,6 +236,7 @@ public static class EndpointIds
     public const string ManagementBundlesDelete = "management.bundles.delete";
     public const string ManagementGrantsCreate = "management.grants.create";
     public const string ManagementGrantsDelete = "management.grants.delete";
+    public const string ManagementDirectorySearch = "management.directory.search";
 
     // Backups
     public const string BackupsCreate = "backups.create";
@@ -443,6 +444,7 @@ public static class EndpointCatalog
         new(EndpointIds.ManagementBundlesDelete, Bundles.Management),
         new(EndpointIds.ManagementGrantsCreate, Bundles.Management),
         new(EndpointIds.ManagementGrantsDelete, Bundles.Management),
+        new(EndpointIds.ManagementDirectorySearch, Bundles.Management),
 
         new(EndpointIds.BackupsCreate, Bundles.Management),
         new(EndpointIds.BackupsJobsList, Bundles.Management),
