@@ -34,10 +34,10 @@ public static class StartAuthentik
         var configuredAuthority = Environment.GetEnvironmentVariable("AUTHENTIK_AUTHORITY");
         var clientSecret = builder.AddParameter(
             "authentik-client-secret",
-            Environment.GetEnvironmentVariable("AUTHENTIK_CLIENT_SECRET") ?? "froststream-dev-client-secret",
+            Helpers.GetEnv("AUTHENTIK_CLIENT_SECRET"),
             publishValueAsDefault: false,
             secret: true);
-        var clientId = Environment.GetEnvironmentVariable("AUTHENTIK_CLIENT_ID") ?? "froststream-bff";
+        var clientId = Helpers.GetEnv("AUTHENTIK_CLIENT_ID");
 
         // Single-user mode runs without an identity provider, so no authentik containers are added.
         if (hardening.SingleUserMode)
@@ -54,12 +54,12 @@ public static class StartAuthentik
 
         var secretKey = builder.AddParameter(
             "authentik-secret-key",
-            Environment.GetEnvironmentVariable("AUTHENTIK_SECRET_KEY") ?? Guid.NewGuid().ToString("N"),
+            Helpers.GetEnv("AUTHENTIK_SECRET_KEY"),
             publishValueAsDefault: false,
             secret: true);
         var bootstrapPassword = builder.AddParameter(
             "authentik-bootstrap-password",
-            Environment.GetEnvironmentVariable("AUTHENTIK_BOOTSTRAP_PASSWORD") ?? "froststream-dev-admin",
+            Helpers.GetEnv("AUTHENTIK_BOOTSTRAP_PASSWORD"),
             publishValueAsDefault: false,
             secret: true);
         var signingKeyName = Environment.GetEnvironmentVariable("AUTHENTIK_SIGNING_KEY_NAME");
@@ -67,7 +67,7 @@ public static class StartAuthentik
         // The WebAPI uses it for directory lookups (grantee autocomplete in bundle management).
         var apiToken = builder.AddParameter(
             "authentik-bootstrap-token",
-            Environment.GetEnvironmentVariable("AUTHENTIK_BOOTSTRAP_TOKEN") ?? "froststream-dev-api-token",
+            Helpers.GetEnv("AUTHENTIK_BOOTSTRAP_TOKEN"),
             publishValueAsDefault: false,
             secret: true);
 
@@ -79,7 +79,7 @@ public static class StartAuthentik
             .WithHttpEndpoint(port: 9000, targetPort: 9000, name: "http")
             .WithEnvironment("AUTHENTIK_SECRET_KEY", secretKey)
             .WithAuthentikPostgresEnv(postgres)
-            .WithEnvironment("AUTHENTIK_BOOTSTRAP_EMAIL", Environment.GetEnvironmentVariable("AUTHENTIK_BOOTSTRAP_EMAIL") ?? "admin@localhost")
+            .WithEnvironment("AUTHENTIK_BOOTSTRAP_EMAIL", Helpers.GetEnv("AUTHENTIK_BOOTSTRAP_EMAIL"))
             .WithEnvironment("AUTHENTIK_BOOTSTRAP_PASSWORD", bootstrapPassword)
             .WithEnvironment("AUTHENTIK_BOOTSTRAP_TOKEN", apiToken)
             .WithEnvironment("AUTHENTIK_CLIENT_ID", clientId)

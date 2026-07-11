@@ -72,4 +72,9 @@ public static class Helpers
             File.SetUnixFileMode(keyPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
         }
     }
+
+    internal static string GetEnv(string variable)
+    {
+        return Environment.GetEnvironmentVariable(variable) ?? "VALUE_NOT_SET";
+    }
 }
