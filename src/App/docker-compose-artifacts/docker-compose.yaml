@@ -249,14 +249,14 @@ services:
       OpenBao__Token: "froststream-dev-root"
       Typesense__Url: "http://typesense:8108"
       Typesense__ApiKey: "froststream-dev-key"
-      FROSTSTREAM_STORAGE_ROOT: "/home/micah/RiderProjects/FrostStream/data"
+      FROSTSTREAM_STORAGE_ROOT: "${FROSTSTREAM_STORAGE_ROOT}"
       SINGLE_USER_MODE: "false"
       PotBroker__Enabled: "true"
       PotBroker__ProviderUrl: "http://pot-provider:4416"
-      Backup__Directory: "/home/micah/RiderProjects/FrostStream/data/core-backups"
+      Backup__Directory: "${FROSTSTREAM_STORAGE_ROOT}/core-backups"
       Backup__ToolPath: "dotnet"
       Backup__ToolBaseArguments: "run --project /home/micah/RiderProjects/FrostStream/src/App/BackupTool/BackupTool.csproj --"
-      Backup__ArchiveDir: "/home/micah/RiderProjects/FrostStream/data/wal-archive"
+      Backup__ArchiveDir: "${FROSTSTREAM_STORAGE_ROOT}/wal-archive"
       Backup__OpenBaoAddress: "http://openbao:8200"
       Backup__OpenBaoToken: "froststream-dev-root"
       Backup__OpenBaoKvMount: "secret"
@@ -265,8 +265,8 @@ services:
       OTEL_SERVICE_NAME: "databridge"
     volumes:
       - type: "bind"
-        source: "/home/micah/RiderProjects/FrostStream/data"
-        target: "/home/micah/RiderProjects/FrostStream/data"
+        source: "${FROSTSTREAM_STORAGE_ROOT}"
+        target: "${FROSTSTREAM_STORAGE_ROOT}"
         read_only: false
     depends_on:
       postgres-init:
@@ -304,7 +304,7 @@ services:
       ASPNETCORE_URLS: "http://0.0.0.0:5041"
       OpenBao__Address: "http://openbao:8200"
       OpenBao__Token: "froststream-dev-root"
-      FROSTSTREAM_STORAGE_ROOT: "/home/micah/RiderProjects/FrostStream/data"
+      FROSTSTREAM_STORAGE_ROOT: "${FROSTSTREAM_STORAGE_ROOT}"
       SINGLE_USER_MODE: "false"
       Auth__SingleUserMode: "false"
       Auth__AllowSingleUserModeInProduction: "false"
@@ -317,10 +317,10 @@ services:
       OpenFga__AutoProvision: "true"
       OpenFga__BootstrapOwnerSubjects: ""
       Cast__AdvertisedBaseUrl: ""
-      Backup__Directory: "/home/micah/RiderProjects/FrostStream/data/core-backups"
+      Backup__Directory: "${FROSTSTREAM_STORAGE_ROOT}/core-backups"
       Backup__ToolPath: "dotnet"
       Backup__ToolBaseArguments: "run --project /home/micah/RiderProjects/FrostStream/src/App/BackupTool/BackupTool.csproj --"
-      Backup__ArchiveDir: "/home/micah/RiderProjects/FrostStream/data/wal-archive"
+      Backup__ArchiveDir: "${FROSTSTREAM_STORAGE_ROOT}/wal-archive"
       Backup__OpenBaoAddress: "http://openbao:8200"
       Backup__OpenBaoToken: "froststream-dev-root"
       Backup__OpenBaoKvMount: "secret"
@@ -333,8 +333,8 @@ services:
       OTEL_SERVICE_NAME: "webapi"
     volumes:
       - type: "bind"
-        source: "/home/micah/RiderProjects/FrostStream/data"
-        target: "/home/micah/RiderProjects/FrostStream/data"
+        source: "${FROSTSTREAM_STORAGE_ROOT}"
+        target: "${FROSTSTREAM_STORAGE_ROOT}"
         read_only: false
     expose:
       - "${WEBAPI_PORT}"
@@ -363,15 +363,15 @@ services:
       NATS_URI: "nats://nats:${NATS_PASSWORD}@nats:4222"
       OpenBao__Address: "http://openbao:8200"
       OpenBao__Token: "froststream-dev-root"
-      FROSTSTREAM_STORAGE_ROOT: "/home/micah/RiderProjects/FrostStream/data"
+      FROSTSTREAM_STORAGE_ROOT: "${FROSTSTREAM_STORAGE_ROOT}"
       PotProvider__Enabled: "true"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://aspire-docker-demo-dashboard:18889"
       OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
       OTEL_SERVICE_NAME: "worker"
     volumes:
       - type: "bind"
-        source: "/home/micah/RiderProjects/FrostStream/data"
-        target: "/home/micah/RiderProjects/FrostStream/data"
+        source: "${FROSTSTREAM_STORAGE_ROOT}"
+        target: "${FROSTSTREAM_STORAGE_ROOT}"
         read_only: false
     depends_on:
       nats:
