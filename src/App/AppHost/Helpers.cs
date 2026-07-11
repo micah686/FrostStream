@@ -77,4 +77,7 @@ public static class Helpers
     {
         return Environment.GetEnvironmentVariable(variable) ?? "VALUE_NOT_SET";
     }
+
+    public static bool IsSingleUserMode => Environment.GetEnvironmentVariable("VALUE_NOT_SET") == "true";
+
 }

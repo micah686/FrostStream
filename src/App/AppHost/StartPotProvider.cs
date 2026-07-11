@@ -9,8 +9,7 @@ namespace AppHost;
 public static class StartPotProvider
 {
     public static IResourceBuilder<ContainerResource> Start(
-        IDistributedApplicationBuilder builder,
-        AppHostHardeningOptions hardening)
+        IDistributedApplicationBuilder builder)
     {
         return builder
             //MUST match YtDlpBinaryDownloaderOptions.BgUtilPluginVersion — bgutil requires the

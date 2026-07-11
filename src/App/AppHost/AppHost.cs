@@ -27,11 +27,11 @@ var sharedStorageRoot = ResolveStorageRoot(builder);
 
 var nats      = StartNats.Start(builder);
 var postgres  = StartPostgres.Start(builder, hardening, sharedStorageRoot);
-var openBao   = StartOpenBao.Start(builder, hardening);
-var typesense = StartTypesense.Start(builder, hardening);
+var openBao   = StartOpenBao.Start(builder);
+var typesense = StartTypesense.Start(builder);
 var authentik = StartAuthentik.Start(builder, postgres, hardening);
 var openFga   = StartOpenFga.Start(builder, postgres, hardening);
-var potProvider = StartPotProvider.Start(builder, hardening);
+var potProvider = StartPotProvider.Start(builder);
 
 StartServices.Wire(builder, hardening, sharedStorageRoot, nats, postgres, openBao, typesense, authentik, openFga, potProvider);
 

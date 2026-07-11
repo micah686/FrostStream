@@ -24,6 +24,15 @@ public static class StartNats
             .WithHttpEndpoint(port: 8222, targetPort: 8222, name: "monitor")
             .WithEndpoint(port: 9222, targetPort: 9222, name: "ws");
 
+#if DEBUG
+        AddNatsUI(builder, nats);
+#endif
+        
+        return nats; //return the nats instance for for others to use as reference
+    }
+
+    private static void AddNatsUI(IDistributedApplicationBuilder builder, IResourceBuilder<NatsServerResource> nats)
+    {
         var jwt = Environment.GetEnvironmentVariable("JWT_SECRET") ?? Guid.NewGuid().ToString();
         var natsUi = builder
             .AddContainer("nats-ui", "klinux/nats-ui", "0.4.0")
@@ -35,7 +44,5 @@ public static class StartNats
             .WithEnvironment("ADMIN_PASS", Helpers.GetEnv("NATS_UI_ADMIN_PASS")) //ui password
             .WithEnvironment("JWT_SECRET", jwt)
             .WithReference(nats);
-        
-        return nats; //return the nats instance for for others to use as reference
     }
 }

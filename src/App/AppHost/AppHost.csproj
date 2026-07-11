@@ -22,7 +22,6 @@
 
     <ItemGroup>
       <Folder Include="configs\nats\certs\" />
-      <Folder Include="New\" />
     </ItemGroup>
 
     <ItemGroup>

@@ -5,17 +5,15 @@ namespace AppHost;
 public static class StartTypesense
 {
     public static IResourceBuilder<ContainerResource> Start(
-        IDistributedApplicationBuilder builder,
-        AppHostHardeningOptions hardening)
+        IDistributedApplicationBuilder builder)
     {
-        var dataDir = Environment.GetEnvironmentVariable("TYPESENSE_DATA_DIR") ?? "/data";
 
         return builder
             .AddContainer("typesense", "typesense/typesense", "30.2")
-            .WithVolume("typesense-data", dataDir)
-            .WithEnvironment("TYPESENSE_DATA_DIR", dataDir)
-            .WithEnvironment("TYPESENSE_API_KEY", hardening.TypesenseApiKey)
-            .WithEnvironment("TYPESENSE_ENABLE_CORS", Environment.GetEnvironmentVariable("TYPESENSE_ENABLE_CORS") ?? "true")
+            .WithVolume("typesense-data", Helpers.GetEnv("TYPESENSE_DATA_DIR"))
+            .WithEnvironment("TYPESENSE_DATA_DIR", Helpers.GetEnv("TYPESENSE_DATA_DIR"))
+            .WithEnvironment("TYPESENSE_API_KEY", Helpers.GetEnv("TYPESENSE_API_KEY"))
+            .WithEnvironment("TYPESENSE_ENABLE_CORS", Helpers.GetEnv("TYPESENSE_ENABLE_CORS"))
             .WithHttpEndpoint(port: 8108, targetPort: 8108, name: "http");
     }
 }
