@@ -8,12 +8,14 @@ public static class StartTypesense
         IDistributedApplicationBuilder builder,
         AppHostHardeningOptions hardening)
     {
+        var dataDir = Environment.GetEnvironmentVariable("TYPESENSE_DATA_DIR") ?? "/data";
+
         return builder
-            .AddContainer("typesense", "typesense/typesense", "30.2")
-            .WithVolume("typesense-data", "/data")
-            .WithEnvironment("TYPESENSE_DATA_DIR", "/data")
+            .AddContainer("typesense", "typesense/typesense", hardening.TypesenseImageTag)
+            .WithVolume("typesense-data", dataDir)
+            .WithEnvironment("TYPESENSE_DATA_DIR", dataDir)
             .WithEnvironment("TYPESENSE_API_KEY", hardening.TypesenseApiKey)
-            .WithEnvironment("TYPESENSE_ENABLE_CORS", "true")
+            .WithEnvironment("TYPESENSE_ENABLE_CORS", Environment.GetEnvironmentVariable("TYPESENSE_ENABLE_CORS") ?? "true")
             .WithHttpEndpoint(port: 8108, targetPort: 8108, name: "http");
     }
 }

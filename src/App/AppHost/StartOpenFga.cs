@@ -34,7 +34,7 @@ public static class StartOpenFga
             .WaitFor(postgres.OpenFgaDb);
         
         var studio = builder
-            .AddContainer("openfga-studio", "ghcr.io/prakashm88/openfga-studio")
+            .AddContainer("openfga-studio", "ghcr.io/prakashm88/openfga-studio", Environment.GetEnvironmentVariable("OPENFGA_STUDIO_IMAGE_TAG") ?? "latest")
             .WithHttpEndpoint(port: 3000, targetPort: 3000, name: "http")
             // Tell Studio not to run its own embedded OpenFGA.
             .WithEnvironment("DISABLE_LOCAL_OPENFGA", "true")

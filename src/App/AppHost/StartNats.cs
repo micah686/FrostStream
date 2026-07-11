@@ -26,13 +26,13 @@ public static class StartNats
 
         var jwt = Environment.GetEnvironmentVariable("JWT_SECRET") ?? Guid.NewGuid().ToString();
         var natsUi = builder
-            .AddContainer("nats-ui", "klinux/nats-ui:0.4.0")
+            .AddContainer("nats-ui", "klinux/nats-ui", Environment.GetEnvironmentVariable("NATS_UI_IMAGE_TAG") ?? "0.4.0")
             .WithHttpEndpoint(port: 8080, targetPort: 8080, name: "http")
             .WithEnvironment("PORT", "8080")
             .WithEnvironment("BASE_URL", "http://localhost:8080")
             .WithEnvironment("NATS_URL", nats)
-            .WithEnvironment("ADMIN_USER", "admin") //ui login
-            .WithEnvironment("ADMIN_PASS", "admin") //ui password
+            .WithEnvironment("ADMIN_USER", Environment.GetEnvironmentVariable("NATS_UI_ADMIN_USER") ?? "admin") //ui login
+            .WithEnvironment("ADMIN_PASS", Environment.GetEnvironmentVariable("NATS_UI_ADMIN_PASS") ?? "admin") //ui password
             .WithEnvironment("JWT_SECRET", jwt)
             .WithReference(nats);
         

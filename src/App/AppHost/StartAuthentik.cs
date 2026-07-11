@@ -22,7 +22,6 @@ public static class StartAuthentik
     // authentik 2025.10+ dropped the Redis requirement; caching, the embedded outpost
     // and WebSocket state are now backed by PostgreSQL. Both server and worker share the
     // existing postgres instance.
-    private const string ImageTag = "2026.5.3";
     private const string DatabaseName = "authentikdb";
 
     public static AuthentikResources Start(
@@ -75,7 +74,7 @@ public static class StartAuthentik
         // The server serves the web UI and OIDC endpoints; the worker applies blueprints and
         // runs background tasks. Both run the same image with different args and share config.
         var server = builder
-            .AddContainer("authentik", "ghcr.io/goauthentik/server", ImageTag)
+            .AddContainer("authentik", "ghcr.io/goauthentik/server", hardening.AuthentikImageTag)
             .WithArgs("server")
             .WithHttpEndpoint(port: 9000, targetPort: 9000, name: "http")
             .WithEnvironment("AUTHENTIK_SECRET_KEY", secretKey)
@@ -95,7 +94,7 @@ public static class StartAuthentik
         }
 
         var worker = builder
-            .AddContainer("authentik-worker", "ghcr.io/goauthentik/server", ImageTag)
+            .AddContainer("authentik-worker", "ghcr.io/goauthentik/server", hardening.AuthentikImageTag)
             .WithArgs("worker")
             .WithEnvironment("AUTHENTIK_SECRET_KEY", secretKey)
             .WithAuthentikPostgresEnv(postgres)
