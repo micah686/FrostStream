@@ -17,7 +17,6 @@
     DownloadOutline,
     HeartOutline,
     HomeOutline,
-    PlaySolid,
     RectangleListOutline,
     SearchOutline,
     ServerOutline,
@@ -262,13 +261,13 @@
     <BarsOutline class="h-5 w-5" />
   </Button>
 
-  <a href="/" class="flex shrink-0 items-center gap-2.5 rounded-lg focus-visible:outline-offset-4">
-    <span
-      class="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-blue-400 to-blue-700 shadow-[0_0_18px_rgba(59,130,246,0.4)]"
-    >
-      <PlaySolid class="h-4 w-4 text-white" />
-    </span>
-    <span class="hidden text-base font-bold tracking-tight text-slate-100 sm:block">FrostStream</span>
+  <a href="/" class="flex shrink-0 items-center rounded-lg focus-visible:outline-offset-4">
+    <img
+      src="/froststream-banner.svg"
+      alt="FrostStream"
+      class="h-8 w-auto max-w-[11.5rem] sm:max-w-[13.5rem]"
+      decoding="async"
+    />
   </a>
 
   <div class="relative ml-3 w-full max-w-[39rem] sm:ml-4" onfocusout={onSearchFocusOut}>
