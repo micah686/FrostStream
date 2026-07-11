@@ -7,6 +7,8 @@ var builder = DistributedApplication.CreateBuilder(args);
 //Test with single-user-mode for easy dev
 //Environment.SetEnvironmentVariable("SINGLE_USER_MODE", "true");
 
+builder.AddDockerComposeEnvironment("aspire-docker-demo");
+
 
 
 var hardening = AppHostHardening.Read(AppHostHardening.IsTruthy(Environment.GetEnvironmentVariable("SINGLE_USER_MODE")));
