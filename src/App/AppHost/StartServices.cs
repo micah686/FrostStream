@@ -21,7 +21,7 @@ public static class StartServices
         WireWorker(builder, hardening, sharedStorageRoot, nats, openBao);
         WireScheduler(builder, nats, databridge);
         //WireAuthTester(builder, hardening, webapi, authentik, webApiEndpointName);
-        //WireFrontend(builder, hardening, webapi, authentik, webApiEndpointName);
+        WireFrontend(builder, hardening, webapi, authentik, webApiEndpointName);
     }
 
     private static IResourceBuilder<ProjectResource> WireDataBridge(
@@ -191,62 +191,34 @@ public static class StartServices
                 url.DisplayText = "Quartz";
             });
     }
-
-    // private static void WireAuthTester(
-    //     IDistributedApplicationBuilder builder,
-    //     AppHostHardeningOptions hardening,
-    //     IResourceBuilder<ProjectResource> webapi,
-    //     AuthentikResources authentik,
-    //     string webApiEndpointName)
-    // {
-    //     var authTester = builder.AddViteApp("auth-tester", "../../HelperTestingApps/AuthTester")
-    //         .WithPnpm()
-    //         .WithReference(webapi)
-    //         .WaitFor(webapi)
-    //         .WithEnvironment("VITE_API_BASE_URL", webapi.GetEndpoint(webApiEndpointName))
-    //         .WithEnvironment("API_BASE_URL", webapi.GetEndpoint(webApiEndpointName))
-    //         .WithEnvironment("SINGLE_USER_MODE", hardening.SingleUserMode ? "true" : "false")
-    //         .WithEnvironment("VITE_SINGLE_USER_MODE", hardening.SingleUserMode ? "true" : "false")
-    //         .WithEnvironment("VITE_AUTH_MODE", hardening.SingleUserMode ? "single-user" : "multi-user")
-    //         .WithEnvironment("AUTH_CLIENT_ID", authentik.ClientId)
-    //         .WithEnvironment("AUTH_CLIENT_SECRET", authentik.ClientSecret)
-    //         .WithEnvironment("AUTH_SCOPES", Environment.GetEnvironmentVariable("AUTH_SCOPES") ?? "openid profile email groups offline_access");
-    //
-    //     authTester = authTester.WithAuthAuthority("VITE_AUTH_AUTHORITY", hardening.SingleUserMode, authentik);
-    //     authTester = authTester.WithAuthAuthority("AUTH_AUTHORITY", hardening.SingleUserMode, authentik);
-    //
-    //     if (!hardening.SingleUserMode && authentik.Server is { } authentikServer)
-    //     {
-    //         authTester = authTester.WaitFor(authentikServer);
-    //     }
-    // }
     
-    // private static void WireFrontend(
-    //     IDistributedApplicationBuilder builder,
-    //     AppHostHardeningOptions hardening,
-    //     IResourceBuilder<ProjectResource> webapi,
-    //     AuthentikResources authentik,
-    //     string webApiEndpointName)
-    // {
-    //     var frontend = builder.AddViteApp("frontend", "../Frontend")
-    //         .WithPnpm()
-    //         .WithReference(webapi)
-    //         .WaitFor(webapi)
-    //         .WithEnvironment("VITE_API_BASE_URL", webapi.GetEndpoint(webApiEndpointName))
-    //         .WithEnvironment("API_BASE_URL", webapi.GetEndpoint(webApiEndpointName))
-    //         .WithEnvironment("SINGLE_USER_MODE", hardening.SingleUserMode ? "true" : "false")
-    //         .WithEnvironment("VITE_SINGLE_USER_MODE", hardening.SingleUserMode ? "true" : "false")
-    //         .WithEnvironment("VITE_AUTH_MODE", hardening.SingleUserMode ? "single-user" : "multi-user")
-    //         .WithEnvironment("AUTH_CLIENT_ID", authentik.ClientId)
-    //         .WithEnvironment("AUTH_CLIENT_SECRET", authentik.ClientSecret)
-    //         .WithEnvironment("AUTH_SCOPES", Environment.GetEnvironmentVariable("AUTH_SCOPES") ?? "openid profile email groups offline_access");
-    //
-    //     frontend = frontend.WithAuthAuthority("VITE_AUTH_AUTHORITY", hardening.SingleUserMode, authentik);
-    //     frontend = frontend.WithAuthAuthority("AUTH_AUTHORITY", hardening.SingleUserMode, authentik);
-    //
-    //     if (!hardening.SingleUserMode && authentik.Server is { } authentikServer)
-    //     {
-    //         frontend = frontend.WaitFor(authentikServer);
-    //     }
-    // }
+    
+    private static void WireFrontend(
+        IDistributedApplicationBuilder builder,
+        AppHostHardeningOptions hardening,
+        IResourceBuilder<ProjectResource> webapi,
+        AuthentikResources authentik,
+        string webApiEndpointName)
+    {
+        var frontend = builder.AddViteApp("frontend", "../Frontend")
+            .WithPnpm()
+            .WithReference(webapi)
+            .WaitFor(webapi)
+            .WithEnvironment("VITE_API_BASE_URL", webapi.GetEndpoint(webApiEndpointName))
+            .WithEnvironment("API_BASE_URL", webapi.GetEndpoint(webApiEndpointName))
+            .WithEnvironment("SINGLE_USER_MODE", hardening.SingleUserMode ? "true" : "false")
+            .WithEnvironment("VITE_SINGLE_USER_MODE", hardening.SingleUserMode ? "true" : "false")
+            .WithEnvironment("VITE_AUTH_MODE", hardening.SingleUserMode ? "single-user" : "multi-user")
+            .WithEnvironment("AUTH_CLIENT_ID", authentik.ClientId)
+            .WithEnvironment("AUTH_CLIENT_SECRET", authentik.ClientSecret)
+            .WithEnvironment("AUTH_SCOPES", Environment.GetEnvironmentVariable("AUTH_SCOPES") ?? "openid profile email groups offline_access");
+    
+        frontend = frontend.WithAuthAuthority("VITE_AUTH_AUTHORITY", hardening.SingleUserMode, authentik);
+        frontend = frontend.WithAuthAuthority("AUTH_AUTHORITY", hardening.SingleUserMode, authentik);
+    
+        if (!hardening.SingleUserMode && authentik.Server is { } authentikServer)
+        {
+            frontend = frontend.WaitFor(authentikServer);
+        }
+    }
 }
