@@ -11,7 +11,7 @@ public static class StartTypesense
         var dataDir = Environment.GetEnvironmentVariable("TYPESENSE_DATA_DIR") ?? "/data";
 
         return builder
-            .AddContainer("typesense", "typesense/typesense", hardening.TypesenseImageTag)
+            .AddContainer("typesense", "typesense/typesense", "30.2")
             .WithVolume("typesense-data", dataDir)
             .WithEnvironment("TYPESENSE_DATA_DIR", dataDir)
             .WithEnvironment("TYPESENSE_API_KEY", hardening.TypesenseApiKey)

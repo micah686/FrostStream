@@ -17,14 +17,14 @@ public static class StartOpenFga
         }
 
         var migrate = builder
-            .AddContainer("openfga-migrate", "openfga/openfga", hardening.OpenFgaImageTag)
+            .AddContainer("openfga-migrate", "openfga/openfga", "v1.18.0")
             .WithArgs("migrate")
             .WithEnvironment("OPENFGA_DATASTORE_ENGINE", "postgres")
             .WithEnvironment("OPENFGA_DATASTORE_URI", $"postgres://{postgres.User}:{postgres.Password}@postgres:5432/openfgadb?sslmode=disable")
             .WaitFor(postgres.OpenFgaDb);
 
         var server = builder
-            .AddContainer("openfga", "openfga/openfga", hardening.OpenFgaImageTag)
+            .AddContainer("openfga", "openfga/openfga", "v1.18.0")
             .WithArgs("run")
             .WithHttpEndpoint(port: 8081, targetPort: 8080, name: "http")
             .WithEnvironment("OPENFGA_DATASTORE_ENGINE", "postgres")

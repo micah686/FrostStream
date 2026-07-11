@@ -74,7 +74,7 @@ public static class StartAuthentik
         // The server serves the web UI and OIDC endpoints; the worker applies blueprints and
         // runs background tasks. Both run the same image with different args and share config.
         var server = builder
-            .AddContainer("authentik", "ghcr.io/goauthentik/server", hardening.AuthentikImageTag)
+            .AddContainer("authentik", "ghcr.io/goauthentik/server", "2026.5.3")
             .WithArgs("server")
             .WithHttpEndpoint(port: 9000, targetPort: 9000, name: "http")
             .WithEnvironment("AUTHENTIK_SECRET_KEY", secretKey)
@@ -94,7 +94,7 @@ public static class StartAuthentik
         }
 
         var worker = builder
-            .AddContainer("authentik-worker", "ghcr.io/goauthentik/server", hardening.AuthentikImageTag)
+            .AddContainer("authentik-worker", "ghcr.io/goauthentik/server", "2026.5.3")
             .WithArgs("worker")
             .WithEnvironment("AUTHENTIK_SECRET_KEY", secretKey)
             .WithAuthentikPostgresEnv(postgres)
