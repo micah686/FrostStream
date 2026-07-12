@@ -3,7 +3,7 @@
 #
 # Runtime configuration is read from the environment by the node server ($env/dynamic/private):
 #   API_BASE_URL, AUTH_AUTHORITY, AUTH_CLIENT_ID, AUTH_CLIENT_SECRET, AUTH_SCOPES,
-#   SINGLE_USER_MODE, PORT (default 3000).
+#   SINGLE_USER_MODE, PORT (default 25000).
 
 FROM node:22-alpine AS build
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
@@ -24,7 +24,7 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/package.json .
 
 ENV NODE_ENV=production \
-    PORT=3000
+    PORT=25000
 EXPOSE 3000
 
 CMD ["node", "build"]

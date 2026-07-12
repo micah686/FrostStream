@@ -51,7 +51,7 @@ export function isSingleUserMode(): boolean {
 }
 
 export function apiBaseUrl(): string {
-  return env.API_BASE_URL || env.VITE_API_BASE_URL || 'http://localhost:5041';
+  return env.API_BASE_URL || env.VITE_API_BASE_URL || 'http://localhost:25200';
 }
 
 export function authority(): string {

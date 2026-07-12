@@ -155,12 +155,12 @@ public class Program
         builder.Services.AddOpenBaoSecretStore(builder.Configuration);
         builder.Services.AddFrostStreamStorage();
 
-        //var natsUrl = builder.Configuration["NATS:Url"] ?? "nats://localhost:4222";
+        //var natsUrl = builder.Configuration["NATS:Url"] ?? "nats://localhost:24040";
         builder.Services.AddNats(options =>
         {
             options.Url = builder.Configuration.GetConnectionString("nats")
                           ?? builder.Configuration["NATS:Url"]
-                          ?? "nats://localhost:4222";
+                          ?? "nats://localhost:24040";
             options.EnableTopologyProvisioning = false;
         });
 

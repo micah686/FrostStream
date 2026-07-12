@@ -8,7 +8,7 @@ internal static class NatsConnectionFactory
     public static string GetUrl(IConfiguration configuration)
         => configuration.GetConnectionString("nats")
            ?? configuration["NATS:Url"]
-           ?? "nats://localhost:4222";
+           ?? "nats://localhost:24040";
 
     public static NatsAuthOpts? BuildAuth(IConfiguration configuration)
     {

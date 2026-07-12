@@ -20,9 +20,9 @@ public static class StartNats
             .WithBindMount(websocketCertPath, "/etc/nats/certs/ws-cert.pem", isReadOnly: true)
             .WithBindMount(websocketKeyPath, "/etc/nats/certs/ws-key.pem", isReadOnly: true)
             .WithArgs("-c", "/etc/nats/nats.conf")
-            .WithEndpoint(port: 4222, targetPort: 4222, name: "client")
-            .WithHttpEndpoint(port: 8222, targetPort: 8222, name: "monitor")
-            .WithEndpoint(port: 9222, targetPort: 9222, name: "ws");
+            .WithEndpoint(port: Ports.NatsClient, targetPort: 4222, name: "client")
+            .WithHttpEndpoint(port: Ports.NatsMonitor, targetPort: 8222, name: "monitor")
+            .WithEndpoint(port: Ports.NatsWebSocket, targetPort: 9222, name: "ws");
 
 #if DEBUG
         AddNatsUI(builder, nats);
@@ -36,10 +36,10 @@ public static class StartNats
         var jwt = Environment.GetEnvironmentVariable("JWT_SECRET") ?? Guid.NewGuid().ToString();
         var natsUi = builder
             .AddContainer("nats-ui", "klinux/nats-ui", "0.4.0")
-            .WithHttpEndpoint(port: 8080, targetPort: 8080, name: "http")
+            .WithHttpEndpoint(port: Ports.NatsUi, targetPort: 8080, name: "http")
             .WithExternalHttpEndpoints()
             .WithEnvironment("PORT", "8080")
-            .WithEnvironment("BASE_URL", "http://localhost:8080")
+            .WithEnvironment("BASE_URL", "http://localhost:" + Ports.NatsUi)
             .WithEnvironment("NATS_URL", nats)
             .WithEnvironment("ADMIN_USER", Helpers.GetEnv("NATS_UI_ADMIN_USER")) //ui login
             .WithEnvironment("ADMIN_PASS", Helpers.GetEnv("NATS_UI_ADMIN_PASS")) //ui password

@@ -258,7 +258,7 @@ internal static class Program
               --pgdata <dir>               target data directory for a full/PITR restore
               --pg-ctl <path>             optional pg_ctl path for stopping/starting the server
               --tool-command <cmd>         how PostgreSQL should invoke this tool in archive/restore commands
-              --openbao-address <url>      default: env OPENBAO_ADDR/OpenBao__Address or http://127.0.0.1:8200
+              --openbao-address <url>      default: env OPENBAO_ADDR/OpenBao__Address or http://127.0.0.1:25400
               --openbao-token <token>      default: env OPENBAO_TOKEN/OpenBao__Token
               --openbao-kv-mount <mount>   default: env OPENBAO_KV_MOUNT/OpenBao__KvMount or secret
             """);

@@ -10,7 +10,7 @@ public static class StartOpenBao
     {
         return builder
             .AddContainer("openbao", "openbao/openbao", "2.5.5")
-            .WithHttpEndpoint(port: 8200, targetPort: 8200, name: "http")
+            .WithHttpEndpoint(port: Ports.OpenBao, targetPort: 8200, name: "http")
             .WithExternalHttpEndpoints()
             .WithEnvironment("BAO_DEV_ROOT_TOKEN_ID", Helpers.GetEnv("OPENBAO_TOKEN"))
             .WithEnvironment("BAO_DEV_LISTEN_ADDRESS", "0.0.0.0:8200")

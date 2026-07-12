@@ -33,7 +33,7 @@ class Program
 
         var natsUrl = builder.Configuration.GetConnectionString("nats")
             ?? builder.Configuration["NATS:Url"]
-            ?? "nats://localhost:4222";
+            ?? "nats://localhost:24040";
         var natsAuth = BuildNatsAuth(builder.Configuration);
 
         builder.Services.AddNats(options =>

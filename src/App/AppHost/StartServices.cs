@@ -113,15 +113,15 @@ public static class StartServices
         string webApiEndpointName)
     {
         var webApiUrls = hardening.EnableHttps
-            ? "http://0.0.0.0:5041;https://0.0.0.0:7035"
-            : "http://0.0.0.0:5041";
+            ? $"http://0.0.0.0:{Ports.WebApiHttp};https://0.0.0.0:{Ports.WebApiHttps}"
+            : $"http://0.0.0.0:{Ports.WebApiHttp}";
 
         var webapi = builder.AddProject<Projects.WebAPI>("webapi", launchProfileName: webApiEndpointName)
             .WithReference(postgres.FrostStreamDb).WaitFor(postgres.FrostStreamDb).WaitForDatabases(postgres)
             .WithReference(nats).WaitFor(nats)
             // Run mode only: in publish mode the container binds via the Dockerfile's
-            // HTTP_PORTS=8080, and ASPNETCORE_URLS would override that to 5041, leaving the
-            // 5041:8080 port mapping and the frontend's http://webapi:8080 pointing at a dead port.
+            // HTTP_PORTS=8080, and ASPNETCORE_URLS would override that to the host port, leaving
+            // the host:8080 port mapping and the frontend's http://webapi:8080 pointing at a dead port.
             .WithEnvironment(ctx =>
             {
                 if (ctx.ExecutionContext.IsRunMode)
@@ -165,11 +165,11 @@ public static class StartServices
             endpoint.TargetHost = "0.0.0.0";
             endpoint.IsProxied = false;
             endpoint.IsExternal = true;
-            // Publish defaults the host port to the container port (8080), colliding with
-            // nats-ui; pin the run-mode launch-profile port instead. Run mode already has 5041.
+            // Publish would default the host port to the container port (8080); pin it. Run
+            // mode gets the same port via ASPNETCORE_URLS/the launch profile.
             if (isPublishMode)
             {
-                endpoint.Port = 5041;
+                endpoint.Port = Ports.WebApiHttp;
             }
         }, createIfNotExists: false);
         webapi.WithEndpoint("https", endpoint =>
@@ -181,7 +181,7 @@ public static class StartServices
             endpoint.IsExternal = hardening.EnableHttps;
             if (isPublishMode && hardening.EnableHttps)
             {
-                endpoint.Port = 7035;
+                endpoint.Port = Ports.WebApiHttps;
             }
         }, createIfNotExists: false);
 
@@ -241,10 +241,10 @@ public static class StartServices
         IResourceBuilder<NatsServerResource> nats,
         IResourceBuilder<ProjectResource> databridge)
     {
-        builder.AddProject<Projects.Scheduler>("scheduler")
+        var scheduler = builder.AddProject<Projects.Scheduler>("scheduler")
             .WithReference(nats).WaitFor(nats)
             .WaitFor(databridge)
-            .WithHttpEndpoint(name: "http")
+            .WithHttpEndpoint(port: Ports.Scheduler, name: "http")
             .WithUrlForEndpoint("http", url =>
             {
                 url.Url = "/quartz";
@@ -256,6 +256,18 @@ public static class StartServices
                     "Dockerfile")
                 .WithImage("localhost/froststream-scheduler", "latest"))
             .WithLocalComposeBuild("localhost/froststream-scheduler:latest", "App/Scheduler/Dockerfile");
+
+        // The Quartz UI is host-facing, so publish a host mapping. The container itself keeps
+        // listening on the aspnet default (HTTP_PORTS=8080).
+        scheduler.WithEndpoint("http", endpoint =>
+        {
+            endpoint.IsExternal = true;
+            if (builder.ExecutionContext.IsPublishMode)
+            {
+                endpoint.Port = Ports.Scheduler;
+                endpoint.TargetPort = 8080;
+            }
+        }, createIfNotExists: false);
     }
     
     
@@ -288,12 +300,10 @@ public static class StartServices
         frontend = frontend.WithAuthAuthority("VITE_AUTH_AUTHORITY", hardening.SingleUserMode, authentik);
         frontend = frontend.WithAuthAuthority("AUTH_AUTHORITY", hardening.SingleUserMode, authentik);
 
-        if (builder.ExecutionContext.IsPublishMode)
-        {
-            // Pin the published host port to match ORIGIN/AUTH_REDIRECT_URI (localhost:8000).
-            // Run mode is left alone: Vite itself binds 8000 there.
-            frontend.WithEndpoint("http", endpoint => endpoint.Port = 8000, createIfNotExists: false);
-        }
+        // Pin the host port in both modes so ORIGIN/AUTH_REDIRECT_URI stay valid whether the
+        // frontend runs under Aspire, compose, or standalone `pnpm run dev` (vite.config.ts
+        // defaults to the same port).
+        frontend.WithEndpoint("http", endpoint => endpoint.Port = Ports.Frontend, createIfNotExists: false);
     
         if (!hardening.SingleUserMode && authentik.Server is { } authentikServer)
         {
@@ -312,11 +322,11 @@ public static class StartServices
 
         return Environment.GetEnvironmentVariable("AUTHENTIK_PUBLIC_AUTHORITY")
                ?? Environment.GetEnvironmentVariable("AUTHENTIK_AUTHORITY")
-               ?? "http://localhost:9000/application/o/froststream/";
+               ?? $"http://localhost:{Ports.Authentik}/application/o/froststream/";
     }
 
     private static string FrontendPublicOrigin()
-        => (Environment.GetEnvironmentVariable("FRONTEND_PUBLIC_ORIGIN") ?? "http://localhost:8000").TrimEnd('/');
+        => (Environment.GetEnvironmentVariable("FRONTEND_PUBLIC_ORIGIN") ?? $"http://localhost:{Ports.Frontend}").TrimEnd('/');
 
     private static IResourceBuilder<TResource> WithLocalComposeBuild<TResource>(
         this IResourceBuilder<TResource> resource,
