@@ -83,6 +83,14 @@ services:
         read_only: false
     networks:
       - "aspire"
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - "pg_isready -U ${POSTGRES_USER} -d postgres"
+      interval: "5s"
+      timeout: "5s"
+      retries: 10
+      start_period: "20s"
   dbgate:
     image: "docker.io/dbgate/dbgate:6.1.4"
     environment:
@@ -115,7 +123,7 @@ services:
       PGPASSWORD: "${POSTGRES_PASSWORD}"
     depends_on:
       postgres:
-        condition: "service_started"
+        condition: "service_healthy"
     networks:
       - "aspire"
   openbao:
@@ -172,7 +180,7 @@ services:
         read_only: true
     depends_on:
       postgres:
-        condition: "service_started"
+        condition: "service_healthy"
       postgres-init:
         condition: "service_completed_successfully"
     networks:
@@ -207,7 +215,7 @@ services:
         read_only: true
     depends_on:
       postgres:
-        condition: "service_started"
+        condition: "service_healthy"
       postgres-init:
         condition: "service_completed_successfully"
       authentik:
@@ -288,14 +296,14 @@ services:
       OpenBao__Token: "froststream-dev-root"
       Typesense__Url: "http://typesense:8108"
       Typesense__ApiKey: "froststream-dev-key"
-      FROSTSTREAM_STORAGE_ROOT: "/home/micah/RiderProjects/FrostStream/data"
+      FROSTSTREAM_STORAGE_ROOT: "C:\\Users\\Micah\\source\\repos\\micah686\\FrostStream\\data"
       SINGLE_USER_MODE: "false"
       PotBroker__Enabled: "true"
       PotBroker__ProviderUrl: "http://pot-provider:4416"
-      Backup__Directory: "/home/micah/RiderProjects/FrostStream/data/core-backups"
+      Backup__Directory: "C:\\Users\\Micah\\source\\repos\\micah686\\FrostStream\\data\\core-backups"
       Backup__ToolPath: "dotnet"
-      Backup__ToolBaseArguments: "run --project /home/micah/RiderProjects/FrostStream/src/App/BackupTool/BackupTool.csproj --"
-      Backup__ArchiveDir: "/home/micah/RiderProjects/FrostStream/data/wal-archive"
+      Backup__ToolBaseArguments: "run --project C:\\Users\\Micah\\source\\repos\\micah686\\FrostStream\\src\\App\\BackupTool\\BackupTool.csproj --"
+      Backup__ArchiveDir: "C:\\Users\\Micah\\source\\repos\\micah686\\FrostStream\\data\\wal-archive"
       Backup__OpenBaoAddress: "http://openbao:8200"
       Backup__OpenBaoToken: "froststream-dev-root"
       Backup__OpenBaoKvMount: "secret"
@@ -344,7 +352,7 @@ services:
       ASPNETCORE_URLS: "http://0.0.0.0:5041"
       OpenBao__Address: "http://openbao:8200"
       OpenBao__Token: "froststream-dev-root"
-      FROSTSTREAM_STORAGE_ROOT: "/home/micah/RiderProjects/FrostStream/data"
+      FROSTSTREAM_STORAGE_ROOT: "C:\\Users\\Micah\\source\\repos\\micah686\\FrostStream\\data"
       SINGLE_USER_MODE: "false"
       Auth__SingleUserMode: "false"
       Auth__AllowSingleUserModeInProduction: "false"
@@ -357,10 +365,10 @@ services:
       OpenFga__AutoProvision: "true"
       OpenFga__BootstrapOwnerSubjects: ""
       Cast__AdvertisedBaseUrl: ""
-      Backup__Directory: "/home/micah/RiderProjects/FrostStream/data/core-backups"
+      Backup__Directory: "C:\\Users\\Micah\\source\\repos\\micah686\\FrostStream\\data\\core-backups"
       Backup__ToolPath: "dotnet"
-      Backup__ToolBaseArguments: "run --project /home/micah/RiderProjects/FrostStream/src/App/BackupTool/BackupTool.csproj --"
-      Backup__ArchiveDir: "/home/micah/RiderProjects/FrostStream/data/wal-archive"
+      Backup__ToolBaseArguments: "run --project C:\\Users\\Micah\\source\\repos\\micah686\\FrostStream\\src\\App\\BackupTool\\BackupTool.csproj --"
+      Backup__ArchiveDir: "C:\\Users\\Micah\\source\\repos\\micah686\\FrostStream\\data\\wal-archive"
       Backup__OpenBaoAddress: "http://openbao:8200"
       Backup__OpenBaoToken: "froststream-dev-root"
       Backup__OpenBaoKvMount: "secret"
@@ -406,7 +414,7 @@ services:
       NATS_URI: "nats://nats:${NATS_PASSWORD}@nats:4222"
       OpenBao__Address: "http://openbao:8200"
       OpenBao__Token: "froststream-dev-root"
-      FROSTSTREAM_STORAGE_ROOT: "/home/micah/RiderProjects/FrostStream/data"
+      FROSTSTREAM_STORAGE_ROOT: "C:\\Users\\Micah\\source\\repos\\micah686\\FrostStream\\data"
       PotProvider__Enabled: "true"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://aspire-docker-demo-dashboard:18889"
       OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"

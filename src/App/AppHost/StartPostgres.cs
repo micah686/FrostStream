@@ -87,6 +87,20 @@ public static class StartPostgres
                 endpoint.IsExternal = true;
             }, createIfNotExists: false);
 
+            // pg_isready only checks TCP; this healthcheck also verifies the auth flow works,
+            // so dependents using service_healthy don't start before postgres can serve queries.
+            server.PublishAsDockerComposeService((_, svc) =>
+            {
+                svc.Healthcheck = new()
+                {
+                    Test = ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d postgres"],
+                    Interval = "5s",
+                    Timeout = "5s",
+                    Retries = 10,
+                    StartPeriod = "20s",
+                };
+            });
+
             // WithDbGate (run mode, above) is excluded from the compose publish by the community
             // toolkit, so publish a plain dbgate container with the same connection wiring.
             builder
@@ -102,7 +116,8 @@ public static class StartPostgres
                 .WithEnvironment("ENGINE_con1", "postgres@dbgate-plugin-postgres")
                 .WaitFor(server);
 
-            const string seedScript = """
+            // ReplaceLineEndings: raw string literals on Windows have CRLF; bash rejects \r.
+            var seedScript = """
                 set -eu
                 until pg_isready -q; do echo 'postgres-init: waiting for postgres'; sleep 1; done
                 for db in froststreamdb authentikdb openfgadb; do
@@ -114,7 +129,7 @@ public static class StartPostgres
                   fi
                 done
                 echo 'postgres-init: done'
-                """;
+                """.ReplaceLineEndings("\n");
 
             init = builder
                 .AddContainer("postgres-init", "docker.io/library/postgres", "18.3")
@@ -125,7 +140,8 @@ public static class StartPostgres
                 .WithEnvironment("PGDATABASE", "postgres")
                 .WithEnvironment("PGUSER", user)
                 .WithEnvironment("PGPASSWORD", password)
-                .WaitFor(server);
+                .WaitFor(server)
+                .WithComposeDependencyCondition("postgres", "service_healthy");
         }
 
         return new PostgresResources(

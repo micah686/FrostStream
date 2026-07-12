@@ -89,6 +89,7 @@ public static class StartAuthentik
             .WithHttpHealthCheck(path: "/-/health/ready/")
             .WaitFor(postgres.AuthentikDb)
             .WaitForDatabases(postgres)
+            .WithComposeDependencyCondition("postgres", "service_healthy")
             // Compose has no notion of Aspire health checks, so publish an explicit healthcheck.
             // "ak healthcheck" fails until first-boot migrations finish (verified), letting
             // dependents gate on service_healthy. Generous retries: first boot on slow hosts
@@ -122,6 +123,7 @@ public static class StartAuthentik
             .WithBindMount(blueprintPath, "/blueprints/froststream.yaml", isReadOnly: true)
             .WaitFor(postgres.AuthentikDb)
             .WaitForDatabases(postgres)
+            .WithComposeDependencyCondition("postgres", "service_healthy")
             // Server and worker racing lifecycle.migrate on an empty database intermittently
             // fails ("relation authentik_core_group does not exist"), so the worker starts only
             // once the server is healthy — i.e. migrations are done.
