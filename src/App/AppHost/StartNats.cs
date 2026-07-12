@@ -37,6 +37,7 @@ public static class StartNats
         var natsUi = builder
             .AddContainer("nats-ui", "klinux/nats-ui", "0.4.0")
             .WithHttpEndpoint(port: 8080, targetPort: 8080, name: "http")
+            .WithExternalHttpEndpoints()
             .WithEnvironment("PORT", "8080")
             .WithEnvironment("BASE_URL", "http://localhost:8080")
             .WithEnvironment("NATS_URL", nats)

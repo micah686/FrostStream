@@ -77,6 +77,7 @@ public static class StartAuthentik
             .AddContainer("authentik", "ghcr.io/goauthentik/server", "2026.5.3")
             .WithArgs("server")
             .WithHttpEndpoint(port: 9000, targetPort: 9000, name: "http")
+            .WithExternalHttpEndpoints()
             .WithEnvironment("AUTHENTIK_SECRET_KEY", secretKey)
             .WithAuthentikPostgresEnv(postgres)
             .WithEnvironment("AUTHENTIK_BOOTSTRAP_EMAIL", Helpers.GetEnv("AUTHENTIK_BOOTSTRAP_EMAIL"))
@@ -86,7 +87,24 @@ public static class StartAuthentik
             .WithEnvironment("AUTHENTIK_CLIENT_SECRET", clientSecret)
             .WithBindMount(blueprintPath, "/blueprints/froststream.yaml", isReadOnly: true)
             .WithHttpHealthCheck(path: "/-/health/ready/")
-            .WaitFor(postgres.AuthentikDb);
+            .WaitFor(postgres.AuthentikDb)
+            .WaitForDatabases(postgres)
+            .WithComposeDependencyCondition("postgres", "service_healthy")
+            // Compose has no notion of Aspire health checks, so publish an explicit healthcheck.
+            // "ak healthcheck" fails until first-boot migrations finish (verified), letting
+            // dependents gate on service_healthy. Generous retries: first boot on slow hosts
+            // (Windows/Docker Desktop) migrates for minutes.
+            .PublishAsDockerComposeService((_, service) =>
+            {
+                service.Healthcheck = new()
+                {
+                    Test = ["CMD", "ak", "healthcheck"],
+                    Interval = "10s",
+                    Timeout = "30s",
+                    Retries = 30,
+                    StartPeriod = "60s",
+                };
+            });
 
         if (!string.IsNullOrWhiteSpace(signingKeyName))
         {
@@ -103,7 +121,14 @@ public static class StartAuthentik
             .WithEnvironment("AUTHENTIK_CLIENT_ID", clientId)
             .WithEnvironment("AUTHENTIK_CLIENT_SECRET", clientSecret)
             .WithBindMount(blueprintPath, "/blueprints/froststream.yaml", isReadOnly: true)
-            .WaitFor(postgres.AuthentikDb);
+            .WaitFor(postgres.AuthentikDb)
+            .WaitForDatabases(postgres)
+            .WithComposeDependencyCondition("postgres", "service_healthy")
+            // Server and worker racing lifecycle.migrate on an empty database intermittently
+            // fails ("relation authentik_core_group does not exist"), so the worker starts only
+            // once the server is healthy — i.e. migrations are done.
+            .WaitFor(server)
+            .WithComposeDependencyCondition("authentik", "service_healthy");
 
         if (!string.IsNullOrWhiteSpace(signingKeyName))
         {

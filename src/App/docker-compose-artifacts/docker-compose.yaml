@@ -52,8 +52,8 @@ services:
       NATS_USERNAME: "nats"
       NATS_PASSWORD: "${NATS_PASSWORD}"
       NATS_URI: "nats://nats:${NATS_PASSWORD}@nats:4222"
-    expose:
-      - "8080"
+    ports:
+      - "8080:8080"
     networks:
       - "aspire"
   postgres:
@@ -66,8 +66,8 @@ services:
       POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
       POSTGRES_USER: "${POSTGRES_USER}"
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
-    expose:
-      - "5432"
+    ports:
+      - "5432:5432"
     volumes:
       - type: "volume"
         target: "/var/lib/postgresql"
@@ -83,6 +83,49 @@ services:
         read_only: false
     networks:
       - "aspire"
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - "pg_isready -U ${POSTGRES_USER} -d postgres"
+      interval: "5s"
+      timeout: "5s"
+      retries: 10
+      start_period: "20s"
+  dbgate:
+    image: "docker.io/dbgate/dbgate:6.1.4"
+    environment:
+      CONNECTIONS: "con1"
+      LABEL_con1: "postgres"
+      SERVER_con1: "postgres"
+      USER_con1: "${POSTGRES_USER}"
+      PASSWORD_con1: "${POSTGRES_PASSWORD}"
+      PORT_con1: "5432"
+      ENGINE_con1: "postgres@dbgate-plugin-postgres"
+    ports:
+      - "3100:3000"
+    depends_on:
+      postgres:
+        condition: "service_started"
+    networks:
+      - "aspire"
+  postgres-init:
+    image: "docker.io/library/postgres:18.3"
+    command:
+      - "-c"
+      - "set -eu\nuntil pg_isready -q; do echo 'postgres-init: waiting for postgres'; sleep 1; done\nfor db in froststreamdb authentikdb openfgadb; do\n  if [ \"$(psql -tAc \"SELECT 1 FROM pg_database WHERE datname = '$$db'\")\" = '1' ]; then\n    echo \"postgres-init: database $$db already exists\"\n  else\n    echo \"postgres-init: creating database $$db\"\n    createdb \"$$db\"\n  fi\ndone\necho 'postgres-init: done'"
+    entrypoint:
+      - "/bin/bash"
+    environment:
+      PGHOST: "postgres"
+      PGPORT: "5432"
+      PGDATABASE: "postgres"
+      PGUSER: "${POSTGRES_USER}"
+      PGPASSWORD: "${POSTGRES_PASSWORD}"
+    depends_on:
+      postgres:
+        condition: "service_healthy"
+    networks:
+      - "aspire"
   openbao:
     image: "openbao/openbao:2.5.5"
     command:
@@ -93,8 +136,8 @@ services:
     environment:
       BAO_DEV_ROOT_TOKEN_ID: "froststream-dev-root"
       BAO_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
-    expose:
-      - "8200"
+    ports:
+      - "8200:8200"
     networks:
       - "aspire"
   typesense:
@@ -103,8 +146,8 @@ services:
       TYPESENSE_DATA_DIR: "/data"
       TYPESENSE_API_KEY: "froststream-dev-key"
       TYPESENSE_ENABLE_CORS: "true"
-    expose:
-      - "8108"
+    ports:
+      - "8108:8108"
     volumes:
       - type: "volume"
         target: "/data"
@@ -128,8 +171,8 @@ services:
       AUTHENTIK_BOOTSTRAP_TOKEN: "${AUTHENTIK_BOOTSTRAP_TOKEN}"
       AUTHENTIK_CLIENT_ID: "froststream-bff"
       AUTHENTIK_CLIENT_SECRET: "${AUTHENTIK_CLIENT_SECRET}"
-    expose:
-      - "9000"
+    ports:
+      - "9000:9000"
     volumes:
       - type: "bind"
         target: "/blueprints/froststream.yaml"
@@ -137,9 +180,20 @@ services:
         read_only: true
     depends_on:
       postgres:
-        condition: "service_started"
+        condition: "service_healthy"
+      postgres-init:
+        condition: "service_completed_successfully"
     networks:
       - "aspire"
+    healthcheck:
+      test:
+        - "CMD"
+        - "ak"
+        - "healthcheck"
+      interval: "10s"
+      timeout: "30s"
+      retries: 30
+      start_period: "60s"
   authentik-worker:
     image: "ghcr.io/goauthentik/server:2026.5.3"
     command:
@@ -161,7 +215,11 @@ services:
         read_only: true
     depends_on:
       postgres:
-        condition: "service_started"
+        condition: "service_healthy"
+      postgres-init:
+        condition: "service_completed_successfully"
+      authentik:
+        condition: "service_healthy"
     networks:
       - "aspire"
   openfga-migrate:
@@ -174,6 +232,8 @@ services:
     depends_on:
       postgres:
         condition: "service_started"
+      postgres-init:
+        condition: "service_completed_successfully"
     networks:
       - "aspire"
   openfga:
@@ -183,8 +243,8 @@ services:
     environment:
       OPENFGA_DATASTORE_ENGINE: "postgres"
       OPENFGA_DATASTORE_URI: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/openfgadb?sslmode=disable"
-    expose:
-      - "8080"
+    ports:
+      - "8081:8080"
     depends_on:
       openfga-migrate:
         condition: "service_completed_successfully"
@@ -197,8 +257,8 @@ services:
     environment:
       DISABLE_LOCAL_OPENFGA: "true"
       OPENFGA_ENDPOINT: "http://openfga:8080"
-    expose:
-      - "3000"
+    ports:
+      - "3000:3000"
     depends_on:
       openfga:
         condition: "service_started"
@@ -236,23 +296,30 @@ services:
       OpenBao__Token: "froststream-dev-root"
       Typesense__Url: "http://typesense:8108"
       Typesense__ApiKey: "froststream-dev-key"
-      FROSTSTREAM_STORAGE_ROOT: "/home/micah/RiderProjects/FrostStream/data"
+      FROSTSTREAM_STORAGE_ROOT: "/data"
       SINGLE_USER_MODE: "false"
       PotBroker__Enabled: "true"
       PotBroker__ProviderUrl: "http://pot-provider:4416"
-      Backup__Directory: "/home/micah/RiderProjects/FrostStream/data/core-backups"
+      Backup__Directory: "/data/core-backups"
       Backup__ToolPath: "dotnet"
-      Backup__ToolBaseArguments: "run --project /home/micah/RiderProjects/FrostStream/src/App/BackupTool/BackupTool.csproj --"
-      Backup__ArchiveDir: "/home/micah/RiderProjects/FrostStream/data/wal-archive"
+      Backup__ToolBaseArguments: "run --project C:\\Users\\Micah\\source\\repos\\micah686\\FrostStream\\src\\App\\BackupTool\\BackupTool.csproj --"
+      Backup__ArchiveDir: "/data/wal-archive"
       Backup__OpenBaoAddress: "http://openbao:8200"
       Backup__OpenBaoToken: "froststream-dev-root"
       Backup__OpenBaoKvMount: "secret"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://aspire-docker-demo-dashboard:18889"
       OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
       OTEL_SERVICE_NAME: "databridge"
+    volumes:
+      - type: "bind"
+        target: "/data"
+        source: "${DATABRIDGE_BINDMOUNT_0}"
+        read_only: false
     depends_on:
       postgres:
         condition: "service_started"
+      postgres-init:
+        condition: "service_completed_successfully"
       nats:
         condition: "service_started"
       openbao:
@@ -287,10 +354,9 @@ services:
       NATS_USERNAME: "nats"
       NATS_PASSWORD: "${NATS_PASSWORD}"
       NATS_URI: "nats://nats:${NATS_PASSWORD}@nats:4222"
-      ASPNETCORE_URLS: "http://0.0.0.0:5041"
       OpenBao__Address: "http://openbao:8200"
       OpenBao__Token: "froststream-dev-root"
-      FROSTSTREAM_STORAGE_ROOT: "/home/micah/RiderProjects/FrostStream/data"
+      FROSTSTREAM_STORAGE_ROOT: "/data"
       SINGLE_USER_MODE: "false"
       Auth__SingleUserMode: "false"
       Auth__AllowSingleUserModeInProduction: "false"
@@ -303,10 +369,10 @@ services:
       OpenFga__AutoProvision: "true"
       OpenFga__BootstrapOwnerSubjects: ""
       Cast__AdvertisedBaseUrl: ""
-      Backup__Directory: "/home/micah/RiderProjects/FrostStream/data/core-backups"
+      Backup__Directory: "/data/core-backups"
       Backup__ToolPath: "dotnet"
-      Backup__ToolBaseArguments: "run --project /home/micah/RiderProjects/FrostStream/src/App/BackupTool/BackupTool.csproj --"
-      Backup__ArchiveDir: "/home/micah/RiderProjects/FrostStream/data/wal-archive"
+      Backup__ToolBaseArguments: "run --project C:\\Users\\Micah\\source\\repos\\micah686\\FrostStream\\src\\App\\BackupTool\\BackupTool.csproj --"
+      Backup__ArchiveDir: "/data/wal-archive"
       Backup__OpenBaoAddress: "http://openbao:8200"
       Backup__OpenBaoToken: "froststream-dev-root"
       Backup__OpenBaoKvMount: "secret"
@@ -317,17 +383,26 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://aspire-docker-demo-dashboard:18889"
       OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
       OTEL_SERVICE_NAME: "webapi"
+    ports:
+      - "5041:8080"
     expose:
       - "8080"
+    volumes:
+      - type: "bind"
+        target: "/data"
+        source: "${WEBAPI_BINDMOUNT_0}"
+        read_only: false
     depends_on:
       postgres:
         condition: "service_started"
+      postgres-init:
+        condition: "service_completed_successfully"
       nats:
         condition: "service_started"
       openbao:
         condition: "service_started"
       authentik:
-        condition: "service_started"
+        condition: "service_healthy"
       openfga:
         condition: "service_started"
     networks:
@@ -348,11 +423,16 @@ services:
       NATS_URI: "nats://nats:${NATS_PASSWORD}@nats:4222"
       OpenBao__Address: "http://openbao:8200"
       OpenBao__Token: "froststream-dev-root"
-      FROSTSTREAM_STORAGE_ROOT: "/home/micah/RiderProjects/FrostStream/data"
+      FROSTSTREAM_STORAGE_ROOT: "/data"
       PotProvider__Enabled: "true"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://aspire-docker-demo-dashboard:18889"
       OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
       OTEL_SERVICE_NAME: "worker"
+    volumes:
+      - type: "bind"
+        target: "/data"
+        source: "${WORKER_BINDMOUNT_0}"
+        read_only: false
     depends_on:
       nats:
         condition: "service_started"
@@ -417,13 +497,13 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://aspire-docker-demo-dashboard:18889"
       OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
       OTEL_SERVICE_NAME: "frontend"
-    expose:
-      - "8000"
+    ports:
+      - "8000:8000"
     depends_on:
       webapi:
         condition: "service_started"
       authentik:
-        condition: "service_started"
+        condition: "service_healthy"
     networks:
       - "aspire"
 networks:
