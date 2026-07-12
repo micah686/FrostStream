@@ -135,15 +135,30 @@ public static class StartServices
         webapi = ApplyBackupEnvironment(webapi, builder.AppHostDirectory, sharedStorageRoot, hardening, openBao);
 
         webapi.WithEndpointProxySupport(false);
+        var isPublishMode = builder.ExecutionContext.IsPublishMode;
         webapi.WithEndpoint("http", endpoint =>
         {
             endpoint.TargetHost = "0.0.0.0";
             endpoint.IsProxied = false;
+            endpoint.IsExternal = true;
+            // Publish defaults the host port to the container port (8080), colliding with
+            // nats-ui; pin the run-mode launch-profile port instead. Run mode already has 5041.
+            if (isPublishMode)
+            {
+                endpoint.Port = 5041;
+            }
         }, createIfNotExists: false);
         webapi.WithEndpoint("https", endpoint =>
         {
             endpoint.TargetHost = "0.0.0.0";
             endpoint.IsProxied = false;
+            // Without EnableHttps the container serves plain HTTP only, so publishing a host
+            // mapping for the https endpoint would just expose a dead port.
+            endpoint.IsExternal = hardening.EnableHttps;
+            if (isPublishMode && hardening.EnableHttps)
+            {
+                endpoint.Port = 7035;
+            }
         }, createIfNotExists: false);
 
         webapi = webapi.WithAuthAuthority("Auth__Authority", hardening.SingleUserMode, authentik);
@@ -226,6 +241,7 @@ public static class StartServices
     {
         var frontend = builder.AddViteApp("frontend", "../Frontend")
             .WithPnpm()
+            .WithExternalHttpEndpoints()
             .WithReference(webapi)
             .WaitFor(webapi)
             .WithEnvironment("VITE_API_BASE_URL", webapi.GetEndpoint(webApiEndpointName))
@@ -244,6 +260,13 @@ public static class StartServices
     
         frontend = frontend.WithAuthAuthority("VITE_AUTH_AUTHORITY", hardening.SingleUserMode, authentik);
         frontend = frontend.WithAuthAuthority("AUTH_AUTHORITY", hardening.SingleUserMode, authentik);
+
+        if (builder.ExecutionContext.IsPublishMode)
+        {
+            // Pin the published host port to match ORIGIN/AUTH_REDIRECT_URI (localhost:8000).
+            // Run mode is left alone: Vite itself binds 8000 there.
+            frontend.WithEndpoint("http", endpoint => endpoint.Port = 8000, createIfNotExists: false);
+        }
     
         if (!hardening.SingleUserMode && authentik.Server is { } authentikServer)
         {

@@ -18,10 +18,12 @@ services:
       - "${NATS_PASSWORD}"
       - "-c"
       - "/etc/nats/nats.conf"
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+      - "9222:9222"
     expose:
       - "4222"
-      - "8222"
-      - "9222"
     volumes:
       - type: "bind"
         target: "/etc/nats/nats.conf"
@@ -52,8 +54,8 @@ services:
       NATS_USERNAME: "nats"
       NATS_PASSWORD: "${NATS_PASSWORD}"
       NATS_URI: "nats://nats:${NATS_PASSWORD}@nats:4222"
-    expose:
-      - "8080"
+    ports:
+      - "8080:8080"
     networks:
       - "aspire"
   postgres:
@@ -66,8 +68,8 @@ services:
       POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
       POSTGRES_USER: "${POSTGRES_USER}"
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
-    expose:
-      - "5432"
+    ports:
+      - "5432:5432"
     volumes:
       - type: "volume"
         target: "/var/lib/postgresql"
@@ -81,6 +83,23 @@ services:
         target: "/wal-archive"
         source: "${POSTGRES_BINDMOUNT_1}"
         read_only: false
+    networks:
+      - "aspire"
+  dbgate:
+    image: "docker.io/dbgate/dbgate:6.1.4"
+    environment:
+      CONNECTIONS: "con1"
+      LABEL_con1: "postgres"
+      SERVER_con1: "postgres"
+      USER_con1: "${POSTGRES_USER}"
+      PASSWORD_con1: "${POSTGRES_PASSWORD}"
+      PORT_con1: "5432"
+      ENGINE_con1: "postgres@dbgate-plugin-postgres"
+    ports:
+      - "3100:3000"
+    depends_on:
+      postgres:
+        condition: "service_started"
     networks:
       - "aspire"
   postgres-init:
@@ -111,8 +130,8 @@ services:
     environment:
       BAO_DEV_ROOT_TOKEN_ID: "froststream-dev-root"
       BAO_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
-    expose:
-      - "8200"
+    ports:
+      - "8200:8200"
     networks:
       - "aspire"
   typesense:
@@ -121,8 +140,8 @@ services:
       TYPESENSE_DATA_DIR: "/data"
       TYPESENSE_API_KEY: "froststream-dev-key"
       TYPESENSE_ENABLE_CORS: "true"
-    expose:
-      - "8108"
+    ports:
+      - "8108:8108"
     volumes:
       - type: "volume"
         target: "/data"
@@ -146,8 +165,8 @@ services:
       AUTHENTIK_BOOTSTRAP_TOKEN: "${AUTHENTIK_BOOTSTRAP_TOKEN}"
       AUTHENTIK_CLIENT_ID: "froststream-bff"
       AUTHENTIK_CLIENT_SECRET: "${AUTHENTIK_CLIENT_SECRET}"
-    expose:
-      - "9000"
+    ports:
+      - "9000:9000"
     volumes:
       - type: "bind"
         target: "/blueprints/froststream.yaml"
@@ -207,8 +226,8 @@ services:
     environment:
       OPENFGA_DATASTORE_ENGINE: "postgres"
       OPENFGA_DATASTORE_URI: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/openfgadb?sslmode=disable"
-    expose:
-      - "8080"
+    ports:
+      - "8081:8080"
     depends_on:
       openfga-migrate:
         condition: "service_completed_successfully"
@@ -221,8 +240,8 @@ services:
     environment:
       DISABLE_LOCAL_OPENFGA: "true"
       OPENFGA_ENDPOINT: "http://openfga:8080"
-    expose:
-      - "3000"
+    ports:
+      - "3000:3000"
     depends_on:
       openfga:
         condition: "service_started"
@@ -343,6 +362,8 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://aspire-docker-demo-dashboard:18889"
       OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
       OTEL_SERVICE_NAME: "webapi"
+    ports:
+      - "5041:8080"
     expose:
       - "8080"
     depends_on:
@@ -445,8 +466,8 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://aspire-docker-demo-dashboard:18889"
       OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
       OTEL_SERVICE_NAME: "frontend"
-    expose:
-      - "8000"
+    ports:
+      - "8000:8000"
     depends_on:
       webapi:
         condition: "service_started"

@@ -14,6 +14,7 @@ public static class StartTypesense
             .WithEnvironment("TYPESENSE_DATA_DIR", Helpers.GetEnv("TYPESENSE_DATA_DIR"))
             .WithEnvironment("TYPESENSE_API_KEY", Helpers.GetEnv("TYPESENSE_API_KEY"))
             .WithEnvironment("TYPESENSE_ENABLE_CORS", Helpers.GetEnv("TYPESENSE_ENABLE_CORS"))
-            .WithHttpEndpoint(port: 8108, targetPort: 8108, name: "http");
+            .WithHttpEndpoint(port: 8108, targetPort: 8108, name: "http")
+            .WithExternalHttpEndpoints();
     }
 }

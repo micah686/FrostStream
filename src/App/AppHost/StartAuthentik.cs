@@ -77,6 +77,7 @@ public static class StartAuthentik
             .AddContainer("authentik", "ghcr.io/goauthentik/server", "2026.5.3")
             .WithArgs("server")
             .WithHttpEndpoint(port: 9000, targetPort: 9000, name: "http")
+            .WithExternalHttpEndpoints()
             .WithEnvironment("AUTHENTIK_SECRET_KEY", secretKey)
             .WithAuthentikPostgresEnv(postgres)
             .WithEnvironment("AUTHENTIK_BOOTSTRAP_EMAIL", Helpers.GetEnv("AUTHENTIK_BOOTSTRAP_EMAIL"))
