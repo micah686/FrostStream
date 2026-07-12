@@ -188,6 +188,21 @@ public sealed class MetadataReadService(NpgsqlDataSource dataSource) : IMetadata
         };
     }
 
+    public async Task<Guid?> GetRandomMediaGuidAsync(Guid? excludeMediaGuid, CancellationToken ct = default)
+    {
+        await using var command = dataSource.CreateCommand("""
+            SELECT mm.media_guid
+            FROM metadata.media_metadata mm
+            WHERE @exclude_media_guid IS NULL OR mm.media_guid <> @exclude_media_guid
+            ORDER BY random()
+            LIMIT 1
+            """);
+        command.Parameters.Add("@exclude_media_guid", NpgsqlDbType.Uuid).Value = (object?)excludeMediaGuid ?? DBNull.Value;
+
+        var result = await command.ExecuteScalarAsync(ct);
+        return result is Guid mediaGuid ? mediaGuid : null;
+    }
+
     public async Task<MetadataTechnicalDto?> GetTechnicalAsync(Guid mediaGuid, CancellationToken ct = default)
     {
         await using var baseCommand = dataSource.CreateCommand("""
@@ -325,6 +340,40 @@ public sealed class MetadataReadService(NpgsqlDataSource dataSource) : IMetadata
             Streams = streams,
             Chapters = chapters
         };
+    }
+
+    public async Task<IReadOnlyList<MetadataVersionDto>> ListVersionsAsync(Guid mediaGuid, CancellationToken ct = default)
+    {
+        await using var command = dataSource.CreateCommand("""
+            SELECT
+                media_guid,
+                version_num,
+                storage_key,
+                storage_path,
+                content_hash_xxh128,
+                ingest_origin::text AS ingest_origin
+            FROM media.media_content_id_versions
+            WHERE media_guid = @media_guid
+            ORDER BY version_num
+            """);
+        command.Parameters.AddWithValue("@media_guid", mediaGuid);
+
+        var items = new List<MetadataVersionDto>();
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            items.Add(new MetadataVersionDto
+            {
+                MediaGuid = GetGuid(reader, "media_guid"),
+                VersionNum = GetInt32(reader, "version_num"),
+                StorageKey = GetString(reader, "storage_key"),
+                StoragePath = GetString(reader, "storage_path"),
+                ContentHashXxh128 = GetString(reader, "content_hash_xxh128"),
+                IngestOrigin = GetString(reader, "ingest_origin")
+            });
+        }
+
+        return items;
     }
 
     public async Task<AccountsListResult> ListAccountsAsync(int pageSize, string? after, string? platform, CancellationToken ct = default)

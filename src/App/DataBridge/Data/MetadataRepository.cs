@@ -58,6 +58,41 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
         }
     }
 
+    public async Task<bool> UpdateAccountAssetsByIdAsync(
+        long accountId,
+        string? avatarStoragePath,
+        string? bannerStoragePath,
+        string? storageKey,
+        CancellationToken ct = default)
+    {
+        var conn = (NpgsqlConnection)db.Database.GetDbConnection();
+        var opened = conn.State != ConnectionState.Open;
+        if (opened)
+            await conn.OpenAsync(ct);
+
+        try
+        {
+            await using var cmd = new NpgsqlCommand("""
+                UPDATE metadata.accounts SET
+                    avatar_storage_path = COALESCE(@avatar_path, avatar_storage_path),
+                    banner_storage_path = COALESCE(@banner_path, banner_storage_path),
+                    storage_key         = COALESCE(@storage_key, storage_key)
+                WHERE id = @account_id
+                """, conn);
+
+            cmd.Parameters.AddWithValue("@account_id", accountId);
+            cmd.Parameters.AddWithValue("@avatar_path", (object?)avatarStoragePath ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@banner_path", (object?)bannerStoragePath ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@storage_key", (object?)storageKey ?? DBNull.Value);
+            return await cmd.ExecuteNonQueryAsync(ct) > 0;
+        }
+        finally
+        {
+            if (opened)
+                await conn.CloseAsync();
+        }
+    }
+
     public async Task WriteMetadataAsync(Guid mediaGuid, CapturedMediaMetadata metadata, string storageKey, CancellationToken ct = default)
     {
         await db.Database.OpenConnectionAsync(ct);

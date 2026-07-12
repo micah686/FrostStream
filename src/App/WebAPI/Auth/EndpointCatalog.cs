@@ -37,8 +37,25 @@ public static class EndpointIds
     public const string DownloadsUpdatePriority = "downloads.update-priority";
     public const string DownloadsCancel = "downloads.cancel";
     public const string DownloadsRestartHalted = "downloads.restart-halted";
-    public const string DownloadsProgress = "downloads.progress";
-    public const string ImportsLocalMedia = "imports.local-media";
+    public const string DownloadsQueueList = "downloads.queue.list";
+    public const string DownloadsQueueGet = "downloads.queue.get";
+    public const string DownloadsQueueHistory = "downloads.queue.history";
+    public const string DownloadsQueueStream = "downloads.queue.stream";
+    public const string DownloadsQueueProgress = "downloads.queue.progress";
+    public const string DownloadsQueuePriority = "downloads.queue.priority";
+    public const string DownloadsQueueCancel = "downloads.queue.cancel";
+    public const string DownloadsQueueRestart = "downloads.queue.restart";
+    public const string ImportsSessionsCreate = "imports.sessions.create";
+    public const string ImportsSessionsList = "imports.sessions.list";
+    public const string ImportsSessionsGet = "imports.sessions.get";
+    public const string ImportsSessionsItemsList = "imports.sessions.items.list";
+    public const string ImportsSessionsItemsPatch = "imports.sessions.items.patch";
+    public const string ImportsSessionsItemsBulk = "imports.sessions.items.bulk";
+    public const string ImportsSessionsMapping = "imports.sessions.mapping";
+    public const string ImportsSessionsEnrich = "imports.sessions.enrich";
+    public const string ImportsSessionsCommit = "imports.sessions.commit";
+    public const string ImportsSessionsRetry = "imports.sessions.retry";
+    public const string ImportsSessionsCancel = "imports.sessions.cancel";
 
     // Storage
     public const string StorageLocalCreate = "storage.local.create";
@@ -59,11 +76,14 @@ public static class EndpointIds
     public const string MetadataList = "metadata.list";
     public const string MetadataSearch = "metadata.search";
     public const string MetadataGet = "metadata.get";
+    public const string MetadataRandom = "metadata.random";
     public const string MetadataTechnical = "metadata.technical";
+    public const string MetadataVersions = "metadata.versions";
     public const string MetadataComments = "metadata.comments";
     public const string MetadataCaptions = "metadata.captions";
     public const string MetadataAccountsList = "metadata.accounts.list";
     public const string MetadataAccountsGet = "metadata.accounts.get";
+    public const string MetadataAccountsRefreshAssets = "metadata.accounts.refresh-assets";
     public const string MetadataAccountsMedia = "metadata.accounts.media";
     public const string MetadataTaxonomyTags = "metadata.taxonomy.tags";
     public const string MetadataTaxonomyCategories = "metadata.taxonomy.categories";
@@ -75,6 +95,7 @@ public static class EndpointIds
     public const string UserNotesUpsert = "user-notes.upsert";
     public const string UserNotesGet = "user-notes.get";
     public const string UserNotesDelete = "user-notes.delete";
+    public const string UserNotesList = "user-notes.list";
     public const string UserNotesSearch = "user-notes.search";
 
     // Unified search
@@ -153,20 +174,43 @@ public static class EndpointIds
     public const string CreatorSourcesGet = "creator-sources.get";
     public const string CreatorSourcesList = "creator-sources.list";
     public const string CreatorSourcesRefreshAssets = "creator-sources.refresh-assets";
+    public const string CreatorSourcesScanNow = "creator-sources.scan-now";
     public const string CreatorSourcesDelete = "creator-sources.delete";
     public const string CreatorSourcesListIgnoredMedia = "creator-sources.list-ignored-media";
     public const string CreatorSourcesForceQueueMedia = "creator-sources.force-queue-media";
 
     // Media
     public const string MediaStream = "media.stream";
-    public const string MediaAudioStream = "media.audio-stream";
-    public const string MediaAudioPlaylist = "media.audio-playlist";
-    public const string MediaAudioSegment = "media.audio-segment";
+    public const string MediaThumbnail = "media.thumbnail";
+    public const string MediaCaption = "media.caption";
+    public const string MediaAccountAsset = "media.account-asset";
+    public const string MediaCastToken = "media.cast-token";
+    public const string MediaHlsManifest = "media.hls-manifest";
+    public const string MediaHlsSegment = "media.hls-segment";
     public const string MediaWatchStateGet = "media.watch-state.get";
     public const string MediaWatchStateUpsert = "media.watch-state.upsert";
+    public const string MediaWatchStateListInProgress = "media.watch-state.list-in-progress";
+    public const string MediaWatchStateListHistory = "media.watch-state.list-history";
     public const string MediaWatchStateMarkWatched = "media.watch-state.mark-watched";
     public const string MediaWatchStateMarkUnwatched = "media.watch-state.mark-unwatched";
+    public const string MediaLikeStateGet = "media.like-state.get";
+    public const string MediaLike = "media.like";
+    public const string MediaUnlike = "media.unlike";
+    public const string MediaLikesList = "media.likes.list";
     public const string PlaylistAudioStream = "playlists.audio-stream";
+
+    // Server-side casting (protocol providers driven by the server via local discovery)
+    public const string CastDevicesList = "cast.devices.list";
+    public const string CastSessionsStart = "cast.sessions.start";
+    public const string CastSessionsList = "cast.sessions.list";
+    public const string CastSessionsGet = "cast.sessions.get";
+    public const string CastSessionsPlay = "cast.sessions.play";
+    public const string CastSessionsPause = "cast.sessions.pause";
+    public const string CastSessionsStop = "cast.sessions.stop";
+    public const string CastSessionsSeek = "cast.sessions.seek";
+    public const string CastSessionsVolume = "cast.sessions.volume";
+    public const string CastSessionsDisconnect = "cast.sessions.disconnect";
+    public const string CastSessionsEvents = "cast.sessions.events";
 
     // Media access control (watch-time restrictions). The internal `media-access.check` gate has no
     // endpoint id — it is server-to-server only and never reachable as a route.
@@ -192,6 +236,7 @@ public static class EndpointIds
     public const string ManagementBundlesDelete = "management.bundles.delete";
     public const string ManagementGrantsCreate = "management.grants.create";
     public const string ManagementGrantsDelete = "management.grants.delete";
+    public const string ManagementDirectorySearch = "management.directory.search";
 
     // Backups
     public const string BackupsCreate = "backups.create";
@@ -220,8 +265,25 @@ public static class EndpointCatalog
         new(EndpointIds.DownloadsUpdatePriority, Bundles.Downloading),
         new(EndpointIds.DownloadsCancel, Bundles.Downloading),
         new(EndpointIds.DownloadsRestartHalted, Bundles.Downloading),
-        new(EndpointIds.DownloadsProgress, Bundles.Downloading),
-        new(EndpointIds.ImportsLocalMedia, Bundles.Downloading),
+        new(EndpointIds.DownloadsQueueList, Bundles.Downloading),
+        new(EndpointIds.DownloadsQueueGet, Bundles.Downloading),
+        new(EndpointIds.DownloadsQueueHistory, Bundles.Downloading),
+        new(EndpointIds.DownloadsQueueStream, Bundles.Downloading),
+        new(EndpointIds.DownloadsQueueProgress, Bundles.Downloading),
+        new(EndpointIds.DownloadsQueuePriority, Bundles.Downloading),
+        new(EndpointIds.DownloadsQueueCancel, Bundles.Downloading),
+        new(EndpointIds.DownloadsQueueRestart, Bundles.Downloading),
+        new(EndpointIds.ImportsSessionsCreate, Bundles.Downloading),
+        new(EndpointIds.ImportsSessionsList, Bundles.Downloading),
+        new(EndpointIds.ImportsSessionsGet, Bundles.Downloading),
+        new(EndpointIds.ImportsSessionsItemsList, Bundles.Downloading),
+        new(EndpointIds.ImportsSessionsItemsPatch, Bundles.Downloading),
+        new(EndpointIds.ImportsSessionsItemsBulk, Bundles.Downloading),
+        new(EndpointIds.ImportsSessionsMapping, Bundles.Downloading),
+        new(EndpointIds.ImportsSessionsEnrich, Bundles.Downloading),
+        new(EndpointIds.ImportsSessionsCommit, Bundles.Downloading),
+        new(EndpointIds.ImportsSessionsRetry, Bundles.Downloading),
+        new(EndpointIds.ImportsSessionsCancel, Bundles.Downloading),
 
         new(EndpointIds.StorageLocalCreate, Bundles.Storage),
         new(EndpointIds.StorageLocalUpdate, Bundles.Storage),
@@ -240,7 +302,9 @@ public static class EndpointCatalog
         new(EndpointIds.MetadataList, Bundles.Metadata),
         new(EndpointIds.MetadataSearch, Bundles.Metadata),
         new(EndpointIds.MetadataGet, Bundles.Metadata),
+        new(EndpointIds.MetadataRandom, Bundles.Metadata),
         new(EndpointIds.MetadataTechnical, Bundles.Metadata),
+        new(EndpointIds.MetadataVersions, Bundles.Metadata),
         new(EndpointIds.MetadataComments, Bundles.Metadata),
         new(EndpointIds.MetadataCaptions, Bundles.Metadata),
         new(EndpointIds.MetadataAccountsList, Bundles.Metadata),
@@ -256,6 +320,7 @@ public static class EndpointCatalog
         new(EndpointIds.UserNotesUpsert, Bundles.Metadata),
         new(EndpointIds.UserNotesGet, Bundles.Metadata),
         new(EndpointIds.UserNotesDelete, Bundles.Metadata),
+        new(EndpointIds.UserNotesList, Bundles.Metadata),
         new(EndpointIds.UserNotesSearch, Bundles.Metadata),
         new(EndpointIds.SearchQuery, Bundles.Metadata),
         new(EndpointIds.SearchSimilar, Bundles.Metadata),
@@ -323,18 +388,40 @@ public static class EndpointCatalog
         new(EndpointIds.CreatorSourcesGet, Bundles.CreatorSources),
         new(EndpointIds.CreatorSourcesList, Bundles.CreatorSources),
         new(EndpointIds.CreatorSourcesRefreshAssets, Bundles.CreatorSources),
+        new(EndpointIds.MetadataAccountsRefreshAssets, Bundles.CreatorSources),
+        new(EndpointIds.CreatorSourcesScanNow, Bundles.CreatorSources),
         new(EndpointIds.CreatorSourcesDelete, Bundles.CreatorSources),
         new(EndpointIds.CreatorSourcesListIgnoredMedia, Bundles.CreatorSources),
         new(EndpointIds.CreatorSourcesForceQueueMedia, Bundles.CreatorSources),
 
         new(EndpointIds.MediaStream, Bundles.Media),
-        new(EndpointIds.MediaAudioStream, Bundles.Media),
-        new(EndpointIds.MediaAudioPlaylist, Bundles.Media),
-        new(EndpointIds.MediaAudioSegment, Bundles.Media),
+        new(EndpointIds.MediaThumbnail, Bundles.Media),
+        new(EndpointIds.MediaCaption, Bundles.Media),
+        new(EndpointIds.MediaAccountAsset, Bundles.Media),
+        new(EndpointIds.MediaCastToken, Bundles.Media),
+        new(EndpointIds.MediaHlsManifest, Bundles.Media),
+        new(EndpointIds.MediaHlsSegment, Bundles.Media),
         new(EndpointIds.MediaWatchStateGet, Bundles.Media),
         new(EndpointIds.MediaWatchStateUpsert, Bundles.Media),
         new(EndpointIds.MediaWatchStateMarkWatched, Bundles.Media),
         new(EndpointIds.MediaWatchStateMarkUnwatched, Bundles.Media),
+        new(EndpointIds.MediaWatchStateListInProgress, Bundles.Media),
+        new(EndpointIds.MediaWatchStateListHistory, Bundles.Media),
+        new(EndpointIds.MediaLikeStateGet, Bundles.Media),
+        new(EndpointIds.MediaLike, Bundles.Media),
+        new(EndpointIds.MediaUnlike, Bundles.Media),
+        new(EndpointIds.MediaLikesList, Bundles.Media),
+        new(EndpointIds.CastDevicesList, Bundles.Media),
+        new(EndpointIds.CastSessionsStart, Bundles.Media),
+        new(EndpointIds.CastSessionsList, Bundles.Media),
+        new(EndpointIds.CastSessionsGet, Bundles.Media),
+        new(EndpointIds.CastSessionsPlay, Bundles.Media),
+        new(EndpointIds.CastSessionsPause, Bundles.Media),
+        new(EndpointIds.CastSessionsStop, Bundles.Media),
+        new(EndpointIds.CastSessionsSeek, Bundles.Media),
+        new(EndpointIds.CastSessionsVolume, Bundles.Media),
+        new(EndpointIds.CastSessionsDisconnect, Bundles.Media),
+        new(EndpointIds.CastSessionsEvents, Bundles.Media),
         new(EndpointIds.PlaylistAudioStream, Bundles.Playlists),
 
         new(EndpointIds.MediaAccessMediaList, Bundles.MediaAccessAdmin),
@@ -357,6 +444,7 @@ public static class EndpointCatalog
         new(EndpointIds.ManagementBundlesDelete, Bundles.Management),
         new(EndpointIds.ManagementGrantsCreate, Bundles.Management),
         new(EndpointIds.ManagementGrantsDelete, Bundles.Management),
+        new(EndpointIds.ManagementDirectorySearch, Bundles.Management),
 
         new(EndpointIds.BackupsCreate, Bundles.Management),
         new(EndpointIds.BackupsJobsList, Bundles.Management),

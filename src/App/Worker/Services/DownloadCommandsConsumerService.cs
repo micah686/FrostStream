@@ -52,7 +52,9 @@ public sealed class DownloadCommandsConsumerService(
     private const string MediaFileBase = "media";
     private static readonly StreamName Stream = StreamName.From(DownloadTopology.StreamNameValue);
     private static readonly TimeSpan StorageProbeTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan PendingCancellationTtl = TimeSpan.FromMinutes(30);
     private readonly ConcurrentDictionary<Guid, CancellationTokenSource> _activeDownloadCancellations = new();
+    private readonly ConcurrentDictionary<Guid, DateTimeOffset> _pendingDownloadCancellations = new();
     private ISubscription? _cancelSubscription;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -180,7 +182,8 @@ public sealed class DownloadCommandsConsumerService(
             var metadataOptions = YtDlpOptionsMerger.Merge(
                 cmd.YtDlpOptions,
                 ffmpegLocation: GetFfmpegLocation(),
-                cookieFilePath: cookies.FilePath);
+                cookieFilePath: cookies.FilePath,
+                logger);
 
             var metadataResult = await ytDlp.TryGetVideoInfoAsync(
                 cmd.SourceUrl,
@@ -292,6 +295,11 @@ public sealed class DownloadCommandsConsumerService(
 
             if (!_activeDownloadCancellations.TryAdd(cmd.JobId, downloadCts))
                 throw new InvalidOperationException($"Download job {cmd.JobId} is already active on this worker.");
+            if (_pendingDownloadCancellations.TryRemove(cmd.JobId, out _))
+            {
+                logger.LogInformation("Applying pending cancellation to active download for JobId {JobId}.", cmd.JobId);
+                downloadCts.Cancel();
+            }
 
             Directory.CreateDirectory(tempDirectory);
 
@@ -400,6 +408,7 @@ public sealed class DownloadCommandsConsumerService(
         finally
         {
             _activeDownloadCancellations.TryRemove(cmd.JobId, out _);
+            _pendingDownloadCancellations.TryRemove(cmd.JobId, out _);
             DeleteCookieScratch(cookieScratch);
         }
     }
@@ -418,10 +427,22 @@ public sealed class DownloadCommandsConsumerService(
         }
         else
         {
-            logger.LogDebug("Ignoring cancel request for JobId {JobId}; no active download on this worker.", cmd.JobId);
+            CleanupPendingDownloadCancellations();
+            _pendingDownloadCancellations[cmd.JobId] = DateTimeOffset.UtcNow;
+            logger.LogDebug("Recorded pending cancel request for JobId {JobId}; no active download on this worker.", cmd.JobId);
         }
 
         return Task.CompletedTask;
+    }
+
+    private void CleanupPendingDownloadCancellations()
+    {
+        var cutoff = DateTimeOffset.UtcNow.Subtract(PendingCancellationTtl);
+        foreach (var (jobId, recordedAt) in _pendingDownloadCancellations)
+        {
+            if (recordedAt < cutoff)
+                _pendingDownloadCancellations.TryRemove(jobId, out _);
+        }
     }
 
     private async Task HandleUploadObjectAsync(IJsMessageContext<UploadObjectCommand> context)
@@ -472,7 +493,21 @@ public sealed class DownloadCommandsConsumerService(
 
                 await using (var stream = File.OpenRead(fileInfo.FullName))
                 {
-                    await storage.WriteAsync(cmd.StoragePath, stream, append: false);
+                    if (cmd.VerifyHashWhileStreaming)
+                    {
+                        await using var hashingStream = new XxHash128ReadStream(stream);
+                        await storage.WriteAsync(cmd.StoragePath, hashingStream, append: false);
+                        var observedHash = hashingStream.GetHash();
+                        if (!string.Equals(observedHash, cmd.ContentHashXxh128, StringComparison.OrdinalIgnoreCase))
+                        {
+                            throw new InvalidOperationException(
+                                $"Upload hash verification failed. Expected {cmd.ContentHashXxh128}, observed {observedHash}.");
+                        }
+                    }
+                    else
+                    {
+                        await storage.WriteAsync(cmd.StoragePath, stream, append: false);
+                    }
                 }
                 contentLength = fileInfo.Length;
 
@@ -894,7 +929,8 @@ public sealed class DownloadCommandsConsumerService(
         var ytDlpOptions = ApplyOperationalDefaults(YtDlpOptionsMerger.Merge(
             cmd.YtDlpOptions,
             ffmpegLocation: GetFfmpegLocation(),
-            cookieFilePath: cookieFilePath));
+            cookieFilePath: cookieFilePath,
+            logger));
 
         var outputTemplate = $"{MediaFileBase}.%(ext)s";
 
@@ -1230,5 +1266,48 @@ public sealed class DownloadCommandsConsumerService(
         => ex is ArgumentException
             ? FailureKind.Permanent
             : FailureKind.Transient;
+
+    private sealed class XxHash128ReadStream(Stream inner) : Stream
+    {
+        private readonly XxHash128 _hasher = new();
+
+        public override bool CanRead => inner.CanRead;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => inner.Length;
+        public override long Position
+        {
+            get => inner.Position;
+            set => throw new NotSupportedException();
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            var read = inner.Read(buffer, offset, count);
+            if (read > 0)
+                _hasher.Append(buffer.AsSpan(offset, read));
+            return read;
+        }
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            var read = await inner.ReadAsync(buffer, cancellationToken);
+            if (read > 0)
+                _hasher.Append(buffer.Span[..read]);
+            return read;
+        }
+
+        public string GetHash()
+        {
+            Span<byte> hash = stackalloc byte[16];
+            _hasher.GetCurrentHash(hash);
+            return Convert.ToHexString(hash).ToLowerInvariant();
+        }
+
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
     #endregion
 }

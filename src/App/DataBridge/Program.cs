@@ -59,6 +59,10 @@ class Program
                         .MapEnum<AudioRenditionFormat>("audio_rendition_format", "media")
                         .MapEnum<AudioRenditionStatus>("audio_rendition_status", "media")
                         .MapEnum<LocalImportStatus>("local_import_status", "imports")
+                        .MapEnum<ImportSessionStatus>("import_session_status", "imports")
+                        .MapEnum<ImportSessionSourceKind>("import_session_source_kind", "imports")
+                        .MapEnum<ImportSessionItemStatus>("import_session_item_status", "imports")
+                        .MapEnum<ImportSessionItemMetadataState>("import_session_item_metadata_state", "imports")
                         .MapEnum<PlaylistState>("playlist_state", "playlists"))
                 .UseSnakeCaseNamingConvention());
 
@@ -96,6 +100,10 @@ class Program
 
         builder.Services.AddFlows(c => c
             .UsePostgresStore(cleipnirConnectionString)
+            // Cleipnir's DefaultSerializer has no NodaTime support and collapses every Instant in a
+            // persisted message/effect to the Unix epoch. Swap in a NodaTime-aware serializer so
+            // dates (OccurredAt, metadata scrape/release dates, …) survive the flow store round-trip.
+            .WithOptions(new Options(serializer: new NodaTimeFlowSerializer()))
             .RegisterFlowsAutomatically());
 
         builder.Services.AddSingleton<IClock>(SystemClock.Instance);
@@ -104,12 +112,16 @@ class Program
             var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
             return dataSourceBuilder.Build();
         });
+        builder.Services.AddSingleton<IDownloadJobStateNotifier, DownloadJobStateNotifier>();
         builder.Services.AddScoped<IDownloadJobsRepository, DownloadJobsRepository>();
-        builder.Services.AddScoped<ILocalImportRepository, LocalImportRepository>();
+        builder.Services.AddScoped<IImportSessionRepository, ImportSessionRepository>();
         builder.Services.AddScoped<IMetadataRepository, MetadataRepository>();
         builder.Services.AddScoped<IMetadataReadService, MetadataReadService>();
         builder.Services.AddScoped<IStatisticsReadService, StatisticsReadService>();
         builder.Services.AddScoped<IMediaStreamReadService, MediaStreamReadService>();
+        builder.Services.AddScoped<IMediaThumbnailReadService, MediaThumbnailReadService>();
+        builder.Services.AddScoped<IMediaCaptionReadService, MediaCaptionReadService>();
+        builder.Services.AddScoped<IAccountAssetReadService, AccountAssetReadService>();
         builder.Services.AddScoped<IAudioRenditionRepository, AudioRenditionRepository>();
         builder.Services.AddScoped<IPlaylistsRepository, PlaylistsRepository>();
         builder.Services.AddScoped<IUserPlaylistsRepository, UserPlaylistsRepository>();
@@ -129,6 +141,7 @@ class Program
         builder.Services.Configure<BackupRunnerOptions>(
             builder.Configuration.GetSection(BackupRunnerOptions.SectionName));
         builder.Services.AddSingleton<BackupRunner>();
+        builder.Services.AddSingleton<ImportSessionRequestReplyService>();
 
         builder.Services.AddTypesenseClient(config =>
         {
@@ -165,11 +178,13 @@ class Program
         builder.Services.AddHostedService<BackgroundJobConsumerService>();
         builder.Services.AddHostedService<DownloadSlotCoordinator>(p => p.GetRequiredService<DownloadSlotCoordinator>());
         builder.Services.AddHostedService<DownloadAdminConsumerService>();
+        builder.Services.AddHostedService<DownloadQueueConsumerService>();
         builder.Services.AddHostedService<DownloadRequestedIngressService>();
-        builder.Services.AddHostedService<ProviderHaltRetryService>();
         builder.Services.AddHostedService<DownloadEventsConsumerService>();
-        builder.Services.AddHostedService<LocalMediaImportRequestedIngressService>();
         builder.Services.AddHostedService<LocalImportEventsConsumerService>();
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<ImportSessionRequestReplyService>());
+        builder.Services.AddHostedService<ImportSessionProbeEventsConsumerService>();
+        builder.Services.AddHostedService<ImportDispatcherService>();
         builder.Services.AddHostedService<PlaylistRequestedIngressService>();
         builder.Services.AddHostedService<PlaylistEventsConsumerService>();
         builder.Services.AddHostedService<PlaylistQueryConsumerService>();

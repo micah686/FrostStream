@@ -6,14 +6,13 @@ namespace AppHost;
 public static class StartOpenBao
 {
     public static IResourceBuilder<ContainerResource> Start(
-        IDistributedApplicationBuilder builder,
-        AppHostHardeningOptions hardening)
+        IDistributedApplicationBuilder builder)
     {
         return builder
-            .AddContainer("openbao", "openbao/openbao", hardening.OpenBaoImageTag)
+            .AddContainer("openbao", "openbao/openbao", "2.5.5")
             .WithHttpEndpoint(port: 8200, targetPort: 8200, name: "http")
-            .WithEnvironment("BAO_DEV_ROOT_TOKEN_ID", hardening.OpenBaoToken)
+            .WithEnvironment("BAO_DEV_ROOT_TOKEN_ID", Helpers.GetEnv("OPENBAO_TOKEN"))
             .WithEnvironment("BAO_DEV_LISTEN_ADDRESS", "0.0.0.0:8200")
-            .WithArgs("server", "-dev", "-dev-root-token-id", hardening.OpenBaoToken);
+            .WithArgs("server", "-dev", "-dev-root-token-id", Helpers.GetEnv("OPENBAO_TOKEN"));
     }
 }

@@ -31,7 +31,7 @@ public sealed class LocalImportCommandsConsumerService(
                     LocalImportSubjects.PrepareLocalImportFileCommand,
                     tag),
                 stoppingToken);
-            logger.LogInformation("Ensured tagged local import prepare consumer for tag '{Tag}'.", tag);
+            logger.LogInformation("Ensured tagged local import consumers for tag '{Tag}'.", tag);
         }
 
         var consumerTasks = new List<Task>();
@@ -52,9 +52,10 @@ public sealed class LocalImportCommandsConsumerService(
         }
 
         logger.LogInformation(
-            "Subscribed to {Count} local import command consumer(s) on stream {Stream}.",
+            "Subscribed to {Count} local import command consumer(s) on stream {Stream} (incoming root '{IncomingRoot}').",
             consumerTasks.Count,
-            Stream.Value);
+            Stream.Value,
+            options.IncomingRoot);
 
         await Task.WhenAll(consumerTasks);
     }
@@ -74,6 +75,7 @@ public sealed class LocalImportCommandsConsumerService(
     private async Task HandlePrepareLocalImportFileAsync(IJsMessageContext<PrepareLocalImportFileCommand> context)
     {
         var cmd = context.Message;
+        var incomingRoot = workerOptions.Value.IncomingRoot;
         try
         {
             logger.LogInformation(
@@ -82,12 +84,12 @@ public sealed class LocalImportCommandsConsumerService(
                 cmd.ItemId,
                 cmd.File);
 
-            var sourceFile = await PrepareFileAsync(cmd.SourceRoot, cmd.File, workerOptions.Value.AllowedImportRoots);
+            var sourceFile = await PrepareFileAsync(incomingRoot, cmd.File);
             var infoJson = cmd.Sidecars?.InfoJson is { } infoJsonPath
-                ? await PrepareSidecarAsync(cmd.SourceRoot, infoJsonPath, workerOptions.Value.AllowedImportRoots)
+                ? await PrepareFileAsync(incomingRoot, infoJsonPath)
                 : null;
             var thumbnail = cmd.Sidecars?.Thumbnail is { } thumbnailPath
-                ? await PrepareSidecarAsync(cmd.SourceRoot, thumbnailPath, workerOptions.Value.AllowedImportRoots)
+                ? await PrepareFileAsync(incomingRoot, thumbnailPath)
                 : null;
 
             var captions = new List<LocalImportPreparedCaptionSidecar>();
@@ -95,7 +97,7 @@ public sealed class LocalImportCommandsConsumerService(
             {
                 foreach (var caption in captionSpecs)
                 {
-                    var preparedCaption = await PrepareSidecarAsync(cmd.SourceRoot, caption.File, workerOptions.Value.AllowedImportRoots);
+                    var preparedCaption = await PrepareFileAsync(incomingRoot, caption.File);
                     captions.Add(new LocalImportPreparedCaptionSidecar
                     {
                         SourceFileRef = preparedCaption.SourceFileRef,
@@ -159,15 +161,12 @@ public sealed class LocalImportCommandsConsumerService(
         }
     }
 
-    private static async Task<LocalImportPreparedSidecar> PrepareFileAsync(
-        string sourceRoot,
-        string relativePath,
-        IReadOnlyList<string> allowedRoots)
+    private static async Task<LocalImportPreparedSidecar> PrepareFileAsync(string incomingRoot, string relativePath)
     {
         if (!LocalImportPathRules.TryResolveUnderAllowedRoots(
-                sourceRoot,
+                incomingRoot,
                 relativePath,
-                allowedRoots,
+                [incomingRoot],
                 out var fullPath,
                 out _,
                 out var error))
@@ -189,12 +188,6 @@ public sealed class LocalImportCommandsConsumerService(
             ContentHashXxh128 = await ComputeXxHash128Async(file.FullName)
         };
     }
-
-    private static Task<LocalImportPreparedSidecar> PrepareSidecarAsync(
-        string sourceRoot,
-        string relativePath,
-        IReadOnlyList<string> allowedRoots)
-        => PrepareFileAsync(sourceRoot, relativePath, allowedRoots);
 
     private Task Publish<T>(string subject, T message) where T : IFlowMessage
         => publisher.PublishAsync(subject, message, messageId: message.MessageId.ToString("N"));

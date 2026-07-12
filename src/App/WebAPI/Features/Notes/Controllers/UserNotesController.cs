@@ -8,7 +8,7 @@ using WebAPI.Features.Notes.Models;
 namespace WebAPI.Features.Notes.Controllers;
 
 [ApiController]
-[Route("api/notes")]
+[Route("api/user/notes")]
 public sealed class UserNotesController(
     IMessageBus messageBus,
     ILogger<UserNotesController> logger) : ControllerBase
@@ -46,7 +46,7 @@ public sealed class UserNotesController(
     [HttpGet("{targetType}/{targetId}")]
     [Endpoint(EndpointIds.UserNotesGet)]
     [EndpointSummary("Get a user note")]
-    [EndpointDescription("Gets the authenticated user's private note for a video, channel, or playlist target. Notes owned by other users are never returned.")]
+    [EndpointDescription("Gets the authenticated user's private note for a video, channel, or playlist target. Notes owned by other users are never returned. Returns a JSON null body when the user has no note for the target.")]
     public async Task<ActionResult<UserNoteDto>> Get(
         string targetType,
         string targetId,
@@ -66,13 +66,20 @@ public sealed class UserNotesController(
             "get user note",
             cancellationToken);
 
+        // Having no note for a target is a normal empty result, not an error: answer 200 with a
+        // JSON null so clients don't have to treat 404 as "no note yet". JsonResult is used
+        // instead of Ok(null) because null object results are otherwise rewritten to 204, whose
+        // empty body breaks response.json() callers. A missing target still maps to 404 below.
+        if (response is { Success: false, ErrorCode: "not_found" })
+            return new JsonResult(null);
+
         return ToObjectResult(response);
     }
 
     [HttpDelete("{targetType}/{targetId}")]
     [Endpoint(EndpointIds.UserNotesDelete)]
     [EndpointSummary("Delete a user note")]
-    [EndpointDescription("Deletes the authenticated user's private note for a video, channel, or playlist target. The underlying target is not modified.")]
+    [EndpointDescription("Deletes the authenticated user's private note for a video, channel, or playlist target. The underlying target is not modified. Deleting is idempotent: a target with no note still answers 204.")]
     public async Task<ActionResult> Delete(
         string targetType,
         string targetId,
@@ -94,7 +101,10 @@ public sealed class UserNotesController(
 
         if (response is null)
             return StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable.");
-        if (!response.Success)
+
+        // Idempotent delete: the desired end state (no note) already holds, so a missing note is
+        // success, not 404 — mirroring Get's empty-result handling.
+        if (!response.Success && response.ErrorCode != "not_found")
             return MapError(response.ErrorCode, response.ErrorMessage);
 
         return NoContent();
@@ -128,6 +138,40 @@ public sealed class UserNotesController(
                 PageOffset = pageOffset
             },
             "search user notes",
+            cancellationToken);
+
+        if (response is null)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable.");
+        if (!response.Success)
+            return MapError(response.ErrorCode, response.ErrorMessage);
+
+        return Ok(response);
+    }
+
+    [HttpGet]
+    [Endpoint(EndpointIds.UserNotesList)]
+    [EndpointSummary("List user notes")]
+    [EndpointDescription("Lists the authenticated user's private notes across videos, channels, and playlists. The optional targetType filter accepts video, channel, or playlist.")]
+    public async Task<ActionResult<UserNoteSearchResponseMessage>> List(
+        [FromQuery] string? targetType = null,
+        [FromQuery] int pageSize = 50,
+        [FromQuery] int pageOffset = 0,
+        CancellationToken cancellationToken = default)
+    {
+        if (ResolveSubject() is not { } owner)
+            return Unauthorized();
+
+        var response = await SendAsync<UserNoteSearchRequestMessage, UserNoteSearchResponseMessage>(
+            UserNoteSubjects.Search,
+            new UserNoteSearchRequestMessage
+            {
+                OwnerSubject = owner,
+                Query = string.Empty,
+                TargetType = targetType,
+                PageSize = pageSize,
+                PageOffset = pageOffset
+            },
+            "list user notes",
             cancellationToken);
 
         if (response is null)

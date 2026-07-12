@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NodaTime;
 using Shared.Messaging;
+using Shared.Metadata;
 using YtDlpSharpLib;
 using YtDlpSharpLib.Models;
 using YtDlpSharpLib.Options;
@@ -50,6 +51,12 @@ public sealed class ChannelAssetRefreshConsumerService(
 
     private async Task HandleAsync(ChannelAssetRefreshRequested request, CancellationToken cancellationToken)
     {
+        if (request.TargetAccountId is { } accountId)
+        {
+            await RefreshAccountAsync(accountId, request, cancellationToken);
+            return;
+        }
+
         var sources = await ResolveSourcesAsync(request, cancellationToken);
         if (sources.Count == 0)
         {
@@ -114,6 +121,113 @@ public sealed class ChannelAssetRefreshConsumerService(
         }
 
         return listResponse.Items ?? Array.Empty<CreatorSourceDto>();
+    }
+
+    /// <summary>
+    /// Channel-page manual refresh: the account may have no creator source, so assets are fetched
+    /// from the account's stored URL and persisted straight onto its <c>metadata.accounts</c> row.
+    /// Manual-only, so there is no freshness gating or attempt tracking here.
+    /// </summary>
+    private async Task RefreshAccountAsync(long accountId, ChannelAssetRefreshRequested request, CancellationToken cancellationToken)
+    {
+        var accountResponse = await messageBus.RequestAsync<MetadataAccountGetRequestMessage, MetadataAccountGetResponseMessage>(
+            MetadataSubjects.AccountsGet,
+            new MetadataAccountGetRequestMessage { AccountId = accountId },
+            RequestTimeout,
+            cancellationToken);
+
+        if (accountResponse is not { Success: true } || accountResponse.Item is null)
+        {
+            throw new InvalidOperationException(accountResponse?.ErrorMessage ?? $"Account '{accountId}' was not found.");
+        }
+
+        var account = accountResponse.Item;
+        if (string.IsNullOrWhiteSpace(account.AccountUrl))
+        {
+            logger.LogInformation("Account {AccountId} has no stored URL; skipping asset refresh {IdempotencyKey}.", accountId, request.IdempotencyKey);
+            return;
+        }
+
+        VideoInfo container;
+        var options = new YtDlpOptions
+        {
+            VideoSelection = new YtDlpVideoSelectionOptions
+            {
+                PlaylistItems = "0"
+            }
+        };
+        var result = await ytDlp.TryGetVideoInfoAsync(account.AccountUrl, cancellationToken, flat: false, overrideOptions: potOptionsApplier.Apply(options));
+        if (!result.Success || result.Data is not { } info)
+        {
+            throw new InvalidOperationException($"yt-dlp returned no metadata for account {accountId} ({account.AccountUrl}): {result.ErrorOutput}");
+        }
+        container = info;
+
+        var avatar = SelectThumbnail(container.Thumbnails, AssetKind.Avatar);
+        var banner = SelectThumbnail(container.Thumbnails, AssetKind.Banner);
+
+        if (avatar is null && banner is null)
+        {
+            logger.LogInformation("No avatar/banner thumbnails available for account {AccountId} ({AccountUrl}).", accountId, account.AccountUrl);
+            return;
+        }
+
+        AssetDownloadResult? avatarResult = null;
+        AssetDownloadResult? bannerResult = null;
+
+        if (avatar is not null)
+        {
+            try
+            {
+                avatarResult = await assetCacheWriter.DownloadAndStoreAsync(avatar.Url!, AssetKind.Avatar, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Avatar download failed for account {AccountId}.", accountId);
+            }
+        }
+
+        if (banner is not null)
+        {
+            try
+            {
+                bannerResult = await assetCacheWriter.DownloadAndStoreAsync(banner.Url!, AssetKind.Banner, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Banner download failed for account {AccountId}.", accountId);
+            }
+        }
+
+        if (avatarResult is null && bannerResult is null)
+        {
+            throw new InvalidOperationException($"Asset downloads failed for account {accountId}.");
+        }
+
+        var updateResponse = await messageBus.RequestAsync<MetadataAccountAssetsUpdateRequestMessage, MetadataAccountAssetsUpdateResponseMessage>(
+            MetadataSubjects.AccountsUpdateAssets,
+            new MetadataAccountAssetsUpdateRequestMessage
+            {
+                AccountId = accountId,
+                AvatarStoragePath = avatarResult?.StoragePath,
+                BannerStoragePath = bannerResult?.StoragePath,
+                StorageKey = avatarResult?.StorageKey ?? bannerResult?.StorageKey
+            },
+            RequestTimeout,
+            cancellationToken);
+
+        if (updateResponse is not { Success: true })
+        {
+            throw new InvalidOperationException(
+                $"Failed to persist refreshed assets for account {accountId}: {updateResponse?.ErrorMessage ?? "no response"}");
+        }
+
+        logger.LogInformation(
+            "Completed channel asset refresh {IdempotencyKey} for account {AccountId} (avatar: {Avatar}, banner: {Banner}).",
+            request.IdempotencyKey,
+            accountId,
+            avatarResult is not null,
+            bannerResult is not null);
     }
 
     private async Task RefreshSourceAsync(CreatorSourceDto source, CancellationToken cancellationToken)
@@ -328,13 +442,12 @@ public sealed class ChannelAssetRefreshConsumerService(
     /// </summary>
     private static ChannelAccountIdentity DeriveIdentity(VideoInfo info)
         => new(
-            FirstNonBlank(info.Extractor, info.ExtractorKey),
-            FirstNonBlank(info.UploaderId, info.ChannelId, info.Uploader, info.Channel),
-            FirstNonBlank(info.Uploader, info.Channel, info.Creator),
-            FirstNonBlank(info.UploaderUrl, info.ChannelUrl));
-
-    private static string? FirstNonBlank(params string?[] values)
-        => values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v))?.Trim();
+            // A channel page reports a sub-extractor ("youtube:tab"); normalize so the
+            // (platform, account_handle) key matches what video downloads write ("youtube").
+            CreatorIdentity.NormalizePlatform(info.Extractor, info.ExtractorKey),
+            CreatorIdentity.FirstNonBlank(info.ChannelId, info.UploaderId, info.Uploader, info.Channel),
+            CreatorIdentity.FirstNonBlank(info.Uploader, info.Channel, info.Creator),
+            CreatorIdentity.FirstNonBlank(info.UploaderUrl, info.ChannelUrl));
 
     private sealed record ChannelAccountIdentity(string? Platform, string? Handle, string? Name, string? Url);
 

@@ -3,6 +3,7 @@ using System.Text.Json;
 using NodaTime;
 using Shared.Metadata;
 using YtDlpSharpLib.Models;
+using static Shared.Metadata.CreatorIdentity;
 
 namespace Worker.Metadata;
 
@@ -12,12 +13,15 @@ internal static class YtDlpMetadataMapper
     {
         var scrapedAt = clock.GetCurrentInstant();
         var externalMediaId = FirstNonBlank(info.Id, info.DisplayId);
+        var normalizedPlatform = NormalizePlatform(platform) ?? "unknown";
 
         var account = new CapturedAccountMetadata
         {
-            Platform = platform,
+            Platform = normalizedPlatform,
             AccountName = FirstNonBlank(info.Uploader, info.Channel, info.Creator) ?? "unknown",
-            AccountHandle = FirstNonBlank(info.UploaderId, info.ChannelId, info.Uploader, info.Channel)
+            // ChannelId first: it is immutable per channel, while UploaderId (@handle) can be
+            // renamed by the creator and would split the (platform, account_handle) key.
+            AccountHandle = FirstNonBlank(info.ChannelId, info.UploaderId, info.Uploader, info.Channel)
                 ?? UnknownAccountHandle("media", externalMediaId),
             AccountUrl = FirstNonBlank(info.UploaderUrl, info.ChannelUrl),
             FollowerCount = info.ChannelFollowerCount,
@@ -54,7 +58,7 @@ internal static class YtDlpMetadataMapper
             // Captions are persisted from the actual downloaded subtitle blobs (bounded to the
             // requested SubLangs), not from the 100+ remote tracks yt-dlp lists in metadata.
             Captions = [],
-            Comments = BuildComments(info, platform, externalMediaId, scrapedAt),
+            Comments = BuildComments(info, normalizedPlatform, externalMediaId, scrapedAt),
             Series = BuildSeries(info),
             Music = BuildMusic(info),
             Artists = DistinctNonBlank(info.Artists ?? ToList(info.Artist)),
@@ -350,9 +354,6 @@ internal static class YtDlpMetadataMapper
             : value > int.MaxValue ? int.MaxValue
             : value < int.MinValue ? int.MinValue
             : (int)value.Value;
-
-    private static string? FirstNonBlank(params string?[] values)
-        => values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v))?.Trim();
 
     private static string UnknownAccountHandle(string scope, params string?[] identityParts)
     {

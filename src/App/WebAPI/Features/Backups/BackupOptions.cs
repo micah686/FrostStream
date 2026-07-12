@@ -1,6 +1,8 @@
+using Shared.Backups;
+
 namespace WebAPI.Features.Backups;
 
-public sealed class BackupOptions
+public sealed class BackupOptions : IBackupToolSettings
 {
     public const string SectionName = "Backup";
 
@@ -19,6 +21,8 @@ public sealed class BackupOptions
     public string? PostgresPassword { get; init; }
 
     public string? PostgresBinDir { get; init; }
+
+    public string? ArchiveDir { get; init; }
 
     public string OpenBaoAddress { get; init; } = "http://127.0.0.1:8200";
 

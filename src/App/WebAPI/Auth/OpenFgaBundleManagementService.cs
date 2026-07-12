@@ -68,6 +68,11 @@ public sealed class OpenFgaBundleManagementService(
                 var bundleId = tuple.Object[AuthConstants.CapabilityGroupObjectPrefix.Length..];
                 if (BundleManagementValidation.ParseGranteeUser(tuple.User) is { } grant)
                 {
+                    if (IsLockoutGuardGrant(bundleId, grant.Type, grant.Id))
+                    {
+                        grant = grant with { Locked = true };
+                    }
+
                     (grants.TryGetValue(bundleId, out var list) ? list : grants[bundleId] = []).Add(grant);
                 }
             }
@@ -241,6 +246,12 @@ public sealed class OpenFgaBundleManagementService(
             return BundleOpResult.Validation("Grantee must be a valid user or group id.");
         }
 
+        if (IsLockoutGuardGrant(bundleId, granteeType, granteeId))
+        {
+            return BundleOpResult.Forbidden(
+                $"The '{_options.BootstrapAdminGroup}' group's grant on the '{AuthConstants.AllBundle}' bundle is the lock-out guard and cannot be revoked.");
+        }
+
         var grantTuples = await ReadBundleGrantTuplesAsync(storeId, bundleId, cancellationToken);
         var match = grantTuples.FirstOrDefault(t => t.User == granteeUser);
         if (match is null)
@@ -253,12 +264,24 @@ public sealed class OpenFgaBundleManagementService(
 
     // ---- validation helpers ----
 
+    /// <summary>The bootstrap admin group's grant on the `:all` bundle is the lock-out guard seeded by
+    /// the provisioner; revoking it could strand the deployment with no privileged account.</summary>
+    private bool IsLockoutGuardGrant(string bundleId, string granteeType, string granteeId)
+        => bundleId == AuthConstants.AllBundle
+           && granteeType == BundleManagementValidation.GranteeTypeGroup
+           && granteeId == _options.BootstrapAdminGroup;
+
     private static BundleOpResult? ValidateUserBundleId(string bundleId)
     {
         if (!AuthConstants.IsUserBundle(bundleId))
         {
             return BundleOpResult.Forbidden(
                 $"Bundle '{bundleId}' is system-owned and read-only. Runtime bundles must use the '{AuthConstants.UserBundlePrefix}' id prefix.");
+        }
+
+        if (bundleId.Length == AuthConstants.UserBundlePrefix.Length)
+        {
+            return BundleOpResult.Validation($"Bundle id must have a name after the '{AuthConstants.UserBundlePrefix}' prefix.");
         }
 
         if (!BundleManagementValidation.ValidIdRegex().IsMatch(bundleId))

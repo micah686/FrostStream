@@ -144,6 +144,36 @@ public sealed class YtDlpMetadataMapperTests
     }
 
     [Test]
+    public void Map_Prefers_ChannelId_Over_UploaderId_For_Account_Handle()
+    {
+        var result = YtDlpMetadataMapper.Map(new VideoInfo
+        {
+            Id = "video-1",
+            Uploader = "Uploader Name",
+            UploaderId = "@handle",
+            ChannelId = "UC123"
+        }, "youtube", new FixedClock(Now));
+
+        result.Account.AccountHandle.ShouldBe("UC123");
+    }
+
+    [Test]
+    public void Map_Normalizes_Platform_From_Sub_Extractor()
+    {
+        var result = YtDlpMetadataMapper.Map(new VideoInfo { Id = "video-1" }, "YouTube:tab", new FixedClock(Now));
+
+        result.Account.Platform.ShouldBe("youtube");
+    }
+
+    [Test]
+    public void Map_Falls_Back_To_Unknown_Platform_When_Extractor_Is_Blank()
+    {
+        var result = YtDlpMetadataMapper.Map(new VideoInfo { Id = "video-1" }, "", new FixedClock(Now));
+
+        result.Account.Platform.ShouldBe("unknown");
+    }
+
+    [Test]
     public void Map_Uses_Per_Media_Unknown_Account_Handle_When_Creator_Identity_Is_Missing()
     {
         var result = YtDlpMetadataMapper.Map(new VideoInfo

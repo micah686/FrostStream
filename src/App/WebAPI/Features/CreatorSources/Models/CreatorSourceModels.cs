@@ -31,6 +31,11 @@ public abstract class CreatorSourceRequestBase
     [Range(1, 365)]
     public int FullRescanIntervalDays { get; init; } = 30;
 
+    /// <summary>Minimum hours between incremental update-check scans; the global sweep tick only
+    /// scans sources that are due.</summary>
+    [Range(1, 168)]
+    public int UpdateCheckIntervalHours { get; init; } = 6;
+
     [Range(1, 500)]
     public int MetadataRefreshWindow { get; init; } = 25;
 
@@ -136,6 +141,7 @@ public sealed class CreatorSourceResponse
     public required int IncrementalPageSize { get; init; }
     public required int ConsecutiveKnownThreshold { get; init; }
     public required int FullRescanIntervalDays { get; init; }
+    public required int UpdateCheckIntervalHours { get; init; }
     public required int MetadataRefreshWindow { get; init; }
     public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
     public Instant? LastSuccessfulScanAt { get; init; }

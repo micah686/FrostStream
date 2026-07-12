@@ -43,12 +43,6 @@ public sealed class DownloadJobConfiguration : IEntityTypeConfiguration<Download
             .HasColumnName("source_kind")
             .HasDefaultValue(DownloadSourceKind.Direct)
             .IsRequired();
-        builder.Property(x => x.ProviderHaltRetryAt)
-            .HasColumnName("provider_halt_retry_at")
-            .HasColumnType("timestamp with time zone");
-        builder.Property(x => x.ProviderHaltRetryDispatchedAt)
-            .HasColumnName("provider_halt_retry_dispatched_at")
-            .HasColumnType("timestamp with time zone");
         builder.Property(x => x.IngestOrigin)
             .HasColumnName("ingest_origin")
             .HasColumnType("media.ingest_origin")

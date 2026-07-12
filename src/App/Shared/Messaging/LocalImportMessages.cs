@@ -13,31 +13,6 @@ public enum LocalImportStatus
     Failed = 5
 }
 
-public sealed record LocalMediaImportRequested : IFlowMessage
-{
-    public required Guid JobId { get; init; }
-    public required Guid CorrelationId { get; init; }
-    public Guid? CausationId { get; init; }
-    public required Guid MessageId { get; init; }
-    public required string OperationKey { get; init; }
-    public required Instant OccurredAt { get; init; }
-    public int Attempt { get; init; } = 1;
-
-    public Guid BatchId => JobId;
-
-    public required string ManifestObjectBucket { get; init; }
-
-    public required string ManifestObjectKey { get; init; }
-
-    public required string SourceRoot { get; init; }
-
-    public required string StorageKey { get; init; }
-
-    public string? RequestedBy { get; init; }
-
-    public string? RequestedByContext { get; init; }
-}
-
 public sealed record PrepareLocalImportFileCommand : IFlowMessage
 {
     public required Guid JobId { get; init; }
@@ -51,8 +26,6 @@ public sealed record PrepareLocalImportFileCommand : IFlowMessage
     public required Guid BatchId { get; init; }
 
     public required Guid ItemId { get; init; }
-
-    public required string SourceRoot { get; init; }
 
     public required string File { get; init; }
 

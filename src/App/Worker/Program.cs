@@ -67,6 +67,10 @@ class Program
             .GetSection(WorkerOptions.SectionName)
             .Get<WorkerOptions>() ?? new WorkerOptions();
 
+        // Static local-import discovery folder: created up front and seeded with a
+        // manifest.json.template so operators know where to drop content + manifest.json.
+        Shared.Imports.LocalImportIncoming.EnsureScaffold(configuredWorkerOptions.IncomingRoot);
+
         var binaryDownloaderOptions = new YtDlpSharpLib.Provisioning.YtDlpBinaryDownloaderOptions
         {
             DefaultDirectory = toolsDirectory,
@@ -80,7 +84,7 @@ class Program
             FfmpegExecutablePath = Path.Combine(toolsDirectory, YtDlpPaths.FfmpegFileName),
             DownloadLimitRate = configuredWorkerOptions.YtDlpLimitRate,
             DownloadThrottledRate = configuredWorkerOptions.YtDlpThrottledRate,
-            MinimumDelayBetweenProcessStarts = configuredWorkerOptions.YtDlpMinDelayBetweenStarts
+            MinimumDelayBetweenProcessStarts = configuredWorkerOptions.EffectiveYtDlpMinDelay()
         };
         builder.Services.TryAddSingleton(TimeProvider.System);
         builder.Services.TryAddSingleton<IYtDlpArgumentRenderer, YtDlpArgumentRenderer>();
@@ -132,6 +136,9 @@ class Program
 
         // Command consumers for the download flow.
         builder.Services.AddHostedService<DownloadCommandsConsumerService>();
+        builder.Services.AddHostedService<LocalImportScanConsumerService>();
+        builder.Services.AddHostedService<LocalImportProbeConsumerService>();
+        builder.Services.AddHostedService<LocalImportEnrichConsumerService>();
         builder.Services.AddHostedService<LocalImportCommandsConsumerService>();
         builder.Services.AddHostedService<PlaylistCommandsConsumerService>();
         builder.Services.AddHostedService<ChannelDiscoveryConsumerService>();

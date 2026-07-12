@@ -55,7 +55,7 @@ public sealed class MediaWatchStateControllerTests
     }
 
     [Test]
-    public async Task Get_Returns_NotFound_For_Missing_State()
+    public async Task Get_Returns_Empty_State_For_Missing_State()
     {
         var bus = Substitute.For<IMessageBus>();
         var controller = CreateController(bus);
@@ -68,7 +68,12 @@ public sealed class MediaWatchStateControllerTests
 
         var result = await controller.Get(MediaGuid, CancellationToken.None);
 
-        result.ShouldBeOfType<NotFoundResult>();
+        var payload = result.ShouldBeOfType<OkObjectResult>().Value.ShouldBeOfType<WatchStateDto>();
+        payload.OwnerSubject.ShouldBe("reader-1");
+        payload.MediaGuid.ShouldBe(MediaGuid);
+        payload.Completed.ShouldBeFalse();
+        payload.WatchedAt.ShouldBeNull();
+        payload.PositionSeconds.ShouldBeNull();
     }
 
     [Test]
@@ -146,6 +151,33 @@ public sealed class MediaWatchStateControllerTests
         var payload = result.ShouldBeOfType<OkObjectResult>().Value.ShouldBeOfType<WatchStateDto>();
         payload.Completed.ShouldBeFalse();
         payload.WatchedAt.ShouldBeNull();
+    }
+
+    [Test]
+    public async Task ListHistory_Forwards_Authenticated_User_Request()
+    {
+        var bus = Substitute.For<IMessageBus>();
+        var controller = CreateController(bus);
+        bus.RequestAsync<WatchStateHistoryListRequest, WatchStateHistoryListResponse>(
+                WatchStateSubjects.ListHistory,
+                Arg.Is<WatchStateHistoryListRequest>(x =>
+                    x.OwnerSubject == "reader-1" &&
+                    x.Page == 2 &&
+                    x.PageSize == 10),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new WatchStateHistoryListResponse
+            {
+                Success = true,
+                Page = 2,
+                TotalCount = 0,
+                HasMore = false
+            });
+
+        var result = await controller.ListHistory(10, 2, CancellationToken.None);
+
+        var payload = result.ShouldBeOfType<OkObjectResult>().Value.ShouldBeOfType<WatchStateHistoryListResponse>();
+        payload.Page.ShouldBe(2);
     }
 
     private static MediaWatchStateController CreateController(IMessageBus bus)

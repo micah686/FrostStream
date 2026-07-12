@@ -12,7 +12,7 @@ using WebAPI.Features.Playlists.Models;
 namespace WebAPI.Features.Playlists.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/playlists")]
 public class PlaylistsController(
     IJetStreamPublisher jetStreamPublisher,
     IMessageBus messageBus,

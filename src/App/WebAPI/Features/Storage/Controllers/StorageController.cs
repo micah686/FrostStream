@@ -10,7 +10,7 @@ using WebAPI.Features.Storage.Models;
 namespace WebAPI.Features.Storage.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/storage")]
 public class StorageController : ControllerBase
 {
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);

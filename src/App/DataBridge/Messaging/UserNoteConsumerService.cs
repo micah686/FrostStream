@@ -116,12 +116,6 @@ public sealed class UserNoteConsumerService(
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(context.Message.Query))
-            {
-                await context.RespondAsync(SearchFailure("validation", "query is required."));
-                return;
-            }
-
             var result = await WithRepo(repository => repository.SearchAsync(
                 context.Message.OwnerSubject,
                 context.Message.Query,

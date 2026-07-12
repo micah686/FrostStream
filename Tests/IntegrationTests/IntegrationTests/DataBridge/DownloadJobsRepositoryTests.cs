@@ -165,14 +165,252 @@ public sealed class DownloadJobsRepositoryTests
         failed.FailureMessage.ShouldBe("cancelled cleanly");
     }
 
-    private static DownloadJobEntity Job(Guid jobId, DownloadJobState state)
+    [Test]
+    public async Task UpdateStateAsync_Allows_Cancelled_Job_To_Requeue_For_Restart()
+    {
+        var jobId = Guid.NewGuid();
+        await using var db = Fixture.CreateDb();
+        db.DownloadJobs.Add(Job(jobId, DownloadJobState.Cancelling));
+        await db.SaveChangesAsync();
+
+        var notifier = new CapturingStateNotifier();
+        var repository = new DownloadJobsRepository(db, SystemClock.Instance, notifier);
+
+        await repository.MarkCancelledAsync(jobId, "cancelled cleanly");
+        await repository.UpdateStateAsync(jobId, DownloadJobState.Queued);
+
+        var job = await db.DownloadJobs.SingleAsync(x => x.JobId == jobId);
+        job.State.ShouldBe(DownloadJobState.Queued);
+        job.FailureKind.ShouldBeNull();
+        job.FailureCode.ShouldBeNull();
+        job.FailureMessage.ShouldBeNull();
+        job.CompletedAt.ShouldBeNull();
+        notifier.Calls[^1].ShouldBe((jobId, DownloadJobState.Queued, DownloadJobState.Cancelled));
+    }
+
+    [Test]
+    public async Task QueryQueueAsync_Filters_By_State_SourceKind_RequestedBy_StorageKey_And_Query()
+    {
+        await using var db = Fixture.CreateDb();
+        var completedId = Guid.NewGuid();
+        var failedId = Guid.NewGuid();
+        db.DownloadJobs.Add(Job(completedId, DownloadJobState.Completed, sourceUrl: "https://example.test/cats", requestedBy: "alice", storageKey: "nas", sourceKind: DownloadSourceKind.Playlist));
+        db.DownloadJobs.Add(Job(Guid.NewGuid(), DownloadJobState.Completed, sourceUrl: "https://example.test/dogs", requestedBy: "bob", storageKey: "s3", sourceKind: DownloadSourceKind.Direct));
+        db.DownloadJobs.Add(Job(Guid.NewGuid(), DownloadJobState.Cancelled, sourceUrl: "https://example.test/cats-2", requestedBy: "alice", storageKey: "nas", sourceKind: DownloadSourceKind.Playlist));
+        db.DownloadJobs.Add(Job(Guid.NewGuid(), DownloadJobState.DownloadPending, sourceUrl: "https://example.test/active"));
+        db.DownloadJobs.Add(Job(Guid.NewGuid(), DownloadJobState.DownloadQueued, sourceUrl: "https://example.test/queued"));
+        db.DownloadJobs.Add(Job(failedId, DownloadJobState.ProviderHalted, sourceUrl: "https://example.test/halted"));
+        await db.SaveChangesAsync();
+        await db.DownloadJobs
+            .Where(x => x.JobId == failedId)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.FailureCode, "bot_check")
+                .SetProperty(x => x.FailureMessage, "Provider requested verification"));
+        var repository = new DownloadJobsRepository(db, SystemClock.Instance);
+
+        (await repository.QueryQueueAsync(new DownloadQueueListRequest { State = DownloadJobState.Completed }))
+            .TotalCount.ShouldBe(2);
+        (await repository.QueryQueueAsync(new DownloadQueueListRequest { SourceKind = DownloadSourceKind.Playlist }))
+            .TotalCount.ShouldBe(2);
+        (await repository.QueryQueueAsync(new DownloadQueueListRequest { RequestedBy = "bob" }))
+            .TotalCount.ShouldBe(1);
+        (await repository.QueryQueueAsync(new DownloadQueueListRequest { StorageKey = "nas" }))
+            .TotalCount.ShouldBe(2);
+        // Case-insensitive substring match against the source URL.
+        (await repository.QueryQueueAsync(new DownloadQueueListRequest { Query = "CATS" }))
+            .TotalCount.ShouldBe(2);
+        (await repository.QueryQueueAsync(new DownloadQueueListRequest { Query = completedId.ToString()[..8] }))
+            .Items.ShouldHaveSingleItem().JobId.ShouldBe(completedId);
+        (await repository.QueryQueueAsync(new DownloadQueueListRequest { Query = "bot_check" }))
+            .Items.ShouldHaveSingleItem().JobId.ShouldBe(failedId);
+        (await repository.QueryQueueAsync(new DownloadQueueListRequest { StateGroup = DownloadQueueStateGroup.Active }))
+            .Items.ShouldHaveSingleItem().State.ShouldBe(DownloadJobState.DownloadPending);
+        (await repository.QueryQueueAsync(new DownloadQueueListRequest { StateGroup = DownloadQueueStateGroup.Queued }))
+            .Items.ShouldHaveSingleItem().State.ShouldBe(DownloadJobState.DownloadQueued);
+        (await repository.QueryQueueAsync(new DownloadQueueListRequest { StateGroup = DownloadQueueStateGroup.Failed }))
+            .Items.ShouldHaveSingleItem().JobId.ShouldBe(failedId);
+        (await repository.QueryQueueAsync(new DownloadQueueListRequest { StateGroup = DownloadQueueStateGroup.Done }))
+            .TotalCount.ShouldBe(2);
+        (await repository.QueryQueueAsync(new DownloadQueueListRequest { StateGroup = DownloadQueueStateGroup.Cancelled }))
+            .Items.ShouldHaveSingleItem().State.ShouldBe(DownloadJobState.Cancelled);
+
+        var combined = await repository.QueryQueueAsync(new DownloadQueueListRequest
+        {
+            State = DownloadJobState.Completed,
+            RequestedBy = "alice",
+            Query = "cats"
+        });
+        combined.Items.ShouldHaveSingleItem().SourceUrl.ShouldBe("https://example.test/cats");
+    }
+
+    [Test]
+    public async Task QueryQueueAsync_Filters_By_Created_Time_Range()
+    {
+        await using var db = Fixture.CreateDb();
+        var early = Instant.FromUtc(2026, 1, 1, 0, 0);
+        var mid = Instant.FromUtc(2026, 3, 1, 0, 0);
+        var late = Instant.FromUtc(2026, 6, 1, 0, 0);
+        var earlyId = Guid.NewGuid();
+        var midId = Guid.NewGuid();
+        var lateId = Guid.NewGuid();
+        db.DownloadJobs.Add(Job(earlyId, DownloadJobState.Completed));
+        db.DownloadJobs.Add(Job(midId, DownloadJobState.Completed));
+        db.DownloadJobs.Add(Job(lateId, DownloadJobState.Completed));
+        await db.SaveChangesAsync();
+        await SetCreatedAtAsync(db, earlyId, early);
+        await SetCreatedAtAsync(db, midId, mid);
+        await SetCreatedAtAsync(db, lateId, late);
+
+        var repository = new DownloadJobsRepository(db, SystemClock.Instance);
+
+        var page = await repository.QueryQueueAsync(new DownloadQueueListRequest { CreatedFrom = mid });
+        page.TotalCount.ShouldBe(2);
+        page.Items.Select(x => x.JobId).ShouldBe([lateId, midId]); // created_at desc
+
+        var windowed = await repository.QueryQueueAsync(new DownloadQueueListRequest { CreatedFrom = mid, CreatedTo = mid });
+        windowed.Items.ShouldHaveSingleItem().JobId.ShouldBe(midId);
+    }
+
+    [Test]
+    public async Task QueryQueueAsync_Paginates_Deterministically()
+    {
+        await using var db = Fixture.CreateDb();
+        var ids = new List<Guid>();
+        for (var i = 0; i < 5; i++)
+        {
+            var id = Guid.NewGuid();
+            ids.Add(id);
+            db.DownloadJobs.Add(Job(id, DownloadJobState.Completed));
+        }
+        await db.SaveChangesAsync();
+        var repository = new DownloadJobsRepository(db, SystemClock.Instance);
+
+        var seen = new List<Guid>();
+        string? cursor = null;
+        var guard = 0;
+        do
+        {
+            var page = await repository.QueryQueueAsync(new DownloadQueueListRequest { Limit = 2, Cursor = cursor });
+            page.TotalCount.ShouldBe(5);
+            seen.AddRange(page.Items.Select(x => x.JobId));
+            cursor = page.NextCursor;
+            (++guard).ShouldBeLessThan(10);
+        }
+        while (cursor is not null);
+
+        seen.Count.ShouldBe(5);
+        seen.ToHashSet().Count.ShouldBe(5); // no duplicates / gaps
+        seen.ShouldBe(seen.ToHashSet().ToList()); // each exactly once
+        seen.OrderBy(x => x).ShouldBe(ids.OrderBy(x => x));
+    }
+
+    [Test]
+    public async Task GetQueueJobAsync_Returns_Snapshot_Or_Null()
+    {
+        var jobId = Guid.NewGuid();
+        await using var db = Fixture.CreateDb();
+        db.DownloadJobs.Add(Job(jobId, DownloadJobState.ProviderHalted, requestedBy: "alice"));
+        await db.SaveChangesAsync();
+        var repository = new DownloadJobsRepository(db, SystemClock.Instance);
+
+        var job = await repository.GetQueueJobAsync(jobId);
+        job.ShouldNotBeNull();
+        job.State.ShouldBe(DownloadJobState.ProviderHalted);
+        job.RequestedBy.ShouldBe("alice");
+
+        (await repository.GetQueueJobAsync(Guid.NewGuid())).ShouldBeNull();
+    }
+
+    [Test]
+    public async Task GetQueueHistoryAsync_Returns_Ordered_Entries_And_Null_For_Missing_Job()
+    {
+        var jobId = Guid.NewGuid();
+        await using var db = Fixture.CreateDb();
+        db.DownloadJobs.Add(Job(jobId, DownloadJobState.Completed));
+        await db.SaveChangesAsync();
+        var repository = new DownloadJobsRepository(db, SystemClock.Instance);
+
+        await repository.RecordHistoryAsync(jobId, Guid.NewGuid(), "op/1", nameof(DownloadRequested), "{}");
+        await repository.RecordHistoryAsync(jobId, Guid.NewGuid(), "op/2", nameof(MetadataFetched), "{}");
+        await repository.RecordHistoryAsync(jobId, Guid.NewGuid(), "op/3", nameof(DownloadCompleted), null);
+
+        var entries = await repository.GetQueueHistoryAsync(jobId);
+        entries.ShouldNotBeNull();
+        entries.Select(x => x.EventName).ShouldBe(
+        [
+            nameof(DownloadRequested),
+            nameof(MetadataFetched),
+            nameof(DownloadCompleted)
+        ]);
+        entries.Select(x => x.Id).ShouldBeInOrder();
+
+        (await repository.GetQueueHistoryAsync(Guid.NewGuid())).ShouldBeNull();
+    }
+
+    [Test]
+    public async Task QueryQueueAsync_On_Empty_Table_Returns_Empty_Page()
+    {
+        await using var db = Fixture.CreateDb();
+        var repository = new DownloadJobsRepository(db, SystemClock.Instance);
+
+        var page = await repository.QueryQueueAsync(new DownloadQueueListRequest());
+
+        page.TotalCount.ShouldBe(0);
+        page.Items.ShouldBeEmpty();
+        page.NextCursor.ShouldBeNull();
+    }
+
+    [Test]
+    public async Task State_Transitions_Publish_State_Changed_Only_On_Actual_Change()
+    {
+        var jobId = Guid.NewGuid();
+        await using var db = Fixture.CreateDb();
+        db.DownloadJobs.Add(Job(jobId, DownloadJobState.Queued));
+        await db.SaveChangesAsync();
+
+        var notifier = new CapturingStateNotifier();
+        var repository = new DownloadJobsRepository(db, SystemClock.Instance, notifier);
+
+        await repository.UpdateStateAsync(jobId, DownloadJobState.MetadataPending);
+        await repository.UpdateStateAsync(jobId, DownloadJobState.MetadataPending); // no-op, unchanged
+        await repository.RecordTerminalFailureAsync(jobId, FailureKind.Permanent, "gone", "source removed", DownloadJobState.FailedPermanent, null);
+
+        notifier.Calls.Count.ShouldBe(2);
+        notifier.Calls[0].ShouldBe((jobId, DownloadJobState.MetadataPending, DownloadJobState.Queued));
+        notifier.Calls[1].ShouldBe((jobId, DownloadJobState.FailedPermanent, DownloadJobState.MetadataPending));
+    }
+
+    private sealed class CapturingStateNotifier : IDownloadJobStateNotifier
+    {
+        public List<(Guid JobId, DownloadJobState NewState, DownloadJobState PreviousState)> Calls { get; } = [];
+
+        public Task NotifyAsync(Guid jobId, DownloadJobState newState, DownloadJobState previousState, Guid correlationId, CancellationToken ct = default)
+        {
+            Calls.Add((jobId, newState, previousState));
+            return Task.CompletedTask;
+        }
+    }
+
+    private static Task SetCreatedAtAsync(DataBridgeDbContext db, Guid jobId, Instant createdAt)
+        => db.Database.ExecuteSqlInterpolatedAsync(
+            $"UPDATE download_jobs SET created_at = {createdAt} WHERE job_id = {jobId}");
+
+    private static DownloadJobEntity Job(
+        Guid jobId,
+        DownloadJobState state,
+        string sourceUrl = "https://example.test/video",
+        string? requestedBy = null,
+        string storageKey = "default",
+        DownloadSourceKind sourceKind = DownloadSourceKind.Direct)
         => new()
         {
             JobId = jobId,
             CorrelationId = Guid.NewGuid(),
             State = state,
-            SourceUrl = "https://example.test/video",
-            StorageKey = "default",
+            SourceUrl = sourceUrl,
+            RequestedBy = requestedBy,
+            StorageKey = storageKey,
+            SourceKind = sourceKind,
             IngestOrigin = IngestOrigin.Download
         };
 

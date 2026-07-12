@@ -9,7 +9,7 @@ using WebAPI.Features.Playlists.Models;
 namespace WebAPI.Features.Playlists.Controllers;
 
 [ApiController]
-[Route("api/user-playlists")]
+[Route("api/user/playlists")]
 public sealed class UserPlaylistsController(
     IMessageBus messageBus,
     ILogger<UserPlaylistsController> logger) : ControllerBase

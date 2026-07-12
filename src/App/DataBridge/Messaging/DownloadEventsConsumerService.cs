@@ -143,5 +143,6 @@ public sealed class DownloadEventsConsumerService(
         => Task.CompletedTask;
 
     private static bool IsLocalImportEvent(IFlowMessage evt)
-        => evt.OperationKey.StartsWith("local-import/", StringComparison.Ordinal);
+        => evt.OperationKey.StartsWith("local-import/", StringComparison.Ordinal)
+           || evt.OperationKey.StartsWith("local-import-item/", StringComparison.Ordinal);
 }

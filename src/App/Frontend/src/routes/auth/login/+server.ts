@@ -1,6 +1,7 @@
-import { redirect } from '@sveltejs/kit';
+import { error, redirect } from '@sveltejs/kit';
 import {
   authCookies,
+  authority,
   clientId,
   cookieSecure,
   createPkce,
@@ -8,14 +9,25 @@ import {
   discover,
   isSingleUserMode,
   redirectUri,
+  safeReturnTo,
   scopes,
   setTransientCookie
 } from '$lib/server/auth';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ cookies, url }) => {
+  // Single-user mode has no external IdP; the account control is a local profile link.
   if (isSingleUserMode()) {
-    throw redirect(303, '/');
+    throw redirect(303, '/profile');
+  }
+
+  if (!authority()) {
+    throw error(
+      503,
+      'Login is not configured: AUTH_AUTHORITY is empty and SINGLE_USER_MODE is off. ' +
+        'Launch the frontend through AppHost (which injects both), or set them in the environment ' +
+        'before running "pnpm dev".'
+    );
   }
 
   const discovery = await discover();
@@ -24,6 +36,10 @@ export const GET: RequestHandler = async ({ cookies, url }) => {
   const secure = cookieSecure(url);
   setTransientCookie(cookies, authCookies.state, state, secure);
   setTransientCookie(cookies, authCookies.verifier, pkce.verifier, secure);
+  const returnTo = safeReturnTo(url.searchParams.get('redirectTo'));
+  if (returnTo) {
+    setTransientCookie(cookies, authCookies.returnTo, returnTo, secure);
+  }
 
   const authorize = new URL(discovery.authorization_endpoint);
   authorize.searchParams.set('client_id', clientId());

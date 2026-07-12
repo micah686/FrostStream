@@ -122,6 +122,12 @@ public class DownloadArchiveFlow(
 
         // STEP 3: download ----------------------------------------------------
         await Capture(() => Update(jobId, DownloadJobState.DownloadPending));
+        if (await Capture(() => IsCancelling(jobId)))
+        {
+            await Capture(() => slotCoordinator.ReleaseSlotAsync(workerTag));
+            await Capture(() => Cancel(jobId, "Download cancelled by request."));
+            return;
+        }
         var downloaded = await RunDownloadStep(request, jobInstance, workerTag);
         // Release immediately after the download (regardless of outcome) so the next
         // highest-priority job can start while we finish upload/commit for this one.
@@ -881,17 +887,6 @@ public class DownloadArchiveFlow(
             message);
         await RepoCall(r => r.RecordTerminalFailureAsync(request.JobId, kind, code, message, terminalState, lastPayloadJson: null));
         await NotifyTerminalFailureAsync(request.JobId, terminalState, code, message);
-
-        if (terminalState == DownloadJobState.ProviderHalted && request.SourceKind is not DownloadSourceKind.Direct)
-        {
-            var retryAt = clock.GetCurrentInstant().Plus(Duration.FromHours(2));
-            logger.LogInformation(
-                "Scheduling provider-halt retry for JobId {JobId} at {RetryAt} SourceKind {SourceKind}.",
-                request.JobId,
-                retryAt,
-                request.SourceKind);
-            await RepoCall(r => r.ScheduleProviderHaltRetryAsync(request.JobId, retryAt));
-        }
     }
 
     private async Task Cancel(Guid jobId, string? message)

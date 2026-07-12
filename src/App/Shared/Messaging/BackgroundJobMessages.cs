@@ -12,11 +12,18 @@ public abstract record ScheduledBackgroundRequest
     public required Instant OccurredAt { get; init; }
 }
 
-public sealed record ChannelUpdateCheckRequested : ScheduledBackgroundRequest;
+public sealed record ChannelUpdateCheckRequested : ScheduledBackgroundRequest
+{
+    /// <summary>When set, scan only this creator source (manual "scan now"); scheduled sweeps leave it null.</summary>
+    public long? TargetSourceId { get; init; }
+}
 
 public sealed record ChannelAssetRefreshRequested : ScheduledBackgroundRequest
 {
     public long? TargetSourceId { get; init; }
+    /// <summary>When set, refresh assets for this metadata account directly (channel-page manual
+    /// refresh); the account's stored URL is used instead of a creator source.</summary>
+    public long? TargetAccountId { get; init; }
     public bool Force { get; init; }
 }
 

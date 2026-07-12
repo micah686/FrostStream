@@ -20,7 +20,8 @@ public static class StartServices
         var webapi = WireWebApi(builder, hardening, sharedStorageRoot, nats, postgres, openBao, authentik, openFga, webApiEndpointName);
         WireWorker(builder, hardening, sharedStorageRoot, nats, openBao);
         WireScheduler(builder, nats, databridge);
-        WireAuthTester(builder, hardening, webapi, authentik, webApiEndpointName);
+        //WireAuthTester(builder, hardening, webapi, authentik, webApiEndpointName);
+        WireFrontend(builder, hardening, webapi, authentik, webApiEndpointName);
     }
 
     private static IResourceBuilder<ProjectResource> WireDataBridge(
@@ -33,7 +34,7 @@ public static class StartServices
         IResourceBuilder<ContainerResource> typesense,
         IResourceBuilder<ContainerResource> potProvider)
     {
-        return builder.AddProject<Projects.DataBridge>("databridge")
+        var databridge = builder.AddProject<Projects.DataBridge>("databridge")
             .WithReference(postgres.FrostStreamDb).WaitFor(postgres.FrostStreamDb)
             .WithReference(nats).WaitFor(nats)
             .WithEnvironment("OpenBao__Address", openBao.GetEndpoint("http"))
@@ -47,7 +48,44 @@ public static class StartServices
             .WithEnvironment("PotBroker__ProviderUrl", potProvider.GetEndpoint("http"))
             .WaitFor(openBao)
             .WaitFor(typesense)
-            .WaitFor(potProvider);
+            .WaitFor(potProvider)
+            .PublishAsDockerFile(c => c
+                .WithDockerfile(
+                    Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "DataBridge")),
+                    "Dockerfile")
+                .WithImage("localhost/froststream-databridge", "latest"))
+            .WithLocalComposeBuild("localhost/froststream-databridge:latest", "App/DataBridge/Dockerfile");
+
+        // Scheduled backups run in DataBridge, so it needs the same BackupTool wiring as WebAPI.
+        return ApplyBackupEnvironment(databridge, builder.AppHostDirectory, sharedStorageRoot, hardening, openBao);
+    }
+
+    /// <summary>
+    /// Applies the shared BackupTool environment (`Backup__*`) to a service that shells out to the
+    /// tool. Both WebAPI (on-demand) and DataBridge (scheduled) use this so their configuration stays
+    /// in lockstep, including the WAL archive directory shared with the Postgres container.
+    /// </summary>
+    private static IResourceBuilder<ProjectResource> ApplyBackupEnvironment(
+        IResourceBuilder<ProjectResource> resource,
+        string appHostDirectory,
+        string sharedStorageRoot,
+        AppHostHardeningOptions hardening,
+        IResourceBuilder<ContainerResource> openBao)
+    {
+        var backupToolProject = Path.GetFullPath(Path.Combine(
+            appHostDirectory,
+            "..",
+            "BackupTool",
+            "BackupTool.csproj"));
+
+        return resource
+            .WithEnvironment("Backup__Directory", BackupPaths.BackupRoot(sharedStorageRoot))
+            .WithEnvironment("Backup__ToolPath", "dotnet")
+            .WithEnvironment("Backup__ToolBaseArguments", $"run --project {backupToolProject} --")
+            .WithEnvironment("Backup__ArchiveDir", BackupPaths.WalArchiveDirectory(sharedStorageRoot))
+            .WithEnvironment("Backup__OpenBaoAddress", openBao.GetEndpoint("http"))
+            .WithEnvironment("Backup__OpenBaoToken", hardening.OpenBaoToken)
+            .WithEnvironment("Backup__OpenBaoKvMount", "secret");
     }
 
     private static IResourceBuilder<ProjectResource> WireWebApi(
@@ -61,25 +99,16 @@ public static class StartServices
         OpenFgaResources openFga,
         string webApiEndpointName)
     {
-        var backupToolProject = Path.GetFullPath(Path.Combine(
-            builder.AppHostDirectory,
-            "..",
-            "BackupTool",
-            "BackupTool.csproj"));
-        var backupRoot = Environment.GetEnvironmentVariable("FROSTSTREAM_BACKUP_ROOT")
-                         ?? Path.Combine(sharedStorageRoot, "core-backups");
+        var webApiUrls = hardening.EnableHttps
+            ? "http://0.0.0.0:5041;https://0.0.0.0:7035"
+            : "http://0.0.0.0:5041";
 
         var webapi = builder.AddProject<Projects.WebAPI>("webapi", launchProfileName: webApiEndpointName)
             .WithReference(postgres.FrostStreamDb).WaitFor(postgres.FrostStreamDb)
             .WithReference(nats).WaitFor(nats)
+            .WithEnvironment("ASPNETCORE_URLS", webApiUrls)
             .WithEnvironment("OpenBao__Address", openBao.GetEndpoint("http"))
             .WithEnvironment("OpenBao__Token", hardening.OpenBaoToken)
-            .WithEnvironment("Backup__Directory", backupRoot)
-            .WithEnvironment("Backup__ToolPath", "dotnet")
-            .WithEnvironment("Backup__ToolBaseArguments", $"run --project {backupToolProject} --")
-            .WithEnvironment("Backup__OpenBaoAddress", openBao.GetEndpoint("http"))
-            .WithEnvironment("Backup__OpenBaoToken", hardening.OpenBaoToken)
-            .WithEnvironment("Backup__OpenBaoKvMount", "secret")
             .WithEnvironment("FROSTSTREAM_STORAGE_ROOT", sharedStorageRoot)
             .WithEnvironment("SINGLE_USER_MODE", hardening.SingleUserMode ? "true" : "false")
             .WithEnvironment("Auth__SingleUserMode", hardening.SingleUserMode ? "true" : "false")
@@ -92,7 +121,30 @@ public static class StartServices
             .WithEnvironment("OpenFga__AuthorizationModelId", Environment.GetEnvironmentVariable("OPENFGA_AUTHORIZATION_MODEL_ID") ?? "")
             .WithEnvironment("OpenFga__AutoProvision", Environment.GetEnvironmentVariable("OPENFGA_AUTO_PROVISION") ?? "true")
             .WithEnvironment("OpenFga__BootstrapOwnerSubjects", Environment.GetEnvironmentVariable("OPENFGA_BOOTSTRAP_OWNER_SUB") ?? "")
-            .WaitFor(openBao);
+            // LAN-reachable base URL that cast devices use to fetch media. Required for real-device
+            // casting under Aspire, whose proxied endpoints bind to localhost.
+            .WithEnvironment("Cast__AdvertisedBaseUrl", Environment.GetEnvironmentVariable("CAST_ADVERTISED_BASE_URL") ?? "")
+            .WaitFor(openBao)
+            .PublishAsDockerFile(c => c
+                .WithDockerfile(
+                    Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "WebAPI")),
+                    "Dockerfile")
+                .WithImage("localhost/froststream-webapi", "latest"))
+            .WithLocalComposeBuild("localhost/froststream-webapi:latest", "App/WebAPI/Dockerfile");
+
+        webapi = ApplyBackupEnvironment(webapi, builder.AppHostDirectory, sharedStorageRoot, hardening, openBao);
+
+        webapi.WithEndpointProxySupport(false);
+        webapi.WithEndpoint("http", endpoint =>
+        {
+            endpoint.TargetHost = "0.0.0.0";
+            endpoint.IsProxied = false;
+        }, createIfNotExists: false);
+        webapi.WithEndpoint("https", endpoint =>
+        {
+            endpoint.TargetHost = "0.0.0.0";
+            endpoint.IsProxied = false;
+        }, createIfNotExists: false);
 
         webapi = webapi.WithAuthAuthority("Auth__Authority", hardening.SingleUserMode, authentik);
 
@@ -100,8 +152,14 @@ public static class StartServices
         {
             webapi = webapi
                 .WithEnvironment("OpenFga__Endpoint", openFga.Endpoint)
+                .WithEnvironment("Authentik__ApiUrl", authentikServer.GetEndpoint("http"))
                 .WaitFor(authentikServer)
                 .WaitFor(openFga.Server);
+
+            if (authentik.ApiToken is { } authentikApiToken)
+            {
+                webapi = webapi.WithEnvironment("Authentik__ApiToken", authentikApiToken);
+            }
 
             if (hardening.EnableFgaAuthenticatedEndpoints)
             {
@@ -127,7 +185,13 @@ public static class StartServices
             // Start the loopback HTTP→NATS POT shim and inject the bgutil extractor-args. The Worker
             // reaches a provider via the pot-brokers queue group over NATS, not a direct container URL.
             .WithEnvironment("PotProvider__Enabled", "true")
-            .WaitFor(openBao);
+            .WaitFor(openBao)
+            .PublishAsDockerFile(c => c
+                .WithDockerfile(
+                    Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "Worker")),
+                    "Dockerfile")
+                .WithImage("localhost/froststream-worker", "latest"))
+            .WithLocalComposeBuild("localhost/froststream-worker:latest", "App/Worker/Dockerfile");
     }
 
     private static void WireScheduler(
@@ -143,35 +207,82 @@ public static class StartServices
             {
                 url.Url = "/quartz";
                 url.DisplayText = "Quartz";
-            });
+            })
+            .PublishAsDockerFile(c => c
+                .WithDockerfile(
+                    Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "Scheduler")),
+                    "Dockerfile")
+                .WithImage("localhost/froststream-scheduler", "latest"))
+            .WithLocalComposeBuild("localhost/froststream-scheduler:latest", "App/Scheduler/Dockerfile");
     }
-
-    private static void WireAuthTester(
+    
+    
+    private static void WireFrontend(
         IDistributedApplicationBuilder builder,
         AppHostHardeningOptions hardening,
         IResourceBuilder<ProjectResource> webapi,
         AuthentikResources authentik,
         string webApiEndpointName)
     {
-        var authTester = builder.AddViteApp("auth-tester", "../../HelperTestingApps/AuthTester")
+        var frontend = builder.AddViteApp("frontend", "../Frontend")
             .WithPnpm()
             .WithReference(webapi)
             .WaitFor(webapi)
             .WithEnvironment("VITE_API_BASE_URL", webapi.GetEndpoint(webApiEndpointName))
             .WithEnvironment("API_BASE_URL", webapi.GetEndpoint(webApiEndpointName))
+            .WithEnvironment("ORIGIN", FrontendPublicOrigin())
             .WithEnvironment("SINGLE_USER_MODE", hardening.SingleUserMode ? "true" : "false")
             .WithEnvironment("VITE_SINGLE_USER_MODE", hardening.SingleUserMode ? "true" : "false")
             .WithEnvironment("VITE_AUTH_MODE", hardening.SingleUserMode ? "single-user" : "multi-user")
             .WithEnvironment("AUTH_CLIENT_ID", authentik.ClientId)
             .WithEnvironment("AUTH_CLIENT_SECRET", authentik.ClientSecret)
-            .WithEnvironment("AUTH_SCOPES", Environment.GetEnvironmentVariable("AUTH_SCOPES") ?? "openid profile email groups");
-
-        authTester = authTester.WithAuthAuthority("VITE_AUTH_AUTHORITY", hardening.SingleUserMode, authentik);
-        authTester = authTester.WithAuthAuthority("AUTH_AUTHORITY", hardening.SingleUserMode, authentik);
-
+            .WithEnvironment("AUTH_SCOPES", Environment.GetEnvironmentVariable("AUTH_SCOPES") ?? "openid profile email groups offline_access")
+            .WithEnvironment("AUTH_REDIRECT_URI", $"{FrontendPublicOrigin()}/auth/callback")
+            .WithEnvironment("VITE_AUTH_PUBLIC_AUTHORITY", FrontendPublicAuthAuthority(hardening))
+            .WithEnvironment("AUTH_PUBLIC_AUTHORITY", FrontendPublicAuthAuthority(hardening))
+            .WithLocalComposeBuild("localhost/froststream-frontend:latest", "App/Frontend/Dockerfile");
+    
+        frontend = frontend.WithAuthAuthority("VITE_AUTH_AUTHORITY", hardening.SingleUserMode, authentik);
+        frontend = frontend.WithAuthAuthority("AUTH_AUTHORITY", hardening.SingleUserMode, authentik);
+    
         if (!hardening.SingleUserMode && authentik.Server is { } authentikServer)
         {
-            authTester = authTester.WaitFor(authentikServer);
+            frontend = frontend.WaitFor(authentikServer);
         }
+    }
+
+    private static string FrontendPublicAuthAuthority(AppHostHardeningOptions hardening)
+    {
+        if (hardening.SingleUserMode)
+        {
+            return "";
+        }
+
+        return Environment.GetEnvironmentVariable("AUTHENTIK_PUBLIC_AUTHORITY")
+               ?? Environment.GetEnvironmentVariable("AUTHENTIK_AUTHORITY")
+               ?? "http://localhost:9000/application/o/froststream/";
+    }
+
+    private static string FrontendPublicOrigin()
+        => (Environment.GetEnvironmentVariable("FRONTEND_PUBLIC_ORIGIN") ?? "http://localhost:8000").TrimEnd('/');
+
+    private static IResourceBuilder<TResource> WithLocalComposeBuild<TResource>(
+        this IResourceBuilder<TResource> resource,
+        string image,
+        string dockerfile)
+        where TResource : IComputeResource
+    {
+        return resource.PublishAsDockerComposeService((_, service) =>
+        {
+            service.Image = image;
+            service.PullPolicy = "build";
+            service.Build = new Aspire.Hosting.Docker.Resources.ServiceNodes.Build
+            {
+                // docker-compose.yaml is emitted under src/App/docker-compose-artifacts.
+                // The Dockerfiles expect the repository src/ directory as build context.
+                Context = "../..",
+                Dockerfile = dockerfile
+            };
+        });
     }
 }

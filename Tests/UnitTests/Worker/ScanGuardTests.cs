@@ -130,6 +130,7 @@ public sealed class ScanGuardTests
             IncrementalPageSize = incrementalPageSize,
             ConsecutiveKnownThreshold = 25,
             FullRescanIntervalDays = 30,
+            UpdateCheckIntervalHours = 6,
             MetadataRefreshWindow = 25,
             CreatedAt = NodaTime.Instant.FromUtc(2026, 6, 18, 0, 0)
         };

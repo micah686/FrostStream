@@ -54,6 +54,10 @@ public sealed class CreatorSourceEntity
 
     public int FullRescanIntervalDays { get; set; } = 30;
 
+    /// <summary>Minimum hours between incremental update-check scans of this source. The global
+    /// channel-update-check schedule ticks frequently; each tick only scans sources due by this interval.</summary>
+    public int UpdateCheckIntervalHours { get; set; } = 6;
+
     public int MetadataRefreshWindow { get; set; } = 25;
 
     public Instant? LastSuccessfulScanAt { get; set; }

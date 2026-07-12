@@ -175,6 +175,16 @@ public sealed record MetadataTechnicalDto
     public IReadOnlyList<TechnicalChapterDto> Chapters { get; init; } = [];
 }
 
+public sealed record MetadataVersionDto
+{
+    public required Guid MediaGuid { get; init; }
+    public required int VersionNum { get; init; }
+    public required string StorageKey { get; init; }
+    public required string StoragePath { get; init; }
+    public required string ContentHashXxh128 { get; init; }
+    public required string IngestOrigin { get; init; }
+}
+
 public sealed record CommentDto
 {
     public required string CommentId { get; init; }
@@ -268,6 +278,20 @@ public sealed record MetadataGetResponseMessage
     public MetadataDetailDto? Item { get; init; }
 }
 
+public sealed record MetadataRandomRequestMessage
+{
+    /// <summary>Media to exclude from the pick, typically the video currently playing.</summary>
+    public Guid? ExcludeMediaGuid { get; init; }
+}
+
+public sealed record MetadataRandomResponseMessage
+{
+    public bool Success { get; init; }
+    public string? ErrorCode { get; init; }
+    public string? ErrorMessage { get; init; }
+    public Guid? MediaGuid { get; init; }
+}
+
 public sealed record MetadataTechnicalRequestMessage
 {
     public required Guid MediaGuid { get; init; }
@@ -279,6 +303,21 @@ public sealed record MetadataTechnicalResponseMessage
     public string? ErrorCode { get; init; }
     public string? ErrorMessage { get; init; }
     public MetadataTechnicalDto? Item { get; init; }
+}
+
+public sealed record MetadataVersionsRequestMessage
+{
+    public required Guid MediaGuid { get; init; }
+    public bool CountOnly { get; init; }
+}
+
+public sealed record MetadataVersionsResponseMessage
+{
+    public bool Success { get; init; }
+    public string? ErrorCode { get; init; }
+    public string? ErrorMessage { get; init; }
+    public IReadOnlyList<MetadataVersionDto> Items { get; init; } = [];
+    public int TotalCount { get; init; }
 }
 
 public sealed record MetadataCommentsListRequestMessage
@@ -349,6 +388,25 @@ public sealed record MetadataAccountGetResponseMessage
     public string? ErrorCode { get; init; }
     public string? ErrorMessage { get; init; }
     public AccountDto? Item { get; init; }
+}
+
+/// <summary>
+/// Persists freshly downloaded avatar/banner blobs onto an existing <c>metadata.accounts</c> row
+/// by id. Null paths leave the existing value untouched, mirroring the (platform, handle) upsert.
+/// </summary>
+public sealed record MetadataAccountAssetsUpdateRequestMessage
+{
+    public required long AccountId { get; init; }
+    public string? AvatarStoragePath { get; init; }
+    public string? BannerStoragePath { get; init; }
+    public string? StorageKey { get; init; }
+}
+
+public sealed record MetadataAccountAssetsUpdateResponseMessage
+{
+    public bool Success { get; init; }
+    public string? ErrorCode { get; init; }
+    public string? ErrorMessage { get; init; }
 }
 
 public sealed record MetadataTaxonomyListRequestMessage

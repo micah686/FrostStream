@@ -14,7 +14,7 @@ using YtDlpSharpLib.Options;
 namespace WebAPI.Features.Downloads.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/downloads")]
 public class DownloadsController(
     IJetStreamPublisher publisher,
     IMessageBus messageBus,
@@ -23,14 +23,14 @@ public class DownloadsController(
 {
     private static readonly TimeSpan AdminRequestTimeout = TimeSpan.FromSeconds(10);
     /// <summary>
-    /// Submits a simple video download. Supports only the small set of request fields exposed here,
-    /// including optional SponsorBlock categories. Use <see cref="DownloadWithPreset"/> for full yt-dlp
+    /// Submits a video download. Callers may supply yt-dlp options directly (merged with the
+    /// optional SponsorBlock section); use <see cref="DownloadWithPreset"/> for stored yt-dlp
     /// option presets.
     /// </summary>
-    [HttpPost]
+    [HttpPost("video")]
     [Endpoint(EndpointIds.DownloadsCreate)]
     [EndpointSummary("Queue a video download")]
-    [EndpointDescription("Creates a new video download job and publishes it to the durable download stream. Blank storage keys use the default storage target; optional requester, tags, cookie credentials, and force-download behavior are included in the queued command. Returns job and correlation identifiers immediately without waiting for the download to complete.")]
+    [EndpointDescription("Creates a new video download job and publishes it to the durable download stream. Blank storage keys use the default storage target; optional requester, tags, cookie credentials, yt-dlp options, and force-download behavior are included in the queued command. Supplied yt-dlp options are passed through to the worker's yt-dlp invocation. Returns job and correlation identifiers immediately without waiting for the download to complete. Unambiguous playlist-container URLs are auto-routed into the playlist pipeline instead and return a playlist identifier (kind \"playlist\") rather than a job identifier; force-download and tags do not apply on that path.")]
     public Task<ActionResult<DownloadRequestResponse>> Download(
         [FromBody] DownloadRequest request,
         CancellationToken cancellationToken)
@@ -41,11 +41,14 @@ public class DownloadsController(
             tags: request.Tags,
             mediaKind: MediaKind.Video,
             audioFormat: null,
-            ytDlpOptions: BuildYtDlpOptions(request.SponsorBlock),
+            ytDlpOptions: CombineOptions(request.YtDlpOptions, request.SponsorBlock),
             presetKey: null,
             cookieProfileKey: request.CookieProfileKey,
             priority: request.Priority,
             fetchComments: request.FetchComments,
+            // Only the plain video endpoint can auto-route: /audio's forced MP3 extraction and
+            // /preset's PresetKey have no equivalent on PlaylistRequested.
+            allowPlaylistAutoRoute: true,
             cancellationToken: cancellationToken);
 
     /// <summary>
@@ -207,14 +210,14 @@ public class DownloadsController(
     }
 
     /// <summary>
-    /// Restarts a download job that was halted because the provider demanded bot verification.
-    /// The restart replays the original request payload and resumes from the last recorded
-    /// successful step when the flow has one available.
+    /// Restarts a download job from a restartable terminal state. Cancelled jobs replay as a
+    /// fresh run; provider-halted jobs replay the original request payload and resume from the
+    /// last recorded successful step when the flow has one available.
     /// </summary>
     [HttpPost("{jobId:guid}/restart")]
     [Endpoint(EndpointIds.DownloadsCancel)]
-    [EndpointSummary("Restart a halted download job")]
-    [EndpointDescription("Restarts a download job that was halted by provider bot-detection. The original request is replayed and the worker resumes from the last recorded successful step when possible.")]
+    [EndpointSummary("Restart a download job")]
+    [EndpointDescription("Restarts a download job from a restartable terminal state. Cancelled jobs replay as a fresh run. Provider-halted jobs replay the original request and resume from the last recorded successful step when possible.")]
     public async Task<ActionResult> RestartHalted(
         [FromRoute] Guid jobId,
         CancellationToken cancellationToken)
@@ -280,7 +283,8 @@ public class DownloadsController(
         string? cookieProfileKey,
         int priority,
         bool fetchComments,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool allowPlaylistAutoRoute = false)
     {
         if (!YtDlpSourceUrlValidator.TryValidate(sourceUrl, out var validationError))
         {
@@ -310,6 +314,14 @@ public class DownloadsController(
             }
 
             cookieSecretPath = SecretPaths.ForUserCookieProfile(subject!, cookieProfileKey);
+        }
+
+        // Playlist-container URLs on the direct path would become a single unmodeled job (no
+        // fan-out, no per-entry tracking), so route them into the playlist pipeline instead.
+        if (allowPlaylistAutoRoute && PlaylistUrlDetector.IsPlaylistUrl(sourceUrl))
+        {
+            return await PublishPlaylistRequestAsync(
+                sourceUrl, storageKey, subject, cookieSecretPath, ytDlpOptions, priority, fetchComments, cancellationToken);
         }
 
         var jobId = Guid.NewGuid();
@@ -361,6 +373,85 @@ public class DownloadsController(
         }
 
         return Accepted(new DownloadRequestResponse(jobId, correlationId));
+    }
+
+    /// <summary>
+    /// Routes a playlist-container URL into the playlist pipeline, mirroring
+    /// <c>PlaylistsController.Submit</c>. The direct request already carries the equivalent
+    /// config (storage, cookies, options, priority, comments); no config set is involved, which
+    /// matches direct-path semantics (no ignore keywords, no playlist audio encoding).
+    /// ForceDownload and Tags cannot be represented on <see cref="PlaylistRequested"/> and are
+    /// dropped; per-entry force is available later via the playlist force-queue endpoint.
+    /// </summary>
+    private async Task<ActionResult<DownloadRequestResponse>> PublishPlaylistRequestAsync(
+        string sourceUrl,
+        string? storageKey,
+        string? subject,
+        string? cookieSecretPath,
+        YtDlpOptions? ytDlpOptions,
+        int priority,
+        bool fetchComments,
+        CancellationToken cancellationToken)
+    {
+        var playlistId = Guid.NewGuid();
+        var correlationId = Guid.NewGuid();
+        var messageId = Guid.NewGuid();
+
+        var message = new PlaylistRequested
+        {
+            PlaylistId = playlistId,
+            CorrelationId = correlationId,
+            CausationId = null,
+            MessageId = messageId,
+            OperationKey = $"playlist/{playlistId:N}/requested",
+            OccurredAt = clock.GetCurrentInstant(),
+            Attempt = 1,
+            SourceUrl = sourceUrl,
+            RequestedBy = subject,
+            StorageKey = string.IsNullOrWhiteSpace(storageKey) ? "default" : storageKey,
+            ConfigSetKey = null,
+            EncodeForPlaylist = false,
+            CookieSecretPath = cookieSecretPath,
+            YtDlpOptions = ytDlpOptions,
+            Priority = priority,
+            FetchComments = fetchComments
+        };
+
+        try
+        {
+            await publisher.PublishAsync(
+                PlaylistSubjects.PlaylistRequested,
+                message,
+                messageId: messageId.ToString("N"),
+                cancellationToken: cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed publishing PlaylistRequested for auto-routed playlist {PlaylistId}", playlistId);
+            return StatusCode(StatusCodes.Status502BadGateway, new ProblemDetails
+            {
+                Title = "Failed to submit playlist request",
+                Detail = "Could not publish to the messaging bus.",
+                Status = StatusCodes.Status502BadGateway
+            });
+        }
+
+        logger.LogInformation(
+            "Auto-routed playlist URL from the direct download endpoint into the playlist pipeline as PlaylistId {PlaylistId}.",
+            playlistId);
+        return Accepted(new DownloadRoutedToPlaylistResponse(playlistId, correlationId));
+    }
+
+    /// <summary>Caller-supplied options form the base; a SponsorBlock section replaces their SponsorBlock group.</summary>
+    private static YtDlpOptions? CombineOptions(YtDlpOptions? baseOptions, SponsorBlockRequest? sponsorBlock)
+    {
+        var sponsorBlockOptions = BuildYtDlpOptions(sponsorBlock);
+        if (baseOptions is null)
+            return sponsorBlockOptions;
+        if (sponsorBlockOptions is null)
+            return baseOptions;
+
+        return baseOptions with { SponsorBlock = sponsorBlockOptions.SponsorBlock };
     }
 
     private static YtDlpOptions? BuildYtDlpOptions(SponsorBlockRequest? sponsorBlock)

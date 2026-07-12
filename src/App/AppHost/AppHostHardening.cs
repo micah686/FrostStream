@@ -9,17 +9,19 @@ public sealed record AppHostHardeningOptions(
     string OpenBaoImageTag,
     string OpenFgaImageTag,
     string BgUtilImageTag,
+    string TypesenseImageTag,
+    string AuthentikImageTag,
     string OpenBaoToken,
     string TypesenseApiKey,
     string OpenFgaApiToken);
 
 public static class AppHostHardening
 {
-    private const string DevOpenBaoToken = "froststream-dev-root";
-    private const string DevTypesenseApiKey = "froststream-dev-key";
-    private const string DevOpenFgaApiToken = "froststream-dev-openfga-token-change-me";
-    private const string DevAuthentikClientSecret = "froststream-dev-client-secret";
-    private const string DevAuthentikBootstrapPassword = "froststream-dev-admin";
+    // private const string DevOpenBaoToken = "froststream-dev-root";
+    // private const string DevTypesenseApiKey = "froststream-dev-key";
+    // private const string DevOpenFgaApiToken = "froststream-dev-openfga-token-change-me";
+    // private const string DevAuthentikClientSecret = "froststream-dev-client-secret";
+    // private const string DevAuthentikBootstrapPassword = "froststream-dev-admin";
 
     public static AppHostHardeningOptions Read(bool singleUserMode)
     {
@@ -43,9 +45,11 @@ public static class AppHostHardening
             // MUST match YtDlpBinaryDownloaderOptions.BgUtilPluginVersion — bgutil requires the
             // provider server and the yt-dlp plugin to be the same version.
             BgUtilImageTag: Environment.GetEnvironmentVariable("BGUTIL_IMAGE_TAG") ?? "1.3.1",
-            OpenBaoToken: Environment.GetEnvironmentVariable("OPENBAO_TOKEN") ?? DevOpenBaoToken,
-            TypesenseApiKey: Environment.GetEnvironmentVariable("TYPESENSE_API_KEY") ?? DevTypesenseApiKey,
-            OpenFgaApiToken: Environment.GetEnvironmentVariable("OPENFGA_API_TOKEN") ?? DevOpenFgaApiToken);
+            TypesenseImageTag: Environment.GetEnvironmentVariable("TYPESENSE_IMAGE_TAG") ?? "30.2",
+            AuthentikImageTag: Environment.GetEnvironmentVariable("AUTHENTIK_IMAGE_TAG") ?? "2026.5.3",
+            OpenBaoToken: Helpers.GetEnv("OPENBAO_TOKEN"),
+            TypesenseApiKey: Helpers.GetEnv("TYPESENSE_API_KEY"),
+            OpenFgaApiToken: Helpers.GetEnv("OPENFGA_API_TOKEN"));
     }
 
     public static void Validate(AppHostHardeningOptions options)
@@ -79,19 +83,19 @@ public static class AppHostHardening
             errors.Add("AUTHENTIK_AUTHORITY must use https:// in production.");
         }
 
-        RequireStrongSecret(errors, "POSTGRES_PASSWORD", Environment.GetEnvironmentVariable("POSTGRES_PASSWORD"), "postgres", 16);
-        RequireStrongSecret(errors, "OPENBAO_TOKEN", Environment.GetEnvironmentVariable("OPENBAO_TOKEN"), DevOpenBaoToken, 32);
-        RequireStrongSecret(errors, "TYPESENSE_API_KEY", Environment.GetEnvironmentVariable("TYPESENSE_API_KEY"), DevTypesenseApiKey, 32);
+        RequireStrongSecret(errors, "POSTGRES_PASSWORD", Environment.GetEnvironmentVariable("POSTGRES_PASSWORD"),  16);
+        RequireStrongSecret(errors, "OPENBAO_TOKEN", Environment.GetEnvironmentVariable("OPENBAO_TOKEN"), 32);
+        RequireStrongSecret(errors, "TYPESENSE_API_KEY", Environment.GetEnvironmentVariable("TYPESENSE_API_KEY"), 32);
 
         if (!options.SingleUserMode)
         {
-            RequireStrongSecret(errors, "AUTHENTIK_SECRET_KEY", Environment.GetEnvironmentVariable("AUTHENTIK_SECRET_KEY"), null, 32);
-            RequireStrongSecret(errors, "AUTHENTIK_CLIENT_SECRET", Environment.GetEnvironmentVariable("AUTHENTIK_CLIENT_SECRET"), DevAuthentikClientSecret, 32);
-            RequireStrongSecret(errors, "AUTHENTIK_BOOTSTRAP_PASSWORD", Environment.GetEnvironmentVariable("AUTHENTIK_BOOTSTRAP_PASSWORD"), DevAuthentikBootstrapPassword, 16);
+            RequireStrongSecret(errors, "AUTHENTIK_SECRET_KEY", Environment.GetEnvironmentVariable("AUTHENTIK_SECRET_KEY"),  32);
+            RequireStrongSecret(errors, "AUTHENTIK_CLIENT_SECRET", Environment.GetEnvironmentVariable("AUTHENTIK_CLIENT_SECRET"), 32);
+            RequireStrongSecret(errors, "AUTHENTIK_BOOTSTRAP_PASSWORD", Environment.GetEnvironmentVariable("AUTHENTIK_BOOTSTRAP_PASSWORD"), 16);
 
             if (options.EnableFgaAuthenticatedEndpoints)
             {
-                RequireStrongSecret(errors, "OPENFGA_API_TOKEN", Environment.GetEnvironmentVariable("OPENFGA_API_TOKEN"), DevOpenFgaApiToken, 32);
+                RequireStrongSecret(errors, "OPENFGA_API_TOKEN", Environment.GetEnvironmentVariable("OPENFGA_API_TOKEN"), 32);
             }
 
             if (IsFalsey(Environment.GetEnvironmentVariable("OPENFGA_AUTO_PROVISION")) &&
@@ -114,7 +118,6 @@ public static class AppHostHardening
         List<string> errors,
         string name,
         string? value,
-        string? forbiddenValue,
         int minimumLength)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -126,11 +129,6 @@ public static class AppHostHardening
         if (value.Length < minimumLength)
         {
             errors.Add($"{name} must be at least {minimumLength} characters.");
-        }
-
-        if (!string.IsNullOrEmpty(forbiddenValue) && string.Equals(value, forbiddenValue, StringComparison.Ordinal))
-        {
-            errors.Add($"{name} must not use the development default.");
         }
     }
 

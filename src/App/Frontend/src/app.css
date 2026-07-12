@@ -9,6 +9,20 @@
   --color-frost-500: #3b82f6;
   --color-frost-600: #2563eb;
   --color-ink-950: #0d1017;
+  /* flowbite-svelte components (Toggle, Checkbox, Button, …) style their active
+     state with primary-* utilities; without this scale those classes resolve to
+     nothing and e.g. enabled toggles stay gray. */
+  --color-primary-50: #eff6ff;
+  --color-primary-100: #dbeafe;
+  --color-primary-200: #bfdbfe;
+  --color-primary-300: #93c5fd;
+  --color-primary-400: #60a5fa;
+  --color-primary-500: #3b82f6;
+  --color-primary-600: #2563eb;
+  --color-primary-700: #1d4ed8;
+  --color-primary-800: #1e40af;
+  --color-primary-900: #1e3a8a;
+  --color-primary-950: #172554;
   --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
@@ -51,6 +65,60 @@ input:focus-visible {
 
 ::selection {
   background: rgb(59 130 246 / 40%);
+}
+
+/* Checkboxes: white box with a blue checkmark. Toggle inputs are sr-only and
+   render through their sibling track, so this only affects visible checkboxes. */
+input[type="checkbox"]:not(.sr-only) {
+  border-color: #475569;
+  background-color: #fff;
+}
+
+input[type="checkbox"]:not(.sr-only):checked {
+  border-color: var(--color-frost-500);
+  background-color: #fff;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%232563eb' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3e%3cpath d='M4 8.5l2.5 2.5L12 5'/%3e%3c/svg%3e");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+}
+
+/* Range sliders: appearance-none removes the native thumb, so restyle it
+   (blue knob on the slate track) or the slider renders as an empty bar. */
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 1.125rem;
+  width: 1.125rem;
+  border: 2px solid #fff;
+  border-radius: 9999px;
+  background: var(--color-frost-500);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 40%);
+  transition: background 0.15s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  background: var(--color-frost-400);
+}
+
+input[type="range"]::-moz-range-thumb {
+  height: 1.125rem;
+  width: 1.125rem;
+  border: 2px solid #fff;
+  border-radius: 9999px;
+  background: var(--color-frost-500);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 40%);
+  transition: background 0.15s ease;
+}
+
+input[type="range"]::-moz-range-thumb:hover {
+  background: var(--color-frost-400);
+}
+
+input[type="range"]::-moz-range-progress {
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: var(--color-frost-500);
 }
 
 ::-webkit-scrollbar {

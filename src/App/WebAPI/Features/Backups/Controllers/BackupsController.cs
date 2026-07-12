@@ -5,15 +5,15 @@ using WebAPI.Features.Backups.Models;
 namespace WebAPI.Features.Backups.Controllers;
 
 [ApiController]
-[Route("api/admin/backups")]
+[Route("api/global/backups")]
 public sealed class BackupsController(BackupJobService backups) : ControllerBase
 {
     [HttpPost]
     [Endpoint(EndpointIds.BackupsCreate)]
     [EndpointSummary("Queue a core-data backup")]
-    [EndpointDescription("Starts a background backup job using the configured local backup tool and backup directory. The backup includes FrostStream, Authentik, and OpenFGA PostgreSQL databases plus OpenBao KV secrets, and explicitly excludes media files and rebuildable search or queue state.")]
+    [EndpointDescription("Starts a background backup job using the configured local backup tool and backup directory. The backup includes FrostStream, Authentik, and OpenFGA PostgreSQL databases plus OpenBao KV secrets, and explicitly excludes media files and rebuildable search or queue state. Mode selects the PostgreSQL strategy: snapshot (default), full, or wal-archive.")]
     public ActionResult<BackupJobResponse> Create([FromBody] CreateBackupRequest? request)
-        => Accepted(backups.StartBackup(request?.Name));
+        => Accepted(backups.StartBackup(request?.Name, request?.Mode));
 
     [HttpGet("jobs")]
     [Endpoint(EndpointIds.BackupsJobsList)]

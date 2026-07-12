@@ -19,6 +19,7 @@ public sealed class CreatorSourceConfiguration : IEntityTypeConfiguration<Creato
         builder.Property(x => x.IncrementalPageSize).HasColumnName("incremental_page_size").IsRequired();
         builder.Property(x => x.ConsecutiveKnownThreshold).HasColumnName("consecutive_known_threshold").IsRequired();
         builder.Property(x => x.FullRescanIntervalDays).HasColumnName("full_rescan_interval_days").IsRequired();
+        builder.Property(x => x.UpdateCheckIntervalHours).HasColumnName("update_check_interval_hours").IsRequired();
         builder.Property(x => x.MetadataRefreshWindow).HasColumnName("metadata_refresh_window").IsRequired();
         builder.Property(x => x.LastSuccessfulScanAt).HasColumnName("last_successful_scan_at").HasColumnType("timestamp with time zone");
         builder.Property(x => x.LastFullScanAt).HasColumnName("last_full_scan_at").HasColumnType("timestamp with time zone");

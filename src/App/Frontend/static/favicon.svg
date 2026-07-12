@@ -1,11 +1,62 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="a" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#60a5fa"/>
-      <stop offset="1" stop-color="#2563eb"/>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0A2540"/>
+      <stop offset="55%" stop-color="#0E6FBF"/>
+      <stop offset="100%" stop-color="#38D2F0"/>
     </linearGradient>
+    <linearGradient id="playGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#CFF3FF"/>
+    </linearGradient>
+    <linearGradient id="waveGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#9FE4FF"/>
+      <stop offset="100%" stop-color="#FFFFFF"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="38%" r="65%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
   </defs>
-  <rect width="64" height="64" rx="16" fill="#111827"/>
-  <rect x="10" y="10" width="44" height="44" rx="13" fill="url(#a)"/>
-  <path d="m27 22 15 10-15 10V22Z" fill="white"/>
+
+  <!-- background badge -->
+  <rect x="4" y="4" width="192" height="192" rx="46" fill="url(#bgGrad)"/>
+  <rect x="4" y="4" width="192" height="192" rx="46" fill="url(#glow)"/>
+
+  <!-- snowflake accent -->
+  <g stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="3" stroke-linecap="round">
+    <g transform="translate(100,98)">
+      <line x1="0" y1="-72" x2="0" y2="72"/>
+      <line x1="-62.4" y1="-36" x2="62.4" y2="36"/>
+      <line x1="-62.4" y1="36" x2="62.4" y2="-36"/>
+
+      <line x1="0" y1="-52" x2="-13" y2="-40"/>
+      <line x1="0" y1="-52" x2="13" y2="-40"/>
+      <line x1="0" y1="52" x2="-13" y2="40"/>
+      <line x1="0" y1="52" x2="13" y2="40"/>
+
+      <line x1="-45" y1="-26" x2="-45" y2="-11"/>
+      <line x1="-45" y1="-26" x2="-31" y2="-19"/>
+      <line x1="45" y1="26" x2="45" y2="11"/>
+      <line x1="45" y1="26" x2="31" y2="19"/>
+
+      <line x1="-45" y1="26" x2="-45" y2="11"/>
+      <line x1="-45" y1="26" x2="-31" y2="19"/>
+      <line x1="45" y1="-26" x2="45" y2="-11"/>
+      <line x1="45" y1="-26" x2="31" y2="-19"/>
+    </g>
+  </g>
+
+  <!-- faceted ice-crystal play button -->
+  <g transform="translate(102,94)">
+    <path d="M -30 -40 L 42 0 L -30 40 Z" fill="url(#playGrad)"/>
+    <path d="M -30 -40 L 6 -20 L -30 0 Z" fill="#FFFFFF" fill-opacity="0.6"/>
+    <path d="M -30 0 L 6 -20 L 6 20 Z" fill="#DFF6FF" fill-opacity="0.5"/>
+  </g>
+
+  <!-- flowing stream lines -->
+  <g fill="none" stroke="url(#waveGrad)" stroke-width="6.5" stroke-linecap="round" opacity="0.95">
+    <path d="M44 152 Q 70 138 100 152 T 156 152"/>
+    <path d="M44 167 Q 70 155 100 167 T 156 167" opacity="0.55"/>
+  </g>
 </svg>

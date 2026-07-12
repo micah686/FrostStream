@@ -15,10 +15,19 @@ public sealed class PlaylistTopology : ITopologySource
     public const string StreamNameValue = "FROSTSTREAM_PLAYLIST";
 
     /// <summary>
-    /// Subject filter for the JetStream stream. Excludes the <c>playlist.get</c> /
-    /// <c>playlist.list</c> request/reply subjects which are handled over core NATS.
+    /// Subject filters for the JetStream stream. Deliberately enumerates only the pipeline
+    /// subjects (requested + commands + events). The request/reply core-NATS subjects
+    /// (<c>playlist.get</c>, <c>playlist.list</c>, <c>playlist.item.force-queue</c>,
+    /// <c>playlist.user.&gt;</c>) must never be captured by the stream: JetStream sends its
+    /// publish ack to the request's reply inbox, which the requester then mistakes for the
+    /// responder's reply.
     /// </summary>
-    public const string SubjectFilter = "playlist.>";
+    public static readonly string[] SubjectFilters =
+    [
+        PlaylistSubjects.PlaylistRequested,
+        "playlist.cmd.>",
+        "playlist.evt.>"
+    ];
 
     public const string DataBridgeQueueGroup = "databridge-playlists";
     public const string WorkerQueueGroup = "workers";
@@ -35,7 +44,7 @@ public sealed class PlaylistTopology : ITopologySource
         yield return new StreamSpec
         {
             Name = StreamName.From(StreamNameValue),
-            Subjects = [SubjectFilter],
+            Subjects = SubjectFilters,
             MaxAge = TimeSpan.FromDays(30),
             RetentionPolicy = StreamRetention.Limits,
             StorageType = StorageType.File,

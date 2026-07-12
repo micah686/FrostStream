@@ -9,7 +9,7 @@ using WebAPI.Features.Notifications.Models;
 namespace WebAPI.Features.Notifications.Controllers;
 
 [ApiController]
-[Route("api/notifications")]
+[Route("api/user/notifications")]
 public sealed class NotificationsController(
     IMessageBus messageBus,
     ISecretStore secretStore,

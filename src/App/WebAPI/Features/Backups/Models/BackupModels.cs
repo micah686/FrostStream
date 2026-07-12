@@ -1,6 +1,6 @@
 namespace WebAPI.Features.Backups.Models;
 
-public sealed record CreateBackupRequest(string? Name);
+public sealed record CreateBackupRequest(string? Name, string? Mode);
 
 public sealed record BackupJobResponse(
     Guid JobId,
@@ -14,7 +14,8 @@ public sealed record BackupSummaryResponse(
     string ArchivePath,
     DateTimeOffset? CreatedAt,
     bool MediaIncluded,
-    int SchemaVersion);
+    int SchemaVersion,
+    string Mode);
 
 public sealed record VerifyBackupRequest(string ArchivePath);
 

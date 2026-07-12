@@ -11,9 +11,19 @@ namespace WebAPI.Features.Management.Controllers;
 /// bundle, so the bootstrap admin can always reach it.
 /// </summary>
 [ApiController]
-[Route("api/management")]
-public sealed class BundleManagementController(IBundleManagementService bundles) : ControllerBase
+[Route("api/global/management")]
+public sealed class BundleManagementController(IBundleManagementService bundles, IDirectoryService directory) : ControllerBase
 {
+    [HttpGet("directory")]
+    [Endpoint(EndpointIds.ManagementDirectorySearch)]
+    [EndpointSummary("Search the identity provider directory")]
+    [EndpointDescription("Searches Authentik for users or groups matching the query, for grantee autocomplete. User results carry the OIDC subject id (user UUID); group results carry the group name. Returns an empty list when the directory is unavailable or unconfigured.")]
+    public async Task<ActionResult<IReadOnlyList<DirectoryEntry>>> SearchDirectory(
+        [FromQuery] string type,
+        [FromQuery] string q,
+        CancellationToken cancellationToken)
+        => Ok(await directory.SearchAsync(type ?? "", q ?? "", cancellationToken));
+
     [HttpGet("catalog")]
     [Endpoint(EndpointIds.ManagementCatalog)]
     [EndpointSummary("List the endpoint catalog")]
@@ -25,14 +35,31 @@ public sealed class BundleManagementController(IBundleManagementService bundles)
     [EndpointSummary("List capability bundles")]
     [EndpointDescription("Returns every capability bundle with its endpoint membership and grants. System-owned (seeded) bundles are flagged and are read-only.")]
     public async Task<ActionResult<IReadOnlyList<BundleView>>> ListBundles(CancellationToken cancellationToken)
-        => Map(await bundles.ListBundlesAsync(cancellationToken));
+    {
+        var result = await bundles.ListBundlesAsync(cancellationToken);
+        if (result.Status == BundleOpStatus.Ok)
+        {
+            result = BundleOpResult<IReadOnlyList<BundleView>>.Ok(await WithUserDisplayNamesAsync(result.Value!, cancellationToken));
+        }
+
+        return Map(result);
+    }
 
     [HttpGet("bundles/{bundleId}")]
     [Endpoint(EndpointIds.ManagementBundlesGet)]
     [EndpointSummary("Get a capability bundle")]
     [EndpointDescription("Returns a single capability bundle with its endpoint membership and grants. Returns 404 when the bundle has no tuples.")]
     public async Task<ActionResult<BundleView>> GetBundle(string bundleId, CancellationToken cancellationToken)
-        => Map(await bundles.GetBundleAsync(bundleId, cancellationToken));
+    {
+        var result = await bundles.GetBundleAsync(bundleId, cancellationToken);
+        if (result.Status == BundleOpStatus.Ok)
+        {
+            var enriched = await WithUserDisplayNamesAsync([result.Value!], cancellationToken);
+            result = BundleOpResult<BundleView>.Ok(enriched[0]);
+        }
+
+        return Map(result);
+    }
 
     [HttpPost("bundles")]
     [Endpoint(EndpointIds.ManagementBundlesCreate)]
@@ -77,6 +104,42 @@ public sealed class BundleManagementController(IBundleManagementService bundles)
         [FromQuery] string id,
         CancellationToken cancellationToken)
         => Map(await bundles.RevokeAsync(bundleId, type ?? "", id ?? "", cancellationToken));
+
+    /// <summary>Resolves user-grant subject UUIDs to friendly names so the UI can show who a grant
+    /// targets. Group grants already carry their name as the id. Unresolvable ids stay name-less.</summary>
+    private async Task<IReadOnlyList<BundleView>> WithUserDisplayNamesAsync(
+        IReadOnlyList<BundleView> views,
+        CancellationToken cancellationToken)
+    {
+        var userIds = views
+            .SelectMany(view => view.Grants)
+            .Where(grant => grant.Type == BundleManagementValidation.GranteeTypeUser)
+            .Select(grant => grant.Id)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (userIds.Length == 0)
+        {
+            return views;
+        }
+
+        var names = await directory.ResolveUserNamesAsync(userIds, cancellationToken);
+        if (names.Count == 0)
+        {
+            return views;
+        }
+
+        return views
+            .Select(view => view with
+            {
+                Grants = view.Grants
+                    .Select(grant => grant.Type == BundleManagementValidation.GranteeTypeUser && names.TryGetValue(grant.Id, out var name)
+                        ? grant with { DisplayName = name }
+                        : grant)
+                    .ToArray()
+            })
+            .ToArray();
+    }
 
     private ActionResult<T> Map<T>(BundleOpResult<T> result)
         => result.Status == BundleOpStatus.Ok ? Ok(result.Value) : MapError(new BundleOpResult(result.Status, result.Error));

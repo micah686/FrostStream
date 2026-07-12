@@ -34,7 +34,19 @@ public sealed class MediaWatchStateController(
         if (!response.Success)
             return MapWatchStateError(response);
         if (response.State is null)
-            return NotFound();
+        {
+            return Ok(new WatchStateDto
+            {
+                OwnerSubject = subject,
+                MediaGuid = mediaGuid,
+                PositionSeconds = null,
+                DurationSeconds = null,
+                Completed = false,
+                WatchedAt = null,
+                LastPlayedAt = NodaTime.Instant.FromUtc(1970, 1, 1, 0, 0),
+                UpdatedAt = NodaTime.Instant.FromUtc(1970, 1, 1, 0, 0)
+            });
+        }
 
         return Ok(response.State);
     }
@@ -77,6 +89,80 @@ public sealed class MediaWatchStateController(
             durationSeconds: null,
             completed: false,
             cancellationToken);
+
+    // Absolute route: this is a cross-media collection query, so it escapes the controller's
+    // per-media `api/media/{mediaGuid}/watch-state` template.
+    [HttpGet("/api/media/watch-states/in-progress")]
+    [Endpoint(EndpointIds.MediaWatchStateListInProgress)]
+    [EndpointSummary("List the caller's in-progress videos")]
+    [EndpointDescription("Returns the authenticated caller's partially watched media items (playback started but not completed), newest first by last play time. Results are scoped to the caller and never include another user's watch history.")]
+    public async Task<IActionResult> ListInProgress(
+        [FromQuery] int limit = 12,
+        CancellationToken cancellationToken = default)
+    {
+        var subject = AuthConstants.FindSubject(User);
+        if (string.IsNullOrWhiteSpace(subject))
+            return Unauthorized();
+
+        var response = await SendAsync<WatchStateInProgressListRequest, WatchStateListResponse>(
+            WatchStateSubjects.ListInProgress,
+            new WatchStateInProgressListRequest { OwnerSubject = subject, Limit = limit },
+            cancellationToken);
+
+        if (response is null)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to list in-progress watch states.");
+
+        if (!response.Success)
+        {
+            return response.ErrorCode switch
+            {
+                "validation" => BadRequest(response.ErrorMessage),
+                _ => StatusCode(StatusCodes.Status500InternalServerError, response.ErrorMessage ?? "Watch-state request failed.")
+            };
+        }
+
+        return Ok(response.Items ?? Array.Empty<WatchStateDto>());
+    }
+
+    // Absolute route: this is a cross-media collection query, so it escapes the controller's
+    // per-media `api/media/{mediaGuid}/watch-state` template.
+    [HttpGet("/api/media/watch-states/history")]
+    [Endpoint(EndpointIds.MediaWatchStateListHistory)]
+    [EndpointSummary("List the caller's watch history")]
+    [EndpointDescription("Returns the authenticated caller's watch history, newest first by last play time. Results include media cards and are scoped to the caller.")]
+    public async Task<IActionResult> ListHistory(
+        [FromQuery] int pageSize = 24,
+        [FromQuery] int page = 1,
+        CancellationToken cancellationToken = default)
+    {
+        var subject = AuthConstants.FindSubject(User);
+        if (string.IsNullOrWhiteSpace(subject))
+            return Unauthorized();
+
+        var response = await SendAsync<WatchStateHistoryListRequest, WatchStateHistoryListResponse>(
+            WatchStateSubjects.ListHistory,
+            new WatchStateHistoryListRequest
+            {
+                OwnerSubject = subject,
+                PageSize = pageSize,
+                Page = page
+            },
+            cancellationToken);
+
+        if (response is null)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to list watch history.");
+
+        if (!response.Success)
+        {
+            return response.ErrorCode switch
+            {
+                "validation" => BadRequest(response.ErrorMessage),
+                _ => StatusCode(StatusCodes.Status500InternalServerError, response.ErrorMessage ?? "Watch-history request failed.")
+            };
+        }
+
+        return Ok(response);
+    }
 
     private async Task<IActionResult> UpsertForCurrentUserAsync(
         Guid mediaGuid,

@@ -5,6 +5,28 @@ metadata:
   labels:
     blueprints.goauthentik.io/description: FrostStream development OIDC application and provider.
 entries:
+  # Replaces authentik's default `profile` scope mapping, which also emits a `groups` claim.
+  # Scope mapping results are deep-merged with list concatenation, so combining the default
+  # mapping with froststream-scope-groups below would duplicate every entry in `groups`.
+  # This mapping is the default minus `groups`; the groups claim comes only from
+  # froststream-scope-groups.
+  - id: froststream-scope-profile
+    model: authentik_providers_oauth2.scopemapping
+    identifiers:
+      scope_name: profile
+      name: FrostStream profile
+    attrs:
+      scope_name: profile
+      name: FrostStream profile
+      description: OpenID profile claims without the groups claim (supplied by the groups scope).
+      expression: |
+        return {
+            "name": request.user.name,
+            "given_name": request.user.name,
+            "preferred_username": request.user.username,
+            "nickname": request.user.username,
+        }
+
   # Emits a `groups` claim containing the user's Authentik group names. WebAPI maps this
   # claim to OpenFGA membership tuples (see Section 3 session sync). Keep the scope_name as
   # `groups` so it lines up with AUTH_SCOPES (`openid profile email groups`).
@@ -54,8 +76,11 @@ entries:
       signing_key: !Find [authentik_crypto.certificatekeypair, [name, !Env [AUTHENTIK_SIGNING_KEY_NAME, authentik Self-signed Certificate]]]
       property_mappings:
         - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
-        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]
+        - !KeyOf froststream-scope-profile
         - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
+        # Authentik only issues refresh tokens when offline_access is granted; without it every
+        # session hard-expires with the 1-hour access token.
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, offline_access]]
         - !KeyOf froststream-scope-groups
         - !KeyOf froststream-scope-audience
       client_type: confidential
@@ -134,3 +159,18 @@ entries:
       name: owner
     attrs:
       name: owner
+
+  # API token the WebAPI uses for directory lookups (grantee autocomplete in bundle management).
+  # AUTHENTIK_BOOTSTRAP_TOKEN only creates this on a brand-new database, so the blueprint declares
+  # it too — blueprints re-apply on every worker start, covering databases created before the env
+  # was introduced.
+  - id: froststream-api-token
+    model: authentik_core.token
+    identifiers:
+      identifier: froststream-api-token
+    attrs:
+      key: !Env [AUTHENTIK_BOOTSTRAP_TOKEN, froststream-dev-api-token]
+      user: !Find [authentik_core.user, [username, akadmin]]
+      intent: api
+      expiring: false
+      description: FrostStream WebAPI directory lookups.

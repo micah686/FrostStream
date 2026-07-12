@@ -34,7 +34,7 @@ public sealed record BundleOpResult<T>(BundleOpStatus Status, T? Value = default
     public static BundleOpResult<T> Unavailable(string error) => new(BundleOpStatus.Unavailable, Error: error);
 }
 
-public sealed record BundleGrant(string Type, string Id);
+public sealed record BundleGrant(string Type, string Id, bool Locked = false, string? DisplayName = null);
 
 public sealed record BundleView(
     string Id,
@@ -43,6 +43,32 @@ public sealed record BundleView(
     IReadOnlyList<BundleGrant> Grants);
 
 public sealed record CatalogEntry(string Id, string Bundle);
+
+/// <summary>A user or group known to the identity provider, offered as a grantee suggestion.</summary>
+public sealed record DirectoryEntry(string Type, string Id, string Name, string? Description = null);
+
+/// <summary>
+/// Grantee lookup against the identity provider so admins can pick users/groups by name instead of
+/// pasting opaque ids. User results return the Authentik user UUID (the OIDC <c>sub</c> under
+/// <c>sub_mode: user_uuid</c>); group results return the group name, matching the tuple writer.
+/// </summary>
+public interface IDirectoryService
+{
+    Task<IReadOnlyList<DirectoryEntry>> SearchAsync(string granteeType, string query, CancellationToken cancellationToken);
+
+    /// <summary>Resolves user subject ids (UUIDs) to display names. Unresolvable ids are omitted.</summary>
+    Task<IReadOnlyDictionary<string, string>> ResolveUserNamesAsync(IReadOnlyCollection<string> userIds, CancellationToken cancellationToken);
+}
+
+/// <summary>Stand-in when no identity provider is available (single-user mode or unconfigured API).</summary>
+public sealed class NullDirectoryService : IDirectoryService
+{
+    public Task<IReadOnlyList<DirectoryEntry>> SearchAsync(string granteeType, string query, CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<DirectoryEntry>>([]);
+
+    public Task<IReadOnlyDictionary<string, string>> ResolveUserNamesAsync(IReadOnlyCollection<string> userIds, CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyDictionary<string, string>>(new Dictionary<string, string>());
+}
 
 /// <summary>
 /// Runtime bundle-management surface (the hybrid feature in B_Axis1.MD). Lists the code-defined

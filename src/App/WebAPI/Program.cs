@@ -14,6 +14,8 @@ using System.Text.Json.Serialization;
 using WebAPI.Auth;
 using WebAPI.Features.Backups;
 using WebAPI.Features.Downloads;
+using WebAPI.Features.Media;
+using WebAPI.Features.Media.Casting;
 
 namespace WebAPI;
 
@@ -35,18 +37,50 @@ public class Program
         WebApiHardening.ValidateStartup(authOptions, singleUserMode, builder.Environment.IsProduction());
         builder.Services.Configure<FrostStreamAuthOptions>(builder.Configuration.GetSection(FrostStreamAuthOptions.SectionName));
         builder.Services.Configure<OpenFgaOptions>(builder.Configuration.GetSection(OpenFgaOptions.SectionName));
+        builder.Services.Configure<AuthentikOptions>(builder.Configuration.GetSection(AuthentikOptions.SectionName));
         builder.Services.Configure<BackupOptions>(builder.Configuration.GetSection(BackupOptions.SectionName));
+
+        // Default scheme is a selector: requests carrying a cast token (sessionless cast devices)
+        // authenticate through the CastToken scheme; everything else uses the session scheme for
+        // the current mode (SingleUser or JwtBearer).
+        const string schemeSelector = "FrostStream";
+        var sessionScheme = singleUserMode ? AuthConstants.SingleUserScheme : JwtBearerDefaults.AuthenticationScheme;
+        var authBuilder = builder.Services
+            .AddAuthentication(schemeSelector)
+            .AddPolicyScheme(schemeSelector, "FrostStream scheme selector", options =>
+            {
+                options.ForwardDefaultSelector = context =>
+                    context.Request.Query.ContainsKey(CastTokenDefaults.QueryParameter)
+                        ? CastTokenDefaults.Scheme
+                        : sessionScheme;
+            })
+            .AddScheme<AuthenticationSchemeOptions, CastTokenAuthenticationHandler>(
+                CastTokenDefaults.Scheme,
+                _ => { });
+
+        builder.Services.Configure<CastTokenOptions>(builder.Configuration.GetSection(CastTokenOptions.SectionName));
+        builder.Services.AddSingleton<CastTokenService>();
+        builder.Services.Configure<CastingOptions>(builder.Configuration.GetSection(CastingOptions.SectionName));
+        builder.Services.AddSingleton<CastMediaUrlBuilder>();
+        builder.Services.AddSingleton<ICastProtocol, ChromecastCastProtocol>();
+        builder.Services.AddSingleton<ICastProtocol, FCastCastProtocol>();
+        builder.Services.AddSingleton<ICastDeviceRegistry, CastDeviceRegistry>();
+        builder.Services.AddSingleton<CastSessionManager>();
+        builder.Services.AddScoped<MediaAccessChecker>();
+        builder.Services.AddScoped<AudioRenditionResolver>();
+        builder.Services.AddCors(options => options.AddPolicy(MediaCors.Policy, policy =>
+            policy.AllowAnyOrigin().AllowAnyHeader().WithMethods("GET", "HEAD")));
 
         if (singleUserMode)
         {
-            builder.Services
-                .AddAuthentication(AuthConstants.SingleUserScheme)
+            authBuilder
                 .AddScheme<AuthenticationSchemeOptions, SingleUserAuthenticationHandler>(
                     AuthConstants.SingleUserScheme,
                     _ => { });
             builder.Services.AddSingleton<IFrostStreamAuthorizer, AllowAllAuthorizer>();
             builder.Services.AddSingleton<IOpenFgaTupleWriter, NullOpenFgaTupleWriter>();
             builder.Services.AddSingleton<IBundleManagementService, NullBundleManagementService>();
+            builder.Services.AddSingleton<IDirectoryService, NullDirectoryService>();
         }
         else
         {
@@ -66,8 +100,7 @@ public class Program
                 .Distinct(StringComparer.Ordinal)
                 .ToArray();
 
-            builder.Services
-                .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            authBuilder
                 .AddJwtBearer(options =>
                 {
                     options.Authority = authority;
@@ -99,6 +132,8 @@ public class Program
             builder.Services.AddHostedService<OpenFgaProvisioner>();
             builder.Services.AddHttpClient<OpenFgaBundleManagementService>();
             builder.Services.AddScoped<IBundleManagementService>(sp => sp.GetRequiredService<OpenFgaBundleManagementService>());
+            builder.Services.AddHttpClient<AuthentikDirectoryService>();
+            builder.Services.AddScoped<IDirectoryService>(sp => sp.GetRequiredService<AuthentikDirectoryService>());
         }
 
         builder.Services.AddScoped<IAuthorizationHandler, FrostStreamPermissionHandler>();
@@ -115,8 +150,8 @@ public class Program
         
         builder.Services.AddSingleton<IClock>(NodaTime.SystemClock.Instance);
         builder.Services.AddSingleton<BackupJobService>();
-        builder.Services.AddSingleton<DownloadProgressHub>();
-        builder.Services.AddHostedService<DownloadProgressHub>(p => p.GetRequiredService<DownloadProgressHub>());
+        builder.Services.AddSingleton<DownloadQueueHub>();
+        builder.Services.AddHostedService<DownloadQueueHub>(p => p.GetRequiredService<DownloadQueueHub>());
         builder.Services.AddOpenBaoSecretStore(builder.Configuration);
         builder.Services.AddFrostStreamStorage();
 
@@ -153,6 +188,7 @@ public class Program
         }
 
         app.UseHttpsRedirection();
+        app.UseCors();
         app.UseAuthentication();
         app.UseAuthorization();
         app.MapControllers();

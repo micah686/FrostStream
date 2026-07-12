@@ -568,9 +568,9 @@ public sealed record DownloadFailed : IFlowMessage
 }
 
 /// <summary>
-/// Request to restart a download job that was halted because the provider demanded bot
-/// verification. The DataBridge admin service replays the original request payload with
-/// <see cref="DownloadRequested.ResumeFromHaltedState"/> enabled.
+/// Request to restart a download job from a restartable terminal state. Provider-halted jobs
+/// replay with <see cref="DownloadRequested.ResumeFromHaltedState"/> enabled; cancelled jobs
+/// replay as a fresh run.
 /// </summary>
 public sealed record RestartHaltedDownloadRequest
 {
@@ -626,6 +626,12 @@ public sealed record UploadObjectCommand : IFlowMessage
 
     /// <summary>Hex XxHash128 of the bytes; passed through so the upload event can reaffirm it.</summary>
     public required string ContentHashXxh128 { get; init; }
+
+    /// <summary>
+    /// When true, the worker hashes bytes as the upload stream is read and fails the command
+    /// if the observed hash differs from <see cref="ContentHashXxh128"/>.
+    /// </summary>
+    public bool VerifyHashWhileStreaming { get; init; }
 
     /// <summary>
     /// Which artifact this upload represents. Defaults to <see cref="UploadArtifactKind.Primary"/>

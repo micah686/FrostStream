@@ -106,14 +106,29 @@ public interface IDownloadJobsRepository
 
     Task RecordTerminalFailureAsync(Guid jobId, FailureKind kind, string? code, string message, DownloadJobState terminalState, string? lastPayloadJson, CancellationToken ct = default);
 
-    Task ScheduleProviderHaltRetryAsync(Guid jobId, Instant retryAt, CancellationToken ct = default);
+    // ── Admin queue read surface (read-only; no schema migration) ────────────────────
 
-    Task MarkProviderHaltRetryDispatchedAsync(Guid jobId, CancellationToken ct = default);
+    /// <summary>
+    /// Returns a filtered, paged slice of the full download-job history for the admin queue view.
+    /// Ordering is total and deterministic so paging with the returned opaque cursor is stable.
+    /// </summary>
+    Task<DownloadQueuePage> QueryQueueAsync(DownloadQueueListRequest request, CancellationToken ct = default);
 
-    Task ClearProviderHaltRetryDispatchedAsync(Guid jobId, CancellationToken ct = default);
+    /// <summary>Returns the queue snapshot for a single job, or null when the job does not exist.</summary>
+    Task<DownloadQueueJobDto?> GetQueueJobAsync(Guid jobId, CancellationToken ct = default);
 
-    Task<IReadOnlyList<ProviderHaltRetryCandidate>> GetDueProviderHaltRetriesAsync(Instant now, CancellationToken ct = default);
+    /// <summary>
+    /// Returns the persisted event timeline for a job ordered by recorded time/id, or null when
+    /// the job does not exist (so callers can distinguish 404 from an empty timeline).
+    /// </summary>
+    Task<IReadOnlyList<DownloadQueueHistoryEntryDto>?> GetQueueHistoryAsync(Guid jobId, CancellationToken ct = default);
 }
+
+/// <summary>Result of <see cref="IDownloadJobsRepository.QueryQueueAsync"/>.</summary>
+public sealed record DownloadQueuePage(
+    IReadOnlyList<DownloadQueueJobDto> Items,
+    string? NextCursor,
+    int TotalCount);
 
 /// <summary>
 /// Result of <see cref="IDownloadJobsRepository.CheckSourceVersionAsync"/>.
@@ -175,8 +190,6 @@ public sealed record VersionReservation(
 
 /// <summary>A job waiting for a download slot, as returned by <see cref="IDownloadJobsRepository.GetDownloadQueuedJobsAsync"/>.</summary>
 public sealed record DownloadQueuedEntry(Guid JobId, int Priority, Instant CreatedAt, string? StorageKey);
-
-public sealed record ProviderHaltRetryCandidate(Guid JobId, Instant RetryAt, DownloadSourceKind SourceKind);
 
 public sealed record CancelDownloadDecision(
     bool Accepted,

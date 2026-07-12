@@ -8,7 +8,7 @@ namespace DataBridge.Messaging;
 
 public sealed class LocalImportEventsConsumerService(
     IJetStreamConsumer consumer,
-    LocalMediaImportFlows flows,
+    LocalImportItemFlows itemFlows,
     ILogger<LocalImportEventsConsumerService> logger) : BackgroundService
 {
     private static readonly StreamName ImportStream = StreamName.From(LocalImportTopology.StreamNameValue);
@@ -54,20 +54,20 @@ public sealed class LocalImportEventsConsumerService(
         var evt = context.Message;
         try
         {
-            if (!evt.OperationKey.StartsWith("local-import/", StringComparison.Ordinal))
+            if (!evt.OperationKey.StartsWith("local-import-item/", StringComparison.Ordinal))
             {
                 await context.AckAsync();
                 return;
             }
 
-            await flows.SendMessage(evt.JobId.ToString("N"), evt, idempotencyKey: evt.OperationKey);
+            await itemFlows.SendMessage(evt.JobId.ToString("N"), evt, idempotencyKey: evt.OperationKey);
             await context.AckAsync();
         }
         catch (Exception ex)
         {
             logger.LogError(
                 ex,
-                "Failed handling local import event {EventType} for BatchId {BatchId}; nacking.",
+                "Failed handling local import event {EventType} for ItemId {ItemId}; nacking.",
                 typeof(TEvent).Name,
                 evt.JobId);
             await context.NackAsync();

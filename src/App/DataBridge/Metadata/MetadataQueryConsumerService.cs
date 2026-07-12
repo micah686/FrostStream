@@ -21,10 +21,24 @@ public sealed class MetadataQueryConsumerService(
             queueGroup: MetadataSubjects.ProcessorsQueueGroup,
             cancellationToken: stoppingToken);
 
+        await SubscribeAsync<MetadataRandomRequestMessage>(
+            messageBus,
+            MetadataSubjects.Random,
+            HandleRandomAsync,
+            queueGroup: MetadataSubjects.ProcessorsQueueGroup,
+            cancellationToken: stoppingToken);
+
         await SubscribeAsync<MetadataTechnicalRequestMessage>(
             messageBus,
             MetadataSubjects.GetTechnical,
             HandleTechnicalAsync,
+            queueGroup: MetadataSubjects.ProcessorsQueueGroup,
+            cancellationToken: stoppingToken);
+
+        await SubscribeAsync<MetadataVersionsRequestMessage>(
+            messageBus,
+            MetadataSubjects.Versions,
+            HandleVersionsAsync,
             queueGroup: MetadataSubjects.ProcessorsQueueGroup,
             cancellationToken: stoppingToken);
 
@@ -39,6 +53,13 @@ public sealed class MetadataQueryConsumerService(
             messageBus,
             MetadataSubjects.AccountsGet,
             HandleAccountGetAsync,
+            queueGroup: MetadataSubjects.ProcessorsQueueGroup,
+            cancellationToken: stoppingToken);
+
+        await SubscribeAsync<MetadataAccountAssetsUpdateRequestMessage>(
+            messageBus,
+            MetadataSubjects.AccountsUpdateAssets,
+            HandleAccountAssetsUpdateAsync,
             queueGroup: MetadataSubjects.ProcessorsQueueGroup,
             cancellationToken: stoppingToken);
 
@@ -95,6 +116,32 @@ public sealed class MetadataQueryConsumerService(
         }
     }
 
+    private async Task HandleRandomAsync(IMessageContext<MetadataRandomRequestMessage> context)
+    {
+        try
+        {
+            var mediaGuid = await WithQuery(query => query.GetRandomMediaGuidAsync(context.Message.ExcludeMediaGuid));
+            await context.RespondAsync(mediaGuid is null
+                ? new MetadataRandomResponseMessage
+                {
+                    Success = false,
+                    ErrorCode = "not_found",
+                    ErrorMessage = "No archived media is available to pick from."
+                }
+                : new MetadataRandomResponseMessage { Success = true, MediaGuid = mediaGuid });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed handling random media query.");
+            await context.RespondAsync(new MetadataRandomResponseMessage
+            {
+                Success = false,
+                ErrorCode = "internal_error",
+                ErrorMessage = "Internal metadata service error."
+            });
+        }
+    }
+
     private async Task HandleTechnicalAsync(IMessageContext<MetadataTechnicalRequestMessage> context)
     {
         try
@@ -113,6 +160,30 @@ public sealed class MetadataQueryConsumerService(
         {
             logger.LogError(ex, "Failed handling technical metadata query for {MediaGuid}", context.Message.MediaGuid);
             await context.RespondAsync(new MetadataTechnicalResponseMessage
+            {
+                Success = false,
+                ErrorCode = "internal_error",
+                ErrorMessage = "Internal metadata service error."
+            });
+        }
+    }
+
+    private async Task HandleVersionsAsync(IMessageContext<MetadataVersionsRequestMessage> context)
+    {
+        try
+        {
+            var items = await WithQuery(query => query.ListVersionsAsync(context.Message.MediaGuid));
+            await context.RespondAsync(new MetadataVersionsResponseMessage
+            {
+                Success = true,
+                Items = context.Message.CountOnly ? [] : items,
+                TotalCount = items.Count
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed handling version list query for {MediaGuid}", context.Message.MediaGuid);
+            await context.RespondAsync(new MetadataVersionsResponseMessage
             {
                 Success = false,
                 ErrorCode = "internal_error",
@@ -181,6 +252,39 @@ public sealed class MetadataQueryConsumerService(
         {
             logger.LogError(ex, "Failed handling account get query for {AccountId}", context.Message.AccountId);
             await context.RespondAsync(new MetadataAccountGetResponseMessage
+            {
+                Success = false,
+                ErrorCode = "internal_error",
+                ErrorMessage = "Internal metadata service error."
+            });
+        }
+    }
+
+    private async Task HandleAccountAssetsUpdateAsync(IMessageContext<MetadataAccountAssetsUpdateRequestMessage> context)
+    {
+        var msg = context.Message;
+        try
+        {
+            var updated = await scopeFactory.WithScopedAsync<IMetadataRepository, bool>(
+                repo => repo.UpdateAccountAssetsByIdAsync(
+                    msg.AccountId,
+                    msg.AvatarStoragePath,
+                    msg.BannerStoragePath,
+                    msg.StorageKey));
+
+            await context.RespondAsync(updated
+                ? new MetadataAccountAssetsUpdateResponseMessage { Success = true }
+                : new MetadataAccountAssetsUpdateResponseMessage
+                {
+                    Success = false,
+                    ErrorCode = "not_found",
+                    ErrorMessage = $"Account '{msg.AccountId}' was not found."
+                });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed handling account assets update for {AccountId}", msg.AccountId);
+            await context.RespondAsync(new MetadataAccountAssetsUpdateResponseMessage
             {
                 Success = false,
                 ErrorCode = "internal_error",

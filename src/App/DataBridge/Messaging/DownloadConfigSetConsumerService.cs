@@ -100,12 +100,20 @@ public sealed class DownloadConfigSetConsumerService(
 
     private async Task HandleListAsync(IMessageContext<DownloadConfigSetListRequestMessage> context)
     {
-        var items = await WithRepo(repo => repo.ListAsync(context.Message.OwnerSubject));
-        await context.RespondAsync(new DownloadConfigSetOperationResponseMessage
+        try
         {
-            Success = true,
-            Items = items.Select(Map).ToArray()
-        });
+            var items = await WithRepo(repo => repo.ListAsync(context.Message.OwnerSubject));
+            await context.RespondAsync(new DownloadConfigSetOperationResponseMessage
+            {
+                Success = true,
+                Items = items.Select(Map).ToArray()
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed listing download config sets for {OwnerSubject}.", context.Message.OwnerSubject);
+            await context.RespondAsync(Failure("internal", "Failed to list download config sets."));
+        }
     }
 
     private async Task HandleDeleteAsync(IMessageContext<DownloadConfigSetDeleteRequestMessage> context)

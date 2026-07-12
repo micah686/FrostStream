@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using NodaTime;
 using Shared.Auth;
 using Shared.Database;
+using Shared.Downloads;
 using Shared.Messaging;
 using WebAPI.Auth;
 using WebAPI.Features.Common;
@@ -13,7 +14,7 @@ using WebAPI.Features.CreatorSources.Models;
 namespace WebAPI.Features.CreatorSources.Controllers;
 
 [ApiController]
-[Route("api/creator-sources")]
+[Route("api/creator-monitor")]
 public sealed class CreatorSourcesController(
     IMessageBus messageBus,
     IJetStreamPublisher publisher,
@@ -22,6 +23,7 @@ public sealed class CreatorSourcesController(
 {
     private const string ChannelAssetRefreshTaskType = "channel_asset_refresh";
     private const string ChannelMediaListTaskType = "channel_media_list";
+    private const string ChannelUpdateCheckTaskType = "channel_update_check";
     private const string ManualChannelDownloadScheduleKey = "manual-channel-download";
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);
 
@@ -42,11 +44,12 @@ public sealed class CreatorSourcesController(
             {
                 Platform = request.Platform,
                 SourceType = request.SourceType,
-                SourceUrl = request.SourceUrl,
+                SourceUrl = SourceUrlCanonicalizer.Canonicalize(request.SourceUrl),
                 ScanEnabled = request.ScanEnabled,
                 IncrementalPageSize = request.IncrementalPageSize,
                 ConsecutiveKnownThreshold = request.ConsecutiveKnownThreshold,
                 FullRescanIntervalDays = request.FullRescanIntervalDays,
+                UpdateCheckIntervalHours = request.UpdateCheckIntervalHours,
                 MetadataRefreshWindow = request.MetadataRefreshWindow,
                 ProviderQueryLimits = request.ProviderQueryLimits
             },
@@ -72,7 +75,7 @@ public sealed class CreatorSourcesController(
             {
                 Platform = request.Platform,
                 SourceType = request.SourceType,
-                SourceUrl = request.SourceUrl,
+                SourceUrl = SourceUrlCanonicalizer.Canonicalize(request.SourceUrl),
                 ScanEnabled = true,
                 ProviderQueryLimits = request.ProviderQueryLimits
             },
@@ -175,11 +178,12 @@ public sealed class CreatorSourcesController(
                 Id = id,
                 Platform = request.Platform,
                 SourceType = request.SourceType,
-                SourceUrl = request.SourceUrl,
+                SourceUrl = SourceUrlCanonicalizer.Canonicalize(request.SourceUrl),
                 ScanEnabled = request.ScanEnabled,
                 IncrementalPageSize = request.IncrementalPageSize,
                 ConsecutiveKnownThreshold = request.ConsecutiveKnownThreshold,
                 FullRescanIntervalDays = request.FullRescanIntervalDays,
+                UpdateCheckIntervalHours = request.UpdateCheckIntervalHours,
                 MetadataRefreshWindow = request.MetadataRefreshWindow,
                 ProviderQueryLimits = request.ProviderQueryLimits
             },
@@ -272,6 +276,83 @@ public sealed class CreatorSourcesController(
         return Accepted(new { queued = true, sourceId = id, force });
     }
 
+    [HttpPost("{id:long}/scan")]
+    [Endpoint(EndpointIds.CreatorSourcesScanNow)]
+    [EndpointSummary("Queue an immediate scan of a creator source")]
+    [EndpointDescription("Verifies that the creator source exists, then queues an immediate media scan of just that source without waiting for the global sweep schedule. The mode query parameter selects an incremental update check (default) or a full listing rescan; a successful request returns 202 with the queued source identifier and mode.")]
+    public async Task<IActionResult> ScanNow(
+        long id,
+        [FromQuery] string mode = "incremental",
+        CancellationToken cancellationToken = default)
+    {
+        bool? isFull = mode.ToLowerInvariant() switch
+        {
+            "incremental" => false,
+            "full" => true,
+            _ => null
+        };
+
+        if (isFull is null)
+            return BadRequest("mode must be 'incremental' or 'full'.");
+
+        var getResponse = await SendAsync(
+            CreatorDiscoverySubjects.GetSource,
+            new CreatorSourceGetRequestMessage { Id = id },
+            cancellationToken);
+
+        if (getResponse is null)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to process creator source request.");
+        if (!getResponse.Success)
+            return MapErrorResponse(getResponse);
+        if (getResponse.Entity is null)
+            return NotFound($"Creator source '{id}' was not found.");
+
+        var now = clock.GetCurrentInstant();
+        var idempotencyKey = $"manual-scan:{id}:{Guid.NewGuid():N}";
+        try
+        {
+            if (isFull.Value)
+            {
+                await publisher.PublishAsync(
+                    BackgroundJobSubjects.ChannelMediaListRequest,
+                    new ChannelMediaListRequested
+                    {
+                        ScheduleKey = "manual",
+                        TaskType = ChannelMediaListTaskType,
+                        DueWindowUtc = now,
+                        IdempotencyKey = idempotencyKey,
+                        OccurredAt = now,
+                        TargetSourceId = id
+                    },
+                    messageId: idempotencyKey,
+                    cancellationToken: cancellationToken);
+            }
+            else
+            {
+                await publisher.PublishAsync(
+                    BackgroundJobSubjects.ChannelUpdateCheckRequest,
+                    new ChannelUpdateCheckRequested
+                    {
+                        ScheduleKey = "manual",
+                        TaskType = ChannelUpdateCheckTaskType,
+                        DueWindowUtc = now,
+                        IdempotencyKey = idempotencyKey,
+                        OccurredAt = now,
+                        TargetSourceId = id
+                    },
+                    messageId: idempotencyKey,
+                    cancellationToken: cancellationToken);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed enqueueing manual {Mode} scan for source {SourceId}", mode, id);
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to enqueue channel scan.");
+        }
+
+        return Accepted(new { queued = true, sourceId = id, mode = isFull.Value ? "full" : "incremental" });
+    }
+
     [HttpDelete("{id:long}")]
     [Endpoint(EndpointIds.CreatorSourcesDelete)]
     [EndpointSummary("Delete a creator discovery source")]
@@ -331,6 +412,7 @@ public sealed class CreatorSourcesController(
         }).ToArray());
     }
 
+    [Obsolete("remove this endpoint later")]
     [HttpPost("discovered-media/{id:long}/force-queue")]
     [Endpoint(EndpointIds.CreatorSourcesForceQueueMedia)]
     [EndpointSummary("Force-queue an ignored video")]
@@ -461,6 +543,7 @@ public sealed class CreatorSourcesController(
             IncrementalPageSize = dto.IncrementalPageSize,
             ConsecutiveKnownThreshold = dto.ConsecutiveKnownThreshold,
             FullRescanIntervalDays = dto.FullRescanIntervalDays,
+            UpdateCheckIntervalHours = dto.UpdateCheckIntervalHours,
             MetadataRefreshWindow = dto.MetadataRefreshWindow,
             ProviderQueryLimits = dto.ProviderQueryLimits,
             LastSuccessfulScanAt = dto.LastSuccessfulScanAt,

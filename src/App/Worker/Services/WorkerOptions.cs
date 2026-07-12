@@ -27,10 +27,12 @@ public sealed class WorkerOptions
     public bool AcceptsUntaggedJobs { get; init; } = true;
 
     /// <summary>
-    /// Absolute filesystem roots this worker is allowed to read for v1 local media imports.
-    /// Empty means local imports are rejected by this worker.
+    /// Static filesystem folder this worker discovers local-import content in. The worker creates
+    /// it at startup (with a <c>manifest.json.template</c>) and reads <c>manifest.json</c> plus the
+    /// listed media files from it. Manifest paths are resolved relative to this root.
     /// </summary>
-    public IReadOnlyList<string> AllowedImportRoots { get; init; } = [];
+    public string IncomingRoot { get; init; } =
+        Path.Combine(AppContext.BaseDirectory, Shared.Imports.LocalImportIncoming.FolderName);
 
     /// <summary>Worker-wide yt-dlp <c>--limit-rate</c> value, e.g. <c>500K</c> or <c>4.2M</c>.</summary>
     public string? YtDlpLimitRate { get; init; }
@@ -38,8 +40,22 @@ public sealed class WorkerOptions
     /// <summary>Worker-wide yt-dlp <c>--throttled-rate</c> value, e.g. <c>100K</c>.</summary>
     public string? YtDlpThrottledRate { get; init; }
 
-    /// <summary>Minimum time to wait between yt-dlp process starts on this worker.</summary>
+    /// <summary>
+    /// Minimum time to wait between yt-dlp process starts on this worker. Value is a
+    /// TimeSpan string (e.g. <c>00:00:05</c>, env var <c>Worker__YtDlpMinDelayBetweenStarts</c>),
+    /// not a bare number of seconds. Defaults to 3 seconds when unset; configured values
+    /// below 3 seconds are clamped up to 3 seconds.
+    /// </summary>
     public TimeSpan? YtDlpMinDelayBetweenStarts { get; init; }
+
+    /// <summary>Floor applied to <see cref="YtDlpMinDelayBetweenStarts"/>.</summary>
+    public static readonly TimeSpan YtDlpMinDelayFloor = TimeSpan.FromSeconds(3);
+
+    /// <summary>The delay actually applied between yt-dlp process starts: configured value clamped to at least the 3s floor.</summary>
+    public TimeSpan EffectiveYtDlpMinDelay() =>
+        YtDlpMinDelayBetweenStarts is { } configured && configured > YtDlpMinDelayFloor
+            ? configured
+            : YtDlpMinDelayFloor;
 
     /// <summary>Return YouTube Dislike enrichment settings.</summary>
     public ReturnYouTubeDislikeOptions ReturnYouTubeDislike { get; init; } = new();

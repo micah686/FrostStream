@@ -117,10 +117,10 @@ public sealed record DownloadStateStatisticsDto
 
 public sealed record ChannelStatisticsSummaryDto
 {
-    public long CreatorSourceId { get; init; }
+    public long? CreatorSourceId { get; init; }
     public required string Platform { get; init; }
-    public required string SourceType { get; init; }
-    public required string SourceUrl { get; init; }
+    public string? SourceType { get; init; }
+    public string? SourceUrl { get; init; }
     public long? AccountId { get; init; }
     public string? AccountName { get; init; }
     public string? AccountHandle { get; init; }

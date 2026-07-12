@@ -9,11 +9,12 @@ namespace AppHost;
 public static class StartPotProvider
 {
     public static IResourceBuilder<ContainerResource> Start(
-        IDistributedApplicationBuilder builder,
-        AppHostHardeningOptions hardening)
+        IDistributedApplicationBuilder builder)
     {
         return builder
-            .AddContainer("pot-provider", "brainicism/bgutil-ytdlp-pot-provider", hardening.BgUtilImageTag)
+            //MUST match YtDlpBinaryDownloaderOptions.BgUtilPluginVersion — bgutil requires the
+            // provider server and the yt-dlp plugin to be the same version.
+            .AddContainer("pot-provider", "brainicism/bgutil-ytdlp-pot-provider", "1.3.1")
             .WithHttpEndpoint(port: 4416, targetPort: 4416, name: "http")
             .WithHttpHealthCheck("/ping");
     }

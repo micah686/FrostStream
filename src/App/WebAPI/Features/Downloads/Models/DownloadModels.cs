@@ -3,6 +3,7 @@ using System.ComponentModel.DataAnnotations;
 using Shared.Messaging;
 using WebAPI.Features.Downloads.Controllers;
 using WebAPI.Features.OptionPresets.Controllers;
+using YtDlpSharpLib.Options;
 
 namespace WebAPI.Features.Downloads.Models;
 
@@ -33,6 +34,13 @@ public sealed class DownloadRequest
     public int Priority { get; init; } = 0;
 
     public SponsorBlockRequest? SponsorBlock { get; init; }
+
+    /// <summary>
+    /// Optional yt-dlp options passed through to the worker's yt-dlp invocation (e.g. subtitle,
+    /// thumbnail, or info-json capture). The <see cref="SponsorBlock"/> section, when supplied,
+    /// replaces the SponsorBlock group of these options; worker operational defaults still win.
+    /// </summary>
+    public YtDlpOptions? YtDlpOptions { get; init; }
 
     /// <summary>When true, yt-dlp fetches comments and they are persisted to the database and indexed in Typesense.</summary>
     [DefaultValue(false)]
@@ -148,3 +156,10 @@ public sealed class SponsorBlockRequest
 }
 
 public sealed record DownloadRequestResponse(Guid JobId, Guid CorrelationId);
+
+/// <summary>
+/// Returned by <c>POST /api/downloads/video</c> when the URL was an unambiguous playlist
+/// container and the request was auto-routed into the playlist pipeline. Carries a playlist
+/// identifier instead of a job identifier; <see cref="Kind"/> lets callers discriminate.
+/// </summary>
+public sealed record DownloadRoutedToPlaylistResponse(Guid PlaylistId, Guid CorrelationId, string Kind = "playlist");
