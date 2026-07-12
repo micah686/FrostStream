@@ -48,7 +48,12 @@ public static class StartServices
             .WithEnvironment("PotBroker__ProviderUrl", potProvider.GetEndpoint("http"))
             .WaitFor(openBao)
             .WaitFor(typesense)
-            .WaitFor(potProvider);
+            .WaitFor(potProvider)
+            .PublishAsDockerFile(c => c
+                .WithDockerfile(
+                    Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "DataBridge")),
+                    "Dockerfile")
+                .WithImage("froststream-databridge", "latest"));
 
         // Scheduled backups run in DataBridge, so it needs the same BackupTool wiring as WebAPI.
         return ApplyBackupEnvironment(databridge, builder.AppHostDirectory, sharedStorageRoot, hardening, openBao);
@@ -118,7 +123,12 @@ public static class StartServices
             // LAN-reachable base URL that cast devices use to fetch media. Required for real-device
             // casting under Aspire, whose proxied endpoints bind to localhost.
             .WithEnvironment("Cast__AdvertisedBaseUrl", Environment.GetEnvironmentVariable("CAST_ADVERTISED_BASE_URL") ?? "")
-            .WaitFor(openBao);
+            .WaitFor(openBao)
+            .PublishAsDockerFile(c => c
+                .WithDockerfile(
+                    Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "WebAPI")),
+                    "Dockerfile")
+                .WithImage("froststream-webapi", "latest"));
 
         webapi = ApplyBackupEnvironment(webapi, builder.AppHostDirectory, sharedStorageRoot, hardening, openBao);
 
@@ -173,7 +183,12 @@ public static class StartServices
             // Start the loopback HTTP→NATS POT shim and inject the bgutil extractor-args. The Worker
             // reaches a provider via the pot-brokers queue group over NATS, not a direct container URL.
             .WithEnvironment("PotProvider__Enabled", "true")
-            .WaitFor(openBao);
+            .WaitFor(openBao)
+            .PublishAsDockerFile(c => c
+                .WithDockerfile(
+                    Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "Worker")),
+                    "Dockerfile")
+                .WithImage("froststream-worker", "latest"));
     }
 
     private static void WireScheduler(
@@ -189,7 +204,12 @@ public static class StartServices
             {
                 url.Url = "/quartz";
                 url.DisplayText = "Quartz";
-            });
+            })
+            .PublishAsDockerFile(c => c
+                .WithDockerfile(
+                    Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "Scheduler")),
+                    "Dockerfile")
+                .WithImage("froststream-scheduler", "latest"));
     }
     
     
@@ -211,7 +231,8 @@ public static class StartServices
             .WithEnvironment("VITE_AUTH_MODE", hardening.SingleUserMode ? "single-user" : "multi-user")
             .WithEnvironment("AUTH_CLIENT_ID", authentik.ClientId)
             .WithEnvironment("AUTH_CLIENT_SECRET", authentik.ClientSecret)
-            .WithEnvironment("AUTH_SCOPES", Environment.GetEnvironmentVariable("AUTH_SCOPES") ?? "openid profile email groups offline_access");
+            .WithEnvironment("AUTH_SCOPES", Environment.GetEnvironmentVariable("AUTH_SCOPES") ?? "openid profile email groups offline_access")
+            ;
     
         frontend = frontend.WithAuthAuthority("VITE_AUTH_AUTHORITY", hardening.SingleUserMode, authentik);
         frontend = frontend.WithAuthAuthority("AUTH_AUTHORITY", hardening.SingleUserMode, authentik);
