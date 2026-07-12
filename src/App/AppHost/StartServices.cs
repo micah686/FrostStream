@@ -53,7 +53,8 @@ public static class StartServices
                 .WithDockerfile(
                     Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "DataBridge")),
                     "Dockerfile")
-                .WithImage("froststream-databridge", "latest"));
+                .WithImage("localhost/froststream-databridge", "latest"))
+            .WithLocalComposeBuild("localhost/froststream-databridge:latest", "App/DataBridge/Dockerfile");
 
         // Scheduled backups run in DataBridge, so it needs the same BackupTool wiring as WebAPI.
         return ApplyBackupEnvironment(databridge, builder.AppHostDirectory, sharedStorageRoot, hardening, openBao);
@@ -128,7 +129,8 @@ public static class StartServices
                 .WithDockerfile(
                     Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "WebAPI")),
                     "Dockerfile")
-                .WithImage("froststream-webapi", "latest"));
+                .WithImage("localhost/froststream-webapi", "latest"))
+            .WithLocalComposeBuild("localhost/froststream-webapi:latest", "App/WebAPI/Dockerfile");
 
         webapi = ApplyBackupEnvironment(webapi, builder.AppHostDirectory, sharedStorageRoot, hardening, openBao);
 
@@ -188,7 +190,8 @@ public static class StartServices
                 .WithDockerfile(
                     Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "Worker")),
                     "Dockerfile")
-                .WithImage("froststream-worker", "latest"));
+                .WithImage("localhost/froststream-worker", "latest"))
+            .WithLocalComposeBuild("localhost/froststream-worker:latest", "App/Worker/Dockerfile");
     }
 
     private static void WireScheduler(
@@ -209,7 +212,8 @@ public static class StartServices
                 .WithDockerfile(
                     Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "Scheduler")),
                     "Dockerfile")
-                .WithImage("froststream-scheduler", "latest"));
+                .WithImage("localhost/froststream-scheduler", "latest"))
+            .WithLocalComposeBuild("localhost/froststream-scheduler:latest", "App/Scheduler/Dockerfile");
     }
     
     
@@ -232,7 +236,7 @@ public static class StartServices
             .WithEnvironment("AUTH_CLIENT_ID", authentik.ClientId)
             .WithEnvironment("AUTH_CLIENT_SECRET", authentik.ClientSecret)
             .WithEnvironment("AUTH_SCOPES", Environment.GetEnvironmentVariable("AUTH_SCOPES") ?? "openid profile email groups offline_access")
-            ;
+            .WithLocalComposeBuild("localhost/froststream-frontend:latest", "App/Frontend/Dockerfile");
     
         frontend = frontend.WithAuthAuthority("VITE_AUTH_AUTHORITY", hardening.SingleUserMode, authentik);
         frontend = frontend.WithAuthAuthority("AUTH_AUTHORITY", hardening.SingleUserMode, authentik);
@@ -241,5 +245,25 @@ public static class StartServices
         {
             frontend = frontend.WaitFor(authentikServer);
         }
+    }
+
+    private static IResourceBuilder<TResource> WithLocalComposeBuild<TResource>(
+        this IResourceBuilder<TResource> resource,
+        string image,
+        string dockerfile)
+        where TResource : IComputeResource
+    {
+        return resource.PublishAsDockerComposeService((_, service) =>
+        {
+            service.Image = image;
+            service.PullPolicy = "build";
+            service.Build = new Aspire.Hosting.Docker.Resources.ServiceNodes.Build
+            {
+                // docker-compose.yaml is emitted under src/App/docker-compose-artifacts.
+                // The Dockerfiles expect the repository src/ directory as build context.
+                Context = "../..",
+                Dockerfile = dockerfile
+            };
+        });
     }
 }
