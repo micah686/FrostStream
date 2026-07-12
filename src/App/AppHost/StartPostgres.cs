@@ -6,7 +6,22 @@ public sealed record PostgresResources(
     IResourceBuilder<PostgresServerResource> Server,
     IResourceBuilder<PostgresDatabaseResource> FrostStreamDb,
     IResourceBuilder<PostgresDatabaseResource> AuthentikDb,
-    IResourceBuilder<PostgresDatabaseResource> OpenFgaDb);
+    IResourceBuilder<PostgresDatabaseResource> OpenFgaDb,
+    IResourceBuilder<ContainerResource>? Init);
+
+public static class PostgresInitExtensions
+{
+    /// <summary>
+    /// Waits for the publish-only postgres-init seeding container so the databases created by
+    /// <c>AddDatabase</c> exist before the consumer starts. No-op in run mode, where Aspire
+    /// creates the databases itself.
+    /// </summary>
+    public static IResourceBuilder<T> WaitForDatabases<T>(
+        this IResourceBuilder<T> resource,
+        PostgresResources postgres)
+        where T : IResourceWithWaitSupport
+        => postgres.Init is null ? resource : resource.WaitForCompletion(postgres.Init);
+}
 
 public static class StartPostgres
 {
@@ -51,12 +66,46 @@ public static class StartPostgres
             .WithBindMount(walArchiveDir, "/wal-archive")
             .WithArgs("-c", "config_file=/etc/postgresql/postgresql.conf");
 
+        // In run mode Aspire creates the AddDatabase databases itself, but the published compose
+        // file has no such mechanism: the postgres image only creates the default POSTGRES_USER
+        // database, so authentik/openfga/the app all crash-loop on a fresh volume. Publish a
+        // one-shot seeding container that consumers gate on via WaitForDatabases.
+        IResourceBuilder<ContainerResource>? init = null;
+        if (builder.ExecutionContext.IsPublishMode)
+        {
+            const string seedScript = """
+                set -eu
+                until pg_isready -q; do echo 'postgres-init: waiting for postgres'; sleep 1; done
+                for db in froststreamdb authentikdb openfgadb; do
+                  if [ "$(psql -tAc "SELECT 1 FROM pg_database WHERE datname = '$db'")" = '1' ]; then
+                    echo "postgres-init: database $db already exists"
+                  else
+                    echo "postgres-init: creating database $db"
+                    createdb "$db"
+                  fi
+                done
+                echo 'postgres-init: done'
+                """;
+
+            init = builder
+                .AddContainer("postgres-init", "docker.io/library/postgres", "18.3")
+                .WithEntrypoint("/bin/bash")
+                .WithArgs("-c", seedScript)
+                .WithEnvironment("PGHOST", "postgres")
+                .WithEnvironment("PGPORT", "5432")
+                .WithEnvironment("PGDATABASE", "postgres")
+                .WithEnvironment("PGUSER", user)
+                .WithEnvironment("PGPASSWORD", password)
+                .WaitFor(server);
+        }
+
         return new PostgresResources(
             user,
             password,
             server,
             server.AddDatabase("froststreamdb"),
             server.AddDatabase("authentikdb"),
-            server.AddDatabase("openfgadb"));
+            server.AddDatabase("openfgadb"),
+            init);
     }
 }

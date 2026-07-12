@@ -21,7 +21,8 @@ public static class StartOpenFga
             .WithArgs("migrate")
             .WithEnvironment("OPENFGA_DATASTORE_ENGINE", "postgres")
             .WithEnvironment("OPENFGA_DATASTORE_URI", $"postgres://{postgres.User}:{postgres.Password}@postgres:5432/openfgadb?sslmode=disable")
-            .WaitFor(postgres.OpenFgaDb);
+            .WaitFor(postgres.OpenFgaDb)
+            .WaitForDatabases(postgres);
 
         var server = builder
             .AddContainer("openfga", "openfga/openfga", "v1.18.0")

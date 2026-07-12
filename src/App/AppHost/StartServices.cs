@@ -35,7 +35,7 @@ public static class StartServices
         IResourceBuilder<ContainerResource> potProvider)
     {
         var databridge = builder.AddProject<Projects.DataBridge>("databridge")
-            .WithReference(postgres.FrostStreamDb).WaitFor(postgres.FrostStreamDb)
+            .WithReference(postgres.FrostStreamDb).WaitFor(postgres.FrostStreamDb).WaitForDatabases(postgres)
             .WithReference(nats).WaitFor(nats)
             .WithEnvironment("OpenBao__Address", openBao.GetEndpoint("http"))
             .WithEnvironment("OpenBao__Token", hardening.OpenBaoToken)
@@ -104,7 +104,7 @@ public static class StartServices
             : "http://0.0.0.0:5041";
 
         var webapi = builder.AddProject<Projects.WebAPI>("webapi", launchProfileName: webApiEndpointName)
-            .WithReference(postgres.FrostStreamDb).WaitFor(postgres.FrostStreamDb)
+            .WithReference(postgres.FrostStreamDb).WaitFor(postgres.FrostStreamDb).WaitForDatabases(postgres)
             .WithReference(nats).WaitFor(nats)
             .WithEnvironment("ASPNETCORE_URLS", webApiUrls)
             .WithEnvironment("OpenBao__Address", openBao.GetEndpoint("http"))

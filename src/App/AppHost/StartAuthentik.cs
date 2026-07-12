@@ -86,7 +86,8 @@ public static class StartAuthentik
             .WithEnvironment("AUTHENTIK_CLIENT_SECRET", clientSecret)
             .WithBindMount(blueprintPath, "/blueprints/froststream.yaml", isReadOnly: true)
             .WithHttpHealthCheck(path: "/-/health/ready/")
-            .WaitFor(postgres.AuthentikDb);
+            .WaitFor(postgres.AuthentikDb)
+            .WaitForDatabases(postgres);
 
         if (!string.IsNullOrWhiteSpace(signingKeyName))
         {
@@ -103,7 +104,8 @@ public static class StartAuthentik
             .WithEnvironment("AUTHENTIK_CLIENT_ID", clientId)
             .WithEnvironment("AUTHENTIK_CLIENT_SECRET", clientSecret)
             .WithBindMount(blueprintPath, "/blueprints/froststream.yaml", isReadOnly: true)
-            .WaitFor(postgres.AuthentikDb);
+            .WaitFor(postgres.AuthentikDb)
+            .WaitForDatabases(postgres);
 
         if (!string.IsNullOrWhiteSpace(signingKeyName))
         {
