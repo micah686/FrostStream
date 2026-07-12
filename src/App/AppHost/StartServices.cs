@@ -230,12 +230,16 @@ public static class StartServices
             .WaitFor(webapi)
             .WithEnvironment("VITE_API_BASE_URL", webapi.GetEndpoint(webApiEndpointName))
             .WithEnvironment("API_BASE_URL", webapi.GetEndpoint(webApiEndpointName))
+            .WithEnvironment("ORIGIN", FrontendPublicOrigin())
             .WithEnvironment("SINGLE_USER_MODE", hardening.SingleUserMode ? "true" : "false")
             .WithEnvironment("VITE_SINGLE_USER_MODE", hardening.SingleUserMode ? "true" : "false")
             .WithEnvironment("VITE_AUTH_MODE", hardening.SingleUserMode ? "single-user" : "multi-user")
             .WithEnvironment("AUTH_CLIENT_ID", authentik.ClientId)
             .WithEnvironment("AUTH_CLIENT_SECRET", authentik.ClientSecret)
             .WithEnvironment("AUTH_SCOPES", Environment.GetEnvironmentVariable("AUTH_SCOPES") ?? "openid profile email groups offline_access")
+            .WithEnvironment("AUTH_REDIRECT_URI", $"{FrontendPublicOrigin()}/auth/callback")
+            .WithEnvironment("VITE_AUTH_PUBLIC_AUTHORITY", FrontendPublicAuthAuthority(hardening))
+            .WithEnvironment("AUTH_PUBLIC_AUTHORITY", FrontendPublicAuthAuthority(hardening))
             .WithLocalComposeBuild("localhost/froststream-frontend:latest", "App/Frontend/Dockerfile");
     
         frontend = frontend.WithAuthAuthority("VITE_AUTH_AUTHORITY", hardening.SingleUserMode, authentik);
@@ -246,6 +250,21 @@ public static class StartServices
             frontend = frontend.WaitFor(authentikServer);
         }
     }
+
+    private static string FrontendPublicAuthAuthority(AppHostHardeningOptions hardening)
+    {
+        if (hardening.SingleUserMode)
+        {
+            return "";
+        }
+
+        return Environment.GetEnvironmentVariable("AUTHENTIK_PUBLIC_AUTHORITY")
+               ?? Environment.GetEnvironmentVariable("AUTHENTIK_AUTHORITY")
+               ?? "http://localhost:9000/application/o/froststream/";
+    }
+
+    private static string FrontendPublicOrigin()
+        => (Environment.GetEnvironmentVariable("FRONTEND_PUBLIC_ORIGIN") ?? "http://localhost:8000").TrimEnd('/');
 
     private static IResourceBuilder<TResource> WithLocalComposeBuild<TResource>(
         this IResourceBuilder<TResource> resource,
