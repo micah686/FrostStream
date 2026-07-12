@@ -73,6 +73,25 @@ public static class Helpers
         }
     }
 
+    /// <summary>
+    /// Upgrades the published compose <c>depends_on</c> condition for <paramref name="dependency"/>
+    /// (default emitted by WaitFor is <c>service_started</c>). No effect in run mode.
+    /// </summary>
+    internal static IResourceBuilder<T> WithComposeDependencyCondition<T>(
+        this IResourceBuilder<T> resource,
+        string dependency,
+        string condition)
+        where T : IComputeResource
+    {
+        return resource.PublishAsDockerComposeService((_, service) =>
+        {
+            if (service.DependsOn.TryGetValue(dependency, out var dep))
+            {
+                dep.Condition = condition;
+            }
+        });
+    }
+
     internal static string GetEnv(string variable)
     {
         return Environment.GetEnvironmentVariable(variable) ?? "VALUE_NOT_SET";

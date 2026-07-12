@@ -169,6 +169,7 @@ public static class StartServices
                 .WithEnvironment("OpenFga__Endpoint", openFga.Endpoint)
                 .WithEnvironment("Authentik__ApiUrl", authentikServer.GetEndpoint("http"))
                 .WaitFor(authentikServer)
+                .WithComposeDependencyCondition("authentik", "service_healthy")
                 .WaitFor(openFga.Server);
 
             if (authentik.ApiToken is { } authentikApiToken)
@@ -270,7 +271,9 @@ public static class StartServices
     
         if (!hardening.SingleUserMode && authentik.Server is { } authentikServer)
         {
-            frontend = frontend.WaitFor(authentikServer);
+            frontend = frontend
+                .WaitFor(authentikServer)
+                .WithComposeDependencyCondition("authentik", "service_healthy");
         }
     }
 

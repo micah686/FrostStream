@@ -18,12 +18,10 @@ services:
       - "${NATS_PASSWORD}"
       - "-c"
       - "/etc/nats/nats.conf"
-    ports:
-      - "4222:4222"
-      - "8222:8222"
-      - "9222:9222"
     expose:
       - "4222"
+      - "8222"
+      - "9222"
     volumes:
       - type: "bind"
         target: "/etc/nats/nats.conf"
@@ -179,6 +177,15 @@ services:
         condition: "service_completed_successfully"
     networks:
       - "aspire"
+    healthcheck:
+      test:
+        - "CMD"
+        - "ak"
+        - "healthcheck"
+      interval: "10s"
+      timeout: "30s"
+      retries: 30
+      start_period: "60s"
   authentik-worker:
     image: "ghcr.io/goauthentik/server:2026.5.3"
     command:
@@ -203,6 +210,8 @@ services:
         condition: "service_started"
       postgres-init:
         condition: "service_completed_successfully"
+      authentik:
+        condition: "service_healthy"
     networks:
       - "aspire"
   openfga-migrate:
@@ -376,7 +385,7 @@ services:
       openbao:
         condition: "service_started"
       authentik:
-        condition: "service_started"
+        condition: "service_healthy"
       openfga:
         condition: "service_started"
     networks:
@@ -472,7 +481,7 @@ services:
       webapi:
         condition: "service_started"
       authentik:
-        condition: "service_started"
+        condition: "service_healthy"
     networks:
       - "aspire"
 networks:
