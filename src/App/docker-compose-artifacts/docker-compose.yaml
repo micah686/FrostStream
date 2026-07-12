@@ -296,20 +296,25 @@ services:
       OpenBao__Token: "froststream-dev-root"
       Typesense__Url: "http://typesense:8108"
       Typesense__ApiKey: "froststream-dev-key"
-      FROSTSTREAM_STORAGE_ROOT: "C:\\Users\\Micah\\source\\repos\\micah686\\FrostStream\\data"
+      FROSTSTREAM_STORAGE_ROOT: "/data"
       SINGLE_USER_MODE: "false"
       PotBroker__Enabled: "true"
       PotBroker__ProviderUrl: "http://pot-provider:4416"
-      Backup__Directory: "C:\\Users\\Micah\\source\\repos\\micah686\\FrostStream\\data\\core-backups"
+      Backup__Directory: "/data/core-backups"
       Backup__ToolPath: "dotnet"
       Backup__ToolBaseArguments: "run --project C:\\Users\\Micah\\source\\repos\\micah686\\FrostStream\\src\\App\\BackupTool\\BackupTool.csproj --"
-      Backup__ArchiveDir: "C:\\Users\\Micah\\source\\repos\\micah686\\FrostStream\\data\\wal-archive"
+      Backup__ArchiveDir: "/data/wal-archive"
       Backup__OpenBaoAddress: "http://openbao:8200"
       Backup__OpenBaoToken: "froststream-dev-root"
       Backup__OpenBaoKvMount: "secret"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://aspire-docker-demo-dashboard:18889"
       OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
       OTEL_SERVICE_NAME: "databridge"
+    volumes:
+      - type: "bind"
+        target: "/data"
+        source: "${DATABRIDGE_BINDMOUNT_0}"
+        read_only: false
     depends_on:
       postgres:
         condition: "service_started"
@@ -349,10 +354,9 @@ services:
       NATS_USERNAME: "nats"
       NATS_PASSWORD: "${NATS_PASSWORD}"
       NATS_URI: "nats://nats:${NATS_PASSWORD}@nats:4222"
-      ASPNETCORE_URLS: "http://0.0.0.0:5041"
       OpenBao__Address: "http://openbao:8200"
       OpenBao__Token: "froststream-dev-root"
-      FROSTSTREAM_STORAGE_ROOT: "C:\\Users\\Micah\\source\\repos\\micah686\\FrostStream\\data"
+      FROSTSTREAM_STORAGE_ROOT: "/data"
       SINGLE_USER_MODE: "false"
       Auth__SingleUserMode: "false"
       Auth__AllowSingleUserModeInProduction: "false"
@@ -365,10 +369,10 @@ services:
       OpenFga__AutoProvision: "true"
       OpenFga__BootstrapOwnerSubjects: ""
       Cast__AdvertisedBaseUrl: ""
-      Backup__Directory: "C:\\Users\\Micah\\source\\repos\\micah686\\FrostStream\\data\\core-backups"
+      Backup__Directory: "/data/core-backups"
       Backup__ToolPath: "dotnet"
       Backup__ToolBaseArguments: "run --project C:\\Users\\Micah\\source\\repos\\micah686\\FrostStream\\src\\App\\BackupTool\\BackupTool.csproj --"
-      Backup__ArchiveDir: "C:\\Users\\Micah\\source\\repos\\micah686\\FrostStream\\data\\wal-archive"
+      Backup__ArchiveDir: "/data/wal-archive"
       Backup__OpenBaoAddress: "http://openbao:8200"
       Backup__OpenBaoToken: "froststream-dev-root"
       Backup__OpenBaoKvMount: "secret"
@@ -383,6 +387,11 @@ services:
       - "5041:8080"
     expose:
       - "8080"
+    volumes:
+      - type: "bind"
+        target: "/data"
+        source: "${WEBAPI_BINDMOUNT_0}"
+        read_only: false
     depends_on:
       postgres:
         condition: "service_started"
@@ -414,11 +423,16 @@ services:
       NATS_URI: "nats://nats:${NATS_PASSWORD}@nats:4222"
       OpenBao__Address: "http://openbao:8200"
       OpenBao__Token: "froststream-dev-root"
-      FROSTSTREAM_STORAGE_ROOT: "C:\\Users\\Micah\\source\\repos\\micah686\\FrostStream\\data"
+      FROSTSTREAM_STORAGE_ROOT: "/data"
       PotProvider__Enabled: "true"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://aspire-docker-demo-dashboard:18889"
       OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
       OTEL_SERVICE_NAME: "worker"
+    volumes:
+      - type: "bind"
+        target: "/data"
+        source: "${WORKER_BINDMOUNT_0}"
+        read_only: false
     depends_on:
       nats:
         condition: "service_started"

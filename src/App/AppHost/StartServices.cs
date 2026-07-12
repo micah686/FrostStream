@@ -2,6 +2,11 @@ namespace AppHost;
 
 public static class StartServices
 {
+    // Container-side path the shared storage directory is bind-mounted to in publish mode.
+    // Run mode runs services directly on the host, so they get the host directory instead;
+    // the host path is not absolute inside a Linux container and would fail storage checks.
+    private const string ContainerStorageRoot = "/data";
+
     public static void Wire(
         IDistributedApplicationBuilder builder,
         AppHostHardeningOptions hardening,
@@ -41,7 +46,8 @@ public static class StartServices
             .WithEnvironment("OpenBao__Token", hardening.OpenBaoToken)
             .WithEnvironment("Typesense__Url", typesense.GetEndpoint("http"))
             .WithEnvironment("Typesense__ApiKey", hardening.TypesenseApiKey)
-            .WithEnvironment("FROSTSTREAM_STORAGE_ROOT", sharedStorageRoot)
+            .WithEnvironment(ctx => ctx.EnvironmentVariables["FROSTSTREAM_STORAGE_ROOT"] =
+                ctx.ExecutionContext.IsRunMode ? sharedStorageRoot : ContainerStorageRoot)
             .WithEnvironment("SINGLE_USER_MODE", hardening.SingleUserMode ? "true" : "false")
             // POT broker role: answers Worker pot.request messages from the co-located bgutil provider.
             .WithEnvironment("PotBroker__Enabled", "true")
@@ -53,7 +59,8 @@ public static class StartServices
                 .WithDockerfile(
                     Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "DataBridge")),
                     "Dockerfile")
-                .WithImage("localhost/froststream-databridge", "latest"))
+                .WithImage("localhost/froststream-databridge", "latest")
+                .WithBindMount(sharedStorageRoot, ContainerStorageRoot))
             .WithLocalComposeBuild("localhost/froststream-databridge:latest", "App/DataBridge/Dockerfile");
 
         // Scheduled backups run in DataBridge, so it needs the same BackupTool wiring as WebAPI.
@@ -79,10 +86,16 @@ public static class StartServices
             "BackupTool.csproj"));
 
         return resource
-            .WithEnvironment("Backup__Directory", BackupPaths.BackupRoot(sharedStorageRoot))
+            .WithEnvironment(ctx => ctx.EnvironmentVariables["Backup__Directory"] =
+                ctx.ExecutionContext.IsRunMode
+                    ? BackupPaths.BackupRoot(sharedStorageRoot)
+                    : $"{ContainerStorageRoot}/core-backups")
             .WithEnvironment("Backup__ToolPath", "dotnet")
             .WithEnvironment("Backup__ToolBaseArguments", $"run --project {backupToolProject} --")
-            .WithEnvironment("Backup__ArchiveDir", BackupPaths.WalArchiveDirectory(sharedStorageRoot))
+            .WithEnvironment(ctx => ctx.EnvironmentVariables["Backup__ArchiveDir"] =
+                ctx.ExecutionContext.IsRunMode
+                    ? BackupPaths.WalArchiveDirectory(sharedStorageRoot)
+                    : $"{ContainerStorageRoot}/wal-archive")
             .WithEnvironment("Backup__OpenBaoAddress", openBao.GetEndpoint("http"))
             .WithEnvironment("Backup__OpenBaoToken", hardening.OpenBaoToken)
             .WithEnvironment("Backup__OpenBaoKvMount", "secret");
@@ -106,10 +119,20 @@ public static class StartServices
         var webapi = builder.AddProject<Projects.WebAPI>("webapi", launchProfileName: webApiEndpointName)
             .WithReference(postgres.FrostStreamDb).WaitFor(postgres.FrostStreamDb).WaitForDatabases(postgres)
             .WithReference(nats).WaitFor(nats)
-            .WithEnvironment("ASPNETCORE_URLS", webApiUrls)
+            // Run mode only: in publish mode the container binds via the Dockerfile's
+            // HTTP_PORTS=8080, and ASPNETCORE_URLS would override that to 5041, leaving the
+            // 5041:8080 port mapping and the frontend's http://webapi:8080 pointing at a dead port.
+            .WithEnvironment(ctx =>
+            {
+                if (ctx.ExecutionContext.IsRunMode)
+                {
+                    ctx.EnvironmentVariables["ASPNETCORE_URLS"] = webApiUrls;
+                }
+            })
             .WithEnvironment("OpenBao__Address", openBao.GetEndpoint("http"))
             .WithEnvironment("OpenBao__Token", hardening.OpenBaoToken)
-            .WithEnvironment("FROSTSTREAM_STORAGE_ROOT", sharedStorageRoot)
+            .WithEnvironment(ctx => ctx.EnvironmentVariables["FROSTSTREAM_STORAGE_ROOT"] =
+                ctx.ExecutionContext.IsRunMode ? sharedStorageRoot : ContainerStorageRoot)
             .WithEnvironment("SINGLE_USER_MODE", hardening.SingleUserMode ? "true" : "false")
             .WithEnvironment("Auth__SingleUserMode", hardening.SingleUserMode ? "true" : "false")
             .WithEnvironment("Auth__AllowSingleUserModeInProduction", Environment.GetEnvironmentVariable("AUTH_ALLOW_SINGLE_USER_MODE_IN_PRODUCTION") ?? "false")
@@ -129,7 +152,8 @@ public static class StartServices
                 .WithDockerfile(
                     Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "WebAPI")),
                     "Dockerfile")
-                .WithImage("localhost/froststream-webapi", "latest"))
+                .WithImage("localhost/froststream-webapi", "latest")
+                .WithBindMount(sharedStorageRoot, ContainerStorageRoot))
             .WithLocalComposeBuild("localhost/froststream-webapi:latest", "App/WebAPI/Dockerfile");
 
         webapi = ApplyBackupEnvironment(webapi, builder.AppHostDirectory, sharedStorageRoot, hardening, openBao);
@@ -197,7 +221,8 @@ public static class StartServices
             .WithReference(nats).WaitFor(nats)
             .WithEnvironment("OpenBao__Address", openBao.GetEndpoint("http"))
             .WithEnvironment("OpenBao__Token", hardening.OpenBaoToken)
-            .WithEnvironment("FROSTSTREAM_STORAGE_ROOT", sharedStorageRoot)
+            .WithEnvironment(ctx => ctx.EnvironmentVariables["FROSTSTREAM_STORAGE_ROOT"] =
+                ctx.ExecutionContext.IsRunMode ? sharedStorageRoot : ContainerStorageRoot)
             // Start the loopback HTTP→NATS POT shim and inject the bgutil extractor-args. The Worker
             // reaches a provider via the pot-brokers queue group over NATS, not a direct container URL.
             .WithEnvironment("PotProvider__Enabled", "true")
@@ -206,7 +231,8 @@ public static class StartServices
                 .WithDockerfile(
                     Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "Worker")),
                     "Dockerfile")
-                .WithImage("localhost/froststream-worker", "latest"))
+                .WithImage("localhost/froststream-worker", "latest")
+                .WithBindMount(sharedStorageRoot, ContainerStorageRoot))
             .WithLocalComposeBuild("localhost/froststream-worker:latest", "App/Worker/Dockerfile");
     }
 
