@@ -5,16 +5,17 @@ namespace AppHost;
 public static class StartTypesense
 {
     public static IResourceBuilder<ContainerResource> Start(
-        IDistributedApplicationBuilder builder)
+        IDistributedApplicationBuilder builder,
+        IResourceBuilder<ParameterResource> apiKey)
     {
 
         return builder
             .AddContainer("typesense", "typesense/typesense", "30.2")
             .WithVolume("typesense-data", Helpers.GetEnv("TYPESENSE_DATA_DIR"))
             .WithEnvironment("TYPESENSE_DATA_DIR", Helpers.GetEnv("TYPESENSE_DATA_DIR"))
-            .WithEnvironment("TYPESENSE_API_KEY", Helpers.GetEnv("TYPESENSE_API_KEY"))
+            .WithEnvironment("TYPESENSE_API_KEY", apiKey)
             .WithEnvironment("TYPESENSE_ENABLE_CORS", Helpers.GetEnv("TYPESENSE_ENABLE_CORS"))
-            .WithHttpEndpoint(port: 8108, targetPort: 8108, name: "http")
-            .WithExternalHttpEndpoints();
+            // Internal-only: the compose export keeps this off the host network.
+            .WithHttpEndpoint(port: Ports.Typesense, targetPort: 8108, name: "http");
     }
 }

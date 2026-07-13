@@ -15,7 +15,7 @@ public static class StartPotProvider
             //MUST match YtDlpBinaryDownloaderOptions.BgUtilPluginVersion — bgutil requires the
             // provider server and the yt-dlp plugin to be the same version.
             .AddContainer("pot-provider", "brainicism/bgutil-ytdlp-pot-provider", "1.3.1")
-            .WithHttpEndpoint(port: 4416, targetPort: 4416, name: "http")
+            .WithHttpEndpoint(port: Ports.PotProvider, targetPort: 4416, name: "http")
             .WithHttpHealthCheck("/ping");
     }
 }

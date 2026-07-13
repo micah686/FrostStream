@@ -8,7 +8,7 @@ public sealed class AuthentikOptions
 {
     public const string SectionName = "Authentik";
 
-    /// <summary>Base URL of the Authentik server (e.g. http://localhost:9000).</summary>
+    /// <summary>Base URL of the Authentik server (e.g. http://localhost:25100).</summary>
     public string ApiUrl { get; init; } = "";
 
     /// <summary>Authentik API token used for directory lookups (core/users, core/groups).</summary>

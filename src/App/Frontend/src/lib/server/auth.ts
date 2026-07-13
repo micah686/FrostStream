@@ -46,12 +46,13 @@ export function safeReturnTo(value: string | null | undefined): string | null {
 
 // Config is read through $env/dynamic/private (not process.env) so that a local .env file works
 // when the app runs standalone via `pnpm dev`; real environment variables still take precedence.
+// Single-user mode requires an explicitly truthy SINGLE_USER_MODE; unset means multi-user.
 export function isSingleUserMode(): boolean {
   return isTruthy(env.SINGLE_USER_MODE) || isTruthy(env.VITE_SINGLE_USER_MODE);
 }
 
 export function apiBaseUrl(): string {
-  return env.API_BASE_URL || env.VITE_API_BASE_URL || 'http://localhost:5041';
+  return env.API_BASE_URL || env.VITE_API_BASE_URL || 'http://localhost:25200';
 }
 
 export function authority(): string {

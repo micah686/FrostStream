@@ -60,16 +60,27 @@ public static class StartPostgres
         // WithDbGate requires CommunityToolkit.Aspire.Hosting.DbGate and
         // CommunityToolkit.Aspire.Hosting.PostgreSQL.Extensions at the same version.
         var server = builder.AddPostgres("postgres", user, password)
+            .WithHostPort(Ports.Postgres)
             .WithDataVolume()
-            .WithBindMount(postgresConf, "/etc/postgresql/postgresql.conf", isReadOnly: true)
-            .WithBindMount(walArchiveDir, "/wal-archive")
+            .WithPortableBindMount(postgresConf, "../AppHost/configs/postgres/postgresql.conf", "/etc/postgresql/postgresql.conf", isReadOnly: true)
             .WithArgs("-c", "config_file=/etc/postgresql/postgresql.conf");
+
+        // The WAL archive is shared with BackupTool on the host in run mode; the compose deploy
+        // has no working BackupTool integration yet, so a named volume keeps the export portable.
+        if (builder.ExecutionContext.IsRunMode)
+        {
+            server.WithBindMount(walArchiveDir, "/wal-archive");
+        }
+        else
+        {
+            server.WithVolume("wal-archive", "/wal-archive");
+        }
 
         // The toolkit's DbGate resource never makes it into the compose publish, and its "dbgate"
         // name would collide with the explicit publish-only container below — so run mode only.
         if (builder.ExecutionContext.IsRunMode)
         {
-            server.WithDbGate();
+            server.WithDbGate(dbGate => dbGate.WithHostPort(Ports.DbGate));
         }
 
         // In run mode Aspire creates the AddDatabase databases itself, but the published compose
@@ -79,11 +90,11 @@ public static class StartPostgres
         IResourceBuilder<ContainerResource>? init = null;
         if (builder.ExecutionContext.IsPublishMode)
         {
-            // Publish-only: pin the host port so compose exposes postgres deterministically.
-            // Run mode keeps the auto-assigned host port to avoid clashing with a local postgres.
+            // Pin the published host port so compose exposes postgres deterministically
+            // (WithHostPort above only covers run mode).
             server.WithEndpoint("tcp", endpoint =>
             {
-                endpoint.Port = 5432;
+                endpoint.Port = Ports.Postgres;
                 endpoint.IsExternal = true;
             }, createIfNotExists: false);
 
@@ -105,7 +116,7 @@ public static class StartPostgres
             // toolkit, so publish a plain dbgate container with the same connection wiring.
             builder
                 .AddContainer("dbgate", "docker.io/dbgate/dbgate", "6.1.4")
-                .WithHttpEndpoint(port: 3100, targetPort: 3000, name: "http")
+                .WithHttpEndpoint(port: Ports.DbGate, targetPort: 3000, name: "http")
                 .WithExternalHttpEndpoints()
                 .WithEnvironment("CONNECTIONS", "con1")
                 .WithEnvironment("LABEL_con1", "postgres")

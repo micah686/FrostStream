@@ -62,6 +62,10 @@ public static class StartAuthentik
             Helpers.GetEnv("AUTHENTIK_BOOTSTRAP_PASSWORD"),
             publishValueAsDefault: false,
             secret: true);
+        var bootstrapEmail = builder.AddParameter(
+            "authentik-bootstrap-email",
+            Helpers.GetEnv("AUTHENTIK_BOOTSTRAP_EMAIL"),
+            publishValueAsDefault: false);
         var signingKeyName = Environment.GetEnvironmentVariable("AUTHENTIK_SIGNING_KEY_NAME");
         // Authentik's bootstrap creates an akadmin API token with this exact value on first start.
         // The WebAPI uses it for directory lookups (grantee autocomplete in bundle management).
@@ -76,16 +80,16 @@ public static class StartAuthentik
         var server = builder
             .AddContainer("authentik", "ghcr.io/goauthentik/server", "2026.5.3")
             .WithArgs("server")
-            .WithHttpEndpoint(port: 9000, targetPort: 9000, name: "http")
+            .WithHttpEndpoint(port: Ports.Authentik, targetPort: 9000, name: "http")
             .WithExternalHttpEndpoints()
             .WithEnvironment("AUTHENTIK_SECRET_KEY", secretKey)
             .WithAuthentikPostgresEnv(postgres)
-            .WithEnvironment("AUTHENTIK_BOOTSTRAP_EMAIL", Helpers.GetEnv("AUTHENTIK_BOOTSTRAP_EMAIL"))
+            .WithEnvironment("AUTHENTIK_BOOTSTRAP_EMAIL", bootstrapEmail)
             .WithEnvironment("AUTHENTIK_BOOTSTRAP_PASSWORD", bootstrapPassword)
             .WithEnvironment("AUTHENTIK_BOOTSTRAP_TOKEN", apiToken)
             .WithEnvironment("AUTHENTIK_CLIENT_ID", clientId)
             .WithEnvironment("AUTHENTIK_CLIENT_SECRET", clientSecret)
-            .WithBindMount(blueprintPath, "/blueprints/froststream.yaml", isReadOnly: true)
+            .WithPortableBindMount(blueprintPath, "../AppHost/configs/authentik/blueprints/froststream.yaml", "/blueprints/froststream.yaml", isReadOnly: true)
             .WithHttpHealthCheck(path: "/-/health/ready/")
             .WaitFor(postgres.AuthentikDb)
             .WaitForDatabases(postgres)
@@ -120,7 +124,7 @@ public static class StartAuthentik
             .WithEnvironment("AUTHENTIK_BOOTSTRAP_TOKEN", apiToken)
             .WithEnvironment("AUTHENTIK_CLIENT_ID", clientId)
             .WithEnvironment("AUTHENTIK_CLIENT_SECRET", clientSecret)
-            .WithBindMount(blueprintPath, "/blueprints/froststream.yaml", isReadOnly: true)
+            .WithPortableBindMount(blueprintPath, "../AppHost/configs/authentik/blueprints/froststream.yaml", "/blueprints/froststream.yaml", isReadOnly: true)
             .WaitFor(postgres.AuthentikDb)
             .WaitForDatabases(postgres)
             .WithComposeDependencyCondition("postgres", "service_healthy")

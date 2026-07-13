@@ -16,13 +16,13 @@ public static class StartNats
         var nats = builder
             .AddNats("nats") // logical name "nats"
             //.WithDataVolume("nats-data")    // persist JS data across restarts (uses a Docker volume)
-            .WithBindMount("./configs/nats/nats-server.conf", "/etc/nats/nats.conf", isReadOnly: true)
-            .WithBindMount(websocketCertPath, "/etc/nats/certs/ws-cert.pem", isReadOnly: true)
-            .WithBindMount(websocketKeyPath, "/etc/nats/certs/ws-key.pem", isReadOnly: true)
+            .WithPortableBindMount("./configs/nats/nats-server.conf", "../AppHost/configs/nats/nats-server.conf", "/etc/nats/nats.conf", isReadOnly: true)
+            .WithPortableBindMount(websocketCertPath, "../AppHost/configs/nats/certs/ws-cert.pem", "/etc/nats/certs/ws-cert.pem", isReadOnly: true)
+            .WithPortableBindMount(websocketKeyPath, "../AppHost/configs/nats/certs/ws-key.pem", "/etc/nats/certs/ws-key.pem", isReadOnly: true)
             .WithArgs("-c", "/etc/nats/nats.conf")
-            .WithEndpoint(port: 4222, targetPort: 4222, name: "client")
-            .WithHttpEndpoint(port: 8222, targetPort: 8222, name: "monitor")
-            .WithEndpoint(port: 9222, targetPort: 9222, name: "ws");
+            .WithEndpoint(port: Ports.NatsClient, targetPort: 4222, name: "client")
+            .WithHttpEndpoint(port: Ports.NatsMonitor, targetPort: 8222, name: "monitor")
+            .WithEndpoint(port: Ports.NatsWebSocket, targetPort: 9222, name: "ws");
 
 #if DEBUG
         AddNatsUI(builder, nats);
@@ -33,17 +33,33 @@ public static class StartNats
 
     private static void AddNatsUI(IDistributedApplicationBuilder builder, IResourceBuilder<NatsServerResource> nats)
     {
-        var jwt = Environment.GetEnvironmentVariable("JWT_SECRET") ?? Guid.NewGuid().ToString();
+        // Parameters (not inline strings) so the compose publisher writes them to .env
+        // instead of baking the credentials into docker-compose.yaml.
+        var adminUser = builder.AddParameter(
+            "nats-ui-admin-user",
+            Helpers.GetEnv("NATS_UI_ADMIN_USER"),
+            publishValueAsDefault: false);
+        var adminPass = builder.AddParameter(
+            "nats-ui-admin-pass",
+            Helpers.GetEnv("NATS_UI_ADMIN_PASS"),
+            publishValueAsDefault: false,
+            secret: true);
+        var jwtSecret = builder.AddParameter(
+            "nats-ui-jwt-secret",
+            Environment.GetEnvironmentVariable("NATS_UI_JWT_SECRET") ?? Guid.NewGuid().ToString(),
+            publishValueAsDefault: false,
+            secret: true);
+
         var natsUi = builder
             .AddContainer("nats-ui", "klinux/nats-ui", "0.4.0")
-            .WithHttpEndpoint(port: 8080, targetPort: 8080, name: "http")
+            .WithHttpEndpoint(port: Ports.NatsUi, targetPort: 8080, name: "http")
             .WithExternalHttpEndpoints()
             .WithEnvironment("PORT", "8080")
-            .WithEnvironment("BASE_URL", "http://localhost:8080")
+            .WithEnvironment("BASE_URL", "http://localhost:" + Ports.NatsUi)
             .WithEnvironment("NATS_URL", nats)
-            .WithEnvironment("ADMIN_USER", Helpers.GetEnv("NATS_UI_ADMIN_USER")) //ui login
-            .WithEnvironment("ADMIN_PASS", Helpers.GetEnv("NATS_UI_ADMIN_PASS")) //ui password
-            .WithEnvironment("JWT_SECRET", jwt)
+            .WithEnvironment("ADMIN_USER", adminUser) //ui login
+            .WithEnvironment("ADMIN_PASS", adminPass) //ui password
+            .WithEnvironment("JWT_SECRET", jwtSecret)
             .WithReference(nats);
     }
 }

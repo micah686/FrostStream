@@ -11,7 +11,7 @@ public sealed record PotBrokerOptions
     /// <summary>Whether this host runs a POT broker. Off by default; enable only where a provider is nearby.</summary>
     public bool Enabled { get; init; }
 
-    /// <summary>Base URL of the nearby bgutil provider (e.g. <c>http://localhost:4416</c>).</summary>
+    /// <summary>Base URL of the nearby bgutil provider (e.g. <c>http://localhost:24020</c>).</summary>
     public string? ProviderUrl { get; init; }
 
     /// <summary>How often the broker polls the provider's <c>/ping</c> to decide whether to serve requests.</summary>

@@ -24,7 +24,7 @@ public sealed class BackupOptions : IBackupToolSettings
 
     public string? ArchiveDir { get; init; }
 
-    public string OpenBaoAddress { get; init; } = "http://127.0.0.1:8200";
+    public string OpenBaoAddress { get; init; } = "http://127.0.0.1:25400";
 
     public string? OpenBaoToken { get; init; }
 

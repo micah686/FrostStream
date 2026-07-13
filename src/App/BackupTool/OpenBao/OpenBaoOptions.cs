@@ -7,7 +7,7 @@ internal sealed record OpenBaoOptions(string Address, string? Token, string KvMo
             options.Get("openbao-address")
             ?? Environment.GetEnvironmentVariable("OPENBAO_ADDR")
             ?? Environment.GetEnvironmentVariable("OpenBao__Address")
-            ?? "http://127.0.0.1:8200",
+            ?? "http://127.0.0.1:25400",
             options.Get("openbao-token")
             ?? Environment.GetEnvironmentVariable("OPENBAO_TOKEN")
             ?? Environment.GetEnvironmentVariable("OpenBao__Token"),

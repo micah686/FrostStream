@@ -40,7 +40,7 @@ class Program
             ?? "Host=localhost;Port=5432;Database=froststreamdb;Username=postgres;Password=postgres";
         var natsUrl = builder.Configuration.GetConnectionString("nats")
             ?? builder.Configuration["NATS:Url"]
-            ?? "nats://localhost:4222";
+            ?? "nats://localhost:24040";
         var natsAuth = BuildNatsAuth(builder.Configuration);
 
         builder.Services.AddDbContext<DataBridgeDbContext>(options =>
@@ -264,7 +264,7 @@ class Program
 
         return new Node(
             configuration["Typesense:Host"] ?? "localhost",
-            configuration["Typesense:Port"] ?? "8108",
+            configuration["Typesense:Port"] ?? "24010",
             configuration["Typesense:Protocol"] ?? "http");
     }
 }

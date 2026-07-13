@@ -4,7 +4,7 @@ public sealed class OpenBaoOptions
 {
     public const string SectionName = "OpenBao";
 
-    public string Address { get; set; } = "http://127.0.0.1:8200";
+    public string Address { get; set; } = "http://127.0.0.1:25400";
 
     public string? Token { get; set; }
 
