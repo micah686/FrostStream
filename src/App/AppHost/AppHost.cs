@@ -25,15 +25,29 @@ AppHostHardening.Validate(hardening);
 
 var sharedStorageRoot = ResolveStorageRoot(builder);
 
+// Deployment-specific secrets shared by several services. Declared as parameters (not inline
+// strings) so the compose publisher emits ${...} references backed by .env instead of baking
+// the values into docker-compose.yaml as literals.
+var openBaoToken = builder.AddParameter(
+    "openbao-token",
+    hardening.OpenBaoToken,
+    publishValueAsDefault: false,
+    secret: true);
+var typesenseApiKey = builder.AddParameter(
+    "typesense-api-key",
+    hardening.TypesenseApiKey,
+    publishValueAsDefault: false,
+    secret: true);
+
 var nats      = StartNats.Start(builder);
 var postgres  = StartPostgres.Start(builder, hardening, sharedStorageRoot);
-var openBao   = StartOpenBao.Start(builder);
-var typesense = StartTypesense.Start(builder);
+var openBao   = StartOpenBao.Start(builder, openBaoToken);
+var typesense = StartTypesense.Start(builder, typesenseApiKey);
 var authentik = StartAuthentik.Start(builder, postgres, hardening);
 var openFga   = StartOpenFga.Start(builder, postgres, hardening);
 var potProvider = StartPotProvider.Start(builder);
 
-StartServices.Wire(builder, hardening, sharedStorageRoot, nats, postgres, openBao, typesense, authentik, openFga, potProvider);
+StartServices.Wire(builder, hardening, sharedStorageRoot, nats, postgres, openBao, openBaoToken, typesense, typesenseApiKey, authentik, openFga, potProvider);
 
 builder.Build().Run();
 

@@ -33,7 +33,23 @@ public static class StartNats
 
     private static void AddNatsUI(IDistributedApplicationBuilder builder, IResourceBuilder<NatsServerResource> nats)
     {
-        var jwt = Environment.GetEnvironmentVariable("JWT_SECRET") ?? Guid.NewGuid().ToString();
+        // Parameters (not inline strings) so the compose publisher writes them to .env
+        // instead of baking the credentials into docker-compose.yaml.
+        var adminUser = builder.AddParameter(
+            "nats-ui-admin-user",
+            Helpers.GetEnv("NATS_UI_ADMIN_USER"),
+            publishValueAsDefault: false);
+        var adminPass = builder.AddParameter(
+            "nats-ui-admin-pass",
+            Helpers.GetEnv("NATS_UI_ADMIN_PASS"),
+            publishValueAsDefault: false,
+            secret: true);
+        var jwtSecret = builder.AddParameter(
+            "nats-ui-jwt-secret",
+            Environment.GetEnvironmentVariable("NATS_UI_JWT_SECRET") ?? Guid.NewGuid().ToString(),
+            publishValueAsDefault: false,
+            secret: true);
+
         var natsUi = builder
             .AddContainer("nats-ui", "klinux/nats-ui", "0.4.0")
             .WithHttpEndpoint(port: Ports.NatsUi, targetPort: 8080, name: "http")
@@ -41,9 +57,9 @@ public static class StartNats
             .WithEnvironment("PORT", "8080")
             .WithEnvironment("BASE_URL", "http://localhost:" + Ports.NatsUi)
             .WithEnvironment("NATS_URL", nats)
-            .WithEnvironment("ADMIN_USER", Helpers.GetEnv("NATS_UI_ADMIN_USER")) //ui login
-            .WithEnvironment("ADMIN_PASS", Helpers.GetEnv("NATS_UI_ADMIN_PASS")) //ui password
-            .WithEnvironment("JWT_SECRET", jwt)
+            .WithEnvironment("ADMIN_USER", adminUser) //ui login
+            .WithEnvironment("ADMIN_PASS", adminPass) //ui password
+            .WithEnvironment("JWT_SECRET", jwtSecret)
             .WithReference(nats);
     }
 }

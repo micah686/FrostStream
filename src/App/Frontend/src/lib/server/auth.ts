@@ -46,6 +46,7 @@ export function safeReturnTo(value: string | null | undefined): string | null {
 
 // Config is read through $env/dynamic/private (not process.env) so that a local .env file works
 // when the app runs standalone via `pnpm dev`; real environment variables still take precedence.
+// Single-user mode requires an explicitly truthy SINGLE_USER_MODE; unset means multi-user.
 export function isSingleUserMode(): boolean {
   return isTruthy(env.SINGLE_USER_MODE) || isTruthy(env.VITE_SINGLE_USER_MODE);
 }
