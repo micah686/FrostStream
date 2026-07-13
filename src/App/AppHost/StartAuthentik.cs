@@ -62,6 +62,10 @@ public static class StartAuthentik
             Helpers.GetEnv("AUTHENTIK_BOOTSTRAP_PASSWORD"),
             publishValueAsDefault: false,
             secret: true);
+        var bootstrapEmail = builder.AddParameter(
+            "authentik-bootstrap-email",
+            Helpers.GetEnv("AUTHENTIK_BOOTSTRAP_EMAIL"),
+            publishValueAsDefault: false);
         var signingKeyName = Environment.GetEnvironmentVariable("AUTHENTIK_SIGNING_KEY_NAME");
         // Authentik's bootstrap creates an akadmin API token with this exact value on first start.
         // The WebAPI uses it for directory lookups (grantee autocomplete in bundle management).
@@ -80,7 +84,7 @@ public static class StartAuthentik
             .WithExternalHttpEndpoints()
             .WithEnvironment("AUTHENTIK_SECRET_KEY", secretKey)
             .WithAuthentikPostgresEnv(postgres)
-            .WithEnvironment("AUTHENTIK_BOOTSTRAP_EMAIL", Helpers.GetEnv("AUTHENTIK_BOOTSTRAP_EMAIL"))
+            .WithEnvironment("AUTHENTIK_BOOTSTRAP_EMAIL", bootstrapEmail)
             .WithEnvironment("AUTHENTIK_BOOTSTRAP_PASSWORD", bootstrapPassword)
             .WithEnvironment("AUTHENTIK_BOOTSTRAP_TOKEN", apiToken)
             .WithEnvironment("AUTHENTIK_CLIENT_ID", clientId)
