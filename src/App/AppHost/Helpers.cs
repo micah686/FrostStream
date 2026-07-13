@@ -92,6 +92,37 @@ public static class Helpers
         });
     }
 
+    /// <summary>
+    /// Bind-mounts <paramref name="hostPath"/> in run mode; in publish mode emits a bind volume
+    /// whose source is <paramref name="composeRelativeSource"/>, resolved relative to
+    /// docker-compose.yaml. This keeps the compose export machine-portable — no host-specific
+    /// path warnings and no <c>*_BINDMOUNT_n</c> .env placeholders. Repo-relative sources are
+    /// safe because the artifacts already assume the repo checkout (build contexts point at ../..).
+    /// </summary>
+    internal static IResourceBuilder<T> WithPortableBindMount<T>(
+        this IResourceBuilder<T> resource,
+        string hostPath,
+        string composeRelativeSource,
+        string target,
+        bool isReadOnly = false)
+        where T : ContainerResource
+    {
+        if (resource.ApplicationBuilder.ExecutionContext.IsRunMode)
+        {
+            return resource.WithBindMount(hostPath, target, isReadOnly);
+        }
+
+        return resource.PublishAsDockerComposeService((_, service) =>
+            service.Volumes.Add(new Aspire.Hosting.Docker.Resources.ServiceNodes.Volume
+            {
+                Name = target,
+                Type = "bind",
+                Source = composeRelativeSource,
+                Target = target,
+                ReadOnly = isReadOnly ? true : null,
+            }));
+    }
+
     internal static string GetEnv(string variable)
     {
         return Environment.GetEnvironmentVariable(variable) ?? "VALUE_NOT_SET";

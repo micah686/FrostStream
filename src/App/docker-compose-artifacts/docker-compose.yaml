@@ -25,15 +25,15 @@ services:
     volumes:
       - type: "bind"
         target: "/etc/nats/nats.conf"
-        source: "${NATS_BINDMOUNT_0}"
+        source: "../AppHost/configs/nats/nats-server.conf"
         read_only: true
       - type: "bind"
         target: "/etc/nats/certs/ws-cert.pem"
-        source: "${NATS_BINDMOUNT_1}"
+        source: "../AppHost/configs/nats/certs/ws-cert.pem"
         read_only: true
       - type: "bind"
         target: "/etc/nats/certs/ws-key.pem"
-        source: "${NATS_BINDMOUNT_2}"
+        source: "../AppHost/configs/nats/certs/ws-key.pem"
         read_only: true
     networks:
       - "aspire"
@@ -73,14 +73,14 @@ services:
         target: "/var/lib/postgresql"
         source: "apphost-feed4158f1-postgres-data"
         read_only: false
+      - type: "volume"
+        target: "/wal-archive"
+        source: "wal-archive"
+        read_only: false
       - type: "bind"
         target: "/etc/postgresql/postgresql.conf"
-        source: "${POSTGRES_BINDMOUNT_0}"
+        source: "../AppHost/configs/postgres/postgresql.conf"
         read_only: true
-      - type: "bind"
-        target: "/wal-archive"
-        source: "${POSTGRES_BINDMOUNT_1}"
-        read_only: false
     networks:
       - "aspire"
     healthcheck:
@@ -176,7 +176,7 @@ services:
     volumes:
       - type: "bind"
         target: "/blueprints/froststream.yaml"
-        source: "${AUTHENTIK_BINDMOUNT_0}"
+        source: "../AppHost/configs/authentik/blueprints/froststream.yaml"
         read_only: true
     depends_on:
       postgres:
@@ -211,7 +211,7 @@ services:
     volumes:
       - type: "bind"
         target: "/blueprints/froststream.yaml"
-        source: "${AUTHENTIK_WORKER_BINDMOUNT_0}"
+        source: "../AppHost/configs/authentik/blueprints/froststream.yaml"
         read_only: true
     depends_on:
       postgres:
@@ -311,9 +311,9 @@ services:
       OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
       OTEL_SERVICE_NAME: "databridge"
     volumes:
-      - type: "bind"
+      - type: "volume"
         target: "/data"
-        source: "${DATABRIDGE_BINDMOUNT_0}"
+        source: "froststream-data"
         read_only: false
     depends_on:
       postgres:
@@ -388,9 +388,9 @@ services:
     expose:
       - "8080"
     volumes:
-      - type: "bind"
+      - type: "volume"
         target: "/data"
-        source: "${WEBAPI_BINDMOUNT_0}"
+        source: "froststream-data"
         read_only: false
     depends_on:
       postgres:
@@ -429,9 +429,9 @@ services:
       OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
       OTEL_SERVICE_NAME: "worker"
     volumes:
-      - type: "bind"
+      - type: "volume"
         target: "/data"
-        source: "${WORKER_BINDMOUNT_0}"
+        source: "froststream-data"
         read_only: false
     depends_on:
       nats:
@@ -512,5 +512,9 @@ networks:
 volumes:
   apphost-feed4158f1-postgres-data:
     driver: "local"
+  wal-archive:
+    driver: "local"
   typesense-data:
+    driver: "local"
+  froststream-data:
     driver: "local"

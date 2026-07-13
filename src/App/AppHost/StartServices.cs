@@ -64,7 +64,9 @@ public static class StartServices
                     Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "DataBridge")),
                     "Dockerfile")
                 .WithImage("localhost/froststream-databridge", "latest")
-                .WithBindMount(sharedStorageRoot, ContainerStorageRoot))
+                // Named volume (shared by databridge/webapi/worker) instead of a host bind mount
+                // so the compose export stays machine-portable.
+                .WithVolume("froststream-data", ContainerStorageRoot))
             .WithLocalComposeBuild("localhost/froststream-databridge:latest", "App/DataBridge/Dockerfile");
 
         // Scheduled backups run in DataBridge, so it needs the same BackupTool wiring as WebAPI.
@@ -163,7 +165,9 @@ public static class StartServices
                     Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "WebAPI")),
                     "Dockerfile")
                 .WithImage("localhost/froststream-webapi", "latest")
-                .WithBindMount(sharedStorageRoot, ContainerStorageRoot))
+                // Named volume (shared by databridge/webapi/worker) instead of a host bind mount
+                // so the compose export stays machine-portable.
+                .WithVolume("froststream-data", ContainerStorageRoot))
             .WithLocalComposeBuild("localhost/froststream-webapi:latest", "App/WebAPI/Dockerfile");
 
         webapi = ApplyBackupEnvironment(webapi, builder.AppHostDirectory, sharedStorageRoot, openBao, openBaoToken);
@@ -243,7 +247,9 @@ public static class StartServices
                     Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "Worker")),
                     "Dockerfile")
                 .WithImage("localhost/froststream-worker", "latest")
-                .WithBindMount(sharedStorageRoot, ContainerStorageRoot))
+                // Named volume (shared by databridge/webapi/worker) instead of a host bind mount
+                // so the compose export stays machine-portable.
+                .WithVolume("froststream-data", ContainerStorageRoot))
             .WithLocalComposeBuild("localhost/froststream-worker:latest", "App/Worker/Dockerfile");
     }
 

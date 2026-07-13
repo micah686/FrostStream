@@ -16,9 +16,9 @@ public static class StartNats
         var nats = builder
             .AddNats("nats") // logical name "nats"
             //.WithDataVolume("nats-data")    // persist JS data across restarts (uses a Docker volume)
-            .WithBindMount("./configs/nats/nats-server.conf", "/etc/nats/nats.conf", isReadOnly: true)
-            .WithBindMount(websocketCertPath, "/etc/nats/certs/ws-cert.pem", isReadOnly: true)
-            .WithBindMount(websocketKeyPath, "/etc/nats/certs/ws-key.pem", isReadOnly: true)
+            .WithPortableBindMount("./configs/nats/nats-server.conf", "../AppHost/configs/nats/nats-server.conf", "/etc/nats/nats.conf", isReadOnly: true)
+            .WithPortableBindMount(websocketCertPath, "../AppHost/configs/nats/certs/ws-cert.pem", "/etc/nats/certs/ws-cert.pem", isReadOnly: true)
+            .WithPortableBindMount(websocketKeyPath, "../AppHost/configs/nats/certs/ws-key.pem", "/etc/nats/certs/ws-key.pem", isReadOnly: true)
             .WithArgs("-c", "/etc/nats/nats.conf")
             .WithEndpoint(port: Ports.NatsClient, targetPort: 4222, name: "client")
             .WithHttpEndpoint(port: Ports.NatsMonitor, targetPort: 8222, name: "monitor")

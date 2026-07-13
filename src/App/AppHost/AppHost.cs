@@ -5,7 +5,16 @@ using Microsoft.Extensions.Configuration;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-builder.AddDockerComposeEnvironment("aspire-docker-demo");
+builder.AddDockerComposeEnvironment("aspire-docker-demo")
+    // WithLocalComposeBuild pins literal image names in the yaml, so the publisher's
+    // <SERVICE>_IMAGE placeholders are never referenced — keep them out of .env.
+    .ConfigureEnvFile(env =>
+    {
+        foreach (var key in env.Keys.Where(static k => k.EndsWith("_IMAGE", StringComparison.Ordinal)).ToList())
+        {
+            env.Remove(key);
+        }
+    });
 
 // aspire-development.env is the source of truth for all configurable environment
 // variables (mode flags, image tags, secrets, tunables). Values in the file override

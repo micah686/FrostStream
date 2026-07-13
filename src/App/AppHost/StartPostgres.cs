@@ -62,9 +62,19 @@ public static class StartPostgres
         var server = builder.AddPostgres("postgres", user, password)
             .WithHostPort(Ports.Postgres)
             .WithDataVolume()
-            .WithBindMount(postgresConf, "/etc/postgresql/postgresql.conf", isReadOnly: true)
-            .WithBindMount(walArchiveDir, "/wal-archive")
+            .WithPortableBindMount(postgresConf, "../AppHost/configs/postgres/postgresql.conf", "/etc/postgresql/postgresql.conf", isReadOnly: true)
             .WithArgs("-c", "config_file=/etc/postgresql/postgresql.conf");
+
+        // The WAL archive is shared with BackupTool on the host in run mode; the compose deploy
+        // has no working BackupTool integration yet, so a named volume keeps the export portable.
+        if (builder.ExecutionContext.IsRunMode)
+        {
+            server.WithBindMount(walArchiveDir, "/wal-archive");
+        }
+        else
+        {
+            server.WithVolume("wal-archive", "/wal-archive");
+        }
 
         // The toolkit's DbGate resource never makes it into the compose publish, and its "dbgate"
         // name would collide with the explicit publish-only container below — so run mode only.
