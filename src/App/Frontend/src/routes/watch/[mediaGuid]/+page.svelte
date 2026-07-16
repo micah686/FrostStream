@@ -4,7 +4,6 @@
   import { browser } from '$app/environment';
   import { Button, Spinner } from 'flowbite-svelte';
   import {
-    ArrowsRepeatOutline,
     CheckCircleOutline,
     CheckCircleSolid,
     ChevronDownOutline,
@@ -15,7 +14,6 @@
     HeartOutline,
     HeartSolid,
     SearchOutline,
-    ShuffleOutline,
     ThumbsDownOutline,
     ThumbsUpOutline
   } from 'flowbite-svelte-icons';
@@ -252,25 +250,6 @@
   function toggleShuffle() {
     shuffleEnabled = !shuffleEnabled;
   }
-
-  const playbackModes = $derived([
-    {
-      id: 'repeat',
-      label: 'Repeat',
-      title: 'Repeat — keep replaying this video',
-      icon: ArrowsRepeatOutline,
-      active: repeatEnabled,
-      toggle: toggleRepeat
-    },
-    {
-      id: 'shuffle',
-      label: 'Shuffle',
-      title: 'Shuffle — autoplay picks a random video instead of the next one',
-      icon: ShuffleOutline,
-      active: shuffleEnabled,
-      toggle: toggleShuffle
-    }
-  ]);
 
   $effect(() => {
     if (!moreMenuOpen) {
@@ -837,31 +816,6 @@
             {p.label}
           </button>
         {/each}
-      </div>
-      <div class="flex items-center gap-2">
-        <div
-          class="flex gap-1 rounded-xl border border-slate-800/70 bg-slate-900/40 p-1"
-          role="group"
-          aria-label="Playback modes"
-        >
-          {#each playbackModes as mode (mode.id)}
-            <button
-              type="button"
-              onclick={mode.toggle}
-              aria-pressed={mode.active}
-              aria-label={mode.label}
-              title={mode.title}
-              class={[
-                'grid h-8 w-9 place-items-center rounded-lg transition',
-                mode.active
-                  ? 'bg-blue-500/15 text-blue-400'
-                  : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-300'
-              ]}
-            >
-              <mode.icon class="h-4 w-4" />
-            </button>
-          {/each}
-        </div>
       </div>
     </div>
 
