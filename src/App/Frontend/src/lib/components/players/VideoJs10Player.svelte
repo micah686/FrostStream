@@ -138,7 +138,11 @@
 
 {#if ready}
   <video-player class="block h-full w-full">
-    <video-skin bind:this={skinElement} class="block h-full w-full">
+    <video-skin
+      bind:this={skinElement}
+      class="block h-full w-full"
+      style="--media-border-radius: 1rem; --media-video-border-radius: 1rem;"
+    >
       <!-- svelte-ignore a11y_media_has_caption — tracks are only present when captions were archived -->
       <video
         {src}
