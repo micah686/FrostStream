@@ -7,7 +7,8 @@
     ExclamationCircleOutline,
     ListOutline,
     UsersGroupOutline,
-    VideoCameraOutline
+    VideoCameraOutline,
+    CloseOutline
   } from 'flowbite-svelte-icons';
   import { listOptionPresets, type OptionPreset } from '$lib/api/optionPresets';
   import { listDownloadConfigSets, type DownloadConfigSet } from '$lib/api/downloadConfigSets';
@@ -57,16 +58,10 @@
 
   let optionPresets = $state<OptionPreset[]>([]);
   let optionPresetKey = $state('');
-  let audioOnly = $state(false);
-  let downloadInfoJson = $state(false);
-  let downloadThumbnail = $state(true);
-  let downloadSubtitles = $state(false);
-
-  let sponsorBlockEnabled = $state(false);
-  let sbMarkCategories = $state('');
-  let sbRemoveCategories = $state('');
-  let sbChapterTitleTemplate = $state('');
-  let sbApiUrl = $state('');
+  let audioOnlyOverride = $state<boolean | null>(null);
+  let downloadInfoJsonOverride = $state<boolean | null>(null);
+  let downloadThumbnailOverride = $state<boolean | null>(null);
+  let downloadSubtitlesOverride = $state<boolean | null>(null);
 
   // Playlist form
   let playlistUrl = $state('');
@@ -179,33 +174,39 @@
     return group && typeof group === 'object' && !Array.isArray(group) ? (group as Record<string, unknown>) : {};
   }
 
-  // Reflect the newly selected preset's values in the toggles; the toggles then override
-  // the matching preset values when the download is submitted.
-  function syncTogglesFromPreset() {
-    const options = selectedPreset()?.ytDlpOptions ?? null;
-    audioOnly = optionGroup(options, 'postProcessing').extractAudio === true;
-    downloadInfoJson = optionGroup(options, 'filesystem').writeInfoJson === true;
-    downloadThumbnail = optionGroup(options, 'thumbnail').noWriteThumbnail !== true;
-    downloadSubtitles = optionGroup(options, 'subtitle').writeSubs === true;
-  }
-
   function buildYtDlpOptions(): Record<string, unknown> {
     const base: Record<string, unknown> = structuredClone($state.snapshot(selectedPreset()?.ytDlpOptions ?? {}));
 
-    base.postProcessing = { ...optionGroup(base, 'postProcessing'), extractAudio: audioOnly };
-    base.filesystem = { ...optionGroup(base, 'filesystem'), writeInfoJson: downloadInfoJson };
-    base.thumbnail = {
-      ...optionGroup(base, 'thumbnail'),
-      writeThumbnail: downloadThumbnail,
-      noWriteThumbnail: !downloadThumbnail
-    };
-    base.subtitle = {
-      ...optionGroup(base, 'subtitle'),
-      writeSubs: downloadSubtitles,
-      ...(downloadSubtitles ? { subLangs: 'all' } : {})
-    };
+    if (audioOnlyOverride !== null) {
+      base.postProcessing = { ...optionGroup(base, 'postProcessing'), extractAudio: audioOnlyOverride };
+    }
+
+    if (downloadInfoJsonOverride !== null) {
+      base.filesystem = { ...optionGroup(base, 'filesystem'), writeInfoJson: downloadInfoJsonOverride };
+    }
+
+    if (downloadThumbnailOverride !== null) {
+      base.thumbnail = {
+        ...optionGroup(base, 'thumbnail'),
+        writeThumbnail: downloadThumbnailOverride,
+        noWriteThumbnail: !downloadThumbnailOverride
+      };
+    }
+
+    if (downloadSubtitlesOverride !== null) {
+      base.subtitle = {
+        ...optionGroup(base, 'subtitle'),
+        writeSubs: downloadSubtitlesOverride,
+        noWriteSubs: !downloadSubtitlesOverride,
+        ...(downloadSubtitlesOverride ? { subLangs: 'all,-live_chat' } : {})
+      };
+    }
 
     return base;
+  }
+
+  function overrideStatus(value: boolean | null): string {
+    return value === null ? 'Preset' : value ? 'On' : 'Off';
   }
 
   function parseTags(value: string): string[] {
@@ -236,21 +237,6 @@
       cookieProfileKey: cookieProfileKey || null,
       priority,
       ytDlpOptions: buildYtDlpOptions(),
-      sponsorBlock: sponsorBlockEnabled
-        ? {
-            markCategories: sbMarkCategories.trim() || null,
-            removeCategories: sbRemoveCategories.trim() || null,
-            chapterTitleTemplate: sbChapterTitleTemplate.trim() || null,
-            apiUrl: sbApiUrl.trim() || null,
-            disable: false
-          }
-        : {
-            markCategories: null,
-            removeCategories: null,
-            chapterTitleTemplate: null,
-            apiUrl: null,
-            disable: true
-          },
       fetchComments
     };
 
@@ -498,65 +484,59 @@
                 ...optionPresets.map((preset) => ({ value: preset.key, name: preset.name }))
               ]}
               bind:value={optionPresetKey}
-              onchange={syncTogglesFromPreset}
               class={fieldClass}
             />
             <p class="mt-1.5 text-xs text-slate-600">
-              yt-dlp options from the preset are applied to this download; the toggles below override the matching values.
+              yt-dlp options from the preset are applied to this download. The controls below only override a preset after you change them.
             </p>
           </div>
 
           <div class="mt-4 flex flex-wrap gap-x-8 gap-y-3 border-t border-slate-800/70 pt-4">
-            <Toggle bind:checked={audioOnly} class="text-sm text-slate-300">
-              Audio only
-            </Toggle>
-            <Toggle bind:checked={downloadInfoJson} class="text-sm text-slate-300">
-              Download info JSON
-            </Toggle>
-            <Toggle bind:checked={downloadThumbnail} class="text-sm text-slate-300">
-              Download thumbnail
-            </Toggle>
-            <Toggle bind:checked={downloadSubtitles} class="text-sm text-slate-300">
-              Download subtitles (all)
-            </Toggle>
-          </div>
-        </div>
-
-        <div class="rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
-          <Toggle bind:checked={sponsorBlockEnabled} class="text-sm font-medium text-slate-300">
-            SponsorBlock
-          </Toggle>
-          {#if sponsorBlockEnabled}
-            <div class="mt-4 grid gap-4 sm:grid-cols-2">
-              <div>
-                <Label for="sb-mark" class="mb-2 text-xs font-medium text-slate-400">Mark categories</Label>
-                <Input id="sb-mark" bind:value={sbMarkCategories} placeholder="all,-preview" class={fieldClass} />
-              </div>
-              <div>
-                <Label for="sb-remove" class="mb-2 text-xs font-medium text-slate-400">Remove categories</Label>
-                <Input
-                  id="sb-remove"
-                  bind:value={sbRemoveCategories}
-                  placeholder="sponsor,selfpromo"
-                  class={fieldClass}
-                />
-              </div>
-              <div>
-                <Label for="sb-template" class="mb-2 text-xs font-medium text-slate-400">Chapter title template</Label>
-                <Input id="sb-template" bind:value={sbChapterTitleTemplate} class={fieldClass} />
-              </div>
-              <div>
-                <Label for="sb-api" class="mb-2 text-xs font-medium text-slate-400">API URL</Label>
-                <Input
-                  id="sb-api"
-                  type="url"
-                  bind:value={sbApiUrl}
-                  placeholder="https://sponsor.ajay.app"
-                  class={fieldClass}
-                />
-              </div>
+            <div class="flex items-center gap-2">
+              <Toggle checked={audioOnlyOverride ?? false} onchange={(event) => (audioOnlyOverride = event.currentTarget.checked)} class="text-sm text-slate-300">
+                Audio only
+              </Toggle>
+              <span class="text-xs text-slate-600">{overrideStatus(audioOnlyOverride)}</span>
+              {#if audioOnlyOverride !== null}
+                <button type="button" aria-label="Use preset audio setting" title="Use preset" onclick={() => (audioOnlyOverride = null)} class="rounded p-1 text-slate-500 hover:bg-slate-800 hover:text-slate-300">
+                  <CloseOutline class="h-3.5 w-3.5" />
+                </button>
+              {/if}
             </div>
-          {/if}
+            <div class="flex items-center gap-2">
+              <Toggle checked={downloadInfoJsonOverride ?? false} onchange={(event) => (downloadInfoJsonOverride = event.currentTarget.checked)} class="text-sm text-slate-300">
+                Download info JSON
+              </Toggle>
+              <span class="text-xs text-slate-600">{overrideStatus(downloadInfoJsonOverride)}</span>
+              {#if downloadInfoJsonOverride !== null}
+                <button type="button" aria-label="Use preset info JSON setting" title="Use preset" onclick={() => (downloadInfoJsonOverride = null)} class="rounded p-1 text-slate-500 hover:bg-slate-800 hover:text-slate-300">
+                  <CloseOutline class="h-3.5 w-3.5" />
+                </button>
+              {/if}
+            </div>
+            <div class="flex items-center gap-2">
+              <Toggle checked={downloadThumbnailOverride ?? false} onchange={(event) => (downloadThumbnailOverride = event.currentTarget.checked)} class="text-sm text-slate-300">
+                Download thumbnail
+              </Toggle>
+              <span class="text-xs text-slate-600">{overrideStatus(downloadThumbnailOverride)}</span>
+              {#if downloadThumbnailOverride !== null}
+                <button type="button" aria-label="Use preset thumbnail setting" title="Use preset" onclick={() => (downloadThumbnailOverride = null)} class="rounded p-1 text-slate-500 hover:bg-slate-800 hover:text-slate-300">
+                  <CloseOutline class="h-3.5 w-3.5" />
+                </button>
+              {/if}
+            </div>
+            <div class="flex items-center gap-2">
+              <Toggle checked={downloadSubtitlesOverride ?? false} onchange={(event) => (downloadSubtitlesOverride = event.currentTarget.checked)} class="text-sm text-slate-300">
+                Download subtitles (all)
+              </Toggle>
+              <span class="text-xs text-slate-600">{overrideStatus(downloadSubtitlesOverride)}</span>
+              {#if downloadSubtitlesOverride !== null}
+                <button type="button" aria-label="Use preset subtitles setting" title="Use preset" onclick={() => (downloadSubtitlesOverride = null)} class="rounded p-1 text-slate-500 hover:bg-slate-800 hover:text-slate-300">
+                  <CloseOutline class="h-3.5 w-3.5" />
+                </button>
+              {/if}
+            </div>
+          </div>
         </div>
 
         {@render submitRow('Queue download')}
