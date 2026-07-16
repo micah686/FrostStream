@@ -18,7 +18,6 @@
     ThumbsUpOutline
   } from 'flowbite-svelte-icons';
   import VideoJs10Player, { type TextTrackSource } from '$lib/components/players/VideoJs10Player.svelte';
-  import SveltePlayer from '$lib/components/players/SveltePlayer.svelte';
   import CastDropdown from '$lib/components/players/CastDropdown.svelte';
   import SaveToPlaylistButton from '$lib/components/SaveToPlaylistButton.svelte';
   import PlaylistPanel from '$lib/components/PlaylistPanel.svelte';
@@ -168,13 +167,6 @@
     name: string;
   }
 
-  const players = [
-    { id: 'videojs', label: 'Video.js 10 (beta)' },
-    { id: 'svelte', label: 'Svelte Video Player' }
-  ] as const;
-  type PlayerId = (typeof players)[number]['id'];
-
-  let playerTab = $state<PlayerId>('videojs');
   let detail = $state<Detail | null>(null);
   let loadError = $state<string | null>(null);
   let comments = $state<Comment[]>([]);
@@ -798,27 +790,6 @@
 
 <div class="grid gap-8 xl:grid-cols-[minmax(0,1fr)_360px]">
   <section class="min-w-0" aria-label="Video player">
-    <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-      <div class="flex flex-1 gap-1 rounded-xl border border-slate-800/70 bg-slate-900/40 p-1" role="tablist" aria-label="Player implementation">
-        {#each players as p}
-          <button
-            type="button"
-            role="tab"
-            aria-selected={playerTab === p.id}
-            onclick={() => (playerTab = p.id)}
-            class={[
-              'flex-1 rounded-lg px-4 py-2 text-xs font-semibold transition',
-              playerTab === p.id
-                ? 'bg-blue-500/15 text-blue-400'
-                : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-300'
-            ]}
-          >
-            {p.label}
-          </button>
-        {/each}
-      </div>
-    </div>
-
     {#if loadError}
       <div
         class="flex aspect-video items-center justify-center gap-2 rounded-2xl border border-red-900/60 bg-red-950/30 p-6 text-sm text-red-300"
@@ -842,33 +813,21 @@
             </div>
           </div>
         {:else}
-          {#key `${mediaGuid}:${playerTab}:${selectedVersion}`}
-            {#if playerTab === 'videojs'}
-              <VideoJs10Player
-                src={streamUrl}
-                poster={posterUrl}
-                tracks={captionTracks}
-                startTime={resumeTime}
-                loop={repeatEnabled}
-                autoplay={autoplayEnabled}
-                {repeatEnabled}
-                {shuffleEnabled}
-                onToggleRepeat={toggleRepeat}
-                onToggleShuffle={toggleShuffle}
-                onProgress={handlePlaybackProgress}
-                onEnded={handlePlaybackEnded}
-              />
-            {:else}
-              <SveltePlayer
-                src={streamUrl}
-                poster={posterUrl}
-                startTime={resumeTime}
-                loop={repeatEnabled}
-                autoplay={autoplayEnabled}
-                onProgress={handlePlaybackProgress}
-                onEnded={handlePlaybackEnded}
-              />
-            {/if}
+          {#key `${mediaGuid}:${selectedVersion}`}
+            <VideoJs10Player
+              src={streamUrl}
+              poster={posterUrl}
+              tracks={captionTracks}
+              startTime={resumeTime}
+              loop={repeatEnabled}
+              autoplay={autoplayEnabled}
+              {repeatEnabled}
+              {shuffleEnabled}
+              onToggleRepeat={toggleRepeat}
+              onToggleShuffle={toggleShuffle}
+              onProgress={handlePlaybackProgress}
+              onEnded={handlePlaybackEnded}
+            />
           {/key}
         {/if}
       </div>
