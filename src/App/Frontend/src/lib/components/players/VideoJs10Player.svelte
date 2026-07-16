@@ -4,12 +4,16 @@
     srclang: string;
     label: string;
     kind?: 'subtitles' | 'captions';
+    /** ASS/SSA tracks stay in the native Video.js captions menu but render through JASSUB. */
+    renderer?: 'native' | 'jassub';
+    sourceUrl?: string | null;
   }
 </script>
 
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import { Spinner } from 'flowbite-svelte';
+  import type JASSUB from 'jassub';
 
   let {
     src,
@@ -50,11 +54,19 @@
   let ready = $state(false);
   let startTimeApplied = false;
   let skinElement = $state<HTMLElement | null>(null);
+  let videoElement = $state<HTMLVideoElement | null>(null);
   let repeatButton: HTMLButtonElement | null = null;
   let shuffleButton: HTMLButtonElement | null = null;
+  let assRenderer: JASSUB | null = null;
+  let assRendererTrackUrl: string | null = null;
+  let captionTracksChanged: (() => void) | null = null;
 
   onMount(() => {
     void initializePlayer();
+    return () => {
+      captionTracksChanged?.();
+      void destroyAssRenderer();
+    };
   });
 
   async function initializePlayer() {
@@ -62,7 +74,59 @@
     ready = true;
     await tick();
     addPlaybackModeControls();
+    bindCaptionMenu();
   }
+
+  function bindCaptionMenu() {
+    const video = videoElement;
+    if (!video) return;
+    const onChange = () => void syncAssRenderer();
+    video.textTracks.addEventListener('change', onChange);
+    captionTracksChanged = () => video.textTracks.removeEventListener('change', onChange);
+    void syncAssRenderer();
+  }
+
+  async function destroyAssRenderer() {
+    const renderer = assRenderer;
+    assRenderer = null;
+    assRendererTrackUrl = null;
+    if (renderer) await renderer.destroy();
+  }
+
+  async function syncAssRenderer() {
+    const video = videoElement;
+    if (!video) return;
+
+    const selected = Array.from(video.querySelectorAll<HTMLTrackElement>('track[data-caption-renderer="jassub"]'))
+      .find((track) => track.track.mode === 'showing');
+    const sourceUrl = selected?.src ?? null;
+    if (sourceUrl === assRendererTrackUrl) return;
+
+    await destroyAssRenderer();
+    if (!sourceUrl) return;
+
+    try {
+      const { default: JASSUBRenderer } = await import('jassub');
+      // Keep the browser's selected text track "showing" so Video.js's existing captions menu
+      // continues to display the selected language. JASSUB draws the ASS/SSA source above it.
+      const renderer = new JASSUBRenderer({ video, subUrl: sourceUrl });
+      await renderer.ready;
+      if (!selected || videoElement !== video || selected.track.mode !== 'showing' || selected.src !== sourceUrl) {
+        await renderer.destroy();
+        return;
+      }
+      assRenderer = renderer;
+      assRendererTrackUrl = sourceUrl;
+    } catch {
+      // Unsupported browsers retain the normal captions-menu selection; the renderer simply
+      // remains unavailable instead of interrupting video playback.
+    }
+  }
+
+  $effect(() => {
+    tracks;
+    if (ready) void tick().then(syncAssRenderer);
+  });
 
   function addPlaybackModeControls() {
     const controls = skinElement?.shadowRoot?.querySelector('.media-button-group');
@@ -145,6 +209,7 @@
     >
       <!-- svelte-ignore a11y_media_has_caption — tracks are only present when captions were archived -->
       <video
+        bind:this={videoElement}
         {src}
         poster={poster ?? undefined}
         playsinline
@@ -158,7 +223,13 @@
         onended={() => onEnded?.()}
       >
         {#each tracks as track (track.src)}
-          <track kind={track.kind ?? 'subtitles'} src={track.src} srclang={track.srclang} label={track.label} />
+          <track
+            kind={track.kind ?? 'subtitles'}
+            src={track.renderer === 'jassub' ? (track.sourceUrl ?? track.src) : track.src}
+            srclang={track.srclang}
+            label={track.label}
+            data-caption-renderer={track.renderer ?? 'native'}
+          />
         {/each}
       </video>
     </video-skin>

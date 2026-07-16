@@ -327,7 +327,9 @@
       src: caption.url,
       srclang: caption.languageCode,
       label: captionSummary(caption),
-      kind: caption.captionType === 'automatic_captions' ? 'captions' : 'subtitles'
+      kind: caption.captionType === 'automatic_captions' ? 'captions' : 'subtitles',
+      renderer: caption.renderer,
+      sourceUrl: caption.sourceUrl
     }));
   });
 

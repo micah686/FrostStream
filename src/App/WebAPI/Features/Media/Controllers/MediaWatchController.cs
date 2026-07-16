@@ -359,11 +359,20 @@ public sealed class MediaWatchController(
         if (!response.Success)
             return StatusCode(StatusCodes.Status500InternalServerError, response.ErrorMessage ?? "Caption lookup failed.");
 
-        return Ok(response.Items.Select(caption => new CaptionTrackResponse(
-            caption.LanguageCode,
-            caption.CaptionType,
-            caption.Name,
-            $"/api/media/watch/{mediaGuid:D}/captions/{Uri.EscapeDataString(caption.LanguageCode)}?captionType={Uri.EscapeDataString(caption.CaptionType)}")));
+        return Ok(response.Items.Select(caption =>
+        {
+            var url = $"/api/media/watch/{mediaGuid:D}/captions/{Uri.EscapeDataString(caption.LanguageCode)}?captionType={Uri.EscapeDataString(caption.CaptionType)}";
+            var format = Path.GetExtension(caption.StoragePath).TrimStart('.').ToLowerInvariant();
+            var requiresAssRenderer = format is "ass" or "ssa";
+            return new CaptionTrackResponse(
+                caption.LanguageCode,
+                caption.CaptionType,
+                caption.Name,
+                format,
+                requiresAssRenderer ? "jassub" : "native",
+                url,
+                requiresAssRenderer ? $"{url}&raw=true" : null);
+        }));
     }
 
     [HttpGet("{mediaGuid:guid}/captions/{languageCode}")]
@@ -375,6 +384,7 @@ public sealed class MediaWatchController(
         Guid mediaGuid,
         string languageCode,
         [FromQuery] string? captionType = null,
+        [FromQuery] bool raw = false,
         CancellationToken cancellationToken = default)
     {
         languageCode = languageCode.Trim();
@@ -443,6 +453,25 @@ public sealed class MediaWatchController(
 
         var location = response.Item;
         var extension = Path.GetExtension(location.StoragePath).ToLowerInvariant();
+
+        if (raw)
+        {
+            return await this.ServeBlobAsync(
+                blobStorageProvider,
+                logger,
+                location.StorageKey,
+                location.StoragePath,
+                subject: "caption track",
+                contentType: extension switch
+                {
+                    ".ass" or ".ssa" => "text/x-ssa; charset=utf-8",
+                    ".srt" => "application/x-subrip; charset=utf-8",
+                    _ => null
+                },
+                enableRangeProcessing: false,
+                cacheControl: "private, max-age=86400",
+                cancellationToken: cancellationToken);
+        }
 
         if (extension is ".srt" or ".ass" or ".ssa")
         {
@@ -544,5 +573,12 @@ public sealed class MediaWatchController(
         return $"{hours:00}:{minutes:00}:{seconds:00}.{milliseconds:000}";
     }
 
-    private sealed record CaptionTrackResponse(string LanguageCode, string CaptionType, string? Name, string Url);
+    private sealed record CaptionTrackResponse(
+        string LanguageCode,
+        string CaptionType,
+        string? Name,
+        string Format,
+        string Renderer,
+        string Url,
+        string? SourceUrl);
 }
