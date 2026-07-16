@@ -178,6 +178,10 @@ services:
         target: "/blueprints/froststream.yaml"
         source: "../AppHost/configs/authentik/blueprints/froststream.yaml"
         read_only: true
+      - type: "bind"
+        target: "/web/dist/assets/icons/froststream.svg"
+        source: "../Frontend/static/favicon.svg"
+        read_only: true
     depends_on:
       postgres:
         condition: "service_healthy"
