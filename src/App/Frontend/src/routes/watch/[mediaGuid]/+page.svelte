@@ -2,7 +2,7 @@
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
   import { browser } from '$app/environment';
-  import { Button, Select, Spinner } from 'flowbite-svelte';
+  import { Button, Spinner } from 'flowbite-svelte';
   import {
     ArrowsRepeatOutline,
     CheckCircleOutline,
@@ -12,11 +12,9 @@
     DotsHorizontalOutline,
     EditOutline,
     ExclamationCircleOutline,
-    ForwardStepOutline,
     HeartOutline,
     HeartSolid,
     SearchOutline,
-    ShareNodesOutline,
     ShuffleOutline,
     ThumbsDownOutline,
     ThumbsUpOutline
@@ -207,6 +205,8 @@
   let moreMenuOpen = $state(false);
   let noteMenuOpen = $state(false);
   let moreMenuContainer = $state<HTMLDivElement | null>(null);
+  let versionMenuOpen = $state(false);
+  let versionMenuContainer = $state<HTMLDivElement | null>(null);
   let selectedVersion = $state('');
   let mediaVersionOptions = $state<MediaVersionOption[]>([{ value: '', name: 'Latest version' }]);
   let versionsLoading = $state(false);
@@ -246,14 +246,6 @@
   });
 
   const playbackModes = $derived([
-    {
-      id: 'autoplay',
-      label: 'Autoplay',
-      title: 'Autoplay — play the next video when this one ends',
-      icon: ForwardStepOutline,
-      active: autoplayEnabled,
-      toggle: () => (autoplayEnabled = !autoplayEnabled)
-    },
     {
       id: 'repeat',
       label: 'Repeat',
@@ -295,6 +287,28 @@
     };
   });
 
+  $effect(() => {
+    if (!versionMenuOpen) {
+      return;
+    }
+    const onPointerDown = (event: PointerEvent) => {
+      if (versionMenuContainer && event.target instanceof Node && !versionMenuContainer.contains(event.target)) {
+        versionMenuOpen = false;
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        versionMenuOpen = false;
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  });
+
   const mediaGuid = $derived(page.params.mediaGuid ?? '');
   // Playlist context: ?ulist= plays through a user playlist, ?list= through a
   // platform (downloaded provider) playlist. Only one panel is shown; ulist wins.
@@ -304,6 +318,9 @@
     const query = selectedVersion ? `?version=${encodeURIComponent(selectedVersion)}` : '';
     return `/api/media/watch/${mediaGuid}${query}`;
   });
+  const selectedVersionLabel = $derived(
+    mediaVersionOptions.find((option) => option.value === selectedVersion)?.name ?? 'Latest version'
+  );
   const watched = $derived(watchState?.completed === true);
   const liked = $derived(likeState?.liked === true);
   // ?t= wins over the saved position; positions within the first 5s or last 5% are
@@ -837,19 +854,6 @@
             </button>
           {/each}
         </div>
-        {#if versionsLoading}
-          <span class="flex items-center gap-2 rounded-xl border border-slate-800/70 bg-slate-900/40 px-3 py-2 text-xs text-slate-500">
-            <Spinner size="4" />
-            Versions
-          </span>
-        {:else}
-          <Select
-            items={mediaVersionOptions}
-            bind:value={selectedVersion}
-            aria-label="Media version"
-            class="w-full border-slate-800! bg-slate-900/80! text-sm! text-slate-300! focus:border-blue-500! focus:ring-blue-500! sm:w-44!"
-          />
-        {/if}
       </div>
     </div>
 
@@ -990,13 +994,63 @@
             captionLanguages={detail.captionLanguages}
             position={livePosition}
           />
-          <Button
-            color="dark"
-            class="border-slate-800! bg-slate-900/70! px-4! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800!"
-          >
-            <ShareNodesOutline class="mr-1.5 h-4 w-4" />
-            Share
-          </Button>
+          <div class="relative" bind:this={versionMenuContainer}>
+            <button
+              type="button"
+              onclick={() => (versionMenuOpen = !versionMenuOpen)}
+              aria-haspopup="menu"
+              aria-expanded={versionMenuOpen}
+              disabled={versionsLoading}
+              class={[
+                'flex items-center gap-1.5 rounded-lg border px-4 py-2 text-xs font-semibold transition disabled:cursor-wait disabled:opacity-60',
+                versionMenuOpen
+                  ? 'border-blue-900/60 bg-blue-950/40 text-blue-300 hover:bg-blue-950/60'
+                  : 'border-slate-800 bg-slate-900/70 text-slate-300 hover:bg-slate-800'
+              ]}
+            >
+              {#if versionsLoading}
+                <Spinner size="4" />
+                Versions
+              {:else}
+                Version
+                <span class="max-w-24 truncate text-slate-500">{selectedVersionLabel}</span>
+                <ChevronDownOutline class="h-3.5 w-3.5" />
+              {/if}
+            </button>
+
+            {#if versionMenuOpen}
+              <div
+                class="absolute right-0 z-30 mt-2 w-64 rounded-xl border border-slate-800 bg-slate-950/95 p-2 shadow-2xl shadow-black/50 backdrop-blur"
+                role="menu"
+                aria-label="Select media version"
+              >
+                <div class="space-y-1">
+                  {#each mediaVersionOptions as option (option.value)}
+                    <button
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={selectedVersion === option.value}
+                      onclick={() => {
+                        selectedVersion = option.value;
+                        versionMenuOpen = false;
+                      }}
+                      class={[
+                        'flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition',
+                        selectedVersion === option.value
+                          ? 'bg-blue-500/15 text-blue-300'
+                          : 'text-slate-200 hover:bg-slate-800/70'
+                      ]}
+                    >
+                      <span class="truncate">{option.name}</span>
+                      {#if selectedVersion === option.value}
+                        <CheckCircleSolid class="h-4 w-4 shrink-0 text-blue-400" />
+                      {/if}
+                    </button>
+                  {/each}
+                </div>
+              </div>
+            {/if}
+          </div>
           <SaveToPlaylistButton {mediaGuid} />
           <div class="relative" bind:this={moreMenuContainer}>
             <button
@@ -1360,6 +1414,30 @@
         {/key}
       </div>
     {/if}
+
+    <div class="mb-5 flex items-center justify-between gap-3 rounded-xl border border-slate-800/80 bg-slate-900/40 px-4 py-3">
+      <span class="text-sm font-semibold text-slate-300">Autoplay</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={autoplayEnabled}
+        title="Autoplay - play the next video when this one ends"
+        onclick={() => (autoplayEnabled = !autoplayEnabled)}
+        class={[
+          'relative h-6 w-11 rounded-full border transition',
+          autoplayEnabled
+            ? 'border-blue-500/50 bg-blue-500/80'
+            : 'border-slate-700 bg-slate-950/80 hover:border-slate-600'
+        ]}
+      >
+        <span
+          class={[
+            'absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-white shadow-sm transition',
+            autoplayEnabled ? 'left-6' : 'left-1'
+          ]}
+        ></span>
+      </button>
+    </div>
 
     <h2 class="text-sm font-bold uppercase tracking-[0.08em] text-slate-500">Up next</h2>
     <ul class="mt-4 space-y-4">
