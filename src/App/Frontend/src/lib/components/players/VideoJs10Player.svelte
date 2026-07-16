@@ -109,7 +109,12 @@
       const { default: JASSUBRenderer } = await import('jassub');
       // Keep the browser's selected text track "showing" so Video.js's existing captions menu
       // continues to display the selected language. JASSUB draws the ASS/SSA source above it.
-      const renderer = new JASSUBRenderer({ video, subUrl: sourceUrl });
+      const renderer = new JASSUBRenderer({
+        video,
+        subUrl: sourceUrl,
+        // Fetch a missing subtitle font from Google Fonts when it is not embedded or installed.
+        queryFonts: 'localandremote'
+      });
       await renderer.ready;
       if (!selected || videoElement !== video || selected.track.mode !== 'showing' || selected.src !== sourceUrl) {
         await renderer.destroy();
