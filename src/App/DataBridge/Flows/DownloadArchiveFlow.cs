@@ -712,8 +712,7 @@ public class DownloadArchiveFlow(
                 // default to "subtitles".
                 CaptionType = "subtitles",
                 LanguageCode = string.IsNullOrWhiteSpace(caption.LanguageCode) ? "und" : caption.LanguageCode!,
-                Name = null,
-                TextContent = caption.ParsedText
+                Name = null
             });
         }
 

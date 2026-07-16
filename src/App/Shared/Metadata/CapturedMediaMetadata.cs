@@ -110,9 +110,6 @@ public sealed record CapturedCaptionMetadata
     public required string CaptionType { get; init; }
     public required string LanguageCode { get; init; }
     public string? Name { get; init; }
-    /// <summary>Plain text extracted from the subtitle file. Null when the format is unsupported or
-    /// parsing was skipped (e.g. local imports where the file is already in storage).</summary>
-    public string? TextContent { get; init; }
 }
 
 public sealed record CapturedCommentMetadata

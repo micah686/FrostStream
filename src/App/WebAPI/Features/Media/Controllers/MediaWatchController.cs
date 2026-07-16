@@ -1,4 +1,6 @@
 using Conduit.NATS;
+using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using Shared.Messaging;
@@ -401,20 +403,21 @@ public sealed class MediaWatchController(
         var location = response.Item;
         var extension = Path.GetExtension(location.StoragePath).ToLowerInvariant();
 
-        if (extension == ".srt")
+        if (extension is ".srt" or ".ass" or ".ssa")
         {
-            var srt = await MediaBlobServing.ReadBlobTextAsync(
+            var captionText = await MediaBlobServing.ReadBlobTextAsync(
                 blobStorageProvider,
                 location.StorageKey,
                 location.StoragePath,
                 cancellationToken);
-            if (srt is null)
+            if (captionText is null)
             {
                 return NotFound("The selected caption track is missing from storage.");
             }
 
             Response.Headers.CacheControl = "private, max-age=86400";
-            return Content(ConvertSrtToWebVtt(srt), "text/vtt; charset=utf-8");
+            var vtt = extension == ".srt" ? ConvertSrtToWebVtt(captionText) : ConvertAssToWebVtt(captionText);
+            return Content(vtt, "text/vtt; charset=utf-8");
         }
 
         return await this.ServeBlobAsync(
@@ -446,5 +449,57 @@ public sealed class MediaWatchController(
         }
 
         return "WEBVTT\n\n" + string.Join('\n', lines);
+    }
+
+    /// <summary>Converts ASS/SSA dialogue cues to the browser-native WebVTT format. Styling is
+    /// intentionally discarded; the durable source file remains unchanged.</summary>
+    private static string ConvertAssToWebVtt(string ass)
+    {
+        var output = new StringBuilder("WEBVTT\n\n");
+        foreach (var rawLine in ass.TrimStart('\uFEFF').Replace("\r\n", "\n").Split('\n'))
+        {
+            if (!rawLine.StartsWith("Dialogue:", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var parts = rawLine["Dialogue:".Length..].Split(',', 10);
+            if (parts.Length != 10)
+                continue;
+
+            var start = ConvertAssTimestamp(parts[1]);
+            var end = ConvertAssTimestamp(parts[2]);
+            if (start is null || end is null)
+                continue;
+
+            var text = Regex.Replace(parts[9], @"\{[^}]*\}", string.Empty)
+                .Replace("\\N", "\n", StringComparison.Ordinal)
+                .Replace("\\n", "\n", StringComparison.Ordinal)
+                .Trim();
+            if (text.Length == 0)
+                continue;
+
+            output.Append(start).Append(" --> ").Append(end).Append('\n')
+                .Append(text).Append("\n\n");
+        }
+
+        return output.ToString();
+    }
+
+    private static string? ConvertAssTimestamp(string value)
+    {
+        var parts = value.Trim().Split(':');
+        if (parts.Length != 3 || !int.TryParse(parts[0], out var hours) ||
+            !int.TryParse(parts[1], out var minutes))
+            return null;
+
+        var secondsParts = parts[2].Split('.', 2);
+        if (!int.TryParse(secondsParts[0], out var seconds))
+            return null;
+
+        var centiseconds = 0;
+        if (secondsParts.Length == 2 && !int.TryParse(secondsParts[1], out centiseconds))
+            return null;
+
+        var milliseconds = centiseconds * 10;
+        return $"{hours:00}:{minutes:00}:{seconds:00}.{milliseconds:000}";
     }
 }

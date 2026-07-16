@@ -484,9 +484,6 @@ public sealed record SidecarFileRef
     /// <summary>Language code for caption sidecars (e.g. "en", "en-US"); null for thumbnails.</summary>
     public string? LanguageCode { get; init; }
 
-    /// <summary>Plain text extracted from the subtitle file at download time. Null for thumbnails or
-    /// unsupported formats. Stored in the DB and indexed in Typesense for full-text search.</summary>
-    public string? ParsedText { get; init; }
 }
 
 /// <summary>

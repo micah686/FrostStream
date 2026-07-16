@@ -86,6 +86,7 @@ class Program
         builder.Services.AddNatsTopologySource<BackgroundJobsTopology>();
         builder.Services.AddNatsTopologySource<LocalImportTopology>();
         builder.Services.AddOpenBaoSecretStore(builder.Configuration);
+        builder.Services.AddFrostStreamStorage();
 
         // Isolate Cleipnir's runtime tables in their own Postgres schema. Cleipnir's
         // PostgresSql store only exposes `tablePrefix`, not a schema option, so we route
@@ -150,6 +151,7 @@ class Program
         });
         builder.Services.AddSingleton<ITypesenseIndexService, TypesenseIndexService>();
         builder.Services.AddSingleton<IMediaDocumentQuery, MediaDocumentQuery>();
+        builder.Services.AddSingleton<CaptionDocumentHydrator>();
         builder.Services.AddSingleton<IMetadataRebuildCoordinator, MetadataRebuildCoordinator>();
 
         builder.Services.AddHostedService<TypesenseStartupService>();

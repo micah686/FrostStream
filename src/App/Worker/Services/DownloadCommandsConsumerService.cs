@@ -1161,8 +1161,7 @@ public sealed class DownloadCommandsConsumerService(
                     FileName = fileName,
                     SizeBytes = file.Length,
                     ContentHashXxh128 = await ComputeXxHash128Async(path),
-                    LanguageCode = ParseCaptionLanguage(fileName),
-                    ParsedText = SubtitleTextExtractor.ExtractText(path)
+                    LanguageCode = ParseCaptionLanguage(fileName)
                 });
             }
         }
