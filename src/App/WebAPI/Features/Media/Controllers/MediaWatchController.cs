@@ -325,6 +325,47 @@ public sealed class MediaWatchController(
             cancellationToken: cancellationToken);
     }
 
+    [HttpGet("{mediaGuid:guid}/captions")]
+    [EnableCors(MediaCors.Policy)]
+    [Endpoint(EndpointIds.MediaCaptions)]
+    [EndpointSummary("List archived caption tracks")]
+    [EndpointDescription("Lists caption tracks with durable sidecar files for a media item. This endpoint is watch-authorized and reads the caption locations from PostgreSQL, not Typesense.")]
+    public async Task<IActionResult> ListCaptions(Guid mediaGuid, CancellationToken cancellationToken = default)
+    {
+        if (await accessChecker.CheckWatchAccessAsync(User, mediaGuid, cancellationToken) is { } denied)
+            return denied;
+
+        MediaCaptionsListResponseMessage? response;
+        try
+        {
+            response = await messageBus.RequestAsync<MediaCaptionsListRequestMessage, MediaCaptionsListResponseMessage>(
+                MediaStreamSubjects.ListCaptions,
+                new MediaCaptionsListRequestMessage { MediaGuid = mediaGuid },
+                QueryTimeout,
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed listing captions for {MediaGuid}.", mediaGuid);
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable.");
+        }
+
+        if (response is null)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable.");
+        if (!response.Success)
+            return StatusCode(StatusCodes.Status500InternalServerError, response.ErrorMessage ?? "Caption lookup failed.");
+
+        return Ok(response.Items.Select(caption => new CaptionTrackResponse(
+            caption.LanguageCode,
+            caption.CaptionType,
+            caption.Name,
+            $"/api/media/watch/{mediaGuid:D}/captions/{Uri.EscapeDataString(caption.LanguageCode)}?captionType={Uri.EscapeDataString(caption.CaptionType)}")));
+    }
+
     [HttpGet("{mediaGuid:guid}/captions/{languageCode}")]
     [EnableCors(MediaCors.Policy)]
     [Endpoint(EndpointIds.MediaCaption)]
@@ -502,4 +543,6 @@ public sealed class MediaWatchController(
         var milliseconds = centiseconds * 10;
         return $"{hours:00}:{minutes:00}:{seconds:00}.{milliseconds:000}";
     }
+
+    private sealed record CaptionTrackResponse(string LanguageCode, string CaptionType, string? Name, string Url);
 }

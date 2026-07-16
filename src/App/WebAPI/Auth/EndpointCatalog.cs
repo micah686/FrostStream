@@ -183,6 +183,7 @@ public static class EndpointIds
     public const string MediaStream = "media.stream";
     public const string MediaThumbnail = "media.thumbnail";
     public const string MediaCaption = "media.caption";
+    public const string MediaCaptions = "media.captions";
     public const string MediaAccountAsset = "media.account-asset";
     public const string MediaCastToken = "media.cast-token";
     public const string MediaHlsManifest = "media.hls-manifest";
@@ -397,6 +398,7 @@ public static class EndpointCatalog
         new(EndpointIds.MediaStream, Bundles.Media),
         new(EndpointIds.MediaThumbnail, Bundles.Media),
         new(EndpointIds.MediaCaption, Bundles.Media),
+        new(EndpointIds.MediaCaptions, Bundles.Media),
         new(EndpointIds.MediaAccountAsset, Bundles.Media),
         new(EndpointIds.MediaCastToken, Bundles.Media),
         new(EndpointIds.MediaHlsManifest, Bundles.Media),

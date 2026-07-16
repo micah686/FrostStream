@@ -6,6 +6,36 @@ namespace DataBridge.MediaStream;
 
 public sealed class MediaCaptionReadService(NpgsqlDataSource dataSource) : IMediaCaptionReadService
 {
+    public async Task<IReadOnlyList<MediaCaptionLocationDto>> ListAsync(
+        Guid mediaGuid,
+        CancellationToken cancellationToken = default)
+    {
+        await using var command = dataSource.CreateCommand("""
+            SELECT media_guid, storage_key, storage_path, two_digit_language_code, caption_type::text AS caption_type, name
+            FROM metadata.media_captions
+            WHERE media_guid = @media_guid AND storage_key IS NOT NULL
+            ORDER BY two_digit_language_code, CASE WHEN caption_type::text = 'subtitles' THEN 0 ELSE 1 END, id
+            """);
+        command.Parameters.AddWithValue("@media_guid", mediaGuid);
+
+        var items = new List<MediaCaptionLocationDto>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            items.Add(new MediaCaptionLocationDto
+            {
+                MediaGuid = GetGuid(reader, "media_guid"),
+                StorageKey = GetString(reader, "storage_key"),
+                StoragePath = GetString(reader, "storage_path"),
+                LanguageCode = GetString(reader, "two_digit_language_code"),
+                CaptionType = GetString(reader, "caption_type"),
+                Name = GetNullableString(reader, "name")
+            });
+        }
+
+        return items;
+    }
+
     public async Task<MediaCaptionLocationDto?> ResolveAsync(
         Guid mediaGuid,
         string languageCode,
@@ -19,7 +49,8 @@ public sealed class MediaCaptionReadService(NpgsqlDataSource dataSource) : IMedi
                 storage_key,
                 storage_path,
                 two_digit_language_code,
-                caption_type::text AS caption_type
+                caption_type::text AS caption_type,
+                name
             FROM metadata.media_captions
             WHERE media_guid = @media_guid
               AND two_digit_language_code = @language_code
@@ -45,7 +76,8 @@ public sealed class MediaCaptionReadService(NpgsqlDataSource dataSource) : IMedi
             StorageKey = GetString(reader, "storage_key"),
             StoragePath = GetString(reader, "storage_path"),
             LanguageCode = GetString(reader, "two_digit_language_code"),
-            CaptionType = GetString(reader, "caption_type")
+            CaptionType = GetString(reader, "caption_type"),
+            Name = GetNullableString(reader, "name")
         };
     }
 }

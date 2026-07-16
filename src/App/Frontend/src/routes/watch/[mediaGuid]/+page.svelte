@@ -31,6 +31,7 @@
   } from '$lib/api/watchState';
   import { getLikeState, likeMedia, unlikeMedia, type MediaLikeState } from '$lib/api/mediaLikes';
   import { getMetadataVersions, type MetadataVersion } from '$lib/api/metadata';
+  import { listCaptionTracks, type CaptionTrack } from '$lib/api/captions';
   import {
     accentFor,
     formatCount,
@@ -57,12 +58,6 @@
     trackTitle: string;
     trackNumber: number;
     composer?: string | null;
-  }
-
-  interface CaptionLanguage {
-    languageCode: string;
-    captionType: string;
-    name?: string | null;
   }
 
   interface Detail {
@@ -99,7 +94,6 @@
     albumArtists: string[];
     series?: Series | null;
     music?: Music | null;
-    captionLanguages: CaptionLanguage[];
     userNote?: string | null;
   }
 
@@ -168,6 +162,7 @@
   }
 
   let detail = $state<Detail | null>(null);
+  let captionTracksAvailable = $state<CaptionTrack[]>([]);
   let loadError = $state<string | null>(null);
   let comments = $state<Comment[]>([]);
   let commentTotal = $state(0);
@@ -328,8 +323,8 @@
     if (!current) {
       return [];
     }
-    return current.captionLanguages.map((caption) => ({
-      src: `/api/media/watch/${current.mediaGuid}/captions/${encodeURIComponent(caption.languageCode)}?captionType=${encodeURIComponent(caption.captionType)}`,
+    return captionTracksAvailable.map((caption) => ({
+      src: caption.url,
       srclang: caption.languageCode,
       label: captionSummary(caption),
       kind: caption.captionType === 'automatic_captions' ? 'captions' : 'subtitles'
@@ -353,6 +348,7 @@
 
   async function loadAll(guid: string) {
     detail = null;
+    captionTracksAvailable = [];
     loadError = null;
     comments = [];
     commentTotal = 0;
@@ -379,6 +375,7 @@
 
     await Promise.all([
       loadDetail(guid),
+      loadCaptionTracks(guid),
       loadComments(guid, 1),
       loadUpNext(guid),
       loadWatchState(guid),
@@ -600,6 +597,17 @@
     }
   }
 
+  async function loadCaptionTracks(guid: string) {
+    try {
+      const tracks = await listCaptionTracks(guid);
+      if (guid === mediaGuid) {
+        captionTracksAvailable = tracks;
+      }
+    } catch {
+      // Captions are optional; playback and metadata can still load without them.
+    }
+  }
+
   async function loadComments(guid: string, target: number) {
     try {
       const response = await fetch(`/api/metadata/${guid}/comments?page=${target}&pageSize=20`);
@@ -698,7 +706,7 @@
       .join(' · ');
   }
 
-  function captionSummary(caption: CaptionLanguage): string {
+  function captionSummary(caption: CaptionTrack): string {
     const label = caption.name || caption.languageCode;
     return caption.captionType === 'automatic_captions' ? `${label} (auto)` : label;
   }
@@ -761,7 +769,7 @@
     push('External ID', detail.externalMediaId);
     push(
       'Captions',
-      detail.captionLanguages.length > 0 ? detail.captionLanguages.map(captionSummary).join(', ') : null
+      captionTracksAvailable.length > 0 ? captionTracksAvailable.map(captionSummary).join(', ') : null
     );
     push('Metadata archived', formatFullDate(detail.metadataScrapedAt));
     return rows;
@@ -916,7 +924,7 @@
             {mediaGuid}
             title={detail.title}
             posterUrl={posterUrl}
-            captionLanguages={detail.captionLanguages}
+            captionLanguages={captionTracksAvailable}
             position={livePosition}
           />
           <div class="relative" bind:this={versionMenuContainer}>

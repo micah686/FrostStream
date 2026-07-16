@@ -33,6 +33,13 @@ public sealed class MediaStreamQueryConsumerService(
             queueGroup: MediaStreamSubjects.ProcessorsQueueGroup,
             cancellationToken: stoppingToken);
 
+        await SubscribeAsync<MediaCaptionsListRequestMessage>(
+            messageBus,
+            MediaStreamSubjects.ListCaptions,
+            HandleListCaptionsAsync,
+            queueGroup: MediaStreamSubjects.ProcessorsQueueGroup,
+            cancellationToken: stoppingToken);
+
         await SubscribeAsync<AccountAssetResolveRequestMessage>(
             messageBus,
             MediaStreamSubjects.ResolveAccountAsset,
@@ -113,6 +120,26 @@ public sealed class MediaStreamQueryConsumerService(
                 context.Message.MediaGuid);
 
             await context.RespondAsync(new MediaCaptionResolveResponseMessage
+            {
+                Success = false,
+                ErrorCode = "internal_error",
+                ErrorMessage = "Internal caption service error."
+            });
+        }
+    }
+
+    private async Task HandleListCaptionsAsync(IMessageContext<MediaCaptionsListRequestMessage> context)
+    {
+        try
+        {
+            var items = await scopeFactory.WithScopedAsync<IMediaCaptionReadService, IReadOnlyList<MediaCaptionLocationDto>>(
+                service => service.ListAsync(context.Message.MediaGuid));
+            await context.RespondAsync(new MediaCaptionsListResponseMessage { Success = true, Items = items });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed listing captions for {MediaGuid}.", context.Message.MediaGuid);
+            await context.RespondAsync(new MediaCaptionsListResponseMessage
             {
                 Success = false,
                 ErrorCode = "internal_error",
