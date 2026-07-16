@@ -245,6 +245,14 @@
     }
   });
 
+  function toggleRepeat() {
+    repeatEnabled = !repeatEnabled;
+  }
+
+  function toggleShuffle() {
+    shuffleEnabled = !shuffleEnabled;
+  }
+
   const playbackModes = $derived([
     {
       id: 'repeat',
@@ -252,7 +260,7 @@
       title: 'Repeat — keep replaying this video',
       icon: ArrowsRepeatOutline,
       active: repeatEnabled,
-      toggle: () => (repeatEnabled = !repeatEnabled)
+      toggle: toggleRepeat
     },
     {
       id: 'shuffle',
@@ -260,7 +268,7 @@
       title: 'Shuffle — autoplay picks a random video instead of the next one',
       icon: ShuffleOutline,
       active: shuffleEnabled,
-      toggle: () => (shuffleEnabled = !shuffleEnabled)
+      toggle: toggleShuffle
     }
   ]);
 
@@ -889,6 +897,10 @@
                 startTime={resumeTime}
                 loop={repeatEnabled}
                 autoplay={autoplayEnabled}
+                {repeatEnabled}
+                {shuffleEnabled}
+                onToggleRepeat={toggleRepeat}
+                onToggleShuffle={toggleShuffle}
                 onProgress={handlePlaybackProgress}
                 onEnded={handlePlaybackEnded}
               />
