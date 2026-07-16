@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { Checkbox, Input, Label, Select, Textarea, Toggle } from 'flowbite-svelte';
+  import { ChevronDownOutline } from 'flowbite-svelte-icons';
   import TriStateSelect from './TriStateSelect.svelte';
   import {
     applyStateToOptions,
@@ -51,21 +52,17 @@
   }
 </script>
 
-{#snippet sectionCard(title: string, hint: string)}
-  <h3 class="text-sm font-semibold text-slate-200">{title}</h3>
-  {#if hint}
-    <p class="mt-1 text-xs text-slate-600">{hint}</p>
-  {/if}
-{/snippet}
-
 <div class="space-y-4">
   <p class="text-xs text-slate-500">
     Everything is optional — leave a field on “Default” to use the server’s normal behavior for that
     setting. Only the values you change are stored in the preset.
   </p>
 
-  <div class="rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
-    {@render sectionCard('Video quality & format', '')}
+  <details open class="group rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
+    <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
+      <h3 class="text-sm font-semibold text-slate-200">Video quality & format</h3>
+      <ChevronDownOutline class="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-180" />
+    </summary>
     <div class="mt-4 grid gap-4 sm:grid-cols-2">
       <div>
         <Label for="opt-resolution" class="mb-2 text-sm font-medium text-slate-300">Maximum resolution</Label>
@@ -88,10 +85,13 @@
         </div>
       {/if}
     </div>
-  </div>
+  </details>
 
-  <div class="rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
-    {@render sectionCard('Audio', '')}
+  <details class="group rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
+    <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
+      <h3 class="text-sm font-semibold text-slate-200">Audio</h3>
+      <ChevronDownOutline class="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-180" />
+    </summary>
     <div class="mt-4 space-y-4">
       <Toggle bind:checked={opts.audioOnly} class="text-sm text-slate-300">
         Audio only <span class="ml-1 text-xs text-slate-600">(skip the video, keep just the sound)</span>
@@ -119,10 +119,13 @@
         </div>
       </div>
     </div>
-  </div>
+  </details>
 
-  <div class="rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
-    {@render sectionCard('Subtitles', '')}
+  <details class="group rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
+    <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
+      <h3 class="text-sm font-semibold text-slate-200">Subtitles</h3>
+      <ChevronDownOutline class="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-180" />
+    </summary>
     <div class="mt-4 grid gap-4 sm:grid-cols-2">
       <TriStateSelect id="opt-write-subs" label="Download subtitles" bind:value={opts.writeSubs} />
       <TriStateSelect id="opt-write-auto-subs" label="Auto-generated subtitles" bind:value={opts.writeAutoSubs} />
@@ -137,10 +140,13 @@
       </div>
       <TriStateSelect id="opt-embed-subs" label="Embed subtitles in the video" bind:value={opts.embedSubs} />
     </div>
-  </div>
+  </details>
 
-  <div class="rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
-    {@render sectionCard('Thumbnails & metadata', '')}
+  <details class="group rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
+    <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
+      <h3 class="text-sm font-semibold text-slate-200">Thumbnails & metadata</h3>
+      <ChevronDownOutline class="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-180" />
+    </summary>
     <div class="mt-4 grid gap-4 sm:grid-cols-2">
       <TriStateSelect id="opt-write-thumbnail" label="Save thumbnail file" bind:value={opts.writeThumbnail} />
       <TriStateSelect id="opt-embed-thumbnail" label="Embed thumbnail" bind:value={opts.embedThumbnail} />
@@ -150,10 +156,16 @@
       <TriStateSelect id="opt-write-info-json" label="Save info JSON file" bind:value={opts.writeInfoJson} />
       <TriStateSelect id="opt-embed-info-json" label="Embed info JSON" bind:value={opts.embedInfoJson} />
     </div>
-  </div>
+  </details>
 
-  <div class="rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
-    {@render sectionCard('SponsorBlock', 'Marks or removes sponsored segments using community data.')}
+  <details class="group rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
+    <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200">SponsorBlock</h3>
+        <p class="mt-1 text-xs text-slate-600">Marks or removes sponsored segments using community data.</p>
+      </div>
+      <ChevronDownOutline class="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-180" />
+    </summary>
     <div class="mt-4 space-y-4">
       <Checkbox bind:checked={opts.sponsorBlockDisabled} class="text-sm text-slate-300">
         Disable SponsorBlock entirely
@@ -220,10 +232,13 @@
         </div>
       {/if}
     </div>
-  </div>
+  </details>
 
-  <div class="rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
-    {@render sectionCard('Download behavior & limits', '')}
+  <details class="group rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
+    <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
+      <h3 class="text-sm font-semibold text-slate-200">Download behavior & limits</h3>
+      <ChevronDownOutline class="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-180" />
+    </summary>
     <div class="mt-4 grid gap-4 sm:grid-cols-2">
       <div>
         <Label for="opt-limit-rate" class="mb-2 text-sm font-medium text-slate-300">Speed limit</Label>
@@ -274,10 +289,16 @@
         <Input id="opt-date-before" type="date" bind:value={opts.dateBefore} class={fieldClass} />
       </div>
     </div>
-  </div>
+  </details>
 
-  <div class="rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
-    {@render sectionCard('Network & authentication', 'For sites that need a login or a proxy. Prefer cookie profiles for site logins when possible.')}
+  <details class="group rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
+    <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200">Network & authentication</h3>
+        <p class="mt-1 text-xs text-slate-600">For sites that need a login or a proxy. Prefer cookie profiles for site logins when possible.</p>
+      </div>
+      <ChevronDownOutline class="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-180" />
+    </summary>
     <div class="mt-4 grid gap-4 sm:grid-cols-2">
       <div class="sm:col-span-2">
         <Label for="opt-proxy" class="mb-2 text-sm font-medium text-slate-300">Proxy URL</Label>
@@ -309,10 +330,16 @@
         Credentials are stored as plain text in the preset and sent to the site during downloads.
       </p>
     </div>
-  </div>
+  </details>
 
-  <div class="rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
-    {@render sectionCard('Workarounds', 'Only needed for sites that misbehave with the default settings.')}
+  <details class="group rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
+    <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200">Workarounds</h3>
+        <p class="mt-1 text-xs text-slate-600">Only needed for sites that misbehave with the default settings.</p>
+      </div>
+      <ChevronDownOutline class="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-180" />
+    </summary>
     <div class="mt-4 space-y-4">
       <div class="flex flex-wrap gap-x-8 gap-y-3">
         <Toggle bind:checked={opts.noCheckCertificates} class="text-sm text-slate-300">
@@ -352,5 +379,5 @@
         <p class="mt-1.5 text-xs text-slate-600">One <code>Header: value</code> per line.</p>
       </div>
     </div>
-  </div>
+  </details>
 </div>
