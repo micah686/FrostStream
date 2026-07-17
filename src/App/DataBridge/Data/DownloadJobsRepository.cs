@@ -766,9 +766,17 @@ public sealed class DownloadJobsRepository(
 
         // Progress-log ids are negated so they can never collide with history ids (both are
         // independent bigserial sequences) when the two lists are merged for the client.
-        var progressLines = await db.DownloadJobProgressLog
+        // Projected as an anonymous type first (real columns only) and mapped to the DTO afterwards,
+        // in-memory — projecting the Guid.Empty/"progress"/ProgressLineEventName constants directly
+        // into the IQueryable made Npgsql infer a "text" column for MessageId, which then failed to
+        // read back as a Guid at materialization time.
+        var progressLogRows = await db.DownloadJobProgressLog
             .AsNoTracking()
             .Where(x => x.JobId == jobId)
+            .Select(x => new { x.Id, x.Message, x.RecordedAt })
+            .ToListAsync(ct);
+
+        var progressLines = progressLogRows
             .Select(x => new DownloadQueueHistoryEntryDto
             {
                 Id = -x.Id,
@@ -777,8 +785,7 @@ public sealed class DownloadJobsRepository(
                 EventName = ProgressLineEventName,
                 PayloadJson = x.Message,
                 RecordedAt = x.RecordedAt
-            })
-            .ToListAsync(ct);
+            });
 
         return historyEntries
             .Concat(progressLines)

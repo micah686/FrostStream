@@ -85,4 +85,47 @@ public sealed class YtDlpFailureDetailsTests
         YtDlpFailureDetails.ClassifyFailure(new OperationCanceledException())
             .ShouldBe(FailureKind.Cancelled);
     }
+
+    [Test]
+    public void Subtitle_Rate_Limit_Failure_Is_Sidecar_Only()
+    {
+        var exception = new YtDlpProcessException(
+            "yt-dlp failed",
+            "yt-dlp https://example.test",
+            1,
+            "ERROR: Unable to download video subtitles for 'ab': HTTP Error 429: Too Many Requests");
+
+        YtDlpFailureDetails.IsSidecarOnlyFailure(exception).ShouldBeTrue();
+    }
+
+    [Test]
+    public void Thumbnail_Failure_Is_Sidecar_Only()
+    {
+        var exception = new YtDlpProcessException(
+            "yt-dlp failed",
+            "yt-dlp https://example.test",
+            1,
+            "WARNING: [info] Writing video thumbnail\nERROR: unable to download video thumbnail: HTTP Error 404: Not Found");
+
+        YtDlpFailureDetails.IsSidecarOnlyFailure(exception).ShouldBeTrue();
+    }
+
+    [Test]
+    public void Content_Failure_Is_Not_Sidecar_Only_Even_When_Subtitles_Are_Mentioned()
+    {
+        var exception = new YtDlpProcessException(
+            "yt-dlp failed",
+            "yt-dlp https://example.test",
+            1,
+            "WARNING: unable to download video subtitles for 'ab': HTTP Error 429\nERROR: [youtube] abc123: Video unavailable");
+
+        YtDlpFailureDetails.IsSidecarOnlyFailure(exception).ShouldBeFalse();
+    }
+
+    [Test]
+    public void Non_Process_Exception_Is_Not_Sidecar_Only()
+    {
+        YtDlpFailureDetails.IsSidecarOnlyFailure(new YtDlpUnavailableException("This video is unavailable"))
+            .ShouldBeFalse();
+    }
 }

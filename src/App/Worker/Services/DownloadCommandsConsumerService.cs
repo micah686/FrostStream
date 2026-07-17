@@ -327,7 +327,23 @@ public sealed class DownloadCommandsConsumerService(
                 logger);
 
             progress = new DownloadProgressReporter(cmd, publisher, clock, logger);
-            await DispatchYtDlpAsync(cmd, tempDirectory, cookies.FilePath, progress, downloadCts.Token);
+            try
+            {
+                await DispatchYtDlpAsync(cmd, tempDirectory, cookies.FilePath, progress, downloadCts.Token);
+            }
+            catch (YtDlpException ex) when (YtDlpFailureDetails.IsSidecarOnlyFailure(ex))
+            {
+                // A subtitle/thumbnail fetch failing (e.g. rate-limited) shouldn't cost the user
+                // their video — retry once with those optional sidecars disabled rather than failing
+                // the whole job.
+                logger.LogWarning(ex,
+                    "Sidecar-only failure for JobId {JobId}; retrying without subtitles/thumbnail.",
+                    cmd.JobId);
+                await progress.ReportPhaseAsync(
+                    "Retrying without sidecars",
+                    "Subtitle/thumbnail download failed; retrying without optional sidecar content.");
+                await DispatchYtDlpAsync(cmd, tempDirectory, cookies.FilePath, progress, downloadCts.Token, disableSidecars: true);
+            }
             await progress.FlushAsync();
 
             tempFileRef = FindDownloadedMediaFile(tempDirectory)
@@ -940,13 +956,23 @@ public sealed class DownloadCommandsConsumerService(
         string tempDirectory,
         string? cookieFilePath,
         DownloadProgressReporter progress,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool disableSidecars = false)
     {
         var ytDlpOptions = ApplyOperationalDefaults(YtDlpOptionsMerger.Merge(
             cmd.YtDlpOptions,
             ffmpegLocation: GetFfmpegLocation(),
             cookieFilePath: cookieFilePath,
             logger));
+
+        if (disableSidecars)
+        {
+            ytDlpOptions = ytDlpOptions with
+            {
+                Subtitle = ytDlpOptions.Subtitle with { WriteSubs = false, WriteAutoSubs = false, NoWriteSubs = true, NoWriteAutoSubs = true },
+                Thumbnail = ytDlpOptions.Thumbnail with { WriteThumbnail = false, NoWriteThumbnail = true }
+            };
+        }
 
         var outputTemplate = $"{MediaFileBase}.%(ext)s";
 

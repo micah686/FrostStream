@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq;
 using Shared.Messaging;
 using Worker.Metadata;
 using YtDlpSharpLib.Exceptions;
@@ -100,6 +101,34 @@ internal static class YtDlpFailureDetails
             _ => null
         };
     }
+
+    /// <summary>
+    /// True when yt-dlp aborted (via <c>--abort-on-error</c>) purely because an optional sidecar
+    /// asset — subtitles or the thumbnail — failed to download, not because the requested video/audio
+    /// content itself failed. These are safe to retry with that sidecar disabled rather than failing
+    /// the whole job: e.g. a subtitle provider rate-limiting (HTTP 429) shouldn't cost the user their
+    /// video. Only matches when the *entire* stderr tail is sidecar-only chatter, so a genuine content
+    /// failure that happens to also mention subtitles isn't misclassified.
+    /// </summary>
+    public static bool IsSidecarOnlyFailure(Exception ex)
+    {
+        if (ex is not YtDlpProcessException { LastStderrLines: { Length: > 0 } stderr })
+            return false;
+
+        var lines = stderr.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (lines.Length == 0)
+            return false;
+
+        return lines.All(IsSidecarChatterLine);
+    }
+
+    private static bool IsSidecarChatterLine(string line)
+        => Contains(line, "unable to download video subtitles")
+           || Contains(line, "unable to write video subtitles")
+           || Contains(line, "unable to download video thumbnail")
+           || Contains(line, "unable to write video thumbnail")
+           // Non-fatal informational/progress lines that can precede the fatal ERROR line above.
+           || !Contains(line, "error");
 
     public static FailureKind ClassifyFailure(Exception ex)
         => ex switch

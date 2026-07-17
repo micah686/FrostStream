@@ -74,6 +74,37 @@ internal sealed class DownloadProgressReporter(
         }
     }
 
+    /// <summary>
+    /// Publishes a synthetic advisory progress frame not sourced from yt-dlp's own progress hook —
+    /// used to surface Worker-driven state (e.g. "retrying without sidecar content") live on the Jobs
+    /// page, the same way yt-dlp's own phases are.
+    /// </summary>
+    public Task ReportPhaseAsync(string phase, string message)
+    {
+        var sequence = Interlocked.Increment(ref _sequence);
+        var frame = new DownloadProgress
+        {
+            JobId = command.JobId,
+            CorrelationId = command.CorrelationId,
+            CausationId = command.MessageId,
+            MessageId = DeterministicGuid.Create(command.MessageId, $"/progress/{sequence.ToString(CultureInfo.InvariantCulture)}"),
+            OperationKey = $"{command.OperationKey}/progress/{sequence.ToString(CultureInfo.InvariantCulture)}",
+            OccurredAt = clock.GetCurrentInstant(),
+            Attempt = command.Attempt,
+            Sequence = sequence,
+            SourceUrl = command.SourceUrl,
+            Phase = phase,
+            Message = message
+        };
+
+        var task = PublishProgressAsync(frame);
+        lock (_gate)
+        {
+            _publishes.Add(task);
+        }
+        return task;
+    }
+
     public Task FlushAsync()
     {
         Task[] publishes;

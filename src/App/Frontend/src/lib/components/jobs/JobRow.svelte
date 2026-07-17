@@ -270,7 +270,14 @@
       return false;
     }
     const phase = progress.phase.trim().toLowerCase();
-    return phase === 'downloading' || progress.percent !== null || progress.downloadedBytes !== null;
+    // "Retrying without sidecars" is a synthetic Worker-driven phase (no percent/byte counts of its
+    // own, since it precedes a fresh yt-dlp invocation) — still worth surfacing in the status pill.
+    return (
+      phase === 'downloading' ||
+      phase === 'retrying without sidecars' ||
+      progress.percent !== null ||
+      progress.downloadedBytes !== null
+    );
   }
 
   function findHistoryEntry(entries: DownloadQueueHistoryEntry[], eventName: string): DownloadQueueHistoryEntry | undefined {
