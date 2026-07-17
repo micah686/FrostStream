@@ -79,6 +79,23 @@ public class DownloadJobHistoryEntity
     public Instant RecordedAt { get; private set; } = SystemClock.Instance.GetCurrentInstant();
 }
 
+/// <summary>
+/// One persisted advisory yt-dlp progress line for a job (durable version of the live-only
+/// <see cref="Shared.Messaging.DownloadProgress"/> broadcast), so the job log survives a page refresh.
+/// </summary>
+public class DownloadJobProgressLogEntity
+{
+    public long Id { get; set; }
+
+    public Guid JobId { get; set; }
+
+    public int Sequence { get; set; }
+
+    public required string Message { get; set; }
+
+    public Instant RecordedAt { get; private set; } = SystemClock.Instance.GetCurrentInstant();
+}
+
 public class FailedDownloadJobEntity
 {
     public Guid JobId { get; set; }

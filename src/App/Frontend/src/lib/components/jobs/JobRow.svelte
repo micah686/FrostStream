@@ -3,12 +3,10 @@
   import {
     ArrowsRepeatOutline,
     ArrowUpRightFromSquareOutline,
-    CheckCircleOutline,
     ChevronDownOutline,
     ExclamationCircleOutline,
     FireOutline,
     PlayOutline,
-    ServerOutline,
     StopOutline
   } from 'flowbite-svelte-icons';
   import {
@@ -42,14 +40,23 @@
   let expanded = $state(false);
   let history = $state<DownloadQueueHistoryEntry[] | 'loading' | 'error' | undefined>(undefined);
   let mediaGuid = $state<string | null | undefined>(undefined);
+  let liveMessages = $state<{ text: string; at: number }[]>([]);
 
   const job = $derived(row.job);
   const provider = $derived(providerFor(job.sourceUrl));
   const percent = $derived(percentFor(row));
+  const showProgressDetails = $derived(isActive(job.state));
 
   $effect(() => {
     if (isDone(job.state) && mediaGuid === undefined) {
       void loadMediaGuid(job.jobId);
+    }
+  });
+
+  $effect(() => {
+    const message = row.progress?.message?.trim();
+    if (message && liveMessages.at(-1)?.text !== message) {
+      liveMessages = [...liveMessages, { text: message, at: Date.now() }].slice(-50);
     }
   });
 
@@ -63,13 +70,17 @@
 
   async function toggleExpanded(): Promise<void> {
     expanded = !expanded;
-    if (expanded && history === undefined) {
-      history = 'loading';
-      try {
-        history = await fetchJobHistory(job.jobId);
-      } catch {
-        history = 'error';
-      }
+    if (!expanded) {
+      return;
+    }
+    history = 'loading';
+    try {
+      history = await fetchJobHistory(job.jobId);
+      // The fresh history now durably includes any progress lines the backend already
+      // persisted, so drop the ephemeral live buffer to avoid showing lines twice.
+      liveMessages = [];
+    } catch {
+      history = 'error';
     }
   }
 
@@ -78,6 +89,14 @@
   }
 
   function canCancel(j: DownloadQueueJob): boolean {
+    // FailedTransient is a special case: the backend allows force-cancelling it even though it's
+    // otherwise a terminal failure, because a known race can leave a yt-dlp process still running
+    // on the worker (e.g. stuck retrying a rate-limited subtitle fetch) after the job already
+    // recorded FailedTransient. Other failed states (FailedPermanent/DeadLettered/ProviderHalted)
+    // are not affected by that race and stay non-cancellable.
+    if (normalizeState(j.state) === 'failedtransient') {
+      return true;
+    }
     return !isDone(j.state) && !isCancelled(j.state) && !isFailed(j.state);
   }
 
@@ -200,6 +219,19 @@
     return 'bg-blue-500/12 text-blue-300 ring-blue-500/20';
   }
 
+  function barColor(state: string): string {
+    if (isDone(state)) {
+      return 'bg-emerald-500';
+    }
+    if (isFailed(state)) {
+      return 'bg-red-400';
+    }
+    if (isCancelled(state)) {
+      return 'bg-slate-500';
+    }
+    return 'bg-blue-500';
+  }
+
   function rowTone(state: string): string {
     if (isFailed(state)) {
       return 'border-red-500/45 bg-red-950/10';
@@ -274,9 +306,8 @@
 </script>
 
 <article class={['rounded-xl border p-4 shadow-lg shadow-black/10 transition', rowTone(job.state)]}>
-  <div class="flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
   <div
-    class="flex min-w-0 flex-1 flex-col gap-3 cursor-pointer md:flex-row md:items-center md:gap-4"
+    class="grid cursor-pointer gap-3 md:grid-cols-[minmax(0,1fr)_18rem_8.5rem] md:items-center"
     role="button"
     tabindex="0"
     aria-expanded={expanded}
@@ -288,7 +319,7 @@
       }
     }}
   >
-    <div class="flex min-w-0 flex-1 items-start gap-3">
+    <div class="flex min-w-0 items-start gap-3">
       <span
         class="mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-slate-800 text-sm font-bold text-blue-300 ring-1 ring-slate-700"
         aria-hidden="true"
@@ -298,7 +329,7 @@
       <div class="min-w-0">
         <div class="flex min-w-0 items-center gap-2">
           <ChevronDownOutline class={['h-3.5 w-3.5 shrink-0 text-slate-600 transition-transform', expanded ? 'rotate-180' : '']} />
-          <h2 class="min-w-0 flex-1 truncate text-sm font-semibold text-slate-100">
+          <h2 class="min-w-0 truncate text-sm font-semibold text-slate-100">
             {displayTitle(job.sourceUrl)}
           </h2>
           <span class={['shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ring-1', stateTone(job.state)]}>
@@ -318,40 +349,30 @@
           <p class="mt-2 line-clamp-1 text-xs text-red-300">
             {job.failureCode ? `${job.failureCode}: ` : ''}{job.failureMessage}
           </p>
-        {:else if row.progress?.message}
-          <p class="mt-2 line-clamp-1 text-xs text-slate-500">{row.progress.message}</p>
         {/if}
       </div>
     </div>
 
-    <div class="flex w-full shrink-0 items-center gap-3 md:w-72">
+    <div class="flex items-center gap-3">
       <div class="min-w-0 flex-1">
         <div class="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
-          <div
-            class={['h-full rounded-full', isFailed(job.state) ? 'bg-red-400' : 'bg-blue-500']}
-            style={`width: ${percent}%`}
-          ></div>
+          <div class={['h-full rounded-full', barColor(job.state)]} style={`width: ${percent}%`}></div>
         </div>
-        <p class="mt-1 text-xs text-slate-500">
-          {formatPercent(row)} · {formatSpeed(row.progress?.speed)} · {formatElapsed(job)}
-        </p>
+        {#if showProgressDetails}
+          <p class="mt-1 text-xs text-slate-500">
+            {formatPercent(row)} · {formatSpeed(row.progress?.speed)} · {formatElapsed(job)}
+          </p>
+        {/if}
       </div>
-      <div class="w-20 shrink-0 text-right">
-        <p class="text-xs font-medium text-slate-300">eta {formatEta(row.progress?.etaSeconds)}</p>
-        <p class="mt-0.5 text-[11px] text-slate-500">{formatByteProgress(row.progress, job)}</p>
-      </div>
-    </div>
-  </div>
-
-    <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
-      {#if isDone(job.state)}
-        <span
-          class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
-          title="Done"
-        >
-          <CheckCircleOutline class="h-4 w-4" />
-        </span>
+      {#if showProgressDetails}
+        <div class="w-20 shrink-0 text-right">
+          <p class="text-xs font-medium text-slate-300">eta {formatEta(row.progress?.etaSeconds)}</p>
+          <p class="mt-0.5 text-[11px] text-slate-500">{formatByteProgress(row.progress, job)}</p>
+        </div>
       {/if}
+    </div>
+
+    <div class="flex flex-wrap items-center justify-end gap-1.5">
       {#if isDone(job.state) && mediaGuid}
         <a
           href={`/watch/${mediaGuid}`}
@@ -469,13 +490,14 @@
         {:else}
           {#each history as entry (entry.id)}
             <p class="whitespace-pre-wrap break-words text-slate-400">
-              <span class="text-slate-600">[{formatLogTime(entry.recordedAt)}]</span> {entry.eventName}
+              <span class="text-slate-600">[{formatLogTime(entry.recordedAt)}]</span>
+              {entry.eventName === 'ProgressLine' ? entry.payloadJson : entry.eventName}
             </p>
           {/each}
         {/if}
-        {#if row.progress?.message}
-          <p class="whitespace-pre-wrap break-words text-slate-500">{row.progress.message}</p>
-        {/if}
+        {#each liveMessages as entry (entry.at)}
+          <p class="whitespace-pre-wrap break-words text-slate-500">{entry.text}</p>
+        {/each}
       </div>
     </div>
   {/if}

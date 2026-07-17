@@ -460,7 +460,26 @@ public sealed class DownloadJobsRepository(
         if (job.State is DownloadJobState.Completed or DownloadJobState.AlreadyDownloaded)
             return CancelDownloadDecision.Rejected(job.State, "Job is already complete.", alreadyTerminal: true);
 
-        if (job.State is DownloadJobState.FailedPermanent or DownloadJobState.FailedTransient or DownloadJobState.DeadLettered or DownloadJobState.ProviderHalted)
+        if (job.State is DownloadJobState.FailedTransient)
+        {
+            // The saga already ran its terminal Fail() step for this job, so there's no active
+            // Cleipnir flow instance left to drive the normal Cancelling -> Cancelled transition.
+            // Transition straight to Cancelled and let the caller still notify the Worker — a known
+            // race (JetStream redelivering DownloadVideoCommand mid-retry-backoff, e.g. during a
+            // rate-limited sidecar/subtitle fetch) can leave a yt-dlp process running for this JobId
+            // even though the DB already recorded FailedTransient.
+            var failedPreviousState = job.State;
+            job.State = DownloadJobState.Cancelled;
+            job.FailureKind = FailureKind.Cancelled;
+            job.FailureCode = "cancel_requested";
+            job.FailureMessage = BuildCancellationMessage(requestedBy, reason);
+            job.UpdatedAt = clock.GetCurrentInstant();
+            await db.SaveChangesAsync(ct);
+            await NotifyStateAsync(job, failedPreviousState, ct);
+            return CancelDownloadDecision.AcceptedFor(job.CorrelationId, job.State, failedPreviousState, workerTag);
+        }
+
+        if (job.State is DownloadJobState.FailedPermanent or DownloadJobState.DeadLettered or DownloadJobState.ProviderHalted)
             return CancelDownloadDecision.Rejected(job.State, "Job has already failed.", alreadyTerminal: true);
 
         if (job.State is DownloadJobState.UploadPending or DownloadJobState.Uploaded or DownloadJobState.CommitPending or DownloadJobState.Compensating or DownloadJobState.DownloadedTemp)
@@ -569,6 +588,27 @@ public sealed class DownloadJobsRepository(
             PayloadJson = payloadJson
         });
         await db.SaveChangesAsync(ct);
+    }
+
+    public async Task AppendProgressLogAsync(Guid jobId, int sequence, string message, CancellationToken ct = default)
+    {
+        db.DownloadJobProgressLog.Add(new DownloadJobProgressLogEntity
+        {
+            JobId = jobId,
+            Sequence = sequence,
+            Message = message.Length > 2048 ? message[..2048] : message
+        });
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            // Advisory telemetry, not saga state — safe to drop if the job no longer exists (FK
+            // violation) or a write races with the job being deleted.
+            db.ChangeTracker.Clear();
+        }
     }
 
     public async Task RecordTerminalFailureAsync(Guid jobId, FailureKind kind, string? code, string message, DownloadJobState terminalState, string? lastPayloadJson, CancellationToken ct = default)
@@ -697,17 +737,22 @@ public sealed class DownloadJobsRepository(
             .FirstOrDefaultAsync(ct);
     }
 
+    /// <summary>
+    /// <see cref="DownloadQueueHistoryEntryDto.EventName"/> marker for a merged-in progress-log row.
+    /// The frontend renders these as the raw yt-dlp line (<see cref="DownloadQueueHistoryEntryDto.PayloadJson"/>)
+    /// instead of "[time] EventName".
+    /// </summary>
+    private const string ProgressLineEventName = "ProgressLine";
+
     public async Task<IReadOnlyList<DownloadQueueHistoryEntryDto>?> GetQueueHistoryAsync(Guid jobId, CancellationToken ct = default)
     {
         var exists = await db.DownloadJobs.AsNoTracking().AnyAsync(x => x.JobId == jobId, ct);
         if (!exists)
             return null;
 
-        return await db.DownloadJobHistory
+        var historyEntries = await db.DownloadJobHistory
             .AsNoTracking()
             .Where(x => x.JobId == jobId)
-            .OrderBy(x => x.RecordedAt)
-            .ThenBy(x => x.Id)
             .Select(x => new DownloadQueueHistoryEntryDto
             {
                 Id = x.Id,
@@ -718,6 +763,28 @@ public sealed class DownloadJobsRepository(
                 RecordedAt = x.RecordedAt
             })
             .ToListAsync(ct);
+
+        // Progress-log ids are negated so they can never collide with history ids (both are
+        // independent bigserial sequences) when the two lists are merged for the client.
+        var progressLines = await db.DownloadJobProgressLog
+            .AsNoTracking()
+            .Where(x => x.JobId == jobId)
+            .Select(x => new DownloadQueueHistoryEntryDto
+            {
+                Id = -x.Id,
+                MessageId = Guid.Empty,
+                OperationKey = "progress",
+                EventName = ProgressLineEventName,
+                PayloadJson = x.Message,
+                RecordedAt = x.RecordedAt
+            })
+            .ToListAsync(ct);
+
+        return historyEntries
+            .Concat(progressLines)
+            .OrderBy(x => x.RecordedAt)
+            .ThenBy(x => x.Id)
+            .ToList();
     }
 
     public async Task<Guid?> GetMediaGuidForJobAsync(Guid jobId, CancellationToken ct = default)

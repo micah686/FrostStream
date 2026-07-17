@@ -178,6 +178,7 @@ class Program
         builder.Services.AddHostedService<DownloadSlotCoordinator>(p => p.GetRequiredService<DownloadSlotCoordinator>());
         builder.Services.AddHostedService<DownloadAdminConsumerService>();
         builder.Services.AddHostedService<DownloadQueueConsumerService>();
+        builder.Services.AddHostedService<DownloadProgressPersistenceService>();
         builder.Services.AddHostedService<DownloadRequestedIngressService>();
         builder.Services.AddHostedService<DownloadEventsConsumerService>();
         builder.Services.AddHostedService<LocalImportEventsConsumerService>();

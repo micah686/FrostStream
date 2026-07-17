@@ -236,8 +236,14 @@ public sealed class DownloadAdminConsumerService(
                 await SendCancelToFlowAsync(req, decision.CorrelationId!.Value);
             }
 
-            if (decision.PreviousState is DownloadJobState.DownloadQueued or DownloadJobState.DownloadPending or DownloadJobState.Cancelling)
+            if (decision.PreviousState is DownloadJobState.DownloadQueued or DownloadJobState.DownloadPending
+                or DownloadJobState.Cancelling or DownloadJobState.FailedTransient)
             {
+                // For FailedTransient there's no active flow instance to signal (see
+                // TryBeginCancellationAsync) — this publish is purely a best-effort kill signal for
+                // the known race where a yt-dlp process can still be running on the worker even
+                // though the saga already recorded a terminal failure. The Worker no-ops harmlessly
+                // if it finds no active download for this JobId.
                 await messageBus.PublishAsync(
                     DownloadSubjects.CancelActiveDownloadCommand,
                     new CancelActiveDownloadCommand

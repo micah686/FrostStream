@@ -34,22 +34,12 @@ public abstract record QueueStreamEvent
 /// </summary>
 public sealed class DownloadQueueHub(IMessageBus messageBus, ILogger<DownloadQueueHub> logger) : BackgroundService
 {
-    /// <summary>Minimum spacing between forwarded progress frames for a given job.</summary>
-    public static readonly TimeSpan ProgressInterval = TimeSpan.FromMilliseconds(500);
-
     private readonly ConcurrentDictionary<Guid, Subscriber> _subscribers = new();
-    // Per-job progress throttle state (last-forwarded timestamp + last phase).
-    private readonly ConcurrentDictionary<Guid, ProgressGate> _progressGates = new();
+    private readonly ProgressForwardGate _progressGate = new(ProgressForwardGate.DefaultInterval);
     private ISubscription? _progressSubscription;
     private ISubscription? _stateSubscription;
 
     private sealed record Subscriber(Guid? JobFilter, Channel<QueueStreamEvent> Channel);
-
-    private sealed class ProgressGate
-    {
-        public long LastForwardedTicks;
-        public string? LastPhase;
-    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -121,7 +111,7 @@ public sealed class DownloadQueueHub(IMessageBus messageBus, ILogger<DownloadQue
     private Task HandleProgressAsync(IMessageContext<DownloadProgress> context)
     {
         var progress = context.Message;
-        if (ShouldForwardProgress(progress))
+        if (_progressGate.ShouldForward(progress.JobId, progress.Phase, progress.Percent))
             Fan(new QueueStreamEvent.Progress(progress));
         return Task.CompletedTask;
     }
@@ -129,33 +119,9 @@ public sealed class DownloadQueueHub(IMessageBus messageBus, ILogger<DownloadQue
     private Task HandleStateAsync(IMessageContext<DownloadQueueStateChanged> context)
     {
         // A job that reached a terminal/steady state won't emit more progress; drop its throttle state.
-        _progressGates.TryRemove(context.Message.JobId, out _);
+        _progressGate.Clear(context.Message.JobId);
         Fan(new QueueStreamEvent.State(context.Message));
         return Task.CompletedTask;
-    }
-
-    // Time-gate progress per job, but always pass phase changes and the final (>=100%) frame so a
-    // client never misses a transition or the completion frame.
-    private bool ShouldForwardProgress(DownloadProgress progress)
-    {
-        var gate = _progressGates.GetOrAdd(progress.JobId, _ => new ProgressGate { LastForwardedTicks = long.MinValue });
-        var now = Environment.TickCount64;
-
-        lock (gate)
-        {
-            var phaseChanged = !string.Equals(gate.LastPhase, progress.Phase, StringComparison.Ordinal);
-            var isFinal = progress.Percent is >= 100;
-            var due = now - gate.LastForwardedTicks >= (long)ProgressInterval.TotalMilliseconds;
-
-            if (phaseChanged || isFinal || due)
-            {
-                gate.LastForwardedTicks = now;
-                gate.LastPhase = progress.Phase;
-                return true;
-            }
-
-            return false;
-        }
     }
 
     private void Fan(QueueStreamEvent evt)

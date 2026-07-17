@@ -53,6 +53,12 @@ public sealed class DownloadCommandsConsumerService(
     private static readonly StreamName Stream = StreamName.From(DownloadTopology.StreamNameValue);
     private static readonly TimeSpan StorageProbeTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan PendingCancellationTtl = TimeSpan.FromMinutes(30);
+
+    // yt-dlp downloads routinely run well past the JetStream AckWait for this consumer
+    // (DownloadTopology: 2 minutes) — a slow sidecar fetch (e.g. subtitle rate-limiting) alone can
+    // exceed it. Without renewing in-progress acks, JetStream redelivers the same command while the
+    // original invocation is still running, which collides with _activeDownloadCancellations below.
+    private static readonly TimeSpan DownloadHeartbeatInterval = TimeSpan.FromSeconds(30);
     private readonly ConcurrentDictionary<Guid, CancellationTokenSource> _activeDownloadCancellations = new();
     private readonly ConcurrentDictionary<Guid, DateTimeOffset> _pendingDownloadCancellations = new();
     private ISubscription? _cancelSubscription;
@@ -284,6 +290,8 @@ public sealed class DownloadCommandsConsumerService(
         string? tempFileRef = null;
         DownloadProgressReporter? progress = null;
         using var downloadCts = new CancellationTokenSource();
+        using var heartbeatCts = CancellationTokenSource.CreateLinkedTokenSource(CancellationToken.None);
+        var heartbeatTask = JetStreamHeartbeat.RunAsync(context, DownloadHeartbeatInterval, logger, "DownloadVideo", heartbeatCts.Token);
 
         try
         {
@@ -407,9 +415,17 @@ public sealed class DownloadCommandsConsumerService(
         }
         finally
         {
-            _activeDownloadCancellations.TryRemove(cmd.JobId, out _);
+            // Compare-and-remove: only clear the dictionary entry if it's still *this* invocation's
+            // token source. A redelivered/duplicate invocation for the same JobId (see the heartbeat
+            // above for why that should no longer happen, but defense in depth) must not be able to
+            // rip out the real in-flight download's cancellation handle out from under it.
+            ((ICollection<KeyValuePair<Guid, CancellationTokenSource>>)_activeDownloadCancellations)
+                .Remove(new KeyValuePair<Guid, CancellationTokenSource>(cmd.JobId, downloadCts));
             _pendingDownloadCancellations.TryRemove(cmd.JobId, out _);
             DeleteCookieScratch(cookieScratch);
+
+            await heartbeatCts.CancelAsync();
+            try { await heartbeatTask; } catch { /* best-effort cleanup */ }
         }
     }
 

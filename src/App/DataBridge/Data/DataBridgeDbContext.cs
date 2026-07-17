@@ -16,6 +16,7 @@ public sealed class DataBridgeDbContext(DbContextOptions<DataBridgeDbContext> op
 
     public DbSet<DownloadJobEntity> DownloadJobs => Set<DownloadJobEntity>();
     public DbSet<DownloadJobHistoryEntity> DownloadJobHistory => Set<DownloadJobHistoryEntity>();
+    public DbSet<DownloadJobProgressLogEntity> DownloadJobProgressLog => Set<DownloadJobProgressLogEntity>();
     public DbSet<FailedDownloadJobEntity> FailedDownloadJobs => Set<FailedDownloadJobEntity>();
     public DbSet<ProcessedMessageEntity> ProcessedMessages => Set<ProcessedMessageEntity>();
     public DbSet<MediaEntity> Media => Set<MediaEntity>();

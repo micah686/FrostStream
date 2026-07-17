@@ -114,6 +114,37 @@ public sealed class DownloadJobHistoryConfiguration : IEntityTypeConfiguration<D
     }
 }
 
+public sealed class DownloadJobProgressLogConfiguration : IEntityTypeConfiguration<DownloadJobProgressLogEntity>
+{
+    public void Configure(EntityTypeBuilder<DownloadJobProgressLogEntity> builder)
+    {
+        builder.ToTable("download_job_progress_log", "downloads");
+
+        builder.HasKey(x => x.Id);
+
+        builder.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
+        builder.Property(x => x.JobId).HasColumnName("job_id").IsRequired();
+        builder.Property(x => x.Sequence).HasColumnName("sequence").IsRequired();
+        builder.Property(x => x.Message).HasColumnName("message").HasMaxLength(2048).IsRequired();
+
+        builder.Property(x => x.RecordedAt)
+            .HasColumnName("recorded_at")
+            .HasColumnType("timestamp with time zone")
+            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .ValueGeneratedOnAdd()
+            .IsRequired();
+
+        builder.HasIndex(x => new { x.JobId, x.RecordedAt })
+            .HasDatabaseName("ix_download_job_progress_log_job_id_recorded_at");
+
+        builder.HasOne<DownloadJobEntity>()
+            .WithMany()
+            .HasForeignKey(x => x.JobId)
+            .HasConstraintName("fk_download_job_progress_log_job_id")
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
 public sealed class FailedDownloadJobConfiguration : IEntityTypeConfiguration<FailedDownloadJobEntity>
 {
     public void Configure(EntityTypeBuilder<FailedDownloadJobEntity> builder)

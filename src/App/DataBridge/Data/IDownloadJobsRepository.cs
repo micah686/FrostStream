@@ -104,6 +104,13 @@ public interface IDownloadJobsRepository
 
     Task RecordHistoryAsync(Guid jobId, Guid messageId, string operationKey, string eventName, string? payloadJson, CancellationToken ct = default);
 
+    /// <summary>
+    /// Durably appends one advisory yt-dlp progress line so the Jobs page log survives a page refresh.
+    /// Best-effort: silently no-ops if the job no longer exists (e.g. it was deleted between the
+    /// progress event being published and this handler running).
+    /// </summary>
+    Task AppendProgressLogAsync(Guid jobId, int sequence, string message, CancellationToken ct = default);
+
     Task RecordTerminalFailureAsync(Guid jobId, FailureKind kind, string? code, string message, DownloadJobState terminalState, string? lastPayloadJson, CancellationToken ct = default);
 
     // ── Admin queue read surface (read-only; no schema migration) ────────────────────
