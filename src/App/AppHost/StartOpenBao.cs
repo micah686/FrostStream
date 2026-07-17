@@ -17,6 +17,8 @@ public static class OpenBaoResourceExtensions
 public static class StartOpenBao
 {
     private const string DataVolumeName = "openbao-data";
+    // The official OpenBao image runs the server as uid 100, gid 1000.
+    private const string OpenBaoUserAndGroup = "100:1000";
 
     public static OpenBaoResources Start(
         IDistributedApplicationBuilder builder,
@@ -28,7 +30,7 @@ public static class StartOpenBao
         var dataInit = builder
             .AddContainer("openbao-data-init", "docker.io/library/busybox", "1.37")
             .WithEntrypoint("/bin/sh")
-            .WithArgs("-c", "mkdir -p /openbao/data && chown -R 0:0 /openbao/data && chmod -R u+rwX,g+rwX /openbao/data")
+            .WithArgs("-c", $"mkdir -p /openbao/data && chown -R {OpenBaoUserAndGroup} /openbao/data && chmod -R u+rwX,g+rwX /openbao/data")
             .WithVolume(DataVolumeName, "/openbao/data");
 
         var server = builder

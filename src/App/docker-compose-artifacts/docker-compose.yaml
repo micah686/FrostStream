@@ -133,7 +133,7 @@ services:
     image: "docker.io/library/busybox:1.37"
     command:
       - "-c"
-      - "mkdir -p /openbao/data && chown -R 0:0 /openbao/data && chmod -R u+rwX,g+rwX /openbao/data"
+      - "mkdir -p /openbao/data && chown -R 100:1000 /openbao/data && chmod -R u+rwX,g+rwX /openbao/data"
     entrypoint:
       - "/bin/sh"
     volumes:
