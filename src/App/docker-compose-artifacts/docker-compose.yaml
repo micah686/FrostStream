@@ -133,7 +133,7 @@ services:
     image: "docker.io/library/busybox:1.37"
     command:
       - "-c"
-      - "mkdir -p /openbao/data && chown -R 100:1000 /openbao/data && chmod -R u+rwX,g+rwX /openbao/data"
+      - "mkdir -p /openbao/data && touch /openbao/data/.volume-initialized && chown -R 100:1000 /openbao/data && chmod -R u+rwX,g+rwX /openbao/data"
     entrypoint:
       - "/bin/sh"
     volumes:
@@ -437,20 +437,13 @@ services:
       OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "in_memory"
       ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
       HTTP_PORTS: "8080"
-      ConnectionStrings__froststreamdb: "Host=postgres;Port=5432;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD};Database=froststreamdb"
-      FROSTSTREAMDB_HOST: "postgres"
-      FROSTSTREAMDB_PORT: "5432"
-      FROSTSTREAMDB_USERNAME: "${POSTGRES_USER}"
-      FROSTSTREAMDB_PASSWORD: "${POSTGRES_PASSWORD}"
-      FROSTSTREAMDB_URI: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/froststreamdb"
-      FROSTSTREAMDB_JDBCCONNECTIONSTRING: "jdbc:postgresql://postgres:5432/froststreamdb"
-      FROSTSTREAMDB_DATABASENAME: "froststreamdb"
       ConnectionStrings__nats: "nats://nats:${NATS_PASSWORD}@nats:4222"
       NATS_HOST: "nats"
       NATS_PORT: "4222"
       NATS_USERNAME: "nats"
       NATS_PASSWORD: "${NATS_PASSWORD}"
       NATS_URI: "nats://nats:${NATS_PASSWORD}@nats:4222"
+      DOTNET_ENVIRONMENT: "Development"
       OpenBao__Address: "http://openbao:8200"
       OpenBao__Token: "${OPENBAO_TOKEN}"
       FROSTSTREAM_STORAGE_ROOT: "/data"
@@ -459,6 +452,12 @@ services:
       Auth__AllowSingleUserModeInProduction: "false"
       Auth__Audience: "froststream-api"
       Auth__ClientId: "froststream-bff"
+      Auth__ClientSecret: "${AUTHENTIK_CLIENT_SECRET}"
+      Auth__Scopes: "openid profile email groups offline_access"
+      Auth__PublicOrigin: "${FRONTEND_PUBLIC_ORIGIN}"
+      Auth__PublicAuthority: "${AUTHENTIK_PUBLIC_AUTHORITY}"
+      Auth__SecureCookies: "false"
+      Auth__DataProtectionKeysPath: "/data-protection-keys"
       Auth__RequireHttpsMetadata: "false"
       Auth__ExposeOpenApi: "false"
       OpenFga__StoreId: ""
@@ -483,12 +482,14 @@ services:
         target: "/data"
         source: "froststream-data"
         read_only: false
+      - type: "volume"
+        target: "/data-protection-keys"
+        source: "froststream-data-protection-keys"
+        read_only: false
     depends_on:
-      postgres:
-        condition: "service_started"
-      postgres-init:
-        condition: "service_completed_successfully"
       nats:
+        condition: "service_started"
+      databridge:
         condition: "service_started"
       openbao:
         condition: "service_healthy"
@@ -573,20 +574,7 @@ services:
       WEBAPI_HTTP: "http://webapi:8080"
       services__webapi__http__0: "http://webapi:8080"
       WEBAPI_HTTPS: "https://webapi:8080"
-      VITE_API_BASE_URL: "http://webapi:8080"
-      API_BASE_URL: "http://webapi:8080"
-      ORIGIN: "${FRONTEND_PUBLIC_ORIGIN}"
-      SINGLE_USER_MODE: "false"
-      VITE_SINGLE_USER_MODE: "false"
-      VITE_AUTH_MODE: "multi-user"
-      AUTH_CLIENT_ID: "froststream-bff"
-      AUTH_CLIENT_SECRET: "${AUTHENTIK_CLIENT_SECRET}"
-      AUTH_SCOPES: "openid profile email groups offline_access"
-      AUTH_REDIRECT_URI: "${FRONTEND_PUBLIC_ORIGIN}/auth/callback"
-      VITE_AUTH_PUBLIC_AUTHORITY: "${AUTHENTIK_PUBLIC_AUTHORITY}"
-      AUTH_PUBLIC_AUTHORITY: "${AUTHENTIK_PUBLIC_AUTHORITY}"
-      VITE_AUTH_AUTHORITY: "http://authentik:9000/application/o/froststream/"
-      AUTH_AUTHORITY: "http://authentik:9000/application/o/froststream/"
+      WEBAPI_UPSTREAM: "http://webapi:8080"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://aspire-docker-demo-dashboard:18889"
       OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
       OTEL_SERVICE_NAME: "frontend"
@@ -595,8 +583,6 @@ services:
     depends_on:
       webapi:
         condition: "service_started"
-      authentik:
-        condition: "service_healthy"
     networks:
       - "aspire"
 networks:
@@ -610,4 +596,6 @@ volumes:
   typesense-data:
     driver: "local"
   froststream-data:
+    driver: "local"
+  froststream-data-protection-keys:
     driver: "local"

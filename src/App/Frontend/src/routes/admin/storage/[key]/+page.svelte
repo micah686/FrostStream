@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
+  import { page } from '$app/state';
   import { Button, Spinner } from 'flowbite-svelte';
   import { ArrowLeftOutline, ExclamationCircleOutline, TrashBinOutline } from 'flowbite-svelte-icons';
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
@@ -18,8 +19,6 @@
     mono?: boolean;
   }
 
-  let { data } = $props();
-
   let storage = $state<StorageConfig | null>(null);
   let loading = $state(true);
   let error = $state<string | null>(null);
@@ -28,7 +27,7 @@
 
   onMount(async () => {
     try {
-      storage = await getStorage(data.key);
+      storage = await getStorage(page.params.key ?? '');
     } catch (err) {
       error = err instanceof Error ? err.message : 'Could not load the storage target.';
     } finally {
@@ -117,7 +116,7 @@
 </script>
 
 <svelte:head>
-  <title>{data.key} · Storage · FrostStream</title>
+  <title>{page.params.key} · Storage · FrostStream</title>
 </svelte:head>
 
 <section class="mx-auto min-h-[calc(100vh-7rem)] max-w-4xl" aria-labelledby="storage-detail-title">

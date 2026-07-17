@@ -10,11 +10,29 @@ public sealed class FrostStreamAuthOptions
 
     public string Authority { get; init; } = "";
 
+    public string PublicAuthority { get; init; } = "";
+
+    public string PublicOrigin { get; init; } = "";
+
+    public string ClientId { get; init; } = "froststream-bff";
+
+    public string ClientSecret { get; init; } = "";
+
+    public string Scopes { get; init; } = "openid profile email groups offline_access";
+
     public string Audience { get; init; } = "froststream-api";
 
     public bool RequireHttpsMetadata { get; init; } = true;
 
     public bool ExposeOpenApi { get; init; }
+
+    public string DataProtectionKeysPath { get; init; } = "";
+
+    public int SessionLifetimeDays { get; init; } = 30;
+
+    public int RefreshSkewSeconds { get; init; } = 60;
+
+    public bool SecureCookies { get; init; }
 }
 
 public sealed class OpenFgaOptions

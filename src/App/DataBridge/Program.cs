@@ -84,6 +84,7 @@ class Program
         builder.Services.AddNatsTopologySource<PlaylistTopology>();
         builder.Services.AddNatsTopologySource<BackgroundJobsTopology>();
         builder.Services.AddNatsTopologySource<LocalImportTopology>();
+        builder.Services.AddNatsTopologySource<AuthSessionsTopology>();
         builder.Services.AddOpenBaoSecretStore(builder.Configuration);
         builder.Services.AddFrostStreamStorage();
 

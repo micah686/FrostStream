@@ -26,11 +26,11 @@ public static class StartServices
         var webApiEndpointName = hardening.EnableHttps ? "https" : "http";
 
         var databridge = WireDataBridge(builder, hardening, sharedStorageRoot, nats, postgres, openBaoResources, openBaoToken, typesense, typesenseApiKey, potProvider);
-        var webapi = WireWebApi(builder, hardening, sharedStorageRoot, nats, postgres, openBaoResources, openBaoToken, authentik, openFga, backupService, webApiEndpointName);
+        var webapi = WireWebApi(builder, hardening, sharedStorageRoot, nats, databridge, openBaoResources, openBaoToken, authentik, openFga, backupService, webApiEndpointName);
         WireWorker(builder, hardening, sharedStorageRoot, nats, openBaoResources, openBaoToken);
         WireScheduler(builder, nats, databridge);
         //WireAuthTester(builder, hardening, webapi, authentik, webApiEndpointName);
-        WireFrontend(builder, hardening, webapi, authentik, webApiEndpointName);
+        WireFrontend(builder, webapi, webApiEndpointName);
     }
 
     private static IResourceBuilder<ProjectResource> WireDataBridge(
@@ -80,7 +80,7 @@ public static class StartServices
         AppHostHardeningOptions hardening,
         string sharedStorageRoot,
         IResourceBuilder<NatsServerResource> nats,
-        PostgresResources postgres,
+        IResourceBuilder<ProjectResource> databridge,
         OpenBaoResources openBaoResources,
         IResourceBuilder<ParameterResource> openBaoToken,
         AuthentikResources authentik,
@@ -95,14 +95,26 @@ public static class StartServices
             "cast-advertised-base-url",
             Environment.GetEnvironmentVariable("CAST_ADVERTISED_BASE_URL") ?? "",
             publishValueAsDefault: false);
+        var publicOrigin = builder.AddParameter(
+            "frontend-public-origin",
+            FrontendPublicOrigin(),
+            publishValueAsDefault: false);
+        var publicAuthority = builder.AddParameter(
+            "authentik-public-authority",
+            FrontendPublicAuthAuthority(hardening),
+            publishValueAsDefault: false);
 
         var webApiUrls = hardening.EnableHttps
             ? $"http://0.0.0.0:{Ports.WebApiHttp};https://0.0.0.0:{Ports.WebApiHttps}"
             : $"http://0.0.0.0:{Ports.WebApiHttp}";
 
         var webapi = builder.AddProject<Projects.WebAPI>("webapi", launchProfileName: webApiEndpointName)
-            .WithReference(postgres.FrostStreamDb).WaitFor(postgres.FrostStreamDb).WaitForDatabases(postgres)
             .WithReference(nats).WaitFor(nats)
+            .WaitFor(databridge)
+            // Published ASP.NET images default to Production. Keep the WebAPI runtime environment
+            // aligned with the AppHost hardening profile so the local HTTP compose profile remains
+            // a development deployment while hardened exports enforce production-only checks.
+            .WithEnvironment("DOTNET_ENVIRONMENT", hardening.IsProduction ? "Production" : "Development")
             // Run mode only: in publish mode the container binds via the Dockerfile's
             // HTTP_PORTS=8080, and ASPNETCORE_URLS would override that to the host port, leaving
             // the host:8080 port mapping and the frontend's http://webapi:8080 pointing at a dead port.
@@ -122,6 +134,15 @@ public static class StartServices
             .WithEnvironment("Auth__AllowSingleUserModeInProduction", Environment.GetEnvironmentVariable("AUTH_ALLOW_SINGLE_USER_MODE_IN_PRODUCTION") ?? "false")
             .WithEnvironment("Auth__Audience", Environment.GetEnvironmentVariable("AUTHENTIK_API_AUDIENCE") ?? "froststream-api")
             .WithEnvironment("Auth__ClientId", authentik.ClientId)
+            .WithEnvironment("Auth__ClientSecret", authentik.ClientSecret)
+            .WithEnvironment("Auth__Scopes", Environment.GetEnvironmentVariable("AUTH_SCOPES") ?? "openid profile email groups offline_access")
+            .WithEnvironment("Auth__PublicOrigin", publicOrigin)
+            .WithEnvironment("Auth__PublicAuthority", publicAuthority)
+            .WithEnvironment("Auth__SecureCookies", Environment.GetEnvironmentVariable("AUTH_SECURE_COOKIES") ?? (hardening.EnableHttps ? "true" : "false"))
+            .WithEnvironment(ctx => ctx.EnvironmentVariables["Auth__DataProtectionKeysPath"] =
+                ctx.ExecutionContext.IsRunMode
+                    ? Path.Combine(sharedStorageRoot, "data-protection-keys")
+                    : "/data-protection-keys")
             .WithEnvironment("Auth__RequireHttpsMetadata", hardening.RequireHttpsMetadata ? "true" : "false")
             .WithEnvironment("Auth__ExposeOpenApi", Environment.GetEnvironmentVariable("AUTH_EXPOSE_OPENAPI") ?? "false")
             .WithEnvironment("OpenFga__StoreId", Environment.GetEnvironmentVariable("OPENFGA_STORE_ID") ?? "")
@@ -139,11 +160,13 @@ public static class StartServices
                 .WithImage("localhost/froststream-webapi", "latest")
                 // Named volume (shared by databridge/webapi/worker) instead of a host bind mount
                 // so the compose export stays machine-portable.
-                .WithVolume("froststream-data", ContainerStorageRoot))
+                .WithVolume("froststream-data", ContainerStorageRoot)
+                .WithVolume("froststream-data-protection-keys", "/data-protection-keys"))
             .WithLocalComposeBuild("localhost/froststream-webapi:latest", "App/WebAPI/Dockerfile");
 
         webapi.WithComposeDependencyCondition("openbao", "service_healthy");
         webapi.WithComposeDependencyCondition("backupservice", "service_healthy");
+        webapi.WithComposeDependencyCondition("databridge", "service_started");
         webapi.WithEndpointProxySupport(false);
         var isPublishMode = builder.ExecutionContext.IsPublishMode;
         webapi.WithEndpoint("http", endpoint =>
@@ -264,56 +287,20 @@ public static class StartServices
     
     private static void WireFrontend(
         IDistributedApplicationBuilder builder,
-        AppHostHardeningOptions hardening,
         IResourceBuilder<ProjectResource> webapi,
-        AuthentikResources authentik,
         string webApiEndpointName)
     {
-        // Browser-facing URLs are deployment-specific (LAN IP, reverse-proxy domain), so they are
-        // parameters: the compose publisher writes them to .env instead of baking literals into
-        // the yaml, letting a deployer repoint them without republishing.
-        var publicOrigin = builder.AddParameter(
-            "frontend-public-origin",
-            FrontendPublicOrigin(),
-            publishValueAsDefault: false);
-        var publicAuthority = builder.AddParameter(
-            "authentik-public-authority",
-            FrontendPublicAuthAuthority(hardening),
-            publishValueAsDefault: false);
-
         var frontend = builder.AddViteApp("frontend", "../Frontend")
             .WithPnpm()
             .WithExternalHttpEndpoints()
             .WithReference(webapi)
             .WaitFor(webapi)
-            .WithEnvironment("VITE_API_BASE_URL", webapi.GetEndpoint(webApiEndpointName))
-            .WithEnvironment("API_BASE_URL", webapi.GetEndpoint(webApiEndpointName))
-            .WithEnvironment("ORIGIN", publicOrigin)
-            .WithEnvironment("SINGLE_USER_MODE", hardening.SingleUserMode ? "true" : "false")
-            .WithEnvironment("VITE_SINGLE_USER_MODE", hardening.SingleUserMode ? "true" : "false")
-            .WithEnvironment("VITE_AUTH_MODE", hardening.SingleUserMode ? "single-user" : "multi-user")
-            .WithEnvironment("AUTH_CLIENT_ID", authentik.ClientId)
-            .WithEnvironment("AUTH_CLIENT_SECRET", authentik.ClientSecret)
-            .WithEnvironment("AUTH_SCOPES", Environment.GetEnvironmentVariable("AUTH_SCOPES") ?? "openid profile email groups offline_access")
-            .WithEnvironment("AUTH_REDIRECT_URI", ReferenceExpression.Create($"{publicOrigin}/auth/callback"))
-            .WithEnvironment("VITE_AUTH_PUBLIC_AUTHORITY", publicAuthority)
-            .WithEnvironment("AUTH_PUBLIC_AUTHORITY", publicAuthority)
+            .WithEnvironment("WEBAPI_UPSTREAM", webapi.GetEndpoint(webApiEndpointName))
             .WithLocalComposeBuild("localhost/froststream-frontend:latest", "App/Frontend/Dockerfile");
-    
-        frontend = frontend.WithAuthAuthority("VITE_AUTH_AUTHORITY", hardening.SingleUserMode, authentik);
-        frontend = frontend.WithAuthAuthority("AUTH_AUTHORITY", hardening.SingleUserMode, authentik);
 
-        // Pin the host port in both modes so ORIGIN/AUTH_REDIRECT_URI stay valid whether the
-        // frontend runs under Aspire, compose, or standalone `pnpm run dev` (vite.config.ts
-        // defaults to the same port).
+        // Pin the host port in both modes; vite proxies during development and Caddy proxies in the
+        // published image using the same /api, /auth, and /stream contract.
         frontend.WithEndpoint("http", endpoint => endpoint.Port = Ports.Frontend, createIfNotExists: false);
-    
-        if (!hardening.SingleUserMode && authentik.Server is { } authentikServer)
-        {
-            frontend = frontend
-                .WaitFor(authentikServer)
-                .WithComposeDependencyCondition("authentik", "service_healthy");
-        }
     }
 
     private static string FrontendPublicAuthAuthority(AppHostHardeningOptions hardening)

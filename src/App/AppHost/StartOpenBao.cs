@@ -30,7 +30,10 @@ public static class StartOpenBao
         var dataInit = builder
             .AddContainer("openbao-data-init", "docker.io/library/busybox", "1.37")
             .WithEntrypoint("/bin/sh")
-            .WithArgs("-c", $"mkdir -p /openbao/data && chown -R {OpenBaoUserAndGroup} /openbao/data && chmod -R u+rwX,g+rwX /openbao/data")
+            // Keep the volume non-empty after initialization. Rootless Podman can otherwise
+            // initialize the still-empty mountpoint again for the OpenBao image, replacing the
+            // ownership set here with root:root before OpenBao drops to uid 100/gid 1000.
+            .WithArgs("-c", $"mkdir -p /openbao/data && touch /openbao/data/.volume-initialized && chown -R {OpenBaoUserAndGroup} /openbao/data && chmod -R u+rwX,g+rwX /openbao/data")
             .WithVolume(DataVolumeName, "/openbao/data");
 
         var server = builder

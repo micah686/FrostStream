@@ -50,11 +50,13 @@ SINGLE_USER_MODE="true"   # no Authentik/OpenFGA containers, no login
 
 Media and app data default to `<repo>/data` (override with `FROSTSTREAM_STORAGE_ROOT`).
 
-The frontend can also be run standalone against an already-running backend:
+The frontend can also be run standalone against an already-running WebAPI. Vite proxies `/api`,
+`/auth`, and `/stream`; override `WEBAPI_UPSTREAM` when WebAPI is not on `http://localhost:25200`:
 
 ```bash
 cd src/App/Frontend
-pnpm install && pnpm run dev   # binds http://localhost:25000
+pnpm install
+WEBAPI_UPSTREAM=http://localhost:25200 pnpm run dev   # binds http://localhost:25000
 ```
 
 ### Run with Docker Compose
@@ -73,7 +75,16 @@ Notes:
 
 - `.env` holds all secrets and deployment URLs (`FRONTEND_PUBLIC_ORIGIN`, `AUTHENTIK_PUBLIC_AUTHORITY`, …). Change these when serving on a LAN address or domain — no republish needed.
 
-- Media is stored in the named volume `froststream-data`; Postgres WAL archive in `wal-archive`.
+- The production frontend image is Caddy plus static assets. WebAPI owns OIDC, refresh, logout,
+  CSRF, and opaque browser sessions; encrypted session tickets live in the DataBridge-provisioned
+  NATS KV bucket and Data Protection keys live in the `froststream-data-protection-keys` volume.
+
+- Core backups and PostgreSQL WAL are written beneath the host path in `FROSTSTREAM_BACKUP_ROOT`
+  (`./backups` by default). Media remains in the named volume `froststream-data`.
+
+- OpenBao now uses persistent integrated storage. A new Compose deployment must be initialized and
+  unsealed before the remaining services can start; follow
+  [`docs/Markdown/BACKUP_RESTORE.md`](docs/Markdown/BACKUP_RESTORE.md#first-compose-start-openbao).
 
 - The artifacts are **generated** — never hand-edit the yaml. Regenerate after AppHost changes:
   
@@ -164,7 +175,7 @@ All host ports live in one registry ([`src/App/AppHost/Ports.cs`](src/App/AppHos
 | **25xy0** (external) | Host-published; browser/host-facing                                                | frontend `25000` · authentik `25100` · webapi `25200` (https `25210`) · scheduler `25300` · openbao `25400` · postgres `25500` · dbgate `25600` · nats-ui `25700` · openfga-studio `25800` |
 | **240xy** (internal) | Container-to-container only; bound on localhost in dev, never published by compose | typesense `24010` · pot-provider `24020` · openfga `24030` · nats `24040`–`24042`                                                                                                          |
 
-External ports are overridable via `PORT_*` variables in `aspire-development.env`.
+External ports are overridable via `PORT_*` variables in the generated Aspire dev env.
 
 ---
 
