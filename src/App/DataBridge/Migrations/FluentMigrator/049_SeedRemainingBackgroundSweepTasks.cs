@@ -94,8 +94,8 @@ public sealed class M049_SeedRemainingBackgroundSweepTasks : Migration
             """);
 
         // Nightly database backup (02:00 UTC). Seeded disabled — mirrors nightly-orphan-cleanup —
-        // because BackupRunner depends on environment configuration (pg_dump credentials, OpenBao);
-        // enable via the schedules API once the Backup section is configured.
+        // because backups are an operator-controlled retention policy; enable through the schedules
+        // API after confirming the BackupService host bind has sufficient capacity.
         Execute.Sql("""
             INSERT INTO scheduling.scheduled_tasks
                 ("key", task_type, cron, timezone, enabled, catchup_policy, next_due_at)

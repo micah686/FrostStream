@@ -25,6 +25,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\BackupService\BackupService.csproj" />
       <ProjectReference Include="..\DataBridge\DataBridge.csproj" />
       <ProjectReference Include="..\Scheduler\Scheduler.csproj" />
       <ProjectReference Include="..\WebAPI\WebAPI.csproj" />

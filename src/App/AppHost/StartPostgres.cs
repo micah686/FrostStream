@@ -56,6 +56,7 @@ public static class StartPostgres
         }
 
         var postgresConf = Path.Combine(builder.AppHostDirectory, "configs", "postgres", "postgresql.conf");
+        var postgresHba = Path.Combine(builder.AppHostDirectory, "configs", "postgres", "pg_hba.conf");
 
         // WithDbGate requires CommunityToolkit.Aspire.Hosting.DbGate and
         // CommunityToolkit.Aspire.Hosting.PostgreSQL.Extensions at the same version.
@@ -63,18 +64,13 @@ public static class StartPostgres
             .WithHostPort(Ports.Postgres)
             .WithDataVolume()
             .WithPortableBindMount(postgresConf, "../AppHost/configs/postgres/postgresql.conf", "/etc/postgresql/postgresql.conf", isReadOnly: true)
+            .WithPortableBindMount(postgresHba, "../AppHost/configs/postgres/pg_hba.conf", "/etc/postgresql/pg_hba.conf", isReadOnly: true)
             .WithArgs("-c", "config_file=/etc/postgresql/postgresql.conf");
 
-        // The WAL archive is shared with BackupTool on the host in run mode; the compose deploy
-        // has no working BackupTool integration yet, so a named volume keeps the export portable.
-        if (builder.ExecutionContext.IsRunMode)
-        {
-            server.WithBindMount(walArchiveDir, "/wal-archive");
-        }
-        else
-        {
-            server.WithVolume("wal-archive", "/wal-archive");
-        }
+        server.WithPortableBindMount(
+            walArchiveDir,
+            "${FROSTSTREAM_BACKUP_ROOT:-./backups}/wal",
+            "/wal-archive");
 
         // The toolkit's DbGate resource never makes it into the compose publish, and its "dbgate"
         // name would collide with the explicit publish-only container below — so run mode only.

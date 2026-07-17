@@ -73,14 +73,17 @@ services:
         target: "/var/lib/postgresql"
         source: "apphost-feed4158f1-postgres-data"
         read_only: false
-      - type: "volume"
-        target: "/wal-archive"
-        source: "wal-archive"
-        read_only: false
       - type: "bind"
         target: "/etc/postgresql/postgresql.conf"
         source: "../AppHost/configs/postgres/postgresql.conf"
         read_only: true
+      - type: "bind"
+        target: "/etc/postgresql/pg_hba.conf"
+        source: "../AppHost/configs/postgres/pg_hba.conf"
+        read_only: true
+      - type: "bind"
+        target: "/wal-archive"
+        source: "${FROSTSTREAM_BACKUP_ROOT:-./backups}/wal"
     networks:
       - "aspire"
     healthcheck:
@@ -126,20 +129,52 @@ services:
         condition: "service_healthy"
     networks:
       - "aspire"
+  openbao-data-init:
+    image: "docker.io/library/busybox:1.37"
+    command:
+      - "-c"
+      - "mkdir -p /openbao/data && chown -R 0:0 /openbao/data && chmod -R u+rwX,g+rwX /openbao/data"
+    entrypoint:
+      - "/bin/sh"
+    volumes:
+      - type: "volume"
+        target: "/openbao/data"
+        source: "openbao-data"
+        read_only: false
+    networks:
+      - "aspire"
   openbao:
     image: "openbao/openbao:2.5.5"
     command:
       - "server"
-      - "-dev"
-      - "-dev-root-token-id"
-      - "${OPENBAO_TOKEN}"
+      - "-config=/openbao/openbao.hcl"
     environment:
-      BAO_DEV_ROOT_TOKEN_ID: "${OPENBAO_TOKEN}"
-      BAO_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
+      OPENBAO_APP_TOKEN: "${OPENBAO_TOKEN}"
     ports:
       - "25400:8200"
+    volumes:
+      - type: "volume"
+        target: "/openbao/data"
+        source: "openbao-data"
+        read_only: false
+      - type: "bind"
+        target: "/openbao/openbao.hcl"
+        source: "../AppHost/configs/openbao/openbao.hcl"
+        read_only: true
+    depends_on:
+      openbao-data-init:
+        condition: "service_completed_successfully"
     networks:
       - "aspire"
+    healthcheck:
+      test:
+        - "CMD"
+        - "bao"
+        - "status"
+      interval: "10s"
+      timeout: "5s"
+      retries: 30
+      start_period: "10s"
   typesense:
     image: "typesense/typesense:30.2"
     environment:
@@ -274,6 +309,71 @@ services:
       - "4416"
     networks:
       - "aspire"
+  backupservice:
+    image: "localhost/froststream-backupservice:latest"
+    pull_policy: "build"
+    build:
+      context: "../.."
+      dockerfile: "App/BackupService/Dockerfile"
+    environment:
+      ConnectionStrings__nats: "nats://nats:${NATS_PASSWORD}@nats:4222"
+      NATS_HOST: "nats"
+      NATS_PORT: "4222"
+      NATS_USERNAME: "nats"
+      NATS_PASSWORD: "${NATS_PASSWORD}"
+      NATS_URI: "nats://nats:${NATS_PASSWORD}@nats:4222"
+      ConnectionStrings__froststreamdb: "Host=postgres;Port=5432;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD};Database=froststreamdb"
+      FROSTSTREAMDB_HOST: "postgres"
+      FROSTSTREAMDB_PORT: "5432"
+      FROSTSTREAMDB_USERNAME: "${POSTGRES_USER}"
+      FROSTSTREAMDB_PASSWORD: "${POSTGRES_PASSWORD}"
+      FROSTSTREAMDB_URI: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/froststreamdb"
+      FROSTSTREAMDB_JDBCCONNECTIONSTRING: "jdbc:postgresql://postgres:5432/froststreamdb"
+      FROSTSTREAMDB_DATABASENAME: "froststreamdb"
+      Backup__Directory: "/backups"
+      Backup__ArchiveDir: "/backups/wal"
+      Backup__PostgresHost: "postgres"
+      Backup__PostgresPort: "5432"
+      Backup__PostgresUser: "${POSTGRES_USER}"
+      Backup__PostgresPassword: "${POSTGRES_PASSWORD}"
+      Backup__OpenBaoAddress: "http://openbao:8200"
+      Backup__OpenBaoToken: "${OPENBAO_TOKEN}"
+      Backup__OpenBaoKvMount: "secret"
+      Backup__ScheduledRetentionCount: "14"
+      POSTGRES_HOST: "postgres"
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: "${POSTGRES_USER}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      POSTGRES_ARCHIVE_DIR: "/backups/wal"
+      OPENBAO_ADDR: "http://openbao:8200"
+      OPENBAO_TOKEN: "${OPENBAO_TOKEN}"
+      OPENBAO_KV_MOUNT: "secret"
+      Backup__HostRoot: "${FROSTSTREAM_BACKUP_ROOT}"
+    expose:
+      - "8080"
+    volumes:
+      - type: "bind"
+        target: "/backups"
+        source: "${FROSTSTREAM_BACKUP_ROOT:-./backups}"
+    depends_on:
+      nats:
+        condition: "service_started"
+      postgres:
+        condition: "service_started"
+      postgres-init:
+        condition: "service_completed_successfully"
+      openbao:
+        condition: "service_healthy"
+    networks:
+      - "aspire"
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - "curl -fsS http://localhost:8080/health || exit 1"
+      interval: "10s"
+      timeout: "5s"
+      retries: 12
+      start_period: "20s"
   databridge:
     image: "localhost/froststream-databridge:latest"
     pull_policy: "build"
@@ -304,13 +404,6 @@ services:
       SINGLE_USER_MODE: "false"
       PotBroker__Enabled: "true"
       PotBroker__ProviderUrl: "http://pot-provider:4416"
-      Backup__Directory: "/data/core-backups"
-      Backup__ToolPath: "dotnet"
-      Backup__ToolBaseArguments: "run --project /home/micah/RiderProjects/FrostStream/src/App/BackupTool/BackupTool.csproj --"
-      Backup__ArchiveDir: "/data/wal-archive"
-      Backup__OpenBaoAddress: "http://openbao:8200"
-      Backup__OpenBaoToken: "${OPENBAO_TOKEN}"
-      Backup__OpenBaoKvMount: "secret"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://aspire-docker-demo-dashboard:18889"
       OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
       OTEL_SERVICE_NAME: "databridge"
@@ -327,7 +420,7 @@ services:
       nats:
         condition: "service_started"
       openbao:
-        condition: "service_started"
+        condition: "service_healthy"
       typesense:
         condition: "service_started"
       pot-provider:
@@ -373,13 +466,7 @@ services:
       OpenFga__AutoProvision: "true"
       OpenFga__BootstrapOwnerSubjects: ""
       Cast__AdvertisedBaseUrl: "${CAST_ADVERTISED_BASE_URL}"
-      Backup__Directory: "/data/core-backups"
-      Backup__ToolPath: "dotnet"
-      Backup__ToolBaseArguments: "run --project /home/micah/RiderProjects/FrostStream/src/App/BackupTool/BackupTool.csproj --"
-      Backup__ArchiveDir: "/data/wal-archive"
-      Backup__OpenBaoAddress: "http://openbao:8200"
-      Backup__OpenBaoToken: "${OPENBAO_TOKEN}"
-      Backup__OpenBaoKvMount: "secret"
+      BackupService__BaseUrl: "http://backupservice:8080"
       Auth__Authority: "http://authentik:9000/application/o/froststream/"
       OpenFga__Endpoint: "http://openfga:8080"
       Authentik__ApiUrl: "http://authentik:9000"
@@ -404,7 +491,9 @@ services:
       nats:
         condition: "service_started"
       openbao:
-        condition: "service_started"
+        condition: "service_healthy"
+      backupservice:
+        condition: "service_healthy"
       authentik:
         condition: "service_healthy"
       openfga:
@@ -441,7 +530,7 @@ services:
       nats:
         condition: "service_started"
       openbao:
-        condition: "service_started"
+        condition: "service_healthy"
     networks:
       - "aspire"
   scheduler:
@@ -516,7 +605,7 @@ networks:
 volumes:
   apphost-feed4158f1-postgres-data:
     driver: "local"
-  wal-archive:
+  openbao-data:
     driver: "local"
   typesense-data:
     driver: "local"

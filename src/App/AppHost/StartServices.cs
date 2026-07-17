@@ -13,19 +13,21 @@ public static class StartServices
         string sharedStorageRoot,
         IResourceBuilder<NatsServerResource> nats,
         PostgresResources postgres,
-        IResourceBuilder<ContainerResource> openBao,
+        OpenBaoResources openBaoResources,
         IResourceBuilder<ParameterResource> openBaoToken,
         IResourceBuilder<ContainerResource> typesense,
         IResourceBuilder<ParameterResource> typesenseApiKey,
         AuthentikResources authentik,
         OpenFgaResources openFga,
-        IResourceBuilder<ContainerResource> potProvider)
+        IResourceBuilder<ContainerResource> potProvider,
+        IResourceBuilder<ContainerResource> backupService)
     {
+        var openBao = openBaoResources.Server;
         var webApiEndpointName = hardening.EnableHttps ? "https" : "http";
 
-        var databridge = WireDataBridge(builder, hardening, sharedStorageRoot, nats, postgres, openBao, openBaoToken, typesense, typesenseApiKey, potProvider);
-        var webapi = WireWebApi(builder, hardening, sharedStorageRoot, nats, postgres, openBao, openBaoToken, authentik, openFga, webApiEndpointName);
-        WireWorker(builder, hardening, sharedStorageRoot, nats, openBao, openBaoToken);
+        var databridge = WireDataBridge(builder, hardening, sharedStorageRoot, nats, postgres, openBaoResources, openBaoToken, typesense, typesenseApiKey, potProvider);
+        var webapi = WireWebApi(builder, hardening, sharedStorageRoot, nats, postgres, openBaoResources, openBaoToken, authentik, openFga, backupService, webApiEndpointName);
+        WireWorker(builder, hardening, sharedStorageRoot, nats, openBaoResources, openBaoToken);
         WireScheduler(builder, nats, databridge);
         //WireAuthTester(builder, hardening, webapi, authentik, webApiEndpointName);
         WireFrontend(builder, hardening, webapi, authentik, webApiEndpointName);
@@ -37,12 +39,13 @@ public static class StartServices
         string sharedStorageRoot,
         IResourceBuilder<NatsServerResource> nats,
         PostgresResources postgres,
-        IResourceBuilder<ContainerResource> openBao,
+        OpenBaoResources openBaoResources,
         IResourceBuilder<ParameterResource> openBaoToken,
         IResourceBuilder<ContainerResource> typesense,
         IResourceBuilder<ParameterResource> typesenseApiKey,
         IResourceBuilder<ContainerResource> potProvider)
     {
+        var openBao = openBaoResources.Server;
         var databridge = builder.AddProject<Projects.DataBridge>("databridge")
             .WithReference(postgres.FrostStreamDb).WaitFor(postgres.FrostStreamDb).WaitForDatabases(postgres)
             .WithReference(nats).WaitFor(nats)
@@ -56,7 +59,7 @@ public static class StartServices
             // POT broker role: answers Worker pot.request messages from the co-located bgutil provider.
             .WithEnvironment("PotBroker__Enabled", "true")
             .WithEnvironment("PotBroker__ProviderUrl", potProvider.GetEndpoint("http"))
-            .WaitFor(openBao)
+            .WaitForOpenBao(openBaoResources)
             .WaitFor(typesense)
             .WaitFor(potProvider)
             .PublishAsDockerFile(c => c
@@ -69,42 +72,7 @@ public static class StartServices
                 .WithVolume("froststream-data", ContainerStorageRoot))
             .WithLocalComposeBuild("localhost/froststream-databridge:latest", "App/DataBridge/Dockerfile");
 
-        // Scheduled backups run in DataBridge, so it needs the same BackupTool wiring as WebAPI.
-        return ApplyBackupEnvironment(databridge, builder.AppHostDirectory, sharedStorageRoot, openBao, openBaoToken);
-    }
-
-    /// <summary>
-    /// Applies the shared BackupTool environment (`Backup__*`) to a service that shells out to the
-    /// tool. Both WebAPI (on-demand) and DataBridge (scheduled) use this so their configuration stays
-    /// in lockstep, including the WAL archive directory shared with the Postgres container.
-    /// </summary>
-    private static IResourceBuilder<ProjectResource> ApplyBackupEnvironment(
-        IResourceBuilder<ProjectResource> resource,
-        string appHostDirectory,
-        string sharedStorageRoot,
-        IResourceBuilder<ContainerResource> openBao,
-        IResourceBuilder<ParameterResource> openBaoToken)
-    {
-        var backupToolProject = Path.GetFullPath(Path.Combine(
-            appHostDirectory,
-            "..",
-            "BackupTool",
-            "BackupTool.csproj"));
-
-        return resource
-            .WithEnvironment(ctx => ctx.EnvironmentVariables["Backup__Directory"] =
-                ctx.ExecutionContext.IsRunMode
-                    ? BackupPaths.BackupRoot(sharedStorageRoot)
-                    : $"{ContainerStorageRoot}/core-backups")
-            .WithEnvironment("Backup__ToolPath", "dotnet")
-            .WithEnvironment("Backup__ToolBaseArguments", $"run --project {backupToolProject} --")
-            .WithEnvironment(ctx => ctx.EnvironmentVariables["Backup__ArchiveDir"] =
-                ctx.ExecutionContext.IsRunMode
-                    ? BackupPaths.WalArchiveDirectory(sharedStorageRoot)
-                    : $"{ContainerStorageRoot}/wal-archive")
-            .WithEnvironment("Backup__OpenBaoAddress", openBao.GetEndpoint("http"))
-            .WithEnvironment("Backup__OpenBaoToken", openBaoToken)
-            .WithEnvironment("Backup__OpenBaoKvMount", "secret");
+        return databridge.WithComposeDependencyCondition("openbao", "service_healthy");
     }
 
     private static IResourceBuilder<ProjectResource> WireWebApi(
@@ -113,12 +81,14 @@ public static class StartServices
         string sharedStorageRoot,
         IResourceBuilder<NatsServerResource> nats,
         PostgresResources postgres,
-        IResourceBuilder<ContainerResource> openBao,
+        OpenBaoResources openBaoResources,
         IResourceBuilder<ParameterResource> openBaoToken,
         AuthentikResources authentik,
         OpenFgaResources openFga,
+        IResourceBuilder<ContainerResource> backupService,
         string webApiEndpointName)
     {
+        var openBao = openBaoResources.Server;
         // LAN-reachable base URL that cast devices use to fetch media; deployment-specific, so
         // parameterized to land in the compose .env rather than the yaml.
         var castAdvertisedBaseUrl = builder.AddParameter(
@@ -159,7 +129,9 @@ public static class StartServices
             .WithEnvironment("OpenFga__AutoProvision", Environment.GetEnvironmentVariable("OPENFGA_AUTO_PROVISION") ?? "true")
             .WithEnvironment("OpenFga__BootstrapOwnerSubjects", Environment.GetEnvironmentVariable("OPENFGA_BOOTSTRAP_OWNER_SUB") ?? "")
             .WithEnvironment("Cast__AdvertisedBaseUrl", castAdvertisedBaseUrl)
-            .WaitFor(openBao)
+            .WithEnvironment("BackupService__BaseUrl", backupService.GetEndpoint("http"))
+            .WaitForOpenBao(openBaoResources)
+            .WaitFor(backupService)
             .PublishAsDockerFile(c => c
                 .WithDockerfile(
                     Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "WebAPI")),
@@ -170,8 +142,8 @@ public static class StartServices
                 .WithVolume("froststream-data", ContainerStorageRoot))
             .WithLocalComposeBuild("localhost/froststream-webapi:latest", "App/WebAPI/Dockerfile");
 
-        webapi = ApplyBackupEnvironment(webapi, builder.AppHostDirectory, sharedStorageRoot, openBao, openBaoToken);
-
+        webapi.WithComposeDependencyCondition("openbao", "service_healthy");
+        webapi.WithComposeDependencyCondition("backupservice", "service_healthy");
         webapi.WithEndpointProxySupport(false);
         var isPublishMode = builder.ExecutionContext.IsPublishMode;
         webapi.WithEndpoint("http", endpoint =>
@@ -229,9 +201,10 @@ public static class StartServices
         AppHostHardeningOptions hardening,
         string sharedStorageRoot,
         IResourceBuilder<NatsServerResource> nats,
-        IResourceBuilder<ContainerResource> openBao,
+        OpenBaoResources openBaoResources,
         IResourceBuilder<ParameterResource> openBaoToken)
     {
+        var openBao = openBaoResources.Server;
         builder.AddProject<Projects.Worker>("worker")
             .WithReference(nats).WaitFor(nats)
             .WithEnvironment("OpenBao__Address", openBao.GetEndpoint("http"))
@@ -241,7 +214,7 @@ public static class StartServices
             // Start the loopback HTTP→NATS POT shim and inject the bgutil extractor-args. The Worker
             // reaches a provider via the pot-brokers queue group over NATS, not a direct container URL.
             .WithEnvironment("PotProvider__Enabled", "true")
-            .WaitFor(openBao)
+            .WaitForOpenBao(openBaoResources)
             .PublishAsDockerFile(c => c
                 .WithDockerfile(
                     Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "Worker")),
@@ -250,7 +223,8 @@ public static class StartServices
                 // Named volume (shared by databridge/webapi/worker) instead of a host bind mount
                 // so the compose export stays machine-portable.
                 .WithVolume("froststream-data", ContainerStorageRoot))
-            .WithLocalComposeBuild("localhost/froststream-worker:latest", "App/Worker/Dockerfile");
+            .WithLocalComposeBuild("localhost/froststream-worker:latest", "App/Worker/Dockerfile")
+            .WithComposeDependencyCondition("openbao", "service_healthy");
     }
 
     private static void WireScheduler(

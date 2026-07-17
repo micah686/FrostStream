@@ -7,8 +7,7 @@ namespace Shared.Backups;
 /// <summary>
 /// Shared launcher for the BackupTool CLI. Resolves effective connection settings (merging the
 /// <c>Backup</c> section with the <c>froststreamdb</c> connection string), builds the standard
-/// PostgreSQL/OpenBao argument set, and runs the tool — replacing the logic that was previously
-/// duplicated in WebAPI's BackupJobService and DataBridge's BackupRunner.
+/// PostgreSQL/OpenBao argument set, and runs the tool for the dedicated BackupService.
 /// </summary>
 public sealed class BackupToolClient(IBackupToolSettings settings, IConfiguration configuration)
 {

@@ -8,6 +8,7 @@ using NodaTime;
 using NodaTime.Serialization.SystemTextJson;
 using Scalar.AspNetCore;
 using Shared.Auth;
+using Shared.Backups;
 using Shared.Secrets;
 using Shared.Storage;
 using System.Text.Json.Serialization;
@@ -38,7 +39,6 @@ public class Program
         builder.Services.Configure<FrostStreamAuthOptions>(builder.Configuration.GetSection(FrostStreamAuthOptions.SectionName));
         builder.Services.Configure<OpenFgaOptions>(builder.Configuration.GetSection(OpenFgaOptions.SectionName));
         builder.Services.Configure<AuthentikOptions>(builder.Configuration.GetSection(AuthentikOptions.SectionName));
-        builder.Services.Configure<BackupOptions>(builder.Configuration.GetSection(BackupOptions.SectionName));
 
         // Default scheme is a selector: requests carrying a cast token (sessionless cast devices)
         // authenticate through the CastToken scheme; everything else uses the session scheme for
@@ -149,6 +149,8 @@ public class Program
             });
         
         builder.Services.AddSingleton<IClock>(NodaTime.SystemClock.Instance);
+        builder.Services.AddHttpClient<IBackupServiceClient, BackupServiceClient>(client =>
+            client.BaseAddress = new Uri(builder.Configuration["BackupService:BaseUrl"] ?? "http://backupservice"));
         builder.Services.AddSingleton<BackupJobService>();
         builder.Services.AddSingleton<DownloadQueueHub>();
         builder.Services.AddHostedService<DownloadQueueHub>(p => p.GetRequiredService<DownloadQueueHub>());
@@ -186,6 +188,23 @@ public class Program
         {
             app.Logger.LogWarning("AUTH DISABLED - SINGLE_USER_MODE is active; full access is granted to all requests.");
         }
+
+        app.Use(async (context, next) =>
+        {
+            try
+            {
+                await next();
+            }
+            catch (Exception ex) when (context.Request.Path.StartsWithSegments("/api/global/backups"))
+            {
+                app.Logger.LogError(ex, "BackupService request failed.");
+                context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    error = "The backup service is unavailable. Check its health and configured backup directory."
+                });
+            }
+        });
 
         app.UseHttpsRedirection();
         app.UseCors();

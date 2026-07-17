@@ -16,18 +16,25 @@ builder.AddDockerComposeEnvironment("aspire-docker-demo")
         }
     });
 
+
 // aspire-development.env is the source of truth for all configurable environment
 // variables (mode flags, image tags, secrets, tunables). Values in the file override
 // variables inherited from the shell.
-var devEnvFile = Path.GetFullPath(Path.Combine(builder.AppHostDirectory,  "aspire-development.env"));
+var devEnvFile = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "aspire-development.env"));
 if (File.Exists(devEnvFile))
 {
     Env.Load(devEnvFile);
-
-    builder.Configuration.AddEnvironmentVariables();
 }
 
+// Empty optional path values mean "use the deployment default". Remove them before Aspire
+// snapshots environment variables into configuration, otherwise parameter publication emits
+// an empty bind source instead of the Compose-safe default.
+if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FROSTSTREAM_BACKUP_ROOT")))
+{
+    Environment.SetEnvironmentVariable("FROSTSTREAM_BACKUP_ROOT", null);
+}
 
+builder.Configuration.AddEnvironmentVariables();
 
 var hardening = AppHostHardening.Read(AppHostHardening.IsTruthy(Environment.GetEnvironmentVariable("SINGLE_USER_MODE")));
 AppHostHardening.Validate(hardening);
@@ -50,13 +57,15 @@ var typesenseApiKey = builder.AddParameter(
 
 var nats      = StartNats.Start(builder);
 var postgres  = StartPostgres.Start(builder, hardening, sharedStorageRoot);
-var openBao   = StartOpenBao.Start(builder, openBaoToken);
+var openBaoResources = StartOpenBao.Start(builder, openBaoToken, sharedStorageRoot);
+var openBao   = openBaoResources.Server;
 var typesense = StartTypesense.Start(builder, typesenseApiKey);
 var authentik = StartAuthentik.Start(builder, postgres, hardening);
 var openFga   = StartOpenFga.Start(builder, postgres, hardening);
 var potProvider = StartPotProvider.Start(builder);
+var backupService = StartBackupService.Start(builder, sharedStorageRoot, nats, postgres, openBaoResources, openBaoToken);
 
-StartServices.Wire(builder, hardening, sharedStorageRoot, nats, postgres, openBao, openBaoToken, typesense, typesenseApiKey, authentik, openFga, potProvider);
+StartServices.Wire(builder, hardening, sharedStorageRoot, nats, postgres, openBaoResources, openBaoToken, typesense, typesenseApiKey, authentik, openFga, potProvider, backupService);
 
 builder.Build().Run();
 

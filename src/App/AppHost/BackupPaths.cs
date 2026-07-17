@@ -7,9 +7,10 @@ namespace AppHost;
 internal static class BackupPaths
 {
     public static string BackupRoot(string sharedStorageRoot)
-        => Environment.GetEnvironmentVariable("FROSTSTREAM_BACKUP_ROOT")
-           ?? Path.Combine(sharedStorageRoot, "core-backups");
+        => string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FROSTSTREAM_BACKUP_ROOT"))
+            ? Path.Combine(sharedStorageRoot, "core-backups")
+            : Environment.GetEnvironmentVariable("FROSTSTREAM_BACKUP_ROOT")!;
 
     public static string WalArchiveDirectory(string sharedStorageRoot)
-        => Path.Combine(sharedStorageRoot, "wal-archive");
+        => Path.Combine(BackupRoot(sharedStorageRoot), "wal");
 }
