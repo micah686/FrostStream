@@ -40,6 +40,7 @@ public static class EndpointIds
     public const string DownloadsQueueList = "downloads.queue.list";
     public const string DownloadsQueueGet = "downloads.queue.get";
     public const string DownloadsQueueHistory = "downloads.queue.history";
+    public const string DownloadsQueueMedia = "downloads.queue.media";
     public const string DownloadsQueueStream = "downloads.queue.stream";
     public const string DownloadsQueueProgress = "downloads.queue.progress";
     public const string DownloadsQueuePriority = "downloads.queue.priority";
@@ -269,6 +270,7 @@ public static class EndpointCatalog
         new(EndpointIds.DownloadsQueueList, Bundles.Downloading),
         new(EndpointIds.DownloadsQueueGet, Bundles.Downloading),
         new(EndpointIds.DownloadsQueueHistory, Bundles.Downloading),
+        new(EndpointIds.DownloadsQueueMedia, Bundles.Downloading),
         new(EndpointIds.DownloadsQueueStream, Bundles.Downloading),
         new(EndpointIds.DownloadsQueueProgress, Bundles.Downloading),
         new(EndpointIds.DownloadsQueuePriority, Bundles.Downloading),

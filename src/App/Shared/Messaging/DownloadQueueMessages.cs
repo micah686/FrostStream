@@ -12,6 +12,7 @@ public static class DownloadQueueSubjects
     public const string List = "download-queue.list";
     public const string Get = "download-queue.get";
     public const string History = "download-queue.history";
+    public const string Media = "download-queue.media";
 
     /// <summary>
     /// Non-persistent broadcast published by DataBridge whenever a download job's state changes.
@@ -162,4 +163,22 @@ public sealed record DownloadQueueHistoryEntryDto
     public required string EventName { get; init; }
     public string? PayloadJson { get; init; }
     public Instant RecordedAt { get; init; }
+}
+
+public sealed record DownloadQueueMediaRequest
+{
+    public required Guid JobId { get; init; }
+}
+
+/// <summary>
+/// Resolves a job to the media item it produced, via <c>media.media_source_versions.latest_job_id</c>.
+/// Only the job that is *currently* the latest for its source resolves — an older job whose source
+/// was later re-downloaded will report <see cref="MediaGuid"/> as null.
+/// </summary>
+public sealed record DownloadQueueMediaResponse
+{
+    public bool Success { get; init; }
+    public string? ErrorCode { get; init; }
+    public string? ErrorMessage { get; init; }
+    public Guid? MediaGuid { get; init; }
 }

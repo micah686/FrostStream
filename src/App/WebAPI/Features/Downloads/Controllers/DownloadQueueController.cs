@@ -131,6 +131,25 @@ public sealed class DownloadQueueController(
         return Ok(response.Entries);
     }
 
+    [HttpGet("{jobId:guid}/media")]
+    [Endpoint(EndpointIds.DownloadsQueueMedia)]
+    [EndpointSummary("Resolve a download job's produced media")]
+    [EndpointDescription("Resolves the media item a completed job produced via media_source_versions.latest_job_id, for deep-linking to /watch/{mediaGuid}. Returns 404 when the job never produced media or is no longer the latest job for its source (a later re-download of the same source overwrites latest_job_id).")]
+    public async Task<ActionResult<DownloadQueueMediaDto>> GetMedia(Guid jobId, CancellationToken cancellationToken)
+    {
+        var response = await SendQueryAsync<DownloadQueueMediaRequest, DownloadQueueMediaResponse>(
+            DownloadQueueSubjects.Media, new DownloadQueueMediaRequest { JobId = jobId }, cancellationToken);
+
+        if (response is null)
+            return BadGateway();
+        if (!response.Success)
+            return QueueError(response.ErrorCode, response.ErrorMessage);
+        if (response.MediaGuid is null)
+            return NotFound(new ProblemDetails { Title = "No media resolved for this job.", Status = StatusCodes.Status404NotFound });
+
+        return Ok(new DownloadQueueMediaDto(response.MediaGuid.Value));
+    }
+
     // ── Live surface (SSE) ────────────────────────────────────────────────────────────
 
     [HttpGet("stream")]

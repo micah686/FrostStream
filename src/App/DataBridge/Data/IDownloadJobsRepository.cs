@@ -122,6 +122,13 @@ public interface IDownloadJobsRepository
     /// the job does not exist (so callers can distinguish 404 from an empty timeline).
     /// </summary>
     Task<IReadOnlyList<DownloadQueueHistoryEntryDto>?> GetQueueHistoryAsync(Guid jobId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Resolves the media item a job produced via <c>media_source_versions.latest_job_id</c>.
+    /// Returns null when the job never produced media or is no longer the latest job for its
+    /// source (a later re-download overwrote <c>latest_job_id</c>).
+    /// </summary>
+    Task<Guid?> GetMediaGuidForJobAsync(Guid jobId, CancellationToken ct = default);
 }
 
 /// <summary>Result of <see cref="IDownloadJobsRepository.QueryQueueAsync"/>.</summary>

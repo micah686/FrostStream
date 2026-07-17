@@ -133,6 +133,9 @@ public sealed class CancelDownloadApiRequest
 
 public sealed record CancelDownloadApiResponse(DownloadJobState State);
 
+/// <summary>Body for <c>GET /api/downloads/queue/{jobId}/media</c>.</summary>
+public sealed record DownloadQueueMediaDto(Guid MediaGuid);
+
 public sealed class SponsorBlockRequest
 {
     /// <summary>SponsorBlock categories to mark as chapters, e.g. <c>all,-preview</c>.</summary>

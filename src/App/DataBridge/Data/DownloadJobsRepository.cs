@@ -720,6 +720,15 @@ public sealed class DownloadJobsRepository(
             .ToListAsync(ct);
     }
 
+    public async Task<Guid?> GetMediaGuidForJobAsync(Guid jobId, CancellationToken ct = default)
+    {
+        return await db.MediaSourceVersions
+            .AsNoTracking()
+            .Where(x => x.LatestJobId == jobId)
+            .Select(x => (Guid?)x.MediaGuid)
+            .FirstOrDefaultAsync(ct);
+    }
+
     // Shared projection (as an expression tree so EF can translate it) — list and detail
     // return identical snapshots.
     private static readonly Expression<Func<DownloadJobEntity, DownloadQueueJobDto>> QueueDtoProjection = x => new DownloadQueueJobDto
