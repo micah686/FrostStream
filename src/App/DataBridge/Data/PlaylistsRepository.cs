@@ -197,6 +197,7 @@ public sealed class PlaylistsRepository(
                 SourceUrl = request.EntryUrl,
                 RequestedBy = request.RequestedBy,
                 StorageKey = request.StorageKey,
+                SourceKind = DownloadSourceKind.Playlist,
                 IgnoredKeyword = request.IgnoredKeyword
             });
         }

@@ -50,7 +50,7 @@ public sealed class DownloadSlotCoordinator(
                 var tag = NormalizeTag(entry.StorageKey);
                 if (!_waiting.TryGetValue(tag, out var set))
                     _waiting[tag] = set = new SortedSet<SlotEntry>(SlotEntryComparer.Instance);
-                set.Add(new SlotEntry(entry.JobId, entry.Priority, entry.CreatedAt));
+                set.Add(new SlotEntry(entry.JobId, entry.CorrelationId, entry.Priority, entry.CreatedAt));
             }
             logger.LogInformation(
                 "DownloadSlotCoordinator recovered {Count} queued jobs across {Tags} worker tag(s).",
@@ -73,7 +73,7 @@ public sealed class DownloadSlotCoordinator(
     /// Called by the flow before it enters the download step. Adds the job to the waiting
     /// list and immediately grants the slot if no other download is active for this tag.
     /// </summary>
-    public async Task EnqueueAsync(Guid jobId, int priority, string? workerTag, Instant requestedAt)
+    public async Task EnqueueAsync(Guid jobId, Guid correlationId, int priority, string? workerTag, Instant requestedAt)
     {
         var tag = NormalizeTag(workerTag);
         await _lock.WaitAsync();
@@ -81,7 +81,7 @@ public sealed class DownloadSlotCoordinator(
         {
             if (!_waiting.TryGetValue(tag, out var set))
                 _waiting[tag] = set = new SortedSet<SlotEntry>(SlotEntryComparer.Instance);
-            set.Add(new SlotEntry(jobId, priority, requestedAt));
+            set.Add(new SlotEntry(jobId, correlationId, priority, requestedAt));
             logger.LogDebug(
                 "DownloadSlotCoordinator enqueued JobId {JobId} Priority {Priority} Tag '{Tag}'. Queue depth: {Depth}",
                 jobId, priority, tag, set.Count);
@@ -208,7 +208,7 @@ public sealed class DownloadSlotCoordinator(
             await flows.SendMessage(granted.JobId.ToString("N"), new DownloadSlotGranted
             {
                 JobId = granted.JobId,
-                CorrelationId = granted.JobId,
+                CorrelationId = granted.CorrelationId,
                 MessageId = Guid.NewGuid(),
                 OperationKey = $"job/{granted.JobId:N}/slot-granted",
                 OccurredAt = clock.GetCurrentInstant(),
@@ -239,7 +239,7 @@ public sealed class DownloadSlotCoordinator(
     private static string NormalizeTag(string? tag)
         => string.IsNullOrWhiteSpace(tag) ? string.Empty : tag.Trim();
 
-    private record struct SlotEntry(Guid JobId, int Priority, Instant CreatedAt);
+    private record struct SlotEntry(Guid JobId, Guid CorrelationId, int Priority, Instant CreatedAt);
 
     private sealed class SlotEntryComparer : IComparer<SlotEntry>
     {

@@ -548,9 +548,9 @@ public sealed class DownloadJobsRepository(
             .Where(x => x.State == DownloadJobState.DownloadQueued)
             .OrderByDescending(x => x.Priority)
             .ThenBy(x => x.CreatedAt)
-            .Select(x => new { x.JobId, x.Priority, x.CreatedAt, x.StorageKey })
+            .Select(x => new { x.JobId, x.CorrelationId, x.Priority, x.CreatedAt, x.StorageKey })
             .ToListAsync(ct);
-        return rows.Select(r => new DownloadQueuedEntry(r.JobId, r.Priority, r.CreatedAt, r.StorageKey)).ToList();
+        return rows.Select(r => new DownloadQueuedEntry(r.JobId, r.CorrelationId, r.Priority, r.CreatedAt, r.StorageKey)).ToList();
     }
 
     public async Task IncrementMetadataAttemptAsync(Guid jobId, int attempt, CancellationToken ct = default)
@@ -703,6 +703,7 @@ public sealed class DownloadJobsRepository(
             query = query.Where(x =>
                 EF.Functions.ILike(x.SourceUrl, pattern, "\\")
                 || EF.Functions.ILike(x.JobId.ToString(), pattern, "\\")
+                || EF.Functions.ILike(x.CorrelationId.ToString(), pattern, "\\")
                 || (x.RequestedBy != null && EF.Functions.ILike(x.RequestedBy, pattern, "\\"))
                 || (x.StorageKey != null && EF.Functions.ILike(x.StorageKey, pattern, "\\"))
                 || (x.FailureCode != null && EF.Functions.ILike(x.FailureCode, pattern, "\\"))

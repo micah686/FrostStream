@@ -203,7 +203,7 @@ public sealed record VersionReservation(
     bool IsNewMediaGuid);
 
 /// <summary>A job waiting for a download slot, as returned by <see cref="IDownloadJobsRepository.GetDownloadQueuedJobsAsync"/>.</summary>
-public sealed record DownloadQueuedEntry(Guid JobId, int Priority, Instant CreatedAt, string? StorageKey);
+public sealed record DownloadQueuedEntry(Guid JobId, Guid CorrelationId, int Priority, Instant CreatedAt, string? StorageKey);
 
 public sealed record CancelDownloadDecision(
     bool Accepted,

@@ -67,7 +67,7 @@ public sealed class PlaylistCommandsConsumerService(
                     var fallbackIndex = pageStartIndex;
                     foreach (var entry in childEntries.Take(pageSize))
                     {
-                        var url = entry.WebpageUrl ?? entry.Url;
+                        var url = ResolveEntryUrl(cmd.SourceUrl, entry);
                         if (string.IsNullOrWhiteSpace(url))
                             continue;
                         var resolvedIndex = entry.PlaylistIndex ?? fallbackIndex;
@@ -95,7 +95,7 @@ public sealed class PlaylistCommandsConsumerService(
                         if (entries.Count >= pageSize)
                             break;
 
-                        var url = entry.WebpageUrl ?? entry.Url;
+                        var url = ResolveEntryUrl(cmd.SourceUrl, entry);
                         if (string.IsNullOrWhiteSpace(url))
                             continue;
 
@@ -220,4 +220,26 @@ public sealed class PlaylistCommandsConsumerService(
 
     private static int PageSize(FetchPlaylistMetadataCommand cmd)
         => Math.Clamp(cmd.PageSize, 1, MaxPlaylistEntriesPerRequest);
+
+    internal static string? ResolveEntryUrl(string collectionUrl, VideoInfo entry)
+    {
+        if (IsYouTubeUrl(collectionUrl) && !string.IsNullOrWhiteSpace(entry.Id))
+            return $"https://www.youtube.com/watch?v={Uri.EscapeDataString(entry.Id)}";
+
+        return FirstIndividualAbsoluteUrl(collectionUrl, entry.WebpageUrl, entry.Url);
+    }
+
+    private static bool IsYouTubeUrl(string url)
+        => Uri.TryCreate(url, UriKind.Absolute, out var uri)
+           && (uri.Host.Equals("youtube.com", StringComparison.OrdinalIgnoreCase)
+               || uri.Host.EndsWith(".youtube.com", StringComparison.OrdinalIgnoreCase)
+               || uri.Host.Equals("youtu.be", StringComparison.OrdinalIgnoreCase));
+
+    private static string? FirstIndividualAbsoluteUrl(string collectionUrl, params string?[] values)
+        => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)
+            && Uri.TryCreate(value, UriKind.Absolute, out _)
+            && !string.Equals(
+                value.Trim().TrimEnd('/'),
+                collectionUrl.Trim().TrimEnd('/'),
+                StringComparison.OrdinalIgnoreCase));
 }

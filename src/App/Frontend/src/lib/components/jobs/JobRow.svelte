@@ -257,6 +257,15 @@
     }
   }
 
+  function isCollectionJob(j: DownloadQueueJob): boolean {
+    const kind = j.sourceKind.toLowerCase();
+    return kind === 'playlist' || kind === 'channel';
+  }
+
+  function shortCollectionId(id: string): string {
+    return id.split('-')[0] ?? id.slice(0, 8);
+  }
+
   function displayState(r: QueueRow): string {
     const state = r.job.state;
     if (normalizeState(state) === 'downloadpending' && hasActiveDownloadProgress(r.progress)) {
@@ -351,6 +360,9 @@
         </div>
         <p class="mt-1 truncate text-xs text-slate-500">
           {provider} · {job.storageKey ?? 'default'} · {formatOptionalBytes(row.progress?.totalBytes ?? job.fileSizeBytes)}
+          {#if isCollectionJob(job)}
+            · group <span class="font-mono">{shortCollectionId(job.correlationId)}</span>
+          {/if}
         </p>
         {#if job.failureMessage}
           <p class="mt-2 line-clamp-1 text-xs text-red-300">
@@ -469,6 +481,12 @@
           <span class="shrink-0 text-slate-600">Job ID</span>
           <span class="break-all font-mono text-slate-400">{job.jobId}</span>
         </span>
+        {#if isCollectionJob(job)}
+          <span class="inline-flex min-w-0 items-center gap-1">
+            <span class="shrink-0 text-slate-600">Collection ID</span>
+            <span class="break-all font-mono text-slate-400">{job.correlationId}</span>
+          </span>
+        {/if}
         <span class="inline-flex items-center gap-1">
           <span class="shrink-0 text-slate-600">Option set</span>
           <span class="text-slate-400">{optionSetLabel(history)}</span>

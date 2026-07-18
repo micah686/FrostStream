@@ -54,10 +54,12 @@ export interface ChannelDownloadRequest {
   encodeForPlaylist?: boolean | null;
   priority?: number | null;
   fetchComments?: boolean | null;
+  forceDownload?: boolean;
 }
 
 export interface ChannelDownloadResponse {
   sourceId: number;
+  correlationId: string;
   sourceUrl: string;
   platform: string;
   sourceType: CreatorSourceType;

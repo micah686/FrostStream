@@ -30,6 +30,15 @@ public sealed record ChannelAssetRefreshRequested : ScheduledBackgroundRequest
 public sealed record ChannelMediaListRequested : ScheduledBackgroundRequest
 {
     public long? TargetSourceId { get; init; }
+    /// <summary>
+    /// Shared identifier for every per-video job created by this channel request. Manual
+    /// requests populate it at the API boundary; scheduled sweeps derive one per source.
+    /// </summary>
+    public Guid? CorrelationId { get; init; }
+    /// <summary>Queue every discovered item, including unchanged items already known to the monitor.</summary>
+    public bool QueueAllItems { get; init; }
+    /// <summary>Bypass the normal already-downloaded check for every per-video job.</summary>
+    public bool ForceDownload { get; init; }
     public string? StorageKey { get; init; }
     public string? RequestedBy { get; init; }
     public string? ConfigSetKey { get; init; }

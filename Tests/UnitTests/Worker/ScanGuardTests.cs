@@ -3,6 +3,7 @@ using Shared.Messaging;
 using Shouldly;
 using TUnit.Core;
 using Worker.Services;
+using YtDlpSharpLib.Models;
 
 namespace UnitTests.Worker;
 
@@ -117,6 +118,57 @@ public sealed class ScanGuardTests
         var options = PlaylistCommandsConsumerService.BuildPlaylistOptions(pageStartIndex: 1, pageSize: 10_000);
 
         options.VideoSelection.PlaylistItems.ShouldBe($"1:{PlaylistCommandsConsumerService.MaxPlaylistEntriesPerRequest}");
+    }
+
+    [Test]
+    public void Channel_Discovery_Uses_The_Entry_Id_For_YouTube_Instead_Of_A_Collection_Url()
+    {
+        var source = CreateSource(50) with
+        {
+            SourceUrl = "https://www.youtube.com/@creator/videos"
+        };
+        var entry = new VideoInfo
+        {
+            Id = "video-id",
+            WebpageUrl = source.SourceUrl,
+            Extractor = "youtube"
+        };
+
+        ChannelDiscoveryConsumerService.ResolveCanonicalUrl(source, entry, entry.Id)
+            .ShouldBe("https://www.youtube.com/watch?v=video-id");
+    }
+
+    [Test]
+    public void Playlist_Metadata_Uses_The_Entry_Id_For_YouTube_Instead_Of_A_Collection_Url()
+    {
+        var entry = new VideoInfo
+        {
+            Id = "playlist-video-id",
+            WebpageUrl = "https://www.youtube.com/playlist?list=PL123"
+        };
+
+        PlaylistCommandsConsumerService.ResolveEntryUrl(
+                "https://www.youtube.com/playlist?list=PL123",
+                entry)
+            .ShouldBe("https://www.youtube.com/watch?v=playlist-video-id");
+    }
+
+    [Test]
+    public void Channel_Download_Uses_Explicit_Collection_Correlation_Id()
+    {
+        var correlationId = Guid.NewGuid();
+        var request = new ChannelMediaListRequested
+        {
+            ScheduleKey = "manual-channel-download",
+            TaskType = "channel_media_list",
+            DueWindowUtc = NodaTime.Instant.FromUnixTimeSeconds(1),
+            IdempotencyKey = "manual-channel-download:42:test",
+            OccurredAt = NodaTime.Instant.FromUnixTimeSeconds(1),
+            TargetSourceId = 42,
+            CorrelationId = correlationId
+        };
+
+        ChannelDiscoveryConsumerService.ChannelCorrelationId(request, 42).ShouldBe(correlationId);
     }
 
     private static CreatorSourceDto CreateSource(int incrementalPageSize)

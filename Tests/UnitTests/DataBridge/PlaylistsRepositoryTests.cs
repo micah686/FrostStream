@@ -196,6 +196,7 @@ public sealed class PlaylistsRepositoryTests
         var job = await db.DownloadJobs.SingleAsync();
         job.JobId.ShouldBe(jobId);
         job.State.ShouldBe(DownloadJobState.Queued);
+        job.SourceKind.ShouldBe(DownloadSourceKind.Playlist);
         job.SourceUrl.ShouldBe("https://example.test/video");
 
         var item = await db.PlaylistItems.SingleAsync();

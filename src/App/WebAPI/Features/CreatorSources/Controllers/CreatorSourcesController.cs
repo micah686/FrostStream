@@ -61,7 +61,7 @@ public sealed class CreatorSourcesController(
     [HttpPost("channel-downloads")]
     [Endpoint(EndpointIds.CreatorSourcesDownloadChannel)]
     [EndpointSummary("Queue a full channel download")]
-    [EndpointDescription("Creates or reuses a creator channel source, then queues a targeted full channel scan. The scan uses the same creator-discovery pipeline as scheduled channel downloads, so discovered videos are tracked as channel media and unchanged known videos are not re-enqueued.")]
+    [EndpointDescription("Creates or reuses a creator channel source, then queues a targeted full channel scan. Every discovered video is emitted as an independent download job under one shared correlation identifier, so one failed video does not fail the rest of the channel. Existing library items are skipped by normal deduplication unless forceDownload is enabled.")]
     public async Task<ActionResult<ChannelDownloadResponse>> DownloadChannel(
         [FromBody] ChannelDownloadRequest request,
         CancellationToken cancellationToken)
@@ -89,6 +89,7 @@ public sealed class CreatorSourcesController(
             return StatusCode(StatusCodes.Status502BadGateway, "Creator source service returned an invalid response.");
 
         var now = clock.GetCurrentInstant();
+        var correlationId = Guid.NewGuid();
         var idempotencyKey = $"manual-channel-download:{sourceResponse.Entity.Id}:{Guid.NewGuid():N}";
         var subject = AuthConstants.FindSubject(User);
         ResolvedDownloadConfigSet resolved;
@@ -123,6 +124,9 @@ public sealed class CreatorSourcesController(
             IdempotencyKey = idempotencyKey,
             OccurredAt = now,
             TargetSourceId = sourceResponse.Entity.Id,
+            CorrelationId = correlationId,
+            QueueAllItems = true,
+            ForceDownload = request.ForceDownload,
             StorageKey = resolved.StorageKey,
             RequestedBy = subject,
             ConfigSetKey = resolved.ConfigSetKey,
@@ -150,6 +154,7 @@ public sealed class CreatorSourcesController(
 
         return Accepted(new ChannelDownloadResponse(
             sourceResponse.Entity.Id,
+            correlationId,
             sourceResponse.Entity.SourceUrl,
             sourceResponse.Entity.Platform,
             sourceResponse.Entity.SourceType,

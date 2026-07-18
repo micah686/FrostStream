@@ -99,6 +99,23 @@ public sealed class CreatorDiscoveryRepositoryTests
     }
 
     [Test]
+    public async Task Full_Channel_Download_Queues_Every_Known_Candidate_As_An_Independent_Job_Request()
+    {
+        await using var db = CreateDb();
+        var repo = new CreatorDiscoveryRepository(db, SystemClock.Instance);
+        var source = await repo.CreateSourceAsync(CreateSource());
+        var candidate = Candidate("abc123", "https://www.youtube.com/watch?v=abc123", title: "First media");
+        await repo.UpsertDiscoveredMediaBatchAsync(Batch(source.Id, candidate));
+
+        var request = Batch(source.Id, candidate) with { QueueAllItems = true };
+        var result = await repo.UpsertDiscoveredMediaBatchAsync(request);
+
+        result.NewCount.ShouldBe(0);
+        result.ChangedCount.ShouldBe(0);
+        result.EnqueuedItems.ShouldHaveSingleItem();
+    }
+
+    [Test]
     public async Task UpsertDiscoveredMediaBatch_Uses_Scan_High_Watermark_When_Batch_Is_Chunked()
     {
         await using var db = CreateDb();

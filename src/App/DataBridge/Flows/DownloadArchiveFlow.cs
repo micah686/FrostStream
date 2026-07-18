@@ -110,7 +110,7 @@ public class DownloadArchiveFlow(
             return;
         }
         await Capture(() => Update(jobId, DownloadJobState.DownloadQueued));
-        await Capture(() => slotCoordinator.EnqueueAsync(jobId, request.Priority, workerTag, clock.GetCurrentInstant()));
+        await Capture(() => slotCoordinator.EnqueueAsync(jobId, request.CorrelationId, request.Priority, workerTag, clock.GetCurrentInstant()));
         var slotResult = await Messages.FirstOfTypes<DownloadSlotGranted, DownloadCancelRequested>();
         if (slotResult.HasSecond || await Capture(() => IsCancelling(jobId)))
         {

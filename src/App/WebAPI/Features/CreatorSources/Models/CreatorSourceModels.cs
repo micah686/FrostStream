@@ -79,11 +79,15 @@ public sealed class ChannelDownloadRequest
 
     public bool? FetchComments { get; init; }
 
+    /// <summary>Re-download videos even when the same source is already present in the library.</summary>
+    public bool ForceDownload { get; init; }
+
     public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
 }
 
 public sealed record ChannelDownloadResponse(
     long SourceId,
+    Guid CorrelationId,
     string SourceUrl,
     string Platform,
     CreatorSourceType SourceType,

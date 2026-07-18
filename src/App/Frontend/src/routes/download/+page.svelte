@@ -75,6 +75,7 @@
   let creatorSourceType = $state<CreatorSourceType>('Videos');
   let creatorConfigSetKey = $state('');
   let creatorFetchComments = $state(false);
+  let creatorForceDownload = $state(false);
 
   // Shared fields
   let storageKey = $state('default');
@@ -312,9 +313,10 @@
         configSetKey: creatorConfigSetKey || null,
         cookieProfileKey: cookieProfileKey || null,
         priority,
-        fetchComments: creatorFetchComments
+        fetchComments: creatorFetchComments,
+        forceDownload: creatorForceDownload
       });
-      recordQueued('creator', `source ${result.sourceId}`, url);
+      recordQueued('creator', `group ${result.correlationId}`, url);
       creatorUrl = '';
     } catch (err) {
       submitError = err instanceof Error ? err.message : 'The channel download request failed.';
@@ -653,6 +655,9 @@
         </div>
 
         <div class="flex flex-wrap gap-x-8 gap-y-3 border-t border-slate-800/70 pt-5">
+          <Checkbox bind:checked={creatorForceDownload} class="text-sm text-slate-300">
+            Force download <span class="ml-1 text-xs text-slate-600">(re-download videos already in the library)</span>
+          </Checkbox>
           <Checkbox bind:checked={creatorFetchComments} class="text-sm text-slate-300">
             Fetch comments
           </Checkbox>

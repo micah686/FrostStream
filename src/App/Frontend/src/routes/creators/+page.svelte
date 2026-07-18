@@ -92,6 +92,7 @@
   let downloadStorageKey = $state('default');
   let downloadConfigSetKey = $state('');
   let downloadFetchComments = $state(false);
+  let downloadForce = $state(false);
   let downloadOptionsLoaded = $state(false);
   let storageOptions = $state<Array<{ value: string; name: string }>>([
     { value: 'default', name: 'default' }
@@ -260,6 +261,7 @@
   function openDownloadModal(source: CreatorSource) {
     sourcePendingDownload = source;
     downloadError = null;
+    downloadForce = false;
     downloadModalOpen = true;
     if (!downloadOptionsLoaded) {
       downloadOptionsLoaded = true;
@@ -308,9 +310,10 @@
         sourceType: source.sourceType,
         storageKey: downloadStorageKey.trim() || 'default',
         configSetKey: downloadConfigSetKey || null,
-        fetchComments: downloadFetchComments
+        fetchComments: downloadFetchComments,
+        forceDownload: downloadForce
       });
-      actionNotice = `Full channel download queued for ${displayName(source)} (source ${result.sourceId}).`;
+      actionNotice = `Full channel download queued for ${displayName(source)} (group ${result.correlationId}).`;
       actionError = null;
       downloadModalOpen = false;
     } catch (err) {
@@ -938,6 +941,10 @@
 
     <Checkbox bind:checked={downloadFetchComments} class="text-sm text-slate-300">
       Fetch comments
+    </Checkbox>
+
+    <Checkbox bind:checked={downloadForce} class="text-sm text-slate-300">
+      Force re-download videos already in the library
     </Checkbox>
 
     {#if downloadError}
