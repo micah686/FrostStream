@@ -22,6 +22,7 @@
   import SaveToPlaylistButton from '$lib/components/SaveToPlaylistButton.svelte';
   import PlaylistPanel from '$lib/components/PlaylistPanel.svelte';
   import TargetNotePanel from '$lib/components/TargetNotePanel.svelte';
+  import WatchComment from '$lib/components/watch/WatchComment.svelte';
   import {
     getWatchState,
     markUnwatched,
@@ -138,12 +139,24 @@
 
   interface Comment {
     commentId: string;
+    parentCommentId?: string | null;
     text: string;
     commentTimestamp: string;
     likeCount?: number | null;
+    dislikeCount?: number | null;
+    isFavorited: boolean;
     isPinned: boolean;
     isUploader: boolean;
-    account: { accountName: string; accountHandle: string };
+    account: {
+      accountId: number;
+      accountName: string;
+      accountHandle: string;
+      avatarStoragePath?: string | null;
+    };
+  }
+
+  interface CommentNode extends Comment {
+    replies: CommentNode[];
   }
 
   interface UpNextCard {
@@ -165,6 +178,7 @@
   let captionTracksAvailable = $state<CaptionTrack[]>([]);
   let loadError = $state<string | null>(null);
   let comments = $state<Comment[]>([]);
+  let commentThreads = $derived.by(() => buildCommentThreads(comments));
   let commentTotal = $state(0);
   let commentsHaveMore = $state(false);
   let commentPage = $state(1);
@@ -198,6 +212,7 @@
   let streamChecking = $state(false);
   let streamError = $state<string | null>(null);
   let streamCheckSeq = 0;
+  const commentsPageSize = 100;
 
   // Playback modes persist across videos and sessions. Repeat wins over autoplay:
   // a looping video never fires "ended", so autoplay simply never triggers.
@@ -378,7 +393,7 @@
     await Promise.all([
       loadDetail(guid),
       loadCaptionTracks(guid),
-      loadComments(guid, 1),
+      loadComments(guid),
       loadUpNext(guid),
       loadWatchState(guid),
       loadLikeState(guid),
@@ -610,25 +625,82 @@
     }
   }
 
-  async function loadComments(guid: string, target: number) {
+  async function loadComments(guid: string) {
     try {
-      const response = await fetch(`/api/metadata/${guid}/comments?page=${target}&pageSize=20`);
-      if (!response.ok) {
-        return;
+      const allComments: Comment[] = [];
+      let page = 1;
+      let totalCount = 0;
+
+      while (true) {
+        const response = await fetch(`/api/metadata/${guid}/comments?page=${page}&pageSize=${commentsPageSize}`);
+        if (!response.ok) {
+          return;
+        }
+
+        const data = (await response.json()) as {
+          items: Comment[];
+          page: number;
+          totalCount: number;
+          hasMore: boolean;
+        };
+
+        allComments.push(...data.items);
+        totalCount = data.totalCount;
+        commentPage = data.page;
+
+        if (!data.hasMore) {
+          break;
+        }
+
+        page += 1;
       }
-      const data = (await response.json()) as {
-        items: Comment[];
-        page: number;
-        totalCount: number;
-        hasMore: boolean;
-      };
-      comments = target === 1 ? data.items : [...comments, ...data.items];
-      commentTotal = data.totalCount;
-      commentsHaveMore = data.hasMore;
-      commentPage = data.page;
+
+      comments = allComments;
+      commentTotal = totalCount;
+      commentsHaveMore = false;
     } catch {
       // Comments are secondary; the player is the page's real content.
     }
+  }
+
+  function buildCommentThreads(items: Comment[]): CommentNode[] {
+    const nodes = new Map<string, CommentNode>();
+    const roots: CommentNode[] = [];
+
+    for (const comment of items) {
+      nodes.set(comment.commentId, { ...comment, replies: [] });
+    }
+
+    for (const node of nodes.values()) {
+      const parentId = node.parentCommentId?.trim();
+      const parent = parentId ? nodes.get(parentId) : null;
+      if (parent) {
+        parent.replies.push(node);
+      } else {
+        roots.push(node);
+      }
+    }
+
+    const compare = (left: CommentNode, right: CommentNode) =>
+      (right.isPinned ? 1 : 0) - (left.isPinned ? 1 : 0) ||
+      new Date(right.commentTimestamp).getTime() - new Date(left.commentTimestamp).getTime() ||
+      left.commentId.localeCompare(right.commentId);
+
+    const compareReplies = (left: CommentNode, right: CommentNode) =>
+      new Date(left.commentTimestamp).getTime() - new Date(right.commentTimestamp).getTime() ||
+      left.commentId.localeCompare(right.commentId);
+
+    const sortTree = (nodesToSort: CommentNode[], isReplyLevel: boolean) => {
+      nodesToSort.sort(isReplyLevel ? compareReplies : compare);
+      for (const node of nodesToSort) {
+        if (node.replies.length > 0) {
+          sortTree(node.replies, true);
+        }
+      }
+    };
+
+    sortTree(roots, false);
+    return roots;
   }
 
   async function loadUpNext(guid: string) {
@@ -1284,49 +1356,15 @@
           {commentTotal > 0 ? `${commentTotal} comments` : 'Comments'}
         </h2>
 
-        {#if comments.length === 0}
+        {#if commentThreads.length === 0}
           <p class="mt-4 text-sm text-slate-500">No comments were archived for this video.</p>
         {:else}
-          <ul class="mt-5 space-y-6">
-            {#each comments as comment (comment.commentId)}
-              <li class="flex gap-3">
-                <span
-                  class={`mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br ${accentFor(comment.account.accountName)} text-[10px] font-bold text-white`}
-                >
-                  {initialsFor(comment.account.accountName)}
-                </span>
-                <div class="min-w-0">
-                  <p class="flex flex-wrap items-center gap-2 text-xs">
-                    <span class="font-semibold text-slate-200">{comment.account.accountName}</span>
-                    {#if comment.isUploader}
-                      <span class="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-400">Creator</span>
-                    {/if}
-                    {#if comment.isPinned}
-                      <span class="text-[10px] font-semibold text-slate-500">Pinned</span>
-                    {/if}
-                    <span class="text-slate-600">{formatRelativeDate(comment.commentTimestamp)}</span>
-                  </p>
-                  <p class="mt-1 whitespace-pre-line text-sm leading-6 text-slate-300">{comment.text}</p>
-                  {#if comment.likeCount}
-                    <p class="mt-1.5 flex items-center gap-1.5 text-xs text-slate-600">
-                      <ThumbsUpOutline class="h-3.5 w-3.5" />
-                      {formatCount(comment.likeCount)}
-                    </p>
-                  {/if}
-                </div>
-              </li>
+          <div class="mt-5 space-y-6">
+            {#each commentThreads as comment (comment.commentId)}
+              <WatchComment comment={comment} />
             {/each}
-          </ul>
+          </div>
 
-          {#if commentsHaveMore}
-            <Button
-              color="dark"
-              onclick={() => loadComments(mediaGuid, commentPage + 1)}
-              class="mt-6 border-slate-700! bg-slate-900! px-4! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800!"
-            >
-              Load more comments
-            </Button>
-          {/if}
         {/if}
       </section>
     {:else if !loadError}

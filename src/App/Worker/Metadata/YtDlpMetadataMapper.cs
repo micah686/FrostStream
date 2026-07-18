@@ -279,7 +279,8 @@ internal static class YtDlpMetadataMapper
                 LikeCount = ToInt32(c.LikeCount),
                 DislikeCount = ToInt32(c.DislikeCount),
                 IsFavorited = c.IsFavorited ?? false,
-                IsPinned = c.IsPinned ?? false
+                IsPinned = c.IsPinned ?? false,
+                IsUploader = c.AuthorIsUploader ?? false
             })
             .ToArray() ?? [];
 

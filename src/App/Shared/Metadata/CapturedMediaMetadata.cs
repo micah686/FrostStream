@@ -124,6 +124,7 @@ public sealed record CapturedCommentMetadata
     public int? DislikeCount { get; init; }
     public bool IsFavorited { get; init; }
     public bool IsPinned { get; init; }
+    public bool IsUploader { get; init; }
 }
 
 public sealed record CapturedSeriesMetadata

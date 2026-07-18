@@ -453,7 +453,7 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
                      comment_timestamp, like_count, dislike_count, is_favorited, is_uploader, is_pinned)
                 VALUES
                     (@media_guid, @comment_id, @parent_id, @text, @account_id,
-                     @timestamp, @like_count, @dislike_count, @is_favorited, false, @is_pinned)
+                     @timestamp, @like_count, @dislike_count, @is_favorited, @is_uploader, @is_pinned)
                 """, conn, tx);
             ins.Parameters.AddWithValue("@media_guid", mediaGuid);
             ins.Parameters.AddWithValue("@comment_id", comment.CommentId);
@@ -464,6 +464,7 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
             ins.Parameters.AddWithValue("@like_count", (object?)comment.LikeCount ?? DBNull.Value);
             ins.Parameters.AddWithValue("@dislike_count", (object?)comment.DislikeCount ?? DBNull.Value);
             ins.Parameters.AddWithValue("@is_favorited", comment.IsFavorited);
+            ins.Parameters.AddWithValue("@is_uploader", comment.IsUploader);
             ins.Parameters.AddWithValue("@is_pinned", comment.IsPinned);
             await ins.ExecuteNonQueryAsync(ct);
         }
