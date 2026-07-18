@@ -1,8 +1,10 @@
 <script lang="ts">
   import '../app.css';
+  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { Button, Drawer, Input, Spinner } from 'flowbite-svelte';
+  import { installApiFetch } from '$lib/api/http';
   import { searchMedia, type SearchHit } from '$lib/api/search';
   import { accentFor, formatDuration, initialsFor } from '$lib/media';
   import {
@@ -61,6 +63,10 @@
   ];
 
   let drawerOpen = $state(false);
+
+  onMount(() => {
+    installApiFetch();
+  });
 
   const closeDrawer = () => {
     drawerOpen = false;

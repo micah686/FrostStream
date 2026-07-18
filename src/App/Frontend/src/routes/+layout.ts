@@ -1,6 +1,5 @@
 import { error, redirect } from '@sveltejs/kit';
 import type { LayoutLoad } from './$types';
-import { installApiFetch } from '$lib/api/http';
 
 export const ssr = false;
 
@@ -21,7 +20,6 @@ interface AuthMeResponse {
 }
 
 export const load: LayoutLoad = async ({ fetch, url }) => {
-  installApiFetch();
   const response = await fetch('/api/auth/me', {
     credentials: 'same-origin',
     cache: 'no-store'
