@@ -1,4 +1,4 @@
-namespace BackupTool;
+namespace BackupService;
 
 /// <summary>
 /// A PostgreSQL backup strategy. Each mode (snapshot, full, wal-archive) writes its output under

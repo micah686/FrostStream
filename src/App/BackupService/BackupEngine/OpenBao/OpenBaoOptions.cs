@@ -1,4 +1,4 @@
-namespace BackupTool;
+namespace BackupService;
 
 internal sealed record OpenBaoOptions(string Address, string? Token, string KvMount)
 {
@@ -15,4 +15,7 @@ internal sealed record OpenBaoOptions(string Address, string? Token, string KvMo
             ?? Environment.GetEnvironmentVariable("OPENBAO_KV_MOUNT")
             ?? Environment.GetEnvironmentVariable("OpenBao__KvMount")
             ?? "secret");
+
+    public static OpenBaoOptions From(BackupServiceOptions options)
+        => new(options.OpenBaoAddress, options.OpenBaoToken, options.OpenBaoKvMount);
 }

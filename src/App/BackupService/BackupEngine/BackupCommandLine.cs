@@ -1,10 +1,15 @@
 using System.Text.Json;
 
-namespace BackupTool;
+namespace BackupService;
 
-internal static class Program
+internal static class BackupCommandLine
 {
-    private static async Task<int> Main(string[] args)
+    private static readonly HashSet<string> Commands = ["backup", "create", "verify", "restore", "list", "wal-archive", "-h", "--help"];
+
+    public static bool ShouldHandle(string[] args)
+        => args.Length > 0 && Commands.Contains(args[0]);
+
+    public static async Task<int> RunAsync(string[] args)
     {
         if (args.Length == 0 || args[0] is "-h" or "--help")
         {
@@ -56,9 +61,6 @@ internal static class Program
 
         var bao = OpenBaoOptions.From(options);
         BackupComponent? openBaoComponent = null;
-
-        // A wal-archive backup only initializes continuous archiving; it is not a data snapshot,
-        // so it intentionally omits the OpenBao export.
         if (mode != PostgresBackupMode.WalArchive)
         {
             await new OpenBaoBackup().ExportToFileAsync(bao, Path.Combine(backupDirectory, "openbao", "kv-export.json"));
@@ -91,7 +93,7 @@ internal static class Program
         {
             SchemaVersion = BackupManifest.CurrentSchemaVersion,
             CreatedAtUtc = DateTimeOffset.UtcNow,
-            ToolVersion = typeof(Program).Assembly.GetName().Version?.ToString() ?? "unknown",
+            ToolVersion = typeof(BackupCommandLine).Assembly.GetName().Version?.ToString() ?? "unknown",
             MediaIncluded = false,
             Mode = mode,
             Components = components
@@ -110,7 +112,7 @@ internal static class Program
     private static async Task<int> VerifyBackupAsync(CliOptions options)
     {
         var archive = options.Required("archive");
-        var manifest = await ReadManifestAsync(archive);
+        var manifest = await BackupEngine.ReadManifestAsync(archive);
 
         var expected = await ChecksumService.ReadAsync(archive);
         var actual = await ChecksumService.ComputeAsync(archive, includeChecksumFile: false);
@@ -129,7 +131,6 @@ internal static class Program
         if (unexpected is not null)
             throw new InvalidOperationException($"Unexpected backup file: {unexpected}");
 
-        // Mode-specific structural validation (pg_restore --list / pg_verifybackup / WAL continuity).
         var pg = PostgresOptions.From(options);
         var validator = new PostgresBackupValidator(new PostgresToolRunner(pg));
         await validator.ValidateAsync(archive, manifest, CancellationToken.None);
@@ -150,7 +151,7 @@ internal static class Program
                 "Restore is destructive. Re-run with --force after stopping FrostStream services and confirming the target is correct.");
         }
 
-        var manifest = await ReadManifestAsync(archive);
+        var manifest = await BackupEngine.ReadManifestAsync(archive);
         if (manifest.MediaIncluded)
             throw new InvalidOperationException("Refusing to restore an archive that claims to include media.");
 
@@ -184,24 +185,6 @@ internal static class Program
         return 0;
     }
 
-    private static async Task<BackupManifest> ReadManifestAsync(string archive)
-    {
-        var manifestPath = Path.Combine(archive, "manifest.json");
-        if (!File.Exists(manifestPath))
-            throw new FileNotFoundException("Backup manifest was not found.", manifestPath);
-
-        var manifest = JsonSerializer.Deserialize<BackupManifest>(
-            await File.ReadAllTextAsync(manifestPath),
-            BackupJson.Options) ?? throw new InvalidOperationException("Backup manifest is invalid.");
-
-        if (manifest.SchemaVersion is not (1 or 2))
-            throw new InvalidOperationException($"Unsupported backup schema version {manifest.SchemaVersion}.");
-        if (manifest.MediaIncluded)
-            throw new InvalidOperationException("Invalid core backup: mediaIncluded must be false.");
-
-        return manifest;
-    }
-
     private static string Slug(PostgresBackupMode mode) => mode switch
     {
         PostgresBackupMode.Snapshot => "core",
@@ -229,7 +212,7 @@ internal static class Program
     private static void PrintHelp()
     {
         Console.WriteLine("""
-            FrostStream.BackupTool
+            FrostStream BackupService
 
             Commands:
               create --output <dir> [--name <name>] [--mode snapshot|full|wal-archive]
@@ -256,8 +239,8 @@ internal static class Program
               --postgres-bin-dir <dir>     optional dir containing the PostgreSQL client tools
               --archive-dir <dir>          WAL archive store (wal-archive + PITR restore)
               --pgdata <dir>               target data directory for a full/PITR restore
-              --pg-ctl <path>             optional pg_ctl path for stopping/starting the server
-              --tool-command <cmd>         how PostgreSQL should invoke this tool in archive/restore commands
+              --pg-ctl <path>              optional pg_ctl path for stopping/starting the server
+              --tool-command <cmd>         how PostgreSQL should invoke BackupService CLI commands
               --openbao-address <url>      default: env OPENBAO_ADDR/OpenBao__Address or http://127.0.0.1:25400
               --openbao-token <token>      default: env OPENBAO_TOKEN/OpenBao__Token
               --openbao-kv-mount <mount>   default: env OPENBAO_KV_MOUNT/OpenBao__KvMount or secret

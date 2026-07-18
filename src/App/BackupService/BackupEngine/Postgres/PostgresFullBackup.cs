@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace BackupTool;
+namespace BackupService;
 
 /// <summary>
 /// Full physical cluster backup via <c>pg_basebackup</c> (tar + gzip, streamed WAL, SHA256

@@ -88,11 +88,8 @@ internal sealed class BackupCoordinator(
         try
         {
             Directory.CreateDirectory(stagingRoot);
-            var client = new BackupToolClient(options.Value, configuration);
-            var output = await client.RunAsync(
-                ["create", "--output", stagingRoot, "--name", record.Name, "--mode", record.Mode],
-                cancellationToken);
-            var stagedArchive = output.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Last();
+            var engine = new BackupEngine(options.Value, configuration);
+            var stagedArchive = await engine.CreateAsync(stagingRoot, record.Name, record.Mode, cancellationToken);
             var destination = Path.Combine(store.Archives, Path.GetFileName(stagedArchive));
             if (Directory.Exists(destination))
                 throw new IOException($"Backup archive already exists: {destination}");
@@ -149,7 +146,7 @@ internal sealed class BackupCoordinator(
         try
         {
             var path = store.ResolveArchive(archivePath);
-            await new BackupToolClient(options.Value, configuration).RunAsync(["verify", "--archive", path], cancellationToken);
+            await new BackupEngine(options.Value, configuration).VerifyAsync(path, cancellationToken);
             return new VerifyBackupDto(true, null);
         }
         catch (Exception ex)
@@ -167,7 +164,7 @@ internal sealed class BackupCoordinator(
             ? ["restore", "--archive", path, "--force", "--pgdata", "<PGDATA>", "--pg-ctl", "<pg_ctl>", "--target-time", "<YYYY-MM-DD HH:MM:SS+00>"]
             : ["restore", "--archive", path, "--force"];
         var command = "docker compose run --rm --entrypoint dotnet backupservice "
-                      + "/app/backuptool/BackupTool.dll "
+                      + "/app/BackupService.dll "
                       + string.Join(' ', arguments.Select(Quote));
         return new RestorePlanDto(verify.Success, command, verify.ErrorMessage);
     }

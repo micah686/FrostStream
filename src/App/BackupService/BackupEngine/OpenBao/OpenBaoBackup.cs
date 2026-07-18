@@ -3,7 +3,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 
-namespace BackupTool;
+namespace BackupService;
 
 internal sealed record OpenBaoKvExport
 {

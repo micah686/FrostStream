@@ -1,4 +1,4 @@
-namespace BackupTool;
+namespace BackupService;
 
 /// <summary>Point-in-time recovery target for a full-backup restore.</summary>
 internal sealed record RestoreTarget(string? Time, string? Lsn, string? Name, bool RecoverLatest, string? ArchiveDir)

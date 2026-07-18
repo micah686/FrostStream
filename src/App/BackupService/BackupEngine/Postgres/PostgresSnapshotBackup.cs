@@ -1,8 +1,8 @@
-namespace BackupTool;
+namespace BackupService;
 
 /// <summary>
 /// Quick logical snapshot: a per-database <c>pg_dump</c> in custom format. This reproduces the
-/// original BackupTool behavior and is the default mode.
+/// original backup behavior and is the default mode.
 /// </summary>
 internal sealed class PostgresSnapshotBackup(PostgresOptions options, PostgresToolRunner runner) : IPostgresBackupStrategy
 {

@@ -6,6 +6,12 @@ using NodaTime;
 using Shared.Backups;
 using Shared.Messaging;
 
+if (BackupCommandLine.ShouldHandle(args))
+{
+    Environment.ExitCode = await BackupCommandLine.RunAsync(args);
+    return;
+}
+
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
 builder.Services.AddOptions<BackupServiceOptions>()

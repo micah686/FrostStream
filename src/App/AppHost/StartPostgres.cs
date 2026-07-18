@@ -41,7 +41,7 @@ public static class StartPostgres
             secret: true);
 
         // Shared WAL archive store: written by the server's archive_command (mounted at
-        // /wal-archive) and read by BackupTool for wal-archive verification / PITR restore.
+        // /wal-archive) and read by BackupService for wal-archive verification / PITR restore.
         // Made world-writable so the container's postgres user can write regardless of the
         // rootless-podman uid mapping.
         var walArchiveDir = BackupPaths.WalArchiveDirectory(sharedStorageRoot);

@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 
-namespace BackupTool;
+namespace BackupService;
 
 internal sealed record ChecksumEntry(string RelativePath, string Hash);
 

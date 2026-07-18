@@ -2,7 +2,7 @@ namespace AppHost;
 
 /// <summary>
 /// Shared filesystem locations for backups, so the Postgres container's WAL archive mount and the
-/// BackupTool env handed to WebAPI/DataBridge always agree.
+/// BackupService env handed to WebAPI/DataBridge always agree.
 /// </summary>
 internal static class BackupPaths
 {

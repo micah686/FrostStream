@@ -10,7 +10,6 @@
   </Folder>
   <Folder Name="/Core/">
     <Project Path="BackupService/BackupService.csproj" />
-    <Project Path="BackupTool/BackupTool.csproj" />
     <Project Path="DataBridge/DataBridge.csproj" />
     <Project Path="MediaProcessor/MediaProcessor.csproj" />
     <Project Path="Scheduler/Scheduler.csproj" />

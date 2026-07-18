@@ -1,4 +1,4 @@
-namespace BackupTool;
+namespace BackupService;
 
 /// <summary>
 /// Runs PostgreSQL client tools (pg_dump, pg_restore, pg_basebackup, …), resolving the tool

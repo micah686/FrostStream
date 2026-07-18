@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace BackupTool;
+namespace BackupService;
 
 internal static class BackupJson
 {

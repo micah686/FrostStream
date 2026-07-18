@@ -1,7 +1,7 @@
 using System.Formats.Tar;
 using System.IO.Compression;
 
-namespace BackupTool;
+namespace BackupService;
 
 /// <summary>
 /// Cold/offline restore of a PostgreSQL backup, dispatched by the backup mode recorded in the
@@ -101,7 +101,7 @@ internal sealed class PostgresRestore(PostgresOptions options, PostgresToolRunne
         // Otherwise --recover-latest: replay all available WAL (no recovery_target_* line).
 
         var autoConf = Path.Combine(pgData, "postgresql.auto.conf");
-        await File.AppendAllLinesAsync(autoConf, ["", "# Added by FrostStream BackupTool restore", .. lines]);
+        await File.AppendAllLinesAsync(autoConf, ["", "# Added by FrostStream BackupService restore", .. lines]);
         await File.WriteAllTextAsync(Path.Combine(pgData, "recovery.signal"), string.Empty);
     }
 

@@ -47,7 +47,7 @@ For Docker Compose, the same image can be run as a one-shot CLI:
 ```bash
 cd src/App/docker-compose-artifacts
 docker compose run --rm --entrypoint dotnet backupservice \
-  /app/backuptool/BackupTool.dll create \
+  /app/BackupService.dll create \
   --output /backups/archives \
   --name froststream-core-$(date -u +%Y%m%d%H%M%S)
 ```
@@ -58,7 +58,7 @@ tools on the host:
 Snapshot (default — unchanged behavior):
 
 ```bash
-dotnet run --project src/App/BackupTool/BackupTool.csproj -- \
+dotnet run --project src/App/BackupService/BackupService.csproj -- \
   create \
   --output /var/backups/froststream \
   --name froststream-core-$(date -u +%Y%m%d%H%M%S) \
@@ -72,7 +72,7 @@ dotnet run --project src/App/BackupTool/BackupTool.csproj -- \
 Full physical base backup:
 
 ```bash
-dotnet run --project src/App/BackupTool/BackupTool.csproj -- \
+dotnet run --project src/App/BackupService/BackupService.csproj -- \
   create --mode full \
   --output /var/backups/froststream \
   --postgres-host localhost --postgres-port 5432 \
@@ -88,9 +88,9 @@ Set `POSTGRES_PASSWORD` and `OPENBAO_TOKEN` in the environment rather than passi
 invoke this tool (use an absolute path to a published binary, not `dotnet run`):
 
 ```bash
-dotnet run --project src/App/BackupTool/BackupTool.csproj -- \
+dotnet run --project src/App/BackupService/BackupService.csproj -- \
   wal-archive setup --archive-dir /var/backups/froststream/wal-archive \
-  --tool-command /opt/froststream/BackupTool
+  --tool-command 'dotnet /opt/froststream/BackupService.dll'
 ```
 
 That emits, for `postgresql.conf`:
@@ -98,7 +98,7 @@ That emits, for `postgresql.conf`:
 ```
 wal_level = replica
 archive_mode = on
-archive_command = '/opt/froststream/BackupTool wal-archive receive %p %f --archive-dir /var/backups/froststream/wal-archive'
+archive_command = 'dotnet /opt/froststream/BackupService.dll wal-archive receive %p %f --archive-dir /var/backups/froststream/wal-archive'
 max_wal_senders = 10
 ```
 
@@ -112,14 +112,14 @@ From Compose, use the bundled tools:
 
 ```bash
 docker compose run --rm --entrypoint dotnet backupservice \
-  /app/backuptool/BackupTool.dll verify \
+  /app/BackupService.dll verify \
   --archive /backups/archives/<backup-name>
 ```
 
 The Admin UI invokes the same verification through `backupservice`.
 
 ```bash
-dotnet run --project src/App/BackupTool/BackupTool.csproj -- \
+dotnet run --project src/App/BackupService/BackupService.csproj -- \
   verify \
   --archive /var/backups/froststream/froststream-core-20260628010203
 ```
@@ -141,7 +141,7 @@ Restore is a cold/offline operation.
 ```bash
 docker compose stop webapi databridge worker scheduler authentik authentik-worker openfga
 docker compose run --rm --entrypoint dotnet backupservice \
-  /app/backuptool/BackupTool.dll restore \
+  /app/BackupService.dll restore \
   --archive /backups/archives/<backup-name> --force
 docker compose up -d
 ```
@@ -149,7 +149,7 @@ docker compose up -d
 The equivalent host command is:
 
 ```bash
-dotnet run --project src/App/BackupTool/BackupTool.csproj -- \
+dotnet run --project src/App/BackupService/BackupService.csproj -- \
   restore \
   --archive /var/backups/froststream/froststream-core-20260628010203 \
   --force
@@ -165,7 +165,7 @@ directory is replaced. Provide `--pgdata` (and optionally `--pg-ctl`) so the too
 clears the data directory, extracts `base.tar.gz` and `pg_wal.tar.gz`, and restarts it:
 
 ```bash
-dotnet run --project src/App/BackupTool/BackupTool.csproj -- \
+dotnet run --project src/App/BackupService/BackupService.csproj -- \
   restore --force \
   --archive /var/backups/froststream/froststream-full-20260628010203 \
   --pgdata /var/lib/postgresql/data --pg-ctl /usr/lib/postgresql/18/bin/pg_ctl
@@ -176,13 +176,13 @@ For point-in-time recovery, add a recovery target and the WAL archive directory.
 `postgresql.auto.conf`, then starts the server so it replays WAL to the target and promotes:
 
 ```bash
-dotnet run --project src/App/BackupTool/BackupTool.csproj -- \
+dotnet run --project src/App/BackupService/BackupService.csproj -- \
   restore --force \
   --archive /var/backups/froststream/froststream-full-20260628010203 \
   --pgdata /var/lib/postgresql/data --pg-ctl /usr/lib/postgresql/18/bin/pg_ctl \
   --archive-dir /var/backups/froststream/wal-archive \
   --target-time '2026-06-28 02:05:00+00' \
-  --tool-command /opt/froststream/BackupTool
+  --tool-command 'dotnet /opt/froststream/BackupService.dll'
 ```
 
 Use `--target-lsn`, `--target-name`, or `--recover-latest` instead of `--target-time` as needed. If
@@ -228,13 +228,13 @@ The AppHost wires the dedicated service and physical-backup prerequisites automa
   connections from the private container network using SCRAM password authentication. The explicit
   replication rule is required because a normal `host all all` rule does not match the replication
   protocol used by `pg_basebackup`.
-- The `archive_command` `chmod 0644`s the archived files so the BackupTool process (which runs as the
+- The `archive_command` `chmod 0644`s the archived files so the BackupService CLI process (which runs as the
   host user, not the container's postgres user under rootless podman) can read them.
 - Only BackupService receives PostgreSQL/OpenBao backup credentials and the archive directory.
   WebAPI proxies the management API; DataBridge no longer contains PostgreSQL client tooling.
 
 Because the containerized Postgres invokes its own `archive_command` (a shell `cp` + `sha256sum`), it
-produces the same on-disk format as `BackupTool wal-archive receive`. On a bare-metal server where the
+produces the same on-disk format as `BackupService wal-archive receive`. On a bare-metal server where the
 tool is on PATH, you can instead point `archive_command` directly at `wal-archive receive` (see
 `wal-archive setup`).
 

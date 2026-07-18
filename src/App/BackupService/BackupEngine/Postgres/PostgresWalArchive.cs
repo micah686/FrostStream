@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace BackupTool;
+namespace BackupService;
 
 /// <summary>
 /// Continuous WAL archiving using the server-driven model: PostgreSQL's <c>archive_command</c>
@@ -14,7 +14,7 @@ internal sealed class PostgresWalArchive(PostgresOptions options) : IPostgresBac
     /// <summary>Default segment count per logical WAL file (16 MB segments → 256 per log).</summary>
     private const uint DefaultSegmentsPerLog = 0x100;
 
-    public const string ToolCommandPlaceholder = "/path/to/BackupTool";
+    public const string ToolCommandPlaceholder = "dotnet /app/BackupService.dll";
 
     public PostgresBackupMode Mode => PostgresBackupMode.WalArchive;
 

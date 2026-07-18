@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace BackupTool;
+namespace BackupService;
 
 internal sealed record ProcessResult(int ExitCode, string StandardOutput, string StandardError);
 

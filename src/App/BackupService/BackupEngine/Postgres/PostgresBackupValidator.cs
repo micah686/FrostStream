@@ -1,4 +1,4 @@
-namespace BackupTool;
+namespace BackupService;
 
 /// <summary>
 /// Mode-specific structural validation of a PostgreSQL backup, layered on top of the archive-wide

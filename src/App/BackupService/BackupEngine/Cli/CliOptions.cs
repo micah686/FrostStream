@@ -1,4 +1,4 @@
-namespace BackupTool;
+namespace BackupService;
 
 internal sealed class CliOptions
 {
