@@ -2,7 +2,6 @@ using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using Shared.Downloads;
-using Shared.Messaging;
 using YtDlpSharpLib.Options;
 
 namespace WebAPI.Features.DownloadConfigSets.Models;
@@ -34,17 +33,8 @@ public class DownloadConfigSetCreateRequest
     /// using this config set. Background channel monitoring ignores this list.</summary>
     public IReadOnlyList<IgnoreKeyword> IgnoreKeywords { get; init; } = [];
 
-    [DefaultValue(false)]
-    public bool EncodeForPlaylist { get; init; }
-
-    [DefaultValue(AudioRenditionFormat.Aac)]
-    public AudioRenditionFormat AudioFormat { get; init; } = AudioRenditionFormat.Aac;
-
     [Range(0, 100)]
     public int Priority { get; init; }
-
-    [DefaultValue(false)]
-    public bool FetchComments { get; init; }
 }
 
 public sealed class DownloadConfigSetUpdateRequest : DownloadConfigSetCreateRequest;
@@ -59,8 +49,5 @@ public sealed class DownloadConfigSetResponse
     public string? CookieProfileKey { get; init; }
     public JsonElement? YtDlpOptions { get; init; }
     public IReadOnlyList<IgnoreKeyword> IgnoreKeywords { get; init; } = [];
-    public bool EncodeForPlaylist { get; init; }
-    public AudioRenditionFormat AudioFormat { get; init; }
     public int Priority { get; init; }
-    public bool FetchComments { get; init; }
 }

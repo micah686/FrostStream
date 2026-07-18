@@ -6,7 +6,6 @@
     ArchiveOutline,
     ExclamationCircleOutline,
     EyeOutline,
-    MusicAltOutline,
     PlusOutline,
     TrashBinOutline
   } from 'flowbite-svelte-icons';
@@ -66,14 +65,12 @@
       config.storageKey ?? 'default storage',
       config.cookieProfileKey ? `cookie ${config.cookieProfileKey}` : null,
       `priority ${config.priority}`,
-      config.encodeForPlaylist ? `${config.audioFormat} playlist audio` : null,
-      config.fetchComments ? 'fetch comments' : null,
       config.ignoreKeywords.length > 0 ? `${config.ignoreKeywords.length} ignore ${config.ignoreKeywords.length === 1 ? 'keyword' : 'keywords'}` : null
     ].filter(Boolean).join(' · ');
   }
 
   function configIcon(config: DownloadConfigSet): IconComponent {
-    return config.encodeForPlaylist ? MusicAltOutline : config.ytDlpOptions ? AdjustmentsHorizontalOutline : ArchiveOutline;
+    return config.ytDlpOptions ? AdjustmentsHorizontalOutline : ArchiveOutline;
   }
 </script>
 
