@@ -1,13 +1,14 @@
+using DataBridge;
 using Conduit.NATS;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Shared.Messaging;
-using Typesense;
 
 namespace DataBridge.Search;
 
 public sealed class MetadataCommentsConsumerService(
     IMessageBus messageBus,
-    ITypesenseClient typesense,
+    IServiceScopeFactory scopeFactory,
     ILogger<MetadataCommentsConsumerService> logger) : SubscriptionBackgroundService
 {
     protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
@@ -30,33 +31,42 @@ public sealed class MetadataCommentsConsumerService(
 
         try
         {
-            var filters = new List<string>
+            var comments = await scopeFactory.WithScopedAsync<IMediaDocumentQuery, IReadOnlyList<CommentDocument>>(
+                query => query.GetCommentsByMediaGuidAsync(request.MediaGuid));
+
+            IEnumerable<CommentDocument> filtered = comments;
+
+            var parentId = request.ParentCommentId?.Trim();
+            if (!string.IsNullOrWhiteSpace(parentId))
             {
-                TypesenseSearchHelpers.Eq("media_guid", TypesenseSearchHelpers.NormalizeGuid(request.MediaGuid)),
-                TypesenseSearchHelpers.Eq("parent_comment_id", request.ParentCommentId?.Trim() ?? string.Empty)
-            };
+                filtered = filtered.Where(comment => string.Equals(comment.ParentCommentId, parentId, StringComparison.Ordinal));
+            }
 
-            var hasQuery = !string.IsNullOrWhiteSpace(request.Query);
-            var parameters = new SearchParameters(hasQuery ? request.Query!.Trim() : "*", hasQuery ? "text,account_name" : "text")
+            var queryText = request.Query?.Trim();
+            if (!string.IsNullOrWhiteSpace(queryText))
             {
-                FilterBy = string.Join(" && ", filters),
-                SortBy = $"{TypesenseSearchHelpers.MapCommentSortField(request.SortBy)}:{TypesenseSearchHelpers.NormalizeSortOrder(request.SortOrder)}",
-                Page = page,
-                PerPage = pageSize
-            };
+                filtered = filtered.Where(comment =>
+                    comment.Text.Contains(queryText, StringComparison.OrdinalIgnoreCase) ||
+                    comment.AccountName.Contains(queryText, StringComparison.OrdinalIgnoreCase) ||
+                    comment.AccountHandle.Contains(queryText, StringComparison.OrdinalIgnoreCase));
+            }
 
-            var result = await typesense.Search<CommentDocument>(
-                CommentsCollectionSchema.CollectionName,
-                parameters);
+            filtered = SortComments(filtered, request.SortBy, request.SortOrder);
 
-            var items = result.Hits.Select(x => TypesenseSearchHelpers.ToCommentDto(x.Document)).ToArray();
+            var totalCount = filtered.Count();
+            var items = filtered
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(TypesenseSearchHelpers.ToCommentDto)
+                .ToArray();
+
             await context.RespondAsync(new MetadataCommentsListResponseMessage
             {
                 Success = true,
                 Items = items,
                 Page = page,
-                TotalCount = result.Found,
-                HasMore = page * pageSize < result.Found
+                TotalCount = totalCount,
+                HasMore = page * pageSize < totalCount
             });
         }
         catch (Exception ex)
@@ -70,5 +80,24 @@ public sealed class MetadataCommentsConsumerService(
                 Page = page
             });
         }
+    }
+
+    private static IEnumerable<CommentDocument> SortComments(
+        IEnumerable<CommentDocument> comments,
+        string sortBy,
+        string sortOrder)
+    {
+        var descending = string.Equals(TypesenseSearchHelpers.NormalizeSortOrder(sortOrder), "desc", StringComparison.OrdinalIgnoreCase);
+        var sorted = TypesenseSearchHelpers.MapCommentSortField(sortBy) switch
+        {
+            "like_count" => descending
+                ? comments.OrderByDescending(comment => comment.LikeCount ?? int.MinValue).ThenByDescending(comment => comment.CommentTimestampUnix).ThenBy(comment => comment.Id, StringComparer.Ordinal)
+                : comments.OrderBy(comment => comment.LikeCount ?? int.MinValue).ThenBy(comment => comment.CommentTimestampUnix).ThenBy(comment => comment.Id, StringComparer.Ordinal),
+            _ => descending
+                ? comments.OrderByDescending(comment => comment.CommentTimestampUnix).ThenByDescending(comment => comment.Id, StringComparer.Ordinal)
+                : comments.OrderBy(comment => comment.CommentTimestampUnix).ThenBy(comment => comment.Id, StringComparer.Ordinal)
+        };
+
+        return sorted;
     }
 }
