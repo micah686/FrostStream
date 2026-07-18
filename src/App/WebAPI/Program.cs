@@ -53,6 +53,11 @@ public class Program
             {
                 options.ForwardDefaultSelector = context =>
                 {
+                    if (context.Request.Headers.ContainsKey(MediaProcessorAuthenticationDefaults.ApiKeyHeader))
+                    {
+                        return MediaProcessorAuthenticationDefaults.Scheme;
+                    }
+
                     if (context.Request.Query.ContainsKey(CastTokenDefaults.QueryParameter))
                     {
                         return CastTokenDefaults.Scheme;
@@ -74,10 +79,14 @@ public class Program
                         : BffAuthenticationDefaults.CookieScheme;
                 };
             })
+            .AddScheme<AuthenticationSchemeOptions, MediaProcessorAuthenticationHandler>(
+                MediaProcessorAuthenticationDefaults.Scheme,
+                _ => { })
             .AddScheme<AuthenticationSchemeOptions, CastTokenAuthenticationHandler>(
                 CastTokenDefaults.Scheme,
                 _ => { });
 
+        builder.Services.Configure<MediaProcessorAuthOptions>(builder.Configuration.GetSection("MediaProcessor"));
         builder.Services.Configure<CastTokenOptions>(builder.Configuration.GetSection(CastTokenOptions.SectionName));
         builder.Services.AddSingleton<CastTokenService>();
         builder.Services.Configure<CastingOptions>(builder.Configuration.GetSection(CastingOptions.SectionName));
@@ -88,6 +97,7 @@ public class Program
         builder.Services.AddSingleton<CastSessionManager>();
         builder.Services.AddScoped<MediaAccessChecker>();
         builder.Services.AddScoped<AudioRenditionResolver>();
+        builder.Services.AddScoped<StreamRenditionResolver>();
         builder.Services.AddCors(options => options.AddPolicy(MediaCors.Policy, policy =>
             policy.AllowAnyOrigin().AllowAnyHeader().WithMethods("GET", "HEAD")));
 

@@ -8,6 +8,7 @@ using NodaTime;
 using NodaTime.Serialization.SystemTextJson;
 using Shared.Auth;
 using Shared.Messaging;
+using Shared.Storage;
 using WebAPI.Auth;
 using WebAPI.Features.Media.Casting;
 
@@ -16,8 +17,10 @@ namespace WebAPI.Features.Media.Controllers;
 /// <summary>
 /// Server-side casting surface: the WebAPI discovers cast receivers on its own network via each
 /// enabled protocol and drives them directly (connect, load, transport control), so any browser can cast
-/// without vendor browser SDKs. Media reaches the device through the existing progressive
-/// endpoints in <see cref="MediaWatchController"/>, authenticated by a cast token minted here.
+/// without vendor browser SDKs. Media reaches the device through this server's stream endpoints,
+/// authenticated by a cast token minted here: a faststart H.264/AAC MP4 original is served
+/// progressively (range requests) from <see cref="MediaWatchController"/>, anything else goes
+/// through the HLS stream rendition served by <see cref="MediaStreamController"/>.
 /// </summary>
 [ApiController]
 [Route("api/cast")]
@@ -27,6 +30,8 @@ public sealed class CastController(
     CastTokenService castTokens,
     MediaAccessChecker accessChecker,
     AudioRenditionResolver audioRenditions,
+    StreamRenditionResolver streamRenditions,
+    IBlobStorageProvider blobStorageProvider,
     CastMediaUrlBuilder urlBuilder,
     IMessageBus messageBus,
     ILogger<CastController> logger) : ControllerBase
@@ -64,18 +69,12 @@ public sealed class CastController(
     [HttpPost("devices/{deviceId}/session")]
     [Endpoint(EndpointIds.CastSessionsStart)]
     [EndpointSummary("Start casting a media item to a device")]
-    [EndpointDescription("Connects to the given cast device and loads the requested media item from this server's progressive stream endpoints, authenticated with a freshly minted single-media cast token. Supports video (original file) or audio-only (audioOnly=true with format 'aac', 'opus', or 'mp3'; returns 202 while the rendition is being prepared), an optional WebVTT subtitle track by language, and an optional start position. Replaces whatever the device is currently playing when a session already exists.")]
+    [EndpointDescription("Connects to the given cast device and loads the requested media item from this server's stream endpoints, authenticated with a freshly minted single-media cast token. Compatible MP4 originals stream progressively; everything else is served as the H.264/AAC HLS rendition, and audioOnly=true serves the opus audio rendition. Returns 202 while a required rendition is still being prepared. Supports an optional WebVTT subtitle track by language and an optional start position. Replaces whatever the device is currently playing when a session already exists.")]
     public async Task<IActionResult> StartSession(
         string deviceId,
         [FromBody] StartCastSessionRequest request,
         CancellationToken cancellationToken)
     {
-        var audioFormat = AudioRenditionFormat.Aac;
-        if (request.AudioOnly && !AudioRenditionHelpers.TryParseAudioFormat(request.Format, out audioFormat))
-        {
-            return BadRequest("Audio format must be 'aac', 'opus', or 'mp3'.");
-        }
-
         if (request.StartPositionSeconds is < 0)
         {
             return BadRequest("startPositionSeconds must not be negative.");
@@ -100,11 +99,11 @@ public sealed class CastController(
 
         // Resolve what the device will actually fetch — fail here instead of on the TV screen.
         string contentType;
+        var useHlsRendition = false;
         if (request.AudioOnly)
         {
             var (error, rendition) = await audioRenditions.ResolveAsync(
                 request.MediaGuid,
-                audioFormat,
                 storageKey: null,
                 sourceVersion: null,
                 createIfMissing: true,
@@ -122,33 +121,63 @@ public sealed class CastController(
                     rendition.RenditionId,
                     rendition.MediaGuid,
                     rendition.SourceVersion,
-                    Format = AudioRenditionHelpers.AudioFormatToken(rendition.Format),
                     Status = rendition.Status.ToString().ToLowerInvariant()
                 });
             }
 
-            contentType = AudioRenditionHelpers.AudioContentType(rendition.Format);
+            contentType = AudioRenditionHelpers.ContentType;
         }
         else
         {
-            var (error, resolvedContentType) = await ResolveVideoContentTypeAsync(request.MediaGuid, cancellationToken);
+            var (error, location) = await ResolveStreamLocationAsync(request.MediaGuid, cancellationToken);
             if (error is not null)
             {
                 return error;
             }
 
-            contentType = resolvedContentType!;
+            // Faststart H.264/AAC MP4 originals stream directly with range support; everything
+            // else is served as the H.264/AAC HLS rendition, encoded on first request.
+            if (await CastStreamCompatibility.IsDirectStreamableAsync(
+                    blobStorageProvider, location!.StorageKey, location.StoragePath, logger, cancellationToken))
+            {
+                contentType = VideoContentTypeOf(location.StoragePath);
+            }
+            else
+            {
+                var (renditionError, rendition) = await streamRenditions.ResolveAsync(
+                    request.MediaGuid,
+                    storageKey: null,
+                    sourceVersion: null,
+                    createIfMissing: true,
+                    cancellationToken);
+                if (renditionError is not null)
+                {
+                    return renditionError;
+                }
+
+                if (rendition!.Status != StreamRenditionStatus.Ready || string.IsNullOrWhiteSpace(rendition.StoragePath))
+                {
+                    // Same body shape as the watch endpoint's 202 so clients share retry handling.
+                    return Accepted(new
+                    {
+                        rendition.RenditionId,
+                        rendition.MediaGuid,
+                        rendition.SourceVersion,
+                        Status = rendition.Status.ToString().ToLowerInvariant()
+                    });
+                }
+
+                useHlsRendition = true;
+                contentType = StreamRenditionHelpers.HlsContentType;
+            }
         }
 
         var metadata = await FetchMetadataAsync(request.MediaGuid, cancellationToken);
         var (token, tokenExpiresAt) = castTokens.Issue(User, request.MediaGuid);
 
-        var contentUrl = CastMediaUrlBuilder.BuildStreamUrl(
-            baseUrl,
-            request.MediaGuid,
-            token,
-            request.AudioOnly,
-            AudioRenditionHelpers.AudioFormatToken(audioFormat));
+        var contentUrl = useHlsRendition
+            ? CastMediaUrlBuilder.BuildHlsManifestUrl(baseUrl, request.MediaGuid, token)
+            : CastMediaUrlBuilder.BuildStreamUrl(baseUrl, request.MediaGuid, token, request.AudioOnly);
         var title = metadata?.Title ?? request.MediaGuid.ToString("D");
         var thumbnailUrl = metadata?.ThumbnailStoragePath is null
             ? null
@@ -400,8 +429,8 @@ public sealed class CastController(
         }
     }
 
-    /// <summary>Confirms the media file exists and infers the MIME type the device will receive.</summary>
-    private async Task<(IActionResult? Error, string? ContentType)> ResolveVideoContentTypeAsync(
+    /// <summary>Confirms the media file exists and returns where the original lives in storage.</summary>
+    private async Task<(IActionResult? Error, MediaStreamLocationDto? Location)> ResolveStreamLocationAsync(
         Guid mediaGuid,
         CancellationToken cancellationToken)
     {
@@ -440,7 +469,7 @@ public sealed class CastController(
                     response.ErrorMessage ?? "Media stream lookup failed."), null);
         }
 
-        return (null, VideoContentTypeOf(response.Item.StoragePath));
+        return (null, response.Item);
     }
 
     internal static string VideoContentTypeOf(string storagePath)

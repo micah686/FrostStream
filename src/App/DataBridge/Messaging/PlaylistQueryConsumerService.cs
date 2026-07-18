@@ -89,7 +89,6 @@ public sealed class PlaylistQueryConsumerService(
                 Priority = playlist.Priority,
                 FetchComments = playlist.FetchComments,
                 EncodeAudioRendition = playlist.EncodeForPlaylist,
-                AudioRenditionFormat = playlist.AudioFormat,
                 SourceKind = DownloadSourceKind.Playlist
             };
 

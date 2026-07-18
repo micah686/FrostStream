@@ -74,8 +74,6 @@ public sealed class ChannelDownloadRequest
 
     public bool? EncodeForPlaylist { get; init; }
 
-    public AudioRenditionFormat? AudioFormat { get; init; }
-
     [Range(0, 100)]
     public int? Priority { get; init; }
 
@@ -120,8 +118,6 @@ public sealed class ForceQueueMediaRequest
     public YtDlpOptions? YtDlpOptions { get; init; }
 
     public bool? EncodeForPlaylist { get; init; }
-
-    public AudioRenditionFormat? AudioFormat { get; init; }
 
     [Range(0, 100)]
     public int? Priority { get; init; }

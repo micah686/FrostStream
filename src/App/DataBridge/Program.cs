@@ -3,6 +3,7 @@ using Cleipnir.Flows.AspNet;
 using Cleipnir.Flows.PostgresSql;
 using DataBridge.Data;
 using DataBridge.AudioRenditions;
+using DataBridge.StreamRenditions;
 using DataBridge.Flows;
 using DataBridge.MediaStream;
 using DataBridge.Metadata;
@@ -55,8 +56,8 @@ class Program
                         .MapEnum<DownloadJobState>("download_job_state", "downloads")
                         .MapEnum<FailureKind>("failure_kind", "downloads")
                         .MapEnum<IngestOrigin>("ingest_origin", "media")
-                        .MapEnum<AudioRenditionFormat>("audio_rendition_format", "media")
                         .MapEnum<AudioRenditionStatus>("audio_rendition_status", "media")
+                        .MapEnum<StreamRenditionStatus>("stream_rendition_status", "media")
                         .MapEnum<LocalImportStatus>("local_import_status", "imports")
                         .MapEnum<ImportSessionStatus>("import_session_status", "imports")
                         .MapEnum<ImportSessionSourceKind>("import_session_source_kind", "imports")
@@ -124,6 +125,7 @@ class Program
         builder.Services.AddScoped<IMediaCaptionReadService, MediaCaptionReadService>();
         builder.Services.AddScoped<IAccountAssetReadService, AccountAssetReadService>();
         builder.Services.AddScoped<IAudioRenditionRepository, AudioRenditionRepository>();
+        builder.Services.AddScoped<IStreamRenditionRepository, StreamRenditionRepository>();
         builder.Services.AddScoped<IPlaylistsRepository, PlaylistsRepository>();
         builder.Services.AddScoped<IUserPlaylistsRepository, UserPlaylistsRepository>();
         builder.Services.AddScoped<IUserNotesRepository, UserNotesRepository>();
@@ -194,6 +196,7 @@ class Program
         builder.Services.AddHostedService<StatisticsQueryConsumerService>();
         builder.Services.AddHostedService<MediaStreamQueryConsumerService>();
         builder.Services.AddHostedService<AudioRenditionConsumerService>();
+        builder.Services.AddHostedService<StreamRenditionConsumerService>();
         builder.Services.AddHostedService<MediaDeleteConsumerService>();
         builder.Services.AddHostedService<MediaAccessConsumerService>();
 

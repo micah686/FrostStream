@@ -27,8 +27,6 @@ public sealed class PlaylistRequest
     [DefaultValue(false)]
     public bool? EncodeForPlaylist { get; init; }
 
-    public AudioRenditionFormat? AudioFormat { get; init; }
-
     [Range(0, 100)]
     public int? Priority { get; init; }
 

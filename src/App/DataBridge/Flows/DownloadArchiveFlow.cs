@@ -1018,11 +1018,10 @@ public class DownloadArchiveFlow(
         if (!shouldEncode)
             return;
 
-        var audioFormat = preference?.AudioFormat ?? request.AudioRenditionFormat;
         var audioStorageKey = preference?.StorageKey ?? storageKey;
 
         var rendition = await scopeFactory.WithScopedAsync<IAudioRenditionRepository, AudioRenditionDto?>(
-            repo => repo.CreateIfMissingAsync(mediaGuid, audioFormat, audioStorageKey, sourceVersion));
+            repo => repo.CreateIfMissingAsync(mediaGuid, audioStorageKey, sourceVersion));
         if (rendition is null || rendition.Status == AudioRenditionStatus.Ready)
             return;
 
@@ -1032,8 +1031,7 @@ public class DownloadArchiveFlow(
             {
                 RenditionId = rendition.RenditionId,
                 MediaGuid = rendition.MediaGuid,
-                SourceVersion = rendition.SourceVersion,
-                Format = rendition.Format
+                SourceVersion = rendition.SourceVersion
             },
             messageId: rendition.RenditionId.ToString("N"));
     }

@@ -180,7 +180,6 @@ public sealed class ChannelDiscoveryConsumerService(
                     RequestedBy = ChannelRequestedBy(request),
                     ConfigSetKey = ChannelConfigSetKey(request),
                     EncodeForPlaylist = ChannelEncodeForPlaylist(request),
-                    AudioFormat = ChannelAudioFormat(request),
                     CookieSecretPath = ChannelCookieSecretPath(request),
                     Priority = ChannelPriority(request),
                     FetchComments = ChannelFetchComments(request),
@@ -221,7 +220,6 @@ public sealed class ChannelDiscoveryConsumerService(
                     RequestedBy = ChannelRequestedBy(request),
                     ConfigSetKey = ChannelConfigSetKey(request),
                     EncodeForPlaylist = ChannelEncodeForPlaylist(request),
-                    AudioFormat = ChannelAudioFormat(request),
                     CookieSecretPath = ChannelCookieSecretPath(request),
                     Priority = ChannelPriority(request),
                     FetchComments = ChannelFetchComments(request),
@@ -318,9 +316,6 @@ public sealed class ChannelDiscoveryConsumerService(
 
     private static bool ChannelEncodeForPlaylist(ScheduledBackgroundRequest request)
         => request is ChannelMediaListRequested channelRequest && channelRequest.EncodeForPlaylist;
-
-    private static AudioRenditionFormat ChannelAudioFormat(ScheduledBackgroundRequest request)
-        => request is ChannelMediaListRequested channelRequest ? channelRequest.AudioFormat : AudioRenditionFormat.Aac;
 
     private static string? ChannelCookieSecretPath(ScheduledBackgroundRequest request)
         => request is ChannelMediaListRequested channelRequest ? channelRequest.CookieSecretPath : null;

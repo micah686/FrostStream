@@ -97,11 +97,11 @@ public sealed class CastMediaUrlBuilderTests
     [Test]
     public async Task Stream_Urls_Carry_The_Cast_Token()
     {
-        var video = CastMediaUrlBuilder.BuildStreamUrl("http://10.0.0.2:5041", MediaGuid, "tok en", audio: false, format: null);
-        var audio = CastMediaUrlBuilder.BuildStreamUrl("http://10.0.0.2:5041", MediaGuid, "abc", audio: true, format: "opus");
+        var video = CastMediaUrlBuilder.BuildStreamUrl("http://10.0.0.2:5041", MediaGuid, "tok en", audio: false);
+        var audio = CastMediaUrlBuilder.BuildStreamUrl("http://10.0.0.2:5041", MediaGuid, "abc", audio: true);
 
         video.ShouldBe($"http://10.0.0.2:5041/api/media/watch/{MediaGuid:D}?castToken=tok%20en");
-        audio.ShouldBe($"http://10.0.0.2:5041/api/media/watch/{MediaGuid:D}?audio=true&format=opus&castToken=abc");
+        audio.ShouldBe($"http://10.0.0.2:5041/api/media/watch/{MediaGuid:D}?audio=true&castToken=abc");
         await Task.CompletedTask;
     }
 

@@ -40,7 +40,6 @@ public sealed record StartCastSessionRequest
 {
     public required Guid MediaGuid { get; init; }
     public bool AudioOnly { get; init; }
-    public string Format { get; init; } = AudioRenditionHelpers.DefaultFormat;
     public string? SubtitleLanguage { get; init; }
     public string? CaptionType { get; init; }
     public double? StartPositionSeconds { get; init; }

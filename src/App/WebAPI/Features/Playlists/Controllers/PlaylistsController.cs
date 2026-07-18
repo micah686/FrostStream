@@ -58,7 +58,6 @@ public class PlaylistsController(
                 request.CookieProfileKey,
                 request.YtDlpOptions,
                 request.EncodeForPlaylist,
-                request.AudioFormat,
                 request.Priority,
                 request.FetchComments,
                 cancellationToken);
@@ -87,7 +86,6 @@ public class PlaylistsController(
             StorageKey = resolved.StorageKey,
             ConfigSetKey = resolved.ConfigSetKey,
             EncodeForPlaylist = resolved.EncodeForPlaylist,
-            AudioFormat = resolved.AudioFormat,
             CookieSecretPath = resolved.CookieSecretPath,
             YtDlpOptions = resolved.YtDlpOptions,
             Priority = resolved.Priority,

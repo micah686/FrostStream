@@ -12,7 +12,6 @@ public sealed record ResolvedDownloadConfigSet(
     string? CookieSecretPath,
     YtDlpOptions? YtDlpOptions,
     bool EncodeForPlaylist,
-    AudioRenditionFormat AudioFormat,
     int Priority,
     bool FetchComments);
 
@@ -28,7 +27,6 @@ public static class DownloadConfigSetResolver
         string? cookieProfileKeyOverride,
         YtDlpOptions? ytDlpOptionsOverride,
         bool? encodeForPlaylistOverride,
-        AudioRenditionFormat? audioFormatOverride,
         int? priorityOverride,
         bool? fetchCommentsOverride,
         CancellationToken cancellationToken)
@@ -64,7 +62,7 @@ public static class DownloadConfigSetResolver
         var storageKey = Normalize(storageKeyOverride) ?? config?.StorageKey ?? "default";
         var ytDlpOptions = ytDlpOptionsOverride ?? Deserialize(config?.YtDlpOptionsJson);
 
-        // encodeForPlaylist/audioFormat/fetchComments are no longer config-set fields (removed —
+        // encodeForPlaylist/fetchComments are no longer config-set fields (removed —
         // they duplicated settings the caller's own request body already carries); these always
         // resolve from the caller-supplied override, with no config-set-level fallback.
         return (new ResolvedDownloadConfigSet(
@@ -73,7 +71,6 @@ public static class DownloadConfigSetResolver
             CookieSecretPath: cookieSecretPath,
             YtDlpOptions: ytDlpOptions,
             EncodeForPlaylist: encodeForPlaylistOverride ?? false,
-            AudioFormat: audioFormatOverride ?? AudioRenditionFormat.Aac,
             Priority: priorityOverride ?? config?.Priority ?? 0,
             FetchComments: fetchCommentsOverride ?? false), null);
     }

@@ -2,7 +2,7 @@ using NodaTime;
 
 namespace Shared.Messaging;
 
-public enum AudioRenditionStatus
+public enum StreamRenditionStatus
 {
     Pending = 0,
     Processing = 1,
@@ -10,23 +10,27 @@ public enum AudioRenditionStatus
     Failed = 3
 }
 
-public static class AudioRenditionSubjects
+public static class StreamRenditionSubjects
 {
-    public const string Resolve = "media.audio-rendition.resolve";
-    public const string Claim = "media.audio-rendition.claim";
-    public const string Complete = "media.audio-rendition.complete";
-    public const string Fail = "media.audio-rendition.fail";
-    public const string ProcessorsQueueGroup = "databridge-audio-renditions";
+    public const string Resolve = "media.stream-rendition.resolve";
+    public const string Claim = "media.stream-rendition.claim";
+    public const string Complete = "media.stream-rendition.complete";
+    public const string Fail = "media.stream-rendition.fail";
+    public const string ProcessorsQueueGroup = "databridge-stream-renditions";
 }
 
-public sealed record AudioRenditionEncodeRequested
+/// <summary>
+/// JetStream job asking MediaProcessor to produce the stream/casting HLS rendition
+/// (H.264 + AAC segments) for one stored media version.
+/// </summary>
+public sealed record StreamRenditionEncodeRequested
 {
     public required Guid RenditionId { get; init; }
     public required Guid MediaGuid { get; init; }
     public required int SourceVersion { get; init; }
 }
 
-public sealed record AudioRenditionResolveRequest
+public sealed record StreamRenditionResolveRequest
 {
     public required Guid MediaGuid { get; init; }
     public string? StorageKey { get; init; }
@@ -34,62 +38,67 @@ public sealed record AudioRenditionResolveRequest
     public bool CreateIfMissing { get; init; }
 }
 
-public sealed record AudioRenditionResolveResponse
+public sealed record StreamRenditionResolveResponse
 {
     public bool Success { get; init; }
     public string? ErrorCode { get; init; }
     public string? ErrorMessage { get; init; }
-    public AudioRenditionDto? Item { get; init; }
+    public StreamRenditionDto? Item { get; init; }
 }
 
-public sealed record AudioRenditionClaimRequest
+public sealed record StreamRenditionClaimRequest
 {
     public required Guid RenditionId { get; init; }
 }
 
-public sealed record AudioRenditionClaimResponse
+public sealed record StreamRenditionClaimResponse
 {
     public bool Success { get; init; }
     public string? ErrorCode { get; init; }
     public string? ErrorMessage { get; init; }
-    public AudioRenditionWorkItem? Item { get; init; }
+    public StreamRenditionWorkItem? Item { get; init; }
 }
 
-public sealed record AudioRenditionCompleteRequest
+public sealed record StreamRenditionCompleteRequest
 {
     public required Guid RenditionId { get; init; }
+
+    /// <summary>Storage directory the HLS assets were written to (manifest is index.m3u8 inside it).</summary>
     public required string StoragePath { get; init; }
-    public required string ContentHashXxh128 { get; init; }
+
     public required long SizeBytes { get; init; }
     public int? DurationSeconds { get; init; }
 }
 
-public sealed record AudioRenditionCompleteResponse
+public sealed record StreamRenditionCompleteResponse
 {
     public bool Success { get; init; }
     public string? ErrorCode { get; init; }
     public string? ErrorMessage { get; init; }
 }
 
-public sealed record AudioRenditionFailRequest
+public sealed record StreamRenditionFailRequest
 {
     public required Guid RenditionId { get; init; }
     public required string ErrorMessage { get; init; }
 }
 
-public sealed record AudioRenditionFailResponse
+public sealed record StreamRenditionFailResponse
 {
     public bool Success { get; init; }
 }
 
-public sealed record AudioRenditionDto
+public sealed record StreamRenditionDto
 {
     public required Guid RenditionId { get; init; }
     public required Guid MediaGuid { get; init; }
     public required int SourceVersion { get; init; }
-    public required AudioRenditionStatus Status { get; init; }
+    public required StreamRenditionStatus Status { get; init; }
     public required string StorageKey { get; init; }
+
+    /// <summary>Storage directory holding index.m3u8 and its segments once the rendition is ready.</summary>
     public string? StoragePath { get; init; }
+
     public long? SizeBytes { get; init; }
     public int? DurationSeconds { get; init; }
     public string? ErrorMessage { get; init; }
@@ -97,7 +106,7 @@ public sealed record AudioRenditionDto
     public Instant UpdatedAt { get; init; }
 }
 
-public sealed record AudioRenditionWorkItem
+public sealed record StreamRenditionWorkItem
 {
     public required Guid RenditionId { get; init; }
     public required Guid MediaGuid { get; init; }

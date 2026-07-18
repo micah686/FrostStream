@@ -173,8 +173,6 @@ public class AudioRenditionEntity
 
     public int SourceVersionNum { get; set; }
 
-    public AudioRenditionFormat Format { get; set; }
-
     public AudioRenditionStatus Status { get; set; }
 
     public required string StorageKey { get; set; }
@@ -182,6 +180,32 @@ public class AudioRenditionEntity
     public string? StoragePath { get; set; }
 
     public string? ContentHashXxh128 { get; set; }
+
+    public long? SizeBytes { get; set; }
+
+    public int? DurationSeconds { get; set; }
+
+    public string? ErrorMessage { get; set; }
+
+    public Instant CreatedAt { get; private set; } = SystemClock.Instance.GetCurrentInstant();
+
+    public Instant UpdatedAt { get; set; } = SystemClock.Instance.GetCurrentInstant();
+}
+
+public class StreamRenditionEntity
+{
+    public Guid RenditionId { get; set; }
+
+    public Guid MediaGuid { get; set; }
+
+    public int SourceVersionNum { get; set; }
+
+    public StreamRenditionStatus Status { get; set; }
+
+    public required string StorageKey { get; set; }
+
+    /// <summary>Storage directory holding the HLS manifest (index.m3u8) and its segments.</summary>
+    public string? StoragePath { get; set; }
 
     public long? SizeBytes { get; set; }
 

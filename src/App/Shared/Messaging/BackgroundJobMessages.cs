@@ -34,7 +34,6 @@ public sealed record ChannelMediaListRequested : ScheduledBackgroundRequest
     public string? RequestedBy { get; init; }
     public string? ConfigSetKey { get; init; }
     public bool EncodeForPlaylist { get; init; }
-    public AudioRenditionFormat AudioFormat { get; init; } = AudioRenditionFormat.Aac;
     public string? CookieSecretPath { get; init; }
     public int Priority { get; init; }
     public bool FetchComments { get; init; }

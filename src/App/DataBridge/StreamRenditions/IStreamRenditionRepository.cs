@@ -1,27 +1,26 @@
 using Shared.Messaging;
 
-namespace DataBridge.AudioRenditions;
+namespace DataBridge.StreamRenditions;
 
-public interface IAudioRenditionRepository
+public interface IStreamRenditionRepository
 {
-    Task<AudioRenditionDto?> ResolveAsync(
+    Task<StreamRenditionDto?> ResolveAsync(
         Guid mediaGuid,
         string? storageKey,
         int? sourceVersion,
         CancellationToken cancellationToken = default);
 
-    Task<AudioRenditionDto?> CreateIfMissingAsync(
+    Task<StreamRenditionDto?> CreateIfMissingAsync(
         Guid mediaGuid,
         string? storageKey,
         int? sourceVersion,
         CancellationToken cancellationToken = default);
 
-    Task<AudioRenditionWorkItem?> ClaimAsync(Guid renditionId, CancellationToken cancellationToken = default);
+    Task<StreamRenditionWorkItem?> ClaimAsync(Guid renditionId, CancellationToken cancellationToken = default);
 
     Task<bool> CompleteAsync(
         Guid renditionId,
         string storagePath,
-        string contentHashXxh128,
         long sizeBytes,
         int? durationSeconds,
         CancellationToken cancellationToken = default);

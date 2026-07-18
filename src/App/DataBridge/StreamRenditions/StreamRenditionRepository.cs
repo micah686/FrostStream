@@ -4,11 +4,11 @@ using NodaTime;
 using Shared.Database;
 using Shared.Messaging;
 
-namespace DataBridge.AudioRenditions;
+namespace DataBridge.StreamRenditions;
 
-public sealed class AudioRenditionRepository(DataBridgeDbContext db, IClock clock) : IAudioRenditionRepository
+public sealed class StreamRenditionRepository(DataBridgeDbContext db, IClock clock) : IStreamRenditionRepository
 {
-    public async Task<AudioRenditionDto?> ResolveAsync(
+    public async Task<StreamRenditionDto?> ResolveAsync(
         Guid mediaGuid,
         string? storageKey,
         int? sourceVersion,
@@ -18,7 +18,7 @@ public sealed class AudioRenditionRepository(DataBridgeDbContext db, IClock cloc
         if (source is null)
             return null;
 
-        return await db.AudioRenditions
+        return await db.StreamRenditions
             .AsNoTracking()
             .Where(x => x.MediaGuid == mediaGuid &&
                         x.SourceVersionNum == source.VersionNum &&
@@ -27,7 +27,7 @@ public sealed class AudioRenditionRepository(DataBridgeDbContext db, IClock cloc
             .FirstOrDefaultAsync(cancellationToken);
     }
 
-    public async Task<AudioRenditionDto?> CreateIfMissingAsync(
+    public async Task<StreamRenditionDto?> CreateIfMissingAsync(
         Guid mediaGuid,
         string? storageKey,
         int? sourceVersion,
@@ -37,7 +37,7 @@ public sealed class AudioRenditionRepository(DataBridgeDbContext db, IClock cloc
         if (source is null)
             return null;
 
-        var existing = await db.AudioRenditions
+        var existing = await db.StreamRenditions
             .FirstOrDefaultAsync(x =>
                 x.MediaGuid == mediaGuid &&
                 x.SourceVersionNum == source.VersionNum &&
@@ -46,9 +46,9 @@ public sealed class AudioRenditionRepository(DataBridgeDbContext db, IClock cloc
 
         if (existing is not null)
         {
-            if (existing.Status == AudioRenditionStatus.Failed)
+            if (existing.Status == StreamRenditionStatus.Failed)
             {
-                existing.Status = AudioRenditionStatus.Pending;
+                existing.Status = StreamRenditionStatus.Pending;
                 existing.ErrorMessage = null;
                 existing.UpdatedAt = clock.GetCurrentInstant();
                 await db.SaveChangesAsync(cancellationToken);
@@ -57,29 +57,29 @@ public sealed class AudioRenditionRepository(DataBridgeDbContext db, IClock cloc
             return ToDto(existing);
         }
 
-        var rendition = new AudioRenditionEntity
+        var rendition = new StreamRenditionEntity
         {
             RenditionId = Guid.NewGuid(),
             MediaGuid = mediaGuid,
             SourceVersionNum = source.VersionNum,
-            Status = AudioRenditionStatus.Pending,
+            Status = StreamRenditionStatus.Pending,
             StorageKey = source.StorageKey,
             StoragePath = BuildStoragePath(mediaGuid, source.VersionNum),
             UpdatedAt = clock.GetCurrentInstant()
         };
 
-        db.AudioRenditions.Add(rendition);
+        db.StreamRenditions.Add(rendition);
         await db.SaveChangesAsync(cancellationToken);
         return ToDto(rendition);
     }
 
-    public async Task<AudioRenditionWorkItem?> ClaimAsync(Guid renditionId, CancellationToken cancellationToken = default)
+    public async Task<StreamRenditionWorkItem?> ClaimAsync(Guid renditionId, CancellationToken cancellationToken = default)
     {
-        var rendition = await db.AudioRenditions.FirstOrDefaultAsync(x => x.RenditionId == renditionId, cancellationToken);
+        var rendition = await db.StreamRenditions.FirstOrDefaultAsync(x => x.RenditionId == renditionId, cancellationToken);
         if (rendition is null)
             return null;
 
-        if (rendition.Status == AudioRenditionStatus.Ready)
+        if (rendition.Status == StreamRenditionStatus.Ready)
             return null;
 
         var source = await db.MediaContentIdVersions
@@ -88,13 +88,13 @@ public sealed class AudioRenditionRepository(DataBridgeDbContext db, IClock cloc
         if (source is null)
             return null;
 
-        rendition.Status = AudioRenditionStatus.Processing;
+        rendition.Status = StreamRenditionStatus.Processing;
         rendition.ErrorMessage = null;
         rendition.StoragePath ??= BuildStoragePath(rendition.MediaGuid, rendition.SourceVersionNum);
         rendition.UpdatedAt = clock.GetCurrentInstant();
         await db.SaveChangesAsync(cancellationToken);
 
-        return new AudioRenditionWorkItem
+        return new StreamRenditionWorkItem
         {
             RenditionId = rendition.RenditionId,
             MediaGuid = rendition.MediaGuid,
@@ -109,18 +109,16 @@ public sealed class AudioRenditionRepository(DataBridgeDbContext db, IClock cloc
     public async Task<bool> CompleteAsync(
         Guid renditionId,
         string storagePath,
-        string contentHashXxh128,
         long sizeBytes,
         int? durationSeconds,
         CancellationToken cancellationToken = default)
     {
-        var rendition = await db.AudioRenditions.FirstOrDefaultAsync(x => x.RenditionId == renditionId, cancellationToken);
+        var rendition = await db.StreamRenditions.FirstOrDefaultAsync(x => x.RenditionId == renditionId, cancellationToken);
         if (rendition is null)
             return false;
 
-        rendition.Status = AudioRenditionStatus.Ready;
+        rendition.Status = StreamRenditionStatus.Ready;
         rendition.StoragePath = storagePath;
-        rendition.ContentHashXxh128 = contentHashXxh128;
         rendition.SizeBytes = sizeBytes;
         rendition.DurationSeconds = durationSeconds;
         rendition.ErrorMessage = null;
@@ -131,11 +129,11 @@ public sealed class AudioRenditionRepository(DataBridgeDbContext db, IClock cloc
 
     public async Task<bool> FailAsync(Guid renditionId, string errorMessage, CancellationToken cancellationToken = default)
     {
-        var rendition = await db.AudioRenditions.FirstOrDefaultAsync(x => x.RenditionId == renditionId, cancellationToken);
+        var rendition = await db.StreamRenditions.FirstOrDefaultAsync(x => x.RenditionId == renditionId, cancellationToken);
         if (rendition is null)
             return false;
 
-        rendition.Status = AudioRenditionStatus.Failed;
+        rendition.Status = StreamRenditionStatus.Failed;
         rendition.ErrorMessage = errorMessage.Length > 4096 ? errorMessage[..4096] : errorMessage;
         rendition.UpdatedAt = clock.GetCurrentInstant();
         await db.SaveChangesAsync(cancellationToken);
@@ -163,12 +161,11 @@ public sealed class AudioRenditionRepository(DataBridgeDbContext db, IClock cloc
             .FirstOrDefaultAsync(cancellationToken);
     }
 
-    // Beside the archived original: data/archives/<guid>/<version>/stream/audio. Renditions created
-    // before this layout keep the storage_path recorded on their row, so old files still serve.
+    // Beside the archived original: data/archives/<guid>/<version>/stream/hls
     private static string BuildStoragePath(Guid mediaGuid, int sourceVersion)
-        => $"archives/{mediaGuid:N}/v{sourceVersion}/stream/audio/media.opus";
+        => $"archives/{mediaGuid:N}/v{sourceVersion}/stream/hls";
 
-    private static AudioRenditionDto ToDto(AudioRenditionEntity entity)
+    private static StreamRenditionDto ToDto(StreamRenditionEntity entity)
         => new()
         {
             RenditionId = entity.RenditionId,

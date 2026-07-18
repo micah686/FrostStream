@@ -23,6 +23,7 @@ public sealed class DataBridgeDbContext(DbContextOptions<DataBridgeDbContext> op
     public DbSet<MediaSourceVersionEntity> MediaSourceVersions => Set<MediaSourceVersionEntity>();
     public DbSet<MediaContentIdVersionEntity> MediaContentIdVersions => Set<MediaContentIdVersionEntity>();
     public DbSet<AudioRenditionEntity> AudioRenditions => Set<AudioRenditionEntity>();
+    public DbSet<StreamRenditionEntity> StreamRenditions => Set<StreamRenditionEntity>();
     public DbSet<LocalImportBatchEntity> LocalImportBatches => Set<LocalImportBatchEntity>();
     public DbSet<LocalImportItemEntity> LocalImportItems => Set<LocalImportItemEntity>();
     public DbSet<ImportSessionEntity> ImportSessions => Set<ImportSessionEntity>();
@@ -57,8 +58,8 @@ public sealed class DataBridgeDbContext(DbContextOptions<DataBridgeDbContext> op
         modelBuilder.HasPostgresEnum<DownloadJobState>("downloads", "download_job_state");
         modelBuilder.HasPostgresEnum<FailureKind>("downloads", "failure_kind");
         modelBuilder.HasPostgresEnum<IngestOrigin>("media", "ingest_origin");
-        modelBuilder.HasPostgresEnum<AudioRenditionFormat>("media", "audio_rendition_format");
         modelBuilder.HasPostgresEnum<AudioRenditionStatus>("media", "audio_rendition_status");
+        modelBuilder.HasPostgresEnum<StreamRenditionStatus>("media", "stream_rendition_status");
         modelBuilder.HasPostgresEnum<LocalImportStatus>("imports", "local_import_status");
         modelBuilder.HasPostgresEnum<ImportSessionStatus>("imports", "import_session_status");
         modelBuilder.HasPostgresEnum<ImportSessionSourceKind>("imports", "import_session_source_kind");

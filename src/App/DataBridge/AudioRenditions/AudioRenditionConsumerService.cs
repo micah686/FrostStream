@@ -53,8 +53,8 @@ public sealed class AudioRenditionConsumerService(
             {
                 var repo = scope.ServiceProvider.GetRequiredService<IAudioRenditionRepository>();
                 item = request.CreateIfMissing
-                    ? await repo.CreateIfMissingAsync(request.MediaGuid, request.Format, request.StorageKey, request.SourceVersion)
-                    : await repo.ResolveAsync(request.MediaGuid, request.Format, request.StorageKey, request.SourceVersion);
+                    ? await repo.CreateIfMissingAsync(request.MediaGuid, request.StorageKey, request.SourceVersion)
+                    : await repo.ResolveAsync(request.MediaGuid, request.StorageKey, request.SourceVersion);
             }
 
             if (item is null)
@@ -76,8 +76,7 @@ public sealed class AudioRenditionConsumerService(
                     {
                         RenditionId = item.RenditionId,
                         MediaGuid = item.MediaGuid,
-                        SourceVersion = item.SourceVersion,
-                        Format = item.Format
+                        SourceVersion = item.SourceVersion
                     },
                     messageId: item.RenditionId.ToString("N"));
             }

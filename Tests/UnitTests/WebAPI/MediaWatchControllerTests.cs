@@ -101,17 +101,6 @@ public sealed class MediaWatchControllerTests
     }
 
     [Test]
-    public async Task GetWatch_Rejects_Invalid_Audio_Format()
-    {
-        var bus = Substitute.For<IMessageBus>();
-        var provider = Substitute.For<IBlobStorageProvider>();
-
-        var result = await CreateController(bus, provider).GetWatch(Guid.NewGuid(), audio: true, format: "flac");
-
-        result.ShouldBeOfType<BadRequestObjectResult>();
-    }
-
-    [Test]
     public async Task GetWatch_Audio_Returns_202_While_Rendition_Prepares()
     {
         var mediaGuid = Guid.NewGuid();
@@ -122,7 +111,6 @@ public sealed class MediaWatchControllerTests
                 AudioRenditionSubjects.Resolve,
                 Arg.Is<AudioRenditionResolveRequest>(request =>
                     request.MediaGuid == mediaGuid &&
-                    request.Format == AudioRenditionFormat.Aac &&
                     request.CreateIfMissing),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
@@ -134,7 +122,6 @@ public sealed class MediaWatchControllerTests
                     RenditionId = Guid.NewGuid(),
                     MediaGuid = mediaGuid,
                     SourceVersion = 1,
-                    Format = AudioRenditionFormat.Aac,
                     Status = AudioRenditionStatus.Pending,
                     StorageKey = "storage-a"
                 }

@@ -31,11 +31,10 @@ public sealed class MediaWatchController(
     [EnableCors(MediaCors.Policy)]
     [Endpoint(EndpointIds.MediaStream)]
     [EndpointSummary("Play back an archived media file")]
-    [EndpointDescription("Streams an archived media file by GUID directly from the configured storage backend, with HTTP range support for seeking. Optional storageKey and positive version parameters select a specific stored copy. With audio=true the cached audio-only rendition ('aac', 'opus', or 'mp3'; default aac) is served instead; when that rendition is still being prepared the endpoint returns 202 with a status body, and prepare=false suppresses queueing missing renditions.")]
+    [EndpointDescription("Streams an archived media file by GUID directly from the configured storage backend, with HTTP range support for seeking. Optional storageKey and positive version parameters select a specific stored copy. With audio=true the cached opus audio-only rendition is served instead; when that rendition is still being prepared the endpoint returns 202 with a status body, and prepare=false suppresses queueing missing renditions.")]
     public async Task<IActionResult> GetWatch(
         Guid mediaGuid,
         [FromQuery] bool audio = false,
-        [FromQuery] string format = AudioRenditionHelpers.DefaultFormat,
         [FromQuery] bool prepare = true,
         [FromQuery] string? storageKey = null,
         [FromQuery] int? version = null,
@@ -44,11 +43,10 @@ public sealed class MediaWatchController(
         if (Request.Query.ContainsKey(CastTokenDefaults.QueryParameter))
         {
             logger.LogInformation(
-                "Cast device requested media {MediaGuid} from {RemoteIp}; audio={Audio}, format={Format}, range={Range}, userAgent={UserAgent}.",
+                "Cast device requested media {MediaGuid} from {RemoteIp}; audio={Audio}, range={Range}, userAgent={UserAgent}.",
                 mediaGuid,
                 HttpContext.Connection.RemoteIpAddress,
                 audio,
-                format,
                 Request.Headers.Range.ToString(),
                 Request.Headers.UserAgent.ToString());
         }
@@ -56,12 +54,6 @@ public sealed class MediaWatchController(
         if (version is <= 0)
         {
             return BadRequest("Query parameter 'version' must be greater than zero.");
-        }
-
-        var audioFormat = AudioRenditionFormat.Aac;
-        if (audio && !AudioRenditionHelpers.TryParseAudioFormat(format, out audioFormat))
-        {
-            return BadRequest("Audio format must be 'aac', 'opus', or 'mp3'.");
         }
 
         if (await accessChecker.CheckWatchAccessAsync(User, mediaGuid, cancellationToken) is { } denied)
@@ -72,7 +64,7 @@ public sealed class MediaWatchController(
         storageKey = string.IsNullOrWhiteSpace(storageKey) ? null : storageKey.Trim();
 
         return audio
-            ? await ServeAudioRenditionAsync(mediaGuid, audioFormat, storageKey, version, prepare, cancellationToken)
+            ? await ServeAudioRenditionAsync(mediaGuid, storageKey, version, prepare, cancellationToken)
             : await ServeOriginalFileAsync(mediaGuid, storageKey, version, cancellationToken);
     }
 
@@ -140,7 +132,6 @@ public sealed class MediaWatchController(
 
     private async Task<IActionResult> ServeAudioRenditionAsync(
         Guid mediaGuid,
-        AudioRenditionFormat format,
         string? storageKey,
         int? sourceVersion,
         bool prepare,
@@ -148,7 +139,6 @@ public sealed class MediaWatchController(
     {
         var (error, rendition) = await audioRenditions.ResolveAsync(
             mediaGuid,
-            format,
             storageKey,
             sourceVersion,
             createIfMissing: prepare,
@@ -166,7 +156,6 @@ public sealed class MediaWatchController(
                 rendition.RenditionId,
                 rendition.MediaGuid,
                 rendition.SourceVersion,
-                Format = AudioRenditionHelpers.AudioFormatToken(rendition.Format),
                 Status = rendition.Status.ToString().ToLowerInvariant()
             });
         }
@@ -177,7 +166,7 @@ public sealed class MediaWatchController(
             rendition.StorageKey,
             rendition.StoragePath,
             subject: "audio rendition",
-            contentType: AudioRenditionHelpers.AudioContentType(rendition.Format),
+            contentType: AudioRenditionHelpers.ContentType,
             cancellationToken: cancellationToken);
     }
 

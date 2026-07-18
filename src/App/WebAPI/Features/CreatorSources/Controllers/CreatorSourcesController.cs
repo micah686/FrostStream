@@ -102,7 +102,6 @@ public sealed class CreatorSourcesController(
                 request.CookieProfileKey,
                 request.YtDlpOptions,
                 request.EncodeForPlaylist,
-                request.AudioFormat,
                 request.Priority,
                 request.FetchComments,
                 cancellationToken);
@@ -128,7 +127,6 @@ public sealed class CreatorSourcesController(
             RequestedBy = subject,
             ConfigSetKey = resolved.ConfigSetKey,
             EncodeForPlaylist = resolved.EncodeForPlaylist,
-            AudioFormat = resolved.AudioFormat,
             CookieSecretPath = resolved.CookieSecretPath,
             YtDlpOptions = resolved.YtDlpOptions,
             Priority = resolved.Priority,
@@ -437,7 +435,6 @@ public sealed class CreatorSourcesController(
                 request.CookieProfileKey,
                 request.YtDlpOptions,
                 request.EncodeForPlaylist,
-                request.AudioFormat,
                 request.Priority,
                 request.FetchComments,
                 cancellationToken);
@@ -464,7 +461,6 @@ public sealed class CreatorSourcesController(
                     CookieSecretPath = resolved.CookieSecretPath,
                     YtDlpOptions = resolved.YtDlpOptions,
                     EncodeForPlaylist = resolved.EncodeForPlaylist,
-                    AudioFormat = resolved.AudioFormat,
                     Priority = resolved.Priority,
                     FetchComments = resolved.FetchComments
                 },
