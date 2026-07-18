@@ -68,6 +68,54 @@ public sealed class AudioRenditionResolver(IMessageBus messageBus, ILogger<Audio
         => new("DataBridge is unreachable.") { StatusCode = StatusCodes.Status503ServiceUnavailable };
 }
 
+public sealed class ChannelAudioResolver(IMessageBus messageBus, ILogger<ChannelAudioResolver> logger)
+{
+    private static readonly TimeSpan QueryTimeout = TimeSpan.FromSeconds(30);
+
+    public async Task<(IActionResult? Error, ChannelAudioDto? Channel)> ResolveAsync(
+        long accountId,
+        bool createIfMissing,
+        bool retryFailedAndPending,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await messageBus.RequestAsync<ChannelAudioResolveRequest, ChannelAudioResolveResponse>(
+                AudioRenditionSubjects.ResolveChannel,
+                new ChannelAudioResolveRequest
+                {
+                    AccountId = accountId,
+                    CreateIfMissing = createIfMissing,
+                    RetryFailedAndPending = retryFailedAndPending
+                },
+                QueryTimeout,
+                cancellationToken);
+
+            if (response is null)
+                return (new ObjectResult("DataBridge is unreachable.") { StatusCode = 503 }, null);
+            if (!response.Success)
+            {
+                return (response.ErrorCode == "not_found"
+                    ? new NotFoundObjectResult(response.ErrorMessage ?? "Channel was not found.")
+                    : new ObjectResult(response.ErrorMessage ?? "Channel audio lookup failed.") { StatusCode = 500 }, null);
+            }
+
+            return response.Item is null
+                ? (new ObjectResult("DataBridge returned an invalid channel audio response.") { StatusCode = 502 }, null)
+                : (null, response.Item);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed resolving channel audio for account {AccountId}.", accountId);
+            return (new ObjectResult("DataBridge is unreachable.") { StatusCode = 503 }, null);
+        }
+    }
+}
+
 /// <summary>Content types and rendition storage-layout helpers. Audio renditions are opus-only.</summary>
 public static class AudioRenditionHelpers
 {

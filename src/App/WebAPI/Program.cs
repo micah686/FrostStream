@@ -43,6 +43,13 @@ public class Program
         builder.Services.Configure<FrostStreamAuthOptions>(builder.Configuration.GetSection(FrostStreamAuthOptions.SectionName));
         builder.Services.Configure<OpenFgaOptions>(builder.Configuration.GetSection(OpenFgaOptions.SectionName));
         builder.Services.Configure<AuthentikOptions>(builder.Configuration.GetSection(AuthentikOptions.SectionName));
+        var dataProtection = builder.Services.AddDataProtection()
+            .SetApplicationName("FrostStream.WebAPI.Bff");
+        if (!string.IsNullOrWhiteSpace(authOptions.DataProtectionKeysPath))
+        {
+            Directory.CreateDirectory(authOptions.DataProtectionKeysPath);
+            dataProtection.PersistKeysToFileSystem(new DirectoryInfo(authOptions.DataProtectionKeysPath));
+        }
 
         // Default scheme is a selector. Explicit, sessionless credentials take precedence over the
         // ambient browser cookie so API and cast clients remain deterministic.
@@ -61,6 +68,11 @@ public class Program
                     if (context.Request.Query.ContainsKey(CastTokenDefaults.QueryParameter))
                     {
                         return CastTokenDefaults.Scheme;
+                    }
+
+                    if (context.Request.Query.ContainsKey(PodcastTokenDefaults.QueryParameter))
+                    {
+                        return PodcastTokenDefaults.Scheme;
                     }
 
                     if (context.Request.Headers.Authorization.ToString()
@@ -84,11 +96,16 @@ public class Program
                 _ => { })
             .AddScheme<AuthenticationSchemeOptions, CastTokenAuthenticationHandler>(
                 CastTokenDefaults.Scheme,
+                _ => { })
+            .AddScheme<AuthenticationSchemeOptions, PodcastTokenAuthenticationHandler>(
+                PodcastTokenDefaults.Scheme,
                 _ => { });
 
         builder.Services.Configure<MediaProcessorAuthOptions>(builder.Configuration.GetSection("MediaProcessor"));
         builder.Services.Configure<CastTokenOptions>(builder.Configuration.GetSection(CastTokenOptions.SectionName));
+        builder.Services.Configure<PodcastTokenOptions>(builder.Configuration.GetSection(PodcastTokenOptions.SectionName));
         builder.Services.AddSingleton<CastTokenService>();
+        builder.Services.AddSingleton<PodcastTokenService>();
         builder.Services.Configure<CastingOptions>(builder.Configuration.GetSection(CastingOptions.SectionName));
         builder.Services.AddSingleton<CastMediaUrlBuilder>();
         builder.Services.AddSingleton<ICastProtocol, ChromecastCastProtocol>();
@@ -97,6 +114,7 @@ public class Program
         builder.Services.AddSingleton<CastSessionManager>();
         builder.Services.AddScoped<MediaAccessChecker>();
         builder.Services.AddScoped<AudioRenditionResolver>();
+        builder.Services.AddScoped<ChannelAudioResolver>();
         builder.Services.AddScoped<StreamRenditionResolver>();
         builder.Services.AddCors(options => options.AddPolicy(MediaCors.Policy, policy =>
             policy.AllowAnyOrigin().AllowAnyHeader().WithMethods("GET", "HEAD")));
@@ -233,14 +251,6 @@ public class Program
                         }
                     };
                 });
-
-            var dataProtection = builder.Services.AddDataProtection()
-                .SetApplicationName("FrostStream.WebAPI.Bff");
-            if (!string.IsNullOrWhiteSpace(authOptions.DataProtectionKeysPath))
-            {
-                Directory.CreateDirectory(authOptions.DataProtectionKeysPath);
-                dataProtection.PersistKeysToFileSystem(new DirectoryInfo(authOptions.DataProtectionKeysPath));
-            }
 
             builder.Services.AddSingleton<NatsBffTicketStore>();
             builder.Services.AddSingleton<IPostConfigureOptions<CookieAuthenticationOptions>, BffCookiePostConfigure>();

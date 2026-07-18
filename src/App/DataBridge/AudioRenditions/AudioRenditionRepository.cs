@@ -1,13 +1,110 @@
 using DataBridge.Data;
 using Microsoft.EntityFrameworkCore;
 using NodaTime;
+using Npgsql;
 using Shared.Database;
 using Shared.Messaging;
 
 namespace DataBridge.AudioRenditions;
 
-public sealed class AudioRenditionRepository(DataBridgeDbContext db, IClock clock) : IAudioRenditionRepository
+public sealed class AudioRenditionRepository(
+    DataBridgeDbContext db,
+    NpgsqlDataSource dataSource,
+    IClock clock) : IAudioRenditionRepository
 {
+    public async Task<ChannelAudioResolveResult?> ResolveChannelAsync(
+        long accountId,
+        bool createIfMissing,
+        bool retryFailedAndPending,
+        CancellationToken cancellationToken = default)
+    {
+        var account = await ReadChannelAccountAsync(accountId, cancellationToken);
+        if (account is null)
+            return null;
+
+        var sources = await ReadChannelSourcesAsync(accountId, cancellationToken);
+        var mediaGuids = sources.Select(x => x.MediaGuid).ToArray();
+        var renditions = mediaGuids.Length == 0
+            ? []
+            : await db.AudioRenditions
+                .Where(x => mediaGuids.Contains(x.MediaGuid))
+                .ToListAsync(cancellationToken);
+
+        var bySource = renditions.ToDictionary(
+            x => (x.MediaGuid, x.SourceVersionNum, x.StorageKey),
+            x => x);
+        IReadOnlyList<AudioRenditionDto> renditionsToQueue = [];
+
+        if (createIfMissing)
+        {
+            var queue = new List<AudioRenditionEntity>();
+            foreach (var source in sources)
+            {
+                var key = (source.MediaGuid, source.SourceVersion, source.StorageKey);
+                if (!bySource.TryGetValue(key, out var rendition))
+                {
+                    rendition = new AudioRenditionEntity
+                    {
+                        RenditionId = Guid.NewGuid(),
+                        MediaGuid = source.MediaGuid,
+                        SourceVersionNum = source.SourceVersion,
+                        Status = AudioRenditionStatus.Pending,
+                        StorageKey = source.StorageKey,
+                        StoragePath = BuildStoragePath(source.MediaGuid, source.SourceVersion),
+                        UpdatedAt = clock.GetCurrentInstant()
+                    };
+                    db.AudioRenditions.Add(rendition);
+                    bySource.Add(key, rendition);
+                    queue.Add(rendition);
+                }
+                else if (retryFailedAndPending && rendition.Status == AudioRenditionStatus.Failed)
+                {
+                    rendition.Status = AudioRenditionStatus.Pending;
+                    rendition.ErrorMessage = null;
+                    rendition.UpdatedAt = clock.GetCurrentInstant();
+                    queue.Add(rendition);
+                }
+                else if (retryFailedAndPending && rendition.Status == AudioRenditionStatus.Pending)
+                {
+                    queue.Add(rendition);
+                }
+            }
+
+            await db.SaveChangesAsync(cancellationToken);
+            renditionsToQueue = queue.Select(ToDto).ToArray();
+        }
+
+        var items = sources.Select(source =>
+        {
+            bySource.TryGetValue((source.MediaGuid, source.SourceVersion, source.StorageKey), out var rendition);
+            return new ChannelAudioItemDto
+            {
+                MediaGuid = source.MediaGuid,
+                Title = source.Title,
+                Description = source.Description,
+                ReleaseDate = source.ReleaseDate,
+                DurationSeconds = source.DurationSeconds,
+                Rendition = rendition is null ? null : ToDto(rendition)
+            };
+        }).ToArray();
+
+        var channel = new ChannelAudioDto
+        {
+            AccountId = account.Value.AccountId,
+            AccountName = account.Value.AccountName,
+            AccountDescription = account.Value.Description,
+            AvatarStoragePath = account.Value.AvatarStoragePath,
+            TotalCount = items.Length,
+            MissingCount = items.Count(x => x.Rendition is null),
+            PendingCount = CountStatus(items, AudioRenditionStatus.Pending),
+            ProcessingCount = CountStatus(items, AudioRenditionStatus.Processing),
+            ReadyCount = CountStatus(items, AudioRenditionStatus.Ready),
+            FailedCount = CountStatus(items, AudioRenditionStatus.Failed),
+            Items = items
+        };
+        return new ChannelAudioResolveResult(channel, renditionsToQueue);
+    }
+
     public async Task<AudioRenditionDto?> ResolveAsync(
         Guid mediaGuid,
         string? storageKey,
@@ -163,6 +260,74 @@ public sealed class AudioRenditionRepository(DataBridgeDbContext db, IClock cloc
             .FirstOrDefaultAsync(cancellationToken);
     }
 
+    private async Task<(long AccountId, string AccountName, string? Description, string? AvatarStoragePath)?>
+        ReadChannelAccountAsync(long accountId, CancellationToken cancellationToken)
+    {
+        await using var command = dataSource.CreateCommand("""
+            SELECT id, account_name, account_description, avatar_storage_path
+            FROM metadata.accounts
+            WHERE id = @account_id
+            """);
+        command.Parameters.AddWithValue("@account_id", accountId);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+            return null;
+
+        return (
+            reader.GetInt64(0),
+            reader.GetString(1),
+            reader.IsDBNull(2) ? null : reader.GetString(2),
+            reader.IsDBNull(3) ? null : reader.GetString(3));
+    }
+
+    private async Task<IReadOnlyList<ChannelAudioSource>> ReadChannelSourcesAsync(
+        long accountId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = dataSource.CreateCommand("""
+            SELECT
+                mm.media_guid,
+                COALESCE(NULLIF(mm.title, ''), 'Untitled'),
+                mm.description,
+                EXTRACT(EPOCH FROM COALESCE(mm.release_date, media_root.created_at))::bigint,
+                CASE WHEN mm.duration IS NULL THEN NULL ELSE ROUND(mm.duration)::integer END,
+                source.version_num,
+                source.storage_key
+            FROM metadata.media_metadata mm
+            JOIN media.media media_root ON media_root.media_guid = mm.media_guid
+            JOIN LATERAL (
+                SELECT version_num, storage_key
+                FROM media.media_content_id_versions
+                WHERE media_guid = mm.media_guid
+                ORDER BY version_num DESC
+                LIMIT 1
+            ) source ON true
+            WHERE mm.account_id = @account_id
+            ORDER BY COALESCE(mm.release_date, media_root.created_at) DESC, mm.media_guid
+            """);
+        command.Parameters.AddWithValue("@account_id", accountId);
+
+        var items = new List<ChannelAudioSource>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            items.Add(new ChannelAudioSource(
+                reader.GetGuid(0),
+                reader.GetString(1),
+                reader.IsDBNull(2) ? null : reader.GetString(2),
+                reader.IsDBNull(3) ? null : Instant.FromUnixTimeSeconds(reader.GetInt64(3)),
+                reader.IsDBNull(4) ? null : reader.GetInt32(4),
+                reader.GetInt32(5),
+                reader.GetString(6)));
+        }
+
+        return items;
+    }
+
+    private static int CountStatus(IEnumerable<ChannelAudioItemDto> items, AudioRenditionStatus status)
+        => items.Count(x => x.Rendition?.Status == status);
+
     // Beside the archived original: data/archives/<guid>/<version>/stream/audio. Renditions created
     // before this layout keep the storage_path recorded on their row, so old files still serve.
     private static string BuildStoragePath(Guid mediaGuid, int sourceVersion)
@@ -183,4 +348,13 @@ public sealed class AudioRenditionRepository(DataBridgeDbContext db, IClock cloc
             CreatedAt = entity.CreatedAt,
             UpdatedAt = entity.UpdatedAt
         };
+
+    private sealed record ChannelAudioSource(
+        Guid MediaGuid,
+        string Title,
+        string? Description,
+        Instant? ReleaseDate,
+        int? DurationSeconds,
+        int SourceVersion,
+        string StorageKey);
 }

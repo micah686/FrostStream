@@ -200,6 +200,11 @@ public static class EndpointIds
     public const string MediaUnlike = "media.unlike";
     public const string MediaLikesList = "media.likes.list";
     public const string PlaylistAudioStream = "playlists.audio-stream";
+    public const string ChannelAudioStatus = "channels.audio.status";
+    public const string ChannelAudioEncode = "channels.audio.encode";
+    public const string ChannelAudioPodcastToken = "channels.audio.podcast-token";
+    public const string ChannelAudioPodcastFeed = "channels.audio.podcast-feed";
+    public const string ChannelAudioEnclosure = "channels.audio.enclosure";
 
     // Server-side casting (protocol providers driven by the server via local discovery)
     public const string CastDevicesList = "cast.devices.list";
@@ -427,6 +432,11 @@ public static class EndpointCatalog
         new(EndpointIds.CastSessionsDisconnect, Bundles.Media),
         new(EndpointIds.CastSessionsEvents, Bundles.Media),
         new(EndpointIds.PlaylistAudioStream, Bundles.Playlists),
+        new(EndpointIds.ChannelAudioStatus, Bundles.Media),
+        new(EndpointIds.ChannelAudioEncode, Bundles.Media),
+        new(EndpointIds.ChannelAudioPodcastToken, Bundles.Media),
+        new(EndpointIds.ChannelAudioPodcastFeed, Bundles.Media),
+        new(EndpointIds.ChannelAudioEnclosure, Bundles.Media),
 
         new(EndpointIds.MediaAccessMediaList, Bundles.MediaAccessAdmin),
         new(EndpointIds.MediaAccessMediaAdd, Bundles.MediaAccessAdmin),

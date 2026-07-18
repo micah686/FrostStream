@@ -13,10 +13,51 @@ public enum AudioRenditionStatus
 public static class AudioRenditionSubjects
 {
     public const string Resolve = "media.audio-rendition.resolve";
+    public const string ResolveChannel = "media.audio-rendition.channel.resolve";
     public const string Claim = "media.audio-rendition.claim";
     public const string Complete = "media.audio-rendition.complete";
     public const string Fail = "media.audio-rendition.fail";
     public const string ProcessorsQueueGroup = "databridge-audio-renditions";
+}
+
+public sealed record ChannelAudioResolveRequest
+{
+    public required long AccountId { get; init; }
+    public bool CreateIfMissing { get; init; }
+    public bool RetryFailedAndPending { get; init; }
+}
+
+public sealed record ChannelAudioResolveResponse
+{
+    public bool Success { get; init; }
+    public string? ErrorCode { get; init; }
+    public string? ErrorMessage { get; init; }
+    public ChannelAudioDto? Item { get; init; }
+}
+
+public sealed record ChannelAudioDto
+{
+    public required long AccountId { get; init; }
+    public required string AccountName { get; init; }
+    public string? AccountDescription { get; init; }
+    public string? AvatarStoragePath { get; init; }
+    public int TotalCount { get; init; }
+    public int MissingCount { get; init; }
+    public int PendingCount { get; init; }
+    public int ProcessingCount { get; init; }
+    public int ReadyCount { get; init; }
+    public int FailedCount { get; init; }
+    public IReadOnlyList<ChannelAudioItemDto> Items { get; init; } = [];
+}
+
+public sealed record ChannelAudioItemDto
+{
+    public required Guid MediaGuid { get; init; }
+    public required string Title { get; init; }
+    public string? Description { get; init; }
+    public Instant? ReleaseDate { get; init; }
+    public int? DurationSeconds { get; init; }
+    public AudioRenditionDto? Rendition { get; init; }
 }
 
 public sealed record AudioRenditionEncodeRequested

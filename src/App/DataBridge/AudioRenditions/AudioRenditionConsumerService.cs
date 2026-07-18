@@ -21,6 +21,13 @@ public sealed class AudioRenditionConsumerService(
             queueGroup: AudioRenditionSubjects.ProcessorsQueueGroup,
             cancellationToken: stoppingToken);
 
+        await SubscribeAsync<ChannelAudioResolveRequest>(
+            messageBus,
+            AudioRenditionSubjects.ResolveChannel,
+            HandleResolveChannelAsync,
+            queueGroup: AudioRenditionSubjects.ProcessorsQueueGroup,
+            cancellationToken: stoppingToken);
+
         await SubscribeAsync<AudioRenditionClaimRequest>(
             messageBus,
             AudioRenditionSubjects.Claim,
@@ -41,6 +48,58 @@ public sealed class AudioRenditionConsumerService(
             HandleFailAsync,
             queueGroup: AudioRenditionSubjects.ProcessorsQueueGroup,
             cancellationToken: stoppingToken);
+    }
+
+    private async Task HandleResolveChannelAsync(IMessageContext<ChannelAudioResolveRequest> context)
+    {
+        try
+        {
+            ChannelAudioResolveResult? result;
+            using (var scope = scopeFactory.CreateScope())
+            {
+                result = await scope.ServiceProvider.GetRequiredService<IAudioRenditionRepository>()
+                    .ResolveChannelAsync(
+                        context.Message.AccountId,
+                        context.Message.CreateIfMissing,
+                        context.Message.RetryFailedAndPending);
+            }
+
+            if (result is null)
+            {
+                await context.RespondAsync(new ChannelAudioResolveResponse
+                {
+                    Success = false,
+                    ErrorCode = "not_found",
+                    ErrorMessage = $"Channel '{context.Message.AccountId}' was not found."
+                });
+                return;
+            }
+
+            foreach (var rendition in result.RenditionsToQueue)
+            {
+                await publisher.PublishAsync(
+                    BackgroundJobSubjects.AudioRenditionEncodeRequest,
+                    new AudioRenditionEncodeRequested
+                    {
+                        RenditionId = rendition.RenditionId,
+                        MediaGuid = rendition.MediaGuid,
+                        SourceVersion = rendition.SourceVersion
+                    },
+                    messageId: rendition.RenditionId.ToString("N"));
+            }
+
+            await context.RespondAsync(new ChannelAudioResolveResponse { Success = true, Item = result.Channel });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed resolving channel audio for account {AccountId}.", context.Message.AccountId);
+            await context.RespondAsync(new ChannelAudioResolveResponse
+            {
+                Success = false,
+                ErrorCode = "internal_error",
+                ErrorMessage = "Internal channel audio service error."
+            });
+        }
     }
 
     private async Task HandleResolveAsync(IMessageContext<AudioRenditionResolveRequest> context)
