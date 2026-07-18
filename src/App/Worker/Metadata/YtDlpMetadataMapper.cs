@@ -269,7 +269,9 @@ internal static class YtDlpMetadataMapper
                 Account = new CapturedAccountMetadata
                 {
                     Platform = platform,
-                    AccountName = FirstNonBlank(c.Author, c.AuthorId) ?? "unknown",
+                    // No real display name in the source data (e.g. live-chat-replay comments):
+                    // leave it blank rather than duplicating AccountHandle's raw id here.
+                    AccountName = FirstNonBlank(c.Author) ?? "",
                     AccountHandle = FirstNonBlank(c.AuthorId, c.Author)
                         ?? UnknownAccountHandle("comment", externalMediaId, c.Id),
                     AccountUrl = null,

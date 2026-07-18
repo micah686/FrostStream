@@ -35,6 +35,7 @@
 
   const hasReplies = $derived(comment.replies.length > 0);
   const authorHandle = $derived(formatHandle(comment.account.accountHandle || comment.account.accountName));
+  const displayName = $derived(comment.account.accountName?.trim() || authorHandle);
   const avatarUrl = $derived(
     comment.account.avatarStoragePath ? `/api/media/watch/accounts/${comment.account.accountId}/avatar` : null
   );
@@ -53,10 +54,10 @@
 <article class={['space-y-3', depth > 0 ? 'ml-8 border-l border-slate-800/70 pl-4' : '']}>
   <div class="flex gap-3">
     <span
-      class={`relative mt-0.5 grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br ${accentFor(comment.account.accountName)} text-[10px] font-bold text-white shadow-lg shadow-black/20`}
+      class={`relative mt-0.5 grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br ${accentFor(displayName)} text-[10px] font-bold text-white shadow-lg shadow-black/20`}
       aria-hidden="true"
     >
-      {initialsFor(comment.account.accountName)}
+      {initialsFor(displayName)}
       {#if avatarUrl}
         <img
           src={avatarUrl}
@@ -80,7 +81,7 @@
       <p class="flex flex-wrap items-center gap-2 text-xs">
         {#if comment.isUploader}
           <span class="inline-flex items-center gap-1.5 rounded-full border border-blue-400/40 bg-blue-500/20 px-3 py-1 font-semibold text-blue-50 shadow-sm shadow-blue-950/30">
-            <span>{comment.account.accountName}</span>
+            <span>{displayName}</span>
             <BadgeCheckSolid class="h-3.5 w-3.5 shrink-0 text-blue-200" />
           </span>
         {:else}
@@ -109,11 +110,11 @@
           {#if comment.isFavorited}
             <span class="relative ml-1 grid h-7 w-7 place-items-center rounded-full ring-1 ring-rose-500/30">
               <span
-                class={`absolute inset-0 rounded-full bg-gradient-to-br ${accentFor(comment.account.accountName)} overflow-hidden`}
+                class={`absolute inset-0 rounded-full bg-gradient-to-br ${accentFor(displayName)} overflow-hidden`}
                 aria-hidden="true"
               >
                 <span class="absolute inset-0 grid place-items-center text-[9px] font-bold text-white">
-                  {initialsFor(comment.account.accountName)}
+                  {initialsFor(displayName)}
                 </span>
                 {#if avatarUrl}
                   <img

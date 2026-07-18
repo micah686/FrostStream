@@ -134,7 +134,7 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
             VALUES
                 (@platform, @account_name, @account_handle, @account_url, @follower_count, false, @description)
             ON CONFLICT (platform, account_handle) DO UPDATE SET
-                account_name       = EXCLUDED.account_name,
+                account_name       = COALESCE(NULLIF(EXCLUDED.account_name, ''), metadata.accounts.account_name),
                 account_url        = EXCLUDED.account_url,
                 account_follower_count = EXCLUDED.account_follower_count,
                 account_description = EXCLUDED.account_description
