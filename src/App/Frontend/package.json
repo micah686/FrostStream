@@ -32,6 +32,7 @@
   "packageManager": "pnpm@10.28.1",
   "dependencies": {
     "@videojs/html": "10.0.0-beta.25",
+    "chart.js": "^4.5.1",
     "jassub": "2.4.1",
     "svelte-video-player": "^2.2.0"
   }

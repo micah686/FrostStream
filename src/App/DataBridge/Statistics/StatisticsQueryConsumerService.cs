@@ -27,6 +27,13 @@ public sealed class StatisticsQueryConsumerService(
             queueGroup: StatisticsSubjects.QueueGroup,
             cancellationToken: stoppingToken);
 
+        await SubscribeAsync<StatisticsChannelSuggestionsRequestMessage>(
+            messageBus,
+            StatisticsSubjects.ChannelSuggestions,
+            HandleChannelSuggestionsAsync,
+            queueGroup: StatisticsSubjects.QueueGroup,
+            cancellationToken: stoppingToken);
+
         await SubscribeAsync<StatisticsChannelGetRequestMessage>(
             messageBus,
             StatisticsSubjects.ChannelGet,
@@ -70,7 +77,8 @@ public sealed class StatisticsQueryConsumerService(
                 context.Message.PageSize,
                 context.Message.Page,
                 context.Message.SortBy,
-                context.Message.SortOrder));
+                context.Message.SortOrder,
+                context.Message.Search));
 
             await context.RespondAsync(new StatisticsChannelsListResponseMessage
             {
@@ -85,6 +93,27 @@ public sealed class StatisticsQueryConsumerService(
         {
             logger.LogError(ex, "Failed handling channel statistics list query.");
             await context.RespondAsync(Failure<StatisticsChannelsListResponseMessage>("internal_error", "Internal statistics service error."));
+        }
+    }
+
+    private async Task HandleChannelSuggestionsAsync(IMessageContext<StatisticsChannelSuggestionsRequestMessage> context)
+    {
+        try
+        {
+            var items = await WithQuery(query => query.SuggestChannelsAsync(
+                context.Message.Search,
+                context.Message.Limit));
+
+            await context.RespondAsync(new StatisticsChannelSuggestionsResponseMessage
+            {
+                Success = true,
+                Items = items
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed handling channel statistics suggestions query.");
+            await context.RespondAsync(Failure<StatisticsChannelSuggestionsResponseMessage>("internal_error", "Internal statistics service error."));
         }
     }
 
@@ -155,6 +184,8 @@ public sealed class StatisticsQueryConsumerService(
                 (new StatisticsOverviewResponseMessage { Success = false, ErrorCode = errorCode, ErrorMessage = errorMessage } as T)!,
             var t when t == typeof(StatisticsChannelsListResponseMessage) =>
                 (new StatisticsChannelsListResponseMessage { Success = false, ErrorCode = errorCode, ErrorMessage = errorMessage } as T)!,
+            var t when t == typeof(StatisticsChannelSuggestionsResponseMessage) =>
+                (new StatisticsChannelSuggestionsResponseMessage { Success = false, ErrorCode = errorCode, ErrorMessage = errorMessage } as T)!,
             var t when t == typeof(StatisticsChannelGetResponseMessage) =>
                 (new StatisticsChannelGetResponseMessage { Success = false, ErrorCode = errorCode, ErrorMessage = errorMessage } as T)!,
             var t when t == typeof(StatisticsDownloadHistoryResponseMessage) =>

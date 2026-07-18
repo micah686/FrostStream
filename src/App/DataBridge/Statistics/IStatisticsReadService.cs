@@ -11,6 +11,12 @@ public interface IStatisticsReadService
         int page,
         string sortBy,
         string sortOrder,
+        string? search,
+        CancellationToken ct = default);
+
+    Task<IReadOnlyList<ChannelSuggestionDto>> SuggestChannelsAsync(
+        string? search,
+        int limit,
         CancellationToken ct = default);
 
     Task<ChannelStatisticsDetailDto?> GetChannelAsync(long creatorSourceId, CancellationToken ct = default);

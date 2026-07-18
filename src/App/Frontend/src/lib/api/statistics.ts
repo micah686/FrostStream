@@ -77,6 +77,15 @@ export interface ChannelStatisticsListResponse {
   hasMore: boolean;
 }
 
+export interface ChannelSuggestion {
+  value: string;
+  label: string;
+  accountName: string | null;
+  accountHandle: string | null;
+  platform: string;
+  availableCount: number;
+}
+
 export interface DownloadHistoryBucket {
   bucketStart: string;
   bucketEnd: string;
@@ -94,6 +103,7 @@ export interface ListChannelStatisticsOptions {
   page?: number;
   sortBy?: 'downloaded' | 'available' | 'duration' | 'bytes' | 'name';
   sortOrder?: 'asc' | 'desc';
+  search?: string;
 }
 
 export interface DownloadStatisticsOptions {
@@ -115,6 +125,7 @@ export async function listChannelStatistics(
   if (options.page) query.set('page', String(options.page));
   if (options.sortBy) query.set('sortBy', options.sortBy);
   if (options.sortOrder) query.set('sortOrder', options.sortOrder);
+  if (options.search) query.set('search', options.search);
   const suffix = query.size > 0 ? `?${query}` : '';
   return getJson<ChannelStatisticsListResponse>(`${BASE}/channels${suffix}`, fetchImpl);
 }
@@ -124,6 +135,15 @@ export async function getChannelStatistics(
   fetchImpl: typeof fetch = fetch
 ): Promise<ChannelStatisticsDetail> {
   return getJson<ChannelStatisticsDetail>(`${BASE}/channels/${encodeURIComponent(creatorSourceId)}`, fetchImpl);
+}
+
+export async function suggestChannelStatistics(
+  search: string,
+  limit = 8,
+  fetchImpl: typeof fetch = fetch
+): Promise<ChannelSuggestion[]> {
+  const query = new URLSearchParams({ search, limit: String(limit) });
+  return getJson<ChannelSuggestion[]>(`${BASE}/channels/suggestions?${query}`, fetchImpl);
 }
 
 export async function getDownloadStatistics(

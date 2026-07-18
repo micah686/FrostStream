@@ -47,6 +47,7 @@ public sealed class StatisticsController(
         [FromQuery] int page = 1,
         [FromQuery] string sortBy = "downloaded",
         [FromQuery] string sortOrder = "desc",
+        [FromQuery] string? search = null,
         CancellationToken cancellationToken = default)
     {
         var response = await SendRequestAsync<StatisticsChannelsListRequestMessage, StatisticsChannelsListResponseMessage>(
@@ -56,7 +57,8 @@ public sealed class StatisticsController(
                 PageSize = pageSize,
                 Page = page,
                 SortBy = sortBy,
-                SortOrder = sortOrder
+                SortOrder = sortOrder,
+                Search = search
             },
             cancellationToken);
 
@@ -70,6 +72,35 @@ public sealed class StatisticsController(
             response.Page,
             response.TotalCount,
             response.HasMore));
+    }
+
+    [HttpGet("channels/suggestions")]
+    [Endpoint(EndpointIds.StatisticsChannelSuggestions)]
+    [EndpointSummary("Suggest channel statistics search values")]
+    [EndpointDescription("Returns compact channel-name suggestions for the statistics channel coverage search box, sourced from the same authoritative DataBridge read model as the channel coverage table.")]
+    public async Task<ActionResult<IReadOnlyList<ChannelSuggestionDto>>> SuggestChannels(
+        [FromQuery] string? search = null,
+        [FromQuery] int limit = 8,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(search) || search.Trim().Length < 2)
+            return Ok(Array.Empty<ChannelSuggestionDto>());
+
+        var response = await SendRequestAsync<StatisticsChannelSuggestionsRequestMessage, StatisticsChannelSuggestionsResponseMessage>(
+            StatisticsSubjects.ChannelSuggestions,
+            new StatisticsChannelSuggestionsRequestMessage
+            {
+                Search = search,
+                Limit = limit
+            },
+            cancellationToken);
+
+        if (response is null)
+            return ServiceUnavailable();
+        if (!response.Success)
+            return StatisticsError(response.ErrorCode, response.ErrorMessage);
+
+        return Ok(response.Items);
     }
 
     [HttpGet("channels/{creatorSourceId:long}")]
