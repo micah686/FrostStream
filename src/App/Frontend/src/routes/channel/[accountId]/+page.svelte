@@ -4,14 +4,12 @@
   import { Button, Select, Spinner } from 'flowbite-svelte';
   import {
     ArrowUpRightFromSquareOutline,
-    BackwardStepOutline,
     ChevronDownOutline,
     ChevronLeftOutline,
     ChevronRightOutline,
     ChevronUpOutline,
     ExclamationCircleOutline,
     FileCopyOutline,
-    ForwardStepOutline,
     HeadphonesOutline,
     ImageOutline,
     MusicOutline,
@@ -27,6 +25,7 @@
     type ChannelAudioStatus
   } from '$lib/api/channelAudio';
   import TargetNotePanel from '$lib/components/TargetNotePanel.svelte';
+  import VideoJs10AudioPlayer from '$lib/components/players/VideoJs10AudioPlayer.svelte';
   import {
     getChannelStatistics,
     listChannelStatistics,
@@ -205,6 +204,22 @@
   function moveAudio(offset: number) {
     if (readyAudioItems.length === 0) return;
     audioIndex = (audioIndex + offset + readyAudioItems.length) % readyAudioItems.length;
+  }
+
+  function audioSource(item: NonNullable<typeof currentAudioItem>): string {
+    const version = item.rendition?.sourceVersion;
+    const query = new URLSearchParams({ audio: 'true', prepare: 'false' });
+    if (version !== undefined) query.set('version', String(version));
+    return `/api/media/watch/${encodeURIComponent(item.mediaGuid)}?${query}`;
+  }
+
+  function audioDownloadName(title: string): string {
+    const baseName = title
+      .replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_')
+      .replace(/[. ]+$/g, '')
+      .trim()
+      .slice(0, 180);
+    return `${baseName || 'audio'}.opus`;
   }
 
   async function copyPodcastFeed() {
@@ -601,23 +616,17 @@
               {currentAudioItem.title}
             </h2>
           </div>
-          <div class="flex items-center gap-2">
-            <button type="button" class="grid h-9 w-9 place-items-center rounded-md text-slate-400 hover:bg-slate-800 hover:text-white" onclick={() => moveAudio(-1)} title="Previous episode" aria-label="Previous episode">
-              <BackwardStepOutline class="h-5 w-5" />
-            </button>
+          <div class="w-full min-w-0 sm:w-[38rem]">
             {#key currentAudioItem.mediaGuid}
-              <!-- svelte-ignore a11y_media_has_caption -->
-              <audio
-                class="h-10 w-full min-w-52 sm:w-96"
-                controls
+              <VideoJs10AudioPlayer
+                src={audioSource(currentAudioItem)}
+                downloadFileName={audioDownloadName(currentAudioItem.title)}
                 autoplay
-                src={`/api/media/watch/${currentAudioItem.mediaGuid}?audio=true&prepare=false`}
-                onended={() => moveAudio(1)}
-              ></audio>
+                onPreviousTrack={() => moveAudio(-1)}
+                onNextTrack={() => moveAudio(1)}
+                onEnded={() => moveAudio(1)}
+              />
             {/key}
-            <button type="button" class="grid h-9 w-9 place-items-center rounded-md text-slate-400 hover:bg-slate-800 hover:text-white" onclick={() => moveAudio(1)} title="Next episode" aria-label="Next episode">
-              <ForwardStepOutline class="h-5 w-5" />
-            </button>
           </div>
         </div>
       </section>
