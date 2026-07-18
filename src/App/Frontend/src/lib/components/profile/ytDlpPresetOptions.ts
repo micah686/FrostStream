@@ -46,6 +46,11 @@ export interface PresetOptionsState {
   sponsorBlockChapterTitle: string;
   sponsorBlockApi: string;
 
+  // Comments & live streams
+  fetchComments: TriState;
+  liveFromStart: TriState;
+  waitForVideo: string; // poll interval, e.g. "60" seconds; blank = don't wait
+
   // Download behavior & limits
   limitRate: string;
   concurrentFragments: number | undefined;
@@ -53,8 +58,14 @@ export interface PresetOptionsState {
   playlistItems: string;
   maxFilesize: string;
   minFilesize: string;
+  date: string; // YYYY-MM-DD for the date input; other yt-dlp date expressions pass through
   dateAfter: string; // YYYY-MM-DD for the date input; other yt-dlp date expressions pass through
   dateBefore: string;
+  throttledRate: string;
+  retrySleep: string; // one "[type:]EXPR" per line, passed through verbatim
+  bufferSize: string;
+  resizeBuffer: TriState;
+  httpChunkSize: string;
 
   // Network
   proxy: string;
@@ -217,6 +228,7 @@ export function stateFromOptions(options: Record<string, unknown>): PresetOption
   const network = group(options, 'network');
   const authentication = group(options, 'authentication');
   const workarounds = group(options, 'workarounds');
+  const general = group(options, 'general');
 
   const format = text(videoFormat, 'format');
   const resolution = format ? (resolutionByFormat.get(format) ?? 'custom') : '';
@@ -250,14 +262,24 @@ export function stateFromOptions(options: Record<string, unknown>): PresetOption
     sponsorBlockChapterTitle: text(sponsorBlock, 'sponsorblockChapterTitle'),
     sponsorBlockApi: text(sponsorBlock, 'sponsorblockApi'),
 
+    fetchComments: triState(filesystem, 'writeComments', 'noWriteComments'),
+    liveFromStart: triState(general, 'liveFromStart', 'noLiveFromStart'),
+    waitForVideo: text(general, 'waitForVideo'),
+
     limitRate: text(download, 'limitRate'),
     concurrentFragments: numeric(download, 'concurrentFragments'),
     retries: text(download, 'retries'),
     playlistItems: text(videoSelection, 'playlistItems'),
     maxFilesize: text(videoSelection, 'maxFilesize'),
     minFilesize: text(videoSelection, 'minFilesize'),
+    date: dateFromWire(text(videoSelection, 'date')),
     dateAfter: dateFromWire(text(videoSelection, 'dateafter')),
     dateBefore: dateFromWire(text(videoSelection, 'datebefore')),
+    throttledRate: text(download, 'throttledRate'),
+    retrySleep: lineList(download, 'retrySleep'),
+    bufferSize: text(download, 'bufferSize'),
+    resizeBuffer: triState(download, 'resizeBuffer', 'noResizeBuffer'),
+    httpChunkSize: text(download, 'httpChunkSize'),
 
     proxy: text(network, 'proxy'),
 
@@ -356,7 +378,8 @@ export function applyStateToOptions(
     videoSelection: group(result, 'videoSelection'),
     network: group(result, 'network'),
     authentication: group(result, 'authentication'),
-    workarounds: group(result, 'workarounds')
+    workarounds: group(result, 'workarounds'),
+    general: group(result, 'general')
   };
 
   const format =
@@ -394,14 +417,29 @@ export function applyStateToOptions(
   setOrDelete(groups.sponsorBlock, 'sponsorblockChapterTitle', state.sponsorBlockChapterTitle.trim());
   setOrDelete(groups.sponsorBlock, 'sponsorblockApi', state.sponsorBlockApi.trim());
 
+  applyTriState(groups.filesystem, 'writeComments', 'noWriteComments', state.fetchComments);
+  applyTriState(groups.general, 'liveFromStart', 'noLiveFromStart', state.liveFromStart);
+  setOrDelete(groups.general, 'waitForVideo', state.waitForVideo.trim());
+
   setOrDelete(groups.download, 'limitRate', state.limitRate.trim());
   setOrDelete(groups.download, 'concurrentFragments', state.concurrentFragments);
   setOrDelete(groups.download, 'retries', state.retries.trim());
   setOrDelete(groups.videoSelection, 'playlistItems', state.playlistItems.trim());
   setOrDelete(groups.videoSelection, 'maxFilesize', state.maxFilesize.trim());
   setOrDelete(groups.videoSelection, 'minFilesize', state.minFilesize.trim());
+  setOrDelete(groups.videoSelection, 'date', dateToWire(state.date.trim()));
   setOrDelete(groups.videoSelection, 'dateafter', dateToWire(state.dateAfter.trim()));
   setOrDelete(groups.videoSelection, 'datebefore', dateToWire(state.dateBefore.trim()));
+  setOrDelete(groups.download, 'throttledRate', state.throttledRate.trim());
+  const retrySleepLines = parseHeaderLines(state.retrySleep);
+  if (retrySleepLines.length > 0) {
+    groups.download.retrySleep = retrySleepLines;
+  } else {
+    delete groups.download.retrySleep;
+  }
+  setOrDelete(groups.download, 'bufferSize', state.bufferSize.trim());
+  applyTriState(groups.download, 'resizeBuffer', 'noResizeBuffer', state.resizeBuffer);
+  setOrDelete(groups.download, 'httpChunkSize', state.httpChunkSize.trim());
 
   setOrDelete(groups.network, 'proxy', state.proxy.trim());
 

@@ -27,7 +27,7 @@ public sealed class MetadataController(
     public async Task<ActionResult<PagedMetadataResponse<MetadataCardDto>>> List(
         [FromQuery] int pageSize = 24,
         [FromQuery] int page = 1,
-        [FromQuery] string sortBy = "release_date",
+        [FromQuery] string sortBy = "added_at",
         [FromQuery] string sortOrder = "desc",
         [FromQuery] string? platform = null,
         [FromQuery] long? accountId = null,
@@ -386,7 +386,7 @@ public sealed class MetadataController(
         long accountId,
         [FromQuery] int pageSize = 24,
         [FromQuery] int page = 1,
-        [FromQuery] string sortBy = "release_date",
+        [FromQuery] string sortBy = "added_at",
         [FromQuery] string sortOrder = "desc",
         CancellationToken cancellationToken = default)
     {

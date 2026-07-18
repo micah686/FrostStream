@@ -160,6 +160,27 @@
 
   <details class="group rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
     <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
+      <h3 class="text-sm font-semibold text-slate-200">Comments & live streams</h3>
+      <ChevronDownOutline class="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-180" />
+    </summary>
+    <div class="mt-4 grid gap-4 sm:grid-cols-2">
+      <TriStateSelect id="opt-fetch-comments" label="Fetch comments" bind:value={opts.fetchComments} />
+      <TriStateSelect id="opt-live-from-start" label="Record live streams from the start" bind:value={opts.liveFromStart} />
+      <div>
+        <Label for="opt-wait-for-video" class="mb-2 text-sm font-medium text-slate-300">Wait for scheduled premieres</Label>
+        <Input
+          id="opt-wait-for-video"
+          bind:value={opts.waitForVideo}
+          placeholder="e.g. 60 (poll every 60s until it airs)"
+          class={fieldClass}
+        />
+        <p class="mt-1.5 text-xs text-slate-600">Poll interval in seconds; blank means don't wait for an upcoming video.</p>
+      </div>
+    </div>
+  </details>
+
+  <details class="group rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
+    <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
       <div>
         <h3 class="text-sm font-semibold text-slate-200">SponsorBlock</h3>
         <p class="mt-1 text-xs text-slate-600">Marks or removes sponsored segments using community data.</p>
@@ -281,12 +302,45 @@
         <Input id="opt-min-filesize" bind:value={opts.minFilesize} placeholder="e.g. 1M" class={fieldClass} />
       </div>
       <div>
+        <Label for="opt-date" class="mb-2 text-sm font-medium text-slate-300">Uploaded on</Label>
+        <Input id="opt-date" type="date" bind:value={opts.date} class={fieldClass} />
+      </div>
+      <div>
         <Label for="opt-date-after" class="mb-2 text-sm font-medium text-slate-300">Uploaded on or after</Label>
         <Input id="opt-date-after" type="date" bind:value={opts.dateAfter} class={fieldClass} />
       </div>
       <div>
         <Label for="opt-date-before" class="mb-2 text-sm font-medium text-slate-300">Uploaded on or before</Label>
         <Input id="opt-date-before" type="date" bind:value={opts.dateBefore} class={fieldClass} />
+      </div>
+      <div>
+        <Label for="opt-throttled-rate" class="mb-2 text-sm font-medium text-slate-300">Throttled rate threshold</Label>
+        <Input id="opt-throttled-rate" bind:value={opts.throttledRate} placeholder="e.g. 100K" class={fieldClass} />
+        <p class="mt-1.5 text-xs text-slate-600">Re-extract the download if speed drops below this, for sites that throttle.</p>
+      </div>
+      <div>
+        <Label for="opt-buffer-size" class="mb-2 text-sm font-medium text-slate-300">Buffer size</Label>
+        <Input id="opt-buffer-size" bind:value={opts.bufferSize} placeholder="e.g. 16K" class={fieldClass} />
+      </div>
+      <div>
+        <Label for="opt-http-chunk-size" class="mb-2 text-sm font-medium text-slate-300">HTTP chunk size</Label>
+        <Input id="opt-http-chunk-size" bind:value={opts.httpChunkSize} placeholder="e.g. 10M" class={fieldClass} />
+        <p class="mt-1.5 text-xs text-slate-600">Splits downloads into chunks of this size; helps with some rate limits.</p>
+      </div>
+      <TriStateSelect id="opt-resize-buffer" label="Resize the download buffer automatically" bind:value={opts.resizeBuffer} />
+      <div class="sm:col-span-2">
+        <Label for="opt-retry-sleep" class="mb-2 text-sm font-medium text-slate-300">Retry sleep expressions</Label>
+        <Textarea
+          id="opt-retry-sleep"
+          rows={2}
+          bind:value={opts.retrySleep}
+          placeholder={'exp=1:20\nfragment:exp=1:10'}
+          class="font-mono! {fieldClass}"
+        />
+        <p class="mt-1.5 text-xs text-slate-600">
+          One <code>[type:]EXPR</code> per line (types: http, fragment, file_access, extractor). See yt-dlp's
+          <code>--retry-sleep</code> docs for the expression syntax.
+        </p>
       </div>
     </div>
   </details>

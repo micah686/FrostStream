@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import { Button, Select, Spinner } from 'flowbite-svelte';
   import {
@@ -72,8 +73,10 @@
   type Tab = (typeof tabs)[number];
 
   const sortOptions = [
-    { value: 'release_date:desc', name: 'Recently added' },
-    { value: 'release_date:asc', name: 'Oldest first' },
+    { value: 'added_at:desc', name: 'Recently added' },
+    { value: 'added_at:asc', name: 'Oldest added' },
+    { value: 'release_date:desc', name: 'Release date (newest)' },
+    { value: 'release_date:asc', name: 'Release date (oldest)' },
     { value: 'title:asc', name: 'Title A–Z' },
     { value: 'view_count:desc', name: 'Most viewed' },
     { value: 'duration:desc', name: 'Longest first' }
@@ -89,8 +92,7 @@
     firstGuid: string | null;
   }
 
-  let activeTab = $state<Tab>('Videos');
-  let sort = $state('release_date:desc');
+  let sort = $state('added_at:desc');
   let playlistsRequested = $state(false);
   let userPlaylistCards = $state<UserPlaylistCard[]>([]);
   let userPlaylistsLoading = $state(false);
@@ -116,18 +118,27 @@
       ? value
       : null;
   });
+  // The URL is the single source of truth for which tab is active — selectTab() only ever
+  // navigates, it never mutates a separate local copy. That was the bug: a local `activeTab`
+  // $state was set on click, but a reactive effect kept snapping it back to whatever the URL
+  // still said, since nothing told the URL about the click (most visibly, clicking back to the
+  // default "Videos" tab never cleared the leftover ?tab=History from a previous click).
+  const activeTab = $derived(tabFromQuery ?? 'Videos');
 
   onMount(() => {
-    if (tabFromQuery) {
-      activeTab = tabFromQuery;
-    }
-    void loadPage(1);
     void loadOverview();
   });
 
   $effect(() => {
-    if (tabFromQuery && activeTab !== tabFromQuery) {
-      activeTab = tabFromQuery;
+    const tab = activeTab;
+    if (tab === 'Playlists' && !playlistsRequested) {
+      playlistsRequested = true;
+      void loadUserPlaylistCards();
+      void loadPlatformPlaylistCards();
+      return;
+    }
+    if (tab === 'Videos' || tab === 'History' || tab === 'Liked') {
+      void loadPage(1);
     }
   });
 
@@ -209,16 +220,13 @@
   }
 
   function selectTab(tab: Tab) {
-    activeTab = tab;
-    if (tab === 'Playlists' && !playlistsRequested) {
-      playlistsRequested = true;
-      void loadUserPlaylistCards();
-      void loadPlatformPlaylistCards();
-      return;
+    const url = new URL(page.url);
+    if (tab === 'Videos') {
+      url.searchParams.delete('tab');
+    } else {
+      url.searchParams.set('tab', tab);
     }
-    if (tab === 'Videos' || tab === 'History' || tab === 'Liked') {
-      void loadPage(1);
-    }
+    void goto(`${url.pathname}${url.search}`, { replaceState: true, noScroll: true, keepFocus: true });
   }
 
   async function loadUserPlaylistCards() {

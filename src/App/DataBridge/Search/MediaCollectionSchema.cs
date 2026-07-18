@@ -27,6 +27,7 @@ public static class MediaCollectionSchema
                 new Field("account_id", FieldType.Int64) { Facet = true },
                 new Field("release_date_unix", FieldType.Int64) { Sort = true, Optional = true },
                 new Field("release_date_sort", FieldType.Int64) { Sort = true },
+                new Field("added_at_sort", FieldType.Int64) { Sort = true },
                 new Field("view_count", FieldType.Int64) { Sort = true, Optional = true },
                 new Field("like_count", FieldType.Int64) { Sort = true, Optional = true },
                 new Field("duration_seconds", FieldType.Float) { Sort = true, Optional = true },
@@ -42,5 +43,5 @@ public static class MediaCollectionSchema
                 new Field("account_avatar_storage_path", FieldType.String) { Index = false, Optional = true },
                 new Field("webpage_url", FieldType.String) { Index = false, Optional = true }
             ],
-            "release_date_sort");
+            "added_at_sort");
 }
