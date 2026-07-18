@@ -25,7 +25,10 @@ internal static class YtDlpMetadataMapper
                 ?? UnknownAccountHandle("media", externalMediaId),
             AccountUrl = FirstNonBlank(info.UploaderUrl, info.ChannelUrl),
             FollowerCount = info.ChannelFollowerCount,
-            Description = null
+            Description = null,
+            ExternalIds = ExternalIds(
+                ("channel_id", info.ChannelId),
+                ("uploader_id", info.UploaderId))
         };
 
         return new CapturedMediaMetadata
@@ -275,7 +278,8 @@ internal static class YtDlpMetadataMapper
                     AccountHandle = FirstNonBlank(c.AuthorId, c.Author)
                         ?? UnknownAccountHandle("comment", externalMediaId, c.Id),
                     AccountUrl = null,
-                    Description = null
+                    Description = null,
+                    ExternalIds = ExternalIds(("author_id", c.AuthorId))
                 },
                 CommentTimestamp = c.Timestamp is { } ts ? Instant.FromUnixTimeSeconds(ts) : fallbackTime,
                 LikeCount = ToInt32(c.LikeCount),
@@ -357,6 +361,33 @@ internal static class YtDlpMetadataMapper
             : value > int.MaxValue ? int.MaxValue
             : value < int.MinValue ? int.MinValue
             : (int)value.Value;
+
+    private static IReadOnlyList<CapturedAccountExternalId> ExternalIds(params (string Kind, string? Value)[] ids)
+    {
+        HashSet<string>? seen = null;
+        List<CapturedAccountExternalId>? result = null;
+
+        foreach (var (kind, value) in ids)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                continue;
+
+            var trimmedValue = value.Trim();
+            var key = $"{kind}\u001F{trimmedValue}";
+            seen ??= [];
+            if (!seen.Add(key))
+                continue;
+
+            result ??= [];
+            result.Add(new CapturedAccountExternalId
+            {
+                Kind = kind,
+                Value = trimmedValue
+            });
+        }
+
+        return result ?? [];
+    }
 
     private static string UnknownAccountHandle(string scope, params string?[] identityParts)
     {

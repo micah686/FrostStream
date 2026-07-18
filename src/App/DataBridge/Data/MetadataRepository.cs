@@ -107,7 +107,7 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
             await InsertTaxonomyAsync(conn, npgsqlTx, mediaMetadataId, metadata, ct);
             await InsertTechnicalAsync(conn, npgsqlTx, mediaGuid, metadata.Technical, ct);
             await InsertCaptionsAsync(conn, npgsqlTx, mediaGuid, metadata.Captions, storageKey, ct);
-            await InsertCommentsAsync(conn, npgsqlTx, mediaGuid, metadata.Comments, ct);
+            await InsertCommentsAsync(conn, npgsqlTx, mediaGuid, accountId, metadata.Comments, ct);
             await InsertSeriesAsync(conn, npgsqlTx, mediaGuid, metadata.Series, ct);
             await InsertMusicAsync(conn, npgsqlTx, mediaGuid, metadata.Music, ct);
 
@@ -128,6 +128,28 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
         CapturedAccountMetadata account,
         CancellationToken ct)
     {
+        var aliasedAccountId = await FindAccountIdByExternalIdsAsync(conn, tx, account, ct);
+        if (aliasedAccountId is { } existingAccountId)
+        {
+            await using var update = new NpgsqlCommand("""
+                UPDATE metadata.accounts SET
+                    account_name       = COALESCE(NULLIF(@account_name, ''), account_name),
+                    account_url        = COALESCE(@account_url, account_url),
+                    account_follower_count = COALESCE(@follower_count, account_follower_count),
+                    account_description = COALESCE(@description, account_description)
+                WHERE id = @account_id
+                """, conn, tx);
+
+            update.Parameters.AddWithValue("@account_id", existingAccountId);
+            update.Parameters.AddWithValue("@account_name", account.AccountName);
+            update.Parameters.AddWithValue("@account_url", (object?)account.AccountUrl ?? DBNull.Value);
+            update.Parameters.AddWithValue("@follower_count", (object?)account.FollowerCount ?? DBNull.Value);
+            update.Parameters.AddWithValue("@description", (object?)account.Description ?? DBNull.Value);
+            await update.ExecuteNonQueryAsync(ct);
+            await AddAccountExternalIdsAsync(conn, tx, existingAccountId, account, ct);
+            return existingAccountId;
+        }
+
         await using var cmd = new NpgsqlCommand("""
             INSERT INTO metadata.accounts
                 (platform, account_name, account_handle, account_url, account_follower_count, is_verified, account_description)
@@ -148,7 +170,88 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
         cmd.Parameters.AddWithValue("@follower_count", (object?)account.FollowerCount ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@description", (object?)account.Description ?? DBNull.Value);
 
-        return Convert.ToInt64(await cmd.ExecuteScalarAsync(ct));
+        var accountId = Convert.ToInt64(await cmd.ExecuteScalarAsync(ct));
+        await AddAccountExternalIdsAsync(conn, tx, accountId, account, ct);
+        return accountId;
+    }
+
+    private static async Task<long?> FindAccountIdByExternalIdsAsync(
+        NpgsqlConnection conn,
+        NpgsqlTransaction tx,
+        CapturedAccountMetadata account,
+        CancellationToken ct)
+    {
+        foreach (var externalId in NormalizeExternalIds(account.ExternalIds))
+        {
+            await using var cmd = new NpgsqlCommand("""
+                SELECT account_id
+                FROM metadata.account_external_ids
+                WHERE platform = @platform
+                  AND external_id = @external_id
+                LIMIT 1
+                """, conn, tx);
+
+            cmd.Parameters.AddWithValue("@platform", account.Platform);
+            cmd.Parameters.AddWithValue("@external_id", externalId.Value);
+
+            if (await cmd.ExecuteScalarAsync(ct) is { } value)
+                return Convert.ToInt64(value);
+        }
+
+        return null;
+    }
+
+    private static async Task AddAccountExternalIdsAsync(
+        NpgsqlConnection conn,
+        NpgsqlTransaction tx,
+        long accountId,
+        CapturedAccountMetadata account,
+        CancellationToken ct)
+    {
+        foreach (var externalId in NormalizeExternalIds(account.ExternalIds))
+        {
+            await using var cmd = new NpgsqlCommand("""
+                INSERT INTO metadata.account_external_ids
+                    (account_id, platform, id_kind, external_id)
+                VALUES
+                    (@account_id, @platform, @id_kind, @external_id)
+                ON CONFLICT (platform, external_id) DO NOTHING
+                """, conn, tx);
+
+            cmd.Parameters.AddWithValue("@account_id", accountId);
+            cmd.Parameters.AddWithValue("@platform", account.Platform);
+            cmd.Parameters.AddWithValue("@id_kind", externalId.Kind);
+            cmd.Parameters.AddWithValue("@external_id", externalId.Value);
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+    }
+
+    private static IReadOnlyList<CapturedAccountExternalId> NormalizeExternalIds(IReadOnlyList<CapturedAccountExternalId> externalIds)
+    {
+        HashSet<string>? seen = null;
+        List<CapturedAccountExternalId>? result = null;
+
+        foreach (var externalId in externalIds)
+        {
+            if (string.IsNullOrWhiteSpace(externalId.Kind) || string.IsNullOrWhiteSpace(externalId.Value))
+                continue;
+
+            var kind = externalId.Kind.Trim();
+            var value = externalId.Value.Trim();
+            var key = $"{kind}\u001F{value}";
+            seen ??= [];
+            if (!seen.Add(key))
+                continue;
+
+            result ??= [];
+            result.Add(new CapturedAccountExternalId
+            {
+                Kind = kind,
+                Value = value
+            });
+        }
+
+        return result ?? [];
     }
 
     // ── media_metadata ───────────────────────────────────────────────────────
@@ -435,6 +538,7 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
         NpgsqlConnection conn,
         NpgsqlTransaction tx,
         Guid mediaGuid,
+        long uploaderAccountId,
         IReadOnlyList<CapturedCommentMetadata> comments,
         CancellationToken ct)
     {
@@ -445,7 +549,12 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
 
         foreach (var comment in comments)
         {
-            var commentAccountId = await UpsertAccountAsync(conn, tx, comment.Account, ct);
+            var commentAccountId = comment.IsUploader
+                ? uploaderAccountId
+                : await UpsertAccountAsync(conn, tx, comment.Account, ct);
+
+            if (comment.IsUploader)
+                await AddAccountExternalIdsAsync(conn, tx, uploaderAccountId, comment.Account, ct);
 
             await using var ins = new NpgsqlCommand("""
                 INSERT INTO metadata.media_comments

@@ -27,6 +27,13 @@ public sealed record CapturedAccountMetadata
     public string? AccountUrl { get; init; }
     public long? FollowerCount { get; init; }
     public string? Description { get; init; }
+    public IReadOnlyList<CapturedAccountExternalId> ExternalIds { get; init; } = [];
+}
+
+public sealed record CapturedAccountExternalId
+{
+    public required string Kind { get; init; }
+    public required string Value { get; init; }
 }
 
 public sealed record CapturedMediaMetadataCore
