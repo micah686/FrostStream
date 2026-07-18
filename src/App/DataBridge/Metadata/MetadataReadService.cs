@@ -393,7 +393,7 @@ public sealed class MetadataReadService(NpgsqlDataSource dataSource) : IMetadata
                 a.avatar_storage_path,
                 COUNT(mm.id) AS media_count
             FROM metadata.accounts a
-            LEFT JOIN metadata.media_metadata mm ON mm.account_id = a.id
+            JOIN metadata.media_metadata mm ON mm.account_id = a.id
             WHERE (@platform IS NULL OR a.platform = @platform)
               AND (
                   @after_handle IS NULL
