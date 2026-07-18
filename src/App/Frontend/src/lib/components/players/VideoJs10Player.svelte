@@ -15,6 +15,11 @@
   import { Spinner } from 'flowbite-svelte';
   import type JASSUB from 'jassub';
 
+  const REPEAT_ICON =
+    '<svg class="media-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m16 10 3-3m0 0-3-3m3 3H5v3m3 4-3 3m0 0 3 3m-3-3h14v-3"/></svg>';
+  const SHUFFLE_ICON =
+    '<svg class="media-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.484 9.166 15 7h5m0 0-3-3m3 3-3 3M4 17h4l1.577-2.253M4 7h4l7 10h5m0 0-3 3m3-3-3-3"/></svg>';
+
   let {
     src,
     poster = null,
@@ -141,13 +146,13 @@
     repeatButton = createPlaybackModeButton(
       'Repeat',
       'Repeat - keep replaying this video',
-      '<svg class="media-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M17 1.5 20.5 5 17 8.5M3.5 5h17v5M7 22.5 3.5 19 7 15.5M20.5 19h-17v-5"/></svg>',
+      REPEAT_ICON,
       () => onToggleRepeat?.()
     );
     shuffleButton = createPlaybackModeButton(
       'Shuffle',
       'Shuffle - autoplay picks a random video instead of the next one',
-      '<svg class="media-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16 3h5v5M4 20 9.5 14.5M4 4l13 13M21 16v5h-5M14.5 9.5 17 7"/></svg>',
+      SHUFFLE_ICON,
       () => onToggleShuffle?.()
     );
 
@@ -165,6 +170,7 @@
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'media-button media-button--subtle media-button--icon';
+    button.style.overflow = 'visible';
     button.setAttribute('aria-label', label);
     button.title = title;
     button.innerHTML = icon;

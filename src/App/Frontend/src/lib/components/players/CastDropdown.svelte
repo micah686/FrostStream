@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronDownOutline } from 'flowbite-svelte-icons';
+  import { ChevronDownOutline, ComputerSpeakerOutline } from 'flowbite-svelte-icons';
   import ServerCastMenu from './ServerCastMenu.svelte';
   import { canUseBrowserCast, startBrowserCast } from './browserCast';
 
@@ -95,10 +95,7 @@
         : 'border-slate-800 bg-slate-900/70 text-slate-300 hover:bg-slate-800'
     ]}
   >
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-4 w-4" aria-hidden="true">
-      <path d="M2 16.1A5 5 0 0 1 5.9 20M2 12.05A9 9 0 0 1 9.95 20M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6" />
-      <circle cx="2" cy="20" r="0.5" fill="currentColor" />
-    </svg>
+    <ComputerSpeakerOutline class="h-4 w-4" />
     Cast
     <ChevronDownOutline class="h-3.5 w-3.5" />
   </button>
