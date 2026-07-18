@@ -254,6 +254,35 @@
   }
 
   $effect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) {
+        return;
+      }
+
+      const target = event.target;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        (target instanceof HTMLElement && target.isContentEditable)
+      ) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+      if (key === 'r') {
+        event.preventDefault();
+        toggleRepeat();
+      } else if (key === 's') {
+        event.preventDefault();
+        toggleShuffle();
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  });
+
+  $effect(() => {
     if (!moreMenuOpen) {
       noteMenuOpen = false;
       return;

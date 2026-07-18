@@ -143,39 +143,58 @@
     const playButton = controls?.querySelector('media-play-button');
     if (!controls || !playButton || repeatButton || shuffleButton) return;
 
-    repeatButton = createPlaybackModeButton(
+    const repeatControl = createPlaybackModeButton(
       'Repeat',
       'Repeat - keep replaying this video',
       REPEAT_ICON,
+      'R',
       () => onToggleRepeat?.()
     );
-    shuffleButton = createPlaybackModeButton(
+    const shuffleControl = createPlaybackModeButton(
       'Shuffle',
       'Shuffle - autoplay picks a random video instead of the next one',
       SHUFFLE_ICON,
+      'S',
       () => onToggleShuffle?.()
     );
 
     // The packaged skin places the backward seek control directly after play/pause.
-    playButton.insertAdjacentElement('afterend', shuffleButton);
-    playButton.insertAdjacentElement('afterend', repeatButton);
+    playButton.insertAdjacentElement('afterend', shuffleControl.button);
+    shuffleControl.button.insertAdjacentElement('afterend', shuffleControl.tooltip);
+    shuffleControl.tooltip.setAttribute('aria-hidden', 'true');
+    playButton.insertAdjacentElement('afterend', repeatControl.button);
+    repeatControl.button.insertAdjacentElement('afterend', repeatControl.tooltip);
+    repeatControl.tooltip.setAttribute('aria-hidden', 'true');
+
+    repeatButton = repeatControl.button;
+    shuffleButton = shuffleControl.button;
   }
 
   function createPlaybackModeButton(
     label: string,
     title: string,
     icon: string,
+    shortcut: string,
     onClick: () => void
-  ): HTMLButtonElement {
+  ): { button: HTMLButtonElement; tooltip: HTMLElement } {
+    const tooltipId = `${label.toLowerCase()}-tooltip`;
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'media-button media-button--subtle media-button--icon';
-    button.style.overflow = 'visible';
     button.setAttribute('aria-label', label);
     button.title = title;
+    button.setAttribute('commandfor', tooltipId);
     button.innerHTML = icon;
     button.addEventListener('click', onClick);
-    return button;
+    const tooltip = document.createElement('media-tooltip');
+    tooltip.id = tooltipId;
+    tooltip.setAttribute('side', 'top');
+    tooltip.className = 'media-surface media-tooltip';
+    tooltip.innerHTML = `
+      <media-tooltip-label>${label}</media-tooltip-label>
+      <media-tooltip-shortcut class="media-tooltip__kbd">${shortcut}</media-tooltip-shortcut>
+    `;
+    return { button, tooltip };
   }
 
   $effect(() => {
