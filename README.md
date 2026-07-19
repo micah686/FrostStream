@@ -7,9 +7,11 @@
 Froststream is a self-hosted media archival tool and library. It downloads music and video files (via yt-dlp), and presents the media files in a youtube-like web interface.
 This allows for a personal media collection that can't be removed by corporations.
 
-The application is entirely designed to be accessed by REST, so clients can be made easily for interacting with FrostStream, the same way the web UI interacts.
+The application is entirely designed to be accessed by REST, so clients can be made easily for interacting with FrostStream, the same way the web UI interacts.  
 
 
+> [!WARNING]  
+> This application is under heavy development right now. Data loss may occur, and features/capabilities may change
 
 ---
 
@@ -161,7 +163,7 @@ Notes:
 | **DataBridge**     | Owns PostgreSQL Database (EF Core + FluentMigrator)                                       |
 | **Scheduler**      | Quartz.NET recurring jobs (creator scans, scheduled backups) with a web UI                |
 | **Frontend**       | SvelteKit app (BFF pattern — tokens never reach the browser)                              |
-| **BackupTool**     | CLI for Postgres snapshot/full/WAL-archive backup and restore                             |
+| **BackupService**  | Runs and verifies core backups; also exposes backup/restore CLI commands                  |
 | **MediaProcessor** | Stub — reserved for future transcoding work                                               |
 
 **Infrastructure containers:** NATS (JetStream), PostgreSQL, Typesense, OpenBao, bgutil pot-provider, and in multi-user mode Authentik + OpenFGA. Dev tooling: DbGate (DB browser), nats-ui, OpenFGA Studio.
@@ -201,7 +203,7 @@ dotnet test --project src/Modules/Conduit.NATS/Tests/Conduit.NATS.UnitTests/Cond
 │   │   ├── DataBridge/               # persistence, sagas, migrations
 │   │   ├── Scheduler/                # Quartz jobs
 │   │   ├── Frontend/                 # SvelteKit app
-│   │   ├── BackupTool/               # Postgres backup/restore CLI
+│   │   ├── BackupService/            # backup API plus Postgres/OpenBao backup/restore engine
 │   │   ├── Shared/                   # shared contracts & options
 │   │   └── docker-compose-artifacts/ # generated compose deployment
 │   ├── Containers/                   # container resource definitions/config
