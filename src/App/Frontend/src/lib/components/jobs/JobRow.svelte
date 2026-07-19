@@ -64,6 +64,7 @@
   const provider = $derived(providerFor(job.sourceUrl));
   const percent = $derived(percentFor(row));
   const showProgressDetails = $derived(isActive(job.status));
+  let previousStatus = $state<string | undefined>(undefined);
 
   $effect(() => {
     if (isDone(job.status) && mediaGuid === undefined) {
@@ -75,6 +76,15 @@
     const message = row.progress?.message?.trim();
     if (message && liveMessages.at(-1)?.text !== message) {
       liveMessages = [...liveMessages, { text: message, at: Date.now() }].slice(-50);
+    }
+  });
+
+  $effect(() => {
+    const status = normalizeStatus(job.status);
+    const enteredTerminal = previousStatus !== undefined && status !== previousStatus && isTerminal(status);
+    previousStatus = status;
+    if (enteredTerminal && expanded) {
+      void refreshHistory(job.jobId);
     }
   });
 
@@ -91,9 +101,13 @@
     if (!expanded) {
       return;
     }
+    await refreshHistory(job.jobId);
+  }
+
+  async function refreshHistory(jobId: string): Promise<void> {
     history = 'loading';
     try {
-      history = await fetchJobHistory(job.jobId);
+      history = await fetchJobHistory(jobId);
       // The fresh history now durably includes any progress lines the backend already
       // persisted, so drop the ephemeral live buffer to avoid showing lines twice.
       liveMessages = [];

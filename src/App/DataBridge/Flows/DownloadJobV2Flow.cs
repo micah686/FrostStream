@@ -606,13 +606,29 @@ public sealed class DownloadJobV2Flow(
                 Kind = kind
             };
             await Capture(() => Publish(Tagged(ArtifactStorageSubjects.UploadObjectCommand, workerTag), command));
-            var result = await Messages.FirstOfTypes<UploadCompleted, UploadFailed>();
+            // Upload results share one message type, so only the result for this dispatch may
+            // settle the current artifact. Older/stale results can otherwise be mistaken for the
+            // current sidecar upload and point the artifact at another file.
+            var result = await Messages.OfTypes<UploadCompleted, UploadFailed>()
+                .Where(x => (x.HasFirst ? x.First!.Execution : x.Second!.Execution)?.DispatchId == execution.DispatchId)
+                .First();
             if (result.HasFirst)
             {
+                // The command is the source of truth for the destination and payload hash. A
+                // stale/duplicate UploadCompleted can carry another artifact's path (all upload
+                // results share the same message type), which would make sidecar ingestion read
+                // the primary media object and silently drop comments.
+                var upload = result.First with
+                {
+                    StorageKey = storageKey,
+                    StoragePath = storagePath,
+                    ContentHashXxh128 = contentHash,
+                    TempFileRef = tempFileRef
+                };
                 await Capture(() => V2(r => r.CompleteStageAttemptAsync(execution)));
                 await Capture(() => V2(r => r.UpsertArtifactAsync(ToArtifact(
-                    run, stage, artifactKey, kind, required, result.First))));
-                return new UploadOutcome(result.First, true, false, false, null, null, null);
+                    run, stage, artifactKey, kind, required, upload))));
+                return new UploadOutcome(upload, true, false, false, null, null, null);
             }
 
             var failure = result.Second;
