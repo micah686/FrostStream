@@ -6,7 +6,20 @@ namespace Shared.Messaging;
 public sealed class DownloadTopology : ITopologySource
 {
     public const string StreamNameValue = "FROSTSTREAM_DOWNLOAD_V2";
-    public const string SubjectFilter = "download.v2.>";
+
+    /// <summary>
+    /// Durable traffic only. The control-plane request/reply subjects
+    /// (<c>download.v2.control.&gt;</c> — job start/stop, lease acquire/renew, …) must never be
+    /// captured by the stream: JetStream sends its publish ack to the request's reply inbox,
+    /// which the requester then mistakes for the responder's reply (see PlaylistTopology).
+    /// </summary>
+    public static readonly string[] SubjectFilters =
+    [
+        "download.v2.request.>",
+        "download.v2.command.>",
+        "download.v2.event.>",
+        DownloadSubjects.DownloadProgress
+    ];
 
     public const string GroupRequestedConsumer = "databridge-download-v2-group-requested";
     public const string DownloadRequestedConsumer = "databridge-download-v2-job-requested";
@@ -30,7 +43,7 @@ public sealed class DownloadTopology : ITopologySource
         yield return new StreamSpec
         {
             Name = StreamName.From(StreamNameValue),
-            Subjects = [SubjectFilter],
+            Subjects = SubjectFilters,
             MaxAge = TimeSpan.FromDays(30),
             RetentionPolicy = StreamRetention.Limits,
             StorageType = StorageType.File,

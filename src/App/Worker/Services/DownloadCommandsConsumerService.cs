@@ -1029,8 +1029,21 @@ public sealed class DownloadCommandsConsumerService(
         }
         if (!response.Granted)
         {
-            logger.LogInformation("Rejected stale V2 dispatch {DispatchId}: {Reason}", execution.DispatchId, response.RejectionCode);
-            await context.AckAsync();
+            logger.LogInformation(
+                "Rejected V2 dispatch {DispatchId} for JobId {JobId} RunId {RunId} Stage {Stage} Attempt {Attempt}: {Reason}",
+                execution.DispatchId,
+                execution.JobId,
+                execution.RunId,
+                execution.Stage,
+                execution.Attempt,
+                response.RejectionCode ?? "lease_rejected_without_reason");
+            // Only rejections that DataBridge durably decided against are dropped. Anything else
+            // (transient acquire errors, or a response we could not interpret) is nacked so the
+            // dispatch is retried instead of stranding a granted-but-unheard lease until expiry.
+            if (response.RejectionCode is "dispatch_already_claimed" or "stale_execution")
+                await context.AckAsync();
+            else
+                await context.NackAsync();
             return null;
         }
 

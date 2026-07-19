@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using NodaTime;
 using Shared.Database;
 using Shared.Messaging;
@@ -9,7 +10,8 @@ namespace DataBridge.Data;
 public sealed class DownloadFlowV2Repository(
     DataBridgeDbContext db,
     IClock clock,
-    IDownloadJobStateNotifier notifier) : IDownloadFlowV2Repository
+    IDownloadJobStateNotifier notifier,
+    ILogger<DownloadFlowV2Repository>? logger = null) : IDownloadFlowV2Repository
 {
     public static readonly Duration LeaseDuration = Duration.FromSeconds(45);
 
@@ -770,8 +772,41 @@ public sealed class DownloadFlowV2Repository(
         var execution = request.Execution;
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var job = await LockJobAsync(execution.JobId, ct);
-        if (await db.DownloadWorkerLeases.AsNoTracking().AnyAsync(x => x.DispatchId == execution.DispatchId, ct))
+        var existingLease = await db.DownloadWorkerLeases
+            .FirstOrDefaultAsync(x => x.DispatchId == execution.DispatchId, ct);
+        if (existingLease is not null)
+        {
+            // The grant response can be lost after the lease commits (reply timeout, transport
+            // hiccup). Re-granting the same worker's active lease makes the retry idempotent
+            // instead of stranding a lease nobody heartbeats until the expiry sweep kills the run.
+            var regrantNow = clock.GetCurrentInstant();
+            if (existingLease.WorkerInstanceId == request.WorkerInstanceId
+                && existingLease.Status == DownloadWorkerLeaseStatus.Active
+                && existingLease.ExpiresAt > regrantNow)
+            {
+                existingLease.LastHeartbeatAt = regrantNow;
+                existingLease.ExpiresAt = regrantNow + LeaseDuration;
+                await db.SaveChangesAsync(ct);
+                await transaction.CommitAsync(ct);
+                return new AcquireDownloadLeaseResponse
+                {
+                    Granted = true,
+                    StopRequested = job?.StopRequestedAt is not null
+                                    && execution.Stage is not (DownloadStage.Cleanup or DownloadStage.Compensation),
+                    ExpiresAt = existingLease.ExpiresAt
+                };
+            }
+            logger?.LogInformation(
+                "Rejected Download V2 lease acquire for DispatchId {DispatchId} JobId {JobId} RunId {RunId} Stage {Stage} Attempt {Attempt}: dispatch already claimed by Worker {LeaseWorker} (Status {LeaseStatus}).",
+                execution.DispatchId,
+                execution.JobId,
+                execution.RunId,
+                execution.Stage,
+                execution.Attempt,
+                existingLease.WorkerInstanceId,
+                existingLease.Status);
             return new AcquireDownloadLeaseResponse { Granted = false, RejectionCode = "dispatch_already_claimed" };
+        }
 
         var attempt = await db.DownloadStageAttempts.FirstOrDefaultAsync(x => x.DispatchId == execution.DispatchId, ct);
         if (job is null || attempt is null || job.CurrentRunId != execution.RunId
@@ -780,7 +815,23 @@ public sealed class DownloadFlowV2Repository(
             || job.Stage != execution.Stage
             || job.CurrentAttempt != execution.Attempt
             || NormalizeArtifactKey(job.CurrentArtifactKey) != NormalizeArtifactKey(execution.ArtifactKey))
+        {
+            logger?.LogInformation(
+                "Rejected Download V2 lease acquire for DispatchId {DispatchId} JobId {JobId} RunId {RunId} Stage {Stage} Attempt {Attempt}: stale execution. CurrentJobRunId={CurrentRunId} CurrentStatus={CurrentStatus} CurrentStage={CurrentStage} CurrentAttempt={CurrentAttempt} CurrentArtifactKey={CurrentArtifactKey} AttemptExists={AttemptExists} Worker={WorkerInstanceId}.",
+                execution.DispatchId,
+                execution.JobId,
+                execution.RunId,
+                execution.Stage,
+                execution.Attempt,
+                job?.CurrentRunId,
+                job?.Status,
+                job?.Stage,
+                job?.CurrentAttempt,
+                job?.CurrentArtifactKey,
+                attempt is not null,
+                request.WorkerInstanceId);
             return new AcquireDownloadLeaseResponse { Granted = false, RejectionCode = "stale_execution" };
+        }
 
         var now = clock.GetCurrentInstant();
         var expires = now + LeaseDuration;

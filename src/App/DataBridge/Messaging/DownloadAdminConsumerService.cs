@@ -154,18 +154,42 @@ public sealed class DownloadAdminConsumerService(
 
     private async Task HandleAcquireLeaseAsync(IMessageContext<AcquireDownloadLeaseRequest> context)
     {
-        using var scope = scopeFactory.CreateScope();
-        var result = await scope.ServiceProvider.GetRequiredService<IDownloadFlowV2Repository>()
-            .TryAcquireLeaseAsync(context.Message);
-        await context.RespondAsync(result);
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var result = await scope.ServiceProvider.GetRequiredService<IDownloadFlowV2Repository>()
+                .TryAcquireLeaseAsync(context.Message);
+            await context.RespondAsync(result);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed acquiring V2 lease for DispatchId {DispatchId}",
+                context.Message.Execution.DispatchId);
+            // "acquire_error" is deliberately not a fatal rejection code on the Worker: it nacks
+            // and retries instead of dropping the dispatch.
+            await context.RespondAsync(new AcquireDownloadLeaseResponse
+            {
+                Granted = false,
+                RejectionCode = "acquire_error"
+            });
+        }
     }
 
     private async Task HandleRenewLeaseAsync(IMessageContext<RenewDownloadLeaseRequest> context)
     {
-        using var scope = scopeFactory.CreateScope();
-        var result = await scope.ServiceProvider.GetRequiredService<IDownloadFlowV2Repository>()
-            .TryRenewLeaseAsync(context.Message);
-        await context.RespondAsync(result);
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var result = await scope.ServiceProvider.GetRequiredService<IDownloadFlowV2Repository>()
+                .TryRenewLeaseAsync(context.Message);
+            await context.RespondAsync(result);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed renewing V2 lease for DispatchId {DispatchId}",
+                context.Message.DispatchId);
+            await context.RespondAsync(new RenewDownloadLeaseResponse { Renewed = false });
+        }
     }
 
     private async Task HandleClearProviderAsync(IMessageContext<ClearProviderCircuitRequest> context)
