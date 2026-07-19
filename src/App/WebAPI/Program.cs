@@ -311,6 +311,8 @@ public class Program
         builder.Services.AddSingleton<BackupJobService>();
         builder.Services.AddSingleton<DownloadQueueHub>();
         builder.Services.AddHostedService<DownloadQueueHub>(p => p.GetRequiredService<DownloadQueueHub>());
+        builder.Services.AddSingleton<RenditionProgressHub>();
+        builder.Services.AddHostedService<RenditionProgressHub>(p => p.GetRequiredService<RenditionProgressHub>());
         builder.Services.AddOpenBaoSecretStore(builder.Configuration);
         builder.Services.AddFrostStreamStorage();
 

@@ -4,6 +4,7 @@ using MediaProcessor.Storage;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using NodaTime;
 using Shared.Messaging;
 
 namespace MediaProcessor.Video;
@@ -19,6 +20,7 @@ public sealed class StreamRenditionProcessorService(
     MediaProcessorStorageClient storageClient,
     FfmpegRunner ffmpeg,
     IOptions<MediaProcessorOptions> options,
+    IClock clock,
     ILogger<StreamRenditionProcessorService> logger) : BackgroundService
 {
     private static readonly StreamName Stream = StreamName.From(BackgroundJobsTopology.StreamNameValue);
@@ -43,6 +45,7 @@ public sealed class StreamRenditionProcessorService(
 
         // Transcodes run for as long as the source demands; heartbeat instead of a long ack wait.
         await using var heartbeat = new JetStreamHeartbeat(context, logger);
+        RenditionProgressReporter? progress = null;
 
         try
         {
@@ -62,20 +65,28 @@ public sealed class StreamRenditionProcessorService(
             }
 
             var item = claim.Item;
+            progress = new RenditionProgressReporter(messageBus, clock, logger, item.RenditionId, RenditionKind.Stream, item.MediaGuid);
             logger.LogInformation(
                 "Stream rendition encode started for {RenditionId} MediaGuid {MediaGuid} Version {Version}.",
                 item.RenditionId,
                 item.MediaGuid,
                 item.SourceVersion);
 
+            await progress.PhaseAsync(RenditionProgressPhases.FetchingSource);
             await storageClient.DownloadToFileAsync(item.SourceStorageKey, item.SourceStoragePath, inputPath, CancellationToken.None);
 
+            await progress.PhaseAsync(RenditionProgressPhases.Probing);
             var probe = await ffmpeg.ProbeAsync(inputPath, CancellationToken.None);
             if (!probe.HasVideo)
                 throw new InvalidOperationException("Source media has no video track; request an audio rendition instead.");
 
             Directory.CreateDirectory(hlsRoot);
-            await ffmpeg.RunFfmpegAsync(BuildHlsArgs(inputPath, hlsRoot, probe), hlsRoot, CancellationToken.None);
+            var reporter = progress;
+            await ffmpeg.RunFfmpegAsync(
+                BuildHlsArgs(inputPath, hlsRoot, probe),
+                hlsRoot,
+                frame => reporter.ReportFfmpeg(RenditionProgressPhases.Encoding, frame, probe.DurationSeconds),
+                CancellationToken.None);
 
             var manifestPath = Path.Combine(hlsRoot, ManifestFileName);
             var manifestInfo = new FileInfo(manifestPath);
@@ -86,12 +97,18 @@ public sealed class StreamRenditionProcessorService(
             long totalSizeBytes = 0;
 
             // Manifest goes up last so its presence in storage implies a complete segment set.
-            foreach (var file in Directory.EnumerateFiles(hlsRoot)
-                         .OrderBy(path => Path.GetFileName(path) == ManifestFileName ? 1 : 0)
-                         .ThenBy(Path.GetFileName, StringComparer.Ordinal))
+            var uploadFiles = Directory.EnumerateFiles(hlsRoot)
+                .OrderBy(path => Path.GetFileName(path) == ManifestFileName ? 1 : 0)
+                .ThenBy(Path.GetFileName, StringComparer.Ordinal)
+                .ToList();
+
+            await progress.PhaseAsync(RenditionProgressPhases.Uploading, percent: 0);
+            for (var i = 0; i < uploadFiles.Count; i++)
             {
+                var file = uploadFiles[i];
                 totalSizeBytes += new FileInfo(file).Length;
                 await storageClient.UploadFromFileAsync(file, item.OutputStorageKey, $"{outputBase}/{Path.GetFileName(file)}", CancellationToken.None);
+                await progress.PhaseAsync(RenditionProgressPhases.Uploading, percent: (i + 1) * 100d / uploadFiles.Count);
             }
 
             await messageBus.RequestAsync<StreamRenditionCompleteRequest, StreamRenditionCompleteResponse>(
@@ -115,11 +132,14 @@ public sealed class StreamRenditionProcessorService(
                 probe.VideoCodec,
                 probe.AudioCodec ?? "none");
 
+            await progress.PhaseAsync(RenditionProgressPhases.Ready, percent: 100);
             await CompleteAsync(heartbeat, context);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Stream rendition encode failed for {RenditionId}.", request.RenditionId);
+            if (progress is not null)
+                await progress.PhaseAsync(RenditionProgressPhases.Failed, message: ex.Message);
             try
             {
                 await messageBus.RequestAsync<StreamRenditionFailRequest, StreamRenditionFailResponse>(

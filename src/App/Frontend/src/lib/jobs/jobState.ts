@@ -9,11 +9,16 @@ export function isQueued(state: string): boolean {
 }
 
 export function isActive(state: string): boolean {
+  // DownloadedTemp and Uploaded are mid-flow checkpoints (bytes on worker disk / bytes in
+  // storage): the job still has uploads and/or the final DB commit ahead, so they render as
+  // active, never as done.
   return [
     'metadatapending',
     'metadataresolved',
     'downloadpending',
+    'downloadedtemp',
     'uploadpending',
+    'uploaded',
     'commitpending',
     'compensating',
     'cancelling'
@@ -25,7 +30,9 @@ export function isFailed(state: string): boolean {
 }
 
 export function isDone(state: string): boolean {
-  return ['uploaded', 'completed', 'alreadydownloaded'].includes(normalizeState(state));
+  // Only true terminal success states — matches the backend's StateGroup.Done filter. The green
+  // bar/pill is reserved for the very end of the flow.
+  return ['completed', 'alreadydownloaded'].includes(normalizeState(state));
 }
 
 export function isCancelled(state: string): boolean {

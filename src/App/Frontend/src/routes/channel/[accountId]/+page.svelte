@@ -22,8 +22,11 @@
     createPodcastFeedLink,
     encodeChannelAudio,
     getChannelAudioStatus,
-    type ChannelAudioStatus
+    renditionProgressStreamUrl,
+    type ChannelAudioStatus,
+    type RenditionProgressFrame
   } from '$lib/api/channelAudio';
+  import { readEventStream } from '$lib/sse/eventStream';
   import TargetNotePanel from '$lib/components/TargetNotePanel.svelte';
   import VideoJs10AudioPlayer from '$lib/components/players/VideoJs10AudioPlayer.svelte';
   import {
@@ -104,6 +107,8 @@
   let podcastBusy = $state(false);
   let podcastFeedUrl = $state<string | null>(null);
   let audioPollTimer: ReturnType<typeof setTimeout> | null = null;
+  let renditionStreamController: AbortController | null = null;
+  let liveRenditionProgress = $state<Record<string, RenditionProgressFrame>>({});
 
   const accountId = $derived(page.params.accountId ?? '');
   const totalPages = $derived(Math.max(1, Math.ceil(totalCount / pageSize)));
@@ -126,6 +131,7 @@
 
   onDestroy(() => {
     if (audioPollTimer) clearTimeout(audioPollTimer);
+    closeRenditionStream();
   });
 
   $effect(() => {
@@ -174,8 +180,75 @@
   function scheduleAudioPoll(id: string) {
     if (audioPollTimer) clearTimeout(audioPollTimer);
     audioPollTimer = null;
-    if (!channelAudio || channelAudio.pendingCount + channelAudio.processingCount === 0) return;
+    const encodesInFlight = channelAudio !== null && channelAudio.pendingCount + channelAudio.processingCount > 0;
+    syncRenditionStream(encodesInFlight);
+    if (!encodesInFlight) return;
     audioPollTimer = setTimeout(() => void loadChannelAudio(id, true), 2000);
+  }
+
+  // Live per-item encode progress over SSE, on top of the coarse 2s count polling: the poll stays
+  // as the resilient fallback, the stream adds percent/speed and immediate refresh on completion.
+  function syncRenditionStream(shouldStream: boolean) {
+    if (!shouldStream) {
+      closeRenditionStream();
+      return;
+    }
+    if (renditionStreamController) return;
+    const controller = new AbortController();
+    renditionStreamController = controller;
+    void (async () => {
+      try {
+        await readEventStream(
+          renditionProgressStreamUrl(),
+          {
+            onEvent: (event) => {
+              if (event.event !== 'progress') return;
+              applyRenditionFrame(JSON.parse(event.data) as RenditionProgressFrame);
+            }
+          },
+          controller.signal
+        );
+      } catch {
+        // Live progress is advisory; the status poll keeps working without it.
+      } finally {
+        if (renditionStreamController === controller) renditionStreamController = null;
+      }
+    })();
+  }
+
+  function closeRenditionStream() {
+    renditionStreamController?.abort();
+    renditionStreamController = null;
+    liveRenditionProgress = {};
+  }
+
+  function applyRenditionFrame(frame: RenditionProgressFrame) {
+    if (frame.kind !== 'Audio') return;
+    if (!channelAudio?.items.some((item) => item.mediaGuid === frame.mediaGuid)) return;
+
+    if (frame.phase === 'Ready' || frame.phase === 'Failed') {
+      const rest = { ...liveRenditionProgress };
+      delete rest[frame.mediaGuid];
+      liveRenditionProgress = rest;
+      // Counts changed server-side; refresh right away instead of waiting out the poll.
+      void loadChannelAudio(accountId, true);
+      return;
+    }
+
+    liveRenditionProgress = { ...liveRenditionProgress, [frame.mediaGuid]: frame };
+  }
+
+  function renditionItemTitle(frame: RenditionProgressFrame): string {
+    return channelAudio?.items.find((item) => item.mediaGuid === frame.mediaGuid)?.title ?? 'Encoding';
+  }
+
+  function renditionProgressLine(frame: RenditionProgressFrame): string {
+    const parts = [frame.phase];
+    if (frame.percent !== null) parts.push(`${Math.round(frame.percent)}%`);
+    if (frame.speedX !== null) parts.push(`${frame.speedX.toFixed(1)}x`);
+    const eta = frame.etaSeconds !== null ? formatDuration(Math.round(frame.etaSeconds)) : null;
+    if (eta) parts.push(`eta ${eta}`);
+    return parts.join(' · ');
   }
 
   async function encodeAudio() {
@@ -586,6 +659,11 @@
               <p class="mt-1 text-[11px] text-slate-600">
                 {channelAudio.processingCount} processing · {channelAudio.pendingCount} queued
               </p>
+              {#each Object.values(liveRenditionProgress) as frame (frame.renditionId)}
+                <p class="mt-0.5 truncate text-[11px] text-slate-500" title={renditionItemTitle(frame)}>
+                  {renditionItemTitle(frame)} — {renditionProgressLine(frame)}
+                </p>
+              {/each}
             {:else if channelAudio.failedCount}
               <p class="mt-1 text-[11px] text-red-400">{channelAudio.failedCount} failed · Encode as audio retries them</p>
             {/if}

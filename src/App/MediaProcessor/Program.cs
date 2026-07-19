@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Hosting.Internal;
 using NATS.Client.Core;
+using NodaTime;
 using Shared.Messaging;
 
 namespace MediaProcessor;
@@ -35,6 +36,7 @@ class Program
         builder.Services.AddOptions<MediaProcessorOptions>()
             .Bind(builder.Configuration.GetSection(MediaProcessorOptions.SectionName));
         builder.Services.AddHttpClient<MediaProcessorStorageClient>();
+        builder.Services.AddSingleton<IClock>(SystemClock.Instance);
         builder.Services.AddSingleton<FfmpegRunner>();
         builder.Services.AddHostedService<AudioRenditionProcessorService>();
         builder.Services.AddHostedService<StreamRenditionProcessorService>();

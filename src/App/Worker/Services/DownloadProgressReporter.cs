@@ -31,7 +31,7 @@ internal sealed class DownloadProgressReporter(
             Attempt = command.Attempt,
             Sequence = sequence,
             SourceUrl = command.SourceUrl,
-            Phase = value.Phase.ToString(),
+            Phase = MapPhase(value.Phase),
             Percent = value.Percent,
             DownloadedBytes = value.DownloadedBytes,
             TotalBytes = value.TotalBytes,
@@ -133,6 +133,19 @@ internal sealed class DownloadProgressReporter(
                 message.Sequence);
         }
     }
+
+    /// <summary>
+    /// yt-dlp's terminal phases only mean the *download* is done — the job still has upload and DB
+    /// commit ahead of it. Renaming them keeps "Completed" reserved for the job's true end state
+    /// (<see cref="DownloadJobState.Completed"/>), so the Jobs page never shows a completed-looking
+    /// pill while sidecars are still uploading.
+    /// </summary>
+    private static string MapPhase(ProgressPhase phase) => phase switch
+    {
+        ProgressPhase.Finished => "DownloadFinished",
+        ProgressPhase.Completed => "DownloadCompleted",
+        _ => phase.ToString()
+    };
 
     private static string FormatPercent(double? percent)
         => percent is { } value

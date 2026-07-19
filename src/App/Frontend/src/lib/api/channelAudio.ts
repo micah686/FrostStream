@@ -42,6 +42,22 @@ export interface PodcastFeedLink {
   expiresAt: string;
 }
 
+// One live MediaProcessor progress frame from the rendition SSE stream (advisory, live-only).
+export interface RenditionProgressFrame {
+  renditionId: string;
+  kind: 'Stream' | 'Audio';
+  mediaGuid: string;
+  sequence: number;
+  occurredAt: string;
+  phase: 'FetchingSource' | 'Probing' | 'Encoding' | 'Packaging' | 'Uploading' | 'Ready' | 'Failed' | string;
+  percent: number | null;
+  speedX: number | null;
+  etaSeconds: number | null;
+  message: string | null;
+}
+
+export const renditionProgressStreamUrl = (): string => '/api/media/renditions/progress/stream';
+
 const base = (accountId: number) => `/api/media/channels/${encodeURIComponent(accountId)}/audio`;
 
 export function getChannelAudioStatus(accountId: number, fetchImpl: typeof fetch = fetch): Promise<ChannelAudioStatus> {

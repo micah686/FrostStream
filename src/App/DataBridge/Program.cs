@@ -106,6 +106,11 @@ class Program
             // persisted message/effect to the Unix epoch. Swap in a NodaTime-aware serializer so
             // dates (OccurredAt, metadata scrape/release dates, …) survive the flow store round-trip.
             .WithOptions(new Options(serializer: new NodaTimeFlowSerializer()))
+            // Wait for executing flows to finish before the host tears down DI. Without this, a
+            // flow running through a shutdown dies with ObjectDisposedException (disposed
+            // IServiceProvider) and is left permanently Failed — the exact corpse the slot
+            // coordinator's recovery/sweep has to repair.
+            .GracefulShutdown(enable: true)
             .RegisterFlowsAutomatically());
 
         builder.Services.AddSingleton<IClock>(SystemClock.Instance);

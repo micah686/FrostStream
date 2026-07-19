@@ -19,21 +19,76 @@ public sealed record MediaProbe
     public bool HasAudio => AudioCodec is not null;
 }
 
+/// <summary>One parsed frame of ffmpeg's <c>-progress</c> key/value output.</summary>
+public sealed record FfmpegProgress
+{
+    /// <summary>Output timestamp reached so far, in seconds of media time.</summary>
+    public required double OutTimeSeconds { get; init; }
+
+    /// <summary>Encode speed relative to realtime (ffmpeg's <c>speed=</c>), when reported.</summary>
+    public double? SpeedX { get; init; }
+}
+
 /// <summary>Runs ffmpeg/ffprobe as child processes for the rendition services.</summary>
 public sealed class FfmpegRunner(IOptions<MediaProcessorOptions> options, ILogger<FfmpegRunner> logger)
 {
-    public async Task RunFfmpegAsync(string args, string? workingDirectory, CancellationToken cancellationToken)
+    public Task RunFfmpegAsync(string args, string? workingDirectory, CancellationToken cancellationToken)
+        => RunFfmpegAsync(args, workingDirectory, onProgress: null, cancellationToken);
+
+    public async Task RunFfmpegAsync(string args, string? workingDirectory, Action<FfmpegProgress>? onProgress, CancellationToken cancellationToken)
     {
         logger.LogDebug("ffmpeg {Args}", args);
-        var (exitCode, _, stderr) = await RunProcessAsync(options.Value.FfmpegPath, args, workingDirectory, cancellationToken);
+
+        // -progress writes machine-readable key=value frames to stdout, which nothing else uses
+        // (encode output goes to files, diagnostics to stderr).
+        var effectiveArgs = onProgress is null ? args : "-progress pipe:1 -nostats " + args;
+        var parser = onProgress is null ? null : new FfmpegProgressParser(onProgress);
+        var (exitCode, _, stderr) = await RunProcessAsync(
+            options.Value.FfmpegPath, effectiveArgs, workingDirectory, parser is null ? null : parser.PushLine, cancellationToken);
         if (exitCode != 0)
             throw new InvalidOperationException($"ffmpeg exited with code {exitCode}: {LastLines(stderr, 8)}");
+    }
+
+    /// <summary>
+    /// Accumulates <c>-progress</c> lines and emits one <see cref="FfmpegProgress"/> per
+    /// <c>progress=</c> frame terminator. Invoked from the stdout pump task.
+    /// </summary>
+    private sealed class FfmpegProgressParser(Action<FfmpegProgress> onProgress)
+    {
+        private double _outTimeSeconds;
+        private double? _speedX;
+
+        public void PushLine(string line)
+        {
+            var separator = line.IndexOf('=');
+            if (separator <= 0)
+                return;
+
+            var key = line[..separator].Trim();
+            var value = line[(separator + 1)..].Trim();
+            switch (key)
+            {
+                // Both keys carry microseconds (out_time_ms is a long-standing ffmpeg misnomer).
+                case "out_time_us" or "out_time_ms"
+                    when long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var micros) && micros >= 0:
+                    _outTimeSeconds = micros / 1_000_000d;
+                    break;
+                case "speed"
+                    when value.EndsWith('x') &&
+                         double.TryParse(value[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var speed) && speed > 0:
+                    _speedX = speed;
+                    break;
+                case "progress":
+                    onProgress(new FfmpegProgress { OutTimeSeconds = _outTimeSeconds, SpeedX = _speedX });
+                    break;
+            }
+        }
     }
 
     public async Task<MediaProbe> ProbeAsync(string inputPath, CancellationToken cancellationToken)
     {
         var args = $"-hide_banner -v error -print_format json -show_format -show_streams {Quote(inputPath)}";
-        var (exitCode, stdout, stderr) = await RunProcessAsync(options.Value.FfprobePath, args, workingDirectory: null, cancellationToken);
+        var (exitCode, stdout, stderr) = await RunProcessAsync(options.Value.FfprobePath, args, workingDirectory: null, onStdoutLine: null, cancellationToken);
         if (exitCode != 0)
             throw new InvalidOperationException($"ffprobe exited with code {exitCode}: {LastLines(stderr, 8)}");
 
@@ -89,6 +144,7 @@ public sealed class FfmpegRunner(IOptions<MediaProcessorOptions> options, ILogge
         string fileName,
         string args,
         string? workingDirectory,
+        Action<string>? onStdoutLine,
         CancellationToken cancellationToken)
     {
         using var process = new Process
@@ -106,10 +162,29 @@ public sealed class FfmpegRunner(IOptions<MediaProcessorOptions> options, ILogge
         };
 
         process.Start();
-        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var stdoutTask = onStdoutLine is null
+            ? process.StandardOutput.ReadToEndAsync(cancellationToken)
+            : PumpLinesAsync(process.StandardOutput, onStdoutLine, cancellationToken);
         var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
         await process.WaitForExitAsync(cancellationToken);
         return (process.ExitCode, await stdoutTask, await stderrTask);
+    }
+
+    private static async Task<string> PumpLinesAsync(StreamReader reader, Action<string> onLine, CancellationToken cancellationToken)
+    {
+        while (await reader.ReadLineAsync(cancellationToken) is { } line)
+        {
+            try
+            {
+                onLine(line);
+            }
+            catch
+            {
+                // Progress observers are advisory; a throwing observer must not kill the encode.
+            }
+        }
+
+        return string.Empty;
     }
 
     public static async Task<string> ComputeXxHash128Async(string path, CancellationToken cancellationToken)
