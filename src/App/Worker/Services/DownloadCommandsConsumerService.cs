@@ -57,13 +57,12 @@ public sealed class DownloadCommandsConsumerService(
     // yt-dlp downloads routinely run well past the JetStream AckWait for this consumer
     // (DownloadTopology: 2 minutes) — a slow sidecar fetch (e.g. subtitle rate-limiting) alone can
     // exceed it. Without renewing in-progress acks, JetStream redelivers the same command while the
-    // original invocation is still running, which collides with the active-run cancellation gate below.
+    // original invocation is still running.
     private static readonly TimeSpan DownloadHeartbeatInterval = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan LeaseHeartbeatInterval = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan LeaseRequestTimeout = TimeSpan.FromSeconds(5);
     private readonly string _workerInstanceId = $"{Environment.MachineName}-{Guid.NewGuid():N}";
-    private readonly ConcurrentDictionary<(Guid JobId, Guid RunId), CancellationTokenSource> _activeRunCancellations = new();
-    private readonly ConcurrentDictionary<(Guid JobId, Guid RunId), DownloadStage> _activeRunStages = new();
+    private readonly ConcurrentDictionary<Guid, ActiveExecution> _activeExecutions = new();
     private readonly ConcurrentDictionary<(Guid JobId, Guid RunId), DateTimeOffset> _pendingRunCancellations = new();
     private readonly ConcurrentDictionary<(Guid JobId, Guid RunId), DateTimeOffset> _userStopRequests = new();
     private ISubscription? _cancelSubscription;
@@ -138,8 +137,8 @@ public sealed class DownloadCommandsConsumerService(
             _cancelSubscription = null;
         }
 
-        foreach (var cancellation in _activeRunCancellations.Values)
-            await cancellation.CancelAsync();
+        foreach (var active in _activeExecutions.Values)
+            await active.Cancellation.CancelAsync();
 
         await base.StopAsync(cancellationToken);
     }
@@ -176,6 +175,11 @@ public sealed class DownloadCommandsConsumerService(
         if (cmd.Execution is not null && executionLease is null)
             return;
         using var operationCts = RegisterActiveRun(cmd.Execution, executionLease!.CancellationToken);
+        if (operationCts is null)
+        {
+            await context.AckAsync();
+            return;
+        }
 
         try
         {
@@ -273,7 +277,9 @@ public sealed class DownloadCommandsConsumerService(
                 SourceLastModified = sourceLastModified,
                 Title = info.Title ?? info.FullTitle,
                 Uploader = info.Uploader ?? info.Channel,
-                RichMetadata = richMetadata
+                // Comment threads are unbounded and would blow the NATS payload limit; they reach
+                // DataBridge via the media-acquire stage's comments.json sidecar instead.
+                RichMetadata = richMetadata with { Comments = [] }
             });
             await context.AckAsync();
         }
@@ -321,6 +327,11 @@ public sealed class DownloadCommandsConsumerService(
         DownloadProgressReporter? progress = null;
         var acquisitionWarnings = new List<DownloadStageWarning>();
         using var operationCts = RegisterActiveRun(cmd.Execution, executionLease!.CancellationToken);
+        if (operationCts is null)
+        {
+            await context.AckAsync();
+            return;
+        }
         using var heartbeatCts = CancellationTokenSource.CreateLinkedTokenSource(CancellationToken.None);
         var heartbeatTask = JetStreamHeartbeat.RunAsync(context, DownloadHeartbeatInterval, logger, "DownloadVideo", heartbeatCts.Token);
 
@@ -381,6 +392,7 @@ public sealed class DownloadCommandsConsumerService(
             PlaceholderContentDetector.ThrowIfPlaceholderContentHash(contentHash);
 
             var infoJson = await ResolveInfoJsonSidecarAsync(tempDirectory);
+            var commentsSidecar = await ResolveCommentsSidecarAsync(tempDirectory, cmd.JobId);
             var (thumbnail, captions) = await ResolveAssetSidecarsAsync(tempDirectory, tempFileRef);
 
             logger.LogInformation(
@@ -414,6 +426,7 @@ public sealed class DownloadCommandsConsumerService(
                 InfoJsonContentHashXxh128 = infoJson?.ContentHash,
                 Thumbnail = thumbnail,
                 Captions = captions,
+                Comments = commentsSidecar,
                 Warnings = acquisitionWarnings
             });
             await context.AckAsync();
@@ -474,23 +487,32 @@ public sealed class DownloadCommandsConsumerService(
         var cmd = context.Message;
         var runKey = (cmd.JobId, cmd.RunId);
         _userStopRequests[runKey] = DateTimeOffset.UtcNow;
-        if (_activeRunCancellations.TryGetValue(runKey, out var cancellation)
-            && (!_activeRunStages.TryGetValue(runKey, out var stage)
-                || stage is not (DownloadStage.Cleanup or DownloadStage.Compensation)))
+        var cancellable = _activeExecutions.Values
+            .Where(x => x.Execution.JobId == cmd.JobId
+                        && x.Execution.RunId == cmd.RunId
+                        && x.Execution.Stage is not (DownloadStage.Cleanup or DownloadStage.Compensation))
+            .ToArray();
+        var settling = _activeExecutions.Values
+            .Where(x => x.Execution.JobId == cmd.JobId
+                        && x.Execution.RunId == cmd.RunId
+                        && x.Execution.Stage is DownloadStage.Cleanup or DownloadStage.Compensation)
+            .ToArray();
+        if (cancellable.Length > 0)
         {
             logger.LogInformation(
-                "Stopping active download for JobId {JobId}. RequestedBy {RequestedBy} Reason {Reason}",
+                "Stopping {ActiveCount} active download execution(s) for JobId {JobId}. RequestedBy {RequestedBy} Reason {Reason}",
+                cancellable.Length,
                 cmd.JobId,
                 "v2-control",
                 cmd.Reason);
-            cancellation.Cancel();
+            foreach (var active in cancellable)
+                active.Cancellation.Cancel();
         }
-        else if (_activeRunStages.TryGetValue(runKey, out var settlingStage)
-                 && settlingStage is DownloadStage.Cleanup or DownloadStage.Compensation)
+        else if (settling.Length > 0)
         {
             logger.LogInformation(
-                "Stop recorded for JobId {JobId}, but active {Stage} is allowed to settle.",
-                cmd.JobId, settlingStage);
+                "Stop recorded for JobId {JobId}, but {ActiveCount} active cleanup/compensation execution(s) are allowed to settle.",
+                cmd.JobId, settling.Length);
         }
         else
         {
@@ -515,7 +537,7 @@ public sealed class DownloadCommandsConsumerService(
         }
     }
 
-    private CancellationTokenSource RegisterActiveRun(
+    private CancellationTokenSource? RegisterActiveRun(
         DownloadExecutionIdentity? execution,
         CancellationToken leaseToken)
     {
@@ -524,13 +546,17 @@ public sealed class DownloadCommandsConsumerService(
             return cancellation;
 
         var runKey = (execution.JobId, execution.RunId);
-        _activeRunStages[runKey] = execution.Stage;
-        if (!_activeRunCancellations.TryAdd(runKey, cancellation))
+        if (!_activeExecutions.TryAdd(execution.DispatchId, new ActiveExecution(execution, cancellation)))
         {
-            _activeRunStages.TryRemove(runKey, out _);
             cancellation.Dispose();
-            throw new InvalidOperationException(
-                $"Download job {execution.JobId} run {execution.RunId} already has an active stage on this worker.");
+            logger.LogInformation(
+                "Ignoring duplicate active V2 dispatch {DispatchId} for JobId {JobId} RunId {RunId} Stage {Stage} Attempt {Attempt}.",
+                execution.DispatchId,
+                execution.JobId,
+                execution.RunId,
+                execution.Stage,
+                execution.Attempt);
+            return null;
         }
 
         // Cleanup and compensation must settle even after the user has asked to stop. Cancelling
@@ -558,11 +584,16 @@ public sealed class DownloadCommandsConsumerService(
         if (execution is null)
             return;
         var runKey = (execution.JobId, execution.RunId);
-        ((ICollection<KeyValuePair<(Guid JobId, Guid RunId), CancellationTokenSource>>)_activeRunCancellations)
-            .Remove(new KeyValuePair<(Guid JobId, Guid RunId), CancellationTokenSource>(runKey, cancellation));
-        _activeRunStages.TryRemove(runKey, out _);
-        _pendingRunCancellations.TryRemove(runKey, out _);
-        _userStopRequests.TryRemove(runKey, out _);
+        ((ICollection<KeyValuePair<Guid, ActiveExecution>>)_activeExecutions)
+            .Remove(new KeyValuePair<Guid, ActiveExecution>(
+                execution.DispatchId,
+                new ActiveExecution(execution, cancellation)));
+        if (!_activeExecutions.Values.Any(x => x.Execution.JobId == execution.JobId
+                                               && x.Execution.RunId == execution.RunId))
+        {
+            _pendingRunCancellations.TryRemove(runKey, out _);
+            _userStopRequests.TryRemove(runKey, out _);
+        }
     }
 
     private FailureKind CancellationFailureKind(DownloadExecutionIdentity? execution)
@@ -581,6 +612,11 @@ public sealed class DownloadCommandsConsumerService(
         if (cmd.Execution is not null && executionLease is null)
             return;
         using var operationCts = RegisterActiveRun(cmd.Execution, executionLease!.CancellationToken);
+        if (operationCts is null)
+        {
+            await context.AckAsync();
+            return;
+        }
 
         try
         {
@@ -710,6 +746,11 @@ public sealed class DownloadCommandsConsumerService(
         if (cmd.Execution is not null && executionLease is null)
             return;
         using var operationCts = RegisterActiveRun(cmd.Execution, executionLease!.CancellationToken);
+        if (operationCts is null)
+        {
+            await context.AckAsync();
+            return;
+        }
 
         try
         {
@@ -798,6 +839,11 @@ public sealed class DownloadCommandsConsumerService(
         if (cmd.Execution is not null && executionLease is null)
             return;
         using var operationCts = RegisterActiveRun(cmd.Execution, executionLease!.CancellationToken);
+        if (operationCts is null)
+        {
+            await context.AckAsync();
+            return;
+        }
 
         try
         {
@@ -1173,6 +1219,10 @@ public sealed class DownloadCommandsConsumerService(
         _ => null
     };
 
+    private sealed record ActiveExecution(
+        DownloadExecutionIdentity Execution,
+        CancellationTokenSource Cancellation);
+
     private sealed class WorkerExecutionLease(
         CancellationTokenSource? cancellation,
         Task? heartbeat) : IAsyncDisposable
@@ -1510,6 +1560,57 @@ public sealed class DownloadCommandsConsumerService(
     }
 
     private sealed record InfoJsonSidecar(string TempFileRef, string FileName, long SizeBytes, string ContentHash);
+
+    private static readonly System.Text.Json.JsonSerializerOptions CommentsSidecarJsonOptions =
+        JsonSerializerRegistry.CreateDefaultOptions();
+
+    /// <summary>
+    /// Parses the info.json sidecar into C# objects and serializes just the comment thread into a
+    /// <c>media.comments.json</c> sidecar of <see cref="CapturedCommentMetadata"/> rows. Comment
+    /// threads are unbounded, so they ride to storage as a sidecar instead of inside NATS
+    /// messages; DataBridge loads the uploaded sidecar back during the rich-metadata write.
+    /// Returns null when the info.json is absent or carries no comments.
+    /// </summary>
+    private async Task<SidecarFileRef?> ResolveCommentsSidecarAsync(string tempDirectory, Guid jobId)
+    {
+        var infoJsonPath = Path.Combine(tempDirectory, $"{MediaFileBase}.info.json");
+        if (!File.Exists(infoJsonPath))
+            return null;
+        try
+        {
+            VideoInfo? info;
+            await using (var stream = File.OpenRead(infoJsonPath))
+                info = await System.Text.Json.JsonSerializer.DeserializeAsync(
+                    stream, YtDlpJsonContext.Default.VideoInfo);
+            if (info?.Comments is not { Count: > 0 })
+                return null;
+
+            var provider = !string.IsNullOrWhiteSpace(info.Extractor) ? info.Extractor : info.ExtractorKey;
+            var comments = YtDlpMetadataMapper.Map(info, provider ?? "", clock).Comments;
+            if (comments.Count == 0)
+                return null;
+
+            var path = Path.Combine(tempDirectory, $"{MediaFileBase}.comments.json");
+            await using (var output = File.Create(path))
+                await System.Text.Json.JsonSerializer.SerializeAsync(output, comments, CommentsSidecarJsonOptions);
+
+            var file = new FileInfo(path);
+            return new SidecarFileRef
+            {
+                TempFileRef = file.FullName,
+                FileName = file.Name,
+                SizeBytes = file.Length,
+                ContentHashXxh128 = await ComputeXxHash128Async(file.FullName)
+            };
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "Could not extract the comments sidecar for JobId {JobId}; continuing without comments.",
+                jobId);
+            return null;
+        }
+    }
 
     /// <summary>
     /// Collects the per-media thumbnail and caption sidecars yt-dlp wrote next to the media file

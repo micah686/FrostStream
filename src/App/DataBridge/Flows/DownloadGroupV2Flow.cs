@@ -1,7 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
 using Cleipnir.Flows;
-using Cleipnir.ResilientFunctions.Domain.Exceptions;
 using Cleipnir.ResilientFunctions.Reactive.Extensions;
 using Conduit.NATS;
 using DataBridge.Data;
@@ -23,7 +22,6 @@ namespace DataBridge.Flows;
 public sealed class DownloadGroupV2Flow(
     IJetStreamPublisher publisher,
     IServiceScopeFactory scopeFactory,
-    DownloadJobV2Flows jobFlows,
     IClock clock,
     ILogger<DownloadGroupV2Flow> logger) : Flow<DownloadGroupRequested>
 {
@@ -111,19 +109,14 @@ public sealed class DownloadGroupV2Flow(
     {
         var child = request.DirectRequest
                     ?? throw new InvalidOperationException("A direct group requires DirectRequest.");
-        var run = await Capture(() => V2(r => r.CreateInitialRunAsync(child, autoStart: true)));
-        if (run is not null)
-        {
-            try
-            {
-                await jobFlows.Run(DownloadFlowInstance.Job(child.JobId, run.RunId), run);
-            }
-            catch (InvocationSuspendedException)
-            {
-                // The child is independently waiting for a Worker event.
-            }
-        }
-        await Capture(() => V2(r => r.RefreshGroupAggregateAsync(request.CorrelationId)));
+        // Start the child through the ordinary ingress consumer. Calling Run inline shares the
+        // group's effect scope, while Schedule implicitly attaches the child to this short-lived
+        // group flow. Publishing here makes the job flow an independent durable root, exactly as
+        // collection fan-out jobs are started below.
+        await Capture(() => publisher.PublishAsync(
+            DownloadSubjects.DownloadRequested,
+            child,
+            messageId: child.MessageId.ToString("N")));
     }
 
     private async Task RunCollectionAsync(DownloadGroupRequested group, PlaylistRequested collection)

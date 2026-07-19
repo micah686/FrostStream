@@ -282,8 +282,8 @@ public sealed class DownloadLeaseMonitorService(
             try
             {
                 using var scope = scopeFactory.CreateScope();
-                var expired = await scope.ServiceProvider.GetRequiredService<IDownloadFlowV2Repository>()
-                    .FailExpiredLeasesAsync(stoppingToken);
+                var repository = scope.ServiceProvider.GetRequiredService<IDownloadFlowV2Repository>();
+                var expired = await repository.FailExpiredLeasesAsync(stoppingToken);
                 foreach (var run in expired.DistinctBy(x => (x.JobId, x.RunId)))
                 {
                     var panel = await flows.ControlPanel(new FlowInstance(
@@ -295,6 +295,26 @@ public sealed class DownloadLeaseMonitorService(
                     logger.LogWarning(
                         "Failed {Count} Download V2 dispatches after worker lease expiry; their immutable flow instances were deleted.",
                         expired.Count);
+
+                // A terminal flow paired with an active database run leaves the job "running"
+                // forever while worker results pile up in a mailbox nobody reads. Convert the
+                // inconsistent run into a restartable failure. The one-minute grace keeps the
+                // sweep from racing runs whose flow is still being scheduled.
+                foreach (var active in await repository.ListActiveRunsAsync(Duration.FromMinutes(1), stoppingToken))
+                {
+                    var panel = await flows.ControlPanel(new FlowInstance(
+                        DownloadFlowInstance.Job(active.JobId, active.RunId)));
+                    if (panel is null || panel.Status is not (Status.Failed or Status.Succeeded))
+                        continue;
+                    var failed = await repository.FailRunAsync(
+                        active.JobId, active.RunId, FailureKind.Interrupted, "flow_failed",
+                        "The durable download flow terminated before the active run settled. Start the job to create a fresh run.",
+                        stoppingToken);
+                    await panel.Delete();
+                    logger.LogWarning(
+                        "Deleted terminal Download V2 flow instance with active run for JobId {JobId} RunId {RunId} FlowStatus {FlowStatus} (run marked failed: {Failed}).",
+                        active.JobId, active.RunId, panel.Status, failed);
+                }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

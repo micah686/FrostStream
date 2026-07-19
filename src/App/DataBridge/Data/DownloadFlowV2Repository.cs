@@ -969,6 +969,18 @@ public sealed class DownloadFlowV2Repository(
         return leases.Select(x => new ExpiredDownloadLease(x.JobId, x.RunId, x.DispatchId)).ToArray();
     }
 
+    public async Task<IReadOnlyList<ActiveDownloadRun>> ListActiveRunsAsync(Duration minAge, CancellationToken ct = default)
+    {
+        var cutoff = clock.GetCurrentInstant() - minAge;
+        return await db.DownloadJobs.AsNoTracking()
+            .Where(x => x.CurrentRunId != null
+                        && (x.Status == DownloadJobStatus.Running || x.Status == DownloadJobStatus.Stopping
+                            || x.Status == DownloadJobStatus.Compensating)
+                        && x.UpdatedAt <= cutoff)
+            .Select(x => new ActiveDownloadRun(x.JobId, x.CurrentRunId!.Value))
+            .ToListAsync(ct);
+    }
+
     public async Task<StartupReconciliationResult> ReconcileForStartupAsync(CancellationToken ct = default)
     {
         var now = clock.GetCurrentInstant();

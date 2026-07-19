@@ -454,6 +454,13 @@ public sealed record DownloadCompleted : IFlowMessage
     public IReadOnlyList<SidecarFileRef> Captions { get; init; } = [];
 
     /// <summary>
+    /// The Worker-generated <c>.comments.json</c> sidecar holding the comment thread parsed from
+    /// the info.json (<c>CapturedCommentMetadata</c> rows). Null when the info.json carried no
+    /// comments. Kept out of NATS payloads because comment threads are unbounded.
+    /// </summary>
+    public SidecarFileRef? Comments { get; init; }
+
+    /// <summary>
     /// Non-fatal problems observed while acquiring the media. The coordinator persists each one
     /// and allows the run to finish as <c>CompletedWithWarnings</c>.
     /// </summary>
@@ -507,7 +514,14 @@ public enum UploadArtifactKind
     /// <summary>The DataBridge-generated <c>.meta</c> sidecar containing title, hash, media GUID,
     /// and original URL — used to correlate storage objects back to their DB records after
     /// migrations or path changes.</summary>
-    Meta = 4
+    Meta = 4,
+    /// <summary>
+    /// The Worker-generated <c>.comments.json</c> sidecar: the comment thread parsed out of the
+    /// info.json and serialized as <c>CapturedCommentMetadata</c> rows. Comment threads are
+    /// unbounded, so they travel via storage instead of inline NATS payloads; DataBridge loads
+    /// this sidecar back during the rich-metadata write.
+    /// </summary>
+    Comments = 5
 }
 
 /// <summary>

@@ -194,6 +194,36 @@ public sealed class DownloadJobV2Flow(
                 DownloadStage.InfoJsonUpload, DownloadStageStatus.Skipped)));
         }
 
+        string? commentsStoragePath = null;
+        if (downloaded.Comments is { } commentsSidecar)
+        {
+            var comments = await RunUploadAsync(run, request, workerTag, DownloadStage.InfoJsonUpload, "comments",
+                UploadArtifactKind.Comments, required: false, commentsSidecar.TempFileRef, null, storageKey,
+                SidecarPath(primary.Upload!.StoragePath, commentsSidecar.FileName), commentsSidecar.ContentHashXxh128);
+            if (comments.Stopped || await Capture(() => V2(r => r.IsStopRequestedAsync(jobId, runId))))
+            {
+                await CompensateAsync(
+                    run, request, workerTag, downloaded, reservation, metadata,
+                    FailureKind.Stopped, "user_stopped", "User stopped the run.");
+                return;
+            }
+            if (comments.Fatal)
+            {
+                await CompensateAsync(
+                    run, request, workerTag, downloaded, reservation, metadata,
+                    comments.FailureKind ?? FailureKind.Interrupted,
+                    comments.FailureCode ?? "comments_upload_failed",
+                    comments.FailureMessage);
+                return;
+            }
+            if (comments.Succeeded)
+            {
+                commentsStoragePath = comments.Upload!.StoragePath;
+                await Capture(() => V2(r => r.UpsertArtifactAsync(ToArtifact(run, DownloadStage.InfoJsonUpload,
+                    "comments", UploadArtifactKind.Comments, required: false, comments.Upload!))));
+            }
+        }
+
         var metaBytes = BuildMetaBytes(request, reservation.MediaGuid, metadata.Title, downloaded.ContentHashXxh128);
         var metaHash = Convert.ToHexStringLower(XxHash128.Hash(metaBytes));
         var meta = await RunUploadAsync(run, request, workerTag, DownloadStage.MetaSidecarUpload, "meta",
@@ -292,7 +322,7 @@ public sealed class DownloadJobV2Flow(
                 Captions = captionRows
             };
         var richMetadata = await RunRichMetadataWriteAsync(
-            run, metadata with { RichMetadata = enrichedMetadata }, reservation, storageKey);
+            run, metadata with { RichMetadata = enrichedMetadata }, reservation, storageKey, commentsStoragePath);
         if (!richMetadata.Succeeded)
         {
             await CompensateAsync(
@@ -686,7 +716,8 @@ public sealed class DownloadJobV2Flow(
     }
 
     private async Task<RequiredStageOutcome> RunRichMetadataWriteAsync(
-        DownloadRunRequest run, MetadataFetched metadata, VersionReservation reservation, string storageKey)
+        DownloadRunRequest run, MetadataFetched metadata, VersionReservation reservation, string storageKey,
+        string? commentsStoragePath)
     {
         if (metadata.RichMetadata is null)
         {
@@ -710,7 +741,8 @@ public sealed class DownloadJobV2Flow(
                     FailureKind.Stopped, "run_not_current", "The run is no longer executable.");
             try
             {
-                await Capture(() => Metadata(r => r.WriteMetadataAsync(reservation.MediaGuid, metadata.RichMetadata, storageKey)));
+                await Capture(() => WriteRichMetadataAsync(
+                    reservation.MediaGuid, metadata.RichMetadata, storageKey, commentsStoragePath));
                 await Capture(() => PublishMetadataSync(reservation.MediaGuid));
                 await Capture(() => V2(r => r.CompleteStageAttemptAsync(execution)));
                 return RequiredStageOutcome.Success;
@@ -796,6 +828,7 @@ public sealed class DownloadJobV2Flow(
         var succeeded = true;
         var files = new List<(string Key, string Path)> { ("primary", downloaded.TempFileRef) };
         if (downloaded.InfoJsonTempFileRef is { } info) files.Add(("info-json", info));
+        if (downloaded.Comments is { } commentsFile) files.Add(("comments", commentsFile.TempFileRef));
         if (downloaded.Thumbnail is { } thumb) files.Add(("thumbnail", thumb.TempFileRef));
         files.AddRange(downloaded.Captions.Select((x, i) => ($"caption:{i}", x.TempFileRef)));
         foreach (var file in files.DistinctBy(x => x.Path, StringComparer.Ordinal))
@@ -1229,6 +1262,44 @@ public sealed class DownloadJobV2Flow(
             logger.LogError(ex, "Could not deserialize preset {PresetKey} for JobId {JobId}", request.PresetKey, request.JobId);
             return request;
         }
+    }
+
+    private static readonly JsonSerializerOptions CommentsSidecarJsonOptions =
+        JsonSerializerRegistry.CreateDefaultOptions();
+
+    /// <summary>
+    /// Commits rich metadata, first merging in the comment thread from the uploaded
+    /// <c>comments.json</c> sidecar (comment threads are unbounded, so they travel via storage
+    /// instead of NATS payloads). A missing or unreadable sidecar downgrades to a warning —
+    /// the archive still holds the full info.json.
+    /// </summary>
+    private async Task WriteRichMetadataAsync(
+        Guid mediaGuid, CapturedMediaMetadata metadata, string storageKey, string? commentsStoragePath)
+    {
+        if (commentsStoragePath is not null)
+        {
+            try
+            {
+                using var scope = scopeFactory.CreateScope();
+                var storage = await scope.ServiceProvider.GetRequiredService<Shared.Storage.IBlobStorageProvider>()
+                    .GetAsync(storageKey);
+                await using var stream = await storage.OpenReadAsync(commentsStoragePath);
+                if (stream is not null)
+                {
+                    var comments = await JsonSerializer.DeserializeAsync<IReadOnlyList<CapturedCommentMetadata>>(
+                        stream, CommentsSidecarJsonOptions);
+                    if (comments is { Count: > 0 })
+                        metadata = metadata with { Comments = comments };
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex,
+                    "Could not load the comments sidecar {StorageKey}:{StoragePath} for MediaGuid {MediaGuid}; committing metadata without comments.",
+                    storageKey, commentsStoragePath, mediaGuid);
+            }
+        }
+        await Metadata(r => r.WriteMetadataAsync(mediaGuid, metadata, storageKey));
     }
 
     private Task V2(Func<IDownloadFlowV2Repository, Task> action) => scopeFactory.WithScopedAsync(action);
