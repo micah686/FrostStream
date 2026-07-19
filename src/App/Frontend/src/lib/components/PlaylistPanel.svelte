@@ -111,13 +111,13 @@
       .map((item) => ({
         mediaGuid: item.mediaGuid,
         title: item.entryTitle || item.entryUrl,
-        subtitle: item.mediaGuid ? null : statusLabel(item.jobState),
+        subtitle: item.mediaGuid ? null : statusLabel(item.jobStatus),
         durationSeconds: null
       }));
   }
 
-  function statusLabel(jobState: string): string {
-    const normalized = jobState.replace(/_/g, ' ').toLowerCase();
+  function statusLabel(jobStatus: string): string {
+    const normalized = jobStatus.replace(/_/g, ' ').toLowerCase();
     return `Not available — ${normalized}`;
   }
 

@@ -96,21 +96,40 @@ export function createDownloadQueueStore(deps: DownloadQueueStoreDeps = defaultD
     if (event.event === 'progress') {
       const frame = JSON.parse(event.data) as ProgressFrame;
       const row = rows.get(frame.jobId);
-      if (row) {
+      if (row && (!frame.runId || frame.runId === row.job.runId)) {
         rows.set(frame.jobId, { ...row, progress: frame });
       }
     } else if (event.event === 'state') {
       const frame = JSON.parse(event.data) as StateFrame;
       const row = rows.get(frame.jobId);
       if (row) {
-        if (!stateMatchesFilter(frame.state, currentParams.state, currentParams.stateGroup)) {
+        if (!statusMatchesFilter(frame.status, currentParams.status, currentParams.stateGroup)) {
           void refresh();
           return;
         }
         rows.set(frame.jobId, {
           ...row,
-          job: { ...row.job, state: frame.state, updatedAt: frame.occurredAt }
+          job: {
+            ...row.job,
+            status: frame.status,
+            stage: frame.stage,
+            stageStatus: frame.stageStatus,
+            runId: frame.runId,
+            runNumber: frame.runNumber,
+            attempt: frame.attempt,
+            artifactKey: frame.artifactKey,
+            warningCount: frame.warningCount,
+            updatedAt: frame.occurredAt
+          }
         });
+        // The compact SSE frame intentionally omits failure text, completion timestamps, and
+        // storage fields. Refresh terminal transitions so the row immediately shows the complete
+        // authoritative result (including provider-circuit details and warnings).
+        if (['completed', 'completedwithwarnings', 'alreadydownloaded', 'ignored', 'failed', 'stopped'].includes(
+          normalizeStatus(frame.status)
+        )) {
+          void refresh();
+        }
       } else {
         if (!currentParams.cursor) {
           void refresh();
@@ -165,38 +184,30 @@ export function createDownloadQueueStore(deps: DownloadQueueStoreDeps = defaultD
   };
 }
 
-function stateMatchesFilter(state: string, exactState?: string, stateGroup?: string): boolean {
-  if (exactState) {
-    return normalizeState(state) === normalizeState(exactState);
+function statusMatchesFilter(status: string, exactStatus?: string, stateGroup?: string): boolean {
+  if (exactStatus) {
+    return normalizeStatus(status) === normalizeStatus(exactStatus);
   }
 
-  const normalized = normalizeState(state);
+  const normalized = normalizeStatus(status);
   switch (stateGroup) {
     case 'active':
-      return [
-        'metadatapending',
-        'metadataresolved',
-        'downloadpending',
-        'uploadpending',
-        'commitpending',
-        'compensating',
-        'cancelling'
-      ].includes(normalized);
+      return ['running', 'stopping', 'compensating'].includes(normalized);
     case 'queued':
-      return ['queued', 'downloadqueued'].includes(normalized);
+      return normalized === 'queued';
     case 'failed':
-      return ['failedtransient', 'failedpermanent', 'deadlettered', 'providerhalted'].includes(normalized);
+      return normalized === 'failed';
     case 'done':
-      return ['completed', 'alreadydownloaded'].includes(normalized);
-    case 'cancelled':
-      return ['cancelled', 'ignored'].includes(normalized);
+      return ['completed', 'completedwithwarnings', 'alreadydownloaded', 'ignored'].includes(normalized);
+    case 'stopped':
+      return normalized === 'stopped';
     default:
       return true;
   }
 }
 
-function normalizeState(state: string): string {
-  return state.toLowerCase();
+function normalizeStatus(status: string): string {
+  return status.toLowerCase();
 }
 
 function delay(ms: number, signal: AbortSignal): Promise<void> {

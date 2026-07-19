@@ -22,11 +22,11 @@ using YtDlpSharpLib.Options;
 namespace Worker.Services;
 
 /// <summary>
-/// Worker-side JetStream consumer for the download flow's commands. The worker no longer
-/// constructs storage paths or talks to DataBridge mid-stream — DataBridge does all routing
-/// and dedupe, and the worker just executes the IO it's told to.
+/// Worker-side JetStream consumer for Download Flow V2 commands. DataBridge constructs storage
+/// paths and owns deduplication; the Worker acquires and renews the exact durable dispatch lease,
+/// then executes only the provider, filesystem, or storage I/O it was assigned.
 ///
-/// Consumer durables and the FROSTSTREAM_DOWNLOAD stream are provisioned by
+/// Consumer durables and the FROSTSTREAM_DOWNLOAD_V2 stream are provisioned by
 /// <see cref="DownloadTopology"/>; both DataBridge and Worker register it, so whichever
 /// service starts first creates them.
 ///
@@ -45,32 +45,39 @@ public sealed class DownloadCommandsConsumerService(
     IClock clock,
     IOptions<WorkerOptions> workerOptions,
     PotOptionsApplier potOptionsApplier,
-    ProviderDownloadHaltRegistry providerHaltRegistry,
     IReturnYouTubeDislikeClient returnYouTubeDislikeClient,
     ILogger<DownloadCommandsConsumerService> logger) : BackgroundService
 {
     private const string MediaFileBase = "media";
     private static readonly StreamName Stream = StreamName.From(DownloadTopology.StreamNameValue);
+    private static readonly StreamName ArtifactStream = StreamName.From(ArtifactStorageTopology.StreamNameValue);
     private static readonly TimeSpan StorageProbeTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan PendingCancellationTtl = TimeSpan.FromMinutes(30);
 
     // yt-dlp downloads routinely run well past the JetStream AckWait for this consumer
     // (DownloadTopology: 2 minutes) — a slow sidecar fetch (e.g. subtitle rate-limiting) alone can
     // exceed it. Without renewing in-progress acks, JetStream redelivers the same command while the
-    // original invocation is still running, which collides with _activeDownloadCancellations below.
+    // original invocation is still running, which collides with the active-run cancellation gate below.
     private static readonly TimeSpan DownloadHeartbeatInterval = TimeSpan.FromSeconds(30);
-    private readonly ConcurrentDictionary<Guid, CancellationTokenSource> _activeDownloadCancellations = new();
-    private readonly ConcurrentDictionary<Guid, DateTimeOffset> _pendingDownloadCancellations = new();
+    private static readonly TimeSpan LeaseHeartbeatInterval = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan LeaseRequestTimeout = TimeSpan.FromSeconds(5);
+    private readonly string _workerInstanceId = $"{Environment.MachineName}-{Guid.NewGuid():N}";
+    private readonly ConcurrentDictionary<(Guid JobId, Guid RunId), CancellationTokenSource> _activeRunCancellations = new();
+    private readonly ConcurrentDictionary<(Guid JobId, Guid RunId), DownloadStage> _activeRunStages = new();
+    private readonly ConcurrentDictionary<(Guid JobId, Guid RunId), DateTimeOffset> _pendingRunCancellations = new();
+    private readonly ConcurrentDictionary<(Guid JobId, Guid RunId), DateTimeOffset> _userStopRequests = new();
     private ISubscription? _cancelSubscription;
+    private CancellationToken _serviceStoppingToken;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        _serviceStoppingToken = stoppingToken;
         // Remove any cookie scratch dirs left behind by a previous crash before serving traffic.
         SweepCookieScratchRoot();
 
-        _cancelSubscription = await messageBus.SubscribeAsync<CancelActiveDownloadCommand>(
-            DownloadSubjects.CancelActiveDownloadCommand,
-            HandleCancelActiveDownloadAsync,
+        _cancelSubscription = await messageBus.SubscribeAsync<StopActiveDownloadRun>(
+            DownloadSubjects.StopActiveRun,
+            HandleStopActiveRunAsync,
             queueGroup: null,
             cancellationToken: stoppingToken);
 
@@ -84,9 +91,9 @@ public sealed class DownloadCommandsConsumerService(
         {
             await topologyManager.EnsureConsumerAsync(DownloadTopology.TaggedWorkerConsumerSpec(DownloadTopology.WorkerFetchMetadataConsumer,        DownloadSubjects.FetchMetadataCommand,        tag), stoppingToken);
             await topologyManager.EnsureConsumerAsync(DownloadTopology.TaggedWorkerConsumerSpec(DownloadTopology.WorkerDownloadVideoConsumer,        DownloadSubjects.DownloadVideoCommand,        tag), stoppingToken);
-            await topologyManager.EnsureConsumerAsync(DownloadTopology.TaggedWorkerConsumerSpec(DownloadTopology.WorkerUploadObjectConsumer,         DownloadSubjects.UploadObjectCommand,         tag), stoppingToken);
-            await topologyManager.EnsureConsumerAsync(DownloadTopology.TaggedWorkerConsumerSpec(DownloadTopology.WorkerDeleteTempFileConsumer,       DownloadSubjects.DeleteTempFileCommand,       tag), stoppingToken);
-            await topologyManager.EnsureConsumerAsync(DownloadTopology.TaggedWorkerConsumerSpec(DownloadTopology.WorkerDeleteUploadedObjectConsumer, DownloadSubjects.DeleteUploadedObjectCommand, tag), stoppingToken);
+            await topologyManager.EnsureConsumerAsync(ArtifactStorageTopology.TaggedWorkerConsumerSpec(ArtifactStorageTopology.WorkerUploadConsumer, ArtifactStorageSubjects.UploadObjectCommand, tag), stoppingToken);
+            await topologyManager.EnsureConsumerAsync(ArtifactStorageTopology.TaggedWorkerConsumerSpec(ArtifactStorageTopology.WorkerDeleteTempConsumer, ArtifactStorageSubjects.DeleteTempFileCommand, tag), stoppingToken);
+            await topologyManager.EnsureConsumerAsync(ArtifactStorageTopology.TaggedWorkerConsumerSpec(ArtifactStorageTopology.WorkerDeleteObjectConsumer, ArtifactStorageSubjects.DeleteUploadedObjectCommand, tag), stoppingToken);
             logger.LogInformation("Ensured tagged download consumers for tag '{Tag}'.", tag);
         }
 
@@ -97,9 +104,9 @@ public sealed class DownloadCommandsConsumerService(
         {
             consumerTasks.Add(Consume<FetchMetadataCommand>(DownloadTopology.WorkerFetchMetadataConsumer,        HandleFetchMetadataAsync,        stoppingToken));
             consumerTasks.Add(Consume<DownloadVideoCommand>(DownloadTopology.WorkerDownloadVideoConsumer,        HandleDownloadVideoAsync,        stoppingToken));
-            consumerTasks.Add(Consume<UploadObjectCommand>(DownloadTopology.WorkerUploadObjectConsumer,          HandleUploadObjectAsync,         stoppingToken));
-            consumerTasks.Add(Consume<DeleteTempFileCommand>(DownloadTopology.WorkerDeleteTempFileConsumer,      HandleDeleteTempFileAsync,       stoppingToken));
-            consumerTasks.Add(Consume<DeleteUploadedObjectCommand>(DownloadTopology.WorkerDeleteUploadedObjectConsumer, HandleDeleteUploadedObjectAsync, stoppingToken));
+            consumerTasks.Add(ConsumeArtifact<UploadObjectCommand>(ArtifactStorageTopology.WorkerUploadConsumer, HandleUploadObjectAsync, stoppingToken));
+            consumerTasks.Add(ConsumeArtifact<DeleteTempFileCommand>(ArtifactStorageTopology.WorkerDeleteTempConsumer, HandleDeleteTempFileAsync, stoppingToken));
+            consumerTasks.Add(ConsumeArtifact<DeleteUploadedObjectCommand>(ArtifactStorageTopology.WorkerDeleteObjectConsumer, HandleDeleteUploadedObjectAsync, stoppingToken));
         }
 
         // Subscribe to per-tag consumers.
@@ -107,9 +114,9 @@ public sealed class DownloadCommandsConsumerService(
         {
             consumerTasks.Add(Consume<FetchMetadataCommand>($"{DownloadTopology.WorkerFetchMetadataConsumer}-{tag}",        HandleFetchMetadataAsync,        stoppingToken));
             consumerTasks.Add(Consume<DownloadVideoCommand>($"{DownloadTopology.WorkerDownloadVideoConsumer}-{tag}",        HandleDownloadVideoAsync,        stoppingToken));
-            consumerTasks.Add(Consume<UploadObjectCommand>($"{DownloadTopology.WorkerUploadObjectConsumer}-{tag}",          HandleUploadObjectAsync,         stoppingToken));
-            consumerTasks.Add(Consume<DeleteTempFileCommand>($"{DownloadTopology.WorkerDeleteTempFileConsumer}-{tag}",      HandleDeleteTempFileAsync,       stoppingToken));
-            consumerTasks.Add(Consume<DeleteUploadedObjectCommand>($"{DownloadTopology.WorkerDeleteUploadedObjectConsumer}-{tag}", HandleDeleteUploadedObjectAsync, stoppingToken));
+            consumerTasks.Add(ConsumeArtifact<UploadObjectCommand>($"{ArtifactStorageTopology.WorkerUploadConsumer}-{tag}", HandleUploadObjectAsync, stoppingToken));
+            consumerTasks.Add(ConsumeArtifact<DeleteTempFileCommand>($"{ArtifactStorageTopology.WorkerDeleteTempConsumer}-{tag}", HandleDeleteTempFileAsync, stoppingToken));
+            consumerTasks.Add(ConsumeArtifact<DeleteUploadedObjectCommand>($"{ArtifactStorageTopology.WorkerDeleteObjectConsumer}-{tag}", HandleDeleteUploadedObjectAsync, stoppingToken));
         }
 
         logger.LogInformation(
@@ -131,7 +138,7 @@ public sealed class DownloadCommandsConsumerService(
             _cancelSubscription = null;
         }
 
-        foreach (var cancellation in _activeDownloadCancellations.Values)
+        foreach (var cancellation in _activeRunCancellations.Values)
             await cancellation.CancelAsync();
 
         await base.StopAsync(cancellationToken);
@@ -149,10 +156,26 @@ public sealed class DownloadCommandsConsumerService(
             options: null,
             cancellationToken: stoppingToken);
 
+    private Task ConsumeArtifact<TCommand>(
+        string consumerName,
+        Func<IJsMessageContext<TCommand>, Task> handler,
+        CancellationToken stoppingToken)
+        where TCommand : class, IFlowMessage
+        => consumer.ConsumePullAsync<TCommand>(
+            stream: ArtifactStream,
+            consumer: ConsumerName.From(consumerName),
+            handler: handler,
+            options: null,
+            cancellationToken: stoppingToken);
+
     private async Task HandleFetchMetadataAsync(IJsMessageContext<FetchMetadataCommand> context)
     {
         var cmd = context.Message;
         var cookieScratch = GetCookieScratchDirectory(cmd.JobId);
+        await using var executionLease = await TryAcquireExecutionLeaseAsync(context, cmd.Execution);
+        if (cmd.Execution is not null && executionLease is null)
+            return;
+        using var operationCts = RegisterActiveRun(cmd.Execution, executionLease!.CancellationToken);
 
         try
         {
@@ -165,16 +188,10 @@ public sealed class DownloadCommandsConsumerService(
                 cmd.RequiredWorkerTag,
                 !string.IsNullOrWhiteSpace(cmd.CookieSecretPath));
 
-            if (await TryPublishHaltedMetadataAsync(cmd))
-            {
-                await context.AckAsync();
-                return;
-            }
-
             // Probe storage connectivity before invoking yt-dlp. A failed probe fails the job
             // immediately with a permanent failure so the saga doesn't waste time downloading
             // bytes that can never be uploaded.
-            if (!await ProbeStorageAsync(cmd))
+            if (!await ProbeStorageAsync(cmd, operationCts.Token))
             {
                 await context.AckAsync();
                 return;
@@ -193,6 +210,7 @@ public sealed class DownloadCommandsConsumerService(
 
             var metadataResult = await ytDlp.TryGetVideoInfoAsync(
                 cmd.SourceUrl,
+                ct: operationCts.Token,
                 overrideOptions: potOptionsApplier.Apply(metadataOptions),
                 fetchComments: cmd.FetchComments);
             if (!metadataResult.Success || metadataResult.Data is not { } info)
@@ -214,7 +232,7 @@ public sealed class DownloadCommandsConsumerService(
             info = await ReturnYouTubeDislikeMetadataEnricher.EnrichAsync(
                 info,
                 returnYouTubeDislikeClient,
-                CancellationToken.None);
+                operationCts.Token);
 
             CapturedMediaMetadata? richMetadata;
             try
@@ -249,6 +267,7 @@ public sealed class DownloadCommandsConsumerService(
                 OperationKey = $"{cmd.OperationKey}/result",
                 OccurredAt = clock.GetCurrentInstant(),
                 Attempt = cmd.Attempt,
+                Execution = cmd.Execution,
                 Provider = provider,
                 SourceMediaId = sourceMediaId,
                 SourceLastModified = sourceLastModified,
@@ -263,8 +282,16 @@ public sealed class DownloadCommandsConsumerService(
             logger.LogWarning(ex,
                 "FetchMetadata: source unavailable for JobId {JobId} URL {SourceUrl}",
                 cmd.JobId, cmd.SourceUrl);
-            RecordProviderHaltIfNeeded(ex, sourceUrl: cmd.SourceUrl);
             await PublishMetadataFailedAsync(cmd, ex, YtDlpFailureDetails.ClassifyYtDlpFailure(ex));
+            await context.AckAsync();
+        }
+        catch (OperationCanceledException ex) when (operationCts.IsCancellationRequested)
+        {
+            var failureKind = CancellationFailureKind(cmd.Execution);
+            var message = failureKind == FailureKind.Stopped
+                ? "Metadata fetch stopped by request."
+                : "Metadata fetch interrupted because the Worker stopped or lost its lease.";
+            await PublishMetadataFailedAsync(cmd, new OperationCanceledException(message, ex, operationCts.Token), failureKind);
             await context.AckAsync();
         }
         catch (Exception ex)
@@ -272,12 +299,12 @@ public sealed class DownloadCommandsConsumerService(
             logger.LogError(ex,
                 "FetchMetadata failed for JobId {JobId} URL {SourceUrl}",
                 cmd.JobId, cmd.SourceUrl);
-            RecordProviderHaltIfNeeded(ex, sourceUrl: cmd.SourceUrl);
             await PublishMetadataFailedAsync(cmd, ex, YtDlpFailureDetails.ClassifyFailure(ex));
             await context.AckAsync();
         }
         finally
         {
+            UnregisterActiveRun(cmd.Execution, operationCts);
             DeleteCookieScratch(cookieScratch);
         }
     }
@@ -285,30 +312,20 @@ public sealed class DownloadCommandsConsumerService(
     private async Task HandleDownloadVideoAsync(IJsMessageContext<DownloadVideoCommand> context)
     {
         var cmd = context.Message;
+        await using var executionLease = await TryAcquireExecutionLeaseAsync(context, cmd.Execution);
+        if (cmd.Execution is not null && executionLease is null)
+            return;
         var tempDirectory = GetDownloadTempDirectory(cmd);
         var cookieScratch = GetCookieScratchDirectory(cmd.JobId);
         string? tempFileRef = null;
         DownloadProgressReporter? progress = null;
-        using var downloadCts = new CancellationTokenSource();
+        var acquisitionWarnings = new List<DownloadStageWarning>();
+        using var operationCts = RegisterActiveRun(cmd.Execution, executionLease!.CancellationToken);
         using var heartbeatCts = CancellationTokenSource.CreateLinkedTokenSource(CancellationToken.None);
         var heartbeatTask = JetStreamHeartbeat.RunAsync(context, DownloadHeartbeatInterval, logger, "DownloadVideo", heartbeatCts.Token);
 
         try
         {
-            if (await TryPublishHaltedDownloadAsync(cmd))
-            {
-                await context.AckAsync();
-                return;
-            }
-
-            if (!_activeDownloadCancellations.TryAdd(cmd.JobId, downloadCts))
-                throw new InvalidOperationException($"Download job {cmd.JobId} is already active on this worker.");
-            if (_pendingDownloadCancellations.TryRemove(cmd.JobId, out _))
-            {
-                logger.LogInformation("Applying pending cancellation to active download for JobId {JobId}.", cmd.JobId);
-                downloadCts.Cancel();
-            }
-
             Directory.CreateDirectory(tempDirectory);
 
             logger.LogInformation(
@@ -329,20 +346,27 @@ public sealed class DownloadCommandsConsumerService(
             progress = new DownloadProgressReporter(cmd, publisher, clock, logger);
             try
             {
-                await DispatchYtDlpAsync(cmd, tempDirectory, cookies.FilePath, progress, downloadCts.Token);
+                await DispatchYtDlpAsync(cmd, tempDirectory, cookies.FilePath, progress, operationCts.Token);
             }
             catch (YtDlpException ex) when (YtDlpFailureDetails.IsSidecarOnlyFailure(ex))
             {
-                // A subtitle/thumbnail fetch failing (e.g. rate-limited) shouldn't cost the user
-                // their video — retry once with those optional sidecars disabled rather than failing
-                // the whole job.
+                // yt-dlp can exit non-zero after the primary media is complete because an optional
+                // subtitle or thumbnail failed. Accept the existing media and report a warning;
+                // do not hide a second yt-dlp invocation inside this application attempt.
+                tempFileRef = FindDownloadedMediaFile(tempDirectory);
+                if (tempFileRef is null)
+                    throw;
                 logger.LogWarning(ex,
-                    "Sidecar-only failure for JobId {JobId}; retrying without subtitles/thumbnail.",
+                    "Sidecar-only failure for JobId {JobId}; accepting primary media with a warning.",
                     cmd.JobId);
                 await progress.ReportPhaseAsync(
-                    "Retrying without sidecars",
-                    "Subtitle/thumbnail download failed; retrying without optional sidecar content.");
-                await DispatchYtDlpAsync(cmd, tempDirectory, cookies.FilePath, progress, downloadCts.Token, disableSidecars: true);
+                    "Optional sidecar warning",
+                    "Primary media completed, but an optional subtitle or thumbnail failed.");
+                acquisitionWarnings.Add(new DownloadStageWarning
+                {
+                    Code = "optional_sidecar_acquire_failed",
+                    Message = YtDlpFailureDetails.DescribeException(ex, sourceUrl: cmd.SourceUrl)
+                });
             }
             await progress.FlushAsync();
 
@@ -379,6 +403,7 @@ public sealed class DownloadCommandsConsumerService(
                 OperationKey = $"{cmd.OperationKey}/result",
                 OccurredAt = clock.GetCurrentInstant(),
                 Attempt = cmd.Attempt,
+                Execution = cmd.Execution,
                 TempFileRef = tempFileRef,
                 FileName = fileInfo.Name,
                 FileSizeBytes = fileInfo.Length,
@@ -388,7 +413,8 @@ public sealed class DownloadCommandsConsumerService(
                 InfoJsonSizeBytes = infoJson?.SizeBytes,
                 InfoJsonContentHashXxh128 = infoJson?.ContentHash,
                 Thumbnail = thumbnail,
-                Captions = captions
+                Captions = captions,
+                Warnings = acquisitionWarnings
             });
             await context.AckAsync();
         }
@@ -400,22 +426,27 @@ public sealed class DownloadCommandsConsumerService(
             logger.LogWarning(ex,
                 "DownloadVideo: source unavailable for JobId {JobId} URL {SourceUrl}",
                 cmd.JobId, cmd.SourceUrl);
-            RecordProviderHaltIfNeeded(ex, sourceUrl: cmd.SourceUrl);
             await PublishDownloadFailedAsync(cmd, ex, YtDlpFailureDetails.ClassifyYtDlpFailure(ex), tempFileRef ?? FindDownloadedMediaFile(tempDirectory));
             await context.AckAsync();
         }
-        catch (OperationCanceledException ex) when (downloadCts.IsCancellationRequested)
+        catch (OperationCanceledException ex) when (operationCts.IsCancellationRequested)
         {
             if (progress is not null)
                 await progress.FlushAsync();
 
+            var failureKind = CancellationFailureKind(cmd.Execution);
             logger.LogInformation(ex,
-                "DownloadVideo cancelled for JobId {JobId} URL {SourceUrl}",
-                cmd.JobId, cmd.SourceUrl);
+                "DownloadVideo {Outcome} for JobId {JobId} URL {SourceUrl}",
+                failureKind == FailureKind.Stopped ? "stopped" : "interrupted", cmd.JobId, cmd.SourceUrl);
             await PublishDownloadFailedAsync(
                 cmd,
-                new OperationCanceledException("Download cancelled by request.", ex, downloadCts.Token),
-                FailureKind.Cancelled,
+                new OperationCanceledException(
+                    failureKind == FailureKind.Stopped
+                        ? "Download stopped by request."
+                        : "Download interrupted because the Worker stopped or lost its lease.",
+                    ex,
+                    operationCts.Token),
+                failureKind,
                 tempFileRef ?? FindDownloadedMediaFile(tempDirectory) ?? tempDirectory);
             await context.AckAsync();
         }
@@ -425,19 +456,12 @@ public sealed class DownloadCommandsConsumerService(
                 await progress.FlushAsync();
 
             logger.LogError(ex, "DownloadVideo failed for JobId {JobId} URL {SourceUrl}", cmd.JobId, cmd.SourceUrl);
-            RecordProviderHaltIfNeeded(ex, sourceUrl: cmd.SourceUrl);
             await PublishDownloadFailedAsync(cmd, ex, YtDlpFailureDetails.ClassifyFailure(ex), tempFileRef ?? FindDownloadedMediaFile(tempDirectory));
             await context.AckAsync();
         }
         finally
         {
-            // Compare-and-remove: only clear the dictionary entry if it's still *this* invocation's
-            // token source. A redelivered/duplicate invocation for the same JobId (see the heartbeat
-            // above for why that should no longer happen, but defense in depth) must not be able to
-            // rip out the real in-flight download's cancellation handle out from under it.
-            ((ICollection<KeyValuePair<Guid, CancellationTokenSource>>)_activeDownloadCancellations)
-                .Remove(new KeyValuePair<Guid, CancellationTokenSource>(cmd.JobId, downloadCts));
-            _pendingDownloadCancellations.TryRemove(cmd.JobId, out _);
+            UnregisterActiveRun(cmd.Execution, operationCts);
             DeleteCookieScratch(cookieScratch);
 
             await heartbeatCts.CancelAsync();
@@ -445,45 +469,122 @@ public sealed class DownloadCommandsConsumerService(
         }
     }
 
-    private Task HandleCancelActiveDownloadAsync(IMessageContext<CancelActiveDownloadCommand> context)
+    private Task HandleStopActiveRunAsync(IMessageContext<StopActiveDownloadRun> context)
     {
         var cmd = context.Message;
-        if (_activeDownloadCancellations.TryGetValue(cmd.JobId, out var cancellation))
+        var runKey = (cmd.JobId, cmd.RunId);
+        _userStopRequests[runKey] = DateTimeOffset.UtcNow;
+        if (_activeRunCancellations.TryGetValue(runKey, out var cancellation)
+            && (!_activeRunStages.TryGetValue(runKey, out var stage)
+                || stage is not (DownloadStage.Cleanup or DownloadStage.Compensation)))
         {
             logger.LogInformation(
-                "Cancelling active download for JobId {JobId}. RequestedBy {RequestedBy} Reason {Reason}",
+                "Stopping active download for JobId {JobId}. RequestedBy {RequestedBy} Reason {Reason}",
                 cmd.JobId,
-                cmd.RequestedBy,
+                "v2-control",
                 cmd.Reason);
             cancellation.Cancel();
         }
+        else if (_activeRunStages.TryGetValue(runKey, out var settlingStage)
+                 && settlingStage is DownloadStage.Cleanup or DownloadStage.Compensation)
+        {
+            logger.LogInformation(
+                "Stop recorded for JobId {JobId}, but active {Stage} is allowed to settle.",
+                cmd.JobId, settlingStage);
+        }
         else
         {
-            CleanupPendingDownloadCancellations();
-            _pendingDownloadCancellations[cmd.JobId] = DateTimeOffset.UtcNow;
+            CleanupPendingRunCancellations();
+            _pendingRunCancellations[runKey] = DateTimeOffset.UtcNow;
             logger.LogDebug("Recorded pending cancel request for JobId {JobId}; no active download on this worker.", cmd.JobId);
         }
 
         return Task.CompletedTask;
     }
 
-    private void CleanupPendingDownloadCancellations()
+    private void CleanupPendingRunCancellations()
     {
         var cutoff = DateTimeOffset.UtcNow.Subtract(PendingCancellationTtl);
-        foreach (var (jobId, recordedAt) in _pendingDownloadCancellations)
+        foreach (var (runKey, recordedAt) in _pendingRunCancellations)
         {
             if (recordedAt < cutoff)
-                _pendingDownloadCancellations.TryRemove(jobId, out _);
+            {
+                _pendingRunCancellations.TryRemove(runKey, out _);
+                _userStopRequests.TryRemove(runKey, out _);
+            }
         }
+    }
+
+    private CancellationTokenSource RegisterActiveRun(
+        DownloadExecutionIdentity? execution,
+        CancellationToken leaseToken)
+    {
+        var cancellation = CancellationTokenSource.CreateLinkedTokenSource(_serviceStoppingToken, leaseToken);
+        if (execution is null)
+            return cancellation;
+
+        var runKey = (execution.JobId, execution.RunId);
+        _activeRunStages[runKey] = execution.Stage;
+        if (!_activeRunCancellations.TryAdd(runKey, cancellation))
+        {
+            _activeRunStages.TryRemove(runKey, out _);
+            cancellation.Dispose();
+            throw new InvalidOperationException(
+                $"Download job {execution.JobId} run {execution.RunId} already has an active stage on this worker.");
+        }
+
+        // Cleanup and compensation must settle even after the user has asked to stop. Cancelling
+        // those operations would turn an otherwise clean stop into a residual-object failure.
+        if (execution.Stage is DownloadStage.Cleanup or DownloadStage.Compensation)
+        {
+            _pendingRunCancellations.TryRemove(runKey, out _);
+            _userStopRequests.TryRemove(runKey, out _);
+        }
+        else if (_pendingRunCancellations.TryRemove(runKey, out _))
+        {
+            logger.LogInformation(
+                "Applying pending stop to active {Stage} stage for JobId {JobId} RunId {RunId}.",
+                execution.Stage, execution.JobId, execution.RunId);
+            cancellation.Cancel();
+        }
+
+        return cancellation;
+    }
+
+    private void UnregisterActiveRun(
+        DownloadExecutionIdentity? execution,
+        CancellationTokenSource cancellation)
+    {
+        if (execution is null)
+            return;
+        var runKey = (execution.JobId, execution.RunId);
+        ((ICollection<KeyValuePair<(Guid JobId, Guid RunId), CancellationTokenSource>>)_activeRunCancellations)
+            .Remove(new KeyValuePair<(Guid JobId, Guid RunId), CancellationTokenSource>(runKey, cancellation));
+        _activeRunStages.TryRemove(runKey, out _);
+        _pendingRunCancellations.TryRemove(runKey, out _);
+        _userStopRequests.TryRemove(runKey, out _);
+    }
+
+    private FailureKind CancellationFailureKind(DownloadExecutionIdentity? execution)
+    {
+        if (execution is null)
+            return FailureKind.Cancelled;
+        return _userStopRequests.ContainsKey((execution.JobId, execution.RunId))
+            ? FailureKind.Stopped
+            : FailureKind.Interrupted;
     }
 
     private async Task HandleUploadObjectAsync(IJsMessageContext<UploadObjectCommand> context)
     {
         var cmd = context.Message;
+        await using var executionLease = await TryAcquireExecutionLeaseAsync(context, cmd.Execution);
+        if (cmd.Execution is not null && executionLease is null)
+            return;
+        using var operationCts = RegisterActiveRun(cmd.Execution, executionLease!.CancellationToken);
 
         try
         {
-            var storage = await blobStorageProvider.GetAsync(cmd.StorageKey);
+            var storage = await blobStorageProvider.GetAsync(cmd.StorageKey, operationCts.Token);
             long contentLength;
 
             if (cmd.InlineContent is { } inlineBytes)
@@ -497,7 +598,7 @@ public sealed class DownloadCommandsConsumerService(
                     cmd.StoragePath);
 
                 await using var memStream = new MemoryStream(inlineBytes, writable: false);
-                await storage.WriteAsync(cmd.StoragePath, memStream, append: false);
+                await storage.WriteAsync(cmd.StoragePath, memStream, append: false, operationCts.Token);
                 contentLength = inlineBytes.Length;
 
                 logger.LogInformation(
@@ -528,7 +629,7 @@ public sealed class DownloadCommandsConsumerService(
                     if (cmd.VerifyHashWhileStreaming)
                     {
                         await using var hashingStream = new XxHash128ReadStream(stream);
-                        await storage.WriteAsync(cmd.StoragePath, hashingStream, append: false);
+                        await storage.WriteAsync(cmd.StoragePath, hashingStream, append: false, operationCts.Token);
                         var observedHash = hashingStream.GetHash();
                         if (!string.Equals(observedHash, cmd.ContentHashXxh128, StringComparison.OrdinalIgnoreCase))
                         {
@@ -538,7 +639,7 @@ public sealed class DownloadCommandsConsumerService(
                     }
                     else
                     {
-                        await storage.WriteAsync(cmd.StoragePath, stream, append: false);
+                        await storage.WriteAsync(cmd.StoragePath, stream, append: false, operationCts.Token);
                     }
                 }
                 contentLength = fileInfo.Length;
@@ -557,7 +658,7 @@ public sealed class DownloadCommandsConsumerService(
                 throw new InvalidOperationException("UploadObjectCommand has neither TempFileRef nor InlineContent.");
             }
 
-            await Publish(DownloadSubjects.UploadCompleted, new UploadCompleted
+            await Publish(ArtifactStorageSubjects.UploadCompleted, new UploadCompleted
             {
                 JobId = cmd.JobId,
                 CorrelationId = cmd.CorrelationId,
@@ -566,6 +667,7 @@ public sealed class DownloadCommandsConsumerService(
                 OperationKey = $"{cmd.OperationKey}/result",
                 OccurredAt = clock.GetCurrentInstant(),
                 Attempt = cmd.Attempt,
+                Execution = cmd.Execution,
                 TempFileRef = cmd.TempFileRef,
                 StorageKey = cmd.StorageKey,
                 StoragePath = cmd.StoragePath,
@@ -576,6 +678,17 @@ public sealed class DownloadCommandsConsumerService(
             });
             await context.AckAsync();
         }
+        catch (OperationCanceledException ex) when (operationCts.IsCancellationRequested)
+        {
+            var failureKind = CancellationFailureKind(cmd.Execution);
+            await PublishUploadFailedAsync(cmd, new OperationCanceledException(
+                failureKind == FailureKind.Stopped
+                    ? "Upload stopped by request."
+                    : "Upload interrupted because the Worker stopped or lost its lease.",
+                ex,
+                operationCts.Token), failureKind);
+            await context.AckAsync();
+        }
         catch (Exception ex)
         {
             logger.LogError(ex,
@@ -584,14 +697,23 @@ public sealed class DownloadCommandsConsumerService(
             await PublishUploadFailedAsync(cmd, ex, UploadFailureKind(ex));
             await context.AckAsync();
         }
+        finally
+        {
+            UnregisterActiveRun(cmd.Execution, operationCts);
+        }
     }
 
     private async Task HandleDeleteTempFileAsync(IJsMessageContext<DeleteTempFileCommand> context)
     {
         var cmd = context.Message;
+        await using var executionLease = await TryAcquireExecutionLeaseAsync(context, cmd.Execution);
+        if (cmd.Execution is not null && executionLease is null)
+            return;
+        using var operationCts = RegisterActiveRun(cmd.Execution, executionLease!.CancellationToken);
 
         try
         {
+            operationCts.Token.ThrowIfCancellationRequested();
             logger.LogInformation(
                 "Temp file cleanup started for JobId {JobId} Attempt {Attempt} TempFileRef {TempFileRef}",
                 cmd.JobId,
@@ -599,6 +721,7 @@ public sealed class DownloadCommandsConsumerService(
                 cmd.TempFileRef);
 
             DeleteTempFileRef(cmd.TempFileRef);
+            operationCts.Token.ThrowIfCancellationRequested();
 
             logger.LogInformation(
                 "Temp file cleanup completed for JobId {JobId} Attempt {Attempt} TempFileRef {TempFileRef}",
@@ -606,7 +729,7 @@ public sealed class DownloadCommandsConsumerService(
                 cmd.Attempt,
                 cmd.TempFileRef);
 
-            await Publish(DownloadSubjects.TempFileDeleted, new TempFileDeleted
+            await Publish(ArtifactStorageSubjects.TempFileDeleted, new TempFileDeleted
             {
                 JobId = cmd.JobId,
                 CorrelationId = cmd.CorrelationId,
@@ -615,16 +738,15 @@ public sealed class DownloadCommandsConsumerService(
                 OperationKey = $"{cmd.OperationKey}/result",
                 OccurredAt = clock.GetCurrentInstant(),
                 Attempt = cmd.Attempt,
+                Execution = cmd.Execution,
                 TempFileRef = cmd.TempFileRef
             });
             await context.AckAsync();
         }
-        catch (Exception ex)
+        catch (OperationCanceledException ex) when (operationCts.IsCancellationRequested)
         {
-            logger.LogError(ex,
-                "DeleteTempFile failed for JobId {JobId} TempFileRef {TempFileRef}",
-                cmd.JobId, cmd.TempFileRef);
-            await Publish(DownloadSubjects.TempFileDeleteFailed, new TempFileDeleteFailed
+            var failureKind = CancellationFailureKind(cmd.Execution);
+            await Publish(ArtifactStorageSubjects.TempFileDeleteFailed, new TempFileDeleteFailed
             {
                 JobId = cmd.JobId,
                 CorrelationId = cmd.CorrelationId,
@@ -633,17 +755,49 @@ public sealed class DownloadCommandsConsumerService(
                 OperationKey = $"{cmd.OperationKey}/failed",
                 OccurredAt = clock.GetCurrentInstant(),
                 Attempt = cmd.Attempt,
+                Execution = cmd.Execution,
+                TempFileRef = cmd.TempFileRef,
+                FailureKind = failureKind,
+                ErrorMessage = failureKind == FailureKind.Stopped
+                    ? "Temp cleanup stopped by request."
+                    : $"Temp cleanup interrupted because the Worker stopped or lost its lease: {ex.Message}"
+            });
+            await context.AckAsync();
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "DeleteTempFile failed for JobId {JobId} TempFileRef {TempFileRef}",
+                cmd.JobId, cmd.TempFileRef);
+            await Publish(ArtifactStorageSubjects.TempFileDeleteFailed, new TempFileDeleteFailed
+            {
+                JobId = cmd.JobId,
+                CorrelationId = cmd.CorrelationId,
+                CausationId = cmd.MessageId,
+                MessageId = DeterministicGuid.Create(cmd.MessageId, "/failed"),
+                OperationKey = $"{cmd.OperationKey}/failed",
+                OccurredAt = clock.GetCurrentInstant(),
+                Attempt = cmd.Attempt,
+                Execution = cmd.Execution,
                 TempFileRef = cmd.TempFileRef,
                 FailureKind = DeleteFailureKind(ex),
                 ErrorMessage = ex.Message
             });
             await context.AckAsync();
         }
+        finally
+        {
+            UnregisterActiveRun(cmd.Execution, operationCts);
+        }
     }
 
     private async Task HandleDeleteUploadedObjectAsync(IJsMessageContext<DeleteUploadedObjectCommand> context)
     {
         var cmd = context.Message;
+        await using var executionLease = await TryAcquireExecutionLeaseAsync(context, cmd.Execution);
+        if (cmd.Execution is not null && executionLease is null)
+            return;
+        using var operationCts = RegisterActiveRun(cmd.Execution, executionLease!.CancellationToken);
 
         try
         {
@@ -657,8 +811,8 @@ public sealed class DownloadCommandsConsumerService(
                 cmd.StorageKey,
                 cmd.StoragePath);
 
-            var storage = await blobStorageProvider.GetAsync(cmd.StorageKey);
-            await storage.DeleteAsync([cmd.StoragePath]);
+            var storage = await blobStorageProvider.GetAsync(cmd.StorageKey, operationCts.Token);
+            await storage.DeleteAsync([cmd.StoragePath], operationCts.Token);
 
             logger.LogInformation(
                 "Uploaded object cleanup completed for JobId {JobId} Attempt {Attempt} StorageKey {StorageKey} StoragePath {StoragePath}",
@@ -667,7 +821,7 @@ public sealed class DownloadCommandsConsumerService(
                 cmd.StorageKey,
                 cmd.StoragePath);
 
-            await Publish(DownloadSubjects.UploadedObjectDeleted, new UploadedObjectDeleted
+            await Publish(ArtifactStorageSubjects.UploadedObjectDeleted, new UploadedObjectDeleted
             {
                 JobId = cmd.JobId,
                 CorrelationId = cmd.CorrelationId,
@@ -676,18 +830,17 @@ public sealed class DownloadCommandsConsumerService(
                 OperationKey = $"{cmd.OperationKey}/result",
                 OccurredAt = clock.GetCurrentInstant(),
                 Attempt = cmd.Attempt,
+                Execution = cmd.Execution,
                 StorageKey = cmd.StorageKey,
                 StoragePath = cmd.StoragePath,
                 StorageVersion = cmd.StorageVersion
             });
             await context.AckAsync();
         }
-        catch (Exception ex)
+        catch (OperationCanceledException ex) when (operationCts.IsCancellationRequested)
         {
-            logger.LogError(ex,
-                "DeleteUploadedObject failed for JobId {JobId} StorageKey {StorageKey} StoragePath {StoragePath}",
-                cmd.JobId, cmd.StorageKey, cmd.StoragePath);
-            await Publish(DownloadSubjects.UploadedObjectDeleteFailed, new UploadedObjectDeleteFailed
+            var failureKind = CancellationFailureKind(cmd.Execution);
+            await Publish(ArtifactStorageSubjects.UploadedObjectDeleteFailed, new UploadedObjectDeleteFailed
             {
                 JobId = cmd.JobId,
                 CorrelationId = cmd.CorrelationId,
@@ -696,6 +849,32 @@ public sealed class DownloadCommandsConsumerService(
                 OperationKey = $"{cmd.OperationKey}/failed",
                 OccurredAt = clock.GetCurrentInstant(),
                 Attempt = cmd.Attempt,
+                Execution = cmd.Execution,
+                StorageKey = cmd.StorageKey,
+                StoragePath = cmd.StoragePath,
+                StorageVersion = cmd.StorageVersion,
+                FailureKind = failureKind,
+                ErrorMessage = failureKind == FailureKind.Stopped
+                    ? "Object compensation stopped by request."
+                    : $"Object compensation interrupted because the Worker stopped or lost its lease: {ex.Message}"
+            });
+            await context.AckAsync();
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "DeleteUploadedObject failed for JobId {JobId} StorageKey {StorageKey} StoragePath {StoragePath}",
+                cmd.JobId, cmd.StorageKey, cmd.StoragePath);
+            await Publish(ArtifactStorageSubjects.UploadedObjectDeleteFailed, new UploadedObjectDeleteFailed
+            {
+                JobId = cmd.JobId,
+                CorrelationId = cmd.CorrelationId,
+                CausationId = cmd.MessageId,
+                MessageId = DeterministicGuid.Create(cmd.MessageId, "/failed"),
+                OperationKey = $"{cmd.OperationKey}/failed",
+                OccurredAt = clock.GetCurrentInstant(),
+                Attempt = cmd.Attempt,
+                Execution = cmd.Execution,
                 StorageKey = cmd.StorageKey,
                 StoragePath = cmd.StoragePath,
                 StorageVersion = cmd.StorageVersion,
@@ -703,6 +882,10 @@ public sealed class DownloadCommandsConsumerService(
                 ErrorMessage = ex.Message
             });
             await context.AckAsync();
+        }
+        finally
+        {
+            UnregisterActiveRun(cmd.Execution, operationCts);
         }
     }
 
@@ -714,11 +897,12 @@ public sealed class DownloadCommandsConsumerService(
     /// backend is unreachable (e.g. a NAS worker tag pointing at a locally-mounted share that
     /// went offline).
     /// </summary>
-    private async Task<bool> ProbeStorageAsync(FetchMetadataCommand cmd)
+    private async Task<bool> ProbeStorageAsync(FetchMetadataCommand cmd, CancellationToken cancellationToken)
     {
         try
         {
-            using var cts = new CancellationTokenSource(StorageProbeTimeout);
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(StorageProbeTimeout);
             var storage = await blobStorageProvider.GetAsync(cmd.StorageKey, cts.Token);
             await storage.ListAsync(new ListOptions { MaxResults = 1 }, cts.Token);
 
@@ -727,6 +911,10 @@ public sealed class DownloadCommandsConsumerService(
                 cmd.JobId,
                 cmd.StorageKey);
             return true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -744,6 +932,7 @@ public sealed class DownloadCommandsConsumerService(
                 OperationKey = $"{cmd.OperationKey}/storage-probe-failed",
                 OccurredAt = clock.GetCurrentInstant(),
                 Attempt = cmd.Attempt,
+                Execution = cmd.Execution,
                 FailureKind = FailureKind.Permanent,
                 ErrorCode = "storage_unavailable",
                 ErrorMessage = $"Storage backend '{cmd.StorageKey}' is unreachable from this worker: {ex.Message}"
@@ -752,8 +941,244 @@ public sealed class DownloadCommandsConsumerService(
         }
     }
 
-    private Task Publish<T>(string subject, T message) where T : IFlowMessage
-        => publisher.PublishAsync(subject, message, messageId: message.MessageId.ToString("N"));
+    private async Task Publish<T>(string subject, T message) where T : IFlowMessage
+    {
+        await publisher.PublishAsync(subject, message, messageId: message.MessageId.ToString("N"));
+        if (message is DownloadProgress || ExecutionOf(message) is not { } execution)
+            return;
+
+        var failure = FailureKindOf(message);
+        if (failure is FailureKind.Stopped or FailureKind.Cancelled)
+        {
+            var stopped = new DownloadStageStopped
+            {
+                Execution = execution,
+                MessageId = DeterministicGuid.Create(message.MessageId, "/stage-stopped"),
+                CausationId = message.MessageId,
+                OperationKey = $"{message.OperationKey}/stage-stopped",
+                OccurredAt = clock.GetCurrentInstant(),
+                WorkerInstanceId = _workerInstanceId,
+                Reason = FailureMessageOf(message)
+            };
+            await publisher.PublishAsync(DownloadSubjects.StageStopped, stopped, stopped.MessageId.ToString("N"));
+        }
+        else if (failure is { } failedKind)
+        {
+            var failed = new DownloadStageFailed
+            {
+                Execution = execution,
+                MessageId = DeterministicGuid.Create(message.MessageId, "/stage-failed"),
+                CausationId = message.MessageId,
+                OperationKey = $"{message.OperationKey}/stage-failed",
+                OccurredAt = clock.GetCurrentInstant(),
+                WorkerInstanceId = _workerInstanceId,
+                FailureKind = failedKind,
+                ErrorCode = FailureCodeOf(message),
+                ErrorMessage = FailureMessageOf(message) ?? "Worker stage failed."
+            };
+            await publisher.PublishAsync(DownloadSubjects.StageFailed, failed, failed.MessageId.ToString("N"));
+        }
+        else
+        {
+            var succeeded = new DownloadStageSucceeded
+            {
+                Execution = execution,
+                MessageId = DeterministicGuid.Create(message.MessageId, "/stage-succeeded"),
+                CausationId = message.MessageId,
+                OperationKey = $"{message.OperationKey}/stage-succeeded",
+                OccurredAt = clock.GetCurrentInstant(),
+                WorkerInstanceId = _workerInstanceId
+            };
+            await publisher.PublishAsync(DownloadSubjects.StageSucceeded, succeeded, succeeded.MessageId.ToString("N"));
+        }
+    }
+
+    private async Task<WorkerExecutionLease?> TryAcquireExecutionLeaseAsync<T>(
+        IJsMessageContext<T> context,
+        DownloadExecutionIdentity? execution)
+        where T : class
+    {
+        if (execution is null)
+            return WorkerExecutionLease.Noop;
+
+        AcquireDownloadLeaseResponse? response;
+        try
+        {
+            response = await messageBus.RequestAsync<AcquireDownloadLeaseRequest, AcquireDownloadLeaseResponse>(
+                DownloadSubjects.AcquireLeaseRequest,
+                new AcquireDownloadLeaseRequest
+                {
+                    Execution = execution,
+                    WorkerInstanceId = _workerInstanceId,
+                    OccurredAt = clock.GetCurrentInstant()
+                },
+                LeaseRequestTimeout,
+                _serviceStoppingToken);
+        }
+        catch (Exception ex) when (!_serviceStoppingToken.IsCancellationRequested)
+        {
+            logger.LogWarning(ex, "Could not acquire V2 lease for DispatchId {DispatchId}; nacking transport delivery.", execution.DispatchId);
+            await context.NackAsync();
+            return null;
+        }
+
+        if (response is null)
+        {
+            await context.NackAsync();
+            return null;
+        }
+        if (!response.Granted)
+        {
+            logger.LogInformation("Rejected stale V2 dispatch {DispatchId}: {Reason}", execution.DispatchId, response.RejectionCode);
+            await context.AckAsync();
+            return null;
+        }
+
+        if (response.StopRequested)
+        {
+            // The command was durably published before Stop won the database gate. Claim it only
+            // to produce the matching Stopped result that releases the immutable flow waiter; no
+            // provider or storage operation is allowed to begin.
+            _userStopRequests[(execution.JobId, execution.RunId)] = DateTimeOffset.UtcNow;
+        }
+
+        var started = new DownloadStageStarted
+        {
+            Execution = execution,
+            MessageId = DeterministicGuid.Create(execution.DispatchId, "/stage-started"),
+            CausationId = execution.DispatchId,
+            OperationKey = $"dispatch/{execution.DispatchId:N}/stage-started",
+            OccurredAt = clock.GetCurrentInstant(),
+            WorkerInstanceId = _workerInstanceId
+        };
+        await publisher.PublishAsync(DownloadSubjects.StageStarted, started, started.MessageId.ToString("N"));
+
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(_serviceStoppingToken);
+        var heartbeat = RunLeaseHeartbeatAsync(execution, cts);
+        if (response.StopRequested)
+            await cts.CancelAsync();
+        return new WorkerExecutionLease(cts, heartbeat);
+    }
+
+    private async Task RunLeaseHeartbeatAsync(DownloadExecutionIdentity execution, CancellationTokenSource leaseCts)
+    {
+        var missed = 0;
+        try
+        {
+            using var timer = new PeriodicTimer(LeaseHeartbeatInterval);
+            while (await timer.WaitForNextTickAsync(leaseCts.Token))
+            {
+                RenewDownloadLeaseResponse? response = null;
+                try
+                {
+                    response = await messageBus.RequestAsync<RenewDownloadLeaseRequest, RenewDownloadLeaseResponse>(
+                        DownloadSubjects.RenewLeaseRequest,
+                        new RenewDownloadLeaseRequest
+                        {
+                            DispatchId = execution.DispatchId,
+                            RunId = execution.RunId,
+                            WorkerInstanceId = _workerInstanceId,
+                            OccurredAt = clock.GetCurrentInstant()
+                        },
+                        LeaseRequestTimeout,
+                        leaseCts.Token);
+                }
+                catch (Exception ex) when (!leaseCts.IsCancellationRequested)
+                {
+                    logger.LogWarning(ex, "V2 lease renewal failed for DispatchId {DispatchId}.", execution.DispatchId);
+                }
+
+                if (response?.Renewed == true)
+                {
+                    missed = 0;
+                    var heartbeat = new DownloadStageHeartbeat
+                    {
+                        Execution = execution,
+                        MessageId = Guid.NewGuid(),
+                        CausationId = execution.DispatchId,
+                        OperationKey = $"dispatch/{execution.DispatchId:N}/heartbeat/{clock.GetCurrentInstant().ToUnixTimeTicks()}",
+                        OccurredAt = clock.GetCurrentInstant(),
+                        WorkerInstanceId = _workerInstanceId
+                    };
+                    await publisher.PublishAsync(DownloadSubjects.StageHeartbeat, heartbeat, heartbeat.MessageId.ToString("N"));
+                    continue;
+                }
+
+                missed++;
+                if (missed < 3)
+                    continue;
+                logger.LogError("V2 lease lost for DispatchId {DispatchId}; cancelling local work.", execution.DispatchId);
+                await leaseCts.CancelAsync();
+                return;
+            }
+        }
+        catch (OperationCanceledException) when (leaseCts.IsCancellationRequested)
+        {
+        }
+    }
+
+    private static DownloadExecutionIdentity? ExecutionOf(IFlowMessage message) => message switch
+    {
+        MetadataFetched x => x.Execution,
+        MetadataFetchFailed x => x.Execution,
+        DownloadCompleted x => x.Execution,
+        DownloadFailed x => x.Execution,
+        UploadCompleted x => x.Execution,
+        UploadFailed x => x.Execution,
+        TempFileDeleted x => x.Execution,
+        TempFileDeleteFailed x => x.Execution,
+        UploadedObjectDeleted x => x.Execution,
+        UploadedObjectDeleteFailed x => x.Execution,
+        _ => null
+    };
+
+    private static FailureKind? FailureKindOf(IFlowMessage message) => message switch
+    {
+        MetadataFetchFailed x => x.FailureKind,
+        DownloadFailed x => x.FailureKind,
+        UploadFailed x => x.FailureKind,
+        TempFileDeleteFailed x => x.FailureKind,
+        UploadedObjectDeleteFailed x => x.FailureKind,
+        _ => null
+    };
+
+    private static string? FailureCodeOf(IFlowMessage message) => message switch
+    {
+        MetadataFetchFailed x => x.ErrorCode,
+        DownloadFailed x => x.ErrorCode,
+        UploadFailed x => x.ErrorCode,
+        _ => null
+    };
+
+    private static string? FailureMessageOf(IFlowMessage message) => message switch
+    {
+        MetadataFetchFailed x => x.ErrorMessage,
+        DownloadFailed x => x.ErrorMessage,
+        UploadFailed x => x.ErrorMessage,
+        TempFileDeleteFailed x => x.ErrorMessage,
+        UploadedObjectDeleteFailed x => x.ErrorMessage,
+        _ => null
+    };
+
+    private sealed class WorkerExecutionLease(
+        CancellationTokenSource? cancellation,
+        Task? heartbeat) : IAsyncDisposable
+    {
+        public static readonly WorkerExecutionLease Noop = new(null, null);
+        public CancellationToken CancellationToken => cancellation?.Token ?? CancellationToken.None;
+
+        public async ValueTask DisposeAsync()
+        {
+            if (cancellation is null)
+                return;
+            await cancellation.CancelAsync();
+            if (heartbeat is not null)
+            {
+                try { await heartbeat; } catch (OperationCanceledException) { }
+            }
+            cancellation.Dispose();
+        }
+    }
 
     private Task PublishFailureAsync<TCommand, TFailure>(
         string subject,
@@ -782,92 +1207,6 @@ public sealed class DownloadCommandsConsumerService(
             : null;
     }
 
-    private async Task<bool> TryPublishHaltedMetadataAsync(FetchMetadataCommand cmd)
-    {
-        if (cmd.ResumeFromHaltedState)
-            return false;
-
-        var provider = YtDlpFailureDetails.ResolveProvider(sourceUrl: cmd.SourceUrl);
-        if (!providerHaltRegistry.TryGetHalt(provider, out var halt))
-            return false;
-
-        logger.LogWarning(
-            "Metadata fetch halted for JobId {JobId} URL {SourceUrl} Provider {Provider} HaltedAt {HaltedAt}: {ErrorMessage}",
-            cmd.JobId,
-            cmd.SourceUrl,
-            halt.Provider,
-            halt.HaltedAt,
-            halt.ErrorMessage);
-
-        await PublishFailureAsync(DownloadSubjects.MetadataFetchFailed, cmd, envelope => new MetadataFetchFailed
-        {
-            JobId = envelope.JobId,
-            CorrelationId = envelope.CorrelationId,
-            CausationId = envelope.CausationId,
-            MessageId = envelope.MessageId,
-            OperationKey = envelope.OperationKey,
-            OccurredAt = envelope.OccurredAt,
-            Attempt = envelope.Attempt,
-            FailureKind = FailureKind.Permanent,
-            ErrorCode = halt.ErrorCode,
-            Provider = halt.Provider,
-            HaltProviderDownloads = true,
-            ErrorMessage = halt.ErrorMessage
-        });
-        return true;
-    }
-
-    private async Task<bool> TryPublishHaltedDownloadAsync(DownloadVideoCommand cmd)
-    {
-        if (cmd.ResumeFromHaltedState)
-            return false;
-
-        var provider = YtDlpFailureDetails.ResolveProvider(sourceUrl: cmd.SourceUrl);
-        if (!providerHaltRegistry.TryGetHalt(provider, out var halt))
-            return false;
-
-        logger.LogWarning(
-            "Download halted for JobId {JobId} URL {SourceUrl} Provider {Provider} HaltedAt {HaltedAt}: {ErrorMessage}",
-            cmd.JobId,
-            cmd.SourceUrl,
-            halt.Provider,
-            halt.HaltedAt,
-            halt.ErrorMessage);
-
-        await PublishFailureAsync(DownloadSubjects.DownloadFailed, cmd, envelope => new DownloadFailed
-        {
-            JobId = envelope.JobId,
-            CorrelationId = envelope.CorrelationId,
-            CausationId = envelope.CausationId,
-            MessageId = envelope.MessageId,
-            OperationKey = envelope.OperationKey,
-            OccurredAt = envelope.OccurredAt,
-            Attempt = envelope.Attempt,
-            FailureKind = FailureKind.Permanent,
-            ErrorCode = halt.ErrorCode,
-            Provider = halt.Provider,
-            HaltProviderDownloads = true,
-            ErrorMessage = halt.ErrorMessage,
-            TempFileRef = null
-        });
-        return true;
-    }
-
-    private void RecordProviderHaltIfNeeded(Exception ex, string sourceUrl)
-    {
-        var providerFailure = YtDlpFailureDetails.ClassifyProviderAccessFailure(ex, sourceUrl: sourceUrl);
-        if (providerFailure is not { HaltProviderDownloads: true })
-            return;
-
-        var halt = providerHaltRegistry.Record(providerFailure);
-        logger.LogWarning(
-            "Provider downloads halted for Provider {Provider} ErrorCode {ErrorCode} HaltedAt {HaltedAt}: {ErrorMessage}",
-            halt.Provider,
-            halt.ErrorCode,
-            halt.HaltedAt,
-            halt.ErrorMessage);
-    }
-
     private Task PublishMetadataFailedAsync(FetchMetadataCommand cmd, Exception ex, FailureKind failureKind)
     {
         var providerFailure = YtDlpFailureDetails.ClassifyProviderAccessFailure(ex, sourceUrl: cmd.SourceUrl);
@@ -880,6 +1219,7 @@ public sealed class DownloadCommandsConsumerService(
             OperationKey = envelope.OperationKey,
             OccurredAt = envelope.OccurredAt,
             Attempt = envelope.Attempt,
+            Execution = envelope.Execution,
             FailureKind = failureKind,
             ErrorCode = providerFailure?.ErrorCode ?? YtDlpFailureDetails.ErrorCode(ex, sourceUrl: cmd.SourceUrl),
             Provider = providerFailure?.Provider ?? YtDlpFailureDetails.ResolveProvider(sourceUrl: cmd.SourceUrl),
@@ -904,6 +1244,7 @@ public sealed class DownloadCommandsConsumerService(
             OperationKey = envelope.OperationKey,
             OccurredAt = envelope.OccurredAt,
             Attempt = envelope.Attempt,
+            Execution = envelope.Execution,
             FailureKind = failureKind,
             ErrorCode = providerFailure?.ErrorCode ?? YtDlpFailureDetails.ErrorCode(ex, sourceUrl: cmd.SourceUrl),
             Provider = providerFailure?.Provider ?? YtDlpFailureDetails.ResolveProvider(sourceUrl: cmd.SourceUrl),
@@ -914,7 +1255,7 @@ public sealed class DownloadCommandsConsumerService(
     }
 
     private Task PublishUploadFailedAsync(UploadObjectCommand cmd, Exception ex, FailureKind failureKind)
-        => PublishFailureAsync(DownloadSubjects.UploadFailed, cmd, envelope => new UploadFailed
+        => PublishFailureAsync(ArtifactStorageSubjects.UploadFailed, cmd, envelope => new UploadFailed
         {
             JobId = envelope.JobId,
             CorrelationId = envelope.CorrelationId,
@@ -923,6 +1264,7 @@ public sealed class DownloadCommandsConsumerService(
             OperationKey = envelope.OperationKey,
             OccurredAt = envelope.OccurredAt,
             Attempt = envelope.Attempt,
+            Execution = envelope.Execution,
             FailureKind = failureKind,
             ErrorMessage = ex.Message,
             TempFileRef = cmd.TempFileRef,
@@ -936,7 +1278,8 @@ public sealed class DownloadCommandsConsumerService(
         Guid MessageId,
         string OperationKey,
         Instant OccurredAt,
-        int Attempt)
+        int Attempt,
+        DownloadExecutionIdentity? Execution)
     {
         public static FailureEnvelope From(IFlowMessage command, IClock clock)
             => new(
@@ -946,7 +1289,16 @@ public sealed class DownloadCommandsConsumerService(
                 DeterministicGuid.Create(command.MessageId, "/failed"),
                 $"{command.OperationKey}/failed",
                 clock.GetCurrentInstant(),
-                command.Attempt);
+                command.Attempt,
+                command switch
+                {
+                    FetchMetadataCommand x => x.Execution,
+                    DownloadVideoCommand x => x.Execution,
+                    UploadObjectCommand x => x.Execution,
+                    DeleteTempFileCommand x => x.Execution,
+                    DeleteUploadedObjectCommand x => x.Execution,
+                    _ => null
+                });
     }
 
 
@@ -956,23 +1308,13 @@ public sealed class DownloadCommandsConsumerService(
         string tempDirectory,
         string? cookieFilePath,
         DownloadProgressReporter progress,
-        CancellationToken cancellationToken,
-        bool disableSidecars = false)
+        CancellationToken cancellationToken)
     {
         var ytDlpOptions = ApplyOperationalDefaults(YtDlpOptionsMerger.Merge(
             cmd.YtDlpOptions,
             ffmpegLocation: GetFfmpegLocation(),
             cookieFilePath: cookieFilePath,
             logger));
-
-        if (disableSidecars)
-        {
-            ytDlpOptions = ytDlpOptions with
-            {
-                Subtitle = ytDlpOptions.Subtitle with { WriteSubs = false, WriteAutoSubs = false, NoWriteSubs = true, NoWriteAutoSubs = true },
-                Thumbnail = ytDlpOptions.Thumbnail with { WriteThumbnail = false, NoWriteThumbnail = true }
-            };
-        }
 
         var outputTemplate = $"{MediaFileBase}.%(ext)s";
 

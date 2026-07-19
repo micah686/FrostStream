@@ -124,68 +124,78 @@ public sealed class DownloadJobsRepositoryTests
     }
 
     [Test]
-    public async Task TryBeginCancellationAsync_Marks_Queued_Job_Cancelling()
+    public async Task RequestStopAsync_Marks_Active_V2_Run_Stopping()
     {
         var jobId = Guid.NewGuid();
+        var correlationId = Guid.NewGuid();
         await using var db = Fixture.CreateDb();
-        db.DownloadJobs.Add(Job(jobId, DownloadJobState.DownloadQueued));
-        await db.SaveChangesAsync();
+        var repository = new DownloadFlowV2Repository(db, SystemClock.Instance, NullDownloadJobStateNotifier.Instance);
+        var initial = await repository.CreateInitialRunAsync(Request(jobId, correlationId), autoStart: true);
+        initial.ShouldNotBeNull();
 
-        var repository = new DownloadJobsRepository(db, SystemClock.Instance);
-
-        var decision = await repository.TryBeginCancellationAsync(jobId, "tester", "stop requested");
+        var decision = await repository.RequestStopAsync(jobId, "tester", "stop requested");
 
         decision.Accepted.ShouldBeTrue();
-        decision.State.ShouldBe(DownloadJobState.Cancelling);
-        decision.PreviousState.ShouldBe(DownloadJobState.DownloadQueued);
+        decision.Status.ShouldBe(DownloadJobStatus.Stopping);
+        decision.RunId.ShouldBe(initial.RunId);
         var job = await db.DownloadJobs.SingleAsync(x => x.JobId == jobId);
+        job.Status.ShouldBe(DownloadJobStatus.Stopping);
         job.State.ShouldBe(DownloadJobState.Cancelling);
-        job.FailureKind.ShouldBe(FailureKind.Cancelled);
-        job.FailureCode.ShouldBe("cancel_requested");
+        job.FailureKind.ShouldBe(FailureKind.Stopped);
+        job.FailureCode.ShouldBe("user_stopped");
+        job.StopRequestedBy.ShouldBe("tester");
     }
 
     [Test]
-    public async Task MarkCancelledAsync_Writes_Terminal_State_And_Failed_Row()
+    public async Task MarkStoppedAsync_Writes_Terminal_Stopped_Run()
     {
         var jobId = Guid.NewGuid();
+        var correlationId = Guid.NewGuid();
         await using var db = Fixture.CreateDb();
-        db.DownloadJobs.Add(Job(jobId, DownloadJobState.Cancelling));
-        await db.SaveChangesAsync();
+        var repository = new DownloadFlowV2Repository(db, SystemClock.Instance, NullDownloadJobStateNotifier.Instance);
+        var initial = await repository.CreateInitialRunAsync(Request(jobId, correlationId), autoStart: true);
+        initial.ShouldNotBeNull();
+        await repository.RequestStopAsync(jobId, "tester", "stop requested");
 
-        var repository = new DownloadJobsRepository(db, SystemClock.Instance);
-
-        await repository.MarkCancelledAsync(jobId, "cancelled cleanly");
+        (await repository.MarkStoppedAsync(jobId, initial.RunId, "stopped cleanly")).ShouldBeTrue();
 
         var job = await db.DownloadJobs.SingleAsync(x => x.JobId == jobId);
+        job.Status.ShouldBe(DownloadJobStatus.Stopped);
         job.State.ShouldBe(DownloadJobState.Cancelled);
         job.CompletedAt.ShouldNotBeNull();
-        var failed = await db.FailedDownloadJobs.SingleAsync(x => x.JobId == jobId);
-        failed.FailedState.ShouldBe(DownloadJobState.Cancelled);
-        failed.FailureKind.ShouldBe(FailureKind.Cancelled);
-        failed.FailureMessage.ShouldBe("cancelled cleanly");
+        var run = await db.DownloadJobRuns.SingleAsync(x => x.RunId == initial.RunId);
+        run.Status.ShouldBe(DownloadJobStatus.Stopped);
+        run.EndedAt.ShouldNotBeNull();
     }
 
     [Test]
-    public async Task UpdateStateAsync_Allows_Cancelled_Job_To_Requeue_For_Restart()
+    public async Task StartFreshRunAsync_Creates_New_Run_And_Resets_Attempts()
     {
         var jobId = Guid.NewGuid();
+        var correlationId = Guid.NewGuid();
         await using var db = Fixture.CreateDb();
-        db.DownloadJobs.Add(Job(jobId, DownloadJobState.Cancelling));
-        await db.SaveChangesAsync();
+        var repository = new DownloadFlowV2Repository(db, SystemClock.Instance, NullDownloadJobStateNotifier.Instance);
+        var initial = await repository.CreateInitialRunAsync(Request(jobId, correlationId), autoStart: true);
+        initial.ShouldNotBeNull();
+        await repository.RequestStopAsync(jobId, "tester", "stop requested");
+        await repository.MarkStoppedAsync(jobId, initial.RunId, "stopped cleanly");
 
-        var notifier = new CapturingStateNotifier();
-        var repository = new DownloadJobsRepository(db, SystemClock.Instance, notifier);
+        var restarted = await repository.StartFreshRunAsync(jobId);
 
-        await repository.MarkCancelledAsync(jobId, "cancelled cleanly");
-        await repository.UpdateStateAsync(jobId, DownloadJobState.Queued);
-
+        restarted.ShouldNotBeNull();
+        restarted.RunId.ShouldNotBe(initial.RunId);
+        restarted.RunNumber.ShouldBe(2);
         var job = await db.DownloadJobs.SingleAsync(x => x.JobId == jobId);
-        job.State.ShouldBe(DownloadJobState.Queued);
+        job.Status.ShouldBe(DownloadJobStatus.Running);
+        job.State.ShouldBe(DownloadJobState.MetadataPending);
+        job.CurrentRunId.ShouldBe(restarted.RunId);
+        job.CurrentRunNumber.ShouldBe(2);
+        job.CurrentAttempt.ShouldBe(0);
         job.FailureKind.ShouldBeNull();
         job.FailureCode.ShouldBeNull();
         job.FailureMessage.ShouldBeNull();
         job.CompletedAt.ShouldBeNull();
-        notifier.Calls[^1].ShouldBe((jobId, DownloadJobState.Queued, DownloadJobState.Cancelled));
+        (await db.DownloadJobRuns.CountAsync(x => x.JobId == jobId)).ShouldBe(2);
     }
 
     [Test]
@@ -231,7 +241,7 @@ public sealed class DownloadJobsRepositoryTests
             .Items.ShouldHaveSingleItem().JobId.ShouldBe(failedId);
         (await repository.QueryQueueAsync(new DownloadQueueListRequest { StateGroup = DownloadQueueStateGroup.Done }))
             .TotalCount.ShouldBe(2);
-        (await repository.QueryQueueAsync(new DownloadQueueListRequest { StateGroup = DownloadQueueStateGroup.Cancelled }))
+        (await repository.QueryQueueAsync(new DownloadQueueListRequest { StateGroup = DownloadQueueStateGroup.Stopped }))
             .Items.ShouldHaveSingleItem().State.ShouldBe(DownloadJobState.Cancelled);
 
         var combined = await repository.QueryQueueAsync(new DownloadQueueListRequest
@@ -361,32 +371,320 @@ public sealed class DownloadJobsRepositoryTests
     }
 
     [Test]
-    public async Task State_Transitions_Publish_State_Changed_Only_On_Actual_Change()
+    public async Task V2_Stage_Transition_Publishes_Status_And_Attempt()
     {
         var jobId = Guid.NewGuid();
         await using var db = Fixture.CreateDb();
-        db.DownloadJobs.Add(Job(jobId, DownloadJobState.Queued));
-        await db.SaveChangesAsync();
-
         var notifier = new CapturingStateNotifier();
-        var repository = new DownloadJobsRepository(db, SystemClock.Instance, notifier);
+        var repository = new DownloadFlowV2Repository(db, SystemClock.Instance, notifier);
+        var run = await repository.CreateInitialRunAsync(Request(jobId, Guid.NewGuid()), autoStart: true);
+        run.ShouldNotBeNull();
+        var execution = new DownloadExecutionIdentity
+        {
+            JobId = jobId,
+            RunId = run.RunId,
+            CorrelationId = run.Request.CorrelationId,
+            DispatchId = Guid.NewGuid(),
+            Stage = DownloadStage.Metadata,
+            Attempt = 1
+        };
 
-        await repository.UpdateStateAsync(jobId, DownloadJobState.MetadataPending);
-        await repository.UpdateStateAsync(jobId, DownloadJobState.MetadataPending); // no-op, unchanged
-        await repository.RecordTerminalFailureAsync(jobId, FailureKind.Permanent, "gone", "source removed", DownloadJobState.FailedPermanent, null);
+        (await repository.BeginStageAttemptAsync(execution, "metadata/attempt/1")).ShouldBeTrue();
 
-        notifier.Calls.Count.ShouldBe(2);
-        notifier.Calls[0].ShouldBe((jobId, DownloadJobState.MetadataPending, DownloadJobState.Queued));
-        notifier.Calls[1].ShouldBe((jobId, DownloadJobState.FailedPermanent, DownloadJobState.MetadataPending));
+        notifier.V2Calls.Count.ShouldBe(2);
+        notifier.V2Calls[^1].JobId.ShouldBe(jobId);
+        notifier.V2Calls[^1].Status.ShouldBe(DownloadJobStatus.Running);
+        notifier.V2Calls[^1].Stage.ShouldBe(DownloadStage.Metadata);
+        notifier.V2Calls[^1].Attempt.ShouldBe(1);
+    }
+
+    [Test]
+    public async Task Stop_After_Dispatch_Allows_One_Drain_Lease_That_Is_Already_Cancelled()
+    {
+        var jobId = Guid.NewGuid();
+        await using var db = Fixture.CreateDb();
+        var repository = new DownloadFlowV2Repository(
+            db, SystemClock.Instance, NullDownloadJobStateNotifier.Instance);
+        var run = await repository.CreateInitialRunAsync(Request(jobId, Guid.NewGuid()), autoStart: true);
+        run.ShouldNotBeNull();
+        var execution = Execution(run, DownloadStage.Metadata, 1);
+        (await repository.BeginStageAttemptAsync(execution, "metadata/attempt/1")).ShouldBeTrue();
+        (await repository.RequestStopAsync(jobId, "tester", "stop before claim"))
+            .Status.ShouldBe(DownloadJobStatus.Stopping);
+
+        var lease = await repository.TryAcquireLeaseAsync(new AcquireDownloadLeaseRequest
+        {
+            Execution = execution,
+            WorkerInstanceId = "worker-drain",
+            OccurredAt = SystemClock.Instance.GetCurrentInstant()
+        });
+
+        lease.Granted.ShouldBeTrue();
+        lease.StopRequested.ShouldBeTrue();
+        (await repository.CanAcceptWorkerEventAsync(execution)).ShouldBeTrue();
+    }
+
+    [Test]
+    public async Task V2_Reservation_Defers_Source_Mapping_Until_Atomic_Finalize()
+    {
+        var jobId = Guid.NewGuid();
+        const string provider = "youtube";
+        const string sourceMediaId = "deferred-source";
+        await using var db = Fixture.CreateDb();
+        var v2 = new DownloadFlowV2Repository(
+            db, SystemClock.Instance, NullDownloadJobStateNotifier.Instance);
+        var run = await v2.CreateInitialRunAsync(Request(jobId, Guid.NewGuid()), autoStart: true);
+        run.ShouldNotBeNull();
+        var jobs = new DownloadJobsRepository(db, SystemClock.Instance);
+        var reservation = await jobs.ReserveVersionAsync(new VersionReservationRequest
+        {
+            JobId = jobId,
+            ContentHashXxh128 = Guid.NewGuid().ToString("N"),
+            StorageKey = "default",
+            FileName = "video.mp4",
+            Provider = provider,
+            SourceMediaId = sourceMediaId,
+            SourceLastModified = SystemClock.Instance.GetCurrentInstant(),
+            LinkSourceToDownloadJob = false,
+            PersistSourceMapping = false
+        });
+        (await db.MediaSourceVersions.CountAsync(x => x.SourceMediaId == sourceMediaId)).ShouldBe(0);
+        var execution = Execution(run, DownloadStage.Finalize, 1);
+        (await v2.BeginStageAttemptAsync(execution, "finalize/attempt/1")).ShouldBeTrue();
+
+        (await v2.FinalizeRunAsync(
+            execution,
+            reservation.MediaGuid,
+            provider,
+            sourceMediaId,
+            SystemClock.Instance.GetCurrentInstant())).ShouldBeTrue();
+
+        var source = await db.MediaSourceVersions.SingleAsync(x => x.SourceMediaId == sourceMediaId);
+        source.MediaGuid.ShouldBe(reservation.MediaGuid);
+        source.LatestJobId.ShouldBe(jobId);
+    }
+
+    [Test]
+    public async Task Expired_Lease_During_Stop_Fails_Run_Instead_Of_Leaving_It_Stopping()
+    {
+        var jobId = Guid.NewGuid();
+        await using var db = Fixture.CreateDb();
+        var repository = new DownloadFlowV2Repository(
+            db, SystemClock.Instance, NullDownloadJobStateNotifier.Instance);
+        var run = await repository.CreateInitialRunAsync(Request(jobId, Guid.NewGuid()), autoStart: true);
+        run.ShouldNotBeNull();
+        var execution = Execution(run, DownloadStage.MediaAcquire, 1);
+        (await repository.BeginStageAttemptAsync(execution, "media/attempt/1")).ShouldBeTrue();
+        (await repository.TryAcquireLeaseAsync(new AcquireDownloadLeaseRequest
+        {
+            Execution = execution,
+            WorkerInstanceId = "worker-lost",
+            OccurredAt = SystemClock.Instance.GetCurrentInstant()
+        })).Granted.ShouldBeTrue();
+        await repository.RequestStopAsync(jobId, "tester", "stop while worker disappears");
+        var expiredAt = SystemClock.Instance.GetCurrentInstant() - Duration.FromSeconds(1);
+        await db.DownloadWorkerLeases.Where(x => x.DispatchId == execution.DispatchId)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.ExpiresAt, expiredAt));
+
+        (await repository.FailExpiredLeasesAsync()).Count.ShouldBe(1);
+
+        var failed = await db.DownloadJobs.SingleAsync(x => x.JobId == jobId);
+        failed.Status.ShouldBe(DownloadJobStatus.Failed);
+        failed.FailureKind.ShouldBe(FailureKind.Interrupted);
+        failed.FailureCode.ShouldBe("worker_lease_expired");
+    }
+
+    [Test]
+    public async Task FinalizeRunAsync_Commits_Playlist_Link_And_Terminal_Status_Together()
+    {
+        var jobId = Guid.NewGuid();
+        var correlationId = Guid.NewGuid();
+        var playlistId = Guid.NewGuid();
+        var mediaGuid = Guid.NewGuid();
+        await Fixture.SeedMediaWithSourceAsync(mediaGuid, "youtube", "finalize-media");
+        await using var db = Fixture.CreateDb();
+        var repository = new DownloadFlowV2Repository(db, SystemClock.Instance, NullDownloadJobStateNotifier.Instance);
+        var run = await repository.CreateInitialRunAsync(Request(jobId, correlationId), autoStart: true);
+        run.ShouldNotBeNull();
+        db.Playlists.Add(new PlaylistEntity
+        {
+            PlaylistId = playlistId,
+            CorrelationId = correlationId,
+            State = PlaylistState.MetadataResolved,
+            SourceUrl = $"https://example.test/playlist/{playlistId:N}"
+        });
+        db.PlaylistItems.Add(new PlaylistItemEntity
+        {
+            PlaylistId = playlistId,
+            JobId = jobId,
+            PlaylistIndex = 4,
+            EntryUrl = run.Request.SourceUrl
+        });
+        await db.SaveChangesAsync();
+        var execution = Execution(run, DownloadStage.Finalize, 1);
+        (await repository.BeginStageAttemptAsync(execution, "finalize/attempt/1")).ShouldBeTrue();
+
+        (await repository.FinalizeRunAsync(execution, mediaGuid)).ShouldBeTrue();
+
+        var job = await db.DownloadJobs.SingleAsync(x => x.JobId == jobId);
+        job.Status.ShouldBe(DownloadJobStatus.Completed);
+        job.Stage.ShouldBe(DownloadStage.Finalize);
+        job.StageStatus.ShouldBe(DownloadStageStatus.Succeeded);
+        (await db.MediaPlaylistMemberships.SingleAsync()).MediaGuid.ShouldBe(mediaGuid);
+        (await db.DownloadStageAttempts.SingleAsync(x => x.DispatchId == execution.DispatchId))
+            .Status.ShouldBe(DownloadStageStatus.Succeeded);
+    }
+
+    [Test]
+    public async Task Stop_Wins_Against_Finalize_Without_Creating_Playlist_Membership()
+    {
+        var jobId = Guid.NewGuid();
+        var correlationId = Guid.NewGuid();
+        var playlistId = Guid.NewGuid();
+        var mediaGuid = Guid.NewGuid();
+        await Fixture.SeedMediaWithSourceAsync(mediaGuid, "youtube", "stopped-finalize-media");
+        await using var db = Fixture.CreateDb();
+        var repository = new DownloadFlowV2Repository(db, SystemClock.Instance, NullDownloadJobStateNotifier.Instance);
+        var run = await repository.CreateInitialRunAsync(Request(jobId, correlationId), autoStart: true);
+        run.ShouldNotBeNull();
+        db.Playlists.Add(new PlaylistEntity
+        {
+            PlaylistId = playlistId,
+            CorrelationId = correlationId,
+            State = PlaylistState.MetadataResolved,
+            SourceUrl = $"https://example.test/playlist/{playlistId:N}"
+        });
+        db.PlaylistItems.Add(new PlaylistItemEntity
+        {
+            PlaylistId = playlistId,
+            JobId = jobId,
+            PlaylistIndex = 1,
+            EntryUrl = run.Request.SourceUrl
+        });
+        await db.SaveChangesAsync();
+        var execution = Execution(run, DownloadStage.Finalize, 1);
+        (await repository.BeginStageAttemptAsync(execution, "finalize/attempt/1")).ShouldBeTrue();
+        (await repository.RequestStopAsync(jobId, "tester", "race finalization")).Accepted.ShouldBeTrue();
+
+        (await repository.FinalizeRunAsync(execution, mediaGuid)).ShouldBeFalse();
+
+        (await db.MediaPlaylistMemberships.CountAsync()).ShouldBe(0);
+        (await db.DownloadJobs.SingleAsync(x => x.JobId == jobId)).Status.ShouldBe(DownloadJobStatus.Stopping);
+    }
+
+    [Test]
+    public async Task Old_Run_Event_Is_Rejected_After_User_Starts_A_Fresh_Run()
+    {
+        var jobId = Guid.NewGuid();
+        await using var db = Fixture.CreateDb();
+        var repository = new DownloadFlowV2Repository(db, SystemClock.Instance, NullDownloadJobStateNotifier.Instance);
+        var first = await repository.CreateInitialRunAsync(Request(jobId, Guid.NewGuid()), autoStart: true);
+        first.ShouldNotBeNull();
+        var oldExecution = Execution(first, DownloadStage.Metadata, 1);
+        (await repository.BeginStageAttemptAsync(oldExecution, "metadata/attempt/1")).ShouldBeTrue();
+        (await repository.TryAcquireLeaseAsync(new AcquireDownloadLeaseRequest
+        {
+            Execution = oldExecution,
+            WorkerInstanceId = "worker-a",
+            OccurredAt = SystemClock.Instance.GetCurrentInstant()
+        })).Granted.ShouldBeTrue();
+        await repository.RequestStopAsync(jobId, "tester", "restart it");
+        await repository.MarkStoppedAsync(jobId, first.RunId, "stopped");
+        var second = await repository.StartFreshRunAsync(jobId);
+        second.ShouldNotBeNull();
+
+        (await repository.CanAcceptWorkerEventAsync(oldExecution)).ShouldBeFalse();
+        second.RunId.ShouldNotBe(first.RunId);
+    }
+
+    [Test]
+    public async Task Provider_Circuit_Requires_Clear_And_Explicit_Fresh_Start()
+    {
+        var jobId = Guid.NewGuid();
+        await using var db = Fixture.CreateDb();
+        var repository = new DownloadFlowV2Repository(db, SystemClock.Instance, NullDownloadJobStateNotifier.Instance);
+        var request = Request(jobId, Guid.NewGuid()) with { SourceUrl = "https://www.youtube.com/watch?v=blocked" };
+        (await repository.CreateInitialRunAsync(request, autoStart: false)).ShouldBeNull();
+        await repository.OpenProviderCircuitAsync("youtube", "Provider requested verification.");
+
+        (await repository.StartFreshRunAsync(jobId)).ShouldBeNull();
+        var blocked = await db.DownloadJobs.SingleAsync(x => x.JobId == jobId);
+        blocked.Status.ShouldBe(DownloadJobStatus.Stopped);
+        blocked.FailureKind.ShouldBe(FailureKind.ProviderBlocked);
+        blocked.FailureCode.ShouldBe("provider_circuit_open");
+
+        await repository.ClearProviderCircuitAsync("youtube");
+        var started = await repository.StartFreshRunAsync(jobId);
+        started.ShouldNotBeNull();
+        started.RunNumber.ShouldBe(1);
+    }
+
+    [Test]
+    public async Task Startup_Reconciliation_Stops_Queued_And_Fails_Begun_Runs_Without_Creating_New_Runs()
+    {
+        var queuedId = Guid.NewGuid();
+        var activeId = Guid.NewGuid();
+        await using var db = Fixture.CreateDb();
+        var repository = new DownloadFlowV2Repository(db, SystemClock.Instance, NullDownloadJobStateNotifier.Instance);
+        await repository.CreateInitialRunAsync(Request(queuedId, Guid.NewGuid()), autoStart: false);
+        await db.DownloadJobs.Where(x => x.JobId == queuedId).ExecuteUpdateAsync(setters => setters
+            .SetProperty(x => x.Status, DownloadJobStatus.Queued)
+            .SetProperty(x => x.StageStatus, DownloadStageStatus.Pending));
+        var active = await repository.CreateInitialRunAsync(Request(activeId, Guid.NewGuid()), autoStart: true);
+        active.ShouldNotBeNull();
+        var runsBefore = await db.DownloadJobRuns.CountAsync();
+
+        var result = await repository.ReconcileForStartupAsync();
+
+        result.StoppedQueuedJobs.ShouldBe(1);
+        result.FailedActiveJobs.ShouldBe(1);
+        (await db.DownloadJobs.SingleAsync(x => x.JobId == queuedId)).Status.ShouldBe(DownloadJobStatus.Stopped);
+        var failed = await db.DownloadJobs.SingleAsync(x => x.JobId == activeId);
+        failed.Status.ShouldBe(DownloadJobStatus.Failed);
+        failed.FailureKind.ShouldBe(FailureKind.Interrupted);
+        (await db.DownloadJobRuns.CountAsync()).ShouldBe(runsBefore);
+    }
+
+    [Test]
+    public async Task Group_Stop_Remains_Stopping_Until_Active_Children_Settle_Then_Becomes_Stopped()
+    {
+        var correlationId = Guid.NewGuid();
+        var completedId = Guid.NewGuid();
+        var activeId = Guid.NewGuid();
+        await using var db = Fixture.CreateDb();
+        var repository = new DownloadFlowV2Repository(db, SystemClock.Instance, NullDownloadJobStateNotifier.Instance);
+        var completedRun = await repository.CreateInitialRunAsync(Request(completedId, correlationId), autoStart: true);
+        var activeRun = await repository.CreateInitialRunAsync(Request(activeId, correlationId), autoStart: true);
+        completedRun.ShouldNotBeNull();
+        activeRun.ShouldNotBeNull();
+        (await repository.CompleteRunAsync(completedId, completedRun.RunId, withWarnings: false)).ShouldBeTrue();
+
+        await repository.StopGroupAsync(correlationId, "tester", "stop collection");
+
+        (await db.DownloadGroups.SingleAsync(x => x.CorrelationId == correlationId))
+            .Status.ShouldBe(DownloadGroupStatus.Stopping);
+        (await repository.MarkStoppedAsync(activeId, activeRun.RunId, "stopped")).ShouldBeTrue();
+        (await db.DownloadGroups.SingleAsync(x => x.CorrelationId == correlationId))
+            .Status.ShouldBe(DownloadGroupStatus.Stopped);
     }
 
     private sealed class CapturingStateNotifier : IDownloadJobStateNotifier
     {
         public List<(Guid JobId, DownloadJobState NewState, DownloadJobState PreviousState)> Calls { get; } = [];
+        public List<(Guid JobId, DownloadJobStatus Status, DownloadStage Stage, int Attempt)> V2Calls { get; } = [];
 
         public Task NotifyAsync(Guid jobId, DownloadJobState newState, DownloadJobState previousState, Guid correlationId, CancellationToken ct = default)
         {
             Calls.Add((jobId, newState, previousState));
+            return Task.CompletedTask;
+        }
+
+        public Task NotifyV2Async(Guid jobId, Guid correlationId, DownloadJobStatus status,
+            DownloadJobStatus previousStatus, DownloadStage stage, DownloadStageStatus stageStatus,
+            Guid? runId, int runNumber, int attempt, string? artifactKey, int warningCount,
+            CancellationToken ct = default)
+        {
+            V2Calls.Add((jobId, status, stage, attempt));
             return Task.CompletedTask;
         }
     }
@@ -407,11 +705,55 @@ public sealed class DownloadJobsRepositoryTests
             JobId = jobId,
             CorrelationId = Guid.NewGuid(),
             State = state,
+            Status = LegacyStatus(state),
             SourceUrl = sourceUrl,
             RequestedBy = requestedBy,
             StorageKey = storageKey,
             SourceKind = sourceKind,
             IngestOrigin = IngestOrigin.Download
+        };
+
+    private static DownloadRequested Request(Guid jobId, Guid correlationId)
+        => new()
+        {
+            JobId = jobId,
+            CorrelationId = correlationId,
+            MessageId = Guid.NewGuid(),
+            OperationKey = $"job/{jobId:N}/requested",
+            OccurredAt = SystemClock.Instance.GetCurrentInstant(),
+            Attempt = 1,
+            SourceUrl = "https://example.test/video",
+            StorageKey = "default",
+            SourceKind = DownloadSourceKind.Direct
+        };
+
+    private static DownloadExecutionIdentity Execution(
+        DownloadRunRequest run,
+        DownloadStage stage,
+        int attempt,
+        string? artifactKey = null)
+        => new()
+        {
+            JobId = run.Request.JobId,
+            RunId = run.RunId,
+            CorrelationId = run.Request.CorrelationId,
+            DispatchId = Guid.NewGuid(),
+            Stage = stage,
+            ArtifactKey = artifactKey,
+            Attempt = attempt
+        };
+
+    private static DownloadJobStatus LegacyStatus(DownloadJobState state)
+        => state switch
+        {
+            DownloadJobState.Queued or DownloadJobState.DownloadQueued => DownloadJobStatus.Queued,
+            DownloadJobState.Completed => DownloadJobStatus.Completed,
+            DownloadJobState.AlreadyDownloaded => DownloadJobStatus.AlreadyDownloaded,
+            DownloadJobState.Ignored => DownloadJobStatus.Ignored,
+            DownloadJobState.Cancelled => DownloadJobStatus.Stopped,
+            DownloadJobState.FailedPermanent or DownloadJobState.FailedTransient
+                or DownloadJobState.ProviderHalted => DownloadJobStatus.Failed,
+            _ => DownloadJobStatus.Running
         };
 
     private sealed class PostgresFixture : IAsyncDisposable
@@ -474,6 +816,13 @@ public sealed class DownloadJobsRepositoryTests
                         .MapEnum<AzureBlobCredentialMode>("azure_blob_credential_mode", "storage")
                         .MapEnum<GoogleCloudStorageCredentialMode>("google_cloud_storage_credential_mode", "storage")
                         .MapEnum<DownloadJobState>("download_job_state", "downloads")
+                        .MapEnum<DownloadJobStatus>("download_job_status", "downloads")
+                        .MapEnum<DownloadStage>("download_stage", "downloads")
+                        .MapEnum<DownloadStageStatus>("download_stage_status", "downloads")
+                        .MapEnum<DownloadGroupKind>("download_group_kind", "downloads")
+                        .MapEnum<DownloadGroupStatus>("download_group_status", "downloads")
+                        .MapEnum<DownloadArtifactStatus>("download_artifact_status", "downloads")
+                        .MapEnum<DownloadWorkerLeaseStatus>("download_worker_lease_status", "downloads")
                         .MapEnum<FailureKind>("failure_kind", "downloads")
                         .MapEnum<IngestOrigin>("ingest_origin", "media")
                         .MapEnum<PlaylistState>("playlist_state", "playlists"))

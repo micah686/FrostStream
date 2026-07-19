@@ -9,13 +9,20 @@
     RefreshOutline,
     ServerOutline
   } from 'flowbite-svelte-icons';
-  import { cancelJob, restartJob, setPriority } from '$lib/api/downloadQueue';
+  import {
+    clearProviderCircuit,
+    setPriority,
+    startGroup,
+    startJob,
+    stopGroup,
+    stopJob
+  } from '$lib/api/downloadQueue';
   import { createDownloadQueueStore, type DownloadQueueState, type QueueRow } from '$lib/stores/downloadQueue';
-  import { formatOptionalBytes, isActive, isCancelled, isDone, isFailed, isQueued } from '$lib/jobs/jobState';
+  import { formatOptionalBytes, isActive, isDone, isFailed, isQueued, isStopped } from '$lib/jobs/jobState';
   import { listOptionPresets } from '$lib/api/optionPresets';
   import JobRow from '$lib/components/jobs/JobRow.svelte';
 
-  type FilterKey = 'all' | 'active' | 'queued' | 'failed' | 'done' | 'cancelled';
+  type FilterKey = 'all' | 'active' | 'queued' | 'failed' | 'done' | 'stopped';
   type SourceFilterKey = 'all' | 'Direct' | 'Playlist' | 'Channel';
 
   const queue = createDownloadQueueStore();
@@ -60,20 +67,19 @@
 
   const tabs = $derived([
     { key: 'all' as const, label: 'All', count: activeFilter === 'all' ? queueState.totalCount : null },
-    { key: 'active' as const, label: 'Active', count: queueState.rows.filter((row) => isActive(row.job.state)).length },
-    { key: 'queued' as const, label: 'Queued', count: queueState.rows.filter((row) => isQueued(row.job.state)).length },
-    { key: 'failed' as const, label: 'Failed', count: queueState.rows.filter((row) => isFailed(row.job.state)).length },
-    { key: 'done' as const, label: 'Done', count: queueState.rows.filter((row) => isDone(row.job.state)).length },
+    { key: 'active' as const, label: 'Active', count: queueState.rows.filter((row) => isActive(row.job.status)).length },
+    { key: 'queued' as const, label: 'Queued', count: queueState.rows.filter((row) => isQueued(row.job.status)).length },
+    { key: 'failed' as const, label: 'Failed', count: queueState.rows.filter((row) => isFailed(row.job.status)).length },
+    { key: 'done' as const, label: 'Done', count: queueState.rows.filter((row) => isDone(row.job.status)).length },
     {
-      key: 'cancelled' as const,
-      label: 'Cancelled',
-      count: queueState.rows.filter((row) => isCancelled(row.job.state)).length
+      key: 'stopped' as const,
+      label: 'Stopped',
+      count: queueState.rows.filter((row) => isStopped(row.job.status)).length
     }
   ]);
 
-  const activeCount = $derived(queueState.rows.filter((row) => isActive(row.job.state)).length);
-  const queuedCount = $derived(queueState.rows.filter((row) => isQueued(row.job.state)).length);
-  const failedCount = $derived(queueState.rows.filter((row) => isFailed(row.job.state)).length);
+  const activeCount = $derived(queueState.rows.filter((row) => isActive(row.job.status)).length);
+  const queuedCount = $derived(queueState.rows.filter((row) => isQueued(row.job.status)).length);
   const totalBytes = $derived(
     queueState.rows.reduce((sum, row) => sum + (row.progress?.totalBytes ?? row.job.fileSizeBytes ?? 0), 0)
   );
@@ -192,15 +198,47 @@
     await applyQueueParams();
   }
 
-  async function cancelDownload(row: QueueRow) {
-    await runAction(row.job.jobId, 'cancel', async () => {
-      await cancelJob(row.job.jobId, 'Cancelled from the jobs page.');
+  async function stopDownload(row: QueueRow) {
+    await runAction(row.job.jobId, 'stop', async () => {
+      await stopJob(row.job.jobId, 'Stopped from the jobs page.');
     });
   }
 
-  async function restartDownload(row: QueueRow) {
-    await runAction(row.job.jobId, 'restart', async () => {
-      await restartJob(row.job.jobId);
+  async function startDownload(row: QueueRow) {
+    await runAction(row.job.jobId, 'start', async () => {
+      await startJob(row.job.jobId);
+    });
+  }
+
+  async function clearDownloadProvider(row: QueueRow) {
+    await runAction(row.job.jobId, 'clear-provider', async () => {
+      await clearProviderCircuit(providerCircuitName(row));
+    });
+  }
+
+  function providerCircuitName(row: QueueRow): string {
+    const recorded = row.job.failureMessage?.match(/provider circuit for '([^']+)'/i)?.[1];
+    if (recorded) return recorded;
+    try {
+      const host = new URL(row.job.sourceUrl).hostname.toLowerCase().replace(/^www\./, '');
+      if (host === 'youtu.be' || host.endsWith('.youtube.com') || host === 'youtube.com') return 'youtube';
+      if (host.endsWith('.tiktok.com') || host === 'tiktok.com') return 'tiktok';
+      if (host.endsWith('.vimeo.com') || host === 'vimeo.com') return 'vimeo';
+      return host.split('.')[0] || host;
+    } catch {
+      return 'unknown';
+    }
+  }
+
+  async function stopDownloadGroup(row: QueueRow) {
+    await runAction(row.job.jobId, 'group-stop', async () => {
+      await stopGroup(row.job.correlationId, 'Stopped from the jobs page.');
+    });
+  }
+
+  async function startDownloadGroup(row: QueueRow) {
+    await runAction(row.job.jobId, 'group-start', async () => {
+      await startGroup(row.job.correlationId);
     });
   }
 
@@ -304,7 +342,7 @@
     <div class="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4">
       <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-600">Waiting</p>
       <p class="mt-2 text-2xl font-bold text-white">{queuedCount}</p>
-      <p class="mt-1 text-xs text-slate-500">queued for a slot</p>
+      <p class="mt-1 text-xs text-slate-500">not yet dispatched</p>
     </div>
     <div class="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4">
       <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-600">Size</p>
@@ -407,8 +445,11 @@
           {now}
           {optionPresetsByKey}
           busyAction={actionBusy[row.job.jobId]}
-          oncancel={cancelDownload}
-          onrestart={restartDownload}
+          onstop={stopDownload}
+          onstart={startDownload}
+          onclearprovider={clearDownloadProvider}
+          ongroupstop={stopDownloadGroup}
+          ongroupstart={startDownloadGroup}
           onpriority={updatePriority}
         />
       {/each}

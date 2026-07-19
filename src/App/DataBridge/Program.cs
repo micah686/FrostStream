@@ -54,6 +54,13 @@ class Program
                         .MapEnum<AzureBlobCredentialMode>("azure_blob_credential_mode", "storage")
                         .MapEnum<GoogleCloudStorageCredentialMode>("google_cloud_storage_credential_mode", "storage")
                         .MapEnum<DownloadJobState>("download_job_state", "downloads")
+                        .MapEnum<DownloadJobStatus>("download_job_status", "downloads")
+                        .MapEnum<DownloadStage>("download_stage", "downloads")
+                        .MapEnum<DownloadStageStatus>("download_stage_status", "downloads")
+                        .MapEnum<DownloadGroupKind>("download_group_kind", "downloads")
+                        .MapEnum<DownloadGroupStatus>("download_group_status", "downloads")
+                        .MapEnum<DownloadArtifactStatus>("download_artifact_status", "downloads")
+                        .MapEnum<DownloadWorkerLeaseStatus>("download_worker_lease_status", "downloads")
                         .MapEnum<FailureKind>("failure_kind", "downloads")
                         .MapEnum<IngestOrigin>("ingest_origin", "media")
                         .MapEnum<AudioRenditionStatus>("audio_rendition_status", "media")
@@ -82,6 +89,7 @@ class Program
         });
 
         builder.Services.AddNatsTopologySource<DownloadTopology>();
+        builder.Services.AddNatsTopologySource<ArtifactStorageTopology>();
         builder.Services.AddNatsTopologySource<PlaylistTopology>();
         builder.Services.AddNatsTopologySource<BackgroundJobsTopology>();
         builder.Services.AddNatsTopologySource<LocalImportTopology>();
@@ -106,10 +114,9 @@ class Program
             // persisted message/effect to the Unix epoch. Swap in a NodaTime-aware serializer so
             // dates (OccurredAt, metadata scrape/release dates, …) survive the flow store round-trip.
             .WithOptions(new Options(serializer: new NodaTimeFlowSerializer()))
-            // Wait for executing flows to finish before the host tears down DI. Without this, a
-            // flow running through a shutdown dies with ObjectDisposedException (disposed
-            // IServiceProvider) and is left permanently Failed — the exact corpse the slot
-            // coordinator's recovery/sweep has to repair.
+            // Let executing effects leave DI cleanly. On the next DataBridge generation the V2
+            // startup gate still deletes every recorded run/group flow and marks begun work
+            // Interrupted; graceful host teardown never implies automatic resume.
             .GracefulShutdown(enable: true)
             .RegisterFlowsAutomatically());
 
@@ -121,6 +128,7 @@ class Program
         });
         builder.Services.AddSingleton<IDownloadJobStateNotifier, DownloadJobStateNotifier>();
         builder.Services.AddScoped<IDownloadJobsRepository, DownloadJobsRepository>();
+        builder.Services.AddScoped<IDownloadFlowV2Repository, DownloadFlowV2Repository>();
         builder.Services.AddScoped<IImportSessionRepository, ImportSessionRepository>();
         builder.Services.AddScoped<IMetadataRepository, MetadataRepository>();
         builder.Services.AddScoped<IMetadataReadService, MetadataReadService>();
@@ -144,7 +152,7 @@ class Program
         builder.Services.Configure<MediaAccessOptions>(
             builder.Configuration.GetSection(MediaAccessOptions.SectionName));
         builder.Services.AddSingleton<WatchedItemAutoDeleteExecutor>();
-        builder.Services.AddSingleton<DownloadSlotCoordinator>();
+        builder.Services.AddSingleton<DownloadFlowStartupState>();
         builder.Services.AddSingleton<INotificationDispatcher, NotificationDispatcher>();
         builder.Services.AddSingleton<ImportSessionRequestReplyService>();
 
@@ -182,17 +190,20 @@ class Program
         builder.Services.AddHostedService<OrphanMetadataCleanupConsumerService>();
         builder.Services.AddHostedService<FilesystemRescanConsumerService>();
         builder.Services.AddHostedService<BackgroundJobConsumerService>();
-        builder.Services.AddHostedService<DownloadSlotCoordinator>(p => p.GetRequiredService<DownloadSlotCoordinator>());
+        builder.Services.AddHostedService<DownloadFlowStartupService>();
         builder.Services.AddHostedService<DownloadAdminConsumerService>();
+        builder.Services.AddHostedService<DownloadLeaseMonitorService>();
         builder.Services.AddHostedService<DownloadQueueConsumerService>();
         builder.Services.AddHostedService<DownloadProgressPersistenceService>();
+        builder.Services.AddHostedService<DownloadGroupRequestedIngressService>();
         builder.Services.AddHostedService<DownloadRequestedIngressService>();
         builder.Services.AddHostedService<DownloadEventsConsumerService>();
+        builder.Services.AddHostedService<DownloadGroupExpansionEventsConsumerService>();
+        builder.Services.AddHostedService<DownloadStageTelemetryConsumerService>();
         builder.Services.AddHostedService<LocalImportEventsConsumerService>();
         builder.Services.AddHostedService(sp => sp.GetRequiredService<ImportSessionRequestReplyService>());
         builder.Services.AddHostedService<ImportSessionProbeEventsConsumerService>();
         builder.Services.AddHostedService<ImportDispatcherService>();
-        builder.Services.AddHostedService<PlaylistRequestedIngressService>();
         builder.Services.AddHostedService<PlaylistEventsConsumerService>();
         builder.Services.AddHostedService<PlaylistQueryConsumerService>();
         builder.Services.AddHostedService<UserPlaylistConsumerService>();

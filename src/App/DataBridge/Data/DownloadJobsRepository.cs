@@ -33,11 +33,12 @@ public sealed class DownloadJobsRepository(
 
     private readonly IDownloadJobStateNotifier _stateNotifier = stateNotifier ?? NullDownloadJobStateNotifier.Instance;
 
-    /// <summary>Fires a live state-changed notification when a transition actually occurred. Best-effort.</summary>
+    /// <summary>
+    /// Legacy checkpoint writes are internal persistence details in V2 and must not emit a queue
+    /// lifecycle event. The authoritative V2 repository publishes status/stage notifications.
+    /// </summary>
     private Task NotifyStateAsync(DownloadJobEntity job, DownloadJobState previousState, CancellationToken ct)
-        => previousState == job.State
-            ? Task.CompletedTask
-            : _stateNotifier.NotifyAsync(job.JobId, job.State, previousState, job.CorrelationId, ct);
+        => Task.CompletedTask;
 
     public Task<bool> IsMessageProcessedAsync(Guid messageId, CancellationToken ct = default)
         => db.ProcessedMessages.AsNoTracking().AnyAsync(x => x.MessageId == messageId, ct);
@@ -176,9 +177,7 @@ public sealed class DownloadJobsRepository(
     }
 
     private Task NotifyProgressAsync((Guid JobId, DownloadJobState State, Guid CorrelationId) snapshot, int affected, DownloadJobState newState, CancellationToken ct)
-        => affected == 0 || snapshot.State == newState
-            ? Task.CompletedTask
-            : _stateNotifier.NotifyAsync(snapshot.JobId, newState, snapshot.State, snapshot.CorrelationId, ct);
+        => Task.CompletedTask;
 
     public async Task<SourceVersionDecision> CheckSourceVersionAsync(MetadataFetched evt, bool forceDownload, CancellationToken ct = default)
     {
@@ -308,7 +307,7 @@ public sealed class DownloadJobsRepository(
 
         // Upsert the source row pointing at media_guid. If it already exists with a different
         // media_guid, prefer the bytes-derived one (option a) — same bytes win as identity.
-        if (provider is not null && sourceMediaId is not null)
+        if (request.PersistSourceMapping && provider is not null && sourceMediaId is not null)
         {
             var sourceRow = await db.MediaSourceVersions
                 .FirstOrDefaultAsync(x => x.Provider == provider && x.SourceMediaId == sourceMediaId, ct);
@@ -428,131 +427,6 @@ public sealed class DownloadJobsRepository(
         return true;
     }
 
-    public async Task<(DownloadJobState? State, string? StorageKey)> GetJobStateAndStorageKeyAsync(Guid jobId, CancellationToken ct = default)
-    {
-        var row = await db.DownloadJobs
-            .AsNoTracking()
-            .Where(x => x.JobId == jobId)
-            .Select(x => new { x.State, x.StorageKey })
-            .FirstOrDefaultAsync(ct);
-        return row is null ? (null, null) : (row.State, row.StorageKey);
-    }
-
-    public async Task<CancelDownloadDecision> TryBeginCancellationAsync(
-        Guid jobId,
-        string? requestedBy,
-        string? reason,
-        CancellationToken ct = default)
-    {
-        var job = await db.DownloadJobs.FirstOrDefaultAsync(x => x.JobId == jobId, ct);
-
-        if (job is null)
-            return CancelDownloadDecision.NotFound();
-
-        var workerTag = await db.StorageConfigs
-            .Where(x => x.Key == job.StorageKey)
-            .Select(x => x.WorkerTag)
-            .FirstOrDefaultAsync(ct);
-
-        if (job.State is DownloadJobState.Cancelled)
-            return CancelDownloadDecision.Rejected(job.State, "Job is already cancelled.", alreadyTerminal: true);
-
-        if (job.State is DownloadJobState.Completed or DownloadJobState.AlreadyDownloaded)
-            return CancelDownloadDecision.Rejected(job.State, "Job is already complete.", alreadyTerminal: true);
-
-        if (job.State is DownloadJobState.FailedTransient)
-        {
-            // The saga already ran its terminal Fail() step for this job, so there's no active
-            // Cleipnir flow instance left to drive the normal Cancelling -> Cancelled transition.
-            // Transition straight to Cancelled and let the caller still notify the Worker — a known
-            // race (JetStream redelivering DownloadVideoCommand mid-retry-backoff, e.g. during a
-            // rate-limited sidecar/subtitle fetch) can leave a yt-dlp process running for this JobId
-            // even though the DB already recorded FailedTransient.
-            var failedPreviousState = job.State;
-            job.State = DownloadJobState.Cancelled;
-            job.FailureKind = FailureKind.Cancelled;
-            job.FailureCode = "cancel_requested";
-            job.FailureMessage = BuildCancellationMessage(requestedBy, reason);
-            job.UpdatedAt = clock.GetCurrentInstant();
-            await db.SaveChangesAsync(ct);
-            await NotifyStateAsync(job, failedPreviousState, ct);
-            return CancelDownloadDecision.AcceptedFor(job.CorrelationId, job.State, failedPreviousState, workerTag);
-        }
-
-        if (job.State is DownloadJobState.FailedPermanent or DownloadJobState.DeadLettered or DownloadJobState.ProviderHalted)
-            return CancelDownloadDecision.Rejected(job.State, "Job has already failed.", alreadyTerminal: true);
-
-        if (job.State is DownloadJobState.UploadPending or DownloadJobState.Uploaded or DownloadJobState.CommitPending or DownloadJobState.Compensating or DownloadJobState.DownloadedTemp)
-        {
-            return CancelDownloadDecision.Rejected(
-                job.State,
-                $"Job cannot be cancelled cleanly from state {job.State}.");
-        }
-
-        if (job.State is not (DownloadJobState.Queued or DownloadJobState.MetadataPending or DownloadJobState.MetadataResolved or DownloadJobState.DownloadQueued or DownloadJobState.DownloadPending or DownloadJobState.Cancelling))
-        {
-            return CancelDownloadDecision.Rejected(
-                job.State,
-                $"Job cannot be cancelled from state {job.State}.");
-        }
-
-        var previousState = job.State;
-        if (job.State != DownloadJobState.Cancelling)
-        {
-            job.State = DownloadJobState.Cancelling;
-            job.FailureKind = FailureKind.Cancelled;
-            job.FailureCode = "cancel_requested";
-            job.FailureMessage = BuildCancellationMessage(requestedBy, reason);
-            job.UpdatedAt = clock.GetCurrentInstant();
-            await db.SaveChangesAsync(ct);
-            await NotifyStateAsync(job, previousState, ct);
-        }
-
-        return CancelDownloadDecision.AcceptedFor(job.CorrelationId, job.State, previousState, workerTag);
-    }
-
-    public async Task MarkCancelledAsync(Guid jobId, string? message, CancellationToken ct = default)
-    {
-        var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
-        var previousState = job.State;
-        job.State = DownloadJobState.Cancelled;
-        job.FailureKind = FailureKind.Cancelled;
-        job.FailureCode = "cancel_requested";
-        job.FailureMessage = string.IsNullOrWhiteSpace(message) ? "Download cancelled by request." : message;
-        job.UpdatedAt = clock.GetCurrentInstant();
-        job.CompletedAt = job.UpdatedAt;
-
-        var alreadyTerminal = await db.FailedDownloadJobs.AnyAsync(x => x.JobId == jobId, ct);
-        if (!alreadyTerminal)
-        {
-            db.FailedDownloadJobs.Add(new FailedDownloadJobEntity
-            {
-                JobId = jobId,
-                CorrelationId = job.CorrelationId,
-                FailedState = DownloadJobState.Cancelled,
-                FailureKind = FailureKind.Cancelled,
-                FailureCode = job.FailureCode,
-                FailureMessage = job.FailureMessage,
-                LastPayloadJson = null
-            });
-        }
-
-        await db.SaveChangesAsync(ct);
-        await NotifyStateAsync(job, previousState, ct);
-    }
-
-    public async Task<IReadOnlyList<DownloadQueuedEntry>> GetDownloadQueuedJobsAsync(CancellationToken ct = default)
-    {
-        var rows = await db.DownloadJobs
-            .AsNoTracking()
-            .Where(x => x.State == DownloadJobState.DownloadQueued)
-            .OrderByDescending(x => x.Priority)
-            .ThenBy(x => x.CreatedAt)
-            .Select(x => new { x.JobId, x.CorrelationId, x.Priority, x.CreatedAt, x.StorageKey })
-            .ToListAsync(ct);
-        return rows.Select(r => new DownloadQueuedEntry(r.JobId, r.CorrelationId, r.Priority, r.CreatedAt, r.StorageKey)).ToList();
-    }
-
     public async Task IncrementMetadataAttemptAsync(Guid jobId, int attempt, CancellationToken ct = default)
     {
         var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
@@ -647,7 +521,11 @@ public sealed class DownloadJobsRepository(
 
         var query = db.DownloadJobs.AsNoTracking().AsQueryable();
 
-        if (request.State is { } state)
+        if (request.Status is { } status)
+        {
+            query = query.Where(x => x.Status == status);
+        }
+        else if (request.State is { } state)
         {
             query = query.Where(x => x.State == state);
         }
@@ -656,27 +534,17 @@ public sealed class DownloadJobsRepository(
             query = request.StateGroup switch
             {
                 DownloadQueueStateGroup.Active => query.Where(x =>
-                    x.State == DownloadJobState.MetadataPending
-                    || x.State == DownloadJobState.MetadataResolved
-                    || x.State == DownloadJobState.DownloadPending
-                    || x.State == DownloadJobState.UploadPending
-                    || x.State == DownloadJobState.CommitPending
-                    || x.State == DownloadJobState.Compensating
-                    || x.State == DownloadJobState.Cancelling),
-                DownloadQueueStateGroup.Queued => query.Where(x =>
-                    x.State == DownloadJobState.Queued
-                    || x.State == DownloadJobState.DownloadQueued),
-                DownloadQueueStateGroup.Failed => query.Where(x =>
-                    x.State == DownloadJobState.FailedTransient
-                    || x.State == DownloadJobState.FailedPermanent
-                    || x.State == DownloadJobState.DeadLettered
-                    || x.State == DownloadJobState.ProviderHalted),
+                    x.Status == DownloadJobStatus.Running
+                    || x.Status == DownloadJobStatus.Stopping
+                    || x.Status == DownloadJobStatus.Compensating),
+                DownloadQueueStateGroup.Queued => query.Where(x => x.Status == DownloadJobStatus.Queued),
+                DownloadQueueStateGroup.Failed => query.Where(x => x.Status == DownloadJobStatus.Failed),
                 DownloadQueueStateGroup.Done => query.Where(x =>
-                    x.State == DownloadJobState.Completed
-                    || x.State == DownloadJobState.AlreadyDownloaded),
-                DownloadQueueStateGroup.Cancelled => query.Where(x =>
-                    x.State == DownloadJobState.Cancelled
-                    || x.State == DownloadJobState.Ignored),
+                    x.Status == DownloadJobStatus.Completed
+                    || x.Status == DownloadJobStatus.CompletedWithWarnings
+                    || x.Status == DownloadJobStatus.AlreadyDownloaded
+                    || x.Status == DownloadJobStatus.Ignored),
+                DownloadQueueStateGroup.Stopped => query.Where(x => x.Status == DownloadJobStatus.Stopped),
                 _ => query
             };
         }
@@ -811,6 +679,15 @@ public sealed class DownloadJobsRepository(
         JobId = x.JobId,
         CorrelationId = x.CorrelationId,
         State = x.State,
+        Status = x.Status,
+        Stage = x.Stage,
+        StageStatus = x.StageStatus,
+        RunId = x.CurrentRunId,
+        RunNumber = x.CurrentRunNumber,
+        Attempt = x.CurrentAttempt,
+        MaxAttempts = 3,
+        ArtifactKey = x.CurrentArtifactKey,
+        WarningCount = x.WarningCount,
         SourceUrl = x.SourceUrl,
         RequestedBy = x.RequestedBy,
         StorageKey = x.StorageKey,
@@ -883,17 +760,4 @@ public sealed class DownloadJobsRepository(
             ? null
             : value.Trim();
 
-    private static string BuildCancellationMessage(string? requestedBy, string? reason)
-    {
-        var trimmedReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
-        var trimmedRequester = string.IsNullOrWhiteSpace(requestedBy) ? null : requestedBy.Trim();
-
-        return (trimmedRequester, trimmedReason) switch
-        {
-            ({ } requester, { } why) => $"Download cancelled by {requester}: {why}",
-            ({ } requester, null) => $"Download cancelled by {requester}.",
-            (null, { } why) => $"Download cancelled by request: {why}",
-            _ => "Download cancelled by request."
-        };
-    }
 }

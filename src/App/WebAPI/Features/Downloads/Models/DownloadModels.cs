@@ -28,8 +28,8 @@ public sealed class DownloadRequest
     /// </summary>
     public string? CookieProfileKey { get; init; }
 
-    /// <summary>Scheduling priority 0–100 (default 0). Higher values run before lower ones when multiple
-    /// jobs are waiting for a download slot.</summary>
+    /// <summary>Administrative priority 0–100 (default 0), retained on the job and used by
+    /// priority-sorted queue views.</summary>
     [Range(0, 100)]
     public int Priority { get; init; } = 0;
 
@@ -68,8 +68,8 @@ public sealed class DownloadAudioRequest
     /// </summary>
     public string? CookieProfileKey { get; init; }
 
-    /// <summary>Scheduling priority 0–100 (default 0). Higher values run before lower ones when multiple
-    /// jobs are waiting for a download slot.</summary>
+    /// <summary>Administrative priority 0–100 (default 0), retained on the job and used by
+    /// priority-sorted queue views.</summary>
     [Range(0, 100)]
     public int Priority { get; init; } = 0;
 
@@ -107,8 +107,8 @@ public sealed class DownloadPresetRequest
     /// </summary>
     public string? CookieProfileKey { get; init; }
 
-    /// <summary>Scheduling priority 0–100 (default 0). Higher values run before lower ones when multiple
-    /// jobs are waiting for a download slot.</summary>
+    /// <summary>Administrative priority 0–100 (default 0), retained on the job and used by
+    /// priority-sorted queue views.</summary>
     [Range(0, 100)]
     public int Priority { get; init; } = 0;
 
@@ -124,14 +124,14 @@ public sealed class UpdatePriorityRequest
     public required int Priority { get; init; }
 }
 
-/// <summary>Body for <c>POST /api/downloads/{jobId}/cancel</c>.</summary>
-public sealed class CancelDownloadApiRequest
+/// <summary>Body for <c>POST /api/downloads/{jobId}/stop</c>.</summary>
+public sealed class StopDownloadApiRequest
 {
     [StringLength(512)]
     public string? Reason { get; init; }
 }
 
-public sealed record CancelDownloadApiResponse(DownloadJobState State);
+public sealed record StopDownloadApiResponse(DownloadJobStatus Status);
 
 /// <summary>Body for <c>GET /api/downloads/queue/{jobId}/media</c>.</summary>
 public sealed record DownloadQueueMediaDto(Guid MediaGuid);

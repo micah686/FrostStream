@@ -186,25 +186,25 @@ public sealed class DownloadQueueControllerTests
     }
 
     [Test]
-    public async Task Cancel_Alias_Preserves_Existing_Response()
+    public async Task Stop_Requests_V2_Stop_With_Authenticated_User()
     {
         var messageBus = Substitute.For<IMessageBus>();
         var jobId = Guid.NewGuid();
-        messageBus.RequestAsync<CancelDownloadRequest, CancelDownloadResponse>(
-                DownloadSubjects.CancelDownloadRequest,
-                Arg.Any<CancelDownloadRequest>(),
+        messageBus.RequestAsync<StopDownloadRequest, StopDownloadResponse>(
+                DownloadSubjects.StopDownloadRequest,
+                Arg.Any<StopDownloadRequest>(),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
-            .Returns(new CancelDownloadResponse { Success = true, State = DownloadJobState.Cancelling });
+            .Returns(new StopDownloadResponse { Success = true, Status = DownloadJobStatus.Stopping });
         var controller = CreateController(messageBus);
 
-        var result = await controller.Cancel(jobId, new CancelDownloadApiRequest { Reason = "stop" }, CancellationToken.None);
+        var result = await controller.Stop(jobId, new StopDownloadApiRequest { Reason = "stop" }, CancellationToken.None);
 
         result.ShouldBeOfType<AcceptedResult>().Value
-            .ShouldBeOfType<CancelDownloadApiResponse>().State.ShouldBe(DownloadJobState.Cancelling);
-        await messageBus.Received(1).RequestAsync<CancelDownloadRequest, CancelDownloadResponse>(
-            DownloadSubjects.CancelDownloadRequest,
-            Arg.Is<CancelDownloadRequest>(x => x.JobId == jobId && x.RequestedBy == "unit_test_user" && x.Reason == "stop"),
+            .ShouldBeOfType<StopDownloadApiResponse>().Status.ShouldBe(DownloadJobStatus.Stopping);
+        await messageBus.Received(1).RequestAsync<StopDownloadRequest, StopDownloadResponse>(
+            DownloadSubjects.StopDownloadRequest,
+            Arg.Is<StopDownloadRequest>(x => x.JobId == jobId && x.RequestedBy == "unit_test_user" && x.Reason == "stop"),
             Arg.Any<TimeSpan>(),
             Arg.Any<CancellationToken>());
     }
@@ -227,21 +227,27 @@ public sealed class DownloadQueueControllerTests
     }
 
     [Test]
-    public async Task Restart_Alias_Returns_Accepted_On_Success()
+    public async Task Start_Returns_Accepted_With_Fresh_Run_On_Success()
     {
         var messageBus = Substitute.For<IMessageBus>();
         var jobId = Guid.NewGuid();
-        messageBus.RequestAsync<RestartHaltedDownloadRequest, RestartHaltedDownloadResponse>(
-                DownloadSubjects.RestartHaltedDownloadRequest,
-                Arg.Any<RestartHaltedDownloadRequest>(),
+        var runId = Guid.NewGuid();
+        messageBus.RequestAsync<StartDownloadRequest, StartDownloadResponse>(
+                DownloadSubjects.StartDownloadRequest,
+                Arg.Any<StartDownloadRequest>(),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
-            .Returns(new RestartHaltedDownloadResponse { Success = true, JobId = jobId });
+            .Returns(new StartDownloadResponse { Success = true, JobId = jobId, RunId = runId });
         var controller = CreateController(messageBus);
 
-        var result = await controller.RestartHalted(jobId, CancellationToken.None);
+        var result = await controller.Start(jobId, CancellationToken.None);
 
         result.ShouldBeOfType<AcceptedResult>();
+        await messageBus.Received(1).RequestAsync<StartDownloadRequest, StartDownloadResponse>(
+            DownloadSubjects.StartDownloadRequest,
+            Arg.Is<StartDownloadRequest>(x => x.JobId == jobId && x.RequestedBy == "unit_test_user"),
+            Arg.Any<TimeSpan>(),
+            Arg.Any<CancellationToken>());
     }
 
     private static DownloadQueueController CreateController(IMessageBus messageBus)

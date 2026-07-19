@@ -23,6 +23,7 @@ public sealed class PlaylistsRepository(
         var existingById = await db.Playlists.FirstOrDefaultAsync(x => x.PlaylistId == request.PlaylistId, ct);
         if (existingById is not null)
         {
+            existingById.CorrelationId = request.CorrelationId;
             existingById.State = PlaylistState.PendingMetadata;
             existingById.UpdatedAt = clock.GetCurrentInstant();
             existingById.ConfigSetKey = request.ConfigSetKey;
@@ -38,6 +39,7 @@ public sealed class PlaylistsRepository(
         var existingByUrl = await db.Playlists.FirstOrDefaultAsync(x => x.SourceUrl == request.SourceUrl, ct);
         if (existingByUrl is not null)
         {
+            existingByUrl.CorrelationId = request.CorrelationId;
             existingByUrl.State = PlaylistState.PendingMetadata;
             existingByUrl.UpdatedAt = clock.GetCurrentInstant();
             existingByUrl.RequestedBy = request.RequestedBy ?? existingByUrl.RequestedBy;
@@ -189,16 +191,22 @@ public sealed class PlaylistsRepository(
         var jobExists = await db.DownloadJobs.AnyAsync(x => x.JobId == request.JobId, ct);
         if (!jobExists)
         {
+            var ignored = request.InitialState == DownloadJobState.Ignored;
             db.DownloadJobs.Add(new DownloadJobEntity
             {
                 JobId = request.JobId,
                 CorrelationId = request.CorrelationId,
                 State = request.InitialState,
+                Status = ignored ? DownloadJobStatus.Ignored : DownloadJobStatus.Queued,
+                Stage = DownloadStage.None,
+                StageStatus = ignored ? DownloadStageStatus.Skipped : DownloadStageStatus.Pending,
                 SourceUrl = request.EntryUrl,
                 RequestedBy = request.RequestedBy,
                 StorageKey = request.StorageKey,
                 SourceKind = DownloadSourceKind.Playlist,
-                IgnoredKeyword = request.IgnoredKeyword
+                IgnoredKeyword = request.IgnoredKeyword,
+                CompletedAt = ignored ? clock.GetCurrentInstant() : null,
+                UpdatedAt = clock.GetCurrentInstant()
             });
         }
 
@@ -229,13 +237,25 @@ public sealed class PlaylistsRepository(
         if (job is null)
             return null;
 
+        if (job.Status is not (DownloadJobStatus.Ignored or DownloadJobStatus.Stopped or DownloadJobStatus.Failed))
+            return null;
+
         var previousState = job.State;
-        job.State = DownloadJobState.Queued;
+        var previousStatus = job.Status;
+        job.State = DownloadJobState.Cancelled;
+        job.Status = DownloadJobStatus.Stopped;
+        job.Stage = DownloadStage.None;
+        job.StageStatus = DownloadStageStatus.Stopped;
+        job.CurrentAttempt = 0;
+        job.CurrentArtifactKey = null;
         job.IgnoredKeyword = null;
+        job.CompletedAt = null;
         job.UpdatedAt = clock.GetCurrentInstant();
         await db.SaveChangesAsync(ct);
-        if (previousState != job.State)
-            await _stateNotifier.NotifyAsync(job.JobId, job.State, previousState, job.CorrelationId, ct);
+        if (previousState != job.State || previousStatus != job.Status)
+            await _stateNotifier.NotifyV2Async(job.JobId, job.CorrelationId, job.Status, previousStatus,
+                job.Stage, job.StageStatus, job.CurrentRunId, job.CurrentRunNumber, job.CurrentAttempt, job.CurrentArtifactKey,
+                job.WarningCount, ct);
         return item.EntryUrl;
     }
 
@@ -302,16 +322,16 @@ public sealed class PlaylistsRepository(
             .Join(db.DownloadJobs.AsNoTracking(),
                 item => item.JobId,
                 job => job.JobId,
-                (item, job) => new { item.PlaylistId, job.State })
-            .GroupBy(x => new { x.PlaylistId, x.State })
-            .Select(g => new { g.Key.PlaylistId, g.Key.State, Count = g.Count() })
+                (item, job) => new { item.PlaylistId, job.Status })
+            .GroupBy(x => new { x.PlaylistId, x.Status })
+            .Select(g => new { g.Key.PlaylistId, g.Key.Status, Count = g.Count() })
             .ToListAsync(ct);
 
         var summaries = new List<PlaylistSummary>(playlists.Count);
         foreach (var playlist in playlists)
         {
             var rows = counts.Where(c => c.PlaylistId == playlist.PlaylistId).ToList();
-            var (completed, failed, pending) = ClassifyCounts(rows.Select(r => (r.State, r.Count)));
+            var (completed, failed, pending) = ClassifyCounts(rows.Select(r => (r.Status, r.Count)));
             summaries.Add(new PlaylistSummary(playlist, completed, failed, pending));
         }
         return summaries;
@@ -338,32 +358,31 @@ public sealed class PlaylistsRepository(
                 item.JobId,
                 item.EntryUrl,
                 item.EntryTitle,
-                job.State,
+                job.Status,
                 m == null ? (Guid?)null : m.MediaGuid,
                 job.IgnoredKeyword))
             .ToListAsync(ct);
 
-        var (completed, failed, pending) = ClassifyCounts(items.Select(i => (i.JobState, 1)));
+        var (completed, failed, pending) = ClassifyCounts(items.Select(i => (i.JobStatus, 1)));
         return new PlaylistDetail(playlist, completed, failed, pending, items);
     }
 
-    private static (int Completed, int Failed, int Pending) ClassifyCounts(IEnumerable<(DownloadJobState State, int Count)> rows)
+    private static (int Completed, int Failed, int Pending) ClassifyCounts(IEnumerable<(DownloadJobStatus Status, int Count)> rows)
     {
         var completed = 0;
         var failed = 0;
         var pending = 0;
-        foreach (var (state, count) in rows)
+        foreach (var (status, count) in rows)
         {
-            switch (state)
+            switch (status)
             {
-                case DownloadJobState.Completed:
-                case DownloadJobState.AlreadyDownloaded:
+                case DownloadJobStatus.Completed:
+                case DownloadJobStatus.CompletedWithWarnings:
+                case DownloadJobStatus.AlreadyDownloaded:
+                case DownloadJobStatus.Ignored:
                     completed += count;
                     break;
-                case DownloadJobState.FailedPermanent:
-                case DownloadJobState.FailedTransient:
-                case DownloadJobState.DeadLettered:
-                case DownloadJobState.ProviderHalted:
+                case DownloadJobStatus.Failed:
                     failed += count;
                     break;
                 default:

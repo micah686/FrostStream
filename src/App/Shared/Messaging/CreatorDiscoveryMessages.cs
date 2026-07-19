@@ -137,6 +137,8 @@ public sealed record UpsertDiscoveredMediaBatchRequestMessage
     public bool FetchComments { get; init; }
     public bool QueueAllItems { get; init; }
     public bool ForceDownload { get; init; }
+    /// <summary>Persists discovery results without producing download jobs after a group stop.</summary>
+    public bool SuppressDownloadEnqueue { get; init; }
     public YtDlpSharpLib.Options.YtDlpOptions? YtDlpOptions { get; init; }
     public required IReadOnlyList<DiscoveredMediaCandidate> Items { get; init; }
 }

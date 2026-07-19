@@ -170,21 +170,6 @@ public sealed record PlaylistMetadataFetchFailed : IPlaylistFlowMessage
     public required string ErrorMessage { get; init; }
 }
 
-/// <summary>
-/// Internal command. Tells DataBridge to drain the staging table and create one
-/// DownloadJob + PlaylistItem row per entry, publishing <see cref="DownloadRequested"/> for each.
-/// </summary>
-public sealed record ProcessPlaylistStagedEntriesCommand : IPlaylistFlowMessage
-{
-    public required Guid PlaylistId { get; init; }
-    public required Guid CorrelationId { get; init; }
-    public Guid? CausationId { get; init; }
-    public required Guid MessageId { get; init; }
-    public required string OperationKey { get; init; }
-    public required Instant OccurredAt { get; init; }
-    public required int Attempt { get; init; }
-}
-
 // ── NATS request/reply (non-JetStream) for queries ────────────────────────────
 
 public sealed class PlaylistGetRequestMessage
@@ -206,10 +191,10 @@ public sealed class PlaylistItemDto
     public required Guid JobId { get; init; }
     public required string EntryUrl { get; init; }
     public string? EntryTitle { get; init; }
-    public required DownloadJobState JobState { get; init; }
+    public required DownloadJobStatus JobStatus { get; init; }
     public Guid? MediaGuid { get; init; }
 
-    /// <summary>When <see cref="JobState"/> is <see cref="DownloadJobState.Ignored"/>, the config-set
+    /// <summary>When <see cref="JobStatus"/> is <see cref="DownloadJobStatus.Ignored"/>, the config-set
     /// keyword that suppressed this entry. Null otherwise.</summary>
     public string? IgnoredKeyword { get; init; }
 }

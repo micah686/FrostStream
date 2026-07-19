@@ -46,6 +46,7 @@ class Program
         });
 
         builder.Services.AddNatsTopologySource<DownloadTopology>();
+        builder.Services.AddNatsTopologySource<ArtifactStorageTopology>();
         builder.Services.AddNatsTopologySource<PlaylistTopology>();
         builder.Services.AddNatsTopologySource<BackgroundJobsTopology>();
         builder.Services.AddNatsTopologySource<LocalImportTopology>();
@@ -101,7 +102,6 @@ class Program
             .Bind(builder.Configuration.GetSection(PotProviderOptions.SectionName));
         builder.Services.AddSingleton<PotShimEndpoint>();
         builder.Services.AddSingleton<PotOptionsApplier>();
-        builder.Services.AddSingleton<ProviderDownloadHaltRegistry>();
         builder.Services.AddHttpClient<IReturnYouTubeDislikeClient, ReturnYouTubeDislikeClient>((sp, client) =>
         {
             var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<WorkerOptions>>()

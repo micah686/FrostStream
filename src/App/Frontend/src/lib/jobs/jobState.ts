@@ -1,42 +1,50 @@
 import { formatBytes } from '$lib/media';
 
-export function normalizeState(state: string): string {
-  return state.toLowerCase();
+export function normalizeStatus(status: string): string {
+  return status.toLowerCase();
 }
 
-export function isQueued(state: string): boolean {
-  return ['queued', 'downloadqueued'].includes(normalizeState(state));
+export function isQueued(status: string): boolean {
+  return normalizeStatus(status) === 'queued';
 }
 
-export function isActive(state: string): boolean {
-  // DownloadedTemp and Uploaded are mid-flow checkpoints (bytes on worker disk / bytes in
-  // storage): the job still has uploads and/or the final DB commit ahead, so they render as
-  // active, never as done.
-  return [
-    'metadatapending',
-    'metadataresolved',
-    'downloadpending',
-    'downloadedtemp',
-    'uploadpending',
-    'uploaded',
-    'commitpending',
-    'compensating',
-    'cancelling'
-  ].includes(normalizeState(state));
+export function isActive(status: string): boolean {
+  return ['running', 'stopping', 'compensating'].includes(normalizeStatus(status));
 }
 
-export function isFailed(state: string): boolean {
-  return ['failedtransient', 'failedpermanent', 'deadlettered', 'providerhalted'].includes(normalizeState(state));
+export function isFailed(status: string): boolean {
+  return normalizeStatus(status) === 'failed';
 }
 
-export function isDone(state: string): boolean {
-  // Only true terminal success states — matches the backend's StateGroup.Done filter. The green
-  // bar/pill is reserved for the very end of the flow.
-  return ['completed', 'alreadydownloaded'].includes(normalizeState(state));
+export function isDone(status: string): boolean {
+  return ['completed', 'completedwithwarnings', 'alreadydownloaded', 'ignored'].includes(normalizeStatus(status));
 }
 
-export function isCancelled(state: string): boolean {
-  return ['cancelled', 'ignored'].includes(normalizeState(state));
+export function isStopped(status: string): boolean {
+  return normalizeStatus(status) === 'stopped';
+}
+
+export function isTerminal(status: string): boolean {
+  return isDone(status) || isFailed(status) || isStopped(status);
+}
+
+export function canStart(status: string): boolean {
+  return isFailed(status) || isStopped(status);
+}
+
+export function canStop(status: string): boolean {
+  return isQueued(status) || normalizeStatus(status) === 'running' || normalizeStatus(status) === 'compensating';
+}
+
+export function humanizeDownloadName(value: string): string {
+  if (!value || value.toLowerCase() === 'none') {
+    return 'Not started';
+  }
+
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1 $2')
+    .replace(/Json/g, 'JSON');
 }
 
 export function formatOptionalBytes(bytes: number | null | undefined): string {

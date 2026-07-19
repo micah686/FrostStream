@@ -16,7 +16,8 @@ namespace WebAPI.Features.Downloads.Controllers;
 /// <summary>
 /// Admin-focused download queue / history surface. Read routes expose the full download-job history
 /// with filters, per-job detail, and per-job event timelines; live routes stream progress over SSE;
-/// control routes are queue-oriented aliases for the existing priority/cancel/restart operations.
+/// V2 control routes explicitly start fresh runs, stop active work, control groups, and clear
+/// persistent provider circuits.
 /// </summary>
 [ApiController]
 [Route("api/downloads/queue")]
@@ -45,7 +46,7 @@ public sealed class DownloadQueueController(
     [HttpGet]
     [Endpoint(EndpointIds.DownloadsQueueList)]
     [EndpointSummary("List the download queue / history")]
-    [EndpointDescription("Returns a filtered, paginated slice of the full download-job history from the authoritative DataBridge read model. Supports filtering by state, source kind, requester, storage key, creation time range, and source-URL text, plus newest-first or priority sort. Progress is not included because it is delivered live-only over the SSE routes.")]
+    [EndpointDescription("Returns a filtered, paginated slice of the full download-job history from the authoritative DataBridge read model. Supports filtering by V2 status, source kind, requester, storage key, creation time range, and source-URL text, plus newest-first or priority sort. Progress is not included because it is delivered live-only over the SSE routes.")]
     public async Task<ActionResult<DownloadQueueListResponse>> List(
         [FromQuery] DownloadJobState? state,
         [FromQuery] DownloadSourceKind? sourceKind,
@@ -58,6 +59,7 @@ public sealed class DownloadQueueController(
         [FromQuery] string? cursor = null,
         [FromQuery] string sort = "createdAt",
         [FromQuery] DownloadQueueStateGroup stateGroup = DownloadQueueStateGroup.All,
+        [FromQuery] DownloadJobStatus? status = null,
         CancellationToken cancellationToken = default)
     {
         var normalizedSort = sort.Trim().ToLowerInvariant() switch
@@ -72,6 +74,7 @@ public sealed class DownloadQueueController(
         var request = new DownloadQueueListRequest
         {
             State = state,
+            Status = status,
             StateGroup = stateGroup,
             SourceKind = sourceKind,
             RequestedBy = requestedBy,
@@ -98,7 +101,7 @@ public sealed class DownloadQueueController(
     [HttpGet("{jobId:guid}")]
     [Endpoint(EndpointIds.DownloadsQueueGet)]
     [EndpointSummary("Get a download job's queue detail")]
-    [EndpointDescription("Returns the queue snapshot for a single download job, including state, source, requester, storage key, attempts, file size/hash, failure info, and provider-halt retry scheduling. Returns 404 when the job does not exist. Progress is not included because it is delivered live-only over the SSE routes.")]
+    [EndpointDescription("Returns the queue snapshot for a single download job, including V2 status, stage, immutable run identity, attempt, artifact, warnings, source, storage, and last-failure details. Returns 404 when the job does not exist. Progress is not included because it is delivered live-only over the SSE routes.")]
     public async Task<ActionResult<DownloadQueueJobDto>> Get(Guid jobId, CancellationToken cancellationToken)
     {
         var response = await SendQueryAsync<DownloadQueueGetRequest, DownloadQueueGetResponse>(
@@ -251,6 +254,9 @@ public sealed class DownloadQueueController(
 
     private static ProgressEvent MapProgress(DownloadProgress p) => new(
         p.JobId,
+        p.Execution?.RunId,
+        p.Execution?.Stage,
+        p.Execution?.Attempt ?? p.Attempt,
         p.Sequence,
         p.Phase,
         p.Percent,
@@ -262,12 +268,22 @@ public sealed class DownloadQueueController(
 
     private static StateEvent MapState(DownloadQueueStateChanged s) => new(
         s.JobId,
-        s.State,
-        s.PreviousState,
+        s.Status,
+        s.PreviousStatus,
+        s.Stage,
+        s.StageStatus,
+        s.RunId,
+        s.RunNumber,
+        s.Attempt,
+        s.ArtifactKey,
+        s.WarningCount,
         s.OccurredAt);
 
     private sealed record ProgressEvent(
         Guid JobId,
+        Guid? RunId,
+        DownloadStage? Stage,
+        int Attempt,
         int Sequence,
         string Phase,
         double? Percent,
@@ -279,16 +295,23 @@ public sealed class DownloadQueueController(
 
     private sealed record StateEvent(
         Guid JobId,
-        DownloadJobState State,
-        DownloadJobState PreviousState,
+        DownloadJobStatus Status,
+        DownloadJobStatus PreviousStatus,
+        DownloadStage Stage,
+        DownloadStageStatus StageStatus,
+        Guid? RunId,
+        int RunNumber,
+        int Attempt,
+        string? ArtifactKey,
+        int WarningCount,
         Instant OccurredAt);
 
-    // ── Control aliases (reuse existing DataBridge request/reply behavior) ──────────────
+    // ── V2 controls ───────────────────────────────────────────────────────────────────
 
     [HttpPatch("{jobId:guid}/priority")]
     [Endpoint(EndpointIds.DownloadsQueuePriority)]
-    [EndpointSummary("Update a queued download job's priority")]
-    [EndpointDescription("Queue-oriented alias for changing the scheduling priority (0–100) of a queued download job. Higher values run before lower ones. Effective only while the job is waiting for a download slot; no-ops if the download has already started.")]
+    [EndpointSummary("Update a download job's priority")]
+    [EndpointDescription("Changes the stored administrative priority (0–100) used by priority-sorted queue views. This operation never starts, resumes, or interrupts a V2 run.")]
     public async Task<ActionResult> UpdatePriority(
         [FromRoute] Guid jobId,
         [FromBody] UpdatePriorityRequest request,
@@ -320,21 +343,21 @@ public sealed class DownloadQueueController(
         return NoContent();
     }
 
-    [HttpPost("{jobId:guid}/cancel")]
-    [Endpoint(EndpointIds.DownloadsQueueCancel)]
-    [EndpointSummary("Cancel a download job")]
-    [EndpointDescription("Queue-oriented alias for requesting clean cancellation of a queued or active download job. Queued jobs are removed from the scheduler; active yt-dlp processes are asked to stop and any worker-local temp files are cleaned.")]
-    public async Task<ActionResult> Cancel(
+    [HttpPost("{jobId:guid}/stop")]
+    [Endpoint(EndpointIds.DownloadsQueueStop)]
+    [EndpointSummary("Stop a download job")]
+    [EndpointDescription("Stops a queued or active download run, blocks further stage dispatches, cancels active worker work, and compensates any partial durable artifacts before settling as Stopped.")]
+    public async Task<ActionResult> Stop(
         [FromRoute] Guid jobId,
-        [FromBody] CancelDownloadApiRequest? request,
+        [FromBody] StopDownloadApiRequest? request,
         CancellationToken cancellationToken)
     {
-        CancelDownloadResponse? response;
+        StopDownloadResponse? response;
         try
         {
-            response = await messageBus.RequestAsync<CancelDownloadRequest, CancelDownloadResponse>(
-                DownloadSubjects.CancelDownloadRequest,
-                new CancelDownloadRequest
+            response = await messageBus.RequestAsync<StopDownloadRequest, StopDownloadResponse>(
+                DownloadSubjects.StopDownloadRequest,
+                new StopDownloadRequest
                 {
                     JobId = jobId,
                     RequestedBy = AuthConstants.FindSubject(User),
@@ -345,40 +368,40 @@ public sealed class DownloadQueueController(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed requesting cancellation for JobId {JobId}", jobId);
-            return BadGateway("Failed to cancel download", "Could not reach the messaging bus.");
+            logger.LogError(ex, "Failed requesting stop for JobId {JobId}", jobId);
+            return BadGateway("Failed to stop download", "Could not reach the messaging bus.");
         }
 
         if (response is null)
-            return BadGateway("Failed to cancel download", "No response from DataBridge.");
+            return BadGateway("Failed to stop download", "No response from DataBridge.");
 
         if (response.Success)
-            return Accepted(new CancelDownloadApiResponse(response.State ?? DownloadJobState.Cancelling));
+            return Accepted(new StopDownloadApiResponse(response.Status ?? DownloadJobStatus.Stopping));
 
-        if (response.Error == "Job not found.")
+        if (response.ErrorCode == "not_found")
             return NotFound(new ProblemDetails { Title = "Job not found.", Status = StatusCodes.Status404NotFound });
 
         return Conflict(new ProblemDetails
         {
-            Title = response.Error ?? "Download cannot be cancelled.",
+            Title = response.ErrorMessage ?? "Download cannot be stopped.",
             Status = StatusCodes.Status409Conflict
         });
     }
 
-    [HttpPost("{jobId:guid}/restart")]
-    [Endpoint(EndpointIds.DownloadsQueueRestart)]
-    [EndpointSummary("Restart a download job")]
-    [EndpointDescription("Queue-oriented alias for restarting a download job from a restartable terminal state. Cancelled jobs replay as a fresh run. Provider-halted jobs replay the original request and resume from the last recorded successful step when possible.")]
-    public async Task<ActionResult> RestartHalted(
+    [HttpPost("{jobId:guid}/start")]
+    [Endpoint(EndpointIds.DownloadsQueueStart)]
+    [EndpointSummary("Start a download job")]
+    [EndpointDescription("Starts a Stopped or Failed download job from metadata with a fresh RunId while retaining prior run history and resetting stage attempts and temporary working references.")]
+    public async Task<ActionResult> Start(
         [FromRoute] Guid jobId,
         CancellationToken cancellationToken)
     {
-        RestartHaltedDownloadResponse? response;
+        StartDownloadResponse? response;
         try
         {
-            response = await messageBus.RequestAsync<RestartHaltedDownloadRequest, RestartHaltedDownloadResponse>(
-                DownloadSubjects.RestartHaltedDownloadRequest,
-                new RestartHaltedDownloadRequest
+            response = await messageBus.RequestAsync<StartDownloadRequest, StartDownloadResponse>(
+                DownloadSubjects.StartDownloadRequest,
+                new StartDownloadRequest
                 {
                     JobId = jobId,
                     RequestedBy = AuthConstants.FindSubject(User)
@@ -388,26 +411,98 @@ public sealed class DownloadQueueController(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed requesting restart for JobId {JobId}", jobId);
-            return BadGateway("Failed to restart download", "Could not reach the messaging bus.");
+            logger.LogError(ex, "Failed requesting start for JobId {JobId}", jobId);
+            return BadGateway("Failed to start download", "Could not reach the messaging bus.");
         }
 
         if (response is null)
-            return BadGateway("Failed to restart download", "No response from DataBridge.");
+            return BadGateway("Failed to start download", "No response from DataBridge.");
 
         if (response.Success)
-            return Accepted(new { State = "queued", JobId = response.JobId });
+            return Accepted(new { Status = "running", JobId = response.JobId, RunId = response.RunId });
 
-        return response.ErrorCode switch
+        return Conflict(new ProblemDetails
         {
-            "not_halted" => Conflict(new ProblemDetails { Title = response.ErrorMessage, Status = StatusCodes.Status409Conflict }),
-            "missing_request" => StatusCode(StatusCodes.Status500InternalServerError, new ProblemDetails { Title = response.ErrorMessage, Status = StatusCodes.Status500InternalServerError }),
-            _ => StatusCode(StatusCodes.Status409Conflict, new ProblemDetails
+            Title = response.ErrorMessage ?? "Download cannot be started.",
+            Status = StatusCodes.Status409Conflict
+        });
+    }
+
+    [HttpPost("/api/downloads/groups/{correlationId:guid}/start")]
+    [Endpoint(EndpointIds.DownloadsGroupStart)]
+    [EndpointSummary("Start eligible jobs in a download group")]
+    [EndpointDescription("Starts each Stopped or Failed child in the identified playlist, channel, creator-monitor, or direct-download group as an independent fresh run; completed children remain unchanged.")]
+    public async Task<ActionResult> StartGroup(Guid correlationId, CancellationToken cancellationToken)
+    {
+        var response = await messageBus.RequestAsync<StartDownloadGroupRequest, DownloadGroupControlResponse>(
+            DownloadSubjects.StartGroupRequest,
+            new StartDownloadGroupRequest
             {
-                Title = response.ErrorMessage ?? "Download cannot be restarted.",
-                Status = StatusCodes.Status409Conflict
-            })
-        };
+                CorrelationId = correlationId,
+                RequestedBy = AuthConstants.FindSubject(User)
+            },
+            AdminRequestTimeout,
+            cancellationToken);
+        return response is { Success: true }
+            ? Accepted(response)
+            : BadGateway("Failed to start download group", response?.ErrorMessage ?? "No response from DataBridge.");
+    }
+
+    [HttpPost("/api/downloads/groups/{correlationId:guid}/stop")]
+    [Endpoint(EndpointIds.DownloadsGroupStop)]
+    [EndpointSummary("Stop expansion and active jobs in a download group")]
+    [EndpointDescription("Stops further collection expansion and requests a clean stop for every queued or active nonterminal child in the identified group, without altering already completed children.")]
+    public async Task<ActionResult> StopGroup(
+        Guid correlationId,
+        [FromBody] StopDownloadApiRequest? request,
+        CancellationToken cancellationToken)
+    {
+        var response = await messageBus.RequestAsync<StopDownloadGroupRequest, DownloadGroupControlResponse>(
+            DownloadSubjects.StopGroupRequest,
+            new StopDownloadGroupRequest
+            {
+                CorrelationId = correlationId,
+                RequestedBy = AuthConstants.FindSubject(User),
+                Reason = request?.Reason
+            },
+            AdminRequestTimeout,
+            cancellationToken);
+        return response is { Success: true }
+            ? Accepted(response)
+            : BadGateway("Failed to stop download group", response?.ErrorMessage ?? "No response from DataBridge.");
+    }
+
+    [HttpPost("/api/downloads/providers/{provider}/circuit/clear")]
+    [Endpoint(EndpointIds.DownloadsProviderCircuitClear)]
+    [EndpointSummary("Clear a download provider circuit")]
+    [EndpointDescription("Clears a provider-wide download halt. Stopped or failed jobs remain stopped until a user explicitly starts them.")]
+    public async Task<ActionResult> ClearProviderCircuit(string provider, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(provider) || provider.Length > 255)
+            return BadRequest(new ProblemDetails { Title = "A valid provider is required.", Status = StatusCodes.Status400BadRequest });
+
+        ClearProviderCircuitResponse? response;
+        try
+        {
+            response = await messageBus.RequestAsync<ClearProviderCircuitRequest, ClearProviderCircuitResponse>(
+                DownloadSubjects.ClearProviderCircuitRequest,
+                new ClearProviderCircuitRequest
+                {
+                    Provider = provider,
+                    RequestedBy = AuthConstants.FindSubject(User)
+                },
+                AdminRequestTimeout,
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed clearing download provider circuit {Provider}", provider);
+            return BadGateway("Failed to clear provider circuit", "Could not reach the messaging bus.");
+        }
+
+        return response is { Success: true }
+            ? NoContent()
+            : BadGateway("Failed to clear provider circuit", response?.ErrorMessage ?? "No response from DataBridge.");
     }
 
     private async Task<TResponse?> SendQueryAsync<TRequest, TResponse>(

@@ -1,297 +1,285 @@
+using Conduit.NATS;
+using Cleipnir.ResilientFunctions.Domain;
 using DataBridge.Data;
 using DataBridge.Flows;
-using Cleipnir.ResilientFunctions.Domain;
-using Cleipnir.ResilientFunctions.Domain.Exceptions;
-using Conduit.NATS;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
 using NodaTime;
 using Shared.Messaging;
 
 namespace DataBridge.Messaging;
 
-/// <summary>
-/// Handles NATS Core request/reply operations for download job administration
-/// (e.g. changing a queued job's priority).
-/// </summary>
 public sealed class DownloadAdminConsumerService(
     IMessageBus messageBus,
     IServiceScopeFactory scopeFactory,
-    DownloadSlotCoordinator slotCoordinator,
-    DownloadArchiveFlows flows,
+    DownloadJobV2Flows flows,
+    DownloadGroupV2Flows groupFlows,
     IClock clock,
     ILogger<DownloadAdminConsumerService> logger) : SubscriptionBackgroundService
 {
-    private const string QueueGroup = "databridge-download-admin";
+    private const string QueueGroup = "databridge-download-v2-admin";
 
     protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
     {
-        await SubscribeAsync<UpdateDownloadPriorityRequest>(
-            messageBus,
-            DownloadSubjects.UpdatePriorityRequest,
-            HandleUpdatePriorityAsync,
-            queueGroup: QueueGroup,
-            cancellationToken: stoppingToken);
-
-        await SubscribeAsync<CancelDownloadRequest>(
-            messageBus,
-            DownloadSubjects.CancelDownloadRequest,
-            HandleCancelAsync,
-            queueGroup: QueueGroup,
-            cancellationToken: stoppingToken);
-
-        await SubscribeAsync<RestartHaltedDownloadRequest>(
-            messageBus,
-            DownloadSubjects.RestartHaltedDownloadRequest,
-            HandleRestartHaltedAsync,
-            queueGroup: QueueGroup,
-            cancellationToken: stoppingToken);
-
-        logger.LogInformation("Subscribed to download-admin subjects.");
+        await SubscribeAsync<UpdateDownloadPriorityRequest>(messageBus, DownloadSubjects.UpdatePriorityRequest,
+            HandlePriorityAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<StartDownloadRequest>(messageBus, DownloadSubjects.StartDownloadRequest,
+            HandleStartAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<StopDownloadRequest>(messageBus, DownloadSubjects.StopDownloadRequest,
+            HandleStopAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<StartDownloadGroupRequest>(messageBus, DownloadSubjects.StartGroupRequest,
+            HandleStartGroupAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<StopDownloadGroupRequest>(messageBus, DownloadSubjects.StopGroupRequest,
+            HandleStopGroupAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<AcquireDownloadLeaseRequest>(messageBus, DownloadSubjects.AcquireLeaseRequest,
+            HandleAcquireLeaseAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<RenewDownloadLeaseRequest>(messageBus, DownloadSubjects.RenewLeaseRequest,
+            HandleRenewLeaseAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<ClearProviderCircuitRequest>(messageBus, DownloadSubjects.ClearProviderCircuitRequest,
+            HandleClearProviderAsync, QueueGroup, stoppingToken);
+        logger.LogInformation("Subscribed to Download V2 controls.");
     }
 
-    private async Task HandleUpdatePriorityAsync(IMessageContext<UpdateDownloadPriorityRequest> context)
+    private async Task HandlePriorityAsync(IMessageContext<UpdateDownloadPriorityRequest> context)
     {
-        var req = context.Message;
         try
         {
-            DownloadJobState? state;
-            string? storageKey;
-            using (var scope = scopeFactory.CreateScope())
-            {
-                var repo = scope.ServiceProvider.GetRequiredService<IDownloadJobsRepository>();
-                var found = await repo.UpdatePriorityAsync(req.JobId, req.Priority);
-                if (!found)
-                {
-                    await context.RespondAsync(new UpdateDownloadPriorityResponse
-                    {
-                        Success = false,
-                        Error = "Job not found."
-                    });
-                    return;
-                }
-                (state, storageKey) = await repo.GetJobStateAndStorageKeyAsync(req.JobId);
-            }
-
-            // Tell the coordinator to re-sort only if the job is still waiting for a slot.
-            if (state == DownloadJobState.DownloadQueued)
-                await slotCoordinator.UpdatePriorityAsync(req.JobId, req.Priority, storageKey);
-
-            logger.LogInformation(
-                "Updated priority for JobId {JobId} to {Priority} (state {State}).",
-                req.JobId, req.Priority, state);
-
-            await context.RespondAsync(new UpdateDownloadPriorityResponse { Success = true });
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed updating priority for JobId {JobId}.", req.JobId);
+            using var scope = scopeFactory.CreateScope();
+            var found = await scope.ServiceProvider.GetRequiredService<IDownloadJobsRepository>()
+                .UpdatePriorityAsync(context.Message.JobId, context.Message.Priority);
             await context.RespondAsync(new UpdateDownloadPriorityResponse
             {
-                Success = false,
-                Error = "Internal error."
-            });
-        }
-    }
-
-    private async Task HandleRestartHaltedAsync(IMessageContext<RestartHaltedDownloadRequest> context)
-    {
-        var req = context.Message;
-        try
-        {
-            DownloadRequested? originalRequest;
-            DownloadJobState restartFromState;
-            using (var scope = scopeFactory.CreateScope())
-            {
-                var repo = scope.ServiceProvider.GetRequiredService<IDownloadJobsRepository>();
-                var job = await repo.GetJobStateAndStorageKeyAsync(req.JobId);
-                if (job.State is null)
-                {
-                    await context.RespondAsync(new RestartHaltedDownloadResponse
-                    {
-                        Success = false,
-                        ErrorCode = "not_found",
-                        ErrorMessage = $"Job '{req.JobId}' was not found."
-                    });
-                    return;
-                }
-
-                if (job.State is not (DownloadJobState.ProviderHalted or DownloadJobState.Cancelled))
-                {
-                    await context.RespondAsync(new RestartHaltedDownloadResponse
-                    {
-                        Success = false,
-                        ErrorCode = "not_halted",
-                        ErrorMessage = $"Job '{req.JobId}' cannot be restarted from state {job.State}."
-                    });
-                    return;
-                }
-                restartFromState = job.State.Value;
-
-                originalRequest = await repo.GetOriginalRequestAsync(req.JobId);
-                if (originalRequest is null)
-                {
-                    await context.RespondAsync(new RestartHaltedDownloadResponse
-                    {
-                        Success = false,
-                        ErrorCode = "missing_request",
-                        ErrorMessage = $"Original request for job '{req.JobId}' was not found."
-                    });
-                    return;
-                }
-            }
-
-            var replay = originalRequest with
-            {
-                MessageId = Guid.NewGuid(),
-                CausationId = originalRequest.MessageId,
-                OperationKey = $"job/{req.JobId:N}/restart/{Guid.NewGuid():N}",
-                OccurredAt = clock.GetCurrentInstant(),
-                Attempt = originalRequest.Attempt + 1,
-                ResumeFromHaltedState = restartFromState is DownloadJobState.ProviderHalted
-            };
-
-            try
-            {
-                var controlPanel = (await flows.ControlPanel(new FlowInstance(req.JobId.ToString("N"))))!;
-                if (restartFromState is DownloadJobState.Cancelled)
-                    await ClearReplayStateAsync(controlPanel);
-                controlPanel.Param = replay;
-                await controlPanel.Restart(clearFailures: restartFromState is DownloadJobState.ProviderHalted, refresh: false);
-            }
-            catch (InvocationSuspendedException)
-            {
-                logger.LogWarning(
-                    "DownloadArchiveFlow suspended after restart for JobId {JobId}; treating restart as accepted.",
-                    req.JobId);
-            }
-
-            using (var scope = scopeFactory.CreateScope())
-            {
-                var repo = scope.ServiceProvider.GetRequiredService<IDownloadJobsRepository>();
-                await repo.RecordHistoryAsync(
-                    replay.JobId,
-                    replay.MessageId,
-                    replay.OperationKey,
-                    nameof(DownloadRequested),
-                    System.Text.Json.JsonSerializer.Serialize(replay));
-            }
-
-            logger.LogInformation("Restarted download JobId {JobId} from state {State}.", req.JobId, restartFromState);
-
-            await context.RespondAsync(new RestartHaltedDownloadResponse
-            {
-                Success = true,
-                JobId = req.JobId
+                Success = found,
+                Error = found ? null : "Job not found."
             });
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed restarting halted download JobId {JobId}.", req.JobId);
-
-            await context.RespondAsync(new RestartHaltedDownloadResponse
-            {
-                Success = false,
-                ErrorCode = "internal",
-                ErrorMessage = "Failed to restart halted download."
-            });
+            logger.LogError(ex, "Failed updating V2 priority for {JobId}", context.Message.JobId);
+            await context.RespondAsync(new UpdateDownloadPriorityResponse { Success = false, Error = "Internal error." });
         }
     }
 
-    private static async Task ClearReplayStateAsync(Cleipnir.ResilientFunctions.Domain.ControlPanel<DownloadRequested> controlPanel)
+    private async Task HandleStartAsync(IMessageContext<StartDownloadRequest> context)
     {
-        var effectIds = (await controlPanel.Effects.AllIds).ToList();
-        foreach (var effectId in effectIds)
-            await controlPanel.Effects.Remove(effectId);
-
-        await controlPanel.Messages.Clear();
-    }
-
-    private async Task HandleCancelAsync(IMessageContext<CancelDownloadRequest> context)
-    {
-        var req = context.Message;
         try
         {
-            CancelDownloadDecision decision;
-            using (var scope = scopeFactory.CreateScope())
+            using var scope = scopeFactory.CreateScope();
+            var run = await scope.ServiceProvider.GetRequiredService<IDownloadFlowV2Repository>()
+                .StartFreshRunAsync(context.Message.JobId);
+            if (run is null)
             {
-                var repo = scope.ServiceProvider.GetRequiredService<IDownloadJobsRepository>();
-                decision = await repo.TryBeginCancellationAsync(req.JobId, req.RequestedBy, req.Reason);
-            }
-
-            if (!decision.Accepted)
-            {
-                await context.RespondAsync(new CancelDownloadResponse
+                var rejection = await scope.ServiceProvider.GetRequiredService<DataBridgeDbContext>()
+                    .DownloadJobs.AsNoTracking()
+                    .Where(x => x.JobId == context.Message.JobId)
+                    .Select(x => new { x.FailureCode, x.FailureMessage })
+                    .FirstOrDefaultAsync();
+                await context.RespondAsync(new StartDownloadResponse
                 {
                     Success = false,
-                    State = decision.State,
-                    Error = decision.Error
+                    ErrorCode = rejection?.FailureCode == "provider_circuit_open"
+                        ? rejection.FailureCode
+                        : "not_restartable",
+                    ErrorMessage = rejection?.FailureCode == "provider_circuit_open"
+                        ? rejection.FailureMessage
+                        : "The job was not found or is not Stopped/Failed."
                 });
                 return;
             }
-
-            if (decision.PreviousState is DownloadJobState.DownloadQueued or DownloadJobState.Cancelling)
-            {
-                await slotCoordinator.CancelQueuedAsync(req.JobId, decision.WorkerTag);
-                await SendCancelToFlowAsync(req, decision.CorrelationId!.Value);
-            }
-
-            if (decision.PreviousState is DownloadJobState.DownloadQueued or DownloadJobState.DownloadPending
-                or DownloadJobState.Cancelling or DownloadJobState.FailedTransient)
-            {
-                // For FailedTransient there's no active flow instance to signal (see
-                // TryBeginCancellationAsync) — this publish is purely a best-effort kill signal for
-                // the known race where a yt-dlp process can still be running on the worker even
-                // though the saga already recorded a terminal failure. The Worker no-ops harmlessly
-                // if it finds no active download for this JobId.
-                await messageBus.PublishAsync(
-                    DownloadSubjects.CancelActiveDownloadCommand,
-                    new CancelActiveDownloadCommand
-                    {
-                        JobId = req.JobId,
-                        MessageId = Guid.NewGuid(),
-                        RequestedBy = req.RequestedBy,
-                        Reason = req.Reason
-                    });
-            }
-
-            logger.LogInformation(
-                "Accepted cancellation for JobId {JobId}; previous state {PreviousState}, worker tag {WorkerTag}.",
-                req.JobId,
-                decision.PreviousState,
-                decision.WorkerTag);
-
-            await context.RespondAsync(new CancelDownloadResponse
+            _ = StartFlowAsync(run);
+            await context.RespondAsync(new StartDownloadResponse
             {
                 Success = true,
-                State = decision.State
+                JobId = run.Request.JobId,
+                RunId = run.RunId
             });
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed cancelling JobId {JobId}.", req.JobId);
-            await context.RespondAsync(new CancelDownloadResponse
-            {
-                Success = false,
-                Error = "Internal error."
-            });
+            logger.LogError(ex, "Failed starting V2 JobId {JobId}", context.Message.JobId);
+            await context.RespondAsync(new StartDownloadResponse { Success = false, ErrorCode = "internal", ErrorMessage = ex.Message });
         }
     }
 
-    private async Task SendCancelToFlowAsync(CancelDownloadRequest req, Guid correlationId)
+    private async Task HandleStopAsync(IMessageContext<StopDownloadRequest> context)
     {
-        var messageId = Guid.NewGuid();
-        await flows.SendMessage(req.JobId.ToString("N"), new DownloadCancelRequested
+        try
         {
-            JobId = req.JobId,
+            using var scope = scopeFactory.CreateScope();
+            var decision = await scope.ServiceProvider.GetRequiredService<IDownloadFlowV2Repository>()
+                .RequestStopAsync(context.Message.JobId, context.Message.RequestedBy, context.Message.Reason);
+            if (decision.Accepted && decision.RunId is { } runId)
+                await SignalStopAsync(decision.JobId, runId, context.Message.Reason);
+            await context.RespondAsync(new StopDownloadResponse
+            {
+                Success = decision.Accepted,
+                Status = decision.Status,
+                ErrorCode = decision.ErrorCode,
+                ErrorMessage = decision.ErrorMessage
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed stopping V2 JobId {JobId}", context.Message.JobId);
+            await context.RespondAsync(new StopDownloadResponse { Success = false, ErrorCode = "internal", ErrorMessage = ex.Message });
+        }
+    }
+
+    private async Task HandleStartGroupAsync(IMessageContext<StartDownloadGroupRequest> context)
+    {
+        using var scope = scopeFactory.CreateScope();
+        var runs = await scope.ServiceProvider.GetRequiredService<IDownloadFlowV2Repository>()
+            .StartGroupAsync(context.Message.CorrelationId);
+        foreach (var run in runs)
+            _ = StartFlowAsync(run);
+        await context.RespondAsync(new DownloadGroupControlResponse { Success = true, AffectedJobs = runs.Count });
+    }
+
+    private async Task HandleStopGroupAsync(IMessageContext<StopDownloadGroupRequest> context)
+    {
+        using var scope = scopeFactory.CreateScope();
+        var decisions = await scope.ServiceProvider.GetRequiredService<IDownloadFlowV2Repository>()
+            .StopGroupAsync(context.Message.CorrelationId, context.Message.RequestedBy, context.Message.Reason);
+        await SignalGroupStopAsync(context.Message.CorrelationId, context.Message.Reason);
+        foreach (var decision in decisions.Where(x => x.Accepted && x.RunId is not null))
+            await SignalStopAsync(decision.JobId, decision.RunId!.Value, context.Message.Reason);
+        await context.RespondAsync(new DownloadGroupControlResponse
+        {
+            Success = true,
+            AffectedJobs = decisions.Count(x => x.Accepted)
+        });
+    }
+
+    private async Task HandleAcquireLeaseAsync(IMessageContext<AcquireDownloadLeaseRequest> context)
+    {
+        using var scope = scopeFactory.CreateScope();
+        var result = await scope.ServiceProvider.GetRequiredService<IDownloadFlowV2Repository>()
+            .TryAcquireLeaseAsync(context.Message);
+        await context.RespondAsync(result);
+    }
+
+    private async Task HandleRenewLeaseAsync(IMessageContext<RenewDownloadLeaseRequest> context)
+    {
+        using var scope = scopeFactory.CreateScope();
+        var result = await scope.ServiceProvider.GetRequiredService<IDownloadFlowV2Repository>()
+            .TryRenewLeaseAsync(context.Message);
+        await context.RespondAsync(result);
+    }
+
+    private async Task HandleClearProviderAsync(IMessageContext<ClearProviderCircuitRequest> context)
+    {
+        try
+        {
+            var provider = context.Message.Provider.Trim().ToLowerInvariant();
+            using var scope = scopeFactory.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<IDownloadFlowV2Repository>()
+                .ClearProviderCircuitAsync(provider);
+            await context.RespondAsync(new ClearProviderCircuitResponse { Success = true });
+        }
+        catch (Exception ex)
+        {
+            await context.RespondAsync(new ClearProviderCircuitResponse { Success = false, ErrorMessage = ex.Message });
+        }
+    }
+
+    private async Task SignalStopAsync(Guid jobId, Guid runId, string? reason)
+    {
+        var message = new DownloadRunStopRequested
+        {
+            JobId = jobId,
+            RunId = runId,
+            MessageId = Guid.NewGuid(),
+            Reason = reason,
+            OccurredAt = clock.GetCurrentInstant()
+        };
+        await flows.SendMessage(DownloadFlowInstance.Job(jobId, runId), message,
+            idempotencyKey: $"stop/{message.MessageId:N}");
+        await messageBus.PublishAsync(DownloadSubjects.StopActiveRun, new StopActiveDownloadRun
+        {
+            JobId = jobId,
+            RunId = runId,
+            Reason = reason
+        });
+    }
+
+    private async Task SignalGroupStopAsync(Guid correlationId, string? reason)
+    {
+        var message = new DownloadGroupStopRequested
+        {
+            GroupId = correlationId,
             CorrelationId = correlationId,
-            CausationId = null,
-            MessageId = messageId,
-            OperationKey = $"job/{req.JobId:N}/cancel/{messageId:N}",
-            OccurredAt = clock.GetCurrentInstant(),
-            Attempt = 1,
-            RequestedBy = req.RequestedBy,
-            Reason = req.Reason
-        }, idempotencyKey: $"job/{req.JobId:N}/cancel");
+            MessageId = Guid.NewGuid(),
+            Reason = reason,
+            OccurredAt = clock.GetCurrentInstant()
+        };
+        try
+        {
+            await groupFlows.SendMessage(
+                DownloadFlowInstance.Group(correlationId),
+                message,
+                idempotencyKey: $"stop/{message.MessageId:N}");
+        }
+        catch (Exception ex)
+        {
+            // A completed direct/fan-out group has no live coordinator; child stop decisions
+            // above remain authoritative.
+            logger.LogDebug(ex, "No active group flow to signal for CorrelationId {CorrelationId}.", correlationId);
+        }
+    }
+
+    private async Task StartFlowAsync(DownloadRunRequest run)
+    {
+        try
+        {
+            await flows.Run(DownloadFlowInstance.Job(run.Request.JobId, run.RunId), run);
+        }
+        catch (Cleipnir.ResilientFunctions.Domain.Exceptions.InvocationSuspendedException)
+        {
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "V2 flow start failed for JobId {JobId} RunId {RunId}", run.Request.JobId, run.RunId);
+        }
+    }
+}
+
+public sealed class DownloadLeaseMonitorService(
+    IServiceScopeFactory scopeFactory,
+    DownloadJobV2Flows flows,
+    ILogger<DownloadLeaseMonitorService> logger) : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+        while (await timer.WaitForNextTickAsync(stoppingToken))
+        {
+            try
+            {
+                using var scope = scopeFactory.CreateScope();
+                var expired = await scope.ServiceProvider.GetRequiredService<IDownloadFlowV2Repository>()
+                    .FailExpiredLeasesAsync(stoppingToken);
+                foreach (var run in expired.DistinctBy(x => (x.JobId, x.RunId)))
+                {
+                    var panel = await flows.ControlPanel(new FlowInstance(
+                        DownloadFlowInstance.Job(run.JobId, run.RunId)));
+                    if (panel is not null)
+                        await panel.Delete();
+                }
+                if (expired.Count > 0)
+                    logger.LogWarning(
+                        "Failed {Count} Download V2 dispatches after worker lease expiry; their immutable flow instances were deleted.",
+                        expired.Count);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Download V2 lease sweep failed.");
+            }
+        }
     }
 }

@@ -1,8 +1,7 @@
 using System.Text.Json;
-using DataBridge;
+using Conduit.NATS;
 using DataBridge.Data;
 using DataBridge.Flows;
-using Conduit.NATS;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -11,138 +10,192 @@ using Shared.Messaging;
 namespace DataBridge.Messaging;
 
 /// <summary>
-/// Consumes Worker-emitted result events for the download flow from JetStream.
-/// For each event:
-///   1. Dedupe via <c>processed_messages</c>.
-///   2. Persist the business-visible state change (<c>download_jobs</c>) and append
-///      to <c>download_job_history</c>.
-///   3. Forward the event to the Cleipnir flow via the per-instance message writer with
-///      <see cref="IFlowMessage.OperationKey"/> as Cleipnir's idempotency key — so even if
-///      ingress dedupe is bypassed (e.g. a different MessageId for the same logical event),
-///      Cleipnir's message store will deduplicate by OperationKey before the flow advances.
-///   4. Mark the message processed in the same transaction as the state/history write.
-///   5. Ack JetStream — only after every step above has succeeded.
-///
-/// All work runs under a single fresh DI scope per message so the scoped
-/// <see cref="DataBridgeDbContext"/> isn't shared across messages. One
-/// <see cref="IJetStreamConsumer.ConsumePullAsync"/> task per result subject runs in
-/// parallel; <see cref="ExecuteAsync"/> awaits all of them with <see cref="Task.WhenAll(Task[])"/>.
+/// Validates Worker results against the authoritative current RunId/DispatchId before handing
+/// them to Cleipnir. Stale and duplicate results are acknowledged but can never advance a run.
 /// </summary>
 public sealed class DownloadEventsConsumerService(
     IJetStreamConsumer consumer,
     IServiceScopeFactory scopeFactory,
-    DownloadArchiveFlows flows,
+    DownloadJobV2Flows flows,
     ILogger<DownloadEventsConsumerService> logger) : BackgroundService
 {
-    private static readonly StreamName Stream = StreamName.From(DownloadTopology.StreamNameValue);
+    private static readonly StreamName DownloadStream = StreamName.From(DownloadTopology.StreamNameValue);
+    private static readonly StreamName ArtifactStream = StreamName.From(ArtifactStorageTopology.StreamNameValue);
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var consumers = new[]
+        var tasks = new[]
         {
-            Consume<MetadataFetched>(DownloadTopology.MetadataFetchedConsumer, ApplyMetadataFetchedAsync, stoppingToken),
-            Consume<MetadataFetchFailed>(DownloadTopology.MetadataFetchFailedConsumer, NoStateChange, stoppingToken),
-            Consume<DownloadCompleted>(DownloadTopology.DownloadCompletedConsumer, ApplyDownloadCompletedAsync, stoppingToken),
-            Consume<DownloadFailed>(DownloadTopology.DownloadFailedConsumer, NoStateChange, stoppingToken),
-            Consume<UploadCompleted>(DownloadTopology.UploadCompletedConsumer, ApplyUploadCompletedAsync, stoppingToken),
-            Consume<UploadFailed>(DownloadTopology.UploadFailedConsumer, NoStateChange, stoppingToken),
-            Consume<TempFileDeleted>(DownloadTopology.TempFileDeletedConsumer, NoStateChange, stoppingToken),
-            Consume<TempFileDeleteFailed>(DownloadTopology.TempFileDeleteFailedConsumer, NoStateChange, stoppingToken),
-            Consume<UploadedObjectDeleted>(DownloadTopology.UploadedObjectDeletedConsumer, NoStateChange, stoppingToken),
-            Consume<UploadedObjectDeleteFailed>(DownloadTopology.UploadedObjectDeleteFailedConsumer, NoStateChange, stoppingToken),
+            Consume<MetadataFetched>(DownloadStream, DownloadTopology.MetadataFetchedConsumer, stoppingToken),
+            Consume<MetadataFetchFailed>(DownloadStream, DownloadTopology.MetadataFetchFailedConsumer, stoppingToken),
+            Consume<DownloadCompleted>(DownloadStream, DownloadTopology.DownloadCompletedConsumer, stoppingToken),
+            Consume<DownloadFailed>(DownloadStream, DownloadTopology.DownloadFailedConsumer, stoppingToken),
+            Consume<UploadCompleted>(ArtifactStream, ArtifactStorageTopology.DownloadUploadCompletedConsumer, stoppingToken),
+            Consume<UploadFailed>(ArtifactStream, ArtifactStorageTopology.DownloadUploadFailedConsumer, stoppingToken),
+            Consume<TempFileDeleted>(ArtifactStream, ArtifactStorageTopology.DownloadTempDeletedConsumer, stoppingToken),
+            Consume<TempFileDeleteFailed>(ArtifactStream, ArtifactStorageTopology.DownloadTempDeleteFailedConsumer, stoppingToken),
+            Consume<UploadedObjectDeleted>(ArtifactStream, ArtifactStorageTopology.DownloadObjectDeletedConsumer, stoppingToken),
+            Consume<UploadedObjectDeleteFailed>(ArtifactStream, ArtifactStorageTopology.DownloadObjectDeleteFailedConsumer, stoppingToken)
         };
-
-        logger.LogInformation("Subscribed to {Count} download event consumers on stream {Stream}.", consumers.Length, Stream.Value);
-        return Task.WhenAll(consumers);
+        logger.LogInformation("Subscribed to {Count} Download V2 result consumers.", tasks.Length);
+        return Task.WhenAll(tasks);
     }
 
-    private Task Consume<TEvent>(
-        string consumerName,
-        Func<IDownloadJobsRepository, TEvent, CancellationToken, Task> persist,
-        CancellationToken stoppingToken)
-        where TEvent : class, IFlowMessage
-        => consumer.ConsumePullAsync<TEvent>(
-            stream: Stream,
-            consumer: ConsumerName.From(consumerName),
-            handler: ctx => HandleAsync(ctx, persist),
-            options: null,
-            cancellationToken: stoppingToken);
+    private Task Consume<T>(StreamName stream, string durable, CancellationToken stoppingToken)
+        where T : class, IFlowMessage
+        => consumer.ConsumePullAsync<T>(stream, ConsumerName.From(durable), HandleAsync, cancellationToken: stoppingToken);
 
-    private async Task HandleAsync<TEvent>(
-        IJsMessageContext<TEvent> context,
-        Func<IDownloadJobsRepository, TEvent, CancellationToken, Task> persist)
-        where TEvent : class, IFlowMessage
+    private async Task HandleAsync<T>(IJsMessageContext<T> context) where T : class, IFlowMessage
     {
         var evt = context.Message;
-        var eventName = typeof(TEvent).Name;
-
         try
         {
-            if (IsLocalImportEvent(evt))
+            if (evt.OperationKey.StartsWith("local-import", StringComparison.Ordinal))
             {
                 await context.AckAsync();
                 return;
             }
 
-            await scopeFactory.WithScopedAsync<IDownloadJobsRepository, DataBridgeDbContext>(async (jobs, db) =>
+            var execution = Execution(evt);
+            if (execution is null)
             {
-                await using var tx = await db.Database.BeginTransactionAsync();
-                if (!await jobs.TryMarkMessageProcessedAsync(evt.MessageId, evt.OperationKey, evt.JobId))
-                {
-                    await tx.CommitAsync();
-                    await context.AckAsync();
-                    return;
-                }
-
-                await persist(jobs, evt, CancellationToken.None);
-
-                await jobs.RecordHistoryAsync(
-                    evt.JobId,
-                    evt.MessageId,
-                    evt.OperationKey,
-                    eventName,
-                    JsonSerializer.Serialize<TEvent>(evt));
-
-                // Keep the flow handoff before committing processed_messages: if the process
-                // dies after commit, redelivery will be acked as processed and will not resend.
-                // If commit fails after this send, redelivery may resend and Cleipnir's
-                // OperationKey idempotency absorbs the duplicate.
-                await flows.SendMessage(evt.JobId.ToString("N"), evt, idempotencyKey: evt.OperationKey);
-
-                await tx.CommitAsync();
+                logger.LogWarning("Ignoring V2 result {Type} without execution identity.", typeof(T).Name);
                 await context.AckAsync();
-            });
+                return;
+            }
+
+            using var scope = scopeFactory.CreateScope();
+            var v2 = scope.ServiceProvider.GetRequiredService<IDownloadFlowV2Repository>();
+            var legacy = scope.ServiceProvider.GetRequiredService<IDownloadJobsRepository>();
+            if (!await v2.CanAcceptWorkerEventAsync(execution)
+                || await legacy.IsMessageProcessedAsync(evt.MessageId))
+            {
+                await context.AckAsync();
+                return;
+            }
+
+            await v2.ReleaseLeaseAsync(execution.DispatchId,
+                FailureKindOf(evt) is FailureKind.Stopped or FailureKind.Cancelled
+                    ? DownloadWorkerLeaseStatus.Stopped
+                    : DownloadWorkerLeaseStatus.Released);
+            await legacy.RecordHistoryAsync(evt.JobId, evt.MessageId, evt.OperationKey,
+                typeof(T).Name, JsonSerializer.Serialize(evt));
+            await flows.SendMessage(
+                DownloadFlowInstance.Job(evt.JobId, execution.RunId),
+                evt,
+                idempotencyKey: evt.OperationKey);
+            await legacy.MarkMessageProcessedAsync(evt.MessageId, evt.OperationKey, evt.JobId);
+            await context.AckAsync();
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed handling {EventName} for JobId {JobId}; nacking for redelivery", eventName, evt.JobId);
+            logger.LogError(ex, "Failed handling V2 result {Type} for JobId {JobId}", typeof(T).Name, evt.JobId);
             await context.NackAsync();
         }
     }
 
-    private static Task ApplyMetadataFetchedAsync(IDownloadJobsRepository jobs, MetadataFetched evt, CancellationToken ct)
-        => jobs.ApplyMetadataAsync(evt.JobId, evt, ct);
+    private static DownloadExecutionIdentity? Execution(IFlowMessage message) => message switch
+    {
+        MetadataFetched x => x.Execution,
+        MetadataFetchFailed x => x.Execution,
+        DownloadCompleted x => x.Execution,
+        DownloadFailed x => x.Execution,
+        UploadCompleted x => x.Execution,
+        UploadFailed x => x.Execution,
+        TempFileDeleted x => x.Execution,
+        TempFileDeleteFailed x => x.Execution,
+        UploadedObjectDeleted x => x.Execution,
+        UploadedObjectDeleteFailed x => x.Execution,
+        _ => null
+    };
 
-    private static Task ApplyDownloadCompletedAsync(IDownloadJobsRepository jobs, DownloadCompleted evt, CancellationToken ct)
-        => jobs.ApplyDownloadCompletedAsync(evt.JobId, evt, ct);
+    private static FailureKind? FailureKindOf(IFlowMessage message) => message switch
+    {
+        MetadataFetchFailed x => x.FailureKind,
+        DownloadFailed x => x.FailureKind,
+        UploadFailed x => x.FailureKind,
+        TempFileDeleteFailed x => x.FailureKind,
+        UploadedObjectDeleteFailed x => x.FailureKind,
+        _ => null
+    };
+}
 
-    private static Task ApplyUploadCompletedAsync(IDownloadJobsRepository jobs, UploadCompleted evt, CancellationToken ct)
-        => evt.Kind switch
+/// <summary>Consumes advisory stage telemetry; leases remain authoritative in PostgreSQL.</summary>
+public sealed class DownloadStageTelemetryConsumerService(
+    IJetStreamConsumer consumer,
+    ILogger<DownloadStageTelemetryConsumerService> logger) : BackgroundService
+{
+    private static readonly StreamName Stream = StreamName.From(DownloadTopology.StreamNameValue);
+
+    protected override Task ExecuteAsync(CancellationToken stoppingToken) => Task.WhenAll(
+        Consume<DownloadStageStarted>(DownloadTopology.StageStartedConsumer, stoppingToken),
+        Consume<DownloadStageHeartbeat>(DownloadTopology.StageHeartbeatConsumer, stoppingToken),
+        Consume<DownloadStageSucceeded>(DownloadTopology.StageSucceededConsumer, stoppingToken),
+        Consume<DownloadStageFailed>(DownloadTopology.StageFailedConsumer, stoppingToken),
+        Consume<DownloadStageStopped>(DownloadTopology.StageStoppedConsumer, stoppingToken));
+
+    private Task Consume<T>(string durable, CancellationToken ct) where T : class, IDownloadStageEvent
+        => consumer.ConsumePullAsync<T>(Stream, ConsumerName.From(durable), async context =>
         {
-            UploadArtifactKind.InfoJson => jobs.ApplySidecarUploadCompletedAsync(evt.JobId, evt, ct),
-            UploadArtifactKind.Meta => jobs.ApplyMetaUploadCompletedAsync(evt.JobId, evt, ct),
-            // Thumbnail/caption blobs are best-effort, version-lifecycle assets. They drive no
-            // download_jobs state — the flow records their blob paths via the metadata write —
-            // so they must not fall through to primary-commit logic.
-            UploadArtifactKind.Thumbnail or UploadArtifactKind.Caption => Task.CompletedTask,
-            _ => jobs.CommitUploadAsync(evt.JobId, evt, ct)
-        };
+            logger.LogDebug("Worker {Worker} reported {Event} for JobId {JobId} RunId {RunId} Stage {Stage} Attempt {Attempt}",
+                context.Message.WorkerInstanceId, typeof(T).Name, context.Message.Execution.JobId,
+                context.Message.Execution.RunId, context.Message.Execution.Stage, context.Message.Execution.Attempt);
+            await context.AckAsync();
+        }, cancellationToken: ct);
+}
 
-    private static Task NoStateChange<TEvent>(IDownloadJobsRepository jobs, TEvent evt, CancellationToken ct)
-        where TEvent : IFlowMessage
-        => Task.CompletedTask;
+/// <summary>Routes supervised channel-expansion results to the matching durable group flow.</summary>
+public sealed class DownloadGroupExpansionEventsConsumerService(
+    IJetStreamConsumer consumer,
+    IServiceScopeFactory scopeFactory,
+    DownloadGroupV2Flows flows,
+    ILogger<DownloadGroupExpansionEventsConsumerService> logger) : BackgroundService
+{
+    private static readonly StreamName Stream = StreamName.From(DownloadTopology.StreamNameValue);
 
-    private static bool IsLocalImportEvent(IFlowMessage evt)
-        => evt.OperationKey.StartsWith("local-import/", StringComparison.Ordinal)
-           || evt.OperationKey.StartsWith("local-import-item/", StringComparison.Ordinal);
+    protected override Task ExecuteAsync(CancellationToken stoppingToken) => Task.WhenAll(
+        consumer.ConsumePullAsync<DownloadGroupExpansionSucceeded>(
+            Stream,
+            ConsumerName.From(DownloadTopology.GroupExpansionSucceededConsumer),
+            HandleAsync,
+            cancellationToken: stoppingToken),
+        consumer.ConsumePullAsync<DownloadGroupExpansionFailed>(
+            Stream,
+            ConsumerName.From(DownloadTopology.GroupExpansionFailedConsumer),
+            HandleAsync,
+            cancellationToken: stoppingToken));
+
+    private Task HandleAsync(IJsMessageContext<DownloadGroupExpansionSucceeded> context)
+        => ForwardAsync(context, context.Message.GroupId, context.Message.CorrelationId,
+            context.Message.OperationKey, context.Message);
+
+    private Task HandleAsync(IJsMessageContext<DownloadGroupExpansionFailed> context)
+        => ForwardAsync(context, context.Message.GroupId, context.Message.CorrelationId,
+            context.Message.OperationKey, context.Message);
+
+    private async Task ForwardAsync<T>(
+        IJsMessageContext<T> context,
+        Guid groupId,
+        Guid correlationId,
+        string operationKey,
+        T message) where T : class
+    {
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var active = await scope.ServiceProvider.GetRequiredService<IDownloadFlowV2Repository>()
+                .IsGroupExpansionAllowedAsync(correlationId);
+            if (active)
+            {
+                await flows.SendMessage(
+                    DownloadFlowInstance.Group(groupId), message, idempotencyKey: operationKey);
+            }
+            await context.AckAsync();
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed routing V2 expansion result for GroupId {GroupId}.", groupId);
+            await context.NackAsync();
+        }
+    }
 }

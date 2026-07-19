@@ -73,7 +73,7 @@ internal static class YtDlpFailureDetails
                 normalizedProvider,
                 "yt-dlp.youtube.bot-detection-halted",
                 "yt-dlp could not access YouTube because YouTube is requiring bot verification. " +
-                "YouTube downloads have been halted on this worker until cookies or provider access are refreshed. " +
+                "The persistent YouTube provider circuit has been opened until an administrator clears it. " +
                 $"Raw yt-dlp error: {text}"),
             _ => null
         };
@@ -105,10 +105,10 @@ internal static class YtDlpFailureDetails
     /// <summary>
     /// True when yt-dlp aborted (via <c>--abort-on-error</c>) purely because an optional sidecar
     /// asset — subtitles or the thumbnail — failed to download, not because the requested video/audio
-    /// content itself failed. These are safe to retry with that sidecar disabled rather than failing
-    /// the whole job: e.g. a subtitle provider rate-limiting (HTTP 429) shouldn't cost the user their
-    /// video. Only matches when the *entire* stderr tail is sidecar-only chatter, so a genuine content
-    /// failure that happens to also mention subtitles isn't misclassified.
+    /// content itself failed. When primary media exists, V2 settles this as an optional-artifact
+    /// warning without hiding another yt-dlp invocation inside the same application attempt. Only
+    /// matches when the *entire* stderr tail is sidecar-only chatter, so a genuine content failure
+    /// that happens to also mention subtitles is not misclassified.
     /// </summary>
     public static bool IsSidecarOnlyFailure(Exception ex)
     {

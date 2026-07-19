@@ -18,8 +18,8 @@ public enum MediaKind
 }
 
 /// <summary>
-/// Where a download request came from. Used to decide whether a provider-halt should be
-/// automatically retried later.
+/// Where a download request came from. Collection children retain this value so the UI and
+/// group controls can distinguish direct, playlist, and channel work.
 /// </summary>
 public enum DownloadSourceKind
 {
@@ -84,8 +84,10 @@ public interface IFlowMessage
 }
 
 /// <summary>
-/// Lifecycle states for a download job, persisted by DataBridge alongside the saga state.
-/// Numeric values are part of the wire/database contract — never renumber existing entries.
+/// Legacy V1 lifecycle values retained only for the existing database column and historical
+/// records. Download Flow V2 uses <see cref="DownloadJobStatus"/> plus
+/// <see cref="DownloadStage"/>; new orchestration must not branch on this enum.
+/// Numeric values are part of the database contract — never renumber existing entries.
 /// </summary>
 public enum DownloadJobState
 {
@@ -117,8 +119,7 @@ public enum DownloadJobState
     DeadLettered = 12,
     /// <summary>Source already downloaded (matched an existing version); download was skipped.</summary>
     AlreadyDownloaded = 13,
-    /// <summary>Waiting for a download slot from the <c>DownloadSlotCoordinator</c>; will proceed once
-    /// a slot is available in priority order.</summary>
+    /// <summary>Legacy V1 slot-waiting state. Download Flow V2 does not use a slot coordinator.</summary>
     DownloadQueued = 14,
     /// <summary>A user requested cancellation; the flow is stopping any in-flight work and cleanup.</summary>
     Cancelling = 15,
@@ -145,8 +146,14 @@ public enum FailureKind
     Permanent = 2,
     /// <summary>The operation exceeded its time budget. Generally retried with longer timeout.</summary>
     Timeout = 3,
-    /// <summary>The operation was cancelled (host shutdown, user-initiated cancel).</summary>
-    Cancelled = 4
+    /// <summary>Legacy cancellation classification. V2 uses <see cref="Stopped"/> for user stops.</summary>
+    Cancelled = 4,
+    /// <summary>The coordinating service or worker disappeared while a run was active.</summary>
+    Interrupted = 5,
+    /// <summary>A provider circuit prevented execution.</summary>
+    ProviderBlocked = 6,
+    /// <summary>The user explicitly stopped the job.</summary>
+    Stopped = 7
 }
 
 /// <summary>
@@ -187,17 +194,8 @@ public sealed record DownloadRequested : IFlowMessage
     /// </summary>
     public bool ForceDownload { get; init; }
 
-    /// <summary>
-    /// Where this request came from. Direct user requests do not get automatic provider-halt
-    /// retries; playlist and channel fan-outs do.
-    /// </summary>
+    /// <summary>Where this request came from for grouping, filtering, and display.</summary>
     public DownloadSourceKind SourceKind { get; init; } = DownloadSourceKind.Direct;
-
-    /// <summary>
-    /// When true, the flow should resume from the last recorded successful step instead of
-    /// restarting from the beginning.
-    /// </summary>
-    public bool ResumeFromHaltedState { get; init; }
 
     /// <summary>
     /// What kind of media to produce (video or audio-only). Audio jobs force
@@ -238,8 +236,8 @@ public sealed record DownloadRequested : IFlowMessage
     public string? CookieSecretPath { get; init; }
 
     /// <summary>
-    /// Scheduling priority: 0 (default / lowest) to 100 (highest). When multiple jobs
-    /// are waiting for a download slot, higher-priority jobs are dispatched first.
+    /// Administrative priority: 0 (default / lowest) to 100 (highest). It is retained on
+    /// the job and used by priority-sorted queue views without changing V2 restart semantics.
     /// </summary>
     public int Priority { get; init; } = 0;
 
@@ -261,6 +259,7 @@ public sealed record FetchMetadataCommand : IFlowMessage
     public required string OperationKey { get; init; }
     public required Instant OccurredAt { get; init; }
     public required int Attempt { get; init; }
+    public DownloadExecutionIdentity? Execution { get; init; }
 
     /// <summary>The original source URL passed through from <see cref="DownloadRequested.SourceUrl"/>.</summary>
     public required string SourceUrl { get; init; }
@@ -274,7 +273,8 @@ public sealed record FetchMetadataCommand : IFlowMessage
 
     /// <summary>
     /// Worker tag that was used to route this command. Informational; the routing already
-    /// happened at publish time via the subject suffix (<c>download.cmd.fetch-metadata.{tag}</c>).
+    /// happened at publish time via the subject suffix
+    /// (<c>download.v2.command.metadata.fetch.{tag}</c>).
     /// </summary>
     public string? RequiredWorkerTag { get; init; }
 
@@ -284,12 +284,6 @@ public sealed record FetchMetadataCommand : IFlowMessage
     /// matter at metadata time, so we don't strip the options here.
     /// </summary>
     public YtDlpOptions? YtDlpOptions { get; init; }
-
-    /// <summary>
-    /// When true, the Worker should ignore any cached provider halt and attempt the command
-    /// anyway. Used by manual and automatic restarts.
-    /// </summary>
-    public bool ResumeFromHaltedState { get; init; }
 
     /// <summary>Same resolved user-owned cookie path as on <see cref="DownloadRequested.CookieSecretPath"/>.</summary>
     public string? CookieSecretPath { get; init; }
@@ -313,6 +307,7 @@ public sealed record MetadataFetched : IFlowMessage
     public required string OperationKey { get; init; }
     public required Instant OccurredAt { get; init; }
     public required int Attempt { get; init; }
+    public DownloadExecutionIdentity? Execution { get; init; }
 
     /// <summary>Provider-specific source media id (e.g. YouTube video id <c>"dQw4w9WgXcQ"</c>).</summary>
     public string? SourceMediaId { get; init; }
@@ -350,6 +345,7 @@ public sealed record MetadataFetchFailed : IFlowMessage
     public required string OperationKey { get; init; }
     public required Instant OccurredAt { get; init; }
     public required int Attempt { get; init; }
+    public DownloadExecutionIdentity? Execution { get; init; }
 
     public required FailureKind FailureKind { get; init; }
 
@@ -377,6 +373,7 @@ public sealed record DownloadVideoCommand : IFlowMessage
     public required string OperationKey { get; init; }
     public required Instant OccurredAt { get; init; }
     public required int Attempt { get; init; }
+    public DownloadExecutionIdentity? Execution { get; init; }
 
     /// <summary>Source URL to download (passed through from <see cref="DownloadRequested.SourceUrl"/>).</summary>
     public required string SourceUrl { get; init; }
@@ -396,11 +393,6 @@ public sealed record DownloadVideoCommand : IFlowMessage
     /// <summary>Same resolved user-owned cookie path as on <see cref="DownloadRequested.CookieSecretPath"/>.</summary>
     public string? CookieSecretPath { get; init; }
 
-    /// <summary>
-    /// When true, the Worker should ignore any cached provider halt and attempt the command
-    /// anyway. Used by manual and automatic restarts.
-    /// </summary>
-    public bool ResumeFromHaltedState { get; init; }
 }
 
 /// <summary>
@@ -417,6 +409,7 @@ public sealed record DownloadCompleted : IFlowMessage
     public required string OperationKey { get; init; }
     public required Instant OccurredAt { get; init; }
     public required int Attempt { get; init; }
+    public DownloadExecutionIdentity? Execution { get; init; }
 
     /// <summary>Absolute path on the producing worker where the bytes live. Worker-local.</summary>
     public required string TempFileRef { get; init; }
@@ -459,6 +452,18 @@ public sealed record DownloadCompleted : IFlowMessage
     /// <c>metadata.media_captions</c> row. Empty when none were produced.
     /// </summary>
     public IReadOnlyList<SidecarFileRef> Captions { get; init; } = [];
+
+    /// <summary>
+    /// Non-fatal problems observed while acquiring the media. The coordinator persists each one
+    /// and allows the run to finish as <c>CompletedWithWarnings</c>.
+    /// </summary>
+    public IReadOnlyList<DownloadStageWarning> Warnings { get; init; } = [];
+}
+
+public sealed record DownloadStageWarning
+{
+    public required string Code { get; init; }
+    public required string Message { get; init; }
 }
 
 /// <summary>
@@ -518,6 +523,7 @@ public sealed record DownloadProgress : IFlowMessage
     public required string OperationKey { get; init; }
     public required Instant OccurredAt { get; init; }
     public required int Attempt { get; init; }
+    public DownloadExecutionIdentity? Execution { get; init; }
 
     /// <summary>Monotonic per-download progress sequence assigned by the Worker.</summary>
     public required int Sequence { get; init; }
@@ -550,6 +556,7 @@ public sealed record DownloadFailed : IFlowMessage
     public required string OperationKey { get; init; }
     public required Instant OccurredAt { get; init; }
     public required int Attempt { get; init; }
+    public DownloadExecutionIdentity? Execution { get; init; }
 
     public required FailureKind FailureKind { get; init; }
     public string? ErrorCode { get; init; }
@@ -559,25 +566,6 @@ public sealed record DownloadFailed : IFlowMessage
     public bool HaltProviderDownloads { get; init; }
     public required string ErrorMessage { get; init; }
     public string? TempFileRef { get; init; }
-}
-
-/// <summary>
-/// Request to restart a download job from a restartable terminal state. Provider-halted jobs
-/// replay with <see cref="DownloadRequested.ResumeFromHaltedState"/> enabled; cancelled jobs
-/// replay as a fresh run.
-/// </summary>
-public sealed record RestartHaltedDownloadRequest
-{
-    public required Guid JobId { get; init; }
-    public string? RequestedBy { get; init; }
-}
-
-public sealed record RestartHaltedDownloadResponse
-{
-    public bool Success { get; init; }
-    public string? ErrorCode { get; init; }
-    public string? ErrorMessage { get; init; }
-    public Guid? JobId { get; init; }
 }
 
 /// <summary>
@@ -594,6 +582,7 @@ public sealed record UploadObjectCommand : IFlowMessage
     public required string OperationKey { get; init; }
     public required Instant OccurredAt { get; init; }
     public required int Attempt { get; init; }
+    public DownloadExecutionIdentity? Execution { get; init; }
 
     /// <summary>Source path on the worker. Null when <see cref="InlineContent"/> is set instead.</summary>
     public string? TempFileRef { get; init; }
@@ -646,6 +635,7 @@ public sealed record UploadCompleted : IFlowMessage
     public required string OperationKey { get; init; }
     public required Instant OccurredAt { get; init; }
     public required int Attempt { get; init; }
+    public DownloadExecutionIdentity? Execution { get; init; }
 
     /// <summary>The temp-file source the bytes came from. Null for inline-content uploads (e.g. <c>.meta</c> sidecars).</summary>
     public string? TempFileRef { get; init; }
@@ -682,6 +672,7 @@ public sealed record UploadFailed : IFlowMessage
     public required string OperationKey { get; init; }
     public required Instant OccurredAt { get; init; }
     public required int Attempt { get; init; }
+    public DownloadExecutionIdentity? Execution { get; init; }
 
     public required FailureKind FailureKind { get; init; }
     public string? ErrorCode { get; init; }
@@ -705,6 +696,7 @@ public sealed record DeleteTempFileCommand : IFlowMessage
     public required string OperationKey { get; init; }
     public required Instant OccurredAt { get; init; }
     public required int Attempt { get; init; }
+    public DownloadExecutionIdentity? Execution { get; init; }
 
     /// <summary>Worker tag used to route this command. Informational.</summary>
     public string? RequiredWorkerTag { get; init; }
@@ -722,6 +714,7 @@ public sealed record TempFileDeleted : IFlowMessage
     public required string OperationKey { get; init; }
     public required Instant OccurredAt { get; init; }
     public required int Attempt { get; init; }
+    public DownloadExecutionIdentity? Execution { get; init; }
 
     public required string TempFileRef { get; init; }
 }
@@ -736,33 +729,16 @@ public sealed record TempFileDeleteFailed : IFlowMessage
     public required string OperationKey { get; init; }
     public required Instant OccurredAt { get; init; }
     public required int Attempt { get; init; }
+    public DownloadExecutionIdentity? Execution { get; init; }
 
     public required string TempFileRef { get; init; }
     public required FailureKind FailureKind { get; init; }
     public required string ErrorMessage { get; init; }
 }
 
-/// <summary>
-/// Sent by <c>DownloadSlotCoordinator</c> directly into a Cleipnir flow instance when
-/// that job has been granted a download slot. The flow resumes its download step upon receipt.
-/// </summary>
-public sealed record DownloadSlotGranted : IFlowMessage
-{
-    public required Guid JobId { get; init; }
-    public required Guid CorrelationId { get; init; }
-    public Guid? CausationId { get; init; }
-    public required Guid MessageId { get; init; }
-    public required string OperationKey { get; init; }
-    public required Instant OccurredAt { get; init; }
-    public int Attempt { get; init; } = 1;
-
-    /// <summary>The worker tag this slot belongs to (empty string for the default/untagged worker).</summary>
-    public required string WorkerTag { get; init; }
-}
-
 // ── NATS Core request/reply — download admin ────────────────────────────────────
 
-/// <summary>Request to update a queued job's scheduling priority (NATS Core request/reply).</summary>
+/// <summary>Request to update a job's stored administrative priority (NATS Core request/reply).</summary>
 public sealed record UpdateDownloadPriorityRequest
 {
     public required Guid JobId { get; init; }
@@ -778,55 +754,6 @@ public sealed record UpdateDownloadPriorityResponse
     public string? Error { get; init; }
 }
 
-/// <summary>Request to cancel a download job (NATS Core request/reply).</summary>
-public sealed record CancelDownloadRequest
-{
-    public required Guid JobId { get; init; }
-    public string? RequestedBy { get; init; }
-    public string? Reason { get; init; }
-}
-
-/// <summary>Response to <see cref="CancelDownloadRequest"/>.</summary>
-public sealed record CancelDownloadResponse
-{
-    public bool Success { get; init; }
-    /// <summary>Current or final state after the cancellation request was handled.</summary>
-    public DownloadJobState? State { get; init; }
-    /// <summary>When false, explanation of why cancellation was not applied.</summary>
-    public string? Error { get; init; }
-}
-
-/// <summary>
-/// Message delivered directly into the Cleipnir flow when a caller requests cancellation.
-/// The flow consumes this while waiting for a download slot; active downloads are cancelled
-/// by a separate Worker broadcast and report back through <see cref="DownloadFailed"/>.
-/// </summary>
-public sealed record DownloadCancelRequested : IFlowMessage
-{
-    public required Guid JobId { get; init; }
-    public required Guid CorrelationId { get; init; }
-    public Guid? CausationId { get; init; }
-    public required Guid MessageId { get; init; }
-    public required string OperationKey { get; init; }
-    public required Instant OccurredAt { get; init; }
-    public int Attempt { get; init; } = 1;
-
-    public string? RequestedBy { get; init; }
-    public string? Reason { get; init; }
-}
-
-/// <summary>
-/// Core NATS broadcast to Workers asking the instance that currently owns <see cref="JobId"/>
-/// to cancel its local yt-dlp process. Workers without that active job ignore the message.
-/// </summary>
-public sealed record CancelActiveDownloadCommand
-{
-    public required Guid JobId { get; init; }
-    public required Guid MessageId { get; init; }
-    public string? RequestedBy { get; init; }
-    public string? Reason { get; init; }
-}
-
 /// <summary>
 /// Compensating command issued when an upload succeeded but a downstream step failed:
 /// removes the orphaned object from the final storage backend.
@@ -840,6 +767,7 @@ public sealed record DeleteUploadedObjectCommand : IFlowMessage
     public required string OperationKey { get; init; }
     public required Instant OccurredAt { get; init; }
     public required int Attempt { get; init; }
+    public DownloadExecutionIdentity? Execution { get; init; }
 
     /// <summary>Worker tag used to route this command. Informational.</summary>
     public string? RequiredWorkerTag { get; init; }
@@ -862,6 +790,7 @@ public sealed record UploadedObjectDeleted : IFlowMessage
     public required string OperationKey { get; init; }
     public required Instant OccurredAt { get; init; }
     public required int Attempt { get; init; }
+    public DownloadExecutionIdentity? Execution { get; init; }
 
     public required string StorageKey { get; init; }
     public required string StoragePath { get; init; }
@@ -880,6 +809,7 @@ public sealed record UploadedObjectDeleteFailed : IFlowMessage
     public required string OperationKey { get; init; }
     public required Instant OccurredAt { get; init; }
     public required int Attempt { get; init; }
+    public DownloadExecutionIdentity? Execution { get; init; }
 
     public required string StorageKey { get; init; }
     public required string StoragePath { get; init; }

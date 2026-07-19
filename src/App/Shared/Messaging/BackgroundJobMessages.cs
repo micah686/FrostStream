@@ -29,6 +29,10 @@ public sealed record ChannelAssetRefreshRequested : ScheduledBackgroundRequest
 
 public sealed record ChannelMediaListRequested : ScheduledBackgroundRequest
 {
+    /// <summary>Set for a Cleipnir-supervised V2 channel expansion.</summary>
+    public Guid? GroupId { get; init; }
+    public Guid? ExpansionDispatchId { get; init; }
+    public int ExpansionAttempt { get; init; } = 1;
     public long? TargetSourceId { get; init; }
     /// <summary>
     /// Shared identifier for every per-video job created by this channel request. Manual

@@ -195,6 +195,7 @@ public sealed class PlaylistsRepositoryTests
         (await db.PlaylistScanEntries.CountAsync()).ShouldBe(0);
         var job = await db.DownloadJobs.SingleAsync();
         job.JobId.ShouldBe(jobId);
+        job.Status.ShouldBe(DownloadJobStatus.Queued);
         job.State.ShouldBe(DownloadJobState.Queued);
         job.SourceKind.ShouldBe(DownloadSourceKind.Playlist);
         job.SourceUrl.ShouldBe("https://example.test/video");
@@ -253,7 +254,8 @@ public sealed class PlaylistsRepositoryTests
 
         entryUrl.ShouldBe("https://example.test/trailer");
         var job = await db.DownloadJobs.SingleAsync();
-        job.State.ShouldBe(DownloadJobState.Queued);
+        job.Status.ShouldBe(DownloadJobStatus.Stopped);
+        job.State.ShouldBe(DownloadJobState.Cancelled);
         job.IgnoredKeyword.ShouldBeNull();
 
         (await repo.RequeuePlaylistItemAsync(playlistId, Guid.NewGuid())).ShouldBeNull();
@@ -330,6 +332,15 @@ public sealed class PlaylistsRepositoryTests
             JobId = jobId,
             CorrelationId = Guid.NewGuid(),
             State = state,
+            Status = state switch
+            {
+                DownloadJobState.Completed => DownloadJobStatus.Completed,
+                DownloadJobState.FailedPermanent or DownloadJobState.FailedTransient
+                    or DownloadJobState.ProviderHalted => DownloadJobStatus.Failed,
+                DownloadJobState.Ignored => DownloadJobStatus.Ignored,
+                DownloadJobState.Cancelled => DownloadJobStatus.Stopped,
+                _ => DownloadJobStatus.Queued
+            },
             SourceUrl = $"https://example.test/{jobId:N}"
         };
 

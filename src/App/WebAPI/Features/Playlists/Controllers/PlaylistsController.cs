@@ -94,10 +94,24 @@ public class PlaylistsController(
 
         try
         {
+            var group = new DownloadGroupRequested
+            {
+                GroupId = correlationId,
+                CorrelationId = correlationId,
+                MessageId = Guid.NewGuid(),
+                OperationKey = $"group/{correlationId:N}/requested",
+                OccurredAt = message.OccurredAt,
+                Kind = DownloadGroupKind.Playlist,
+                SourceUrl = message.SourceUrl,
+                RequestedBy = message.RequestedBy,
+                StorageKey = message.StorageKey,
+                Priority = message.Priority,
+                CollectionRequest = message
+            };
             await jetStreamPublisher.PublishAsync(
-                PlaylistSubjects.PlaylistRequested,
-                message,
-                messageId: messageId.ToString("N"),
+                DownloadSubjects.GroupRequested,
+                group,
+                messageId: group.MessageId.ToString("N"),
                 cancellationToken: cancellationToken);
         }
         catch (Exception ex)

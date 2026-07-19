@@ -247,22 +247,22 @@
     }
   }
 
-  function itemStateTone(state: string): string {
-    const normalized = state.toLowerCase();
-    if (['uploaded', 'completed', 'alreadydownloaded'].includes(normalized)) {
+  function itemStateTone(status: string): string {
+    const normalized = status.toLowerCase();
+    if (['completed', 'completedwithwarnings', 'alreadydownloaded', 'ignored'].includes(normalized)) {
       return 'bg-emerald-500/12 text-emerald-300 ring-emerald-500/20';
     }
-    if (['failedtransient', 'failedpermanent', 'deadlettered', 'providerhalted'].includes(normalized)) {
+    if (normalized === 'failed') {
       return 'bg-red-500/12 text-red-300 ring-red-500/25';
     }
-    if (['cancelled', 'ignored'].includes(normalized)) {
+    if (normalized === 'stopped') {
       return 'bg-slate-500/12 text-slate-400 ring-slate-500/20';
     }
     return 'bg-blue-500/12 text-blue-300 ring-blue-500/20';
   }
 
   function isIgnored(item: PlatformPlaylistItem): boolean {
-    return item.jobState.toLowerCase() === 'ignored';
+    return item.jobStatus.toLowerCase() === 'ignored';
   }
 </script>
 
@@ -527,9 +527,9 @@
                           </span>
                         {/if}
                         <span
-                          class={['rounded-full px-2 py-0.5 text-[10px] font-bold ring-1', itemStateTone(item.jobState)]}
+                          class={['rounded-full px-2 py-0.5 text-[10px] font-bold ring-1', itemStateTone(item.jobStatus)]}
                         >
-                          {item.jobState}
+                          {item.jobStatus}
                         </span>
                         {#if isIgnored(item)}
                           <button

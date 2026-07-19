@@ -249,8 +249,8 @@ public class LocalImportItemFlow(
                 VerifyHashWhileStreaming = true
             };
             var subject = string.IsNullOrWhiteSpace(work.WorkerTag)
-                ? DownloadSubjects.UploadObjectCommand
-                : DownloadSubjects.UploadObjectCommandForTag(work.WorkerTag);
+                ? ArtifactStorageSubjects.UploadObjectCommand
+                : ArtifactStorageSubjects.UploadObjectCommandForTag(work.WorkerTag);
 
             await Capture(() => Publish(subject, cmd));
             var result = await Messages.FirstOfTypes<UploadCompleted, UploadFailed>();
@@ -340,8 +340,8 @@ public class LocalImportItemFlow(
             StorageVersion = uploaded.StorageVersion
         };
         var subject = string.IsNullOrWhiteSpace(work.WorkerTag)
-            ? DownloadSubjects.DeleteUploadedObjectCommand
-            : DownloadSubjects.DeleteUploadedObjectCommandForTag(work.WorkerTag);
+            ? ArtifactStorageSubjects.DeleteUploadedObjectCommand
+            : ArtifactStorageSubjects.DeleteUploadedObjectCommandForTag(work.WorkerTag);
         await Capture(() => Publish(subject, deletion));
     }
 

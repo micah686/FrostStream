@@ -61,9 +61,10 @@ public interface IDownloadJobsRepository
     Task<VersionReservation> ReserveVersionAsync(VersionReservationRequest request, CancellationToken ct = default);
 
     /// <summary>
-    /// Flips the job to <see cref="DownloadJobState.Uploaded"/> and points the source row's
-    /// <c>latest_job_id</c> at this job. Does not write <c>media_content_id_versions</c> —
-    /// that row was inserted earlier by <see cref="ReserveVersionAsync"/>.
+    /// Records the primary object's storage identity and updates the legacy V1 shadow state.
+    /// Download Flow V2 deliberately defers the source mapping and <c>latest_job_id</c> update to
+    /// its atomic finalization transaction. Does not write <c>media_content_id_versions</c> — that
+    /// row was inserted earlier by <see cref="ReserveVersionAsync"/>.
     /// </summary>
     Task CommitUploadAsync(Guid jobId, UploadCompleted evt, CancellationToken ct = default);
 
@@ -83,18 +84,6 @@ public interface IDownloadJobsRepository
 
     /// <summary>Updates the priority of an existing job. Returns false when the job does not exist.</summary>
     Task<bool> UpdatePriorityAsync(Guid jobId, int priority, CancellationToken ct = default);
-
-    /// <summary>Returns the current state and storage key for a job, or (null, null) when not found.</summary>
-    Task<(DownloadJobState? State, string? StorageKey)> GetJobStateAndStorageKeyAsync(Guid jobId, CancellationToken ct = default);
-
-    /// <summary>Attempts to move a job into <see cref="DownloadJobState.Cancelling"/>.</summary>
-    Task<CancelDownloadDecision> TryBeginCancellationAsync(Guid jobId, string? requestedBy, string? reason, CancellationToken ct = default);
-
-    /// <summary>Marks a cancellation request as the terminal user-visible job result.</summary>
-    Task MarkCancelledAsync(Guid jobId, string? message, CancellationToken ct = default);
-
-    /// <summary>Returns all jobs in <see cref="DownloadJobState.DownloadQueued"/> ordered by priority then creation time.</summary>
-    Task<IReadOnlyList<DownloadQueuedEntry>> GetDownloadQueuedJobsAsync(CancellationToken ct = default);
 
     Task IncrementMetadataAttemptAsync(Guid jobId, int attempt, CancellationToken ct = default);
 
@@ -174,6 +163,13 @@ public sealed record VersionReservationRequest
     public IngestOrigin IngestOrigin { get; init; } = IngestOrigin.Download;
 
     public bool LinkSourceToDownloadJob { get; init; } = true;
+
+    /// <summary>
+    /// When false, source identity is used to choose the media GUID but its durable mapping is
+    /// deferred to the V2 final transaction. This prevents a failed or stopped run from making a
+    /// source look successfully downloaded before completion.
+    /// </summary>
+    public bool PersistSourceMapping { get; init; } = true;
 }
 
 /// <summary>
@@ -201,30 +197,3 @@ public sealed record VersionReservation(
     int VersionNum,
     bool ContentAlreadyStored,
     bool IsNewMediaGuid);
-
-/// <summary>A job waiting for a download slot, as returned by <see cref="IDownloadJobsRepository.GetDownloadQueuedJobsAsync"/>.</summary>
-public sealed record DownloadQueuedEntry(Guid JobId, Guid CorrelationId, int Priority, Instant CreatedAt, string? StorageKey);
-
-public sealed record CancelDownloadDecision(
-    bool Accepted,
-    bool Found,
-    bool AlreadyTerminal,
-    DownloadJobState? State,
-    DownloadJobState? PreviousState,
-    Guid? CorrelationId,
-    string? WorkerTag,
-    string? Error)
-{
-    public static CancelDownloadDecision NotFound()
-        => new(false, false, false, null, null, null, null, "Job not found.");
-
-    public static CancelDownloadDecision Rejected(DownloadJobState state, string error, bool alreadyTerminal = false)
-        => new(false, true, alreadyTerminal, state, state, null, null, error);
-
-    public static CancelDownloadDecision AcceptedFor(
-        Guid correlationId,
-        DownloadJobState state,
-        DownloadJobState previousState,
-        string? workerTag)
-        => new(true, true, false, state, previousState, correlationId, workerTag, null);
-}

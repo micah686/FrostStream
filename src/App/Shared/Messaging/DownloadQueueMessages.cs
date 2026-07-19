@@ -15,9 +15,9 @@ public static class DownloadQueueSubjects
     public const string Media = "download-queue.media";
 
     /// <summary>
-    /// Non-persistent broadcast published by DataBridge whenever a download job's state changes.
-    /// The authoritative record stays the <c>state</c> column; this is a live notification only
-    /// (no JetStream, no replay). WebAPI's queue hub fans it into the SSE streams as a state event.
+    /// Non-persistent broadcast published by DataBridge whenever a download job's status or stage
+    /// changes. PostgreSQL remains authoritative; this is a live notification only (no JetStream,
+    /// no replay). WebAPI's queue hub fans it into the SSE streams as a state event.
     /// </summary>
     public const string StateChanged = "download-queue.state-changed";
 
@@ -32,8 +32,17 @@ public static class DownloadQueueSubjects
 public sealed record DownloadQueueStateChanged
 {
     public required Guid JobId { get; init; }
-    public required DownloadJobState State { get; init; }
-    public required DownloadJobState PreviousState { get; init; }
+    public DownloadJobState State { get; init; }
+    public DownloadJobState PreviousState { get; init; }
+    public DownloadJobStatus Status { get; init; }
+    public DownloadJobStatus PreviousStatus { get; init; }
+    public DownloadStage Stage { get; init; }
+    public DownloadStageStatus StageStatus { get; init; }
+    public Guid? RunId { get; init; }
+    public int RunNumber { get; init; }
+    public int Attempt { get; init; }
+    public string? ArtifactKey { get; init; }
+    public int WarningCount { get; init; }
     public Guid CorrelationId { get; init; }
     public required Instant OccurredAt { get; init; }
 }
@@ -54,7 +63,7 @@ public enum DownloadQueueStateGroup
     Queued = 2,
     Failed = 3,
     Done = 4,
-    Cancelled = 5
+    Stopped = 5
 }
 
 /// <summary>
@@ -63,6 +72,8 @@ public enum DownloadQueueStateGroup
 /// </summary>
 public sealed record DownloadQueueListRequest
 {
+    public DownloadJobStatus? Status { get; init; }
+    /// <summary>Legacy-only filter retained for older clients; V2 clients use <see cref="Status"/>.</summary>
     public DownloadJobState? State { get; init; }
     public DownloadQueueStateGroup StateGroup { get; init; } = DownloadQueueStateGroup.All;
     public DownloadSourceKind? SourceKind { get; init; }
@@ -132,6 +143,15 @@ public sealed record DownloadQueueJobDto
     public required Guid JobId { get; init; }
     public Guid CorrelationId { get; init; }
     public DownloadJobState State { get; init; }
+    public DownloadJobStatus Status { get; init; }
+    public DownloadStage Stage { get; init; }
+    public DownloadStageStatus StageStatus { get; init; }
+    public Guid? RunId { get; init; }
+    public int RunNumber { get; init; }
+    public int Attempt { get; init; }
+    public int MaxAttempts { get; init; } = 3;
+    public string? ArtifactKey { get; init; }
+    public int WarningCount { get; init; }
     public required string SourceUrl { get; init; }
     public string? RequestedBy { get; init; }
     public string? StorageKey { get; init; }

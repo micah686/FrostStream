@@ -227,7 +227,7 @@ public sealed class PlaylistQueryConsumerService(
                 JobId = item.JobId,
                 EntryUrl = item.EntryUrl,
                 EntryTitle = item.EntryTitle,
-                JobState = item.JobState,
+                JobStatus = item.JobStatus,
                 MediaGuid = item.MediaGuid,
                 IgnoredKeyword = item.IgnoredKeyword
             }).ToArray());

@@ -140,10 +140,24 @@ public sealed class CreatorSourcesController(
 
         try
         {
+            var group = new DownloadGroupRequested
+            {
+                GroupId = correlationId,
+                CorrelationId = correlationId,
+                MessageId = Guid.NewGuid(),
+                OperationKey = $"group/{correlationId:N}/channel/requested",
+                OccurredAt = now,
+                Kind = DownloadGroupKind.Channel,
+                SourceUrl = sourceResponse.Entity.SourceUrl,
+                RequestedBy = subject,
+                StorageKey = resolved.StorageKey,
+                Priority = resolved.Priority,
+                ChannelRequest = message
+            };
             await publisher.PublishAsync(
-                BackgroundJobSubjects.ChannelMediaListRequest,
-                message,
-                messageId: idempotencyKey,
+                DownloadSubjects.GroupRequested,
+                group,
+                messageId: group.MessageId.ToString("N"),
                 cancellationToken: cancellationToken);
         }
         catch (Exception ex)
