@@ -168,7 +168,7 @@ sequenceDiagram
 | `WaitingForWorker` | Expose that the run is about to dispatch media acquisition. | No separate slot-recovery state. |
 | `MediaAcquire` | Run yt-dlp for exactly one media item into Worker-local temp files. | Required; `Failed` before durable writes. |
 | `PrimaryMediaUpload` | Upload the primary media object and verify its hash. | Required; compensate and `Failed`. |
-| `InfoJsonUpload` | Upload the captured `.info.json` when present. | Optional warning. |
+| `InfoJsonUpload` | Upload the captured `.info.json`. Rich metadata (including comments) is derived from this object at `RichMetadataWrite`, so it is required. | Required; compensate and `Failed`. |
 | `MetaSidecarUpload` | Generate and upload FrostStream's `.meta` sidecar. | Required; compensate and `Failed`. |
 | `ThumbnailUpload` | Upload a thumbnail when captured. | Optional warning. |
 | `CaptionUpload` | Upload each caption independently using its own artifact key. | Optional warning per caption. |

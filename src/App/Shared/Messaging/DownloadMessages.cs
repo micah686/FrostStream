@@ -326,6 +326,23 @@ public sealed record MetadataFetched : IFlowMessage
 
     /// <summary>Small source metadata snapshot used to generate the archive .meta sidecar.</summary>
     public MetaFile? MetaFile { get; init; }
+
+    /// <summary>
+    /// Engagement counters as enriched at metadata-fetch time (ReturnYouTubeDislike fills gaps
+    /// yt-dlp no longer reports, e.g. dislikes). The rich-metadata write maps from the
+    /// media-acquire info.json, which never saw that enrichment, so these values are overlaid as
+    /// fallbacks onto the mapped metadata.
+    /// </summary>
+    public MediaEngagementSnapshot? Engagement { get; init; }
+}
+
+/// <summary>Enriched engagement counters captured at metadata-fetch time.</summary>
+public sealed record MediaEngagementSnapshot
+{
+    public long? LikeCount { get; init; }
+    public long? DislikeCount { get; init; }
+    public long? ViewCount { get; init; }
+    public double? AverageRating { get; init; }
 }
 
 /// <summary>

@@ -165,8 +165,8 @@ public sealed class DownloadAdminConsumerService(
         {
             logger.LogError(ex, "Failed acquiring V2 lease for DispatchId {DispatchId}",
                 context.Message.Execution.DispatchId);
-            // "acquire_error" is deliberately not a fatal rejection code on the Worker: it nacks
-            // and retries instead of dropping the dispatch.
+            // "acquire_error" is deliberately not a fatal rejection code on the Worker: it keeps
+            // the delivery and retries the acquire in place instead of dropping the dispatch.
             await context.RespondAsync(new AcquireDownloadLeaseResponse
             {
                 Granted = false,
@@ -304,7 +304,21 @@ public sealed class DownloadLeaseMonitorService(
                 {
                     var panel = await flows.ControlPanel(new FlowInstance(
                         DownloadFlowInstance.Job(active.JobId, active.RunId)));
-                    if (panel is null || panel.Status is not (Status.Failed or Status.Succeeded))
+                    if (panel is null)
+                    {
+                        // An active run whose flow instance never materialized (flows.Run threw on
+                        // first delivery and the redelivery hit the MessageId dedup, or a Start's
+                        // fire-and-forget flow launch failed) has nothing left that can settle it.
+                        var healed = await repository.FailRunAsync(
+                            active.JobId, active.RunId, FailureKind.Interrupted, "flow_missing",
+                            "No durable download flow exists for the active run. Start the job to create a fresh run.",
+                            stoppingToken);
+                        logger.LogWarning(
+                            "Failed Download V2 run without a flow instance for JobId {JobId} RunId {RunId} (run marked failed: {Failed}).",
+                            active.JobId, active.RunId, healed);
+                        continue;
+                    }
+                    if (panel.Status is not (Status.Failed or Status.Succeeded))
                         continue;
                     var failed = await repository.FailRunAsync(
                         active.JobId, active.RunId, FailureKind.Interrupted, "flow_failed",

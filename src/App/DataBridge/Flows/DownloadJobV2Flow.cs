@@ -164,8 +164,11 @@ public sealed class DownloadJobV2Flow(
             && downloaded.InfoJsonFileName is { Length: > 0 } infoName
             && downloaded.InfoJsonContentHashXxh128 is { Length: > 0 } infoHash)
         {
+            // Required: the RichMetadataWrite stage derives all rich metadata (including
+            // comments) from this uploaded info.json, so losing it must fail and compensate the
+            // run instead of downgrading to an optional-artifact warning.
             var info = await RunUploadAsync(run, request, workerTag, DownloadStage.InfoJsonUpload, "info-json",
-                UploadArtifactKind.InfoJson, required: false, infoTemp, null, storageKey,
+                UploadArtifactKind.InfoJson, required: true, infoTemp, null, storageKey,
                 SidecarPath(primary.Upload!.StoragePath, infoName), infoHash);
             if (info.Stopped || await Capture(() => V2(r => r.IsStopRequestedAsync(jobId, runId))))
             {
@@ -188,7 +191,7 @@ public sealed class DownloadJobV2Flow(
                 infoStoragePath = info.Upload!.StoragePath;
                 await Capture(() => Jobs(r => r.ApplySidecarUploadCompletedAsync(jobId, info.Upload!)));
                 await Capture(() => V2(r => r.UpsertArtifactAsync(ToArtifact(run, DownloadStage.InfoJsonUpload,
-                    "info-json", UploadArtifactKind.InfoJson, required: false, info.Upload!))));
+                    "info-json", UploadArtifactKind.InfoJson, required: true, info.Upload!))));
             }
         }
         else
@@ -288,7 +291,7 @@ public sealed class DownloadJobV2Flow(
         }
 
         var richMetadata = await RunRichMetadataWriteAsync(
-            run, reservation, storageKey, infoStoragePath, thumbnailPath, captionRows);
+            run, reservation, storageKey, infoStoragePath, thumbnailPath, captionRows, metadata.Engagement);
         if (!richMetadata.Succeeded)
         {
             await CompensateAsync(
@@ -357,8 +360,12 @@ public sealed class DownloadJobV2Flow(
             };
             await Capture(() => Publish(Tagged(DownloadSubjects.FetchMetadataCommand, workerTag), command));
             // A stop request changes the durable job gate and cancels the Worker. Wait for the
-            // Worker result so an in-flight write cannot race compensation.
-            var result = await Messages.FirstOfTypes<MetadataFetched, MetadataFetchFailed>();
+            // Worker result so an in-flight write cannot race compensation. Only this dispatch's
+            // result may settle the attempt — a stale result from an earlier attempt that slipped
+            // past the ingress gate must not be mistaken for the current one.
+            var result = await Messages.OfTypes<MetadataFetched, MetadataFetchFailed>()
+                .Where(x => (x.HasFirst ? x.First!.Execution : x.Second!.Execution)?.DispatchId == execution.DispatchId)
+                .First();
             if (result.HasFirst)
             {
                 await Capture(() => V2(r => r.CompleteStageAttemptAsync(execution)));
@@ -400,7 +407,9 @@ public sealed class DownloadJobV2Flow(
                 CookieSecretPath = request.CookieSecretPath
             };
             await Capture(() => Publish(Tagged(DownloadSubjects.DownloadVideoCommand, workerTag), command));
-            var result = await Messages.FirstOfTypes<DownloadCompleted, DownloadFailed>();
+            var result = await Messages.OfTypes<DownloadCompleted, DownloadFailed>()
+                .Where(x => (x.HasFirst ? x.First!.Execution : x.Second!.Execution)?.DispatchId == execution.DispatchId)
+                .First();
             if (result.HasFirst)
             {
                 await Capture(() => V2(r => r.CompleteStageAttemptAsync(execution)));
@@ -699,19 +708,24 @@ public sealed class DownloadJobV2Flow(
 
     private async Task<RequiredStageOutcome> RunRichMetadataWriteAsync(
         DownloadRunRequest run, VersionReservation reservation, string storageKey,
-        string? infoStoragePath, string? thumbnailPath, IReadOnlyList<CapturedCaptionMetadata> captions)
+        string? infoStoragePath, string? thumbnailPath, IReadOnlyList<CapturedCaptionMetadata> captions,
+        MediaEngagementSnapshot? engagement)
     {
         if (infoStoragePath is null)
         {
+            // Rich metadata is derived from the uploaded info.json, so its absence (yt-dlp did
+            // not produce one despite the forced WriteInfoJson) is a required-stage failure.
+            const string missingMessage =
+                "No info.json was captured for this media, so the required rich metadata cannot be written.";
             var missing = await NewExecutionAsync(run, DownloadStage.RichMetadataWrite, 1);
             var op = Operation(run, DownloadStage.RichMetadataWrite, 1);
             await Capture(() => V2(r => r.BeginStageAttemptAsync(missing, op)));
             await Capture(() => V2(r => r.FailStageAttemptAsync(missing, FailureKind.Permanent,
-                "rich_metadata_missing", "The Worker did not return the required rich metadata.")));
+                "info_json_missing", missingMessage)));
             return RequiredStageOutcome.Failed(
                 FailureKind.Permanent,
-                "rich_metadata_missing",
-                "The Worker did not return the required rich metadata.");
+                "info_json_missing",
+                missingMessage);
         }
 
         for (var attempt = 1; attempt <= MaxStageAttempts; attempt++)
@@ -724,7 +738,7 @@ public sealed class DownloadJobV2Flow(
             try
             {
                 await Capture(() => WriteRichMetadataAsync(
-                    reservation.MediaGuid, storageKey, infoStoragePath, thumbnailPath, captions));
+                    reservation.MediaGuid, storageKey, infoStoragePath, thumbnailPath, captions, engagement));
                 await Capture(() => PublishMetadataSync(reservation.MediaGuid));
                 await Capture(() => V2(r => r.CompleteStageAttemptAsync(execution)));
                 return RequiredStageOutcome.Success;
@@ -840,7 +854,11 @@ public sealed class DownloadJobV2Flow(
                 TempFileRef = tempFileRef
             };
             await Capture(() => Publish(Tagged(ArtifactStorageSubjects.DeleteTempFileCommand, workerTag), command));
-            var result = await Messages.FirstOfTypes<TempFileDeleted, TempFileDeleteFailed>();
+            // Cleanup runs several artifacts through the same message types back to back; only
+            // this dispatch's result may settle this file's attempt.
+            var result = await Messages.OfTypes<TempFileDeleted, TempFileDeleteFailed>()
+                .Where(x => (x.HasFirst ? x.First!.Execution : x.Second!.Execution)?.DispatchId == execution.DispatchId)
+                .First();
             if (result.HasFirst)
             {
                 await Capture(() => V2(r => r.CompleteStageAttemptAsync(execution)));
@@ -937,7 +955,12 @@ public sealed class DownloadJobV2Flow(
                 StorageVersion = artifact.StorageVersion
             };
             await Capture(() => Publish(Tagged(ArtifactStorageSubjects.DeleteUploadedObjectCommand, workerTag), command));
-            var result = await Messages.FirstOfTypes<UploadedObjectDeleted, UploadedObjectDeleteFailed>();
+            // Compensation deletes several objects through the same message types; matching on
+            // DispatchId keeps a stale delete result from marking a different artifact as removed
+            // while its object is still in storage.
+            var result = await Messages.OfTypes<UploadedObjectDeleted, UploadedObjectDeleteFailed>()
+                .Where(x => (x.HasFirst ? x.First!.Execution : x.Second!.Execution)?.DispatchId == execution.DispatchId)
+                .First();
             if (result.HasFirst)
             {
                 await Capture(() => V2(r => r.CompleteStageAttemptAsync(execution)));
@@ -1247,20 +1270,32 @@ public sealed class DownloadJobV2Flow(
 
     private async Task WriteRichMetadataAsync(
         Guid mediaGuid, string storageKey, string infoStoragePath, string? thumbnailPath,
-        IReadOnlyList<CapturedCaptionMetadata> captions)
+        IReadOnlyList<CapturedCaptionMetadata> captions, MediaEngagementSnapshot? engagement)
     {
         using var scope = scopeFactory.CreateScope();
         var storage = await scope.ServiceProvider.GetRequiredService<Shared.Storage.IBlobStorageProvider>()
             .GetAsync(storageKey);
         await using var stream = await storage.OpenReadAsync(infoStoragePath)
             ?? throw new InvalidOperationException($"Info JSON was not found at {infoStoragePath}.");
-        var info = await JsonSerializer.DeserializeAsync<VideoInfo>(stream)
+        // yt-dlp writes snake_case keys; VideoInfo only annotates multi-word names and relies on
+        // the source-gen context's naming policy for the rest, so plain Deserialize<VideoInfo>
+        // would silently leave title/uploader/comments/… null.
+        var info = await JsonSerializer.DeserializeAsync(stream, YtDlpJsonContext.Default.VideoInfo)
             ?? throw new InvalidOperationException("Info JSON was empty or invalid.");
         var provider = !string.IsNullOrWhiteSpace(info.Extractor) ? info.Extractor : info.ExtractorKey;
         var metadata = YtDlpMetadataMapper.Map(info, provider ?? "", clock);
         metadata = metadata with
         {
-            Media = metadata.Media with { ThumbnailStoragePath = thumbnailPath },
+            Media = metadata.Media with
+            {
+                ThumbnailStoragePath = thumbnailPath,
+                // The acquire-stage info.json never saw the metadata-stage ReturnYouTubeDislike
+                // enrichment; the snapshot fills only the gaps the source itself doesn't report.
+                LikeCount = metadata.Media.LikeCount ?? engagement?.LikeCount,
+                DislikeCount = metadata.Media.DislikeCount ?? engagement?.DislikeCount,
+                ViewCount = metadata.Media.ViewCount ?? engagement?.ViewCount,
+                AverageRating = metadata.Media.AverageRating ?? engagement?.AverageRating
+            },
             Captions = captions
         };
         await Metadata(r => r.WriteMetadataAsync(mediaGuid, metadata, storageKey));

@@ -61,6 +61,7 @@ public sealed class DownloadCommandsConsumerService(
     private static readonly TimeSpan DownloadHeartbeatInterval = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan LeaseHeartbeatInterval = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan LeaseRequestTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan LeaseAcquireRetryDelay = TimeSpan.FromSeconds(5);
     private readonly string _workerInstanceId = $"{Environment.MachineName}-{Guid.NewGuid():N}";
     private readonly ConcurrentDictionary<Guid, ActiveExecution> _activeExecutions = new();
     private readonly ConcurrentDictionary<(Guid JobId, Guid RunId), DateTimeOffset> _pendingRunCancellations = new();
@@ -266,6 +267,16 @@ public sealed class DownloadCommandsConsumerService(
                 {
                     Title = info.Title ?? info.FullTitle,
                     OriginalUrl = cmd.SourceUrl
+                },
+                // The rich-metadata write maps from the media-acquire info.json, which never sees
+                // the ReturnYouTubeDislike enrichment applied above — carry the enriched counters
+                // so DataBridge can overlay them as fallbacks.
+                Engagement = new MediaEngagementSnapshot
+                {
+                    LikeCount = info.LikeCount,
+                    DislikeCount = info.DislikeCount,
+                    ViewCount = info.ViewCount,
+                    AverageRating = info.AverageRating
                 }
             });
             await context.AckAsync();
@@ -1032,52 +1043,84 @@ public sealed class DownloadCommandsConsumerService(
         if (execution is null)
             return WorkerExecutionLease.Noop;
 
-        AcquireDownloadLeaseResponse? response;
+        // Transient acquire failures are retried in place while the JetStream ack deadline is
+        // extended. Nacking instead would burn MaxDeliver: a DataBridge outage of a few minutes
+        // would dead-letter the command, and an unclaimed dispatch has no lease row, so no
+        // lease-expiry sweep could ever fail the run — it would hang as Running forever.
+        using var ackProgressCts = new CancellationTokenSource();
+        var ackProgress = JetStreamHeartbeat.RunAsync(
+            context, DownloadHeartbeatInterval, logger, "AcquireLease", ackProgressCts.Token);
         try
         {
-            response = await messageBus.RequestAsync<AcquireDownloadLeaseRequest, AcquireDownloadLeaseResponse>(
-                DownloadSubjects.AcquireLeaseRequest,
-                new AcquireDownloadLeaseRequest
+            while (true)
+            {
+                AcquireDownloadLeaseResponse? response = null;
+                try
                 {
-                    Execution = execution,
-                    WorkerInstanceId = _workerInstanceId,
-                    OccurredAt = clock.GetCurrentInstant()
-                },
-                LeaseRequestTimeout,
-                _serviceStoppingToken);
-        }
-        catch (Exception ex) when (!_serviceStoppingToken.IsCancellationRequested)
-        {
-            logger.LogWarning(ex, "Could not acquire V2 lease for DispatchId {DispatchId}; nacking transport delivery.", execution.DispatchId);
-            await context.NackAsync();
-            return null;
-        }
+                    response = await messageBus.RequestAsync<AcquireDownloadLeaseRequest, AcquireDownloadLeaseResponse>(
+                        DownloadSubjects.AcquireLeaseRequest,
+                        new AcquireDownloadLeaseRequest
+                        {
+                            Execution = execution,
+                            WorkerInstanceId = _workerInstanceId,
+                            OccurredAt = clock.GetCurrentInstant()
+                        },
+                        LeaseRequestTimeout,
+                        _serviceStoppingToken);
+                }
+                catch (Exception ex) when (!_serviceStoppingToken.IsCancellationRequested)
+                {
+                    logger.LogWarning(ex, "V2 lease acquire attempt failed for DispatchId {DispatchId}; retrying in place.",
+                        execution.DispatchId);
+                }
 
-        if (response is null)
-        {
-            await context.NackAsync();
-            return null;
-        }
-        if (!response.Granted)
-        {
-            logger.LogInformation(
-                "Rejected V2 dispatch {DispatchId} for JobId {JobId} RunId {RunId} Stage {Stage} Attempt {Attempt}: {Reason}",
-                execution.DispatchId,
-                execution.JobId,
-                execution.RunId,
-                execution.Stage,
-                execution.Attempt,
-                response.RejectionCode ?? "lease_rejected_without_reason");
-            // Only rejections that DataBridge durably decided against are dropped. Anything else
-            // (transient acquire errors, or a response we could not interpret) is nacked so the
-            // dispatch is retried instead of stranding a granted-but-unheard lease until expiry.
-            if (response.RejectionCode is "dispatch_already_claimed" or "stale_execution")
-                await context.AckAsync();
-            else
-                await context.NackAsync();
-            return null;
-        }
+                if (response is { Granted: true })
+                    return await BeginGrantedExecutionAsync(execution, response);
 
+                // Only rejections that DataBridge durably decided against drop the dispatch.
+                if (response?.RejectionCode is "dispatch_already_claimed" or "stale_execution")
+                {
+                    logger.LogInformation(
+                        "Rejected V2 dispatch {DispatchId} for JobId {JobId} RunId {RunId} Stage {Stage} Attempt {Attempt}: {Reason}",
+                        execution.DispatchId,
+                        execution.JobId,
+                        execution.RunId,
+                        execution.Stage,
+                        execution.Attempt,
+                        response.RejectionCode);
+                    await context.AckAsync();
+                    return null;
+                }
+
+                if (response is not null)
+                    logger.LogWarning(
+                        "V2 lease acquire returned {Reason} for DispatchId {DispatchId}; retrying in place.",
+                        response.RejectionCode ?? "lease_rejected_without_reason",
+                        execution.DispatchId);
+
+                try
+                {
+                    await Task.Delay(LeaseAcquireRetryDelay, _serviceStoppingToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    // Shutting down: hand the untouched delivery back for another worker.
+                    await context.NackAsync();
+                    return null;
+                }
+            }
+        }
+        finally
+        {
+            await ackProgressCts.CancelAsync();
+            await ackProgress;
+        }
+    }
+
+    private async Task<WorkerExecutionLease> BeginGrantedExecutionAsync(
+        DownloadExecutionIdentity execution,
+        AcquireDownloadLeaseResponse response)
+    {
         if (response.StopRequested)
         {
             // The command was durably published before Stop won the database gate. Claim it only
