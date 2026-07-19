@@ -324,12 +324,8 @@ public sealed record MetadataFetched : IFlowMessage
     /// <summary>Channel / creator display name. Audit and search only.</summary>
     public string? Uploader { get; init; }
 
-    /// <summary>
-    /// Full structured metadata produced by the Worker's yt-dlp mapper. Present on the
-    /// happy path; null if the VideoInfo was too sparse to map. DataBridge uses this to
-    /// populate all <c>metadata.*</c> tables after a successful ingestion.
-    /// </summary>
-    public CapturedMediaMetadata? RichMetadata { get; init; }
+    /// <summary>Small source metadata snapshot used to generate the archive .meta sidecar.</summary>
+    public MetaFile? MetaFile { get; init; }
 }
 
 /// <summary>
@@ -452,13 +448,6 @@ public sealed record DownloadCompleted : IFlowMessage
     /// <c>metadata.media_captions</c> row. Empty when none were produced.
     /// </summary>
     public IReadOnlyList<SidecarFileRef> Captions { get; init; } = [];
-
-    /// <summary>
-    /// The Worker-generated <c>.comments.json</c> sidecar holding the comment thread parsed from
-    /// the info.json (<c>CapturedCommentMetadata</c> rows). Null when the info.json carried no
-    /// comments. Kept out of NATS payloads because comment threads are unbounded.
-    /// </summary>
-    public SidecarFileRef? Comments { get; init; }
 
     /// <summary>
     /// Non-fatal problems observed while acquiring the media. The coordinator persists each one

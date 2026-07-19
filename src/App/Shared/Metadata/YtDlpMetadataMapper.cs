@@ -5,9 +5,9 @@ using Shared.Metadata;
 using YtDlpSharpLib.Models;
 using static Shared.Metadata.CreatorIdentity;
 
-namespace Worker.Metadata;
+namespace Shared.Metadata;
 
-internal static class YtDlpMetadataMapper
+public static class YtDlpMetadataMapper
 {
     public static CapturedMediaMetadata Map(VideoInfo info, string platform, IClock clock)
     {

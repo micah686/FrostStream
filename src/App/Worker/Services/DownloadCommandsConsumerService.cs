@@ -238,21 +238,6 @@ public sealed class DownloadCommandsConsumerService(
                 returnYouTubeDislikeClient,
                 operationCts.Token);
 
-            CapturedMediaMetadata? richMetadata;
-            try
-            {
-                richMetadata = YtDlpMetadataMapper.Map(info, provider ?? "", clock);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex,
-                    "Metadata mapping failed for JobId {JobId} Provider {Provider} SourceMediaId {SourceMediaId}",
-                    cmd.JobId,
-                    provider,
-                    sourceMediaId);
-                throw;
-            }
-
             logger.LogInformation(
                 "Metadata fetch completed for JobId {JobId} Attempt {Attempt} Provider {Provider} SourceMediaId {SourceMediaId} Title {Title}",
                 cmd.JobId,
@@ -277,9 +262,11 @@ public sealed class DownloadCommandsConsumerService(
                 SourceLastModified = sourceLastModified,
                 Title = info.Title ?? info.FullTitle,
                 Uploader = info.Uploader ?? info.Channel,
-                // Comment threads are unbounded and would blow the NATS payload limit; they reach
-                // DataBridge via the media-acquire stage's comments.json sidecar instead.
-                RichMetadata = richMetadata with { Comments = [] }
+                MetaFile = new MetaFile
+                {
+                    Title = info.Title ?? info.FullTitle,
+                    OriginalUrl = cmd.SourceUrl
+                }
             });
             await context.AckAsync();
         }
@@ -392,7 +379,6 @@ public sealed class DownloadCommandsConsumerService(
             PlaceholderContentDetector.ThrowIfPlaceholderContentHash(contentHash);
 
             var infoJson = await ResolveInfoJsonSidecarAsync(tempDirectory);
-            var commentsSidecar = await ResolveCommentsSidecarAsync(tempDirectory, cmd.JobId);
             var (thumbnail, captions) = await ResolveAssetSidecarsAsync(tempDirectory, tempFileRef);
 
             logger.LogInformation(
@@ -426,7 +412,6 @@ public sealed class DownloadCommandsConsumerService(
                 InfoJsonContentHashXxh128 = infoJson?.ContentHash,
                 Thumbnail = thumbnail,
                 Captions = captions,
-                Comments = commentsSidecar,
                 Warnings = acquisitionWarnings
             });
             await context.AckAsync();
@@ -1434,7 +1419,7 @@ public sealed class DownloadCommandsConsumerService(
         options = options with
         {
             VideoSelection = options.VideoSelection with { NoPlaylist = true },
-            Filesystem = options.Filesystem with { NoPart = true },
+            Filesystem = options.Filesystem with { NoPart = true, WriteInfoJson = true },
             VerbositySimulation = options.VerbositySimulation with { Newline = true },
             Thumbnail = options.Thumbnail with { WriteThumbnail = !options.Thumbnail.NoWriteThumbnail }
         };
