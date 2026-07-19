@@ -51,6 +51,12 @@ public static class StartAuthentik
             "authentik",
             "blueprints",
             "froststream.yaml");
+        var brandingIconPath = Path.GetFullPath(Path.Combine(
+            builder.AppHostDirectory,
+            "..",
+            "Frontend",
+            "static",
+            "favicon.svg"));
 
         var secretKey = builder.AddParameter(
             "authentik-secret-key",
@@ -90,6 +96,7 @@ public static class StartAuthentik
             .WithEnvironment("AUTHENTIK_CLIENT_ID", clientId)
             .WithEnvironment("AUTHENTIK_CLIENT_SECRET", clientSecret)
             .WithPortableBindMount(blueprintPath, "../AppHost/configs/authentik/blueprints/froststream.yaml", "/blueprints/froststream.yaml", isReadOnly: true)
+            .WithPortableBindMount(brandingIconPath, "../Frontend/static/favicon.svg", "/web/dist/assets/icons/froststream.svg", isReadOnly: true)
             .WithHttpHealthCheck(path: "/-/health/ready/")
             .WaitFor(postgres.AuthentikDb)
             .WaitForDatabases(postgres)

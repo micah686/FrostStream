@@ -211,11 +211,8 @@ public sealed record DownloadRequested : IFlowMessage
     /// </summary>
     public AudioConversionFormat? AudioFormat { get; init; }
 
-    /// <summary>When true, queue a cached audio rendition after the video download completes.</summary>
+    /// <summary>When true, queue a cached opus audio rendition after the video download completes.</summary>
     public bool EncodeAudioRendition { get; init; }
-
-    /// <summary>Cached audio rendition format used when <see cref="EncodeAudioRendition"/> is true.</summary>
-    public AudioRenditionFormat AudioRenditionFormat { get; init; } = AudioRenditionFormat.Aac;
 
     /// <summary>
     /// Caller-supplied yt-dlp options snapshot. The Worker merges this on top of its
@@ -484,9 +481,6 @@ public sealed record SidecarFileRef
     /// <summary>Language code for caption sidecars (e.g. "en", "en-US"); null for thumbnails.</summary>
     public string? LanguageCode { get; init; }
 
-    /// <summary>Plain text extracted from the subtitle file at download time. Null for thumbnails or
-    /// unsupported formats. Stored in the DB and indexed in Typesense for full-text search.</summary>
-    public string? ParsedText { get; init; }
 }
 
 /// <summary>

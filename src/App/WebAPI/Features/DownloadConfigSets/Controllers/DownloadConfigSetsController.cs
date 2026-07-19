@@ -20,7 +20,7 @@ public sealed class DownloadConfigSetsController(
     [HttpPost]
     [Endpoint(EndpointIds.DownloadConfigSetsCreate)]
     [EndpointSummary("Create a download config set")]
-    [EndpointDescription("Creates a reusable download configuration set owned by the authenticated user. The config can include storage target, cookie profile key, yt-dlp options, playlist audio encoding options, priority, and comment-fetch behavior.")]
+    [EndpointDescription("Creates a reusable download configuration set owned by the authenticated user. The config can include storage target, cookie profile key, yt-dlp options, and priority.")]
     public async Task<ActionResult<DownloadConfigSetResponse>> Create(
         [FromBody] DownloadConfigSetCreateRequest request,
         CancellationToken cancellationToken)
@@ -70,7 +70,7 @@ public sealed class DownloadConfigSetsController(
     [HttpGet]
     [Endpoint(EndpointIds.DownloadConfigSetsList)]
     [EndpointSummary("List download config sets")]
-    [EndpointDescription("Lists all reusable download configuration sets owned by the authenticated user, ordered by key. The response includes each config's storage, cookie, yt-dlp, audio encoding, priority, and comment-fetch options.")]
+    [EndpointDescription("Lists all reusable download configuration sets owned by the authenticated user, ordered by key. The response includes each config's storage, cookie, yt-dlp, and priority options.")]
     public async Task<ActionResult<IReadOnlyCollection<DownloadConfigSetResponse>>> List(CancellationToken cancellationToken)
     {
         var owner = RequireSubject();
@@ -148,10 +148,7 @@ public sealed class DownloadConfigSetsController(
             CookieProfileKey = request.CookieProfileKey,
             YtDlpOptionsJson = request.YtDlpOptions is null ? null : JsonSerializer.Serialize(request.YtDlpOptions),
             IgnoreKeywords = request.IgnoreKeywords,
-            EncodeForPlaylist = request.EncodeForPlaylist,
-            AudioFormat = request.AudioFormat,
-            Priority = request.Priority,
-            FetchComments = request.FetchComments
+            Priority = request.Priority
         };
 
     private static DownloadConfigSetUpdateRequestMessage ToUpdateMessage(string owner, string key, DownloadConfigSetUpdateRequest request)
@@ -165,10 +162,7 @@ public sealed class DownloadConfigSetsController(
             CookieProfileKey = request.CookieProfileKey,
             YtDlpOptionsJson = request.YtDlpOptions is null ? null : JsonSerializer.Serialize(request.YtDlpOptions),
             IgnoreKeywords = request.IgnoreKeywords,
-            EncodeForPlaylist = request.EncodeForPlaylist,
-            AudioFormat = request.AudioFormat,
-            Priority = request.Priority,
-            FetchComments = request.FetchComments
+            Priority = request.Priority
         };
 
     private ActionResult<DownloadConfigSetResponse> MapEntityResponse(DownloadConfigSetOperationResponseMessage? response)
@@ -203,10 +197,7 @@ public sealed class DownloadConfigSetsController(
             CookieProfileKey = dto.CookieProfileKey,
             YtDlpOptions = ParseOptionsJson(dto.YtDlpOptionsJson),
             IgnoreKeywords = dto.IgnoreKeywords,
-            EncodeForPlaylist = dto.EncodeForPlaylist,
-            AudioFormat = dto.AudioFormat,
-            Priority = dto.Priority,
-            FetchComments = dto.FetchComments
+            Priority = dto.Priority
         };
 
     private static JsonElement? ParseOptionsJson(string? json)

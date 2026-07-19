@@ -20,14 +20,15 @@ public sealed class TypesenseStartupService(
             MediaCollectionSchema.CollectionName,
             cancellationToken);
 
-        // A pre-existing collection from an earlier schema lacks the technical fields; a rebuild
-        // recreates it with the current schema and backfills.
-        var hasTechnicalFields = await indexService.MediaCollectionHasFieldAsync("resolution_label", cancellationToken);
+        // A pre-existing collection from an earlier schema lacks the current fields; a rebuild
+        // recreates it with the current schema and backfills. added_at_sort (ingestion timestamp,
+        // used for "Recently added") is the newest addition.
+        var hasCurrentFields = await indexService.MediaCollectionHasFieldAsync("added_at_sort", cancellationToken);
 
-        if (createdAny || mediaDocumentCount == 0 || !hasTechnicalFields)
+        if (createdAny || mediaDocumentCount == 0 || !hasCurrentFields)
         {
             var reason = createdAny ? "missing collection created at startup"
-                : !hasTechnicalFields ? "media collection schema is missing technical fields"
+                : !hasCurrentFields ? "media collection schema is missing current fields"
                 : "media collection is empty at startup";
             var result = await rebuildCoordinator.RebuildAsync(reason, cancellationToken);
             logger.LogInformation(

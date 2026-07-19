@@ -21,6 +21,13 @@ public sealed class AudioRenditionConsumerService(
             queueGroup: AudioRenditionSubjects.ProcessorsQueueGroup,
             cancellationToken: stoppingToken);
 
+        await SubscribeAsync<ChannelAudioResolveRequest>(
+            messageBus,
+            AudioRenditionSubjects.ResolveChannel,
+            HandleResolveChannelAsync,
+            queueGroup: AudioRenditionSubjects.ProcessorsQueueGroup,
+            cancellationToken: stoppingToken);
+
         await SubscribeAsync<AudioRenditionClaimRequest>(
             messageBus,
             AudioRenditionSubjects.Claim,
@@ -43,6 +50,58 @@ public sealed class AudioRenditionConsumerService(
             cancellationToken: stoppingToken);
     }
 
+    private async Task HandleResolveChannelAsync(IMessageContext<ChannelAudioResolveRequest> context)
+    {
+        try
+        {
+            ChannelAudioResolveResult? result;
+            using (var scope = scopeFactory.CreateScope())
+            {
+                result = await scope.ServiceProvider.GetRequiredService<IAudioRenditionRepository>()
+                    .ResolveChannelAsync(
+                        context.Message.AccountId,
+                        context.Message.CreateIfMissing,
+                        context.Message.RetryFailedAndPending);
+            }
+
+            if (result is null)
+            {
+                await context.RespondAsync(new ChannelAudioResolveResponse
+                {
+                    Success = false,
+                    ErrorCode = "not_found",
+                    ErrorMessage = $"Channel '{context.Message.AccountId}' was not found."
+                });
+                return;
+            }
+
+            foreach (var rendition in result.RenditionsToQueue)
+            {
+                await publisher.PublishAsync(
+                    BackgroundJobSubjects.AudioRenditionEncodeRequest,
+                    new AudioRenditionEncodeRequested
+                    {
+                        RenditionId = rendition.RenditionId,
+                        MediaGuid = rendition.MediaGuid,
+                        SourceVersion = rendition.SourceVersion
+                    },
+                    messageId: rendition.RenditionId.ToString("N"));
+            }
+
+            await context.RespondAsync(new ChannelAudioResolveResponse { Success = true, Item = result.Channel });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed resolving channel audio for account {AccountId}.", context.Message.AccountId);
+            await context.RespondAsync(new ChannelAudioResolveResponse
+            {
+                Success = false,
+                ErrorCode = "internal_error",
+                ErrorMessage = "Internal channel audio service error."
+            });
+        }
+    }
+
     private async Task HandleResolveAsync(IMessageContext<AudioRenditionResolveRequest> context)
     {
         try
@@ -53,8 +112,8 @@ public sealed class AudioRenditionConsumerService(
             {
                 var repo = scope.ServiceProvider.GetRequiredService<IAudioRenditionRepository>();
                 item = request.CreateIfMissing
-                    ? await repo.CreateIfMissingAsync(request.MediaGuid, request.Format, request.StorageKey, request.SourceVersion)
-                    : await repo.ResolveAsync(request.MediaGuid, request.Format, request.StorageKey, request.SourceVersion);
+                    ? await repo.CreateIfMissingAsync(request.MediaGuid, request.StorageKey, request.SourceVersion)
+                    : await repo.ResolveAsync(request.MediaGuid, request.StorageKey, request.SourceVersion);
             }
 
             if (item is null)
@@ -76,8 +135,7 @@ public sealed class AudioRenditionConsumerService(
                     {
                         RenditionId = item.RenditionId,
                         MediaGuid = item.MediaGuid,
-                        SourceVersion = item.SourceVersion,
-                        Format = item.Format
+                        SourceVersion = item.SourceVersion
                     },
                     messageId: item.RenditionId.ToString("N"));
             }

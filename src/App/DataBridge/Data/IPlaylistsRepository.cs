@@ -89,4 +89,4 @@ public sealed record PlaylistDetailItem(
     Guid? MediaGuid,
     string? IgnoredKeyword);
 
-public sealed record PlaylistAudioPreference(bool EncodeForPlaylist, AudioRenditionFormat AudioFormat, string? StorageKey);
+public sealed record PlaylistAudioPreference(bool EncodeForPlaylist, string? StorageKey);

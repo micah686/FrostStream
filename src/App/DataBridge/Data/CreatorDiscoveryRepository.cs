@@ -223,9 +223,13 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
             if (changed)
             {
                 existing.LastChangedAt = now;
+                changedCount++;
+            }
+
+            if (changed || request.QueueAllItems)
+            {
                 existing.LastEnqueuedAt = now;
                 existing.MetadataStatus = MediaMetadataStatus.RefreshRequested;
-                changedCount++;
                 enqueued.Add(candidate);
             }
         }

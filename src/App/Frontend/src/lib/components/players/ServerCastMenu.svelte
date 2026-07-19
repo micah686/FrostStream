@@ -20,6 +20,15 @@
   } from '$lib/api/cast';
   import { readEventStream } from '$lib/sse/eventStream';
   import RangeSlider from '$lib/components/RangeSlider.svelte';
+  import {
+    ComputerSpeakerOutline,
+    PauseOutline,
+    PlaySolid,
+    RefreshOutline,
+    StopSolid,
+    VolumeMuteOutline,
+    VolumeUpOutline
+  } from 'flowbite-svelte-icons';
 
   interface CaptionLanguage {
     languageCode: string;
@@ -305,10 +314,7 @@
           : 'border-slate-800 bg-slate-900/70 text-slate-300 hover:bg-slate-800'
       ]}
     >
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-4 w-4" aria-hidden="true">
-        <path d="M2 16.1A5 5 0 0 1 5.9 20M2 12.05A9 9 0 0 1 9.95 20M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6" />
-        <circle cx="2" cy="20" r="0.5" fill="currentColor" />
-      </svg>
+      <ComputerSpeakerOutline class="h-4 w-4" />
       {session ? `Casting · ${session.deviceName}` : triggerLabel}
     </button>
   {/if}
@@ -351,15 +357,15 @@
           <div class="flex items-center justify-center gap-2">
             {#if playing}
               <button type="button" class="cast-ctl" onclick={() => transport(castPause)} title="Pause">
-                <svg viewBox="0 0 24 24" fill="currentColor" class="h-5 w-5"><path d="M6 4h4v16H6zM14 4h4v16h-4z" /></svg>
+                <PauseOutline class="h-5 w-5" />
               </button>
             {:else}
               <button type="button" class="cast-ctl" onclick={() => transport(castPlay)} title="Play">
-                <svg viewBox="0 0 24 24" fill="currentColor" class="h-5 w-5"><path d="M8 5v14l11-7z" /></svg>
+                <PlaySolid class="h-5 w-5" />
               </button>
             {/if}
             <button type="button" class="cast-ctl" onclick={() => transport(castStop)} title="Stop">
-              <svg viewBox="0 0 24 24" fill="currentColor" class="h-5 w-5"><path d="M6 6h12v12H6z" /></svg>
+              <StopSolid class="h-5 w-5" />
             </button>
             <button
               type="button"
@@ -368,9 +374,9 @@
               title={session.snapshot.muted ? 'Unmute' : 'Mute'}
             >
               {#if session.snapshot.muted}
-                <svg viewBox="0 0 24 24" fill="currentColor" class="h-5 w-5"><path d="M16.5 12A4.5 4.5 0 0 0 14 8v2.2l2.4 2.4c.06-.2.1-.4.1-.6zM3 4.3 4.3 3 21 19.7 19.7 21l-2.6-2.6A8.9 8.9 0 0 1 14 19.8v-2.1a6.9 6.9 0 0 0 1.6-.8L12 13.3V18l-5-5H3V9h3.3zM12 4 9.9 6.1 12 8.2z" /></svg>
+                <VolumeMuteOutline class="h-5 w-5" />
               {:else}
-                <svg viewBox="0 0 24 24" fill="currentColor" class="h-5 w-5"><path d="M3 9v6h4l5 5V4L7 9zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z" /></svg>
+                <VolumeUpOutline class="h-5 w-5" />
               {/if}
             </button>
           </div>
@@ -406,16 +412,7 @@
             class="rounded-md p-1 text-slate-400 transition hover:bg-slate-800 hover:text-slate-200 disabled:opacity-50"
             title="Scan again (takes a few seconds)"
           >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              class={['h-4 w-4', devicesLoading && 'animate-spin']}
-              aria-hidden="true"
-            >
-              <path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" />
-            </svg>
+            <RefreshOutline class={['h-4 w-4', devicesLoading && 'animate-spin']} />
           </button>
         </div>
 

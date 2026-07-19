@@ -5,6 +5,319 @@ metadata:
   labels:
     blueprints.goauthentik.io/description: FrostStream development OIDC application and provider.
 entries:
+  # Keep FrostStream's login presentation reproducible across fresh installs and container
+  # recreation. This only brands the existing flow executor; authentication stages and their
+  # bindings remain owned by authentik's default authentication flow.
+  - id: froststream-default-brand
+    model: authentik_brands.brand
+    identifiers:
+      default: true
+    attrs:
+      branding_title: FrostStream
+      branding_logo: /static/dist/assets/icons/froststream.svg
+      branding_favicon: /static/dist/assets/icons/froststream.svg
+      attributes:
+        settings:
+          theme:
+            base: dark
+          locale: en
+      branding_custom_css: |
+        /* FrostStream authentication theme. Scoped to the flow executor so the admin and
+           application interfaces retain authentik's standard, maintainable presentation. */
+        :root {
+          color-scheme: dark;
+          --fs-auth-bg: #0c1120;
+          --fs-auth-panel: #171c29;
+          --fs-auth-field: #121722;
+          --fs-auth-border: #293247;
+          --fs-auth-border-strong: #3b82f6;
+          --fs-auth-text: #f1f5f9;
+          --fs-auth-muted: #929bb0;
+          --fs-auth-primary: #3b82f6;
+          --fs-auth-primary-hover: #60a5fa;
+          --fs-auth-danger: #fb7185;
+          --fs-auth-font: Inter, "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+
+          --pf-global--primary-color--100: var(--fs-auth-primary);
+          --pf-global--primary-color--200: #2563eb;
+          --pf-global--BackgroundColor--100: var(--fs-auth-panel);
+          --pf-global--BackgroundColor--dark-100: var(--fs-auth-panel);
+          --pf-global--Color--100: var(--fs-auth-text);
+          --pf-global--Color--200: var(--fs-auth-muted);
+          --pf-global--BorderColor--100: var(--fs-auth-border);
+          --pf-global--BorderRadius--sm: 8px;
+          --ak-c-login--MaxWidth: 37rem;
+          --ak-c-login__main--BackgroundColor: var(--fs-auth-panel);
+          --ak-c-login__main--Color: var(--fs-auth-text);
+          --ak-c-login__main--BoxShadow: 0 28px 70px rgb(0 0 0 / 36%);
+          --ak-c-login__footer--Color: var(--fs-auth-muted);
+        }
+
+        html,
+        body,
+        ak-flow-executor,
+        .pf-c-login {
+          min-width: 320px;
+          min-height: 100vh;
+          background:
+            linear-gradient(115deg, rgb(18 45 83 / 58%) 0%, transparent 42%),
+            linear-gradient(250deg, rgb(52 28 75 / 40%) 0%, transparent 38%),
+            var(--fs-auth-bg) !important;
+          color: var(--fs-auth-text);
+          font-family: var(--fs-auth-font);
+          letter-spacing: 0;
+          text-rendering: optimizeLegibility;
+          -webkit-font-smoothing: antialiased;
+        }
+
+        ak-flow-executor::part(locale-select) {
+          display: none;
+        }
+
+        ak-flow-executor::part(main),
+        .pf-c-login__main {
+          width: min(37rem, calc(100vw - 2rem));
+          min-height: 0;
+          overflow: hidden;
+          border: 1px solid var(--fs-auth-border);
+          border-radius: 8px;
+          background: var(--fs-auth-panel) !important;
+          box-shadow: 0 28px 70px rgb(0 0 0 / 36%) !important;
+        }
+
+        .pf-c-login__main-header,
+        .pf-c-login__main-body,
+        .pf-c-login__main-footer {
+          padding-inline: clamp(2rem, 7vw, 4.25rem);
+        }
+
+        .pf-c-login__main-header {
+          padding-block-start: 3.25rem;
+          text-align: center;
+        }
+
+        .pf-c-login__main-body {
+          padding-block: 1.75rem 3.5rem;
+        }
+
+        .pf-c-brand,
+        ak-flow-executor::part(branding) {
+          display: flex;
+          justify-content: center;
+          margin: 0 auto 1.5rem;
+        }
+
+        .pf-c-brand img,
+        ak-flow-executor::part(branding) img {
+          width: 4rem;
+          height: 4rem;
+          object-fit: contain;
+          filter: drop-shadow(0 8px 14px rgb(14 111 191 / 30%));
+        }
+
+        .pf-c-title,
+        h1,
+        h2 {
+          margin: 0;
+          color: var(--fs-auth-text) !important;
+          font-family: var(--fs-auth-font);
+          font-size: clamp(1.55rem, 4vw, 1.85rem) !important;
+          font-weight: 700 !important;
+          line-height: 1.25;
+          letter-spacing: 0;
+          text-align: center;
+        }
+
+        /* authentik's stock flow title is literal and does not consume branding_title. Replace
+           only its visual presentation; the flow object and all stage behavior stay untouched. */
+        .pf-c-login__main-header .pf-c-title {
+          font-size: 0 !important;
+        }
+
+        .pf-c-login__main-header .pf-c-title::before {
+          display: block;
+          min-height: 4rem;
+          margin: 0 auto;
+          padding-block-start: 5.5rem;
+          background: url("/static/dist/assets/icons/froststream.svg") top center / 4rem 4rem no-repeat;
+          color: var(--fs-auth-text);
+          content: "Welcome to FrostStream";
+          filter: drop-shadow(0 8px 14px rgb(14 111 191 / 30%));
+          font-size: 1.85rem;
+          font-weight: 700;
+          line-height: 1.25;
+        }
+
+        .pf-c-login__main-header .pf-c-title::after,
+        .pf-c-login__main-header h1::after {
+          display: block;
+          margin-block-start: 0.65rem;
+          color: var(--fs-auth-muted);
+          content: "Sign in to continue";
+          font-size: 1rem;
+          font-weight: 400;
+          line-height: 1.5;
+        }
+
+        .pf-c-form,
+        form {
+          display: flex;
+          flex-direction: column;
+          gap: 1.15rem;
+        }
+
+        .pf-c-form__group,
+        .form-group {
+          margin: 0;
+        }
+
+        label,
+        .pf-c-form__label,
+        .pf-c-form__label-text {
+          color: var(--fs-auth-muted) !important;
+          font-size: 0.95rem;
+          font-weight: 500 !important;
+          letter-spacing: 0;
+        }
+
+        input:not([type="checkbox"]):not([type="radio"]),
+        .pf-c-form-control,
+        .pf-c-input-group {
+          min-height: 3.75rem;
+          border: 1px solid var(--fs-auth-border) !important;
+          border-radius: 8px !important;
+          background: var(--fs-auth-field) !important;
+          color: var(--fs-auth-text) !important;
+          box-shadow: none !important;
+          font-family: var(--fs-auth-font);
+          font-size: 1rem;
+          letter-spacing: 0;
+          transition: border-color 150ms ease, box-shadow 150ms ease;
+        }
+
+        input:not([type="checkbox"]):not([type="radio"]) {
+          padding-inline: 1rem !important;
+        }
+
+        input::placeholder {
+          color: #707990 !important;
+          opacity: 1;
+        }
+
+        input:not([type="checkbox"]):not([type="radio"]):hover,
+        .pf-c-form-control:hover {
+          border-color: #3b465e !important;
+        }
+
+        input:not([type="checkbox"]):not([type="radio"]):focus,
+        input:not([type="checkbox"]):not([type="radio"]):focus-visible,
+        .pf-c-form-control:focus,
+        .pf-c-form-control:focus-within,
+        .pf-c-input-group:focus-within {
+          border-color: var(--fs-auth-border-strong) !important;
+          outline: 0 !important;
+          box-shadow: 0 0 0 3px rgb(59 130 246 / 18%) !important;
+        }
+
+        button,
+        .pf-c-button,
+        input[type="submit"] {
+          min-height: 3.5rem;
+          border-radius: 8px !important;
+          font-family: var(--fs-auth-font);
+          font-size: 1rem;
+          font-weight: 650;
+          letter-spacing: 0;
+          transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+        }
+
+        .pf-c-button.pf-m-primary,
+        button[type="submit"],
+        input[type="submit"] {
+          border: 1px solid var(--fs-auth-primary) !important;
+          background: var(--fs-auth-primary) !important;
+          color: #fff !important;
+          box-shadow: 0 8px 22px rgb(37 99 235 / 24%);
+        }
+
+        .pf-c-button.pf-m-primary:hover,
+        button[type="submit"]:hover,
+        input[type="submit"]:hover {
+          border-color: var(--fs-auth-primary-hover) !important;
+          background: var(--fs-auth-primary-hover) !important;
+        }
+
+        .pf-c-button:focus-visible,
+        button:focus-visible,
+        a:focus-visible {
+          outline: 2px solid #93c5fd !important;
+          outline-offset: 3px;
+        }
+
+        a,
+        .pf-c-button.pf-m-link {
+          color: #60a5fa !important;
+          letter-spacing: 0;
+        }
+
+        .pf-c-form__helper-text,
+        .pf-c-helper-text,
+        .pf-c-login__main-footer,
+        small,
+        p {
+          color: var(--fs-auth-muted);
+        }
+
+        .pf-m-error,
+        .pf-c-form__helper-text.pf-m-error,
+        [aria-invalid="true"] {
+          color: var(--fs-auth-danger);
+        }
+
+        .pf-c-login__footer,
+        ak-flow-executor::part(footer) {
+          padding-block: 1.5rem;
+          color: var(--fs-auth-muted) !important;
+          font-size: 0.875rem;
+          letter-spacing: 0;
+        }
+
+        @media (max-width: 40rem) {
+          ak-flow-executor::part(main),
+          .pf-c-login__main {
+            width: calc(100vw - 1.5rem);
+          }
+
+          .pf-c-login__main-header,
+          .pf-c-login__main-body,
+          .pf-c-login__main-footer {
+            padding-inline: 1.5rem;
+          }
+
+          .pf-c-login__main-header {
+            padding-block-start: 2.25rem;
+          }
+
+          .pf-c-login__main-body {
+            padding-block-end: 2.25rem;
+          }
+
+          .pf-c-brand img,
+          ak-flow-executor::part(branding) img {
+            width: 3.5rem;
+            height: 3.5rem;
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          *,
+          *::before,
+          *::after {
+            scroll-behavior: auto !important;
+            transition-duration: 0.01ms !important;
+          }
+        }
+
   # Replaces authentik's default `profile` scope mapping, which also emits a `groups` claim.
   # Scope mapping results are deep-merged with list concatenation, so combining the default
   # mapping with froststream-scope-groups below would duplicate every entry in `groups`.

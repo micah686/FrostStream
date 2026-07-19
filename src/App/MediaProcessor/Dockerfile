@@ -19,6 +19,10 @@ COPY App/MediaProcessor/ App/MediaProcessor/
 RUN dotnet publish App/MediaProcessor/MediaProcessor.csproj -c Release -o /app --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
+# ffmpeg/ffprobe drive every rendition encode.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app .
 

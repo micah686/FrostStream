@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
   import { goto } from '$app/navigation';
-  import { Alert, Button, Checkbox, Input, Label, Select, Spinner, Textarea } from 'flowbite-svelte';
+  import { Alert, Button, Input, Label, Select, Spinner, Textarea } from 'flowbite-svelte';
   import {
     ArrowLeftOutline,
     CheckCircleOutline,
@@ -11,12 +11,13 @@
   import {
     createDownloadConfigSet,
     updateDownloadConfigSet,
-    type AudioRenditionFormat,
     type DownloadConfigSet,
     type DownloadConfigSetRequest,
     type IgnoreKeyword
   } from '$lib/api/downloadConfigSets';
   import { listOptionPresets, type OptionPreset } from '$lib/api/optionPresets';
+  import { listStorage } from '$lib/api/storage';
+  import { listCookieProfiles } from '$lib/api/cookies';
   import RangeSlider from '$lib/components/RangeSlider.svelte';
 
   interface Props {
@@ -26,11 +27,10 @@
 
   let { mode, initial = null }: Props = $props();
 
-  const audioFormatOptions = [
-    { value: 'Aac', name: 'AAC' },
-    { value: 'Opus', name: 'Opus' },
-    { value: 'Mp3', name: 'MP3' }
-  ];
+  interface SelectItem {
+    value: string;
+    name: string;
+  }
 
   let key = $state(untrack(() => initial?.key ?? ''));
   let name = $state(untrack(() => initial?.name ?? ''));
@@ -38,14 +38,14 @@
   let storageKey = $state(untrack(() => initial?.storageKey ?? 'default'));
   let cookieProfileKey = $state(untrack(() => initial?.cookieProfileKey ?? ''));
   let priority = $state(untrack(() => initial?.priority ?? 0));
-  let encodeForPlaylist = $state(untrack(() => initial?.encodeForPlaylist ?? false));
-  let audioFormat = $state<AudioRenditionFormat>(untrack(() => initial?.audioFormat ?? 'Aac'));
-  let fetchComments = $state(untrack(() => initial?.fetchComments ?? false));
   let ignoreKeywordsText = $state(untrack(() => formatIgnoreKeywords(initial?.ignoreKeywords ?? [])));
   let selectedOptionPresetKey = $state(untrack(() => (initial?.ytDlpOptions ? '__existing' : '')));
   let optionPresets = $state<OptionPreset[]>([]);
   let optionPresetsLoading = $state(true);
   let optionPresetsError = $state<string | null>(null);
+  let storageOptions = $state<SelectItem[]>([{ value: 'default', name: 'default' }]);
+  let storageLoadFailed = $state(false);
+  let cookieOptions = $state<SelectItem[]>([]);
   let submitting = $state(false);
   let submitError = $state<string | null>(null);
 
@@ -58,9 +58,12 @@
       name: preset.description ? `${preset.name} — ${preset.description}` : preset.name
     }))
   ]);
+  const cookieProfileItems = $derived([{ value: '', name: 'None' }, ...cookieOptions]);
 
   onMount(() => {
     void loadOptionPresets();
+    void loadStorageTargets();
+    void loadCookieProfiles();
   });
 
   async function loadOptionPresets() {
@@ -72,6 +75,36 @@
       optionPresetsError = err instanceof Error ? err.message : 'Could not load option presets.';
     } finally {
       optionPresetsLoading = false;
+    }
+  }
+
+  async function loadStorageTargets() {
+    try {
+      const items = await listStorage();
+      if (items.length > 0) {
+        storageOptions = items.map((item) => ({
+          value: item.key,
+          name: item.description ? `${item.key} — ${item.description}` : item.key
+        }));
+        if (!storageOptions.some((option) => option.value === storageKey)) {
+          storageKey = storageOptions[0].value;
+        }
+      }
+    } catch {
+      // Fall back to a free-text storage key input when the list is unavailable.
+      storageLoadFailed = true;
+    }
+  }
+
+  async function loadCookieProfiles() {
+    try {
+      const items = await listCookieProfiles();
+      cookieOptions = items.map((item) => ({
+        value: item.profileKey,
+        name: item.displayName || item.site ? `${item.profileKey} (${item.displayName ?? item.site})` : item.profileKey
+      }));
+    } catch {
+      // Cookie profiles are optional; config sets work without them.
     }
   }
 
@@ -109,10 +142,7 @@
       cookieProfileKey: cookieProfileKey.trim() || null,
       ytDlpOptions: selectedYtDlpOptions(),
       ignoreKeywords: parseIgnoreKeywords(ignoreKeywordsText),
-      encodeForPlaylist,
-      audioFormat,
-      priority: normalizedPriority,
-      fetchComments
+      priority: normalizedPriority
     };
   }
 
@@ -212,64 +242,32 @@
   <div class="grid gap-5 sm:grid-cols-2">
     <div>
       <Label for="storage-key" class="mb-2 text-sm font-medium text-slate-300">Storage key</Label>
-      <Input
-        id="storage-key"
-        bind:value={storageKey}
-        placeholder="default"
-        class="border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!"
-      />
+      {#if storageLoadFailed}
+        <Input
+          id="storage-key"
+          bind:value={storageKey}
+          placeholder="default"
+          class="border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!"
+        />
+      {:else}
+        <Select
+          id="storage-key"
+          items={storageOptions}
+          bind:value={storageKey}
+          class="border-slate-800! bg-slate-950/60! text-sm! text-slate-200! focus:border-blue-500! focus:ring-blue-500!"
+        />
+      {/if}
     </div>
 
     <div>
       <Label for="cookie-profile-key" class="mb-2 text-sm font-medium text-slate-300">Cookie profile key</Label>
-      <Input
-        id="cookie-profile-key"
-        pattern={'[a-z0-9-]{2,100}'}
-        bind:value={cookieProfileKey}
-        placeholder="optional"
-        class="border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!"
-      />
-    </div>
-  </div>
-
-  <div class="grid gap-5 sm:grid-cols-2">
-    <div>
-      <Label for="priority" class="mb-2 text-sm font-medium text-slate-300">
-        Priority <span class="font-normal text-slate-500">({priority})</span>
-      </Label>
-      <RangeSlider id="priority" min={0} max={100} step={1} bind:value={priority} />
-    </div>
-
-    <div>
-      <Label for="audio-format" class="mb-2 text-sm font-medium text-slate-300">Playlist audio format</Label>
       <Select
-        id="audio-format"
-        items={audioFormatOptions}
-        bind:value={audioFormat}
+        id="cookie-profile-key"
+        items={cookieProfileItems}
+        bind:value={cookieProfileKey}
         class="border-slate-800! bg-slate-950/60! text-sm! text-slate-200! focus:border-blue-500! focus:ring-blue-500!"
       />
     </div>
-  </div>
-
-  <div class="flex flex-wrap gap-x-8 gap-y-3 border-t border-slate-800/70 pt-5">
-    <Checkbox bind:checked={encodeForPlaylist} class="text-sm text-slate-300">
-      Encode audio rendition for playlists
-    </Checkbox>
-    <Checkbox bind:checked={fetchComments} class="text-sm text-slate-300">
-      Fetch comments
-    </Checkbox>
-  </div>
-
-  <div>
-    <Label for="ignore-keywords" class="mb-2 text-sm font-medium text-slate-300">Ignore keywords</Label>
-    <Textarea
-      id="ignore-keywords"
-      rows={5}
-      bind:value={ignoreKeywordsText}
-      placeholder={'shorts\nregex:\\btrailer\\b'}
-      class="font-mono! border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!"
-    />
-    <p class="mt-1.5 text-xs text-slate-600">One per line. Prefix with <code>regex:</code> for regex matching.</p>
   </div>
 
   <div>
@@ -299,6 +297,25 @@
         No option presets exist yet. Create one from Profile → Option presets if this config set needs custom yt-dlp options.
       </Alert>
     {/if}
+  </div>
+
+  <div>
+    <Label for="priority" class="mb-2 text-sm font-medium text-slate-300">
+      Priority <span class="font-normal text-slate-500">({priority})</span>
+    </Label>
+    <RangeSlider id="priority" min={0} max={100} step={1} bind:value={priority} />
+  </div>
+
+  <div>
+    <Label for="ignore-keywords" class="mb-2 text-sm font-medium text-slate-300">Ignore keywords</Label>
+    <Textarea
+      id="ignore-keywords"
+      rows={5}
+      bind:value={ignoreKeywordsText}
+      placeholder={'shorts\nregex:\\btrailer\\b'}
+      class="font-mono! border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!"
+    />
+    <p class="mt-1.5 text-xs text-slate-600">One per line. Prefix with <code>regex:</code> for regex matching.</p>
   </div>
 
   {#if submitError}

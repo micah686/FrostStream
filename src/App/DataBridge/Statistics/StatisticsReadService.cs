@@ -83,20 +83,32 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
         int page,
         string sortBy,
         string sortOrder,
+        string? search,
         CancellationToken ct = default)
     {
         pageSize = NormalizePageSize(pageSize);
         page = Math.Max(1, page);
         var offset = (page - 1) * pageSize;
         var orderBy = ChannelOrderBy(sortBy, sortOrder);
+        var normalizedSearch = search?.Trim() ?? string.Empty;
+        var searchPattern = $"%{EscapeLikePattern(normalizedSearch)}%";
+        const string searchWhere = """
+            WHERE @search = ''
+               OR account_rollup.account_name ILIKE @search_pattern ESCAPE '\'
+               OR account_rollup.account_handle ILIKE @search_pattern ESCAPE '\'
+               OR account_rollup.platform ILIKE @search_pattern ESCAPE '\'
+            """;
 
-        var totalCount = await GetChannelWithMediaCountAsync(ct);
+        var totalCount = await GetChannelWithMediaCountAsync(normalizedSearch, searchPattern, ct);
         var sql = AccountSummarySql($"""
+            {searchWhere}
             ORDER BY {orderBy}
             LIMIT @limit OFFSET @offset
             """);
 
         await using var command = dataSource.CreateCommand(sql);
+        command.Parameters.AddWithValue("@search", normalizedSearch);
+        command.Parameters.AddWithValue("@search_pattern", searchPattern);
         command.Parameters.AddWithValue("@limit", pageSize);
         command.Parameters.AddWithValue("@offset", offset);
 
@@ -108,6 +120,61 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
         }
 
         return (items, totalCount, page, offset + items.Count < totalCount);
+    }
+
+    public async Task<IReadOnlyList<ChannelSuggestionDto>> SuggestChannelsAsync(
+        string? search,
+        int limit,
+        CancellationToken ct = default)
+    {
+        var normalizedSearch = search?.Trim() ?? string.Empty;
+        if (normalizedSearch.Length < 2)
+            return [];
+
+        limit = Math.Clamp(limit <= 0 ? 8 : limit, 1, 20);
+        var containsPattern = $"%{EscapeLikePattern(normalizedSearch)}%";
+        var prefixPattern = $"{EscapeLikePattern(normalizedSearch)}%";
+        var sql = AccountSummarySql("""
+            WHERE account_rollup.account_name ILIKE @contains_pattern ESCAPE '\'
+               OR account_rollup.account_handle ILIKE @contains_pattern ESCAPE '\'
+               OR account_rollup.platform ILIKE @contains_pattern ESCAPE '\'
+            ORDER BY
+                CASE
+                    WHEN account_rollup.account_name ILIKE @prefix_pattern ESCAPE '\' THEN 0
+                    WHEN account_rollup.account_handle ILIKE @prefix_pattern ESCAPE '\' THEN 1
+                    ELSE 2
+                END,
+                account_rollup.available_count DESC,
+                COALESCE(account_rollup.account_name, account_rollup.account_handle, account_rollup.platform) ASC,
+                account_rollup.account_id ASC
+            LIMIT @limit
+            """);
+
+        await using var command = dataSource.CreateCommand(sql);
+        command.Parameters.AddWithValue("@contains_pattern", containsPattern);
+        command.Parameters.AddWithValue("@prefix_pattern", prefixPattern);
+        command.Parameters.AddWithValue("@limit", limit);
+
+        var items = new List<ChannelSuggestionDto>();
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            var accountName = GetNullableString(reader, "account_name");
+            var accountHandle = GetNullableString(reader, "account_handle");
+            var platform = GetString(reader, "platform");
+            var value = FirstNonBlank(accountName, accountHandle, platform) ?? platform;
+            items.Add(new ChannelSuggestionDto
+            {
+                Value = value,
+                Label = value,
+                AccountName = accountName,
+                AccountHandle = accountHandle,
+                Platform = platform,
+                AvailableCount = GetInt64(reader, "available_count")
+            });
+        }
+
+        return items;
     }
 
     public async Task<ChannelStatisticsDetailDto?> GetChannelAsync(long creatorSourceId, CancellationToken ct = default)
@@ -321,13 +388,22 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
         };
     }
 
-    private async Task<int> GetChannelWithMediaCountAsync(CancellationToken ct)
+    private async Task<int> GetChannelWithMediaCountAsync(
+        string search,
+        string searchPattern,
+        CancellationToken ct)
     {
         await using var command = dataSource.CreateCommand("""
             SELECT COUNT(DISTINCT mm.account_id)
             FROM metadata.media_metadata mm
             JOIN metadata.accounts a ON a.id = mm.account_id
+            WHERE @search = ''
+               OR a.account_name ILIKE @search_pattern ESCAPE '\'
+               OR a.account_handle ILIKE @search_pattern ESCAPE '\'
+               OR a.platform ILIKE @search_pattern ESCAPE '\'
             """);
+        command.Parameters.AddWithValue("@search", search);
+        command.Parameters.AddWithValue("@search_pattern", searchPattern);
         var value = await command.ExecuteScalarAsync(ct);
         return Convert.ToInt32(value);
     }
@@ -611,4 +687,20 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
 
     private static double Percent(double numerator, double denominator)
         => denominator <= 0 ? 0 : numerator * 100 / denominator;
+
+    private static string? FirstNonBlank(params string?[] values)
+    {
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+                return value;
+        }
+
+        return null;
+    }
+
+    private static string EscapeLikePattern(string value)
+        => value.Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("%", "\\%", StringComparison.Ordinal)
+            .Replace("_", "\\_", StringComparison.Ordinal);
 }

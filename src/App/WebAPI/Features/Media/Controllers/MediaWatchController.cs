@@ -1,4 +1,6 @@
 using Conduit.NATS;
+using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using Shared.Messaging;
@@ -29,11 +31,10 @@ public sealed class MediaWatchController(
     [EnableCors(MediaCors.Policy)]
     [Endpoint(EndpointIds.MediaStream)]
     [EndpointSummary("Play back an archived media file")]
-    [EndpointDescription("Streams an archived media file by GUID directly from the configured storage backend, with HTTP range support for seeking. Optional storageKey and positive version parameters select a specific stored copy. With audio=true the cached audio-only rendition ('aac', 'opus', or 'mp3'; default aac) is served instead; when that rendition is still being prepared the endpoint returns 202 with a status body, and prepare=false suppresses queueing missing renditions.")]
+    [EndpointDescription("Streams an archived media file by GUID directly from the configured storage backend, with HTTP range support for seeking. Optional storageKey and positive version parameters select a specific stored copy. With audio=true the cached opus audio-only rendition is served instead; when that rendition is still being prepared the endpoint returns 202 with a status body, and prepare=false suppresses queueing missing renditions.")]
     public async Task<IActionResult> GetWatch(
         Guid mediaGuid,
         [FromQuery] bool audio = false,
-        [FromQuery] string format = AudioRenditionHelpers.DefaultFormat,
         [FromQuery] bool prepare = true,
         [FromQuery] string? storageKey = null,
         [FromQuery] int? version = null,
@@ -42,11 +43,10 @@ public sealed class MediaWatchController(
         if (Request.Query.ContainsKey(CastTokenDefaults.QueryParameter))
         {
             logger.LogInformation(
-                "Cast device requested media {MediaGuid} from {RemoteIp}; audio={Audio}, format={Format}, range={Range}, userAgent={UserAgent}.",
+                "Cast device requested media {MediaGuid} from {RemoteIp}; audio={Audio}, range={Range}, userAgent={UserAgent}.",
                 mediaGuid,
                 HttpContext.Connection.RemoteIpAddress,
                 audio,
-                format,
                 Request.Headers.Range.ToString(),
                 Request.Headers.UserAgent.ToString());
         }
@@ -54,12 +54,6 @@ public sealed class MediaWatchController(
         if (version is <= 0)
         {
             return BadRequest("Query parameter 'version' must be greater than zero.");
-        }
-
-        var audioFormat = AudioRenditionFormat.Aac;
-        if (audio && !AudioRenditionHelpers.TryParseAudioFormat(format, out audioFormat))
-        {
-            return BadRequest("Audio format must be 'aac', 'opus', or 'mp3'.");
         }
 
         if (await accessChecker.CheckWatchAccessAsync(User, mediaGuid, cancellationToken) is { } denied)
@@ -70,7 +64,7 @@ public sealed class MediaWatchController(
         storageKey = string.IsNullOrWhiteSpace(storageKey) ? null : storageKey.Trim();
 
         return audio
-            ? await ServeAudioRenditionAsync(mediaGuid, audioFormat, storageKey, version, prepare, cancellationToken)
+            ? await ServeAudioRenditionAsync(mediaGuid, storageKey, version, prepare, cancellationToken)
             : await ServeOriginalFileAsync(mediaGuid, storageKey, version, cancellationToken);
     }
 
@@ -138,7 +132,6 @@ public sealed class MediaWatchController(
 
     private async Task<IActionResult> ServeAudioRenditionAsync(
         Guid mediaGuid,
-        AudioRenditionFormat format,
         string? storageKey,
         int? sourceVersion,
         bool prepare,
@@ -146,7 +139,6 @@ public sealed class MediaWatchController(
     {
         var (error, rendition) = await audioRenditions.ResolveAsync(
             mediaGuid,
-            format,
             storageKey,
             sourceVersion,
             createIfMissing: prepare,
@@ -164,7 +156,6 @@ public sealed class MediaWatchController(
                 rendition.RenditionId,
                 rendition.MediaGuid,
                 rendition.SourceVersion,
-                Format = AudioRenditionHelpers.AudioFormatToken(rendition.Format),
                 Status = rendition.Status.ToString().ToLowerInvariant()
             });
         }
@@ -175,7 +166,7 @@ public sealed class MediaWatchController(
             rendition.StorageKey,
             rendition.StoragePath,
             subject: "audio rendition",
-            contentType: AudioRenditionHelpers.AudioContentType(rendition.Format),
+            contentType: AudioRenditionHelpers.ContentType,
             cancellationToken: cancellationToken);
     }
 
@@ -323,6 +314,56 @@ public sealed class MediaWatchController(
             cancellationToken: cancellationToken);
     }
 
+    [HttpGet("{mediaGuid:guid}/captions")]
+    [EnableCors(MediaCors.Policy)]
+    [Endpoint(EndpointIds.MediaCaptions)]
+    [EndpointSummary("List archived caption tracks")]
+    [EndpointDescription("Lists caption tracks with durable sidecar files for a media item. This endpoint is watch-authorized and reads the caption locations from PostgreSQL, not Typesense.")]
+    public async Task<IActionResult> ListCaptions(Guid mediaGuid, CancellationToken cancellationToken = default)
+    {
+        if (await accessChecker.CheckWatchAccessAsync(User, mediaGuid, cancellationToken) is { } denied)
+            return denied;
+
+        MediaCaptionsListResponseMessage? response;
+        try
+        {
+            response = await messageBus.RequestAsync<MediaCaptionsListRequestMessage, MediaCaptionsListResponseMessage>(
+                MediaStreamSubjects.ListCaptions,
+                new MediaCaptionsListRequestMessage { MediaGuid = mediaGuid },
+                QueryTimeout,
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed listing captions for {MediaGuid}.", mediaGuid);
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable.");
+        }
+
+        if (response is null)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable.");
+        if (!response.Success)
+            return StatusCode(StatusCodes.Status500InternalServerError, response.ErrorMessage ?? "Caption lookup failed.");
+
+        return Ok(response.Items.Select(caption =>
+        {
+            var url = $"/api/media/watch/{mediaGuid:D}/captions/{Uri.EscapeDataString(caption.LanguageCode)}?captionType={Uri.EscapeDataString(caption.CaptionType)}";
+            var format = Path.GetExtension(caption.StoragePath).TrimStart('.').ToLowerInvariant();
+            var requiresAssRenderer = format is "ass" or "ssa";
+            return new CaptionTrackResponse(
+                caption.LanguageCode,
+                caption.CaptionType,
+                caption.Name,
+                format,
+                requiresAssRenderer ? "jassub" : "native",
+                url,
+                requiresAssRenderer ? $"{url}&raw=true" : null);
+        }));
+    }
+
     [HttpGet("{mediaGuid:guid}/captions/{languageCode}")]
     [EnableCors(MediaCors.Policy)]
     [Endpoint(EndpointIds.MediaCaption)]
@@ -332,6 +373,7 @@ public sealed class MediaWatchController(
         Guid mediaGuid,
         string languageCode,
         [FromQuery] string? captionType = null,
+        [FromQuery] bool raw = false,
         CancellationToken cancellationToken = default)
     {
         languageCode = languageCode.Trim();
@@ -401,20 +443,40 @@ public sealed class MediaWatchController(
         var location = response.Item;
         var extension = Path.GetExtension(location.StoragePath).ToLowerInvariant();
 
-        if (extension == ".srt")
+        if (raw)
         {
-            var srt = await MediaBlobServing.ReadBlobTextAsync(
+            return await this.ServeBlobAsync(
+                blobStorageProvider,
+                logger,
+                location.StorageKey,
+                location.StoragePath,
+                subject: "caption track",
+                contentType: extension switch
+                {
+                    ".ass" or ".ssa" => "text/x-ssa; charset=utf-8",
+                    ".srt" => "application/x-subrip; charset=utf-8",
+                    _ => null
+                },
+                enableRangeProcessing: false,
+                cacheControl: "private, max-age=86400",
+                cancellationToken: cancellationToken);
+        }
+
+        if (extension is ".srt" or ".ass" or ".ssa")
+        {
+            var captionText = await MediaBlobServing.ReadBlobTextAsync(
                 blobStorageProvider,
                 location.StorageKey,
                 location.StoragePath,
                 cancellationToken);
-            if (srt is null)
+            if (captionText is null)
             {
                 return NotFound("The selected caption track is missing from storage.");
             }
 
             Response.Headers.CacheControl = "private, max-age=86400";
-            return Content(ConvertSrtToWebVtt(srt), "text/vtt; charset=utf-8");
+            var vtt = extension == ".srt" ? ConvertSrtToWebVtt(captionText) : ConvertAssToWebVtt(captionText);
+            return Content(vtt, "text/vtt; charset=utf-8");
         }
 
         return await this.ServeBlobAsync(
@@ -447,4 +509,65 @@ public sealed class MediaWatchController(
 
         return "WEBVTT\n\n" + string.Join('\n', lines);
     }
+
+    /// <summary>Converts ASS/SSA dialogue cues to the browser-native WebVTT format. Styling is
+    /// intentionally discarded; the durable source file remains unchanged.</summary>
+    private static string ConvertAssToWebVtt(string ass)
+    {
+        var output = new StringBuilder("WEBVTT\n\n");
+        foreach (var rawLine in ass.TrimStart('\uFEFF').Replace("\r\n", "\n").Split('\n'))
+        {
+            if (!rawLine.StartsWith("Dialogue:", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var parts = rawLine["Dialogue:".Length..].Split(',', 10);
+            if (parts.Length != 10)
+                continue;
+
+            var start = ConvertAssTimestamp(parts[1]);
+            var end = ConvertAssTimestamp(parts[2]);
+            if (start is null || end is null)
+                continue;
+
+            var text = Regex.Replace(parts[9], @"\{[^}]*\}", string.Empty)
+                .Replace("\\N", "\n", StringComparison.Ordinal)
+                .Replace("\\n", "\n", StringComparison.Ordinal)
+                .Trim();
+            if (text.Length == 0)
+                continue;
+
+            output.Append(start).Append(" --> ").Append(end).Append('\n')
+                .Append(text).Append("\n\n");
+        }
+
+        return output.ToString();
+    }
+
+    private static string? ConvertAssTimestamp(string value)
+    {
+        var parts = value.Trim().Split(':');
+        if (parts.Length != 3 || !int.TryParse(parts[0], out var hours) ||
+            !int.TryParse(parts[1], out var minutes))
+            return null;
+
+        var secondsParts = parts[2].Split('.', 2);
+        if (!int.TryParse(secondsParts[0], out var seconds))
+            return null;
+
+        var centiseconds = 0;
+        if (secondsParts.Length == 2 && !int.TryParse(secondsParts[1], out centiseconds))
+            return null;
+
+        var milliseconds = centiseconds * 10;
+        return $"{hours:00}:{minutes:00}:{seconds:00}.{milliseconds:000}";
+    }
+
+    private sealed record CaptionTrackResponse(
+        string LanguageCode,
+        string CaptionType,
+        string? Name,
+        string Format,
+        string Renderer,
+        string Url,
+        string? SourceUrl);
 }

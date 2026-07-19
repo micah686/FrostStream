@@ -1,4 +1,6 @@
 using Conduit.NATS;
+using System.IO.Hashing;
+using System.Text;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NodaTime;
@@ -138,6 +140,7 @@ public sealed class ChannelDiscoveryConsumerService(
         CancellationToken cancellationToken)
     {
         var requestQueryLimits = ChannelProviderQueryLimits(request);
+        var correlationId = ChannelCorrelationId(request, source.Id);
         var options = BuildOptions(scanMode, source, requestQueryLimits);
         var result = await ytDlp.TryGetVideoInfoAsync(source.SourceUrl, cancellationToken, flat: true, overrideOptions: potOptionsApplier.Apply(options));
         if (!result.Success || result.Data is not { } container)
@@ -167,6 +170,7 @@ public sealed class ChannelDiscoveryConsumerService(
                 new UpsertDiscoveredMediaBatchRequestMessage
                 {
                     CreatorSourceId = source.Id,
+                    CorrelationId = correlationId,
                     ScanMode = scanMode,
                     ScheduleKey = request.ScheduleKey,
                     IdempotencyKey = $"{request.IdempotencyKey}:{source.Id}:batch-{batchIndex}",
@@ -180,10 +184,11 @@ public sealed class ChannelDiscoveryConsumerService(
                     RequestedBy = ChannelRequestedBy(request),
                     ConfigSetKey = ChannelConfigSetKey(request),
                     EncodeForPlaylist = ChannelEncodeForPlaylist(request),
-                    AudioFormat = ChannelAudioFormat(request),
                     CookieSecretPath = ChannelCookieSecretPath(request),
                     Priority = ChannelPriority(request),
                     FetchComments = ChannelFetchComments(request),
+                    QueueAllItems = ChannelQueueAllItems(request),
+                    ForceDownload = ChannelForceDownload(request),
                     YtDlpOptions = ChannelYtDlpOptions(request),
                     Items = batch
                 },
@@ -208,6 +213,7 @@ public sealed class ChannelDiscoveryConsumerService(
                 new UpsertDiscoveredMediaBatchRequestMessage
                 {
                     CreatorSourceId = source.Id,
+                    CorrelationId = correlationId,
                     ScanMode = scanMode,
                     ScheduleKey = request.ScheduleKey,
                     IdempotencyKey = $"{request.IdempotencyKey}:{source.Id}:batch-0",
@@ -221,10 +227,11 @@ public sealed class ChannelDiscoveryConsumerService(
                     RequestedBy = ChannelRequestedBy(request),
                     ConfigSetKey = ChannelConfigSetKey(request),
                     EncodeForPlaylist = ChannelEncodeForPlaylist(request),
-                    AudioFormat = ChannelAudioFormat(request),
                     CookieSecretPath = ChannelCookieSecretPath(request),
                     Priority = ChannelPriority(request),
                     FetchComments = ChannelFetchComments(request),
+                    QueueAllItems = ChannelQueueAllItems(request),
+                    ForceDownload = ChannelForceDownload(request),
                     YtDlpOptions = ChannelYtDlpOptions(request),
                     Items = []
                 },
@@ -319,9 +326,6 @@ public sealed class ChannelDiscoveryConsumerService(
     private static bool ChannelEncodeForPlaylist(ScheduledBackgroundRequest request)
         => request is ChannelMediaListRequested channelRequest && channelRequest.EncodeForPlaylist;
 
-    private static AudioRenditionFormat ChannelAudioFormat(ScheduledBackgroundRequest request)
-        => request is ChannelMediaListRequested channelRequest ? channelRequest.AudioFormat : AudioRenditionFormat.Aac;
-
     private static string? ChannelCookieSecretPath(ScheduledBackgroundRequest request)
         => request is ChannelMediaListRequested channelRequest ? channelRequest.CookieSecretPath : null;
 
@@ -330,6 +334,12 @@ public sealed class ChannelDiscoveryConsumerService(
 
     private static bool ChannelFetchComments(ScheduledBackgroundRequest request)
         => request is ChannelMediaListRequested channelRequest && channelRequest.FetchComments;
+
+    private static bool ChannelQueueAllItems(ScheduledBackgroundRequest request)
+        => request is ChannelMediaListRequested channelRequest && channelRequest.QueueAllItems;
+
+    private static bool ChannelForceDownload(ScheduledBackgroundRequest request)
+        => request is ChannelMediaListRequested channelRequest && channelRequest.ForceDownload;
 
     private static YtDlpOptions? ChannelYtDlpOptions(ScheduledBackgroundRequest request)
         => request is ChannelMediaListRequested channelRequest ? channelRequest.YtDlpOptions : null;
@@ -369,22 +379,35 @@ public sealed class ChannelDiscoveryConsumerService(
         }
     }
 
-    private static string? ResolveCanonicalUrl(CreatorSourceDto source, VideoInfo entry, string externalId)
+    internal static string? ResolveCanonicalUrl(CreatorSourceDto source, VideoInfo entry, string externalId)
     {
-        var url = FirstAbsoluteUrl(entry.WebpageUrl, entry.Url);
+        // Flat YouTube collection entries occasionally report the collection URL in Url/WebpageUrl.
+        // The external id is the reliable per-video identity, so build the canonical watch URL first.
+        var extractor = FirstNonBlank(entry.Extractor, entry.ExtractorKey, source.Platform);
+        if (extractor?.Contains("youtube", StringComparison.OrdinalIgnoreCase) == true ||
+            source.Platform.Contains("youtube", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"https://www.youtube.com/watch?v={Uri.EscapeDataString(externalId)}";
+        }
+
+        var url = FirstIndividualAbsoluteUrl(source.SourceUrl, entry.WebpageUrl, entry.Url);
         if (url is not null)
         {
             return url;
         }
 
-        var extractor = FirstNonBlank(entry.Extractor, entry.ExtractorKey, source.Platform);
-        if (extractor?.Contains("youtube", StringComparison.OrdinalIgnoreCase) == true ||
-            source.Platform.Contains("youtube", StringComparison.OrdinalIgnoreCase))
-        {
-            return $"https://www.youtube.com/watch?v={externalId}";
-        }
-
         return null;
+    }
+
+    internal static Guid ChannelCorrelationId(ScheduledBackgroundRequest request, long sourceId)
+    {
+        if (request is ChannelMediaListRequested { CorrelationId: { } explicitId } && explicitId != Guid.Empty)
+            return explicitId;
+
+        var input = Encoding.UTF8.GetBytes($"channel/{sourceId}/{request.IdempotencyKey}");
+        Span<byte> hash = stackalloc byte[16];
+        XxHash128.Hash(input, hash);
+        return new Guid(hash);
     }
 
     private static string? BestThumbnailUrl(VideoInfo entry)
@@ -395,9 +418,13 @@ public sealed class ChannelDiscoveryConsumerService(
             .Select(x => x.Url)
             .FirstOrDefault();
 
-    private static string? FirstAbsoluteUrl(params string?[] values)
-        => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value) &&
-            Uri.TryCreate(value, UriKind.Absolute, out _));
+    private static string? FirstIndividualAbsoluteUrl(string collectionUrl, params string?[] values)
+        => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)
+            && Uri.TryCreate(value, UriKind.Absolute, out _)
+            && !SameUrl(value, collectionUrl));
+
+    private static bool SameUrl(string left, string right)
+        => string.Equals(left.Trim().TrimEnd('/'), right.Trim().TrimEnd('/'), StringComparison.OrdinalIgnoreCase);
 
     private static IEnumerable<IReadOnlyList<DiscoveredMediaCandidate>> Chunk(
         IReadOnlyList<DiscoveredMediaCandidate> candidates,

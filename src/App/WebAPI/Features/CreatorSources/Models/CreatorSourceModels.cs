@@ -74,18 +74,20 @@ public sealed class ChannelDownloadRequest
 
     public bool? EncodeForPlaylist { get; init; }
 
-    public AudioRenditionFormat? AudioFormat { get; init; }
-
     [Range(0, 100)]
     public int? Priority { get; init; }
 
     public bool? FetchComments { get; init; }
+
+    /// <summary>Re-download videos even when the same source is already present in the library.</summary>
+    public bool ForceDownload { get; init; }
 
     public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
 }
 
 public sealed record ChannelDownloadResponse(
     long SourceId,
+    Guid CorrelationId,
     string SourceUrl,
     string Platform,
     CreatorSourceType SourceType,
@@ -120,8 +122,6 @@ public sealed class ForceQueueMediaRequest
     public YtDlpOptions? YtDlpOptions { get; init; }
 
     public bool? EncodeForPlaylist { get; init; }
-
-    public AudioRenditionFormat? AudioFormat { get; init; }
 
     [Range(0, 100)]
     public int? Priority { get; init; }

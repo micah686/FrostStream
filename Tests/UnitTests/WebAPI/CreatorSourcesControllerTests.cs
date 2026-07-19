@@ -180,12 +180,14 @@ public sealed class CreatorSourcesControllerTests
         {
             SourceUrl = "https://example.test/@creator/videos",
             StorageKey = "archive",
+            ForceDownload = true,
             ProviderQueryLimits = YouTubeLimits(videos: 100, streams: 20, shorts: 40)
         }, CancellationToken.None);
 
         var payload = result.Result.ShouldBeOfType<AcceptedResult>().Value
             .ShouldBeOfType<ChannelDownloadResponse>();
         payload.SourceId.ShouldBe(42);
+        payload.CorrelationId.ShouldNotBe(Guid.Empty);
         payload.Queued.ShouldBeTrue();
         payload.IdempotencyKey.ShouldStartWith("manual-channel-download:42:");
 
@@ -197,6 +199,9 @@ public sealed class CreatorSourcesControllerTests
                 x.DueWindowUtc == Now &&
                 x.OccurredAt == Now &&
                 x.TargetSourceId == 42 &&
+                x.CorrelationId == payload.CorrelationId &&
+                x.QueueAllItems &&
+                x.ForceDownload &&
                 x.StorageKey == "archive" &&
                 x.RequestedBy == "unit_test_user" &&
                 x.ProviderQueryLimits != null &&

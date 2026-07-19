@@ -40,6 +40,7 @@ public static class EndpointIds
     public const string DownloadsQueueList = "downloads.queue.list";
     public const string DownloadsQueueGet = "downloads.queue.get";
     public const string DownloadsQueueHistory = "downloads.queue.history";
+    public const string DownloadsQueueMedia = "downloads.queue.media";
     public const string DownloadsQueueStream = "downloads.queue.stream";
     public const string DownloadsQueueProgress = "downloads.queue.progress";
     public const string DownloadsQueuePriority = "downloads.queue.priority";
@@ -90,6 +91,7 @@ public static class EndpointIds
     public const string MetadataTaxonomyGenres = "metadata.taxonomy.genres";
     public const string StatisticsOverview = "statistics.overview";
     public const string StatisticsChannelsList = "statistics.channels.list";
+    public const string StatisticsChannelSuggestions = "statistics.channels.suggestions";
     public const string StatisticsChannelsGet = "statistics.channels.get";
     public const string StatisticsDownloadHistory = "statistics.download-history";
     public const string UserNotesUpsert = "user-notes.upsert";
@@ -183,10 +185,12 @@ public static class EndpointIds
     public const string MediaStream = "media.stream";
     public const string MediaThumbnail = "media.thumbnail";
     public const string MediaCaption = "media.caption";
+    public const string MediaCaptions = "media.captions";
     public const string MediaAccountAsset = "media.account-asset";
     public const string MediaCastToken = "media.cast-token";
     public const string MediaHlsManifest = "media.hls-manifest";
     public const string MediaHlsSegment = "media.hls-segment";
+    public const string MediaRenditionsProgressStream = "media.renditions.progress-stream";
     public const string MediaWatchStateGet = "media.watch-state.get";
     public const string MediaWatchStateUpsert = "media.watch-state.upsert";
     public const string MediaWatchStateListInProgress = "media.watch-state.list-in-progress";
@@ -198,6 +202,11 @@ public static class EndpointIds
     public const string MediaUnlike = "media.unlike";
     public const string MediaLikesList = "media.likes.list";
     public const string PlaylistAudioStream = "playlists.audio-stream";
+    public const string ChannelAudioStatus = "channels.audio.status";
+    public const string ChannelAudioEncode = "channels.audio.encode";
+    public const string ChannelAudioPodcastToken = "channels.audio.podcast-token";
+    public const string ChannelAudioPodcastFeed = "channels.audio.podcast-feed";
+    public const string ChannelAudioEnclosure = "channels.audio.enclosure";
 
     // Server-side casting (protocol providers driven by the server via local discovery)
     public const string CastDevicesList = "cast.devices.list";
@@ -268,6 +277,7 @@ public static class EndpointCatalog
         new(EndpointIds.DownloadsQueueList, Bundles.Downloading),
         new(EndpointIds.DownloadsQueueGet, Bundles.Downloading),
         new(EndpointIds.DownloadsQueueHistory, Bundles.Downloading),
+        new(EndpointIds.DownloadsQueueMedia, Bundles.Downloading),
         new(EndpointIds.DownloadsQueueStream, Bundles.Downloading),
         new(EndpointIds.DownloadsQueueProgress, Bundles.Downloading),
         new(EndpointIds.DownloadsQueuePriority, Bundles.Downloading),
@@ -315,6 +325,7 @@ public static class EndpointCatalog
         new(EndpointIds.MetadataTaxonomyGenres, Bundles.Metadata),
         new(EndpointIds.StatisticsOverview, Bundles.Metadata),
         new(EndpointIds.StatisticsChannelsList, Bundles.Metadata),
+        new(EndpointIds.StatisticsChannelSuggestions, Bundles.Metadata),
         new(EndpointIds.StatisticsChannelsGet, Bundles.Metadata),
         new(EndpointIds.StatisticsDownloadHistory, Bundles.Metadata),
         new(EndpointIds.UserNotesUpsert, Bundles.Metadata),
@@ -397,10 +408,12 @@ public static class EndpointCatalog
         new(EndpointIds.MediaStream, Bundles.Media),
         new(EndpointIds.MediaThumbnail, Bundles.Media),
         new(EndpointIds.MediaCaption, Bundles.Media),
+        new(EndpointIds.MediaCaptions, Bundles.Media),
         new(EndpointIds.MediaAccountAsset, Bundles.Media),
         new(EndpointIds.MediaCastToken, Bundles.Media),
         new(EndpointIds.MediaHlsManifest, Bundles.Media),
         new(EndpointIds.MediaHlsSegment, Bundles.Media),
+        new(EndpointIds.MediaRenditionsProgressStream, Bundles.Media),
         new(EndpointIds.MediaWatchStateGet, Bundles.Media),
         new(EndpointIds.MediaWatchStateUpsert, Bundles.Media),
         new(EndpointIds.MediaWatchStateMarkWatched, Bundles.Media),
@@ -423,6 +436,11 @@ public static class EndpointCatalog
         new(EndpointIds.CastSessionsDisconnect, Bundles.Media),
         new(EndpointIds.CastSessionsEvents, Bundles.Media),
         new(EndpointIds.PlaylistAudioStream, Bundles.Playlists),
+        new(EndpointIds.ChannelAudioStatus, Bundles.Media),
+        new(EndpointIds.ChannelAudioEncode, Bundles.Media),
+        new(EndpointIds.ChannelAudioPodcastToken, Bundles.Media),
+        new(EndpointIds.ChannelAudioPodcastFeed, Bundles.Media),
+        new(EndpointIds.ChannelAudioEnclosure, Bundles.Media),
 
         new(EndpointIds.MediaAccessMediaList, Bundles.MediaAccessAdmin),
         new(EndpointIds.MediaAccessMediaAdd, Bundles.MediaAccessAdmin),

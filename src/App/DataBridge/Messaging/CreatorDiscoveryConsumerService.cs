@@ -398,7 +398,6 @@ public sealed class CreatorDiscoveryConsumerService(
                     Priority = msg.Priority,
                     FetchComments = msg.FetchComments,
                     EncodeAudioRendition = msg.EncodeForPlaylist,
-                    AudioRenditionFormat = msg.AudioFormat,
                     SourceKind = DownloadSourceKind.Channel
                 },
                 messageId: jobId.ToString("N"));
@@ -419,7 +418,10 @@ public sealed class CreatorDiscoveryConsumerService(
 
     private Task PublishDownloadRequestedAsync(UpsertDiscoveredMediaBatchRequestMessage request, DiscoveredMediaCandidate candidate)
     {
-        var seed = $"{request.CreatorSourceId}:{candidate.Platform}:{candidate.Extractor}:{candidate.ExternalMediaId}";
+        // A collection request gets one stable job id per entry. Including the collection's
+        // correlation id keeps redelivery idempotent while allowing a later full-channel request
+        // to create a fresh set of independently retryable jobs.
+        var seed = $"{request.CorrelationId:N}:{request.CreatorSourceId}:{candidate.Platform}:{candidate.Extractor}:{candidate.ExternalMediaId}";
         var jobId = DeterministicGuid(seed);
         var messageId = DeterministicGuid($"{seed}:download-requested");
         var operationKey = $"creator-discovery/{request.CreatorSourceId}/{candidate.Platform}/{candidate.Extractor}/{candidate.ExternalMediaId}";
@@ -428,7 +430,7 @@ public sealed class CreatorDiscoveryConsumerService(
             new DownloadRequested
             {
                 JobId = jobId,
-                CorrelationId = jobId,
+                CorrelationId = request.CorrelationId == Guid.Empty ? jobId : request.CorrelationId,
                 CausationId = null,
                 MessageId = messageId,
                 OperationKey = operationKey,
@@ -437,14 +439,13 @@ public sealed class CreatorDiscoveryConsumerService(
                 SourceUrl = candidate.CanonicalUrl,
                 RequestedBy = request.RequestedBy ?? $"schedule:{request.ScheduleKey}",
                 StorageKey = request.StorageKey,
-                ForceDownload = false,
+                ForceDownload = request.ForceDownload,
                 MediaKind = MediaKind.Video,
                 YtDlpOptions = request.YtDlpOptions,
                 CookieSecretPath = request.CookieSecretPath,
                 Priority = request.Priority,
                 FetchComments = request.FetchComments,
                 EncodeAudioRendition = request.EncodeForPlaylist,
-                AudioRenditionFormat = request.AudioFormat,
                 SourceKind = DownloadSourceKind.Channel
             },
             messageId: messageId.ToString("N"));

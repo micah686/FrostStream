@@ -1,5 +1,10 @@
 # Core Backup And Restore
 
+Backups are executed by the dedicated `backupservice` container. WebAPI submits authenticated admin
+requests to its internal HTTP API, while the existing Quartz schedule submits durable NATS jobs. The
+container includes PostgreSQL 18 client tools, so neither Aspire nor Compose operators need
+`pg_dump`, `pg_restore`, or `pg_basebackup` installed on the host.
+
 FrostStream core backups contain only the data needed to recreate an instance:
 
 - PostgreSQL data — via one of three modes (see below)
@@ -27,14 +32,33 @@ Both physical modes require, on the PostgreSQL server:
 - `wal_level = replica` (or higher)
 - `max_wal_senders >= 1` (default 10 is fine) — for `pg_basebackup` streaming
 - a role with the `REPLICATION` privilege (superuser works); pass it via `--postgres-repl-user`
+- a `pg_hba.conf` `host replication` rule that permits the backup container; SCRAM authentication
+  is recommended
 - for continuous archiving: `archive_mode = on` and an `archive_command` (see `wal-archive setup`)
 
 ## Create A Backup
 
+The normal path is **Admin → Backups** or `POST /api/global/backups`. Jobs and their state are stored
+beneath the backup root, survive service restarts, and only appear in the archive list after the
+temporary output has been atomically promoted. Only one backup executes at a time.
+
+For Docker Compose, the same image can be run as a one-shot CLI:
+
+```bash
+cd src/App/docker-compose-artifacts
+docker compose run --rm --entrypoint dotnet backupservice \
+  /app/BackupService.dll create \
+  --output /backups/archives \
+  --name froststream-core-$(date -u +%Y%m%d%H%M%S)
+```
+
+The lower-level host command remains available for development, but requires compatible PostgreSQL
+tools on the host:
+
 Snapshot (default — unchanged behavior):
 
 ```bash
-dotnet run --project src/App/BackupTool/BackupTool.csproj -- \
+dotnet run --project src/App/BackupService/BackupService.csproj -- \
   create \
   --output /var/backups/froststream \
   --name froststream-core-$(date -u +%Y%m%d%H%M%S) \
@@ -48,7 +72,7 @@ dotnet run --project src/App/BackupTool/BackupTool.csproj -- \
 Full physical base backup:
 
 ```bash
-dotnet run --project src/App/BackupTool/BackupTool.csproj -- \
+dotnet run --project src/App/BackupService/BackupService.csproj -- \
   create --mode full \
   --output /var/backups/froststream \
   --postgres-host localhost --postgres-port 5432 \
@@ -64,9 +88,9 @@ Set `POSTGRES_PASSWORD` and `OPENBAO_TOKEN` in the environment rather than passi
 invoke this tool (use an absolute path to a published binary, not `dotnet run`):
 
 ```bash
-dotnet run --project src/App/BackupTool/BackupTool.csproj -- \
+dotnet run --project src/App/BackupService/BackupService.csproj -- \
   wal-archive setup --archive-dir /var/backups/froststream/wal-archive \
-  --tool-command /opt/froststream/BackupTool
+  --tool-command 'dotnet /opt/froststream/BackupService.dll'
 ```
 
 That emits, for `postgresql.conf`:
@@ -74,7 +98,7 @@ That emits, for `postgresql.conf`:
 ```
 wal_level = replica
 archive_mode = on
-archive_command = '/opt/froststream/BackupTool wal-archive receive %p %f --archive-dir /var/backups/froststream/wal-archive'
+archive_command = 'dotnet /opt/froststream/BackupService.dll wal-archive receive %p %f --archive-dir /var/backups/froststream/wal-archive'
 max_wal_senders = 10
 ```
 
@@ -84,8 +108,18 @@ backup manifest. PostgreSQL then streams each completed segment into `<dir>` via
 
 ## Verify A Backup
 
+From Compose, use the bundled tools:
+
 ```bash
-dotnet run --project src/App/BackupTool/BackupTool.csproj -- \
+docker compose run --rm --entrypoint dotnet backupservice \
+  /app/BackupService.dll verify \
+  --archive /backups/archives/<backup-name>
+```
+
+The Admin UI invokes the same verification through `backupservice`.
+
+```bash
+dotnet run --project src/App/BackupService/BackupService.csproj -- \
   verify \
   --archive /var/backups/froststream/froststream-core-20260628010203
 ```
@@ -100,12 +134,22 @@ Restore is a cold/offline operation.
 
 ### Snapshot restore (logical)
 
-1. Stop WebAPI, DataBridge, Worker, Scheduler, Authentik, OpenFGA, and OpenBao.
-2. Ensure PostgreSQL and OpenBao are reachable.
-3. Run:
+1. Stop WebAPI, DataBridge, Worker, Scheduler, Authentik, OpenFGA, and BackupService. Keep PostgreSQL
+   and OpenBao running and reachable.
+2. Run the one-shot restore container:
 
 ```bash
-dotnet run --project src/App/BackupTool/BackupTool.csproj -- \
+docker compose stop webapi databridge worker scheduler authentik authentik-worker openfga
+docker compose run --rm --entrypoint dotnet backupservice \
+  /app/BackupService.dll restore \
+  --archive /backups/archives/<backup-name> --force
+docker compose up -d
+```
+
+The equivalent host command is:
+
+```bash
+dotnet run --project src/App/BackupService/BackupService.csproj -- \
   restore \
   --archive /var/backups/froststream/froststream-core-20260628010203 \
   --force
@@ -121,7 +165,7 @@ directory is replaced. Provide `--pgdata` (and optionally `--pg-ctl`) so the too
 clears the data directory, extracts `base.tar.gz` and `pg_wal.tar.gz`, and restarts it:
 
 ```bash
-dotnet run --project src/App/BackupTool/BackupTool.csproj -- \
+dotnet run --project src/App/BackupService/BackupService.csproj -- \
   restore --force \
   --archive /var/backups/froststream/froststream-full-20260628010203 \
   --pgdata /var/lib/postgresql/data --pg-ctl /usr/lib/postgresql/18/bin/pg_ctl
@@ -132,13 +176,13 @@ For point-in-time recovery, add a recovery target and the WAL archive directory.
 `postgresql.auto.conf`, then starts the server so it replays WAL to the target and promotes:
 
 ```bash
-dotnet run --project src/App/BackupTool/BackupTool.csproj -- \
+dotnet run --project src/App/BackupService/BackupService.csproj -- \
   restore --force \
   --archive /var/backups/froststream/froststream-full-20260628010203 \
   --pgdata /var/lib/postgresql/data --pg-ctl /usr/lib/postgresql/18/bin/pg_ctl \
   --archive-dir /var/backups/froststream/wal-archive \
   --target-time '2026-06-28 02:05:00+00' \
-  --tool-command /opt/froststream/BackupTool
+  --tool-command 'dotnet /opt/froststream/BackupService.dll'
 ```
 
 Use `--target-lsn`, `--target-name`, or `--recover-latest` instead of `--target-time` as needed. If
@@ -151,16 +195,16 @@ Finally:
 
 ## WebAPI Admin Surface
 
-When `Backup` options are configured, WebAPI exposes:
+WebAPI proxies these authenticated management endpoints to BackupService:
 
-- `POST /api/admin/backups`
-- `GET /api/admin/backups`
-- `GET /api/admin/backups/jobs`
-- `GET /api/admin/backups/jobs/{jobId}`
-- `POST /api/admin/backups/verify`
-- `POST /api/admin/backups/restore-plan`
+- `POST /api/global/backups`
+- `GET /api/global/backups`
+- `GET /api/global/backups/jobs`
+- `GET /api/global/backups/jobs/{jobId}`
+- `POST /api/global/backups/verify`
+- `POST /api/global/backups/restore-plan`
 
-`POST /api/admin/backups` accepts an optional `mode` (`snapshot` \| `full` \| `wal-archive`,
+`POST /api/global/backups` accepts an optional `mode` (`snapshot` \| `full` \| `wal-archive`,
 default `snapshot`), selectable from the **Admin → Backups** panel. Each archive's mode is shown in
 the list, and `restore-plan` tailors the offline command to the backup's mode (full/PITR restores
 include `--pgdata`/`--pg-ctl` and a recovery-target placeholder).
@@ -171,18 +215,65 @@ operator action on the database host.
 
 ## AppHost / Aspire Configuration
 
-The AppHost wires the physical-backup prerequisites automatically:
+The AppHost wires the dedicated service and physical-backup prerequisites automatically:
 
+- `FROSTSTREAM_BACKUP_ROOT` controls the host bind mounted at `/backups` in BackupService. It
+  defaults to `<storage-root>/core-backups` in Aspire and `./backups` beside the generated Compose
+  file. Completed archives, durable job records, and WAL live in separate subdirectories.
 - `src/App/AppHost/configs/postgres/postgresql.conf` is mounted into the Postgres container
   (`-c config_file=…`) and sets `wal_level=replica`, `max_wal_senders`, `archive_mode=on`, and an
   `archive_command` that copies each completed segment — with a matching `<segment>.sha256` sidecar —
   into a shared `/wal-archive` bind mount (`<storage-root>/wal-archive` on the host).
-- The `archive_command` `chmod 0644`s the archived files so the BackupTool process (which runs as the
+- `src/App/AppHost/configs/postgres/pg_hba.conf` is also mounted and permits normal and replication
+  connections from the private container network using SCRAM password authentication. The explicit
+  replication rule is required because a normal `host all all` rule does not match the replication
+  protocol used by `pg_basebackup`.
+- The `archive_command` `chmod 0644`s the archived files so the BackupService CLI process (which runs as the
   host user, not the container's postgres user under rootless podman) can read them.
-- Both WebAPI and DataBridge receive `Backup__ArchiveDir` pointing at that same host directory, so
-  `wal-archive` verification and PITR restores line up with what the server archives.
+- Only BackupService receives PostgreSQL/OpenBao backup credentials and the archive directory.
+  WebAPI proxies the management API; DataBridge no longer contains PostgreSQL client tooling.
 
 Because the containerized Postgres invokes its own `archive_command` (a shell `cp` + `sha256sum`), it
-produces the same on-disk format as `BackupTool wal-archive receive`. On a bare-metal server where the
+produces the same on-disk format as `BackupService wal-archive receive`. On a bare-metal server where the
 tool is on PATH, you can instead point `archive_command` directly at `wal-archive receive` (see
 `wal-archive setup`).
+
+## First Compose Start: OpenBao
+
+OpenBao uses a persistent single-node Raft volume instead of ephemeral `-dev` mode. On a new Compose
+deployment, initialize and unseal it before starting the application:
+
+```bash
+cd src/App/docker-compose-artifacts
+mkdir -p backups/wal
+docker compose up -d openbao
+docker compose exec openbao bao operator init
+docker compose exec openbao bao operator unseal
+docker compose exec openbao sh
+```
+
+Save the unseal keys and initial root token in a secure system outside this host. At the interactive
+container shell, enter the root token without placing it in shell history, then provision the mount
+and app token configured in `.env`:
+
+```sh
+read -s BAO_TOKEN; export BAO_TOKEN
+bao secrets enable -path=secret kv-v2
+bao token create -id="$OPENBAO_APP_TOKEN" -policy=root -no-default-policy
+exit
+```
+
+Then run `docker compose up -d`. On every later OpenBao restart, run
+`docker compose exec openbao bao operator unseal` before dependent services become healthy. Aspire
+development automates one-share initialization and unseal using owner-readable files under
+`<storage-root>/openbao-bootstrap`; this convenience workflow is not emitted into Compose.
+
+The application token retains the current root-level behavior for compatibility. Replacing it with
+least-privilege policies/AppRole and configuring an external auto-unseal provider are separate
+production-hardening tasks.
+
+## Scheduled Retention
+
+The seeded `nightly-backup` schedule remains disabled and runs at 02:00 UTC when enabled. After each
+successful scheduled snapshot, BackupService retains the newest 14 scheduled snapshots. Manual,
+full, WAL, failed-diagnostic, and active archives are never automatically removed.

@@ -37,10 +37,13 @@ public sealed class CastMediaUrlBuilder(IOptions<CastingOptions> options)
         return (uri.GetLeftPart(UriPartial.Authority), null);
     }
 
-    public static string BuildStreamUrl(string baseUrl, Guid mediaGuid, string castToken, bool audio, string? format)
+    public static string BuildStreamUrl(string baseUrl, Guid mediaGuid, string castToken, bool audio)
         => audio
-            ? $"{baseUrl}/api/media/watch/{mediaGuid:D}?audio=true&format={Uri.EscapeDataString(format ?? AudioRenditionHelpers.DefaultFormat)}&{TokenQuery(castToken)}"
+            ? $"{baseUrl}/api/media/watch/{mediaGuid:D}?audio=true&{TokenQuery(castToken)}"
             : $"{baseUrl}/api/media/watch/{mediaGuid:D}?{TokenQuery(castToken)}";
+
+    public static string BuildHlsManifestUrl(string baseUrl, Guid mediaGuid, string castToken)
+        => $"{baseUrl}/api/media/stream/{mediaGuid:D}/index.m3u8?{TokenQuery(castToken)}";
 
     public static string BuildThumbnailUrl(string baseUrl, Guid mediaGuid, string castToken)
         => $"{baseUrl}/api/media/watch/{mediaGuid:D}/thumbnail?{TokenQuery(castToken)}";

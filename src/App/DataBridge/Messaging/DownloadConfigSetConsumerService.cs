@@ -171,10 +171,7 @@ public sealed class DownloadConfigSetConsumerService(
             CookieProfileKey = Normalize(msg.CookieProfileKey),
             YtDlpOptionsJson = Normalize(msg.YtDlpOptionsJson),
             IgnoreKeywordsJson = IgnoreKeywordMatcher.Serialize(msg.IgnoreKeywords),
-            EncodeForPlaylist = msg.EncodeForPlaylist,
-            AudioFormat = msg.AudioFormat,
-            Priority = msg.Priority,
-            FetchComments = msg.FetchComments
+            Priority = msg.Priority
         };
 
     private static DownloadConfigSetDto Map(DownloadConfigSetEntity entity)
@@ -189,10 +186,7 @@ public sealed class DownloadConfigSetConsumerService(
             CookieProfileKey = entity.CookieProfileKey,
             YtDlpOptionsJson = entity.YtDlpOptionsJson,
             IgnoreKeywords = IgnoreKeywordMatcher.Deserialize(entity.IgnoreKeywordsJson),
-            EncodeForPlaylist = entity.EncodeForPlaylist,
-            AudioFormat = entity.AudioFormat,
             Priority = entity.Priority,
-            FetchComments = entity.FetchComments,
             CreatedAt = entity.CreatedAt,
             UpdatedAt = entity.UpdatedAt
         };

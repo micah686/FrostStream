@@ -1,4 +1,3 @@
-export type AudioRenditionFormat = 'Aac' | 'Opus' | 'Mp3';
 export type IgnoreKeywordMatchType = 'Substring' | 'Regex';
 
 export interface IgnoreKeyword {
@@ -15,10 +14,7 @@ export interface DownloadConfigSet {
   cookieProfileKey: string | null;
   ytDlpOptions: Record<string, unknown> | null;
   ignoreKeywords: IgnoreKeyword[];
-  encodeForPlaylist: boolean;
-  audioFormat: AudioRenditionFormat;
   priority: number;
-  fetchComments: boolean;
 }
 
 export interface DownloadConfigSetRequest {
@@ -29,10 +25,7 @@ export interface DownloadConfigSetRequest {
   cookieProfileKey: string | null;
   ytDlpOptions: Record<string, unknown> | null;
   ignoreKeywords: IgnoreKeyword[];
-  encodeForPlaylist: boolean;
-  audioFormat: AudioRenditionFormat;
   priority: number;
-  fetchComments: boolean;
 }
 
 const BASE = '/api/user/config-sets';

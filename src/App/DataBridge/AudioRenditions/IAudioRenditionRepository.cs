@@ -4,16 +4,20 @@ namespace DataBridge.AudioRenditions;
 
 public interface IAudioRenditionRepository
 {
+    Task<ChannelAudioResolveResult?> ResolveChannelAsync(
+        long accountId,
+        bool createIfMissing,
+        bool retryFailedAndPending,
+        CancellationToken cancellationToken = default);
+
     Task<AudioRenditionDto?> ResolveAsync(
         Guid mediaGuid,
-        AudioRenditionFormat format,
         string? storageKey,
         int? sourceVersion,
         CancellationToken cancellationToken = default);
 
     Task<AudioRenditionDto?> CreateIfMissingAsync(
         Guid mediaGuid,
-        AudioRenditionFormat format,
         string? storageKey,
         int? sourceVersion,
         CancellationToken cancellationToken = default);
@@ -30,3 +34,7 @@ public interface IAudioRenditionRepository
 
     Task<bool> FailAsync(Guid renditionId, string errorMessage, CancellationToken cancellationToken = default);
 }
+
+public sealed record ChannelAudioResolveResult(
+    ChannelAudioDto Channel,
+    IReadOnlyList<AudioRenditionDto> RenditionsToQueue);

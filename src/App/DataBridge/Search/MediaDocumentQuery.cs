@@ -47,6 +47,7 @@ public sealed class MediaDocumentQuery(NpgsqlDataSource dataSource) : IMediaDocu
     {
         await using var command = CreateCaptionsCommand("""
             WHERE mc.media_guid = @media_guid
+              AND mc.storage_key IS NOT NULL
             ORDER BY mc.two_digit_language_code, mc.caption_type, mc.id
             """);
         command.Parameters.AddWithValue("@media_guid", mediaGuid);
@@ -87,6 +88,7 @@ public sealed class MediaDocumentQuery(NpgsqlDataSource dataSource) : IMediaDocu
     {
         await using var command = CreateCaptionsCommand("""
             WHERE mc.id > @last_id
+              AND mc.storage_key IS NOT NULL
             ORDER BY mc.id
             LIMIT @page_size
             """);
@@ -108,6 +110,7 @@ public sealed class MediaDocumentQuery(NpgsqlDataSource dataSource) : IMediaDocu
                 mm.webpage_url,
                 EXTRACT(EPOCH FROM mm.release_date)::bigint AS release_date_unix,
                 COALESCE(EXTRACT(EPOCH FROM mm.release_date)::bigint, 0) AS release_date_sort,
+                EXTRACT(EPOCH FROM mm.metadata_scrape_date)::bigint AS added_at_sort,
                 mm.view_count,
                 mm.like_count,
                 mm.duration,
@@ -225,7 +228,7 @@ public sealed class MediaDocumentQuery(NpgsqlDataSource dataSource) : IMediaDocu
                 mc.caption_type::text AS caption_type,
                 mc.name,
                 mc.storage_path,
-                mc.text_content
+                mc.storage_key
             FROM metadata.media_captions mc
             JOIN media.media m ON m.media_guid = mc.media_guid
             {whereClause}
@@ -253,6 +256,7 @@ public sealed class MediaDocumentQuery(NpgsqlDataSource dataSource) : IMediaDocu
                 WebpageUrl = GetNullableString(reader, "webpage_url"),
                 ReleaseDateUnix = GetNullableInt64(reader, "release_date_unix"),
                 ReleaseDateSort = GetInt64(reader, "release_date_sort"),
+                AddedAtSort = GetInt64(reader, "added_at_sort"),
                 ViewCount = GetNullableInt64(reader, "view_count"),
                 LikeCount = GetNullableInt64(reader, "like_count"),
                 DurationSeconds = GetNullableDouble(reader, "duration"),
@@ -334,7 +338,7 @@ public sealed class MediaDocumentQuery(NpgsqlDataSource dataSource) : IMediaDocu
                 CaptionType = GetString(reader, "caption_type"),
                 Name = GetNullableString(reader, "name"),
                 StoragePath = GetString(reader, "storage_path"),
-                Text = GetNullableString(reader, "text_content")
+                StorageKey = GetString(reader, "storage_key")
             });
         }
 

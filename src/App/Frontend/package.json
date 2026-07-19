@@ -12,8 +12,7 @@
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
   },
   "devDependencies": {
-    "@sveltejs/adapter-auto": "^7.0.1",
-    "@sveltejs/adapter-node": "^5.5.7",
+    "@sveltejs/adapter-static": "^3.0.10",
     "@sveltejs/kit": "^2.64.0",
     "@sveltejs/vite-plugin-svelte": "^7.1.2",
     "@tailwindcss/vite": "^4.3.0",
@@ -33,6 +32,8 @@
   "packageManager": "pnpm@10.28.1",
   "dependencies": {
     "@videojs/html": "10.0.0-beta.25",
+    "chart.js": "^4.5.1",
+    "jassub": "2.4.1",
     "svelte-video-player": "^2.2.0"
   }
 }

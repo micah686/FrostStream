@@ -114,6 +114,37 @@ public sealed class DownloadJobHistoryConfiguration : IEntityTypeConfiguration<D
     }
 }
 
+public sealed class DownloadJobProgressLogConfiguration : IEntityTypeConfiguration<DownloadJobProgressLogEntity>
+{
+    public void Configure(EntityTypeBuilder<DownloadJobProgressLogEntity> builder)
+    {
+        builder.ToTable("download_job_progress_log", "downloads");
+
+        builder.HasKey(x => x.Id);
+
+        builder.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
+        builder.Property(x => x.JobId).HasColumnName("job_id").IsRequired();
+        builder.Property(x => x.Sequence).HasColumnName("sequence").IsRequired();
+        builder.Property(x => x.Message).HasColumnName("message").HasMaxLength(2048).IsRequired();
+
+        builder.Property(x => x.RecordedAt)
+            .HasColumnName("recorded_at")
+            .HasColumnType("timestamp with time zone")
+            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .ValueGeneratedOnAdd()
+            .IsRequired();
+
+        builder.HasIndex(x => new { x.JobId, x.RecordedAt })
+            .HasDatabaseName("ix_download_job_progress_log_job_id_recorded_at");
+
+        builder.HasOne<DownloadJobEntity>()
+            .WithMany()
+            .HasForeignKey(x => x.JobId)
+            .HasConstraintName("fk_download_job_progress_log_job_id")
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
 public sealed class FailedDownloadJobConfiguration : IEntityTypeConfiguration<FailedDownloadJobEntity>
 {
     public void Configure(EntityTypeBuilder<FailedDownloadJobEntity> builder)
@@ -266,10 +297,6 @@ public sealed class AudioRenditionConfiguration : IEntityTypeConfiguration<Audio
         builder.Property(x => x.RenditionId).HasColumnName("rendition_id").ValueGeneratedNever();
         builder.Property(x => x.MediaGuid).HasColumnName("media_guid").IsRequired();
         builder.Property(x => x.SourceVersionNum).HasColumnName("source_version_num").IsRequired();
-        builder.Property(x => x.Format)
-            .HasColumnName("format")
-            .HasColumnType("media.audio_rendition_format")
-            .IsRequired();
         builder.Property(x => x.Status)
             .HasColumnName("status")
             .HasColumnType("media.audio_rendition_status")
@@ -292,9 +319,9 @@ public sealed class AudioRenditionConfiguration : IEntityTypeConfiguration<Audio
             .HasDefaultValueSql("CURRENT_TIMESTAMP")
             .IsRequired();
 
-        builder.HasIndex(x => new { x.MediaGuid, x.SourceVersionNum, x.Format, x.StorageKey })
+        builder.HasIndex(x => new { x.MediaGuid, x.SourceVersionNum, x.StorageKey })
             .IsUnique()
-            .HasDatabaseName("ux_audio_renditions_media_version_format_storage");
+            .HasDatabaseName("ux_audio_renditions_media_version_storage");
 
         builder.HasIndex(x => x.Status)
             .HasDatabaseName("ix_audio_renditions_status");
@@ -304,6 +331,54 @@ public sealed class AudioRenditionConfiguration : IEntityTypeConfiguration<Audio
             .HasPrincipalKey(x => new { x.MediaGuid, x.VersionNum })
             .HasForeignKey(x => new { x.MediaGuid, x.SourceVersionNum })
             .HasConstraintName("fk_audio_renditions_source_version")
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public sealed class StreamRenditionConfiguration : IEntityTypeConfiguration<StreamRenditionEntity>
+{
+    public void Configure(EntityTypeBuilder<StreamRenditionEntity> builder)
+    {
+        builder.ToTable("stream_renditions", "media");
+
+        builder.HasKey(x => x.RenditionId);
+
+        builder.Property(x => x.RenditionId).HasColumnName("rendition_id").ValueGeneratedNever();
+        builder.Property(x => x.MediaGuid).HasColumnName("media_guid").IsRequired();
+        builder.Property(x => x.SourceVersionNum).HasColumnName("source_version_num").IsRequired();
+        builder.Property(x => x.Status)
+            .HasColumnName("status")
+            .HasColumnType("media.stream_rendition_status")
+            .IsRequired();
+        builder.Property(x => x.StorageKey).HasColumnName("storage_key").HasMaxLength(100).IsRequired();
+        builder.Property(x => x.StoragePath).HasColumnName("storage_path").HasMaxLength(2048);
+        builder.Property(x => x.SizeBytes).HasColumnName("size_bytes");
+        builder.Property(x => x.DurationSeconds).HasColumnName("duration_seconds");
+        builder.Property(x => x.ErrorMessage).HasColumnName("error_message").HasMaxLength(4096);
+        builder.Property(x => x.CreatedAt)
+            .HasColumnName("created_at")
+            .HasColumnType("timestamp with time zone")
+            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .ValueGeneratedOnAdd()
+            .IsRequired();
+        builder.Property(x => x.UpdatedAt)
+            .HasColumnName("updated_at")
+            .HasColumnType("timestamp with time zone")
+            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .IsRequired();
+
+        builder.HasIndex(x => new { x.MediaGuid, x.SourceVersionNum, x.StorageKey })
+            .IsUnique()
+            .HasDatabaseName("ux_stream_renditions_media_version_storage");
+
+        builder.HasIndex(x => x.Status)
+            .HasDatabaseName("ix_stream_renditions_status");
+
+        builder.HasOne<MediaContentIdVersionEntity>()
+            .WithMany()
+            .HasPrincipalKey(x => new { x.MediaGuid, x.VersionNum })
+            .HasForeignKey(x => new { x.MediaGuid, x.SourceVersionNum })
+            .HasConstraintName("fk_stream_renditions_source_version")
             .OnDelete(DeleteBehavior.Cascade);
     }
 }

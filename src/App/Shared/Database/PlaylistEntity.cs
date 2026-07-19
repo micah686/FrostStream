@@ -21,8 +21,6 @@ public class PlaylistEntity
 
     public bool EncodeForPlaylist { get; set; }
 
-    public AudioRenditionFormat AudioFormat { get; set; } = AudioRenditionFormat.Aac;
-
     public string? CookieSecretPath { get; set; }
 
     public string? YtDlpOptionsJson { get; set; }

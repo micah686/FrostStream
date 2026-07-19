@@ -1,9 +1,9 @@
 using Cleipnir.Flows;
 using Cleipnir.Flows.AspNet;
 using Cleipnir.Flows.PostgresSql;
-using DataBridge.Backup;
 using DataBridge.Data;
 using DataBridge.AudioRenditions;
+using DataBridge.StreamRenditions;
 using DataBridge.Flows;
 using DataBridge.MediaStream;
 using DataBridge.Metadata;
@@ -56,8 +56,8 @@ class Program
                         .MapEnum<DownloadJobState>("download_job_state", "downloads")
                         .MapEnum<FailureKind>("failure_kind", "downloads")
                         .MapEnum<IngestOrigin>("ingest_origin", "media")
-                        .MapEnum<AudioRenditionFormat>("audio_rendition_format", "media")
                         .MapEnum<AudioRenditionStatus>("audio_rendition_status", "media")
+                        .MapEnum<StreamRenditionStatus>("stream_rendition_status", "media")
                         .MapEnum<LocalImportStatus>("local_import_status", "imports")
                         .MapEnum<ImportSessionStatus>("import_session_status", "imports")
                         .MapEnum<ImportSessionSourceKind>("import_session_source_kind", "imports")
@@ -85,7 +85,9 @@ class Program
         builder.Services.AddNatsTopologySource<PlaylistTopology>();
         builder.Services.AddNatsTopologySource<BackgroundJobsTopology>();
         builder.Services.AddNatsTopologySource<LocalImportTopology>();
+        builder.Services.AddNatsTopologySource<AuthSessionsTopology>();
         builder.Services.AddOpenBaoSecretStore(builder.Configuration);
+        builder.Services.AddFrostStreamStorage();
 
         // Isolate Cleipnir's runtime tables in their own Postgres schema. Cleipnir's
         // PostgresSql store only exposes `tablePrefix`, not a schema option, so we route
@@ -104,6 +106,11 @@ class Program
             // persisted message/effect to the Unix epoch. Swap in a NodaTime-aware serializer so
             // dates (OccurredAt, metadata scrape/release dates, …) survive the flow store round-trip.
             .WithOptions(new Options(serializer: new NodaTimeFlowSerializer()))
+            // Wait for executing flows to finish before the host tears down DI. Without this, a
+            // flow running through a shutdown dies with ObjectDisposedException (disposed
+            // IServiceProvider) and is left permanently Failed — the exact corpse the slot
+            // coordinator's recovery/sweep has to repair.
+            .GracefulShutdown(enable: true)
             .RegisterFlowsAutomatically());
 
         builder.Services.AddSingleton<IClock>(SystemClock.Instance);
@@ -123,6 +130,7 @@ class Program
         builder.Services.AddScoped<IMediaCaptionReadService, MediaCaptionReadService>();
         builder.Services.AddScoped<IAccountAssetReadService, AccountAssetReadService>();
         builder.Services.AddScoped<IAudioRenditionRepository, AudioRenditionRepository>();
+        builder.Services.AddScoped<IStreamRenditionRepository, StreamRenditionRepository>();
         builder.Services.AddScoped<IPlaylistsRepository, PlaylistsRepository>();
         builder.Services.AddScoped<IUserPlaylistsRepository, UserPlaylistsRepository>();
         builder.Services.AddScoped<IUserNotesRepository, UserNotesRepository>();
@@ -138,9 +146,6 @@ class Program
         builder.Services.AddSingleton<WatchedItemAutoDeleteExecutor>();
         builder.Services.AddSingleton<DownloadSlotCoordinator>();
         builder.Services.AddSingleton<INotificationDispatcher, NotificationDispatcher>();
-        builder.Services.Configure<BackupRunnerOptions>(
-            builder.Configuration.GetSection(BackupRunnerOptions.SectionName));
-        builder.Services.AddSingleton<BackupRunner>();
         builder.Services.AddSingleton<ImportSessionRequestReplyService>();
 
         builder.Services.AddTypesenseClient(config =>
@@ -150,6 +155,7 @@ class Program
         });
         builder.Services.AddSingleton<ITypesenseIndexService, TypesenseIndexService>();
         builder.Services.AddSingleton<IMediaDocumentQuery, MediaDocumentQuery>();
+        builder.Services.AddSingleton<CaptionDocumentHydrator>();
         builder.Services.AddSingleton<IMetadataRebuildCoordinator, MetadataRebuildCoordinator>();
 
         builder.Services.AddHostedService<TypesenseStartupService>();
@@ -179,6 +185,7 @@ class Program
         builder.Services.AddHostedService<DownloadSlotCoordinator>(p => p.GetRequiredService<DownloadSlotCoordinator>());
         builder.Services.AddHostedService<DownloadAdminConsumerService>();
         builder.Services.AddHostedService<DownloadQueueConsumerService>();
+        builder.Services.AddHostedService<DownloadProgressPersistenceService>();
         builder.Services.AddHostedService<DownloadRequestedIngressService>();
         builder.Services.AddHostedService<DownloadEventsConsumerService>();
         builder.Services.AddHostedService<LocalImportEventsConsumerService>();
@@ -194,6 +201,7 @@ class Program
         builder.Services.AddHostedService<StatisticsQueryConsumerService>();
         builder.Services.AddHostedService<MediaStreamQueryConsumerService>();
         builder.Services.AddHostedService<AudioRenditionConsumerService>();
+        builder.Services.AddHostedService<StreamRenditionConsumerService>();
         builder.Services.AddHostedService<MediaDeleteConsumerService>();
         builder.Services.AddHostedService<MediaAccessConsumerService>();
 

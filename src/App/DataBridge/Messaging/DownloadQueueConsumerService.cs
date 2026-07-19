@@ -39,6 +39,13 @@ public sealed class DownloadQueueConsumerService(
             queueGroup: DownloadQueueSubjects.QueueGroup,
             cancellationToken: stoppingToken);
 
+        await SubscribeAsync<DownloadQueueMediaRequest>(
+            messageBus,
+            DownloadQueueSubjects.Media,
+            HandleMediaAsync,
+            queueGroup: DownloadQueueSubjects.QueueGroup,
+            cancellationToken: stoppingToken);
+
         logger.LogInformation("Subscribed to download-queue query subjects.");
     }
 
@@ -120,6 +127,28 @@ public sealed class DownloadQueueConsumerService(
         {
             logger.LogError(ex, "Failed handling download queue history query for {JobId}.", context.Message.JobId);
             await context.RespondAsync(new DownloadQueueHistoryResponse
+            {
+                Success = false,
+                ErrorCode = "internal_error",
+                ErrorMessage = "Internal download queue service error."
+            });
+        }
+    }
+
+    private async Task HandleMediaAsync(IMessageContext<DownloadQueueMediaRequest> context)
+    {
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var repo = scope.ServiceProvider.GetRequiredService<IDownloadJobsRepository>();
+            var mediaGuid = await repo.GetMediaGuidForJobAsync(context.Message.JobId);
+
+            await context.RespondAsync(new DownloadQueueMediaResponse { Success = true, MediaGuid = mediaGuid });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed handling download queue media query for {JobId}.", context.Message.JobId);
+            await context.RespondAsync(new DownloadQueueMediaResponse
             {
                 Success = false,
                 ErrorCode = "internal_error",

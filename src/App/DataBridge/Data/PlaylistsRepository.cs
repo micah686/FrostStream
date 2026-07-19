@@ -27,7 +27,6 @@ public sealed class PlaylistsRepository(
             existingById.UpdatedAt = clock.GetCurrentInstant();
             existingById.ConfigSetKey = request.ConfigSetKey;
             existingById.EncodeForPlaylist = request.EncodeForPlaylist;
-            existingById.AudioFormat = request.AudioFormat;
             existingById.CookieSecretPath = request.CookieSecretPath;
             existingById.YtDlpOptionsJson = request.YtDlpOptions is null ? null : System.Text.Json.JsonSerializer.Serialize(request.YtDlpOptions);
             existingById.Priority = request.Priority;
@@ -45,7 +44,6 @@ public sealed class PlaylistsRepository(
             existingByUrl.StorageKey = request.StorageKey ?? existingByUrl.StorageKey;
             existingByUrl.ConfigSetKey = request.ConfigSetKey;
             existingByUrl.EncodeForPlaylist = request.EncodeForPlaylist;
-            existingByUrl.AudioFormat = request.AudioFormat;
             existingByUrl.CookieSecretPath = request.CookieSecretPath;
             existingByUrl.YtDlpOptionsJson = request.YtDlpOptions is null ? null : System.Text.Json.JsonSerializer.Serialize(request.YtDlpOptions);
             existingByUrl.Priority = request.Priority;
@@ -64,7 +62,6 @@ public sealed class PlaylistsRepository(
             StorageKey = request.StorageKey,
             ConfigSetKey = request.ConfigSetKey,
             EncodeForPlaylist = request.EncodeForPlaylist,
-            AudioFormat = request.AudioFormat,
             CookieSecretPath = request.CookieSecretPath,
             YtDlpOptionsJson = request.YtDlpOptions is null ? null : System.Text.Json.JsonSerializer.Serialize(request.YtDlpOptions),
             Priority = request.Priority,
@@ -200,6 +197,7 @@ public sealed class PlaylistsRepository(
                 SourceUrl = request.EntryUrl,
                 RequestedBy = request.RequestedBy,
                 StorageKey = request.StorageKey,
+                SourceKind = DownloadSourceKind.Playlist,
                 IgnoredKeyword = request.IgnoredKeyword
             });
         }
@@ -278,7 +276,7 @@ public sealed class PlaylistsRepository(
             from item in db.PlaylistItems.AsNoTracking()
             where item.JobId == jobId
             join playlist in db.Playlists.AsNoTracking() on item.PlaylistId equals playlist.PlaylistId
-            select new PlaylistAudioPreference(playlist.EncodeForPlaylist, playlist.AudioFormat, playlist.StorageKey))
+            select new PlaylistAudioPreference(playlist.EncodeForPlaylist, playlist.StorageKey))
             .FirstOrDefaultAsync(ct);
 
     public async Task<IReadOnlyList<PlaylistSummary>> ListAsync(int pageSize, int pageOffset, CancellationToken ct = default)

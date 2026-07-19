@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Conduit.NATS;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
@@ -93,7 +94,11 @@ public sealed class AuthControllerTests
     private static AuthController BuildController(IMessageBus bus, IOpenFgaTupleWriter tupleWriter, ClaimsPrincipal user)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection().Build();
-        return new AuthController(configuration, bus, tupleWriter, NullLogger<AuthController>.Instance)
+        var synchronization = new SessionSynchronizationService(
+            bus,
+            tupleWriter,
+            NullLogger<SessionSynchronizationService>.Instance);
+        return new AuthController(configuration, synchronization, Substitute.For<IAntiforgery>())
         {
             ControllerContext = new ControllerContext
             {

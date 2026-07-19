@@ -10,6 +10,7 @@ public sealed class TypesenseSyncConsumerService(
     IMessageBus messageBus,
     IServiceScopeFactory scopeFactory,
     ITypesenseIndexService indexService,
+    CaptionDocumentHydrator captionDocumentHydrator,
     ILogger<TypesenseSyncConsumerService> logger) : SubscriptionBackgroundService
 {
     protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
@@ -50,7 +51,8 @@ public sealed class TypesenseSyncConsumerService(
                 await indexService.DeleteCommentsByMediaGuidAsync(mediaGuidString);
                 await indexService.BulkImportCommentsAsync(await commentsTask);
                 await indexService.DeleteCaptionsByMediaGuidAsync(mediaGuidString);
-                await indexService.BulkImportCaptionsAsync(await captionsTask);
+                var captions = await captionDocumentHydrator.HydrateAsync(await captionsTask);
+                await indexService.BulkImportCaptionsAsync(captions);
             });
 
             logger.LogInformation("Synced Typesense metadata documents for {MediaGuid}.", mediaGuid);

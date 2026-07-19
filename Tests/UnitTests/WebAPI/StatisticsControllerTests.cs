@@ -49,7 +49,8 @@ public sealed class StatisticsControllerTests
                     x.PageSize == 10 &&
                     x.Page == 2 &&
                     x.SortBy == "bytes" &&
-                    x.SortOrder == "asc"),
+                    x.SortOrder == "asc" &&
+                    x.Search == "science"),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new StatisticsChannelsListResponseMessage
@@ -72,12 +73,45 @@ public sealed class StatisticsControllerTests
                 ]
             });
 
-        var result = await controller.ListChannels(10, 2, "bytes", "asc", CancellationToken.None);
+        var result = await controller.ListChannels(10, 2, "bytes", "asc", "science", CancellationToken.None);
 
         var payload = result.Result.ShouldBeOfType<OkObjectResult>().Value.ShouldBeOfType<ChannelStatisticsListResponse>();
         payload.Page.ShouldBe(2);
         payload.TotalCount.ShouldBe(21);
         payload.Items.Single().CreatorSourceId.ShouldBe(7);
+    }
+
+    [Test]
+    public async Task SuggestChannels_Forwards_Search_And_Limit()
+    {
+        var bus = Substitute.For<IMessageBus>();
+        var controller = CreateController(bus);
+        bus.RequestAsync<StatisticsChannelSuggestionsRequestMessage, StatisticsChannelSuggestionsResponseMessage>(
+                StatisticsSubjects.ChannelSuggestions,
+                Arg.Is<StatisticsChannelSuggestionsRequestMessage>(x =>
+                    x.Search == "science" &&
+                    x.Limit == 5),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new StatisticsChannelSuggestionsResponseMessage
+            {
+                Success = true,
+                Items =
+                [
+                    new ChannelSuggestionDto
+                    {
+                        Value = "Science Channel",
+                        Label = "Science Channel",
+                        Platform = "youtube",
+                        AvailableCount = 12
+                    }
+                ]
+            });
+
+        var result = await controller.SuggestChannels("science", 5, CancellationToken.None);
+
+        var payload = (IReadOnlyList<ChannelSuggestionDto>)result.Result.ShouldBeOfType<OkObjectResult>().Value!;
+        payload.Single().Value.ShouldBe("Science Channel");
     }
 
     [Test]

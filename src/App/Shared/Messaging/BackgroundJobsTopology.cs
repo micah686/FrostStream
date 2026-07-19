@@ -21,7 +21,10 @@ public sealed class BackgroundJobsTopology : ITopologySource
     public const string WorkerChannelAssetRefreshConsumer = "worker-channel-asset-refresh";
     public const string WorkerFilesystemRescanConsumer = "worker-filesystem-rescan";
     public const string MediaProcessorAudioRenditionConsumer = "mediaprocessor-audio-rendition";
-    public const string DataBridgeBackupConsumer = "databridge-backup";
+    public const string MediaProcessorStreamRenditionConsumer = "mediaprocessor-stream-rendition";
+    // The durable value is intentionally retained from the former DataBridge owner so queued
+    // schedule messages survive upgrades; BackupService is now the only process that consumes it.
+    public const string BackupServiceBackupConsumer = "databridge-backup";
 
     public IEnumerable<StreamSpec> GetStreams()
     {
@@ -44,6 +47,7 @@ public sealed class BackgroundJobsTopology : ITopologySource
                 BackgroundJobSubjects.SearchReindexRequest,
                 BackgroundJobSubjects.FilesystemRescanRequest,
                 BackgroundJobSubjects.AudioRenditionEncodeRequest,
+                BackgroundJobSubjects.StreamRenditionEncodeRequest,
                 BackgroundJobSubjects.BackupRequest,
                 ScheduleSubjects.OrphanMetadataCleanupRequest
             ],
@@ -76,8 +80,11 @@ public sealed class BackgroundJobsTopology : ITopologySource
         yield return WorkerConsumer(WorkerChannelMediaListConsumer, BackgroundJobSubjects.ChannelMediaListRequest, TimeSpan.FromHours(2), maxDeliver: 3);
         yield return WorkerConsumer(WorkerChannelAssetRefreshConsumer, BackgroundJobSubjects.ChannelAssetRefreshRequest, TimeSpan.FromMinutes(30), maxDeliver: 3);
         yield return WorkerConsumer(WorkerFilesystemRescanConsumer, BackgroundJobSubjects.FilesystemRescanRequest, TimeSpan.FromSeconds(60), maxDeliver: 3);
-        yield return MediaProcessorConsumer(MediaProcessorAudioRenditionConsumer, BackgroundJobSubjects.AudioRenditionEncodeRequest, TimeSpan.FromHours(2), maxDeliver: 3);
-        yield return DataBridgeConsumer(DataBridgeBackupConsumer, BackgroundJobSubjects.BackupRequest, TimeSpan.FromHours(2), maxDeliver: 2);
+        // Encodes run arbitrarily long, so MediaProcessor extends the short ack window with
+        // in-progress acks every 30s while ffmpeg works; a dead encoder is redelivered quickly.
+        yield return MediaProcessorConsumer(MediaProcessorAudioRenditionConsumer, BackgroundJobSubjects.AudioRenditionEncodeRequest, TimeSpan.FromMinutes(2), maxDeliver: 3);
+        yield return MediaProcessorConsumer(MediaProcessorStreamRenditionConsumer, BackgroundJobSubjects.StreamRenditionEncodeRequest, TimeSpan.FromMinutes(2), maxDeliver: 2);
+        yield return DataBridgeConsumer(BackupServiceBackupConsumer, BackgroundJobSubjects.BackupRequest, TimeSpan.FromHours(2), maxDeliver: 2);
     }
 
     public IEnumerable<ObjectStoreSpec> GetObjectStores()
@@ -90,6 +97,7 @@ public sealed class BackgroundJobsTopology : ITopologySource
             Replicas = 1,
             Description = "Temporary filesystem rescan storage listings"
         };
+
     }
 
     private static ConsumerSpec DataBridgeConsumer(string durableName, string subject, TimeSpan ackWait, int maxDeliver)

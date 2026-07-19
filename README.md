@@ -7,9 +7,11 @@
 Froststream is a self-hosted media archival tool and library. It downloads music and video files (via yt-dlp), and presents the media files in a youtube-like web interface.
 This allows for a personal media collection that can't be removed by corporations.
 
-The application is entirely designed to be accessed by REST, so clients can be made easily for interacting with FrostStream, the same way the web UI interacts.
+The application is entirely designed to be accessed by REST, so clients can be made easily for interacting with FrostStream, the same way the web UI interacts.  
 
 
+> [!WARNING]  
+> This application is under heavy development right now. Data loss may occur, and features/capabilities may change
 
 ---
 
@@ -50,11 +52,13 @@ SINGLE_USER_MODE="true"   # no Authentik/OpenFGA containers, no login
 
 Media and app data default to `<repo>/data` (override with `FROSTSTREAM_STORAGE_ROOT`).
 
-The frontend can also be run standalone against an already-running backend:
+The frontend can also be run standalone against an already-running WebAPI. Vite proxies `/api`,
+`/auth`, and `/stream`; override `WEBAPI_UPSTREAM` when WebAPI is not on `http://localhost:25200`:
 
 ```bash
 cd src/App/Frontend
-pnpm install && pnpm run dev   # binds http://localhost:25000
+pnpm install
+WEBAPI_UPSTREAM=http://localhost:25200 pnpm run dev   # binds http://localhost:25000
 ```
 
 ### Run with Docker Compose
@@ -73,7 +77,16 @@ Notes:
 
 - `.env` holds all secrets and deployment URLs (`FRONTEND_PUBLIC_ORIGIN`, `AUTHENTIK_PUBLIC_AUTHORITY`, …). Change these when serving on a LAN address or domain — no republish needed.
 
-- Media is stored in the named volume `froststream-data`; Postgres WAL archive in `wal-archive`.
+- The production frontend image is Caddy plus static assets. WebAPI owns OIDC, refresh, logout,
+  CSRF, and opaque browser sessions; encrypted session tickets live in the DataBridge-provisioned
+  NATS KV bucket and Data Protection keys live in the `froststream-data-protection-keys` volume.
+
+- Core backups and PostgreSQL WAL are written beneath the host path in `FROSTSTREAM_BACKUP_ROOT`
+  (`./backups` by default). Media remains in the named volume `froststream-data`.
+
+- OpenBao now uses persistent integrated storage. A new Compose deployment must be initialized and
+  unsealed before the remaining services can start; follow
+  [`docs/Markdown/BACKUP_RESTORE.md`](docs/Markdown/BACKUP_RESTORE.md#first-compose-start-openbao).
 
 - The artifacts are **generated** — never hand-edit the yaml. Regenerate after AppHost changes:
   
@@ -150,7 +163,7 @@ Notes:
 | **DataBridge**     | Owns PostgreSQL Database (EF Core + FluentMigrator)                                       |
 | **Scheduler**      | Quartz.NET recurring jobs (creator scans, scheduled backups) with a web UI                |
 | **Frontend**       | SvelteKit app (BFF pattern — tokens never reach the browser)                              |
-| **BackupTool**     | CLI for Postgres snapshot/full/WAL-archive backup and restore                             |
+| **BackupService**  | Runs and verifies core backups; also exposes backup/restore CLI commands                  |
 | **MediaProcessor** | Stub — reserved for future transcoding work                                               |
 
 **Infrastructure containers:** NATS (JetStream), PostgreSQL, Typesense, OpenBao, bgutil pot-provider, and in multi-user mode Authentik + OpenFGA. Dev tooling: DbGate (DB browser), nats-ui, OpenFGA Studio.
@@ -164,7 +177,7 @@ All host ports live in one registry ([`src/App/AppHost/Ports.cs`](src/App/AppHos
 | **25xy0** (external) | Host-published; browser/host-facing                                                | frontend `25000` · authentik `25100` · webapi `25200` (https `25210`) · scheduler `25300` · openbao `25400` · postgres `25500` · dbgate `25600` · nats-ui `25700` · openfga-studio `25800` |
 | **240xy** (internal) | Container-to-container only; bound on localhost in dev, never published by compose | typesense `24010` · pot-provider `24020` · openfga `24030` · nats `24040`–`24042`                                                                                                          |
 
-External ports are overridable via `PORT_*` variables in `aspire-development.env`.
+External ports are overridable via `PORT_*` variables in the generated Aspire dev env.
 
 ---
 
@@ -190,7 +203,7 @@ dotnet test --project src/Modules/Conduit.NATS/Tests/Conduit.NATS.UnitTests/Cond
 │   │   ├── DataBridge/               # persistence, sagas, migrations
 │   │   ├── Scheduler/                # Quartz jobs
 │   │   ├── Frontend/                 # SvelteKit app
-│   │   ├── BackupTool/               # Postgres backup/restore CLI
+│   │   ├── BackupService/            # backup API plus Postgres/OpenBao backup/restore engine
 │   │   ├── Shared/                   # shared contracts & options
 │   │   └── docker-compose-artifacts/ # generated compose deployment
 │   ├── Containers/                   # container resource definitions/config

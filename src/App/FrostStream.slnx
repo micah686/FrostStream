@@ -9,7 +9,7 @@
     <Project Path="../Modules/YtDlpSharpLib/YtDlpSharpLib/YtDlpSharpLib.csproj" />
   </Folder>
   <Folder Name="/Core/">
-    <Project Path="BackupTool/BackupTool.csproj" />
+    <Project Path="BackupService/BackupService.csproj" />
     <Project Path="DataBridge/DataBridge.csproj" />
     <Project Path="MediaProcessor/MediaProcessor.csproj" />
     <Project Path="Scheduler/Scheduler.csproj" />

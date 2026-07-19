@@ -110,7 +110,7 @@ public class DownloadArchiveFlow(
             return;
         }
         await Capture(() => Update(jobId, DownloadJobState.DownloadQueued));
-        await Capture(() => slotCoordinator.EnqueueAsync(jobId, request.Priority, workerTag, clock.GetCurrentInstant()));
+        await Capture(() => slotCoordinator.EnqueueAsync(jobId, request.CorrelationId, request.Priority, workerTag, clock.GetCurrentInstant()));
         var slotResult = await Messages.FirstOfTypes<DownloadSlotGranted, DownloadCancelRequested>();
         if (slotResult.HasSecond || await Capture(() => IsCancelling(jobId)))
         {
@@ -712,8 +712,7 @@ public class DownloadArchiveFlow(
                 // default to "subtitles".
                 CaptionType = "subtitles",
                 LanguageCode = string.IsNullOrWhiteSpace(caption.LanguageCode) ? "und" : caption.LanguageCode!,
-                Name = null,
-                TextContent = caption.ParsedText
+                Name = null
             });
         }
 
@@ -1019,11 +1018,10 @@ public class DownloadArchiveFlow(
         if (!shouldEncode)
             return;
 
-        var audioFormat = preference?.AudioFormat ?? request.AudioRenditionFormat;
         var audioStorageKey = preference?.StorageKey ?? storageKey;
 
         var rendition = await scopeFactory.WithScopedAsync<IAudioRenditionRepository, AudioRenditionDto?>(
-            repo => repo.CreateIfMissingAsync(mediaGuid, audioFormat, audioStorageKey, sourceVersion));
+            repo => repo.CreateIfMissingAsync(mediaGuid, audioStorageKey, sourceVersion));
         if (rendition is null || rendition.Status == AudioRenditionStatus.Ready)
             return;
 
@@ -1033,8 +1031,7 @@ public class DownloadArchiveFlow(
             {
                 RenditionId = rendition.RenditionId,
                 MediaGuid = rendition.MediaGuid,
-                SourceVersion = rendition.SourceVersion,
-                Format = rendition.Format
+                SourceVersion = rendition.SourceVersion
             },
             messageId: rendition.RenditionId.ToString("N"));
     }

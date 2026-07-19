@@ -6,6 +6,7 @@ public static class StatisticsSubjects
 {
     public const string Overview = "statistics.overview";
     public const string ChannelsList = "statistics.channels.list";
+    public const string ChannelSuggestions = "statistics.channels.suggestions";
     public const string ChannelGet = "statistics.channels.get";
     public const string DownloadHistory = "statistics.download-history";
 
@@ -31,6 +32,7 @@ public sealed record StatisticsChannelsListRequestMessage
     public int Page { get; init; } = 1;
     public string SortBy { get; init; } = "downloaded";
     public string SortOrder { get; init; } = "desc";
+    public string? Search { get; init; }
 }
 
 public sealed record StatisticsChannelsListResponseMessage
@@ -42,6 +44,20 @@ public sealed record StatisticsChannelsListResponseMessage
     public int Page { get; init; }
     public int TotalCount { get; init; }
     public bool HasMore { get; init; }
+}
+
+public sealed record StatisticsChannelSuggestionsRequestMessage
+{
+    public string? Search { get; init; }
+    public int Limit { get; init; } = 8;
+}
+
+public sealed record StatisticsChannelSuggestionsResponseMessage
+{
+    public bool Success { get; init; }
+    public string? ErrorCode { get; init; }
+    public string? ErrorMessage { get; init; }
+    public IReadOnlyList<ChannelSuggestionDto> Items { get; init; } = [];
 }
 
 public sealed record StatisticsChannelGetRequestMessage
@@ -133,6 +149,16 @@ public sealed record ChannelStatisticsSummaryDto
     public long TotalBytes { get; init; }
     public Instant? LastSuccessfulScanAt { get; init; }
     public Instant? LastFullScanAt { get; init; }
+}
+
+public sealed record ChannelSuggestionDto
+{
+    public required string Value { get; init; }
+    public required string Label { get; init; }
+    public string? AccountName { get; init; }
+    public string? AccountHandle { get; init; }
+    public required string Platform { get; init; }
+    public long AvailableCount { get; init; }
 }
 
 public sealed record ChannelStatisticsDetailDto

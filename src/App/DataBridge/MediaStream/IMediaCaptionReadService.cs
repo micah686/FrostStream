@@ -4,6 +4,10 @@ namespace DataBridge.MediaStream;
 
 public interface IMediaCaptionReadService
 {
+    Task<IReadOnlyList<MediaCaptionLocationDto>> ListAsync(
+        Guid mediaGuid,
+        CancellationToken cancellationToken = default);
+
     Task<MediaCaptionLocationDto?> ResolveAsync(
         Guid mediaGuid,
         string languageCode,

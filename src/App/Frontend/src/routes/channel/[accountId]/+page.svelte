@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { onDestroy } from 'svelte';
   import { Button, Select, Spinner } from 'flowbite-svelte';
   import {
     ArrowUpRightFromSquareOutline,
@@ -8,13 +9,26 @@
     ChevronRightOutline,
     ChevronUpOutline,
     ExclamationCircleOutline,
+    FileCopyOutline,
+    HeadphonesOutline,
     ImageOutline,
+    MusicOutline,
     PlaySolid,
     RectangleListOutline
   } from 'flowbite-svelte-icons';
   import { accentFor, formatBytes, formatCount, formatDuration, formatRelativeDate, formatViews, initialsFor } from '$lib/media';
   import { refreshAccountAssets } from '$lib/api/metadata';
+  import {
+    createPodcastFeedLink,
+    encodeChannelAudio,
+    getChannelAudioStatus,
+    renditionProgressStreamUrl,
+    type ChannelAudioStatus,
+    type RenditionProgressFrame
+  } from '$lib/api/channelAudio';
+  import { readEventStream } from '$lib/sse/eventStream';
   import TargetNotePanel from '$lib/components/TargetNotePanel.svelte';
+  import VideoJs10AudioPlayer from '$lib/components/players/VideoJs10AudioPlayer.svelte';
   import {
     getChannelStatistics,
     listChannelStatistics,
@@ -84,6 +98,17 @@
   let statisticsLoading = $state(false);
   let statisticsError = $state<string | null>(null);
   let statisticsExpanded = $state(false);
+  let channelAudio = $state<ChannelAudioStatus | null>(null);
+  let channelAudioLoading = $state(false);
+  let channelAudioBusy = $state(false);
+  let channelAudioNotice = $state<string | null>(null);
+  let audioPlayerOpen = $state(false);
+  let audioIndex = $state(0);
+  let podcastBusy = $state(false);
+  let podcastFeedUrl = $state<string | null>(null);
+  let audioPollTimer: ReturnType<typeof setTimeout> | null = null;
+  let renditionStreamController: AbortController | null = null;
+  let liveRenditionProgress = $state<Record<string, RenditionProgressFrame>>({});
 
   const accountId = $derived(page.params.accountId ?? '');
   const totalPages = $derived(Math.max(1, Math.ceil(totalCount / pageSize)));
@@ -93,6 +118,21 @@
   const avatarUrl = $derived(
     account?.avatarStoragePath && !avatarBroken ? `/api/media/watch/accounts/${account.accountId}/avatar` : null
   );
+  const readyAudioItems = $derived(
+    channelAudio?.items.filter((item) => item.rendition?.status === 'Ready') ?? []
+  );
+  const currentAudioItem = $derived(readyAudioItems[audioIndex] ?? null);
+  const audioComplete = $derived(
+    channelAudio !== null && channelAudio.totalCount > 0 && channelAudio.readyCount === channelAudio.totalCount
+  );
+  const audioProgress = $derived(
+    channelAudio?.totalCount ? Math.round((channelAudio.readyCount / channelAudio.totalCount) * 100) : 0
+  );
+
+  onDestroy(() => {
+    if (audioPollTimer) clearTimeout(audioPollTimer);
+    closeRenditionStream();
+  });
 
   $effect(() => {
     if (accountId) {
@@ -112,7 +152,164 @@
     totalCount = 0;
     hasMore = false;
 
-    await Promise.all([loadAccount(id), loadMedia(id, 1), loadStatistics(id)]);
+    channelAudio = null;
+    channelAudioNotice = null;
+    audioPlayerOpen = false;
+    podcastFeedUrl = null;
+
+    await Promise.all([loadAccount(id), loadMedia(id, 1), loadStatistics(id), loadChannelAudio(id)]);
+  }
+
+  async function loadChannelAudio(id: string, quiet = false) {
+    const parsedId = Number(id);
+    if (!Number.isFinite(parsedId)) return;
+    if (!quiet) channelAudioLoading = true;
+
+    try {
+      channelAudio = await getChannelAudioStatus(parsedId);
+      scheduleAudioPoll(id);
+    } catch (err) {
+      if (!quiet) {
+        channelAudioNotice = err instanceof Error ? err.message : 'Could not load channel audio status.';
+      }
+    } finally {
+      if (!quiet) channelAudioLoading = false;
+    }
+  }
+
+  function scheduleAudioPoll(id: string) {
+    if (audioPollTimer) clearTimeout(audioPollTimer);
+    audioPollTimer = null;
+    const encodesInFlight = channelAudio !== null && channelAudio.pendingCount + channelAudio.processingCount > 0;
+    syncRenditionStream(encodesInFlight);
+    if (!encodesInFlight) return;
+    audioPollTimer = setTimeout(() => void loadChannelAudio(id, true), 2000);
+  }
+
+  // Live per-item encode progress over SSE, on top of the coarse 2s count polling: the poll stays
+  // as the resilient fallback, the stream adds percent/speed and immediate refresh on completion.
+  function syncRenditionStream(shouldStream: boolean) {
+    if (!shouldStream) {
+      closeRenditionStream();
+      return;
+    }
+    if (renditionStreamController) return;
+    const controller = new AbortController();
+    renditionStreamController = controller;
+    void (async () => {
+      try {
+        await readEventStream(
+          renditionProgressStreamUrl(),
+          {
+            onEvent: (event) => {
+              if (event.event !== 'progress') return;
+              applyRenditionFrame(JSON.parse(event.data) as RenditionProgressFrame);
+            }
+          },
+          controller.signal
+        );
+      } catch {
+        // Live progress is advisory; the status poll keeps working without it.
+      } finally {
+        if (renditionStreamController === controller) renditionStreamController = null;
+      }
+    })();
+  }
+
+  function closeRenditionStream() {
+    renditionStreamController?.abort();
+    renditionStreamController = null;
+    liveRenditionProgress = {};
+  }
+
+  function applyRenditionFrame(frame: RenditionProgressFrame) {
+    if (frame.kind !== 'Audio') return;
+    if (!channelAudio?.items.some((item) => item.mediaGuid === frame.mediaGuid)) return;
+
+    if (frame.phase === 'Ready' || frame.phase === 'Failed') {
+      const rest = { ...liveRenditionProgress };
+      delete rest[frame.mediaGuid];
+      liveRenditionProgress = rest;
+      // Counts changed server-side; refresh right away instead of waiting out the poll.
+      void loadChannelAudio(accountId, true);
+      return;
+    }
+
+    liveRenditionProgress = { ...liveRenditionProgress, [frame.mediaGuid]: frame };
+  }
+
+  function renditionItemTitle(frame: RenditionProgressFrame): string {
+    return channelAudio?.items.find((item) => item.mediaGuid === frame.mediaGuid)?.title ?? 'Encoding';
+  }
+
+  function renditionProgressLine(frame: RenditionProgressFrame): string {
+    const parts = [frame.phase];
+    if (frame.percent !== null) parts.push(`${Math.round(frame.percent)}%`);
+    if (frame.speedX !== null) parts.push(`${frame.speedX.toFixed(1)}x`);
+    const eta = frame.etaSeconds !== null ? formatDuration(Math.round(frame.etaSeconds)) : null;
+    if (eta) parts.push(`eta ${eta}`);
+    return parts.join(' · ');
+  }
+
+  async function encodeAudio() {
+    if (!account || channelAudioBusy) return;
+    channelAudioBusy = true;
+    channelAudioNotice = null;
+    try {
+      channelAudio = await encodeChannelAudio(account.accountId);
+      channelAudioNotice = channelAudio.totalCount === 0
+        ? 'This channel has no archived media to encode.'
+        : `Queued Opus audio for ${channelAudio.totalCount.toLocaleString()} archived items.`;
+      scheduleAudioPoll(String(account.accountId));
+    } catch (err) {
+      channelAudioNotice = err instanceof Error ? err.message : 'Could not queue channel audio encoding.';
+    } finally {
+      channelAudioBusy = false;
+    }
+  }
+
+  function playAudio() {
+    if (!audioComplete) return;
+    audioIndex = 0;
+    audioPlayerOpen = true;
+  }
+
+  function moveAudio(offset: number) {
+    if (readyAudioItems.length === 0) return;
+    audioIndex = (audioIndex + offset + readyAudioItems.length) % readyAudioItems.length;
+  }
+
+  function audioSource(item: NonNullable<typeof currentAudioItem>): string {
+    const version = item.rendition?.sourceVersion;
+    const query = new URLSearchParams({ audio: 'true', prepare: 'false' });
+    if (version !== undefined) query.set('version', String(version));
+    return `/api/media/watch/${encodeURIComponent(item.mediaGuid)}?${query}`;
+  }
+
+  function audioDownloadName(title: string): string {
+    const baseName = title
+      .replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_')
+      .replace(/[. ]+$/g, '')
+      .trim()
+      .slice(0, 180);
+    return `${baseName || 'audio'}.opus`;
+  }
+
+  async function copyPodcastFeed() {
+    if (!account || podcastBusy) return;
+    podcastBusy = true;
+    channelAudioNotice = null;
+    try {
+      const result = await createPodcastFeedLink(account.accountId);
+      podcastFeedUrl = result.feedUrl;
+      await loadChannelAudio(String(account.accountId), true);
+      await navigator.clipboard.writeText(result.feedUrl);
+      channelAudioNotice = 'Podcast RSS URL copied to the clipboard.';
+    } catch (err) {
+      channelAudioNotice = err instanceof Error ? err.message : 'Could not create the podcast RSS URL.';
+    } finally {
+      podcastBusy = false;
+    }
   }
 
   async function loadAccount(id: string) {
@@ -397,26 +594,121 @@
             <ArrowUpRightFromSquareOutline class="mr-1.5 h-3.5 w-3.5" />
             View on {account.platform}
           </Button>
-          <Button
-            color="dark"
-            disabled={assetRefreshBusy}
-            onclick={(event: MouseEvent) => refreshAssets(event.shiftKey)}
-            title="Queue a refresh of the avatar and banner (hold Shift to force re-download)"
-            class="border-slate-700! bg-slate-900! px-4! py-2! text-xs! font-semibold! text-slate-200! hover:bg-slate-800! disabled:opacity-40"
-          >
-            {#if assetRefreshBusy}
-              <Spinner size="4" class="mr-1.5" />
-            {:else}
-              <ImageOutline class="mr-1.5 h-3.5 w-3.5" />
+        {/if}
+        <Button
+          color="dark"
+          disabled={assetRefreshBusy}
+          onclick={(event: MouseEvent) => refreshAssets(event.shiftKey)}
+          title="Queue a refresh of the avatar and banner (hold Shift to force re-download)"
+          class="border-slate-700! bg-slate-900! px-4! py-2! text-xs! font-semibold! text-slate-200! hover:bg-slate-800! disabled:opacity-40"
+        >
+          {#if assetRefreshBusy}
+            <Spinner size="4" class="mr-1.5" />
+          {:else}
+            <ImageOutline class="mr-1.5 h-3.5 w-3.5" />
+          {/if}
+          Refresh assets
+        </Button>
+        <Button
+          color="dark"
+          disabled={channelAudioBusy || channelAudioLoading}
+          onclick={encodeAudio}
+          class="border-slate-700! bg-slate-900! px-4! py-2! text-xs! font-semibold! text-slate-200! hover:bg-slate-800! disabled:opacity-40"
+        >
+          {#if channelAudioBusy}
+            <Spinner size="4" class="mr-1.5" />
+          {:else}
+            <MusicOutline class="mr-1.5 h-3.5 w-3.5" />
+          {/if}
+          Encode as audio
+        </Button>
+        <Button
+          color="dark"
+          disabled={!audioComplete}
+          onclick={playAudio}
+          title={audioComplete ? 'Play every archived video as Opus audio' : 'Encode every item before starting the complete channel playlist'}
+          class="border-slate-700! bg-slate-900! px-4! py-2! text-xs! font-semibold! text-slate-200! hover:bg-slate-800! disabled:opacity-40"
+        >
+          <HeadphonesOutline class="mr-1.5 h-3.5 w-3.5" />
+          Play as audio
+        </Button>
+        <Button
+          color="dark"
+          disabled={podcastBusy}
+          onclick={copyPodcastFeed}
+          title="Create and copy a channel-scoped podcast subscription URL"
+          class="border-slate-700! bg-slate-900! px-4! py-2! text-xs! font-semibold! text-slate-200! hover:bg-slate-800! disabled:opacity-40"
+        >
+          {#if podcastBusy}
+            <Spinner size="4" class="mr-1.5" />
+          {:else}
+            <FileCopyOutline class="mr-1.5 h-3.5 w-3.5" />
+          {/if}
+          Copy podcast RSS
+        </Button>
+        {#if channelAudio && channelAudio.totalCount > 0}
+          <div class="w-full max-w-60" aria-label={`Audio encoding ${audioProgress}% complete`}>
+            <div class="flex justify-between gap-3 text-[11px] text-slate-500">
+              <span>{channelAudio.readyCount.toLocaleString()} / {channelAudio.totalCount.toLocaleString()} encoded</span>
+              <span>{audioProgress}%</span>
+            </div>
+            <div class="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-800">
+              <div class="h-full rounded-full bg-emerald-500 transition-all" style={`width: ${audioProgress}%`}></div>
+            </div>
+            {#if channelAudio.processingCount || channelAudio.pendingCount}
+              <p class="mt-1 text-[11px] text-slate-600">
+                {channelAudio.processingCount} processing · {channelAudio.pendingCount} queued
+              </p>
+              {#each Object.values(liveRenditionProgress) as frame (frame.renditionId)}
+                <p class="mt-0.5 truncate text-[11px] text-slate-500" title={renditionItemTitle(frame)}>
+                  {renditionItemTitle(frame)} — {renditionProgressLine(frame)}
+                </p>
+              {/each}
+            {:else if channelAudio.failedCount}
+              <p class="mt-1 text-[11px] text-red-400">{channelAudio.failedCount} failed · Encode as audio retries them</p>
             {/if}
-            Refresh assets
-          </Button>
+          </div>
         {/if}
         {#if assetRefreshNotice}
           <p class="max-w-60 text-xs text-slate-500 sm:text-right">{assetRefreshNotice}</p>
         {/if}
+        {#if channelAudioNotice}
+          <p class="max-w-60 text-xs text-slate-500 sm:text-right">{channelAudioNotice}</p>
+        {/if}
+        {#if podcastFeedUrl}
+          <a class="max-w-60 truncate text-xs text-blue-400 hover:text-blue-300" href={podcastFeedUrl} target="_blank" rel="noopener noreferrer">
+            Open RSS feed
+          </a>
+        {/if}
       </div>
     </div>
+
+    {#if audioPlayerOpen && currentAudioItem}
+      <section class="mt-6 border-y border-slate-800/80 bg-slate-900/35 px-4 py-4" aria-labelledby="channel-audio-player-title">
+        <div class="mx-auto flex max-w-4xl flex-col gap-3 sm:flex-row sm:items-center">
+          <div class="min-w-0 flex-1">
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-emerald-400">
+              Channel audio · {audioIndex + 1} of {readyAudioItems.length}
+            </p>
+            <h2 id="channel-audio-player-title" class="mt-1 truncate text-sm font-semibold text-slate-100">
+              {currentAudioItem.title}
+            </h2>
+          </div>
+          <div class="w-full min-w-0 sm:w-[38rem]">
+            {#key currentAudioItem.mediaGuid}
+              <VideoJs10AudioPlayer
+                src={audioSource(currentAudioItem)}
+                downloadFileName={audioDownloadName(currentAudioItem.title)}
+                autoplay
+                onPreviousTrack={() => moveAudio(-1)}
+                onNextTrack={() => moveAudio(1)}
+                onEnded={() => moveAudio(1)}
+              />
+            {/key}
+          </div>
+        </div>
+      </section>
+    {/if}
 
     <div class="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-slate-800/70 pt-5">
       <div class="min-w-0">

@@ -99,6 +99,21 @@ public class MultiUserHttpAuthTests
     }
 
     [Test]
+    public async Task Explicit_Bearer_Token_Wins_Over_A_Stale_Browser_Cookie()
+    {
+        var subject = $"admin-{Guid.NewGuid():N}";
+        await Fixture.TupleWriter.SyncUserGroupsAsync(subject, [OpenFgaStackFixture.AdminGroup]);
+
+        using var client = _factory!.CreateClient();
+        client.DefaultRequestHeaders.Add("Cookie", $"{BffAuthenticationDefaults.CookieName}=stale-session");
+        Authorize(client, _factory.Tokens.Issue(subject, OpenFgaStackFixture.AdminGroup));
+
+        var response = await client.GetAsync("/api/metadata");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Test]
     public async Task Auth_Config_Is_Anonymous_And_Reports_Multi_User_Mode()
     {
         using var client = _factory!.CreateClient();
@@ -151,6 +166,11 @@ internal sealed class MultiUserWebApiFactory(string openFgaEndpoint, string stor
         // A non-blank authority is required by Program; the test token issuer overrides JwtBearer so
         // the authority is never actually contacted.
         builder.UseSetting("Auth:Authority", "https://authentik.test/application/o/froststream/");
+        builder.UseSetting("Auth:PublicOrigin", "https://frontend.test");
+        builder.UseSetting("Auth:PublicAuthority", "https://authentik.test/application/o/froststream/");
+        builder.UseSetting("Auth:ClientId", "froststream-bff");
+        builder.UseSetting("Auth:ClientSecret", "integration-test-secret");
+        builder.UseSetting("Auth:Scopes", "openid profile email groups offline_access");
         builder.UseSetting("Auth:Audience", TestTokenIssuer.Audience);
         builder.UseSetting("Auth:RequireHttpsMetadata", "false");
 

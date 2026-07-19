@@ -16,6 +16,7 @@ public sealed record MetadataRebuildStartResult(bool Accepted, string? ErrorMess
 public sealed class MetadataRebuildCoordinator(
     IServiceScopeFactory scopeFactory,
     ITypesenseIndexService indexService,
+    CaptionDocumentHydrator captionDocumentHydrator,
     IHostApplicationLifetime applicationLifetime,
     ILogger<MetadataRebuildCoordinator> logger) : IMetadataRebuildCoordinator
 {
@@ -133,7 +134,8 @@ public sealed class MetadataRebuildCoordinator(
             if (batch.Documents.Count == 0)
                 break;
 
-            await indexService.BulkImportCaptionsAsync(batch.Documents, ct);
+            var captions = await captionDocumentHydrator.HydrateAsync(batch.Documents, ct);
+            await indexService.BulkImportCaptionsAsync(captions, ct);
             total += batch.Documents.Count;
             lastId = batch.LastId;
             LogProgress("captions", total);

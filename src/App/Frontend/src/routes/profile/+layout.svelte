@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { logout } from '$lib/api/http';
   import { Button } from 'flowbite-svelte';
   import {
     AdjustmentsHorizontalOutline,
@@ -69,7 +70,7 @@
     <div class="flex flex-wrap items-center gap-2">
       {#if !data.singleUser}
         <Button
-          href="/auth/logout"
+          onclick={() => void logout()}
           color="dark"
           class="border-slate-700! bg-[#0f1420]! px-4! py-2! text-xs! font-semibold! text-slate-200! hover:border-slate-600! hover:bg-slate-800!"
         >

@@ -27,6 +27,13 @@ public sealed record CapturedAccountMetadata
     public string? AccountUrl { get; init; }
     public long? FollowerCount { get; init; }
     public string? Description { get; init; }
+    public IReadOnlyList<CapturedAccountExternalId> ExternalIds { get; init; } = [];
+}
+
+public sealed record CapturedAccountExternalId
+{
+    public required string Kind { get; init; }
+    public required string Value { get; init; }
 }
 
 public sealed record CapturedMediaMetadataCore
@@ -110,9 +117,6 @@ public sealed record CapturedCaptionMetadata
     public required string CaptionType { get; init; }
     public required string LanguageCode { get; init; }
     public string? Name { get; init; }
-    /// <summary>Plain text extracted from the subtitle file. Null when the format is unsupported or
-    /// parsing was skipped (e.g. local imports where the file is already in storage).</summary>
-    public string? TextContent { get; init; }
 }
 
 public sealed record CapturedCommentMetadata
@@ -127,6 +131,7 @@ public sealed record CapturedCommentMetadata
     public int? DislikeCount { get; init; }
     public bool IsFavorited { get; init; }
     public bool IsPinned { get; init; }
+    public bool IsUploader { get; init; }
 }
 
 public sealed record CapturedSeriesMetadata

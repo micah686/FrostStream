@@ -24,13 +24,16 @@ public static class TypesenseSearchHelpers
     public static string MapMediaSortField(string? sortBy)
         => sortBy?.Trim().ToLowerInvariant() switch
         {
+            // "Recently added"/"Oldest added" — when FrostStream actually ingested the media.
+            "added_at" or "added_at_sort" or "recently_added" => "added_at_sort",
+            // "Release date (newest/oldest)" — the source's own publish/upload date.
             "release_date" or "release_date_unix" or "release_date_sort" => "release_date_sort",
             "view_count" or "views" => "view_count",
             "like_count" or "likes" => "like_count",
             "duration" or "duration_seconds" => "duration_seconds",
             "resolution" or "height" or "video_height" => "video_height",
             "title" => "title",
-            _ => "release_date_sort"
+            _ => "added_at_sort"
         };
 
     public static string MapCommentSortField(string? sortBy)

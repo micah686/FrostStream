@@ -117,6 +117,8 @@ public sealed record DiscoveredMediaCandidate
 public sealed record UpsertDiscoveredMediaBatchRequestMessage
 {
     public required long CreatorSourceId { get; init; }
+    /// <summary>Shared correlation/group identifier for every download job produced by this scan.</summary>
+    public Guid CorrelationId { get; init; }
     public required CreatorSourceScanMode ScanMode { get; init; }
     public required string ScheduleKey { get; init; }
     public required string IdempotencyKey { get; init; }
@@ -130,10 +132,11 @@ public sealed record UpsertDiscoveredMediaBatchRequestMessage
     public string? RequestedBy { get; init; }
     public string? ConfigSetKey { get; init; }
     public bool EncodeForPlaylist { get; init; }
-    public AudioRenditionFormat AudioFormat { get; init; } = AudioRenditionFormat.Aac;
     public string? CookieSecretPath { get; init; }
     public int Priority { get; init; }
     public bool FetchComments { get; init; }
+    public bool QueueAllItems { get; init; }
+    public bool ForceDownload { get; init; }
     public YtDlpSharpLib.Options.YtDlpOptions? YtDlpOptions { get; init; }
     public required IReadOnlyList<DiscoveredMediaCandidate> Items { get; init; }
 }

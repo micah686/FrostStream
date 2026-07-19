@@ -2,9 +2,8 @@
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
   import { browser } from '$app/environment';
-  import { Button, Select, Spinner } from 'flowbite-svelte';
+  import { Button, Spinner } from 'flowbite-svelte';
   import {
-    ArrowsRepeatOutline,
     CheckCircleOutline,
     CheckCircleSolid,
     ChevronDownOutline,
@@ -12,21 +11,18 @@
     DotsHorizontalOutline,
     EditOutline,
     ExclamationCircleOutline,
-    ForwardStepOutline,
     HeartOutline,
     HeartSolid,
     SearchOutline,
-    ShareNodesOutline,
-    ShuffleOutline,
     ThumbsDownOutline,
     ThumbsUpOutline
   } from 'flowbite-svelte-icons';
   import VideoJs10Player, { type TextTrackSource } from '$lib/components/players/VideoJs10Player.svelte';
-  import SveltePlayer from '$lib/components/players/SveltePlayer.svelte';
   import CastDropdown from '$lib/components/players/CastDropdown.svelte';
   import SaveToPlaylistButton from '$lib/components/SaveToPlaylistButton.svelte';
   import PlaylistPanel from '$lib/components/PlaylistPanel.svelte';
   import TargetNotePanel from '$lib/components/TargetNotePanel.svelte';
+  import WatchComment from '$lib/components/watch/WatchComment.svelte';
   import {
     getWatchState,
     markUnwatched,
@@ -36,6 +32,7 @@
   } from '$lib/api/watchState';
   import { getLikeState, likeMedia, unlikeMedia, type MediaLikeState } from '$lib/api/mediaLikes';
   import { getMetadataVersions, type MetadataVersion } from '$lib/api/metadata';
+  import { listCaptionTracks, type CaptionTrack } from '$lib/api/captions';
   import {
     accentFor,
     formatCount,
@@ -62,12 +59,6 @@
     trackTitle: string;
     trackNumber: number;
     composer?: string | null;
-  }
-
-  interface CaptionLanguage {
-    languageCode: string;
-    captionType: string;
-    name?: string | null;
   }
 
   interface Detail {
@@ -104,7 +95,6 @@
     albumArtists: string[];
     series?: Series | null;
     music?: Music | null;
-    captionLanguages: CaptionLanguage[];
     userNote?: string | null;
   }
 
@@ -149,12 +139,24 @@
 
   interface Comment {
     commentId: string;
+    parentCommentId?: string | null;
     text: string;
     commentTimestamp: string;
     likeCount?: number | null;
+    dislikeCount?: number | null;
+    isFavorited: boolean;
     isPinned: boolean;
     isUploader: boolean;
-    account: { accountName: string; accountHandle: string };
+    account: {
+      accountId: number;
+      accountName: string;
+      accountHandle: string;
+      avatarStoragePath?: string | null;
+    };
+  }
+
+  interface CommentNode extends Comment {
+    replies: CommentNode[];
   }
 
   interface UpNextCard {
@@ -172,16 +174,11 @@
     name: string;
   }
 
-  const players = [
-    { id: 'videojs', label: 'Video.js 10 (beta)' },
-    { id: 'svelte', label: 'Svelte Video Player' }
-  ] as const;
-  type PlayerId = (typeof players)[number]['id'];
-
-  let playerTab = $state<PlayerId>('videojs');
   let detail = $state<Detail | null>(null);
+  let captionTracksAvailable = $state<CaptionTrack[]>([]);
   let loadError = $state<string | null>(null);
   let comments = $state<Comment[]>([]);
+  let commentThreads = $derived.by(() => buildCommentThreads(comments));
   let commentTotal = $state(0);
   let commentsHaveMore = $state(false);
   let commentPage = $state(1);
@@ -207,12 +204,15 @@
   let moreMenuOpen = $state(false);
   let noteMenuOpen = $state(false);
   let moreMenuContainer = $state<HTMLDivElement | null>(null);
+  let versionMenuOpen = $state(false);
+  let versionMenuContainer = $state<HTMLDivElement | null>(null);
   let selectedVersion = $state('');
   let mediaVersionOptions = $state<MediaVersionOption[]>([{ value: '', name: 'Latest version' }]);
   let versionsLoading = $state(false);
   let streamChecking = $state(false);
   let streamError = $state<string | null>(null);
   let streamCheckSeq = 0;
+  const commentsPageSize = 100;
 
   // Playback modes persist across videos and sessions. Repeat wins over autoplay:
   // a looping video never fires "ended", so autoplay simply never triggers.
@@ -245,32 +245,42 @@
     }
   });
 
-  const playbackModes = $derived([
-    {
-      id: 'autoplay',
-      label: 'Autoplay',
-      title: 'Autoplay — play the next video when this one ends',
-      icon: ForwardStepOutline,
-      active: autoplayEnabled,
-      toggle: () => (autoplayEnabled = !autoplayEnabled)
-    },
-    {
-      id: 'repeat',
-      label: 'Repeat',
-      title: 'Repeat — keep replaying this video',
-      icon: ArrowsRepeatOutline,
-      active: repeatEnabled,
-      toggle: () => (repeatEnabled = !repeatEnabled)
-    },
-    {
-      id: 'shuffle',
-      label: 'Shuffle',
-      title: 'Shuffle — autoplay picks a random video instead of the next one',
-      icon: ShuffleOutline,
-      active: shuffleEnabled,
-      toggle: () => (shuffleEnabled = !shuffleEnabled)
-    }
-  ]);
+  function toggleRepeat() {
+    repeatEnabled = !repeatEnabled;
+  }
+
+  function toggleShuffle() {
+    shuffleEnabled = !shuffleEnabled;
+  }
+
+  $effect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) {
+        return;
+      }
+
+      const target = event.target;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        (target instanceof HTMLElement && target.isContentEditable)
+      ) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+      if (key === 'r') {
+        event.preventDefault();
+        toggleRepeat();
+      } else if (key === 's') {
+        event.preventDefault();
+        toggleShuffle();
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  });
 
   $effect(() => {
     if (!moreMenuOpen) {
@@ -295,6 +305,28 @@
     };
   });
 
+  $effect(() => {
+    if (!versionMenuOpen) {
+      return;
+    }
+    const onPointerDown = (event: PointerEvent) => {
+      if (versionMenuContainer && event.target instanceof Node && !versionMenuContainer.contains(event.target)) {
+        versionMenuOpen = false;
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        versionMenuOpen = false;
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  });
+
   const mediaGuid = $derived(page.params.mediaGuid ?? '');
   // Playlist context: ?ulist= plays through a user playlist, ?list= through a
   // platform (downloaded provider) playlist. Only one panel is shown; ulist wins.
@@ -304,6 +336,9 @@
     const query = selectedVersion ? `?version=${encodeURIComponent(selectedVersion)}` : '';
     return `/api/media/watch/${mediaGuid}${query}`;
   });
+  const selectedVersionLabel = $derived(
+    mediaVersionOptions.find((option) => option.value === selectedVersion)?.name ?? 'Latest version'
+  );
   const watched = $derived(watchState?.completed === true);
   const liked = $derived(likeState?.liked === true);
   // ?t= wins over the saved position; positions within the first 5s or last 5% are
@@ -332,11 +367,13 @@
     if (!current) {
       return [];
     }
-    return current.captionLanguages.map((caption) => ({
-      src: `/api/media/watch/${current.mediaGuid}/captions/${encodeURIComponent(caption.languageCode)}?captionType=${encodeURIComponent(caption.captionType)}`,
+    return captionTracksAvailable.map((caption) => ({
+      src: caption.url,
       srclang: caption.languageCode,
       label: captionSummary(caption),
-      kind: caption.captionType === 'automatic_captions' ? 'captions' : 'subtitles'
+      kind: caption.captionType === 'automatic_captions' ? 'captions' : 'subtitles',
+      renderer: caption.renderer,
+      sourceUrl: caption.sourceUrl
     }));
   });
 
@@ -357,6 +394,7 @@
 
   async function loadAll(guid: string) {
     detail = null;
+    captionTracksAvailable = [];
     loadError = null;
     comments = [];
     commentTotal = 0;
@@ -383,7 +421,8 @@
 
     await Promise.all([
       loadDetail(guid),
-      loadComments(guid, 1),
+      loadCaptionTracks(guid),
+      loadComments(guid),
       loadUpNext(guid),
       loadWatchState(guid),
       loadLikeState(guid),
@@ -604,25 +643,93 @@
     }
   }
 
-  async function loadComments(guid: string, target: number) {
+  async function loadCaptionTracks(guid: string) {
     try {
-      const response = await fetch(`/api/metadata/${guid}/comments?page=${target}&pageSize=20`);
-      if (!response.ok) {
-        return;
+      const tracks = await listCaptionTracks(guid);
+      if (guid === mediaGuid) {
+        captionTracksAvailable = tracks;
       }
-      const data = (await response.json()) as {
-        items: Comment[];
-        page: number;
-        totalCount: number;
-        hasMore: boolean;
-      };
-      comments = target === 1 ? data.items : [...comments, ...data.items];
-      commentTotal = data.totalCount;
-      commentsHaveMore = data.hasMore;
-      commentPage = data.page;
+    } catch {
+      // Captions are optional; playback and metadata can still load without them.
+    }
+  }
+
+  async function loadComments(guid: string) {
+    try {
+      const allComments: Comment[] = [];
+      let page = 1;
+      let totalCount = 0;
+
+      while (true) {
+        const response = await fetch(`/api/metadata/${guid}/comments?page=${page}&pageSize=${commentsPageSize}`);
+        if (!response.ok) {
+          return;
+        }
+
+        const data = (await response.json()) as {
+          items: Comment[];
+          page: number;
+          totalCount: number;
+          hasMore: boolean;
+        };
+
+        allComments.push(...data.items);
+        totalCount = data.totalCount;
+        commentPage = data.page;
+
+        if (!data.hasMore) {
+          break;
+        }
+
+        page += 1;
+      }
+
+      comments = allComments;
+      commentTotal = totalCount;
+      commentsHaveMore = false;
     } catch {
       // Comments are secondary; the player is the page's real content.
     }
+  }
+
+  function buildCommentThreads(items: Comment[]): CommentNode[] {
+    const nodes = new Map<string, CommentNode>();
+    const roots: CommentNode[] = [];
+
+    for (const comment of items) {
+      nodes.set(comment.commentId, { ...comment, replies: [] });
+    }
+
+    for (const node of nodes.values()) {
+      const parentId = node.parentCommentId?.trim();
+      const parent = parentId ? nodes.get(parentId) : null;
+      if (parent) {
+        parent.replies.push(node);
+      } else {
+        roots.push(node);
+      }
+    }
+
+    const compare = (left: CommentNode, right: CommentNode) =>
+      (right.isPinned ? 1 : 0) - (left.isPinned ? 1 : 0) ||
+      new Date(right.commentTimestamp).getTime() - new Date(left.commentTimestamp).getTime() ||
+      left.commentId.localeCompare(right.commentId);
+
+    const compareReplies = (left: CommentNode, right: CommentNode) =>
+      new Date(left.commentTimestamp).getTime() - new Date(right.commentTimestamp).getTime() ||
+      left.commentId.localeCompare(right.commentId);
+
+    const sortTree = (nodesToSort: CommentNode[], isReplyLevel: boolean) => {
+      nodesToSort.sort(isReplyLevel ? compareReplies : compare);
+      for (const node of nodesToSort) {
+        if (node.replies.length > 0) {
+          sortTree(node.replies, true);
+        }
+      }
+    };
+
+    sortTree(roots, false);
+    return roots;
   }
 
   async function loadUpNext(guid: string) {
@@ -702,7 +809,7 @@
       .join(' · ');
   }
 
-  function captionSummary(caption: CaptionLanguage): string {
+  function captionSummary(caption: CaptionTrack): string {
     const label = caption.name || caption.languageCode;
     return caption.captionType === 'automatic_captions' ? `${label} (auto)` : label;
   }
@@ -765,7 +872,7 @@
     push('External ID', detail.externalMediaId);
     push(
       'Captions',
-      detail.captionLanguages.length > 0 ? detail.captionLanguages.map(captionSummary).join(', ') : null
+      captionTracksAvailable.length > 0 ? captionTracksAvailable.map(captionSummary).join(', ') : null
     );
     push('Metadata archived', formatFullDate(detail.metadataScrapedAt));
     return rows;
@@ -794,65 +901,6 @@
 
 <div class="grid gap-8 xl:grid-cols-[minmax(0,1fr)_360px]">
   <section class="min-w-0" aria-label="Video player">
-    <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-      <div class="flex flex-1 gap-1 rounded-xl border border-slate-800/70 bg-slate-900/40 p-1" role="tablist" aria-label="Player implementation">
-        {#each players as p}
-          <button
-            type="button"
-            role="tab"
-            aria-selected={playerTab === p.id}
-            onclick={() => (playerTab = p.id)}
-            class={[
-              'flex-1 rounded-lg px-4 py-2 text-xs font-semibold transition',
-              playerTab === p.id
-                ? 'bg-blue-500/15 text-blue-400'
-                : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-300'
-            ]}
-          >
-            {p.label}
-          </button>
-        {/each}
-      </div>
-      <div class="flex items-center gap-2">
-        <div
-          class="flex gap-1 rounded-xl border border-slate-800/70 bg-slate-900/40 p-1"
-          role="group"
-          aria-label="Playback modes"
-        >
-          {#each playbackModes as mode (mode.id)}
-            <button
-              type="button"
-              onclick={mode.toggle}
-              aria-pressed={mode.active}
-              aria-label={mode.label}
-              title={mode.title}
-              class={[
-                'grid h-8 w-9 place-items-center rounded-lg transition',
-                mode.active
-                  ? 'bg-blue-500/15 text-blue-400'
-                  : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-300'
-              ]}
-            >
-              <mode.icon class="h-4 w-4" />
-            </button>
-          {/each}
-        </div>
-        {#if versionsLoading}
-          <span class="flex items-center gap-2 rounded-xl border border-slate-800/70 bg-slate-900/40 px-3 py-2 text-xs text-slate-500">
-            <Spinner size="4" />
-            Versions
-          </span>
-        {:else}
-          <Select
-            items={mediaVersionOptions}
-            bind:value={selectedVersion}
-            aria-label="Media version"
-            class="w-full border-slate-800! bg-slate-900/80! text-sm! text-slate-300! focus:border-blue-500! focus:ring-blue-500! sm:w-44!"
-          />
-        {/if}
-      </div>
-    </div>
-
     {#if loadError}
       <div
         class="flex aspect-video items-center justify-center gap-2 rounded-2xl border border-red-900/60 bg-red-950/30 p-6 text-sm text-red-300"
@@ -876,29 +924,21 @@
             </div>
           </div>
         {:else}
-          {#key `${mediaGuid}:${playerTab}:${selectedVersion}`}
-            {#if playerTab === 'videojs'}
-              <VideoJs10Player
-                src={streamUrl}
-                poster={posterUrl}
-                tracks={captionTracks}
-                startTime={resumeTime}
-                loop={repeatEnabled}
-                autoplay={autoplayEnabled}
-                onProgress={handlePlaybackProgress}
-                onEnded={handlePlaybackEnded}
-              />
-            {:else}
-              <SveltePlayer
-                src={streamUrl}
-                poster={posterUrl}
-                startTime={resumeTime}
-                loop={repeatEnabled}
-                autoplay={autoplayEnabled}
-                onProgress={handlePlaybackProgress}
-                onEnded={handlePlaybackEnded}
-              />
-            {/if}
+          {#key `${mediaGuid}:${selectedVersion}`}
+            <VideoJs10Player
+              src={streamUrl}
+              poster={posterUrl}
+              tracks={captionTracks}
+              startTime={resumeTime}
+              loop={repeatEnabled}
+              autoplay={autoplayEnabled}
+              {repeatEnabled}
+              {shuffleEnabled}
+              onToggleRepeat={toggleRepeat}
+              onToggleShuffle={toggleShuffle}
+              onProgress={handlePlaybackProgress}
+              onEnded={handlePlaybackEnded}
+            />
           {/key}
         {/if}
       </div>
@@ -987,16 +1027,66 @@
             {mediaGuid}
             title={detail.title}
             posterUrl={posterUrl}
-            captionLanguages={detail.captionLanguages}
+            captionLanguages={captionTracksAvailable}
             position={livePosition}
           />
-          <Button
-            color="dark"
-            class="border-slate-800! bg-slate-900/70! px-4! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800!"
-          >
-            <ShareNodesOutline class="mr-1.5 h-4 w-4" />
-            Share
-          </Button>
+          <div class="relative" bind:this={versionMenuContainer}>
+            <button
+              type="button"
+              onclick={() => (versionMenuOpen = !versionMenuOpen)}
+              aria-haspopup="menu"
+              aria-expanded={versionMenuOpen}
+              disabled={versionsLoading}
+              class={[
+                'flex items-center gap-1.5 rounded-lg border px-4 py-2 text-xs font-semibold transition disabled:cursor-wait disabled:opacity-60',
+                versionMenuOpen
+                  ? 'border-blue-900/60 bg-blue-950/40 text-blue-300 hover:bg-blue-950/60'
+                  : 'border-slate-800 bg-slate-900/70 text-slate-300 hover:bg-slate-800'
+              ]}
+            >
+              {#if versionsLoading}
+                <Spinner size="4" />
+                Versions
+              {:else}
+                Version
+                <span class="max-w-24 truncate text-slate-500">{selectedVersionLabel}</span>
+                <ChevronDownOutline class="h-3.5 w-3.5" />
+              {/if}
+            </button>
+
+            {#if versionMenuOpen}
+              <div
+                class="absolute right-0 z-30 mt-2 w-64 rounded-xl border border-slate-800 bg-slate-950/95 p-2 shadow-2xl shadow-black/50 backdrop-blur"
+                role="menu"
+                aria-label="Select media version"
+              >
+                <div class="space-y-1">
+                  {#each mediaVersionOptions as option (option.value)}
+                    <button
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={selectedVersion === option.value}
+                      onclick={() => {
+                        selectedVersion = option.value;
+                        versionMenuOpen = false;
+                      }}
+                      class={[
+                        'flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition',
+                        selectedVersion === option.value
+                          ? 'bg-blue-500/15 text-blue-300'
+                          : 'text-slate-200 hover:bg-slate-800/70'
+                      ]}
+                    >
+                      <span class="truncate">{option.name}</span>
+                      {#if selectedVersion === option.value}
+                        <CheckCircleSolid class="h-4 w-4 shrink-0 text-blue-400" />
+                      {/if}
+                    </button>
+                  {/each}
+                </div>
+              </div>
+            {/if}
+          </div>
           <SaveToPlaylistButton {mediaGuid} />
           <div class="relative" bind:this={moreMenuContainer}>
             <button
@@ -1295,49 +1385,15 @@
           {commentTotal > 0 ? `${commentTotal} comments` : 'Comments'}
         </h2>
 
-        {#if comments.length === 0}
+        {#if commentThreads.length === 0}
           <p class="mt-4 text-sm text-slate-500">No comments were archived for this video.</p>
         {:else}
-          <ul class="mt-5 space-y-6">
-            {#each comments as comment (comment.commentId)}
-              <li class="flex gap-3">
-                <span
-                  class={`mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br ${accentFor(comment.account.accountName)} text-[10px] font-bold text-white`}
-                >
-                  {initialsFor(comment.account.accountName)}
-                </span>
-                <div class="min-w-0">
-                  <p class="flex flex-wrap items-center gap-2 text-xs">
-                    <span class="font-semibold text-slate-200">{comment.account.accountName}</span>
-                    {#if comment.isUploader}
-                      <span class="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-400">Creator</span>
-                    {/if}
-                    {#if comment.isPinned}
-                      <span class="text-[10px] font-semibold text-slate-500">Pinned</span>
-                    {/if}
-                    <span class="text-slate-600">{formatRelativeDate(comment.commentTimestamp)}</span>
-                  </p>
-                  <p class="mt-1 whitespace-pre-line text-sm leading-6 text-slate-300">{comment.text}</p>
-                  {#if comment.likeCount}
-                    <p class="mt-1.5 flex items-center gap-1.5 text-xs text-slate-600">
-                      <ThumbsUpOutline class="h-3.5 w-3.5" />
-                      {formatCount(comment.likeCount)}
-                    </p>
-                  {/if}
-                </div>
-              </li>
+          <div class="mt-5 space-y-6">
+            {#each commentThreads as comment (comment.commentId)}
+              <WatchComment comment={comment} />
             {/each}
-          </ul>
+          </div>
 
-          {#if commentsHaveMore}
-            <Button
-              color="dark"
-              onclick={() => loadComments(mediaGuid, commentPage + 1)}
-              class="mt-6 border-slate-700! bg-slate-900! px-4! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800!"
-            >
-              Load more comments
-            </Button>
-          {/if}
         {/if}
       </section>
     {:else if !loadError}
@@ -1360,6 +1416,30 @@
         {/key}
       </div>
     {/if}
+
+    <div class="mb-5 flex items-center justify-between gap-3 rounded-xl border border-slate-800/80 bg-slate-900/40 px-4 py-3">
+      <span class="text-sm font-semibold text-slate-300">Autoplay</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={autoplayEnabled}
+        title="Autoplay - play the next video when this one ends"
+        onclick={() => (autoplayEnabled = !autoplayEnabled)}
+        class={[
+          'relative h-6 w-11 rounded-full border transition',
+          autoplayEnabled
+            ? 'border-blue-500/50 bg-blue-500/80'
+            : 'border-slate-700 bg-slate-950/80 hover:border-slate-600'
+        ]}
+      >
+        <span
+          class={[
+            'absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-white shadow-sm transition',
+            autoplayEnabled ? 'left-6' : 'left-1'
+          ]}
+        ></span>
+      </button>
+    </div>
 
     <h2 class="text-sm font-bold uppercase tracking-[0.08em] text-slate-500">Up next</h2>
     <ul class="mt-4 space-y-4">

@@ -1,5 +1,4 @@
 using NodaTime;
-using Shared.Messaging;
 
 namespace Shared.Database;
 
@@ -27,13 +26,7 @@ public sealed class DownloadConfigSetEntity
     /// </summary>
     public string? IgnoreKeywordsJson { get; set; }
 
-    public bool EncodeForPlaylist { get; set; }
-
-    public AudioRenditionFormat AudioFormat { get; set; } = AudioRenditionFormat.Aac;
-
     public int Priority { get; set; }
-
-    public bool FetchComments { get; set; }
 
     public Instant CreatedAt { get; private set; } = SystemClock.Instance.GetCurrentInstant();
 

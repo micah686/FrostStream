@@ -49,7 +49,7 @@ public sealed class WebApiHttpTests
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(
             HttpMethod.Get,
-            $"/stream/{mediaGuid}?storageKey=storage-a");
+            $"/api/media/watch/{mediaGuid}?storageKey=storage-a");
         request.Headers.Range = new RangeHeaderValue(2, 4);
 
         using var response = await client.SendAsync(request);
@@ -104,7 +104,7 @@ public sealed class WebApiHttpTests
         using var factory = new TestWebApiFactory();
         using var client = factory.CreateClient();
 
-        var response = await client.PostAsJsonAsync("/api/schedules", new
+        var response = await client.PostAsJsonAsync("/api/global/schedules", new
         {
             key = "daily-refresh",
             taskType = "channel_asset_refresh",
@@ -122,7 +122,7 @@ public sealed class WebApiHttpTests
         using var factory = new TestWebApiFactory();
         using var client = factory.CreateClient();
 
-        var response = await client.PutAsJsonAsync("/api/cookies/member-cookie", new
+        var response = await client.PutAsJsonAsync("/api/user/cookies/member-cookie", new
         {
             content = "# Netscape HTTP Cookie File",
             site = "example.com"
@@ -230,6 +230,14 @@ internal sealed class FakeMessageBus : IMessageBus
         TimeSpan timeout,
         CancellationToken cancellationToken = default)
     {
+        if (subject == MediaAccessSubjects.Check && request is MediaAccessCheckRequestMessage)
+        {
+            return Task.FromResult((TResponse?)(object)new MediaAccessCheckResponseMessage
+            {
+                IsAllowed = true
+            });
+        }
+
         if (subject == MediaStreamSubjects.Resolve &&
             request is MediaStreamResolveRequestMessage mediaStreamRequest &&
             MediaStreamResponse is not null)

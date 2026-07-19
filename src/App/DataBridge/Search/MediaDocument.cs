@@ -28,6 +28,14 @@ public sealed record MediaDocument
     [JsonPropertyName("release_date_sort")]
     public long ReleaseDateSort { get; init; }
 
+    /// <summary>
+    /// When FrostStream actually scraped/ingested this metadata (metadata.media_metadata.metadata_scrape_date),
+    /// as opposed to <see cref="ReleaseDateSort"/> which is the source's own publish/upload date. This is
+    /// what "Recently added" sorts by.
+    /// </summary>
+    [JsonPropertyName("added_at_sort")]
+    public long AddedAtSort { get; init; }
+
     [JsonPropertyName("view_count")]
     public long? ViewCount { get; init; }
 

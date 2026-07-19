@@ -62,10 +62,40 @@ export interface StateFrame {
   occurredAt: string;
 }
 
+export interface DownloadQueueHistoryEntry {
+  id: number;
+  messageId: string;
+  operationKey: string;
+  eventName: string;
+  payloadJson: string | null;
+  recordedAt: string;
+}
+
 const BASE = '/api/downloads/queue';
 
 export const queueStreamUrl = (): string => `${BASE}/stream`;
 export const jobProgressUrl = (jobId: string): string => `${BASE}/${jobId}/progress`;
+
+export async function fetchJobHistory(
+  jobId: string,
+  fetchImpl: typeof fetch = fetch
+): Promise<DownloadQueueHistoryEntry[]> {
+  return getJson<DownloadQueueHistoryEntry[]>(`${BASE}/${jobId}/history`, fetchImpl);
+}
+
+/** Resolves a completed job to the media item it produced, or null when none is available
+ *  (the job never produced media, or a later re-download of the same source superseded it). */
+export async function fetchJobMediaGuid(jobId: string, fetchImpl: typeof fetch = fetch): Promise<string | null> {
+  const response = await fetchImpl(`${BASE}/${jobId}/media`, { credentials: 'same-origin' });
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    throw new Error(await describeError(response, `GET ${BASE}/${jobId}/media failed with status ${response.status}.`));
+  }
+  const body = (await response.json()) as { mediaGuid: string };
+  return body.mediaGuid;
+}
 
 export async function fetchQueue(
   params: QueueListParams = {},

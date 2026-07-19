@@ -1,12 +1,15 @@
 ﻿using Conduit.NATS;
+using MediaProcessor.Audio;
+using MediaProcessor.Ffmpeg;
+using MediaProcessor.Storage;
+using MediaProcessor.Video;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Hosting.Internal;
 using NATS.Client.Core;
+using NodaTime;
 using Shared.Messaging;
-using Shared.Secrets;
-using Shared.Storage;
 
 namespace MediaProcessor;
 
@@ -30,11 +33,13 @@ class Program
         });
 
         builder.Services.AddNatsTopologySource<BackgroundJobsTopology>();
-        builder.Services.AddOpenBaoSecretStore(builder.Configuration);
-        builder.Services.AddFrostStreamStorage();
         builder.Services.AddOptions<MediaProcessorOptions>()
             .Bind(builder.Configuration.GetSection(MediaProcessorOptions.SectionName));
+        builder.Services.AddHttpClient<MediaProcessorStorageClient>();
+        builder.Services.AddSingleton<IClock>(SystemClock.Instance);
+        builder.Services.AddSingleton<FfmpegRunner>();
         builder.Services.AddHostedService<AudioRenditionProcessorService>();
+        builder.Services.AddHostedService<StreamRenditionProcessorService>();
 
         // Force ConsoleLifetime so Ctrl+C / SIGTERM triggers StopAsync on hosted services
         builder.Services.AddSingleton<IHostLifetime, ConsoleLifetime>();

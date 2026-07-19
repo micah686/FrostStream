@@ -20,11 +20,6 @@ public sealed class PlaylistConfiguration : IEntityTypeConfiguration<PlaylistEnt
         builder.Property(x => x.StorageKey).HasColumnName("storage_key").HasMaxLength(100);
         builder.Property(x => x.ConfigSetKey).HasColumnName("config_set_key").HasMaxLength(100);
         builder.Property(x => x.EncodeForPlaylist).HasColumnName("encode_for_playlist").HasDefaultValue(false).IsRequired();
-        builder.Property(x => x.AudioFormat)
-            .HasColumnName("audio_format")
-            .HasColumnType("media.audio_rendition_format")
-            .HasDefaultValue(AudioRenditionFormat.Aac)
-            .IsRequired();
         builder.Property(x => x.CookieSecretPath).HasColumnName("cookie_secret_path").HasMaxLength(512);
         builder.Property(x => x.YtDlpOptionsJson).HasColumnName("ytdlp_options_json").HasColumnType("jsonb");
         builder.Property(x => x.Priority).HasColumnName("priority").HasDefaultValue(0).IsRequired();

@@ -31,7 +31,7 @@ internal sealed class DownloadProgressReporter(
             Attempt = command.Attempt,
             Sequence = sequence,
             SourceUrl = command.SourceUrl,
-            Phase = value.Phase.ToString(),
+            Phase = MapPhase(value.Phase),
             Percent = value.Percent,
             DownloadedBytes = value.DownloadedBytes,
             TotalBytes = value.TotalBytes,
@@ -74,6 +74,37 @@ internal sealed class DownloadProgressReporter(
         }
     }
 
+    /// <summary>
+    /// Publishes a synthetic advisory progress frame not sourced from yt-dlp's own progress hook —
+    /// used to surface Worker-driven state (e.g. "retrying without sidecar content") live on the Jobs
+    /// page, the same way yt-dlp's own phases are.
+    /// </summary>
+    public Task ReportPhaseAsync(string phase, string message)
+    {
+        var sequence = Interlocked.Increment(ref _sequence);
+        var frame = new DownloadProgress
+        {
+            JobId = command.JobId,
+            CorrelationId = command.CorrelationId,
+            CausationId = command.MessageId,
+            MessageId = DeterministicGuid.Create(command.MessageId, $"/progress/{sequence.ToString(CultureInfo.InvariantCulture)}"),
+            OperationKey = $"{command.OperationKey}/progress/{sequence.ToString(CultureInfo.InvariantCulture)}",
+            OccurredAt = clock.GetCurrentInstant(),
+            Attempt = command.Attempt,
+            Sequence = sequence,
+            SourceUrl = command.SourceUrl,
+            Phase = phase,
+            Message = message
+        };
+
+        var task = PublishProgressAsync(frame);
+        lock (_gate)
+        {
+            _publishes.Add(task);
+        }
+        return task;
+    }
+
     public Task FlushAsync()
     {
         Task[] publishes;
@@ -102,6 +133,19 @@ internal sealed class DownloadProgressReporter(
                 message.Sequence);
         }
     }
+
+    /// <summary>
+    /// yt-dlp's terminal phases only mean the *download* is done — the job still has upload and DB
+    /// commit ahead of it. Renaming them keeps "Completed" reserved for the job's true end state
+    /// (<see cref="DownloadJobState.Completed"/>), so the Jobs page never shows a completed-looking
+    /// pill while sidecars are still uploading.
+    /// </summary>
+    private static string MapPhase(ProgressPhase phase) => phase switch
+    {
+        ProgressPhase.Finished => "DownloadFinished",
+        ProgressPhase.Completed => "DownloadCompleted",
+        _ => phase.ToString()
+    };
 
     private static string FormatPercent(double? percent)
         => percent is { } value

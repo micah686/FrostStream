@@ -6,7 +6,7 @@ namespace AppHost;
 /// <list type="bullet">
 /// <item><b>External, 25xy0</b> — host-published in run mode and in the compose export
 /// (browser/host-facing: UIs, the API, DB access). x = service, y = extra endpoints of the
-/// same service. Overridable via <c>PORT_*</c> in aspire-development.env.</item>
+/// same service. Overridable via <c>PORT_*</c> in the generated Aspire dev env.</item>
 /// <item><b>Internal, 240xy</b> — container-to-container services. The compose export never
 /// publishes these; they exist only so <c>aspire run</c> binds deterministic localhost ports
 /// (and standalone `dotnet run` fallbacks can rely on them). x = service, y = extra endpoints.</item>

@@ -1,172 +1,39 @@
-using System.Collections.Concurrent;
-using System.Text.Json;
-using Microsoft.Extensions.Options;
 using Shared.Backups;
 using WebAPI.Features.Backups.Models;
 
 namespace WebAPI.Features.Backups;
 
-public sealed class BackupJobService(
-    IOptions<BackupOptions> options,
-    IConfiguration configuration,
-    ILogger<BackupJobService> logger)
+public sealed class BackupJobService(IBackupServiceClient client)
 {
-    private static readonly string[] KnownModes = ["snapshot", "full", "wal-archive"];
+    public async Task<BackupJobResponse> StartBackupAsync(
+        string? name,
+        string? mode,
+        CancellationToken cancellationToken)
+        => ToResponse(await client.CreateAsync(name, mode, cancellationToken));
 
-    private readonly ConcurrentDictionary<Guid, BackupJobRecord> _jobs = new();
-    private readonly BackupToolClient _client = new(options.Value, configuration);
+    public async Task<IReadOnlyList<BackupJobResponse>> ListJobsAsync(CancellationToken cancellationToken)
+        => (await client.ListJobsAsync(cancellationToken)).Select(ToResponse).ToArray();
 
-    public IReadOnlyList<BackupJobResponse> ListJobs()
-        => _jobs.Values
-            .OrderByDescending(x => x.CreatedAt)
-            .Select(ToResponse)
+    public async Task<BackupJobResponse?> GetJobAsync(Guid jobId, CancellationToken cancellationToken)
+        => await client.GetJobAsync(jobId, cancellationToken) is { } job ? ToResponse(job) : null;
+
+    public async Task<IReadOnlyList<BackupSummaryResponse>> ListBackupsAsync(CancellationToken cancellationToken)
+        => (await client.ListArchivesAsync(cancellationToken))
+            .Select(x => new BackupSummaryResponse(x.ArchivePath, x.CreatedAt, x.MediaIncluded, x.SchemaVersion, x.Mode))
             .ToArray();
 
-    public BackupJobResponse? GetJob(Guid jobId)
-        => _jobs.TryGetValue(jobId, out var job) ? ToResponse(job) : null;
-
-    public BackupJobResponse StartBackup(string? requestedName, string? requestedMode = null)
+    public async Task<VerifyBackupResponse> VerifyAsync(string archivePath, CancellationToken cancellationToken)
     {
-        Directory.CreateDirectory(options.Value.Directory);
-
-        var mode = NormalizeMode(requestedMode);
-        var jobId = Guid.NewGuid();
-        var name = string.IsNullOrWhiteSpace(requestedName)
-            ? jobId.ToString("N")
-            : requestedName.Trim();
-        var job = new BackupJobRecord(jobId, "queued", null, null, DateTimeOffset.UtcNow, null);
-        _jobs[jobId] = job;
-
-        _ = Task.Run(async () =>
-        {
-            Update(jobId, job with { Status = "running" });
-            try
-            {
-                var output = await _client.RunAsync(["create", "--output", options.Value.Directory, "--name", name, "--mode", mode]);
-                var archivePath = output.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
-                Update(jobId, job with
-                {
-                    Status = "completed",
-                    ArchivePath = archivePath,
-                    CompletedAt = DateTimeOffset.UtcNow
-                });
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Backup job {JobId} failed.", jobId);
-                Update(jobId, job with
-                {
-                    Status = "failed",
-                    ErrorMessage = ex.Message,
-                    CompletedAt = DateTimeOffset.UtcNow
-                });
-            }
-        });
-
-        return ToResponse(job);
+        var result = await client.VerifyAsync(archivePath, cancellationToken);
+        return new VerifyBackupResponse(result.Success, result.ErrorMessage);
     }
 
-    public IReadOnlyList<BackupSummaryResponse> ListBackups()
+    public async Task<RestorePlanResponse> BuildRestorePlanAsync(string archivePath, CancellationToken cancellationToken)
     {
-        if (!Directory.Exists(options.Value.Directory))
-            return [];
-
-        var results = new List<BackupSummaryResponse>();
-        foreach (var manifestPath in Directory.EnumerateFiles(options.Value.Directory, "manifest.json", SearchOption.AllDirectories))
-        {
-            try
-            {
-                using var doc = JsonDocument.Parse(File.ReadAllText(manifestPath));
-                var root = doc.RootElement;
-                results.Add(new BackupSummaryResponse(
-                    Path.GetDirectoryName(manifestPath) ?? options.Value.Directory,
-                    root.TryGetProperty("createdAtUtc", out var created) && created.TryGetDateTimeOffset(out var createdAt) ? createdAt : null,
-                    root.TryGetProperty("mediaIncluded", out var mediaIncluded) && mediaIncluded.GetBoolean(),
-                    root.TryGetProperty("schemaVersion", out var version) ? version.GetInt32() : 0,
-                    root.TryGetProperty("mode", out var mode) ? mode.GetString() ?? "Snapshot" : "Snapshot"));
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "Skipping invalid backup manifest {ManifestPath}.", manifestPath);
-            }
-        }
-
-        return results.OrderByDescending(x => x.CreatedAt).ToArray();
+        var result = await client.BuildRestorePlanAsync(archivePath, cancellationToken);
+        return new RestorePlanResponse(result.PreflightOk, result.RestoreCommand, result.ErrorMessage);
     }
 
-    public async Task<VerifyBackupResponse> VerifyAsync(string archivePath)
-    {
-        try
-        {
-            await _client.RunAsync(["verify", "--archive", archivePath]);
-            return new VerifyBackupResponse(true, null);
-        }
-        catch (Exception ex)
-        {
-            return new VerifyBackupResponse(false, ex.Message);
-        }
-    }
-
-    public async Task<RestorePlanResponse> BuildRestorePlanAsync(string archivePath)
-    {
-        var verify = await VerifyAsync(archivePath);
-        var command = _client.BuildCommandString(BuildRestoreArguments(archivePath));
-        return new RestorePlanResponse(verify.Success, command, verify.ErrorMessage);
-    }
-
-    /// <summary>
-    /// Restore arguments differ by backup mode. Snapshot restores run against a live server;
-    /// full/PITR restores rebuild a data directory offline and need operator-supplied placeholders.
-    /// </summary>
-    private IReadOnlyList<string> BuildRestoreArguments(string archivePath)
-    {
-        var mode = ReadManifestMode(archivePath);
-        return mode.ToLowerInvariant() switch
-        {
-            "full" or "walarchive" or "wal-archive" =>
-            [
-                "restore", "--archive", archivePath, "--force",
-                "--pgdata", "<PGDATA>", "--pg-ctl", "<pg_ctl>",
-                "--target-time", "<YYYY-MM-DD HH:MM:SS+00>"
-            ],
-            _ => ["restore", "--archive", archivePath, "--force"]
-        };
-    }
-
-    private string ReadManifestMode(string archivePath)
-    {
-        try
-        {
-            var manifestPath = Path.Combine(archivePath, "manifest.json");
-            if (!File.Exists(manifestPath))
-                return "Snapshot";
-            using var doc = JsonDocument.Parse(File.ReadAllText(manifestPath));
-            return doc.RootElement.TryGetProperty("mode", out var mode) ? mode.GetString() ?? "Snapshot" : "Snapshot";
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Could not read backup mode from manifest at {ArchivePath}.", archivePath);
-            return "Snapshot";
-        }
-    }
-
-    private static string NormalizeMode(string? requestedMode)
-    {
-        var mode = requestedMode?.Trim().ToLowerInvariant();
-        return string.IsNullOrEmpty(mode) || !KnownModes.Contains(mode) ? "snapshot" : mode;
-    }
-
-    private void Update(Guid jobId, BackupJobRecord record)
-        => _jobs[jobId] = record;
-
-    private static BackupJobResponse ToResponse(BackupJobRecord record)
-        => new(record.JobId, record.Status, record.ArchivePath, record.ErrorMessage, record.CreatedAt, record.CompletedAt);
-
-    private sealed record BackupJobRecord(
-        Guid JobId,
-        string Status,
-        string? ArchivePath,
-        string? ErrorMessage,
-        DateTimeOffset CreatedAt,
-        DateTimeOffset? CompletedAt);
+    private static BackupJobResponse ToResponse(BackupJobDto job)
+        => new(job.JobId, job.Status, job.ArchivePath, job.ErrorMessage, job.CreatedAt, job.CompletedAt);
 }

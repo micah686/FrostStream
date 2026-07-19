@@ -1,36 +1,89 @@
-using System.Security.Claims;
-using Conduit.NATS;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Shared.Auth;
-using Shared.Messaging;
 using WebAPI.Auth;
 
 namespace WebAPI.Features.Auth.Controllers;
 
 [ApiController]
 [Route("api/auth")]
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class AuthController(
     IConfiguration configuration,
-    IMessageBus messageBus,
-    IOpenFgaTupleWriter tupleWriter,
-    ILogger<AuthController> logger) : ControllerBase
+    ISessionSynchronizationService sessionSynchronization,
+    IAntiforgery antiforgery) : ControllerBase
 {
-    private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);
-
     [HttpGet("config")]
     [AllowAnonymous]
     [EndpointSummary("Get authentication configuration")]
-    [EndpointDescription("Returns the active FrostStream authentication mode and non-secret client configuration needed by the frontend. The endpoint is intentionally anonymous so the UI can decide whether to use single-user mode or start the external OIDC login flow before calling protected API routes.")]
+    [EndpointDescription("Returns only the active FrostStream authentication mode. The endpoint intentionally exposes no identity-provider authority, audience, client secret, token endpoint, or refresh details.")]
     public ActionResult<AuthConfigResponse> GetConfig()
     {
         var singleUserMode = AuthMode.IsSingleUserMode(configuration);
         return Ok(new AuthConfigResponse
         {
-            Mode = singleUserMode ? "single-user" : "multi-user",
-            Authority = singleUserMode ? null : configuration["Auth:Authority"],
-            Audience = configuration["Auth:Audience"] ?? "froststream-api"
+            Mode = singleUserMode ? "single-user" : "multi-user"
         });
+    }
+
+    [HttpGet("me")]
+    [Authorize(Policy = AuthPolicies.Authenticated)]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [EndpointSummary("Get the current browser or API session")]
+    [EndpointDescription("Returns the authenticated user's non-secret profile, groups, authentication mode, and session expiration. OAuth tokens and internal identity-provider details are never returned.")]
+    public ActionResult<AuthMeResponse> GetMe()
+    {
+        var subject = AuthConstants.FindSubject(User);
+        if (subject is null)
+        {
+            return Unauthorized();
+        }
+
+        var groups = User.FindAll(AuthConstants.GroupsClaim)
+            .Select(claim => claim.Value)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var name = FirstNonBlank(
+            User.FindFirst(AuthConstants.PreferredUsernameClaim)?.Value,
+            User.FindFirst("name")?.Value,
+            User.Identity?.Name,
+            subject) ?? subject;
+        var expiresAt = DateTimeOffset.TryParse(
+            HttpContext.Features.Get<Microsoft.AspNetCore.Authentication.IAuthenticateResultFeature>()?
+                .AuthenticateResult?.Properties?.GetTokenValue("expires_at"),
+            out var parsedExpiration)
+            ? parsedExpiration
+            : (DateTimeOffset?)null;
+
+        return Ok(new AuthMeResponse
+        {
+            Mode = AuthMode.IsSingleUserMode(configuration) ? "single-user" : "multi-user",
+            Authenticated = true,
+            Profile = new AuthProfileResponse
+            {
+                Subject = subject,
+                Name = name,
+                Username = User.FindFirst(AuthConstants.PreferredUsernameClaim)?.Value,
+                Email = User.FindFirst("email")?.Value,
+                Groups = groups,
+                Initials = Initials(name)
+            },
+            ExpiresAt = expiresAt
+        });
+    }
+
+    [HttpGet("csrf")]
+    [Authorize(Policy = AuthPolicies.Authenticated)]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [EndpointSummary("Issue a browser CSRF request token")]
+    [EndpointDescription("Creates or refreshes the same-origin antiforgery cookie and returns the request token that browser clients must send in the X-CSRF-TOKEN header on unsafe cookie-authenticated requests.")]
+    public ActionResult<AuthCsrfResponse> GetCsrf()
+    {
+        var tokens = antiforgery.GetAndStoreTokens(HttpContext);
+        return Ok(new AuthCsrfResponse { Token = tokens.RequestToken! });
     }
 
     /// <summary>
@@ -44,88 +97,47 @@ public sealed class AuthController(
     [EndpointDescription("Upserts the local user record keyed by the Authentik subject and refreshes the user's OpenFGA group membership tuples. Intended to be called server-side by the frontend BFF immediately after the OIDC code exchange and on token refresh.")]
     public async Task<ActionResult<AuthSessionResponse>> SyncSession(CancellationToken cancellationToken)
     {
-        var subject = AuthConstants.FindSubject(User);
-        if (subject is null)
+        var result = await sessionSynchronization.SynchronizeAsync(User, cancellationToken);
+        if (!result.Success && string.IsNullOrEmpty(result.Subject))
         {
             return Unauthorized();
         }
 
-        var groups = User.FindAll(AuthConstants.GroupsClaim)
-            .Select(claim => claim.Value)
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-
-        var displayName = FirstNonBlank(
-            User.FindFirst(AuthConstants.PreferredUsernameClaim)?.Value,
-            User.FindFirst("name")?.Value,
-            User.FindFirst(ClaimTypes.Name)?.Value,
-            subject) ?? subject;
-
-        var email = FirstNonBlank(
-            User.FindFirst("email")?.Value,
-            User.FindFirst(ClaimTypes.Email)?.Value);
-
-        Guid userId;
-        try
+        if (!result.Success)
         {
-            var response = await messageBus.RequestAsync<UserSessionUpsertRequestMessage, UserSessionUpsertResponseMessage>(
-                UserSessionSubjects.Upsert,
-                new UserSessionUpsertRequestMessage
-                {
-                    Subject = subject,
-                    DisplayName = displayName,
-                    Email = email,
-                    Groups = groups
-                },
-                RequestTimeout,
-                cancellationToken);
-
-            if (response is null || !response.Success)
-            {
-                logger.LogWarning("User upsert failed for subject {Subject}: {Error}", subject, response?.ErrorMessage);
-                return StatusCode(StatusCodes.Status502BadGateway, "Failed to persist the user session.");
-            }
-
-            userId = response.UserId;
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed requesting user upsert for subject {Subject}", subject);
-            return StatusCode(StatusCodes.Status503ServiceUnavailable, "User service is unavailable.");
-        }
-
-        // Group tuple sync is best-effort: a failure here should not break login. It is logged and
-        // retried on the next session sync.
-        try
-        {
-            await tupleWriter.SyncUserGroupsAsync(subject, groups, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Failed syncing OpenFGA group tuples for subject {Subject}", subject);
+            return StatusCode(
+                result.ServiceUnavailable ? StatusCodes.Status503ServiceUnavailable : StatusCodes.Status502BadGateway,
+                result.ErrorMessage);
         }
 
         return Ok(new AuthSessionResponse
         {
-            UserId = userId,
-            Subject = subject,
-            DisplayName = displayName,
-            Groups = groups
+            UserId = result.UserId,
+            Subject = result.Subject,
+            DisplayName = result.DisplayName,
+            Groups = result.Groups
         });
     }
 
     private static string? FirstNonBlank(params string?[] values)
         => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
+
+    private static string Initials(string name)
+    {
+        var words = name.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return words.Length switch
+        {
+            0 => "?",
+            1 => words[0][..1].ToUpperInvariant(),
+            _ => string.Concat(words[0][..1], words[^1][..1]).ToUpperInvariant()
+        };
+    }
 }
 
 public sealed record AuthConfigResponse
 {
     public required string Mode { get; init; }
 
-    public string? Authority { get; init; }
-
-    public required string Audience { get; init; }
 }
 
 public sealed record AuthSessionResponse
@@ -137,4 +149,27 @@ public sealed record AuthSessionResponse
     public required string DisplayName { get; init; }
 
     public required IReadOnlyList<string> Groups { get; init; }
+}
+
+public sealed record AuthMeResponse
+{
+    public required string Mode { get; init; }
+    public required bool Authenticated { get; init; }
+    public required AuthProfileResponse Profile { get; init; }
+    public DateTimeOffset? ExpiresAt { get; init; }
+}
+
+public sealed record AuthProfileResponse
+{
+    public required string Subject { get; init; }
+    public required string Name { get; init; }
+    public string? Username { get; init; }
+    public string? Email { get; init; }
+    public required IReadOnlyList<string> Groups { get; init; }
+    public required string Initials { get; init; }
+}
+
+public sealed record AuthCsrfResponse
+{
+    public required string Token { get; init; }
 }

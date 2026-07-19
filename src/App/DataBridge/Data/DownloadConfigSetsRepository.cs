@@ -38,10 +38,7 @@ public sealed class DownloadConfigSetsRepository(DataBridgeDbContext db, IClock 
         existing.CookieProfileKey = entity.CookieProfileKey;
         existing.YtDlpOptionsJson = entity.YtDlpOptionsJson;
         existing.IgnoreKeywordsJson = entity.IgnoreKeywordsJson;
-        existing.EncodeForPlaylist = entity.EncodeForPlaylist;
-        existing.AudioFormat = entity.AudioFormat;
         existing.Priority = entity.Priority;
-        existing.FetchComments = entity.FetchComments;
         existing.UpdatedAt = clock.GetCurrentInstant();
         await db.SaveChangesAsync(cancellationToken);
         return existing;

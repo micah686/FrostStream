@@ -40,7 +40,6 @@ public sealed record ForceQueueDiscoveredMediaRequestMessage
     public string? CookieSecretPath { get; init; }
     public YtDlpOptions? YtDlpOptions { get; init; }
     public bool EncodeForPlaylist { get; init; }
-    public AudioRenditionFormat AudioFormat { get; init; } = AudioRenditionFormat.Aac;
     public int Priority { get; init; }
     public bool FetchComments { get; init; }
 }

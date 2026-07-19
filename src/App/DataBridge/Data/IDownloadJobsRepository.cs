@@ -104,6 +104,13 @@ public interface IDownloadJobsRepository
 
     Task RecordHistoryAsync(Guid jobId, Guid messageId, string operationKey, string eventName, string? payloadJson, CancellationToken ct = default);
 
+    /// <summary>
+    /// Durably appends one advisory yt-dlp progress line so the Jobs page log survives a page refresh.
+    /// Best-effort: silently no-ops if the job no longer exists (e.g. it was deleted between the
+    /// progress event being published and this handler running).
+    /// </summary>
+    Task AppendProgressLogAsync(Guid jobId, int sequence, string message, CancellationToken ct = default);
+
     Task RecordTerminalFailureAsync(Guid jobId, FailureKind kind, string? code, string message, DownloadJobState terminalState, string? lastPayloadJson, CancellationToken ct = default);
 
     // ── Admin queue read surface (read-only; no schema migration) ────────────────────
@@ -122,6 +129,13 @@ public interface IDownloadJobsRepository
     /// the job does not exist (so callers can distinguish 404 from an empty timeline).
     /// </summary>
     Task<IReadOnlyList<DownloadQueueHistoryEntryDto>?> GetQueueHistoryAsync(Guid jobId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Resolves the media item a job produced via <c>media_source_versions.latest_job_id</c>.
+    /// Returns null when the job never produced media or is no longer the latest job for its
+    /// source (a later re-download overwrote <c>latest_job_id</c>).
+    /// </summary>
+    Task<Guid?> GetMediaGuidForJobAsync(Guid jobId, CancellationToken ct = default);
 }
 
 /// <summary>Result of <see cref="IDownloadJobsRepository.QueryQueueAsync"/>.</summary>
@@ -189,7 +203,7 @@ public sealed record VersionReservation(
     bool IsNewMediaGuid);
 
 /// <summary>A job waiting for a download slot, as returned by <see cref="IDownloadJobsRepository.GetDownloadQueuedJobsAsync"/>.</summary>
-public sealed record DownloadQueuedEntry(Guid JobId, int Priority, Instant CreatedAt, string? StorageKey);
+public sealed record DownloadQueuedEntry(Guid JobId, Guid CorrelationId, int Priority, Instant CreatedAt, string? StorageKey);
 
 public sealed record CancelDownloadDecision(
     bool Accepted,
