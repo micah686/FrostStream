@@ -32,6 +32,8 @@ public sealed class ImportSessionRequestReplyService(
         await SubscribeAsync<ImportSessionItemPatchRequest>(messageBus, ImportSessionSubjects.ItemsPatch, HandleItemPatchAsync, ImportSessionSubjects.QueueGroup, stoppingToken);
         await SubscribeAsync<ImportSessionItemsBulkRequest>(messageBus, ImportSessionSubjects.ItemsBulk, HandleItemsBulkAsync, ImportSessionSubjects.QueueGroup, stoppingToken);
         await SubscribeAsync<ImportSessionMappingApplyRequest>(messageBus, ImportSessionSubjects.MappingApply, HandleMappingApplyAsync, ImportSessionSubjects.QueueGroup, stoppingToken);
+        await SubscribeAsync<ImportSessionMappingTemplateRequest>(messageBus, ImportSessionSubjects.MappingTemplate, HandleMappingTemplateAsync, ImportSessionSubjects.QueueGroup, stoppingToken);
+        await SubscribeAsync<ImportSessionMetadataRefreshRequest>(messageBus, ImportSessionSubjects.MetadataRefresh, HandleMetadataRefreshAsync, ImportSessionSubjects.QueueGroup, stoppingToken);
         await SubscribeAsync<ImportSessionEnrichRequest>(messageBus, ImportSessionSubjects.Enrich, HandleEnrichAsync, ImportSessionSubjects.QueueGroup, stoppingToken);
         await SubscribeAsync<ImportSessionCommitRequest>(messageBus, ImportSessionSubjects.Commit, HandleCommitAsync, ImportSessionSubjects.QueueGroup, stoppingToken);
         await SubscribeAsync<ImportSessionRetryFailedRequest>(messageBus, ImportSessionSubjects.RetryFailed, HandleRetryFailedAsync, ImportSessionSubjects.QueueGroup, stoppingToken);
@@ -340,6 +342,8 @@ public sealed class ImportSessionRequestReplyService(
             await context.RespondAsync(result.Session is null
                 ? new ImportSessionItemsBulkResponse { Success = false, ErrorCode = "not_found", ErrorMessage = "Import session was not found." }
                 : new ImportSessionItemsBulkResponse { Success = true, AffectedCount = result.AffectedCount, Session = result.Session });
+            if (context.Message.Action == ImportSessionBulkAction.Include && result.Session is not null)
+                await ScheduleProbeBatchAsync(result.Session);
         }
         catch (Exception ex)
         {
@@ -386,11 +390,55 @@ public sealed class ImportSessionRequestReplyService(
         }
     }
 
+    private async Task HandleMappingTemplateAsync(IMessageContext<ImportSessionMappingTemplateRequest> context)
+    {
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var repo = scope.ServiceProvider.GetRequiredService<IImportSessionRepository>();
+            var session = await repo.GetAsync(context.Message.SessionId);
+            if (session is null)
+            {
+                await context.RespondAsync(new ImportSessionMappingTemplateResponse
+                {
+                    Success = false,
+                    ErrorCode = "not_found",
+                    ErrorMessage = "Import session was not found."
+                });
+                return;
+            }
+
+            var items = await repo.ListMappingTemplateAsync(context.Message.SessionId);
+            await context.RespondAsync(new ImportSessionMappingTemplateResponse { Success = true, Items = items });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed generating import mapping template for {SessionId}.", context.Message.SessionId);
+            await context.RespondAsync(new ImportSessionMappingTemplateResponse
+            {
+                Success = false,
+                ErrorCode = "internal_error",
+                ErrorMessage = "Failed to generate the mapping template."
+            });
+        }
+    }
+
     private async Task HandleEnrichAsync(IMessageContext<ImportSessionEnrichRequest> context)
     {
         var request = context.Message;
         try
         {
+            if (request.Options.SleepBetweenRequestsSeconds < 3)
+            {
+                await context.RespondAsync(new ImportSessionEnrichResponse
+                {
+                    Success = false,
+                    ErrorCode = "validation",
+                    ErrorMessage = "Sleep between requests must be at least 3 seconds."
+                });
+                return;
+            }
+
             ImportSessionDto? session;
             IReadOnlyList<ImportSessionEnrichItemRef> items;
             using (var scope = scopeFactory.CreateScope())
@@ -416,6 +464,7 @@ public sealed class ImportSessionRequestReplyService(
                 }
 
                 items = await repo.ListItemsForEnrichAsync(request.SessionId, request.ItemIds, EnrichBatchLimit);
+                session = await repo.MarkEnrichmentQueuedAsync(request.SessionId, items.Select(x => x.ItemId).ToList()) ?? session;
             }
 
             foreach (var item in items)
@@ -429,12 +478,14 @@ public sealed class ImportSessionRequestReplyService(
                     MessageId = messageId,
                     OperationKey = $"import-session/{session.SessionId:N}/enrich/{item.ItemId:N}",
                     OccurredAt = clock.GetCurrentInstant(),
-                    Attempt = 1,
+                    Attempt = item.Attempt,
                     SessionId = session.SessionId,
                     ItemId = item.ItemId,
                     SourceUrl = item.SourceUrl,
+                    RelativePath = item.RelativePath,
                     Provider = item.Provider,
-                    RequiredWorkerTag = session.WorkerTag
+                    RequiredWorkerTag = session.WorkerTag,
+                    Options = request.Options
                 };
                 var subject = string.IsNullOrWhiteSpace(session.WorkerTag)
                     ? LocalImportSubjects.EnrichImportSessionItemCommand
@@ -448,6 +499,120 @@ public sealed class ImportSessionRequestReplyService(
         {
             logger.LogError(ex, "Failed queueing enrichment for import session {SessionId}.", request.SessionId);
             await context.RespondAsync(new ImportSessionEnrichResponse { Success = false, ErrorCode = "internal_error", ErrorMessage = "Internal import-session service error." });
+        }
+    }
+
+    private async Task HandleMetadataRefreshAsync(IMessageContext<ImportSessionMetadataRefreshRequest> context)
+    {
+        var request = context.Message;
+        try
+        {
+            ImportSessionDto? session;
+            IReadOnlyList<ImportSessionMetadataRefreshItemRef> items;
+            using (var scope = scopeFactory.CreateScope())
+            {
+                var repo = scope.ServiceProvider.GetRequiredService<IImportSessionRepository>();
+                session = await repo.GetAsync(request.SessionId);
+                if (session is null)
+                {
+                    await context.RespondAsync(new ImportSessionMetadataRefreshResponse { Success = false, ErrorCode = "not_found", ErrorMessage = "Import session was not found." });
+                    return;
+                }
+
+                if (session.Status != ImportSessionStatus.Reviewing)
+                {
+                    await context.RespondAsync(new ImportSessionMetadataRefreshResponse
+                    {
+                        Success = false,
+                        ErrorCode = "validation",
+                        ErrorMessage = "Metadata refresh is only available while the session is in review.",
+                        Session = session
+                    });
+                    return;
+                }
+
+                items = await repo.ListItemsForMetadataRefreshAsync(request.SessionId, request.ItemIds, EnrichBatchLimit);
+            }
+
+            var subject = string.IsNullOrWhiteSpace(session.WorkerTag)
+                ? LocalImportSubjects.RefreshMetadataRequest
+                : LocalImportSubjects.RefreshMetadataRequestForTag(session.WorkerTag);
+            var refresh = await messageBus.RequestAsync<RefreshImportMetadataRequest, RefreshImportMetadataResponse>(
+                subject,
+                new RefreshImportMetadataRequest
+                {
+                    Items = items.Select(item => new RefreshImportMetadataRequestItem
+                    {
+                        ItemId = item.ItemId,
+                        RelativePath = item.RelativePath,
+                        Provider = item.Provider,
+                        SourceUrl = item.SourceUrl
+                    }).ToList()
+                },
+                TimeSpan.FromSeconds(30),
+                CancellationToken.None);
+
+            if (refresh is null)
+            {
+                await context.RespondAsync(new ImportSessionMetadataRefreshResponse
+                {
+                    Success = false,
+                    ErrorCode = "worker_unavailable",
+                    ErrorMessage = "No import worker answered the local metadata refresh request.",
+                    Session = session
+                });
+                return;
+            }
+
+            if (!refresh.Success)
+            {
+                await context.RespondAsync(new ImportSessionMetadataRefreshResponse
+                {
+                    Success = false,
+                    ErrorCode = refresh.ErrorCode,
+                    ErrorMessage = refresh.ErrorMessage,
+                    Session = session
+                });
+                return;
+            }
+
+            foreach (var item in refresh.Items)
+            {
+                var messageId = Guid.NewGuid();
+                using var scope = scopeFactory.CreateScope();
+                var repo = scope.ServiceProvider.GetRequiredService<IImportSessionRepository>();
+                session = await repo.ApplyEnrichmentAsync(new ImportSessionItemEnriched
+                {
+                    JobId = session.SessionId,
+                    CorrelationId = session.CorrelationId,
+                    CausationId = null,
+                    MessageId = messageId,
+                    OperationKey = $"import-session/{session.SessionId:N}/metadata-refresh/{item.ItemId:N}",
+                    OccurredAt = clock.GetCurrentInstant(),
+                    Attempt = 1,
+                    SessionId = session.SessionId,
+                    ItemId = item.ItemId,
+                    EnrichedMetadataJson = item.EnrichedMetadataJson,
+                    Title = item.Title,
+                    Provider = item.Provider,
+                    SourceMediaId = item.SourceMediaId,
+                    SourceUrl = item.SourceUrl,
+                    InfoJsonRelativePath = item.InfoJsonRelativePath
+                }) ?? session;
+            }
+
+            await context.RespondAsync(new ImportSessionMetadataRefreshResponse
+            {
+                Success = true,
+                CheckedCount = refresh.CheckedCount,
+                FoundCount = refresh.FoundCount,
+                Session = session
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed refreshing local metadata sidecars for import session {SessionId}.", request.SessionId);
+            await context.RespondAsync(new ImportSessionMetadataRefreshResponse { Success = false, ErrorCode = "internal_error", ErrorMessage = "Internal import-session service error." });
         }
     }
 

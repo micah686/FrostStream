@@ -8,7 +8,7 @@ namespace DataBridge.Messaging;
 
 public sealed class LocalImportEventsConsumerService(
     IJetStreamConsumer consumer,
-    LocalImportItemFlows itemFlows,
+    LocalImportItemV2Flows itemFlows,
     ILogger<LocalImportEventsConsumerService> logger) : BackgroundService
 {
     private static readonly StreamName ImportStream = StreamName.From(LocalImportTopology.StreamNameValue);
@@ -60,7 +60,10 @@ public sealed class LocalImportEventsConsumerService(
                 return;
             }
 
-            await itemFlows.SendMessage(evt.JobId.ToString("N"), evt, idempotencyKey: evt.OperationKey);
+            await itemFlows.SendMessage(
+                LocalImportFlowInstance.FromOperationKey(evt.JobId, evt.OperationKey),
+                evt,
+                idempotencyKey: evt.OperationKey);
             await context.AckAsync();
         }
         catch (Exception ex)

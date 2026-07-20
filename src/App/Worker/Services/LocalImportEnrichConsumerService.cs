@@ -4,15 +4,18 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NodaTime;
+using Shared.Imports;
 using Shared.Messaging;
 using YtDlpSharpLib;
+using YtDlpSharpLib.Downloads;
+using YtDlpSharpLib.Options;
 
 namespace Worker.Services;
 
 /// <summary>
 /// Optional yt-dlp metadata enrichment for import-session items that carry a source URL.
-/// Runs yt-dlp with --skip-download --dump-single-json semantics (via TryGetVideoInfoAsync)
-/// and publishes a compact enriched-metadata layer back to DataBridge.
+/// Runs yt-dlp with --write-info-json --skip-download, writes the sidecar beside the source
+/// media, and publishes the complete metadata layer back to DataBridge.
 /// </summary>
 public sealed class LocalImportEnrichConsumerService(
     IJetStreamConsumer consumer,
@@ -90,36 +93,43 @@ public sealed class LocalImportEnrichConsumerService(
 
     private async Task EnrichAsync(EnrichImportSessionItemCommand cmd)
     {
-        var options = YtDlpOptionsMerger.Merge(null, GetFfmpegLocation(), cookieFilePath: null, logger);
-        var result = await ytDlp.TryGetVideoInfoAsync(cmd.SourceUrl, overrideOptions: potOptionsApplier.Apply(options));
-        if (!result.Success || result.Data is not { } info)
+        var sourcePath = ResolveIncomingPath(cmd.RelativePath);
+        var outputDirectory = Path.GetDirectoryName(sourcePath)
+                              ?? throw new InvalidOperationException("The source media folder could not be resolved.");
+        var stem = Path.GetFileNameWithoutExtension(sourcePath);
+        var infoJsonPath = Path.Combine(outputDirectory, $"{stem}.info.json");
+        var userOptions = BuildOptions(cmd.Options);
+        var options = potOptionsApplier.Apply(YtDlpOptionsMerger.Merge(userOptions, GetFfmpegLocation(), cookieFilePath: null, logger))
+                      ?? userOptions;
+
+        await ytDlp.DownloadMetadataAsync(
+            cmd.SourceUrl,
+            outputDirectory,
+            new MetadataDownloadOptions
+            {
+                YtDlp = options,
+                OutputTemplate = $"{stem.Replace("%", "%%", StringComparison.Ordinal)}.%(ext)s",
+                OverwriteFiles = true,
+                IgnoreDownloadErrors = false
+            });
+
+        if (!File.Exists(infoJsonPath))
         {
-            await PublishFailureAsync(
-                cmd,
-                "enrich_fetch_failed",
-                string.IsNullOrWhiteSpace(result.ErrorOutput) ? "yt-dlp metadata fetch failed." : result.ErrorOutput.Trim());
-            return;
+            infoJsonPath = Directory.EnumerateFiles(outputDirectory, $"{stem}*.info.json", SearchOption.TopDirectoryOnly)
+                .OrderByDescending(File.GetLastWriteTimeUtc)
+                .FirstOrDefault()
+                ?? throw new FileNotFoundException("yt-dlp completed without writing the expected info.json sidecar.");
         }
 
-        var provider = FirstNonBlank(info.Extractor, info.ExtractorKey, cmd.Provider);
-        var title = FirstNonBlank(info.Title, info.FullTitle);
-        var sourceMediaId = FirstNonBlank(info.Id, info.DisplayId);
-        var sourceUrl = FirstNonBlank(info.WebpageUrl, cmd.SourceUrl);
-
-        var enrichedJson = JsonSerializer.Serialize(new
-        {
-            title,
-            provider,
-            sourceMediaId,
-            sourceUrl,
-            description = info.Description,
-            channel = FirstNonBlank(info.Channel, info.Uploader),
-            channelId = FirstNonBlank(info.ChannelId, info.UploaderId),
-            uploadDate = info.UploadDate,
-            durationSeconds = info.Duration,
-            viewCount = info.ViewCount,
-            likeCount = info.LikeCount
-        });
+        var enrichedJson = await File.ReadAllTextAsync(infoJsonPath);
+        using var document = JsonDocument.Parse(enrichedJson);
+        var root = document.RootElement;
+        var provider = FirstNonBlank(ReadString(root, "extractor"), ReadString(root, "extractor_key"), cmd.Provider);
+        var title = FirstNonBlank(ReadString(root, "title"), ReadString(root, "fulltitle"));
+        var sourceMediaId = FirstNonBlank(ReadString(root, "id"), ReadString(root, "display_id"));
+        var sourceUrl = FirstNonBlank(ReadString(root, "webpage_url"), ReadString(root, "original_url"), cmd.SourceUrl);
+        var relativeInfoPath = Path.GetRelativePath(workerOptions.Value.IncomingRoot, infoJsonPath)
+            .Replace(Path.DirectorySeparatorChar, '/');
 
         var messageId = DeterministicGuid.Create(cmd.MessageId, "/enriched");
         await publisher.PublishAsync(
@@ -139,7 +149,8 @@ public sealed class LocalImportEnrichConsumerService(
                 Title = title,
                 Provider = provider,
                 SourceMediaId = sourceMediaId,
-                SourceUrl = sourceUrl
+                SourceUrl = sourceUrl,
+                InfoJsonRelativePath = relativeInfoPath
             },
             messageId: messageId.ToString("N"));
     }
@@ -174,6 +185,56 @@ public sealed class LocalImportEnrichConsumerService(
 
     private static string? FirstNonBlank(params string?[] values)
         => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
+
+    private string ResolveIncomingPath(string relativePath)
+    {
+        var incomingRoot = workerOptions.Value.IncomingRoot;
+        if (!LocalImportPathRules.TryResolveUnderAllowedRoots(
+                incomingRoot,
+                relativePath,
+                [incomingRoot],
+                out var fullPath,
+                out _,
+                out var error))
+        {
+            throw new ArgumentException(error, nameof(relativePath));
+        }
+
+        if (!File.Exists(fullPath))
+            throw new FileNotFoundException("Local import file was not found.", fullPath);
+        return fullPath;
+    }
+
+    private static YtDlpOptions BuildOptions(ImportSessionYtDlpOptions options)
+        => new()
+        {
+            Network = new YtDlpNetworkOptions { Proxy = Normalize(options.ProxyUrl) },
+            Authentication = new YtDlpAuthenticationOptions
+            {
+                Username = Normalize(options.Username),
+                Password = Normalize(options.Password),
+                Twofactor = Normalize(options.TwoFactorCode),
+                VideoPassword = Normalize(options.VideoPassword)
+            },
+            Workarounds = new YtDlpWorkaroundsOptions
+            {
+                NoCheckCertificates = options.SkipCertificateChecks,
+                LegacyServerConnect = options.AllowLegacyConnections,
+                AddHeaders = (options.ExtraHttpHeaders ?? [])
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Select(x => x.Trim())
+                    .ToArray(),
+                SleepRequests = Math.Max(3, options.SleepBetweenRequestsSeconds)
+            }
+        };
+
+    private static string? ReadString(JsonElement root, string name)
+        => root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+            ? Normalize(value.GetString())
+            : null;
+
+    private static string? Normalize(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static string ErrorCode(Exception ex)
         => ex switch

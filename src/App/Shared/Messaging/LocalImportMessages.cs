@@ -103,3 +103,51 @@ public sealed record LocalImportFilePrepareFailed : IFlowMessage
 
     public required string ErrorMessage { get; init; }
 }
+
+public sealed record BrowseImportIncomingRequest
+{
+    public string? SubPath { get; init; }
+}
+
+public sealed record BrowseImportIncomingResponse
+{
+    public bool Success { get; init; }
+    public string? ErrorCode { get; init; }
+    public string? ErrorMessage { get; init; }
+    public string SubPath { get; init; } = "";
+    public IReadOnlyList<string> Directories { get; init; } = [];
+}
+
+public sealed record RefreshImportMetadataRequest
+{
+    public IReadOnlyList<RefreshImportMetadataRequestItem> Items { get; init; } = [];
+}
+
+public sealed record RefreshImportMetadataRequestItem
+{
+    public required Guid ItemId { get; init; }
+    public required string RelativePath { get; init; }
+    public string? Provider { get; init; }
+    public string? SourceUrl { get; init; }
+}
+
+public sealed record RefreshImportMetadataResponse
+{
+    public bool Success { get; init; }
+    public string? ErrorCode { get; init; }
+    public string? ErrorMessage { get; init; }
+    public int CheckedCount { get; init; }
+    public int FoundCount { get; init; }
+    public IReadOnlyList<RefreshImportMetadataFoundItem> Items { get; init; } = [];
+}
+
+public sealed record RefreshImportMetadataFoundItem
+{
+    public required Guid ItemId { get; init; }
+    public required string EnrichedMetadataJson { get; init; }
+    public string? Title { get; init; }
+    public string? Provider { get; init; }
+    public string? SourceMediaId { get; init; }
+    public string? SourceUrl { get; init; }
+    public required string InfoJsonRelativePath { get; init; }
+}

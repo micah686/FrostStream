@@ -86,6 +86,14 @@ public class ImportSessionItemEntity
 
     public ImportSessionItemMetadataState MetadataState { get; set; }
 
+    public ImportSessionItemMetadataSource MetadataSource { get; set; }
+
+    public ImportSessionMetadataFetchState MetadataFetchState { get; set; }
+
+    public int MetadataFetchAttempt { get; set; }
+
+    public string? MetadataFetchMessage { get; set; }
+
     public bool Excluded { get; set; }
 
     public ImportSessionItemStatus Status { get; set; }

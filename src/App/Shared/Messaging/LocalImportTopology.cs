@@ -5,7 +5,7 @@ namespace Shared.Messaging;
 public sealed class LocalImportTopology : ITopologySource
 {
     public const string StreamNameValue = "FROSTSTREAM_IMPORT";
-    public const string SubjectFilter = "import.>";
+    public static readonly string[] SubjectFilters = ["import.cmd.>", "import.evt.>"];
     public const string ManifestObjectStoreBucket = "local-media-import-manifests";
 
     public const string DataBridgeQueueGroup = "databridge-imports";
@@ -27,7 +27,7 @@ public sealed class LocalImportTopology : ITopologySource
         yield return new StreamSpec
         {
             Name = StreamName.From(StreamNameValue),
-            Subjects = [SubjectFilter],
+            Subjects = SubjectFilters,
             MaxAge = TimeSpan.FromDays(30),
             RetentionPolicy = StreamRetention.Limits,
             StorageType = StorageType.File,

@@ -218,6 +218,11 @@ public sealed partial class LocalImportScanConsumerService(
         var sourceMediaId = FirstNonBlank(infoMetadata?.SourceMediaId, nfoMetadata?.SourceMediaId);
         var sourceUrl = FirstNonBlank(infoMetadata?.SourceUrl, nfoMetadata?.SourceUrl);
         var hasExternalMetadata = infoMetadata is not null || nfoMetadata is not null;
+        var metadataSource = infoMetadata is not null
+            ? ImportSessionItemMetadataSource.YtDlp
+            : nfoMetadata is not null
+                ? ImportSessionItemMetadataSource.Nfo
+                : ImportSessionItemMetadataSource.Placeholder;
         var scanMetadata = new
         {
             filename = new { title },
@@ -239,7 +244,8 @@ public sealed partial class LocalImportScanConsumerService(
             ScanMetadataJson = JsonSerializer.Serialize(scanMetadata, JsonOptions),
             MetadataState = hasExternalMetadata
                 ? ImportSessionItemMetadataState.Ready
-                : ImportSessionItemMetadataState.Incomplete
+                : ImportSessionItemMetadataState.Incomplete,
+            MetadataSource = metadataSource
         };
     }
 

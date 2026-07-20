@@ -14,6 +14,8 @@ public static class LocalImportSubjects
     public const string EnrichImportSessionItemCommand = "import.cmd.enrich-item";
     public const string ImportSessionItemEnriched = "import.evt.item-enriched";
     public const string ImportSessionItemEnrichFailed = "import.evt.item-enrich-failed";
+    public const string BrowseIncomingRequest = "import.req.browse-incoming";
+    public const string RefreshMetadataRequest = "import.req.refresh-metadata";
 
     public static string Tagged(string baseSubject, string tag) => $"{baseSubject}.{tag}";
 
@@ -24,4 +26,8 @@ public static class LocalImportSubjects
     public static string ProbeImportSessionItemsCommandForTag(string tag) => Tagged(ProbeImportSessionItemsCommand, tag);
 
     public static string EnrichImportSessionItemCommandForTag(string tag) => Tagged(EnrichImportSessionItemCommand, tag);
+
+    public static string BrowseIncomingRequestForTag(string tag) => Tagged(BrowseIncomingRequest, tag);
+
+    public static string RefreshMetadataRequestForTag(string tag) => Tagged(RefreshMetadataRequest, tag);
 }

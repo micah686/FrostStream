@@ -56,10 +56,13 @@ public static class EndpointIds
     public const string ImportsSessionsItemsPatch = "imports.sessions.items.patch";
     public const string ImportsSessionsItemsBulk = "imports.sessions.items.bulk";
     public const string ImportsSessionsMapping = "imports.sessions.mapping";
+    public const string ImportsSessionsMappingTemplate = "imports.sessions.mapping-template";
+    public const string ImportsSessionsMetadataRefresh = "imports.sessions.metadata.refresh";
     public const string ImportsSessionsEnrich = "imports.sessions.enrich";
     public const string ImportsSessionsCommit = "imports.sessions.commit";
     public const string ImportsSessionsRetry = "imports.sessions.retry";
     public const string ImportsSessionsCancel = "imports.sessions.cancel";
+    public const string ImportsIncomingBrowse = "imports.incoming.browse";
 
     // Storage
     public const string StorageLocalCreate = "storage.local.create";
@@ -296,10 +299,13 @@ public static class EndpointCatalog
         new(EndpointIds.ImportsSessionsItemsPatch, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsItemsBulk, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsMapping, Bundles.Downloading),
+        new(EndpointIds.ImportsSessionsMappingTemplate, Bundles.Downloading),
+        new(EndpointIds.ImportsSessionsMetadataRefresh, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsEnrich, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsCommit, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsRetry, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsCancel, Bundles.Downloading),
+        new(EndpointIds.ImportsIncomingBrowse, Bundles.Downloading),
 
         new(EndpointIds.StorageLocalCreate, Bundles.Storage),
         new(EndpointIds.StorageLocalUpdate, Bundles.Storage),

@@ -155,6 +155,7 @@ class Program
         builder.Services.AddSingleton<DownloadFlowStartupState>();
         builder.Services.AddSingleton<INotificationDispatcher, NotificationDispatcher>();
         builder.Services.AddSingleton<ImportSessionRequestReplyService>();
+        builder.Services.AddSingleton<LocalImportItemV2Flows>();
 
         builder.Services.AddTypesenseClient(config =>
         {

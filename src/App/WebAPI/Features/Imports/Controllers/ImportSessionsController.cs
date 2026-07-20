@@ -1,5 +1,6 @@
 using Conduit.NATS;
 using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
 using Shared.Auth;
 using Shared.Messaging;
 using WebAPI.Auth;
@@ -86,11 +87,12 @@ public sealed class ImportSessionsController(
     [HttpGet("{sessionId:guid}/items")]
     [Endpoint(EndpointIds.ImportsSessionsItemsList)]
     [EndpointSummary("List local media import session items")]
-    [EndpointDescription("Returns a keyset-paged slice of discovered files for an import session, with optional status, metadata-state, and text search filters for the review table.")]
+    [EndpointDescription("Returns a keyset-paged slice of discovered files for an import session, with optional inclusion, status, metadata-state, and text search filters for the wizard lists.")]
     public async Task<ActionResult<ImportSessionItemsListResponse>> ListItems(
         Guid sessionId,
         [FromQuery] ImportSessionItemStatus? status,
         [FromQuery] ImportSessionItemMetadataState? metadataState,
+        [FromQuery] bool? included,
         [FromQuery] string? search,
         [FromQuery] Guid? afterItemId,
         [FromQuery] int limit = 100,
@@ -103,6 +105,7 @@ public sealed class ImportSessionsController(
                 SessionId = sessionId,
                 Status = status,
                 MetadataState = metadataState,
+                Included = included,
                 Search = search,
                 AfterItemId = afterItemId,
                 Limit = limit
@@ -124,12 +127,20 @@ public sealed class ImportSessionsController(
     public async Task<ActionResult<ImportSessionItemPatchResponse>> PatchItem(
         Guid sessionId,
         Guid itemId,
-        [FromBody] ImportSessionItemPatchRequest request,
+        [FromBody] ImportSessionItemPatchBody request,
         CancellationToken cancellationToken)
     {
         var response = await SendAsync<ImportSessionItemPatchRequest, ImportSessionItemPatchResponse>(
             ImportSessionSubjects.ItemsPatch,
-            request with { SessionId = sessionId, ItemId = itemId },
+            new ImportSessionItemPatchRequest
+            {
+                SessionId = sessionId,
+                ItemId = itemId,
+                Title = request.Title,
+                Provider = request.Provider,
+                SourceMediaId = request.SourceMediaId,
+                SourceUrl = request.SourceUrl
+            },
             cancellationToken);
 
         if (response is null)
@@ -146,12 +157,20 @@ public sealed class ImportSessionsController(
     [EndpointDescription("Applies a review action to item ids or to a filtered item set. Supported actions include accepting placeholders, excluding, including, and resetting failed items.")]
     public async Task<ActionResult<ImportSessionItemsBulkResponse>> BulkItems(
         Guid sessionId,
-        [FromBody] ImportSessionItemsBulkRequest request,
+        [FromBody] ImportSessionItemsBulkBody request,
         CancellationToken cancellationToken)
     {
         var response = await SendAsync<ImportSessionItemsBulkRequest, ImportSessionItemsBulkResponse>(
             ImportSessionSubjects.ItemsBulk,
-            request with { SessionId = sessionId },
+            new ImportSessionItemsBulkRequest
+            {
+                SessionId = sessionId,
+                Action = request.Action,
+                ItemIds = request.ItemIds,
+                Status = request.Status,
+                MetadataState = request.MetadataState,
+                Search = request.Search
+            },
             cancellationToken);
 
         if (response is null)
@@ -166,7 +185,7 @@ public sealed class ImportSessionsController(
     [RequestSizeLimit(MaxMappingBytes)]
     [Endpoint(EndpointIds.ImportsSessionsMapping)]
     [EndpointSummary("Apply a CSV or JSON metadata mapping file")]
-    [EndpointDescription("Uploads a CSV or JSON mapping file of filename/relative-path to metadata fields, stages it in the import object-store bucket, and asks DataBridge to match rows into item user metadata.")]
+    [EndpointDescription("Uploads a CSV or JSON mapping file of filename/relative-path to metadata fields, stages it in the import object-store bucket, and applies matching rows only to selected items that do not already have yt-dlp metadata.")]
     public async Task<ActionResult<ImportSessionMappingApplyResponse>> ApplyMapping(
         Guid sessionId,
         IFormFile file,
@@ -215,10 +234,55 @@ public sealed class ImportSessionsController(
         return Ok(response);
     }
 
+    [HttpGet("{sessionId:guid}/mapping-template")]
+    [Endpoint(EndpointIds.ImportsSessionsMappingTemplate)]
+    [EndpointSummary("Download a JSON mapping template")]
+    [EndpointDescription("Generates an indented JSON template for selected files that do not already have yt-dlp metadata. The template can be edited offline and uploaded through the mapping endpoint.")]
+    public async Task<IActionResult> MappingTemplate(Guid sessionId, CancellationToken cancellationToken)
+    {
+        var response = await SendAsync<ImportSessionMappingTemplateRequest, ImportSessionMappingTemplateResponse>(
+            ImportSessionSubjects.MappingTemplate,
+            new ImportSessionMappingTemplateRequest { SessionId = sessionId },
+            cancellationToken);
+        if (response is null)
+            return BadGateway();
+        if (!response.Success)
+            return Error(response.ErrorCode, response.ErrorMessage);
+
+        var json = JsonSerializer.SerializeToUtf8Bytes(response.Items, new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true });
+        return File(json, "application/json", $"froststream-import-{sessionId:N}-mapping.json");
+    }
+
+    [HttpPost("{sessionId:guid}/metadata-refresh")]
+    [Endpoint(EndpointIds.ImportsSessionsMetadataRefresh)]
+    [EndpointSummary("Refresh local import metadata sidecars")]
+    [EndpointDescription("Checks the worker incoming folder for adjacent .info.json sidecars beside selected import media files. Found sidecars are parsed as yt-dlp metadata and update the item metadata source without downloading anything.")]
+    public async Task<ActionResult<ImportSessionMetadataRefreshResponse>> RefreshMetadata(
+        Guid sessionId,
+        [FromBody] ImportSessionMetadataRefreshBody? body,
+        CancellationToken cancellationToken)
+    {
+        var response = await SendAsync<ImportSessionMetadataRefreshRequest, ImportSessionMetadataRefreshResponse>(
+            ImportSessionSubjects.MetadataRefresh,
+            new ImportSessionMetadataRefreshRequest
+            {
+                SessionId = sessionId,
+                ItemIds = body?.ItemIds
+            },
+            cancellationToken);
+
+        if (response is null)
+            return BadGateway();
+        if (!response.Success)
+            return Error(response.ErrorCode, response.ErrorMessage);
+
+        return Ok(response);
+    }
+
     [HttpPost("{sessionId:guid}/enrich")]
     [Endpoint(EndpointIds.ImportsSessionsEnrich)]
     [EndpointSummary("Queue yt-dlp metadata enrichment for import items")]
-    [EndpointDescription("Queues optional yt-dlp metadata re-fetch for reviewing items that carry a source URL and have not been enriched yet. Optionally limited to specific item ids. Enriched fields sit below user edits in the commit-time metadata merge.")]
+    [EndpointDescription("Queues optional metadata-only yt-dlp work for selected items that carry a source URL. The restricted options allow proxy and authentication settings, HTTP headers, compatibility switches, and a minimum three-second request delay; media download is always skipped and info.json is written beside the source file.")]
     public async Task<ActionResult<ImportSessionEnrichResponse>> Enrich(
         Guid sessionId,
         [FromBody] ImportSessionEnrichBody? body,
@@ -226,7 +290,12 @@ public sealed class ImportSessionsController(
     {
         var response = await SendAsync<ImportSessionEnrichRequest, ImportSessionEnrichResponse>(
             ImportSessionSubjects.Enrich,
-            new ImportSessionEnrichRequest { SessionId = sessionId, ItemIds = body?.ItemIds },
+            new ImportSessionEnrichRequest
+            {
+                SessionId = sessionId,
+                ItemIds = body?.ItemIds,
+                Options = body?.Options ?? new ImportSessionYtDlpOptions()
+            },
             cancellationToken);
 
         if (response is null)
@@ -240,7 +309,7 @@ public sealed class ImportSessionsController(
     [HttpPost("{sessionId:guid}/commit")]
     [Endpoint(EndpointIds.ImportsSessionsCommit)]
     [EndpointSummary("Commit approved local media import items")]
-    [EndpointDescription("Moves a reviewed import session into committing state and approves every non-excluded item whose metadata is ready, edited, or placeholder accepted. Incomplete items block the commit.")]
+    [EndpointDescription("Moves a reviewed import session into committing state and approves every selected item. Items without yt-dlp, manual, NFO, or info.json metadata automatically use the filename-based placeholder fallback.")]
     public async Task<ActionResult<ImportSessionCommitResponse>> Commit(Guid sessionId, CancellationToken cancellationToken)
     {
         var response = await SendAsync<ImportSessionCommitRequest, ImportSessionCommitResponse>(
@@ -294,6 +363,29 @@ public sealed class ImportSessionsController(
         return Ok(response);
     }
 
+    [HttpGet("/api/global/imports/incoming/browse")]
+    [Endpoint(EndpointIds.ImportsIncomingBrowse)]
+    [EndpointSummary("Browse a worker's incoming folder")]
+    [EndpointDescription("Lists direct child folders under a safe path within a worker's incoming root. An optional worker tag routes the read-only request to the worker that will perform the scan.")]
+    public async Task<ActionResult<BrowseImportIncomingResponse>> BrowseIncoming(
+        [FromQuery] string? path,
+        [FromQuery] string? workerTag,
+        CancellationToken cancellationToken)
+    {
+        var subject = string.IsNullOrWhiteSpace(workerTag)
+            ? LocalImportSubjects.BrowseIncomingRequest
+            : LocalImportSubjects.BrowseIncomingRequestForTag(workerTag.Trim());
+        var response = await SendAsync<BrowseImportIncomingRequest, BrowseImportIncomingResponse>(
+            subject,
+            new BrowseImportIncomingRequest { SubPath = path },
+            cancellationToken);
+        if (response is null)
+            return BadGateway("No import worker answered the folder browse request.");
+        if (!response.Success)
+            return Error(response.ErrorCode, response.ErrorMessage);
+        return Ok(response);
+    }
+
     private async Task<TResponse?> SendAsync<TRequest, TResponse>(
         string subject,
         TRequest request,
@@ -329,7 +421,26 @@ public sealed class ImportSessionsController(
             Status = StatusCodes.Status502BadGateway
         });
 
-    public sealed record ImportSessionEnrichBody(IReadOnlyList<Guid>? ItemIds);
+    public sealed record ImportSessionEnrichBody(IReadOnlyList<Guid>? ItemIds, ImportSessionYtDlpOptions? Options);
+
+    public sealed record ImportSessionMetadataRefreshBody(IReadOnlyList<Guid>? ItemIds);
+
+    public sealed record ImportSessionItemPatchBody
+    {
+        public string? Title { get; init; }
+        public string? Provider { get; init; }
+        public string? SourceMediaId { get; init; }
+        public string? SourceUrl { get; init; }
+    }
+
+    public sealed record ImportSessionItemsBulkBody
+    {
+        public required ImportSessionBulkAction Action { get; init; }
+        public IReadOnlyList<Guid>? ItemIds { get; init; }
+        public ImportSessionItemStatus? Status { get; init; }
+        public ImportSessionItemMetadataState? MetadataState { get; init; }
+        public string? Search { get; init; }
+    }
 
     private static string? ResolveMappingFormat(string fileName, string? contentType)
     {

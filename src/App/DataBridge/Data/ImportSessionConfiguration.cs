@@ -74,6 +74,10 @@ public sealed class ImportSessionItemConfiguration : IEntityTypeConfiguration<Im
         builder.Property(x => x.EnrichedMetadataJson).HasColumnName("enriched_metadata").HasColumnType("jsonb");
         builder.Property(x => x.UserMetadataJson).HasColumnName("user_metadata").HasColumnType("jsonb");
         builder.Property(x => x.MetadataState).HasColumnName("metadata_state").HasColumnType("imports.import_session_item_metadata_state").IsRequired();
+        builder.Property(x => x.MetadataSource).HasColumnName("metadata_source").HasConversion<string>().HasMaxLength(32).IsRequired();
+        builder.Property(x => x.MetadataFetchState).HasColumnName("metadata_fetch_state").HasConversion<string>().HasMaxLength(32).IsRequired();
+        builder.Property(x => x.MetadataFetchAttempt).HasColumnName("metadata_fetch_attempt").IsRequired();
+        builder.Property(x => x.MetadataFetchMessage).HasColumnName("metadata_fetch_message").HasMaxLength(4096);
         builder.Property(x => x.Excluded).HasColumnName("excluded").IsRequired();
         builder.Property(x => x.Status).HasColumnName("status").HasColumnType("imports.import_session_item_status").IsRequired();
         builder.Property(x => x.Attempt).HasColumnName("attempt").IsRequired();
