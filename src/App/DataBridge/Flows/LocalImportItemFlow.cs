@@ -442,7 +442,7 @@ public class LocalImportItemFlow(
             ? null
             : await TryBuildRichMetadataAsync(work, infoJsonPath, thumbnailPath, captionRows);
         metadata ??= BuildMetadata(work, reservation.MediaGuid, thumbnailPath, captionRows);
-        metadata = ApplyUserMetadata(metadata, work.UserMetadataJson);
+        metadata = ApplyUserMetadata(metadata, work.UserMetadataJson, thumbnailPath, captionRows);
         await MetaRepoCall(r => r.WriteMetadataAsync(reservation.MediaGuid, metadata, work.StorageKey));
     }
 
@@ -494,10 +494,34 @@ public class LocalImportItemFlow(
     /// Overlays wizard edits and manual-mapping rows (user_metadata) onto the base metadata.
     /// Scalars override when non-blank; lists replace when non-empty.
     /// </summary>
-    private static CapturedMediaMetadata ApplyUserMetadata(CapturedMediaMetadata metadata, string? userMetadataJson)
+    private static CapturedMediaMetadata ApplyUserMetadata(
+        CapturedMediaMetadata metadata,
+        string? userMetadataJson,
+        string? thumbnailPath,
+        IReadOnlyList<LocalImportCaptionStoragePath> captionRows)
     {
         if (string.IsNullOrWhiteSpace(userMetadataJson))
             return metadata;
+
+        try
+        {
+            var rich = JsonSerializer.Deserialize<CapturedMediaMetadata>(userMetadataJson, JsonOptions);
+            if (rich is not null)
+            {
+                return rich with
+                {
+                    Media = rich.Media with
+                    {
+                        ThumbnailStoragePath = FirstNonBlank(rich.Media.ThumbnailStoragePath, thumbnailPath, metadata.Media.ThumbnailStoragePath)
+                    },
+                    Captions = rich.Captions.Count > 0 ? rich.Captions : MapCaptions(captionRows)
+                };
+            }
+        }
+        catch (JsonException)
+        {
+            // Fall through to the legacy flat manual-mapping shape.
+        }
 
         ImportSessionUserMetadata? user;
         try

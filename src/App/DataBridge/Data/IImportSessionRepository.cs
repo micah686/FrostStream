@@ -1,5 +1,6 @@
 using NodaTime;
 using Shared.Messaging;
+using Shared.Metadata;
 
 namespace DataBridge.Data;
 
@@ -122,6 +123,7 @@ public interface IImportSessionRepository
 public sealed record ImportSessionMappingRow : ImportSessionUserMetadata
 {
     public required string FileName { get; init; }
+    public CapturedMediaMetadata? Metadata { get; init; }
 }
 
 public sealed record ImportSessionEnrichItemRef

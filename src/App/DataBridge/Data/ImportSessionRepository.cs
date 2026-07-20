@@ -1,8 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using NodaTime;
+using NodaTime.Serialization.SystemTextJson;
 using Shared.Database;
 using Shared.Imports;
 using Shared.Messaging;
+using Shared.Metadata;
 using System.Text.Json;
 
 namespace DataBridge.Data;
@@ -14,10 +16,17 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
     private const int InsertBatchSize = 500;
 
     // user_metadata JSON is camelCase (matches the values PatchItemAsync historically wrote).
-    private static readonly JsonSerializerOptions UserMetadataJsonOptions = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions UserMetadataJsonOptions = CreateUserMetadataJsonOptions();
+
+    private static JsonSerializerOptions CreateUserMetadataJsonOptions()
     {
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+        {
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+        };
+        options.ConfigureForNodaTime(DateTimeZoneProviders.Tzdb);
+        return options;
+    }
 
     private static ImportSessionUserMetadata? DeserializeUserMetadata(string? json)
     {
@@ -266,9 +275,12 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         {
             var result = byId[item.ItemId];
             item.ProbeMetadataJson = NormalizeJson(result.ProbeMetadataJson);
-            item.Status = ImportSessionItemStatus.Probed;
-            item.ErrorCode = null;
-            item.ErrorMessage = null;
+            if (item.Status == ImportSessionItemStatus.Discovered)
+            {
+                item.Status = ImportSessionItemStatus.Probed;
+                item.ErrorCode = null;
+                item.ErrorMessage = null;
+            }
             item.UpdatedAt = now;
         }
 
@@ -296,9 +308,12 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
             var failure = byId[item.ItemId];
             // A probe failure is diagnostic only. The commit flow still gets a chance to read
             // and import the file, where a real media failure is isolated to this item.
-            item.Status = ImportSessionItemStatus.Probed;
-            item.ErrorCode = NormalizeOptional(failure.ErrorCode) ?? "probe_failed";
-            item.ErrorMessage = NormalizeOptional(failure.ErrorMessage) ?? "ffprobe failed.";
+            if (item.Status == ImportSessionItemStatus.Discovered)
+            {
+                item.Status = ImportSessionItemStatus.Probed;
+                item.ErrorCode = NormalizeOptional(failure.ErrorCode) ?? "probe_failed";
+                item.ErrorMessage = NormalizeOptional(failure.ErrorMessage) ?? "ffprobe failed.";
+            }
             item.UpdatedAt = now;
         }
 
@@ -426,9 +441,7 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
 
         var items = await db.ImportSessionItems
             .Where(x => x.SessionId == sessionId
-                        && !x.Excluded
-                        && x.MetadataSource != ImportSessionItemMetadataSource.YtDlp
-                        && x.MetadataSource != ImportSessionItemMetadataSource.ManualMapping)
+                        && !x.Excluded)
             .ToListAsync(ct);
         var byFileName = items
             .GroupBy(x => x.FileName, StringComparer.OrdinalIgnoreCase)
@@ -451,8 +464,10 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
             item.Provider = NormalizeOptional(row.Provider) ?? item.Provider;
             item.SourceMediaId = NormalizeOptional(row.SourceMediaId) ?? item.SourceMediaId;
             item.SourceUrl = NormalizeOptional(row.SourceUrl) ?? item.SourceUrl;
-            // Serialize as the base type so FileName stays out of user_metadata.
-            item.UserMetadataJson = JsonSerializer.Serialize<ImportSessionUserMetadata>(row, UserMetadataJsonOptions);
+            item.UserMetadataJson = row.Metadata is { } metadata
+                ? JsonSerializer.Serialize(metadata, UserMetadataJsonOptions)
+                // Serialize as the base type so FileName stays out of user_metadata.
+                : JsonSerializer.Serialize<ImportSessionUserMetadata>(row, UserMetadataJsonOptions);
             item.MetadataState = ImportSessionItemMetadataState.Edited;
             item.MetadataSource = ImportSessionItemMetadataSource.ManualMapping;
             item.UpdatedAt = now;
@@ -486,23 +501,20 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
                         && x.MetadataSource != ImportSessionItemMetadataSource.YtDlp
                         && x.MetadataSource != ImportSessionItemMetadataSource.ManualMapping)
             .OrderBy(x => x.RelativePath)
-            .Select(x => new { x.RelativePath, x.Title, x.Provider, x.SourceMediaId, x.SourceUrl })
+            .Select(x => new { x.RelativePath, x.FileName, x.Title, x.Provider, x.SourceMediaId, x.SourceUrl })
             .ToListAsync(ct);
 
-        // Empty lists (instead of nulls) make the downloadable JSON template self-documenting.
         return items
             .Select(x => new ImportSessionMappingTemplateRow
             {
                 FileName = x.RelativePath,
-                Title = x.Title,
-                Provider = x.Provider,
-                SourceMediaId = x.SourceMediaId,
-                SourceUrl = x.SourceUrl,
-                Tags = [],
-                Categories = [],
-                Genres = [],
-                Artists = [],
-                AlbumArtists = []
+                Metadata = CreateMappingTemplateMetadata(
+                    x.RelativePath,
+                    x.FileName,
+                    x.Title,
+                    x.Provider,
+                    x.SourceMediaId,
+                    x.SourceUrl)
             })
             .ToList();
     }
@@ -806,7 +818,10 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
     public async Task<IReadOnlyList<ImportSessionItemWork>> ClaimApprovedWorkAsync(Guid sessionId, int limit, CancellationToken ct = default)
     {
         var rows = await BuildWorkQuery(sessionId)
-            .Where(x => x.Item.Status == ImportSessionItemStatus.Approved)
+            .Where(x => !x.Item.Excluded
+                        && (x.Item.Status == ImportSessionItemStatus.Approved
+                            || x.Item.Status == ImportSessionItemStatus.Probed
+                            || x.Item.Status == ImportSessionItemStatus.Discovered))
             .OrderBy(x => x.Item.ItemId)
             .Take(Math.Clamp(limit, 1, 100))
             .ToListAsync(ct);
@@ -816,8 +831,12 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         var now = clock.GetCurrentInstant();
         foreach (var row in rows)
         {
+            if (row.Item.MetadataState == ImportSessionItemMetadataState.Incomplete)
+                row.Item.MetadataState = ImportSessionItemMetadataState.PlaceholderAccepted;
             row.Item.Status = ImportSessionItemStatus.Hashing;
             row.Item.Attempt += 1;
+            row.Item.ErrorCode = null;
+            row.Item.ErrorMessage = null;
             row.Item.UpdatedAt = now;
         }
 
@@ -1097,6 +1116,90 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
 
     private static string? MetadataJson(ImportSessionItemEntity item)
         => item.MetadataSource == ImportSessionItemMetadataSource.ManualMapping ? item.UserMetadataJson : null;
+
+    private CapturedMediaMetadata CreateMappingTemplateMetadata(
+        string relativePath,
+        string fileName,
+        string? title,
+        string? provider,
+        string? sourceMediaId,
+        string? sourceUrl)
+    {
+        var normalizedProvider = NormalizeOptional(provider) ?? "local";
+        var folder = relativePath.Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        var extension = Path.GetExtension(fileName).Trim('.');
+        return new CapturedMediaMetadata
+        {
+            Account = new CapturedAccountMetadata
+            {
+                Platform = normalizedProvider,
+                AccountName = folder ?? "Unknown",
+                AccountHandle = folder ?? "unknown",
+                AccountUrl = "",
+                FollowerCount = 0,
+                Description = "",
+                ExternalIds = []
+            },
+            Media = new CapturedMediaMetadataCore
+            {
+                ExternalMediaId = NormalizeOptional(sourceMediaId) ?? "",
+                MetadataScrapeDate = clock.GetCurrentInstant(),
+                ThumbnailStoragePath = "",
+                AgeLimit = 0,
+                AverageRating = 0,
+                LikeCount = 0,
+                DislikeCount = 0,
+                DurationSeconds = 0,
+                Description = "",
+                ReleaseDate = clock.GetCurrentInstant(),
+                Title = NormalizeOptional(title) ?? Path.GetFileNameWithoutExtension(fileName),
+                WasLive = false,
+                WebpageUrl = NormalizeOptional(sourceUrl) ?? "",
+                ViewCount = 0,
+                CommentCount = 0,
+                Availability = "",
+                Location = ""
+            },
+            Technical = new CapturedMediaTechnicalMetadata
+            {
+                DurationTicks = 0,
+                Format = new CapturedFormatMetadata
+                {
+                    DurationTicks = 0,
+                    FormatLongNames = string.IsNullOrWhiteSpace(extension) ? "UNKNOWN" : extension.ToUpperInvariant(),
+                    StreamCount = 0
+                },
+                Streams = []
+            },
+            Captions = [],
+            Comments = [],
+            Series = new CapturedSeriesMetadata
+            {
+                SeriesName = "",
+                SeasonCount = 0,
+                SeasonNumber = 0,
+                SeasonName = "",
+                EpisodeNumber = 0,
+                EpisodeName = ""
+            },
+            Music = new CapturedMusicMetadata
+            {
+                AlbumTitle = "",
+                AlbumType = "",
+                DiscNumber = 0,
+                ReleaseYear = 0,
+                TrackTitle = "",
+                TrackNumber = 0,
+                Composer = ""
+            },
+            Artists = [],
+            AlbumArtists = [],
+            Genres = [],
+            Tags = [],
+            Categories = [],
+            Cast = []
+        };
+    }
 
     private static bool HasSidecar(string? sidecarsJson, string propertyName)
     {

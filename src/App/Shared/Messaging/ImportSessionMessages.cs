@@ -1,4 +1,5 @@
 using NodaTime;
+using Shared.Metadata;
 
 namespace Shared.Messaging;
 
@@ -237,6 +238,7 @@ public record ImportSessionUserMetadata
 public sealed record ImportSessionMappingTemplateRow : ImportSessionUserMetadata
 {
     public required string FileName { get; init; }
+    public CapturedMediaMetadata? Metadata { get; init; }
 }
 
 public sealed record ImportSessionEnrichRequest

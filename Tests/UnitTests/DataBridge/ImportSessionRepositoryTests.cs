@@ -211,7 +211,7 @@ public sealed class ImportSessionRepositoryTests
     }
 
     [Test]
-    public async Task Mapping_Only_Updates_Selected_Files_Without_YtDlp_Metadata()
+    public async Task Mapping_Updates_Selected_Files_Including_YtDlp_When_Explicitly_Specified()
     {
         await using var db = DataBridgeTestHelpers.CreateDb();
         var repository = new ImportSessionRepository(db, new FixedClock(DataBridgeTestHelpers.Now));
@@ -232,15 +232,15 @@ public sealed class ImportSessionRepositoryTests
         [
             new ImportSessionMappingRow { FileName = "selected.mp4", Title = "Mapped" },
             new ImportSessionMappingRow { FileName = "excluded.mp4", Title = "Must not map" },
-            new ImportSessionMappingRow { FileName = "yt-dlp.mp4", Title = "Must not replace yt-dlp" }
+            new ImportSessionMappingRow { FileName = "yt-dlp.mp4", Title = "Mapped yt-dlp" }
         ], "bucket", "key", "json");
 
-        result.MatchedCount.ShouldBe(1);
-        result.UnmatchedCount.ShouldBe(2);
+        result.MatchedCount.ShouldBe(2);
+        result.UnmatchedCount.ShouldBe(1);
         var updated = (await repository.ListItemsAsync(new ImportSessionItemsListRequest { SessionId = sessionId })).Items;
         updated.Single(x => x.FileName == "selected.mp4").MetadataSource.ShouldBe(ImportSessionItemMetadataSource.ManualMapping);
         updated.Single(x => x.FileName == "excluded.mp4").Title.ShouldBeNull();
-        updated.Single(x => x.FileName == "yt-dlp.mp4").Title.ShouldBeNull();
-        updated.Single(x => x.FileName == "yt-dlp.mp4").MetadataSource.ShouldBe(ImportSessionItemMetadataSource.YtDlp);
+        updated.Single(x => x.FileName == "yt-dlp.mp4").Title.ShouldBe("Mapped yt-dlp");
+        updated.Single(x => x.FileName == "yt-dlp.mp4").MetadataSource.ShouldBe(ImportSessionItemMetadataSource.ManualMapping);
     }
 }

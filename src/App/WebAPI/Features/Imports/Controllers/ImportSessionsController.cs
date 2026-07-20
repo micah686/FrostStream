@@ -1,5 +1,7 @@
 using Conduit.NATS;
 using Microsoft.AspNetCore.Mvc;
+using NodaTime;
+using NodaTime.Serialization.SystemTextJson;
 using System.Text.Json;
 using Shared.Auth;
 using Shared.Messaging;
@@ -16,6 +18,7 @@ public sealed class ImportSessionsController(
 {
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);
     private const long MaxMappingBytes = 10 * 1024 * 1024;
+    private static readonly JsonSerializerOptions MappingTemplateJsonOptions = CreateMappingTemplateJsonOptions();
 
     [HttpPost]
     [Endpoint(EndpointIds.ImportsSessionsCreate)]
@@ -249,8 +252,15 @@ public sealed class ImportSessionsController(
         if (!response.Success)
             return Error(response.ErrorCode, response.ErrorMessage);
 
-        var json = JsonSerializer.SerializeToUtf8Bytes(response.Items, new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true });
+        var json = JsonSerializer.SerializeToUtf8Bytes(response.Items, MappingTemplateJsonOptions);
         return File(json, "application/json", $"froststream-import-{sessionId:N}-mapping.json");
+    }
+
+    private static JsonSerializerOptions CreateMappingTemplateJsonOptions()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true };
+        options.ConfigureForNodaTime(DateTimeZoneProviders.Tzdb);
+        return options;
     }
 
     [HttpPost("{sessionId:guid}/metadata-refresh")]

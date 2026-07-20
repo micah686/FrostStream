@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using NodaTime;
 using NodaTime.Serialization.SystemTextJson;
 using Shared.Messaging;
+using Shared.Metadata;
 
 namespace DataBridge.Messaging;
 
@@ -784,8 +785,44 @@ public sealed class ImportSessionRequestReplyService(
         if (format.Equals("json", StringComparison.OrdinalIgnoreCase))
         {
             await using var stream = File.OpenRead(path);
-            return await JsonSerializer.DeserializeAsync<IReadOnlyList<ImportSessionMappingRow>>(stream, JsonOptions)
-                   ?? [];
+            using var document = await JsonDocument.ParseAsync(stream);
+            if (document.RootElement.ValueKind != JsonValueKind.Array)
+                return [];
+
+            var jsonRows = new List<ImportSessionMappingRow>();
+            foreach (var item in document.RootElement.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.Object)
+                    continue;
+
+                var fileName = ReadJsonString(item, "fileName")
+                               ?? ReadJsonString(item, "relativePath")
+                               ?? ReadJsonString(item, "file")
+                               ?? ReadJsonString(item, "path");
+                if (string.IsNullOrWhiteSpace(fileName))
+                    continue;
+
+                if (item.TryGetProperty("metadata", out var metadataElement)
+                    && metadataElement.ValueKind == JsonValueKind.Object
+                    && TryDeserializeMetadata(metadataElement) is { } metadata)
+                {
+                    jsonRows.Add(new ImportSessionMappingRow
+                    {
+                        FileName = fileName.Trim(),
+                        Metadata = metadata,
+                        Title = metadata.Media.Title,
+                        Provider = metadata.Account.Platform,
+                        SourceMediaId = metadata.Media.ExternalMediaId,
+                        SourceUrl = metadata.Media.WebpageUrl
+                    });
+                    continue;
+                }
+
+                if (TryDeserializeMappingRow(item) is { } row)
+                    jsonRows.Add(row);
+            }
+
+            return jsonRows;
         }
 
         var rows = new List<ImportSessionMappingRow>();
@@ -885,6 +922,35 @@ public sealed class ImportSessionRequestReplyService(
 
         result.Add(current.ToString());
         return result;
+    }
+
+    private static string? ReadJsonString(JsonElement element, string propertyName)
+        => element.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String
+            ? property.GetString()
+            : null;
+
+    private static CapturedMediaMetadata? TryDeserializeMetadata(JsonElement metadataElement)
+    {
+        try
+        {
+            return metadataElement.Deserialize<CapturedMediaMetadata>(JsonOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static ImportSessionMappingRow? TryDeserializeMappingRow(JsonElement rowElement)
+    {
+        try
+        {
+            return rowElement.Deserialize<ImportSessionMappingRow>(JsonOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private Task PublishStateChangedAsync(ImportSessionDto session)
