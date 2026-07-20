@@ -1,9 +1,58 @@
+export type DownloadJobStatus =
+  | 'Queued'
+  | 'Running'
+  | 'Stopping'
+  | 'Stopped'
+  | 'Compensating'
+  | 'Completed'
+  | 'CompletedWithWarnings'
+  | 'Failed'
+  | 'AlreadyDownloaded'
+  | 'Ignored';
+
+export type DownloadStage =
+  | 'None'
+  | 'Metadata'
+  | 'DuplicateCheck'
+  | 'WaitingForWorker'
+  | 'MediaAcquire'
+  | 'PrimaryMediaUpload'
+  | 'MetaSidecarUpload'
+  | 'InfoJsonUpload'
+  | 'ThumbnailUpload'
+  | 'CaptionUpload'
+  | 'RichMetadataWrite'
+  | 'Finalize'
+  | 'Cleanup'
+  | 'Compensation';
+
+export type DownloadStageStatus =
+  | 'Pending'
+  | 'Running'
+  | 'RetryWaiting'
+  | 'Succeeded'
+  | 'Skipped'
+  | 'Warning'
+  | 'Failed'
+  | 'Stopped';
+
+/** The pre-V2 state is returned temporarily for old history/debugging data only. */
 export type DownloadJobState = string;
 export type DownloadSourceKind = string;
 
 export interface DownloadQueueJob {
   jobId: string;
   correlationId: string;
+  status: DownloadJobStatus;
+  stage: DownloadStage;
+  stageStatus: DownloadStageStatus;
+  runId: string | null;
+  runNumber: number;
+  attempt: number;
+  maxAttempts: number;
+  artifactKey: string | null;
+  warningCount: number;
+  /** @deprecated V2 clients use status/stage. */
   state: DownloadJobState;
   sourceUrl: string;
   requestedBy: string | null;
@@ -30,8 +79,8 @@ export interface DownloadQueueListResponse {
 }
 
 export interface QueueListParams {
-  state?: DownloadJobState;
-  stateGroup?: 'all' | 'active' | 'queued' | 'failed' | 'done' | 'cancelled';
+  status?: DownloadJobStatus;
+  stateGroup?: 'all' | 'active' | 'queued' | 'failed' | 'done' | 'stopped';
   sourceKind?: DownloadSourceKind;
   requestedBy?: string;
   storageKey?: string;
@@ -45,6 +94,9 @@ export interface QueueListParams {
 
 export interface ProgressFrame {
   jobId: string;
+  runId: string | null;
+  stage: DownloadStage | null;
+  attempt: number;
   sequence: number;
   phase: string;
   percent: number | null;
@@ -57,8 +109,15 @@ export interface ProgressFrame {
 
 export interface StateFrame {
   jobId: string;
-  state: DownloadJobState;
-  previousState: DownloadJobState;
+  status: DownloadJobStatus;
+  previousStatus: DownloadJobStatus;
+  stage: DownloadStage;
+  stageStatus: DownloadStageStatus;
+  runId: string | null;
+  runNumber: number;
+  attempt: number;
+  artifactKey: string | null;
+  warningCount: number;
   occurredAt: string;
 }
 
@@ -112,16 +171,33 @@ export async function fetchQueue(
   return getJson<DownloadQueueListResponse>(`${BASE}${suffix ? `?${suffix}` : ''}`, fetchImpl);
 }
 
-export async function cancelJob(jobId: string, reason?: string, fetchImpl: typeof fetch = fetch): Promise<void> {
-  await send(`${BASE}/${jobId}/cancel`, 'POST', reason ? { reason } : undefined, fetchImpl);
+export async function stopJob(jobId: string, reason?: string, fetchImpl: typeof fetch = fetch): Promise<void> {
+  await send(`${BASE}/${jobId}/stop`, 'POST', reason ? { reason } : undefined, fetchImpl);
 }
 
 export async function setPriority(jobId: string, priority: number, fetchImpl: typeof fetch = fetch): Promise<void> {
   await send(`${BASE}/${jobId}/priority`, 'PATCH', { priority }, fetchImpl);
 }
 
-export async function restartJob(jobId: string, fetchImpl: typeof fetch = fetch): Promise<void> {
-  await send(`${BASE}/${jobId}/restart`, 'POST', undefined, fetchImpl);
+export async function startJob(jobId: string, fetchImpl: typeof fetch = fetch): Promise<void> {
+  await send(`${BASE}/${jobId}/start`, 'POST', undefined, fetchImpl);
+}
+
+export async function stopGroup(
+  correlationId: string,
+  reason?: string,
+  fetchImpl: typeof fetch = fetch
+): Promise<void> {
+  await send(`/api/downloads/groups/${correlationId}/stop`, 'POST', reason ? { reason } : undefined, fetchImpl);
+}
+
+export async function startGroup(correlationId: string, fetchImpl: typeof fetch = fetch): Promise<void> {
+  await send(`/api/downloads/groups/${correlationId}/start`, 'POST', undefined, fetchImpl);
+}
+
+/** Clears only the persistent provider circuit. Jobs remain Stopped/Failed until Start is pressed. */
+export async function clearProviderCircuit(provider: string, fetchImpl: typeof fetch = fetch): Promise<void> {
+  await send(`/api/downloads/providers/${encodeURIComponent(provider)}/circuit/clear`, 'POST', undefined, fetchImpl);
 }
 
 async function getJson<T>(url: string, fetchImpl: typeof fetch): Promise<T> {

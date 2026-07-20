@@ -1,7 +1,7 @@
 using NodaTime;
 using Shouldly;
 using TUnit.Core;
-using Worker.Metadata;
+using Shared.Metadata;
 using YtDlpSharpLib.Models;
 
 namespace UnitTests.Worker;

@@ -15,6 +15,7 @@ namespace Worker.Services;
 
 public sealed class ChannelDiscoveryConsumerService(
     IJetStreamConsumer consumer,
+    IJetStreamPublisher publisher,
     IMessageBus messageBus,
     IYtDlpClient ytDlp,
     PotOptionsApplier potOptionsApplier,
@@ -34,11 +35,11 @@ public sealed class ChannelDiscoveryConsumerService(
         {
             Consume<ChannelUpdateCheckRequested>(
                 BackgroundJobsTopology.WorkerChannelUpdateCheckConsumer,
-                message => HandleScheduledScanAsync(message, CreatorSourceScanMode.Incremental, stoppingToken),
+                async message => { await HandleScheduledScanAsync(message, CreatorSourceScanMode.Incremental, stoppingToken); },
                 stoppingToken),
             Consume<ChannelMediaListRequested>(
                 BackgroundJobsTopology.WorkerChannelMediaListConsumer,
-                message => HandleScheduledScanAsync(message, CreatorSourceScanMode.Full, stoppingToken),
+                message => HandleChannelMediaListAsync(message, stoppingToken),
                 stoppingToken)
         };
 
@@ -70,7 +71,61 @@ public sealed class ChannelDiscoveryConsumerService(
             options: null,
             cancellationToken: stoppingToken);
 
-    private async Task HandleScheduledScanAsync(
+    private async Task HandleChannelMediaListAsync(
+        ChannelMediaListRequested request,
+        CancellationToken cancellationToken)
+    {
+        if (request.GroupId is null || request.ExpansionDispatchId is null
+            || request.CorrelationId is null)
+        {
+            await HandleScheduledScanAsync(request, CreatorSourceScanMode.Full, cancellationToken);
+            return;
+        }
+
+        try
+        {
+            var expectedJobs = await HandleScheduledScanAsync(
+                request, CreatorSourceScanMode.Full, cancellationToken);
+            var evt = new DownloadGroupExpansionSucceeded
+            {
+                GroupId = request.GroupId.Value,
+                CorrelationId = request.CorrelationId.Value,
+                MessageId = DeterministicGuid.Create(request.ExpansionDispatchId.Value, "/succeeded"),
+                CausationId = request.ExpansionDispatchId.Value,
+                OperationKey = $"group/{request.GroupId.Value:N}/expand/attempt/{request.ExpansionAttempt}/succeeded",
+                OccurredAt = clock.GetCurrentInstant(),
+                Attempt = request.ExpansionAttempt,
+                ExpectedJobs = expectedJobs
+            };
+            await publisher.PublishAsync(
+                DownloadSubjects.GroupExpansionSucceeded, evt, evt.MessageId.ToString("N"),
+                cancellationToken: cancellationToken);
+        }
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            logger.LogWarning(ex,
+                "V2 channel group {GroupId} expansion attempt {Attempt} failed.",
+                request.GroupId, request.ExpansionAttempt);
+            var evt = new DownloadGroupExpansionFailed
+            {
+                GroupId = request.GroupId.Value,
+                CorrelationId = request.CorrelationId.Value,
+                MessageId = DeterministicGuid.Create(request.ExpansionDispatchId.Value, "/failed"),
+                CausationId = request.ExpansionDispatchId.Value,
+                OperationKey = $"group/{request.GroupId.Value:N}/expand/attempt/{request.ExpansionAttempt}/failed",
+                OccurredAt = clock.GetCurrentInstant(),
+                Attempt = request.ExpansionAttempt,
+                FailureKind = YtDlpFailureDetails.ClassifyFailure(ex),
+                ErrorCode = YtDlpFailureDetails.ErrorCode(ex),
+                ErrorMessage = YtDlpFailureDetails.DescribeException(ex)
+            };
+            await publisher.PublishAsync(
+                DownloadSubjects.GroupExpansionFailed, evt, evt.MessageId.ToString("N"),
+                cancellationToken: cancellationToken);
+        }
+    }
+
+    private async Task<int> HandleScheduledScanAsync(
         ScheduledBackgroundRequest request,
         CreatorSourceScanMode scanMode,
         CancellationToken cancellationToken)
@@ -78,9 +133,10 @@ public sealed class ChannelDiscoveryConsumerService(
         await MarkAttemptAsync(request, cancellationToken);
 
         var sources = await ResolveSourcesAsync(request, scanMode, cancellationToken);
+        var expectedJobs = 0;
         foreach (var source in sources)
         {
-            await ScanSourceAsync(request, scanMode, source, cancellationToken);
+            expectedJobs += await ScanSourceAsync(request, scanMode, source, cancellationToken);
         }
 
         await MarkSuccessAsync(request, cancellationToken);
@@ -89,6 +145,7 @@ public sealed class ChannelDiscoveryConsumerService(
             scanMode,
             request.IdempotencyKey,
             sources.Count);
+        return expectedJobs;
     }
 
     private async Task<IReadOnlyList<CreatorSourceDto>> ResolveSourcesAsync(
@@ -133,7 +190,7 @@ public sealed class ChannelDiscoveryConsumerService(
         return sourcesResponse.Items ?? Array.Empty<CreatorSourceDto>();
     }
 
-    private async Task ScanSourceAsync(
+    private async Task<int> ScanSourceAsync(
         ScheduledBackgroundRequest request,
         CreatorSourceScanMode scanMode,
         CreatorSourceDto source,
@@ -160,6 +217,7 @@ public sealed class ChannelDiscoveryConsumerService(
         var totalSeen = 0;
         var newCount = 0;
         var changedCount = 0;
+        var expectedJobs = 0;
         var batchIndex = 0;
         var batches = Chunk(candidates, DiscoveryUpsertBatchSize).ToArray();
 
@@ -203,6 +261,7 @@ public sealed class ChannelDiscoveryConsumerService(
             totalSeen += response.TotalSeen;
             newCount += response.NewCount;
             changedCount += response.ChangedCount;
+            expectedJobs += response.EnqueuedItems?.Count ?? 0;
             batchIndex++;
         }
 
@@ -242,6 +301,7 @@ public sealed class ChannelDiscoveryConsumerService(
             {
                 throw new InvalidOperationException(response?.ErrorMessage ?? $"Discovery upsert failed for creator source {source.Id}.");
             }
+            expectedJobs += response.EnqueuedItems?.Count ?? 0;
         }
 
         if (!scanPageComplete)
@@ -263,6 +323,7 @@ public sealed class ChannelDiscoveryConsumerService(
             newCount,
             changedCount,
             Math.Max(batchIndex, 1));
+        return expectedJobs;
     }
 
     internal static YtDlpOptions BuildOptions(

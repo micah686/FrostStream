@@ -46,6 +46,7 @@ class Program
         });
 
         builder.Services.AddNatsTopologySource<DownloadTopology>();
+        builder.Services.AddNatsTopologySource<ArtifactStorageTopology>();
         builder.Services.AddNatsTopologySource<PlaylistTopology>();
         builder.Services.AddNatsTopologySource<BackgroundJobsTopology>();
         builder.Services.AddNatsTopologySource<LocalImportTopology>();
@@ -101,7 +102,6 @@ class Program
             .Bind(builder.Configuration.GetSection(PotProviderOptions.SectionName));
         builder.Services.AddSingleton<PotShimEndpoint>();
         builder.Services.AddSingleton<PotOptionsApplier>();
-        builder.Services.AddSingleton<ProviderDownloadHaltRegistry>();
         builder.Services.AddHttpClient<IReturnYouTubeDislikeClient, ReturnYouTubeDislikeClient>((sp, client) =>
         {
             var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<WorkerOptions>>()
@@ -115,6 +115,7 @@ class Program
         // Register startup service (downloads yt-dlp/ffmpeg/ffprobe binaries before any
         // BackgroundService starts).
         builder.Services.AddHostedService<StartupService>();
+        builder.Services.AddHostedService<WorkerHeartbeatService>();
 
         // POT shim: starts after StartupService; its constructor publishes the loopback base URL.
         builder.Services.AddHostedService<PotShimService>();
@@ -137,6 +138,7 @@ class Program
         // Command consumers for the download flow.
         builder.Services.AddHostedService<DownloadCommandsConsumerService>();
         builder.Services.AddHostedService<LocalImportScanConsumerService>();
+        builder.Services.AddHostedService<LocalImportBrowseConsumerService>();
         builder.Services.AddHostedService<LocalImportProbeConsumerService>();
         builder.Services.AddHostedService<LocalImportEnrichConsumerService>();
         builder.Services.AddHostedService<LocalImportCommandsConsumerService>();

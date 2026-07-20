@@ -82,20 +82,23 @@ public sealed class WebApiHttpTests
         body.ShouldNotBeNull();
         body.JobId.ShouldNotBe(Guid.Empty);
 
-        var published = factory.Publisher.Single<DownloadRequested>();
-        published.Subject.ShouldBe(DownloadSubjects.DownloadRequested);
+        var published = factory.Publisher.Single<DownloadGroupRequested>();
+        published.Subject.ShouldBe(DownloadSubjects.GroupRequested);
         published.MessageId.ShouldNotBeNullOrWhiteSpace();
-        published.Message.JobId.ShouldBe(body.JobId);
-        published.Message.SourceUrl.ShouldBe("https://example.test/audio");
-        published.Message.StorageKey.ShouldBe("default");
+        published.Message.Kind.ShouldBe(DownloadGroupKind.Direct);
+        published.Message.DirectRequest.ShouldNotBeNull();
+        var job = published.Message.DirectRequest;
+        job.JobId.ShouldBe(body.JobId);
+        job.SourceUrl.ShouldBe("https://example.test/audio");
+        job.StorageKey.ShouldBe("default");
         // RequestedBy is now stamped server-side from the validated subject (single-user mode).
-        published.Message.RequestedBy.ShouldBe(AuthConstants.SingleUserSubject);
+        job.RequestedBy.ShouldBe(AuthConstants.SingleUserSubject);
         // Single-user mode resolves the subject to the synthetic owner, so the cookie profile lands
         // under that owner's user-scoped path — never a global key.
-        published.Message.CookieSecretPath.ShouldBe($"cookies/users/{AuthConstants.SingleUserSubject}/member-cookie");
-        published.Message.MediaKind.ShouldBe(MediaKind.Audio);
-        published.Message.AudioFormat.ShouldBe(AudioConversionFormat.Mp3);
-        published.Message.OccurredAt.ShouldBe(TestWebApiFactory.Now);
+        job.CookieSecretPath.ShouldBe($"cookies/users/{AuthConstants.SingleUserSubject}/member-cookie");
+        job.MediaKind.ShouldBe(MediaKind.Audio);
+        job.AudioFormat.ShouldBe(AudioConversionFormat.Mp3);
+        job.OccurredAt.ShouldBe(TestWebApiFactory.Now);
     }
 
     [Test]

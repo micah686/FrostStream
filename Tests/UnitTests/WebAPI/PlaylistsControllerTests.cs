@@ -36,17 +36,21 @@ public sealed class PlaylistsControllerTests
         payload.CorrelationId.ShouldNotBe(Guid.Empty);
 
         await publisher.Received(1).PublishAsync(
-            PlaylistSubjects.PlaylistRequested,
-            Arg.Is<PlaylistRequested>(x =>
-                x.PlaylistId == payload.PlaylistId &&
-                x.CorrelationId == payload.CorrelationId &&
-                x.CausationId == null &&
-                x.OperationKey == $"playlist/{payload.PlaylistId:N}/requested" &&
-                x.OccurredAt == Now &&
-                x.Attempt == 1 &&
-                x.SourceUrl == "https://example.test/playlist" &&
-                x.StorageKey == "default" &&
-                x.RequestedBy == "unit_test_user"),
+            DownloadSubjects.GroupRequested,
+            Arg.Is<DownloadGroupRequested>(g =>
+                g.Kind == DownloadGroupKind.Playlist &&
+                g.GroupId == payload.CorrelationId &&
+                g.CorrelationId == payload.CorrelationId &&
+                g.CollectionRequest != null &&
+                g.CollectionRequest.PlaylistId == payload.PlaylistId &&
+                g.CollectionRequest.CorrelationId == payload.CorrelationId &&
+                g.CollectionRequest.CausationId == null &&
+                g.CollectionRequest.OperationKey == $"playlist/{payload.PlaylistId:N}/requested" &&
+                g.CollectionRequest.OccurredAt == Now &&
+                g.CollectionRequest.Attempt == 1 &&
+                g.CollectionRequest.SourceUrl == "https://example.test/playlist" &&
+                g.CollectionRequest.StorageKey == "default" &&
+                g.CollectionRequest.RequestedBy == "unit_test_user"),
             Arg.Is<string>(x => x.Length == 32),
             null,
             Arg.Any<CancellationToken>());
@@ -113,7 +117,7 @@ public sealed class PlaylistsControllerTests
         var publisher = Substitute.For<IJetStreamPublisher>();
         publisher.PublishAsync(
                 Arg.Any<string>(),
-                Arg.Any<PlaylistRequested>(),
+                Arg.Any<DownloadGroupRequested>(),
                 Arg.Any<string>(),
                 null,
                 Arg.Any<CancellationToken>())
@@ -142,7 +146,7 @@ public sealed class PlaylistsControllerTests
         result.Result.ShouldBeOfType<BadRequestObjectResult>();
         await publisher.DidNotReceiveWithAnyArgs().PublishAsync(
             default!,
-            default(PlaylistRequested)!,
+            default(DownloadGroupRequested)!,
             default,
             default,
             default);

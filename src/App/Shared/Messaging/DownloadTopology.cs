@@ -2,54 +2,48 @@ using Conduit.NATS;
 
 namespace Shared.Messaging;
 
-/// <summary>
-/// JetStream topology for the download flow. One stream (<c>FROSTSTREAM_DOWNLOAD</c>) covers
-/// every <c>download.&gt;</c> subject; durable consumers exist per ingress path so messages
-/// survive service restarts and replay correctly.
-///
-/// Lives in <c>Shared</c> so DataBridge and Worker can both register it via
-/// <c>AddNatsTopologySource&lt;DownloadTopology&gt;()</c>. Provisioning is idempotent —
-/// whichever service starts first creates the stream and the consumers, and the other
-/// service's Ensure* calls become no-ops.
-/// </summary>
+/// <summary>Fresh Download Flow V2 topology. Artifact transfer has its own stream.</summary>
 public sealed class DownloadTopology : ITopologySource
 {
-    public const string StreamNameValue = "FROSTSTREAM_DOWNLOAD";
-    public const string SubjectFilter = "download.>";
+    public const string StreamNameValue = "FROSTSTREAM_DOWNLOAD_V2";
 
-    public const string DataBridgeQueueGroup = "databridge-downloads";
-    public const string WorkerQueueGroup = "workers";
+    /// <summary>
+    /// Durable traffic only. The control-plane request/reply subjects
+    /// (<c>download.v2.control.&gt;</c> — job start/stop, lease acquire/renew, …) must never be
+    /// captured by the stream: JetStream sends its publish ack to the request's reply inbox,
+    /// which the requester then mistakes for the responder's reply (see PlaylistTopology).
+    /// </summary>
+    public static readonly string[] SubjectFilters =
+    [
+        "download.v2.request.>",
+        "download.v2.command.>",
+        "download.v2.event.>",
+        DownloadSubjects.DownloadProgress
+    ];
 
-    // DataBridge consumer durable names.
-    public const string DownloadRequestedConsumer        = "databridge-download-requested";
-    public const string MetadataFetchedConsumer          = "databridge-metadata-fetched";
-    public const string MetadataFetchFailedConsumer      = "databridge-metadata-fetch-failed";
-    public const string DownloadCompletedConsumer        = "databridge-download-completed";
-    public const string DownloadFailedConsumer           = "databridge-download-failed";
-    public const string UploadCompletedConsumer          = "databridge-upload-completed";
-    public const string UploadFailedConsumer             = "databridge-upload-failed";
-    public const string TempFileDeletedConsumer          = "databridge-temp-file-deleted";
-    public const string TempFileDeleteFailedConsumer     = "databridge-temp-file-delete-failed";
-    public const string UploadedObjectDeletedConsumer    = "databridge-uploaded-object-deleted";
-    public const string UploadedObjectDeleteFailedConsumer = "databridge-uploaded-object-delete-failed";
-    public const string LocalImportUploadCompletedConsumer = "databridge-local-import-upload-completed";
-    public const string LocalImportUploadFailedConsumer = "databridge-local-import-upload-failed";
-    public const string LocalImportUploadedObjectDeletedConsumer = "databridge-local-import-uploaded-object-deleted";
-    public const string LocalImportUploadedObjectDeleteFailedConsumer = "databridge-local-import-uploaded-object-delete-failed";
+    public const string GroupRequestedConsumer = "databridge-download-v2-group-requested";
+    public const string DownloadRequestedConsumer = "databridge-download-v2-job-requested";
+    public const string MetadataFetchedConsumer = "databridge-download-v2-metadata-succeeded";
+    public const string MetadataFetchFailedConsumer = "databridge-download-v2-metadata-failed";
+    public const string DownloadCompletedConsumer = "databridge-download-v2-media-succeeded";
+    public const string DownloadFailedConsumer = "databridge-download-v2-media-failed";
+    public const string StageStartedConsumer = "databridge-download-v2-stage-started";
+    public const string StageHeartbeatConsumer = "databridge-download-v2-stage-heartbeat";
+    public const string StageSucceededConsumer = "databridge-download-v2-stage-succeeded";
+    public const string StageFailedConsumer = "databridge-download-v2-stage-failed";
+    public const string StageStoppedConsumer = "databridge-download-v2-stage-stopped";
+    public const string GroupExpansionSucceededConsumer = "databridge-download-v2-group-expansion-succeeded";
+    public const string GroupExpansionFailedConsumer = "databridge-download-v2-group-expansion-failed";
 
-    // Worker consumer durable names.
-    public const string WorkerFetchMetadataConsumer        = "worker-fetch-metadata";
-    public const string WorkerDownloadVideoConsumer        = "worker-download-video";
-    public const string WorkerUploadObjectConsumer         = "worker-upload-object";
-    public const string WorkerDeleteTempFileConsumer       = "worker-delete-temp-file";
-    public const string WorkerDeleteUploadedObjectConsumer = "worker-delete-uploaded-object";
+    public const string WorkerFetchMetadataConsumer = "worker-download-v2-metadata";
+    public const string WorkerDownloadVideoConsumer = "worker-download-v2-media";
 
     public IEnumerable<StreamSpec> GetStreams()
     {
         yield return new StreamSpec
         {
             Name = StreamName.From(StreamNameValue),
-            Subjects = [SubjectFilter],
+            Subjects = SubjectFilters,
             MaxAge = TimeSpan.FromDays(30),
             RetentionPolicy = StreamRetention.Limits,
             StorageType = StorageType.File,
@@ -59,64 +53,45 @@ public sealed class DownloadTopology : ITopologySource
 
     public IEnumerable<ConsumerSpec> GetConsumers()
     {
-        // DataBridge ingress: DownloadRequested + every Worker-emitted result event.
-        yield return DataBridgeConsumer(DownloadRequestedConsumer,         DownloadSubjects.DownloadRequested);
-        yield return DataBridgeConsumer(MetadataFetchedConsumer,           DownloadSubjects.MetadataFetched);
-        yield return DataBridgeConsumer(MetadataFetchFailedConsumer,       DownloadSubjects.MetadataFetchFailed);
-        yield return DataBridgeConsumer(DownloadCompletedConsumer,         DownloadSubjects.DownloadCompleted);
-        yield return DataBridgeConsumer(DownloadFailedConsumer,            DownloadSubjects.DownloadFailed);
-        yield return DataBridgeConsumer(UploadCompletedConsumer,           DownloadSubjects.UploadCompleted);
-        yield return DataBridgeConsumer(UploadFailedConsumer,              DownloadSubjects.UploadFailed);
-        yield return DataBridgeConsumer(TempFileDeletedConsumer,           DownloadSubjects.TempFileDeleted);
-        yield return DataBridgeConsumer(TempFileDeleteFailedConsumer,      DownloadSubjects.TempFileDeleteFailed);
-        yield return DataBridgeConsumer(UploadedObjectDeletedConsumer,     DownloadSubjects.UploadedObjectDeleted);
-        yield return DataBridgeConsumer(UploadedObjectDeleteFailedConsumer, DownloadSubjects.UploadedObjectDeleteFailed);
-        yield return DataBridgeConsumer(LocalImportUploadCompletedConsumer, DownloadSubjects.UploadCompleted);
-        yield return DataBridgeConsumer(LocalImportUploadFailedConsumer, DownloadSubjects.UploadFailed);
-        yield return DataBridgeConsumer(LocalImportUploadedObjectDeletedConsumer, DownloadSubjects.UploadedObjectDeleted);
-        yield return DataBridgeConsumer(LocalImportUploadedObjectDeleteFailedConsumer, DownloadSubjects.UploadedObjectDeleteFailed);
-
-        // Worker-side command consumers — durable so a Worker pod restart resumes mid-flight commands.
-        yield return WorkerConsumer(WorkerFetchMetadataConsumer,        DownloadSubjects.FetchMetadataCommand);
-        yield return WorkerConsumer(WorkerDownloadVideoConsumer,        DownloadSubjects.DownloadVideoCommand);
-        yield return WorkerConsumer(WorkerUploadObjectConsumer,         DownloadSubjects.UploadObjectCommand);
-        yield return WorkerConsumer(WorkerDeleteTempFileConsumer,       DownloadSubjects.DeleteTempFileCommand);
-        yield return WorkerConsumer(WorkerDeleteUploadedObjectConsumer, DownloadSubjects.DeleteUploadedObjectCommand);
+        yield return DataBridge(GroupRequestedConsumer, DownloadSubjects.GroupRequested);
+        yield return DataBridge(DownloadRequestedConsumer, DownloadSubjects.DownloadRequested);
+        yield return DataBridge(MetadataFetchedConsumer, DownloadSubjects.MetadataFetched);
+        yield return DataBridge(MetadataFetchFailedConsumer, DownloadSubjects.MetadataFetchFailed);
+        yield return DataBridge(DownloadCompletedConsumer, DownloadSubjects.DownloadCompleted);
+        yield return DataBridge(DownloadFailedConsumer, DownloadSubjects.DownloadFailed);
+        yield return DataBridge(StageStartedConsumer, DownloadSubjects.StageStarted);
+        yield return DataBridge(StageHeartbeatConsumer, DownloadSubjects.StageHeartbeat);
+        yield return DataBridge(StageSucceededConsumer, DownloadSubjects.StageSucceeded);
+        yield return DataBridge(StageFailedConsumer, DownloadSubjects.StageFailed);
+        yield return DataBridge(StageStoppedConsumer, DownloadSubjects.StageStopped);
+        yield return DataBridge(GroupExpansionSucceededConsumer, DownloadSubjects.GroupExpansionSucceeded);
+        yield return DataBridge(GroupExpansionFailedConsumer, DownloadSubjects.GroupExpansionFailed);
+        yield return Worker(WorkerFetchMetadataConsumer, DownloadSubjects.FetchMetadataCommand);
+        yield return Worker(WorkerDownloadVideoConsumer, DownloadSubjects.DownloadVideoCommand);
     }
 
-    /// <summary>
-    /// Builds a durable consumer spec for a tagged worker command. Workers call
-    /// <see cref="ITopologyManager.EnsureConsumerAsync"/> with this spec at startup for each
-    /// of their configured tags. Multiple workers sharing the same tag use the same durable
-    /// name, so they form a queue group and share load.
-    /// </summary>
-    public static ConsumerSpec TaggedWorkerConsumerSpec(string baseConsumerName, string baseSubject, string tag)
-        => new()
-        {
-            StreamName = StreamName.From(StreamNameValue),
-            DurableName = ConsumerName.From($"{baseConsumerName}-{tag}"),
-            DeliverGroup = QueueGroup.From($"workers-{tag}"),
-            FilterSubject = DownloadSubjects.Tagged(baseSubject, tag),
-            AckPolicy = AckPolicy.Explicit,
-            AckWait = TimeSpan.FromMinutes(2),
-            MaxDeliver = 10
-        };
+    public static ConsumerSpec TaggedWorkerConsumerSpec(string baseConsumerName, string baseSubject, string tag) => new()
+    {
+        StreamName = StreamName.From(StreamNameValue),
+        DurableName = ConsumerName.From($"{baseConsumerName}-{tag}"),
+        DeliverGroup = QueueGroup.From($"download-v2-workers-{tag}"),
+        FilterSubject = DownloadSubjects.Tagged(baseSubject, tag),
+        AckPolicy = AckPolicy.Explicit,
+        AckWait = TimeSpan.FromMinutes(2),
+        MaxDeliver = 10
+    };
 
-    private static ConsumerSpec DataBridgeConsumer(string durableName, string subject)
-        => Consumer(durableName, subject, DataBridgeQueueGroup);
+    private static ConsumerSpec DataBridge(string durableName, string subject) => Consumer(durableName, subject, "databridge-download-v2");
+    private static ConsumerSpec Worker(string durableName, string subject) => Consumer(durableName, subject, "download-v2-workers");
 
-    private static ConsumerSpec WorkerConsumer(string durableName, string subject)
-        => Consumer(durableName, subject, WorkerQueueGroup);
-
-    private static ConsumerSpec Consumer(string durableName, string subject, string queueGroup)
-        => new()
-        {
-            StreamName = StreamName.From(StreamNameValue),
-            DurableName = ConsumerName.From(durableName),
-            DeliverGroup = QueueGroup.From(queueGroup),
-            FilterSubject = subject,
-            AckPolicy = AckPolicy.Explicit,
-            AckWait = TimeSpan.FromMinutes(2),
-            MaxDeliver = 10
-        };
+    private static ConsumerSpec Consumer(string durableName, string subject, string group) => new()
+    {
+        StreamName = StreamName.From(StreamNameValue),
+        DurableName = ConsumerName.From(durableName),
+        DeliverGroup = QueueGroup.From(group),
+        FilterSubject = subject,
+        AckPolicy = AckPolicy.Explicit,
+        AckWait = TimeSpan.FromMinutes(2),
+        MaxDeliver = 10
+    };
 }

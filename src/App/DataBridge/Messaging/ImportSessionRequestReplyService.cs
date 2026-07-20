@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using NodaTime;
 using NodaTime.Serialization.SystemTextJson;
 using Shared.Messaging;
+using Shared.Metadata;
 
 namespace DataBridge.Messaging;
 
@@ -32,7 +33,10 @@ public sealed class ImportSessionRequestReplyService(
         await SubscribeAsync<ImportSessionItemPatchRequest>(messageBus, ImportSessionSubjects.ItemsPatch, HandleItemPatchAsync, ImportSessionSubjects.QueueGroup, stoppingToken);
         await SubscribeAsync<ImportSessionItemsBulkRequest>(messageBus, ImportSessionSubjects.ItemsBulk, HandleItemsBulkAsync, ImportSessionSubjects.QueueGroup, stoppingToken);
         await SubscribeAsync<ImportSessionMappingApplyRequest>(messageBus, ImportSessionSubjects.MappingApply, HandleMappingApplyAsync, ImportSessionSubjects.QueueGroup, stoppingToken);
+        await SubscribeAsync<ImportSessionMappingTemplateRequest>(messageBus, ImportSessionSubjects.MappingTemplate, HandleMappingTemplateAsync, ImportSessionSubjects.QueueGroup, stoppingToken);
+        await SubscribeAsync<ImportSessionMetadataRefreshRequest>(messageBus, ImportSessionSubjects.MetadataRefresh, HandleMetadataRefreshAsync, ImportSessionSubjects.QueueGroup, stoppingToken);
         await SubscribeAsync<ImportSessionEnrichRequest>(messageBus, ImportSessionSubjects.Enrich, HandleEnrichAsync, ImportSessionSubjects.QueueGroup, stoppingToken);
+        await SubscribeAsync<ImportSessionUpdateOptionsRequest>(messageBus, ImportSessionSubjects.UpdateOptions, HandleUpdateOptionsAsync, ImportSessionSubjects.QueueGroup, stoppingToken);
         await SubscribeAsync<ImportSessionCommitRequest>(messageBus, ImportSessionSubjects.Commit, HandleCommitAsync, ImportSessionSubjects.QueueGroup, stoppingToken);
         await SubscribeAsync<ImportSessionRetryFailedRequest>(messageBus, ImportSessionSubjects.RetryFailed, HandleRetryFailedAsync, ImportSessionSubjects.QueueGroup, stoppingToken);
         await SubscribeAsync<ImportSessionCancelRequest>(messageBus, ImportSessionSubjects.Cancel, HandleCancelAsync, ImportSessionSubjects.QueueGroup, stoppingToken);
@@ -340,6 +344,8 @@ public sealed class ImportSessionRequestReplyService(
             await context.RespondAsync(result.Session is null
                 ? new ImportSessionItemsBulkResponse { Success = false, ErrorCode = "not_found", ErrorMessage = "Import session was not found." }
                 : new ImportSessionItemsBulkResponse { Success = true, AffectedCount = result.AffectedCount, Session = result.Session });
+            if (context.Message.Action == ImportSessionBulkAction.Include && result.Session is not null)
+                await ScheduleProbeBatchAsync(result.Session);
         }
         catch (Exception ex)
         {
@@ -386,11 +392,55 @@ public sealed class ImportSessionRequestReplyService(
         }
     }
 
+    private async Task HandleMappingTemplateAsync(IMessageContext<ImportSessionMappingTemplateRequest> context)
+    {
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var repo = scope.ServiceProvider.GetRequiredService<IImportSessionRepository>();
+            var session = await repo.GetAsync(context.Message.SessionId);
+            if (session is null)
+            {
+                await context.RespondAsync(new ImportSessionMappingTemplateResponse
+                {
+                    Success = false,
+                    ErrorCode = "not_found",
+                    ErrorMessage = "Import session was not found."
+                });
+                return;
+            }
+
+            var items = await repo.ListMappingTemplateAsync(context.Message.SessionId);
+            await context.RespondAsync(new ImportSessionMappingTemplateResponse { Success = true, Items = items });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed generating import mapping template for {SessionId}.", context.Message.SessionId);
+            await context.RespondAsync(new ImportSessionMappingTemplateResponse
+            {
+                Success = false,
+                ErrorCode = "internal_error",
+                ErrorMessage = "Failed to generate the mapping template."
+            });
+        }
+    }
+
     private async Task HandleEnrichAsync(IMessageContext<ImportSessionEnrichRequest> context)
     {
         var request = context.Message;
         try
         {
+            if (request.Options.SleepBetweenRequestsSeconds < 3)
+            {
+                await context.RespondAsync(new ImportSessionEnrichResponse
+                {
+                    Success = false,
+                    ErrorCode = "validation",
+                    ErrorMessage = "Sleep between requests must be at least 3 seconds."
+                });
+                return;
+            }
+
             ImportSessionDto? session;
             IReadOnlyList<ImportSessionEnrichItemRef> items;
             using (var scope = scopeFactory.CreateScope())
@@ -416,6 +466,7 @@ public sealed class ImportSessionRequestReplyService(
                 }
 
                 items = await repo.ListItemsForEnrichAsync(request.SessionId, request.ItemIds, EnrichBatchLimit);
+                session = await repo.MarkEnrichmentQueuedAsync(request.SessionId, items.Select(x => x.ItemId).ToList()) ?? session;
             }
 
             foreach (var item in items)
@@ -429,12 +480,14 @@ public sealed class ImportSessionRequestReplyService(
                     MessageId = messageId,
                     OperationKey = $"import-session/{session.SessionId:N}/enrich/{item.ItemId:N}",
                     OccurredAt = clock.GetCurrentInstant(),
-                    Attempt = 1,
+                    Attempt = item.Attempt,
                     SessionId = session.SessionId,
                     ItemId = item.ItemId,
                     SourceUrl = item.SourceUrl,
+                    RelativePath = item.RelativePath,
                     Provider = item.Provider,
-                    RequiredWorkerTag = session.WorkerTag
+                    RequiredWorkerTag = session.WorkerTag,
+                    Options = request.Options
                 };
                 var subject = string.IsNullOrWhiteSpace(session.WorkerTag)
                     ? LocalImportSubjects.EnrichImportSessionItemCommand
@@ -448,6 +501,120 @@ public sealed class ImportSessionRequestReplyService(
         {
             logger.LogError(ex, "Failed queueing enrichment for import session {SessionId}.", request.SessionId);
             await context.RespondAsync(new ImportSessionEnrichResponse { Success = false, ErrorCode = "internal_error", ErrorMessage = "Internal import-session service error." });
+        }
+    }
+
+    private async Task HandleMetadataRefreshAsync(IMessageContext<ImportSessionMetadataRefreshRequest> context)
+    {
+        var request = context.Message;
+        try
+        {
+            ImportSessionDto? session;
+            IReadOnlyList<ImportSessionMetadataRefreshItemRef> items;
+            using (var scope = scopeFactory.CreateScope())
+            {
+                var repo = scope.ServiceProvider.GetRequiredService<IImportSessionRepository>();
+                session = await repo.GetAsync(request.SessionId);
+                if (session is null)
+                {
+                    await context.RespondAsync(new ImportSessionMetadataRefreshResponse { Success = false, ErrorCode = "not_found", ErrorMessage = "Import session was not found." });
+                    return;
+                }
+
+                if (session.Status != ImportSessionStatus.Reviewing)
+                {
+                    await context.RespondAsync(new ImportSessionMetadataRefreshResponse
+                    {
+                        Success = false,
+                        ErrorCode = "validation",
+                        ErrorMessage = "Metadata refresh is only available while the session is in review.",
+                        Session = session
+                    });
+                    return;
+                }
+
+                items = await repo.ListItemsForMetadataRefreshAsync(request.SessionId, request.ItemIds, EnrichBatchLimit);
+            }
+
+            var subject = string.IsNullOrWhiteSpace(session.WorkerTag)
+                ? LocalImportSubjects.RefreshMetadataRequest
+                : LocalImportSubjects.RefreshMetadataRequestForTag(session.WorkerTag);
+            var refresh = await messageBus.RequestAsync<RefreshImportMetadataRequest, RefreshImportMetadataResponse>(
+                subject,
+                new RefreshImportMetadataRequest
+                {
+                    Items = items.Select(item => new RefreshImportMetadataRequestItem
+                    {
+                        ItemId = item.ItemId,
+                        RelativePath = item.RelativePath,
+                        Provider = item.Provider,
+                        SourceUrl = item.SourceUrl
+                    }).ToList()
+                },
+                TimeSpan.FromSeconds(30),
+                CancellationToken.None);
+
+            if (refresh is null)
+            {
+                await context.RespondAsync(new ImportSessionMetadataRefreshResponse
+                {
+                    Success = false,
+                    ErrorCode = "worker_unavailable",
+                    ErrorMessage = "No import worker answered the local metadata refresh request.",
+                    Session = session
+                });
+                return;
+            }
+
+            if (!refresh.Success)
+            {
+                await context.RespondAsync(new ImportSessionMetadataRefreshResponse
+                {
+                    Success = false,
+                    ErrorCode = refresh.ErrorCode,
+                    ErrorMessage = refresh.ErrorMessage,
+                    Session = session
+                });
+                return;
+            }
+
+            foreach (var item in refresh.Items)
+            {
+                var messageId = Guid.NewGuid();
+                using var scope = scopeFactory.CreateScope();
+                var repo = scope.ServiceProvider.GetRequiredService<IImportSessionRepository>();
+                session = await repo.ApplyEnrichmentAsync(new ImportSessionItemEnriched
+                {
+                    JobId = session.SessionId,
+                    CorrelationId = session.CorrelationId,
+                    CausationId = null,
+                    MessageId = messageId,
+                    OperationKey = $"import-session/{session.SessionId:N}/metadata-refresh/{item.ItemId:N}",
+                    OccurredAt = clock.GetCurrentInstant(),
+                    Attempt = 1,
+                    SessionId = session.SessionId,
+                    ItemId = item.ItemId,
+                    EnrichedMetadataJson = item.EnrichedMetadataJson,
+                    Title = item.Title,
+                    Provider = item.Provider,
+                    SourceMediaId = item.SourceMediaId,
+                    SourceUrl = item.SourceUrl,
+                    InfoJsonRelativePath = item.InfoJsonRelativePath
+                }) ?? session;
+            }
+
+            await context.RespondAsync(new ImportSessionMetadataRefreshResponse
+            {
+                Success = true,
+                CheckedCount = refresh.CheckedCount,
+                FoundCount = refresh.FoundCount,
+                Session = session
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed refreshing local metadata sidecars for import session {SessionId}.", request.SessionId);
+            await context.RespondAsync(new ImportSessionMetadataRefreshResponse { Success = false, ErrorCode = "internal_error", ErrorMessage = "Internal import-session service error." });
         }
     }
 
@@ -467,6 +634,35 @@ public sealed class ImportSessionRequestReplyService(
         var session = await repo.ApplyEnrichFailureAsync(message);
         if (session is not null)
             await PublishStateChangedAsync(session);
+    }
+
+    private async Task HandleUpdateOptionsAsync(IMessageContext<ImportSessionUpdateOptionsRequest> context)
+    {
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var repo = scope.ServiceProvider.GetRequiredService<IImportSessionRepository>();
+            var result = await repo.UpdateOptionsAsync(context.Message);
+            if (result.Session is null)
+            {
+                await context.RespondAsync(new ImportSessionUpdateOptionsResponse { Success = false, ErrorCode = "not_found", ErrorMessage = "Import session was not found." });
+                return;
+            }
+
+            if (result.Error is not null)
+            {
+                await context.RespondAsync(new ImportSessionUpdateOptionsResponse { Success = false, ErrorCode = "validation", ErrorMessage = result.Error, Session = result.Session });
+                return;
+            }
+
+            await PublishStateChangedAsync(result.Session);
+            await context.RespondAsync(new ImportSessionUpdateOptionsResponse { Success = true, Session = result.Session });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed updating import session options for {SessionId}.", context.Message.SessionId);
+            await context.RespondAsync(new ImportSessionUpdateOptionsResponse { Success = false, ErrorCode = "internal_error", ErrorMessage = "Internal import-session service error." });
+        }
     }
 
     private async Task HandleCommitAsync(IMessageContext<ImportSessionCommitRequest> context)
@@ -589,8 +785,44 @@ public sealed class ImportSessionRequestReplyService(
         if (format.Equals("json", StringComparison.OrdinalIgnoreCase))
         {
             await using var stream = File.OpenRead(path);
-            return await JsonSerializer.DeserializeAsync<IReadOnlyList<ImportSessionMappingRow>>(stream, JsonOptions)
-                   ?? [];
+            using var document = await JsonDocument.ParseAsync(stream);
+            if (document.RootElement.ValueKind != JsonValueKind.Array)
+                return [];
+
+            var jsonRows = new List<ImportSessionMappingRow>();
+            foreach (var item in document.RootElement.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.Object)
+                    continue;
+
+                var fileName = ReadJsonString(item, "fileName")
+                               ?? ReadJsonString(item, "relativePath")
+                               ?? ReadJsonString(item, "file")
+                               ?? ReadJsonString(item, "path");
+                if (string.IsNullOrWhiteSpace(fileName))
+                    continue;
+
+                if (item.TryGetProperty("metadata", out var metadataElement)
+                    && metadataElement.ValueKind == JsonValueKind.Object
+                    && TryDeserializeMetadata(metadataElement) is { } metadata)
+                {
+                    jsonRows.Add(new ImportSessionMappingRow
+                    {
+                        FileName = fileName.Trim(),
+                        Metadata = metadata,
+                        Title = metadata.Media.Title,
+                        Provider = metadata.Account.Platform,
+                        SourceMediaId = metadata.Media.ExternalMediaId,
+                        SourceUrl = metadata.Media.WebpageUrl
+                    });
+                    continue;
+                }
+
+                if (TryDeserializeMappingRow(item) is { } row)
+                    jsonRows.Add(row);
+            }
+
+            return jsonRows;
         }
 
         var rows = new List<ImportSessionMappingRow>();
@@ -616,13 +848,41 @@ public sealed class ImportSessionRequestReplyService(
             if (string.IsNullOrWhiteSpace(fileName))
                 continue;
 
+            // List-valued cells are semicolon-separated (e.g. "rock;metal;live").
+            static IReadOnlyList<string>? GetList(string? value)
+                => string.IsNullOrWhiteSpace(value)
+                    ? null
+                    : value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            static int? GetInt(string? value)
+                => int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : null;
+
             rows.Add(new ImportSessionMappingRow
             {
                 FileName = fileName.Trim(),
                 Title = Get("title"),
+                Description = Get("description"),
                 Provider = Get("provider"),
                 SourceMediaId = Get("sourceMediaId") ?? Get("source_media_id"),
-                SourceUrl = Get("sourceUrl") ?? Get("source_url")
+                SourceUrl = Get("sourceUrl") ?? Get("source_url"),
+                ReleaseDate = Get("releaseDate") ?? Get("release_date"),
+                AccountName = Get("accountName") ?? Get("account_name") ?? Get("channel") ?? Get("uploader"),
+                AccountHandle = Get("accountHandle") ?? Get("account_handle"),
+                AccountUrl = Get("accountUrl") ?? Get("account_url"),
+                Location = Get("location"),
+                AgeLimit = GetInt(Get("ageLimit") ?? Get("age_limit")),
+                Tags = GetList(Get("tags")),
+                Categories = GetList(Get("categories")),
+                Genres = GetList(Get("genres")),
+                Artists = GetList(Get("artists")),
+                AlbumArtists = GetList(Get("albumArtists") ?? Get("album_artists")),
+                Album = Get("album"),
+                Track = Get("track"),
+                TrackNumber = GetInt(Get("trackNumber") ?? Get("track_number")),
+                SeriesName = Get("seriesName") ?? Get("series_name") ?? Get("series"),
+                SeasonNumber = GetInt(Get("seasonNumber") ?? Get("season_number")),
+                EpisodeNumber = GetInt(Get("episodeNumber") ?? Get("episode_number")),
+                EpisodeName = Get("episodeName") ?? Get("episode_name")
             });
         }
 
@@ -662,6 +922,35 @@ public sealed class ImportSessionRequestReplyService(
 
         result.Add(current.ToString());
         return result;
+    }
+
+    private static string? ReadJsonString(JsonElement element, string propertyName)
+        => element.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String
+            ? property.GetString()
+            : null;
+
+    private static CapturedMediaMetadata? TryDeserializeMetadata(JsonElement metadataElement)
+    {
+        try
+        {
+            return metadataElement.Deserialize<CapturedMediaMetadata>(JsonOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static ImportSessionMappingRow? TryDeserializeMappingRow(JsonElement rowElement)
+    {
+        try
+        {
+            return rowElement.Deserialize<ImportSessionMappingRow>(JsonOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private Task PublishStateChangedAsync(ImportSessionDto session)

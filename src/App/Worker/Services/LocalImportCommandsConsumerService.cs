@@ -31,6 +31,12 @@ public sealed class LocalImportCommandsConsumerService(
                     LocalImportSubjects.PrepareLocalImportFileCommand,
                     tag),
                 stoppingToken);
+            await topologyManager.EnsureConsumerAsync(
+                LocalImportTopology.TaggedWorkerConsumerSpec(
+                    LocalImportTopology.WorkerDeleteLocalImportSourceConsumer,
+                    LocalImportSubjects.DeleteLocalImportSourceCommand,
+                    tag),
+                stoppingToken);
             logger.LogInformation("Ensured tagged local import consumers for tag '{Tag}'.", tag);
         }
 
@@ -41,6 +47,10 @@ public sealed class LocalImportCommandsConsumerService(
                 LocalImportTopology.WorkerPrepareLocalImportFileConsumer,
                 HandlePrepareLocalImportFileAsync,
                 stoppingToken));
+            consumerTasks.Add(Consume<DeleteLocalImportSourceCommand>(
+                LocalImportTopology.WorkerDeleteLocalImportSourceConsumer,
+                HandleDeleteLocalImportSourceAsync,
+                stoppingToken));
         }
 
         foreach (var tag in options.Tags)
@@ -48,6 +58,10 @@ public sealed class LocalImportCommandsConsumerService(
             consumerTasks.Add(Consume<PrepareLocalImportFileCommand>(
                 $"{LocalImportTopology.WorkerPrepareLocalImportFileConsumer}-{tag}",
                 HandlePrepareLocalImportFileAsync,
+                stoppingToken));
+            consumerTasks.Add(Consume<DeleteLocalImportSourceCommand>(
+                $"{LocalImportTopology.WorkerDeleteLocalImportSourceConsumer}-{tag}",
+                HandleDeleteLocalImportSourceAsync,
                 stoppingToken));
         }
 
@@ -159,6 +173,55 @@ public sealed class LocalImportCommandsConsumerService(
             });
             await context.AckAsync();
         }
+    }
+
+    private async Task HandleDeleteLocalImportSourceAsync(IJsMessageContext<DeleteLocalImportSourceCommand> context)
+    {
+        var cmd = context.Message;
+        var incomingRoot = workerOptions.Value.IncomingRoot;
+        var deleted = 0;
+        foreach (var relativePath in cmd.Files)
+        {
+            try
+            {
+                if (!LocalImportPathRules.TryResolveUnderAllowedRoots(
+                        incomingRoot,
+                        relativePath,
+                        [incomingRoot],
+                        out var fullPath,
+                        out _,
+                        out var error))
+                {
+                    logger.LogWarning(
+                        "Skipping local import source delete of '{RelativePath}' for ItemId {ItemId}: {Error}",
+                        relativePath,
+                        cmd.ItemId,
+                        error);
+                    continue;
+                }
+
+                if (!File.Exists(fullPath))
+                    continue;
+
+                File.Delete(fullPath);
+                deleted++;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(
+                    ex,
+                    "Failed deleting local import source '{RelativePath}' for ItemId {ItemId}.",
+                    relativePath,
+                    cmd.ItemId);
+            }
+        }
+
+        logger.LogInformation(
+            "Deleted {Deleted}/{Total} local import source file(s) for ItemId {ItemId}.",
+            deleted,
+            cmd.Files.Count,
+            cmd.ItemId);
+        await context.AckAsync();
     }
 
     private static async Task<LocalImportPreparedSidecar> PrepareFileAsync(string incomingRoot, string relativePath)

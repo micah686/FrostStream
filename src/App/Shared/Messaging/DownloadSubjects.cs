@@ -1,43 +1,42 @@
 namespace Shared.Messaging;
 
+/// <summary>Download Flow V2 subjects. No V1 aliases are provisioned.</summary>
 public static class DownloadSubjects
 {
-    public const string DownloadRequested              = "download.requested";
+    public const string GroupRequested = "download.v2.request.group";
+    public const string DownloadRequested = "download.v2.request.job";
 
-    public const string FetchMetadataCommand           = "download.cmd.fetch-metadata";
-    public const string DownloadVideoCommand           = "download.cmd.download-video";
-    public const string UploadObjectCommand            = "download.cmd.upload-object";
-    public const string DeleteTempFileCommand          = "download.cmd.delete-temp-file";
-    public const string DeleteUploadedObjectCommand    = "download.cmd.delete-uploaded-object";
+    public const string ExpandGroupCommand = "download.v2.command.group.expand";
+    public const string FetchMetadataCommand = "download.v2.command.metadata.fetch";
+    public const string DownloadVideoCommand = "download.v2.command.media.acquire";
 
-    /// <summary>Returns the tagged variant of a command subject (<c>{baseSubject}.{tag}</c>).</summary>
     public static string Tagged(string baseSubject, string tag) => $"{baseSubject}.{tag}";
-
     public static string FetchMetadataCommandForTag(string tag) => Tagged(FetchMetadataCommand, tag);
     public static string DownloadVideoCommandForTag(string tag) => Tagged(DownloadVideoCommand, tag);
-    public static string UploadObjectCommandForTag(string tag) => Tagged(UploadObjectCommand, tag);
-    public static string DeleteTempFileCommandForTag(string tag) => Tagged(DeleteTempFileCommand, tag);
-    public static string DeleteUploadedObjectCommandForTag(string tag) => Tagged(DeleteUploadedObjectCommand, tag);
 
-    public const string MetadataFetched                = "download.evt.metadata-fetched";
-    public const string MetadataFetchFailed            = "download.evt.metadata-fetch-failed";
-    // TODO:
-    // This subject is intentionally not consumed by DataBridge yet. It is available for
-    // service-to-service/live diagnostics consumers that want download progress without
-    // making progress snapshots part of the database-backed download saga.
-    public const string DownloadProgress               = "download.evt.download-progress";
-    public const string DownloadCompleted              = "download.evt.download-completed";
-    public const string DownloadFailed                 = "download.evt.download-failed";
-    public const string UploadCompleted                = "download.evt.upload-completed";
-    public const string UploadFailed                   = "download.evt.upload-failed";
-    public const string TempFileDeleted                = "download.evt.temp-file-deleted";
-    public const string TempFileDeleteFailed           = "download.evt.temp-file-delete-failed";
-    public const string UploadedObjectDeleted          = "download.evt.uploaded-object-deleted";
-    public const string UploadedObjectDeleteFailed     = "download.evt.uploaded-object-delete-failed";
+    public const string MetadataFetched = "download.v2.event.metadata.succeeded";
+    public const string MetadataFetchFailed = "download.v2.event.metadata.failed";
+    public const string DownloadCompleted = "download.v2.event.media.succeeded";
+    public const string DownloadFailed = "download.v2.event.media.failed";
+    public const string DownloadProgress = "download.v2.progress";
 
-    // NATS Core request/reply (not JetStream) — admin operations.
-    public const string UpdatePriorityRequest = "download-admin.update-priority";
-    public const string RestartHaltedDownloadRequest = "download-admin.restart-halted";
-    public const string CancelDownloadRequest = "download-admin.cancel";
-    public const string CancelActiveDownloadCommand = "download-admin.cancel-active";
+    public const string StageStarted = "download.v2.event.stage.started";
+    public const string StageHeartbeat = "download.v2.event.stage.heartbeat";
+    public const string StageSucceeded = "download.v2.event.stage.succeeded";
+    public const string StageFailed = "download.v2.event.stage.failed";
+    public const string StageStopped = "download.v2.event.stage.stopped";
+    public const string GroupExpansionSucceeded = "download.v2.event.group.expansion.succeeded";
+    public const string GroupExpansionFailed = "download.v2.event.group.expansion.failed";
+
+    // Core NATS request/reply controls.
+    public const string UpdatePriorityRequest = "download.v2.control.job.priority";
+    public const string StartDownloadRequest = "download.v2.control.job.start";
+    public const string StopDownloadRequest = "download.v2.control.job.stop";
+    public const string StartGroupRequest = "download.v2.control.group.start";
+    public const string StopGroupRequest = "download.v2.control.group.stop";
+    public const string ClearProviderCircuitRequest = "download.v2.control.provider.clear";
+    public const string AcquireLeaseRequest = "download.v2.control.lease.acquire";
+    public const string RenewLeaseRequest = "download.v2.control.lease.renew";
+    public const string StopActiveRun = "download.v2.control.worker.stop";
+
 }

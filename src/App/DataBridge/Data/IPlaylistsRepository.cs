@@ -85,7 +85,7 @@ public sealed record PlaylistDetailItem(
     Guid JobId,
     string EntryUrl,
     string? EntryTitle,
-    DownloadJobState JobState,
+    DownloadJobStatus JobStatus,
     Guid? MediaGuid,
     string? IgnoredKeyword);
 

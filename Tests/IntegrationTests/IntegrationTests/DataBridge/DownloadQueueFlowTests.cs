@@ -99,10 +99,10 @@ public sealed class DownloadQueueFlowTests
     }
 
     [Test]
-    public async Task State_Transition_Broadcasts_StateChanged_To_Core_Subscriber()
+    public async Task V2_Stage_Transition_Broadcasts_StateChanged_To_Core_Subscriber()
     {
         var jobId = Guid.NewGuid();
-        await Fixture.SeedJobsAsync(Job(jobId, DownloadJobState.Queued));
+        var run = await Fixture.CreateRunAsync(jobId);
 
         var received = new TaskCompletionSource<DownloadQueueStateChanged>(TaskCreationOptions.RunContinuationsAsynchronously);
         await using var subscription = await Fixture.Bus.SubscribeAsync<DownloadQueueStateChanged>(
@@ -113,12 +113,15 @@ public sealed class DownloadQueueFlowTests
                 return Task.CompletedTask;
             });
 
-        await Fixture.UpdateStateAsync(jobId, DownloadJobState.MetadataPending);
+        await Fixture.BeginMetadataAttemptAsync(run);
 
         var evt = await received.Task.WaitAsync(TimeSpan.FromSeconds(10));
         evt.JobId.ShouldBe(jobId);
-        evt.PreviousState.ShouldBe(DownloadJobState.Queued);
-        evt.State.ShouldBe(DownloadJobState.MetadataPending);
+        evt.Status.ShouldBe(DownloadJobStatus.Running);
+        evt.Stage.ShouldBe(DownloadStage.Metadata);
+        evt.StageStatus.ShouldBe(DownloadStageStatus.Pending);
+        evt.RunId.ShouldBe(run.RunId);
+        evt.Attempt.ShouldBe(1);
     }
 
     private static DownloadJobEntity Job(
@@ -131,6 +134,7 @@ public sealed class DownloadQueueFlowTests
             JobId = jobId,
             CorrelationId = Guid.NewGuid(),
             State = state,
+            Status = state == DownloadJobState.Completed ? DownloadJobStatus.Completed : DownloadJobStatus.Queued,
             SourceUrl = sourceUrl,
             RequestedBy = requestedBy,
             StorageKey = "default",
@@ -229,11 +233,40 @@ public sealed class DownloadQueueFlowTests
             }
         }
 
-        public async Task UpdateStateAsync(Guid jobId, DownloadJobState state)
+        public async Task<DownloadRunRequest> CreateRunAsync(Guid jobId)
         {
             await using var scope = _host!.Services.CreateAsyncScope();
-            var repo = scope.ServiceProvider.GetRequiredService<IDownloadJobsRepository>();
-            await repo.UpdateStateAsync(jobId, state);
+            var correlationId = Guid.NewGuid();
+            var run = await scope.ServiceProvider.GetRequiredService<IDownloadFlowV2Repository>()
+                .CreateInitialRunAsync(new DownloadRequested
+                {
+                    JobId = jobId,
+                    CorrelationId = correlationId,
+                    MessageId = Guid.NewGuid(),
+                    OperationKey = $"job/{jobId:N}/requested",
+                    OccurredAt = SystemClock.Instance.GetCurrentInstant(),
+                    Attempt = 1,
+                    SourceUrl = "https://example.test/video",
+                    StorageKey = "default"
+                }, autoStart: true);
+            return run ?? throw new InvalidOperationException("Expected a fresh V2 run.");
+        }
+
+        public async Task BeginMetadataAttemptAsync(DownloadRunRequest run)
+        {
+            await using var scope = _host!.Services.CreateAsyncScope();
+            var dispatchId = Guid.NewGuid();
+            var execution = new DownloadExecutionIdentity
+            {
+                JobId = run.Request.JobId,
+                RunId = run.RunId,
+                CorrelationId = run.Request.CorrelationId,
+                DispatchId = dispatchId,
+                Stage = DownloadStage.Metadata,
+                Attempt = 1
+            };
+            await scope.ServiceProvider.GetRequiredService<IDownloadFlowV2Repository>()
+                .BeginStageAttemptAsync(execution, $"job/{run.Request.JobId:N}/run/{run.RunId:N}/metadata/attempt/1");
         }
 
         private async Task StartHostAsync()
@@ -259,6 +292,13 @@ public sealed class DownloadQueueFlowTests
                             .MapEnum<AzureBlobCredentialMode>("azure_blob_credential_mode", "storage")
                             .MapEnum<GoogleCloudStorageCredentialMode>("google_cloud_storage_credential_mode", "storage")
                             .MapEnum<DownloadJobState>("download_job_state", "downloads")
+                            .MapEnum<DownloadJobStatus>("download_job_status", "downloads")
+                            .MapEnum<DownloadStage>("download_stage", "downloads")
+                            .MapEnum<DownloadStageStatus>("download_stage_status", "downloads")
+                            .MapEnum<DownloadGroupKind>("download_group_kind", "downloads")
+                            .MapEnum<DownloadGroupStatus>("download_group_status", "downloads")
+                            .MapEnum<DownloadArtifactStatus>("download_artifact_status", "downloads")
+                            .MapEnum<DownloadWorkerLeaseStatus>("download_worker_lease_status", "downloads")
                             .MapEnum<FailureKind>("failure_kind", "downloads")
                             .MapEnum<IngestOrigin>("ingest_origin", "media"))
                     .UseSnakeCaseNamingConvention();
@@ -282,6 +322,7 @@ public sealed class DownloadQueueFlowTests
 
             builder.Services.AddSingleton<IDownloadJobStateNotifier, DownloadJobStateNotifier>();
             builder.Services.AddScoped<IDownloadJobsRepository, DownloadJobsRepository>();
+            builder.Services.AddScoped<IDownloadFlowV2Repository, DownloadFlowV2Repository>();
             builder.Services.AddHostedService<DownloadQueueConsumerService>();
 
             _host = builder.Build();

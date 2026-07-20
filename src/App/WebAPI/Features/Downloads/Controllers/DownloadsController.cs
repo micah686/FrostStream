@@ -103,14 +103,13 @@ public class DownloadsController(
             cancellationToken: cancellationToken);
 
     /// <summary>
-    /// Updates the scheduling priority of a download job. Only effective while the job
-    /// is waiting for a download slot (<c>DownloadQueued</c> state); has no effect once
-    /// the actual download has started.
+    /// Updates the stored administrative priority of a download job. This does not start,
+    /// resume, or interrupt an immutable V2 run.
     /// </summary>
     [HttpPatch("{jobId:guid}/priority")]
     [Endpoint(EndpointIds.DownloadsUpdatePriority)]
-    [EndpointSummary("Update a download job's scheduling priority")]
-    [EndpointDescription("Changes the priority (0–100) of a queued download job. Higher values run before lower ones. Effective only while the job is waiting for a download slot; no-ops if the download has already started.")]
+    [EndpointSummary("Update a download job's priority")]
+    [EndpointDescription("Changes the stored administrative priority (0–100) used by priority-sorted queue views. This operation never starts, resumes, or interrupts a V2 run.")]
     public async Task<ActionResult> UpdatePriority(
         [FromRoute] Guid jobId,
         [FromBody] UpdatePriorityRequest request,
@@ -148,25 +147,23 @@ public class DownloadsController(
     }
 
     /// <summary>
-    /// Requests clean cancellation of a queued or actively downloading job. Cancellation is
-    /// accepted asynchronously; the job moves through <c>Cancelling</c> before terminal
-    /// <c>Cancelled</c> once the flow has released any held resources.
+    /// Stops a queued or active job. Starting it later always creates a fresh RunId.
     /// </summary>
-    [HttpPost("{jobId:guid}/cancel")]
-    [Endpoint(EndpointIds.DownloadsRestartHalted)]
-    [EndpointSummary("Cancel a download job")]
-    [EndpointDescription("Requests clean cancellation of a queued or active download job. Queued jobs are removed from the scheduler; active yt-dlp processes are asked to stop and any worker-local temp files are cleaned.")]
-    public async Task<ActionResult> Cancel(
+    [HttpPost("{jobId:guid}/stop")]
+    [Endpoint(EndpointIds.DownloadsStop)]
+    [EndpointSummary("Stop a download job")]
+    [EndpointDescription("Stops a queued or active run. Partial artifacts are compensated before the job settles as Stopped.")]
+    public async Task<ActionResult> Stop(
         [FromRoute] Guid jobId,
-        [FromBody] CancelDownloadApiRequest? request,
+        [FromBody] StopDownloadApiRequest? request,
         CancellationToken cancellationToken)
     {
-        CancelDownloadResponse? response;
+        StopDownloadResponse? response;
         try
         {
-            response = await messageBus.RequestAsync<CancelDownloadRequest, CancelDownloadResponse>(
-                DownloadSubjects.CancelDownloadRequest,
-                new CancelDownloadRequest
+            response = await messageBus.RequestAsync<StopDownloadRequest, StopDownloadResponse>(
+                DownloadSubjects.StopDownloadRequest,
+                new StopDownloadRequest
                 {
                     JobId = jobId,
                     RequestedBy = AuthConstants.FindSubject(User),
@@ -177,10 +174,10 @@ public class DownloadsController(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed requesting cancellation for JobId {JobId}", jobId);
+            logger.LogError(ex, "Failed requesting stop for JobId {JobId}", jobId);
             return StatusCode(StatusCodes.Status502BadGateway, new ProblemDetails
             {
-                Title = "Failed to cancel download",
+                Title = "Failed to stop download",
                 Detail = "Could not reach the messaging bus.",
                 Status = StatusCodes.Status502BadGateway
             });
@@ -190,44 +187,42 @@ public class DownloadsController(
         {
             return StatusCode(StatusCodes.Status502BadGateway, new ProblemDetails
             {
-                Title = "Failed to cancel download",
+                Title = "Failed to stop download",
                 Detail = "No response from DataBridge.",
                 Status = StatusCodes.Status502BadGateway
             });
         }
 
         if (response.Success)
-            return Accepted(new CancelDownloadApiResponse(response.State ?? DownloadJobState.Cancelling));
+            return Accepted(new StopDownloadApiResponse(response.Status ?? DownloadJobStatus.Stopping));
 
-        if (response.Error == "Job not found.")
+        if (response.ErrorCode == "not_found")
             return NotFound(new ProblemDetails { Title = "Job not found.", Status = StatusCodes.Status404NotFound });
 
         return Conflict(new ProblemDetails
         {
-            Title = response.Error ?? "Download cannot be cancelled.",
+            Title = response.ErrorMessage ?? "Download cannot be stopped.",
             Status = StatusCodes.Status409Conflict
         });
     }
 
     /// <summary>
-    /// Restarts a download job from a restartable terminal state. Cancelled jobs replay as a
-    /// fresh run; provider-halted jobs replay the original request payload and resume from the
-    /// last recorded successful step when the flow has one available.
+    /// Starts a Stopped or Failed job as a completely fresh run.
     /// </summary>
-    [HttpPost("{jobId:guid}/restart")]
-    [Endpoint(EndpointIds.DownloadsCancel)]
-    [EndpointSummary("Restart a download job")]
-    [EndpointDescription("Restarts a download job from a restartable terminal state. Cancelled jobs replay as a fresh run. Provider-halted jobs replay the original request and resume from the last recorded successful step when possible.")]
-    public async Task<ActionResult> RestartHalted(
+    [HttpPost("{jobId:guid}/start")]
+    [Endpoint(EndpointIds.DownloadsStart)]
+    [EndpointSummary("Start a download job")]
+    [EndpointDescription("Starts a Stopped or Failed job from metadata with a new RunId and reset stage attempts.")]
+    public async Task<ActionResult> Start(
         [FromRoute] Guid jobId,
         CancellationToken cancellationToken)
     {
-        RestartHaltedDownloadResponse? response;
+        StartDownloadResponse? response;
         try
         {
-            response = await messageBus.RequestAsync<RestartHaltedDownloadRequest, RestartHaltedDownloadResponse>(
-                DownloadSubjects.RestartHaltedDownloadRequest,
-                new RestartHaltedDownloadRequest
+            response = await messageBus.RequestAsync<StartDownloadRequest, StartDownloadResponse>(
+                DownloadSubjects.StartDownloadRequest,
+                new StartDownloadRequest
                 {
                     JobId = jobId,
                     RequestedBy = AuthConstants.FindSubject(User)
@@ -237,10 +232,10 @@ public class DownloadsController(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed requesting restart for JobId {JobId}", jobId);
+            logger.LogError(ex, "Failed requesting start for JobId {JobId}", jobId);
             return StatusCode(StatusCodes.Status502BadGateway, new ProblemDetails
             {
-                Title = "Failed to restart download",
+                Title = "Failed to start download",
                 Detail = "Could not reach the messaging bus.",
                 Status = StatusCodes.Status502BadGateway
             });
@@ -250,25 +245,20 @@ public class DownloadsController(
         {
             return StatusCode(StatusCodes.Status502BadGateway, new ProblemDetails
             {
-                Title = "Failed to restart download",
+                Title = "Failed to start download",
                 Detail = "No response from DataBridge.",
                 Status = StatusCodes.Status502BadGateway
             });
         }
 
         if (response.Success)
-            return Accepted(new { State = "queued", JobId = response.JobId });
+            return Accepted(new { Status = "running", JobId = response.JobId, RunId = response.RunId });
 
-        return response.ErrorCode switch
+        return Conflict(new ProblemDetails
         {
-            "not_halted" => Conflict(new ProblemDetails { Title = response.ErrorMessage, Status = StatusCodes.Status409Conflict }),
-            "missing_request" => StatusCode(StatusCodes.Status500InternalServerError, new ProblemDetails { Title = response.ErrorMessage, Status = StatusCodes.Status500InternalServerError }),
-            _ => StatusCode(StatusCodes.Status409Conflict, new ProblemDetails
-            {
-                Title = response.ErrorMessage ?? "Download cannot be restarted.",
-                Status = StatusCodes.Status409Conflict
-            })
-        };
+            Title = response.ErrorMessage ?? "Download cannot be started.",
+            Status = StatusCodes.Status409Conflict
+        });
     }
 
     private async Task<ActionResult<DownloadRequestResponse>> PublishRequestAsync(
@@ -355,10 +345,24 @@ public class DownloadsController(
 
         try
         {
+            var group = new DownloadGroupRequested
+            {
+                GroupId = correlationId,
+                CorrelationId = correlationId,
+                MessageId = Guid.NewGuid(),
+                OperationKey = $"group/{correlationId:N}/requested",
+                OccurredAt = message.OccurredAt,
+                Kind = DownloadGroupKind.Direct,
+                SourceUrl = sourceUrl,
+                RequestedBy = subject,
+                StorageKey = message.StorageKey,
+                Priority = priority,
+                DirectRequest = message
+            };
             await publisher.PublishAsync(
-                DownloadSubjects.DownloadRequested,
-                message,
-                messageId: messageId.ToString("N"),
+                DownloadSubjects.GroupRequested,
+                group,
+                messageId: group.MessageId.ToString("N"),
                 cancellationToken: cancellationToken);
         }
         catch (Exception ex)
@@ -419,10 +423,24 @@ public class DownloadsController(
 
         try
         {
+            var group = new DownloadGroupRequested
+            {
+                GroupId = correlationId,
+                CorrelationId = correlationId,
+                MessageId = Guid.NewGuid(),
+                OperationKey = $"group/{correlationId:N}/requested",
+                OccurredAt = message.OccurredAt,
+                Kind = DownloadGroupKind.Playlist,
+                SourceUrl = sourceUrl,
+                RequestedBy = subject,
+                StorageKey = message.StorageKey,
+                Priority = priority,
+                CollectionRequest = message
+            };
             await publisher.PublishAsync(
-                PlaylistSubjects.PlaylistRequested,
-                message,
-                messageId: messageId.ToString("N"),
+                DownloadSubjects.GroupRequested,
+                group,
+                messageId: group.MessageId.ToString("N"),
                 cancellationToken: cancellationToken);
         }
         catch (Exception ex)

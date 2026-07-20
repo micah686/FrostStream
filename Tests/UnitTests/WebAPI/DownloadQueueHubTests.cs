@@ -50,8 +50,8 @@ public sealed class DownloadQueueHubTests
             text.ShouldContain("\"sequence\":3");
             text.ShouldContain("\"phase\":\"Downloading\"");
             text.ShouldContain("event: state");
-            text.ShouldContain("\"state\":\"Completed\"");
-            text.ShouldContain("\"previousState\":\"Uploaded\"");
+            text.ShouldContain("\"status\":\"Completed\"");
+            text.ShouldContain("\"previousStatus\":\"Running\"");
         }
         finally
         {
@@ -264,7 +264,20 @@ public sealed class DownloadQueueHubTests
         JobId = jobId,
         PreviousState = previous,
         State = next,
+        PreviousStatus = LegacyStatus(previous),
+        Status = LegacyStatus(next),
         CorrelationId = Guid.NewGuid(),
         OccurredAt = Instant.FromUtc(2026, 6, 1, 0, 0)
     };
+
+    private static DownloadJobStatus LegacyStatus(DownloadJobState state)
+        => state switch
+        {
+            DownloadJobState.DownloadQueued or DownloadJobState.Queued => DownloadJobStatus.Queued,
+            DownloadJobState.Completed => DownloadJobStatus.Completed,
+            DownloadJobState.Cancelled => DownloadJobStatus.Stopped,
+            DownloadJobState.FailedPermanent or DownloadJobState.FailedTransient
+                or DownloadJobState.ProviderHalted => DownloadJobStatus.Failed,
+            _ => DownloadJobStatus.Running
+        };
 }

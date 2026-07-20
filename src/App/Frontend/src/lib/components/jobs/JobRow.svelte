@@ -17,23 +17,41 @@
     type ProgressFrame
   } from '$lib/api/downloadQueue';
   import type { QueueRow } from '$lib/stores/downloadQueue';
-  import { formatOptionalBytes, isActive, isCancelled, isDone, isFailed, isQueued, normalizeState } from '$lib/jobs/jobState';
+  import {
+    canStart,
+    canStop,
+    formatOptionalBytes,
+    humanizeDownloadName,
+    isActive,
+    isDone,
+    isFailed,
+    isQueued,
+    isStopped,
+    isTerminal,
+    normalizeStatus
+  } from '$lib/jobs/jobState';
 
   let {
     row,
     now,
     optionPresetsByKey,
     busyAction,
-    oncancel,
-    onrestart,
+    onstop,
+    onstart,
+    onclearprovider,
+    ongroupstop,
+    ongroupstart,
     onpriority
   }: {
     row: QueueRow;
     now: number;
     optionPresetsByKey: Map<string, string>;
     busyAction: string | undefined;
-    oncancel: (row: QueueRow) => void;
-    onrestart: (row: QueueRow) => void;
+    onstop: (row: QueueRow) => void;
+    onstart: (row: QueueRow) => void;
+    onclearprovider: (row: QueueRow) => void;
+    ongroupstop: (row: QueueRow) => void;
+    ongroupstart: (row: QueueRow) => void;
     onpriority: (row: QueueRow) => void;
   } = $props();
 
@@ -45,10 +63,11 @@
   const job = $derived(row.job);
   const provider = $derived(providerFor(job.sourceUrl));
   const percent = $derived(percentFor(row));
-  const showProgressDetails = $derived(isActive(job.state));
+  const showProgressDetails = $derived(isActive(job.status));
+  let previousStatus = $state<string | undefined>(undefined);
 
   $effect(() => {
-    if (isDone(job.state) && mediaGuid === undefined) {
+    if (isDone(job.status) && mediaGuid === undefined) {
       void loadMediaGuid(job.jobId);
     }
   });
@@ -57,6 +76,15 @@
     const message = row.progress?.message?.trim();
     if (message && liveMessages.at(-1)?.text !== message) {
       liveMessages = [...liveMessages, { text: message, at: Date.now() }].slice(-50);
+    }
+  });
+
+  $effect(() => {
+    const status = normalizeStatus(job.status);
+    const enteredTerminal = previousStatus !== undefined && status !== previousStatus && isTerminal(status);
+    previousStatus = status;
+    if (enteredTerminal && expanded) {
+      void refreshHistory(job.jobId);
     }
   });
 
@@ -73,9 +101,13 @@
     if (!expanded) {
       return;
     }
+    await refreshHistory(job.jobId);
+  }
+
+  async function refreshHistory(jobId: string): Promise<void> {
     history = 'loading';
     try {
-      history = await fetchJobHistory(job.jobId);
+      history = await fetchJobHistory(jobId);
       // The fresh history now durably includes any progress lines the backend already
       // persisted, so drop the ephemeral live buffer to avoid showing lines twice.
       liveMessages = [];
@@ -88,31 +120,15 @@
     event.stopPropagation();
   }
 
-  function canCancel(j: DownloadQueueJob): boolean {
-    // FailedTransient is a special case: the backend allows force-cancelling it even though it's
-    // otherwise a terminal failure, because a known race can leave a yt-dlp process still running
-    // on the worker (e.g. stuck retrying a rate-limited subtitle fetch) after the job already
-    // recorded FailedTransient. Other failed states (FailedPermanent/DeadLettered/ProviderHalted)
-    // are not affected by that race and stay non-cancellable.
-    if (normalizeState(j.state) === 'failedtransient') {
-      return true;
-    }
-    return !isDone(j.state) && !isCancelled(j.state) && !isFailed(j.state);
-  }
-
-  function canRestart(j: DownloadQueueJob): boolean {
-    return normalizeState(j.state) === 'providerhalted' || isCancelled(j.state);
-  }
-
   function canUpdatePriority(j: DownloadQueueJob): boolean {
-    return isQueued(j.state);
+    return isQueued(j.status);
   }
 
   function percentFor(r: QueueRow): number {
     if (r.progress?.percent !== null && r.progress?.percent !== undefined) {
       return clamp(r.progress.percent, 0, 100);
     }
-    if (isDone(r.job.state)) {
+    if (isDone(r.job.status)) {
       return 100;
     }
     const downloaded = r.progress?.downloadedBytes;
@@ -161,7 +177,7 @@
     if (j.completedAt) {
       return Date.parse(j.completedAt);
     }
-    if (isDone(j.state) || isCancelled(j.state) || isFailed(j.state)) {
+    if (isTerminal(j.status)) {
       return Date.parse(j.updatedAt);
     }
     return now;
@@ -203,40 +219,46 @@
     }
   }
 
-  function stateTone(state: string): string {
-    if (isDone(state)) {
+  function statusTone(status: string): string {
+    if (normalizeStatus(status) === 'completedwithwarnings') {
+      return 'bg-amber-500/12 text-amber-300 ring-amber-500/25';
+    }
+    if (isDone(status)) {
       return 'bg-emerald-500/12 text-emerald-300 ring-emerald-500/20';
     }
-    if (isFailed(state)) {
+    if (isFailed(status)) {
       return 'bg-red-500/12 text-red-300 ring-red-500/25';
     }
-    if (isCancelled(state)) {
+    if (isStopped(status)) {
       return 'bg-slate-500/12 text-slate-300 ring-slate-500/20';
     }
-    if (isQueued(state)) {
+    if (isQueued(status)) {
       return 'bg-slate-700/50 text-slate-300 ring-slate-600/40';
     }
     return 'bg-blue-500/12 text-blue-300 ring-blue-500/20';
   }
 
-  function barColor(state: string): string {
-    if (isDone(state)) {
+  function barColor(status: string): string {
+    if (normalizeStatus(status) === 'completedwithwarnings') {
+      return 'bg-amber-400';
+    }
+    if (isDone(status)) {
       return 'bg-emerald-500';
     }
-    if (isFailed(state)) {
+    if (isFailed(status)) {
       return 'bg-red-400';
     }
-    if (isCancelled(state)) {
+    if (isStopped(status)) {
       return 'bg-slate-500';
     }
     return 'bg-blue-500';
   }
 
-  function rowTone(state: string): string {
-    if (isFailed(state)) {
+  function rowTone(status: string): string {
+    if (isFailed(status)) {
       return 'border-red-500/45 bg-red-950/10';
     }
-    if (isActive(state)) {
+    if (isActive(status)) {
       return 'border-blue-500/60 bg-blue-950/10';
     }
     return 'border-slate-800/90 bg-slate-900/45';
@@ -266,12 +288,20 @@
     return id.split('-')[0] ?? id.slice(0, 8);
   }
 
-  function displayState(r: QueueRow): string {
-    const state = r.job.state;
-    if (normalizeState(state) === 'downloadpending' && hasActiveDownloadProgress(r.progress)) {
-      return r.progress?.phase?.trim() || 'Downloading';
+  function displayStatus(r: QueueRow): string {
+    if (normalizeStatus(r.job.status) === 'running' && hasActiveDownloadProgress(r.progress)) {
+      return r.progress?.phase?.trim() || r.job.status;
     }
-    return state;
+    return humanizeDownloadName(r.job.status);
+  }
+
+  function displayStage(r: QueueRow): string {
+    const stage = humanizeDownloadName(r.job.stage);
+    const state = humanizeDownloadName(r.job.stageStatus);
+    if (normalizeStatus(r.job.stageStatus) === 'retrywaiting') {
+      return `${stage} · retry ${Math.min(r.job.attempt + 1, r.job.maxAttempts)}/${r.job.maxAttempts}`;
+    }
+    return `${stage} · ${state}`;
   }
 
   function hasActiveDownloadProgress(progress: ProgressFrame | undefined): boolean {
@@ -279,11 +309,9 @@
       return false;
     }
     const phase = progress.phase.trim().toLowerCase();
-    // "Retrying without sidecars" is a synthetic Worker-driven phase (no percent/byte counts of its
-    // own, since it precedes a fresh yt-dlp invocation) — still worth surfacing in the status pill.
     return (
       phase === 'downloading' ||
-      phase === 'retrying without sidecars' ||
+      phase === 'optional sidecar warning' ||
       progress.percent !== null ||
       progress.downloadedBytes !== null
     );
@@ -321,9 +349,9 @@
   }
 </script>
 
-<article class={['rounded-xl border p-4 shadow-lg shadow-black/10 transition', rowTone(job.state)]}>
+<article class={['rounded-xl border p-4 shadow-lg shadow-black/10 transition', rowTone(job.status)]}>
   <div
-    class="grid cursor-pointer gap-3 md:grid-cols-[minmax(0,1fr)_18rem_8.5rem] md:items-center"
+    class="grid cursor-pointer gap-3 md:grid-cols-[minmax(0,1fr)_18rem_minmax(8.5rem,auto)] md:items-center"
     role="button"
     tabindex="0"
     aria-expanded={expanded}
@@ -348,8 +376,8 @@
           <h2 class="min-w-0 truncate text-sm font-semibold text-slate-100">
             {displayTitle(job.sourceUrl)}
           </h2>
-          <span class={['shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ring-1', stateTone(job.state)]}>
-            {displayState(row)}
+          <span class={['shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ring-1', statusTone(job.status)]}>
+            {displayStatus(row)}
           </span>
           {#if originBadge(job.sourceKind)}
             {@const origin = originBadge(job.sourceKind)!}
@@ -364,6 +392,14 @@
             · group <span class="font-mono">{shortCollectionId(job.correlationId)}</span>
           {/if}
         </p>
+        {#if isActive(job.status) || isQueued(job.status) || isFailed(job.status) || isStopped(job.status)}
+          <p class="mt-1 truncate text-[11px] text-slate-500">
+            {displayStage(row)}
+            {#if job.artifactKey}
+              · <span class="font-mono">{job.artifactKey}</span>
+            {/if}
+          </p>
+        {/if}
         {#if job.failureMessage}
           <p class="mt-2 line-clamp-1 text-xs text-red-300">
             {job.failureCode ? `${job.failureCode}: ` : ''}{job.failureMessage}
@@ -375,7 +411,7 @@
     <div class="flex items-center gap-3">
       <div class="min-w-0 flex-1">
         <div class="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
-          <div class={['h-full rounded-full', barColor(job.state)]} style={`width: ${percent}%`}></div>
+          <div class={['h-full rounded-full', barColor(job.status)]} style={`width: ${percent}%`}></div>
         </div>
         {#if showProgressDetails}
           <p class="mt-1 text-xs text-slate-500">
@@ -392,7 +428,7 @@
     </div>
 
     <div class="flex flex-wrap items-center justify-end gap-1.5">
-      {#if isDone(job.state) && mediaGuid}
+      {#if isDone(job.status) && mediaGuid}
         <a
           href={`/watch/${mediaGuid}`}
           onclick={stop}
@@ -422,42 +458,102 @@
           {/if}
         </button>
       {/if}
-      {#if canRestart(job)}
+      {#if canStart(job.status)}
         <button
           type="button"
           class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-700 bg-slate-900/70 text-slate-200 transition hover:border-blue-500/60 hover:bg-slate-800 hover:text-white disabled:opacity-40"
-          title="Restart job"
-          aria-label="Restart job"
+          title="Start a new run"
+          aria-label="Start a new run"
           disabled={Boolean(busyAction)}
           onclick={(event) => {
             stop(event);
-            onrestart(row);
+            onstart(row);
           }}
         >
-          {#if busyAction === 'restart'}
+          {#if busyAction === 'start'}
             <Spinner size="4" />
           {:else}
-            <ArrowsRepeatOutline class="h-4 w-4" />
+            <PlayOutline class="h-4 w-4" />
           {/if}
         </button>
       {/if}
-      {#if canCancel(job)}
+      {#if job.failureCode === 'provider_circuit_open' || job.failureKind?.toLowerCase() === 'providerblocked'}
         <button
           type="button"
-          class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-700 bg-slate-900/70 text-slate-200 transition hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-200 disabled:opacity-40"
-          title="Cancel job"
-          aria-label="Cancel job"
+          class="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-amber-500/35 bg-amber-500/10 px-2 text-[11px] font-semibold text-amber-200 transition hover:border-amber-400/70 hover:bg-amber-500/20 disabled:opacity-40"
+          title="Clear the provider block; this job will still require Start"
+          aria-label="Clear provider block"
           disabled={Boolean(busyAction)}
           onclick={(event) => {
             stop(event);
-            oncancel(row);
+            onclearprovider(row);
           }}
         >
-          {#if busyAction === 'cancel'}
+          {#if busyAction === 'clear-provider'}
+            <Spinner size="4" />
+          {:else}
+            <ArrowsRepeatOutline class="h-3.5 w-3.5" />
+          {/if}
+          Clear block
+        </button>
+      {/if}
+      {#if canStop(job.status)}
+        <button
+          type="button"
+          class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-700 bg-slate-900/70 text-slate-200 transition hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-200 disabled:opacity-40"
+          title="Stop job"
+          aria-label="Stop job"
+          disabled={Boolean(busyAction)}
+          onclick={(event) => {
+            stop(event);
+            onstop(row);
+          }}
+        >
+          {#if busyAction === 'stop'}
             <Spinner size="4" />
           {:else}
             <StopOutline class="h-4 w-4" />
           {/if}
+        </button>
+      {/if}
+      {#if isCollectionJob(job) && canStart(job.status)}
+        <button
+          type="button"
+          class="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900/70 px-2 text-[11px] font-semibold text-slate-200 transition hover:border-blue-500/60 hover:bg-blue-500/10 hover:text-blue-200 disabled:opacity-40"
+          title="Start every failed or stopped job in this group"
+          aria-label="Start group"
+          disabled={Boolean(busyAction)}
+          onclick={(event) => {
+            stop(event);
+            ongroupstart(row);
+          }}
+        >
+          {#if busyAction === 'group-start'}
+            <Spinner size="4" />
+          {:else}
+            <ArrowsRepeatOutline class="h-3.5 w-3.5" />
+          {/if}
+          Group
+        </button>
+      {/if}
+      {#if isCollectionJob(job) && canStop(job.status)}
+        <button
+          type="button"
+          class="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900/70 px-2 text-[11px] font-semibold text-slate-200 transition hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-200 disabled:opacity-40"
+          title="Stop every queued or running job in this group"
+          aria-label="Stop group"
+          disabled={Boolean(busyAction)}
+          onclick={(event) => {
+            stop(event);
+            ongroupstop(row);
+          }}
+        >
+          {#if busyAction === 'group-stop'}
+            <Spinner size="4" />
+          {:else}
+            <StopOutline class="h-3.5 w-3.5" />
+          {/if}
+          Group
         </button>
       {/if}
       <a
@@ -491,6 +587,30 @@
           <span class="shrink-0 text-slate-600">Option set</span>
           <span class="text-slate-400">{optionSetLabel(history)}</span>
         </span>
+        <span class="inline-flex items-center gap-1">
+          <span class="shrink-0 text-slate-600">Run</span>
+          <span class="text-slate-400">#{job.runNumber}</span>
+        </span>
+        {#if job.runId}
+          <span class="inline-flex min-w-0 items-center gap-1">
+            <span class="shrink-0 text-slate-600">Run ID</span>
+            <span class="break-all font-mono text-slate-400">{job.runId}</span>
+          </span>
+        {/if}
+        <span class="inline-flex items-center gap-1">
+          <span class="shrink-0 text-slate-600">Stage</span>
+          <span class="text-slate-400">{humanizeDownloadName(job.stage)} · {humanizeDownloadName(job.stageStatus)}</span>
+        </span>
+        <span class="inline-flex items-center gap-1">
+          <span class="shrink-0 text-slate-600">Attempt</span>
+          <span class="text-slate-400">{job.attempt || '-'} / {job.maxAttempts}</span>
+        </span>
+        {#if job.warningCount > 0}
+          <span class="inline-flex items-center gap-1 text-amber-300">
+            <span class="shrink-0 text-amber-500">Warnings</span>
+            <span>{job.warningCount}</span>
+          </span>
+        {/if}
         <span class="inline-flex items-center gap-1">
           <span class="shrink-0 text-slate-600">Priority</span>
           <span class="text-slate-400">{job.priority}</span>

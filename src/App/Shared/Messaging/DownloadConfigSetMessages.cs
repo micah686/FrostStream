@@ -5,7 +5,7 @@ namespace Shared.Messaging;
 
 public static class DownloadConfigSetSubjects
 {
-    // Must stay outside the FROSTSTREAM_DOWNLOAD stream's "download.>" subject filter:
+    // Must stay outside the FROSTSTREAM_DOWNLOAD_V2 stream's "download.v2.>" subject filter:
     // JetStream pub-acks on captured subjects win the request/reply race against the consumer.
     public const string Create = "download-config-set.create";
     public const string Update = "download-config-set.update";

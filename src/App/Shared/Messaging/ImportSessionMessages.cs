@@ -1,4 +1,5 @@
 using NodaTime;
+using Shared.Metadata;
 
 namespace Shared.Messaging;
 
@@ -11,7 +12,10 @@ public static class ImportSessionSubjects
     public const string ItemsPatch = "import-session.items.patch";
     public const string ItemsBulk = "import-session.items.bulk";
     public const string MappingApply = "import-session.mapping.apply";
+    public const string MappingTemplate = "import-session.mapping.template";
+    public const string MetadataRefresh = "import-session.metadata.refresh";
     public const string Enrich = "import-session.enrich";
+    public const string UpdateOptions = "import-session.update-options";
     public const string Commit = "import-session.commit";
     public const string RetryFailed = "import-session.retry-failed";
     public const string Cancel = "import-session.cancel";
@@ -57,6 +61,23 @@ public enum ImportSessionItemMetadataState
     Ready = 1,
     Edited = 2,
     PlaceholderAccepted = 3
+}
+
+public enum ImportSessionItemMetadataSource
+{
+    Placeholder = 0,
+    Nfo = 1,
+    InfoJson = 2,
+    YtDlp = 3,
+    ManualMapping = 4
+}
+
+public enum ImportSessionMetadataFetchState
+{
+    NotAttempted = 0,
+    Queued = 1,
+    Succeeded = 2,
+    Failed = 3
 }
 
 public enum ImportSessionBulkAction
@@ -111,6 +132,7 @@ public sealed record ImportSessionItemsListRequest
     public ImportSessionItemStatus? Status { get; init; }
     public ImportSessionItemMetadataState? MetadataState { get; init; }
     public string? Search { get; init; }
+    public bool? Included { get; init; }
     public Guid? AfterItemId { get; init; }
     public int Limit { get; init; } = 100;
 }
@@ -169,15 +191,103 @@ public sealed record ImportSessionMappingApplyResponse : ImportSessionOperationR
     public ImportSessionDto? Session { get; init; }
 }
 
+public sealed record ImportSessionMappingTemplateRequest
+{
+    public required Guid SessionId { get; init; }
+}
+
+public sealed record ImportSessionMappingTemplateResponse : ImportSessionOperationResponse
+{
+    public IReadOnlyList<ImportSessionMappingTemplateRow> Items { get; init; } = [];
+}
+
+/// <summary>
+/// User-supplied metadata overrides for one import item, matching the rich fields
+/// <c>CapturedMediaMetadata</c> can persist. Stored as camelCase JSON in
+/// <c>import_session_items.user_metadata</c>; blank/missing fields fall through to the
+/// info.json / scan-derived values. List fields replace the underlying value entirely when
+/// non-empty. <c>ReleaseDate</c> accepts <c>yyyy-MM-dd</c> or <c>yyyyMMdd</c>.
+/// </summary>
+public record ImportSessionUserMetadata
+{
+    public string? Title { get; init; }
+    public string? Description { get; init; }
+    public string? Provider { get; init; }
+    public string? SourceMediaId { get; init; }
+    public string? SourceUrl { get; init; }
+    public string? ReleaseDate { get; init; }
+    public string? AccountName { get; init; }
+    public string? AccountHandle { get; init; }
+    public string? AccountUrl { get; init; }
+    public string? Location { get; init; }
+    public int? AgeLimit { get; init; }
+    public IReadOnlyList<string>? Tags { get; init; }
+    public IReadOnlyList<string>? Categories { get; init; }
+    public IReadOnlyList<string>? Genres { get; init; }
+    public IReadOnlyList<string>? Artists { get; init; }
+    public IReadOnlyList<string>? AlbumArtists { get; init; }
+    public string? Album { get; init; }
+    public string? Track { get; init; }
+    public int? TrackNumber { get; init; }
+    public string? SeriesName { get; init; }
+    public int? SeasonNumber { get; init; }
+    public int? EpisodeNumber { get; init; }
+    public string? EpisodeName { get; init; }
+}
+
+public sealed record ImportSessionMappingTemplateRow : ImportSessionUserMetadata
+{
+    public required string FileName { get; init; }
+    public CapturedMediaMetadata? Metadata { get; init; }
+}
+
 public sealed record ImportSessionEnrichRequest
+{
+    public required Guid SessionId { get; init; }
+    public IReadOnlyList<Guid>? ItemIds { get; init; }
+    public ImportSessionYtDlpOptions Options { get; init; } = new();
+}
+
+public sealed record ImportSessionMetadataRefreshRequest
 {
     public required Guid SessionId { get; init; }
     public IReadOnlyList<Guid>? ItemIds { get; init; }
 }
 
+public sealed record ImportSessionMetadataRefreshResponse : ImportSessionOperationResponse
+{
+    public int CheckedCount { get; init; }
+    public int FoundCount { get; init; }
+    public ImportSessionDto? Session { get; init; }
+}
+
+public sealed record ImportSessionYtDlpOptions
+{
+    public string? ProxyUrl { get; init; }
+    public string? Username { get; init; }
+    public string? Password { get; init; }
+    public string? TwoFactorCode { get; init; }
+    public string? VideoPassword { get; init; }
+    public bool SkipCertificateChecks { get; init; }
+    public bool AllowLegacyConnections { get; init; }
+    public IReadOnlyList<string> ExtraHttpHeaders { get; init; } = [];
+    public double SleepBetweenRequestsSeconds { get; init; } = 3;
+}
+
 public sealed record ImportSessionEnrichResponse : ImportSessionOperationResponse
 {
     public int QueuedCount { get; init; }
+    public ImportSessionDto? Session { get; init; }
+}
+
+public sealed record ImportSessionUpdateOptionsRequest
+{
+    public required Guid SessionId { get; init; }
+    public bool? DeleteSourceFiles { get; init; }
+}
+
+public sealed record ImportSessionUpdateOptionsResponse : ImportSessionOperationResponse
+{
     public ImportSessionDto? Session { get; init; }
 }
 
@@ -241,6 +351,7 @@ public sealed record ImportSessionDto
     public int AlreadyImportedItems { get; init; }
     public int FailedItems { get; init; }
     public int MaxParallelItems { get; init; }
+    public bool DeleteSourceFiles { get; init; }
     public string? ErrorMessage { get; init; }
     public Instant CreatedAt { get; init; }
     public Instant UpdatedAt { get; init; }
@@ -260,6 +371,13 @@ public sealed record ImportSessionItemDto
     public string? SourceUrl { get; init; }
     public string? Title { get; init; }
     public ImportSessionItemMetadataState MetadataState { get; init; }
+    public ImportSessionItemMetadataSource MetadataSource { get; init; }
+    public ImportSessionMetadataFetchState MetadataFetchState { get; init; }
+    public int MetadataFetchAttempt { get; init; }
+    public string? MetadataFetchMessage { get; init; }
+    public string? MetadataJson { get; init; }
+    public bool HasNfo { get; init; }
+    public bool HasInfoJson { get; init; }
     public bool Excluded { get; init; }
     public ImportSessionItemStatus Status { get; init; }
     public int Attempt { get; init; }
@@ -335,8 +453,10 @@ public sealed record EnrichImportSessionItemCommand : IFlowMessage
     public required Guid SessionId { get; init; }
     public required Guid ItemId { get; init; }
     public required string SourceUrl { get; init; }
+    public required string RelativePath { get; init; }
     public string? Provider { get; init; }
     public string? RequiredWorkerTag { get; init; }
+    public ImportSessionYtDlpOptions Options { get; init; } = new();
 }
 
 public sealed record ImportSessionItemEnriched : IFlowMessage
@@ -356,6 +476,7 @@ public sealed record ImportSessionItemEnriched : IFlowMessage
     public string? Provider { get; init; }
     public string? SourceMediaId { get; init; }
     public string? SourceUrl { get; init; }
+    public string? InfoJsonRelativePath { get; init; }
 }
 
 public sealed record ImportSessionItemEnrichFailed : IFlowMessage
@@ -456,6 +577,7 @@ public sealed record ImportSessionScannedItem
     public string? Title { get; init; }
     public string? ScanMetadataJson { get; init; }
     public ImportSessionItemMetadataState MetadataState { get; init; }
+    public ImportSessionItemMetadataSource MetadataSource { get; init; }
 }
 
 public sealed record ImportSessionStateChanged

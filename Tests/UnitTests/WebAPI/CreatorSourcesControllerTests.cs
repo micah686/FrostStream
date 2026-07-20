@@ -192,23 +192,27 @@ public sealed class CreatorSourcesControllerTests
         payload.IdempotencyKey.ShouldStartWith("manual-channel-download:42:");
 
         await publisher.Received(1).PublishAsync(
-            BackgroundJobSubjects.ChannelMediaListRequest,
-            Arg.Is<ChannelMediaListRequested>(x =>
-                x.ScheduleKey == "manual-channel-download" &&
-                x.TaskType == "channel_media_list" &&
-                x.DueWindowUtc == Now &&
-                x.OccurredAt == Now &&
-                x.TargetSourceId == 42 &&
-                x.CorrelationId == payload.CorrelationId &&
-                x.QueueAllItems &&
-                x.ForceDownload &&
-                x.StorageKey == "archive" &&
-                x.RequestedBy == "unit_test_user" &&
-                x.ProviderQueryLimits != null &&
-                x.ProviderQueryLimits.GetLimit("youtube", CreatorSourceType.Videos) == 100 &&
-                x.ProviderQueryLimits.GetLimit("youtube", CreatorSourceType.Streams) == 20 &&
-                x.ProviderQueryLimits.GetLimit("youtube", CreatorSourceType.Shorts) == 40),
-            Arg.Is<string>(x => x.StartsWith("manual-channel-download:42:", StringComparison.Ordinal)),
+            DownloadSubjects.GroupRequested,
+            Arg.Is<DownloadGroupRequested>(g =>
+                g.Kind == DownloadGroupKind.Channel &&
+                g.GroupId == payload.CorrelationId &&
+                g.CorrelationId == payload.CorrelationId &&
+                g.ChannelRequest != null &&
+                g.ChannelRequest.ScheduleKey == "manual-channel-download" &&
+                g.ChannelRequest.TaskType == "channel_media_list" &&
+                g.ChannelRequest.DueWindowUtc == Now &&
+                g.ChannelRequest.OccurredAt == Now &&
+                g.ChannelRequest.TargetSourceId == 42 &&
+                g.ChannelRequest.CorrelationId == payload.CorrelationId &&
+                g.ChannelRequest.QueueAllItems &&
+                g.ChannelRequest.ForceDownload &&
+                g.ChannelRequest.StorageKey == "archive" &&
+                g.ChannelRequest.RequestedBy == "unit_test_user" &&
+                g.ChannelRequest.ProviderQueryLimits != null &&
+                g.ChannelRequest.ProviderQueryLimits.GetLimit("youtube", CreatorSourceType.Videos) == 100 &&
+                g.ChannelRequest.ProviderQueryLimits.GetLimit("youtube", CreatorSourceType.Streams) == 20 &&
+                g.ChannelRequest.ProviderQueryLimits.GetLimit("youtube", CreatorSourceType.Shorts) == 40),
+            Arg.Is<string>(x => x.Length == 32),
             null,
             Arg.Any<CancellationToken>());
     }

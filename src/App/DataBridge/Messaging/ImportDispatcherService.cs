@@ -11,11 +11,12 @@ namespace DataBridge.Messaging;
 
 public sealed class ImportDispatcherService(
     IServiceScopeFactory scopeFactory,
-    LocalImportItemFlows flows,
+    LocalImportItemV2Flows flows,
     IClock clock,
     ILogger<ImportDispatcherService> logger) : BackgroundService
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
+    private static readonly Duration HashingClaimTimeout = Duration.FromMinutes(5);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -61,7 +62,14 @@ public sealed class ImportDispatcherService(
             using (var scope = scopeFactory.CreateScope())
             {
                 var repo = scope.ServiceProvider.GetRequiredService<IImportSessionRepository>();
-                items = await repo.ListApprovedWorkAsync(session.SessionId, Math.Max(1, session.MaxParallelItems), cancellationToken);
+                var recovered = await repo.RecoverStaleHashingItemsAsync(session.SessionId, clock.GetCurrentInstant() - HashingClaimTimeout, cancellationToken);
+                if (recovered > 0)
+                    logger.LogWarning(
+                        "Recovered {Count} stale local import item(s) stuck in Hashing for SessionId {SessionId}; they will be retried.",
+                        recovered,
+                        session.SessionId);
+
+                items = await repo.ClaimApprovedWorkAsync(session.SessionId, Math.Max(1, session.MaxParallelItems), cancellationToken);
                 if (items.Count == 0)
                 {
                     await repo.CompleteSessionIfTerminalAsync(session.SessionId, cancellationToken);
@@ -77,20 +85,28 @@ public sealed class ImportDispatcherService(
                     CorrelationId = item.CorrelationId,
                     CausationId = null,
                     MessageId = messageId,
-                    OperationKey = $"local-import-item/{item.ItemId:N}/attempt/{Math.Max(1, session.ApprovedItems)}",
+                    OperationKey = LocalImportFlowInstance.OperationKey(item.ItemId, Math.Max(1, item.Attempt), "start"),
                     OccurredAt = clock.GetCurrentInstant(),
-                    Attempt = 1,
+                    Attempt = Math.Max(1, item.Attempt),
                     SessionId = item.SessionId,
                     ItemId = item.ItemId
                 };
 
                 try
                 {
-                    await flows.Run(item.ItemId.ToString("N"), request);
+                    await flows.Run(LocalImportFlowInstance.ForItemAttempt(item.ItemId, request.Attempt), request);
                 }
                 catch (InvocationSuspendedException)
                 {
                     logger.LogDebug("LocalImportItemFlow suspended after start for ItemId {ItemId}.", item.ItemId);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed starting local import flow for SessionId {SessionId} ItemId {ItemId}.", item.SessionId, item.ItemId);
+                    using var scope = scopeFactory.CreateScope();
+                    var repo = scope.ServiceProvider.GetRequiredService<IImportSessionRepository>();
+                    await repo.MarkItemCommitFailedAsync(item.SessionId, item.ItemId, "flow_start_failed", ex.Message, ct: cancellationToken);
+                    await repo.CompleteSessionIfTerminalAsync(item.SessionId, cancellationToken);
                 }
             }
         }

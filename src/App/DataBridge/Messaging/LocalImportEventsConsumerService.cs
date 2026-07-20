@@ -8,11 +8,11 @@ namespace DataBridge.Messaging;
 
 public sealed class LocalImportEventsConsumerService(
     IJetStreamConsumer consumer,
-    LocalImportItemFlows itemFlows,
+    LocalImportItemV2Flows itemFlows,
     ILogger<LocalImportEventsConsumerService> logger) : BackgroundService
 {
     private static readonly StreamName ImportStream = StreamName.From(LocalImportTopology.StreamNameValue);
-    private static readonly StreamName DownloadStream = StreamName.From(DownloadTopology.StreamNameValue);
+    private static readonly StreamName ArtifactStream = StreamName.From(ArtifactStorageTopology.StreamNameValue);
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -20,10 +20,10 @@ public sealed class LocalImportEventsConsumerService(
         {
             ConsumeImport<LocalImportFilePrepared>(LocalImportTopology.LocalImportFilePreparedConsumer, stoppingToken),
             ConsumeImport<LocalImportFilePrepareFailed>(LocalImportTopology.LocalImportFilePrepareFailedConsumer, stoppingToken),
-            ConsumeDownload<UploadCompleted>(DownloadTopology.LocalImportUploadCompletedConsumer, stoppingToken),
-            ConsumeDownload<UploadFailed>(DownloadTopology.LocalImportUploadFailedConsumer, stoppingToken),
-            ConsumeDownload<UploadedObjectDeleted>(DownloadTopology.LocalImportUploadedObjectDeletedConsumer, stoppingToken),
-            ConsumeDownload<UploadedObjectDeleteFailed>(DownloadTopology.LocalImportUploadedObjectDeleteFailedConsumer, stoppingToken)
+            ConsumeArtifact<UploadCompleted>(ArtifactStorageTopology.LocalImportUploadCompletedConsumer, stoppingToken),
+            ConsumeArtifact<UploadFailed>(ArtifactStorageTopology.LocalImportUploadFailedConsumer, stoppingToken),
+            ConsumeArtifact<UploadedObjectDeleted>(ArtifactStorageTopology.LocalImportObjectDeletedConsumer, stoppingToken),
+            ConsumeArtifact<UploadedObjectDeleteFailed>(ArtifactStorageTopology.LocalImportObjectDeleteFailedConsumer, stoppingToken)
         };
 
         logger.LogInformation("Subscribed to {Count} local import event consumers.", consumers.Length);
@@ -39,10 +39,10 @@ public sealed class LocalImportEventsConsumerService(
             options: null,
             cancellationToken: stoppingToken);
 
-    private Task ConsumeDownload<TEvent>(string consumerName, CancellationToken stoppingToken)
+    private Task ConsumeArtifact<TEvent>(string consumerName, CancellationToken stoppingToken)
         where TEvent : class, IFlowMessage
         => consumer.ConsumePullAsync<TEvent>(
-            stream: DownloadStream,
+            stream: ArtifactStream,
             consumer: ConsumerName.From(consumerName),
             handler: HandleAsync,
             options: null,
@@ -60,7 +60,10 @@ public sealed class LocalImportEventsConsumerService(
                 return;
             }
 
-            await itemFlows.SendMessage(evt.JobId.ToString("N"), evt, idempotencyKey: evt.OperationKey);
+            await itemFlows.SendMessage(
+                LocalImportFlowInstance.FromOperationKey(evt.JobId, evt.OperationKey),
+                evt,
+                idempotencyKey: evt.OperationKey);
             await context.AckAsync();
         }
         catch (Exception ex)

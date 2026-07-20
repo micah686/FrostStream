@@ -1,8 +1,7 @@
 using Cleipnir.ResilientFunctions.Domain.Exceptions;
-using System.Text.Json;
+using Conduit.NATS;
 using DataBridge.Data;
 using DataBridge.Flows;
-using Conduit.NATS;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -10,84 +9,57 @@ using Shared.Messaging;
 
 namespace DataBridge.Messaging;
 
-/// <summary>
-/// Consumes <see cref="DownloadRequested"/> from JetStream and starts a Cleipnir
-/// <see cref="DownloadArchiveFlow"/> per <see cref="DownloadRequested.JobId"/>.
-///
-/// Ack ordering is critical: the JetStream message is only acknowledged AFTER the
-/// job row is written, the flow is started, and the dedupe row is persisted. If any
-/// step fails, the message is re-delivered until <c>MaxDeliver</c> (configured in
-/// <see cref="DownloadTopology"/>) is exhausted.
-/// </summary>
+/// <summary>Creates a V2 job/run and starts its immutable Cleipnir instance.</summary>
 public sealed class DownloadRequestedIngressService(
     IJetStreamConsumer consumer,
     IServiceScopeFactory scopeFactory,
-    DownloadArchiveFlows flows,
+    DownloadJobV2Flows flows,
+    DownloadFlowStartupState startupState,
     ILogger<DownloadRequestedIngressService> logger) : BackgroundService
 {
     protected override Task ExecuteAsync(CancellationToken stoppingToken) =>
         consumer.ConsumePullAsync<DownloadRequested>(
-            stream: StreamName.From(DownloadTopology.StreamNameValue),
-            consumer: ConsumerName.From(DownloadTopology.DownloadRequestedConsumer),
-            handler: HandleAsync,
-            options: null,
+            StreamName.From(DownloadTopology.StreamNameValue),
+            ConsumerName.From(DownloadTopology.DownloadRequestedConsumer),
+            HandleAsync,
             cancellationToken: stoppingToken);
 
     private async Task HandleAsync(IJsMessageContext<DownloadRequested> context)
     {
         var request = context.Message;
-
         try
         {
             using var scope = scopeFactory.CreateScope();
-            var jobs = scope.ServiceProvider.GetRequiredService<IDownloadJobsRepository>();
-            var db = scope.ServiceProvider.GetRequiredService<DataBridgeDbContext>();
-
-            if (await jobs.IsMessageProcessedAsync(request.MessageId))
+            var legacy = scope.ServiceProvider.GetRequiredService<IDownloadJobsRepository>();
+            if (await legacy.IsMessageProcessedAsync(request.MessageId))
             {
                 await context.AckAsync();
                 return;
             }
 
-            await jobs.CreateJobIfMissingAsync(request);
-
-            // The first invocation normally suspends while waiting for Worker events.
-            // Treat that as a successful handoff to Cleipnir, not as a NATS failure.
-            // flows.Run is safe to call again for an existing instance id — Cleipnir
-            // recognises the duplicate and no-ops.
-            try
+            var repository = scope.ServiceProvider.GetRequiredService<IDownloadFlowV2Repository>();
+            // A durable request produced before this DataBridge generation is visible but stopped;
+            // it is never silently resumed merely because the service came back.
+            var autoStart = request.OccurredAt >= startupState.GenerationStartedAt;
+            var run = await repository.CreateInitialRunAsync(request, autoStart);
+            if (run is not null)
             {
-                await flows.Run(request.JobId.ToString("N"), request);
-            }
-            catch (InvocationSuspendedException)
-            {
-                logger.LogWarning(
-                    "DownloadArchiveFlow suspended after start for JobId {JobId}; acknowledging DownloadRequested.",
-                    request.JobId);
-            }
-
-            await using var tx = await db.Database.BeginTransactionAsync();
-            if (!await jobs.TryMarkMessageProcessedAsync(request.MessageId, request.OperationKey, request.JobId))
-            {
-                await tx.CommitAsync();
-                await context.AckAsync();
-                return;
+                try
+                {
+                    await flows.Run(DownloadFlowInstance.Job(request.JobId, run.RunId), run);
+                }
+                catch (InvocationSuspendedException)
+                {
+                    // Waiting for a Worker result is the expected handoff point.
+                }
             }
 
-            await jobs.RecordHistoryAsync(
-                request.JobId,
-                request.MessageId,
-                request.OperationKey,
-                nameof(DownloadRequested),
-                JsonSerializer.Serialize(request));
-
-            await tx.CommitAsync();
-
+            await legacy.MarkMessageProcessedAsync(request.MessageId, request.OperationKey, request.JobId);
             await context.AckAsync();
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed handling DownloadRequested for JobId {JobId}; nacking for redelivery", request.JobId);
+            logger.LogError(ex, "Failed accepting Download V2 request for JobId {JobId}", request.JobId);
             await context.NackAsync();
         }
     }

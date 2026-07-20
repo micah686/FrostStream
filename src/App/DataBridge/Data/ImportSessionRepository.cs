@@ -1,8 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using NodaTime;
+using NodaTime.Serialization.SystemTextJson;
 using Shared.Database;
 using Shared.Imports;
 using Shared.Messaging;
+using Shared.Metadata;
 using System.Text.Json;
 
 namespace DataBridge.Data;
@@ -12,6 +14,33 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
     private const int MaxListLimit = 100;
     private const int MaxItemsLimit = 200;
     private const int InsertBatchSize = 500;
+
+    // user_metadata JSON is camelCase (matches the values PatchItemAsync historically wrote).
+    private static readonly JsonSerializerOptions UserMetadataJsonOptions = CreateUserMetadataJsonOptions();
+
+    private static JsonSerializerOptions CreateUserMetadataJsonOptions()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+        {
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+        };
+        options.ConfigureForNodaTime(DateTimeZoneProviders.Tzdb);
+        return options;
+    }
+
+    private static ImportSessionUserMetadata? DeserializeUserMetadata(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return null;
+        try
+        {
+            return JsonSerializer.Deserialize<ImportSessionUserMetadata>(json, UserMetadataJsonOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
 
     public async Task<ImportSessionDto> CreateAsync(
         ImportSessionCreateRequest request,
@@ -81,6 +110,8 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
             query = query.Where(x => x.Status == status);
         if (request.MetadataState is { } metadataState)
             query = query.Where(x => x.MetadataState == metadataState);
+        if (request.Included is { } included)
+            query = query.Where(x => x.Excluded == !included);
         if (request.AfterItemId is { } after)
             query = query.Where(x => x.ItemId.CompareTo(after) > 0);
         if (!string.IsNullOrWhiteSpace(request.Search))
@@ -130,6 +161,8 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
             if (!existing.Add(item.RelativePath))
                 continue;
 
+            var sidecarsJson = NormalizeJson(item.SidecarsJson);
+            var hasInfoJson = HasSidecar(sidecarsJson, "infoJson");
             pending.Add(new ImportSessionItemEntity
             {
                 ItemId = Guid.NewGuid(),
@@ -138,13 +171,21 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
                 FileName = item.FileName,
                 FileSizeBytes = item.FileSizeBytes,
                 FileMtime = item.FileMtime,
-                SidecarsJson = NormalizeJson(item.SidecarsJson),
+                SidecarsJson = sidecarsJson,
                 Provider = NormalizeOptional(item.Provider),
                 SourceMediaId = NormalizeOptional(item.SourceMediaId),
                 SourceUrl = NormalizeOptional(item.SourceUrl),
                 Title = NormalizeOptional(item.Title),
                 ScanMetadataJson = NormalizeJson(item.ScanMetadataJson),
                 MetadataState = item.MetadataState,
+                MetadataSource = item.MetadataSource,
+                MetadataFetchState = hasInfoJson
+                    ? ImportSessionMetadataFetchState.Succeeded
+                    : ImportSessionMetadataFetchState.NotAttempted,
+                MetadataFetchMessage = hasInfoJson
+                    ? "info.json found"
+                    : null,
+                Excluded = true,
                 Status = ImportSessionItemStatus.Discovered,
                 UpdatedAt = now
             });
@@ -234,9 +275,12 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         {
             var result = byId[item.ItemId];
             item.ProbeMetadataJson = NormalizeJson(result.ProbeMetadataJson);
-            item.Status = ImportSessionItemStatus.Probed;
-            item.ErrorCode = null;
-            item.ErrorMessage = null;
+            if (item.Status == ImportSessionItemStatus.Discovered)
+            {
+                item.Status = ImportSessionItemStatus.Probed;
+                item.ErrorCode = null;
+                item.ErrorMessage = null;
+            }
             item.UpdatedAt = now;
         }
 
@@ -262,9 +306,14 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         foreach (var item in rows)
         {
             var failure = byId[item.ItemId];
-            item.Status = ImportSessionItemStatus.Failed;
-            item.ErrorCode = NormalizeOptional(failure.ErrorCode) ?? "probe_failed";
-            item.ErrorMessage = NormalizeOptional(failure.ErrorMessage) ?? "ffprobe failed.";
+            // A probe failure is diagnostic only. The commit flow still gets a chance to read
+            // and import the file, where a real media failure is isolated to this item.
+            if (item.Status == ImportSessionItemStatus.Discovered)
+            {
+                item.Status = ImportSessionItemStatus.Probed;
+                item.ErrorCode = NormalizeOptional(failure.ErrorCode) ?? "probe_failed";
+                item.ErrorMessage = NormalizeOptional(failure.ErrorMessage) ?? "ffprobe failed.";
+            }
             item.UpdatedAt = now;
         }
 
@@ -292,8 +341,24 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         item.Provider = metadata["provider"] ?? item.Provider;
         item.SourceMediaId = metadata["sourceMediaId"] ?? item.SourceMediaId;
         item.SourceUrl = metadata["sourceUrl"] ?? item.SourceUrl;
-        item.UserMetadataJson = JsonSerializer.Serialize(metadata.Where(x => x.Value is not null).ToDictionary(x => x.Key, x => x.Value));
-        item.MetadataState = ImportSessionItemMetadataState.Edited;
+        var isManualMetadataEdit = metadata["title"] is not null
+                                   || metadata["provider"] is not null
+                                   || metadata["sourceMediaId"] is not null;
+        if (isManualMetadataEdit)
+        {
+            // Merge into the existing user metadata so rich fields from an applied mapping survive
+            // a later single-field edit in the UI.
+            var existing = DeserializeUserMetadata(item.UserMetadataJson) ?? new ImportSessionUserMetadata();
+            item.UserMetadataJson = JsonSerializer.Serialize(existing with
+            {
+                Title = metadata["title"] ?? existing.Title,
+                Provider = metadata["provider"] ?? existing.Provider,
+                SourceMediaId = metadata["sourceMediaId"] ?? existing.SourceMediaId,
+                SourceUrl = metadata["sourceUrl"] ?? existing.SourceUrl
+            }, UserMetadataJsonOptions);
+            item.MetadataState = ImportSessionItemMetadataState.Edited;
+            item.MetadataSource = ImportSessionItemMetadataSource.ManualMapping;
+        }
         item.UpdatedAt = clock.GetCurrentInstant();
         await db.SaveChangesAsync(ct);
 
@@ -375,7 +440,8 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
             return (0, rows.Count, null);
 
         var items = await db.ImportSessionItems
-            .Where(x => x.SessionId == sessionId)
+            .Where(x => x.SessionId == sessionId
+                        && !x.Excluded)
             .ToListAsync(ct);
         var byFileName = items
             .GroupBy(x => x.FileName, StringComparer.OrdinalIgnoreCase)
@@ -398,14 +464,12 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
             item.Provider = NormalizeOptional(row.Provider) ?? item.Provider;
             item.SourceMediaId = NormalizeOptional(row.SourceMediaId) ?? item.SourceMediaId;
             item.SourceUrl = NormalizeOptional(row.SourceUrl) ?? item.SourceUrl;
-            item.UserMetadataJson = JsonSerializer.Serialize(new
-            {
-                title = NormalizeOptional(row.Title),
-                provider = NormalizeOptional(row.Provider),
-                sourceMediaId = NormalizeOptional(row.SourceMediaId),
-                sourceUrl = NormalizeOptional(row.SourceUrl)
-            });
+            item.UserMetadataJson = row.Metadata is { } metadata
+                ? JsonSerializer.Serialize(metadata, UserMetadataJsonOptions)
+                // Serialize as the base type so FileName stays out of user_metadata.
+                : JsonSerializer.Serialize<ImportSessionUserMetadata>(row, UserMetadataJsonOptions);
             item.MetadataState = ImportSessionItemMetadataState.Edited;
+            item.MetadataSource = ImportSessionItemMetadataSource.ManualMapping;
             item.UpdatedAt = now;
             matched++;
         }
@@ -426,6 +490,35 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         return (matched, unmatched, session);
     }
 
+    public async Task<IReadOnlyList<ImportSessionMappingTemplateRow>> ListMappingTemplateAsync(
+        Guid sessionId,
+        CancellationToken ct = default)
+    {
+        var items = await db.ImportSessionItems
+            .AsNoTracking()
+            .Where(x => x.SessionId == sessionId
+                        && !x.Excluded
+                        && x.MetadataSource != ImportSessionItemMetadataSource.YtDlp
+                        && x.MetadataSource != ImportSessionItemMetadataSource.ManualMapping)
+            .OrderBy(x => x.RelativePath)
+            .Select(x => new { x.RelativePath, x.FileName, x.Title, x.Provider, x.SourceMediaId, x.SourceUrl })
+            .ToListAsync(ct);
+
+        return items
+            .Select(x => new ImportSessionMappingTemplateRow
+            {
+                FileName = x.RelativePath,
+                Metadata = CreateMappingTemplateMetadata(
+                    x.RelativePath,
+                    x.FileName,
+                    x.Title,
+                    x.Provider,
+                    x.SourceMediaId,
+                    x.SourceUrl)
+            })
+            .ToList();
+    }
+
     public async Task<IReadOnlyList<ImportSessionEnrichItemRef>> ListItemsForEnrichAsync(
         Guid sessionId,
         IReadOnlyList<Guid>? itemIds,
@@ -438,6 +531,7 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
                         && !x.Excluded
                         && x.SourceUrl != null
                         && x.EnrichedMetadataJson == null
+                        && x.MetadataSource != ImportSessionItemMetadataSource.ManualMapping
                         && (x.Status == ImportSessionItemStatus.Discovered || x.Status == ImportSessionItemStatus.Probed));
 
         if (itemIds is { Count: > 0 })
@@ -453,9 +547,71 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
             {
                 ItemId = x.ItemId,
                 SourceUrl = x.SourceUrl!,
+                RelativePath = x.RelativePath,
+                Attempt = x.MetadataFetchAttempt + 1,
                 Provider = x.Provider
             })
             .ToListAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<ImportSessionMetadataRefreshItemRef>> ListItemsForMetadataRefreshAsync(
+        Guid sessionId,
+        IReadOnlyList<Guid>? itemIds,
+        int limit,
+        CancellationToken ct = default)
+    {
+        var query = db.ImportSessionItems
+            .AsNoTracking()
+            .Where(x => x.SessionId == sessionId
+                        && !x.Excluded
+                        && x.MetadataSource != ImportSessionItemMetadataSource.ManualMapping
+                        && (x.Status == ImportSessionItemStatus.Discovered || x.Status == ImportSessionItemStatus.Probed));
+
+        if (itemIds is { Count: > 0 })
+        {
+            var ids = itemIds.ToHashSet();
+            query = query.Where(x => ids.Contains(x.ItemId));
+        }
+
+        return await query
+            .OrderBy(x => x.ItemId)
+            .Take(Math.Clamp(limit, 1, 1000))
+            .Select(x => new ImportSessionMetadataRefreshItemRef
+            {
+                ItemId = x.ItemId,
+                RelativePath = x.RelativePath,
+                Attempt = x.MetadataFetchAttempt + 1,
+                Provider = x.Provider,
+                SourceUrl = x.SourceUrl
+            })
+            .ToListAsync(ct);
+    }
+
+    public async Task<ImportSessionDto?> MarkEnrichmentQueuedAsync(
+        Guid sessionId,
+        IReadOnlyList<Guid> itemIds,
+        CancellationToken ct = default)
+    {
+        if (itemIds.Count == 0)
+            return await GetAsync(sessionId, ct);
+
+        var ids = itemIds.ToHashSet();
+        var rows = await db.ImportSessionItems
+            .Where(x => x.SessionId == sessionId && ids.Contains(x.ItemId))
+            .ToListAsync(ct);
+        var now = clock.GetCurrentInstant();
+        foreach (var item in rows)
+        {
+            item.MetadataFetchState = ImportSessionMetadataFetchState.Queued;
+            item.MetadataFetchAttempt += 1;
+            item.MetadataFetchMessage = "Waiting for an import worker.";
+            item.ErrorCode = null;
+            item.ErrorMessage = null;
+            item.UpdatedAt = now;
+        }
+
+        await db.SaveChangesAsync(ct);
+        return await RecalculateCountersAsync(sessionId, ct);
     }
 
     public async Task<ImportSessionDto?> ApplyEnrichmentAsync(ImportSessionItemEnriched message, CancellationToken ct = default)
@@ -466,6 +622,13 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
             return await GetAsync(message.SessionId, ct);
 
         item.EnrichedMetadataJson = NormalizeJson(message.EnrichedMetadataJson);
+        item.MetadataSource = ImportSessionItemMetadataSource.YtDlp;
+        item.MetadataFetchState = ImportSessionMetadataFetchState.Succeeded;
+        item.MetadataFetchMessage = message.OperationKey.Contains("/metadata-refresh/", StringComparison.Ordinal)
+            ? "info.json found"
+            : "yt-dlp metadata fetched.";
+        if (!string.IsNullOrWhiteSpace(message.InfoJsonRelativePath))
+            item.SidecarsJson = WithInfoJson(item.SidecarsJson, message.InfoJsonRelativePath);
 
         // Enrichment sits below user edits in the layered merge: only refresh the effective
         // display columns while the item has not been touched by the user.
@@ -498,11 +661,35 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
             return await GetAsync(message.SessionId, ct);
 
         // Enrichment is optional; surface the error for the review UI without failing the item.
-        item.ErrorCode = NormalizeOptional(message.ErrorCode) ?? "enrich_failed";
-        item.ErrorMessage = NormalizeOptional(message.ErrorMessage) ?? "yt-dlp enrichment failed.";
+        var errorCode = NormalizeOptional(message.ErrorCode) ?? "enrich_failed";
+        var errorMessage = NormalizeOptional(message.ErrorMessage) ?? "yt-dlp enrichment failed.";
+        item.ErrorCode = errorCode == "info_json_not_found" ? null : errorCode;
+        item.ErrorMessage = errorCode == "info_json_not_found" ? null : errorMessage;
+        item.MetadataFetchState = errorCode == "info_json_not_found"
+            ? ImportSessionMetadataFetchState.NotAttempted
+            : ImportSessionMetadataFetchState.Failed;
+        item.MetadataFetchMessage = errorMessage;
         item.UpdatedAt = clock.GetCurrentInstant();
         await db.SaveChangesAsync(ct);
         return await GetAsync(message.SessionId, ct);
+    }
+
+    public async Task<(ImportSessionDto? Session, string? Error)> UpdateOptionsAsync(ImportSessionUpdateOptionsRequest request, CancellationToken ct = default)
+    {
+        var session = await db.ImportSessions.FirstOrDefaultAsync(x => x.SessionId == request.SessionId, ct);
+        if (session is null)
+            return (null, null);
+        if (session.Status is ImportSessionStatus.Committing
+            or ImportSessionStatus.Completed
+            or ImportSessionStatus.CompletedWithFailures
+            or ImportSessionStatus.Cancelled)
+            return (ToDto(session), "Session options can no longer be changed.");
+
+        if (request.DeleteSourceFiles is { } deleteSourceFiles)
+            session.DeleteSourceFiles = deleteSourceFiles;
+        session.UpdatedAt = clock.GetCurrentInstant();
+        await db.SaveChangesAsync(ct);
+        return (ToDto(session), null);
     }
 
     public async Task<(ImportSessionDto? Session, int ApprovedCount, string? Error)> CommitAsync(Guid sessionId, CancellationToken ct = default)
@@ -513,22 +700,18 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         if (session.Status is ImportSessionStatus.Cancelled or ImportSessionStatus.Completed)
             return (ToDto(session), 0, "Session is terminal.");
 
-        var blockerCount = await db.ImportSessionItems.CountAsync(
-            x => x.SessionId == sessionId && !x.Excluded && x.MetadataState == ImportSessionItemMetadataState.Incomplete,
-            ct);
-        if (blockerCount > 0)
-            return (ToDto(session), 0, $"{blockerCount} incomplete item(s) must be edited, excluded, or placeholder-accepted before commit.");
-
         var eligible = await db.ImportSessionItems
             .Where(x => x.SessionId == sessionId
                         && !x.Excluded
                         && (x.Status == ImportSessionItemStatus.Discovered || x.Status == ImportSessionItemStatus.Probed)
-                        && x.MetadataState != ImportSessionItemMetadataState.Incomplete)
+                        )
             .ToListAsync(ct);
 
         var now = clock.GetCurrentInstant();
         foreach (var item in eligible)
         {
+            if (item.MetadataState == ImportSessionItemMetadataState.Incomplete)
+                item.MetadataState = ImportSessionItemMetadataState.PlaceholderAccepted;
             item.Status = ImportSessionItemStatus.Approved;
             item.ErrorCode = null;
             item.ErrorMessage = null;
@@ -560,7 +743,6 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         foreach (var item in rows)
         {
             item.Status = ImportSessionItemStatus.Approved;
-            item.Attempt += 1;
             item.ErrorCode = null;
             item.ErrorMessage = null;
             item.UpdatedAt = now;
@@ -607,13 +789,61 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
             .Select(x => ToDto(x))
             .ToListAsync(ct);
 
-    public async Task<IReadOnlyList<ImportSessionItemWork>> ListApprovedWorkAsync(Guid sessionId, int limit, CancellationToken ct = default)
-        => await BuildWorkQuery(sessionId)
-            .Where(x => x.Item.Status == ImportSessionItemStatus.Approved)
+    public async Task<int> RecoverStaleHashingItemsAsync(Guid sessionId, Instant staleBefore, CancellationToken ct = default)
+    {
+        var rows = await db.ImportSessionItems
+            .Where(x => x.SessionId == sessionId
+                        && !x.Excluded
+                        && x.Status == ImportSessionItemStatus.Hashing
+                        && x.UpdatedAt < staleBefore)
+            .ToListAsync(ct);
+        if (rows.Count == 0)
+            return 0;
+
+        var now = clock.GetCurrentInstant();
+        foreach (var item in rows)
+        {
+            item.Status = ImportSessionItemStatus.Approved;
+            item.ErrorCode = null;
+            item.ErrorMessage = null;
+            item.UpdatedAt = now;
+            item.CompletedAt = null;
+        }
+
+        await db.SaveChangesAsync(ct);
+        await RecalculateCountersAsync(sessionId, ct);
+        return rows.Count;
+    }
+
+    public async Task<IReadOnlyList<ImportSessionItemWork>> ClaimApprovedWorkAsync(Guid sessionId, int limit, CancellationToken ct = default)
+    {
+        var rows = await BuildWorkQuery(sessionId)
+            .Where(x => !x.Item.Excluded
+                        && (x.Item.Status == ImportSessionItemStatus.Approved
+                            || x.Item.Status == ImportSessionItemStatus.Probed
+                            || x.Item.Status == ImportSessionItemStatus.Discovered))
             .OrderBy(x => x.Item.ItemId)
             .Take(Math.Clamp(limit, 1, 100))
-            .Select(x => ToWork(x.Session, x.Item))
             .ToListAsync(ct);
+        if (rows.Count == 0)
+            return [];
+
+        var now = clock.GetCurrentInstant();
+        foreach (var row in rows)
+        {
+            if (row.Item.MetadataState == ImportSessionItemMetadataState.Incomplete)
+                row.Item.MetadataState = ImportSessionItemMetadataState.PlaceholderAccepted;
+            row.Item.Status = ImportSessionItemStatus.Hashing;
+            row.Item.Attempt += 1;
+            row.Item.ErrorCode = null;
+            row.Item.ErrorMessage = null;
+            row.Item.UpdatedAt = now;
+        }
+
+        await db.SaveChangesAsync(ct);
+        await RecalculateCountersAsync(sessionId, ct);
+        return rows.Select(x => ToWork(x.Session, x.Item)).ToList();
+    }
 
     public async Task<ImportSessionItemWork?> GetItemWorkAsync(Guid sessionId, Guid itemId, CancellationToken ct = default)
         => await BuildWorkQuery(sessionId)
@@ -752,7 +982,7 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
                 db.ImportSessionItems,
                 session => session.SessionId,
                 item => item.SessionId,
-                (session, item) => new ImportSessionWorkProjection(session, item));
+                (session, item) => new ImportSessionWorkProjection { Session = session, Item = item });
 
     private async Task<ImportSessionDto?> RecalculateCountersAsync(Guid sessionId, CancellationToken ct)
     {
@@ -812,6 +1042,7 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         AlreadyImportedItems = x.AlreadyImportedItems,
         FailedItems = x.FailedItems,
         MaxParallelItems = x.MaxParallelItems,
+        DeleteSourceFiles = x.DeleteSourceFiles,
         ErrorMessage = x.ErrorMessage,
         CreatedAt = x.CreatedAt,
         UpdatedAt = x.UpdatedAt,
@@ -831,6 +1062,13 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         SourceUrl = x.SourceUrl,
         Title = x.Title,
         MetadataState = x.MetadataState,
+        MetadataSource = x.MetadataSource,
+        MetadataFetchState = x.MetadataFetchState,
+        MetadataFetchAttempt = x.MetadataFetchAttempt,
+        MetadataFetchMessage = x.MetadataFetchMessage,
+        MetadataJson = MetadataJson(x),
+        HasNfo = HasSidecar(x.SidecarsJson, "nfo"),
+        HasInfoJson = HasSidecar(x.SidecarsJson, "infoJson"),
         Excluded = x.Excluded,
         Status = x.Status,
         Attempt = x.Attempt,
@@ -860,7 +1098,9 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         ScanMetadataJson = item.ScanMetadataJson,
         EnrichedMetadataJson = item.EnrichedMetadataJson,
         UserMetadataJson = item.UserMetadataJson,
-        MetadataState = item.MetadataState
+        MetadataState = item.MetadataState,
+        Attempt = item.Attempt,
+        DeleteSourceFiles = session.DeleteSourceFiles
     };
 
     private static string NormalizeRequired(string? value, string name)
@@ -874,5 +1114,135 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
     private static string? NormalizeJson(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    private sealed record ImportSessionWorkProjection(ImportSessionEntity Session, ImportSessionItemEntity Item);
+    private static string? MetadataJson(ImportSessionItemEntity item)
+        => item.MetadataSource == ImportSessionItemMetadataSource.ManualMapping ? item.UserMetadataJson : null;
+
+    private CapturedMediaMetadata CreateMappingTemplateMetadata(
+        string relativePath,
+        string fileName,
+        string? title,
+        string? provider,
+        string? sourceMediaId,
+        string? sourceUrl)
+    {
+        var normalizedProvider = NormalizeOptional(provider) ?? "local";
+        var folder = relativePath.Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        var extension = Path.GetExtension(fileName).Trim('.');
+        return new CapturedMediaMetadata
+        {
+            Account = new CapturedAccountMetadata
+            {
+                Platform = normalizedProvider,
+                AccountName = folder ?? "Unknown",
+                AccountHandle = folder ?? "unknown",
+                AccountUrl = "",
+                FollowerCount = 0,
+                Description = "",
+                ExternalIds = []
+            },
+            Media = new CapturedMediaMetadataCore
+            {
+                ExternalMediaId = NormalizeOptional(sourceMediaId) ?? "",
+                MetadataScrapeDate = clock.GetCurrentInstant(),
+                ThumbnailStoragePath = "",
+                AgeLimit = 0,
+                AverageRating = 0,
+                LikeCount = 0,
+                DislikeCount = 0,
+                DurationSeconds = 0,
+                Description = "",
+                ReleaseDate = clock.GetCurrentInstant(),
+                Title = NormalizeOptional(title) ?? Path.GetFileNameWithoutExtension(fileName),
+                WasLive = false,
+                WebpageUrl = NormalizeOptional(sourceUrl) ?? "",
+                ViewCount = 0,
+                CommentCount = 0,
+                Availability = "",
+                Location = ""
+            },
+            Technical = new CapturedMediaTechnicalMetadata
+            {
+                DurationTicks = 0,
+                Format = new CapturedFormatMetadata
+                {
+                    DurationTicks = 0,
+                    FormatLongNames = string.IsNullOrWhiteSpace(extension) ? "UNKNOWN" : extension.ToUpperInvariant(),
+                    StreamCount = 0
+                },
+                Streams = []
+            },
+            Captions = [],
+            Comments = [],
+            Series = new CapturedSeriesMetadata
+            {
+                SeriesName = "",
+                SeasonCount = 0,
+                SeasonNumber = 0,
+                SeasonName = "",
+                EpisodeNumber = 0,
+                EpisodeName = ""
+            },
+            Music = new CapturedMusicMetadata
+            {
+                AlbumTitle = "",
+                AlbumType = "",
+                DiscNumber = 0,
+                ReleaseYear = 0,
+                TrackTitle = "",
+                TrackNumber = 0,
+                Composer = ""
+            },
+            Artists = [],
+            AlbumArtists = [],
+            Genres = [],
+            Tags = [],
+            Categories = [],
+            Cast = []
+        };
+    }
+
+    private static bool HasSidecar(string? sidecarsJson, string propertyName)
+    {
+        if (string.IsNullOrWhiteSpace(sidecarsJson))
+            return false;
+        try
+        {
+            using var document = JsonDocument.Parse(sidecarsJson);
+            return document.RootElement.TryGetProperty(propertyName, out var value)
+                   && value.ValueKind == JsonValueKind.String
+                   && !string.IsNullOrWhiteSpace(value.GetString());
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static string WithInfoJson(string? sidecarsJson, string relativePath)
+    {
+        var values = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
+        if (!string.IsNullOrWhiteSpace(sidecarsJson))
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(sidecarsJson);
+                foreach (var property in document.RootElement.EnumerateObject())
+                    values[property.Name] = property.Value.Clone();
+            }
+            catch (JsonException)
+            {
+                // Replace malformed legacy sidecar JSON with a valid minimal object.
+            }
+        }
+
+        using var infoPath = JsonDocument.Parse(JsonSerializer.Serialize(relativePath));
+        values["infoJson"] = infoPath.RootElement.Clone();
+        return JsonSerializer.Serialize(values);
+    }
+
+    private sealed class ImportSessionWorkProjection
+    {
+        public required ImportSessionEntity Session { get; init; }
+        public required ImportSessionItemEntity Item { get; init; }
+    }
 }

@@ -46,6 +46,10 @@ public sealed class DownloadProgressPersistenceService(
         try
         {
             using var scope = scopeFactory.CreateScope();
+            if (progress.Execution is { } execution
+                && !await scope.ServiceProvider.GetRequiredService<IDownloadFlowV2Repository>()
+                    .CanAcceptWorkerEventAsync(execution))
+                return;
             var repo = scope.ServiceProvider.GetRequiredService<IDownloadJobsRepository>();
             await repo.AppendProgressLogAsync(progress.JobId, progress.Sequence, message);
         }

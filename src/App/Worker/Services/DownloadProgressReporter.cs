@@ -29,6 +29,7 @@ internal sealed class DownloadProgressReporter(
             OperationKey = $"{command.OperationKey}/progress/{sequence.ToString(CultureInfo.InvariantCulture)}",
             OccurredAt = clock.GetCurrentInstant(),
             Attempt = command.Attempt,
+            Execution = command.Execution,
             Sequence = sequence,
             SourceUrl = command.SourceUrl,
             Phase = MapPhase(value.Phase),
@@ -75,9 +76,9 @@ internal sealed class DownloadProgressReporter(
     }
 
     /// <summary>
-    /// Publishes a synthetic advisory progress frame not sourced from yt-dlp's own progress hook —
-    /// used to surface Worker-driven state (e.g. "retrying without sidecar content") live on the Jobs
-    /// page, the same way yt-dlp's own phases are.
+    /// Publishes a synthetic advisory progress frame not sourced from yt-dlp's own progress hook.
+    /// Worker-driven stage details and optional-artifact warnings appear live on the Jobs page in
+    /// the same way as yt-dlp's own phases.
     /// </summary>
     public Task ReportPhaseAsync(string phase, string message)
     {
@@ -91,6 +92,7 @@ internal sealed class DownloadProgressReporter(
             OperationKey = $"{command.OperationKey}/progress/{sequence.ToString(CultureInfo.InvariantCulture)}",
             OccurredAt = clock.GetCurrentInstant(),
             Attempt = command.Attempt,
+            Execution = command.Execution,
             Sequence = sequence,
             SourceUrl = command.SourceUrl,
             Phase = phase,

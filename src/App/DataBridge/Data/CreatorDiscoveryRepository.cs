@@ -170,6 +170,7 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
             if (existing is null)
             {
                 var ignoreMatch = IgnoreKeywordMatcher.FirstMatch(candidate.Title, ignoreKeywords);
+                var suppressed = request.SuppressDownloadEnqueue;
                 db.DiscoveredMedia.Add(new DiscoveredMediaEntity
                 {
                     CreatorSourceId = source.Id,
@@ -182,16 +183,17 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
                     ThumbnailUrl = NormalizeOptional(candidate.ThumbnailUrl),
                     LiveStatus = NormalizeOptional(candidate.LiveStatus),
                     Availability = NormalizeOptional(candidate.Availability),
-                    DiscoveryStatus = ignoreMatch is null ? MediaDiscoveryStatus.Queued : MediaDiscoveryStatus.Ignored,
+                    DiscoveryStatus = ignoreMatch is not null ? MediaDiscoveryStatus.Ignored
+                        : suppressed ? MediaDiscoveryStatus.Discovered : MediaDiscoveryStatus.Queued,
                     IgnoredKeyword = ignoreMatch?.Pattern,
-                    MetadataStatus = MediaMetadataStatus.RefreshRequested,
+                    MetadataStatus = suppressed ? MediaMetadataStatus.PendingEnrichment : MediaMetadataStatus.RefreshRequested,
                     FirstSeenAt = now,
                     LastSeenAt = now,
                     LastChangedAt = now,
-                    LastEnqueuedAt = now
+                    LastEnqueuedAt = suppressed ? null : now
                 });
                 newCount++;
-                if (ignoreMatch is null)
+                if (ignoreMatch is null && !suppressed)
                 {
                     enqueued.Add(candidate);
                 }
@@ -226,7 +228,7 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
                 changedCount++;
             }
 
-            if (changed || request.QueueAllItems)
+            if (!request.SuppressDownloadEnqueue && (changed || request.QueueAllItems))
             {
                 existing.LastEnqueuedAt = now;
                 existing.MetadataStatus = MediaMetadataStatus.RefreshRequested;

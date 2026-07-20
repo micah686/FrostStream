@@ -2,7 +2,7 @@ using NodaTime;
 using NSubstitute;
 using Shouldly;
 using TUnit.Core;
-using Worker.Metadata;
+using Shared.Metadata;
 using Worker.Services;
 using YtDlpSharpLib.Models;
 

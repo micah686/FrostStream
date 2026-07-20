@@ -35,8 +35,8 @@ public static class EndpointIds
     public const string DownloadsAudio = "downloads.audio";
     public const string DownloadsPreset = "downloads.preset";
     public const string DownloadsUpdatePriority = "downloads.update-priority";
-    public const string DownloadsCancel = "downloads.cancel";
-    public const string DownloadsRestartHalted = "downloads.restart-halted";
+    public const string DownloadsStart = "downloads.start";
+    public const string DownloadsStop = "downloads.stop";
     public const string DownloadsQueueList = "downloads.queue.list";
     public const string DownloadsQueueGet = "downloads.queue.get";
     public const string DownloadsQueueHistory = "downloads.queue.history";
@@ -44,8 +44,11 @@ public static class EndpointIds
     public const string DownloadsQueueStream = "downloads.queue.stream";
     public const string DownloadsQueueProgress = "downloads.queue.progress";
     public const string DownloadsQueuePriority = "downloads.queue.priority";
-    public const string DownloadsQueueCancel = "downloads.queue.cancel";
-    public const string DownloadsQueueRestart = "downloads.queue.restart";
+    public const string DownloadsQueueStart = "downloads.queue.start";
+    public const string DownloadsQueueStop = "downloads.queue.stop";
+    public const string DownloadsGroupStart = "downloads.group.start";
+    public const string DownloadsGroupStop = "downloads.group.stop";
+    public const string DownloadsProviderCircuitClear = "downloads.provider-circuit.clear";
     public const string ImportsSessionsCreate = "imports.sessions.create";
     public const string ImportsSessionsList = "imports.sessions.list";
     public const string ImportsSessionsGet = "imports.sessions.get";
@@ -53,10 +56,16 @@ public static class EndpointIds
     public const string ImportsSessionsItemsPatch = "imports.sessions.items.patch";
     public const string ImportsSessionsItemsBulk = "imports.sessions.items.bulk";
     public const string ImportsSessionsMapping = "imports.sessions.mapping";
+    public const string ImportsSessionsMappingTemplate = "imports.sessions.mapping-template";
+    public const string ImportsSessionsMappingExample = "imports.sessions.mapping-example";
+    public const string ImportsSessionsMetadataRefresh = "imports.sessions.metadata.refresh";
     public const string ImportsSessionsEnrich = "imports.sessions.enrich";
+    public const string ImportsSessionsUpdateOptions = "imports.sessions.update-options";
     public const string ImportsSessionsCommit = "imports.sessions.commit";
     public const string ImportsSessionsRetry = "imports.sessions.retry";
     public const string ImportsSessionsCancel = "imports.sessions.cancel";
+    public const string ImportsIncomingBrowse = "imports.incoming.browse";
+    public const string WorkersList = "workers.list";
 
     // Storage
     public const string StorageLocalCreate = "storage.local.create";
@@ -272,8 +281,8 @@ public static class EndpointCatalog
         new(EndpointIds.DownloadsAudio, Bundles.Downloading),
         new(EndpointIds.DownloadsPreset, Bundles.Downloading),
         new(EndpointIds.DownloadsUpdatePriority, Bundles.Downloading),
-        new(EndpointIds.DownloadsCancel, Bundles.Downloading),
-        new(EndpointIds.DownloadsRestartHalted, Bundles.Downloading),
+        new(EndpointIds.DownloadsStart, Bundles.Downloading),
+        new(EndpointIds.DownloadsStop, Bundles.Downloading),
         new(EndpointIds.DownloadsQueueList, Bundles.Downloading),
         new(EndpointIds.DownloadsQueueGet, Bundles.Downloading),
         new(EndpointIds.DownloadsQueueHistory, Bundles.Downloading),
@@ -281,8 +290,11 @@ public static class EndpointCatalog
         new(EndpointIds.DownloadsQueueStream, Bundles.Downloading),
         new(EndpointIds.DownloadsQueueProgress, Bundles.Downloading),
         new(EndpointIds.DownloadsQueuePriority, Bundles.Downloading),
-        new(EndpointIds.DownloadsQueueCancel, Bundles.Downloading),
-        new(EndpointIds.DownloadsQueueRestart, Bundles.Downloading),
+        new(EndpointIds.DownloadsQueueStart, Bundles.Downloading),
+        new(EndpointIds.DownloadsQueueStop, Bundles.Downloading),
+        new(EndpointIds.DownloadsGroupStart, Bundles.Downloading),
+        new(EndpointIds.DownloadsGroupStop, Bundles.Downloading),
+        new(EndpointIds.DownloadsProviderCircuitClear, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsCreate, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsList, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsGet, Bundles.Downloading),
@@ -290,10 +302,16 @@ public static class EndpointCatalog
         new(EndpointIds.ImportsSessionsItemsPatch, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsItemsBulk, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsMapping, Bundles.Downloading),
+        new(EndpointIds.ImportsSessionsMappingTemplate, Bundles.Downloading),
+        new(EndpointIds.ImportsSessionsMappingExample, Bundles.Downloading),
+        new(EndpointIds.ImportsSessionsMetadataRefresh, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsEnrich, Bundles.Downloading),
+        new(EndpointIds.ImportsSessionsUpdateOptions, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsCommit, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsRetry, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsCancel, Bundles.Downloading),
+        new(EndpointIds.ImportsIncomingBrowse, Bundles.Downloading),
+        new(EndpointIds.WorkersList, Bundles.Management),
 
         new(EndpointIds.StorageLocalCreate, Bundles.Storage),
         new(EndpointIds.StorageLocalUpdate, Bundles.Storage),

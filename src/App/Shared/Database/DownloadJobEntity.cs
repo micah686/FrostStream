@@ -11,6 +11,29 @@ public class DownloadJobEntity
 
     public DownloadJobState State { get; set; }
 
+    /// <summary>Authoritative V2 lifecycle. <see cref="State"/> remains only for legacy-schema compatibility.</summary>
+    public DownloadJobStatus Status { get; set; } = DownloadJobStatus.Queued;
+
+    public DownloadStage Stage { get; set; } = DownloadStage.None;
+
+    public DownloadStageStatus StageStatus { get; set; } = DownloadStageStatus.Pending;
+
+    public Guid? CurrentRunId { get; set; }
+
+    public int CurrentRunNumber { get; set; }
+
+    public int CurrentAttempt { get; set; }
+
+    public string? CurrentArtifactKey { get; set; }
+
+    public int WarningCount { get; set; }
+
+    public Instant? StopRequestedAt { get; set; }
+
+    public string? StopRequestedBy { get; set; }
+
+    public string? StopReason { get; set; }
+
     public required string SourceUrl { get; set; }
 
     public string? RequestedBy { get; set; }
@@ -60,6 +83,113 @@ public class DownloadJobEntity
     public Instant UpdatedAt { get; set; } = SystemClock.Instance.GetCurrentInstant();
 
     public Instant? CompletedAt { get; set; }
+}
+
+public class DownloadGroupEntity
+{
+    public Guid GroupId { get; set; }
+    public Guid CorrelationId { get; set; }
+    public DownloadGroupKind Kind { get; set; }
+    public DownloadGroupStatus Status { get; set; }
+    public required string SourceUrl { get; set; }
+    public string? RequestedBy { get; set; }
+    public string? StorageKey { get; set; }
+    public int TotalJobs { get; set; }
+    public int CompletedJobs { get; set; }
+    public int WarningJobs { get; set; }
+    public int FailedJobs { get; set; }
+    public string? FailureCode { get; set; }
+    public string? FailureMessage { get; set; }
+    public Instant CreatedAt { get; private set; } = SystemClock.Instance.GetCurrentInstant();
+    public Instant UpdatedAt { get; set; } = SystemClock.Instance.GetCurrentInstant();
+    public Instant? CompletedAt { get; set; }
+}
+
+public class DownloadJobRunEntity
+{
+    public Guid RunId { get; set; }
+    public Guid JobId { get; set; }
+    public int RunNumber { get; set; }
+    public DownloadJobStatus Status { get; set; }
+    public DownloadStage Stage { get; set; }
+    public DownloadStageStatus StageStatus { get; set; }
+    public FailureKind? FailureKind { get; set; }
+    public string? FailureCode { get; set; }
+    public string? FailureMessage { get; set; }
+    public Instant CreatedAt { get; private set; } = SystemClock.Instance.GetCurrentInstant();
+    public Instant? StartedAt { get; set; }
+    public Instant UpdatedAt { get; set; } = SystemClock.Instance.GetCurrentInstant();
+    public Instant? EndedAt { get; set; }
+}
+
+public class DownloadStageAttemptEntity
+{
+    public long Id { get; set; }
+    public Guid RunId { get; set; }
+    public Guid JobId { get; set; }
+    public DownloadStage Stage { get; set; }
+    public string ArtifactKey { get; set; } = string.Empty;
+    public int Attempt { get; set; }
+    public DownloadStageStatus Status { get; set; }
+    public Guid DispatchId { get; set; }
+    public required string OperationKey { get; set; }
+    public FailureKind? FailureKind { get; set; }
+    public string? FailureCode { get; set; }
+    public string? FailureMessage { get; set; }
+    public Instant CreatedAt { get; private set; } = SystemClock.Instance.GetCurrentInstant();
+    public Instant? StartedAt { get; set; }
+    public Instant UpdatedAt { get; set; } = SystemClock.Instance.GetCurrentInstant();
+    public Instant? EndedAt { get; set; }
+}
+
+public class DownloadArtifactEntity
+{
+    public long Id { get; set; }
+    public Guid RunId { get; set; }
+    public Guid JobId { get; set; }
+    public DownloadStage Stage { get; set; }
+    public required string ArtifactKey { get; set; }
+    public UploadArtifactKind Kind { get; set; }
+    public bool Required { get; set; }
+    public DownloadArtifactStatus Status { get; set; }
+    public string? TempFileRef { get; set; }
+    public string? StorageKey { get; set; }
+    public string? StoragePath { get; set; }
+    public string? StorageVersion { get; set; }
+    public string? ContentHashXxh128 { get; set; }
+    public long? SizeBytes { get; set; }
+    public string? WarningCode { get; set; }
+    public string? WarningMessage { get; set; }
+    public Instant CreatedAt { get; private set; } = SystemClock.Instance.GetCurrentInstant();
+    public Instant UpdatedAt { get; set; } = SystemClock.Instance.GetCurrentInstant();
+}
+
+public class DownloadWorkerLeaseEntity
+{
+    public Guid DispatchId { get; set; }
+    public Guid RunId { get; set; }
+    public Guid JobId { get; set; }
+    public DownloadStage Stage { get; set; }
+    public string ArtifactKey { get; set; } = string.Empty;
+    public int Attempt { get; set; }
+    public required string WorkerInstanceId { get; set; }
+    public DownloadWorkerLeaseStatus Status { get; set; }
+    public Instant AcquiredAt { get; set; }
+    public Instant LastHeartbeatAt { get; set; }
+    public Instant ExpiresAt { get; set; }
+    public Instant? ReleasedAt { get; set; }
+}
+
+public class DownloadJobWarningEntity
+{
+    public long Id { get; set; }
+    public Guid RunId { get; set; }
+    public Guid JobId { get; set; }
+    public DownloadStage Stage { get; set; }
+    public string ArtifactKey { get; set; } = string.Empty;
+    public required string WarningCode { get; set; }
+    public required string WarningMessage { get; set; }
+    public Instant CreatedAt { get; private set; } = SystemClock.Instance.GetCurrentInstant();
 }
 
 public class DownloadJobHistoryEntity

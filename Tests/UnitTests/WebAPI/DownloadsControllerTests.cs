@@ -40,24 +40,28 @@ public sealed class DownloadsControllerTests
         payload.CorrelationId.ShouldNotBe(Guid.Empty);
 
         await publisher.Received(1).PublishAsync(
-            DownloadSubjects.DownloadRequested,
-            Arg.Is<DownloadRequested>(x =>
-                x.JobId == payload.JobId &&
-                x.CorrelationId == payload.CorrelationId &&
-                x.CausationId == null &&
-                x.OperationKey == $"job/{payload.JobId:N}/requested" &&
-                x.OccurredAt == Now &&
-                x.Attempt == 1 &&
-                x.SourceUrl == "https://example.test/video" &&
-                x.StorageKey == "default" &&
-                x.ForceDownload &&
-                x.RequestedBy == "unit_test_user" &&
-                x.Tags != null &&
-                x.Tags.SequenceEqual(new[] { "archive", "manual" }) &&
-                x.MediaKind == MediaKind.Video &&
-                x.AudioFormat == null &&
-                x.PresetKey == null &&
-                x.CookieSecretPath == "cookies/users/unit_test_user/member-cookie"),
+            DownloadSubjects.GroupRequested,
+            Arg.Is<DownloadGroupRequested>(g =>
+                g.Kind == DownloadGroupKind.Direct &&
+                g.GroupId == payload.CorrelationId &&
+                g.CorrelationId == payload.CorrelationId &&
+                g.DirectRequest != null &&
+                g.DirectRequest.JobId == payload.JobId &&
+                g.DirectRequest.CorrelationId == payload.CorrelationId &&
+                g.DirectRequest.CausationId == null &&
+                g.DirectRequest.OperationKey == $"job/{payload.JobId:N}/requested" &&
+                g.DirectRequest.OccurredAt == Now &&
+                g.DirectRequest.Attempt == 1 &&
+                g.DirectRequest.SourceUrl == "https://example.test/video" &&
+                g.DirectRequest.StorageKey == "default" &&
+                g.DirectRequest.ForceDownload &&
+                g.DirectRequest.RequestedBy == "unit_test_user" &&
+                g.DirectRequest.Tags != null &&
+                g.DirectRequest.Tags.SequenceEqual(new[] { "archive", "manual" }) &&
+                g.DirectRequest.MediaKind == MediaKind.Video &&
+                g.DirectRequest.AudioFormat == null &&
+                g.DirectRequest.PresetKey == null &&
+                g.DirectRequest.CookieSecretPath == "cookies/users/unit_test_user/member-cookie"),
             Arg.Is<string>(x => x.Length == 32),
             null,
             Arg.Any<CancellationToken>());
@@ -76,12 +80,13 @@ public sealed class DownloadsControllerTests
         }, CancellationToken.None);
 
         await publisher.Received(1).PublishAsync(
-            DownloadSubjects.DownloadRequested,
-            Arg.Is<DownloadRequested>(x =>
-                x.SourceUrl == "https://example.test/audio" &&
-                x.StorageKey == "storage-a" &&
-                x.MediaKind == MediaKind.Audio &&
-                x.AudioFormat == AudioConversionFormat.Mp3),
+            DownloadSubjects.GroupRequested,
+            Arg.Is<DownloadGroupRequested>(g =>
+                g.DirectRequest != null &&
+                g.DirectRequest.SourceUrl == "https://example.test/audio" &&
+                g.DirectRequest.StorageKey == "storage-a" &&
+                g.DirectRequest.MediaKind == MediaKind.Audio &&
+                g.DirectRequest.AudioFormat == AudioConversionFormat.Mp3),
             Arg.Any<string>(),
             null,
             Arg.Any<CancellationToken>());
@@ -107,15 +112,16 @@ public sealed class DownloadsControllerTests
         }, CancellationToken.None);
 
         await publisher.Received(1).PublishAsync(
-            DownloadSubjects.DownloadRequested,
-            Arg.Is<DownloadRequested>(x =>
-                x.SourceUrl == "https://example.test/video" &&
-                x.YtDlpOptions != null &&
-                x.YtDlpOptions.SponsorBlock.SponsorblockMark == "all,-preview" &&
-                x.YtDlpOptions.SponsorBlock.SponsorblockRemove == "sponsor,selfpromo" &&
-                x.YtDlpOptions.SponsorBlock.SponsorblockChapterTitle == "[SponsorBlock]: %(category_names)l" &&
-                x.YtDlpOptions.SponsorBlock.SponsorblockApi == "https://sponsor.example.test" &&
-                !x.YtDlpOptions.SponsorBlock.NoSponsorblock),
+            DownloadSubjects.GroupRequested,
+            Arg.Is<DownloadGroupRequested>(g =>
+                g.DirectRequest != null &&
+                g.DirectRequest.SourceUrl == "https://example.test/video" &&
+                g.DirectRequest.YtDlpOptions != null &&
+                g.DirectRequest.YtDlpOptions.SponsorBlock.SponsorblockMark == "all,-preview" &&
+                g.DirectRequest.YtDlpOptions.SponsorBlock.SponsorblockRemove == "sponsor,selfpromo" &&
+                g.DirectRequest.YtDlpOptions.SponsorBlock.SponsorblockChapterTitle == "[SponsorBlock]: %(category_names)l" &&
+                g.DirectRequest.YtDlpOptions.SponsorBlock.SponsorblockApi == "https://sponsor.example.test" &&
+                !g.DirectRequest.YtDlpOptions.SponsorBlock.NoSponsorblock),
             Arg.Any<string>(),
             null,
             Arg.Any<CancellationToken>());
@@ -135,12 +141,13 @@ public sealed class DownloadsControllerTests
         }, CancellationToken.None);
 
         await publisher.Received(1).PublishAsync(
-            DownloadSubjects.DownloadRequested,
-            Arg.Is<DownloadRequested>(x =>
-                x.MediaKind == MediaKind.Audio &&
-                x.AudioFormat == AudioConversionFormat.Mp3 &&
-                x.YtDlpOptions != null &&
-                x.YtDlpOptions.SponsorBlock.NoSponsorblock),
+            DownloadSubjects.GroupRequested,
+            Arg.Is<DownloadGroupRequested>(g =>
+                g.DirectRequest != null &&
+                g.DirectRequest.MediaKind == MediaKind.Audio &&
+                g.DirectRequest.AudioFormat == AudioConversionFormat.Mp3 &&
+                g.DirectRequest.YtDlpOptions != null &&
+                g.DirectRequest.YtDlpOptions.SponsorBlock.NoSponsorblock),
             Arg.Any<string>(),
             null,
             Arg.Any<CancellationToken>());
@@ -160,12 +167,13 @@ public sealed class DownloadsControllerTests
         }, CancellationToken.None);
 
         await publisher.Received(1).PublishAsync(
-            DownloadSubjects.DownloadRequested,
-            Arg.Is<DownloadRequested>(x =>
-                x.MediaKind == MediaKind.Video &&
-                x.AudioFormat == null &&
-                x.PresetKey == "audio-high" &&
-                x.YtDlpOptions == null),
+            DownloadSubjects.GroupRequested,
+            Arg.Is<DownloadGroupRequested>(g =>
+                g.DirectRequest != null &&
+                g.DirectRequest.MediaKind == MediaKind.Video &&
+                g.DirectRequest.AudioFormat == null &&
+                g.DirectRequest.PresetKey == "audio-high" &&
+                g.DirectRequest.YtDlpOptions == null),
             Arg.Any<string>(),
             null,
             Arg.Any<CancellationToken>());
@@ -177,7 +185,7 @@ public sealed class DownloadsControllerTests
         var publisher = Substitute.For<IJetStreamPublisher>();
         publisher.PublishAsync(
                 Arg.Any<string>(),
-                Arg.Any<DownloadRequested>(),
+                Arg.Any<DownloadGroupRequested>(),
                 Arg.Any<string>(),
                 null,
                 Arg.Any<CancellationToken>())
@@ -211,7 +219,7 @@ public sealed class DownloadsControllerTests
         badRequest.Value.ShouldBeOfType<ProblemDetails>().Title.ShouldBe("Invalid source URL");
         await publisher.DidNotReceiveWithAnyArgs().PublishAsync(
             default!,
-            default(DownloadRequested)!,
+            default(DownloadGroupRequested)!,
             default,
             default,
             default);
@@ -232,40 +240,40 @@ public sealed class DownloadsControllerTests
         result.Result.ShouldBeOfType<BadRequestObjectResult>();
         await publisher.DidNotReceiveWithAnyArgs().PublishAsync(
             default!,
-            default(DownloadRequested)!,
+            default(DownloadGroupRequested)!,
             default,
             default,
             default);
     }
 
     [Test]
-    public async Task Cancel_Requests_Download_Cancellation()
+    public async Task Stop_Requests_V2_Download_Stop()
     {
         var publisher = Substitute.For<IJetStreamPublisher>();
         var messageBus = Substitute.For<IMessageBus>();
         var jobId = Guid.NewGuid();
-        messageBus.RequestAsync<CancelDownloadRequest, CancelDownloadResponse>(
-                DownloadSubjects.CancelDownloadRequest,
-                Arg.Any<CancelDownloadRequest>(),
+        messageBus.RequestAsync<StopDownloadRequest, StopDownloadResponse>(
+                DownloadSubjects.StopDownloadRequest,
+                Arg.Any<StopDownloadRequest>(),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
-            .Returns(new CancelDownloadResponse
+            .Returns(new StopDownloadResponse
             {
                 Success = true,
-                State = DownloadJobState.Cancelling
+                Status = DownloadJobStatus.Stopping
             });
         var controller = CreateController(publisher, messageBus);
 
-        var result = await controller.Cancel(
+        var result = await controller.Stop(
             jobId,
-            new CancelDownloadApiRequest { Reason = "clicked stop" },
+            new StopDownloadApiRequest { Reason = "clicked stop" },
             CancellationToken.None);
 
         var accepted = result.ShouldBeOfType<AcceptedResult>();
-        accepted.Value.ShouldBeOfType<CancelDownloadApiResponse>().State.ShouldBe(DownloadJobState.Cancelling);
-        await messageBus.Received(1).RequestAsync<CancelDownloadRequest, CancelDownloadResponse>(
-            DownloadSubjects.CancelDownloadRequest,
-            Arg.Is<CancelDownloadRequest>(x =>
+        accepted.Value.ShouldBeOfType<StopDownloadApiResponse>().Status.ShouldBe(DownloadJobStatus.Stopping);
+        await messageBus.Received(1).RequestAsync<StopDownloadRequest, StopDownloadResponse>(
+            DownloadSubjects.StopDownloadRequest,
+            Arg.Is<StopDownloadRequest>(x =>
                 x.JobId == jobId &&
                 x.RequestedBy == "unit_test_user" &&
                 x.Reason == "clicked stop"),

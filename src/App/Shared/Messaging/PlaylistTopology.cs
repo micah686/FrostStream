@@ -16,7 +16,7 @@ public sealed class PlaylistTopology : ITopologySource
 
     /// <summary>
     /// Subject filters for the JetStream stream. Deliberately enumerates only the pipeline
-    /// subjects (requested + commands + events). The request/reply core-NATS subjects
+    /// subjects (group-expansion commands + events). The request/reply core-NATS subjects
     /// (<c>playlist.get</c>, <c>playlist.list</c>, <c>playlist.item.force-queue</c>,
     /// <c>playlist.user.&gt;</c>) must never be captured by the stream: JetStream sends its
     /// publish ack to the request's reply inbox, which the requester then mistakes for the
@@ -24,7 +24,6 @@ public sealed class PlaylistTopology : ITopologySource
     /// </summary>
     public static readonly string[] SubjectFilters =
     [
-        PlaylistSubjects.PlaylistRequested,
         "playlist.cmd.>",
         "playlist.evt.>"
     ];
@@ -32,10 +31,8 @@ public sealed class PlaylistTopology : ITopologySource
     public const string DataBridgeQueueGroup = "databridge-playlists";
     public const string WorkerQueueGroup = "workers";
 
-    public const string PlaylistRequestedConsumer            = "databridge-playlist-requested";
     public const string PlaylistMetadataFetchedConsumer      = "databridge-playlist-metadata-fetched";
     public const string PlaylistMetadataFetchFailedConsumer  = "databridge-playlist-metadata-fetch-failed";
-    public const string ProcessStagedEntriesConsumer         = "databridge-playlist-process-staged-entries";
 
     public const string WorkerFetchPlaylistMetadataConsumer  = "worker-fetch-playlist-metadata";
 
@@ -54,10 +51,8 @@ public sealed class PlaylistTopology : ITopologySource
 
     public IEnumerable<ConsumerSpec> GetConsumers()
     {
-        yield return DataBridgeConsumer(PlaylistRequestedConsumer,           PlaylistSubjects.PlaylistRequested);
         yield return DataBridgeConsumer(PlaylistMetadataFetchedConsumer,     PlaylistSubjects.PlaylistMetadataFetched);
         yield return DataBridgeConsumer(PlaylistMetadataFetchFailedConsumer, PlaylistSubjects.PlaylistMetadataFetchFailed);
-        yield return DataBridgeConsumer(ProcessStagedEntriesConsumer,        PlaylistSubjects.ProcessPlaylistStagedEntriesCommand);
 
         yield return WorkerConsumer(WorkerFetchPlaylistMetadataConsumer,     PlaylistSubjects.FetchPlaylistMetadataCommand);
     }

@@ -12,9 +12,17 @@ using Shared.Database;
 using Shared.Imports;
 using Shared.Messaging;
 using Shared.Metadata;
+using Shared.Storage;
+using YtDlpSharpLib.Models;
 
 namespace DataBridge.Flows;
 
+/// <summary>
+/// Imports one approved session item. The flow suspends while Worker commands are in flight and
+/// replays <see cref="Run"/> from the top on every resume, so every side effect (repo write,
+/// publish, reservation) must be wrapped in an effect and every command MessageId must be stable
+/// across replays; results are matched to their dispatch via CausationId.
+/// </summary>
 [GenerateFlows]
 public class LocalImportItemFlow(
     IJetStreamPublisher bus,
@@ -76,6 +84,8 @@ public class LocalImportItemFlow(
                 reservation.MediaGuid,
                 reservation.StoragePath,
                 prepared)));
+            if (work.DeleteSourceFiles)
+                await DispatchSourceDeletionAsync(request, work);
             await Capture(() => ImportRepoCall(r => r.CompleteSessionIfTerminalAsync(request.SessionId)));
             return;
         }
@@ -145,8 +155,7 @@ public class LocalImportItemFlow(
 
             await Capture(() => ImportRepoCall(r => r.MarkItemFinalizingAsync(request.SessionId, request.ItemId)));
 
-            var metadata = BuildMetadata(work, reservation.MediaGuid, thumbnailPath, captionRows);
-            await RunMetadataWriteStepAsync(request, work, reservation, metadata);
+            await RunMetadataWriteStepAsync(work, reservation, infoJsonPath, thumbnailPath, captionRows);
 
             var captionStoragePathsJson = captionRows.Count == 0 ? null : JsonSerializer.Serialize(captionRows, JsonOptions);
             await Capture(() => ImportRepoCall(r => r.MarkItemImportedAsync(
@@ -159,6 +168,9 @@ public class LocalImportItemFlow(
                 infoJsonPath,
                 thumbnailPath,
                 captionStoragePathsJson)));
+
+            if (work.DeleteSourceFiles)
+                await DispatchSourceDeletionAsync(request, work);
         }
         catch (LocalImportItemFailedException ex)
         {
@@ -170,10 +182,10 @@ public class LocalImportItemFlow(
             await CompensateAsync(request, work, reservation, uploadedObjects);
             await Capture(() => ImportRepoCall(r => r.MarkItemCommitFailedAsync(request.SessionId, request.ItemId, "item_failed", ex.Message, reservation.MediaGuid, reservation.StoragePath)));
         }
-        finally
-        {
-            await Capture(() => ImportRepoCall(r => r.CompleteSessionIfTerminalAsync(request.SessionId)));
-        }
+
+        // Deliberately not a finally: a finally runs while a suspension exception unwinds and any
+        // effect captured there steals the next implicit effect id, corrupting replay alignment.
+        await Capture(() => ImportRepoCall(r => r.CompleteSessionIfTerminalAsync(request.SessionId)));
     }
 
     private async Task<LocalImportFilePrepared?> RunPrepareStepAsync(
@@ -188,9 +200,9 @@ public class LocalImportItemFlow(
             CorrelationId = request.CorrelationId,
             CausationId = request.MessageId,
             MessageId = msgId,
-            OperationKey = $"local-import-item/{request.ItemId:N}/prepare",
+            OperationKey = LocalImportFlowInstance.OperationKey(request.ItemId, request.Attempt, "prepare"),
             OccurredAt = clock.GetCurrentInstant(),
-            Attempt = 1,
+            Attempt = request.Attempt,
             BatchId = request.SessionId,
             ItemId = request.ItemId,
             File = work.RelativePath,
@@ -202,7 +214,9 @@ public class LocalImportItemFlow(
             : LocalImportSubjects.PrepareLocalImportFileCommandForTag(work.WorkerTag);
 
         await Capture(() => Publish(subject, cmd));
-        var result = await Messages.FirstOfTypes<LocalImportFilePrepared, LocalImportFilePrepareFailed>();
+        var result = await Messages.OfTypes<LocalImportFilePrepared, LocalImportFilePrepareFailed>()
+            .Where(x => (x.HasFirst ? x.First!.CausationId : x.Second!.CausationId) == msgId)
+            .First();
         if (result.HasFirst)
             return result.First;
 
@@ -236,7 +250,10 @@ public class LocalImportItemFlow(
                 CorrelationId = request.CorrelationId,
                 CausationId = causationId,
                 MessageId = msgId,
-                OperationKey = $"local-import-item/{request.ItemId:N}/upload/{suffix}/attempt/{attempt.ToString(System.Globalization.CultureInfo.InvariantCulture)}",
+                OperationKey = LocalImportFlowInstance.OperationKey(
+                    request.ItemId,
+                    request.Attempt,
+                    $"upload/{suffix}/attempt/{attempt.ToString(System.Globalization.CultureInfo.InvariantCulture)}"),
                 OccurredAt = clock.GetCurrentInstant(),
                 Attempt = attempt,
                 TempFileRef = tempFileRef,
@@ -249,11 +266,13 @@ public class LocalImportItemFlow(
                 VerifyHashWhileStreaming = true
             };
             var subject = string.IsNullOrWhiteSpace(work.WorkerTag)
-                ? DownloadSubjects.UploadObjectCommand
-                : DownloadSubjects.UploadObjectCommandForTag(work.WorkerTag);
+                ? ArtifactStorageSubjects.UploadObjectCommand
+                : ArtifactStorageSubjects.UploadObjectCommandForTag(work.WorkerTag);
 
             await Capture(() => Publish(subject, cmd));
-            var result = await Messages.FirstOfTypes<UploadCompleted, UploadFailed>();
+            var result = await Messages.OfTypes<UploadCompleted, UploadFailed>()
+                .Where(x => (x.HasFirst ? x.First!.CausationId : x.Second!.CausationId) == msgId)
+                .First();
             if (result.HasFirst)
                 return result.First;
             if (result.Second.FailureKind is FailureKind.Permanent or FailureKind.Cancelled || attempt >= MaxAttempts)
@@ -299,6 +318,50 @@ public class LocalImportItemFlow(
         return await RunUploadStepAsync(request, work, primary.MessageId, null, metaBytes, work.StorageKey, metaStoragePath, metaHash, UploadArtifactKind.Meta, "meta");
     }
 
+    // Fire-and-forget: a failed source delete is logged by the Worker but never fails the import.
+    private async Task DispatchSourceDeletionAsync(ImportSessionItemImportRequested request, ImportSessionItemWork work)
+    {
+        var msgId = await Capture(Guid.NewGuid);
+        var cmd = new DeleteLocalImportSourceCommand
+        {
+            JobId = request.ItemId,
+            CorrelationId = request.CorrelationId,
+            CausationId = request.MessageId,
+            MessageId = msgId,
+            OperationKey = LocalImportFlowInstance.OperationKey(request.ItemId, request.Attempt, "delete-source"),
+            OccurredAt = clock.GetCurrentInstant(),
+            Attempt = request.Attempt,
+            BatchId = request.SessionId,
+            ItemId = request.ItemId,
+            Files = CollectSourceFiles(work),
+            RequiredWorkerTag = work.WorkerTag
+        };
+        var subject = string.IsNullOrWhiteSpace(work.WorkerTag)
+            ? LocalImportSubjects.DeleteLocalImportSourceCommand
+            : LocalImportSubjects.DeleteLocalImportSourceCommandForTag(work.WorkerTag);
+        await Capture(() => Publish(subject, cmd));
+    }
+
+    private static IReadOnlyList<string> CollectSourceFiles(ImportSessionItemWork work)
+    {
+        var files = new List<string> { work.RelativePath };
+        var sidecars = ParseSidecars(work.SidecarsJson);
+        if (!string.IsNullOrWhiteSpace(sidecars?.InfoJson))
+            files.Add(sidecars!.InfoJson!);
+        if (!string.IsNullOrWhiteSpace(sidecars?.Thumbnail))
+            files.Add(sidecars!.Thumbnail!);
+        foreach (var caption in sidecars?.Captions ?? [])
+        {
+            if (!string.IsNullOrWhiteSpace(caption.File))
+                files.Add(caption.File);
+        }
+
+        var nfo = ReadJsonString(work.SidecarsJson, "nfo");
+        if (!string.IsNullOrWhiteSpace(nfo))
+            files.Add(nfo!);
+        return files.Distinct(StringComparer.Ordinal).ToList();
+    }
+
     private async Task CompensateAsync(
         ImportSessionItemImportRequested request,
         ImportSessionItemWork work,
@@ -307,8 +370,10 @@ public class LocalImportItemFlow(
     {
         for (var i = uploadedObjects.Count - 1; i >= 0; i--)
         {
-            await DispatchUploadedObjectDeletionAsync(request, work, uploadedObjects[i], $"compensate/{i.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
-            var result = await Messages.FirstOfTypes<UploadedObjectDeleted, UploadedObjectDeleteFailed>();
+            var msgId = await DispatchUploadedObjectDeletionAsync(request, work, uploadedObjects[i], $"compensate/{i.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+            var result = await Messages.OfTypes<UploadedObjectDeleted, UploadedObjectDeleteFailed>()
+                .Where(x => (x.HasFirst ? x.First!.CausationId : x.Second!.CausationId) == msgId)
+                .First();
             if (!result.HasFirst)
                 logger.LogWarning("Local import item compensation delete failed for ItemId {ItemId}: {Error}", request.ItemId, result.Second.ErrorMessage);
         }
@@ -318,7 +383,7 @@ public class LocalImportItemFlow(
             await Capture(() => RepoCall(r => r.DeleteNewMediaGuidAsync(reservation.MediaGuid, work.Provider, work.SourceMediaId)));
     }
 
-    private async Task DispatchUploadedObjectDeletionAsync(
+    private async Task<Guid> DispatchUploadedObjectDeletionAsync(
         ImportSessionItemImportRequested request,
         ImportSessionItemWork work,
         UploadCompleted uploaded,
@@ -331,7 +396,7 @@ public class LocalImportItemFlow(
             CorrelationId = request.CorrelationId,
             CausationId = uploaded.MessageId,
             MessageId = msgId,
-            OperationKey = $"local-import-item/{request.ItemId:N}/{operationSuffix}/delete-uploaded",
+            OperationKey = LocalImportFlowInstance.OperationKey(request.ItemId, request.Attempt, $"{operationSuffix}/delete-uploaded"),
             OccurredAt = clock.GetCurrentInstant(),
             Attempt = 1,
             RequiredWorkerTag = work.WorkerTag,
@@ -340,20 +405,22 @@ public class LocalImportItemFlow(
             StorageVersion = uploaded.StorageVersion
         };
         var subject = string.IsNullOrWhiteSpace(work.WorkerTag)
-            ? DownloadSubjects.DeleteUploadedObjectCommand
-            : DownloadSubjects.DeleteUploadedObjectCommandForTag(work.WorkerTag);
+            ? ArtifactStorageSubjects.DeleteUploadedObjectCommand
+            : ArtifactStorageSubjects.DeleteUploadedObjectCommandForTag(work.WorkerTag);
         await Capture(() => Publish(subject, deletion));
+        return msgId;
     }
 
     private async Task RunMetadataWriteStepAsync(
-        ImportSessionItemImportRequested request,
         ImportSessionItemWork work,
         VersionReservation reservation,
-        CapturedMediaMetadata metadata)
+        string? infoJsonPath,
+        string? thumbnailPath,
+        IReadOnlyList<LocalImportCaptionStoragePath> captionRows)
     {
         try
         {
-            await Capture(() => MetaRepoCall(r => r.WriteMetadataAsync(reservation.MediaGuid, metadata, work.StorageKey)));
+            await Capture(() => WriteItemMetadataAsync(work, reservation, infoJsonPath, thumbnailPath, captionRows));
             await Capture(() => messageBus.PublishAsync(MetadataSyncSubjects.SyncUpsert, new MetadataSyncUpsertMessage { MediaGuid = reservation.MediaGuid }));
         }
         catch (Exception ex) when (!IsControlFlowException(ex))
@@ -362,6 +429,191 @@ public class LocalImportItemFlow(
                 await Capture(() => RepoCall(r => r.DeleteNewMediaGuidAsync(reservation.MediaGuid, work.Provider, work.SourceMediaId)));
             throw new LocalImportItemFailedException("metadata_write_failed", ex.Message, ex);
         }
+    }
+
+    private async Task WriteItemMetadataAsync(
+        ImportSessionItemWork work,
+        VersionReservation reservation,
+        string? infoJsonPath,
+        string? thumbnailPath,
+        IReadOnlyList<LocalImportCaptionStoragePath> captionRows)
+    {
+        var metadata = infoJsonPath is null
+            ? null
+            : await TryBuildRichMetadataAsync(work, infoJsonPath, thumbnailPath, captionRows);
+        metadata ??= BuildMetadata(work, reservation.MediaGuid, thumbnailPath, captionRows);
+        metadata = ApplyUserMetadata(metadata, work.UserMetadataJson, thumbnailPath, captionRows);
+        await MetaRepoCall(r => r.WriteMetadataAsync(reservation.MediaGuid, metadata, work.StorageKey));
+    }
+
+    private async Task<CapturedMediaMetadata?> TryBuildRichMetadataAsync(
+        ImportSessionItemWork work,
+        string infoJsonPath,
+        string? thumbnailPath,
+        IReadOnlyList<LocalImportCaptionStoragePath> captionRows)
+    {
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var storage = await scope.ServiceProvider
+                .GetRequiredService<IBlobStorageProvider>()
+                .GetAsync(work.StorageKey);
+            await using var stream = await storage.OpenReadAsync(infoJsonPath)
+                ?? throw new InvalidOperationException($"Info JSON was not found at {infoJsonPath}.");
+            // yt-dlp writes snake_case keys; VideoInfo only annotates multi-word names and relies on
+            // the source-gen context's naming policy for the rest, so plain Deserialize<VideoInfo>
+            // would silently leave title/uploader/comments/… null.
+            var info = await JsonSerializer.DeserializeAsync(stream, YtDlpJsonContext.Default.VideoInfo)
+                ?? throw new InvalidOperationException("Info JSON was empty or invalid.");
+            var provider = FirstNonBlank(info.Extractor, info.ExtractorKey, work.Provider) ?? "";
+            var mapped = YtDlpMetadataMapper.Map(info, provider, clock);
+            return mapped with
+            {
+                Media = mapped.Media with
+                {
+                    Title = FirstNonBlank(mapped.Media.Title, work.Title),
+                    WebpageUrl = FirstNonBlank(mapped.Media.WebpageUrl, work.SourceUrl),
+                    ExternalMediaId = FirstNonBlank(mapped.Media.ExternalMediaId, work.SourceMediaId),
+                    DurationSeconds = mapped.Media.DurationSeconds ?? ReadProbeDuration(work.ProbeMetadataJson),
+                    ThumbnailStoragePath = thumbnailPath
+                },
+                Captions = MapCaptions(captionRows)
+            };
+        }
+        catch (Exception ex) when (!IsControlFlowException(ex))
+        {
+            logger.LogWarning(
+                ex,
+                "Deriving rich metadata from info.json {InfoJsonPath} failed; falling back to scan-derived metadata.",
+                infoJsonPath);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Overlays wizard edits and manual-mapping rows (user_metadata) onto the base metadata.
+    /// Scalars override when non-blank; lists replace when non-empty.
+    /// </summary>
+    private static CapturedMediaMetadata ApplyUserMetadata(
+        CapturedMediaMetadata metadata,
+        string? userMetadataJson,
+        string? thumbnailPath,
+        IReadOnlyList<LocalImportCaptionStoragePath> captionRows)
+    {
+        if (string.IsNullOrWhiteSpace(userMetadataJson))
+            return metadata;
+
+        try
+        {
+            var rich = JsonSerializer.Deserialize<CapturedMediaMetadata>(userMetadataJson, JsonOptions);
+            if (rich is not null)
+            {
+                return rich with
+                {
+                    Media = rich.Media with
+                    {
+                        ThumbnailStoragePath = FirstNonBlank(rich.Media.ThumbnailStoragePath, thumbnailPath, metadata.Media.ThumbnailStoragePath)
+                    },
+                    Captions = rich.Captions.Count > 0 ? rich.Captions : MapCaptions(captionRows)
+                };
+            }
+        }
+        catch (JsonException)
+        {
+            // Fall through to the legacy flat manual-mapping shape.
+        }
+
+        ImportSessionUserMetadata? user;
+        try
+        {
+            user = JsonSerializer.Deserialize<ImportSessionUserMetadata>(userMetadataJson, JsonOptions);
+        }
+        catch (JsonException)
+        {
+            return metadata;
+        }
+
+        if (user is null)
+            return metadata;
+
+        return metadata with
+        {
+            Account = metadata.Account with
+            {
+                Platform = FirstNonBlank(user.Provider, metadata.Account.Platform)!,
+                AccountName = FirstNonBlank(user.AccountName, metadata.Account.AccountName)!,
+                AccountHandle = FirstNonBlank(user.AccountHandle, metadata.Account.AccountHandle)!,
+                AccountUrl = FirstNonBlank(user.AccountUrl, metadata.Account.AccountUrl)
+            },
+            Media = metadata.Media with
+            {
+                Title = FirstNonBlank(user.Title, metadata.Media.Title),
+                Description = FirstNonBlank(user.Description, metadata.Media.Description),
+                ExternalMediaId = FirstNonBlank(user.SourceMediaId, metadata.Media.ExternalMediaId),
+                WebpageUrl = FirstNonBlank(user.SourceUrl, metadata.Media.WebpageUrl),
+                ReleaseDate = ParseUserDate(user.ReleaseDate) ?? metadata.Media.ReleaseDate,
+                Location = FirstNonBlank(user.Location, metadata.Media.Location),
+                AgeLimit = user.AgeLimit ?? metadata.Media.AgeLimit
+            },
+            Tags = user.Tags is { Count: > 0 } ? user.Tags : metadata.Tags,
+            Categories = user.Categories is { Count: > 0 } ? user.Categories : metadata.Categories,
+            Genres = user.Genres is { Count: > 0 } ? user.Genres : metadata.Genres,
+            Artists = user.Artists is { Count: > 0 } ? user.Artists : metadata.Artists,
+            AlbumArtists = user.AlbumArtists is { Count: > 0 } ? user.AlbumArtists : metadata.AlbumArtists,
+            Music = MergeUserMusic(user, metadata.Music),
+            Series = MergeUserSeries(user, metadata.Series)
+        };
+    }
+
+    private static CapturedMusicMetadata? MergeUserMusic(ImportSessionUserMetadata user, CapturedMusicMetadata? current)
+    {
+        if (string.IsNullOrWhiteSpace(user.Album) && string.IsNullOrWhiteSpace(user.Track) && user.TrackNumber is null)
+            return current;
+
+        return new CapturedMusicMetadata
+        {
+            AlbumTitle = FirstNonBlank(user.Album, current?.AlbumTitle) ?? "unknown",
+            AlbumType = current?.AlbumType,
+            DiscNumber = current?.DiscNumber,
+            ReleaseYear = current?.ReleaseYear,
+            TrackTitle = FirstNonBlank(user.Track, current?.TrackTitle) ?? "unknown",
+            TrackNumber = user.TrackNumber ?? current?.TrackNumber ?? 0,
+            Composer = current?.Composer
+        };
+    }
+
+    private static CapturedSeriesMetadata? MergeUserSeries(ImportSessionUserMetadata user, CapturedSeriesMetadata? current)
+    {
+        if (string.IsNullOrWhiteSpace(user.SeriesName)
+            && user.SeasonNumber is null
+            && user.EpisodeNumber is null
+            && string.IsNullOrWhiteSpace(user.EpisodeName))
+            return current;
+
+        var seriesName = FirstNonBlank(user.SeriesName, current?.SeriesName);
+        if (seriesName is null)
+            return current;
+
+        return new CapturedSeriesMetadata
+        {
+            SeriesName = seriesName,
+            SeasonCount = current?.SeasonCount,
+            SeasonNumber = user.SeasonNumber ?? current?.SeasonNumber ?? 1,
+            SeasonName = current?.SeasonName,
+            EpisodeNumber = user.EpisodeNumber ?? current?.EpisodeNumber ?? 1,
+            EpisodeName = FirstNonBlank(user.EpisodeName, current?.EpisodeName) ?? "unknown"
+        };
+    }
+
+    private static Instant? ParseUserDate(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var formats = new[] { "yyyy-MM-dd", "yyyyMMdd" };
+        return DateOnly.TryParseExact(value.Trim(), formats, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var parsed)
+            ? Instant.FromDateTimeOffset(new DateTimeOffset(parsed.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero))
+            : null;
     }
 
     private CapturedMediaMetadata BuildMetadata(
@@ -380,23 +632,38 @@ public class LocalImportItemFlow(
         var provider = FirstNonBlank(
             ReadJsonString(work.UserMetadataJson, "provider"),
             ReadJsonString(work.EnrichedMetadataJson, "provider"),
+            ReadJsonString(work.EnrichedMetadataJson, "extractor"),
+            ReadJsonString(work.EnrichedMetadataJson, "extractor_key"),
             work.Provider,
             "local")!;
         var sourceId = FirstNonBlank(
             ReadJsonString(work.UserMetadataJson, "sourceMediaId"),
             ReadJsonString(work.EnrichedMetadataJson, "sourceMediaId"),
+            ReadJsonString(work.EnrichedMetadataJson, "id"),
+            ReadJsonString(work.EnrichedMetadataJson, "display_id"),
             work.SourceMediaId,
             mediaGuid.ToString("N"));
         var sourceUrl = FirstNonBlank(
             ReadJsonString(work.UserMetadataJson, "sourceUrl"),
             ReadJsonString(work.EnrichedMetadataJson, "sourceUrl"),
+            ReadJsonString(work.EnrichedMetadataJson, "webpage_url"),
+            ReadJsonString(work.EnrichedMetadataJson, "original_url"),
             work.SourceUrl);
         var durationSeconds = ReadProbeDuration(work.ProbeMetadataJson);
         var durationTicks = durationSeconds is { } seconds ? (long)(seconds * TimeSpan.TicksPerSecond) : 0L;
         var (width, height, codec) = ReadProbeVideo(work.ProbeMetadataJson);
         var topFolder = work.RelativePath.Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
-        var accountName = FirstNonBlank(ReadJsonString(work.EnrichedMetadataJson, "channel"), topFolder, "Unknown")!;
-        var accountHandle = FirstNonBlank(ReadJsonString(work.EnrichedMetadataJson, "channelId"), topFolder, "unknown")!;
+        var accountName = FirstNonBlank(
+            ReadJsonString(work.EnrichedMetadataJson, "channel"),
+            ReadJsonString(work.EnrichedMetadataJson, "uploader"),
+            topFolder,
+            "Unknown")!;
+        var accountHandle = FirstNonBlank(
+            ReadJsonString(work.EnrichedMetadataJson, "channelId"),
+            ReadJsonString(work.EnrichedMetadataJson, "channel_id"),
+            ReadJsonString(work.EnrichedMetadataJson, "uploader_id"),
+            topFolder,
+            "unknown")!;
 
         return new CapturedMediaMetadata
         {
@@ -436,15 +703,18 @@ public class LocalImportItemFlow(
                     }]
                     : []
             },
-            Captions = captionRows.Select(c => new CapturedCaptionMetadata
-            {
-                StoragePath = c.StoragePath,
-                CaptionType = string.IsNullOrWhiteSpace(c.CaptionType) ? "subtitles" : c.CaptionType!,
-                LanguageCode = string.IsNullOrWhiteSpace(c.LanguageCode) ? "und" : c.LanguageCode!,
-                Name = c.Name
-            }).ToList()
+            Captions = MapCaptions(captionRows)
         };
     }
+
+    private static List<CapturedCaptionMetadata> MapCaptions(IReadOnlyList<LocalImportCaptionStoragePath> captionRows)
+        => captionRows.Select(c => new CapturedCaptionMetadata
+        {
+            StoragePath = c.StoragePath,
+            CaptionType = string.IsNullOrWhiteSpace(c.CaptionType) ? "subtitles" : c.CaptionType!,
+            LanguageCode = string.IsNullOrWhiteSpace(c.LanguageCode) ? "und" : c.LanguageCode!,
+            Name = c.Name
+        }).ToList();
 
     private static LocalMediaImportManifestSidecars? ParseSidecars(string? json)
     {

@@ -15,6 +15,12 @@ public sealed class DataBridgeDbContext(DbContextOptions<DataBridgeDbContext> op
     public DbSet<StorageGoogleCloudStorageObjectConfigEntity> StorageGoogleCloudStorageObjectConfigs => Set<StorageGoogleCloudStorageObjectConfigEntity>();
 
     public DbSet<DownloadJobEntity> DownloadJobs => Set<DownloadJobEntity>();
+    public DbSet<DownloadGroupEntity> DownloadGroups => Set<DownloadGroupEntity>();
+    public DbSet<DownloadJobRunEntity> DownloadJobRuns => Set<DownloadJobRunEntity>();
+    public DbSet<DownloadStageAttemptEntity> DownloadStageAttempts => Set<DownloadStageAttemptEntity>();
+    public DbSet<DownloadArtifactEntity> DownloadArtifacts => Set<DownloadArtifactEntity>();
+    public DbSet<DownloadWorkerLeaseEntity> DownloadWorkerLeases => Set<DownloadWorkerLeaseEntity>();
+    public DbSet<DownloadJobWarningEntity> DownloadJobWarnings => Set<DownloadJobWarningEntity>();
     public DbSet<DownloadJobHistoryEntity> DownloadJobHistory => Set<DownloadJobHistoryEntity>();
     public DbSet<DownloadJobProgressLogEntity> DownloadJobProgressLog => Set<DownloadJobProgressLogEntity>();
     public DbSet<FailedDownloadJobEntity> FailedDownloadJobs => Set<FailedDownloadJobEntity>();
@@ -56,6 +62,13 @@ public sealed class DataBridgeDbContext(DbContextOptions<DataBridgeDbContext> op
         modelBuilder.HasPostgresEnum<AzureBlobCredentialMode>("storage", "azure_blob_credential_mode");
         modelBuilder.HasPostgresEnum<GoogleCloudStorageCredentialMode>("storage", "google_cloud_storage_credential_mode");
         modelBuilder.HasPostgresEnum<DownloadJobState>("downloads", "download_job_state");
+        modelBuilder.HasPostgresEnum<DownloadJobStatus>("downloads", "download_job_status");
+        modelBuilder.HasPostgresEnum<DownloadStage>("downloads", "download_stage");
+        modelBuilder.HasPostgresEnum<DownloadStageStatus>("downloads", "download_stage_status");
+        modelBuilder.HasPostgresEnum<DownloadGroupKind>("downloads", "download_group_kind");
+        modelBuilder.HasPostgresEnum<DownloadGroupStatus>("downloads", "download_group_status");
+        modelBuilder.HasPostgresEnum<DownloadArtifactStatus>("downloads", "download_artifact_status");
+        modelBuilder.HasPostgresEnum<DownloadWorkerLeaseStatus>("downloads", "download_worker_lease_status");
         modelBuilder.HasPostgresEnum<FailureKind>("downloads", "failure_kind");
         modelBuilder.HasPostgresEnum<IngestOrigin>("media", "ingest_origin");
         modelBuilder.HasPostgresEnum<AudioRenditionStatus>("media", "audio_rendition_status");

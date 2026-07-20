@@ -43,6 +43,8 @@ public class ImportSessionEntity
 
     public int MaxParallelItems { get; set; } = 6;
 
+    public bool DeleteSourceFiles { get; set; }
+
     public string? ErrorMessage { get; set; }
 
     public Instant CreatedAt { get; private set; } = SystemClock.Instance.GetCurrentInstant();
@@ -85,6 +87,14 @@ public class ImportSessionItemEntity
     public string? UserMetadataJson { get; set; }
 
     public ImportSessionItemMetadataState MetadataState { get; set; }
+
+    public ImportSessionItemMetadataSource MetadataSource { get; set; }
+
+    public ImportSessionMetadataFetchState MetadataFetchState { get; set; }
+
+    public int MetadataFetchAttempt { get; set; }
+
+    public string? MetadataFetchMessage { get; set; }
 
     public bool Excluded { get; set; }
 

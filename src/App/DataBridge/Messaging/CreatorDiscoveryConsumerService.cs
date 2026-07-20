@@ -240,7 +240,10 @@ public sealed class CreatorDiscoveryConsumerService(
         var msg = context.Message;
         try
         {
-            var result = await WithRepo(repo => repo.UpsertDiscoveredMediaBatchAsync(msg));
+            var canEnqueue = await scopeFactory.WithScopedAsync<IDownloadFlowV2Repository, bool>(
+                repo => repo.CanAcceptGroupChildAsync(msg.CorrelationId));
+            var effective = canEnqueue ? msg : msg with { SuppressDownloadEnqueue = true };
+            var result = await WithRepo(repo => repo.UpsertDiscoveredMediaBatchAsync(effective));
 
             foreach (var candidate in result.EnqueuedItems)
             {
@@ -377,30 +380,45 @@ public sealed class CreatorDiscoveryConsumerService(
             }
 
             var jobId = Guid.NewGuid();
+            var download = new DownloadRequested
+            {
+                JobId = jobId,
+                CorrelationId = jobId,
+                CausationId = null,
+                MessageId = Guid.NewGuid(),
+                OperationKey = $"force-queue/discovered-media/{entity.Id}/{jobId:N}",
+                OccurredAt = clock.GetCurrentInstant(),
+                Attempt = 1,
+                SourceUrl = entity.CanonicalUrl,
+                RequestedBy = msg.RequestedBy,
+                StorageKey = msg.StorageKey,
+                ForceDownload = true,
+                MediaKind = MediaKind.Video,
+                YtDlpOptions = msg.YtDlpOptions,
+                CookieSecretPath = msg.CookieSecretPath,
+                Priority = msg.Priority,
+                FetchComments = msg.FetchComments,
+                EncodeAudioRendition = msg.EncodeForPlaylist,
+                SourceKind = DownloadSourceKind.Channel
+            };
+            var group = new DownloadGroupRequested
+            {
+                GroupId = jobId,
+                CorrelationId = jobId,
+                MessageId = Guid.NewGuid(),
+                OperationKey = $"group/{jobId:N}/requested",
+                OccurredAt = download.OccurredAt,
+                Kind = DownloadGroupKind.Direct,
+                SourceUrl = download.SourceUrl,
+                RequestedBy = download.RequestedBy,
+                StorageKey = download.StorageKey,
+                Priority = download.Priority,
+                DirectRequest = download
+            };
             await publisher.PublishAsync(
-                DownloadSubjects.DownloadRequested,
-                new DownloadRequested
-                {
-                    JobId = jobId,
-                    CorrelationId = jobId,
-                    CausationId = null,
-                    MessageId = Guid.NewGuid(),
-                    OperationKey = $"force-queue/discovered-media/{entity.Id}/{jobId:N}",
-                    OccurredAt = clock.GetCurrentInstant(),
-                    Attempt = 1,
-                    SourceUrl = entity.CanonicalUrl,
-                    RequestedBy = msg.RequestedBy,
-                    StorageKey = msg.StorageKey,
-                    ForceDownload = true,
-                    MediaKind = MediaKind.Video,
-                    YtDlpOptions = msg.YtDlpOptions,
-                    CookieSecretPath = msg.CookieSecretPath,
-                    Priority = msg.Priority,
-                    FetchComments = msg.FetchComments,
-                    EncodeAudioRendition = msg.EncodeForPlaylist,
-                    SourceKind = DownloadSourceKind.Channel
-                },
-                messageId: jobId.ToString("N"));
+                DownloadSubjects.GroupRequested,
+                group,
+                messageId: group.MessageId.ToString("N"));
 
             await context.RespondAsync(new ForceQueueOperationResponseMessage { Success = true, JobId = jobId });
         }

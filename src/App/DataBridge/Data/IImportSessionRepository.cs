@@ -1,4 +1,6 @@
+using NodaTime;
 using Shared.Messaging;
+using Shared.Metadata;
 
 namespace DataBridge.Data;
 
@@ -43,15 +45,32 @@ public interface IImportSessionRepository
         string format,
         CancellationToken ct = default);
 
+    Task<IReadOnlyList<ImportSessionMappingTemplateRow>> ListMappingTemplateAsync(
+        Guid sessionId,
+        CancellationToken ct = default);
+
     Task<IReadOnlyList<ImportSessionEnrichItemRef>> ListItemsForEnrichAsync(
         Guid sessionId,
         IReadOnlyList<Guid>? itemIds,
         int limit,
         CancellationToken ct = default);
 
+    Task<IReadOnlyList<ImportSessionMetadataRefreshItemRef>> ListItemsForMetadataRefreshAsync(
+        Guid sessionId,
+        IReadOnlyList<Guid>? itemIds,
+        int limit,
+        CancellationToken ct = default);
+
+    Task<ImportSessionDto?> MarkEnrichmentQueuedAsync(
+        Guid sessionId,
+        IReadOnlyList<Guid> itemIds,
+        CancellationToken ct = default);
+
     Task<ImportSessionDto?> ApplyEnrichmentAsync(ImportSessionItemEnriched message, CancellationToken ct = default);
 
     Task<ImportSessionDto?> ApplyEnrichFailureAsync(ImportSessionItemEnrichFailed message, CancellationToken ct = default);
+
+    Task<(ImportSessionDto? Session, string? Error)> UpdateOptionsAsync(ImportSessionUpdateOptionsRequest request, CancellationToken ct = default);
 
     Task<(ImportSessionDto? Session, int ApprovedCount, string? Error)> CommitAsync(Guid sessionId, CancellationToken ct = default);
 
@@ -61,7 +80,9 @@ public interface IImportSessionRepository
 
     Task<IReadOnlyList<ImportSessionDto>> ListCommittingSessionsAsync(int limit, CancellationToken ct = default);
 
-    Task<IReadOnlyList<ImportSessionItemWork>> ListApprovedWorkAsync(Guid sessionId, int limit, CancellationToken ct = default);
+    Task<int> RecoverStaleHashingItemsAsync(Guid sessionId, Instant staleBefore, CancellationToken ct = default);
+
+    Task<IReadOnlyList<ImportSessionItemWork>> ClaimApprovedWorkAsync(Guid sessionId, int limit, CancellationToken ct = default);
 
     Task<ImportSessionItemWork?> GetItemWorkAsync(Guid sessionId, Guid itemId, CancellationToken ct = default);
 
@@ -99,20 +120,28 @@ public interface IImportSessionRepository
     Task<ImportSessionDto?> CompleteSessionIfTerminalAsync(Guid sessionId, CancellationToken ct = default);
 }
 
-public sealed record ImportSessionMappingRow
+public sealed record ImportSessionMappingRow : ImportSessionUserMetadata
 {
     public required string FileName { get; init; }
-    public string? Title { get; init; }
-    public string? Provider { get; init; }
-    public string? SourceMediaId { get; init; }
-    public string? SourceUrl { get; init; }
+    public CapturedMediaMetadata? Metadata { get; init; }
 }
 
 public sealed record ImportSessionEnrichItemRef
 {
     public required Guid ItemId { get; init; }
     public required string SourceUrl { get; init; }
+    public required string RelativePath { get; init; }
+    public int Attempt { get; init; }
     public string? Provider { get; init; }
+}
+
+public sealed record ImportSessionMetadataRefreshItemRef
+{
+    public required Guid ItemId { get; init; }
+    public required string RelativePath { get; init; }
+    public int Attempt { get; init; }
+    public string? Provider { get; init; }
+    public string? SourceUrl { get; init; }
 }
 
 public sealed record ImportSessionItemWork
@@ -135,4 +164,6 @@ public sealed record ImportSessionItemWork
     public string? EnrichedMetadataJson { get; init; }
     public string? UserMetadataJson { get; init; }
     public ImportSessionItemMetadataState MetadataState { get; init; }
+    public int Attempt { get; init; }
+    public bool DeleteSourceFiles { get; init; }
 }

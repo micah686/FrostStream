@@ -7,7 +7,7 @@ export interface PlatformPlaylistItem {
   jobId: string;
   entryUrl: string;
   entryTitle: string | null;
-  jobState: string;
+  jobStatus: string;
   mediaGuid: string | null;
   ignoredKeyword: string | null;
 }
