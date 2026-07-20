@@ -20,6 +20,9 @@ public sealed class WorkerOptions
     /// <summary>Tags this worker instance advertises. Each tag generates a dedicated NATS consumer.</summary>
     public IReadOnlyList<string> Tags { get; init; } = [];
 
+    /// <summary>Display name shown in the admin worker list.</summary>
+    public string Name { get; init; } = Environment.MachineName;
+
     /// <summary>
     /// Whether this worker also competes for jobs that have no required worker tag.
     /// Defaults to <see langword="true"/> so untagged deployments are unaffected.

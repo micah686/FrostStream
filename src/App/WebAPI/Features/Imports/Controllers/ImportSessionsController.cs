@@ -256,6 +256,33 @@ public sealed class ImportSessionsController(
         return File(json, "application/json", $"froststream-import-{sessionId:N}-mapping.json");
     }
 
+    [HttpGet("{sessionId:guid}/mapping-example")]
+    [Endpoint(EndpointIds.ImportsSessionsMappingExample)]
+    [EndpointSummary("Download a populated JSON metadata example")]
+    public IActionResult MappingExample(Guid sessionId)
+    {
+        var json = JsonSerializer.SerializeToUtf8Bytes(new[]
+        {
+            new
+            {
+                fileName = "Example Concert - Live.webm",
+                relativePath = "concerts/Example Concert - Live.webm",
+                metadata = new
+                {
+                    account = new { platform = "youtube", name = "Example Channel", handle = "@example", url = "https://youtube.com/@example", description = "Example creator", followerCount = 125000, externalIds = new[] { "UCexample123" } },
+                    media = new { externalMediaId = "example123", metadataScrapeDate = "2025-05-10T12:00:00Z", thumbnailUrl = "https://cdn.example.test/thumb.jpg", ageLimit = 0, rating = 5, likeCount = 4200, dislikeCount = 12, durationSeconds = 3600, viewCount = 90000, commentCount = 340, description = "A fully populated example recording.", releaseDate = "2025-05-01", title = "Example Concert - Live", wasLive = true, webpageUrl = "https://youtube.com/watch?v=example123", availability = "public", location = "US" },
+                    technical = new { durationSeconds = 3600, formatDurationSeconds = 3600, formatLongNames = new[] { "WebM video", "Opus audio" }, streamCount = 2, streams = new object[] { new { codec = "VP9", type = "video", width = 1920, height = 1080, channels = 0, sampleRate = 0, bitrate = 4500000 }, new { codec = "Opus", type = "audio", width = 0, height = 0, channels = 2, sampleRate = 48000, bitrate = 160000 } } },
+                    captions = new[] { new { language = "en", name = "English", source = "youtube", url = "https://cdn.example.test/captions.vtt" } },
+                    comments = new[] { new { author = "Example Viewer", text = "Great performance!", likeCount = 12, publishedAt = "2025-05-02T10:00:00Z" } },
+                    artists = new[] { "Example Artist" }, albumArtists = new[] { "Example Artist" }, genres = new[] { "Live", "Music" }, tags = new[] { "concert", "example" }, categories = new[] { "Music" }, cast = new[] { new { name = "Example Artist", role = "Performer" } },
+                    series = new { name = "Example Concert Series", seasonNumber = 1, episodeNumber = 1, episodeTitle = "Live Session" },
+                    music = new { album = "Example Live", track = "Example Concert", discNumber = 1, trackNumber = 1 }
+                }
+            }
+        }, MappingTemplateJsonOptions);
+        return File(json, "application/json", $"froststream-import-{sessionId:N}-mapping-example.json");
+    }
+
     private static JsonSerializerOptions CreateMappingTemplateJsonOptions()
     {
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true };

@@ -115,6 +115,7 @@ class Program
         // Register startup service (downloads yt-dlp/ffmpeg/ffprobe binaries before any
         // BackgroundService starts).
         builder.Services.AddHostedService<StartupService>();
+        builder.Services.AddHostedService<WorkerHeartbeatService>();
 
         // POT shim: starts after StartupService; its constructor publishes the loopback base URL.
         builder.Services.AddHostedService<PotShimService>();

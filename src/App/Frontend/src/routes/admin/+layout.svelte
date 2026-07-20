@@ -8,6 +8,7 @@
     CubesStackedOutline,
     DatabaseOutline,
     FileImportOutline,
+    ServerOutline,
     TagOutline
   } from 'flowbite-svelte-icons';
 
@@ -26,6 +27,7 @@
     { label: 'Statistics', icon: ChartMixedOutline, href: '/admin/statistics' },
     { label: 'Metadata', icon: TagOutline, href: '/admin/metadata' },
     { label: 'Import', icon: FileImportOutline, href: '/admin/import' },
+    { label: 'Workers', icon: ServerOutline, href: '/admin/workers' },
     { label: 'Media access', icon: ApiKeyOutline, href: '/admin/media-access' },
     { label: 'Bundle management', icon: CubesStackedOutline, href: '/admin/bundle-management' },
     { label: 'Backups', icon: CloudArrowUpOutline, href: '/admin/backups' },

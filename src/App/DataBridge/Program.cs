@@ -155,6 +155,7 @@ class Program
         builder.Services.AddSingleton<DownloadFlowStartupState>();
         builder.Services.AddSingleton<INotificationDispatcher, NotificationDispatcher>();
         builder.Services.AddSingleton<ImportSessionRequestReplyService>();
+        builder.Services.AddSingleton<WorkerRegistryConsumerService>();
         builder.Services.AddSingleton<LocalImportItemV2Flows>();
 
         builder.Services.AddTypesenseClient(config =>
@@ -203,6 +204,7 @@ class Program
         builder.Services.AddHostedService<DownloadStageTelemetryConsumerService>();
         builder.Services.AddHostedService<LocalImportEventsConsumerService>();
         builder.Services.AddHostedService(sp => sp.GetRequiredService<ImportSessionRequestReplyService>());
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<WorkerRegistryConsumerService>());
         builder.Services.AddHostedService<ImportSessionProbeEventsConsumerService>();
         builder.Services.AddHostedService<ImportDispatcherService>();
         builder.Services.AddHostedService<PlaylistEventsConsumerService>();

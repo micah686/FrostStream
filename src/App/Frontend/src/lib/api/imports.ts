@@ -220,6 +220,10 @@ export function mappingTemplateUrl(sessionId: string): string {
   return `${SESSIONS_BASE}/${encodeURIComponent(sessionId)}/mapping-template`;
 }
 
+export function mappingExampleUrl(sessionId: string): string {
+  return `${SESSIONS_BASE}/${encodeURIComponent(sessionId)}/mapping-example`;
+}
+
 export function enrichImportSession(sessionId: string, itemIds: string[] | undefined, options: ImportYtDlpOptions, fetchImpl: typeof fetch = fetch): Promise<ImportSessionEnrichResponse> {
   return requestJson(`${SESSIONS_BASE}/${encodeURIComponent(sessionId)}/enrich`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ itemIds: itemIds?.length ? itemIds : undefined, options }) }, fetchImpl);
 }

@@ -57,6 +57,7 @@ public static class EndpointIds
     public const string ImportsSessionsItemsBulk = "imports.sessions.items.bulk";
     public const string ImportsSessionsMapping = "imports.sessions.mapping";
     public const string ImportsSessionsMappingTemplate = "imports.sessions.mapping-template";
+    public const string ImportsSessionsMappingExample = "imports.sessions.mapping-example";
     public const string ImportsSessionsMetadataRefresh = "imports.sessions.metadata.refresh";
     public const string ImportsSessionsEnrich = "imports.sessions.enrich";
     public const string ImportsSessionsUpdateOptions = "imports.sessions.update-options";
@@ -64,6 +65,7 @@ public static class EndpointIds
     public const string ImportsSessionsRetry = "imports.sessions.retry";
     public const string ImportsSessionsCancel = "imports.sessions.cancel";
     public const string ImportsIncomingBrowse = "imports.incoming.browse";
+    public const string WorkersList = "workers.list";
 
     // Storage
     public const string StorageLocalCreate = "storage.local.create";
@@ -301,6 +303,7 @@ public static class EndpointCatalog
         new(EndpointIds.ImportsSessionsItemsBulk, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsMapping, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsMappingTemplate, Bundles.Downloading),
+        new(EndpointIds.ImportsSessionsMappingExample, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsMetadataRefresh, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsEnrich, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsUpdateOptions, Bundles.Downloading),
@@ -308,6 +311,7 @@ public static class EndpointCatalog
         new(EndpointIds.ImportsSessionsRetry, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsCancel, Bundles.Downloading),
         new(EndpointIds.ImportsIncomingBrowse, Bundles.Downloading),
+        new(EndpointIds.WorkersList, Bundles.Management),
 
         new(EndpointIds.StorageLocalCreate, Bundles.Storage),
         new(EndpointIds.StorageLocalUpdate, Bundles.Storage),
