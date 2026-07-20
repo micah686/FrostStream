@@ -228,6 +228,21 @@
     const video = event.currentTarget as HTMLVideoElement;
     onProgress?.(video.currentTime, videoDuration(video));
   }
+
+  export function seekTo(seconds: number, play = true) {
+    const video = videoElement;
+    if (!video || !Number.isFinite(seconds) || seconds < 0) return;
+
+    const duration = videoDuration(video);
+    video.currentTime = duration === null ? seconds : Math.min(seconds, duration);
+    onProgress?.(video.currentTime, duration);
+
+    if (play) {
+      video.play().catch(() => {
+        // If the browser blocks playback, the seek still succeeded.
+      });
+    }
+  }
 </script>
 
 {#if ready}

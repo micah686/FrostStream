@@ -212,6 +212,7 @@
   let streamChecking = $state(false);
   let streamError = $state<string | null>(null);
   let streamCheckSeq = 0;
+  let player = $state<{ seekTo: (seconds: number, play?: boolean) => void } | null>(null);
   const commentsPageSize = 100;
 
   // Playback modes persist across videos and sessions. Repeat wins over autoplay:
@@ -418,6 +419,7 @@
     versionsLoading = false;
     streamChecking = false;
     streamError = null;
+    player = null;
 
     await Promise.all([
       loadDetail(guid),
@@ -784,6 +786,14 @@
     return ticks && ticks > 0 ? formatDuration(ticks / 10_000_000) : null;
   }
 
+  function ticksToSeconds(ticks: number | null | undefined): number {
+    return ticks && ticks > 0 ? ticks / 10_000_000 : 0;
+  }
+
+  function seekToChapter(startTicks: number) {
+    player?.seekTo(ticksToSeconds(startTicks), true);
+  }
+
   function formatBitRate(bps: number | null | undefined): string | null {
     if (!bps || bps <= 0) {
       return null;
@@ -926,6 +936,7 @@
         {:else}
           {#key `${mediaGuid}:${selectedVersion}`}
             <VideoJs10Player
+              bind:this={player}
               src={streamUrl}
               poster={posterUrl}
               tracks={captionTracks}
@@ -1362,9 +1373,14 @@
                   <ul class="mt-2 space-y-1">
                     {#each technical.chapters as chapter}
                       <li class="flex gap-3 text-sm">
-                        <span class="w-16 shrink-0 font-mono text-xs leading-6 text-slate-500">
+                        <button
+                          type="button"
+                          class="w-16 shrink-0 rounded text-left font-mono text-xs leading-6 text-blue-400 transition hover:text-blue-300 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500/60"
+                          title={`Jump to ${formatTicks(chapter.startTicks) ?? '0:00'}`}
+                          onclick={() => seekToChapter(chapter.startTicks)}
+                        >
                           {formatTicks(chapter.startTicks) ?? '0:00'}
-                        </span>
+                        </button>
                         <span class="min-w-0 truncate text-slate-300">{chapter.title}</span>
                       </li>
                     {/each}
