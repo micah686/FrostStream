@@ -306,6 +306,32 @@ public sealed class ImportSessionsController(
         return Accepted(response);
     }
 
+    [HttpPatch("{sessionId:guid}/options")]
+    [Endpoint(EndpointIds.ImportsSessionsUpdateOptions)]
+    [EndpointSummary("Update import session options")]
+    [EndpointDescription("Updates per-session import options, currently whether source files under the Worker incoming root are deleted after each file imports successfully. Options are locked once the session starts committing.")]
+    public async Task<ActionResult<ImportSessionUpdateOptionsResponse>> UpdateOptions(
+        Guid sessionId,
+        [FromBody] ImportSessionUpdateOptionsBody body,
+        CancellationToken cancellationToken)
+    {
+        var response = await SendAsync<ImportSessionUpdateOptionsRequest, ImportSessionUpdateOptionsResponse>(
+            ImportSessionSubjects.UpdateOptions,
+            new ImportSessionUpdateOptionsRequest
+            {
+                SessionId = sessionId,
+                DeleteSourceFiles = body.DeleteSourceFiles
+            },
+            cancellationToken);
+
+        if (response is null)
+            return BadGateway();
+        if (!response.Success)
+            return Error(response.ErrorCode, response.ErrorMessage);
+
+        return Ok(response);
+    }
+
     [HttpPost("{sessionId:guid}/commit")]
     [Endpoint(EndpointIds.ImportsSessionsCommit)]
     [EndpointSummary("Commit approved local media import items")]
@@ -422,6 +448,8 @@ public sealed class ImportSessionsController(
         });
 
     public sealed record ImportSessionEnrichBody(IReadOnlyList<Guid>? ItemIds, ImportSessionYtDlpOptions? Options);
+
+    public sealed record ImportSessionUpdateOptionsBody(bool? DeleteSourceFiles);
 
     public sealed record ImportSessionMetadataRefreshBody(IReadOnlyList<Guid>? ItemIds);
 

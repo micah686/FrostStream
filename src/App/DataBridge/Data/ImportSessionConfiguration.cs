@@ -30,6 +30,7 @@ public sealed class ImportSessionConfiguration : IEntityTypeConfiguration<Import
         builder.Property(x => x.AlreadyImportedItems).HasColumnName("already_imported_items").IsRequired();
         builder.Property(x => x.FailedItems).HasColumnName("failed_items").IsRequired();
         builder.Property(x => x.MaxParallelItems).HasColumnName("max_parallel_items").IsRequired();
+        builder.Property(x => x.DeleteSourceFiles).HasColumnName("delete_source_files").IsRequired();
         builder.Property(x => x.ErrorMessage).HasColumnName("error_message").HasMaxLength(4096);
         builder.Property(x => x.CreatedAt)
             .HasColumnName("created_at")

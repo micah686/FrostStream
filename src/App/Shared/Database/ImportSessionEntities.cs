@@ -43,6 +43,8 @@ public class ImportSessionEntity
 
     public int MaxParallelItems { get; set; } = 6;
 
+    public bool DeleteSourceFiles { get; set; }
+
     public string? ErrorMessage { get; set; }
 
     public Instant CreatedAt { get; private set; } = SystemClock.Instance.GetCurrentInstant();

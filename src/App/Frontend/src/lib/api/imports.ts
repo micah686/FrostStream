@@ -36,6 +36,7 @@ export interface ImportSession {
   alreadyImportedItems: number;
   failedItems: number;
   maxParallelItems: number;
+  deleteSourceFiles: boolean;
   errorMessage?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -225,6 +226,15 @@ export function enrichImportSession(sessionId: string, itemIds: string[] | undef
 
 export function refreshImportSessionMetadata(sessionId: string, itemIds?: string[], fetchImpl: typeof fetch = fetch): Promise<ImportSessionMetadataRefreshResponse> {
   return requestJson(`${SESSIONS_BASE}/${encodeURIComponent(sessionId)}/metadata-refresh`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ itemIds: itemIds?.length ? itemIds : undefined }) }, fetchImpl);
+}
+
+export interface ImportSessionUpdateOptionsResponse {
+  success: boolean;
+  session?: ImportSession | null;
+}
+
+export function updateImportSessionOptions(sessionId: string, options: { deleteSourceFiles?: boolean }, fetchImpl: typeof fetch = fetch): Promise<ImportSessionUpdateOptionsResponse> {
+  return requestJson(`${SESSIONS_BASE}/${encodeURIComponent(sessionId)}/options`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(options) }, fetchImpl);
 }
 
 export function commitImportSession(sessionId: string, fetchImpl: typeof fetch = fetch): Promise<ImportSessionCommitResponse> {

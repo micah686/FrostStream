@@ -59,6 +59,7 @@ public static class EndpointIds
     public const string ImportsSessionsMappingTemplate = "imports.sessions.mapping-template";
     public const string ImportsSessionsMetadataRefresh = "imports.sessions.metadata.refresh";
     public const string ImportsSessionsEnrich = "imports.sessions.enrich";
+    public const string ImportsSessionsUpdateOptions = "imports.sessions.update-options";
     public const string ImportsSessionsCommit = "imports.sessions.commit";
     public const string ImportsSessionsRetry = "imports.sessions.retry";
     public const string ImportsSessionsCancel = "imports.sessions.cancel";
@@ -302,6 +303,7 @@ public static class EndpointCatalog
         new(EndpointIds.ImportsSessionsMappingTemplate, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsMetadataRefresh, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsEnrich, Bundles.Downloading),
+        new(EndpointIds.ImportsSessionsUpdateOptions, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsCommit, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsRetry, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsCancel, Bundles.Downloading),

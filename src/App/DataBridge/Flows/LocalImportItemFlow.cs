@@ -84,6 +84,8 @@ public class LocalImportItemFlow(
                 reservation.MediaGuid,
                 reservation.StoragePath,
                 prepared)));
+            if (work.DeleteSourceFiles)
+                await DispatchSourceDeletionAsync(request, work);
             await Capture(() => ImportRepoCall(r => r.CompleteSessionIfTerminalAsync(request.SessionId)));
             return;
         }
@@ -166,6 +168,9 @@ public class LocalImportItemFlow(
                 infoJsonPath,
                 thumbnailPath,
                 captionStoragePathsJson)));
+
+            if (work.DeleteSourceFiles)
+                await DispatchSourceDeletionAsync(request, work);
         }
         catch (LocalImportItemFailedException ex)
         {
@@ -313,6 +318,50 @@ public class LocalImportItemFlow(
         return await RunUploadStepAsync(request, work, primary.MessageId, null, metaBytes, work.StorageKey, metaStoragePath, metaHash, UploadArtifactKind.Meta, "meta");
     }
 
+    // Fire-and-forget: a failed source delete is logged by the Worker but never fails the import.
+    private async Task DispatchSourceDeletionAsync(ImportSessionItemImportRequested request, ImportSessionItemWork work)
+    {
+        var msgId = await Capture(Guid.NewGuid);
+        var cmd = new DeleteLocalImportSourceCommand
+        {
+            JobId = request.ItemId,
+            CorrelationId = request.CorrelationId,
+            CausationId = request.MessageId,
+            MessageId = msgId,
+            OperationKey = LocalImportFlowInstance.OperationKey(request.ItemId, request.Attempt, "delete-source"),
+            OccurredAt = clock.GetCurrentInstant(),
+            Attempt = request.Attempt,
+            BatchId = request.SessionId,
+            ItemId = request.ItemId,
+            Files = CollectSourceFiles(work),
+            RequiredWorkerTag = work.WorkerTag
+        };
+        var subject = string.IsNullOrWhiteSpace(work.WorkerTag)
+            ? LocalImportSubjects.DeleteLocalImportSourceCommand
+            : LocalImportSubjects.DeleteLocalImportSourceCommandForTag(work.WorkerTag);
+        await Capture(() => Publish(subject, cmd));
+    }
+
+    private static IReadOnlyList<string> CollectSourceFiles(ImportSessionItemWork work)
+    {
+        var files = new List<string> { work.RelativePath };
+        var sidecars = ParseSidecars(work.SidecarsJson);
+        if (!string.IsNullOrWhiteSpace(sidecars?.InfoJson))
+            files.Add(sidecars!.InfoJson!);
+        if (!string.IsNullOrWhiteSpace(sidecars?.Thumbnail))
+            files.Add(sidecars!.Thumbnail!);
+        foreach (var caption in sidecars?.Captions ?? [])
+        {
+            if (!string.IsNullOrWhiteSpace(caption.File))
+                files.Add(caption.File);
+        }
+
+        var nfo = ReadJsonString(work.SidecarsJson, "nfo");
+        if (!string.IsNullOrWhiteSpace(nfo))
+            files.Add(nfo!);
+        return files.Distinct(StringComparer.Ordinal).ToList();
+    }
+
     private async Task CompensateAsync(
         ImportSessionItemImportRequested request,
         ImportSessionItemWork work,
@@ -393,6 +442,7 @@ public class LocalImportItemFlow(
             ? null
             : await TryBuildRichMetadataAsync(work, infoJsonPath, thumbnailPath, captionRows);
         metadata ??= BuildMetadata(work, reservation.MediaGuid, thumbnailPath, captionRows);
+        metadata = ApplyUserMetadata(metadata, work.UserMetadataJson);
         await MetaRepoCall(r => r.WriteMetadataAsync(reservation.MediaGuid, metadata, work.StorageKey));
     }
 
@@ -417,14 +467,13 @@ public class LocalImportItemFlow(
                 ?? throw new InvalidOperationException("Info JSON was empty or invalid.");
             var provider = FirstNonBlank(info.Extractor, info.ExtractorKey, work.Provider) ?? "";
             var mapped = YtDlpMetadataMapper.Map(info, provider, clock);
-            // Wizard review edits win over the sidecar's values.
             return mapped with
             {
                 Media = mapped.Media with
                 {
-                    Title = FirstNonBlank(ReadJsonString(work.UserMetadataJson, "title"), mapped.Media.Title, work.Title),
-                    WebpageUrl = FirstNonBlank(ReadJsonString(work.UserMetadataJson, "sourceUrl"), mapped.Media.WebpageUrl, work.SourceUrl),
-                    ExternalMediaId = FirstNonBlank(ReadJsonString(work.UserMetadataJson, "sourceMediaId"), mapped.Media.ExternalMediaId, work.SourceMediaId),
+                    Title = FirstNonBlank(mapped.Media.Title, work.Title),
+                    WebpageUrl = FirstNonBlank(mapped.Media.WebpageUrl, work.SourceUrl),
+                    ExternalMediaId = FirstNonBlank(mapped.Media.ExternalMediaId, work.SourceMediaId),
                     DurationSeconds = mapped.Media.DurationSeconds ?? ReadProbeDuration(work.ProbeMetadataJson),
                     ThumbnailStoragePath = thumbnailPath
                 },
@@ -439,6 +488,108 @@ public class LocalImportItemFlow(
                 infoJsonPath);
             return null;
         }
+    }
+
+    /// <summary>
+    /// Overlays wizard edits and manual-mapping rows (user_metadata) onto the base metadata.
+    /// Scalars override when non-blank; lists replace when non-empty.
+    /// </summary>
+    private static CapturedMediaMetadata ApplyUserMetadata(CapturedMediaMetadata metadata, string? userMetadataJson)
+    {
+        if (string.IsNullOrWhiteSpace(userMetadataJson))
+            return metadata;
+
+        ImportSessionUserMetadata? user;
+        try
+        {
+            user = JsonSerializer.Deserialize<ImportSessionUserMetadata>(userMetadataJson, JsonOptions);
+        }
+        catch (JsonException)
+        {
+            return metadata;
+        }
+
+        if (user is null)
+            return metadata;
+
+        return metadata with
+        {
+            Account = metadata.Account with
+            {
+                Platform = FirstNonBlank(user.Provider, metadata.Account.Platform)!,
+                AccountName = FirstNonBlank(user.AccountName, metadata.Account.AccountName)!,
+                AccountHandle = FirstNonBlank(user.AccountHandle, metadata.Account.AccountHandle)!,
+                AccountUrl = FirstNonBlank(user.AccountUrl, metadata.Account.AccountUrl)
+            },
+            Media = metadata.Media with
+            {
+                Title = FirstNonBlank(user.Title, metadata.Media.Title),
+                Description = FirstNonBlank(user.Description, metadata.Media.Description),
+                ExternalMediaId = FirstNonBlank(user.SourceMediaId, metadata.Media.ExternalMediaId),
+                WebpageUrl = FirstNonBlank(user.SourceUrl, metadata.Media.WebpageUrl),
+                ReleaseDate = ParseUserDate(user.ReleaseDate) ?? metadata.Media.ReleaseDate,
+                Location = FirstNonBlank(user.Location, metadata.Media.Location),
+                AgeLimit = user.AgeLimit ?? metadata.Media.AgeLimit
+            },
+            Tags = user.Tags is { Count: > 0 } ? user.Tags : metadata.Tags,
+            Categories = user.Categories is { Count: > 0 } ? user.Categories : metadata.Categories,
+            Genres = user.Genres is { Count: > 0 } ? user.Genres : metadata.Genres,
+            Artists = user.Artists is { Count: > 0 } ? user.Artists : metadata.Artists,
+            AlbumArtists = user.AlbumArtists is { Count: > 0 } ? user.AlbumArtists : metadata.AlbumArtists,
+            Music = MergeUserMusic(user, metadata.Music),
+            Series = MergeUserSeries(user, metadata.Series)
+        };
+    }
+
+    private static CapturedMusicMetadata? MergeUserMusic(ImportSessionUserMetadata user, CapturedMusicMetadata? current)
+    {
+        if (string.IsNullOrWhiteSpace(user.Album) && string.IsNullOrWhiteSpace(user.Track) && user.TrackNumber is null)
+            return current;
+
+        return new CapturedMusicMetadata
+        {
+            AlbumTitle = FirstNonBlank(user.Album, current?.AlbumTitle) ?? "unknown",
+            AlbumType = current?.AlbumType,
+            DiscNumber = current?.DiscNumber,
+            ReleaseYear = current?.ReleaseYear,
+            TrackTitle = FirstNonBlank(user.Track, current?.TrackTitle) ?? "unknown",
+            TrackNumber = user.TrackNumber ?? current?.TrackNumber ?? 0,
+            Composer = current?.Composer
+        };
+    }
+
+    private static CapturedSeriesMetadata? MergeUserSeries(ImportSessionUserMetadata user, CapturedSeriesMetadata? current)
+    {
+        if (string.IsNullOrWhiteSpace(user.SeriesName)
+            && user.SeasonNumber is null
+            && user.EpisodeNumber is null
+            && string.IsNullOrWhiteSpace(user.EpisodeName))
+            return current;
+
+        var seriesName = FirstNonBlank(user.SeriesName, current?.SeriesName);
+        if (seriesName is null)
+            return current;
+
+        return new CapturedSeriesMetadata
+        {
+            SeriesName = seriesName,
+            SeasonCount = current?.SeasonCount,
+            SeasonNumber = user.SeasonNumber ?? current?.SeasonNumber ?? 1,
+            SeasonName = current?.SeasonName,
+            EpisodeNumber = user.EpisodeNumber ?? current?.EpisodeNumber ?? 1,
+            EpisodeName = FirstNonBlank(user.EpisodeName, current?.EpisodeName) ?? "unknown"
+        };
+    }
+
+    private static Instant? ParseUserDate(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var formats = new[] { "yyyy-MM-dd", "yyyyMMdd" };
+        return DateOnly.TryParseExact(value.Trim(), formats, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var parsed)
+            ? Instant.FromDateTimeOffset(new DateTimeOffset(parsed.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero))
+            : null;
     }
 
     private CapturedMediaMetadata BuildMetadata(

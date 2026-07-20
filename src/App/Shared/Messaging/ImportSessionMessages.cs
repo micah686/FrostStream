@@ -14,6 +14,7 @@ public static class ImportSessionSubjects
     public const string MappingTemplate = "import-session.mapping.template";
     public const string MetadataRefresh = "import-session.metadata.refresh";
     public const string Enrich = "import-session.enrich";
+    public const string UpdateOptions = "import-session.update-options";
     public const string Commit = "import-session.commit";
     public const string RetryFailed = "import-session.retry-failed";
     public const string Cancel = "import-session.cancel";
@@ -199,13 +200,43 @@ public sealed record ImportSessionMappingTemplateResponse : ImportSessionOperati
     public IReadOnlyList<ImportSessionMappingTemplateRow> Items { get; init; } = [];
 }
 
-public sealed record ImportSessionMappingTemplateRow
+/// <summary>
+/// User-supplied metadata overrides for one import item, matching the rich fields
+/// <c>CapturedMediaMetadata</c> can persist. Stored as camelCase JSON in
+/// <c>import_session_items.user_metadata</c>; blank/missing fields fall through to the
+/// info.json / scan-derived values. List fields replace the underlying value entirely when
+/// non-empty. <c>ReleaseDate</c> accepts <c>yyyy-MM-dd</c> or <c>yyyyMMdd</c>.
+/// </summary>
+public record ImportSessionUserMetadata
 {
-    public required string FileName { get; init; }
     public string? Title { get; init; }
+    public string? Description { get; init; }
     public string? Provider { get; init; }
     public string? SourceMediaId { get; init; }
     public string? SourceUrl { get; init; }
+    public string? ReleaseDate { get; init; }
+    public string? AccountName { get; init; }
+    public string? AccountHandle { get; init; }
+    public string? AccountUrl { get; init; }
+    public string? Location { get; init; }
+    public int? AgeLimit { get; init; }
+    public IReadOnlyList<string>? Tags { get; init; }
+    public IReadOnlyList<string>? Categories { get; init; }
+    public IReadOnlyList<string>? Genres { get; init; }
+    public IReadOnlyList<string>? Artists { get; init; }
+    public IReadOnlyList<string>? AlbumArtists { get; init; }
+    public string? Album { get; init; }
+    public string? Track { get; init; }
+    public int? TrackNumber { get; init; }
+    public string? SeriesName { get; init; }
+    public int? SeasonNumber { get; init; }
+    public int? EpisodeNumber { get; init; }
+    public string? EpisodeName { get; init; }
+}
+
+public sealed record ImportSessionMappingTemplateRow : ImportSessionUserMetadata
+{
+    public required string FileName { get; init; }
 }
 
 public sealed record ImportSessionEnrichRequest
@@ -244,6 +275,17 @@ public sealed record ImportSessionYtDlpOptions
 public sealed record ImportSessionEnrichResponse : ImportSessionOperationResponse
 {
     public int QueuedCount { get; init; }
+    public ImportSessionDto? Session { get; init; }
+}
+
+public sealed record ImportSessionUpdateOptionsRequest
+{
+    public required Guid SessionId { get; init; }
+    public bool? DeleteSourceFiles { get; init; }
+}
+
+public sealed record ImportSessionUpdateOptionsResponse : ImportSessionOperationResponse
+{
     public ImportSessionDto? Session { get; init; }
 }
 
@@ -307,6 +349,7 @@ public sealed record ImportSessionDto
     public int AlreadyImportedItems { get; init; }
     public int FailedItems { get; init; }
     public int MaxParallelItems { get; init; }
+    public bool DeleteSourceFiles { get; init; }
     public string? ErrorMessage { get; init; }
     public Instant CreatedAt { get; init; }
     public Instant UpdatedAt { get; init; }

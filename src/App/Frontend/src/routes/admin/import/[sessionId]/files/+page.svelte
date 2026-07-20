@@ -1,10 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { page } from '$app/state';
-  import { Button, Checkbox, Input, Spinner } from 'flowbite-svelte';
+  import { Button, Checkbox, Input, Spinner, Toggle } from 'flowbite-svelte';
   import ImportNotice from '$lib/components/admin/ImportNotice.svelte';
   import ImportWizardStepper from '$lib/components/admin/ImportWizardStepper.svelte';
-  import { bulkImportSessionItems, getImportSession, listImportSessionItems, type ImportSession, type ImportSessionItem } from '$lib/api/imports';
+  import { bulkImportSessionItems, getImportSession, listImportSessionItems, updateImportSessionOptions, type ImportSession, type ImportSessionItem } from '$lib/api/imports';
 
   const card = 'rounded-2xl border border-slate-800 bg-[#151a26] p-5 shadow-xl shadow-black/15 sm:p-6';
   const sessionId = $derived(page.params.sessionId ?? '');
@@ -42,6 +42,13 @@
     catch (err) { error = err instanceof Error ? err.message : 'Could not update the selection.'; }
     finally { actionBusy = false; }
   }
+  async function setDeleteSourceFiles(checked: boolean) {
+    if (!session) return;
+    const previous = session.deleteSourceFiles;
+    session = { ...session, deleteSourceFiles: checked };
+    try { const response = await updateImportSessionOptions(sessionId, { deleteSourceFiles: checked }); session = response.session ?? session; }
+    catch (err) { session = session ? { ...session, deleteSourceFiles: previous } : session; error = err instanceof Error ? err.message : 'Could not update the session options.'; }
+  }
 </script>
 
 <ImportWizardStepper current={2} {sessionId} />
@@ -55,6 +62,13 @@
     <div class="grid gap-5 xl:grid-cols-2">
       <div class="overflow-hidden rounded-xl border border-slate-800"><div class="flex items-center justify-between bg-slate-950/50 px-4 py-3"><h2 class="font-semibold text-slate-200">Available files <span class="text-slate-500">({availableCount})</span></h2><Button color="blue" class="border-0! text-xs!" disabled={!checkedAvailable.length || actionBusy} onclick={() => move('include')}>Add selected</Button></div><div class="max-h-[430px] divide-y divide-slate-800 overflow-y-auto">{#each available as item (item.itemId)}<label class="flex cursor-pointer items-center gap-3 px-4 py-3 hover:bg-slate-900/40"><Checkbox checked={checkedAvailable.includes(item.itemId)} onchange={(e) => toggle('a', item.itemId, e.currentTarget.checked)} /><span class="min-w-0"><span class="block truncate text-sm text-slate-200">{item.fileName}</span><span class="block truncate text-xs text-slate-500" title={item.relativePath}>{item.relativePath}</span></span><span class="ml-auto shrink-0 text-xs text-slate-600">{(item.fileSizeBytes / 1048576).toFixed(1)} MB</span></label>{:else}<p class="p-8 text-center text-sm text-slate-500">No available files.</p>{/each}</div>{#if availableNext}<Button color="dark" class="m-3 border-slate-700! bg-slate-900! text-xs!" onclick={() => load('available')}>Load more</Button>{/if}</div>
       <div class="overflow-hidden rounded-xl border border-slate-800"><div class="flex items-center justify-between bg-slate-950/50 px-4 py-3"><h2 class="font-semibold text-slate-200">Selected for import <span class="text-slate-500">({selectedCount})</span></h2><Button color="dark" class="border-red-900! bg-red-950/30! text-xs! text-red-200!" disabled={!checkedSelected.length || actionBusy} onclick={() => move('exclude')}>Remove selected</Button></div><div class="max-h-[430px] divide-y divide-slate-800 overflow-y-auto">{#each selected as item (item.itemId)}<label class="flex cursor-pointer items-center gap-3 px-4 py-3 hover:bg-slate-900/40"><Checkbox checked={checkedSelected.includes(item.itemId)} onchange={(e) => toggle('s', item.itemId, e.currentTarget.checked)} /><span class="min-w-0"><span class="block truncate text-sm text-slate-200">{item.fileName}</span><span class="block truncate text-xs text-slate-500" title={item.relativePath}>{item.relativePath}</span></span></label>{:else}<p class="p-8 text-center text-sm text-slate-500">Add at least one file to continue.</p>{/each}</div>{#if selectedNext}<Button color="dark" class="m-3 border-slate-700! bg-slate-900! text-xs!" onclick={() => load('selected')}>Load more</Button>{/if}</div>
+    </div>
+    <div class="mt-5 flex items-start gap-3 rounded-xl border border-slate-800 bg-slate-950/30 p-4">
+      <Toggle checked={session?.deleteSourceFiles ?? false} onchange={(e) => setDeleteSourceFiles(e.currentTarget.checked)} />
+      <div class="min-w-0">
+        <p class="text-sm font-semibold text-slate-200">Delete source files after import</p>
+        <p class="mt-1 text-xs text-slate-500">Each file (and its sidecars) is permanently removed from the incoming folder once it has imported successfully. Files that fail to import are kept.</p>
+      </div>
     </div>
     <div class="mt-6 flex justify-between"><a class="rounded-lg px-4 py-2.5 text-sm font-semibold text-slate-400 hover:text-white" href="/admin/import/new/source">Back</a><a href={selectedCount ? `/admin/import/${sessionId}/metadata` : undefined} aria-disabled={!selectedCount} class={`rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-500 ${selectedCount ? '' : 'pointer-events-none opacity-40'}`}>Next: metadata</a></div>
   {/if}

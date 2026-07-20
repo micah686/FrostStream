@@ -19,6 +19,15 @@
 <section class={card}>
   <div class="flex flex-wrap items-start gap-3"><div><h1 class="text-xl font-bold text-white">Review import</h1><p class="mt-2 text-sm text-slate-400">Confirm every selected file and the metadata source FrostStream will use.</p></div>{#if session}<div class="ml-auto text-right text-xs text-slate-500"><p>{items.length} files</p><p class="mt-1 font-mono">{session.storageKey}</p></div>{/if}</div>
   <div class="mt-5"><ImportNotice {error} /></div>
+  {#if session?.deleteSourceFiles}
+    <div class="mb-5 flex items-start gap-3 rounded-xl border border-amber-800/60 bg-amber-950/25 p-4">
+      <span class="text-lg leading-none text-amber-400">⚠</span>
+      <div>
+        <p class="text-sm font-semibold text-amber-300">Source files will be deleted</p>
+        <p class="mt-1 text-xs text-amber-200/70">This session is set to permanently remove each source file (and its sidecars) from the incoming folder after it imports successfully. You can turn this off on the <a class="underline hover:text-amber-100" href={`/admin/import/${sessionId}/files`}>file selection</a> step.</p>
+      </div>
+    </div>
+  {/if}
   {#if loading}<div class="flex items-center gap-2 p-8 text-sm text-slate-400"><Spinner size="4" />Loading review…</div>{:else}<div class="space-y-2">{#each items as item (item.itemId)}<div class="rounded-xl border border-slate-800 bg-slate-950/25 px-4 py-3"><div class="flex items-center gap-3"><div class="min-w-0 flex-1"><p class="truncate text-sm font-medium text-slate-200">{item.title || item.fileName}</p><p class="truncate text-xs text-slate-500" title={item.relativePath}>{item.relativePath}</p></div><span class={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${pill(item)}`}>{label(item)}</span></div>{#if item.metadataSource === 'manualMapping'}<details class="mt-3 border-t border-slate-800 pt-3"><summary class="cursor-pointer text-xs font-semibold text-slate-400">Show mapped metadata</summary><pre class="mt-3 max-h-72 overflow-auto whitespace-pre-wrap rounded-lg bg-black/25 p-3 text-xs text-slate-400">{pretty(item.metadataJson)}</pre></details>{/if}{#if item.metadataFetchState === 'failed'}<p class="mt-2 text-xs text-amber-400">yt-dlp failed; {label(item).toLowerCase()} metadata will be used instead.</p>{/if}</div>{:else}<p class="rounded-xl border border-dashed border-slate-800 p-8 text-center text-sm text-slate-500">No files selected.</p>{/each}</div>{/if}
   <div class="mt-6 flex justify-between"><a class="rounded-lg px-4 py-2.5 text-sm font-semibold text-slate-400 hover:text-white" href={`/admin/import/${sessionId}/mapping`}>Back</a><a class="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-500" href={`/admin/import/${sessionId}/run`}>Next: import</a></div>
 </section>

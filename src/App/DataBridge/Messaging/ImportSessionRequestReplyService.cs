@@ -35,6 +35,7 @@ public sealed class ImportSessionRequestReplyService(
         await SubscribeAsync<ImportSessionMappingTemplateRequest>(messageBus, ImportSessionSubjects.MappingTemplate, HandleMappingTemplateAsync, ImportSessionSubjects.QueueGroup, stoppingToken);
         await SubscribeAsync<ImportSessionMetadataRefreshRequest>(messageBus, ImportSessionSubjects.MetadataRefresh, HandleMetadataRefreshAsync, ImportSessionSubjects.QueueGroup, stoppingToken);
         await SubscribeAsync<ImportSessionEnrichRequest>(messageBus, ImportSessionSubjects.Enrich, HandleEnrichAsync, ImportSessionSubjects.QueueGroup, stoppingToken);
+        await SubscribeAsync<ImportSessionUpdateOptionsRequest>(messageBus, ImportSessionSubjects.UpdateOptions, HandleUpdateOptionsAsync, ImportSessionSubjects.QueueGroup, stoppingToken);
         await SubscribeAsync<ImportSessionCommitRequest>(messageBus, ImportSessionSubjects.Commit, HandleCommitAsync, ImportSessionSubjects.QueueGroup, stoppingToken);
         await SubscribeAsync<ImportSessionRetryFailedRequest>(messageBus, ImportSessionSubjects.RetryFailed, HandleRetryFailedAsync, ImportSessionSubjects.QueueGroup, stoppingToken);
         await SubscribeAsync<ImportSessionCancelRequest>(messageBus, ImportSessionSubjects.Cancel, HandleCancelAsync, ImportSessionSubjects.QueueGroup, stoppingToken);
@@ -634,6 +635,35 @@ public sealed class ImportSessionRequestReplyService(
             await PublishStateChangedAsync(session);
     }
 
+    private async Task HandleUpdateOptionsAsync(IMessageContext<ImportSessionUpdateOptionsRequest> context)
+    {
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var repo = scope.ServiceProvider.GetRequiredService<IImportSessionRepository>();
+            var result = await repo.UpdateOptionsAsync(context.Message);
+            if (result.Session is null)
+            {
+                await context.RespondAsync(new ImportSessionUpdateOptionsResponse { Success = false, ErrorCode = "not_found", ErrorMessage = "Import session was not found." });
+                return;
+            }
+
+            if (result.Error is not null)
+            {
+                await context.RespondAsync(new ImportSessionUpdateOptionsResponse { Success = false, ErrorCode = "validation", ErrorMessage = result.Error, Session = result.Session });
+                return;
+            }
+
+            await PublishStateChangedAsync(result.Session);
+            await context.RespondAsync(new ImportSessionUpdateOptionsResponse { Success = true, Session = result.Session });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed updating import session options for {SessionId}.", context.Message.SessionId);
+            await context.RespondAsync(new ImportSessionUpdateOptionsResponse { Success = false, ErrorCode = "internal_error", ErrorMessage = "Internal import-session service error." });
+        }
+    }
+
     private async Task HandleCommitAsync(IMessageContext<ImportSessionCommitRequest> context)
     {
         try
@@ -781,13 +811,41 @@ public sealed class ImportSessionRequestReplyService(
             if (string.IsNullOrWhiteSpace(fileName))
                 continue;
 
+            // List-valued cells are semicolon-separated (e.g. "rock;metal;live").
+            static IReadOnlyList<string>? GetList(string? value)
+                => string.IsNullOrWhiteSpace(value)
+                    ? null
+                    : value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            static int? GetInt(string? value)
+                => int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : null;
+
             rows.Add(new ImportSessionMappingRow
             {
                 FileName = fileName.Trim(),
                 Title = Get("title"),
+                Description = Get("description"),
                 Provider = Get("provider"),
                 SourceMediaId = Get("sourceMediaId") ?? Get("source_media_id"),
-                SourceUrl = Get("sourceUrl") ?? Get("source_url")
+                SourceUrl = Get("sourceUrl") ?? Get("source_url"),
+                ReleaseDate = Get("releaseDate") ?? Get("release_date"),
+                AccountName = Get("accountName") ?? Get("account_name") ?? Get("channel") ?? Get("uploader"),
+                AccountHandle = Get("accountHandle") ?? Get("account_handle"),
+                AccountUrl = Get("accountUrl") ?? Get("account_url"),
+                Location = Get("location"),
+                AgeLimit = GetInt(Get("ageLimit") ?? Get("age_limit")),
+                Tags = GetList(Get("tags")),
+                Categories = GetList(Get("categories")),
+                Genres = GetList(Get("genres")),
+                Artists = GetList(Get("artists")),
+                AlbumArtists = GetList(Get("albumArtists") ?? Get("album_artists")),
+                Album = Get("album"),
+                Track = Get("track"),
+                TrackNumber = GetInt(Get("trackNumber") ?? Get("track_number")),
+                SeriesName = Get("seriesName") ?? Get("series_name") ?? Get("series"),
+                SeasonNumber = GetInt(Get("seasonNumber") ?? Get("season_number")),
+                EpisodeNumber = GetInt(Get("episodeNumber") ?? Get("episode_number")),
+                EpisodeName = Get("episodeName") ?? Get("episode_name")
             });
         }
 

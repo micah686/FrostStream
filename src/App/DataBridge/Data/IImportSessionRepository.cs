@@ -69,6 +69,8 @@ public interface IImportSessionRepository
 
     Task<ImportSessionDto?> ApplyEnrichFailureAsync(ImportSessionItemEnrichFailed message, CancellationToken ct = default);
 
+    Task<(ImportSessionDto? Session, string? Error)> UpdateOptionsAsync(ImportSessionUpdateOptionsRequest request, CancellationToken ct = default);
+
     Task<(ImportSessionDto? Session, int ApprovedCount, string? Error)> CommitAsync(Guid sessionId, CancellationToken ct = default);
 
     Task<(ImportSessionDto? Session, int ResetCount)> RetryFailedAsync(Guid sessionId, CancellationToken ct = default);
@@ -117,13 +119,9 @@ public interface IImportSessionRepository
     Task<ImportSessionDto?> CompleteSessionIfTerminalAsync(Guid sessionId, CancellationToken ct = default);
 }
 
-public sealed record ImportSessionMappingRow
+public sealed record ImportSessionMappingRow : ImportSessionUserMetadata
 {
     public required string FileName { get; init; }
-    public string? Title { get; init; }
-    public string? Provider { get; init; }
-    public string? SourceMediaId { get; init; }
-    public string? SourceUrl { get; init; }
 }
 
 public sealed record ImportSessionEnrichItemRef
@@ -165,4 +163,5 @@ public sealed record ImportSessionItemWork
     public string? UserMetadataJson { get; init; }
     public ImportSessionItemMetadataState MetadataState { get; init; }
     public int Attempt { get; init; }
+    public bool DeleteSourceFiles { get; init; }
 }

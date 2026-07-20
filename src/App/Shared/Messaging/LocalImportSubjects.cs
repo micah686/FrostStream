@@ -11,6 +11,7 @@ public static class LocalImportSubjects
     public const string ImportSessionItemsProbed = "import.evt.items-probed";
     public const string ImportSessionItemsProbeFailed = "import.evt.items-probe-failed";
 
+    public const string DeleteLocalImportSourceCommand = "import.cmd.delete-source";
     public const string EnrichImportSessionItemCommand = "import.cmd.enrich-item";
     public const string ImportSessionItemEnriched = "import.evt.item-enriched";
     public const string ImportSessionItemEnrichFailed = "import.evt.item-enrich-failed";
@@ -20,6 +21,8 @@ public static class LocalImportSubjects
     public static string Tagged(string baseSubject, string tag) => $"{baseSubject}.{tag}";
 
     public static string PrepareLocalImportFileCommandForTag(string tag) => Tagged(PrepareLocalImportFileCommand, tag);
+
+    public static string DeleteLocalImportSourceCommandForTag(string tag) => Tagged(DeleteLocalImportSourceCommand, tag);
 
     public static string ScanLocalImportSourceCommandForTag(string tag) => Tagged(ScanLocalImportSourceCommand, tag);
 

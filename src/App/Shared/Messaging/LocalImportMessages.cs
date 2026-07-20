@@ -151,3 +151,27 @@ public sealed record RefreshImportMetadataFoundItem
     public string? SourceUrl { get; init; }
     public required string InfoJsonRelativePath { get; init; }
 }
+
+/// <summary>
+/// Fire-and-forget cleanup of the source files under the Worker incoming root after an item
+/// finished importing (or was already imported). Failures are logged on the Worker only; they
+/// never fail the import.
+/// </summary>
+public sealed record DeleteLocalImportSourceCommand : IFlowMessage
+{
+    public required Guid JobId { get; init; }
+    public required Guid CorrelationId { get; init; }
+    public Guid? CausationId { get; init; }
+    public required Guid MessageId { get; init; }
+    public required string OperationKey { get; init; }
+    public required Instant OccurredAt { get; init; }
+    public required int Attempt { get; init; }
+
+    public required Guid BatchId { get; init; }
+
+    public required Guid ItemId { get; init; }
+
+    public required IReadOnlyList<string> Files { get; init; }
+
+    public string? RequiredWorkerTag { get; init; }
+}

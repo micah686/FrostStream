@@ -14,6 +14,7 @@ public sealed class LocalImportTopology : ITopologySource
     public const string LocalImportFilePreparedConsumer = "databridge-local-import-file-prepared";
     public const string LocalImportFilePrepareFailedConsumer = "databridge-local-import-file-prepare-failed";
     public const string WorkerPrepareLocalImportFileConsumer = "worker-prepare-local-import-file";
+    public const string WorkerDeleteLocalImportSourceConsumer = "worker-delete-local-import-source";
     public const string WorkerScanLocalImportSourceConsumer = "worker-scan-local-import-source";
     public const string WorkerProbeImportSessionItemsConsumer = "worker-probe-import-session-items";
     public const string WorkerEnrichImportSessionItemConsumer = "worker-enrich-import-session-item";
@@ -40,6 +41,7 @@ public sealed class LocalImportTopology : ITopologySource
         yield return DataBridgeConsumer(LocalImportFilePreparedConsumer, LocalImportSubjects.LocalImportFilePrepared);
         yield return DataBridgeConsumer(LocalImportFilePrepareFailedConsumer, LocalImportSubjects.LocalImportFilePrepareFailed);
         yield return WorkerConsumer(WorkerPrepareLocalImportFileConsumer, LocalImportSubjects.PrepareLocalImportFileCommand);
+        yield return WorkerConsumer(WorkerDeleteLocalImportSourceConsumer, LocalImportSubjects.DeleteLocalImportSourceCommand);
         yield return WorkerConsumer(WorkerScanLocalImportSourceConsumer, LocalImportSubjects.ScanLocalImportSourceCommand);
         yield return WorkerConsumer(WorkerProbeImportSessionItemsConsumer, LocalImportSubjects.ProbeImportSessionItemsCommand);
         yield return WorkerConsumer(WorkerEnrichImportSessionItemConsumer, LocalImportSubjects.EnrichImportSessionItemCommand);
