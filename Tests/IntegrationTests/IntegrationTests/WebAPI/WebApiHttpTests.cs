@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using FluentStorage.Blobs;
+using FluentStorage.Storage;
 using Conduit.NATS;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -43,7 +43,7 @@ public sealed class WebApiHttpTests
         };
         factory.BlobStorageProvider.GetAsync("storage-a", Arg.Any<CancellationToken>())
             .Returns(factory.BlobStorage);
-        factory.BlobStorage.OpenReadAsync("media/video.mp4", Arg.Any<CancellationToken>())
+        factory.BlobStorage.OpenRead("media/video.mp4", Arg.Any<CancellationToken>())
             .Returns(_ => Task.FromResult<Stream>(new MemoryStream(bytes, writable: false)));
 
         using var client = factory.CreateClient();
@@ -150,7 +150,7 @@ internal sealed class TestWebApiFactory : WebApplicationFactory<global::WebAPI.P
     public FakeMessageBus MessageBus { get; } = new();
     public InMemorySecretStore SecretStore { get; } = new();
     public IBlobStorageProvider BlobStorageProvider { get; } = Substitute.For<IBlobStorageProvider>();
-    public IBlobStorage BlobStorage { get; } = Substitute.For<IBlobStorage>();
+    public IStore BlobStorage { get; } = Substitute.For<IStore>();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {

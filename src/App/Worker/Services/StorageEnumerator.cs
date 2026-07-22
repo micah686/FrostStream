@@ -7,7 +7,7 @@ using Azure;
 using Azure.Storage;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
-using FluentStorage.Blobs;
+using FluentStorage.Storage;
 using Google.Apis.Auth.OAuth2;
 using Google.Cloud.Storage.V1;
 using Microsoft.Extensions.Logging;
@@ -305,7 +305,7 @@ public sealed class StorageEnumerator(
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var blobStorage = await fallbackBlobStorageProvider.GetAsync(storageKey, cancellationToken);
-        var blobs = await blobStorage.ListAsync(new ListOptions { Recurse = true }, cancellationToken);
+        var blobs = await blobStorage.ListObjects(new StorageListOptions { Recurse = true }, cancellationToken);
         foreach (var blob in blobs.Where(b => b.IsFile))
         {
             cancellationToken.ThrowIfCancellationRequested();

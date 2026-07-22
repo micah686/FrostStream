@@ -7,7 +7,7 @@ namespace Shared.Storage;
 /// are what gets persisted to the application database, returned in API/list
 /// responses, and carried over messaging buses. Plaintext secrets live only in
 /// the secret store and are merged back in at use time when constructing an
-/// IBlobStorage.
+/// IStore.
 /// </summary>
 public abstract class StorageParametersStoredBase
 {

@@ -1,15 +1,15 @@
 using System.Collections.Concurrent;
-using FluentStorage.Blobs;
+using FluentStorage.Storage;
 
 namespace Shared.Storage;
 
 public sealed class CachingBlobStorageProvider(IStorageConfigClient storageConfigClient) : IBlobStorageProvider
 {
-    private readonly ConcurrentDictionary<string, Lazy<Task<IBlobStorage>>> _cache = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, Lazy<Task<IStore>>> _cache = new(StringComparer.Ordinal);
 
-    public Task<IBlobStorage> GetAsync(string storageKey, CancellationToken cancellationToken = default)
+    public Task<IStore> GetAsync(string storageKey, CancellationToken cancellationToken = default)
     {
-        var lazy = _cache.GetOrAdd(storageKey, key => new Lazy<Task<IBlobStorage>>(
+        var lazy = _cache.GetOrAdd(storageKey, key => new Lazy<Task<IStore>>(
             () => BuildAsync(key, cancellationToken),
             LazyThreadSafetyMode.ExecutionAndPublication));
 
@@ -25,13 +25,13 @@ public sealed class CachingBlobStorageProvider(IStorageConfigClient storageConfi
         }
     }
 
-    private async Task<IBlobStorage> BuildAsync(string storageKey, CancellationToken cancellationToken)
+    private async Task<IStore> BuildAsync(string storageKey, CancellationToken cancellationToken)
     {
         var config = await storageConfigClient.GetStorageConfigAsync(storageKey, cancellationToken).ConfigureAwait(false);
         return FluentStorageProvider.CreateStorage(config);
     }
 
-    private static async Task DisposeWhenReadyAsync(Task<IBlobStorage> task)
+    private static async Task DisposeWhenReadyAsync(Task<IStore> task)
     {
         try
         {

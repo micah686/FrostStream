@@ -2,7 +2,7 @@ using System.Buffers;
 using System.Collections.Concurrent;
 using System.IO.Hashing;
 using System.Globalization;
-using FluentStorage.Blobs;
+using FluentStorage.Storage;
 using Conduit.NATS;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -630,7 +630,7 @@ public sealed class DownloadCommandsConsumerService(
                     cmd.StoragePath);
 
                 await using var memStream = new MemoryStream(inlineBytes, writable: false);
-                await storage.WriteAsync(cmd.StoragePath, memStream, append: false, operationCts.Token);
+                await storage.SetObject(cmd.StoragePath, memStream, append: false, operationCts.Token);
                 contentLength = inlineBytes.Length;
 
                 logger.LogInformation(
@@ -661,7 +661,7 @@ public sealed class DownloadCommandsConsumerService(
                     if (cmd.VerifyHashWhileStreaming)
                     {
                         await using var hashingStream = new XxHash128ReadStream(stream);
-                        await storage.WriteAsync(cmd.StoragePath, hashingStream, append: false, operationCts.Token);
+                        await storage.SetObject(cmd.StoragePath, hashingStream, append: false, operationCts.Token);
                         var observedHash = hashingStream.GetHash();
                         if (!string.Equals(observedHash, cmd.ContentHashXxh128, StringComparison.OrdinalIgnoreCase))
                         {
@@ -671,7 +671,7 @@ public sealed class DownloadCommandsConsumerService(
                     }
                     else
                     {
-                        await storage.WriteAsync(cmd.StoragePath, stream, append: false, operationCts.Token);
+                        await storage.SetObject(cmd.StoragePath, stream, append: false, operationCts.Token);
                     }
                 }
                 contentLength = fileInfo.Length;
@@ -854,7 +854,7 @@ public sealed class DownloadCommandsConsumerService(
                 cmd.StoragePath);
 
             var storage = await blobStorageProvider.GetAsync(cmd.StorageKey, operationCts.Token);
-            await storage.DeleteAsync([cmd.StoragePath], operationCts.Token);
+            await storage.DeleteObjects([cmd.StoragePath], operationCts.Token);
 
             logger.LogInformation(
                 "Uploaded object cleanup completed for JobId {JobId} Attempt {Attempt} StorageKey {StorageKey} StoragePath {StoragePath}",
@@ -946,7 +946,7 @@ public sealed class DownloadCommandsConsumerService(
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(StorageProbeTimeout);
             var storage = await blobStorageProvider.GetAsync(cmd.StorageKey, cts.Token);
-            await storage.ListAsync(new ListOptions { MaxResults = 1 }, cts.Token);
+            await storage.ListObjects(new StorageListOptions { MaxResults = 1 }, cts.Token);
 
             logger.LogDebug(
                 "Storage probe succeeded for JobId {JobId} StorageKey {StorageKey}.",

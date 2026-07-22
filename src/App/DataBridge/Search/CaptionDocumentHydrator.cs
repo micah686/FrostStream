@@ -1,6 +1,6 @@
 using System.Text;
 using System.Text.RegularExpressions;
-using FluentStorage.Blobs;
+using FluentStorage.Storage;
 using Microsoft.Extensions.Logging;
 using Shared.Storage;
 
@@ -50,7 +50,7 @@ public sealed partial class CaptionDocumentHydrator(
         try
         {
             var storage = await blobStorageProvider.GetAsync(caption.StorageKey, ct);
-            await using var stream = await storage.OpenReadAsync(caption.StoragePath, ct);
+            await using var stream = await storage.OpenRead(caption.StoragePath, ct);
             if (stream is null)
             {
                 logger.LogWarning("Caption sidecar was missing while indexing {StorageKey}:{StoragePath}.", caption.StorageKey, caption.StoragePath);

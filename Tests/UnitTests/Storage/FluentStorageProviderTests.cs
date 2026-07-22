@@ -13,6 +13,63 @@ public class FluentStorageProviderTests
         ?? throw new InvalidOperationException("BuildConnectionString not found.");
 
     [Test]
+    public async Task CreateStorage_Creates_Usable_Disk_Store()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"froststream-fluent-storage-{Guid.NewGuid():N}");
+
+        try
+        {
+            using var storage = Create(StorageMethod.Local, new PosixLocalStorageParameters
+            {
+                Protocol = LocalStorageProtocol.Local,
+                Path = root
+            });
+
+            await storage.SetText("probe.txt", "ready");
+            (await storage.GetText("probe.txt")).ShouldBe("ready");
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Test]
+    public void CreateStorage_Registers_S3_Provider_Module()
+    {
+        using var storage = Create(StorageMethod.ObjectStorage, new S3CompatibleObjectStorageParameters
+        {
+            Provider = S3CompatibleObjectStorageProvider.MinIo,
+            BucketName = "bucket",
+            Region = "us-east-1",
+            Endpoint = "https://minio.example.test",
+            AccessKeyId = "access",
+            SecretKeyId = "secret",
+            ForcePathStyle = true,
+            UseSsl = true
+        });
+
+        storage.ShouldNotBeNull();
+    }
+
+    [Test]
+    public void CreateStorage_Registers_Azure_Blob_Provider_Module()
+    {
+        using var storage = Create(StorageMethod.ObjectStorage, new AzureBlobObjectStorageParameters
+        {
+            CredentialMode = AzureBlobCredentialMode.AccountKey,
+            ContainerName = "container",
+            AzureAccountName = "account",
+            AzureAccountKeySecretId = Convert.ToBase64String("test-key"u8)
+        });
+
+        storage.ShouldNotBeNull();
+    }
+
+    [Test]
     public void BuildConnectionString_Formats_Disk_Storage()
     {
         Build(StorageMethod.Local, new PosixLocalStorageParameters
@@ -76,7 +133,7 @@ public class FluentStorageProviderTests
             SecretKeyId = "secret",
             ForcePathStyle = true,
             UseSsl = false
-        }).ShouldBe("aws.s3://bucket=bucket;region=us-east-1;keyId=access;key=secret;serviceUrl=https://minio.example.test;forcePathStyle=true;useSsl=false");
+        }).ShouldBe("aws.s3://bucket=bucket;keyId=access;key=secret;serviceUrl=https://minio.example.test;forcePathStyle=true;useSsl=false");
     }
 
     [Test]
@@ -175,5 +232,15 @@ public class FluentStorageProviderTests
             null,
             [method, StorageParametersSerializer.Serialize(method, parameters)])
             ?? throw new InvalidOperationException("Connection string not returned."));
+    }
+
+    private static FluentStorage.Storage.IStore Create(StorageMethod method, StorageParametersBase parameters)
+    {
+        return FluentStorageProvider.CreateStorage(new StorageConfigResponse(
+            Found: true,
+            Key: "test",
+            Method: method,
+            Parameters: StorageParametersSerializer.Serialize(method, parameters),
+            Description: null));
     }
 }

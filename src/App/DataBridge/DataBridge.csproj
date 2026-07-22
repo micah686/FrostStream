@@ -33,7 +33,7 @@
       <PackageReference Include="Npgsql.DependencyInjection" Version="10.0.3" />
       <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
       <PackageReference Include="EFCore.NamingConventions" Version="10.0.1" />
-      <PackageReference Include="FluentStorage" Version="6.0.4" />
+      <PackageReference Include="FluentStorage" Version="8.0.11" />
       <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime" Version="10.0.3" />
       <PackageReference Include="NodaTime.Serialization.SystemTextJson" Version="1.4.0" />
       <PackageReference Include="Polly.Core" Version="8.7.0" />

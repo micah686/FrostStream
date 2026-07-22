@@ -1,4 +1,4 @@
-using FluentStorage.Blobs;
+using FluentStorage.Storage;
 using Conduit.NATS;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -22,7 +22,7 @@ public sealed class MediaWatchControllerTests
         var mediaGuid = Guid.NewGuid();
         var bus = Substitute.For<IMessageBus>();
         var provider = Substitute.For<IBlobStorageProvider>();
-        var storage = Substitute.For<IBlobStorage>();
+        var storage = Substitute.For<IStore>();
         var stream = new MemoryStream([1, 2, 3]);
 
         bus.RequestAsync<MediaStreamResolveRequestMessage, MediaStreamResolveResponseMessage>(
@@ -39,7 +39,7 @@ public sealed class MediaWatchControllerTests
                 Item = Location(mediaGuid, "storage-a", "media/video.mp4", 2)
             });
         provider.GetAsync("storage-a", Arg.Any<CancellationToken>()).Returns(storage);
-        storage.OpenReadAsync("media/video.mp4", Arg.Any<CancellationToken>()).Returns(stream);
+        storage.OpenRead("media/video.mp4", Arg.Any<CancellationToken>()).Returns(stream);
 
         var result = await CreateController(bus, provider).GetWatch(
             mediaGuid,
@@ -59,12 +59,12 @@ public sealed class MediaWatchControllerTests
         var mediaGuid = Guid.NewGuid();
         var bus = Substitute.For<IMessageBus>();
         var provider = Substitute.For<IBlobStorageProvider>();
-        var storage = Substitute.For<IBlobStorage>();
+        var storage = Substitute.For<IStore>();
         var stream = new NonSeekableReadStream([1, 2, 3]);
 
         ArrangeResolved(bus, mediaGuid, Location(mediaGuid, "storage-a", "media/content.unknown", 1));
         provider.GetAsync("storage-a", Arg.Any<CancellationToken>()).Returns(storage);
-        storage.OpenReadAsync("media/content.unknown", Arg.Any<CancellationToken>()).Returns(stream);
+        storage.OpenRead("media/content.unknown", Arg.Any<CancellationToken>()).Returns(stream);
 
         var result = await CreateController(bus, provider).GetWatch(mediaGuid);
 
@@ -138,11 +138,11 @@ public sealed class MediaWatchControllerTests
         var mediaGuid = Guid.NewGuid();
         var bus = Substitute.For<IMessageBus>();
         var provider = Substitute.For<IBlobStorageProvider>();
-        var storage = Substitute.For<IBlobStorage>();
+        var storage = Substitute.For<IStore>();
         var location = Location(mediaGuid, "storage-a", "media/video.mp4", 1);
         ArrangeResolved(bus, mediaGuid, location);
         provider.GetAsync("storage-a", Arg.Any<CancellationToken>()).Returns(storage);
-        storage.OpenReadAsync(location.StoragePath, Arg.Any<CancellationToken>())
+        storage.OpenRead(location.StoragePath, Arg.Any<CancellationToken>())
             .Returns(Task.FromResult<Stream>(null!));
 
         var controller = CreateController(bus, provider);
@@ -150,7 +150,7 @@ public sealed class MediaWatchControllerTests
         missing.ShouldBeOfType<NotFoundObjectResult>();
 
         provider.GetAsync("storage-a", Arg.Any<CancellationToken>())
-            .Returns<Task<IBlobStorage>>(_ => throw new InvalidOperationException("storage failed"));
+            .Returns<Task<IStore>>(_ => throw new InvalidOperationException("storage failed"));
 
         var failed = await controller.GetWatch(mediaGuid);
         failed.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status502BadGateway);
@@ -185,13 +185,13 @@ public sealed class MediaWatchControllerTests
         var mediaGuid = Guid.NewGuid();
         var bus = Substitute.For<IMessageBus>();
         var provider = Substitute.For<IBlobStorageProvider>();
-        var storage = Substitute.For<IBlobStorage>();
+        var storage = Substitute.For<IStore>();
         var stream = new MemoryStream([1, 2, 3]);
         var location = ThumbnailLocation(mediaGuid, "storage-a", "thumbs/poster.jpg");
 
         ArrangeThumbnailResolved(bus, mediaGuid, location);
         provider.GetAsync("storage-a", Arg.Any<CancellationToken>()).Returns(storage);
-        storage.OpenReadAsync("thumbs/poster.jpg", Arg.Any<CancellationToken>()).Returns(stream);
+        storage.OpenRead("thumbs/poster.jpg", Arg.Any<CancellationToken>()).Returns(stream);
 
         var controller = CreateController(bus, provider);
         var result = await controller.GetThumbnail(mediaGuid, CancellationToken.None);

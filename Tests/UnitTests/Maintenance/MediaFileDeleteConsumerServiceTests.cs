@@ -1,5 +1,5 @@
 using FluentStorage;
-using FluentStorage.Blobs;
+using FluentStorage.Storage;
 using Microsoft.Extensions.Logging.Abstractions;
 using Shared.Messaging;
 using Shared.Storage;
@@ -33,7 +33,7 @@ public sealed class MediaFileDeleteConsumerServiceTests
 
             response.ShouldNotBeNull();
             response.Success.ShouldBeTrue();
-            (await storage.ExistsAsync("media/video.mp4")).ShouldBeFalse();
+            (await storage.ObjectExists("media/video.mp4")).ShouldBeFalse();
         }
         finally
         {
@@ -118,70 +118,24 @@ public sealed class MediaFileDeleteConsumerServiceTests
         throw new TimeoutException("MediaFileDeleteConsumerService did not register its subscription in time.");
     }
 
-    private sealed class FakeBlobStorageProvider(IBlobStorage storage) : IBlobStorageProvider
+    private sealed class FakeBlobStorageProvider(FakeBlobStorage storage) : IBlobStorageProvider
     {
-        public Task<IBlobStorage> GetAsync(string storageKey, CancellationToken cancellationToken = default)
-            => Task.FromResult(storage);
+        public Task<IStore> GetAsync(string storageKey, CancellationToken cancellationToken = default)
+            => Task.FromResult(storage.Store);
 
         public void Invalidate(string storageKey)
         {
         }
     }
 
-    private sealed class FakeBlobStorage : IBlobStorage
+    private sealed class FakeBlobStorage
     {
-        private readonly Dictionary<string, byte[]> _files = new(StringComparer.Ordinal);
+        public IStore Store { get; } = StorageFactory.InMemory();
 
         public void Write(string path, byte[] bytes)
-            => _files[path] = bytes;
+            => Store.SetBytes(path, bytes).GetAwaiter().GetResult();
 
-        public Task<IReadOnlyCollection<Blob>> ListAsync(ListOptions options, CancellationToken cancellationToken = default)
-            => Task.FromResult<IReadOnlyCollection<Blob>>([]);
-
-        public async Task WriteAsync(
-            string fullPath,
-            Stream dataStream,
-            bool append = false,
-            CancellationToken cancellationToken = default)
-        {
-            await using var memory = new MemoryStream();
-            await dataStream.CopyToAsync(memory, cancellationToken);
-            _files[fullPath] = memory.ToArray();
-        }
-
-        public Task<Stream> OpenReadAsync(string fullPath, CancellationToken cancellationToken = default)
-            => Task.FromResult<Stream>(new MemoryStream(_files[fullPath], writable: false));
-
-        public Task DeleteAsync(IEnumerable<string> fullPaths, CancellationToken cancellationToken = default)
-        {
-            foreach (var path in fullPaths)
-            {
-                _files.Remove(path);
-            }
-
-            return Task.CompletedTask;
-        }
-
-        public Task<IReadOnlyCollection<bool>> ExistsAsync(
-            IEnumerable<string> fullPaths,
-            CancellationToken cancellationToken = default)
-            => Task.FromResult<IReadOnlyCollection<bool>>(fullPaths.Select(path => _files.ContainsKey(path)).ToList());
-
-        public Task<IReadOnlyCollection<Blob?>> GetBlobsAsync(
-            IEnumerable<string> fullPaths,
-            CancellationToken cancellationToken = default)
-            => Task.FromResult<IReadOnlyCollection<Blob?>>(fullPaths
-                .Select(path => _files.ContainsKey(path) ? new Blob(path) : null)
-                .ToList());
-
-        public Task SetBlobsAsync(IEnumerable<Blob> blobs, CancellationToken cancellationToken = default)
-            => Task.CompletedTask;
-
-        public Task<ITransaction> OpenTransactionAsync()
-            => throw new NotSupportedException();
-
-        public void Dispose()
-        {
-        }
+        public Task<bool> ObjectExists(string path, CancellationToken cancellationToken = default)
+            => Store.ObjectExists(path, cancellationToken);
     }
 }

@@ -53,7 +53,7 @@ public sealed class MediaStorageTransferController(
         try
         {
             var storage = await blobStorageProvider.GetAsync(storageKey, cancellationToken);
-            await storage.WriteAsync(storagePath, Request.Body, append: false, cancellationToken);
+            await storage.SetObject(storagePath, Request.Body, append: false, cancellationToken);
             return NoContent();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

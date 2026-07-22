@@ -1,16 +1,25 @@
 using FluentStorage;
-using FluentStorage.Blobs;
+using FluentStorage.Storage;
 using System.Text;
 using System.Text.Json;
 
 namespace Shared.Storage;
 
 /// <summary>
-/// Builds FluentStorage <see cref="IBlobStorage"/> instances from storage config responses.
+/// Builds FluentStorage <see cref="IStore"/> instances from storage config responses.
 /// </summary>
 public static class FluentStorageProvider
 {
-    public static IBlobStorage CreateStorage(StorageConfigResponse config)
+    static FluentStorageProvider()
+    {
+        AwsS3Storage.Use();
+        AzureBlobStorage.Use();
+        FtpStorage.Use();
+        GoogleCloudStorage.Use();
+        SftpStorage.Use();
+    }
+
+    public static IStore CreateStorage(StorageConfigResponse config)
     {
         if (!config.Found || config.Method is null || string.IsNullOrWhiteSpace(config.Parameters))
         {
@@ -19,7 +28,7 @@ public static class FluentStorageProvider
         }
 
         var connectionString = BuildConnectionString(config.Method.Value, config.Parameters);
-        return StorageFactory.Blobs.FromConnectionString(connectionString);
+        return StorageFactory.FromConnectionString(connectionString);
     }
 
     private static string BuildConnectionString(StorageMethod method, string parametersJson)
@@ -80,10 +89,20 @@ public static class FluentStorageProvider
         var parts = new List<string>();
 
         AddIfPresent(parts, "bucket", parameters.BucketName);
-        AddIfPresent(parts, "region", parameters.Region);
         AddIfPresent(parts, "keyId", parameters.AccessKeyId);
         AddIfPresent(parts, "key", parameters.SecretKeyId);
-        AddIfPresent(parts, "serviceUrl", parameters.Endpoint);
+
+        // FluentStorage 8 rejects connection strings containing both region and
+        // serviceUrl. Custom S3-compatible endpoints are addressed by URL;
+        // standard AWS S3 configurations are addressed by region.
+        if (string.IsNullOrWhiteSpace(parameters.Endpoint))
+        {
+            AddIfPresent(parts, "region", parameters.Region);
+        }
+        else
+        {
+            AddIfPresent(parts, "serviceUrl", parameters.Endpoint);
+        }
 
         if (parameters.ForcePathStyle)
         {

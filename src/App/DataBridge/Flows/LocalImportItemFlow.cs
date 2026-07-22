@@ -458,7 +458,7 @@ public class LocalImportItemFlow(
             var storage = await scope.ServiceProvider
                 .GetRequiredService<IBlobStorageProvider>()
                 .GetAsync(work.StorageKey);
-            await using var stream = await storage.OpenReadAsync(infoJsonPath)
+            await using var stream = await storage.OpenRead(infoJsonPath)
                 ?? throw new InvalidOperationException($"Info JSON was not found at {infoJsonPath}.");
             // yt-dlp writes snake_case keys; VideoInfo only annotates multi-word names and relies on
             // the source-gen context's naming policy for the rest, so plain Deserialize<VideoInfo>

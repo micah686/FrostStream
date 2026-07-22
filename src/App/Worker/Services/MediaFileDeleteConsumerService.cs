@@ -1,5 +1,5 @@
 using Conduit.NATS;
-using FluentStorage.Blobs;
+using FluentStorage.Storage;
 using Microsoft.Extensions.Logging;
 using Shared.Messaging;
 using Shared.Storage;
@@ -39,7 +39,7 @@ public sealed class MediaFileDeleteConsumerService(
             ValidateRequest(request);
 
             var storage = await blobStorageProvider.GetAsync(request.StorageKey);
-            await storage.DeleteAsync([request.StoragePath]);
+            await storage.DeleteObjects([request.StoragePath]);
 
             logger.LogInformation(
                 "Deleted media file {StorageKey}:{StoragePath}.",

@@ -1,6 +1,6 @@
 using System.Net;
 using FluentStorage;
-using FluentStorage.Blobs;
+using FluentStorage.Storage;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -17,7 +17,7 @@ public sealed class AssetCacheWriterTests
     public async Task DownloadAndStoreAsync_Stores_Content_In_Kind_And_Hash_Sharded_Blob()
     {
         var root = Path.Combine(Path.GetTempPath(), $"froststream-assets-{Guid.NewGuid():N}");
-        var storage = StorageFactory.Blobs.DirectoryFiles(root);
+        var storage = StorageFactory.Disk(root);
         var handler = new QueueingHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.OK, "avatar-bytes"u8.ToArray(), "image/png");
         var sut = CreateSut(storage, handler);
@@ -36,8 +36,8 @@ public sealed class AssetCacheWriterTests
             result.StorageKey.ShouldBe("default");
             result.StoragePath.ShouldStartWith("assets/avatars/");
             result.StoragePath.ShouldEndWith(".png");
-            (await storage.ExistsAsync(result.StoragePath)).ShouldBeTrue();
-            (await storage.ReadBytesAsync(result.StoragePath)).ShouldBe("avatar-bytes"u8.ToArray());
+            (await storage.ObjectExists(result.StoragePath)).ShouldBeTrue();
+            (await storage.GetBytes(result.StoragePath)).ShouldBe("avatar-bytes"u8.ToArray());
         }
         finally
         {
@@ -53,7 +53,7 @@ public sealed class AssetCacheWriterTests
     public async Task DownloadAndStoreAsync_Reuses_Existing_Blob_For_Same_Content()
     {
         var root = Path.Combine(Path.GetTempPath(), $"froststream-assets-{Guid.NewGuid():N}");
-        var storage = StorageFactory.Blobs.DirectoryFiles(root);
+        var storage = StorageFactory.Disk(root);
         var handler = new QueueingHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.OK, "same-bytes"u8.ToArray(), "image/jpeg");
         handler.Enqueue(HttpStatusCode.OK, "same-bytes"u8.ToArray(), "image/jpeg");
@@ -73,7 +73,7 @@ public sealed class AssetCacheWriterTests
             second.StoragePath.ShouldBe(first.StoragePath);
             second.ContentHash.ShouldBe(first.ContentHash);
             second.ReusedExisting.ShouldBeTrue();
-            var blobs = await storage.ListAsync(new ListOptions { Recurse = true, FolderPath = "assets/banners" });
+            var blobs = await storage.ListObjects(new StorageListOptions { Recurse = true, FolderPath = "assets/banners" });
             blobs.Count(b => !b.IsFolder).ShouldBe(1);
         }
         finally
@@ -90,7 +90,7 @@ public sealed class AssetCacheWriterTests
     public async Task DownloadAndStoreAsync_Retries_Transient_Http_Failure()
     {
         var root = Path.Combine(Path.GetTempPath(), $"froststream-assets-{Guid.NewGuid():N}");
-        var storage = StorageFactory.Blobs.DirectoryFiles(root);
+        var storage = StorageFactory.Disk(root);
         var handler = new QueueingHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.InternalServerError, [] , "text/plain");
         handler.Enqueue(HttpStatusCode.OK, "banner-bytes"u8.ToArray(), "image/webp");
@@ -117,7 +117,7 @@ public sealed class AssetCacheWriterTests
         }
     }
 
-    private static AssetCacheWriter CreateSut(IBlobStorage storage, QueueingHttpMessageHandler handler)
+    private static AssetCacheWriter CreateSut(IStore storage, QueueingHttpMessageHandler handler)
     {
         var factory = Substitute.For<IHttpClientFactory>();
         factory.CreateClient("asset-cache").Returns(_ => new HttpClient(handler, disposeHandler: false));

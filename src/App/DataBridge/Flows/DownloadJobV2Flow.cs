@@ -1275,7 +1275,7 @@ public sealed class DownloadJobV2Flow(
         using var scope = scopeFactory.CreateScope();
         var storage = await scope.ServiceProvider.GetRequiredService<Shared.Storage.IBlobStorageProvider>()
             .GetAsync(storageKey);
-        await using var stream = await storage.OpenReadAsync(infoStoragePath)
+        await using var stream = await storage.OpenRead(infoStoragePath)
             ?? throw new InvalidOperationException($"Info JSON was not found at {infoStoragePath}.");
         // yt-dlp writes snake_case keys; VideoInfo only annotates multi-word names and relies on
         // the source-gen context's naming policy for the rest, so plain Deserialize<VideoInfo>

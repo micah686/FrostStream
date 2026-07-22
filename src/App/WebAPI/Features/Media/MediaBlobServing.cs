@@ -35,7 +35,7 @@ public static class MediaBlobServing
         try
         {
             var storage = await blobStorageProvider.GetAsync(storageKey, cancellationToken);
-            var stream = await storage.OpenReadAsync(storagePath, cancellationToken);
+            var stream = await storage.OpenRead(storagePath, cancellationToken);
             if (stream is null)
             {
                 return controller.NotFound($"The selected {subject} is missing from storage.");
@@ -94,7 +94,7 @@ public static class MediaBlobServing
         try
         {
             var storage = await blobStorageProvider.GetAsync(storageKey, cancellationToken);
-            return await storage.OpenReadAsync(storagePath, cancellationToken);
+            return await storage.OpenRead(storagePath, cancellationToken);
         }
         catch (FileNotFoundException)
         {

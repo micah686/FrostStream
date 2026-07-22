@@ -1,6 +1,6 @@
 using System.Buffers;
 using System.IO.Hashing;
-using FluentStorage.Blobs;
+using FluentStorage.Storage;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Shared.Storage;
@@ -110,7 +110,7 @@ public sealed class AssetCacheWriter(
             var storagePath = $"assets/{kindFolder}/{shardA}/{shardB}/{contentHash}{extension}";
 
             var storage = await blobStorageProvider.GetAsync(_options.StorageKey, cancellationToken);
-            if (await storage.ExistsAsync(storagePath))
+            if (await storage.ObjectExists(storagePath))
             {
                 logger.LogInformation(
                     "Asset cache hit for {Url} → {StorageKey}:{StoragePath} (hash {Hash})",
@@ -120,7 +120,7 @@ public sealed class AssetCacheWriter(
 
             await using (var upload = File.OpenRead(tempPath))
             {
-                await storage.WriteAsync(storagePath, upload, append: false, cancellationToken);
+                await storage.SetObject(storagePath, upload, append: false, cancellationToken);
             }
 
             logger.LogInformation(

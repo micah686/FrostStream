@@ -1,5 +1,5 @@
 using Conduit.NATS;
-using FluentStorage.Blobs;
+using FluentStorage.Storage;
 using Microsoft.Extensions.Logging;
 using Shared.Messaging;
 using Shared.Storage;
@@ -51,12 +51,12 @@ public sealed class OrphanCleanupConsumerService(
             ValidateMoveRequest(request);
 
             var storage = await blobStorageProvider.GetAsync(request.StorageKey);
-            await using (var source = await storage.OpenReadAsync(request.OriginalStoragePath))
+            await using (var source = await storage.OpenRead(request.OriginalStoragePath))
             {
-                await storage.WriteAsync(request.OrphanStoragePath, source, append: false);
+                await storage.SetObject(request.OrphanStoragePath, source, append: false);
             }
 
-            await storage.DeleteAsync([request.OriginalStoragePath]);
+            await storage.DeleteObjects([request.OriginalStoragePath]);
 
             logger.LogInformation(
                 "Moved orphan file {StorageKey}:{OriginalPath} to {OrphanPath} for orphan row {OrphanId}.",
@@ -93,7 +93,7 @@ public sealed class OrphanCleanupConsumerService(
             ValidateDeleteRequest(request);
 
             var storage = await blobStorageProvider.GetAsync(request.StorageKey);
-            await storage.DeleteAsync([request.OrphanStoragePath]);
+            await storage.DeleteObjects([request.OrphanStoragePath]);
 
             logger.LogInformation(
                 "Deleted orphan file {StorageKey}:{OrphanPath} for orphan row {OrphanId}.",
@@ -128,17 +128,17 @@ public sealed class OrphanCleanupConsumerService(
             ValidateRestoreRequest(request);
 
             var storage = await blobStorageProvider.GetAsync(request.StorageKey);
-            if (await storage.ExistsAsync(request.OriginalStoragePath))
+            if (await storage.ObjectExists(request.OriginalStoragePath))
             {
                 throw new OrphanCleanupException("conflict", "Destination storage path already exists.");
             }
 
-            await using (var source = await storage.OpenReadAsync(request.OrphanStoragePath))
+            await using (var source = await storage.OpenRead(request.OrphanStoragePath))
             {
-                await storage.WriteAsync(request.OriginalStoragePath, source, append: false);
+                await storage.SetObject(request.OriginalStoragePath, source, append: false);
             }
 
-            await storage.DeleteAsync([request.OrphanStoragePath]);
+            await storage.DeleteObjects([request.OrphanStoragePath]);
 
             logger.LogInformation(
                 "Restored orphan file {StorageKey}:{OrphanPath} to {OriginalPath} for orphan row {OrphanId}.",
@@ -175,7 +175,7 @@ public sealed class OrphanCleanupConsumerService(
             ValidateFileExistsRequest(request);
 
             var storage = await blobStorageProvider.GetAsync(request.StorageKey);
-            var exists = await storage.ExistsAsync(request.StoragePath);
+            var exists = await storage.ObjectExists(request.StoragePath);
             await context.RespondAsync(new OrphanFileExistsResponse { Success = true, Exists = exists });
         }
         catch (Exception ex)
