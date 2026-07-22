@@ -14,7 +14,7 @@
       <PackageReference Include="Google.Cloud.Storage.V1" Version="4.15.0" />
       <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.9" />
       <PackageReference Include="Polly.Core" Version="8.7.0" />
-      <PackageReference Include="System.IO.Hashing" Version="10.0.9" />
+      <PackageReference Include="System.IO.Hashing" Version="10.0.10" />
     </ItemGroup>
 
     <ItemGroup>
