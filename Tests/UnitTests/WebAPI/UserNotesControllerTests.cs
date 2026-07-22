@@ -27,7 +27,7 @@ public sealed class UserNotesControllerTests
 
         bus.RequestAsync<UserNoteUpsertRequestMessage, UserNoteResponseMessage>(
                 UserNoteSubjects.Upsert,
-                Arg.Is<UserNoteUpsertRequestMessage>(x =>
+                Arg.Is<UserNoteUpsertRequestMessage>(x => x != null &&
                     x.OwnerSubject == "micah" &&
                     x.TargetType == "video" &&
                     x.TargetId == mediaGuid.ToString() &&
@@ -53,7 +53,7 @@ public sealed class UserNotesControllerTests
             new UserNoteUpsertRequest { Note = "remember this" },
             CancellationToken.None);
 
-        result.Result.ShouldBeOfType<OkObjectResult>().Value
+        result.Result!.ShouldBeOfType<OkObjectResult>().Value
             .ShouldBeOfType<UserNoteDto>().Note.ShouldBe("remember this");
     }
 
@@ -64,10 +64,10 @@ public sealed class UserNotesControllerTests
         var controller = CreateController(bus, "micah");
 
         var blank = await controller.Search(" ", cancellationToken: CancellationToken.None);
-        blank.Result.ShouldBeOfType<BadRequestObjectResult>().Value.ShouldBe("Query parameter 'q' is required.");
+        blank.Result!.ShouldBeOfType<BadRequestObjectResult>().Value!.ShouldBe("Query parameter 'q' is required.");
 
         var anonymous = await CreateController(bus, subject: null).Search("needle", cancellationToken: CancellationToken.None);
-        anonymous.Result.ShouldBeOfType<UnauthorizedResult>();
+        anonymous.Result!.ShouldBeOfType<UnauthorizedResult>();
 
         await bus.DidNotReceive().RequestAsync<UserNoteSearchRequestMessage, UserNoteSearchResponseMessage>(
             Arg.Any<string>(),
@@ -84,7 +84,7 @@ public sealed class UserNotesControllerTests
 
         bus.RequestAsync<UserNoteSearchRequestMessage, UserNoteSearchResponseMessage>(
                 UserNoteSubjects.Search,
-                Arg.Is<UserNoteSearchRequestMessage>(x =>
+                Arg.Is<UserNoteSearchRequestMessage>(x => x != null &&
                     x.OwnerSubject == "micah" &&
                     x.Query == string.Empty &&
                     x.TargetType == "video" &&
@@ -96,7 +96,7 @@ public sealed class UserNotesControllerTests
 
         var result = await controller.List("video", 25, 50, CancellationToken.None);
 
-        result.Result.ShouldBeOfType<OkObjectResult>().Value
+        result.Result!.ShouldBeOfType<OkObjectResult>().Value
             .ShouldBeOfType<UserNoteSearchResponseMessage>().Success.ShouldBeTrue();
     }
 
@@ -120,7 +120,7 @@ public sealed class UserNotesControllerTests
 
         var result = await controller.Delete("channel", "123", CancellationToken.None);
 
-        result.ShouldBeOfType<NotFoundObjectResult>().Value.ShouldBe("missing");
+        result.ShouldBeOfType<NotFoundObjectResult>().Value!.ShouldBe("missing");
     }
 
     private static UserNotesController CreateController(IMessageBus bus, string? subject)

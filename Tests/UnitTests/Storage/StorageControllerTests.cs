@@ -24,7 +24,7 @@ public class StorageControllerTests
 
         bus.RequestAsync<StorageCreateLocalRequestMessage, StorageOperationResponseMessage>(
                 StorageSubjects.CreateLocalStorage,
-                Arg.Is<StorageCreateLocalRequestMessage>(x =>
+                Arg.Is<StorageCreateLocalRequestMessage>(x => x != null &&
                     x.Key == "local-a" &&
                     x.Description == "desc" &&
                     x.Parameters.Path == "/var/storage" &&
@@ -45,8 +45,8 @@ public class StorageControllerTests
             Path = "/var/storage"
         }, CancellationToken.None);
 
-        result.Result.ShouldBeOfType<OkObjectResult>()
-            .Value.ShouldBeOfType<LocalStorageConfigResponse>()
+        result.Result!.ShouldBeOfType<OkObjectResult>()
+            .Value!.ShouldBeOfType<LocalStorageConfigResponse>()
             .Path.ShouldBe("/mnt/storage");
     }
 
@@ -59,7 +59,7 @@ public class StorageControllerTests
 
         bus.RequestAsync<StorageUpdateStreamingRequestMessage, StorageOperationResponseMessage>(
                 StorageSubjects.UpdateNetworkStorage,
-                Arg.Is<StorageUpdateStreamingRequestMessage>(x =>
+                Arg.Is<StorageUpdateStreamingRequestMessage>(x => x != null &&
                     x.Key == "network-a" &&
                     x.Parameters.Host == "host" &&
                     x.Parameters.Port == 22 &&
@@ -82,7 +82,7 @@ public class StorageControllerTests
             Password = "pw"
         }, CancellationToken.None);
 
-        var payload = result.Result.ShouldBeOfType<OkObjectResult>().Value.ShouldBeOfType<NetworkStorageConfigResponse>();
+        var payload = result.Result!.ShouldBeOfType<OkObjectResult>().Value!.ShouldBeOfType<NetworkStorageConfigResponse>();
         payload.Host.ShouldBe("example.test");
         payload.Port.ShouldBe(22);
         payload.Username.ShouldBe("micah");
@@ -97,7 +97,7 @@ public class StorageControllerTests
 
         bus.RequestAsync<StorageCreateS3CompatibleObjectRequestMessage, StorageOperationResponseMessage>(
                 StorageSubjects.CreateS3CompatibleObjectStorage,
-                Arg.Is<StorageCreateS3CompatibleObjectRequestMessage>(x =>
+                Arg.Is<StorageCreateS3CompatibleObjectRequestMessage>(x => x != null &&
                     x.Key == "s3-a" &&
                     x.Parameters.Provider == S3CompatibleObjectStorageProvider.AwsS3 &&
                     x.Parameters.Region == "us-west-2" &&
@@ -122,7 +122,7 @@ public class StorageControllerTests
             SecretKeyId = "secret"
         }, CancellationToken.None);
 
-        var payload = result.Result.ShouldBeOfType<OkObjectResult>().Value.ShouldBeOfType<S3CompatibleObjectStorageConfigResponse>();
+        var payload = result.Result!.ShouldBeOfType<OkObjectResult>().Value!.ShouldBeOfType<S3CompatibleObjectStorageConfigResponse>();
         payload.Provider.ShouldBe(S3CompatibleObjectStorageProvider.AwsS3);
         payload.HasSessionToken.ShouldBeTrue();
     }
@@ -151,7 +151,7 @@ public class StorageControllerTests
 
         bus.RequestAsync<StorageCreateAzureBlobObjectRequestMessage, StorageOperationResponseMessage>(
                 StorageSubjects.CreateAzureBlobObjectStorage,
-                Arg.Is<StorageCreateAzureBlobObjectRequestMessage>(x =>
+                Arg.Is<StorageCreateAzureBlobObjectRequestMessage>(x => x != null &&
                     x.Key == "azure-a" &&
                     x.Parameters.CredentialMode == AzureBlobCredentialMode.AccountKey &&
                     x.Parameters.AzureAccountKeySecretId == "key"),
@@ -172,8 +172,8 @@ public class StorageControllerTests
             AzureAccountKeySecretId = "key"
         }, CancellationToken.None);
 
-        result.Result.ShouldBeOfType<OkObjectResult>()
-            .Value.ShouldBeOfType<AzureBlobObjectStorageConfigResponse>()
+        result.Result!.ShouldBeOfType<OkObjectResult>()
+            .Value!.ShouldBeOfType<AzureBlobObjectStorageConfigResponse>()
             .AzureAccountName.ShouldBe("account");
     }
 
@@ -202,7 +202,7 @@ public class StorageControllerTests
 
         bus.RequestAsync<StorageCreateGoogleCloudStorageObjectRequestMessage, StorageOperationResponseMessage>(
                 StorageSubjects.CreateGoogleCloudStorageObjectStorage,
-                Arg.Is<StorageCreateGoogleCloudStorageObjectRequestMessage>(x =>
+                Arg.Is<StorageCreateGoogleCloudStorageObjectRequestMessage>(x => x != null &&
                     x.Key == "gcs-a" &&
                     x.Parameters.BucketName == "bucket" &&
                     x.Parameters.GcpCredentialsFilePath == "/tmp/gcp.json"),
@@ -223,8 +223,8 @@ public class StorageControllerTests
             GcpProjectId = "proj"
         }, CancellationToken.None);
 
-        result.Result.ShouldBeOfType<OkObjectResult>()
-            .Value.ShouldBeOfType<GoogleCloudStorageObjectStorageConfigResponse>()
+        result.Result!.ShouldBeOfType<OkObjectResult>()
+            .Value!.ShouldBeOfType<GoogleCloudStorageObjectStorageConfigResponse>()
             .GcpCredentialsFilePath.ShouldBe("/tmp/gcp.json");
     }
 
@@ -248,7 +248,7 @@ public class StorageControllerTests
             Path = "/tmp"
         }, CancellationToken.None);
 
-        result.Result.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status503ServiceUnavailable);
+        result.Result!.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status503ServiceUnavailable);
     }
 
     [Test]
@@ -272,7 +272,7 @@ public class StorageControllerTests
             Path = "/tmp"
         }, CancellationToken.None);
 
-        result.Result.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status503ServiceUnavailable);
+        result.Result!.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status503ServiceUnavailable);
         logger.ReceivedCalls().Any().ShouldBeTrue();
     }
 
@@ -312,7 +312,7 @@ public class StorageControllerTests
                 Path = "/tmp"
             }, CancellationToken.None);
 
-            var actionResult = result.Result.ShouldNotBeNull();
+            var actionResult = result.Result!.ShouldNotBeNull();
             (actionResult as ObjectResult)?.StatusCode.ShouldBe(testCase.Value);
         }
     }
@@ -344,7 +344,7 @@ public class StorageControllerTests
             SecretKeyId = "secret"
         }, CancellationToken.None);
 
-        result.Result.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status502BadGateway);
+        result.Result!.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status502BadGateway);
     }
 
     [Test]
@@ -355,14 +355,14 @@ public class StorageControllerTests
 
         bus.RequestAsync<StorageDeleteRequestMessage, StorageOperationResponseMessage>(
                 StorageSubjects.DeleteStorage,
-                Arg.Is<StorageDeleteRequestMessage>(x => x.Key == "present"),
+                Arg.Is<StorageDeleteRequestMessage>(x => x != null && x.Key == "present"),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new StorageOperationResponseMessage { Success = true });
 
         bus.RequestAsync<StorageDeleteRequestMessage, StorageOperationResponseMessage>(
                 StorageSubjects.DeleteStorage,
-                Arg.Is<StorageDeleteRequestMessage>(x => x.Key == "missing"),
+                Arg.Is<StorageDeleteRequestMessage>(x => x != null && x.Key == "missing"),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new StorageOperationResponseMessage
@@ -403,8 +403,8 @@ public class StorageControllerTests
 
         var empty = await controller.ListStorage(CancellationToken.None);
         var populated = await controller.ListStorage(CancellationToken.None);
-        var emptyItems = (IReadOnlyCollection<StorageConfigDto>)empty.Result.ShouldBeOfType<OkObjectResult>().Value!;
-        var populatedItems = (IReadOnlyCollection<StorageConfigDto>)populated.Result.ShouldBeOfType<OkObjectResult>().Value!;
+        var emptyItems = (IReadOnlyCollection<StorageConfigDto>)empty.Result!.ShouldBeOfType<OkObjectResult>().Value!;
+        var populatedItems = (IReadOnlyCollection<StorageConfigDto>)populated.Result!.ShouldBeOfType<OkObjectResult>().Value!;
 
         emptyItems.Count.ShouldBe(0);
         populatedItems.Count.ShouldBe(1);
@@ -419,22 +419,22 @@ public class StorageControllerTests
 
         bus.RequestAsync<StorageGetRequestMessage, StorageOperationResponseMessage>(
                 StorageSubjects.GetStorage,
-                Arg.Is<StorageGetRequestMessage>(x => x.Key == "local-a"),
+                Arg.Is<StorageGetRequestMessage>(x => x != null && x.Key == "local-a"),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new StorageOperationResponseMessage { Success = true, Entity = dto });
         bus.RequestAsync<StorageGetRequestMessage, StorageOperationResponseMessage>(
                 StorageSubjects.GetStorage,
-                Arg.Is<StorageGetRequestMessage>(x => x.Key == "broken"),
+                Arg.Is<StorageGetRequestMessage>(x => x != null && x.Key == "broken"),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new StorageOperationResponseMessage { Success = true, Entity = null });
 
         var ok = await controller.GetStorage("local-a", CancellationToken.None);
-        ok.Result.ShouldBeOfType<OkObjectResult>().Value.ShouldBeOfType<StorageConfigDto>().Key.ShouldBe("local-a");
+        ok.Result!.ShouldBeOfType<OkObjectResult>().Value!.ShouldBeOfType<StorageConfigDto>().Key.ShouldBe("local-a");
 
         var broken = await controller.GetStorage("broken", CancellationToken.None);
-        broken.Result.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status502BadGateway);
+        broken.Result!.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status502BadGateway);
     }
 
     [Test]
@@ -446,7 +446,7 @@ public class StorageControllerTests
 
         bus.RequestAsync<StorageUpdateLocalRequestMessage, StorageOperationResponseMessage>(
                 StorageSubjects.UpdateLocalStorage,
-                Arg.Is<StorageUpdateLocalRequestMessage>(x =>
+                Arg.Is<StorageUpdateLocalRequestMessage>(x => x != null &&
                     x.Key == "local-a" &&
                     x.Description == "updated" &&
                     x.Parameters.Protocol == LocalStorageProtocol.Local &&
@@ -462,7 +462,7 @@ public class StorageControllerTests
             Path = "/mnt/updated"
         }, CancellationToken.None);
 
-        result.Result.ShouldBeOfType<OkObjectResult>().Value
+        result.Result!.ShouldBeOfType<OkObjectResult>().Value
             .ShouldBeOfType<LocalStorageConfigResponse>().Key.ShouldBe("local-a");
     }
 }

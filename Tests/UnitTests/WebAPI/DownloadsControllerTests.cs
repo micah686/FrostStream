@@ -34,14 +34,14 @@ public sealed class DownloadsControllerTests
             CookieProfileKey = "member-cookie"
         }, CancellationToken.None);
 
-        var payload = result.Result.ShouldBeOfType<AcceptedResult>().Value
+        var payload = result.Result!.ShouldBeOfType<AcceptedResult>().Value
             .ShouldBeOfType<DownloadRequestResponse>();
         payload.JobId.ShouldNotBe(Guid.Empty);
         payload.CorrelationId.ShouldNotBe(Guid.Empty);
 
         await publisher.Received(1).PublishAsync(
             DownloadSubjects.GroupRequested,
-            Arg.Is<DownloadGroupRequested>(g =>
+            Arg.Is<DownloadGroupRequested>(g => g != null &&
                 g.Kind == DownloadGroupKind.Direct &&
                 g.GroupId == payload.CorrelationId &&
                 g.CorrelationId == payload.CorrelationId &&
@@ -62,7 +62,7 @@ public sealed class DownloadsControllerTests
                 g.DirectRequest.AudioFormat == null &&
                 g.DirectRequest.PresetKey == null &&
                 g.DirectRequest.CookieSecretPath == "cookies/users/unit_test_user/member-cookie"),
-            Arg.Is<string>(x => x.Length == 32),
+            Arg.Is<string>(x => x != null && x.Length == 32),
             null,
             Arg.Any<CancellationToken>());
     }
@@ -81,7 +81,7 @@ public sealed class DownloadsControllerTests
 
         await publisher.Received(1).PublishAsync(
             DownloadSubjects.GroupRequested,
-            Arg.Is<DownloadGroupRequested>(g =>
+            Arg.Is<DownloadGroupRequested>(g => g != null &&
                 g.DirectRequest != null &&
                 g.DirectRequest.SourceUrl == "https://example.test/audio" &&
                 g.DirectRequest.StorageKey == "storage-a" &&
@@ -113,7 +113,7 @@ public sealed class DownloadsControllerTests
 
         await publisher.Received(1).PublishAsync(
             DownloadSubjects.GroupRequested,
-            Arg.Is<DownloadGroupRequested>(g =>
+            Arg.Is<DownloadGroupRequested>(g => g != null &&
                 g.DirectRequest != null &&
                 g.DirectRequest.SourceUrl == "https://example.test/video" &&
                 g.DirectRequest.YtDlpOptions != null &&
@@ -142,7 +142,7 @@ public sealed class DownloadsControllerTests
 
         await publisher.Received(1).PublishAsync(
             DownloadSubjects.GroupRequested,
-            Arg.Is<DownloadGroupRequested>(g =>
+            Arg.Is<DownloadGroupRequested>(g => g != null &&
                 g.DirectRequest != null &&
                 g.DirectRequest.MediaKind == MediaKind.Audio &&
                 g.DirectRequest.AudioFormat == AudioConversionFormat.Mp3 &&
@@ -168,7 +168,7 @@ public sealed class DownloadsControllerTests
 
         await publisher.Received(1).PublishAsync(
             DownloadSubjects.GroupRequested,
-            Arg.Is<DownloadGroupRequested>(g =>
+            Arg.Is<DownloadGroupRequested>(g => g != null &&
                 g.DirectRequest != null &&
                 g.DirectRequest.MediaKind == MediaKind.Video &&
                 g.DirectRequest.AudioFormat == null &&
@@ -198,9 +198,9 @@ public sealed class DownloadsControllerTests
             StorageKey = "storage-a"
         }, CancellationToken.None);
 
-        var objectResult = result.Result.ShouldBeOfType<ObjectResult>();
+        var objectResult = result.Result!.ShouldBeOfType<ObjectResult>();
         objectResult.StatusCode.ShouldBe(StatusCodes.Status502BadGateway);
-        objectResult.Value.ShouldBeOfType<ProblemDetails>().Title.ShouldBe("Failed to submit download request");
+        objectResult.Value!.ShouldBeOfType<ProblemDetails>().Title.ShouldBe("Failed to submit download request");
     }
 
     [Test]
@@ -215,8 +215,8 @@ public sealed class DownloadsControllerTests
             StorageKey = "storage-a"
         }, CancellationToken.None);
 
-        var badRequest = result.Result.ShouldBeOfType<BadRequestObjectResult>();
-        badRequest.Value.ShouldBeOfType<ProblemDetails>().Title.ShouldBe("Invalid source URL");
+        var badRequest = result.Result!.ShouldBeOfType<BadRequestObjectResult>();
+        badRequest.Value!.ShouldBeOfType<ProblemDetails>().Title.ShouldBe("Invalid source URL");
         await publisher.DidNotReceiveWithAnyArgs().PublishAsync(
             default!,
             default(DownloadGroupRequested)!,
@@ -237,7 +237,7 @@ public sealed class DownloadsControllerTests
             StorageKey = "storage-a"
         }, CancellationToken.None);
 
-        result.Result.ShouldBeOfType<BadRequestObjectResult>();
+        result.Result!.ShouldBeOfType<BadRequestObjectResult>();
         await publisher.DidNotReceiveWithAnyArgs().PublishAsync(
             default!,
             default(DownloadGroupRequested)!,
@@ -270,10 +270,10 @@ public sealed class DownloadsControllerTests
             CancellationToken.None);
 
         var accepted = result.ShouldBeOfType<AcceptedResult>();
-        accepted.Value.ShouldBeOfType<StopDownloadApiResponse>().Status.ShouldBe(DownloadJobStatus.Stopping);
+        accepted.Value!.ShouldBeOfType<StopDownloadApiResponse>().Status.ShouldBe(DownloadJobStatus.Stopping);
         await messageBus.Received(1).RequestAsync<StopDownloadRequest, StopDownloadResponse>(
             DownloadSubjects.StopDownloadRequest,
-            Arg.Is<StopDownloadRequest>(x =>
+            Arg.Is<StopDownloadRequest>(x => x != null &&
                 x.JobId == jobId &&
                 x.RequestedBy == "unit_test_user" &&
                 x.Reason == "clicked stop"),

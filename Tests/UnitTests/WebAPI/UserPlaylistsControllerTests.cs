@@ -47,11 +47,11 @@ public sealed class UserPlaylistsControllerTests
             Description = "private queue"
         }, CancellationToken.None);
 
-        var created = result.Result.ShouldBeOfType<CreatedAtActionResult>();
-        created.Value.ShouldBeOfType<UserPlaylistDto>().PlaylistId.ShouldBe(playlistId);
+        var created = result.Result!.ShouldBeOfType<CreatedAtActionResult>();
+        created.Value!.ShouldBeOfType<UserPlaylistDto>().PlaylistId.ShouldBe(playlistId);
         await bus.Received(1).RequestAsync<UserPlaylistCreateRequestMessage, UserPlaylistResponseMessage>(
             PlaylistSubjects.UserPlaylistCreate,
-            Arg.Is<UserPlaylistCreateRequestMessage>(x =>
+            Arg.Is<UserPlaylistCreateRequestMessage>(x => x != null &&
                 x.OwnerSubject == "unit_test_user" &&
                 x.Name == "Watch later" &&
                 x.Description == "private queue"),
@@ -66,7 +66,7 @@ public sealed class UserPlaylistsControllerTests
         var playlistId = Guid.NewGuid();
         bus.RequestAsync<UserPlaylistGetRequestMessage, UserPlaylistResponseMessage>(
                 PlaylistSubjects.UserPlaylistGet,
-                Arg.Is<UserPlaylistGetRequestMessage>(x =>
+                Arg.Is<UserPlaylistGetRequestMessage>(x => x != null &&
                     x.OwnerSubject == "unit_test_user" &&
                     x.PlaylistId == playlistId),
                 Arg.Any<TimeSpan>(),
@@ -81,7 +81,7 @@ public sealed class UserPlaylistsControllerTests
 
         var result = await controller.Get(playlistId, CancellationToken.None);
 
-        result.Result.ShouldBeOfType<NotFoundObjectResult>().Value.ShouldBe("missing");
+        result.Result!.ShouldBeOfType<NotFoundObjectResult>().Value!.ShouldBe("missing");
     }
 
     [Test]
@@ -91,7 +91,7 @@ public sealed class UserPlaylistsControllerTests
 
         var result = await controller.Create(new UserPlaylistCreateRequest { Name = "Private" }, CancellationToken.None);
 
-        result.Result.ShouldBeOfType<UnauthorizedResult>();
+        result.Result!.ShouldBeOfType<UnauthorizedResult>();
     }
 
     private static UserPlaylistsController CreateController(IMessageBus bus, string? subject = "unit_test_user")

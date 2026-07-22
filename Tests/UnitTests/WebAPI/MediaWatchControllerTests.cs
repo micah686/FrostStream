@@ -27,7 +27,7 @@ public sealed class MediaWatchControllerTests
 
         bus.RequestAsync<MediaStreamResolveRequestMessage, MediaStreamResolveResponseMessage>(
                 MediaStreamSubjects.Resolve,
-                Arg.Is<MediaStreamResolveRequestMessage>(request =>
+                Arg.Is<MediaStreamResolveRequestMessage>(request => request != null &&
                     request.MediaGuid == mediaGuid &&
                     request.StorageKey == "storage-a" &&
                     request.Version == 2),
@@ -97,7 +97,7 @@ public sealed class MediaWatchControllerTests
             });
 
         var missing = await controller.GetWatch(mediaGuid);
-        missing.ShouldBeOfType<NotFoundObjectResult>().Value.ShouldBe("missing");
+        missing.ShouldBeOfType<NotFoundObjectResult>().Value!.ShouldBe("missing");
     }
 
     [Test]
@@ -109,7 +109,7 @@ public sealed class MediaWatchControllerTests
 
         bus.RequestAsync<AudioRenditionResolveRequest, AudioRenditionResolveResponse>(
                 AudioRenditionSubjects.Resolve,
-                Arg.Is<AudioRenditionResolveRequest>(request =>
+                Arg.Is<AudioRenditionResolveRequest>(request => request != null &&
                     request.MediaGuid == mediaGuid &&
                     request.CreateIfMissing),
                 Arg.Any<TimeSpan>(),
@@ -223,7 +223,7 @@ public sealed class MediaWatchControllerTests
 
         var controller = CreateController(bus, provider);
         var missing = await controller.GetThumbnail(mediaGuid, CancellationToken.None);
-        missing.ShouldBeOfType<NotFoundObjectResult>().Value.ShouldBe("missing");
+        missing.ShouldBeOfType<NotFoundObjectResult>().Value!.ShouldBe("missing");
 
         bus.RequestAsync<MediaAccessCheckRequestMessage, MediaAccessCheckResponseMessage>(
                 MediaAccessSubjects.Check,
@@ -275,7 +275,7 @@ public sealed class MediaWatchControllerTests
     {
         bus.RequestAsync<MediaStreamResolveRequestMessage, MediaStreamResolveResponseMessage>(
                 MediaStreamSubjects.Resolve,
-                Arg.Is<MediaStreamResolveRequestMessage>(request => request.MediaGuid == mediaGuid),
+                Arg.Is<MediaStreamResolveRequestMessage>(request => request != null && request.MediaGuid == mediaGuid),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new MediaStreamResolveResponseMessage
@@ -305,7 +305,7 @@ public sealed class MediaWatchControllerTests
     {
         bus.RequestAsync<MediaThumbnailResolveRequestMessage, MediaThumbnailResolveResponseMessage>(
                 MediaStreamSubjects.ResolveThumbnail,
-                Arg.Is<MediaThumbnailResolveRequestMessage>(request => request.MediaGuid == mediaGuid),
+                Arg.Is<MediaThumbnailResolveRequestMessage>(request => request != null && request.MediaGuid == mediaGuid),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new MediaThumbnailResolveResponseMessage

@@ -43,8 +43,8 @@ public sealed class AuthControllerTests
 
         var result = await controller.SyncSession(CancellationToken.None);
 
-        var ok = result.Result.ShouldBeOfType<OkObjectResult>();
-        var body = ok.Value.ShouldBeOfType<AuthSessionResponse>();
+        var ok = result.Result!.ShouldBeOfType<OkObjectResult>();
+        var body = ok.Value!.ShouldBeOfType<AuthSessionResponse>();
         body.UserId.ShouldBe(userId);
         body.Subject.ShouldBe("auth0|abc");
         body.Groups.ShouldBe(["admins", "viewers"]);
@@ -71,7 +71,7 @@ public sealed class AuthControllerTests
 
         var result = await controller.SyncSession(CancellationToken.None);
 
-        result.Result.ShouldBeOfType<UnauthorizedResult>();
+        result.Result!.ShouldBeOfType<UnauthorizedResult>();
         tupleWriter.Calls.ShouldBe(0);
         await bus.DidNotReceiveWithAnyArgs().RequestAsync<UserSessionUpsertRequestMessage, UserSessionUpsertResponseMessage>(
             default!, default!, default, default);

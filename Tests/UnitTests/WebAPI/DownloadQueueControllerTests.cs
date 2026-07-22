@@ -45,7 +45,7 @@ public sealed class DownloadQueueControllerTests
             createdFrom: null, createdTo: null, q: null,
             cancellationToken: CancellationToken.None);
 
-        var payload = result.Result.ShouldBeOfType<OkObjectResult>().Value.ShouldBeOfType<DownloadQueueListResponse>();
+        var payload = result.Result!.ShouldBeOfType<OkObjectResult>().Value!.ShouldBeOfType<DownloadQueueListResponse>();
         payload.TotalCount.ShouldBe(1);
         payload.NextCursor.ShouldBe("next");
         payload.Items.ShouldHaveSingleItem().JobId.ShouldBe(job.JobId);
@@ -74,7 +74,7 @@ public sealed class DownloadQueueControllerTests
 
         await messageBus.Received(1).RequestAsync<DownloadQueueListRequest, DownloadQueueListResponse>(
             DownloadQueueSubjects.List,
-            Arg.Is<DownloadQueueListRequest>(x =>
+            Arg.Is<DownloadQueueListRequest>(x => x != null &&
                 x.State == DownloadJobState.DownloadQueued &&
                 x.SourceKind == DownloadSourceKind.Playlist &&
                 x.RequestedBy == "alice" &&
@@ -98,7 +98,7 @@ public sealed class DownloadQueueControllerTests
             sort: "bogus",
             cancellationToken: CancellationToken.None);
 
-        result.Result.ShouldBeOfType<BadRequestObjectResult>();
+        result.Result!.ShouldBeOfType<BadRequestObjectResult>();
     }
 
     [Test]
@@ -115,7 +115,7 @@ public sealed class DownloadQueueControllerTests
             createdFrom: null, createdTo: null, q: null,
             cancellationToken: CancellationToken.None);
 
-        result.Result.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status502BadGateway);
+        result.Result!.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status502BadGateway);
     }
 
     [Test]
@@ -125,7 +125,7 @@ public sealed class DownloadQueueControllerTests
         var jobId = Guid.NewGuid();
         messageBus.RequestAsync<DownloadQueueGetRequest, DownloadQueueGetResponse>(
                 DownloadQueueSubjects.Get,
-                Arg.Is<DownloadQueueGetRequest>(x => x.JobId == jobId),
+                Arg.Is<DownloadQueueGetRequest>(x => x != null && x.JobId == jobId),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new DownloadQueueGetResponse
@@ -137,7 +137,7 @@ public sealed class DownloadQueueControllerTests
 
         var result = await controller.Get(jobId, CancellationToken.None);
 
-        result.Result.ShouldBeOfType<OkObjectResult>().Value.ShouldBeOfType<DownloadQueueJobDto>().JobId.ShouldBe(jobId);
+        result.Result!.ShouldBeOfType<OkObjectResult>().Value!.ShouldBeOfType<DownloadQueueJobDto>().JobId.ShouldBe(jobId);
     }
 
     [Test]
@@ -151,7 +151,7 @@ public sealed class DownloadQueueControllerTests
 
         var result = await controller.Get(Guid.NewGuid(), CancellationToken.None);
 
-        result.Result.ShouldBeOfType<NotFoundObjectResult>();
+        result.Result!.ShouldBeOfType<NotFoundObjectResult>();
     }
 
     [Test]
@@ -165,7 +165,7 @@ public sealed class DownloadQueueControllerTests
 
         var result = await controller.History(Guid.NewGuid(), CancellationToken.None);
 
-        result.Result.ShouldBeOfType<NotFoundObjectResult>();
+        result.Result!.ShouldBeOfType<NotFoundObjectResult>();
     }
 
     [Test]
@@ -180,7 +180,7 @@ public sealed class DownloadQueueControllerTests
 
         var result = await controller.History(Guid.NewGuid(), CancellationToken.None);
 
-        result.Result.ShouldBeOfType<OkObjectResult>().Value
+        result.Result!.ShouldBeOfType<OkObjectResult>().Value
             .ShouldBeAssignableTo<IReadOnlyList<DownloadQueueHistoryEntryDto>>()!
             .ShouldHaveSingleItem().EventName.ShouldBe(nameof(DownloadRequested));
     }
@@ -204,7 +204,7 @@ public sealed class DownloadQueueControllerTests
             .ShouldBeOfType<StopDownloadApiResponse>().Status.ShouldBe(DownloadJobStatus.Stopping);
         await messageBus.Received(1).RequestAsync<StopDownloadRequest, StopDownloadResponse>(
             DownloadSubjects.StopDownloadRequest,
-            Arg.Is<StopDownloadRequest>(x => x.JobId == jobId && x.RequestedBy == "unit_test_user" && x.Reason == "stop"),
+            Arg.Is<StopDownloadRequest>(x => x != null && x.JobId == jobId && x.RequestedBy == "unit_test_user" && x.Reason == "stop"),
             Arg.Any<TimeSpan>(),
             Arg.Any<CancellationToken>());
     }
@@ -245,7 +245,7 @@ public sealed class DownloadQueueControllerTests
         result.ShouldBeOfType<AcceptedResult>();
         await messageBus.Received(1).RequestAsync<StartDownloadRequest, StartDownloadResponse>(
             DownloadSubjects.StartDownloadRequest,
-            Arg.Is<StartDownloadRequest>(x => x.JobId == jobId && x.RequestedBy == "unit_test_user"),
+            Arg.Is<StartDownloadRequest>(x => x != null && x.JobId == jobId && x.RequestedBy == "unit_test_user"),
             Arg.Any<TimeSpan>(),
             Arg.Any<CancellationToken>());
     }

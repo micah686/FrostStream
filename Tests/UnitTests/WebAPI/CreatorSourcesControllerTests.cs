@@ -27,7 +27,7 @@ public sealed class CreatorSourcesControllerTests
 
         bus.RequestAsync<CreatorSourceCreateRequestMessage, CreatorSourceOperationResponseMessage>(
                 CreatorDiscoverySubjects.CreateSource,
-                Arg.Is<CreatorSourceCreateRequestMessage>(x =>
+                Arg.Is<CreatorSourceCreateRequestMessage>(x => x != null &&
                     x.Platform == "youtube" &&
                     x.SourceType == CreatorSourceType.Videos &&
                     x.SourceUrl == "https://example.test/@creator" &&
@@ -61,7 +61,7 @@ public sealed class CreatorSourcesControllerTests
             ProviderQueryLimits = YouTubeLimits(videos: 125, streams: 25, shorts: 75)
         }, CancellationToken.None);
 
-        var payload = result.Result.ShouldBeOfType<OkObjectResult>().Value
+        var payload = result.Result!.ShouldBeOfType<OkObjectResult>().Value
             .ShouldBeOfType<CreatorSourceResponse>();
         payload.Id.ShouldBe(42);
         payload.Platform.ShouldBe("youtube");
@@ -87,7 +87,7 @@ public sealed class CreatorSourcesControllerTests
 
         var result = await controller.List(CancellationToken.None);
 
-        var payload = result.Result.ShouldBeOfType<OkObjectResult>().Value
+        var payload = result.Result!.ShouldBeOfType<OkObjectResult>().Value
             .ShouldBeAssignableTo<IReadOnlyCollection<CreatorSourceResponse>>();
         payload.ShouldNotBeNull();
         payload.Count.ShouldBe(2);
@@ -101,7 +101,7 @@ public sealed class CreatorSourcesControllerTests
 
         bus.RequestAsync<CreatorSourceGetRequestMessage, CreatorSourceOperationResponseMessage>(
                 CreatorDiscoverySubjects.GetSource,
-                Arg.Is<CreatorSourceGetRequestMessage>(x => x.Id == 99),
+                Arg.Is<CreatorSourceGetRequestMessage>(x => x != null && x.Id == 99),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new CreatorSourceOperationResponseMessage
@@ -113,7 +113,7 @@ public sealed class CreatorSourcesControllerTests
 
         var result = await controller.Get(99, CancellationToken.None);
 
-        result.Result.ShouldBeOfType<NotFoundObjectResult>().Value.ShouldBe("missing");
+        result.Result!.ShouldBeOfType<NotFoundObjectResult>().Value!.ShouldBe("missing");
     }
 
     [Test]
@@ -125,7 +125,7 @@ public sealed class CreatorSourcesControllerTests
 
         bus.RequestAsync<CreatorSourceGetRequestMessage, CreatorSourceOperationResponseMessage>(
                 CreatorDiscoverySubjects.GetSource,
-                Arg.Is<CreatorSourceGetRequestMessage>(x => x.Id == 42),
+                Arg.Is<CreatorSourceGetRequestMessage>(x => x != null && x.Id == 42),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new CreatorSourceOperationResponseMessage
@@ -137,17 +137,17 @@ public sealed class CreatorSourcesControllerTests
         var result = await controller.RefreshAssets(42, force: true, CancellationToken.None);
 
         var accepted = result.ShouldBeOfType<AcceptedResult>();
-        accepted.Value.ShouldNotBeNull();
+        accepted.Value!.ShouldNotBeNull();
         await publisher.Received(1).PublishAsync(
             BackgroundJobSubjects.ChannelAssetRefreshRequest,
-            Arg.Is<ChannelAssetRefreshRequested>(x =>
+            Arg.Is<ChannelAssetRefreshRequested>(x => x != null &&
                 x.ScheduleKey == "manual" &&
                 x.TaskType == "channel_asset_refresh" &&
                 x.DueWindowUtc == Now &&
                 x.OccurredAt == Now &&
                 x.TargetSourceId == 42 &&
                 x.Force),
-            Arg.Is<string>(x => x.StartsWith("manual:42:", StringComparison.Ordinal)),
+            Arg.Is<string>(x => x != null && x.StartsWith("manual:42:", StringComparison.Ordinal)),
             null,
             Arg.Any<CancellationToken>());
     }
@@ -161,7 +161,7 @@ public sealed class CreatorSourcesControllerTests
 
         bus.RequestAsync<CreatorSourceCreateOrReuseRequestMessage, CreatorSourceOperationResponseMessage>(
                 CreatorDiscoverySubjects.CreateOrReuseSource,
-                Arg.Is<CreatorSourceCreateOrReuseRequestMessage>(x =>
+                Arg.Is<CreatorSourceCreateOrReuseRequestMessage>(x => x != null &&
                     x.Platform == "youtube" &&
                     x.SourceType == CreatorSourceType.Videos &&
                     x.SourceUrl == "https://example.test/@creator/videos" &&
@@ -184,7 +184,7 @@ public sealed class CreatorSourcesControllerTests
             ProviderQueryLimits = YouTubeLimits(videos: 100, streams: 20, shorts: 40)
         }, CancellationToken.None);
 
-        var payload = result.Result.ShouldBeOfType<AcceptedResult>().Value
+        var payload = result.Result!.ShouldBeOfType<AcceptedResult>().Value
             .ShouldBeOfType<ChannelDownloadResponse>();
         payload.SourceId.ShouldBe(42);
         payload.CorrelationId.ShouldNotBe(Guid.Empty);
@@ -193,7 +193,7 @@ public sealed class CreatorSourcesControllerTests
 
         await publisher.Received(1).PublishAsync(
             DownloadSubjects.GroupRequested,
-            Arg.Is<DownloadGroupRequested>(g =>
+            Arg.Is<DownloadGroupRequested>(g => g != null &&
                 g.Kind == DownloadGroupKind.Channel &&
                 g.GroupId == payload.CorrelationId &&
                 g.CorrelationId == payload.CorrelationId &&
@@ -212,7 +212,7 @@ public sealed class CreatorSourcesControllerTests
                 g.ChannelRequest.ProviderQueryLimits.GetLimit("youtube", CreatorSourceType.Videos) == 100 &&
                 g.ChannelRequest.ProviderQueryLimits.GetLimit("youtube", CreatorSourceType.Streams) == 20 &&
                 g.ChannelRequest.ProviderQueryLimits.GetLimit("youtube", CreatorSourceType.Shorts) == 40),
-            Arg.Is<string>(x => x.Length == 32),
+            Arg.Is<string>(x => x != null && x.Length == 32),
             null,
             Arg.Any<CancellationToken>());
     }
@@ -255,7 +255,7 @@ public sealed class CreatorSourcesControllerTests
 
         bus.RequestAsync<CreatorSourceDeleteRequestMessage, CreatorSourceOperationResponseMessage>(
                 CreatorDiscoverySubjects.DeleteSource,
-                Arg.Is<CreatorSourceDeleteRequestMessage>(x => x.Id == 42),
+                Arg.Is<CreatorSourceDeleteRequestMessage>(x => x != null && x.Id == 42),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new CreatorSourceOperationResponseMessage
@@ -267,7 +267,7 @@ public sealed class CreatorSourcesControllerTests
 
         var result = await controller.Delete(42, CancellationToken.None);
 
-        result.ShouldBeOfType<BadRequestObjectResult>().Value.ShouldBe("invalid");
+        result.ShouldBeOfType<BadRequestObjectResult>().Value!.ShouldBe("invalid");
     }
 
     [Test]
@@ -283,7 +283,7 @@ public sealed class CreatorSourcesControllerTests
             SourceUrl = "http://[fe80::1]/@creator"
         }, CancellationToken.None);
 
-        result.Result.ShouldBeOfType<BadRequestObjectResult>();
+        result.Result!.ShouldBeOfType<BadRequestObjectResult>();
         await bus.DidNotReceiveWithAnyArgs()
             .RequestAsync<CreatorSourceCreateRequestMessage, CreatorSourceOperationResponseMessage>(
                 default!,

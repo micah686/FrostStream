@@ -25,7 +25,7 @@ public sealed class SchedulesControllerTests
 
         bus.RequestAsync<ScheduleCreateRequestMessage, ScheduleOperationResponseMessage>(
                 ScheduleSubjects.Create,
-                Arg.Is<ScheduleCreateRequestMessage>(x =>
+                Arg.Is<ScheduleCreateRequestMessage>(x => x != null &&
                     x.Key == "daily-refresh" &&
                     x.TaskType == "channel_asset_refresh" &&
                     x.Cron == "0 0 3 ? * *" &&
@@ -51,7 +51,7 @@ public sealed class SchedulesControllerTests
             CatchupPolicy = ScheduleCatchupPolicy.Skip
         }, CancellationToken.None);
 
-        var payload = result.Result.ShouldBeOfType<OkObjectResult>().Value
+        var payload = result.Result!.ShouldBeOfType<OkObjectResult>().Value
             .ShouldBeOfType<ScheduledTaskResponse>();
         payload.Key.ShouldBe("daily-refresh");
         payload.Cron.ShouldBe("0 0 3 ? * *");
@@ -65,7 +65,7 @@ public sealed class SchedulesControllerTests
 
         bus.RequestAsync<ScheduleDeleteRequestMessage, ScheduleOperationResponseMessage>(
                 ScheduleSubjects.Delete,
-                Arg.Is<ScheduleDeleteRequestMessage>(x => x.Key == "missing"),
+                Arg.Is<ScheduleDeleteRequestMessage>(x => x != null && x.Key == "missing"),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new ScheduleOperationResponseMessage
@@ -77,7 +77,7 @@ public sealed class SchedulesControllerTests
 
         var result = await controller.Delete("missing", CancellationToken.None);
 
-        result.ShouldBeOfType<NotFoundObjectResult>().Value.ShouldBe("missing");
+        result.ShouldBeOfType<NotFoundObjectResult>().Value!.ShouldBe("missing");
     }
 
     [Test]

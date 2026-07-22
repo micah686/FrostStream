@@ -35,7 +35,7 @@ public sealed class MetadataAdminControllerOrphanTests
 
         bus.RequestAsync<OrphanCleanupListRequest, OrphanCleanupListResponse>(
                 OrphanCleanupSubjects.AdminList,
-                Arg.Is<OrphanCleanupListRequest>(x =>
+                Arg.Is<OrphanCleanupListRequest>(x => x != null &&
                     x.Kind == "media_without_metadata" &&
                     x.State == "moved" &&
                     x.PageSize == 25 &&
@@ -46,7 +46,7 @@ public sealed class MetadataAdminControllerOrphanTests
 
         var result = await controller.ListOrphans("media_without_metadata", "moved", 25, 2);
 
-        var payload = result.Result.ShouldBeOfType<OkObjectResult>().Value.ShouldNotBeNull()
+        var payload = result.Result!.ShouldBeOfType<OkObjectResult>().Value!.ShouldNotBeNull()
             .ShouldBeAssignableTo<IReadOnlyList<OrphanCleanupItemDto>>();
         payload.Single().Id.ShouldBe(10);
     }
@@ -58,7 +58,7 @@ public sealed class MetadataAdminControllerOrphanTests
         var controller = CreateController(bus);
         bus.RequestAsync<RestoreOrphanRequest, RestoreOrphanResponse>(
                 OrphanCleanupSubjects.AdminRestoreFile,
-                Arg.Is<RestoreOrphanRequest>(x => x.OrphanId == 10),
+                Arg.Is<RestoreOrphanRequest>(x => x != null && x.OrphanId == 10),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new RestoreOrphanResponse { Success = true });
@@ -134,7 +134,7 @@ public sealed class MetadataAdminControllerOrphanTests
 
         var result = await controller.GetOrphanCleanupPolicy(CancellationToken.None);
 
-        var policy = result.ShouldBeOfType<OkObjectResult>().Value.ShouldBeOfType<OrphanCleanupPolicyDto>();
+        var policy = result.ShouldBeOfType<OkObjectResult>().Value!.ShouldBeOfType<OrphanCleanupPolicyDto>();
         policy.FileMoveAfterDays.ShouldBe(7);
         policy.FilePurgeAfterDays.ShouldBe(90);
         policy.MetadataDeleteAfterDays.ShouldBe(180);
@@ -147,7 +147,7 @@ public sealed class MetadataAdminControllerOrphanTests
         var controller = CreateController(bus);
         bus.RequestAsync<OrphanCleanupPolicyUpdateRequest, OrphanCleanupPolicyResponse>(
                 OrphanCleanupSubjects.AdminUpdatePolicy,
-                Arg.Is<OrphanCleanupPolicyUpdateRequest>(x =>
+                Arg.Is<OrphanCleanupPolicyUpdateRequest>(x => x != null &&
                     x.Enabled &&
                     x.FileMoveAfterDays == 30 &&
                     x.FilePurgeAfterDays == 60 &&

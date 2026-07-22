@@ -14,7 +14,7 @@
       <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.10" />
       <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
       <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.10" />
-      <PackageReference Include="NodaTime" Version="3.3.2" />
+      <PackageReference Include="NodaTime" Version="3.3.3" />
       <PackageReference Include="Polly.Core" Version="8.7.0" />
       <PackageReference Include="System.IO.Hashing" Version="10.0.10" />
       <PackageReference Include="VaultSharp" Version="1.17.5.1" />
