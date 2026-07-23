@@ -17,7 +17,7 @@ namespace Worker.Services;
 
 public sealed class StorageEnumerator(
     IStorageConfigClient storageConfigClient,
-    IBlobStorageProvider fallbackBlobStorageProvider,
+    IStoreProvider fallbackStoreProvider,
     ILogger<StorageEnumerator> logger) : IStorageEnumerator
 {
     public async IAsyncEnumerable<string> EnumerateFilePathsAsync(
@@ -46,6 +46,16 @@ public sealed class StorageEnumerator(
                 }
                 yield break;
 
+            case StreamingNetworkStorageParameters
+            {
+                Protocol: NetworkStorageProtocol.Nfs or NetworkStorageProtocol.Smb or NetworkStorageProtocol.Cifs
+            } mountedShare:
+                await foreach (var path in EnumerateMountedShareAsync(mountedShare, cancellationToken))
+                {
+                    yield return path;
+                }
+                yield break;
+
             case S3CompatibleObjectStorageParameters s3:
                 await foreach (var path in EnumerateS3Async(s3, cancellationToken))
                 {
@@ -69,7 +79,7 @@ public sealed class StorageEnumerator(
 
             default:
                 logger.LogWarning(
-                    "Filesystem rescan storage listing for {StorageKey} method {Method} uses FluentStorage ListAsync fallback, which materializes the backend listing before upload.",
+                    "Filesystem rescan storage listing for {StorageKey} method {Method} uses FluentStorage ListObjects fallback, which materializes the backend listing before upload.",
                     storageKey,
                     config.Method);
 
@@ -89,6 +99,30 @@ public sealed class StorageEnumerator(
         if (!Directory.Exists(root))
         {
             throw new DirectoryNotFoundException($"Local storage path does not exist: {root}");
+        }
+
+        foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/');
+            await Task.Yield();
+        }
+    }
+
+    private static async IAsyncEnumerable<string> EnumerateMountedShareAsync(
+        StreamingNetworkStorageParameters parameters,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(parameters.MountPath))
+        {
+            throw new InvalidOperationException($"{parameters.Protocol} storage requires mountPath.");
+        }
+
+        var root = Path.GetFullPath(parameters.MountPath);
+        if (!Directory.Exists(root))
+        {
+            throw new DirectoryNotFoundException(
+                $"{parameters.Protocol} mountPath does not exist or is not mounted: {root}");
         }
 
         foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
@@ -304,8 +338,8 @@ public sealed class StorageEnumerator(
         string storageKey,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var blobStorage = await fallbackBlobStorageProvider.GetAsync(storageKey, cancellationToken);
-        var blobs = await blobStorage.ListObjects(new StorageListOptions { Recurse = true }, cancellationToken);
+        var store = await fallbackStoreProvider.GetAsync(storageKey, cancellationToken);
+        var blobs = await store.ListObjects(new StorageListOptions { Recurse = true }, cancellationToken);
         foreach (var blob in blobs.Where(b => b.IsFile))
         {
             cancellationToken.ThrowIfCancellationRequested();

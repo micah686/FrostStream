@@ -16,7 +16,7 @@ namespace Worker.Services;
 /// </summary>
 public sealed class AssetCacheWriter(
     IHttpClientFactory httpClientFactory,
-    IBlobStorageProvider blobStorageProvider,
+    IStoreProvider blobStorageProvider,
     IOptions<AssetCacheOptions> options,
     ILogger<AssetCacheWriter> logger)
 {

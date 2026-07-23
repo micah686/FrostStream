@@ -65,7 +65,8 @@ public class StorageConfigEntity
                     Host = Network.Host,
                     Port = Network.Port,
                     Username = Network.Username,
-                    BasePath = Network.BasePath
+                    BasePath = Network.BasePath,
+                    MountPath = Network.MountPath
                 },
                 StorageMethod.ObjectStorage when ObjectS3Compatible is not null => new S3CompatibleObjectStorageStored
                 {
@@ -122,7 +123,8 @@ public class StorageConfigEntity
                     Host = network.Host,
                     Port = network.Port,
                     Username = network.Username,
-                    BasePath = network.BasePath
+                    BasePath = network.BasePath,
+                    MountPath = network.MountPath
                 };
                 break;
 
@@ -200,6 +202,8 @@ public sealed class StorageNetworkConfigEntity
     public string? Username { get; set; }
 
     public string? BasePath { get; set; }
+
+    public string? MountPath { get; set; }
 
     public StorageConfigEntity StorageConfig { get; set; } = null!;
 }

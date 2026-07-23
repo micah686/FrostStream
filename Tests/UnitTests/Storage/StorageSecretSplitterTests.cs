@@ -26,8 +26,16 @@ public class StorageSecretSplitterTests
                 Password = "pw",
                 PrivateKey = null,
                 PublicKey = "pub",
-                BasePath = "/upload"
+                BasePath = "/upload",
+                MountPath = null
             }] = [StorageSecretSplitter.NetworkPassword, StorageSecretSplitter.NetworkPublicKey],
+            [new StreamingNetworkStorageParameters
+            {
+                Protocol = NetworkStorageProtocol.Nfs,
+                Host = "nas.example.test",
+                BasePath = "/exports/media",
+                MountPath = "/mnt/media"
+            }] = [],
             [new S3CompatibleObjectStorageParameters
             {
                 Provider = S3CompatibleObjectStorageProvider.AwsS3,

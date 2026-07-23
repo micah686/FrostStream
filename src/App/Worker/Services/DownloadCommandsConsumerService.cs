@@ -40,7 +40,7 @@ public sealed class DownloadCommandsConsumerService(
     IMessageBus messageBus,
     ITopologyManager topologyManager,
     IYtDlpClient ytDlp,
-    IBlobStorageProvider blobStorageProvider,
+    IStoreProvider blobStorageProvider,
     ISecretStore secretStore,
     IClock clock,
     IOptions<WorkerOptions> workerOptions,

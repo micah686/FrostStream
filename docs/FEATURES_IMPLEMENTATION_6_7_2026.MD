@@ -58,7 +58,7 @@ Manages FluentStorage backend configurations. Credentials are stored in OpenBAO;
 |--------|------|-------------|
 | `POST` | `/api/storage/local/create` | Create a local filesystem storage config. Fields: `key`, `description`, `protocol`, `path`. |
 | `PUT` | `/api/storage/local/update/{key}` | Update a local storage config. |
-| `POST` | `/api/storage/network/create` | Create a network storage config (FTP/FTPS/SFTP). Fields: `key`, `description`, `protocol`, `host`, `port`, `username`, `basePath`, plus credentials. |
+| `POST` | `/api/storage/network/create` | Create a network storage config (FTP/FTPS/SFTP or mount-backed NFS/SMB/CIFS). Fields: `key`, `description`, `protocol`, `host`, `port`, `username`, `basePath`, optional `mountPath`, plus credentials. |
 | `PUT` | `/api/storage/network/update/{key}` | Update a network storage config. |
 | `POST` | `/api/storage/object/s3-compatible/create` | Create S3-compatible object storage (AWS S3, MinIO, R2, etc.). Fields: `key`, `description`, `provider`, `bucketName`, `region`, `endpoint`, `forcePathStyle`, `useSsl`, plus credentials. |
 | `PUT` | `/api/storage/object/s3-compatible/update/{key}` | Update S3-compatible object storage. |

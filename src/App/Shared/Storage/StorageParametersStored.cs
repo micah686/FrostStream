@@ -31,6 +31,8 @@ public sealed class StreamingNetworkStorageStored : StorageParametersStoredBase
     public string? Username { get; init; }
 
     public string? BasePath { get; init; }
+
+    public string? MountPath { get; init; }
 }
 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]

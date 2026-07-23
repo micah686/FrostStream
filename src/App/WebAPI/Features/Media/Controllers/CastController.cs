@@ -31,7 +31,7 @@ public sealed class CastController(
     MediaAccessChecker accessChecker,
     AudioRenditionResolver audioRenditions,
     StreamRenditionResolver streamRenditions,
-    IBlobStorageProvider blobStorageProvider,
+    IStoreProvider blobStorageProvider,
     CastMediaUrlBuilder urlBuilder,
     IMessageBus messageBus,
     ILogger<CastController> logger) : ControllerBase

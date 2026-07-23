@@ -6,7 +6,7 @@ This document describes how FrostStream protects sensitive storage backend crede
 
 1. Sensitive values are never persisted in plaintext in the application database.
 2. Sensitive values are never returned in WebAPI responses.
-3. The application can still construct `IBlobStorage` instances on demand using those credentials.
+3. The application can still construct FluentStorage `IStore` instances on demand using those credentials.
 4. Admin UX for create / update / delete remains workable.
 
 ## Why OpenBAO and not envelope encryption?
@@ -52,7 +52,7 @@ Envelope encryption would only become attractive if you had bulk data to encrypt
                     │     │ Worker /       │ DTO + secrets   │
                     │     │ MediaProcessor │◄──── Vault ◄────┤
                     │     │                │ via             │
-                    │     │ IBlobStorage   │ IStorageConfig  │
+                    │     │ IStore         │ IStorageConfig  │
                     │     │ Provider       │ Client          │
                     │     └────────────────┘                 │
                     └────────────────────────────────────────┘
@@ -85,7 +85,7 @@ A parallel hierarchy of **stored** shapes (`StorageParametersStoredBase`, `Strea
 Two operations:
 
 - `Split(input)` → `(IReadOnlyDictionary<string,string> secrets, StorageParametersStoredBase stored)` — pulls sensitive fields out of an input parameters object so the consumer can write them to Vault and persist the stored half.
-- `Hydrate(stored, secrets)` → input parameters — re-merges secrets fetched from Vault back onto a stored shape so `FluentStorageProvider` can build a connection string unchanged.
+- `Hydrate(stored, secrets)` → input parameters — re-merges secrets fetched from Vault back onto a stored shape so `FluentStoreFactory` can construct the provider-specific store.
 
 ### `IStorageConfigClient` / `NatsStorageConfigClient`
 
@@ -96,9 +96,9 @@ Resolves a storage key to a fully hydrated `StorageConfigResponse` (input parame
 3. `StorageSecretSplitter.Hydrate(stored, secrets)` produces the input variant.
 4. Serialised parameters JSON returned in `StorageConfigResponse.Parameters`.
 
-### `IBlobStorageProvider` / `CachingBlobStorageProvider`
+### `IStoreProvider` / `CachingStoreProvider`
 
-Per-key cache of `IBlobStorage` instances backed by `IStorageConfigClient` + `FluentStorageProvider`. `Invalidate(key)` evicts and disposes the previous instance.
+Per-key cache of `IStore` instances backed by `IStorageConfigClient` + `FluentStoreFactory`. `Invalidate(key)` evicts and disposes the previous instance.
 
 ### `StorageConfigChangedSubscriber`
 
@@ -205,9 +205,9 @@ Production deployments should:
 |-------------|-------------------------------------------------|-----------------------------------------------------------------------------------------|
 | WebAPI      | (uses NATS-only path; no `ISecretStore` needed) | Storage CRUD goes through NATS to DataBridge; WebAPI never touches Vault directly.       |
 | DataBridge  | `AddOpenBaoSecretStore()`                       | Owns Vault writes via `StorageCrudConsumerService`.                                     |
-| Worker      | `AddOpenBaoSecretStore()`                       | `AddFrostStreamStorage()` is left commented out until Worker actually consumes `IBlobStorageProvider` (it requires NATS wiring in Worker first). |
+| Worker      | `AddOpenBaoSecretStore()`                       | Uses `AddFrostStreamStorage()` to resolve cached `IStore` instances from NATS-backed configuration. |
 
-`AddFrostStreamStorage()` (in `Shared.Storage.ServiceCollectionExtensions`) registers `IStorageConfigClient`, `IBlobStorageProvider`, and the `StorageConfigChangedSubscriber` hosted service. It depends on both `IMessageBus` (NATS) and `ISecretStore`.
+`AddFrostStreamStorage()` (in `Shared.Storage.ServiceCollectionExtensions`) registers `IStorageConfigClient`, `IStoreProvider`, and the `StorageConfigChangedSubscriber` hosted service. It depends on both `IMessageBus` (NATS) and `ISecretStore`.
 
 ## End-to-end flows
 
@@ -225,20 +225,20 @@ Production deployments should:
 
 ### Worker pulls a file via that storage config
 
-1. Worker calls `IBlobStorageProvider.GetAsync(key)`.
+1. Worker calls `IStoreProvider.GetAsync(key)`.
 2. Cache miss → `IStorageConfigClient.GetStorageConfigAsync(key)`:
    - NATS `storage.get` returns the stored DTO.
    - `ISecretStore.ReadAsync("storage/{key}")` returns the secret bundle.
    - `StorageSecretSplitter.Hydrate(stored, secrets)` reconstructs the input parameters.
-3. `FluentStorageProvider.CreateStorage(...)` builds the connection string and yields an `IBlobStorage`.
-4. The `IBlobStorage` is cached for subsequent requests with the same key.
+3. `FluentStoreFactory.CreateStorage(...)` uses the FluentStorage v8 provider factory and yields an `IStore`.
+4. The `IStore` is cached for subsequent requests with the same key.
 
 ### Admin rotates the SFTP private key
 
 1. `PUT /api/storage/network/update/{key}` with the new `privateKey`.
 2. DataBridge writes the new secret bundle to `secret/data/storage/{key}` — KV v2 records this as version 2.
 3. DataBridge publishes `StorageConfigChanged { Updated }`.
-4. Every Worker / MediaProcessor instance subscribed via `StorageConfigChangedSubscriber` evicts its cached `IBlobStorage` for that key. Next call rebuilds with the rotated credential — no restart.
+4. Every Worker / MediaProcessor instance subscribed via `StorageConfigChangedSubscriber` evicts its cached `IStore` for that key. Next call rebuilds with the rotated credential — no restart.
 
 ### Admin deletes a storage config
 

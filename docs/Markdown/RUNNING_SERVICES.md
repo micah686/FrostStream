@@ -93,6 +93,14 @@ FROSTSTREAM_STORAGE_ROOT=/var/lib/froststream/data
 A local filesystem path cannot be shared between different hosts. Use NFS or
 object storage when FrostStream services run on multiple machines.
 
+NFS, SMB, and CIFS configurations remain `Network` storage. FluentStorage does
+not mount these protocols itself, so the host or container orchestrator must
+mount the share at the same absolute path on every FrostStream node that may
+read or write it. Set that path as the network storage configuration's
+`mountPath`; `host` and `basePath` continue to describe the remote server and
+export/share. FrostStream verifies the mount and accesses it through
+FluentStorage's filesystem store. FTP, FTPS, and SFTP do not use `mountPath`.
+
 ## Queue a Download
 
 ```bash

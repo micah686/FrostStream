@@ -66,7 +66,8 @@ public static class StorageSecretSplitter
             Host = input.Host,
             Port = input.Port,
             Username = input.Username,
-            BasePath = input.BasePath
+            BasePath = input.BasePath,
+            MountPath = input.MountPath
         };
         return (secrets, stored);
     }
@@ -162,6 +163,7 @@ public static class StorageSecretSplitter
             Port = stored.Port,
             Username = stored.Username,
             BasePath = stored.BasePath,
+            MountPath = stored.MountPath,
             Password = TryGet(secrets, NetworkPassword),
             PrivateKey = TryGet(secrets, NetworkPrivateKey),
             PublicKey = TryGet(secrets, NetworkPublicKey)

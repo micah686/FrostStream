@@ -5,11 +5,11 @@ namespace Shared.Storage;
 /// <summary>
 /// Resolves an <see cref="IStore"/> for a given storage key, fetching the
 /// non-sensitive config from DataBridge and the sensitive credentials from the
-/// secret store, then merging them into a FluentStorage connection string.
+/// secret store, then constructing a provider-specific FluentStorage v8 store.
 /// Resulting <see cref="IStore"/> instances are cached per storage key
 /// and invalidated by <c>StorageConfigChanged</c> events.
 /// </summary>
-public interface IBlobStorageProvider
+public interface IStoreProvider
 {
     Task<IStore> GetAsync(string storageKey, CancellationToken cancellationToken = default);
 

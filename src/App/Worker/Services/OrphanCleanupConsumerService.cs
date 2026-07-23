@@ -8,7 +8,7 @@ namespace Worker.Services;
 
 public sealed class OrphanCleanupConsumerService(
     IMessageBus messageBus,
-    IBlobStorageProvider blobStorageProvider,
+    IStoreProvider blobStorageProvider,
     ILogger<OrphanCleanupConsumerService> logger) : SubscriptionBackgroundService
 {
     private const string QueueGroup = "worker-orphan-cleanup";

@@ -122,7 +122,7 @@ public sealed class AssetCacheWriterTests
         var factory = Substitute.For<IHttpClientFactory>();
         factory.CreateClient("asset-cache").Returns(_ => new HttpClient(handler, disposeHandler: false));
 
-        var provider = Substitute.For<IBlobStorageProvider>();
+        var provider = Substitute.For<IStoreProvider>();
         provider.GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(_ => storage);
 
         return new AssetCacheWriter(

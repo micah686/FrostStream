@@ -26,7 +26,7 @@ public static class CastStreamCompatibility
         => Path.GetExtension(storagePath).ToLowerInvariant() is ".mp4" or ".m4v";
 
     public static async Task<bool> IsDirectStreamableAsync(
-        IBlobStorageProvider blobStorageProvider,
+        IStoreProvider blobStorageProvider,
         string storageKey,
         string storagePath,
         ILogger logger,
@@ -37,7 +37,7 @@ public static class CastStreamCompatibility
 
         try
         {
-            var stream = await MediaBlobServing.OpenBlobOrNullAsync(
+            var stream = await MediaBlobServing.OpenSeekableBlobOrNullAsync(
                 blobStorageProvider, storageKey, storagePath, cancellationToken);
             if (stream is null)
                 return false;

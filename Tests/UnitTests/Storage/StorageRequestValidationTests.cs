@@ -75,6 +75,41 @@ public class StorageRequestValidationTests
     }
 
     [Test]
+    public void Mounted_Network_Share_Requires_Absolute_Mount_Path()
+    {
+        var missing = StorageTestHelpers.ValidateObject(new NetworkStorageUpsertRequest
+        {
+            Key = "network-a",
+            Protocol = Shared.Storage.NetworkStorageProtocol.Nfs,
+            Host = "fileserver"
+        });
+        missing.Select(x => x.ErrorMessage).ShouldContain("mountPath is required for Nfs storage.");
+
+        var relative = StorageTestHelpers.ValidateObject(new NetworkStorageUpsertRequest
+        {
+            Key = "network-a",
+            Protocol = Shared.Storage.NetworkStorageProtocol.Smb,
+            Host = "fileserver",
+            MountPath = "relative/share"
+        });
+        relative.Select(x => x.ErrorMessage).ShouldContain("mountPath must be an absolute filesystem path.");
+    }
+
+    [Test]
+    public void Remote_Transfer_Protocols_Reject_Mount_Path()
+    {
+        var results = StorageTestHelpers.ValidateObject(new NetworkStorageUpsertRequest
+        {
+            Key = "network-a",
+            Protocol = Shared.Storage.NetworkStorageProtocol.Sftp,
+            Host = "fileserver",
+            MountPath = "/mnt/share"
+        });
+
+        results.Select(x => x.ErrorMessage).ShouldContain("mountPath is only valid for NFS, SMB, or CIFS storage.");
+    }
+
+    [Test]
     public void S3_Upsert_Request_Requires_Region_For_Aws()
     {
         var results = StorageTestHelpers.ValidateObject(new S3CompatibleObjectStorageUpsertRequest

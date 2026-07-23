@@ -13,7 +13,7 @@ namespace WebAPI.Features.Media.Controllers;
 [Route("api/internal/media-storage")]
 [Authorize(AuthenticationSchemes = MediaProcessorAuthenticationDefaults.Scheme)]
 public sealed class MediaStorageTransferController(
-    IBlobStorageProvider blobStorageProvider,
+    IStoreProvider blobStorageProvider,
     ILogger<MediaStorageTransferController> logger) : ControllerBase
 {
     [HttpGet("{storageKey}/{**storagePath}")]

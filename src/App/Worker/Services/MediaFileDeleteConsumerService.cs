@@ -14,7 +14,7 @@ namespace Worker.Services;
 /// </summary>
 public sealed class MediaFileDeleteConsumerService(
     IMessageBus messageBus,
-    IBlobStorageProvider blobStorageProvider,
+    IStoreProvider blobStorageProvider,
     ILogger<MediaFileDeleteConsumerService> logger) : SubscriptionBackgroundService
 {
     private const string QueueGroup = "worker-media-file-delete";

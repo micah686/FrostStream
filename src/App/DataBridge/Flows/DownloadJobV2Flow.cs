@@ -14,6 +14,7 @@ using NodaTime;
 using Shared.Database;
 using Shared.Messaging;
 using Shared.Metadata;
+using Shared.Storage;
 using YtDlpSharpLib.Models;
 using YtDlpSharpLib.Options;
 
@@ -1165,10 +1166,7 @@ public sealed class DownloadJobV2Flow(
         }));
 
     private static string SidecarPath(string primaryStoragePath, string fileName)
-    {
-        var slash = primaryStoragePath.LastIndexOf('/');
-        return slash < 0 ? fileName : $"{primaryStoragePath[..slash]}/{fileName}";
-    }
+        => StorageObjectPath.Combine(StorageObjectPath.GetParent(primaryStoragePath), fileName);
 
     private static DownloadArtifactSnapshot ToArtifact(
         DownloadRunRequest run, DownloadStage stage, string key, UploadArtifactKind kind, bool required, UploadCompleted upload)
@@ -1273,7 +1271,7 @@ public sealed class DownloadJobV2Flow(
         IReadOnlyList<CapturedCaptionMetadata> captions, MediaEngagementSnapshot? engagement)
     {
         using var scope = scopeFactory.CreateScope();
-        var storage = await scope.ServiceProvider.GetRequiredService<Shared.Storage.IBlobStorageProvider>()
+        var storage = await scope.ServiceProvider.GetRequiredService<Shared.Storage.IStoreProvider>()
             .GetAsync(storageKey);
         await using var stream = await storage.OpenRead(infoStoragePath)
             ?? throw new InvalidOperationException($"Info JSON was not found at {infoStoragePath}.");

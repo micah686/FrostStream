@@ -19,7 +19,7 @@ public sealed class ChannelAudioController(
     ChannelAudioResolver channelAudio,
     PodcastTokenService podcastTokens,
     IOptions<FrostStreamAuthOptions> authOptions,
-    IBlobStorageProvider blobStorageProvider,
+    IStoreProvider blobStorageProvider,
     MediaAccessChecker accessChecker,
     ILogger<ChannelAudioController> logger) : ControllerBase
 {

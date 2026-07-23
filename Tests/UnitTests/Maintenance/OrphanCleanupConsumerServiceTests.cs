@@ -148,7 +148,7 @@ public sealed class OrphanCleanupConsumerServiceTests
         throw new TimeoutException("OrphanCleanupConsumerService did not register all subscriptions in time.");
     }
 
-    private sealed class FakeBlobStorageProvider(FakeBlobStorage storage) : IBlobStorageProvider
+    private sealed class FakeBlobStorageProvider(FakeBlobStorage storage) : IStoreProvider
     {
         public Task<IStore> GetAsync(string storageKey, CancellationToken cancellationToken = default)
             => Task.FromResult(storage.Store);

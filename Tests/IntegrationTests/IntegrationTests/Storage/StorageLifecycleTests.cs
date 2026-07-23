@@ -101,6 +101,30 @@ public class StorageLifecycleTests
     }
 
     [Test]
+    public async Task Mounted_Network_Storage_Persists_Mount_Path_As_NonSecret_Metadata()
+    {
+        var response = await Fixture.CreateNetworkAsync(new NetworkStorageUpsertRequest
+        {
+            Key = "nas-a",
+            Description = "media NAS",
+            Protocol = NetworkStorageProtocol.Nfs,
+            Host = "nas.example.test",
+            BasePath = "/exports/media",
+            MountPath = "/mnt/froststream-media"
+        });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var payload = await response.Content.ReadFromJsonAsync<NetworkStorageConfigResponse>(StorageStackFixture.JsonOptions);
+        payload!.Protocol.ShouldBe(NetworkStorageProtocol.Nfs);
+        payload.MountPath.ShouldBe("/mnt/froststream-media");
+
+        var entity = await Fixture.FindStorageAsync("nas-a");
+        entity!.Method.ShouldBe(StorageMethod.Network);
+        entity.Network!.MountPath.ShouldBe("/mnt/froststream-media");
+        (await Fixture.SecretStore.ReadAsync(SecretPaths.ForStorage("nas-a"))).ShouldBeNull();
+    }
+
+    [Test]
     public async Task S3_Storage_Lifecycle_Works()
     {
         var response = await Fixture.CreateS3Async(new S3CompatibleObjectStorageUpsertRequest

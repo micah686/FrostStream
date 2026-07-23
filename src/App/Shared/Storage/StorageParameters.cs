@@ -57,6 +57,12 @@ public sealed class StreamingNetworkStorageParameters : StorageParametersBase
     public string? PublicKey { get; init; }
     public string? BasePath { get; init; }
 
+    /// <summary>
+    /// Absolute path where an NFS, SMB, or CIFS share has been mounted by the host or orchestrator.
+    /// This remains network storage even though FluentStorage accesses the mounted filesystem via DiskStore.
+    /// </summary>
+    public string? MountPath { get; init; }
+
     public override IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
         var hasUsername = !string.IsNullOrWhiteSpace(Username);
@@ -82,6 +88,34 @@ public sealed class StreamingNetworkStorageParameters : StorageParametersBase
             yield return new ValidationResult(
                 "Use either password-based auth or privateKey auth, not both.",
                 [nameof(Password), nameof(PrivateKey)]);
+        }
+
+        var isMountedShare = Protocol is NetworkStorageProtocol.Nfs or NetworkStorageProtocol.Smb or NetworkStorageProtocol.Cifs;
+        if (isMountedShare && string.IsNullOrWhiteSpace(MountPath))
+        {
+            yield return new ValidationResult(
+                $"mountPath is required for {Protocol} storage.",
+                [nameof(MountPath)]);
+        }
+        else if (isMountedShare && !Path.IsPathFullyQualified(MountPath!))
+        {
+            yield return new ValidationResult(
+                "mountPath must be an absolute filesystem path.",
+                [nameof(MountPath)]);
+        }
+
+        if (!isMountedShare && !string.IsNullOrWhiteSpace(MountPath))
+        {
+            yield return new ValidationResult(
+                "mountPath is only valid for NFS, SMB, or CIFS storage.",
+                [nameof(MountPath)]);
+        }
+
+        if (hasPrivateKey && Protocol != NetworkStorageProtocol.Sftp)
+        {
+            yield return new ValidationResult(
+                "privateKey authentication is only valid for SFTP storage.",
+                [nameof(PrivateKey), nameof(Protocol)]);
         }
     }
 }

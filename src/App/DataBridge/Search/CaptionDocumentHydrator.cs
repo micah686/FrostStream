@@ -11,7 +11,7 @@ namespace DataBridge.Search;
 /// only the track locator; Typesense remains the sole indexed copy of transcript text.
 /// </summary>
 public sealed partial class CaptionDocumentHydrator(
-    IBlobStorageProvider blobStorageProvider,
+    IStoreProvider blobStorageProvider,
     ILogger<CaptionDocumentHydrator> logger)
 {
     private const int MaximumCaptionBytes = 16 * 1024 * 1024;

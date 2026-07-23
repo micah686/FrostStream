@@ -18,7 +18,7 @@ namespace WebAPI.Features.Media.Controllers;
 [Route("api/media/watch")]
 public sealed class MediaWatchController(
     IMessageBus messageBus,
-    IBlobStorageProvider blobStorageProvider,
+    IStoreProvider blobStorageProvider,
     MediaAccessChecker accessChecker,
     AudioRenditionResolver audioRenditions,
     CastTokenService castTokens,

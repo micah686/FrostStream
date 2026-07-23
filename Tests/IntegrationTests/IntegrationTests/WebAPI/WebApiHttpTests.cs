@@ -41,9 +41,9 @@ public sealed class WebApiHttpTests
                 Version = 3
             }
         };
-        factory.BlobStorageProvider.GetAsync("storage-a", Arg.Any<CancellationToken>())
-            .Returns(factory.BlobStorage);
-        factory.BlobStorage.OpenRead("media/video.mp4", Arg.Any<CancellationToken>())
+        factory.StoreProvider.GetAsync("storage-a", Arg.Any<CancellationToken>())
+            .Returns(factory.Store);
+        factory.Store.OpenRead("media/video.mp4", Arg.Any<CancellationToken>())
             .Returns(_ => Task.FromResult<Stream>(new MemoryStream(bytes, writable: false)));
 
         using var client = factory.CreateClient();
@@ -149,8 +149,8 @@ internal sealed class TestWebApiFactory : WebApplicationFactory<global::WebAPI.P
     public CapturingJetStreamPublisher Publisher { get; } = new();
     public FakeMessageBus MessageBus { get; } = new();
     public InMemorySecretStore SecretStore { get; } = new();
-    public IBlobStorageProvider BlobStorageProvider { get; } = Substitute.For<IBlobStorageProvider>();
-    public IStore BlobStorage { get; } = Substitute.For<IStore>();
+    public IStoreProvider StoreProvider { get; } = Substitute.For<IStoreProvider>();
+    public IStore Store { get; } = Substitute.For<IStore>();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -162,13 +162,13 @@ internal sealed class TestWebApiFactory : WebApplicationFactory<global::WebAPI.P
             services.RemoveAll<IMessageBus>();
             services.RemoveAll<ISecretStore>();
             services.RemoveAll<IClock>();
-            services.RemoveAll<IBlobStorageProvider>();
+            services.RemoveAll<IStoreProvider>();
 
             services.AddSingleton<IJetStreamPublisher>(Publisher);
             services.AddSingleton<IMessageBus>(MessageBus);
             services.AddSingleton<ISecretStore>(SecretStore);
             services.AddSingleton<IClock>(new TestClock(Now));
-            services.AddSingleton(BlobStorageProvider);
+            services.AddSingleton(StoreProvider);
         });
     }
 }

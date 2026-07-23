@@ -21,7 +21,7 @@ public sealed class MediaWatchControllerTests
     {
         var mediaGuid = Guid.NewGuid();
         var bus = Substitute.For<IMessageBus>();
-        var provider = Substitute.For<IBlobStorageProvider>();
+        var provider = Substitute.For<IStoreProvider>();
         var storage = Substitute.For<IStore>();
         var stream = new MemoryStream([1, 2, 3]);
 
@@ -58,7 +58,7 @@ public sealed class MediaWatchControllerTests
     {
         var mediaGuid = Guid.NewGuid();
         var bus = Substitute.For<IMessageBus>();
-        var provider = Substitute.For<IBlobStorageProvider>();
+        var provider = Substitute.For<IStoreProvider>();
         var storage = Substitute.For<IStore>();
         var stream = new NonSeekableReadStream([1, 2, 3]);
 
@@ -78,7 +78,7 @@ public sealed class MediaWatchControllerTests
     {
         var mediaGuid = Guid.NewGuid();
         var bus = Substitute.For<IMessageBus>();
-        var provider = Substitute.For<IBlobStorageProvider>();
+        var provider = Substitute.For<IStoreProvider>();
         var controller = CreateController(bus, provider);
 
         var invalid = await controller.GetWatch(mediaGuid, version: 0);
@@ -105,7 +105,7 @@ public sealed class MediaWatchControllerTests
     {
         var mediaGuid = Guid.NewGuid();
         var bus = Substitute.For<IMessageBus>();
-        var provider = Substitute.For<IBlobStorageProvider>();
+        var provider = Substitute.For<IStoreProvider>();
 
         bus.RequestAsync<AudioRenditionResolveRequest, AudioRenditionResolveResponse>(
                 AudioRenditionSubjects.Resolve,
@@ -137,7 +137,7 @@ public sealed class MediaWatchControllerTests
     {
         var mediaGuid = Guid.NewGuid();
         var bus = Substitute.For<IMessageBus>();
-        var provider = Substitute.For<IBlobStorageProvider>();
+        var provider = Substitute.For<IStoreProvider>();
         var storage = Substitute.For<IStore>();
         var location = Location(mediaGuid, "storage-a", "media/video.mp4", 1);
         ArrangeResolved(bus, mediaGuid, location);
@@ -161,7 +161,7 @@ public sealed class MediaWatchControllerTests
     {
         var mediaGuid = Guid.NewGuid();
         var bus = Substitute.For<IMessageBus>();
-        var provider = Substitute.For<IBlobStorageProvider>();
+        var provider = Substitute.For<IStoreProvider>();
         ArrangeResolved(bus, mediaGuid, Location(mediaGuid, "storage-a", "media/video.mp4", 1));
 
         // Override the default-allowed access check with a denial.
@@ -184,7 +184,7 @@ public sealed class MediaWatchControllerTests
     {
         var mediaGuid = Guid.NewGuid();
         var bus = Substitute.For<IMessageBus>();
-        var provider = Substitute.For<IBlobStorageProvider>();
+        var provider = Substitute.For<IStoreProvider>();
         var storage = Substitute.For<IStore>();
         var stream = new MemoryStream([1, 2, 3]);
         var location = ThumbnailLocation(mediaGuid, "storage-a", "thumbs/poster.jpg");
@@ -207,7 +207,7 @@ public sealed class MediaWatchControllerTests
     {
         var mediaGuid = Guid.NewGuid();
         var bus = Substitute.For<IMessageBus>();
-        var provider = Substitute.For<IBlobStorageProvider>();
+        var provider = Substitute.For<IStoreProvider>();
 
         bus.RequestAsync<MediaThumbnailResolveRequestMessage, MediaThumbnailResolveResponseMessage>(
                 MediaStreamSubjects.ResolveThumbnail,
@@ -240,7 +240,7 @@ public sealed class MediaWatchControllerTests
 
     private static MediaWatchController CreateController(
         IMessageBus bus,
-        IBlobStorageProvider provider)
+        IStoreProvider provider)
     {
         // The watch endpoints gate on a watch-time access check; default it to allowed so these tests
         // exercise the streaming path. See MediaAccessControllerTests for the restriction behaviour.
