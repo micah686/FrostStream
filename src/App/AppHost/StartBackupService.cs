@@ -24,7 +24,7 @@ public static class StartBackupService
         var context = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", ".."));
         var service = builder
             .AddDockerfile("backupservice", context, "App/BackupService/Dockerfile")
-            .WithHttpEndpoint(targetPort: 8080, name: "http")
+            .WithHttpEndpoint(port: Ports.BackupService, targetPort: 8080, name: "http")
             .WithReference(nats).WaitFor(nats)
             .WithReference(postgres.FrostStreamDb).WaitFor(postgres.FrostStreamDb).WaitForDatabases(postgres)
             .WithEnvironment("Backup__Directory", ContainerBackupRoot)
