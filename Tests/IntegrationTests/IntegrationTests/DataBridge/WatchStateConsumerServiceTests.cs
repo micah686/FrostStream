@@ -174,6 +174,52 @@ public sealed class WatchStateConsumerServiceTests
         }
     }
 
+    [Test]
+    public async Task Persisted_Policy_Denies_Media_Provider_And_Age_Axes_Then_Deletes_Cleanly()
+    {
+        var mediaGuid = Guid.NewGuid();
+        await Fixture.SeedMediaForAccessPolicyAsync(mediaGuid, "youtube", ageLimit: 18);
+        var executor = Fixture.CreateAccessPolicyExecutor();
+        var policy = new AccessPolicyDto
+        {
+            PolicyId = Guid.NewGuid(),
+            Name = "Restricted media smoke test",
+            Enabled = true,
+            MediaGuids = [mediaGuid],
+            Providers = ["youtube"],
+            AgeThresholds = [18],
+            Assignments =
+            [
+                new AccessPolicyAssignmentDto { Type = "group", Id = "restricted" }
+            ]
+        };
+
+        await executor.SaveAsync(policy, CancellationToken.None);
+
+        var denied = await executor.EvaluateAsync(
+            mediaGuid,
+            userSubject: "reader-a",
+            userGroups: ["restricted"],
+            bypassGroups: [],
+            CancellationToken.None);
+
+        denied.IsAllowed.ShouldBeFalse();
+        denied.Decisions.Where(decision => decision.Axis is "media" or "provider" or "age")
+            .ShouldAllBe(decision => !decision.Allowed);
+        denied.Decisions.ShouldContain(decision => decision.Axis == "media" && decision.Resource == mediaGuid.ToString());
+        denied.Decisions.ShouldContain(decision => decision.Axis == "provider" && decision.Resource == "youtube");
+        denied.Decisions.ShouldContain(decision => decision.Axis == "age" && decision.Resource == "18");
+
+        (await executor.DeleteAsync(policy.PolicyId, CancellationToken.None)).ShouldBeTrue();
+        var allowedAfterDelete = await executor.EvaluateAsync(
+            mediaGuid,
+            userSubject: "reader-a",
+            userGroups: ["restricted"],
+            bypassGroups: [],
+            CancellationToken.None);
+        allowedAfterDelete.IsAllowed.ShouldBeTrue();
+    }
+
     private static Task<WatchStateResponse> UpsertAsync(
         FakeMessageBus bus,
         string ownerSubject,
@@ -262,6 +308,8 @@ public sealed class WatchStateConsumerServiceTests
         public WatchStateConsumerService CreateService(FakeMessageBus bus)
             => new(bus, DataSource, new FixedClock(Now), NullLogger<WatchStateConsumerService>.Instance);
 
+        public AccessPolicyExecutor CreateAccessPolicyExecutor() => new(DataSource);
+
         public async Task InitializeAsync()
         {
             if (_initialized)
@@ -312,6 +360,27 @@ public sealed class WatchStateConsumerServiceTests
             command.Parameters.AddWithValue("metadata_scrape_date", Now.ToDateTimeOffset());
             command.Parameters.AddWithValue("title", title);
             await command.ExecuteNonQueryAsync();
+        }
+
+        public async Task SeedMediaForAccessPolicyAsync(Guid mediaGuid, string provider, int ageLimit)
+        {
+            await SeedMediaWithMetadataAsync(mediaGuid, "Restricted video");
+            await using (var metadata = DataSource.CreateCommand(
+                             "UPDATE metadata.media_metadata SET age_limit = @age_limit WHERE media_guid = @media_guid;"))
+            {
+                metadata.Parameters.AddWithValue("age_limit", ageLimit);
+                metadata.Parameters.AddWithValue("media_guid", mediaGuid);
+                await metadata.ExecuteNonQueryAsync();
+            }
+
+            await using var source = DataSource.CreateCommand("""
+                INSERT INTO media.media_source_versions (provider, source_media_id, media_guid)
+                VALUES (@provider, @source_media_id, @media_guid);
+                """);
+            source.Parameters.AddWithValue("provider", provider);
+            source.Parameters.AddWithValue("source_media_id", $"source-{mediaGuid:N}");
+            source.Parameters.AddWithValue("media_guid", mediaGuid);
+            await source.ExecuteNonQueryAsync();
         }
 
         public async ValueTask DisposeAsync()

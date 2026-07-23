@@ -166,16 +166,53 @@ public sealed class MediaWatchControllerTests
 
         // Override the default-allowed access check with a denial.
         var controller = CreateController(bus, provider);
-        bus.RequestAsync<MediaAccessCheckRequestMessage, MediaAccessCheckResponseMessage>(
-                MediaAccessSubjects.Check,
-                Arg.Any<MediaAccessCheckRequestMessage>(),
+        bus.RequestAsync<AccessPolicyEffectiveMediaRequestMessage, AccessPolicyOperationResponseMessage>(
+                AccessPolicySubjects.EffectiveMedia,
+                Arg.Is<AccessPolicyEffectiveMediaRequestMessage>(request =>
+                    request != null && request.MediaGuid == mediaGuid),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
-            .Returns(new MediaAccessCheckResponseMessage { IsAllowed = false, FailureReason = "media-restricted" });
+            .Returns(new AccessPolicyOperationResponseMessage
+            {
+                Success = true,
+                EffectiveMedia = new AccessPolicyEffectiveMediaDto
+                {
+                    MediaGuid = mediaGuid,
+                    Found = true,
+                    IsAllowed = false
+                }
+            });
 
         var result = await controller.GetWatch(mediaGuid);
 
         result.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status403Forbidden);
+        await provider.DidNotReceive().GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task GetWatch_Returns_503_When_Access_Policy_Evaluation_Fails()
+    {
+        var mediaGuid = Guid.NewGuid();
+        var bus = Substitute.For<IMessageBus>();
+        var provider = Substitute.For<IStoreProvider>();
+        ArrangeResolved(bus, mediaGuid, Location(mediaGuid, "storage-a", "media/video.mp4", 1));
+
+        var controller = CreateController(bus, provider);
+        bus.RequestAsync<AccessPolicyEffectiveMediaRequestMessage, AccessPolicyOperationResponseMessage>(
+                AccessPolicySubjects.EffectiveMedia,
+                Arg.Any<AccessPolicyEffectiveMediaRequestMessage>(),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new AccessPolicyOperationResponseMessage
+            {
+                Success = false,
+                ErrorCode = "internal_error",
+                ErrorMessage = "Access-policy evaluation failed."
+            });
+
+        var result = await controller.GetWatch(mediaGuid);
+
+        result.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status503ServiceUnavailable);
         await provider.DidNotReceive().GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
@@ -225,12 +262,21 @@ public sealed class MediaWatchControllerTests
         var missing = await controller.GetThumbnail(mediaGuid, CancellationToken.None);
         missing.ShouldBeOfType<NotFoundObjectResult>().Value!.ShouldBe("missing");
 
-        bus.RequestAsync<MediaAccessCheckRequestMessage, MediaAccessCheckResponseMessage>(
-                MediaAccessSubjects.Check,
-                Arg.Any<MediaAccessCheckRequestMessage>(),
+        bus.RequestAsync<AccessPolicyEffectiveMediaRequestMessage, AccessPolicyOperationResponseMessage>(
+                AccessPolicySubjects.EffectiveMedia,
+                Arg.Any<AccessPolicyEffectiveMediaRequestMessage>(),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
-            .Returns(new MediaAccessCheckResponseMessage { IsAllowed = false, FailureReason = "media-restricted" });
+            .Returns(new AccessPolicyOperationResponseMessage
+            {
+                Success = true,
+                EffectiveMedia = new AccessPolicyEffectiveMediaDto
+                {
+                    MediaGuid = mediaGuid,
+                    Found = true,
+                    IsAllowed = false
+                }
+            });
 
         var denied = await controller.GetThumbnail(mediaGuid, CancellationToken.None);
 
@@ -243,13 +289,26 @@ public sealed class MediaWatchControllerTests
         IStoreProvider provider)
     {
         // The watch endpoints gate on a watch-time access check; default it to allowed so these tests
-        // exercise the streaming path. See MediaAccessControllerTests for the restriction behaviour.
-        bus.RequestAsync<MediaAccessCheckRequestMessage, MediaAccessCheckResponseMessage>(
-                MediaAccessSubjects.Check,
-                Arg.Any<MediaAccessCheckRequestMessage>(),
+        // exercise the streaming path. Access-policy deny behavior is covered by the DataBridge evaluator tests.
+        bus.RequestAsync<AccessPolicyEffectiveMediaRequestMessage, AccessPolicyOperationResponseMessage>(
+                AccessPolicySubjects.EffectiveMedia,
+                Arg.Any<AccessPolicyEffectiveMediaRequestMessage>(),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
-            .Returns(new MediaAccessCheckResponseMessage { IsAllowed = true });
+            .Returns(callInfo =>
+            {
+                var request = callInfo.ArgAt<AccessPolicyEffectiveMediaRequestMessage>(1);
+                return new AccessPolicyOperationResponseMessage
+                {
+                    Success = true,
+                    EffectiveMedia = new AccessPolicyEffectiveMediaDto
+                    {
+                        MediaGuid = request.MediaGuid,
+                        Found = true,
+                        IsAllowed = true
+                    }
+                };
+            });
 
         return new MediaWatchController(
             bus,

@@ -24,4 +24,9 @@
       <ProjectReference Include="..\Shared\Shared.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <EmbeddedResource Include="Auth\OpenFgaModel.json"
+                        LogicalName="WebAPI.Auth.OpenFgaModel.json" />
+    </ItemGroup>
+
 </Project>

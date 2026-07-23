@@ -1,5 +1,6 @@
 using IntegrationTests.Infrastructure;
 using Shared.Auth;
+using Shared.Messaging;
 using Shouldly;
 using TUnit.Core;
 using WebAPI.Auth;
@@ -7,12 +8,12 @@ using WebAPI.Auth;
 namespace IntegrationTests.Auth;
 
 /// <summary>
-/// End-to-end verification of the Axis 1 API-surface authorization model (B_Axis1.MD) against a real
+/// End-to-end verification of the Axis 1 API-surface authorization model (MEDIA_ACCESS.MD) against a real
 /// OpenFGA store. Drives the production <see cref="OpenFgaProvisioner"/>, <see cref="OpenFgaAuthorizer"/>,
 /// <see cref="OpenFgaTupleWriter"/>, and <see cref="OpenFgaBundleManagementService"/> — covering the
 /// pieces the in-process (single-user, allow-all) tests cannot: the seeded model, the
-/// <c>grantee from bundle</c> tuple-to-userset <c>invoke</c> check, the <c>/read</c> all-tuples paging,
-/// and runtime bundle compose/grant.
+/// <c>grantee from bundle</c> tuple-to-userset <c>invoke</c> check, filtered <c>/read</c> paging,
+/// immutable-model reuse, and runtime bundle compose/grant.
 /// </summary>
 public class OpenFgaAxis1FlowTests
 {
@@ -55,11 +56,19 @@ public class OpenFgaAxis1FlowTests
     }
 
     [Test]
+    public async Task Provisioner_Reuses_The_Existing_Model_When_Content_Is_Unchanged()
+    {
+        var rediscoveredModelId = await Fixture.RediscoverModelAsync();
+
+        rediscoveredModelId.ShouldBe(Fixture.ModelId);
+    }
+
+    [Test]
     public async Task Bootstrap_Owner_Subject_Can_Invoke_Everything()
     {
         // Seeded directly with the :all bundle, no group membership required.
         (await Fixture.CanInvokeAsync(OpenFgaStackFixture.OwnerSubject, EndpointIds.DownloadsCreate)).ShouldBeTrue();
-        (await Fixture.CanInvokeAsync(OpenFgaStackFixture.OwnerSubject, EndpointIds.ManagementCatalog)).ShouldBeTrue();
+        (await Fixture.CanInvokeAsync(OpenFgaStackFixture.OwnerSubject, EndpointIds.AccessControlCatalog)).ShouldBeTrue();
     }
 
     [Test]
@@ -70,7 +79,7 @@ public class OpenFgaAxis1FlowTests
 
         (await Fixture.CanInvokeAsync(subject, EndpointIds.DownloadsCreate)).ShouldBeTrue();
         (await Fixture.CanInvokeAsync(subject, EndpointIds.StorageList)).ShouldBeTrue();
-        (await Fixture.CanInvokeAsync(subject, EndpointIds.ManagementBundlesCreate)).ShouldBeTrue();
+        (await Fixture.CanInvokeAsync(subject, EndpointIds.AccessControlBundlesCreate)).ShouldBeTrue();
     }
 
     [Test]
@@ -96,6 +105,41 @@ public class OpenFgaAxis1FlowTests
         (await Fixture.CanInvokeAsync(subject, EndpointIds.DownloadsAudio)).ShouldBeTrue();
         // Not in the downloading bundle -> denied.
         (await Fixture.CanInvokeAsync(subject, EndpointIds.StorageList)).ShouldBeFalse();
+    }
+
+    [Test]
+    public async Task Policy_Granted_Bundle_Grants_Only_Its_Endpoints_And_Is_Removed_With_The_Policy()
+    {
+        const string group = "axis1-policy-downloaders";
+        const string subject = "axis1-policy-downloader";
+        var policy = new AccessPolicyDto
+        {
+            PolicyId = Guid.NewGuid(),
+            Name = "Policy endpoint grant smoke test",
+            Enabled = true,
+            BundleIds = [Bundles.Downloading],
+            Assignments =
+            [
+                new AccessPolicyAssignmentDto { Type = "group", Id = group }
+            ]
+        };
+
+        (await Fixture.Policies.SynchronizeAsync(policy, CancellationToken.None))
+            .Status.ShouldBe(BundleOpStatus.Ok);
+        await Fixture.TupleWriter.SyncUserGroupsAsync(subject, [group]);
+
+        (await Fixture.CanInvokeAsync(subject, EndpointIds.DownloadsCreate)).ShouldBeTrue();
+        (await Fixture.CanInvokeAsync(subject, EndpointIds.StorageList)).ShouldBeFalse();
+
+        var effectiveEndpoints = await Fixture.Policies.ListEffectiveEndpointsAsync("user", subject, CancellationToken.None);
+        effectiveEndpoints.Status.ShouldBe(BundleOpStatus.Ok);
+        var endpointIds = effectiveEndpoints.Value.ShouldNotBeNull();
+        endpointIds.ShouldContain(EndpointIds.DownloadsCreate);
+        endpointIds.ShouldNotContain(EndpointIds.StorageList);
+
+        (await Fixture.Policies.RemoveAsync(policy.PolicyId, CancellationToken.None))
+            .Status.ShouldBe(BundleOpStatus.Ok);
+        (await Fixture.CanInvokeAsync(subject, EndpointIds.DownloadsCreate)).ShouldBeFalse();
     }
 
     [Test]
@@ -128,6 +172,27 @@ public class OpenFgaAxis1FlowTests
     }
 
     [Test]
+    public async Task Runtime_Bundle_Can_Clone_A_System_Baseline()
+    {
+        const string bundle = "user.axis1-media-clone";
+
+        (await Fixture.Management.CreateBundleAsync(
+                bundle,
+                [],
+                Bundles.Media,
+                CancellationToken.None))
+            .Status.ShouldBe(BundleOpStatus.Ok);
+
+        var clone = (await Fixture.Management.GetBundleAsync(bundle, CancellationToken.None)).Value;
+        clone.ShouldNotBeNull();
+        clone!.Endpoints.ShouldContain(EndpointIds.MediaStream);
+        clone.Endpoints.ShouldContain(EndpointIds.MediaThumbnail);
+
+        (await Fixture.Management.DeleteBundleAsync(bundle, CancellationToken.None))
+            .Status.ShouldBe(BundleOpStatus.Ok);
+    }
+
+    [Test]
     public async Task User_Composed_Bundle_Full_Lifecycle_And_Grant()
     {
         const string bundle = "user.axis1-mix";
@@ -137,6 +202,10 @@ public class OpenFgaAxis1FlowTests
         // Compose from the catalog.
         (await Fixture.Management.CreateBundleAsync(bundle, [EndpointIds.StorageList], CancellationToken.None))
             .Status.ShouldBe(BundleOpStatus.Ok);
+
+        // Emptying tuple membership would make the bundle disappear and bypass the API delete guard.
+        (await Fixture.Management.SetBundleEndpointsAsync(bundle, [], CancellationToken.None))
+            .Status.ShouldBe(BundleOpStatus.Validation);
 
         // Grant it and confirm scoped access through a real invoke check.
         (await Fixture.Management.GrantAsync(bundle, "group", group, CancellationToken.None))

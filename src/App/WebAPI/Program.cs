@@ -128,6 +128,7 @@ public class Program
             builder.Services.AddSingleton<IFrostStreamAuthorizer, AllowAllAuthorizer>();
             builder.Services.AddSingleton<IOpenFgaTupleWriter, NullOpenFgaTupleWriter>();
             builder.Services.AddSingleton<IBundleManagementService, NullBundleManagementService>();
+            builder.Services.AddSingleton<IAccessPolicyOpenFgaService, NullAccessPolicyOpenFgaService>();
             builder.Services.AddSingleton<IDirectoryService, NullDirectoryService>();
         }
         else
@@ -276,8 +277,11 @@ public class Program
             builder.Services.AddHostedService<OpenFgaProvisioner>();
             builder.Services.AddHttpClient<OpenFgaBundleManagementService>();
             builder.Services.AddScoped<IBundleManagementService>(sp => sp.GetRequiredService<OpenFgaBundleManagementService>());
+            builder.Services.AddHttpClient<OpenFgaAccessPolicyService>();
+            builder.Services.AddScoped<IAccessPolicyOpenFgaService>(sp => sp.GetRequiredService<OpenFgaAccessPolicyService>());
             builder.Services.AddHttpClient<AuthentikDirectoryService>();
             builder.Services.AddScoped<IDirectoryService>(sp => sp.GetRequiredService<AuthentikDirectoryService>());
+            builder.Services.AddHostedService<AccessPolicyReconciliationService>();
         }
 
         builder.Services.AddScoped<IAuthorizationHandler, FrostStreamPermissionHandler>();
@@ -298,7 +302,13 @@ public class Program
         // Per-endpoint policies (fs.endpoint:<id>) are resolved dynamically rather than registered up front.
         builder.Services.AddSingleton<IAuthorizationPolicyProvider, EndpointPolicyProvider>();
         builder.Services
-            .AddControllers()
+            .AddControllers(options =>
+            {
+                if (singleUserMode)
+                {
+                    options.Conventions.Add(new SingleUserAccessControlConvention());
+                }
+            })
             .AddJsonOptions(options =>
             {
                 options.JsonSerializerOptions.ConfigureForNodaTime(DateTimeZoneProviders.Tzdb);

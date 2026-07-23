@@ -20,7 +20,6 @@ public static class Bundles
     public const string Media = "media";
     public const string Notifications = "notifications";
     public const string Management = "management";
-    public const string MediaAccessAdmin = "media-access-admin";
 }
 
 /// <summary>
@@ -229,31 +228,28 @@ public static class EndpointIds
     public const string CastSessionsDisconnect = "cast.sessions.disconnect";
     public const string CastSessionsEvents = "cast.sessions.events";
 
-    // Media access control (watch-time restrictions). The internal `media-access.check` gate has no
-    // endpoint id — it is server-to-server only and never reachable as a route.
-    public const string MediaAccessMediaList = "media-access.media.list";
-    public const string MediaAccessMediaAdd = "media-access.media.add";
-    public const string MediaAccessMediaRemove = "media-access.media.remove";
-    public const string MediaAccessMediaClear = "media-access.media.clear";
-    public const string MediaAccessProviderList = "media-access.provider.list";
-    public const string MediaAccessProviderAdd = "media-access.provider.add";
-    public const string MediaAccessProviderRemove = "media-access.provider.remove";
-    public const string MediaAccessProviderClear = "media-access.provider.clear";
-    public const string MediaAccessAgeList = "media-access.age.list";
-    public const string MediaAccessAgeAdd = "media-access.age.add";
-    public const string MediaAccessAgeRemove = "media-access.age.remove";
-
-    // Bundle management (runtime). These live in the `:all` bootstrap bundle so the bootstrap admin
-    // can always reach them — see the lock-out guard in B_Axis1.MD.
-    public const string ManagementCatalog = "management.catalog";
-    public const string ManagementBundlesList = "management.bundles.list";
-    public const string ManagementBundlesGet = "management.bundles.get";
-    public const string ManagementBundlesCreate = "management.bundles.create";
-    public const string ManagementBundlesSetEndpoints = "management.bundles.set-endpoints";
-    public const string ManagementBundlesDelete = "management.bundles.delete";
-    public const string ManagementGrantsCreate = "management.grants.create";
-    public const string ManagementGrantsDelete = "management.grants.delete";
-    public const string ManagementDirectorySearch = "management.directory.search";
+    // Unified access control. These live in the management baseline bundle and therefore in the
+    // `:all` bootstrap bundle. MEDIA_ACCESS.MD defines policies as the only principal-grant surface.
+    public const string AccessControlCatalog = "access-control.catalog";
+    public const string AccessControlDirectorySearch = "access-control.directory.search";
+    public const string AccessControlBundlesList = "access-control.bundles.list";
+    public const string AccessControlBundlesGet = "access-control.bundles.get";
+    public const string AccessControlBundlePoliciesList = "access-control.bundles.policies.list";
+    public const string AccessControlBundlesCreate = "access-control.bundles.create";
+    public const string AccessControlBundlesSetEndpoints = "access-control.bundles.set-endpoints";
+    public const string AccessControlBundlesDelete = "access-control.bundles.delete";
+    public const string AccessControlPoliciesList = "access-control.policies.list";
+    public const string AccessControlPoliciesGet = "access-control.policies.get";
+    public const string AccessControlPoliciesCreate = "access-control.policies.create";
+    public const string AccessControlPoliciesUpdate = "access-control.policies.update";
+    public const string AccessControlPoliciesDelete = "access-control.policies.delete";
+    public const string AccessControlPoliciesDuplicate = "access-control.policies.duplicate";
+    public const string AccessControlPoliciesImpact = "access-control.policies.impact";
+    public const string AccessControlProvidersList = "access-control.providers.list";
+    public const string AccessControlMediaSummary = "access-control.media.summary";
+    public const string AccessControlEffective = "access-control.effective";
+    public const string AccessControlEffectiveCheck = "access-control.effective.check";
+    public const string AccessControlEffectiveMe = "access-control.effective.me";
 
     // Backups
     public const string BackupsCreate = "backups.create";
@@ -458,27 +454,26 @@ public static class EndpointCatalog
         new(EndpointIds.ChannelAudioPodcastFeed, Bundles.Media),
         new(EndpointIds.ChannelAudioEnclosure, Bundles.Media),
 
-        new(EndpointIds.MediaAccessMediaList, Bundles.MediaAccessAdmin),
-        new(EndpointIds.MediaAccessMediaAdd, Bundles.MediaAccessAdmin),
-        new(EndpointIds.MediaAccessMediaRemove, Bundles.MediaAccessAdmin),
-        new(EndpointIds.MediaAccessMediaClear, Bundles.MediaAccessAdmin),
-        new(EndpointIds.MediaAccessProviderList, Bundles.MediaAccessAdmin),
-        new(EndpointIds.MediaAccessProviderAdd, Bundles.MediaAccessAdmin),
-        new(EndpointIds.MediaAccessProviderRemove, Bundles.MediaAccessAdmin),
-        new(EndpointIds.MediaAccessProviderClear, Bundles.MediaAccessAdmin),
-        new(EndpointIds.MediaAccessAgeList, Bundles.MediaAccessAdmin),
-        new(EndpointIds.MediaAccessAgeAdd, Bundles.MediaAccessAdmin),
-        new(EndpointIds.MediaAccessAgeRemove, Bundles.MediaAccessAdmin),
-
-        new(EndpointIds.ManagementCatalog, Bundles.Management),
-        new(EndpointIds.ManagementBundlesList, Bundles.Management),
-        new(EndpointIds.ManagementBundlesGet, Bundles.Management),
-        new(EndpointIds.ManagementBundlesCreate, Bundles.Management),
-        new(EndpointIds.ManagementBundlesSetEndpoints, Bundles.Management),
-        new(EndpointIds.ManagementBundlesDelete, Bundles.Management),
-        new(EndpointIds.ManagementGrantsCreate, Bundles.Management),
-        new(EndpointIds.ManagementGrantsDelete, Bundles.Management),
-        new(EndpointIds.ManagementDirectorySearch, Bundles.Management),
+        new(EndpointIds.AccessControlCatalog, Bundles.Management),
+        new(EndpointIds.AccessControlDirectorySearch, Bundles.Management),
+        new(EndpointIds.AccessControlBundlesList, Bundles.Management),
+        new(EndpointIds.AccessControlBundlesGet, Bundles.Management),
+        new(EndpointIds.AccessControlBundlePoliciesList, Bundles.Management),
+        new(EndpointIds.AccessControlBundlesCreate, Bundles.Management),
+        new(EndpointIds.AccessControlBundlesSetEndpoints, Bundles.Management),
+        new(EndpointIds.AccessControlBundlesDelete, Bundles.Management),
+        new(EndpointIds.AccessControlPoliciesList, Bundles.Management),
+        new(EndpointIds.AccessControlPoliciesGet, Bundles.Management),
+        new(EndpointIds.AccessControlPoliciesCreate, Bundles.Management),
+        new(EndpointIds.AccessControlPoliciesUpdate, Bundles.Management),
+        new(EndpointIds.AccessControlPoliciesDelete, Bundles.Management),
+        new(EndpointIds.AccessControlPoliciesDuplicate, Bundles.Management),
+        new(EndpointIds.AccessControlPoliciesImpact, Bundles.Management),
+        new(EndpointIds.AccessControlProvidersList, Bundles.Management),
+        new(EndpointIds.AccessControlMediaSummary, Bundles.Management),
+        new(EndpointIds.AccessControlEffective, Bundles.Management),
+        new(EndpointIds.AccessControlEffectiveCheck, Bundles.Management),
+        new(EndpointIds.AccessControlEffectiveMe, Bundles.Management),
 
         new(EndpointIds.BackupsCreate, Bundles.Management),
         new(EndpointIds.BackupsJobsList, Bundles.Management),

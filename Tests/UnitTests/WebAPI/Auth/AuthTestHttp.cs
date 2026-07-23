@@ -11,13 +11,28 @@ namespace UnitTests.WebAPI.Auth;
 /// </summary>
 internal sealed class StubHttpMessageHandler(Func<RecordedRequest, HttpResponseMessage> responder) : HttpMessageHandler
 {
-    public List<RecordedRequest> Requests { get; } = [];
+    private readonly object _requestsLock = new();
+    private readonly List<RecordedRequest> _requests = [];
+
+    public IReadOnlyList<RecordedRequest> Requests
+    {
+        get
+        {
+            lock (_requestsLock)
+            {
+                return _requests.ToArray();
+            }
+        }
+    }
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         var body = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
         var recorded = new RecordedRequest(request.Method, request.RequestUri!, body);
-        Requests.Add(recorded);
+        lock (_requestsLock)
+        {
+            _requests.Add(recorded);
+        }
         return responder(recorded);
     }
 

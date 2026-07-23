@@ -18,9 +18,11 @@ public static class AuthConstants
     public const string InvokeRelation = "invoke";
     public const string BundleRelation = "bundle";
     public const string GranteeRelation = "grantee";
+    public const string PolicyRelation = "policy";
 
     public const string EndpointObjectPrefix = "endpoint:";
     public const string CapabilityGroupObjectPrefix = "capability_group:";
+    public const string AccessPolicyObjectPrefix = "access_policy:";
 
     /// <summary>Lock-out guard bundle: contains every endpoint and is granted to the bootstrap admin group.</summary>
     public const string AllBundle = "all";
@@ -32,6 +34,8 @@ public static class AuthConstants
     public static string EndpointObject(string endpointId) => EndpointObjectPrefix + endpointId;
 
     public static string CapabilityGroupObject(string bundleId) => CapabilityGroupObjectPrefix + bundleId;
+
+    public static string AccessPolicyObject(Guid policyId) => AccessPolicyObjectPrefix + policyId.ToString("N");
 
     public static bool IsUserBundle(string bundleId) =>
         bundleId.StartsWith(UserBundlePrefix, StringComparison.Ordinal);

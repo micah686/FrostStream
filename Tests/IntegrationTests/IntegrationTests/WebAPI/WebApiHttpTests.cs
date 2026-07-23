@@ -5,6 +5,7 @@ using FluentStorage.Storage;
 using Conduit.NATS;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -24,6 +25,23 @@ namespace IntegrationTests.WebApiHttp;
 
 public sealed class WebApiHttpTests
 {
+    [Test]
+    public void Access_Control_Routes_Are_Not_Registered_In_Single_User_Mode()
+    {
+        using var factory = new TestWebApiFactory();
+
+        var routePatterns = factory.Services
+            .GetServices<EndpointDataSource>()
+            .SelectMany(dataSource => dataSource.Endpoints)
+            .OfType<RouteEndpoint>()
+            .Select(endpoint => endpoint.RoutePattern.RawText);
+
+        routePatterns
+            .Where(pattern => pattern is not null &&
+                pattern.StartsWith("api/global/access-control", StringComparison.OrdinalIgnoreCase))
+            .ShouldBeEmpty();
+    }
+
     [Test]
     public async Task Get_Media_Stream_Supports_Http_Range_Requests()
     {
@@ -233,11 +251,18 @@ internal sealed class FakeMessageBus : IMessageBus
         TimeSpan timeout,
         CancellationToken cancellationToken = default)
     {
-        if (subject == MediaAccessSubjects.Check && request is MediaAccessCheckRequestMessage)
+        if (subject == AccessPolicySubjects.EffectiveMedia &&
+            request is AccessPolicyEffectiveMediaRequestMessage accessRequest)
         {
-            return Task.FromResult((TResponse?)(object)new MediaAccessCheckResponseMessage
+            return Task.FromResult((TResponse?)(object)new AccessPolicyOperationResponseMessage
             {
-                IsAllowed = true
+                Success = true,
+                EffectiveMedia = new AccessPolicyEffectiveMediaDto
+                {
+                    MediaGuid = accessRequest.MediaGuid,
+                    Found = true,
+                    IsAllowed = true
+                }
             });
         }
 
