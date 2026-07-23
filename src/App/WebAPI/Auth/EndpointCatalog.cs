@@ -16,7 +16,7 @@ public static class Bundles
     public const string Schedules = "schedules";
     public const string Presets = "presets";
     public const string DownloadConfigSets = "download-config-sets";
-    public const string CreatorSources = "creator-sources";
+    public const string CreatorMonitor = "creator-monitor";
     public const string Media = "media";
     public const string Notifications = "notifications";
     public const string Management = "management";
@@ -178,16 +178,16 @@ public static class EndpointIds
     public const string DownloadConfigSetsDelete = "download-config-sets.delete";
 
     // Creator sources
-    public const string CreatorSourcesCreate = "creator-sources.create";
-    public const string CreatorSourcesDownloadChannel = "creator-sources.download-channel";
-    public const string CreatorSourcesUpdate = "creator-sources.update";
-    public const string CreatorSourcesGet = "creator-sources.get";
-    public const string CreatorSourcesList = "creator-sources.list";
-    public const string CreatorSourcesRefreshAssets = "creator-sources.refresh-assets";
-    public const string CreatorSourcesScanNow = "creator-sources.scan-now";
-    public const string CreatorSourcesDelete = "creator-sources.delete";
-    public const string CreatorSourcesListIgnoredMedia = "creator-sources.list-ignored-media";
-    public const string CreatorSourcesForceQueueMedia = "creator-sources.force-queue-media";
+    public const string CreatorMonitorCreate = "creator-monitor.create";
+    public const string CreatorMonitorDownloadChannel = "creator-monitor.download-channel";
+    public const string CreatorMonitorUpdate = "creator-monitor.update";
+    public const string CreatorMonitorGet = "creator-monitor.get";
+    public const string CreatorMonitorList = "creator-monitor.list";
+    public const string CreatorMonitorRefreshAssets = "creator-monitor.refresh-assets";
+    public const string CreatorMonitorScanNow = "creator-monitor.scan-now";
+    public const string CreatorMonitorDelete = "creator-monitor.delete";
+    public const string CreatorMonitorListIgnoredMedia = "creator-monitor.list-ignored-media";
+    public const string CreatorMonitorForceQueueMedia = "creator-monitor.force-queue-media";
 
     // Media
     public const string MediaStream = "media.stream";
@@ -409,17 +409,17 @@ public static class EndpointCatalog
         new(EndpointIds.DownloadConfigSetsList, Bundles.DownloadConfigSets),
         new(EndpointIds.DownloadConfigSetsDelete, Bundles.DownloadConfigSets),
 
-        new(EndpointIds.CreatorSourcesCreate, Bundles.CreatorSources),
-        new(EndpointIds.CreatorSourcesDownloadChannel, Bundles.CreatorSources),
-        new(EndpointIds.CreatorSourcesUpdate, Bundles.CreatorSources),
-        new(EndpointIds.CreatorSourcesGet, Bundles.CreatorSources),
-        new(EndpointIds.CreatorSourcesList, Bundles.CreatorSources),
-        new(EndpointIds.CreatorSourcesRefreshAssets, Bundles.CreatorSources),
-        new(EndpointIds.MetadataAccountsRefreshAssets, Bundles.CreatorSources),
-        new(EndpointIds.CreatorSourcesScanNow, Bundles.CreatorSources),
-        new(EndpointIds.CreatorSourcesDelete, Bundles.CreatorSources),
-        new(EndpointIds.CreatorSourcesListIgnoredMedia, Bundles.CreatorSources),
-        new(EndpointIds.CreatorSourcesForceQueueMedia, Bundles.CreatorSources),
+        new(EndpointIds.CreatorMonitorCreate, Bundles.CreatorMonitor),
+        new(EndpointIds.CreatorMonitorDownloadChannel, Bundles.CreatorMonitor),
+        new(EndpointIds.CreatorMonitorUpdate, Bundles.CreatorMonitor),
+        new(EndpointIds.CreatorMonitorGet, Bundles.CreatorMonitor),
+        new(EndpointIds.CreatorMonitorList, Bundles.CreatorMonitor),
+        new(EndpointIds.CreatorMonitorRefreshAssets, Bundles.CreatorMonitor),
+        new(EndpointIds.MetadataAccountsRefreshAssets, Bundles.CreatorMonitor),
+        new(EndpointIds.CreatorMonitorScanNow, Bundles.CreatorMonitor),
+        new(EndpointIds.CreatorMonitorDelete, Bundles.CreatorMonitor),
+        new(EndpointIds.CreatorMonitorListIgnoredMedia, Bundles.CreatorMonitor),
+        new(EndpointIds.CreatorMonitorForceQueueMedia, Bundles.CreatorMonitor),
 
         new(EndpointIds.MediaStream, Bundles.Media),
         new(EndpointIds.MediaThumbnail, Bundles.Media),

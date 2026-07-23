@@ -10,12 +10,12 @@ using Shared.Database;
 using Shared.Messaging;
 using Shouldly;
 using TUnit.Core;
-using WebAPI.Features.CreatorSources.Controllers;
-using WebAPI.Features.CreatorSources.Models;
+using WebAPI.Features.CreatorMonitor.Controllers;
+using WebAPI.Features.CreatorMonitor.Models;
 
 namespace UnitTests.WebAPI;
 
-public sealed class CreatorSourcesControllerTests
+public sealed class CreatorMonitorControllerTests
 {
     private static readonly Instant Now = Instant.FromUtc(2026, 6, 3, 16, 0);
 
@@ -25,9 +25,9 @@ public sealed class CreatorSourcesControllerTests
         var bus = Substitute.For<IMessageBus>();
         var controller = CreateController(bus: bus);
 
-        bus.RequestAsync<CreatorSourceCreateRequestMessage, CreatorSourceOperationResponseMessage>(
-                CreatorDiscoverySubjects.CreateSource,
-                Arg.Is<CreatorSourceCreateRequestMessage>(x => x != null &&
+        bus.RequestAsync<CreatorMonitorCreateRequestMessage, CreatorMonitorOperationResponseMessage>(
+                CreatorMonitorSubjects.CreateSource,
+                Arg.Is<CreatorMonitorCreateRequestMessage>(x => x != null &&
                     x.Platform == "youtube" &&
                     x.SourceType == CreatorSourceType.Videos &&
                     x.SourceUrl == "https://example.test/@creator" &&
@@ -42,7 +42,7 @@ public sealed class CreatorSourcesControllerTests
                     x.ProviderQueryLimits.GetLimit("youtube", CreatorSourceType.Shorts) == 75),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
-            .Returns(new CreatorSourceOperationResponseMessage
+            .Returns(new CreatorMonitorOperationResponseMessage
             {
                 Success = true,
                 Entity = CreateDto(42)
@@ -74,12 +74,12 @@ public sealed class CreatorSourcesControllerTests
         var bus = Substitute.For<IMessageBus>();
         var controller = CreateController(bus: bus);
 
-        bus.RequestAsync<CreatorSourceListRequestMessage, CreatorSourceOperationResponseMessage>(
-                CreatorDiscoverySubjects.ListSources,
-                Arg.Any<CreatorSourceListRequestMessage>(),
+        bus.RequestAsync<CreatorMonitorListRequestMessage, CreatorMonitorOperationResponseMessage>(
+                CreatorMonitorSubjects.ListSources,
+                Arg.Any<CreatorMonitorListRequestMessage>(),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
-            .Returns(new CreatorSourceOperationResponseMessage
+            .Returns(new CreatorMonitorOperationResponseMessage
             {
                 Success = true,
                 Items = [CreateDto(10), CreateDto(11)]
@@ -99,12 +99,12 @@ public sealed class CreatorSourcesControllerTests
         var bus = Substitute.For<IMessageBus>();
         var controller = CreateController(bus: bus);
 
-        bus.RequestAsync<CreatorSourceGetRequestMessage, CreatorSourceOperationResponseMessage>(
-                CreatorDiscoverySubjects.GetSource,
-                Arg.Is<CreatorSourceGetRequestMessage>(x => x != null && x.Id == 99),
+        bus.RequestAsync<CreatorMonitorGetRequestMessage, CreatorMonitorOperationResponseMessage>(
+                CreatorMonitorSubjects.GetSource,
+                Arg.Is<CreatorMonitorGetRequestMessage>(x => x != null && x.Id == 99),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
-            .Returns(new CreatorSourceOperationResponseMessage
+            .Returns(new CreatorMonitorOperationResponseMessage
             {
                 Success = false,
                 ErrorCode = "not_found",
@@ -123,12 +123,12 @@ public sealed class CreatorSourcesControllerTests
         var publisher = Substitute.For<IJetStreamPublisher>();
         var controller = CreateController(bus, publisher);
 
-        bus.RequestAsync<CreatorSourceGetRequestMessage, CreatorSourceOperationResponseMessage>(
-                CreatorDiscoverySubjects.GetSource,
-                Arg.Is<CreatorSourceGetRequestMessage>(x => x != null && x.Id == 42),
+        bus.RequestAsync<CreatorMonitorGetRequestMessage, CreatorMonitorOperationResponseMessage>(
+                CreatorMonitorSubjects.GetSource,
+                Arg.Is<CreatorMonitorGetRequestMessage>(x => x != null && x.Id == 42),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
-            .Returns(new CreatorSourceOperationResponseMessage
+            .Returns(new CreatorMonitorOperationResponseMessage
             {
                 Success = true,
                 Entity = CreateDto(42)
@@ -159,9 +159,9 @@ public sealed class CreatorSourcesControllerTests
         var publisher = Substitute.For<IJetStreamPublisher>();
         var controller = CreateController(bus, publisher);
 
-        bus.RequestAsync<CreatorSourceCreateOrReuseRequestMessage, CreatorSourceOperationResponseMessage>(
-                CreatorDiscoverySubjects.CreateOrReuseSource,
-                Arg.Is<CreatorSourceCreateOrReuseRequestMessage>(x => x != null &&
+        bus.RequestAsync<CreatorMonitorCreateOrReuseRequestMessage, CreatorMonitorOperationResponseMessage>(
+                CreatorMonitorSubjects.CreateOrReuseSource,
+                Arg.Is<CreatorMonitorCreateOrReuseRequestMessage>(x => x != null &&
                     x.Platform == "youtube" &&
                     x.SourceType == CreatorSourceType.Videos &&
                     x.SourceUrl == "https://example.test/@creator/videos" &&
@@ -170,7 +170,7 @@ public sealed class CreatorSourcesControllerTests
                     x.ProviderQueryLimits.GetLimit("youtube", CreatorSourceType.Videos) == 100),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
-            .Returns(new CreatorSourceOperationResponseMessage
+            .Returns(new CreatorMonitorOperationResponseMessage
             {
                 Success = true,
                 Entity = CreateDto(42) with { SourceUrl = "https://example.test/@creator/videos" }
@@ -224,12 +224,12 @@ public sealed class CreatorSourcesControllerTests
         var publisher = Substitute.For<IJetStreamPublisher>();
         var controller = CreateController(bus, publisher);
 
-        bus.RequestAsync<CreatorSourceGetRequestMessage, CreatorSourceOperationResponseMessage>(
-                CreatorDiscoverySubjects.GetSource,
-                Arg.Any<CreatorSourceGetRequestMessage>(),
+        bus.RequestAsync<CreatorMonitorGetRequestMessage, CreatorMonitorOperationResponseMessage>(
+                CreatorMonitorSubjects.GetSource,
+                Arg.Any<CreatorMonitorGetRequestMessage>(),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
-            .Returns(new CreatorSourceOperationResponseMessage
+            .Returns(new CreatorMonitorOperationResponseMessage
             {
                 Success = true,
                 Entity = CreateDto(42)
@@ -253,12 +253,12 @@ public sealed class CreatorSourcesControllerTests
         var bus = Substitute.For<IMessageBus>();
         var controller = CreateController(bus: bus);
 
-        bus.RequestAsync<CreatorSourceDeleteRequestMessage, CreatorSourceOperationResponseMessage>(
-                CreatorDiscoverySubjects.DeleteSource,
-                Arg.Is<CreatorSourceDeleteRequestMessage>(x => x != null && x.Id == 42),
+        bus.RequestAsync<CreatorMonitorDeleteRequestMessage, CreatorMonitorOperationResponseMessage>(
+                CreatorMonitorSubjects.DeleteSource,
+                Arg.Is<CreatorMonitorDeleteRequestMessage>(x => x != null && x.Id == 42),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
-            .Returns(new CreatorSourceOperationResponseMessage
+            .Returns(new CreatorMonitorOperationResponseMessage
             {
                 Success = false,
                 ErrorCode = "validation",
@@ -285,25 +285,25 @@ public sealed class CreatorSourcesControllerTests
 
         result.Result!.ShouldBeOfType<BadRequestObjectResult>();
         await bus.DidNotReceiveWithAnyArgs()
-            .RequestAsync<CreatorSourceCreateRequestMessage, CreatorSourceOperationResponseMessage>(
+            .RequestAsync<CreatorMonitorCreateRequestMessage, CreatorMonitorOperationResponseMessage>(
                 default!,
                 default!,
                 default,
                 default);
     }
 
-    private static CreatorSourcesController CreateController(
+    private static CreatorMonitorController CreateController(
         IMessageBus? bus = null,
         IJetStreamPublisher? publisher = null)
     {
         var clock = Substitute.For<IClock>();
         clock.GetCurrentInstant().Returns(Now);
 
-        var controller = new CreatorSourcesController(
+        var controller = new CreatorMonitorController(
             bus ?? Substitute.For<IMessageBus>(),
             publisher ?? Substitute.For<IJetStreamPublisher>(),
             clock,
-            Substitute.For<ILogger<CreatorSourcesController>>());
+            Substitute.For<ILogger<CreatorMonitorController>>());
 
         var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(AuthConstants.SubjectClaim, "unit_test_user")], "test"));
         controller.ControllerContext = new ControllerContext
@@ -314,7 +314,7 @@ public sealed class CreatorSourcesControllerTests
         return controller;
     }
 
-    private static CreatorSourceDto CreateDto(long id) => new()
+    private static CreatorMonitorDto CreateDto(long id) => new()
     {
         Id = id,
         Platform = "youtube",

@@ -5,7 +5,7 @@ using Shared.Database;
 using Shared.Messaging;
 using YtDlpSharpLib.Options;
 
-namespace WebAPI.Features.CreatorSources.Models;
+namespace WebAPI.Features.CreatorMonitor.Models;
 
 public abstract class CreatorSourceRequestBase
 {

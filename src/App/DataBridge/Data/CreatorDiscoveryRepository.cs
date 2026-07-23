@@ -309,7 +309,7 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
     }
 
     public async Task<CreatorSourceEntity?> UpdateAssetsAsync(
-        UpdateCreatorSourceAssetsRequestMessage request,
+        UpdateCreatorMonitorAssetsRequestMessage request,
         CancellationToken cancellationToken = default)
     {
         var existing = await db.CreatorSources.FirstOrDefaultAsync(x => x.Id == request.SourceId, cancellationToken);

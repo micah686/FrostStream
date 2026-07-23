@@ -9,17 +9,17 @@ using Shared.Messaging;
 using WebAPI.Auth;
 using WebAPI.Features.Common;
 using WebAPI.Features.DownloadConfigSets;
-using WebAPI.Features.CreatorSources.Models;
+using WebAPI.Features.CreatorMonitor.Models;
 
-namespace WebAPI.Features.CreatorSources.Controllers;
+namespace WebAPI.Features.CreatorMonitor.Controllers;
 
 [ApiController]
 [Route("api/creator-monitor")]
-public sealed class CreatorSourcesController(
+public sealed class CreatorMonitorController(
     IMessageBus messageBus,
     IJetStreamPublisher publisher,
     IClock clock,
-    ILogger<CreatorSourcesController> logger) : ControllerBase
+    ILogger<CreatorMonitorController> logger) : ControllerBase
 {
     private const string ChannelAssetRefreshTaskType = "channel_asset_refresh";
     private const string ChannelMediaListTaskType = "channel_media_list";
@@ -28,7 +28,7 @@ public sealed class CreatorSourcesController(
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);
 
     [HttpPost]
-    [Endpoint(EndpointIds.CreatorSourcesCreate)]
+    [Endpoint(EndpointIds.CreatorMonitorCreate)]
     [EndpointSummary("Create a creator discovery source")]
     [EndpointDescription("Registers a creator or channel source for recurring discovery scans. The platform, source type, URL, scan enablement, incremental paging thresholds, full-rescan interval, and metadata refresh window are validated and persisted by DataBridge.")]
     public async Task<ActionResult<CreatorSourceResponse>> Create(
@@ -39,8 +39,8 @@ public sealed class CreatorSourcesController(
             return BadRequest(validationError);
 
         var response = await SendAsync(
-            CreatorDiscoverySubjects.CreateSource,
-            new CreatorSourceCreateRequestMessage
+            CreatorMonitorSubjects.CreateSource,
+            new CreatorMonitorCreateRequestMessage
             {
                 Platform = request.Platform,
                 SourceType = request.SourceType,
@@ -59,7 +59,7 @@ public sealed class CreatorSourcesController(
     }
 
     [HttpPost("channel-downloads")]
-    [Endpoint(EndpointIds.CreatorSourcesDownloadChannel)]
+    [Endpoint(EndpointIds.CreatorMonitorDownloadChannel)]
     [EndpointSummary("Queue a full channel download")]
     [EndpointDescription("Creates or reuses a creator channel source, then queues a targeted full channel scan. Every discovered video is emitted as an independent download job under one shared correlation identifier, so one failed video does not fail the rest of the channel. Existing library items are skipped by normal deduplication unless forceDownload is enabled.")]
     public async Task<ActionResult<ChannelDownloadResponse>> DownloadChannel(
@@ -70,8 +70,8 @@ public sealed class CreatorSourcesController(
             return BadRequest(validationError);
 
         var sourceResponse = await SendAsync(
-            CreatorDiscoverySubjects.CreateOrReuseSource,
-            new CreatorSourceCreateOrReuseRequestMessage
+            CreatorMonitorSubjects.CreateOrReuseSource,
+            new CreatorMonitorCreateOrReuseRequestMessage
             {
                 Platform = request.Platform,
                 SourceType = request.SourceType,
@@ -177,7 +177,7 @@ public sealed class CreatorSourcesController(
     }
 
     [HttpPut("{id:long}")]
-    [Endpoint(EndpointIds.CreatorSourcesUpdate)]
+    [Endpoint(EndpointIds.CreatorMonitorUpdate)]
     [EndpointSummary("Update a creator discovery source")]
     [EndpointDescription("Replaces the discovery configuration for an existing creator source. The complete platform, source URL, scan controls, paging thresholds, rescan interval, and metadata refresh window are sent to DataBridge for validation and persistence.")]
     public async Task<ActionResult<CreatorSourceResponse>> Update(
@@ -189,8 +189,8 @@ public sealed class CreatorSourcesController(
             return BadRequest(validationError);
 
         var response = await SendAsync(
-            CreatorDiscoverySubjects.UpdateSource,
-            new CreatorSourceUpdateRequestMessage
+            CreatorMonitorSubjects.UpdateSource,
+            new CreatorMonitorUpdateRequestMessage
             {
                 Id = id,
                 Platform = request.Platform,
@@ -210,28 +210,28 @@ public sealed class CreatorSourcesController(
     }
 
     [HttpGet("{id:long}")]
-    [Endpoint(EndpointIds.CreatorSourcesGet)]
+    [Endpoint(EndpointIds.CreatorMonitorGet)]
     [EndpointSummary("Get a creator discovery source")]
     [EndpointDescription("Retrieves a creator source by numeric identifier, including its scan configuration, last successful and full scan timestamps, high-water mark, and audit timestamps. Returns 404 when the source does not exist.")]
     public async Task<ActionResult<CreatorSourceResponse>> Get(long id, CancellationToken cancellationToken)
     {
         var response = await SendAsync(
-            CreatorDiscoverySubjects.GetSource,
-            new CreatorSourceGetRequestMessage { Id = id },
+            CreatorMonitorSubjects.GetSource,
+            new CreatorMonitorGetRequestMessage { Id = id },
             cancellationToken);
 
         return MapEntityResponse(response);
     }
 
     [HttpGet]
-    [Endpoint(EndpointIds.CreatorSourcesList)]
+    [Endpoint(EndpointIds.CreatorMonitorList)]
     [EndpointSummary("List creator discovery sources")]
     [EndpointDescription("Returns all configured creator discovery sources with their scanning policies and latest discovery state. The list is obtained from DataBridge through request/reply and returns 503 if the service cannot be reached.")]
     public async Task<ActionResult<IReadOnlyCollection<CreatorSourceResponse>>> List(CancellationToken cancellationToken)
     {
         var response = await SendAsync(
-            CreatorDiscoverySubjects.ListSources,
-            new CreatorSourceListRequestMessage(),
+            CreatorMonitorSubjects.ListSources,
+            new CreatorMonitorListRequestMessage(),
             cancellationToken);
 
         if (response is null)
@@ -239,11 +239,11 @@ public sealed class CreatorSourcesController(
         if (!response.Success)
             return MapErrorResponse(response);
 
-        return Ok((response.Items ?? Array.Empty<CreatorSourceDto>()).Select(MapDto).ToArray());
+        return Ok((response.Items ?? Array.Empty<CreatorMonitorDto>()).Select(MapDto).ToArray());
     }
 
     [HttpPost("{id:long}/refresh-assets")]
-    [Endpoint(EndpointIds.CreatorSourcesRefreshAssets)]
+    [Endpoint(EndpointIds.CreatorMonitorRefreshAssets)]
     [EndpointSummary("Queue a creator asset refresh")]
     [EndpointDescription("Verifies that the creator source exists, then queues an asynchronous refresh of its avatar, banner, and related channel assets. The force query parameter controls whether cached assets may be replaced; a successful request returns 202 with the queued source identifier.")]
     public async Task<IActionResult> RefreshAssets(
@@ -252,8 +252,8 @@ public sealed class CreatorSourcesController(
         CancellationToken cancellationToken)
     {
         var getResponse = await SendAsync(
-            CreatorDiscoverySubjects.GetSource,
-            new CreatorSourceGetRequestMessage { Id = id },
+            CreatorMonitorSubjects.GetSource,
+            new CreatorMonitorGetRequestMessage { Id = id },
             cancellationToken);
 
         if (getResponse is null)
@@ -294,7 +294,7 @@ public sealed class CreatorSourcesController(
     }
 
     [HttpPost("{id:long}/scan")]
-    [Endpoint(EndpointIds.CreatorSourcesScanNow)]
+    [Endpoint(EndpointIds.CreatorMonitorScanNow)]
     [EndpointSummary("Queue an immediate scan of a creator source")]
     [EndpointDescription("Verifies that the creator source exists, then queues an immediate media scan of just that source without waiting for the global sweep schedule. The mode query parameter selects an incremental update check (default) or a full listing rescan; a successful request returns 202 with the queued source identifier and mode.")]
     public async Task<IActionResult> ScanNow(
@@ -313,8 +313,8 @@ public sealed class CreatorSourcesController(
             return BadRequest("mode must be 'incremental' or 'full'.");
 
         var getResponse = await SendAsync(
-            CreatorDiscoverySubjects.GetSource,
-            new CreatorSourceGetRequestMessage { Id = id },
+            CreatorMonitorSubjects.GetSource,
+            new CreatorMonitorGetRequestMessage { Id = id },
             cancellationToken);
 
         if (getResponse is null)
@@ -371,14 +371,14 @@ public sealed class CreatorSourcesController(
     }
 
     [HttpDelete("{id:long}")]
-    [Endpoint(EndpointIds.CreatorSourcesDelete)]
+    [Endpoint(EndpointIds.CreatorMonitorDelete)]
     [EndpointSummary("Delete a creator discovery source")]
     [EndpointDescription("Deletes the creator discovery source identified by its numeric ID, preventing future scheduled discovery scans for that source. Successful deletion returns 204; missing sources return 404 and conflicting deletions return 409.")]
     public async Task<IActionResult> Delete(long id, CancellationToken cancellationToken)
     {
         var response = await SendAsync(
-            CreatorDiscoverySubjects.DeleteSource,
-            new CreatorSourceDeleteRequestMessage { Id = id },
+            CreatorMonitorSubjects.DeleteSource,
+            new CreatorMonitorDeleteRequestMessage { Id = id },
             cancellationToken);
 
         if (response is null)
@@ -390,7 +390,7 @@ public sealed class CreatorSourcesController(
     }
 
     [HttpGet("{id:long}/ignored-media")]
-    [Endpoint(EndpointIds.CreatorSourcesListIgnoredMedia)]
+    [Endpoint(EndpointIds.CreatorMonitorListIgnoredMedia)]
     [EndpointSummary("List ignored videos for a creator source")]
     [EndpointDescription("Returns videos that were suppressed by a config-set ignore keyword during a user-initiated full channel download for this source, including the keyword that matched. Background monitoring never ignores videos.")]
     public async Task<ActionResult<IReadOnlyCollection<IgnoredMediaResponse>>> ListIgnoredMedia(
@@ -401,7 +401,7 @@ public sealed class CreatorSourcesController(
         try
         {
             response = await messageBus.RequestAsync<ListIgnoredMediaRequestMessage, ListIgnoredMediaResponseMessage>(
-                CreatorDiscoverySubjects.ListIgnoredMedia,
+                CreatorMonitorSubjects.ListIgnoredMedia,
                 new ListIgnoredMediaRequestMessage { CreatorSourceId = id },
                 RequestTimeout,
                 cancellationToken);
@@ -431,7 +431,7 @@ public sealed class CreatorSourcesController(
 
     [Obsolete("remove this endpoint later")]
     [HttpPost("discovered-media/{id:long}/force-queue")]
-    [Endpoint(EndpointIds.CreatorSourcesForceQueueMedia)]
+    [Endpoint(EndpointIds.CreatorMonitorForceQueueMedia)]
     [EndpointSummary("Force-queue an ignored video")]
     [EndpointDescription("Clears the ignored state of a discovered video and queues it for download with force enabled, bypassing the ignore keywords. The download configuration is resolved from the supplied config set or overrides.")]
     public async Task<ActionResult<ForceQueueResponse>> ForceQueueMedia(
@@ -471,7 +471,7 @@ public sealed class CreatorSourcesController(
         try
         {
             response = await messageBus.RequestAsync<ForceQueueDiscoveredMediaRequestMessage, ForceQueueOperationResponseMessage>(
-                CreatorDiscoverySubjects.ForceQueueDiscoveredMedia,
+                CreatorMonitorSubjects.ForceQueueDiscoveredMedia,
                 new ForceQueueDiscoveredMediaRequestMessage
                 {
                     DiscoveredMediaId = id,
@@ -506,14 +506,14 @@ public sealed class CreatorSourcesController(
         return Accepted(new ForceQueueResponse(id, response.JobId ?? Guid.Empty, Queued: true));
     }
 
-    private async Task<CreatorSourceOperationResponseMessage?> SendAsync<TRequest>(
+    private async Task<CreatorMonitorOperationResponseMessage?> SendAsync<TRequest>(
         string subject,
         TRequest request,
         CancellationToken cancellationToken)
     {
         try
         {
-            return await messageBus.RequestAsync<TRequest, CreatorSourceOperationResponseMessage>(
+            return await messageBus.RequestAsync<TRequest, CreatorMonitorOperationResponseMessage>(
                 subject,
                 request,
                 RequestTimeout,
@@ -526,7 +526,7 @@ public sealed class CreatorSourcesController(
         }
     }
 
-    private ActionResult<CreatorSourceResponse> MapEntityResponse(CreatorSourceOperationResponseMessage? response)
+    private ActionResult<CreatorSourceResponse> MapEntityResponse(CreatorMonitorOperationResponseMessage? response)
     {
         if (response is null)
             return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to process creator source request.");
@@ -538,7 +538,7 @@ public sealed class CreatorSourcesController(
         return Ok(MapDto(response.Entity));
     }
 
-    private ActionResult MapErrorResponse(CreatorSourceOperationResponseMessage response)
+    private ActionResult MapErrorResponse(CreatorMonitorOperationResponseMessage response)
         => response.ErrorCode switch
         {
             "not_found" => NotFound(response.ErrorMessage),
@@ -547,7 +547,7 @@ public sealed class CreatorSourcesController(
             _ => StatusCode(StatusCodes.Status500InternalServerError, response.ErrorMessage ?? "Creator source request failed.")
         };
 
-    private static CreatorSourceResponse MapDto(CreatorSourceDto dto)
+    private static CreatorSourceResponse MapDto(CreatorMonitorDto dto)
         => new()
         {
             Id = dto.Id,

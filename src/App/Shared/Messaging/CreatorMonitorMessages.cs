@@ -3,7 +3,7 @@ using Shared.Database;
 
 namespace Shared.Messaging;
 
-public sealed record CreatorSourceDto
+public sealed record CreatorMonitorDto
 {
     public required long Id { get; init; }
     public required string Platform { get; init; }
@@ -32,7 +32,7 @@ public sealed record CreatorSourceDto
     public string? AssetsLastError { get; init; }
 }
 
-public sealed record CreatorSourceCreateRequestMessage
+public sealed record CreatorMonitorCreateRequestMessage
 {
     public required string Platform { get; init; }
     public required CreatorSourceType SourceType { get; init; }
@@ -46,7 +46,7 @@ public sealed record CreatorSourceCreateRequestMessage
     public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
 }
 
-public sealed record CreatorSourceCreateOrReuseRequestMessage
+public sealed record CreatorMonitorCreateOrReuseRequestMessage
 {
     public required string Platform { get; init; }
     public required CreatorSourceType SourceType { get; init; }
@@ -60,7 +60,7 @@ public sealed record CreatorSourceCreateOrReuseRequestMessage
     public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
 }
 
-public sealed record CreatorSourceUpdateRequestMessage
+public sealed record CreatorMonitorUpdateRequestMessage
 {
     public required long Id { get; init; }
     public required string Platform { get; init; }
@@ -75,30 +75,30 @@ public sealed record CreatorSourceUpdateRequestMessage
     public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
 }
 
-public sealed record CreatorSourceGetRequestMessage
+public sealed record CreatorMonitorGetRequestMessage
 {
     public required long Id { get; init; }
 }
 
-public sealed record CreatorSourceListRequestMessage;
+public sealed record CreatorMonitorListRequestMessage;
 
-public sealed record CreatorSourceListEnabledForScanRequestMessage
+public sealed record CreatorMonitorListEnabledForScanRequestMessage
 {
     public required CreatorSourceScanMode ScanMode { get; init; }
 }
 
-public sealed record CreatorSourceDeleteRequestMessage
+public sealed record CreatorMonitorDeleteRequestMessage
 {
     public required long Id { get; init; }
 }
 
-public sealed record CreatorSourceOperationResponseMessage
+public sealed record CreatorMonitorOperationResponseMessage
 {
     public bool Success { get; init; }
     public string? ErrorCode { get; init; }
     public string? ErrorMessage { get; init; }
-    public CreatorSourceDto? Entity { get; init; }
-    public IReadOnlyList<CreatorSourceDto>? Items { get; init; }
+    public CreatorMonitorDto? Entity { get; init; }
+    public IReadOnlyList<CreatorMonitorDto>? Items { get; init; }
 }
 
 public sealed record DiscoveredMediaCandidate
@@ -154,7 +154,7 @@ public sealed record UpsertDiscoveredMediaBatchResponseMessage
     public IReadOnlyList<DiscoveredMediaCandidate>? EnqueuedItems { get; init; }
 }
 
-public sealed record UpdateCreatorSourceAssetsRequestMessage
+public sealed record UpdateCreatorMonitorAssetsRequestMessage
 {
     public required long SourceId { get; init; }
 
@@ -183,10 +183,10 @@ public sealed record UpdateCreatorSourceAssetsRequestMessage
     public bool ClearError { get; init; }
 }
 
-public sealed record UpdateCreatorSourceAssetsResponseMessage
+public sealed record UpdateCreatorMonitorAssetsResponseMessage
 {
     public bool Success { get; init; }
     public string? ErrorCode { get; init; }
     public string? ErrorMessage { get; init; }
-    public CreatorSourceDto? Entity { get; init; }
+    public CreatorMonitorDto? Entity { get; init; }
 }

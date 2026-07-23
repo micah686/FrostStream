@@ -1,6 +1,6 @@
 namespace Shared.Messaging;
 
-public static class CreatorDiscoverySubjects
+public static class CreatorMonitorSubjects
 {
     public const string CreateSource = "fs.creator-source.create";
     public const string CreateOrReuseSource = "fs.creator-source.create-or-reuse";

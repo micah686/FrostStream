@@ -89,15 +89,15 @@ public sealed class ChannelAssetRefreshConsumerService(
             sources.Count);
     }
 
-    private async Task<IReadOnlyList<CreatorSourceDto>> ResolveSourcesAsync(
+    private async Task<IReadOnlyList<CreatorMonitorDto>> ResolveSourcesAsync(
         ChannelAssetRefreshRequested request,
         CancellationToken cancellationToken)
     {
         if (request.TargetSourceId is { } id)
         {
-            var response = await messageBus.RequestAsync<CreatorSourceGetRequestMessage, CreatorSourceOperationResponseMessage>(
-                CreatorDiscoverySubjects.GetSource,
-                new CreatorSourceGetRequestMessage { Id = id },
+            var response = await messageBus.RequestAsync<CreatorMonitorGetRequestMessage, CreatorMonitorOperationResponseMessage>(
+                CreatorMonitorSubjects.GetSource,
+                new CreatorMonitorGetRequestMessage { Id = id },
                 RequestTimeout,
                 cancellationToken);
 
@@ -109,9 +109,9 @@ public sealed class ChannelAssetRefreshConsumerService(
             return [response.Entity];
         }
 
-        var listResponse = await messageBus.RequestAsync<CreatorSourceListEnabledForScanRequestMessage, CreatorSourceOperationResponseMessage>(
-            CreatorDiscoverySubjects.ListEnabledSourcesForScan,
-            new CreatorSourceListEnabledForScanRequestMessage { ScanMode = Shared.Database.CreatorSourceScanMode.Incremental },
+        var listResponse = await messageBus.RequestAsync<CreatorMonitorListEnabledForScanRequestMessage, CreatorMonitorOperationResponseMessage>(
+            CreatorMonitorSubjects.ListEnabledSourcesForScan,
+            new CreatorMonitorListEnabledForScanRequestMessage { ScanMode = Shared.Database.CreatorSourceScanMode.Incremental },
             RequestTimeout,
             cancellationToken);
 
@@ -120,7 +120,7 @@ public sealed class ChannelAssetRefreshConsumerService(
             throw new InvalidOperationException(listResponse?.ErrorMessage ?? "Creator source list request failed.");
         }
 
-        return listResponse.Items ?? Array.Empty<CreatorSourceDto>();
+        return listResponse.Items ?? Array.Empty<CreatorMonitorDto>();
     }
 
     /// <summary>
@@ -230,7 +230,7 @@ public sealed class ChannelAssetRefreshConsumerService(
             bannerResult is not null);
     }
 
-    private async Task RefreshSourceAsync(CreatorSourceDto source, CancellationToken cancellationToken)
+    private async Task RefreshSourceAsync(CreatorMonitorDto source, CancellationToken cancellationToken)
     {
         VideoInfo? container;
         try
@@ -314,7 +314,7 @@ public sealed class ChannelAssetRefreshConsumerService(
     }
 
     private async Task PublishSuccessAsync(
-        CreatorSourceDto source,
+        CreatorMonitorDto source,
         ChannelAccountIdentity identity,
         AvatarOrBanner? avatar,
         AvatarOrBanner? banner,
@@ -322,7 +322,7 @@ public sealed class ChannelAssetRefreshConsumerService(
         string? partialFailure = null)
     {
         var now = clock.GetCurrentInstant();
-        var request = new UpdateCreatorSourceAssetsRequestMessage
+        var request = new UpdateCreatorMonitorAssetsRequestMessage
         {
             SourceId = source.Id,
             Platform = identity.Platform,
@@ -343,8 +343,8 @@ public sealed class ChannelAssetRefreshConsumerService(
             ClearError = partialFailure is null
         };
 
-        var response = await messageBus.RequestAsync<UpdateCreatorSourceAssetsRequestMessage, UpdateCreatorSourceAssetsResponseMessage>(
-            CreatorDiscoverySubjects.UpdateAssets,
+        var response = await messageBus.RequestAsync<UpdateCreatorMonitorAssetsRequestMessage, UpdateCreatorMonitorAssetsResponseMessage>(
+            CreatorMonitorSubjects.UpdateAssets,
             request,
             RequestTimeout,
             cancellationToken);
@@ -358,10 +358,10 @@ public sealed class ChannelAssetRefreshConsumerService(
         }
     }
 
-    private async Task PublishFailureAsync(CreatorSourceDto source, string error, CancellationToken cancellationToken)
+    private async Task PublishFailureAsync(CreatorMonitorDto source, string error, CancellationToken cancellationToken)
     {
         var now = clock.GetCurrentInstant();
-        var request = new UpdateCreatorSourceAssetsRequestMessage
+        var request = new UpdateCreatorMonitorAssetsRequestMessage
         {
             SourceId = source.Id,
             AttemptedAt = now,
@@ -369,8 +369,8 @@ public sealed class ChannelAssetRefreshConsumerService(
             LastError = Truncate(error, 2048)
         };
 
-        var response = await messageBus.RequestAsync<UpdateCreatorSourceAssetsRequestMessage, UpdateCreatorSourceAssetsResponseMessage>(
-            CreatorDiscoverySubjects.UpdateAssets,
+        var response = await messageBus.RequestAsync<UpdateCreatorMonitorAssetsRequestMessage, UpdateCreatorMonitorAssetsResponseMessage>(
+            CreatorMonitorSubjects.UpdateAssets,
             request,
             RequestTimeout,
             cancellationToken);

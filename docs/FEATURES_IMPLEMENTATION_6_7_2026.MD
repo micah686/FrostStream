@@ -96,18 +96,18 @@ Stores named yt-dlp option snapshots for reuse in download requests.
 | `GET` | `/api/option-presets` | List all presets. |
 | `DELETE` | `/api/option-presets/{key}` | Delete a preset. |
 
-### 2.6 Creator Sources (`/api/creator-sources`)
+### 2.6 Creator Monitor (`/api/creator-monitor`)
 
 Manages creator channel/account sources that the Scheduler periodically scans for new content.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/creator-sources` | Create a creator source. Fields: `platform`, `sourceType`, `sourceUrl`, `scanEnabled`, `incrementalPageSize`, `consecutiveKnownThreshold`, `fullRescanIntervalDays`, `metadataRefreshWindow`. |
-| `PUT` | `/api/creator-sources/{id:long}` | Update a creator source. |
-| `GET` | `/api/creator-sources/{id:long}` | Get a creator source by ID. |
-| `GET` | `/api/creator-sources` | List all creator sources. |
-| `POST` | `/api/creator-sources/{id:long}/refresh-assets` | Manually trigger avatar/banner asset refresh for a source. Query param: `force` (bypass freshness window). Returns 202. |
-| `DELETE` | `/api/creator-sources/{id:long}` | Delete a creator source. |
+| `POST` | `/api/creator-monitor` | Create a creator source. Fields: `platform`, `sourceType`, `sourceUrl`, `scanEnabled`, `incrementalPageSize`, `consecutiveKnownThreshold`, `fullRescanIntervalDays`, `metadataRefreshWindow`. |
+| `PUT` | `/api/creator-monitor/{id:long}` | Update a creator source. |
+| `GET` | `/api/creator-monitor/{id:long}` | Get a creator source by ID. |
+| `GET` | `/api/creator-monitor` | List all creator sources. |
+| `POST` | `/api/creator-monitor/{id:long}/refresh-assets` | Manually trigger avatar/banner asset refresh for a source. Query param: `force` (bypass freshness window). Returns 202. |
+| `DELETE` | `/api/creator-monitor/{id:long}` | Delete a creator source. |
 
 ### 2.7 Cookies (`/api/cookies`)
 
