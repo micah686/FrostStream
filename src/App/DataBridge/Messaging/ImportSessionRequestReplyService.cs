@@ -27,7 +27,6 @@ public sealed class ImportSessionRequestReplyService(
     protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
     {
         await SubscribeAsync<ImportSessionCreateRequest>(messageBus, ImportSessionSubjects.Create, HandleCreateAsync, ImportSessionSubjects.QueueGroup, stoppingToken);
-        await SubscribeAsync<ImportSessionListRequest>(messageBus, ImportSessionSubjects.List, HandleListAsync, ImportSessionSubjects.QueueGroup, stoppingToken);
         await SubscribeAsync<ImportSessionGetRequest>(messageBus, ImportSessionSubjects.Get, HandleGetAsync, ImportSessionSubjects.QueueGroup, stoppingToken);
         await SubscribeAsync<ImportSessionItemsListRequest>(messageBus, ImportSessionSubjects.ItemsList, HandleItemsListAsync, ImportSessionSubjects.QueueGroup, stoppingToken);
         await SubscribeAsync<ImportSessionItemPatchRequest>(messageBus, ImportSessionSubjects.ItemsPatch, HandleItemPatchAsync, ImportSessionSubjects.QueueGroup, stoppingToken);
@@ -101,34 +100,6 @@ public sealed class ImportSessionRequestReplyService(
         {
             logger.LogError(ex, "Failed creating import session.");
             await context.RespondAsync(FailCreate("internal_error", "Internal import-session service error."));
-        }
-    }
-
-    private async Task HandleListAsync(IMessageContext<ImportSessionListRequest> context)
-    {
-        try
-        {
-            using var scope = scopeFactory.CreateScope();
-            var repo = scope.ServiceProvider.GetRequiredService<IImportSessionRepository>();
-            var rows = await repo.ListAsync(context.Message);
-            var limit = Math.Clamp(context.Message.Limit, 1, 100);
-            var items = rows.Count > limit ? rows.Take(limit).ToList() : rows;
-            await context.RespondAsync(new ImportSessionListResponse
-            {
-                Success = true,
-                Items = items,
-                NextSessionId = rows.Count > limit ? rows[limit - 1].SessionId : null
-            });
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed listing import sessions.");
-            await context.RespondAsync(new ImportSessionListResponse
-            {
-                Success = false,
-                ErrorCode = "internal_error",
-                ErrorMessage = "Internal import-session service error."
-            });
         }
     }
 

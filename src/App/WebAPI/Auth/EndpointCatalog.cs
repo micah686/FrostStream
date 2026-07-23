@@ -50,7 +50,6 @@ public static class EndpointIds
     public const string DownloadsGroupStop = "downloads.group.stop";
     public const string DownloadsProviderCircuitClear = "downloads.provider-circuit.clear";
     public const string ImportsSessionsCreate = "imports.sessions.create";
-    public const string ImportsSessionsList = "imports.sessions.list";
     public const string ImportsSessionsGet = "imports.sessions.get";
     public const string ImportsSessionsItemsList = "imports.sessions.items.list";
     public const string ImportsSessionsItemsPatch = "imports.sessions.items.patch";
@@ -296,7 +295,6 @@ public static class EndpointCatalog
         new(EndpointIds.DownloadsGroupStop, Bundles.Downloading),
         new(EndpointIds.DownloadsProviderCircuitClear, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsCreate, Bundles.Downloading),
-        new(EndpointIds.ImportsSessionsList, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsGet, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsItemsList, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsItemsPatch, Bundles.Downloading),

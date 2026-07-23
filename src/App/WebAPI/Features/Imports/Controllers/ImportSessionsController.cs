@@ -43,29 +43,6 @@ public sealed class ImportSessionsController(
         return Accepted(response.Session);
     }
 
-    [HttpGet]
-    [Endpoint(EndpointIds.ImportsSessionsList)]
-    [EndpointSummary("List local media import sessions")]
-    [EndpointDescription("Returns recent local media import sessions from DataBridge with optional status filtering and keyset pagination. Each session includes persisted counters for review and commit progress.")]
-    public async Task<ActionResult<ImportSessionListResponse>> List(
-        [FromQuery] ImportSessionStatus? status,
-        [FromQuery] int limit = 50,
-        [FromQuery] Guid? afterSessionId = null,
-        CancellationToken cancellationToken = default)
-    {
-        var response = await SendAsync<ImportSessionListRequest, ImportSessionListResponse>(
-            ImportSessionSubjects.List,
-            new ImportSessionListRequest { Status = status, Limit = limit, AfterSessionId = afterSessionId },
-            cancellationToken);
-
-        if (response is null)
-            return BadGateway();
-        if (!response.Success)
-            return Error(response.ErrorCode, response.ErrorMessage);
-
-        return Ok(response);
-    }
-
     [HttpGet("{sessionId:guid}")]
     [Endpoint(EndpointIds.ImportsSessionsGet)]
     [EndpointSummary("Get a local media import session")]

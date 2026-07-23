@@ -11,7 +11,6 @@ namespace DataBridge.Data;
 
 public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock) : IImportSessionRepository
 {
-    private const int MaxListLimit = 100;
     private const int MaxItemsLimit = 200;
     private const int InsertBatchSize = 500;
 
@@ -70,24 +69,6 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         await db.SaveChangesAsync(ct);
 
         return ToDto(entity);
-    }
-
-    public async Task<IReadOnlyList<ImportSessionDto>> ListAsync(ImportSessionListRequest request, CancellationToken ct = default)
-    {
-        var limit = Math.Clamp(request.Limit, 1, MaxListLimit);
-        var query = db.ImportSessions.AsNoTracking();
-
-        if (request.Status is { } status)
-            query = query.Where(x => x.Status == status);
-        if (request.AfterSessionId is { } after)
-            query = query.Where(x => x.SessionId.CompareTo(after) > 0);
-
-        return await query
-            .OrderByDescending(x => x.UpdatedAt)
-            .ThenBy(x => x.SessionId)
-            .Take(limit + 1)
-            .Select(x => ToDto(x))
-            .ToListAsync(ct);
     }
 
     public async Task<ImportSessionDto?> GetAsync(Guid sessionId, CancellationToken ct = default)
