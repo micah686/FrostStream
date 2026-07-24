@@ -36,6 +36,8 @@ export interface StartCastSessionBody {
   subtitleLanguage?: string | null;
   captionType?: string | null;
   startPositionSeconds?: number | null;
+  storageKey?: string | null;
+  version?: number | null;
 }
 
 /** 202 from session start: the audio rendition is still being prepared server-side. */

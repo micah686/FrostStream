@@ -41,6 +41,8 @@
     title = null,
     captionLanguages = [],
     position = 0,
+    storageKey = null,
+    version = null,
     protocolId = 'chromecast',
     triggerLabel = 'Cast (server)',
     panelLabel = 'Cast to',
@@ -52,6 +54,10 @@
     captionLanguages?: CaptionLanguage[];
     /** Current local player position in seconds, used for "cast from here". */
     position?: number;
+    /** Storage backend to cast from; null casts the default (latest) copy. */
+    storageKey?: string | null;
+    /** Stored version to cast; null casts the latest. */
+    version?: number | null;
     protocolId?: string;
     triggerLabel?: string;
     panelLabel?: string;
@@ -179,7 +185,9 @@
         audioOnly,
         subtitleLanguage: language,
         captionType,
-        startPositionSeconds: fromCurrentPosition && position > 1 ? Math.floor(position) : null
+        startPositionSeconds: fromCurrentPosition && position > 1 ? Math.floor(position) : null,
+        storageKey,
+        version
       });
       if ('preparing' in result) {
         preparingAudio = true;

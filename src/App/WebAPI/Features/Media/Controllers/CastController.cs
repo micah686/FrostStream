@@ -80,6 +80,16 @@ public sealed class CastController(
             return BadRequest("startPositionSeconds must not be negative.");
         }
 
+        if (request.Version is <= 0)
+        {
+            return BadRequest("version must be greater than zero.");
+        }
+
+        // The selected storage/version pin which stored copy the device fetches, mirroring the
+        // watch page. Null on either resolves the default (latest) copy.
+        var storageKey = string.IsNullOrWhiteSpace(request.StorageKey) ? null : request.StorageKey.Trim();
+        var version = request.Version;
+
         var captionType = string.IsNullOrWhiteSpace(request.CaptionType) ? null : request.CaptionType.Trim();
         if (captionType is not (null or "subtitles" or "automatic_captions"))
         {
@@ -104,8 +114,8 @@ public sealed class CastController(
         {
             var (error, rendition) = await audioRenditions.ResolveAsync(
                 request.MediaGuid,
-                storageKey: null,
-                sourceVersion: null,
+                storageKey,
+                sourceVersion: version,
                 createIfMissing: true,
                 cancellationToken);
             if (error is not null)
@@ -129,7 +139,7 @@ public sealed class CastController(
         }
         else
         {
-            var (error, location) = await ResolveStreamLocationAsync(request.MediaGuid, cancellationToken);
+            var (error, location) = await ResolveStreamLocationAsync(request.MediaGuid, storageKey, version, cancellationToken);
             if (error is not null)
             {
                 return error;
@@ -146,8 +156,8 @@ public sealed class CastController(
             {
                 var (renditionError, rendition) = await streamRenditions.ResolveAsync(
                     request.MediaGuid,
-                    storageKey: null,
-                    sourceVersion: null,
+                    storageKey,
+                    sourceVersion: version,
                     createIfMissing: true,
                     cancellationToken);
                 if (renditionError is not null)
@@ -176,8 +186,8 @@ public sealed class CastController(
         var (token, tokenExpiresAt) = castTokens.Issue(User, request.MediaGuid);
 
         var contentUrl = useHlsRendition
-            ? CastMediaUrlBuilder.BuildHlsManifestUrl(baseUrl, request.MediaGuid, token)
-            : CastMediaUrlBuilder.BuildStreamUrl(baseUrl, request.MediaGuid, token, request.AudioOnly);
+            ? CastMediaUrlBuilder.BuildHlsManifestUrl(baseUrl, request.MediaGuid, token, storageKey, version)
+            : CastMediaUrlBuilder.BuildStreamUrl(baseUrl, request.MediaGuid, token, request.AudioOnly, storageKey, version);
         var title = metadata?.Title ?? request.MediaGuid.ToString("D");
         var thumbnailUrl = metadata?.ThumbnailStoragePath is null
             ? null
@@ -432,6 +442,8 @@ public sealed class CastController(
     /// <summary>Confirms the media file exists and returns where the original lives in storage.</summary>
     private async Task<(IActionResult? Error, MediaStreamLocationDto? Location)> ResolveStreamLocationAsync(
         Guid mediaGuid,
+        string? storageKey,
+        int? version,
         CancellationToken cancellationToken)
     {
         MediaStreamResolveResponseMessage? response;
@@ -441,7 +453,12 @@ public sealed class CastController(
                 MediaStreamResolveRequestMessage,
                 MediaStreamResolveResponseMessage>(
                 MediaStreamSubjects.Resolve,
-                new MediaStreamResolveRequestMessage { MediaGuid = mediaGuid },
+                new MediaStreamResolveRequestMessage
+                {
+                    MediaGuid = mediaGuid,
+                    StorageKey = storageKey,
+                    Version = version
+                },
                 QueryTimeout,
                 cancellationToken);
         }

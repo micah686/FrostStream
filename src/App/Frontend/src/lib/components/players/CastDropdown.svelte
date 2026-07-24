@@ -14,13 +14,17 @@
     title = null,
     posterUrl = null,
     captionLanguages = [],
-    position = 0
+    position = 0,
+    storageKey = null,
+    version = null
   }: {
     mediaGuid: string;
     title?: string | null;
     posterUrl?: string | null;
     captionLanguages?: CaptionLanguage[];
     position?: number;
+    storageKey?: string | null;
+    version?: number | null;
   } = $props();
 
   let open = $state(false);
@@ -72,7 +76,7 @@
     busy = true;
     error = null;
     try {
-      await startBrowserCast(mediaGuid, title, posterUrl);
+      await startBrowserCast(mediaGuid, title, posterUrl, storageKey, version);
       close();
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'Casting failed.';
@@ -179,6 +183,8 @@
           {title}
           {captionLanguages}
           {position}
+          {storageKey}
+          {version}
           protocolId={protocol}
           triggerLabel={protocol === 'chromecast' ? 'Cast (Server)' : 'FCast'}
           panelLabel={protocol === 'chromecast' ? 'Cast (Server)' : 'FCast'}

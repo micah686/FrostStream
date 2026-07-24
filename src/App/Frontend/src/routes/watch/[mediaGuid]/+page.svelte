@@ -207,8 +207,13 @@
   let versionMenuOpen = $state(false);
   let versionMenuContainer = $state<HTMLDivElement | null>(null);
   let selectedVersion = $state('');
-  let mediaVersionOptions = $state<MediaVersionOption[]>([{ value: '', name: 'Latest version' }]);
+  let versions = $state<MetadataVersion[]>([]);
   let versionsLoading = $state(false);
+  // Each stored version lives in exactly one storage backend, so the storage keys are
+  // derived from the version list; picking one plays that storage's copy.
+  let storageMenuOpen = $state(false);
+  let storageMenuContainer = $state<HTMLDivElement | null>(null);
+  let selectedStorage = $state('');
   let streamChecking = $state(false);
   let streamError = $state<string | null>(null);
   let streamCheckSeq = 0;
@@ -328,18 +333,68 @@
     };
   });
 
+  $effect(() => {
+    if (!storageMenuOpen) {
+      return;
+    }
+    const onPointerDown = (event: PointerEvent) => {
+      if (storageMenuContainer && event.target instanceof Node && !storageMenuContainer.contains(event.target)) {
+        storageMenuOpen = false;
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        storageMenuOpen = false;
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  });
+
   const mediaGuid = $derived(page.params.mediaGuid ?? '');
   // Playlist context: ?ulist= plays through a user playlist, ?list= through a
   // platform (downloaded provider) playlist. Only one panel is shown; ulist wins.
   const userListId = $derived(page.url.searchParams.get('ulist'));
   const platformListId = $derived(page.url.searchParams.get('list'));
   const streamUrl = $derived.by(() => {
-    const query = selectedVersion ? `?version=${encodeURIComponent(selectedVersion)}` : '';
-    return `/api/media/watch/${mediaGuid}${query}`;
+    const params = new URLSearchParams();
+    if (selectedStorage) {
+      params.set('storageKey', selectedStorage);
+    }
+    if (selectedVersion) {
+      params.set('version', selectedVersion);
+    }
+    const query = params.toString();
+    return `/api/media/watch/${mediaGuid}${query ? `?${query}` : ''}`;
   });
+  // Distinct storage keys across all versions, newest version first.
+  const storageOptions = $derived.by((): MediaVersionOption[] => {
+    const seen = new Set<string>();
+    const keys: string[] = [];
+    for (const version of [...versions].sort((a, b) => b.versionNum - a.versionNum)) {
+      if (version.storageKey && !seen.has(version.storageKey)) {
+        seen.add(version.storageKey);
+        keys.push(version.storageKey);
+      }
+    }
+    return keys.map((key) => ({ value: key, name: key }));
+  });
+  // Versions available in the selected storage (or all when none is pinned), plus "Latest".
+  const mediaVersionOptions = $derived.by((): MediaVersionOption[] => [
+    { value: '', name: 'Latest' },
+    ...[...versions]
+      .filter((version) => !selectedStorage || version.storageKey === selectedStorage)
+      .sort((a, b) => b.versionNum - a.versionNum)
+      .map((version) => ({ value: String(version.versionNum), name: `Version ${version.versionNum}` }))
+  ]);
   const selectedVersionLabel = $derived(
-    mediaVersionOptions.find((option) => option.value === selectedVersion)?.name ?? 'Latest version'
+    mediaVersionOptions.find((option) => option.value === selectedVersion)?.name ?? 'Latest'
   );
+  const selectedStorageLabel = $derived(selectedStorage || 'Default');
   const watched = $derived(watchState?.completed === true);
   const liked = $derived(likeState?.liked === true);
   // ?t= wins over the saved position; positions within the first 5s or last 5% are
@@ -415,7 +470,8 @@
     lastProgressSentAt = 0;
     lastSentPosition = -1;
     selectedVersion = '';
-    mediaVersionOptions = [{ value: '', name: 'Latest version' }];
+    versions = [];
+    selectedStorage = '';
     versionsLoading = false;
     streamChecking = false;
     streamError = null;
@@ -473,19 +529,29 @@
     versionsLoading = true;
     try {
       const response = await getMetadataVersions(guid);
-      const versions = response.versions;
-      mediaVersionOptions = [
-        { value: '', name: 'Latest version' },
-        ...versions.map((version: MetadataVersion) => ({
-          value: String(version.versionNum),
-          name: `Version ${version.versionNum}`
-        }))
-      ];
+      versions = response.versions ?? [];
+      // Default to the storage that holds the latest version, matching the previous
+      // "resolve latest" playback behaviour.
+      const latest = versions.reduce<MetadataVersion | null>(
+        (best, version) => (best === null || version.versionNum > best.versionNum ? version : best),
+        null
+      );
+      selectedStorage = latest?.storageKey ?? '';
     } catch {
-      mediaVersionOptions = [{ value: '', name: 'Latest version' }];
+      versions = [];
+      selectedStorage = '';
     } finally {
       versionsLoading = false;
     }
+  }
+
+  function selectStorage(key: string) {
+    if (key !== selectedStorage) {
+      selectedStorage = key;
+      // Versions are storage-specific; fall back to the newest one in the chosen storage.
+      selectedVersion = '';
+    }
+    storageMenuOpen = false;
   }
 
   async function loadWatchState(guid: string) {
@@ -1040,7 +1106,65 @@
             posterUrl={posterUrl}
             captionLanguages={captionTracksAvailable}
             position={livePosition}
+            storageKey={selectedStorage || null}
+            version={selectedVersion ? Number(selectedVersion) : null}
           />
+          {#if storageOptions.length > 0}
+            <div class="relative" bind:this={storageMenuContainer}>
+              <button
+                type="button"
+                onclick={() => (storageMenuOpen = !storageMenuOpen)}
+                aria-haspopup="menu"
+                aria-expanded={storageMenuOpen}
+                disabled={versionsLoading}
+                class={[
+                  'flex items-center gap-1.5 rounded-lg border px-4 py-2 text-xs font-semibold transition disabled:cursor-wait disabled:opacity-60',
+                  storageMenuOpen
+                    ? 'border-blue-900/60 bg-blue-950/40 text-blue-300 hover:bg-blue-950/60'
+                    : 'border-slate-800 bg-slate-900/70 text-slate-300 hover:bg-slate-800'
+                ]}
+              >
+                {#if versionsLoading}
+                  <Spinner size="4" />
+                  Storage
+                {:else}
+                  Storage
+                  <span class="max-w-24 truncate text-slate-500">{selectedStorageLabel}</span>
+                  <ChevronDownOutline class="h-3.5 w-3.5" />
+                {/if}
+              </button>
+
+              {#if storageMenuOpen}
+                <div
+                  class="absolute right-0 z-30 mt-2 w-64 rounded-xl border border-slate-800 bg-slate-950/95 p-2 shadow-2xl shadow-black/50 backdrop-blur"
+                  role="menu"
+                  aria-label="Select storage backend"
+                >
+                  <div class="space-y-1">
+                    {#each storageOptions as option (option.value)}
+                      <button
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={selectedStorage === option.value}
+                        onclick={() => selectStorage(option.value)}
+                        class={[
+                          'flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition',
+                          selectedStorage === option.value
+                            ? 'bg-blue-500/15 text-blue-300'
+                            : 'text-slate-200 hover:bg-slate-800/70'
+                        ]}
+                      >
+                        <span class="truncate">{option.name}</span>
+                        {#if selectedStorage === option.value}
+                          <CheckCircleSolid class="h-4 w-4 shrink-0 text-blue-400" />
+                        {/if}
+                      </button>
+                    {/each}
+                  </div>
+                </div>
+              {/if}
+            </div>
+          {/if}
           <div class="relative" bind:this={versionMenuContainer}>
             <button
               type="button"
