@@ -73,6 +73,7 @@
   let mediaGuidError = $state<string | null>(null);
   let mediaSummaries = $state<Record<string, MediaSummary>>({});
   let providerInput = $state('');
+  let assignmentSearchTimer: ReturnType<typeof setTimeout> | undefined;
 
   let effectiveType = $state<GranteeType>('user');
   let effectiveId = $state('');
@@ -85,6 +86,7 @@
   let effectiveCheck = $state<EffectiveAccessCheck | null>(null);
   let effectiveLoading = $state(false);
   let effectiveCheckLoading = $state(false);
+  let effectiveSearchTimer: ReturnType<typeof setTimeout> | undefined;
 
   const selectedPolicy = $derived(policies.find((policy) => policy.policyId === selectedPolicyId) ?? policies[0] ?? null);
   const policyBundleReferences = $derived(
@@ -261,16 +263,27 @@
 
   async function findAssignments() {
     const query = assignmentQuery.trim();
-    if (query.length < 2) return;
+    if (query.length < 2) {
+      directoryResults = [];
+      return;
+    }
     directoryLoading = true;
     error = null;
     try {
-      directoryResults = await searchDirectory(assignmentType, query);
+      const results = await searchDirectory(assignmentType, query);
+      if (assignmentQuery.trim() === query) directoryResults = results;
     } catch (err) {
       error = messageFor(err, 'Directory search failed. You can still add the exact identifier.');
     } finally {
       directoryLoading = false;
     }
+  }
+
+  function queueAssignmentSearch() {
+    if (assignmentSearchTimer) clearTimeout(assignmentSearchTimer);
+    directoryResults = [];
+    if (assignmentQuery.trim().length < 2) return;
+    assignmentSearchTimer = setTimeout(() => void findAssignments(), 250);
   }
 
   function addAssignment(id = assignmentQuery.trim(), displayName?: string) {
@@ -295,6 +308,13 @@
     if (!normalized) return;
     editor.providers = [...new Set([...editor.providers, normalized])].sort();
     providerInput = '';
+  }
+
+  function matchingProviders(): string[] {
+    const query = providerInput.trim().toLowerCase();
+    return providerCatalog.filter((provider) =>
+      !editor?.providers.includes(provider) && (!query || provider.toLowerCase().includes(query))
+    );
   }
 
   function removeProvider(provider: string) {
@@ -349,6 +369,13 @@
     } finally {
       effectiveDirectoryLoading = false;
     }
+  }
+
+  function queueEffectivePrincipalSearch() {
+    if (effectiveSearchTimer) clearTimeout(effectiveSearchTimer);
+    effectiveDirectoryResults = [];
+    if (effectivePrincipalQuery.trim().length < 2) return;
+    effectiveSearchTimer = setTimeout(() => void findEffectivePrincipal(), 250);
   }
 
   function selectEffectivePrincipal(entry?: DirectoryEntry) {
@@ -497,11 +524,16 @@
                 editor = null;
               }}
             >
-              <div class="flex items-center justify-between gap-2">
+              <div class="flex items-start justify-between gap-2">
                 <span class="truncate text-sm font-semibold text-slate-100">{policy.name}</span>
-                <span class={['rounded-full border px-2 py-0.5 text-[10px] font-bold', syncClass(policy)]}>
-                  {policy.syncStatus}
-                </span>
+                <div class="flex shrink-0 flex-col items-end gap-1">
+                  <span class={['rounded-full border px-2 py-0.5 text-[10px] font-bold', syncClass(policy)]}>
+                    {policy.syncStatus}
+                  </span>
+                  {#if !policy.enabled}
+                    <span class="rounded-full border border-slate-700 bg-slate-800 px-2 py-0.5 text-[10px] font-bold text-slate-400">Disabled</span>
+                  {/if}
+                </div>
               </div>
               <div class="mt-1 text-xs text-slate-500">
                 {policy.assignments.length} principals · {policy.bundleIds.length} bundles · {policy.enabled ? 'Enabled' : 'Disabled'}
@@ -658,7 +690,7 @@
                 }}
               />
               <button class={secondaryButton} type="button" disabled={mediaGuidLoading || !mediaGuidInput.trim()} onclick={() => void addMediaGuid()}>
-                {mediaGuidLoading ? 'Resolving…' : 'Resolve & add'}
+                {mediaGuidLoading ? 'Adding…' : 'Add'}
               </button>
             </div>
             {#if mediaGuidError}
@@ -692,23 +724,31 @@
 
           <fieldset>
             <legend class="text-xs font-semibold text-slate-400">Denied providers</legend>
-            <div class="mt-2 flex gap-2">
+            <div class="relative mt-2">
               <input
                 class={fieldClass}
                 bind:value={providerInput}
-                list="policy-provider-catalog"
-                placeholder="Search or enter a provider"
+                placeholder="Search providers"
+                autocomplete="off"
                 onkeydown={(event) => {
                   if (event.key === 'Enter') {
                     event.preventDefault();
-                    addKnownProvider();
+                    const provider = matchingProviders()[0];
+                    if (provider) addKnownProvider(provider);
                   }
                 }}
               />
-              <datalist id="policy-provider-catalog">
-                {#each providerCatalog as provider}<option value={provider}></option>{/each}
-              </datalist>
-              <button class={secondaryButton} type="button" disabled={!providerInput.trim()} onclick={() => addKnownProvider()}>Add</button>
+              {#if providerInput.trim().length > 0 && matchingProviders().length > 0}
+                <div class="absolute z-10 mt-1 max-h-44 w-full overflow-y-auto rounded-lg border border-slate-700 bg-[#10141e] shadow-xl shadow-black/30">
+                  {#each matchingProviders() as provider (provider)}
+                    <button
+                      type="button"
+                      class="block w-full px-3 py-2 text-left text-sm text-slate-200 hover:bg-blue-500/10"
+                      onclick={() => addKnownProvider(provider)}
+                    >{provider}</button>
+                  {/each}
+                </div>
+              {/if}
             </div>
             <div class="mt-3 flex flex-wrap gap-2">
               {#each editor.providers as provider (provider)}
@@ -735,29 +775,36 @@
               These assignments receive every selected bundle and the configured media access in one place.
             </p>
             <div class="mt-2 flex gap-2">
-              <select class={`${fieldClass} w-28`} bind:value={assignmentType}>
+              <select
+                class={`${fieldClass} w-28`}
+                bind:value={assignmentType}
+                onchange={() => queueAssignmentSearch()}
+              >
                 <option value="group">Group</option>
                 <option value="user">User</option>
               </select>
               <input
                 class={fieldClass}
                 bind:value={assignmentQuery}
-                placeholder="Search or enter exact identifier"
+                placeholder="Search Authentik users or groups"
+                autocomplete="off"
+                oninput={queueAssignmentSearch}
                 onkeydown={(event) => {
                   if (event.key === 'Enter') {
                     event.preventDefault();
-                    void findAssignments();
+                    const entry = directoryResults[0];
+                    if (entry) addAssignment(entry.id, entry.name);
+                    else addAssignment();
                   }
                 }}
               />
-              <button class={secondaryButton} type="button" disabled={directoryLoading || assignmentQuery.trim().length < 2} onclick={() => void findAssignments()}>
-                {directoryLoading ? 'Searching…' : 'Search'}
-              </button>
-              <button class={secondaryButton} type="button" disabled={!assignmentQuery.trim()} onclick={() => addAssignment()}>Add exact</button>
             </div>
-            {#if directoryResults.length > 0}
+            {#if directoryLoading || directoryResults.length > 0}
               <div class="mt-2 max-h-44 overflow-y-auto rounded-lg border border-slate-700 bg-[#10141e]">
-                {#each directoryResults as entry (entry.id)}
+                {#if directoryLoading}
+                  <div class="px-3 py-2 text-xs text-slate-500">Searching Authentik…</div>
+                {:else}
+                  {#each directoryResults as entry (entry.id)}
                   <button
                     type="button"
                     class="flex w-full items-center gap-2 border-b border-slate-800 px-3 py-2 text-left last:border-0 hover:bg-blue-500/10"
@@ -767,7 +814,8 @@
                     <span class="truncate text-xs text-slate-500">{entry.description}</span>
                     <span class="ml-auto shrink-0 font-mono text-[10px] text-slate-600">{entry.id}</span>
                   </button>
-                {/each}
+                  {/each}
+                {/if}
               </div>
             {/if}
             <div class="mt-3 flex flex-wrap gap-2">
@@ -860,41 +908,40 @@
         <input
           class={`${fieldClass} mt-1.5`}
           bind:value={effectivePrincipalQuery}
-          placeholder="Search display name or enter exact identifier"
+          placeholder="Search users or groups"
           oninput={() => {
             if (effectiveId) effectiveId = '';
+            queueEffectivePrincipalSearch();
           }}
           onkeydown={(event) => {
             if (event.key === 'Enter') {
               event.preventDefault();
-              void findEffectivePrincipal();
+              const entry = effectiveDirectoryResults[0];
+              if (entry) selectEffectivePrincipal(entry);
+              else selectEffectivePrincipal();
             }
           }}
         />
       </label>
-      <div class="flex items-end gap-2">
-        <button class={secondaryButton} type="button" disabled={effectiveDirectoryLoading || effectivePrincipalQuery.trim().length < 2} onclick={() => void findEffectivePrincipal()}>
-          {effectiveDirectoryLoading ? 'Searching…' : 'Search'}
-        </button>
-        <button class={secondaryButton} type="button" disabled={!effectivePrincipalQuery.trim()} onclick={() => selectEffectivePrincipal()}>
-          Use exact
-        </button>
-      </div>
     </div>
 
-    {#if effectiveDirectoryResults.length > 0}
+    {#if effectiveDirectoryLoading || effectiveDirectoryResults.length > 0}
       <div class="mt-2 max-h-48 overflow-y-auto rounded-lg border border-slate-700 bg-[#10141e]">
-        {#each effectiveDirectoryResults as entry (`${entry.type}:${entry.id}`)}
-          <button
-            type="button"
-            class="flex w-full items-center gap-2 border-b border-slate-800 px-3 py-2 text-left last:border-0 hover:bg-blue-500/10"
-            onclick={() => selectEffectivePrincipal(entry)}
-          >
-            <span class="truncate text-sm font-semibold text-slate-100">{entry.name}</span>
-            <span class="truncate text-xs text-slate-500">{entry.description}</span>
-            <span class="ml-auto shrink-0 font-mono text-[10px] text-slate-600">{entry.id}</span>
-          </button>
-        {/each}
+        {#if effectiveDirectoryLoading}
+          <div class="px-3 py-2 text-xs text-slate-500">Searching Authentik…</div>
+        {:else}
+          {#each effectiveDirectoryResults as entry (`${entry.type}:${entry.id}`)}
+            <button
+              type="button"
+              class="flex w-full items-center gap-2 border-b border-slate-800 px-3 py-2 text-left last:border-0 hover:bg-blue-500/10"
+              onclick={() => selectEffectivePrincipal(entry)}
+            >
+              <span class="truncate text-sm font-semibold text-slate-100">{entry.name}</span>
+              <span class="truncate text-xs text-slate-500">{entry.description}</span>
+              <span class="ml-auto shrink-0 font-mono text-[10px] text-slate-600">{entry.id}</span>
+            </button>
+          {/each}
+        {/if}
       </div>
     {/if}
 

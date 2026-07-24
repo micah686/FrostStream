@@ -39,7 +39,6 @@
   const outlineButtonClass =
     'border-slate-700! bg-transparent! px-3! py-1.5! text-xs! font-semibold! text-slate-200! hover:border-slate-600! hover:bg-slate-800!';
   const saveButtonClass = 'border-0! px-4! py-2! text-xs! font-semibold! disabled:opacity-60';
-  const systemTooltip = 'System-owned bundles are seeded by the server and cannot be modified.';
 
   let bundles = $state<BundleView[]>([]);
   let catalog = $state<CatalogEntry[]>([]);
@@ -68,6 +67,7 @@
   const cloneSources = $derived(systemBundles.filter((bundle) => bundle.id !== 'all'));
   let systemGroupOpen = $state(true);
   let runtimeGroupOpen = $state(true);
+  let selectedEndpointSection = $state('all');
   const openFgaUnavailable = $derived(isStatus(loadError, 503) || isStatus(mutationError, 503) || isStatus(pickerError, 503));
 
   onMount(() => {
@@ -161,6 +161,12 @@
     const knownIds = new Set(known.map((entry) => entry.id));
     const unknown = bundle.endpoints.filter((id) => !knownIds.has(id)).map((id) => ({ id, bundle: 'Uncataloged' }));
     return unknown.length > 0 ? [...groups, { bundle: 'Uncataloged', entries: unknown }] : groups;
+  }
+
+  function endpointSectionEntries(bundle: BundleView): CatalogEntry[] {
+    const groups = endpointGroups(bundle);
+    if (selectedEndpointSection === 'all') return groups.flatMap((group) => group.entries);
+    return groups.find((group) => group.bundle === selectedEndpointSection)?.entries ?? groups.flatMap((group) => group.entries);
   }
 
   function filteredCatalog(): CatalogEntry[] {
@@ -395,35 +401,35 @@
                   {selectedBundle.endpointCount} endpoints · {selectedBundle.policyCount} {selectedBundle.policyCount === 1 ? 'policy' : 'policies'}
                 </p>
               </div>
-              <div class="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  class="inline-flex h-9 min-w-9 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-900/70 px-3 text-xs font-semibold text-slate-200 transition hover:border-blue-500/60 hover:bg-blue-500/10 hover:text-blue-200 disabled:cursor-not-allowed disabled:opacity-45"
-                  title={selectedBundle.systemOwned ? systemTooltip : 'Edit endpoints'}
-                  disabled={selectedBundle.systemOwned}
-                  onclick={() => openEditModal(selectedBundle)}
-                >
-                  <EditOutline class="h-4 w-4" />
-                  Edit endpoints
-                </button>
-                <button
-                  type="button"
-                  class="inline-flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-700 bg-slate-900/70 px-3 text-slate-300 transition hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-45"
-                  title={selectedBundle.systemOwned ? systemTooltip : 'Delete runtime bundle'}
-                  aria-label={`Delete bundle ${selectedBundle.id}`}
-                  disabled={selectedBundle.systemOwned || deletingBundleId === selectedBundle.id}
-                  onclick={() => {
-                    deleteTarget = selectedBundle;
-                    deleteModalOpen = true;
-                  }}
-                >
-                  {#if deletingBundleId === selectedBundle.id}
-                    <Spinner size="4" />
-                  {:else}
-                    <TrashBinOutline class="h-4 w-4" />
-                  {/if}
-                </button>
-              </div>
+              {#if !selectedBundle.systemOwned}
+                <div class="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    class="inline-flex h-9 min-w-9 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-900/70 px-3 text-xs font-semibold text-slate-200 transition hover:border-blue-500/60 hover:bg-blue-500/10 hover:text-blue-200"
+                    onclick={() => openEditModal(selectedBundle)}
+                  >
+                    <EditOutline class="h-4 w-4" />
+                    Edit endpoints
+                  </button>
+                  <button
+                    type="button"
+                    class="inline-flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-700 bg-slate-900/70 px-3 text-slate-300 transition hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-45"
+                    title="Delete runtime bundle"
+                    aria-label={`Delete bundle ${selectedBundle.id}`}
+                    disabled={deletingBundleId === selectedBundle.id}
+                    onclick={() => {
+                      deleteTarget = selectedBundle;
+                      deleteModalOpen = true;
+                    }}
+                  >
+                    {#if deletingBundleId === selectedBundle.id}
+                      <Spinner size="4" />
+                    {:else}
+                      <TrashBinOutline class="h-4 w-4" />
+                    {/if}
+                  </button>
+                </div>
+              {/if}
             </div>
           </section>
 
@@ -434,17 +440,40 @@
                 No endpoints assigned.
               </div>
             {:else}
-              <div class="mt-3 space-y-3">
-                {#each endpointGroups(selectedBundle) as group (group.bundle)}
-                  <div class="rounded-lg border border-slate-800 bg-[#151a26]">
-                    <div class="border-b border-slate-800 px-3 py-2 text-xs font-semibold uppercase text-slate-500">{group.bundle}</div>
-                    <div class="divide-y divide-slate-800/70">
-                      {#each group.entries as endpoint (endpoint.id)}
-                        <div class="px-3 py-2 font-mono text-xs text-slate-300">{endpoint.id}</div>
-                      {/each}
-                    </div>
-                  </div>
-                {/each}
+              <div class="mt-3">
+                <div class="flex gap-1 overflow-x-auto border-b border-slate-800" role="tablist" aria-label="Endpoint sections">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={selectedEndpointSection === 'all'}
+                    class={[
+                      'shrink-0 border-b-2 px-3 py-2 text-xs font-semibold transition',
+                      selectedEndpointSection === 'all' ? 'border-blue-400 text-blue-300' : 'border-transparent text-slate-500 hover:text-slate-200'
+                    ]}
+                    onclick={() => (selectedEndpointSection = 'all')}
+                  >
+                    All endpoints ({selectedBundle.endpoints.length})
+                  </button>
+                  {#each endpointGroups(selectedBundle) as group (group.bundle)}
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={selectedEndpointSection === group.bundle}
+                      class={[
+                        'shrink-0 border-b-2 px-3 py-2 text-xs font-semibold transition',
+                        selectedEndpointSection === group.bundle ? 'border-blue-400 text-blue-300' : 'border-transparent text-slate-500 hover:text-slate-200'
+                      ]}
+                      onclick={() => (selectedEndpointSection = group.bundle)}
+                    >
+                      {group.bundle} ({group.entries.length})
+                    </button>
+                  {/each}
+                </div>
+                <div class="divide-y divide-slate-800/70 overflow-hidden rounded-b-lg border border-t-0 border-slate-800 bg-[#151a26]">
+                  {#each endpointSectionEntries(selectedBundle) as endpoint (endpoint.id)}
+                    <div class="px-3 py-2 font-mono text-xs text-slate-300">{endpoint.id}</div>
+                  {/each}
+                </div>
               </div>
             {/if}
           </section>
