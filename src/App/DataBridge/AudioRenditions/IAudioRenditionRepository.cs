@@ -6,6 +6,7 @@ public interface IAudioRenditionRepository
 {
     Task<ChannelAudioResolveResult?> ResolveChannelAsync(
         long accountId,
+        string? storageKey,
         bool createIfMissing,
         bool retryFailedAndPending,
         CancellationToken cancellationToken = default);

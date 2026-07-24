@@ -3,6 +3,7 @@ using Cleipnir.Flows.AspNet;
 using Cleipnir.Flows.PostgresSql;
 using DataBridge.Data;
 using DataBridge.AudioRenditions;
+using DataBridge.Renditions;
 using DataBridge.StreamRenditions;
 using DataBridge.Flows;
 using DataBridge.MediaStream;
@@ -139,6 +140,7 @@ class Program
         builder.Services.AddScoped<IAccountAssetReadService, AccountAssetReadService>();
         builder.Services.AddScoped<IAudioRenditionRepository, AudioRenditionRepository>();
         builder.Services.AddScoped<IStreamRenditionRepository, StreamRenditionRepository>();
+        builder.Services.AddScoped<IRenditionQueueRepository, RenditionQueueRepository>();
         builder.Services.AddScoped<IPlaylistsRepository, PlaylistsRepository>();
         builder.Services.AddScoped<IUserPlaylistsRepository, UserPlaylistsRepository>();
         builder.Services.AddScoped<IUserNotesRepository, UserNotesRepository>();
@@ -216,6 +218,7 @@ class Program
         builder.Services.AddHostedService<MediaStreamQueryConsumerService>();
         builder.Services.AddHostedService<AudioRenditionConsumerService>();
         builder.Services.AddHostedService<StreamRenditionConsumerService>();
+        builder.Services.AddHostedService<RenditionQueueConsumerService>();
         builder.Services.AddHostedService<MediaDeleteConsumerService>();
         builder.Services.AddHostedService<AccessPolicyConsumerService>();
 

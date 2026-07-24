@@ -75,6 +75,7 @@ public sealed class ChannelAudioResolver(IMessageBus messageBus, ILogger<Channel
 
     public async Task<(IActionResult? Error, ChannelAudioDto? Channel)> ResolveAsync(
         long accountId,
+        string? storageKey,
         bool createIfMissing,
         bool retryFailedAndPending,
         CancellationToken cancellationToken)
@@ -86,6 +87,7 @@ public sealed class ChannelAudioResolver(IMessageBus messageBus, ILogger<Channel
                 new ChannelAudioResolveRequest
                 {
                     AccountId = accountId,
+                    StorageKey = string.IsNullOrWhiteSpace(storageKey) ? null : storageKey.Trim(),
                     CreateIfMissing = createIfMissing,
                     RetryFailedAndPending = retryFailedAndPending
                 },

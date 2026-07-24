@@ -198,6 +198,7 @@ public static class EndpointIds
     public const string MediaHlsManifest = "media.hls-manifest";
     public const string MediaHlsSegment = "media.hls-segment";
     public const string MediaRenditionsProgressStream = "media.renditions.progress-stream";
+    public const string MediaRenditionsQueueList = "media.renditions.queue.list";
     public const string MediaWatchStateGet = "media.watch-state.get";
     public const string MediaWatchStateUpsert = "media.watch-state.upsert";
     public const string MediaWatchStateListInProgress = "media.watch-state.list-in-progress";
@@ -426,6 +427,7 @@ public static class EndpointCatalog
         new(EndpointIds.MediaHlsManifest, Bundles.Media),
         new(EndpointIds.MediaHlsSegment, Bundles.Media),
         new(EndpointIds.MediaRenditionsProgressStream, Bundles.Media),
+        new(EndpointIds.MediaRenditionsQueueList, Bundles.Media),
         new(EndpointIds.MediaWatchStateGet, Bundles.Media),
         new(EndpointIds.MediaWatchStateUpsert, Bundles.Media),
         new(EndpointIds.MediaWatchStateMarkWatched, Bundles.Media),

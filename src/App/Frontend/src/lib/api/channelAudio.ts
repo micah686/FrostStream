@@ -34,6 +34,7 @@ export interface ChannelAudioStatus {
   processingCount: number;
   readyCount: number;
   failedCount: number;
+  availableStorageKeys: string[];
   items: ChannelAudioItem[];
 }
 
@@ -60,12 +61,23 @@ export const renditionProgressStreamUrl = (): string => '/api/media/renditions/p
 
 const base = (accountId: number) => `/api/media/channels/${encodeURIComponent(accountId)}/audio`;
 
-export function getChannelAudioStatus(accountId: number, fetchImpl: typeof fetch = fetch): Promise<ChannelAudioStatus> {
-  return getJson<ChannelAudioStatus>(`${base(accountId)}/status`, fetchImpl);
+const withStorageKey = (path: string, storageKey?: string) =>
+  storageKey ? `${path}?storageKey=${encodeURIComponent(storageKey)}` : path;
+
+export function getChannelAudioStatus(
+  accountId: number,
+  storageKey?: string,
+  fetchImpl: typeof fetch = fetch
+): Promise<ChannelAudioStatus> {
+  return getJson<ChannelAudioStatus>(withStorageKey(`${base(accountId)}/status`, storageKey), fetchImpl);
 }
 
-export function encodeChannelAudio(accountId: number, fetchImpl: typeof fetch = fetch): Promise<ChannelAudioStatus> {
-  return sendJson<ChannelAudioStatus>(`${base(accountId)}/encode`, 'POST', undefined, fetchImpl);
+export function encodeChannelAudio(
+  accountId: number,
+  storageKey?: string,
+  fetchImpl: typeof fetch = fetch
+): Promise<ChannelAudioStatus> {
+  return sendJson<ChannelAudioStatus>(withStorageKey(`${base(accountId)}/encode`, storageKey), 'POST', undefined, fetchImpl);
 }
 
 export function createPodcastFeedLink(accountId: number, fetchImpl: typeof fetch = fetch): Promise<PodcastFeedLink> {
