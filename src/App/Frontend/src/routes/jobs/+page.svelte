@@ -275,13 +275,13 @@
 </script>
 
 <svelte:head>
-  <title>Jobs · FrostStream</title>
+  <title>Downloads · Jobs · FrostStream</title>
 </svelte:head>
 
-<section aria-labelledby="jobs-title">
+<div aria-labelledby="downloads-title">
   <div class="flex flex-wrap items-start justify-between gap-4">
     <div>
-      <h1 id="jobs-title" class="text-2xl font-bold tracking-tight text-white">Jobs</h1>
+      <h2 id="downloads-title" class="text-lg font-semibold tracking-tight text-white">Downloads</h2>
       <p class="mt-1 text-sm text-slate-500">
         Download queue · page {page} · {queueState.rows.length} shown · {queueState.totalCount} matching
       </p>
@@ -482,4 +482,4 @@
       </div>
     </div>
   {/if}
-</section>
+</div>
