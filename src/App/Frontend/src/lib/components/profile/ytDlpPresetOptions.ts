@@ -27,6 +27,7 @@ export interface PresetOptionsState {
   writeSubs: TriState;
   writeAutoSubs: TriState;
   subLangs: string;
+  includeLiveChat: boolean; // whether the live-chat replay is kept; off => excluded even for "all"
   subFormat: string;
   embedSubs: TriState;
 
@@ -192,6 +193,23 @@ function numeric(source: Record<string, unknown>, key: string): number | undefin
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
+/** yt-dlp's live-chat replay is a pseudo-subtitle track. "all" pulls it in; a
+ *  leading "-" excludes it (e.g. `--sub-langs all,-live_chat`). The GUI hides these
+ *  tokens behind the "Include live chat" toggle and keeps the Languages field clean. */
+const LIVE_CHAT_LANG = 'live_chat';
+
+function splitLangs(value: string): string[] {
+  return value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+/** Drops both the positive and negative live-chat tokens; the toggle is authoritative. */
+function stripLiveChatLangs(tokens: string[]): string[] {
+  return tokens.filter((token) => token !== LIVE_CHAT_LANG && token !== `-${LIVE_CHAT_LANG}`);
+}
+
 function csvList(source: Record<string, unknown>, key: string): string[] {
   return text(source, key)
     .split(',')
@@ -244,7 +262,13 @@ export function stateFromOptions(options: Record<string, unknown>): PresetOption
 
     writeSubs: triState(subtitle, 'writeSubs', 'noWriteSubs'),
     writeAutoSubs: triState(subtitle, 'writeAutoSubs', 'noWriteAutoSubs'),
-    subLangs: text(subtitle, 'subLangs'),
+    // Live chat only counts as "on" when explicitly requested and not excluded; a bare
+    // "all" (e.g. a preset from before this toggle existed) reads as off, so live chat is
+    // excluded by default.
+    subLangs: stripLiveChatLangs(splitLangs(text(subtitle, 'subLangs'))).join(','),
+    includeLiveChat:
+      splitLangs(text(subtitle, 'subLangs')).includes(LIVE_CHAT_LANG) &&
+      !splitLangs(text(subtitle, 'subLangs')).includes(`-${LIVE_CHAT_LANG}`),
     subFormat: text(subtitle, 'subFormat'),
     embedSubs: triState(postProcessing, 'embedSubs', 'noEmbedSubs'),
 
@@ -399,7 +423,16 @@ export function applyStateToOptions(
 
   applyTriState(groups.subtitle, 'writeSubs', 'noWriteSubs', state.writeSubs);
   applyTriState(groups.subtitle, 'writeAutoSubs', 'noWriteAutoSubs', state.writeAutoSubs);
-  setOrDelete(groups.subtitle, 'subLangs', state.subLangs.trim());
+  // Fold the live-chat toggle back into sub-langs: keep it when on, append an explicit
+  // `-live_chat` exclusion when off (so even "all" drops it). With no other languages,
+  // "off" leaves sub-langs empty (nothing to exclude) and "on" requests live chat alone.
+  const langTokens = stripLiveChatLangs(splitLangs(state.subLangs));
+  const effectiveLangs = state.includeLiveChat
+    ? [...langTokens, LIVE_CHAT_LANG].join(',')
+    : langTokens.length > 0
+      ? [...langTokens, `-${LIVE_CHAT_LANG}`].join(',')
+      : '';
+  setOrDelete(groups.subtitle, 'subLangs', effectiveLangs);
   setOrDelete(groups.subtitle, 'subFormat', state.subFormat);
   applyTriState(groups.postProcessing, 'embedSubs', 'noEmbedSubs', state.embedSubs);
 
