@@ -5,7 +5,6 @@
     ChartMixedOutline,
     ClockOutline,
     CloudArrowUpOutline,
-    CubesStackedOutline,
     DatabaseOutline,
     FileImportOutline,
     ServerOutline,
@@ -20,19 +19,24 @@
     href: string;
   }
 
-  let { children } = $props();
+  let { children, data } = $props();
 
-  const sections: AdminSection[] = [
+  const allSections: AdminSection[] = [
     { label: 'Storage', icon: DatabaseOutline, href: '/admin/storage' },
     { label: 'Statistics', icon: ChartMixedOutline, href: '/admin/statistics' },
     { label: 'Metadata', icon: TagOutline, href: '/admin/metadata' },
     { label: 'Import', icon: FileImportOutline, href: '/admin/import' },
     { label: 'Workers', icon: ServerOutline, href: '/admin/workers' },
-    { label: 'Media access', icon: ApiKeyOutline, href: '/admin/media-access' },
-    { label: 'Bundle management', icon: CubesStackedOutline, href: '/admin/bundle-management' },
+    { label: 'Access control', icon: ApiKeyOutline, href: '/admin/access-control' },
     { label: 'Backups', icon: CloudArrowUpOutline, href: '/admin/backups' },
     { label: 'Schedules', icon: ClockOutline, href: '/admin/schedules' }
   ];
+
+  const sections = $derived(
+    data.singleUser
+      ? allSections.filter((section) => section.href !== '/admin/access-control')
+      : allSections
+  );
 
   const isActive = (href: string) =>
     page.url.pathname === href || page.url.pathname.startsWith(`${href}/`);

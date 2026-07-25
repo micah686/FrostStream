@@ -12,7 +12,7 @@ public sealed class AuthSessionsTopologyTests
     {
         var bucket = new AuthSessionsTopology().GetBuckets().ShouldHaveSingleItem();
 
-        bucket.Name.Value.ShouldBe(AuthSessionsTopology.BucketNameValue);
+        bucket.Name.Value!.ShouldBe(AuthSessionsTopology.BucketNameValue);
         bucket.StorageType.ShouldBe(StorageType.File);
         bucket.History.ShouldBe(1);
         bucket.MaxAge.ShouldBe(TimeSpan.FromDays(31));

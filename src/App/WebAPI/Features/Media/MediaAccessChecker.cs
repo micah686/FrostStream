@@ -39,12 +39,17 @@ public sealed class MediaAccessChecker(IMessageBus messageBus, ILogger<MediaAcce
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 
-        MediaAccessCheckResponseMessage? response;
+        AccessPolicyOperationResponseMessage? response;
         try
         {
-            response = await messageBus.RequestAsync<MediaAccessCheckRequestMessage, MediaAccessCheckResponseMessage>(
-                MediaAccessSubjects.Check,
-                new MediaAccessCheckRequestMessage { MediaGuid = mediaGuid, UserGroups = groups },
+            response = await messageBus.RequestAsync<AccessPolicyEffectiveMediaRequestMessage, AccessPolicyOperationResponseMessage>(
+                AccessPolicySubjects.EffectiveMedia,
+                new AccessPolicyEffectiveMediaRequestMessage
+                {
+                    MediaGuid = mediaGuid,
+                    UserSubject = AuthConstants.FindSubject(user),
+                    UserGroups = groups
+                },
                 QueryTimeout,
                 cancellationToken);
         }
@@ -58,12 +63,12 @@ public sealed class MediaAccessChecker(IMessageBus messageBus, ILogger<MediaAcce
             return Unavailable();
         }
 
-        if (response is null)
+        if (response is null || !response.Success || response.EffectiveMedia is null)
         {
             return Unavailable();
         }
 
-        return response.IsAllowed
+        return response.EffectiveMedia.IsAllowed
             ? null
             : new ObjectResult("You are not allowed to watch this media item.")
             {

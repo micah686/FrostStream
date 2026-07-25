@@ -1,10 +1,11 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using FluentStorage.Blobs;
+using FluentStorage.Storage;
 using Conduit.NATS;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -25,6 +26,23 @@ namespace IntegrationTests.WebApiHttp;
 public sealed class WebApiHttpTests
 {
     [Test]
+    public void Access_Control_Routes_Are_Not_Registered_In_Single_User_Mode()
+    {
+        using var factory = new TestWebApiFactory();
+
+        var routePatterns = factory.Services
+            .GetServices<EndpointDataSource>()
+            .SelectMany(dataSource => dataSource.Endpoints)
+            .OfType<RouteEndpoint>()
+            .Select(endpoint => endpoint.RoutePattern.RawText);
+
+        routePatterns
+            .Where(pattern => pattern is not null &&
+                pattern.StartsWith("api/global/access-control", StringComparison.OrdinalIgnoreCase))
+            .ShouldBeEmpty();
+    }
+
+    [Test]
     public async Task Get_Media_Stream_Supports_Http_Range_Requests()
     {
         var mediaGuid = Guid.NewGuid();
@@ -41,9 +59,9 @@ public sealed class WebApiHttpTests
                 Version = 3
             }
         };
-        factory.BlobStorageProvider.GetAsync("storage-a", Arg.Any<CancellationToken>())
-            .Returns(factory.BlobStorage);
-        factory.BlobStorage.OpenReadAsync("media/video.mp4", Arg.Any<CancellationToken>())
+        factory.StoreProvider.GetAsync("storage-a", Arg.Any<CancellationToken>())
+            .Returns(factory.Store);
+        factory.Store.OpenRead("media/video.mp4", Arg.Any<CancellationToken>())
             .Returns(_ => Task.FromResult<Stream>(new MemoryStream(bytes, writable: false)));
 
         using var client = factory.CreateClient();
@@ -149,8 +167,8 @@ internal sealed class TestWebApiFactory : WebApplicationFactory<global::WebAPI.P
     public CapturingJetStreamPublisher Publisher { get; } = new();
     public FakeMessageBus MessageBus { get; } = new();
     public InMemorySecretStore SecretStore { get; } = new();
-    public IBlobStorageProvider BlobStorageProvider { get; } = Substitute.For<IBlobStorageProvider>();
-    public IBlobStorage BlobStorage { get; } = Substitute.For<IBlobStorage>();
+    public IStoreProvider StoreProvider { get; } = Substitute.For<IStoreProvider>();
+    public IStore Store { get; } = Substitute.For<IStore>();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -162,13 +180,13 @@ internal sealed class TestWebApiFactory : WebApplicationFactory<global::WebAPI.P
             services.RemoveAll<IMessageBus>();
             services.RemoveAll<ISecretStore>();
             services.RemoveAll<IClock>();
-            services.RemoveAll<IBlobStorageProvider>();
+            services.RemoveAll<IStoreProvider>();
 
             services.AddSingleton<IJetStreamPublisher>(Publisher);
             services.AddSingleton<IMessageBus>(MessageBus);
             services.AddSingleton<ISecretStore>(SecretStore);
             services.AddSingleton<IClock>(new TestClock(Now));
-            services.AddSingleton(BlobStorageProvider);
+            services.AddSingleton(StoreProvider);
         });
     }
 }
@@ -233,11 +251,18 @@ internal sealed class FakeMessageBus : IMessageBus
         TimeSpan timeout,
         CancellationToken cancellationToken = default)
     {
-        if (subject == MediaAccessSubjects.Check && request is MediaAccessCheckRequestMessage)
+        if (subject == AccessPolicySubjects.EffectiveMedia &&
+            request is AccessPolicyEffectiveMediaRequestMessage accessRequest)
         {
-            return Task.FromResult((TResponse?)(object)new MediaAccessCheckResponseMessage
+            return Task.FromResult((TResponse?)(object)new AccessPolicyOperationResponseMessage
             {
-                IsAllowed = true
+                Success = true,
+                EffectiveMedia = new AccessPolicyEffectiveMediaDto
+                {
+                    MediaGuid = accessRequest.MediaGuid,
+                    Found = true,
+                    IsAllowed = true
+                }
             });
         }
 

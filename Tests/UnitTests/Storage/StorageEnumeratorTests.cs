@@ -1,4 +1,4 @@
-using FluentStorage.Blobs;
+using FluentStorage.Storage;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Shouldly;
@@ -36,7 +36,7 @@ public class StorageEnumeratorTests
                         }),
                     Description: null));
 
-            var fallback = Substitute.For<IBlobStorageProvider>();
+            var fallback = Substitute.For<IStoreProvider>();
             var sut = new StorageEnumerator(configClient, fallback, NullLogger<StorageEnumerator>.Instance);
 
             var paths = new List<string>();
@@ -89,7 +89,7 @@ public class StorageEnumeratorTests
 
             var sut = new StorageEnumerator(
                 configClient,
-                Substitute.For<IBlobStorageProvider>(),
+                Substitute.For<IStoreProvider>(),
                 NullLogger<StorageEnumerator>.Instance);
 
             var paths = new List<string>();
@@ -103,6 +103,49 @@ public class StorageEnumeratorTests
         finally
         {
             Environment.SetEnvironmentVariable(LocalStoragePathResolver.EnvironmentVariableName, previousRoot);
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task EnumerateFilePathsAsync_Streams_Mounted_Network_Share()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"froststream-network-enumerator-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(Path.Combine(root, "shows"));
+        await File.WriteAllTextAsync(Path.Combine(root, "shows", "episode.mkv"), "video");
+
+        try
+        {
+            var configClient = Substitute.For<IStorageConfigClient>();
+            configClient.GetStorageConfigAsync("network-test", Arg.Any<CancellationToken>())
+                .Returns(new StorageConfigResponse(
+                    Found: true,
+                    Key: "network-test",
+                    Method: StorageMethod.Network,
+                    Parameters: StorageParametersSerializer.Serialize(
+                        StorageMethod.Network,
+                        new StreamingNetworkStorageParameters
+                        {
+                            Protocol = NetworkStorageProtocol.Nfs,
+                            Host = "fileserver",
+                            BasePath = "/exports/media",
+                            MountPath = root
+                        }),
+                    Description: null));
+            var fallback = Substitute.For<IStoreProvider>();
+            var sut = new StorageEnumerator(configClient, fallback, NullLogger<StorageEnumerator>.Instance);
+
+            var paths = new List<string>();
+            await foreach (var path in sut.EnumerateFilePathsAsync("network-test"))
+            {
+                paths.Add(path);
+            }
+
+            paths.ShouldBe(["shows/episode.mkv"]);
+            await fallback.DidNotReceiveWithAnyArgs().GetAsync(default!, default);
+        }
+        finally
+        {
             Directory.Delete(root, recursive: true);
         }
     }

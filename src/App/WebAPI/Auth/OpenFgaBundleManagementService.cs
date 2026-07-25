@@ -38,10 +38,17 @@ public sealed class OpenFgaBundleManagementService(
             return BundleOpResult<IReadOnlyList<BundleView>>.Unavailable("OpenFGA is not configured.");
         }
 
-        List<Tuple> all;
+        List<Tuple> bundleTuples;
+        List<Tuple> grantTuples;
         try
         {
-            all = await ReadAllTuplesAsync(storeId, tupleKey: null, cancellationToken);
+            bundleTuples = await ReadBundleMembershipTuplesAsync(storeId, cancellationToken);
+            var discoveredBundleIds = bundleTuples
+                .Where(tuple => tuple.User.StartsWith(AuthConstants.CapabilityGroupObjectPrefix, StringComparison.Ordinal))
+                .Select(tuple => tuple.User[AuthConstants.CapabilityGroupObjectPrefix.Length..])
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            grantTuples = await ReadBundleGrantTuplesAsync(storeId, discoveredBundleIds, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -52,7 +59,7 @@ public sealed class OpenFgaBundleManagementService(
         var endpoints = new Dictionary<string, SortedSet<string>>(StringComparer.Ordinal);
         var grants = new Dictionary<string, List<BundleGrant>>(StringComparer.Ordinal);
 
-        foreach (var tuple in all)
+        foreach (var tuple in bundleTuples.Concat(grantTuples))
         {
             if (tuple.Relation == AuthConstants.BundleRelation &&
                 tuple.User.StartsWith(AuthConstants.CapabilityGroupObjectPrefix, StringComparison.Ordinal) &&
@@ -108,6 +115,13 @@ public sealed class OpenFgaBundleManagementService(
     }
 
     public async Task<BundleOpResult> CreateBundleAsync(string bundleId, IReadOnlyCollection<string> endpointIds, CancellationToken cancellationToken)
+        => await CreateBundleAsync(bundleId, endpointIds, cloneFrom: null, cancellationToken);
+
+    public async Task<BundleOpResult> CreateBundleAsync(
+        string bundleId,
+        IReadOnlyCollection<string> endpointIds,
+        string? cloneFrom,
+        CancellationToken cancellationToken)
     {
         if (StoreId is not { } storeId)
         {
@@ -119,24 +133,61 @@ public sealed class OpenFgaBundleManagementService(
             return idError;
         }
 
-        if (endpointIds.Count == 0)
+        var desiredEndpointIds = endpointIds
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Select(id => id.Trim())
+            .ToHashSet(StringComparer.Ordinal);
+
+        if (!string.IsNullOrWhiteSpace(cloneFrom))
         {
-            return BundleOpResult.Validation("A bundle must contain at least one endpoint.");
+            cloneFrom = cloneFrom.Trim();
+            if (cloneFrom == AuthConstants.AllBundle)
+            {
+                return BundleOpResult.Forbidden(
+                    $"The '{AuthConstants.AllBundle}' lock-out guard cannot be used as a clone baseline.");
+            }
+
+            if (AuthConstants.IsUserBundle(cloneFrom) || !EndpointCatalog.SeededBundleIds.Contains(cloneFrom))
+            {
+                return BundleOpResult.Validation(
+                    $"Clone source '{cloneFrom}' is not a system bundle. Custom bundles may only clone a code-defined system baseline.");
+            }
+
+            var clonedObjects = await ReadBundleEndpointObjectsAsync(storeId, cloneFrom, cancellationToken);
+            if (clonedObjects.Count == 0)
+            {
+                return BundleOpResult.NotFound($"Clone source bundle '{cloneFrom}' was not found.");
+            }
+
+            foreach (var endpointObject in clonedObjects)
+            {
+                if (endpointObject.StartsWith(AuthConstants.EndpointObjectPrefix, StringComparison.Ordinal))
+                {
+                    desiredEndpointIds.Add(endpointObject[AuthConstants.EndpointObjectPrefix.Length..]);
+                }
+            }
         }
 
-        if (ValidateEndpoints(endpointIds) is { } endpointError)
+        if (desiredEndpointIds.Count == 0)
+        {
+            return BundleOpResult.Validation(
+                "A bundle must contain at least one endpoint. Select endpoints or clone a system bundle.");
+        }
+
+        if (ValidateEndpoints(desiredEndpointIds) is { } endpointError)
         {
             return endpointError;
         }
 
         var existing = await ReadBundleEndpointObjectsAsync(storeId, bundleId, cancellationToken);
-        if (existing.Count > 0)
+        var existingGrants = await ReadBundleGrantTuplesAsync(storeId, bundleId, cancellationToken);
+        if (existing.Count > 0 || existingGrants.Count > 0)
         {
             return BundleOpResult.Validation($"Bundle '{bundleId}' already exists; use set-endpoints to modify it.");
         }
 
         var cgObject = AuthConstants.CapabilityGroupObject(bundleId);
-        var writes = endpointIds.Distinct(StringComparer.Ordinal)
+        var writes = desiredEndpointIds
             .Select(id => new Tuple(cgObject, AuthConstants.BundleRelation, AuthConstants.EndpointObject(id)))
             .ToArray();
 
@@ -153,6 +204,12 @@ public sealed class OpenFgaBundleManagementService(
         if (ValidateUserBundleId(bundleId) is { } idError)
         {
             return idError;
+        }
+
+        if (endpointIds.Count == 0)
+        {
+            return BundleOpResult.Validation(
+                "A bundle must contain at least one endpoint. Delete an unreferenced bundle instead of emptying it.");
         }
 
         if (ValidateEndpoints(endpointIds) is { } endpointError)
@@ -331,7 +388,7 @@ public sealed class OpenFgaBundleManagementService(
             @object = AuthConstants.EndpointObjectPrefix
         };
 
-        var tuples = await ReadAllTuplesAsync(storeId, tupleKey, cancellationToken);
+        var tuples = await ReadTuplesAsync(storeId, tupleKey, cancellationToken);
         return tuples.Select(t => t.Object).ToHashSet(StringComparer.Ordinal);
     }
 
@@ -343,10 +400,69 @@ public sealed class OpenFgaBundleManagementService(
             @object = AuthConstants.CapabilityGroupObject(bundleId)
         };
 
-        return await ReadAllTuplesAsync(storeId, tupleKey, cancellationToken);
+        return await ReadTuplesAsync(storeId, tupleKey, cancellationToken);
     }
 
-    private async Task<List<Tuple>> ReadAllTuplesAsync(string storeId, object? tupleKey, CancellationToken cancellationToken)
+    private async Task<List<Tuple>> ReadBundleMembershipTuplesAsync(
+        string storeId,
+        CancellationToken cancellationToken)
+    {
+        var results = new System.Collections.Concurrent.ConcurrentBag<Tuple>();
+        await Parallel.ForEachAsync(
+            EndpointCatalog.Endpoints,
+            new ParallelOptions
+            {
+                CancellationToken = cancellationToken,
+                MaxDegreeOfParallelism = 8
+            },
+            async (endpoint, token) =>
+            {
+                var tuples = await ReadTuplesAsync(
+                    storeId,
+                    new
+                    {
+                        relation = AuthConstants.BundleRelation,
+                        @object = AuthConstants.EndpointObject(endpoint.Id)
+                    },
+                    token);
+                foreach (var tuple in tuples)
+                {
+                    results.Add(tuple);
+                }
+            });
+
+        return results.ToList();
+    }
+
+    private async Task<List<Tuple>> ReadBundleGrantTuplesAsync(
+        string storeId,
+        IReadOnlyCollection<string> bundleIds,
+        CancellationToken cancellationToken)
+    {
+        var results = new System.Collections.Concurrent.ConcurrentBag<Tuple>();
+        await Parallel.ForEachAsync(
+            bundleIds,
+            new ParallelOptions
+            {
+                CancellationToken = cancellationToken,
+                MaxDegreeOfParallelism = 8
+            },
+            async (bundleId, token) =>
+            {
+                var tuples = await ReadBundleGrantTuplesAsync(storeId, bundleId, token);
+                foreach (var tuple in tuples)
+                {
+                    results.Add(tuple);
+                }
+            });
+
+        return results.ToList();
+    }
+
+    private async Task<List<Tuple>> ReadTuplesAsync(
+        string storeId,
+        object tupleKey,
+        CancellationToken cancellationToken)
     {
         var results = new List<Tuple>();
         string? continuationToken = null;
@@ -355,10 +471,7 @@ public sealed class OpenFgaBundleManagementService(
         {
             using var request = NewRequest(HttpMethod.Post, $"/stores/{Uri.EscapeDataString(storeId)}/read");
             var payload = new Dictionary<string, object?> { ["page_size"] = 100 };
-            if (tupleKey is not null)
-            {
-                payload["tuple_key"] = tupleKey;
-            }
+            payload["tuple_key"] = tupleKey;
 
             if (!string.IsNullOrEmpty(continuationToken))
             {

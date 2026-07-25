@@ -72,7 +72,6 @@ export interface ImportSessionItem {
   completedAt?: string | null;
 }
 
-export interface ImportSessionListResponse { success: boolean; items: ImportSession[]; nextSessionId?: string | null; }
 export interface ImportSessionItemsListResponse { success: boolean; items: ImportSessionItem[]; nextItemId?: string | null; totalCount: number; }
 export interface ImportSessionActionResponse { success: boolean; errorCode?: string | null; errorMessage?: string | null; session?: ImportSession | null; }
 export interface ImportSessionItemsBulkResponse extends ImportSessionActionResponse { affectedCount: number; }
@@ -162,10 +161,6 @@ async function requestJson<T>(url: string, init: RequestInit = {}, fetchImpl: ty
 
 export function createImportSession(submission: ImportSessionSubmission, fetchImpl: typeof fetch = fetch): Promise<ImportSession> {
   return requestJson(SESSIONS_BASE, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sourceKind: 'workerIncoming', ...submission }) }, fetchImpl);
-}
-
-export function listImportSessions(fetchImpl: typeof fetch = fetch): Promise<ImportSessionListResponse> {
-  return requestJson(SESSIONS_BASE, {}, fetchImpl);
 }
 
 export function getImportSession(sessionId: string, fetchImpl: typeof fetch = fetch): Promise<ImportSession> {

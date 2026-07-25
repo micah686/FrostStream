@@ -1,6 +1,7 @@
 using Conduit.NATS;
 using Microsoft.AspNetCore.Mvc;
 using Shared.Messaging;
+using Shared.Storage;
 
 namespace WebAPI.Features.Media;
 
@@ -79,10 +80,10 @@ public static class StreamRenditionHelpers
     public static string? HlsManifestStoragePath(StreamRenditionDto rendition)
         => string.IsNullOrWhiteSpace(rendition.StoragePath)
             ? null
-            : $"{rendition.StoragePath.TrimEnd('/')}/index.m3u8";
+            : StorageObjectPath.Combine(rendition.StoragePath, "index.m3u8");
 
     public static string? SegmentStoragePath(StreamRenditionDto rendition, string fileName)
         => string.IsNullOrWhiteSpace(rendition.StoragePath)
             ? null
-            : $"{rendition.StoragePath.TrimEnd('/')}/{fileName}";
+            : StorageObjectPath.Combine(rendition.StoragePath, fileName);
 }

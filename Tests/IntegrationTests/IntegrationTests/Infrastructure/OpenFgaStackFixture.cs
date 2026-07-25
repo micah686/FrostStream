@@ -46,6 +46,8 @@ public sealed class OpenFgaStackFixture : IAsyncDisposable
 
     public IBundleManagementService Management => _services!.GetRequiredService<OpenFgaBundleManagementService>();
 
+    public IAccessPolicyOpenFgaService Policies => _services!.GetRequiredService<OpenFgaAccessPolicyService>();
+
     public async Task InitializeAsync()
     {
         if (_initialized)
@@ -95,6 +97,34 @@ public sealed class OpenFgaStackFixture : IAsyncDisposable
         return decision.Allowed;
     }
 
+    /// <summary>
+    /// Runs the production provisioner with only the existing store pinned, forcing authorization
+    /// model discovery so tests can verify content-hash reuse against a real OpenFGA response.
+    /// </summary>
+    public async Task<string> RediscoverModelAsync()
+    {
+        var services = _services!;
+        var rediscoveredState = new OpenFgaRuntimeState { StoreId = StoreId };
+        using var provisioner = new OpenFgaProvisioner(
+            services.GetRequiredService<IHttpClientFactory>(),
+            services.GetRequiredService<IOptions<OpenFgaOptions>>(),
+            rediscoveredState,
+            services.GetRequiredService<ILoggerFactory>().CreateLogger<OpenFgaProvisioner>());
+        var hostedService = (IHostedService)provisioner;
+
+        await hostedService.StartAsync(CancellationToken.None);
+        for (var attempt = 0;
+             attempt < 100 && string.IsNullOrWhiteSpace(rediscoveredState.AuthorizationModelId);
+             attempt++)
+        {
+            await Task.Delay(20);
+        }
+
+        await hostedService.StopAsync(CancellationToken.None);
+        return rediscoveredState.AuthorizationModelId
+            ?? throw new TimeoutException("OpenFGA model discovery did not complete.");
+    }
+
     private void BuildServices()
     {
         var services = new ServiceCollection();
@@ -112,6 +142,7 @@ public sealed class OpenFgaStackFixture : IAsyncDisposable
         services.AddHttpClient<OpenFgaAuthorizer>();
         services.AddHttpClient<OpenFgaTupleWriter>();
         services.AddHttpClient<OpenFgaBundleManagementService>();
+        services.AddHttpClient<OpenFgaAccessPolicyService>();
 
         _services = services.BuildServiceProvider();
     }

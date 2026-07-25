@@ -8,8 +8,6 @@ public interface IImportSessionRepository
 {
     Task<ImportSessionDto> CreateAsync(ImportSessionCreateRequest request, Guid sessionId, Guid correlationId, CancellationToken ct = default);
 
-    Task<IReadOnlyList<ImportSessionDto>> ListAsync(ImportSessionListRequest request, CancellationToken ct = default);
-
     Task<ImportSessionDto?> GetAsync(Guid sessionId, CancellationToken ct = default);
 
     Task<(IReadOnlyList<ImportSessionItemDto> Items, Guid? NextItemId, int TotalCount)> ListItemsAsync(

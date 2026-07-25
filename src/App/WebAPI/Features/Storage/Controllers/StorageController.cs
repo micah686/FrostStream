@@ -58,7 +58,7 @@ public class StorageController : ControllerBase
     [HttpPost("network/create")]
     [Endpoint(EndpointIds.StorageNetworkCreate)]
     [EndpointSummary("Create a network storage target")]
-    [EndpointDescription("Creates a named FTP, FTPS, SFTP, NFS, SMB, or CIFS storage configuration. Connection metadata is persisted by DataBridge while sensitive credentials are separated into the secret store; invalid authentication combinations return 400.")]
+    [EndpointDescription("Creates a named FTP, FTPS, SFTP, NFS, SMB, or CIFS storage configuration. NFS/SMB/CIFS shares require an absolute mountPath available on every eligible FrostStream node. Connection metadata is persisted by DataBridge while sensitive credentials are separated into the secret store; invalid protocol or authentication combinations return 400.")]
     public async Task<ActionResult<NetworkStorageConfigResponse>> CreateNetworkStorage(
         [FromBody] NetworkStorageUpsertRequest request,
         CancellationToken cancellationToken)
@@ -73,7 +73,7 @@ public class StorageController : ControllerBase
     [HttpPut("network/update/{key}")]
     [Endpoint(EndpointIds.StorageNetworkUpdate)]
     [EndpointSummary("Update a network storage target")]
-    [EndpointDescription("Replaces the connection metadata and supplied credentials for an existing network storage key. DataBridge validates the protocol, host, port, authentication combination, and base path while preserving secret isolation.")]
+    [EndpointDescription("Replaces the connection metadata and supplied credentials for an existing network storage key. DataBridge validates protocol-specific host, port, authentication, basePath, and mountPath requirements while preserving secret isolation.")]
     public async Task<ActionResult<NetworkStorageConfigResponse>> UpdateNetworkStorage(
         string key,
         [FromBody] NetworkStorageUpdateRequest request,
@@ -385,7 +385,8 @@ public class StorageController : ControllerBase
             Host = network.Host,
             Port = network.Port,
             Username = network.Username,
-            BasePath = network.BasePath
+            BasePath = network.BasePath,
+            MountPath = network.MountPath
         };
     }
 

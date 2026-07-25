@@ -102,21 +102,19 @@ public sealed class OpenFgaProvisioner(
 
     private async Task<string> EnsureModelAsync(HttpClient client, string storeId, CancellationToken cancellationToken)
     {
-        using (var listRequest = NewRequest(HttpMethod.Get, $"/stores/{Uri.EscapeDataString(storeId)}/authorization-models?page_size=1"))
-        using (var listResponse = await client.SendAsync(listRequest, cancellationToken))
+        var desiredHash = OpenFgaModel.ContentHash;
+        var existingModelId = await FindModelByContentHashAsync(
+            client,
+            storeId,
+            desiredHash,
+            cancellationToken);
+        if (existingModelId is not null)
         {
-            listResponse.EnsureSuccessStatusCode();
-            await using var stream = await listResponse.Content.ReadAsStreamAsync(cancellationToken);
-            using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-            if (doc.RootElement.TryGetProperty("authorization_models", out var models) &&
-                models.ValueKind == JsonValueKind.Array &&
-                models.GetArrayLength() > 0 &&
-                models[0].TryGetProperty("id", out var id) &&
-                id.GetString() is { Length: > 0 } existingModelId)
-            {
-                logger.LogInformation("Using existing OpenFGA authorization model {ModelId}.", existingModelId);
-                return existingModelId;
-            }
+            logger.LogInformation(
+                "Reusing OpenFGA authorization model {ModelId} with content hash {ModelHash}.",
+                existingModelId,
+                ShortHash(desiredHash));
+            return existingModelId;
         }
 
         using var writeRequest = NewRequest(HttpMethod.Post, $"/stores/{Uri.EscapeDataString(storeId)}/authorization-models");
@@ -130,8 +128,58 @@ public sealed class OpenFgaProvisioner(
 
         var modelId = await ReadStringPropertyAsync(writeResponse, "authorization_model_id", cancellationToken)
             ?? throw new InvalidOperationException("OpenFGA model write returned no id.");
-        logger.LogInformation("Wrote OpenFGA authorization model {ModelId}.", modelId);
+        logger.LogInformation(
+            "Wrote OpenFGA authorization model {ModelId} with content hash {ModelHash}.",
+            modelId,
+            ShortHash(desiredHash));
         return modelId;
+    }
+
+    private async Task<string?> FindModelByContentHashAsync(
+        HttpClient client,
+        string storeId,
+        string desiredHash,
+        CancellationToken cancellationToken)
+    {
+        string? continuationToken = null;
+        do
+        {
+            var path = $"/stores/{Uri.EscapeDataString(storeId)}/authorization-models?page_size=100";
+            if (!string.IsNullOrEmpty(continuationToken))
+            {
+                path += $"&continuation_token={Uri.EscapeDataString(continuationToken)}";
+            }
+
+            using var request = NewRequest(HttpMethod.Get, path);
+            using var response = await client.SendAsync(request, cancellationToken);
+            response.EnsureSuccessStatusCode();
+
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+            if (document.RootElement.TryGetProperty("authorization_models", out var models) &&
+                models.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var model in models.EnumerateArray())
+                {
+                    if (model.TryGetProperty("id", out var id) &&
+                        id.GetString() is { Length: > 0 } modelId &&
+                        string.Equals(
+                            OpenFgaModel.ComputeContentHash(model),
+                            desiredHash,
+                            StringComparison.Ordinal))
+                    {
+                        return modelId;
+                    }
+                }
+            }
+
+            continuationToken = document.RootElement.TryGetProperty("continuation_token", out var token)
+                ? token.GetString()
+                : null;
+        }
+        while (!string.IsNullOrEmpty(continuationToken));
+
+        return null;
     }
 
     private async Task WriteBootstrapTuplesAsync(HttpClient client, string storeId, string modelId, CancellationToken cancellationToken)
@@ -224,6 +272,9 @@ public sealed class OpenFgaProvisioner(
         => string.IsNullOrWhiteSpace(value)
             ? []
             : value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    private static string ShortHash(string value)
+        => value[..Math.Min(12, value.Length)];
 
     private HttpRequestMessage NewRequest(HttpMethod method, string path)
     {

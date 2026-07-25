@@ -33,11 +33,11 @@ public sealed class CookiesControllerTests
             Site = "example.com"
         }, CancellationToken.None);
 
-        result.Result.ShouldBeOfType<OkObjectResult>().Value
+        result.Result!.ShouldBeOfType<OkObjectResult>().Value
             .ShouldBeOfType<CookieProfileResponse>().ProfileKey.ShouldBe("member-cookie");
         await store.Received(1).WriteAsync(
             "cookies/users/user-123/member-cookie",
-            Arg.Is<IReadOnlyDictionary<string, string>>(x => x["content"] == "# Netscape HTTP Cookie File"),
+            Arg.Is<IReadOnlyDictionary<string, string>>(x => x != null && x["content"] == "# Netscape HTTP Cookie File"),
             Arg.Any<CancellationToken>());
     }
 
@@ -67,7 +67,7 @@ public sealed class CookiesControllerTests
 
         var result = await controller.Upsert("Bad_Key", new CookieUpsertRequest { Content = "content" }, CancellationToken.None);
 
-        result.Result.ShouldBeOfType<BadRequestObjectResult>();
+        result.Result!.ShouldBeOfType<BadRequestObjectResult>();
         await store.DidNotReceive().WriteAsync(
             Arg.Any<string>(),
             Arg.Any<IReadOnlyDictionary<string, string>>(),
@@ -82,7 +82,7 @@ public sealed class CookiesControllerTests
 
         var result = await controller.Upsert("member-cookie", new CookieUpsertRequest { Content = "x" }, CancellationToken.None);
 
-        result.Result.ShouldBeOfType<UnauthorizedResult>();
+        result.Result!.ShouldBeOfType<UnauthorizedResult>();
     }
 
     [Test]
@@ -96,7 +96,7 @@ public sealed class CookiesControllerTests
 
         var result = await controller.Get("member-cookie", CancellationToken.None);
 
-        result.Result.ShouldBeOfType<OkObjectResult>().Value
+        result.Result!.ShouldBeOfType<OkObjectResult>().Value
             .ShouldBeOfType<CookieProfileResponse>().ProfileKey.ShouldBe("member-cookie");
     }
 
@@ -111,7 +111,7 @@ public sealed class CookiesControllerTests
 
         var result = await controller.Get("member-cookie", CancellationToken.None);
 
-        result.Result.ShouldBeOfType<NotFoundObjectResult>();
+        result.Result!.ShouldBeOfType<NotFoundObjectResult>();
     }
 
     [Test]

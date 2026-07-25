@@ -24,22 +24,22 @@ public sealed class CreatorDiscoveryConsumerService(
 
     protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
     {
-        await SubscribeAsync<CreatorSourceCreateRequestMessage>(messageBus, CreatorDiscoverySubjects.CreateSource, HandleCreateAsync, QueueGroup, stoppingToken);
-        await SubscribeAsync<CreatorSourceCreateOrReuseRequestMessage>(messageBus, CreatorDiscoverySubjects.CreateOrReuseSource, HandleCreateOrReuseAsync, QueueGroup, stoppingToken);
-        await SubscribeAsync<CreatorSourceUpdateRequestMessage>(messageBus, CreatorDiscoverySubjects.UpdateSource, HandleUpdateAsync, QueueGroup, stoppingToken);
-        await SubscribeAsync<CreatorSourceGetRequestMessage>(messageBus, CreatorDiscoverySubjects.GetSource, HandleGetAsync, QueueGroup, stoppingToken);
-        await SubscribeAsync<CreatorSourceListRequestMessage>(messageBus, CreatorDiscoverySubjects.ListSources, HandleListAsync, QueueGroup, stoppingToken);
-        await SubscribeAsync<CreatorSourceListEnabledForScanRequestMessage>(messageBus, CreatorDiscoverySubjects.ListEnabledSourcesForScan, HandleListEnabledForScanAsync, QueueGroup, stoppingToken);
-        await SubscribeAsync<CreatorSourceDeleteRequestMessage>(messageBus, CreatorDiscoverySubjects.DeleteSource, HandleDeleteAsync, QueueGroup, stoppingToken);
-        await SubscribeAsync<UpsertDiscoveredMediaBatchRequestMessage>(messageBus, CreatorDiscoverySubjects.UpsertDiscoveredMediaBatch, HandleUpsertBatchAsync, QueueGroup, stoppingToken);
-        await SubscribeAsync<UpdateCreatorSourceAssetsRequestMessage>(messageBus, CreatorDiscoverySubjects.UpdateAssets, HandleUpdateAssetsAsync, QueueGroup, stoppingToken);
-        await SubscribeAsync<ListIgnoredMediaRequestMessage>(messageBus, CreatorDiscoverySubjects.ListIgnoredMedia, HandleListIgnoredMediaAsync, QueueGroup, stoppingToken);
-        await SubscribeAsync<ForceQueueDiscoveredMediaRequestMessage>(messageBus, CreatorDiscoverySubjects.ForceQueueDiscoveredMedia, HandleForceQueueDiscoveredMediaAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<CreatorMonitorCreateRequestMessage>(messageBus, CreatorMonitorSubjects.CreateSource, HandleCreateAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<CreatorMonitorCreateOrReuseRequestMessage>(messageBus, CreatorMonitorSubjects.CreateOrReuseSource, HandleCreateOrReuseAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<CreatorMonitorUpdateRequestMessage>(messageBus, CreatorMonitorSubjects.UpdateSource, HandleUpdateAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<CreatorMonitorGetRequestMessage>(messageBus, CreatorMonitorSubjects.GetSource, HandleGetAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<CreatorMonitorListRequestMessage>(messageBus, CreatorMonitorSubjects.ListSources, HandleListAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<CreatorMonitorListEnabledForScanRequestMessage>(messageBus, CreatorMonitorSubjects.ListEnabledSourcesForScan, HandleListEnabledForScanAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<CreatorMonitorDeleteRequestMessage>(messageBus, CreatorMonitorSubjects.DeleteSource, HandleDeleteAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<UpsertDiscoveredMediaBatchRequestMessage>(messageBus, CreatorMonitorSubjects.UpsertDiscoveredMediaBatch, HandleUpsertBatchAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<UpdateCreatorMonitorAssetsRequestMessage>(messageBus, CreatorMonitorSubjects.UpdateAssets, HandleUpdateAssetsAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<ListIgnoredMediaRequestMessage>(messageBus, CreatorMonitorSubjects.ListIgnoredMedia, HandleListIgnoredMediaAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<ForceQueueDiscoveredMediaRequestMessage>(messageBus, CreatorMonitorSubjects.ForceQueueDiscoveredMedia, HandleForceQueueDiscoveredMediaAsync, QueueGroup, stoppingToken);
 
         logger.LogInformation("Subscribed to creator discovery subjects.");
     }
 
-    private async Task HandleCreateAsync(IMessageContext<CreatorSourceCreateRequestMessage> context)
+    private async Task HandleCreateAsync(IMessageContext<CreatorMonitorCreateRequestMessage> context)
     {
         var msg = context.Message;
         try
@@ -63,12 +63,12 @@ public sealed class CreatorDiscoveryConsumerService(
                 MetadataRefreshWindow = msg.MetadataRefreshWindow,
                 ProviderQueryLimitsJson = msg.ProviderQueryLimits?.ToJson()
             }));
-            await context.RespondAsync(new CreatorSourceOperationResponseMessage { Success = true, Entity = Map(entity) });
+            await context.RespondAsync(new CreatorMonitorOperationResponseMessage { Success = true, Entity = Map(entity) });
         }
         catch (DbUpdateException ex)
         {
             logger.LogWarning(ex, "Creator source create conflicted for URL {SourceUrl}", msg.SourceUrl);
-            await context.RespondAsync(new CreatorSourceOperationResponseMessage
+            await context.RespondAsync(new CreatorMonitorOperationResponseMessage
             {
                 Success = false,
                 ErrorCode = "conflict",
@@ -82,7 +82,7 @@ public sealed class CreatorDiscoveryConsumerService(
         }
     }
 
-    private async Task HandleCreateOrReuseAsync(IMessageContext<CreatorSourceCreateOrReuseRequestMessage> context)
+    private async Task HandleCreateOrReuseAsync(IMessageContext<CreatorMonitorCreateOrReuseRequestMessage> context)
     {
         var msg = context.Message;
         try
@@ -106,7 +106,7 @@ public sealed class CreatorDiscoveryConsumerService(
                 MetadataRefreshWindow = msg.MetadataRefreshWindow,
                 ProviderQueryLimitsJson = msg.ProviderQueryLimits?.ToJson()
             }));
-            await context.RespondAsync(new CreatorSourceOperationResponseMessage { Success = true, Entity = Map(entity) });
+            await context.RespondAsync(new CreatorMonitorOperationResponseMessage { Success = true, Entity = Map(entity) });
         }
         catch (Exception ex)
         {
@@ -115,7 +115,7 @@ public sealed class CreatorDiscoveryConsumerService(
         }
     }
 
-    private async Task HandleUpdateAsync(IMessageContext<CreatorSourceUpdateRequestMessage> context)
+    private async Task HandleUpdateAsync(IMessageContext<CreatorMonitorUpdateRequestMessage> context)
     {
         var msg = context.Message;
         try
@@ -146,12 +146,12 @@ public sealed class CreatorDiscoveryConsumerService(
                 return;
             }
 
-            await context.RespondAsync(new CreatorSourceOperationResponseMessage { Success = true, Entity = Map(updated) });
+            await context.RespondAsync(new CreatorMonitorOperationResponseMessage { Success = true, Entity = Map(updated) });
         }
         catch (DbUpdateException ex)
         {
             logger.LogWarning(ex, "Creator source update conflicted for URL {SourceUrl}", msg.SourceUrl);
-            await context.RespondAsync(new CreatorSourceOperationResponseMessage
+            await context.RespondAsync(new CreatorMonitorOperationResponseMessage
             {
                 Success = false,
                 ErrorCode = "conflict",
@@ -165,7 +165,7 @@ public sealed class CreatorDiscoveryConsumerService(
         }
     }
 
-    private async Task HandleGetAsync(IMessageContext<CreatorSourceGetRequestMessage> context)
+    private async Task HandleGetAsync(IMessageContext<CreatorMonitorGetRequestMessage> context)
     {
         var id = context.Message.Id;
         try
@@ -173,7 +173,7 @@ public sealed class CreatorDiscoveryConsumerService(
             var entity = await WithRepo(repo => repo.GetSourceAsync(id));
             await context.RespondAsync(entity is null
                 ? NotFound(id)
-                : new CreatorSourceOperationResponseMessage { Success = true, Entity = Map(entity) });
+                : new CreatorMonitorOperationResponseMessage { Success = true, Entity = Map(entity) });
         }
         catch (Exception ex)
         {
@@ -182,12 +182,12 @@ public sealed class CreatorDiscoveryConsumerService(
         }
     }
 
-    private async Task HandleListAsync(IMessageContext<CreatorSourceListRequestMessage> context)
+    private async Task HandleListAsync(IMessageContext<CreatorMonitorListRequestMessage> context)
     {
         try
         {
             var items = await WithRepo(repo => repo.ListSourcesAsync());
-            await context.RespondAsync(new CreatorSourceOperationResponseMessage
+            await context.RespondAsync(new CreatorMonitorOperationResponseMessage
             {
                 Success = true,
                 Items = items.Select(Map).ToArray()
@@ -200,12 +200,12 @@ public sealed class CreatorDiscoveryConsumerService(
         }
     }
 
-    private async Task HandleListEnabledForScanAsync(IMessageContext<CreatorSourceListEnabledForScanRequestMessage> context)
+    private async Task HandleListEnabledForScanAsync(IMessageContext<CreatorMonitorListEnabledForScanRequestMessage> context)
     {
         try
         {
             var items = await WithRepo(repo => repo.ListEnabledSourcesForScanAsync(context.Message.ScanMode));
-            await context.RespondAsync(new CreatorSourceOperationResponseMessage
+            await context.RespondAsync(new CreatorMonitorOperationResponseMessage
             {
                 Success = true,
                 Items = items.Select(Map).ToArray()
@@ -218,14 +218,14 @@ public sealed class CreatorDiscoveryConsumerService(
         }
     }
 
-    private async Task HandleDeleteAsync(IMessageContext<CreatorSourceDeleteRequestMessage> context)
+    private async Task HandleDeleteAsync(IMessageContext<CreatorMonitorDeleteRequestMessage> context)
     {
         var id = context.Message.Id;
         try
         {
             var deleted = await WithRepo(repo => repo.DeleteSourceAsync(id));
             await context.RespondAsync(deleted
-                ? new CreatorSourceOperationResponseMessage { Success = true }
+                ? new CreatorMonitorOperationResponseMessage { Success = true }
                 : NotFound(id));
         }
         catch (Exception ex)
@@ -271,7 +271,7 @@ public sealed class CreatorDiscoveryConsumerService(
         }
     }
 
-    private async Task HandleUpdateAssetsAsync(IMessageContext<UpdateCreatorSourceAssetsRequestMessage> context)
+    private async Task HandleUpdateAssetsAsync(IMessageContext<UpdateCreatorMonitorAssetsRequestMessage> context)
     {
         var msg = context.Message;
         try
@@ -303,7 +303,7 @@ public sealed class CreatorDiscoveryConsumerService(
 
             if (updated is null)
             {
-                await context.RespondAsync(new UpdateCreatorSourceAssetsResponseMessage
+                await context.RespondAsync(new UpdateCreatorMonitorAssetsResponseMessage
                 {
                     Success = false,
                     ErrorCode = "not_found",
@@ -312,7 +312,7 @@ public sealed class CreatorDiscoveryConsumerService(
                 return;
             }
 
-            await context.RespondAsync(new UpdateCreatorSourceAssetsResponseMessage
+            await context.RespondAsync(new UpdateCreatorMonitorAssetsResponseMessage
             {
                 Success = true,
                 Entity = Map(updated)
@@ -321,7 +321,7 @@ public sealed class CreatorDiscoveryConsumerService(
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed updating creator source assets {SourceId}", msg.SourceId);
-            await context.RespondAsync(new UpdateCreatorSourceAssetsResponseMessage
+            await context.RespondAsync(new UpdateCreatorMonitorAssetsResponseMessage
             {
                 Success = false,
                 ErrorCode = "internal",
@@ -503,16 +503,16 @@ public sealed class CreatorDiscoveryConsumerService(
         return null;
     }
 
-    private static CreatorSourceOperationResponseMessage Failure(string message)
+    private static CreatorMonitorOperationResponseMessage Failure(string message)
         => new() { Success = false, ErrorCode = "validation", ErrorMessage = message };
 
-    private static CreatorSourceOperationResponseMessage NotFound(long id)
+    private static CreatorMonitorOperationResponseMessage NotFound(long id)
         => new() { Success = false, ErrorCode = "not_found", ErrorMessage = $"Creator source '{id}' was not found." };
 
-    private static CreatorSourceOperationResponseMessage InternalFailure(string message)
+    private static CreatorMonitorOperationResponseMessage InternalFailure(string message)
         => new() { Success = false, ErrorCode = "internal", ErrorMessage = message };
 
-    private static CreatorSourceDto Map(CreatorSourceEntity entity) => new()
+    private static CreatorMonitorDto Map(CreatorSourceEntity entity) => new()
     {
         Id = entity.Id,
         Platform = entity.Platform,

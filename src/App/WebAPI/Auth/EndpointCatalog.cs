@@ -16,11 +16,10 @@ public static class Bundles
     public const string Schedules = "schedules";
     public const string Presets = "presets";
     public const string DownloadConfigSets = "download-config-sets";
-    public const string CreatorSources = "creator-sources";
+    public const string CreatorMonitor = "creator-monitor";
     public const string Media = "media";
     public const string Notifications = "notifications";
     public const string Management = "management";
-    public const string MediaAccessAdmin = "media-access-admin";
 }
 
 /// <summary>
@@ -50,7 +49,6 @@ public static class EndpointIds
     public const string DownloadsGroupStop = "downloads.group.stop";
     public const string DownloadsProviderCircuitClear = "downloads.provider-circuit.clear";
     public const string ImportsSessionsCreate = "imports.sessions.create";
-    public const string ImportsSessionsList = "imports.sessions.list";
     public const string ImportsSessionsGet = "imports.sessions.get";
     public const string ImportsSessionsItemsList = "imports.sessions.items.list";
     public const string ImportsSessionsItemsPatch = "imports.sessions.items.patch";
@@ -179,16 +177,16 @@ public static class EndpointIds
     public const string DownloadConfigSetsDelete = "download-config-sets.delete";
 
     // Creator sources
-    public const string CreatorSourcesCreate = "creator-sources.create";
-    public const string CreatorSourcesDownloadChannel = "creator-sources.download-channel";
-    public const string CreatorSourcesUpdate = "creator-sources.update";
-    public const string CreatorSourcesGet = "creator-sources.get";
-    public const string CreatorSourcesList = "creator-sources.list";
-    public const string CreatorSourcesRefreshAssets = "creator-sources.refresh-assets";
-    public const string CreatorSourcesScanNow = "creator-sources.scan-now";
-    public const string CreatorSourcesDelete = "creator-sources.delete";
-    public const string CreatorSourcesListIgnoredMedia = "creator-sources.list-ignored-media";
-    public const string CreatorSourcesForceQueueMedia = "creator-sources.force-queue-media";
+    public const string CreatorMonitorCreate = "creator-monitor.create";
+    public const string CreatorMonitorDownloadChannel = "creator-monitor.download-channel";
+    public const string CreatorMonitorUpdate = "creator-monitor.update";
+    public const string CreatorMonitorGet = "creator-monitor.get";
+    public const string CreatorMonitorList = "creator-monitor.list";
+    public const string CreatorMonitorRefreshAssets = "creator-monitor.refresh-assets";
+    public const string CreatorMonitorScanNow = "creator-monitor.scan-now";
+    public const string CreatorMonitorDelete = "creator-monitor.delete";
+    public const string CreatorMonitorListIgnoredMedia = "creator-monitor.list-ignored-media";
+    public const string CreatorMonitorForceQueueMedia = "creator-monitor.force-queue-media";
 
     // Media
     public const string MediaStream = "media.stream";
@@ -200,6 +198,7 @@ public static class EndpointIds
     public const string MediaHlsManifest = "media.hls-manifest";
     public const string MediaHlsSegment = "media.hls-segment";
     public const string MediaRenditionsProgressStream = "media.renditions.progress-stream";
+    public const string MediaRenditionsQueueList = "media.renditions.queue.list";
     public const string MediaWatchStateGet = "media.watch-state.get";
     public const string MediaWatchStateUpsert = "media.watch-state.upsert";
     public const string MediaWatchStateListInProgress = "media.watch-state.list-in-progress";
@@ -230,31 +229,28 @@ public static class EndpointIds
     public const string CastSessionsDisconnect = "cast.sessions.disconnect";
     public const string CastSessionsEvents = "cast.sessions.events";
 
-    // Media access control (watch-time restrictions). The internal `media-access.check` gate has no
-    // endpoint id — it is server-to-server only and never reachable as a route.
-    public const string MediaAccessMediaList = "media-access.media.list";
-    public const string MediaAccessMediaAdd = "media-access.media.add";
-    public const string MediaAccessMediaRemove = "media-access.media.remove";
-    public const string MediaAccessMediaClear = "media-access.media.clear";
-    public const string MediaAccessProviderList = "media-access.provider.list";
-    public const string MediaAccessProviderAdd = "media-access.provider.add";
-    public const string MediaAccessProviderRemove = "media-access.provider.remove";
-    public const string MediaAccessProviderClear = "media-access.provider.clear";
-    public const string MediaAccessAgeList = "media-access.age.list";
-    public const string MediaAccessAgeAdd = "media-access.age.add";
-    public const string MediaAccessAgeRemove = "media-access.age.remove";
-
-    // Bundle management (runtime). These live in the `:all` bootstrap bundle so the bootstrap admin
-    // can always reach them — see the lock-out guard in B_Axis1.MD.
-    public const string ManagementCatalog = "management.catalog";
-    public const string ManagementBundlesList = "management.bundles.list";
-    public const string ManagementBundlesGet = "management.bundles.get";
-    public const string ManagementBundlesCreate = "management.bundles.create";
-    public const string ManagementBundlesSetEndpoints = "management.bundles.set-endpoints";
-    public const string ManagementBundlesDelete = "management.bundles.delete";
-    public const string ManagementGrantsCreate = "management.grants.create";
-    public const string ManagementGrantsDelete = "management.grants.delete";
-    public const string ManagementDirectorySearch = "management.directory.search";
+    // Unified access control. These live in the management baseline bundle and therefore in the
+    // `:all` bootstrap bundle. MEDIA_ACCESS.MD defines policies as the only principal-grant surface.
+    public const string AccessControlCatalog = "access-control.catalog";
+    public const string AccessControlDirectorySearch = "access-control.directory.search";
+    public const string AccessControlBundlesList = "access-control.bundles.list";
+    public const string AccessControlBundlesGet = "access-control.bundles.get";
+    public const string AccessControlBundlePoliciesList = "access-control.bundles.policies.list";
+    public const string AccessControlBundlesCreate = "access-control.bundles.create";
+    public const string AccessControlBundlesSetEndpoints = "access-control.bundles.set-endpoints";
+    public const string AccessControlBundlesDelete = "access-control.bundles.delete";
+    public const string AccessControlPoliciesList = "access-control.policies.list";
+    public const string AccessControlPoliciesGet = "access-control.policies.get";
+    public const string AccessControlPoliciesCreate = "access-control.policies.create";
+    public const string AccessControlPoliciesUpdate = "access-control.policies.update";
+    public const string AccessControlPoliciesDelete = "access-control.policies.delete";
+    public const string AccessControlPoliciesDuplicate = "access-control.policies.duplicate";
+    public const string AccessControlPoliciesImpact = "access-control.policies.impact";
+    public const string AccessControlProvidersList = "access-control.providers.list";
+    public const string AccessControlMediaSummary = "access-control.media.summary";
+    public const string AccessControlEffective = "access-control.effective";
+    public const string AccessControlEffectiveCheck = "access-control.effective.check";
+    public const string AccessControlEffectiveMe = "access-control.effective.me";
 
     // Backups
     public const string BackupsCreate = "backups.create";
@@ -296,7 +292,6 @@ public static class EndpointCatalog
         new(EndpointIds.DownloadsGroupStop, Bundles.Downloading),
         new(EndpointIds.DownloadsProviderCircuitClear, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsCreate, Bundles.Downloading),
-        new(EndpointIds.ImportsSessionsList, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsGet, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsItemsList, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsItemsPatch, Bundles.Downloading),
@@ -411,17 +406,17 @@ public static class EndpointCatalog
         new(EndpointIds.DownloadConfigSetsList, Bundles.DownloadConfigSets),
         new(EndpointIds.DownloadConfigSetsDelete, Bundles.DownloadConfigSets),
 
-        new(EndpointIds.CreatorSourcesCreate, Bundles.CreatorSources),
-        new(EndpointIds.CreatorSourcesDownloadChannel, Bundles.CreatorSources),
-        new(EndpointIds.CreatorSourcesUpdate, Bundles.CreatorSources),
-        new(EndpointIds.CreatorSourcesGet, Bundles.CreatorSources),
-        new(EndpointIds.CreatorSourcesList, Bundles.CreatorSources),
-        new(EndpointIds.CreatorSourcesRefreshAssets, Bundles.CreatorSources),
-        new(EndpointIds.MetadataAccountsRefreshAssets, Bundles.CreatorSources),
-        new(EndpointIds.CreatorSourcesScanNow, Bundles.CreatorSources),
-        new(EndpointIds.CreatorSourcesDelete, Bundles.CreatorSources),
-        new(EndpointIds.CreatorSourcesListIgnoredMedia, Bundles.CreatorSources),
-        new(EndpointIds.CreatorSourcesForceQueueMedia, Bundles.CreatorSources),
+        new(EndpointIds.CreatorMonitorCreate, Bundles.CreatorMonitor),
+        new(EndpointIds.CreatorMonitorDownloadChannel, Bundles.CreatorMonitor),
+        new(EndpointIds.CreatorMonitorUpdate, Bundles.CreatorMonitor),
+        new(EndpointIds.CreatorMonitorGet, Bundles.CreatorMonitor),
+        new(EndpointIds.CreatorMonitorList, Bundles.CreatorMonitor),
+        new(EndpointIds.CreatorMonitorRefreshAssets, Bundles.CreatorMonitor),
+        new(EndpointIds.MetadataAccountsRefreshAssets, Bundles.CreatorMonitor),
+        new(EndpointIds.CreatorMonitorScanNow, Bundles.CreatorMonitor),
+        new(EndpointIds.CreatorMonitorDelete, Bundles.CreatorMonitor),
+        new(EndpointIds.CreatorMonitorListIgnoredMedia, Bundles.CreatorMonitor),
+        new(EndpointIds.CreatorMonitorForceQueueMedia, Bundles.CreatorMonitor),
 
         new(EndpointIds.MediaStream, Bundles.Media),
         new(EndpointIds.MediaThumbnail, Bundles.Media),
@@ -432,6 +427,7 @@ public static class EndpointCatalog
         new(EndpointIds.MediaHlsManifest, Bundles.Media),
         new(EndpointIds.MediaHlsSegment, Bundles.Media),
         new(EndpointIds.MediaRenditionsProgressStream, Bundles.Media),
+        new(EndpointIds.MediaRenditionsQueueList, Bundles.Media),
         new(EndpointIds.MediaWatchStateGet, Bundles.Media),
         new(EndpointIds.MediaWatchStateUpsert, Bundles.Media),
         new(EndpointIds.MediaWatchStateMarkWatched, Bundles.Media),
@@ -460,27 +456,26 @@ public static class EndpointCatalog
         new(EndpointIds.ChannelAudioPodcastFeed, Bundles.Media),
         new(EndpointIds.ChannelAudioEnclosure, Bundles.Media),
 
-        new(EndpointIds.MediaAccessMediaList, Bundles.MediaAccessAdmin),
-        new(EndpointIds.MediaAccessMediaAdd, Bundles.MediaAccessAdmin),
-        new(EndpointIds.MediaAccessMediaRemove, Bundles.MediaAccessAdmin),
-        new(EndpointIds.MediaAccessMediaClear, Bundles.MediaAccessAdmin),
-        new(EndpointIds.MediaAccessProviderList, Bundles.MediaAccessAdmin),
-        new(EndpointIds.MediaAccessProviderAdd, Bundles.MediaAccessAdmin),
-        new(EndpointIds.MediaAccessProviderRemove, Bundles.MediaAccessAdmin),
-        new(EndpointIds.MediaAccessProviderClear, Bundles.MediaAccessAdmin),
-        new(EndpointIds.MediaAccessAgeList, Bundles.MediaAccessAdmin),
-        new(EndpointIds.MediaAccessAgeAdd, Bundles.MediaAccessAdmin),
-        new(EndpointIds.MediaAccessAgeRemove, Bundles.MediaAccessAdmin),
-
-        new(EndpointIds.ManagementCatalog, Bundles.Management),
-        new(EndpointIds.ManagementBundlesList, Bundles.Management),
-        new(EndpointIds.ManagementBundlesGet, Bundles.Management),
-        new(EndpointIds.ManagementBundlesCreate, Bundles.Management),
-        new(EndpointIds.ManagementBundlesSetEndpoints, Bundles.Management),
-        new(EndpointIds.ManagementBundlesDelete, Bundles.Management),
-        new(EndpointIds.ManagementGrantsCreate, Bundles.Management),
-        new(EndpointIds.ManagementGrantsDelete, Bundles.Management),
-        new(EndpointIds.ManagementDirectorySearch, Bundles.Management),
+        new(EndpointIds.AccessControlCatalog, Bundles.Management),
+        new(EndpointIds.AccessControlDirectorySearch, Bundles.Management),
+        new(EndpointIds.AccessControlBundlesList, Bundles.Management),
+        new(EndpointIds.AccessControlBundlesGet, Bundles.Management),
+        new(EndpointIds.AccessControlBundlePoliciesList, Bundles.Management),
+        new(EndpointIds.AccessControlBundlesCreate, Bundles.Management),
+        new(EndpointIds.AccessControlBundlesSetEndpoints, Bundles.Management),
+        new(EndpointIds.AccessControlBundlesDelete, Bundles.Management),
+        new(EndpointIds.AccessControlPoliciesList, Bundles.Management),
+        new(EndpointIds.AccessControlPoliciesGet, Bundles.Management),
+        new(EndpointIds.AccessControlPoliciesCreate, Bundles.Management),
+        new(EndpointIds.AccessControlPoliciesUpdate, Bundles.Management),
+        new(EndpointIds.AccessControlPoliciesDelete, Bundles.Management),
+        new(EndpointIds.AccessControlPoliciesDuplicate, Bundles.Management),
+        new(EndpointIds.AccessControlPoliciesImpact, Bundles.Management),
+        new(EndpointIds.AccessControlProvidersList, Bundles.Management),
+        new(EndpointIds.AccessControlMediaSummary, Bundles.Management),
+        new(EndpointIds.AccessControlEffective, Bundles.Management),
+        new(EndpointIds.AccessControlEffectiveCheck, Bundles.Management),
+        new(EndpointIds.AccessControlEffectiveMe, Bundles.Management),
 
         new(EndpointIds.BackupsCreate, Bundles.Management),
         new(EndpointIds.BackupsJobsList, Bundles.Management),

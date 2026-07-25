@@ -1,4 +1,4 @@
-using FluentStorage.Blobs;
+using FluentStorage.Storage;
 using Conduit.NATS;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -21,13 +21,13 @@ public sealed class MediaWatchControllerTests
     {
         var mediaGuid = Guid.NewGuid();
         var bus = Substitute.For<IMessageBus>();
-        var provider = Substitute.For<IBlobStorageProvider>();
-        var storage = Substitute.For<IBlobStorage>();
+        var provider = Substitute.For<IStoreProvider>();
+        var storage = Substitute.For<IStore>();
         var stream = new MemoryStream([1, 2, 3]);
 
         bus.RequestAsync<MediaStreamResolveRequestMessage, MediaStreamResolveResponseMessage>(
                 MediaStreamSubjects.Resolve,
-                Arg.Is<MediaStreamResolveRequestMessage>(request =>
+                Arg.Is<MediaStreamResolveRequestMessage>(request => request != null &&
                     request.MediaGuid == mediaGuid &&
                     request.StorageKey == "storage-a" &&
                     request.Version == 2),
@@ -39,7 +39,7 @@ public sealed class MediaWatchControllerTests
                 Item = Location(mediaGuid, "storage-a", "media/video.mp4", 2)
             });
         provider.GetAsync("storage-a", Arg.Any<CancellationToken>()).Returns(storage);
-        storage.OpenReadAsync("media/video.mp4", Arg.Any<CancellationToken>()).Returns(stream);
+        storage.OpenRead("media/video.mp4", Arg.Any<CancellationToken>()).Returns(stream);
 
         var result = await CreateController(bus, provider).GetWatch(
             mediaGuid,
@@ -58,13 +58,13 @@ public sealed class MediaWatchControllerTests
     {
         var mediaGuid = Guid.NewGuid();
         var bus = Substitute.For<IMessageBus>();
-        var provider = Substitute.For<IBlobStorageProvider>();
-        var storage = Substitute.For<IBlobStorage>();
+        var provider = Substitute.For<IStoreProvider>();
+        var storage = Substitute.For<IStore>();
         var stream = new NonSeekableReadStream([1, 2, 3]);
 
         ArrangeResolved(bus, mediaGuid, Location(mediaGuid, "storage-a", "media/content.unknown", 1));
         provider.GetAsync("storage-a", Arg.Any<CancellationToken>()).Returns(storage);
-        storage.OpenReadAsync("media/content.unknown", Arg.Any<CancellationToken>()).Returns(stream);
+        storage.OpenRead("media/content.unknown", Arg.Any<CancellationToken>()).Returns(stream);
 
         var result = await CreateController(bus, provider).GetWatch(mediaGuid);
 
@@ -78,7 +78,7 @@ public sealed class MediaWatchControllerTests
     {
         var mediaGuid = Guid.NewGuid();
         var bus = Substitute.For<IMessageBus>();
-        var provider = Substitute.For<IBlobStorageProvider>();
+        var provider = Substitute.For<IStoreProvider>();
         var controller = CreateController(bus, provider);
 
         var invalid = await controller.GetWatch(mediaGuid, version: 0);
@@ -97,7 +97,7 @@ public sealed class MediaWatchControllerTests
             });
 
         var missing = await controller.GetWatch(mediaGuid);
-        missing.ShouldBeOfType<NotFoundObjectResult>().Value.ShouldBe("missing");
+        missing.ShouldBeOfType<NotFoundObjectResult>().Value!.ShouldBe("missing");
     }
 
     [Test]
@@ -105,11 +105,11 @@ public sealed class MediaWatchControllerTests
     {
         var mediaGuid = Guid.NewGuid();
         var bus = Substitute.For<IMessageBus>();
-        var provider = Substitute.For<IBlobStorageProvider>();
+        var provider = Substitute.For<IStoreProvider>();
 
         bus.RequestAsync<AudioRenditionResolveRequest, AudioRenditionResolveResponse>(
                 AudioRenditionSubjects.Resolve,
-                Arg.Is<AudioRenditionResolveRequest>(request =>
+                Arg.Is<AudioRenditionResolveRequest>(request => request != null &&
                     request.MediaGuid == mediaGuid &&
                     request.CreateIfMissing),
                 Arg.Any<TimeSpan>(),
@@ -137,12 +137,12 @@ public sealed class MediaWatchControllerTests
     {
         var mediaGuid = Guid.NewGuid();
         var bus = Substitute.For<IMessageBus>();
-        var provider = Substitute.For<IBlobStorageProvider>();
-        var storage = Substitute.For<IBlobStorage>();
+        var provider = Substitute.For<IStoreProvider>();
+        var storage = Substitute.For<IStore>();
         var location = Location(mediaGuid, "storage-a", "media/video.mp4", 1);
         ArrangeResolved(bus, mediaGuid, location);
         provider.GetAsync("storage-a", Arg.Any<CancellationToken>()).Returns(storage);
-        storage.OpenReadAsync(location.StoragePath, Arg.Any<CancellationToken>())
+        storage.OpenRead(location.StoragePath, Arg.Any<CancellationToken>())
             .Returns(Task.FromResult<Stream>(null!));
 
         var controller = CreateController(bus, provider);
@@ -150,7 +150,7 @@ public sealed class MediaWatchControllerTests
         missing.ShouldBeOfType<NotFoundObjectResult>();
 
         provider.GetAsync("storage-a", Arg.Any<CancellationToken>())
-            .Returns<Task<IBlobStorage>>(_ => throw new InvalidOperationException("storage failed"));
+            .Returns<Task<IStore>>(_ => throw new InvalidOperationException("storage failed"));
 
         var failed = await controller.GetWatch(mediaGuid);
         failed.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status502BadGateway);
@@ -161,17 +161,27 @@ public sealed class MediaWatchControllerTests
     {
         var mediaGuid = Guid.NewGuid();
         var bus = Substitute.For<IMessageBus>();
-        var provider = Substitute.For<IBlobStorageProvider>();
+        var provider = Substitute.For<IStoreProvider>();
         ArrangeResolved(bus, mediaGuid, Location(mediaGuid, "storage-a", "media/video.mp4", 1));
 
         // Override the default-allowed access check with a denial.
         var controller = CreateController(bus, provider);
-        bus.RequestAsync<MediaAccessCheckRequestMessage, MediaAccessCheckResponseMessage>(
-                MediaAccessSubjects.Check,
-                Arg.Any<MediaAccessCheckRequestMessage>(),
+        bus.RequestAsync<AccessPolicyEffectiveMediaRequestMessage, AccessPolicyOperationResponseMessage>(
+                AccessPolicySubjects.EffectiveMedia,
+                Arg.Is<AccessPolicyEffectiveMediaRequestMessage>(request =>
+                    request != null && request.MediaGuid == mediaGuid),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
-            .Returns(new MediaAccessCheckResponseMessage { IsAllowed = false, FailureReason = "media-restricted" });
+            .Returns(new AccessPolicyOperationResponseMessage
+            {
+                Success = true,
+                EffectiveMedia = new AccessPolicyEffectiveMediaDto
+                {
+                    MediaGuid = mediaGuid,
+                    Found = true,
+                    IsAllowed = false
+                }
+            });
 
         var result = await controller.GetWatch(mediaGuid);
 
@@ -180,18 +190,45 @@ public sealed class MediaWatchControllerTests
     }
 
     [Test]
+    public async Task GetWatch_Returns_503_When_Access_Policy_Evaluation_Fails()
+    {
+        var mediaGuid = Guid.NewGuid();
+        var bus = Substitute.For<IMessageBus>();
+        var provider = Substitute.For<IStoreProvider>();
+        ArrangeResolved(bus, mediaGuid, Location(mediaGuid, "storage-a", "media/video.mp4", 1));
+
+        var controller = CreateController(bus, provider);
+        bus.RequestAsync<AccessPolicyEffectiveMediaRequestMessage, AccessPolicyOperationResponseMessage>(
+                AccessPolicySubjects.EffectiveMedia,
+                Arg.Any<AccessPolicyEffectiveMediaRequestMessage>(),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new AccessPolicyOperationResponseMessage
+            {
+                Success = false,
+                ErrorCode = "internal_error",
+                ErrorMessage = "Access-policy evaluation failed."
+            });
+
+        var result = await controller.GetWatch(mediaGuid);
+
+        result.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status503ServiceUnavailable);
+        await provider.DidNotReceive().GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task GetThumbnail_Resolves_And_Returns_Cached_Image()
     {
         var mediaGuid = Guid.NewGuid();
         var bus = Substitute.For<IMessageBus>();
-        var provider = Substitute.For<IBlobStorageProvider>();
-        var storage = Substitute.For<IBlobStorage>();
+        var provider = Substitute.For<IStoreProvider>();
+        var storage = Substitute.For<IStore>();
         var stream = new MemoryStream([1, 2, 3]);
         var location = ThumbnailLocation(mediaGuid, "storage-a", "thumbs/poster.jpg");
 
         ArrangeThumbnailResolved(bus, mediaGuid, location);
         provider.GetAsync("storage-a", Arg.Any<CancellationToken>()).Returns(storage);
-        storage.OpenReadAsync("thumbs/poster.jpg", Arg.Any<CancellationToken>()).Returns(stream);
+        storage.OpenRead("thumbs/poster.jpg", Arg.Any<CancellationToken>()).Returns(stream);
 
         var controller = CreateController(bus, provider);
         var result = await controller.GetThumbnail(mediaGuid, CancellationToken.None);
@@ -207,7 +244,7 @@ public sealed class MediaWatchControllerTests
     {
         var mediaGuid = Guid.NewGuid();
         var bus = Substitute.For<IMessageBus>();
-        var provider = Substitute.For<IBlobStorageProvider>();
+        var provider = Substitute.For<IStoreProvider>();
 
         bus.RequestAsync<MediaThumbnailResolveRequestMessage, MediaThumbnailResolveResponseMessage>(
                 MediaStreamSubjects.ResolveThumbnail,
@@ -223,14 +260,23 @@ public sealed class MediaWatchControllerTests
 
         var controller = CreateController(bus, provider);
         var missing = await controller.GetThumbnail(mediaGuid, CancellationToken.None);
-        missing.ShouldBeOfType<NotFoundObjectResult>().Value.ShouldBe("missing");
+        missing.ShouldBeOfType<NotFoundObjectResult>().Value!.ShouldBe("missing");
 
-        bus.RequestAsync<MediaAccessCheckRequestMessage, MediaAccessCheckResponseMessage>(
-                MediaAccessSubjects.Check,
-                Arg.Any<MediaAccessCheckRequestMessage>(),
+        bus.RequestAsync<AccessPolicyEffectiveMediaRequestMessage, AccessPolicyOperationResponseMessage>(
+                AccessPolicySubjects.EffectiveMedia,
+                Arg.Any<AccessPolicyEffectiveMediaRequestMessage>(),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
-            .Returns(new MediaAccessCheckResponseMessage { IsAllowed = false, FailureReason = "media-restricted" });
+            .Returns(new AccessPolicyOperationResponseMessage
+            {
+                Success = true,
+                EffectiveMedia = new AccessPolicyEffectiveMediaDto
+                {
+                    MediaGuid = mediaGuid,
+                    Found = true,
+                    IsAllowed = false
+                }
+            });
 
         var denied = await controller.GetThumbnail(mediaGuid, CancellationToken.None);
 
@@ -240,16 +286,29 @@ public sealed class MediaWatchControllerTests
 
     private static MediaWatchController CreateController(
         IMessageBus bus,
-        IBlobStorageProvider provider)
+        IStoreProvider provider)
     {
         // The watch endpoints gate on a watch-time access check; default it to allowed so these tests
-        // exercise the streaming path. See MediaAccessControllerTests for the restriction behaviour.
-        bus.RequestAsync<MediaAccessCheckRequestMessage, MediaAccessCheckResponseMessage>(
-                MediaAccessSubjects.Check,
-                Arg.Any<MediaAccessCheckRequestMessage>(),
+        // exercise the streaming path. Access-policy deny behavior is covered by the DataBridge evaluator tests.
+        bus.RequestAsync<AccessPolicyEffectiveMediaRequestMessage, AccessPolicyOperationResponseMessage>(
+                AccessPolicySubjects.EffectiveMedia,
+                Arg.Any<AccessPolicyEffectiveMediaRequestMessage>(),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
-            .Returns(new MediaAccessCheckResponseMessage { IsAllowed = true });
+            .Returns(callInfo =>
+            {
+                var request = callInfo.ArgAt<AccessPolicyEffectiveMediaRequestMessage>(1);
+                return new AccessPolicyOperationResponseMessage
+                {
+                    Success = true,
+                    EffectiveMedia = new AccessPolicyEffectiveMediaDto
+                    {
+                        MediaGuid = request.MediaGuid,
+                        Found = true,
+                        IsAllowed = true
+                    }
+                };
+            });
 
         return new MediaWatchController(
             bus,
@@ -275,7 +334,7 @@ public sealed class MediaWatchControllerTests
     {
         bus.RequestAsync<MediaStreamResolveRequestMessage, MediaStreamResolveResponseMessage>(
                 MediaStreamSubjects.Resolve,
-                Arg.Is<MediaStreamResolveRequestMessage>(request => request.MediaGuid == mediaGuid),
+                Arg.Is<MediaStreamResolveRequestMessage>(request => request != null && request.MediaGuid == mediaGuid),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new MediaStreamResolveResponseMessage
@@ -305,7 +364,7 @@ public sealed class MediaWatchControllerTests
     {
         bus.RequestAsync<MediaThumbnailResolveRequestMessage, MediaThumbnailResolveResponseMessage>(
                 MediaStreamSubjects.ResolveThumbnail,
-                Arg.Is<MediaThumbnailResolveRequestMessage>(request => request.MediaGuid == mediaGuid),
+                Arg.Is<MediaThumbnailResolveRequestMessage>(request => request != null && request.MediaGuid == mediaGuid),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new MediaThumbnailResolveResponseMessage

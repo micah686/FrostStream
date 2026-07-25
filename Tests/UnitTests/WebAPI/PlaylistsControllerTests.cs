@@ -30,14 +30,14 @@ public sealed class PlaylistsControllerTests
             StorageKey = ""
         }, CancellationToken.None);
 
-        var payload = result.Result.ShouldBeOfType<AcceptedResult>().Value
+        var payload = result.Result!.ShouldBeOfType<AcceptedResult>().Value
             .ShouldBeOfType<PlaylistRequestResponse>();
         payload.PlaylistId.ShouldNotBe(Guid.Empty);
         payload.CorrelationId.ShouldNotBe(Guid.Empty);
 
         await publisher.Received(1).PublishAsync(
             DownloadSubjects.GroupRequested,
-            Arg.Is<DownloadGroupRequested>(g =>
+            Arg.Is<DownloadGroupRequested>(g => g != null &&
                 g.Kind == DownloadGroupKind.Playlist &&
                 g.GroupId == payload.CorrelationId &&
                 g.CorrelationId == payload.CorrelationId &&
@@ -51,7 +51,7 @@ public sealed class PlaylistsControllerTests
                 g.CollectionRequest.SourceUrl == "https://example.test/playlist" &&
                 g.CollectionRequest.StorageKey == "default" &&
                 g.CollectionRequest.RequestedBy == "unit_test_user"),
-            Arg.Is<string>(x => x.Length == 32),
+            Arg.Is<string>(x => x != null && x.Length == 32),
             null,
             Arg.Any<CancellationToken>());
     }
@@ -74,14 +74,14 @@ public sealed class PlaylistsControllerTests
 
         bus.RequestAsync<PlaylistListRequestMessage, PlaylistListResponseMessage>(
                 PlaylistSubjects.PlaylistList,
-                Arg.Is<PlaylistListRequestMessage>(x => x.PageSize == 25 && x.PageOffset == 50),
+                Arg.Is<PlaylistListRequestMessage>(x => x != null && x.PageSize == 25 && x.PageOffset == 50),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new PlaylistListResponseMessage { Success = true, Items = [playlist] });
 
         var result = await controller.List(25, 50, CancellationToken.None);
 
-        var payload = result.Result.ShouldBeOfType<OkObjectResult>().Value
+        var payload = result.Result!.ShouldBeOfType<OkObjectResult>().Value
             .ShouldBeAssignableTo<IReadOnlyList<PlaylistDto>>();
         payload.ShouldNotBeNull();
         payload.Single().PlaylistId.ShouldBe(playlist.PlaylistId);
@@ -96,7 +96,7 @@ public sealed class PlaylistsControllerTests
 
         bus.RequestAsync<PlaylistGetRequestMessage, PlaylistGetResponseMessage>(
                 PlaylistSubjects.PlaylistGet,
-                Arg.Is<PlaylistGetRequestMessage>(x => x.PlaylistId == playlistId),
+                Arg.Is<PlaylistGetRequestMessage>(x => x != null && x.PlaylistId == playlistId),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new PlaylistGetResponseMessage
@@ -108,7 +108,7 @@ public sealed class PlaylistsControllerTests
 
         var result = await controller.GetById(playlistId, CancellationToken.None);
 
-        result.Result.ShouldBeOfType<NotFoundObjectResult>().Value.ShouldBe("missing");
+        result.Result!.ShouldBeOfType<NotFoundObjectResult>().Value!.ShouldBe("missing");
     }
 
     [Test]
@@ -129,7 +129,7 @@ public sealed class PlaylistsControllerTests
             SourceUrl = "https://example.test/playlist"
         }, CancellationToken.None);
 
-        result.Result.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status502BadGateway);
+        result.Result!.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status502BadGateway);
     }
 
     [Test]
@@ -143,7 +143,7 @@ public sealed class PlaylistsControllerTests
             SourceUrl = "http://localhost:8080/playlist"
         }, CancellationToken.None);
 
-        result.Result.ShouldBeOfType<BadRequestObjectResult>();
+        result.Result!.ShouldBeOfType<BadRequestObjectResult>();
         await publisher.DidNotReceiveWithAnyArgs().PublishAsync(
             default!,
             default(DownloadGroupRequested)!,

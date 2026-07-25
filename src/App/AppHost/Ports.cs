@@ -35,6 +35,7 @@ public static class Ports
     public const int NatsClient = 24040;
     public const int NatsMonitor = 24041;
     public const int NatsWebSocket = 24042;
+    public const int BackupService = 24050;
 
     private static int External(string variable, int fallback)
     {

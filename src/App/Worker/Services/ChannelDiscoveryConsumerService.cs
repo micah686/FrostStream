@@ -148,7 +148,7 @@ public sealed class ChannelDiscoveryConsumerService(
         return expectedJobs;
     }
 
-    private async Task<IReadOnlyList<CreatorSourceDto>> ResolveSourcesAsync(
+    private async Task<IReadOnlyList<CreatorMonitorDto>> ResolveSourcesAsync(
         ScheduledBackgroundRequest request,
         CreatorSourceScanMode scanMode,
         CancellationToken cancellationToken)
@@ -162,9 +162,9 @@ public sealed class ChannelDiscoveryConsumerService(
 
         if (requestedSourceId is { } targetSourceId)
         {
-            var sourceResponse = await messageBus.RequestAsync<CreatorSourceGetRequestMessage, CreatorSourceOperationResponseMessage>(
-                CreatorDiscoverySubjects.GetSource,
-                new CreatorSourceGetRequestMessage { Id = targetSourceId },
+            var sourceResponse = await messageBus.RequestAsync<CreatorMonitorGetRequestMessage, CreatorMonitorOperationResponseMessage>(
+                CreatorMonitorSubjects.GetSource,
+                new CreatorMonitorGetRequestMessage { Id = targetSourceId },
                 RequestTimeout,
                 cancellationToken);
 
@@ -176,9 +176,9 @@ public sealed class ChannelDiscoveryConsumerService(
             return [source];
         }
 
-        var sourcesResponse = await messageBus.RequestAsync<CreatorSourceListEnabledForScanRequestMessage, CreatorSourceOperationResponseMessage>(
-            CreatorDiscoverySubjects.ListEnabledSourcesForScan,
-            new CreatorSourceListEnabledForScanRequestMessage { ScanMode = scanMode },
+        var sourcesResponse = await messageBus.RequestAsync<CreatorMonitorListEnabledForScanRequestMessage, CreatorMonitorOperationResponseMessage>(
+            CreatorMonitorSubjects.ListEnabledSourcesForScan,
+            new CreatorMonitorListEnabledForScanRequestMessage { ScanMode = scanMode },
             RequestTimeout,
             cancellationToken);
 
@@ -187,13 +187,13 @@ public sealed class ChannelDiscoveryConsumerService(
             throw new InvalidOperationException(sourcesResponse?.ErrorMessage ?? "Creator source list request failed.");
         }
 
-        return sourcesResponse.Items ?? Array.Empty<CreatorSourceDto>();
+        return sourcesResponse.Items ?? Array.Empty<CreatorMonitorDto>();
     }
 
     private async Task<int> ScanSourceAsync(
         ScheduledBackgroundRequest request,
         CreatorSourceScanMode scanMode,
-        CreatorSourceDto source,
+        CreatorMonitorDto source,
         CancellationToken cancellationToken)
     {
         var requestQueryLimits = ChannelProviderQueryLimits(request);
@@ -224,7 +224,7 @@ public sealed class ChannelDiscoveryConsumerService(
         foreach (var batch in batches)
         {
             var response = await messageBus.RequestAsync<UpsertDiscoveredMediaBatchRequestMessage, UpsertDiscoveredMediaBatchResponseMessage>(
-                CreatorDiscoverySubjects.UpsertDiscoveredMediaBatch,
+                CreatorMonitorSubjects.UpsertDiscoveredMediaBatch,
                 new UpsertDiscoveredMediaBatchRequestMessage
                 {
                     CreatorSourceId = source.Id,
@@ -268,7 +268,7 @@ public sealed class ChannelDiscoveryConsumerService(
         if (batchIndex == 0)
         {
             var response = await messageBus.RequestAsync<UpsertDiscoveredMediaBatchRequestMessage, UpsertDiscoveredMediaBatchResponseMessage>(
-                CreatorDiscoverySubjects.UpsertDiscoveredMediaBatch,
+                CreatorMonitorSubjects.UpsertDiscoveredMediaBatch,
                 new UpsertDiscoveredMediaBatchRequestMessage
                 {
                     CreatorSourceId = source.Id,
@@ -328,7 +328,7 @@ public sealed class ChannelDiscoveryConsumerService(
 
     internal static YtDlpOptions BuildOptions(
         CreatorSourceScanMode scanMode,
-        CreatorSourceDto source,
+        CreatorMonitorDto source,
         CreatorSourceProviderQueryLimits? requestQueryLimits = null)
         => new()
         {
@@ -340,7 +340,7 @@ public sealed class ChannelDiscoveryConsumerService(
 
     internal static int EntryLimit(
         CreatorSourceScanMode scanMode,
-        CreatorSourceDto source,
+        CreatorMonitorDto source,
         CreatorSourceProviderQueryLimits? requestQueryLimits = null)
     {
         var providerLimit = requestQueryLimits?.GetLimit(source.Platform, source.SourceType)
@@ -355,14 +355,14 @@ public sealed class ChannelDiscoveryConsumerService(
             : MaxFullScanEntriesPerSource;
     }
 
-    internal static int PageStartIndex(CreatorSourceScanMode scanMode, CreatorSourceDto source)
+    internal static int PageStartIndex(CreatorSourceScanMode scanMode, CreatorMonitorDto source)
         => scanMode == CreatorSourceScanMode.Full
             ? Math.Max(1, source.NextFullScanStartIndex ?? 1)
             : 1;
 
     private static int PageEndIndex(
         CreatorSourceScanMode scanMode,
-        CreatorSourceDto source,
+        CreatorMonitorDto source,
         CreatorSourceProviderQueryLimits? requestQueryLimits)
         => PageStartIndex(scanMode, source) + EntryLimit(scanMode, source, requestQueryLimits) - 1;
 
@@ -408,7 +408,7 @@ public sealed class ChannelDiscoveryConsumerService(
     private static CreatorSourceProviderQueryLimits? ChannelProviderQueryLimits(ScheduledBackgroundRequest request)
         => request is ChannelMediaListRequested channelRequest ? channelRequest.ProviderQueryLimits : null;
 
-    private static IEnumerable<DiscoveredMediaCandidate> ExtractCandidates(CreatorSourceDto source, VideoInfo container)
+    private static IEnumerable<DiscoveredMediaCandidate> ExtractCandidates(CreatorMonitorDto source, VideoInfo container)
     {
         var entries = container.Entries ?? Array.Empty<VideoInfo>();
         foreach (var entry in entries)
@@ -440,7 +440,7 @@ public sealed class ChannelDiscoveryConsumerService(
         }
     }
 
-    internal static string? ResolveCanonicalUrl(CreatorSourceDto source, VideoInfo entry, string externalId)
+    internal static string? ResolveCanonicalUrl(CreatorMonitorDto source, VideoInfo entry, string externalId)
     {
         // Flat YouTube collection entries occasionally report the collection URL in Url/WebpageUrl.
         // The external id is the reliable per-video identity, so build the canonical watch URL first.

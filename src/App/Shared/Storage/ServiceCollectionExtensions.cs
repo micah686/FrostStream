@@ -13,7 +13,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddFrostStreamStorage(this IServiceCollection services)
     {
         services.AddSingleton<IStorageConfigClient, NatsStorageConfigClient>();
-        services.AddSingleton<IBlobStorageProvider, CachingBlobStorageProvider>();
+        services.AddSingleton<IStoreProvider, CachingStoreProvider>();
         services.AddHostedService<StorageConfigChangedSubscriber>();
         return services;
     }

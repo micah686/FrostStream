@@ -71,11 +71,10 @@ public sealed class NullDirectoryService : IDirectoryService
 }
 
 /// <summary>
-/// Runtime bundle-management surface (the hybrid feature in B_Axis1.MD). Lists the code-defined
-/// endpoint catalog, exposes capability_group bundles + their grants, and lets privileged users
-/// compose and grant their own <c>user.</c> bundles. System-owned (seeded) bundles are read-only:
-/// their endpoint membership cannot be mutated here — OpenFGA does not enforce that, so this layer
-/// must.
+/// Runtime bundle-management surface described in MEDIA_ACCESS.MD. Lists the code-defined endpoint
+/// catalog and exposes capability_group bundles. Custom <c>user.</c> bundles can start from selected
+/// endpoints or clone a system baseline. System-owned (seeded) bundles are read-only: OpenFGA does
+/// not enforce that ownership rule, so this layer must.
 /// </summary>
 public interface IBundleManagementService
 {
@@ -86,6 +85,12 @@ public interface IBundleManagementService
     Task<BundleOpResult<BundleView>> GetBundleAsync(string bundleId, CancellationToken cancellationToken);
 
     Task<BundleOpResult> CreateBundleAsync(string bundleId, IReadOnlyCollection<string> endpointIds, CancellationToken cancellationToken);
+
+    Task<BundleOpResult> CreateBundleAsync(
+        string bundleId,
+        IReadOnlyCollection<string> endpointIds,
+        string? cloneFrom,
+        CancellationToken cancellationToken);
 
     Task<BundleOpResult> SetBundleEndpointsAsync(string bundleId, IReadOnlyCollection<string> endpointIds, CancellationToken cancellationToken);
 
@@ -106,12 +111,40 @@ public sealed class NullBundleManagementService : IBundleManagementService
         BundleOpResult.Unavailable("Bundle management is unavailable in single-user mode.");
 
     public Task<BundleOpResult<IReadOnlyList<BundleView>>> ListBundlesAsync(CancellationToken cancellationToken)
-        => Task.FromResult(BundleOpResult<IReadOnlyList<BundleView>>.Unavailable("Bundle management is unavailable in single-user mode."));
+    {
+        var grouped = EndpointCatalog.Endpoints
+            .GroupBy(x => x.Bundle, StringComparer.Ordinal)
+            .Select(group => new BundleView(
+                group.Key,
+                SystemOwned: true,
+                group.Select(x => x.Id).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
+                Grants: []));
+        var all = new BundleView(
+            AuthConstants.AllBundle,
+            SystemOwned: true,
+            EndpointCatalog.Endpoints.Select(x => x.Id).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
+            Grants: []);
+        return Task.FromResult(BundleOpResult<IReadOnlyList<BundleView>>.Ok(
+            grouped.Append(all).OrderBy(x => x.Id, StringComparer.Ordinal).ToArray()));
+    }
 
-    public Task<BundleOpResult<BundleView>> GetBundleAsync(string bundleId, CancellationToken cancellationToken)
-        => Task.FromResult(BundleOpResult<BundleView>.Unavailable("Bundle management is unavailable in single-user mode."));
+    public async Task<BundleOpResult<BundleView>> GetBundleAsync(string bundleId, CancellationToken cancellationToken)
+    {
+        var bundles = await ListBundlesAsync(cancellationToken);
+        var bundle = bundles.Value!.FirstOrDefault(x => x.Id == bundleId);
+        return bundle is null
+            ? BundleOpResult<BundleView>.NotFound($"Bundle '{bundleId}' was not found.")
+            : BundleOpResult<BundleView>.Ok(bundle);
+    }
 
     public Task<BundleOpResult> CreateBundleAsync(string bundleId, IReadOnlyCollection<string> endpointIds, CancellationToken cancellationToken)
+        => Task.FromResult(Disabled());
+
+    public Task<BundleOpResult> CreateBundleAsync(
+        string bundleId,
+        IReadOnlyCollection<string> endpointIds,
+        string? cloneFrom,
+        CancellationToken cancellationToken)
         => Task.FromResult(Disabled());
 
     public Task<BundleOpResult> SetBundleEndpointsAsync(string bundleId, IReadOnlyCollection<string> endpointIds, CancellationToken cancellationToken)

@@ -1,3 +1,5 @@
+using FluentStorage.Enums;
+using FluentStorage.Exceptions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.StaticFiles;
 using Shared.Storage;
@@ -22,7 +24,7 @@ public static class MediaBlobServing
     /// </summary>
     public static async Task<IActionResult> ServeBlobAsync(
         this ControllerBase controller,
-        IBlobStorageProvider blobStorageProvider,
+        IStoreProvider blobStorageProvider,
         ILogger logger,
         string storageKey,
         string storagePath,
@@ -35,7 +37,9 @@ public static class MediaBlobServing
         try
         {
             var storage = await blobStorageProvider.GetAsync(storageKey, cancellationToken);
-            var stream = await storage.OpenReadAsync(storagePath, cancellationToken);
+            var stream = enableRangeProcessing && await storage.IsSeekable()
+                ? await storage.OpenSeekable(storagePath, cancellationToken: cancellationToken)
+                : await storage.OpenRead(storagePath, cancellationToken);
             if (stream is null)
             {
                 return controller.NotFound($"The selected {subject} is missing from storage.");
@@ -63,6 +67,10 @@ public static class MediaBlobServing
         {
             return controller.NotFound($"The selected {subject} is missing from storage.");
         }
+        catch (StorageException ex) when (ex.ErrorCode == StorageErrorCode.NotFound)
+        {
+            return controller.NotFound($"The selected {subject} is missing from storage.");
+        }
         catch (Exception ex)
         {
             logger.LogError(
@@ -81,7 +89,7 @@ public static class MediaBlobServing
 
     /// <summary>Opens a blob for in-process reading, mapping "missing" to null instead of throwing.</summary>
     public static async Task<Stream?> OpenBlobOrNullAsync(
-        IBlobStorageProvider blobStorageProvider,
+        IStoreProvider blobStorageProvider,
         string storageKey,
         string? storagePath,
         CancellationToken cancellationToken)
@@ -94,7 +102,7 @@ public static class MediaBlobServing
         try
         {
             var storage = await blobStorageProvider.GetAsync(storageKey, cancellationToken);
-            return await storage.OpenReadAsync(storagePath, cancellationToken);
+            return await storage.OpenRead(storagePath, cancellationToken);
         }
         catch (FileNotFoundException)
         {
@@ -104,10 +112,42 @@ public static class MediaBlobServing
         {
             return null;
         }
+        catch (StorageException ex) when (ex.ErrorCode == StorageErrorCode.NotFound)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Opens a seekable blob stream for probes that skip or revisit ranges.</summary>
+    public static async Task<Stream?> OpenSeekableBlobOrNullAsync(
+        IStoreProvider blobStorageProvider,
+        string storageKey,
+        string storagePath,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var storage = await blobStorageProvider.GetAsync(storageKey, cancellationToken);
+            return await storage.IsSeekable()
+                ? await storage.OpenSeekable(storagePath, cancellationToken: cancellationToken)
+                : await storage.OpenRead(storagePath, cancellationToken);
+        }
+        catch (FileNotFoundException)
+        {
+            return null;
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return null;
+        }
+        catch (StorageException ex) when (ex.ErrorCode == StorageErrorCode.NotFound)
+        {
+            return null;
+        }
     }
 
     public static async Task<string?> ReadBlobTextAsync(
-        IBlobStorageProvider blobStorageProvider,
+        IStoreProvider blobStorageProvider,
         string storageKey,
         string? storagePath,
         CancellationToken cancellationToken)

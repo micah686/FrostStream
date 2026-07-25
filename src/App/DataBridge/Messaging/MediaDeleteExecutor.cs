@@ -277,10 +277,10 @@ public sealed class MediaDeleteExecutor
 
     private async Task DeleteMediaRowAsync(Guid mediaGuid, CancellationToken cancellationToken)
     {
-        // FK cascades from media.media wipe all version, metadata, caption, and comment rows. The
-        // per-media access restrictions live in the auth schema with no FK, so wipe them explicitly.
+        // FK cascades from media.media wipe all version, metadata, caption, and comment rows. Policy
+        // deny scopes live in the auth schema with no media FK, so wipe matching GUID scopes explicitly.
         await using var command = _dataSource.CreateCommand("""
-            DELETE FROM auth.media_access_restrictions WHERE media_guid = @id;
+            DELETE FROM auth.access_policy_media WHERE media_guid = @id;
             DELETE FROM media.media WHERE media_guid = @id;
             """);
         command.Parameters.AddWithValue("id", mediaGuid);

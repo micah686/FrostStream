@@ -139,6 +139,14 @@
         <Select id="opt-sub-format" items={subtitleFormatItems} bind:value={opts.subFormat} class={fieldClass} />
       </div>
       <TriStateSelect id="opt-embed-subs" label="Embed subtitles in the video" bind:value={opts.embedSubs} />
+      <div class="sm:col-span-2">
+        <Toggle bind:checked={opts.includeLiveChat} class="text-sm text-slate-300">
+          Include live chat
+          <span class="ml-1 text-xs text-slate-600">
+            (keep the live-chat replay; off by default, so it is dropped even when Languages is “all”)
+          </span>
+        </Toggle>
+      </div>
     </div>
   </details>
 

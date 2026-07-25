@@ -14,6 +14,7 @@ public sealed class AudioRenditionRepository(
 {
     public async Task<ChannelAudioResolveResult?> ResolveChannelAsync(
         long accountId,
+        string? storageKey,
         bool createIfMissing,
         bool retryFailedAndPending,
         CancellationToken cancellationToken = default)
@@ -22,7 +23,17 @@ public sealed class AudioRenditionRepository(
         if (account is null)
             return null;
 
-        var sources = await ReadChannelSourcesAsync(accountId, cancellationToken);
+        var allSources = await ReadChannelSourcesAsync(accountId, cancellationToken);
+        var availableStorageKeys = allSources
+            .Select(x => x.StorageKey)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(x => x, StringComparer.Ordinal)
+            .ToArray();
+
+        var sources = string.IsNullOrWhiteSpace(storageKey)
+            ? allSources
+            : allSources.Where(x => x.StorageKey == storageKey).ToArray();
+
         var mediaGuids = sources.Select(x => x.MediaGuid).ToArray();
         var renditions = mediaGuids.Length == 0
             ? []
@@ -100,6 +111,7 @@ public sealed class AudioRenditionRepository(
             ProcessingCount = CountStatus(items, AudioRenditionStatus.Processing),
             ReadyCount = CountStatus(items, AudioRenditionStatus.Ready),
             FailedCount = CountStatus(items, AudioRenditionStatus.Failed),
+            AvailableStorageKeys = availableStorageKeys,
             Items = items
         };
         return new ChannelAudioResolveResult(channel, renditionsToQueue);

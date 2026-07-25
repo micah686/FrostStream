@@ -43,6 +43,12 @@ public sealed record StartCastSessionRequest
     public string? SubtitleLanguage { get; init; }
     public string? CaptionType { get; init; }
     public double? StartPositionSeconds { get; init; }
+
+    /// <summary>Optional storage backend to cast from; null resolves the default (latest) copy.</summary>
+    public string? StorageKey { get; init; }
+
+    /// <summary>Optional stored version to cast; null resolves the latest.</summary>
+    public int? Version { get; init; }
 }
 
 public sealed record CastSeekRequest

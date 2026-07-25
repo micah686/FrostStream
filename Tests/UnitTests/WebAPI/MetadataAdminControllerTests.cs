@@ -26,7 +26,7 @@ public sealed class MetadataAdminControllerTests
         result.ShouldBeOfType<AcceptedResult>();
         await publisher.Received(1).PublishAsync(
             BackgroundJobSubjects.SearchReindexRequest,
-            Arg.Is<SearchReindexRequested>(x =>
+            Arg.Is<SearchReindexRequested>(x => x != null &&
                 x.ScheduleKey == BackgroundJobRequestFactory.ManualScheduleKey &&
                 x.TaskType == BackgroundJobRequestFactory.ManualSearchReindexTaskType &&
                 x.DueWindowUtc == Now &&
@@ -65,7 +65,7 @@ public sealed class MetadataAdminControllerTests
             ErrorCode = "validation",
             ErrorMessage = "bad"
         });
-        validation.Result.ShouldBeOfType<BadRequestObjectResult>().Value.ShouldBe("bad");
+        validation.Result!.ShouldBeOfType<BadRequestObjectResult>().Value!.ShouldBe("bad");
 
         var unavailable = await ListOrphansWith(new OrphanCleanupListResponse
         {
@@ -73,7 +73,7 @@ public sealed class MetadataAdminControllerTests
             ErrorCode = "unavailable",
             ErrorMessage = "down"
         });
-        unavailable.Result.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status503ServiceUnavailable);
+        unavailable.Result!.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status503ServiceUnavailable);
 
         var unknown = await ListOrphansWith(new OrphanCleanupListResponse
         {
@@ -81,7 +81,7 @@ public sealed class MetadataAdminControllerTests
             ErrorCode = "unknown",
             ErrorMessage = "failed"
         });
-        unknown.Result.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status500InternalServerError);
+        unknown.Result!.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status500InternalServerError);
     }
 
     [Test]
@@ -91,7 +91,7 @@ public sealed class MetadataAdminControllerTests
         var controller = CreateController(bus: bus);
         bus.RequestAsync<WatchedAutoDeletePolicyUpdateRequest, WatchedAutoDeletePolicyResponse>(
                 WatchedAutoDeleteSubjects.UpdatePolicy,
-                Arg.Is<WatchedAutoDeletePolicyUpdateRequest>(x =>
+                Arg.Is<WatchedAutoDeletePolicyUpdateRequest>(x => x != null &&
                     x.Enabled &&
                     x.DeleteAfterDays == 14 &&
                     x.MaxDeletionsPerRun == 25),
@@ -117,7 +117,7 @@ public sealed class MetadataAdminControllerTests
             },
             CancellationToken.None);
 
-        var payload = result.ShouldBeOfType<OkObjectResult>().Value.ShouldBeOfType<WatchedAutoDeletePolicyDto>();
+        var payload = result.ShouldBeOfType<OkObjectResult>().Value!.ShouldBeOfType<WatchedAutoDeletePolicyDto>();
         payload.Enabled.ShouldBeTrue();
         payload.DeleteAfterDays.ShouldBe(14);
         payload.MaxDeletionsPerRun.ShouldBe(25);
@@ -149,7 +149,7 @@ public sealed class MetadataAdminControllerTests
 
         var result = await controller.RunWatchedAutoDelete(CancellationToken.None);
 
-        var payload = result.ShouldBeOfType<OkObjectResult>().Value.ShouldBeOfType<WatchedAutoDeleteCleanupResultDto>();
+        var payload = result.ShouldBeOfType<OkObjectResult>().Value!.ShouldBeOfType<WatchedAutoDeleteCleanupResultDto>();
         payload.DeletedCount.ShouldBe(1);
         payload.FailedCount.ShouldBe(1);
         payload.FilesDeleted.ShouldBe(3);

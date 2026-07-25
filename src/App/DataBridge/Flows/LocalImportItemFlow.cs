@@ -456,9 +456,9 @@ public class LocalImportItemFlow(
         {
             using var scope = scopeFactory.CreateScope();
             var storage = await scope.ServiceProvider
-                .GetRequiredService<IBlobStorageProvider>()
+                .GetRequiredService<IStoreProvider>()
                 .GetAsync(work.StorageKey);
-            await using var stream = await storage.OpenReadAsync(infoJsonPath)
+            await using var stream = await storage.OpenRead(infoJsonPath)
                 ?? throw new InvalidOperationException($"Info JSON was not found at {infoJsonPath}.");
             // yt-dlp writes snake_case keys; VideoInfo only annotates multi-word names and relies on
             // the source-gen context's naming policy for the rest, so plain Deserialize<VideoInfo>
@@ -825,11 +825,7 @@ public class LocalImportItemFlow(
         => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
 
     private static string BuildSidecarStoragePath(string primaryStoragePath, string sidecarFileName)
-    {
-        var lastSlash = primaryStoragePath.LastIndexOf('/');
-        var directory = lastSlash >= 0 ? primaryStoragePath[..lastSlash] : string.Empty;
-        return string.IsNullOrEmpty(directory) ? sidecarFileName : $"{directory}/{sidecarFileName}";
-    }
+        => StorageObjectPath.Combine(StorageObjectPath.GetParent(primaryStoragePath), sidecarFileName);
 
     private Task Publish<T>(string subject, T message) where T : IFlowMessage
         => bus.PublishAsync(subject, message, messageId: message.MessageId.ToString("N"));

@@ -25,7 +25,7 @@ public sealed class MetadataControllerTests
 
         bus.RequestAsync<MetadataListRequestMessage, MetadataListResponseMessage>(
                 MetadataSubjects.List,
-                Arg.Is<MetadataListRequestMessage>(x =>
+                Arg.Is<MetadataListRequestMessage>(x => x != null &&
                     x.PageSize == 12 &&
                     x.Page == 3 &&
                     x.SortBy == "title" &&
@@ -60,7 +60,7 @@ public sealed class MetadataControllerTests
             captionLanguage: "en",
             cancellationToken: CancellationToken.None);
 
-        var payload = result.Result.ShouldBeOfType<OkObjectResult>().Value
+        var payload = result.Result!.ShouldBeOfType<OkObjectResult>().Value
             .ShouldBeOfType<PagedMetadataResponse<MetadataCardDto>>();
         payload.Items.Single().MediaGuid.ShouldBe(item.MediaGuid);
         payload.Page.ShouldBe(3);
@@ -78,7 +78,7 @@ public sealed class MetadataControllerTests
         var result = await controller.Search(" ", cancellationToken: CancellationToken.None);
 #pragma warning restore CS0618
 
-        result.Result.ShouldBeOfType<BadRequestObjectResult>().Value.ShouldBe("Query parameter 'q' is required.");
+        result.Result!.ShouldBeOfType<BadRequestObjectResult>().Value!.ShouldBe("Query parameter 'q' is required.");
         await bus.DidNotReceive().RequestAsync<MetadataSearchRequestMessage, MetadataSearchResponseMessage>(
             Arg.Any<string>(),
             Arg.Any<MetadataSearchRequestMessage>(),
@@ -95,7 +95,7 @@ public sealed class MetadataControllerTests
 
         bus.RequestAsync<MetadataSearchRequestMessage, MetadataSearchResponseMessage>(
                 MetadataSubjects.Search,
-                Arg.Is<MetadataSearchRequestMessage>(x =>
+                Arg.Is<MetadataSearchRequestMessage>(x => x != null &&
                     x.Query == "needle" &&
                     x.PageSize == 5 &&
                     x.Page == 2 &&
@@ -130,7 +130,7 @@ public sealed class MetadataControllerTests
             cancellationToken: CancellationToken.None);
 #pragma warning restore CS0618
 
-        result.Result.ShouldBeOfType<OkObjectResult>().Value
+        result.Result!.ShouldBeOfType<OkObjectResult>().Value
             .ShouldBeOfType<PagedMetadataResponse<MetadataCardDto>>()
             .Items.Single().Title.ShouldBe("Video");
     }
@@ -146,10 +146,10 @@ public sealed class MetadataControllerTests
             ErrorCode = "not_found",
             ErrorMessage = "missing"
         });
-        notFound.Result.ShouldBeOfType<NotFoundObjectResult>().Value.ShouldBe("missing");
+        notFound.Result!.ShouldBeOfType<NotFoundObjectResult>().Value!.ShouldBe("missing");
 
         var invalid = await GetWith(mediaGuid, new MetadataGetResponseMessage { Success = true, Item = null });
-        invalid.Result.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status502BadGateway);
+        invalid.Result!.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status502BadGateway);
     }
 
     [Test]
@@ -161,7 +161,7 @@ public sealed class MetadataControllerTests
 
         bus.RequestAsync<MetadataTechnicalRequestMessage, MetadataTechnicalResponseMessage>(
                 MetadataSubjects.GetTechnical,
-                Arg.Is<MetadataTechnicalRequestMessage>(x => x.MediaGuid == mediaGuid),
+                Arg.Is<MetadataTechnicalRequestMessage>(x => x != null && x.MediaGuid == mediaGuid),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new MetadataTechnicalResponseMessage
@@ -172,7 +172,7 @@ public sealed class MetadataControllerTests
 
         var result = await controller.GetTechnical(mediaGuid, CancellationToken.None);
 
-        result.Result.ShouldBeOfType<OkObjectResult>().Value
+        result.Result!.ShouldBeOfType<OkObjectResult>().Value
             .ShouldBeOfType<MetadataTechnicalDto>().DurationTicks.ShouldBe(100);
     }
 
@@ -185,7 +185,7 @@ public sealed class MetadataControllerTests
 
         bus.RequestAsync<MetadataVersionsRequestMessage, MetadataVersionsResponseMessage>(
                 MetadataSubjects.Versions,
-                Arg.Is<MetadataVersionsRequestMessage>(x => x.MediaGuid == mediaGuid && x.CountOnly),
+                Arg.Is<MetadataVersionsRequestMessage>(x => x != null && x.MediaGuid == mediaGuid && x.CountOnly),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new MetadataVersionsResponseMessage
@@ -197,7 +197,7 @@ public sealed class MetadataControllerTests
 
         var result = await controller.ListVersions(mediaGuid, countOnly: true, CancellationToken.None);
 
-        result.Result.ShouldBeOfType<OkObjectResult>().Value.ShouldBe(3);
+        result.Result!.ShouldBeOfType<OkObjectResult>().Value!.ShouldBe(3);
     }
 
     [Test]
@@ -218,7 +218,7 @@ public sealed class MetadataControllerTests
 
         bus.RequestAsync<MetadataVersionsRequestMessage, MetadataVersionsResponseMessage>(
                 MetadataSubjects.Versions,
-                Arg.Is<MetadataVersionsRequestMessage>(x => x.MediaGuid == mediaGuid && !x.CountOnly),
+                Arg.Is<MetadataVersionsRequestMessage>(x => x != null && x.MediaGuid == mediaGuid && !x.CountOnly),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new MetadataVersionsResponseMessage
@@ -230,7 +230,7 @@ public sealed class MetadataControllerTests
 
         var result = await controller.ListVersions(mediaGuid, cancellationToken: CancellationToken.None);
 
-        var payload = result.Result.ShouldBeOfType<OkObjectResult>().Value
+        var payload = result.Result!.ShouldBeOfType<OkObjectResult>().Value
             .ShouldBeOfType<MetadataVersionsResponse>();
         payload.TotalCount.ShouldBe(1);
         payload.Versions.Single().VersionNum.ShouldBe(2);
@@ -252,7 +252,7 @@ public sealed class MetadataControllerTests
 
         bus.RequestAsync<MetadataCommentsListRequestMessage, MetadataCommentsListResponseMessage>(
                 MetadataSubjects.CommentsList,
-                Arg.Is<MetadataCommentsListRequestMessage>(x =>
+                Arg.Is<MetadataCommentsListRequestMessage>(x => x != null &&
                     x.MediaGuid == mediaGuid &&
                     x.PageSize == 10 &&
                     x.Page == 4 &&
@@ -281,7 +281,7 @@ public sealed class MetadataControllerTests
             sortOrder: "asc",
             cancellationToken: CancellationToken.None);
 
-        result.Result.ShouldBeOfType<OkObjectResult>().Value
+        result.Result!.ShouldBeOfType<OkObjectResult>().Value
             .ShouldBeOfType<PagedMetadataResponse<CommentDto>>()
             .Items.Single().CommentId.ShouldBe("comment-1");
     }
@@ -295,7 +295,7 @@ public sealed class MetadataControllerTests
 
         bus.RequestAsync<MetadataCaptionsListRequestMessage, MetadataCaptionsListResponseMessage>(
                 MetadataSubjects.CaptionsList,
-                Arg.Is<MetadataCaptionsListRequestMessage>(x =>
+                Arg.Is<MetadataCaptionsListRequestMessage>(x => x != null &&
                     x.MediaGuid == mediaGuid &&
                     x.LanguageCode == "en" &&
                     x.CaptionType == "manual"),
@@ -309,7 +309,7 @@ public sealed class MetadataControllerTests
             });
         bus.RequestAsync<MetadataAccountsListRequestMessage, MetadataAccountsListResponseMessage>(
                 MetadataSubjects.AccountsList,
-                Arg.Is<MetadataAccountsListRequestMessage>(x =>
+                Arg.Is<MetadataAccountsListRequestMessage>(x => x != null &&
                     x.PageSize == 7 &&
                     x.After == "cursor" &&
                     x.Platform == "youtube"),
@@ -324,7 +324,7 @@ public sealed class MetadataControllerTests
             });
         bus.RequestAsync<MetadataTaxonomyListRequestMessage, MetadataTaxonomyListResponseMessage>(
                 MetadataSubjects.TaxonomyTagsList,
-                Arg.Is<MetadataTaxonomyListRequestMessage>(x =>
+                Arg.Is<MetadataTaxonomyListRequestMessage>(x => x != null &&
                     x.PageSize == 9 &&
                     x.PageOffset == 18 &&
                     x.Search == "tag"),
@@ -338,15 +338,15 @@ public sealed class MetadataControllerTests
             });
 
         var captions = await controller.ListCaptions(mediaGuid, "en", "manual", CancellationToken.None);
-        captions.Result.ShouldBeOfType<OkObjectResult>().Value
+        captions.Result!.ShouldBeOfType<OkObjectResult>().Value
             .ShouldBeOfType<MetadataListResponse<CaptionDto>>().TotalCount.ShouldBe(1);
 
         var accounts = await controller.ListAccounts(7, "cursor", "youtube", CancellationToken.None);
-        accounts.Result.ShouldBeOfType<OkObjectResult>().Value
+        accounts.Result!.ShouldBeOfType<OkObjectResult>().Value
             .ShouldBeOfType<AccountListResponse>().NextCursor.ShouldBe("next");
 
         var tags = await controller.ListTags(9, 18, "tag", CancellationToken.None);
-        tags.Result.ShouldBeOfType<OkObjectResult>().Value
+        tags.Result!.ShouldBeOfType<OkObjectResult>().Value
             .ShouldBeOfType<TaxonomyListResponse>().Total.ShouldBe(1);
     }
 
@@ -366,7 +366,7 @@ public sealed class MetadataControllerTests
 
         var result = await controller.List(cancellationToken: CancellationToken.None);
 
-        result.Result.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status503ServiceUnavailable);
+        result.Result!.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status503ServiceUnavailable);
     }
 
     [Test]
@@ -377,7 +377,7 @@ public sealed class MetadataControllerTests
 
         bus.RequestAsync<MetadataAccountGetRequestMessage, MetadataAccountGetResponseMessage>(
                 MetadataSubjects.AccountsGet,
-                Arg.Is<MetadataAccountGetRequestMessage>(x => x.AccountId == 22),
+                Arg.Is<MetadataAccountGetRequestMessage>(x => x != null && x.AccountId == 22),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new MetadataAccountGetResponseMessage
@@ -387,7 +387,7 @@ public sealed class MetadataControllerTests
             });
         bus.RequestAsync<MetadataListRequestMessage, MetadataListResponseMessage>(
                 MetadataSubjects.AccountsMediaList,
-                Arg.Is<MetadataListRequestMessage>(x =>
+                Arg.Is<MetadataListRequestMessage>(x => x != null &&
                     x.AccountId == 22 &&
                     x.PageSize == 6 &&
                     x.Page == 2 &&
@@ -404,10 +404,10 @@ public sealed class MetadataControllerTests
             });
 
         var account = await controller.GetAccount(22, CancellationToken.None);
-        account.Result.ShouldBeOfType<OkObjectResult>().Value.ShouldBeOfType<AccountDto>().AccountId.ShouldBe(22);
+        account.Result!.ShouldBeOfType<OkObjectResult>().Value!.ShouldBeOfType<AccountDto>().AccountId.ShouldBe(22);
 
         var media = await controller.ListAccountMedia(22, 6, 2, "title", "asc", CancellationToken.None);
-        media.Result.ShouldBeOfType<OkObjectResult>().Value
+        media.Result!.ShouldBeOfType<OkObjectResult>().Value
             .ShouldBeOfType<PagedMetadataResponse<MetadataCardDto>>()
             .Items.Single().Title.ShouldBe("Video");
     }
@@ -421,7 +421,7 @@ public sealed class MetadataControllerTests
 
         bus.RequestAsync<MetadataAccountGetRequestMessage, MetadataAccountGetResponseMessage>(
                 MetadataSubjects.AccountsGet,
-                Arg.Is<MetadataAccountGetRequestMessage>(x => x.AccountId == 22),
+                Arg.Is<MetadataAccountGetRequestMessage>(x => x != null && x.AccountId == 22),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new MetadataAccountGetResponseMessage
@@ -439,10 +439,10 @@ public sealed class MetadataControllerTests
 
         var result = await controller.RefreshAccountAssets(22, force: true, CancellationToken.None);
 
-        result.ShouldBeOfType<AcceptedResult>().Value.ShouldNotBeNull();
+        result.ShouldBeOfType<AcceptedResult>().Value!.ShouldNotBeNull();
         await publisher.Received(1).PublishAsync(
             BackgroundJobSubjects.ChannelAssetRefreshRequest,
-            Arg.Is<ChannelAssetRefreshRequested>(x =>
+            Arg.Is<ChannelAssetRefreshRequested>(x => x != null &&
                 x.ScheduleKey == "manual" &&
                 x.TaskType == "channel_asset_refresh" &&
                 x.DueWindowUtc == Now &&
@@ -450,7 +450,7 @@ public sealed class MetadataControllerTests
                 x.TargetAccountId == 22 &&
                 x.TargetSourceId == null &&
                 x.Force),
-            Arg.Is<string>(x => x.StartsWith("manual-account:22:", StringComparison.Ordinal)),
+            Arg.Is<string>(x => x != null && x.StartsWith("manual-account:22:", StringComparison.Ordinal)),
             null,
             Arg.Any<CancellationToken>());
     }
@@ -515,7 +515,7 @@ public sealed class MetadataControllerTests
         var controller = CreateController(bus);
         bus.RequestAsync<MetadataGetRequestMessage, MetadataGetResponseMessage>(
                 MetadataSubjects.Get,
-                Arg.Is<MetadataGetRequestMessage>(x => x.MediaGuid == mediaGuid),
+                Arg.Is<MetadataGetRequestMessage>(x => x != null && x.MediaGuid == mediaGuid),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(response);

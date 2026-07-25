@@ -23,7 +23,7 @@ public sealed class StatisticsControllerTests
         var controller = CreateController(bus);
         bus.RequestAsync<StatisticsOverviewRequestMessage, StatisticsOverviewResponseMessage>(
                 StatisticsSubjects.Overview,
-                Arg.Is<StatisticsOverviewRequestMessage>(x => x.OwnerSubject == "reader-1"),
+                Arg.Is<StatisticsOverviewRequestMessage>(x => x != null && x.OwnerSubject == "reader-1"),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new StatisticsOverviewResponseMessage
@@ -34,7 +34,7 @@ public sealed class StatisticsControllerTests
 
         var result = await controller.GetOverview(CancellationToken.None);
 
-        var payload = result.Result.ShouldBeOfType<OkObjectResult>().Value.ShouldBeOfType<StatisticsOverviewDto>();
+        var payload = result.Result!.ShouldBeOfType<OkObjectResult>().Value!.ShouldBeOfType<StatisticsOverviewDto>();
         payload.Inventory.TotalMedia.ShouldBe(3);
     }
 
@@ -45,7 +45,7 @@ public sealed class StatisticsControllerTests
         var controller = CreateController(bus);
         bus.RequestAsync<StatisticsChannelsListRequestMessage, StatisticsChannelsListResponseMessage>(
                 StatisticsSubjects.ChannelsList,
-                Arg.Is<StatisticsChannelsListRequestMessage>(x =>
+                Arg.Is<StatisticsChannelsListRequestMessage>(x => x != null &&
                     x.PageSize == 10 &&
                     x.Page == 2 &&
                     x.SortBy == "bytes" &&
@@ -75,7 +75,7 @@ public sealed class StatisticsControllerTests
 
         var result = await controller.ListChannels(10, 2, "bytes", "asc", "science", CancellationToken.None);
 
-        var payload = result.Result.ShouldBeOfType<OkObjectResult>().Value.ShouldBeOfType<ChannelStatisticsListResponse>();
+        var payload = result.Result!.ShouldBeOfType<OkObjectResult>().Value!.ShouldBeOfType<ChannelStatisticsListResponse>();
         payload.Page.ShouldBe(2);
         payload.TotalCount.ShouldBe(21);
         payload.Items.Single().CreatorSourceId.ShouldBe(7);
@@ -88,7 +88,7 @@ public sealed class StatisticsControllerTests
         var controller = CreateController(bus);
         bus.RequestAsync<StatisticsChannelSuggestionsRequestMessage, StatisticsChannelSuggestionsResponseMessage>(
                 StatisticsSubjects.ChannelSuggestions,
-                Arg.Is<StatisticsChannelSuggestionsRequestMessage>(x =>
+                Arg.Is<StatisticsChannelSuggestionsRequestMessage>(x => x != null &&
                     x.Search == "science" &&
                     x.Limit == 5),
                 Arg.Any<TimeSpan>(),
@@ -110,8 +110,8 @@ public sealed class StatisticsControllerTests
 
         var result = await controller.SuggestChannels("science", 5, CancellationToken.None);
 
-        var payload = (IReadOnlyList<ChannelSuggestionDto>)result.Result.ShouldBeOfType<OkObjectResult>().Value!;
-        payload.Single().Value.ShouldBe("Science Channel");
+        var payload = (IReadOnlyList<ChannelSuggestionDto>)result.Result!.ShouldBeOfType<OkObjectResult>().Value!;
+        payload.Single().Value!.ShouldBe("Science Channel");
     }
 
     [Test]
@@ -121,7 +121,7 @@ public sealed class StatisticsControllerTests
         var controller = CreateController(bus);
         bus.RequestAsync<StatisticsChannelGetRequestMessage, StatisticsChannelGetResponseMessage>(
                 StatisticsSubjects.ChannelGet,
-                Arg.Is<StatisticsChannelGetRequestMessage>(x => x.CreatorSourceId == 404),
+                Arg.Is<StatisticsChannelGetRequestMessage>(x => x != null && x.CreatorSourceId == 404),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new StatisticsChannelGetResponseMessage
@@ -133,7 +133,7 @@ public sealed class StatisticsControllerTests
 
         var result = await controller.GetChannel(404, CancellationToken.None);
 
-        result.Result.ShouldBeOfType<NotFoundObjectResult>();
+        result.Result!.ShouldBeOfType<NotFoundObjectResult>();
     }
 
     [Test]
@@ -147,7 +147,7 @@ public sealed class StatisticsControllerTests
             "hour",
             CancellationToken.None);
 
-        result.Result.ShouldBeOfType<BadRequestObjectResult>();
+        result.Result!.ShouldBeOfType<BadRequestObjectResult>();
     }
 
     private static StatisticsController CreateController(IMessageBus bus)

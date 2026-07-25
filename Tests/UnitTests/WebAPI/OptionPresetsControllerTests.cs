@@ -26,7 +26,7 @@ public sealed class OptionPresetsControllerTests
 
         bus.RequestAsync<OptionPresetCreateRequestMessage, OptionPresetOperationResponseMessage>(
                 OptionPresetSubjects.CreatePreset,
-                Arg.Is<OptionPresetCreateRequestMessage>(x =>
+                Arg.Is<OptionPresetCreateRequestMessage>(x => x != null &&
                     x.Key == "audio-high" &&
                     x.Name == "Audio High" &&
                     x.Description == "desc" &&
@@ -43,7 +43,7 @@ public sealed class OptionPresetsControllerTests
             YtDlpOptions = new YtDlpOptions()
         }, CancellationToken.None);
 
-        var payload = result.Result.ShouldBeOfType<OkObjectResult>().Value
+        var payload = result.Result!.ShouldBeOfType<OkObjectResult>().Value
             .ShouldBeOfType<OptionPresetResponse>();
         payload.Key.ShouldBe("audio-high");
         payload.Name.ShouldBe("Audio High");
@@ -58,7 +58,7 @@ public sealed class OptionPresetsControllerTests
 
         bus.RequestAsync<OptionPresetGetRequestMessage, OptionPresetOperationResponseMessage>(
                 OptionPresetSubjects.GetPreset,
-                Arg.Is<OptionPresetGetRequestMessage>(x => x.Key == "missing"),
+                Arg.Is<OptionPresetGetRequestMessage>(x => x != null && x.Key == "missing"),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new OptionPresetOperationResponseMessage
@@ -70,7 +70,7 @@ public sealed class OptionPresetsControllerTests
 
         var result = await controller.Get("missing", CancellationToken.None);
 
-        result.Result.ShouldBeOfType<NotFoundObjectResult>().Value.ShouldBe("missing");
+        result.Result!.ShouldBeOfType<NotFoundObjectResult>().Value!.ShouldBe("missing");
     }
 
     [Test]
@@ -92,7 +92,7 @@ public sealed class OptionPresetsControllerTests
 
         var result = await controller.List(CancellationToken.None);
 
-        var payload = result.Result.ShouldBeOfType<OkObjectResult>().Value
+        var payload = result.Result!.ShouldBeOfType<OkObjectResult>().Value
             .ShouldBeAssignableTo<IReadOnlyCollection<OptionPresetResponse>>();
         payload.ShouldNotBeNull();
         payload.Single().YtDlpOptions.ShouldNotBeNull();
@@ -106,7 +106,7 @@ public sealed class OptionPresetsControllerTests
 
         bus.RequestAsync<OptionPresetDeleteRequestMessage, OptionPresetOperationResponseMessage>(
                 OptionPresetSubjects.DeletePreset,
-                Arg.Is<OptionPresetDeleteRequestMessage>(x => x.Key == "in-use"),
+                Arg.Is<OptionPresetDeleteRequestMessage>(x => x != null && x.Key == "in-use"),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new OptionPresetOperationResponseMessage
@@ -118,7 +118,7 @@ public sealed class OptionPresetsControllerTests
 
         var result = await controller.Delete("in-use", CancellationToken.None);
 
-        result.ShouldBeOfType<ConflictObjectResult>().Value.ShouldBe("in use");
+        result.ShouldBeOfType<ConflictObjectResult>().Value!.ShouldBe("in use");
     }
 
     [Test]
@@ -142,7 +142,7 @@ public sealed class OptionPresetsControllerTests
             YtDlpOptions = new YtDlpOptions()
         }, CancellationToken.None);
 
-        result.Result.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status503ServiceUnavailable);
+        result.Result!.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status503ServiceUnavailable);
     }
 
     private static OptionPresetDto CreateDto(string key, string json) => new()

@@ -74,6 +74,8 @@ public class NetworkStorageUpdateRequest : StorageUpdateRequestBase<StreamingNet
     public string? PublicKey { get; init; }
     public string? BasePath { get; init; }
 
+    public string? MountPath { get; init; }
+
     public override StreamingNetworkStorageParameters ToParameters()
         => new()
         {
@@ -84,7 +86,8 @@ public class NetworkStorageUpdateRequest : StorageUpdateRequestBase<StreamingNet
             Password = Password,
             PrivateKey = PrivateKey,
             PublicKey = PublicKey,
-            BasePath = BasePath
+            BasePath = BasePath,
+            MountPath = MountPath
         };
 }
 
@@ -230,6 +233,7 @@ public sealed class NetworkStorageConfigResponse : StorageConfigResponseBase
     public int? Port { get; init; }
     public string? Username { get; init; }
     public string? BasePath { get; init; }
+    public string? MountPath { get; init; }
 }
 
 public sealed class S3CompatibleObjectStorageConfigResponse : StorageConfigResponseBase

@@ -7,15 +7,6 @@ export interface CatalogEntry {
   bundle: string;
 }
 
-export interface BundleGrant {
-  type: GranteeType;
-  id: string;
-  /** True for the seeded lock-out guard grant (bootstrap admin group on the `all` bundle); it cannot be revoked. */
-  locked?: boolean;
-  /** Friendly name resolved from the identity provider (user grants only; the id is the opaque subject UUID). */
-  displayName?: string | null;
-}
-
 export interface DirectoryEntry {
   type: GranteeType;
   id: string;
@@ -23,14 +14,23 @@ export interface DirectoryEntry {
   description?: string | null;
 }
 
+export interface BundleMemberPolicy {
+  policyId: string;
+  name: string;
+  enabled: boolean;
+  syncStatus: 'Pending' | 'Synced' | 'Failed';
+}
+
 export interface BundleView {
   id: string;
   systemOwned: boolean;
   endpoints: string[];
-  grants: BundleGrant[];
+  endpointCount: number;
+  policyCount: number;
+  memberPolicies: BundleMemberPolicy[];
 }
 
-const BASE = '/api/global/management';
+const BASE = '/api/global/access-control';
 
 export async function listBundles(fetchImpl: typeof fetch = fetch): Promise<BundleView[]> {
   return getJson<BundleView[]>(`${BASE}/bundles`, fetchImpl);
@@ -41,10 +41,10 @@ export async function listCatalog(fetchImpl: typeof fetch = fetch): Promise<Cata
 }
 
 export async function createRuntimeBundle(
-  request: { id: string; endpoints: string[] },
+  request: { id: string; name: string; cloneFrom?: string | null; endpoints?: string[] },
   fetchImpl: typeof fetch = fetch
-): Promise<BundleView> {
-  return sendJson<BundleView>(`${BASE}/bundles`, 'POST', request, fetchImpl);
+): Promise<void> {
+  await sendJson<void>(`${BASE}/bundles`, 'POST', request, fetchImpl);
 }
 
 export async function replaceBundleEndpoints(
@@ -59,14 +59,6 @@ export async function deleteRuntimeBundle(bundleId: string, fetchImpl: typeof fe
   await sendEmpty(`${BASE}/bundles/${encodeURIComponent(bundleId)}`, 'DELETE', fetchImpl);
 }
 
-export async function addBundleGrant(
-  bundleId: string,
-  grant: BundleGrant,
-  fetchImpl: typeof fetch = fetch
-): Promise<void> {
-  await sendJson<void>(`${BASE}/bundles/${encodeURIComponent(bundleId)}/grants`, 'POST', grant, fetchImpl);
-}
-
 export async function searchDirectory(
   type: GranteeType,
   query: string,
@@ -74,13 +66,4 @@ export async function searchDirectory(
 ): Promise<DirectoryEntry[]> {
   const params = new URLSearchParams({ type, q: query });
   return getJson<DirectoryEntry[]>(`${BASE}/directory?${params}`, fetchImpl);
-}
-
-export async function revokeBundleGrant(
-  bundleId: string,
-  grant: BundleGrant,
-  fetchImpl: typeof fetch = fetch
-): Promise<void> {
-  const query = new URLSearchParams({ type: grant.type, id: grant.id });
-  await sendEmpty(`${BASE}/bundles/${encodeURIComponent(bundleId)}/grants?${query}`, 'DELETE', fetchImpl);
 }

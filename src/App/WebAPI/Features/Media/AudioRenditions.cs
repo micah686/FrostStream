@@ -1,6 +1,7 @@
 using Conduit.NATS;
 using Microsoft.AspNetCore.Mvc;
 using Shared.Messaging;
+using Shared.Storage;
 
 namespace WebAPI.Features.Media;
 
@@ -74,6 +75,7 @@ public sealed class ChannelAudioResolver(IMessageBus messageBus, ILogger<Channel
 
     public async Task<(IActionResult? Error, ChannelAudioDto? Channel)> ResolveAsync(
         long accountId,
+        string? storageKey,
         bool createIfMissing,
         bool retryFailedAndPending,
         CancellationToken cancellationToken)
@@ -85,6 +87,7 @@ public sealed class ChannelAudioResolver(IMessageBus messageBus, ILogger<Channel
                 new ChannelAudioResolveRequest
                 {
                     AccountId = accountId,
+                    StorageKey = string.IsNullOrWhiteSpace(storageKey) ? null : storageKey.Trim(),
                     CreateIfMissing = createIfMissing,
                     RetryFailedAndPending = retryFailedAndPending
                 },
@@ -143,7 +146,7 @@ public static class AudioRenditionHelpers
         };
 
     public static string CombineStoragePath(string directory, string fileName)
-        => string.IsNullOrWhiteSpace(directory) ? fileName : $"{directory.TrimEnd('/')}/{fileName}";
+        => StorageObjectPath.Combine(directory, fileName);
 
     public static string HlsStorageDirectory(AudioRenditionDto rendition)
         => string.IsNullOrWhiteSpace(rendition.StoragePath)
@@ -157,7 +160,6 @@ public static class AudioRenditionHelpers
 
     private static string StorageDirectory(string storagePath)
     {
-        var slash = storagePath.LastIndexOf('/');
-        return slash < 0 ? string.Empty : storagePath[..slash];
+        return StorageObjectPath.GetParent(storagePath);
     }
 }

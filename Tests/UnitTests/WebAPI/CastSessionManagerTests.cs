@@ -38,7 +38,7 @@ public sealed class CastSessionManagerTests
 
         await fixture.Manager.StartAsync(DeviceId, Spec() with { StartPositionSeconds = 90 }, CancellationToken.None);
 
-        await fixture.Client.Received(1).LoadAsync(Arg.Is<CastLoadSpec>(spec => spec.StartPositionSeconds == 90));
+        await fixture.Client.Received(1).LoadAsync(Arg.Is<CastLoadSpec>(spec => spec != null && spec.StartPositionSeconds == 90));
     }
 
     [Test]
@@ -247,7 +247,7 @@ public sealed class CastSessionManagerTests
             .Returns(callInfo => Status("Playing", currentTime: callInfo.Arg<double>()));
         registry.CreateClientAsync(DeviceId, Arg.Any<CancellationToken>())
             .Returns(new CastSessionClientHandle(device, client));
-        registry.CreateClientAsync(Arg.Is<string>(id => id != DeviceId), Arg.Any<CancellationToken>())
+        registry.CreateClientAsync(Arg.Is<string>(id => id != null && id != DeviceId), Arg.Any<CancellationToken>())
             .Returns((CastSessionClientHandle?)null);
 
         var manager = new CastSessionManager(registry, Substitute.For<ILogger<CastSessionManager>>());

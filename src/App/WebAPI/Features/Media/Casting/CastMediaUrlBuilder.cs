@@ -37,13 +37,27 @@ public sealed class CastMediaUrlBuilder(IOptions<CastingOptions> options)
         return (uri.GetLeftPart(UriPartial.Authority), null);
     }
 
-    public static string BuildStreamUrl(string baseUrl, Guid mediaGuid, string castToken, bool audio)
-        => audio
-            ? $"{baseUrl}/api/media/watch/{mediaGuid:D}?audio=true&{TokenQuery(castToken)}"
-            : $"{baseUrl}/api/media/watch/{mediaGuid:D}?{TokenQuery(castToken)}";
+    public static string BuildStreamUrl(
+        string baseUrl,
+        Guid mediaGuid,
+        string castToken,
+        bool audio,
+        string? storageKey = null,
+        int? version = null)
+    {
+        var audioQuery = audio ? "audio=true&" : "";
+        return $"{baseUrl}/api/media/watch/{mediaGuid:D}?{audioQuery}{TokenQuery(castToken)}"
+            + SourceQuery(storageKey, version, versionParam: "version");
+    }
 
-    public static string BuildHlsManifestUrl(string baseUrl, Guid mediaGuid, string castToken)
-        => $"{baseUrl}/api/media/stream/{mediaGuid:D}/index.m3u8?{TokenQuery(castToken)}";
+    public static string BuildHlsManifestUrl(
+        string baseUrl,
+        Guid mediaGuid,
+        string castToken,
+        string? storageKey = null,
+        int? version = null)
+        => $"{baseUrl}/api/media/stream/{mediaGuid:D}/index.m3u8?{TokenQuery(castToken)}"
+            + SourceQuery(storageKey, version, versionParam: "sourceVersion");
 
     public static string BuildThumbnailUrl(string baseUrl, Guid mediaGuid, string castToken)
         => $"{baseUrl}/api/media/watch/{mediaGuid:D}/thumbnail?{TokenQuery(castToken)}";
@@ -61,6 +75,22 @@ public sealed class CastMediaUrlBuilder(IOptions<CastingOptions> options)
 
     private static string TokenQuery(string castToken)
         => $"{CastTokenDefaults.QueryParameter}={Uri.EscapeDataString(castToken)}";
+
+    /// <summary>Appends the optional storage/version selectors a cast device must echo back so the
+    /// server serves the same copy the browser was watching. Empty when neither is pinned.</summary>
+    private static string SourceQuery(string? storageKey, int? version, string versionParam)
+    {
+        var query = "";
+        if (!string.IsNullOrWhiteSpace(storageKey))
+        {
+            query += $"&storageKey={Uri.EscapeDataString(storageKey)}";
+        }
+        if (version is > 0)
+        {
+            query += $"&{versionParam}={version.Value}";
+        }
+        return query;
+    }
 
     private static string? OriginOf(string referer)
         => Uri.TryCreate(referer, UriKind.Absolute, out var uri) ? uri.GetLeftPart(UriPartial.Authority) : null;

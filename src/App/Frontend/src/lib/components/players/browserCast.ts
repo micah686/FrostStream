@@ -110,7 +110,9 @@ export function canUseBrowserCast(): boolean {
 export async function startBrowserCast(
   mediaGuid: string,
   title: string | null,
-  posterUrl: string | null
+  posterUrl: string | null,
+  storageKey: string | null = null,
+  version: number | null = null
 ): Promise<void> {
   if (!canUseBrowserCast()) {
     throw new Error('Browser casting requires a secure context.');
@@ -124,11 +126,20 @@ export async function startBrowserCast(
 
   const { token } = (await tokenResponse.json()) as { token: string };
   const base = env.PUBLIC_CAST_BASE_URL || window.location.origin;
-  const mediaUrl = `${base}/api/media/watch/${mediaGuid}?castToken=${encodeURIComponent(token)}`;
+  // The selected storage/version pin which stored copy plays, matching the watch page.
+  const sourceQuery = new URLSearchParams();
+  if (storageKey) {
+    sourceQuery.set('storageKey', storageKey);
+  }
+  if (version) {
+    sourceQuery.set('version', String(version));
+  }
+  const sourceSuffix = sourceQuery.toString() ? `&${sourceQuery}` : '';
+  const mediaUrl = `${base}/api/media/watch/${mediaGuid}?castToken=${encodeURIComponent(token)}${sourceSuffix}`;
 
   let contentType = 'video/mp4';
   try {
-    const head = await fetch(`/api/media/watch/${mediaGuid}`, { method: 'HEAD' });
+    const head = await fetch(`/api/media/watch/${mediaGuid}?${sourceQuery}`, { method: 'HEAD' });
     contentType = head.headers.get('content-type') ?? contentType;
   } catch {
     // Fall back to video/mp4; the default receiver sniffs most formats anyway.

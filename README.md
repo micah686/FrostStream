@@ -175,7 +175,7 @@ All host ports live in one registry ([`src/App/AppHost/Ports.cs`](src/App/AppHos
 | Range                | Meaning                                                                            | Ports                                                                                                                                                                                      |
 | -------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **25xy0** (external) | Host-published; browser/host-facing                                                | frontend `25000` · authentik `25100` · webapi `25200` (https `25210`) · scheduler `25300` · openbao `25400` · postgres `25500` · dbgate `25600` · nats-ui `25700` · openfga-studio `25800` |
-| **240xy** (internal) | Container-to-container only; bound on localhost in dev, never published by compose | typesense `24010` · pot-provider `24020` · openfga `24030` · nats `24040`–`24042`                                                                                                          |
+| **240xy** (internal) | Container-to-container only; bound on localhost in dev, never published by compose | typesense `24010` · pot-provider `24020` · openfga `24030` · nats `24040`–`24042` · backupservice `24050`                                                                                 |
 
 External ports are overridable via `PORT_*` variables in the generated Aspire dev env.
 

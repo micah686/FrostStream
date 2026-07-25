@@ -23,6 +23,7 @@ public static class AudioRenditionSubjects
 public sealed record ChannelAudioResolveRequest
 {
     public required long AccountId { get; init; }
+    public string? StorageKey { get; init; }
     public bool CreateIfMissing { get; init; }
     public bool RetryFailedAndPending { get; init; }
 }
@@ -47,6 +48,7 @@ public sealed record ChannelAudioDto
     public int ProcessingCount { get; init; }
     public int ReadyCount { get; init; }
     public int FailedCount { get; init; }
+    public IReadOnlyList<string> AvailableStorageKeys { get; init; } = [];
     public IReadOnlyList<ChannelAudioItemDto> Items { get; init; } = [];
 }
 

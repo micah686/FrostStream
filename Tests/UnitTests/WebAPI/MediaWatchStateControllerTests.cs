@@ -25,7 +25,7 @@ public sealed class MediaWatchStateControllerTests
         var controller = CreateController(bus);
         bus.RequestAsync<WatchStateUpsertRequest, WatchStateResponse>(
                 WatchStateSubjects.Upsert,
-                Arg.Is<WatchStateUpsertRequest>(x =>
+                Arg.Is<WatchStateUpsertRequest>(x => x != null &&
                     x.OwnerSubject == "reader-1" &&
                     x.MediaGuid == MediaGuid &&
                     x.PositionSeconds == 120 &&
@@ -49,7 +49,7 @@ public sealed class MediaWatchStateControllerTests
             },
             CancellationToken.None);
 
-        var payload = result.ShouldBeOfType<OkObjectResult>().Value.ShouldBeOfType<WatchStateDto>();
+        var payload = result.ShouldBeOfType<OkObjectResult>().Value!.ShouldBeOfType<WatchStateDto>();
         payload.OwnerSubject.ShouldBe("reader-1");
         payload.Completed.ShouldBeTrue();
     }
@@ -68,7 +68,7 @@ public sealed class MediaWatchStateControllerTests
 
         var result = await controller.Get(MediaGuid, CancellationToken.None);
 
-        var payload = result.ShouldBeOfType<OkObjectResult>().Value.ShouldBeOfType<WatchStateDto>();
+        var payload = result.ShouldBeOfType<OkObjectResult>().Value!.ShouldBeOfType<WatchStateDto>();
         payload.OwnerSubject.ShouldBe("reader-1");
         payload.MediaGuid.ShouldBe(MediaGuid);
         payload.Completed.ShouldBeFalse();
@@ -105,7 +105,7 @@ public sealed class MediaWatchStateControllerTests
         var controller = CreateController(bus);
         bus.RequestAsync<WatchStateUpsertRequest, WatchStateResponse>(
                 WatchStateSubjects.Upsert,
-                Arg.Is<WatchStateUpsertRequest>(x =>
+                Arg.Is<WatchStateUpsertRequest>(x => x != null &&
                     x.OwnerSubject == "reader-1" &&
                     x.MediaGuid == MediaGuid &&
                     x.PositionSeconds == null &&
@@ -121,7 +121,7 @@ public sealed class MediaWatchStateControllerTests
 
         var result = await controller.MarkWatched(MediaGuid, CancellationToken.None);
 
-        var payload = result.ShouldBeOfType<OkObjectResult>().Value.ShouldBeOfType<WatchStateDto>();
+        var payload = result.ShouldBeOfType<OkObjectResult>().Value!.ShouldBeOfType<WatchStateDto>();
         payload.Completed.ShouldBeTrue();
     }
 
@@ -132,7 +132,7 @@ public sealed class MediaWatchStateControllerTests
         var controller = CreateController(bus);
         bus.RequestAsync<WatchStateUpsertRequest, WatchStateResponse>(
                 WatchStateSubjects.Upsert,
-                Arg.Is<WatchStateUpsertRequest>(x =>
+                Arg.Is<WatchStateUpsertRequest>(x => x != null &&
                     x.OwnerSubject == "reader-1" &&
                     x.MediaGuid == MediaGuid &&
                     x.PositionSeconds == null &&
@@ -148,7 +148,7 @@ public sealed class MediaWatchStateControllerTests
 
         var result = await controller.MarkUnwatched(MediaGuid, CancellationToken.None);
 
-        var payload = result.ShouldBeOfType<OkObjectResult>().Value.ShouldBeOfType<WatchStateDto>();
+        var payload = result.ShouldBeOfType<OkObjectResult>().Value!.ShouldBeOfType<WatchStateDto>();
         payload.Completed.ShouldBeFalse();
         payload.WatchedAt.ShouldBeNull();
     }
@@ -160,7 +160,7 @@ public sealed class MediaWatchStateControllerTests
         var controller = CreateController(bus);
         bus.RequestAsync<WatchStateHistoryListRequest, WatchStateHistoryListResponse>(
                 WatchStateSubjects.ListHistory,
-                Arg.Is<WatchStateHistoryListRequest>(x =>
+                Arg.Is<WatchStateHistoryListRequest>(x => x != null &&
                     x.OwnerSubject == "reader-1" &&
                     x.Page == 2 &&
                     x.PageSize == 10),
@@ -176,7 +176,7 @@ public sealed class MediaWatchStateControllerTests
 
         var result = await controller.ListHistory(10, 2, CancellationToken.None);
 
-        var payload = result.ShouldBeOfType<OkObjectResult>().Value.ShouldBeOfType<WatchStateHistoryListResponse>();
+        var payload = result.ShouldBeOfType<OkObjectResult>().Value!.ShouldBeOfType<WatchStateHistoryListResponse>();
         payload.Page.ShouldBe(2);
     }
 

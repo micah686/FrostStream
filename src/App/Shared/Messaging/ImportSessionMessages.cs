@@ -6,7 +6,6 @@ namespace Shared.Messaging;
 public static class ImportSessionSubjects
 {
     public const string Create = "import-session.create";
-    public const string List = "import-session.list";
     public const string Get = "import-session.get";
     public const string ItemsList = "import-session.items.list";
     public const string ItemsPatch = "import-session.items.patch";
@@ -101,19 +100,6 @@ public sealed record ImportSessionCreateRequest
 public sealed record ImportSessionCreateResponse : ImportSessionOperationResponse
 {
     public ImportSessionDto? Session { get; init; }
-}
-
-public sealed record ImportSessionListRequest
-{
-    public ImportSessionStatus? Status { get; init; }
-    public int Limit { get; init; } = 50;
-    public Guid? AfterSessionId { get; init; }
-}
-
-public sealed record ImportSessionListResponse : ImportSessionOperationResponse
-{
-    public IReadOnlyList<ImportSessionDto> Items { get; init; } = [];
-    public Guid? NextSessionId { get; init; }
 }
 
 public sealed record ImportSessionGetRequest

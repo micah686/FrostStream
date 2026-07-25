@@ -19,7 +19,7 @@ public sealed class ChannelAudioController(
     ChannelAudioResolver channelAudio,
     PodcastTokenService podcastTokens,
     IOptions<FrostStreamAuthOptions> authOptions,
-    IBlobStorageProvider blobStorageProvider,
+    IStoreProvider blobStorageProvider,
     MediaAccessChecker accessChecker,
     ILogger<ChannelAudioController> logger) : ControllerBase
 {
@@ -27,10 +27,10 @@ public sealed class ChannelAudioController(
     [Endpoint(EndpointIds.ChannelAudioStatus)]
     [EndpointSummary("Get channel audio encoding progress")]
     [EndpointDescription("Returns aggregate missing, queued, processing, ready, and failed Opus rendition counts for every archived item in a channel, together with the ordered ready-item metadata used by the virtual audio playlist.")]
-    public async Task<IActionResult> GetStatus(long accountId, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetStatus(long accountId, [FromQuery] string? storageKey, CancellationToken cancellationToken)
     {
         var (error, channel) = await channelAudio.ResolveAsync(
-            accountId, createIfMissing: false, retryFailedAndPending: false, cancellationToken);
+            accountId, storageKey, createIfMissing: false, retryFailedAndPending: false, cancellationToken);
         return error ?? Ok(channel);
     }
 
@@ -38,10 +38,10 @@ public sealed class ChannelAudioController(
     [Endpoint(EndpointIds.ChannelAudioEncode)]
     [EndpointSummary("Encode a channel as Opus audio")]
     [EndpointDescription("Creates any missing Opus audio rendition records for archived items in the channel, retries failed renditions, and publishes idempotent MediaProcessor jobs for everything still waiting to be encoded.")]
-    public async Task<IActionResult> Encode(long accountId, CancellationToken cancellationToken)
+    public async Task<IActionResult> Encode(long accountId, [FromQuery] string? storageKey, CancellationToken cancellationToken)
     {
         var (error, channel) = await channelAudio.ResolveAsync(
-            accountId, createIfMissing: true, retryFailedAndPending: true, cancellationToken);
+            accountId, storageKey, createIfMissing: true, retryFailedAndPending: true, cancellationToken);
         return error ?? Accepted(channel);
     }
 
@@ -52,7 +52,7 @@ public sealed class ChannelAudioController(
     public async Task<IActionResult> CreatePodcastToken(long accountId, CancellationToken cancellationToken)
     {
         var (error, _) = await channelAudio.ResolveAsync(
-            accountId, createIfMissing: true, retryFailedAndPending: false, cancellationToken);
+            accountId, storageKey: null, createIfMissing: true, retryFailedAndPending: false, cancellationToken);
         if (error is not null)
             return error;
 
@@ -73,7 +73,7 @@ public sealed class ChannelAudioController(
     public async Task<IActionResult> GetPodcast(long accountId, CancellationToken cancellationToken)
     {
         var (error, channel) = await channelAudio.ResolveAsync(
-            accountId, createIfMissing: true, retryFailedAndPending: false, cancellationToken);
+            accountId, storageKey: null, createIfMissing: true, retryFailedAndPending: false, cancellationToken);
         if (error is not null)
             return error;
 
@@ -99,7 +99,7 @@ public sealed class ChannelAudioController(
         CancellationToken cancellationToken)
     {
         var (error, channel) = await channelAudio.ResolveAsync(
-            accountId, createIfMissing: false, retryFailedAndPending: false, cancellationToken);
+            accountId, storageKey: null, createIfMissing: false, retryFailedAndPending: false, cancellationToken);
         if (error is not null)
             return error;
 

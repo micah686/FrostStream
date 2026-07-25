@@ -53,9 +53,15 @@ public sealed class OpenFgaOptions
     /// <summary>Store name used when auto-provisioning (or locating) the FrostStream store.</summary>
     public string StoreName { get; init; } = "froststream";
 
-    /// <summary>Comma-separated Authentik subject ids granted the <c>owner</c> relation during bootstrap.</summary>
+    /// <summary>
+    /// Comma-separated Authentik subject ids granted the <c>grantee</c> relation on the
+    /// <c>all</c> capability group during bootstrap.
+    /// </summary>
     public string? BootstrapOwnerSubjects { get; init; }
 
-    /// <summary>Group whose members receive the <c>admin</c> relation during bootstrap.</summary>
+    /// <summary>
+    /// Group whose members receive the <c>grantee</c> relation on the <c>all</c> capability group
+    /// during bootstrap.
+    /// </summary>
     public string BootstrapAdminGroup { get; init; } = "admins";
 }

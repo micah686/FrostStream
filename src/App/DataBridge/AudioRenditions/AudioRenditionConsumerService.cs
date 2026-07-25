@@ -60,6 +60,7 @@ public sealed class AudioRenditionConsumerService(
                 result = await scope.ServiceProvider.GetRequiredService<IAudioRenditionRepository>()
                     .ResolveChannelAsync(
                         context.Message.AccountId,
+                        context.Message.StorageKey,
                         context.Message.CreateIfMissing,
                         context.Message.RetryFailedAndPending);
             }

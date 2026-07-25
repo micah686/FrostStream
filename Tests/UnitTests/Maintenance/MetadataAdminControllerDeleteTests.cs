@@ -22,14 +22,14 @@ public sealed class MetadataAdminControllerDeleteTests
         var controller = CreateController(bus);
         bus.RequestAsync<MediaDeleteRequest, MediaDeleteResponse>(
                 MediaDeleteSubjects.Delete,
-                Arg.Is<MediaDeleteRequest>(x => x.MediaGuid == MediaGuid),
+                Arg.Is<MediaDeleteRequest>(x => x != null && x.MediaGuid == MediaGuid),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new MediaDeleteResponse { Success = true, FilesDeleted = 3, MediaRemoved = true });
 
         var result = await controller.DeleteMedia(MediaGuid, CancellationToken.None);
 
-        var payload = result.ShouldBeOfType<OkObjectResult>().Value.ShouldBeOfType<MediaDeleteResponse>();
+        var payload = result.ShouldBeOfType<OkObjectResult>().Value!.ShouldBeOfType<MediaDeleteResponse>();
         payload.FilesDeleted.ShouldBe(3);
         payload.MediaRemoved.ShouldBeTrue();
     }
@@ -79,14 +79,14 @@ public sealed class MetadataAdminControllerDeleteTests
         var controller = CreateController(bus);
         bus.RequestAsync<MediaDeleteForStorageKeyRequest, MediaDeleteResponse>(
                 MediaDeleteSubjects.DeleteForStorageKey,
-                Arg.Is<MediaDeleteForStorageKeyRequest>(x => x.MediaGuid == MediaGuid && x.StorageKey == "storage-a"),
+                Arg.Is<MediaDeleteForStorageKeyRequest>(x => x != null && x.MediaGuid == MediaGuid && x.StorageKey == "storage-a"),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new MediaDeleteResponse { Success = true, FilesDeleted = 1, MediaRemoved = false });
 
         var result = await controller.DeleteMediaForStorageKey(MediaGuid, "storage-a", CancellationToken.None);
 
-        var payload = result.ShouldBeOfType<OkObjectResult>().Value.ShouldBeOfType<MediaDeleteResponse>();
+        var payload = result.ShouldBeOfType<OkObjectResult>().Value!.ShouldBeOfType<MediaDeleteResponse>();
         payload.MediaRemoved.ShouldBeFalse();
         payload.FilesDeleted.ShouldBe(1);
     }

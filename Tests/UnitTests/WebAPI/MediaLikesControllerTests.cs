@@ -25,7 +25,7 @@ public sealed class MediaLikesControllerTests
         var controller = CreateController(bus);
         bus.RequestAsync<MediaLikeStateRequest, MediaLikeStateResponse>(
                 MediaLikeSubjects.Like,
-                Arg.Is<MediaLikeStateRequest>(x => x.OwnerSubject == "reader-1" && x.MediaGuid == MediaGuid),
+                Arg.Is<MediaLikeStateRequest>(x => x != null && x.OwnerSubject == "reader-1" && x.MediaGuid == MediaGuid),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new MediaLikeStateResponse
@@ -36,7 +36,7 @@ public sealed class MediaLikesControllerTests
 
         var result = await controller.Like(MediaGuid, CancellationToken.None);
 
-        var payload = result.ShouldBeOfType<OkObjectResult>().Value.ShouldBeOfType<MediaLikeStateDto>();
+        var payload = result.ShouldBeOfType<OkObjectResult>().Value!.ShouldBeOfType<MediaLikeStateDto>();
         payload.Liked.ShouldBeTrue();
         payload.OwnerSubject.ShouldBe("reader-1");
     }
@@ -70,7 +70,7 @@ public sealed class MediaLikesControllerTests
         var controller = CreateController(bus);
         bus.RequestAsync<MediaLikeListRequest, MediaLikeListResponse>(
                 MediaLikeSubjects.List,
-                Arg.Is<MediaLikeListRequest>(x =>
+                Arg.Is<MediaLikeListRequest>(x => x != null &&
                     x.OwnerSubject == "reader-1" &&
                     x.Page == 2 &&
                     x.PageSize == 10),
@@ -86,7 +86,7 @@ public sealed class MediaLikesControllerTests
 
         var result = await controller.List(10, 2, CancellationToken.None);
 
-        var payload = result.ShouldBeOfType<OkObjectResult>().Value.ShouldBeOfType<MediaLikeListResponse>();
+        var payload = result.ShouldBeOfType<OkObjectResult>().Value!.ShouldBeOfType<MediaLikeListResponse>();
         payload.Page.ShouldBe(2);
     }
 

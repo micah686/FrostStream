@@ -44,6 +44,24 @@ public class StorageParametersSerializerTests
     }
 
     [Test]
+    public void Serialize_And_Deserialize_Mounted_Network_RoundTrips()
+    {
+        var parameters = new StreamingNetworkStorageParameters
+        {
+            Protocol = NetworkStorageProtocol.Cifs,
+            Host = "fileserver",
+            BasePath = "/media",
+            MountPath = "/mnt/media"
+        };
+
+        var json = StorageParametersSerializer.Serialize(StorageMethod.Network, parameters);
+        var ok = StorageParametersSerializer.TryDeserialize(StorageMethod.Network, json, out var parsed, out var error);
+
+        ok.ShouldBeTrue(error);
+        StorageTestHelpers.Serialize(parsed!).ShouldBe(StorageTestHelpers.Serialize(parameters));
+    }
+
+    [Test]
     public void Serialize_And_Deserialize_S3_RoundTrips()
     {
         var parameters = new S3CompatibleObjectStorageParameters

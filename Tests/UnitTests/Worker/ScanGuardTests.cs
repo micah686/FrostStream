@@ -171,7 +171,7 @@ public sealed class ScanGuardTests
         ChannelDiscoveryConsumerService.ChannelCorrelationId(request, 42).ShouldBe(correlationId);
     }
 
-    private static CreatorSourceDto CreateSource(int incrementalPageSize)
+    private static CreatorMonitorDto CreateSource(int incrementalPageSize)
         => new()
         {
             Id = 1,

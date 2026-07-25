@@ -102,6 +102,7 @@
   let channelAudioLoading = $state(false);
   let channelAudioBusy = $state(false);
   let channelAudioNotice = $state<string | null>(null);
+  let selectedStorageKey = $state('');
   let audioPlayerOpen = $state(false);
   let audioIndex = $state(0);
   let podcastBusy = $state(false);
@@ -154,6 +155,7 @@
 
     channelAudio = null;
     channelAudioNotice = null;
+    selectedStorageKey = '';
     audioPlayerOpen = false;
     podcastFeedUrl = null;
 
@@ -166,7 +168,7 @@
     if (!quiet) channelAudioLoading = true;
 
     try {
-      channelAudio = await getChannelAudioStatus(parsedId);
+      channelAudio = await getChannelAudioStatus(parsedId, selectedStorageKey || undefined);
       scheduleAudioPoll(id);
     } catch (err) {
       if (!quiet) {
@@ -256,16 +258,22 @@
     channelAudioBusy = true;
     channelAudioNotice = null;
     try {
-      channelAudio = await encodeChannelAudio(account.accountId);
+      channelAudio = await encodeChannelAudio(account.accountId, selectedStorageKey || undefined);
+      const scope = selectedStorageKey ? ` on storage key "${selectedStorageKey}"` : '';
       channelAudioNotice = channelAudio.totalCount === 0
-        ? 'This channel has no archived media to encode.'
-        : `Queued Opus audio for ${channelAudio.totalCount.toLocaleString()} archived items.`;
+        ? `This channel has no archived media to encode${scope}.`
+        : `Queued Opus audio for ${channelAudio.totalCount.toLocaleString()} archived items${scope}.`;
       scheduleAudioPoll(String(account.accountId));
     } catch (err) {
       channelAudioNotice = err instanceof Error ? err.message : 'Could not queue channel audio encoding.';
     } finally {
       channelAudioBusy = false;
     }
+  }
+
+  function changeAudioStorageKey() {
+    if (!account) return;
+    void loadChannelAudio(String(account.accountId));
   }
 
   function playAudio() {
@@ -622,6 +630,20 @@
           {/if}
           Encode as audio
         </Button>
+        {#if channelAudio && channelAudio.availableStorageKeys.length > 0}
+          <Select
+            items={[
+              { value: '', name: 'All storage keys' },
+              ...channelAudio.availableStorageKeys.map((key) => ({ value: key, name: key }))
+            ]}
+            bind:value={selectedStorageKey}
+            onchange={changeAudioStorageKey}
+            disabled={channelAudioBusy || channelAudioLoading}
+            aria-label="Storage key to encode"
+            title="Scope encoding to a single storage key, or encode across all of them"
+            class="w-40! border-slate-700! bg-slate-900! text-xs! text-slate-200! focus:border-blue-500! focus:ring-blue-500!"
+          />
+        {/if}
         <Button
           color="dark"
           disabled={!audioComplete}
