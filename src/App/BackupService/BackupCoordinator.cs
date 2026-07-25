@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Threading.Channels;
 using Microsoft.Extensions.Options;
 using Shared.Backups;
+using Shared.Messaging;
 
 namespace BackupService;
 
@@ -11,6 +12,7 @@ internal sealed class BackupCoordinator(
     BackupArchiveCatalog catalog,
     IOptions<BackupServiceOptions> options,
     IConfiguration configuration,
+    IBackgroundRunReporter runReporter,
     ILogger<BackupCoordinator> logger) : BackgroundService
 {
     private static readonly HashSet<string> Modes = ["snapshot", "full", "wal-archive"];
@@ -32,7 +34,8 @@ internal sealed class BackupCoordinator(
         string? requestedMode,
         bool scheduled,
         string? idempotencyKey,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? scheduleKey = null)
     {
         if (!string.IsNullOrWhiteSpace(idempotencyKey)
             && store.FindByIdempotencyKey(idempotencyKey) is { Status: not "failed" } existing)
@@ -53,6 +56,7 @@ internal sealed class BackupCoordinator(
             Name = name,
             Mode = mode,
             Scheduled = scheduled,
+            ScheduleKey = scheduleKey,
             IdempotencyKey = idempotencyKey,
             CreatedAt = DateTimeOffset.UtcNow
         };
@@ -85,14 +89,25 @@ internal sealed class BackupCoordinator(
         await store.SaveAsync(record, cancellationToken);
         var stagingRoot = Path.Combine(store.Staging, record.JobId.ToString("N"));
 
+        // Reported here rather than in ScheduledBackupConsumer because this is where both paths
+        // converge: an admin-triggered backup arrives over HTTP and never touches that consumer.
+        var idempotencyKey = record.IdempotencyKey ?? record.JobId.ToString("N");
+        var detail = $"{record.Mode} · {record.Name}";
+        await using var run = record.Scheduled
+            ? await runReporter.BeginScheduledAsync(
+                "backup", record.ScheduleKey ?? "backup", idempotencyKey, detail, cancellationToken)
+            : await runReporter.BeginManualAsync("backup", idempotencyKey, detail, cancellationToken);
+
         try
         {
             Directory.CreateDirectory(stagingRoot);
+            await run.ReportAsync($"Creating {record.Mode} archive '{record.Name}'…");
             var engine = new BackupEngine(options.Value, configuration);
             var stagedArchive = await engine.CreateAsync(stagingRoot, record.Name, record.Mode, cancellationToken);
             var destination = Path.Combine(store.Archives, Path.GetFileName(stagedArchive));
             if (Directory.Exists(destination))
                 throw new IOException($"Backup archive already exists: {destination}");
+            await run.ReportAsync("Moving the staged archive into place…");
             Directory.Move(stagedArchive, destination);
 
             record = record with
@@ -103,11 +118,16 @@ internal sealed class BackupCoordinator(
             };
             await store.SaveAsync(record, cancellationToken);
             if (record.Scheduled && record.Mode == "snapshot")
+            {
+                await run.ReportAsync("Pruning older scheduled snapshots…");
                 await PruneScheduledSnapshotsAsync(cancellationToken);
+            }
+            run.Succeed($"Archive written to {destination}.");
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             logger.LogError(ex, "Backup job {JobId} failed.", record.JobId);
+            run.Fail(ex.Message);
             record = record with
             {
                 Status = "failed",
@@ -124,6 +144,7 @@ internal sealed class BackupCoordinator(
                 completion.TrySetResult(record);
         }
     }
+
 
     internal async Task PruneScheduledSnapshotsAsync(CancellationToken cancellationToken)
     {

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 using NodaTime;
 using NodaTime.Serialization.SystemTextJson;
+using Shared.Messaging;
 using WebAPI.Auth;
 
 namespace WebAPI.Features.BackgroundJobs.Controllers;
@@ -125,6 +126,7 @@ public sealed class BackgroundJobsController(BackgroundJobHub hub) : ControllerB
         run.RunId,
         run.TaskType,
         run.ScheduleKey,
+        run.Trigger,
         run.Origin,
         run.Detail,
         run.Status,
@@ -144,7 +146,8 @@ public sealed record BackgroundRunListResponse(IReadOnlyList<BackgroundRunDto> I
 public sealed record BackgroundRunDto(
     Guid RunId,
     string TaskType,
-    string ScheduleKey,
+    string? ScheduleKey,
+    BackgroundRunTrigger Trigger,
     string Origin,
     string? Detail,
     string Status,

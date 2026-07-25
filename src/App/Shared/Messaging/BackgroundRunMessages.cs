@@ -21,13 +21,25 @@ public sealed record BackgroundRunStarted
     public required Guid RunId { get; init; }
     /// <summary>Scheduler task type, e.g. <c>search_reindex</c>.</summary>
     public required string TaskType { get; init; }
-    public required string ScheduleKey { get; init; }
+    /// <summary>
+    /// The owning schedule, or null for work a user kicked off directly (an admin-triggered backup
+    /// has no schedule behind it).
+    /// </summary>
+    public string? ScheduleKey { get; init; }
+    /// <summary>Whether a schedule or a person started this run.</summary>
+    public required BackgroundRunTrigger Trigger { get; init; }
     public required string IdempotencyKey { get; init; }
     /// <summary>Which service is executing the run (databridge, worker, backupservice).</summary>
     public required string Origin { get; init; }
     /// <summary>Optional one-line context, e.g. "12 sources" or a target channel name.</summary>
     public string? Detail { get; init; }
     public required Instant StartedAt { get; init; }
+}
+
+public enum BackgroundRunTrigger
+{
+    Scheduled = 0,
+    Manual = 1
 }
 
 public sealed record BackgroundRunProgress

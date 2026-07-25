@@ -7,6 +7,8 @@ internal sealed record BackupJobRecord
     public required string Name { get; init; }
     public required string Mode { get; init; }
     public required bool Scheduled { get; init; }
+    /// <summary>The schedule that triggered this backup; null for admin-triggered runs.</summary>
+    public string? ScheduleKey { get; init; }
     public string? IdempotencyKey { get; init; }
     public string? ArchivePath { get; init; }
     public string? ErrorMessage { get; init; }

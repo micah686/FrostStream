@@ -7,10 +7,14 @@ export interface BackgroundRunLogLine {
   at: string;
 }
 
+export type BackgroundRunTrigger = 'Scheduled' | 'Manual';
+
 export interface BackgroundRun {
   runId: string;
   taskType: string;
-  scheduleKey: string;
+  /** Null for runs a user started directly — an admin-triggered backup has no schedule behind it. */
+  scheduleKey: string | null;
+  trigger: BackgroundRunTrigger;
   origin: string;
   detail: string | null;
   status: BackgroundRunStatus;

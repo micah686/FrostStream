@@ -35,7 +35,8 @@ public sealed record BackgroundRunView
 {
     public required Guid RunId { get; init; }
     public required string TaskType { get; init; }
-    public required string ScheduleKey { get; init; }
+    public string? ScheduleKey { get; init; }
+    public required BackgroundRunTrigger Trigger { get; init; }
     public required string IdempotencyKey { get; init; }
     public required string Origin { get; init; }
     public string? Detail { get; init; }
@@ -143,6 +144,7 @@ public sealed class BackgroundJobHub(IMessageBus messageBus, IClock clock, ILogg
             RunId = m.RunId,
             TaskType = m.TaskType,
             ScheduleKey = m.ScheduleKey,
+            Trigger = m.Trigger,
             IdempotencyKey = m.IdempotencyKey,
             Origin = m.Origin,
             Detail = m.Detail,

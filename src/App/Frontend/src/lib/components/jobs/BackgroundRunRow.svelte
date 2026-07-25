@@ -125,6 +125,11 @@
           <span class={['shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ring-1', statusTone(run.status)]}>
             {run.status}
           </span>
+          {#if run.trigger === 'Manual'}
+            <span class="shrink-0 rounded-full bg-accent/12 px-2 py-0.5 text-[10px] font-bold text-accent ring-1 ring-accent/25">
+              MANUAL
+            </span>
+          {/if}
           {#if run.detail}
             <span class="shrink-0 rounded-full bg-base-300/60 px-2 py-0.5 text-[10px] font-semibold text-base-content/70 ring-1 ring-base-content/15">
               {run.detail}
@@ -132,7 +137,7 @@
           {/if}
         </div>
         <p class="mt-1 truncate text-xs text-base-content/50">
-          {run.scheduleKey} · {run.origin} · {elapsed(run)}
+          {run.scheduleKey ?? 'started by hand'} · {run.origin} · {elapsed(run)}
         </p>
         {#if run.message}
           <p class="mt-1 truncate text-[11px] text-base-content/50">{run.message}</p>
@@ -178,7 +183,7 @@
         </span>
         <span class="inline-flex min-w-0 items-center gap-1">
           <span class="shrink-0 text-base-content/40">Schedule</span>
-          <span class="break-all text-base-content/60">{run.scheduleKey}</span>
+          <span class="break-all text-base-content/60">{run.scheduleKey ?? 'none (started by hand)'}</span>
         </span>
         <span class="inline-flex items-center gap-1">
           <span class="shrink-0 text-base-content/40">Service</span>

@@ -21,6 +21,28 @@ public interface IBackgroundRunReporter
         ScheduledBackgroundRequest request,
         string? detail = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Announces a scheduled run for a component that holds the schedule's identifiers directly
+    /// rather than the originating request (BackupCoordinator only keeps its own job record).
+    /// </summary>
+    Task<IBackgroundRunScope> BeginScheduledAsync(
+        string taskType,
+        string scheduleKey,
+        string idempotencyKey,
+        string? detail = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Announces a run that a user started directly rather than one a schedule triggered — an
+    /// admin-initiated backup, for example. Such work never passes through a scheduled-request
+    /// consumer, so it has no schedule key to report.
+    /// </summary>
+    Task<IBackgroundRunScope> BeginManualAsync(
+        string taskType,
+        string idempotencyKey,
+        string? detail = null,
+        CancellationToken cancellationToken = default);
 }
 
 public interface IBackgroundRunScope : IAsyncDisposable
@@ -43,19 +65,47 @@ public sealed class BackgroundRunReporter(
     string origin,
     ILogger<BackgroundRunReporter>? logger = null) : IBackgroundRunReporter
 {
-    public async Task<IBackgroundRunScope> BeginAsync(
+    public Task<IBackgroundRunScope> BeginAsync(
         string taskType,
         ScheduledBackgroundRequest request,
         string? detail = null,
         CancellationToken cancellationToken = default)
+        => BeginCoreAsync(taskType, request.ScheduleKey, BackgroundRunTrigger.Scheduled,
+            request.IdempotencyKey, detail, cancellationToken);
+
+    public Task<IBackgroundRunScope> BeginScheduledAsync(
+        string taskType,
+        string scheduleKey,
+        string idempotencyKey,
+        string? detail = null,
+        CancellationToken cancellationToken = default)
+        => BeginCoreAsync(taskType, scheduleKey, BackgroundRunTrigger.Scheduled,
+            idempotencyKey, detail, cancellationToken);
+
+    public Task<IBackgroundRunScope> BeginManualAsync(
+        string taskType,
+        string idempotencyKey,
+        string? detail = null,
+        CancellationToken cancellationToken = default)
+        => BeginCoreAsync(taskType, scheduleKey: null, BackgroundRunTrigger.Manual,
+            idempotencyKey, detail, cancellationToken);
+
+    private async Task<IBackgroundRunScope> BeginCoreAsync(
+        string taskType,
+        string? scheduleKey,
+        BackgroundRunTrigger trigger,
+        string idempotencyKey,
+        string? detail,
+        CancellationToken cancellationToken)
     {
         var scope = new Scope(messageBus, clock, logger, Guid.NewGuid());
         await Publish(BackgroundRunSubjects.Started, new BackgroundRunStarted
         {
             RunId = scope.RunId,
             TaskType = taskType,
-            ScheduleKey = request.ScheduleKey,
-            IdempotencyKey = request.IdempotencyKey,
+            ScheduleKey = scheduleKey,
+            Trigger = trigger,
+            IdempotencyKey = idempotencyKey,
             Origin = origin,
             Detail = detail,
             StartedAt = clock.GetCurrentInstant()
@@ -154,6 +204,16 @@ public sealed class NullBackgroundRunReporter : IBackgroundRunReporter
 
     public Task<IBackgroundRunScope> BeginAsync(
         string taskType, ScheduledBackgroundRequest request, string? detail = null,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult<IBackgroundRunScope>(new Scope());
+
+    public Task<IBackgroundRunScope> BeginScheduledAsync(
+        string taskType, string scheduleKey, string idempotencyKey, string? detail = null,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult<IBackgroundRunScope>(new Scope());
+
+    public Task<IBackgroundRunScope> BeginManualAsync(
+        string taskType, string idempotencyKey, string? detail = null,
         CancellationToken cancellationToken = default)
         => Task.FromResult<IBackgroundRunScope>(new Scope());
 
