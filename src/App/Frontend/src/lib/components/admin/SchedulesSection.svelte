@@ -118,6 +118,10 @@
     }
   ] as const;
 
+  function taskTypeSummary(taskType: string): string {
+    return taskTypeHelp.find((item) => item.type === taskType)?.summary ?? 'No description available.';
+  }
+
   let schedules = $state<ScheduledTask[]>([]);
   let loading = $state(true);
   let loadError = $state<Error | null>(null);
@@ -284,15 +288,6 @@
       <div class="flex items-center gap-2">
         <Clock class="h-5 w-5 text-primary" />
         <h2 id="schedules-title" class="text-base font-bold text-base-content">Schedules</h2>
-        <button
-          type="button"
-          class="inline-flex h-6 w-6 items-center justify-center rounded-full text-base-content/50 transition hover:bg-base-300 hover:text-base-content/90"
-          aria-label="Explain schedule task types"
-          title="Explain schedule task types"
-          onclick={() => (taskTypeHelpOpen = true)}
-        >
-          <Info class="h-4 w-4" />
-        </button>
       </div>
       <p class="mt-2 text-sm text-base-content/60">
         Recurring background tasks — metadata cleanup, channel checks, backups, and other maintenance jobs.
@@ -471,6 +466,7 @@
                   <span class="rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-semibold text-warning">disabled</span>
                 {/if}
               </div>
+              <p class="mt-1 text-xs leading-relaxed text-base-content/60">{taskTypeSummary(schedule.taskType)}</p>
               <p class="mt-0.5 truncate font-mono text-xs text-base-content/60">
                 {scheduleTimingSummary(schedule)} · {schedule.timezone} · {schedule.catchupPolicy === 'Coalesce' ? 'coalesce missed runs' : 'skip missed runs'}
               </p>
