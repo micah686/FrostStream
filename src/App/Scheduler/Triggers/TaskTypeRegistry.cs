@@ -5,7 +5,6 @@ namespace Scheduler.Triggers;
 
 internal static class TaskTypeRegistry
 {
-    public const string OrphanMetadataCleanup = "orphan_metadata_cleanup";
     public const string ChannelUpdateCheck = "channel_update_check";
     public const string ChannelAssetRefresh = "channel_asset_refresh";
     public const string ChannelMediaList = "channel_media_list";
@@ -18,7 +17,6 @@ internal static class TaskTypeRegistry
 
     private static readonly IReadOnlyDictionary<string, Type> JobTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
     {
-        [OrphanMetadataCleanup] = typeof(OrphanMetadataCleanupTriggerJob),
         [ChannelUpdateCheck] = typeof(ChannelUpdateCheckJob),
         [ChannelAssetRefresh] = typeof(ChannelAssetRefreshJob),
         [ChannelMediaList] = typeof(ChannelMediaListJob),

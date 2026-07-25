@@ -146,7 +146,6 @@ class Program
         builder.Services.AddHostedService<ChannelDiscoveryConsumerService>();
         builder.Services.AddHostedService<ChannelAssetRefreshConsumerService>();
         builder.Services.AddHostedService<FilesystemRescanConsumerService>();
-        builder.Services.AddHostedService<OrphanCleanupConsumerService>();
         builder.Services.AddHostedService<MediaFileDeleteConsumerService>();
 
         var app = builder.Build();

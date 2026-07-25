@@ -143,9 +143,6 @@ All queries go via NATS request/reply to DataBridge (10-second timeout).
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/api/metadata/reindex` | Trigger a full Typesense search index rebuild. Publishes a background job to JetStream. Returns 202. |
-| `GET` | `/api/metadata/orphans` | List orphaned media items tracked in `orphan_cleanup_items`. Params: `kind`, `state`, `pageSize`, `page`. |
-| `POST` | `/api/metadata/orphans/{id:long}/restore-file` | Move an orphaned file from the `orphaned/` prefix back to its original storage path. |
-| `POST` | `/api/metadata/orphans/{id:long}/restore-metadata` | Re-link orphan metadata to the media record. |
 
 ---
 
@@ -224,17 +221,6 @@ Subscribes to 1 durable consumer on the `FROSTSTREAM_BACKGROUND_JOBS` stream:
 
 Paths are normalized before upload (`StoragePathNormalizer.Normalize`). A per-message NATS heartbeat fires every 10 seconds to keep JetStream from timing out during long-running scans.
 
-### 3.6 Orphan Cleanup (NATS Request/Reply)
-
-Handles 4 request/reply subjects from DataBridge:
-
-| Subject | Request | What It Does |
-|---------|---------|--------------|
-| `orphan.worker.move-file` | `MoveOrphanedFileRequest` | Moves a file from its original storage path to `orphaned/{...}`. Validates that destination starts with `orphaned/`. |
-| `orphan.worker.delete-file` | `DeleteOrphanedFileRequest` | Permanently deletes a file from the `orphaned/` prefix. |
-| `orphan.worker.restore-file` | `RestoreOrphanedFileRequest` | Moves a file from `orphaned/` back to its original path. Checks for conflict (destination already exists). |
-| `orphan.worker.file-exists` | `OrphanFileExistsRequest` | Checks whether a file exists at a given storage path. |
-
 ---
 
 ## 4. DataBridge — Capabilities
@@ -282,8 +268,6 @@ A durable, resumable saga per `jobId`. Steps:
 | `CreatorDiscoveryConsumerService` | `creator.*` (CRUD + upsert-batch + update-assets) | Manages creator sources and discovered media candidates. |
 | `BackgroundJobConsumerService` | Background job subjects | Routes background job requests to internal handlers. |
 | `FilesystemRescanConsumerService` | `fs.rescan.*` | Reads the NDJSON listing uploaded by the Worker and reconciles against `download_jobs` / `filesystem_rescan_findings`. |
-| `OrphanMetadataCleanupConsumerService` | `orphan.*` (metadata) | Detects and cleans up metadata rows without corresponding storage objects. |
-| `OrphanCleanupAdminConsumerService` | `orphan.admin.*` | Handles list/restore-file/restore-metadata admin requests. |
 | `MetadataQueryConsumerService` | `metadata.*` (all read subjects) | Queries media metadata, accounts, taxonomy, technical details, comments, captions from DB. |
 | `MetadataSearchConsumerService` | `metadata.search` | Routes to Typesense for full-text search. |
 | `MetadataCaptionsConsumerService` | Typesense captions sync | Syncs captions to Typesense. |
@@ -315,7 +299,6 @@ A durable, resumable saga per `jobId`. Steps:
 | 017 | Seed: `processed_message_cleanup` scheduled task |
 | 018 | `public.filesystem_rescan_findings` |
 | 019 | Path normalization columns on `filesystem_rescan_findings` |
-| 020 | `public.orphan_cleanup_items` |
 
 ### 4.4 Rich Metadata Model (`CapturedMediaMetadata`)
 
@@ -369,7 +352,6 @@ All jobs use `[DisallowConcurrentExecution]`.
 - **`ScheduleChangeListener`** — subscribes to schedule CRUD events; dynamically adds, updates, or removes Quartz triggers at runtime without restart.
 - **`QuartzJobRegistrar`** — translates a `ScheduledTaskDto` (cron string or interval seconds + timezone + catchup policy) into a Quartz `IJobDetail` + `ITrigger`.
 - **`DatabridgeClient`** — thin NATS client used by the Scheduler to query DataBridge for schedule data.
-- **`OrphanMetadataCleanupTriggerJob`** — special trigger job that DataBridge uses to self-schedule the orphan metadata cleanup without a Scheduler round-trip.
 - **CrystalQuartz dashboard** — optional visual UI for Quartz job/trigger inspection.
 
 ---
@@ -437,17 +419,6 @@ All jobs use `[DisallowConcurrentExecution]`.
 
 ### Playlist Queries (WebAPI → DataBridge, request/reply)
 `playlist.list`, `playlist.get`
-
-### Orphan Cleanup
-| Subject | Direction |
-|---------|-----------|
-| `orphan.worker.move-file` | DataBridge → Worker (req/reply) |
-| `orphan.worker.delete-file` | DataBridge → Worker (req/reply) |
-| `orphan.worker.restore-file` | DataBridge → Worker (req/reply) |
-| `orphan.worker.file-exists` | DataBridge → Worker (req/reply) |
-| `orphan.admin.list` | WebAPI → DataBridge (req/reply) |
-| `orphan.admin.restore-file` | WebAPI → DataBridge (req/reply) |
-| `orphan.admin.restore-metadata` | WebAPI → DataBridge (req/reply) |
 
 ### Filesystem Rescan (Worker ↔ DataBridge)
 `fs.rescan.storage-keys` (DataBridge → Worker), `fs.rescan.reconcile` (Worker → DataBridge)

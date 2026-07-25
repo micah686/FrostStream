@@ -148,7 +148,6 @@ class Program
         builder.Services.AddScoped<IDownloadConfigSetsRepository, DownloadConfigSetsRepository>();
         builder.Services.AddScoped<IScheduledTasksRepository, ScheduledTasksRepository>();
         builder.Services.AddScoped<ICreatorDiscoveryRepository, CreatorDiscoveryRepository>();
-        builder.Services.AddSingleton<OrphanMetadataCleanupExecutor>();
         builder.Services.AddSingleton<MediaDeleteExecutor>();
         builder.Services.AddSingleton<AccessPolicyExecutor>();
         builder.Services.Configure<MediaAccessOptions>(
@@ -188,8 +187,6 @@ class Program
         builder.Services.AddHostedService<ScheduleCrudConsumerService>();
         builder.Services.AddHostedService<CreatorDiscoveryConsumerService>();
         builder.Services.AddHostedService<WatchStateConsumerService>();
-        builder.Services.AddHostedService<OrphanCleanupAdminConsumerService>();
-        builder.Services.AddHostedService<OrphanMetadataCleanupConsumerService>();
         builder.Services.AddHostedService<FilesystemRescanConsumerService>();
         builder.Services.AddHostedService<BackgroundJobConsumerService>();
         builder.Services.AddHostedService<DownloadFlowStartupService>();

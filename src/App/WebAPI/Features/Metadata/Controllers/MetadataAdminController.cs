@@ -47,106 +47,6 @@ public sealed class MetadataAdminController(
         return Accepted();
     }
 
-    [HttpGet("orphans")]
-    [Endpoint(EndpointIds.MetadataOrphansList)]
-    [EndpointSummary("List orphan cleanup items")]
-    [EndpointDescription("Returns paginated orphan-cleanup lifecycle records, optionally filtered by orphan kind and state. Results describe missing metadata or unexpected files detected by filesystem reconciliation and include the information needed to review restoration or cleanup actions.")]
-    public async Task<ActionResult<IReadOnlyList<OrphanCleanupItemDto>>> ListOrphans(
-        [FromQuery] string? kind = null,
-        [FromQuery] string? state = null,
-        [FromQuery] int pageSize = 100,
-        [FromQuery] int page = 1,
-        CancellationToken cancellationToken = default)
-    {
-        var response = await SendRequestAsync<OrphanCleanupListRequest, OrphanCleanupListResponse>(
-            OrphanCleanupSubjects.AdminList,
-            new OrphanCleanupListRequest
-            {
-                Kind = kind,
-                State = state,
-                PageSize = pageSize,
-                Page = page
-            },
-            cancellationToken);
-
-        if (response is null)
-        {
-            return ServiceUnavailable();
-        }
-
-        if (!response.Success)
-        {
-            return MapListError(response);
-        }
-
-        return Ok(response.Items);
-    }
-
-    [HttpPost("orphans/{id:long}/restore-file")]
-    [Endpoint(EndpointIds.MetadataOrphansRestoreFile)]
-    [EndpointSummary("Restore an orphaned file")]
-    [EndpointDescription("Requests restoration of a file orphan by moving the archived object from its orphaned storage path back to its recorded original path. The operation validates lifecycle state and destination conflicts, returning 404 for an unknown item and 409 when restoration is no longer valid.")]
-    public async Task<IActionResult> RestoreFile(long id, CancellationToken cancellationToken)
-    {
-        var response = await SendRequestAsync<RestoreOrphanRequest, RestoreOrphanResponse>(
-            OrphanCleanupSubjects.AdminRestoreFile,
-            new RestoreOrphanRequest { OrphanId = id },
-            cancellationToken);
-
-        return MapRestoreResponse(response);
-    }
-
-    [HttpPost("orphans/{id:long}/restore-metadata")]
-    [Endpoint(EndpointIds.MetadataOrphansRestoreMetadata)]
-    [EndpointSummary("Restore orphaned metadata")]
-    [EndpointDescription("Requests restoration of metadata previously marked orphaned after its expected file disappeared. Restoration succeeds only when the referenced content-version record remains valid and the expected storage object is present; invalid lifecycle states return 409.")]
-    public async Task<IActionResult> RestoreMetadata(long id, CancellationToken cancellationToken)
-    {
-        var response = await SendRequestAsync<RestoreOrphanRequest, RestoreOrphanResponse>(
-            OrphanCleanupSubjects.AdminRestoreMetadata,
-            new RestoreOrphanRequest { OrphanId = id },
-            cancellationToken);
-
-        return MapRestoreResponse(response);
-    }
-
-    [HttpGet("orphan-cleanup-policy")]
-    [Endpoint(EndpointIds.OrphanCleanupPolicyGet)]
-    [EndpointSummary("Get orphan-cleanup policy")]
-    [EndpointDescription("Returns the global orphan-cleanup policy: whether automatic cleanup is enabled, the delay before a file with no metadata is moved into the orphaned folder, the delay before a moved file is permanently purged, the delay before metadata whose file is missing is deleted, and the latest run counters.")]
-    public async Task<IActionResult> GetOrphanCleanupPolicy(CancellationToken cancellationToken)
-    {
-        var response = await SendRequestAsync<OrphanCleanupPolicyGetRequest, OrphanCleanupPolicyResponse>(
-            OrphanCleanupSubjects.AdminGetPolicy,
-            new OrphanCleanupPolicyGetRequest(),
-            cancellationToken);
-
-        return MapOrphanPolicyResponse(response);
-    }
-
-    [HttpPut("orphan-cleanup-policy")]
-    [Endpoint(EndpointIds.OrphanCleanupPolicyUpdate)]
-    [EndpointSummary("Update orphan-cleanup policy")]
-    [EndpointDescription("Enables or disables automatic orphan cleanup and sets its three retention timers (in days): how long before a file with no metadata is moved to the orphaned folder, how long a moved file is retained there before permanent deletion, and how long before metadata with a missing file is deleted. Destructive cleanup runs only while this admin-controlled policy is enabled.")]
-    public async Task<IActionResult> UpdateOrphanCleanupPolicy(
-        [FromBody] OrphanCleanupPolicyUpdateHttpRequest request,
-        CancellationToken cancellationToken)
-    {
-        var response = await SendRequestAsync<OrphanCleanupPolicyUpdateRequest, OrphanCleanupPolicyResponse>(
-            OrphanCleanupSubjects.AdminUpdatePolicy,
-            new OrphanCleanupPolicyUpdateRequest
-            {
-                Enabled = request.Enabled,
-                FileMoveAfterDays = request.FileMoveAfterDays,
-                FilePurgeAfterDays = request.FilePurgeAfterDays,
-                MetadataDeleteAfterDays = request.MetadataDeleteAfterDays,
-                UpdatedBy = Shared.Auth.AuthConstants.FindSubject(User)
-            },
-            cancellationToken);
-
-        return MapOrphanPolicyResponse(response);
-    }
-
     [HttpDelete("{mediaGuid:guid}")]
     [Endpoint(EndpointIds.MediaDelete)]
     [EndpointSummary("Delete a video globally")]
@@ -212,70 +112,11 @@ public sealed class MetadataAdminController(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed processing orphan cleanup admin request on subject '{Subject}'.", subject);
+            logger.LogError(ex, "Failed processing admin request on subject '{Subject}'.", subject);
             return default;
         }
     }
 
-    private ActionResult<IReadOnlyList<OrphanCleanupItemDto>> MapListError(OrphanCleanupListResponse response)
-        => response.ErrorCode switch
-        {
-            "validation" => BadRequest(response.ErrorMessage),
-            "unavailable" => StatusCode(StatusCodes.Status503ServiceUnavailable, response.ErrorMessage),
-            _ => StatusCode(StatusCodes.Status500InternalServerError, response.ErrorMessage ?? "Orphan cleanup request failed.")
-        };
-
-    private IActionResult MapRestoreResponse(RestoreOrphanResponse? response)
-    {
-        if (response is null)
-        {
-            return ServiceUnavailable();
-        }
-
-        if (response.Success)
-        {
-            return Ok();
-        }
-
-        return response.ErrorCode switch
-        {
-            "not_found" => NotFound(response.ErrorMessage),
-            "conflict" => Conflict(response.ErrorMessage),
-            "validation" => BadRequest(response.ErrorMessage),
-            "unavailable" => StatusCode(StatusCodes.Status503ServiceUnavailable, response.ErrorMessage),
-            _ => StatusCode(StatusCodes.Status500InternalServerError, response.ErrorMessage ?? "Orphan cleanup request failed.")
-        };
-    }
-
     private ObjectResult ServiceUnavailable()
-        => StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to process orphan cleanup admin request.");
-
-    private IActionResult MapOrphanPolicyResponse(OrphanCleanupPolicyResponse? response)
-    {
-        if (response is null)
-        {
-            return ServiceUnavailable();
-        }
-
-        if (response.Success)
-        {
-            return Ok(response.Policy);
-        }
-
-        return response.ErrorCode switch
-        {
-            "validation" => BadRequest(response.ErrorMessage),
-            "unavailable" => StatusCode(StatusCodes.Status503ServiceUnavailable, response.ErrorMessage),
-            _ => StatusCode(StatusCodes.Status500InternalServerError, response.ErrorMessage ?? "Orphan cleanup policy request failed.")
-        };
-    }
-
-}
-
-public sealed record OrphanCleanupPolicyUpdateHttpRequest
-{
-    public required bool Enabled { get; init; }
-    public required int FileMoveAfterDays { get; init; }
-    public required int FilePurgeAfterDays { get; init; }
-    public required int MetadataDeleteAfterDays { get; init; }
+        => StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to process admin request.");
 }

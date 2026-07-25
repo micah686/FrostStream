@@ -99,12 +99,3 @@ public sealed record ScheduleChangedMessage
     public required ScheduleChangeKind Kind { get; init; }
     public required Instant OccurredAt { get; init; }
 }
-
-public sealed record OrphanMetadataCleanupRequested
-{
-    public required string ScheduleKey { get; init; }
-    public required string TaskType { get; init; }
-    public required Instant DueWindowUtc { get; init; }
-    public required string IdempotencyKey { get; init; }
-    public required Instant OccurredAt { get; init; }
-}

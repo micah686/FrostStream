@@ -61,7 +61,6 @@ internal static class Program
         builder.Services.AddSingleton<IClock>(SystemClock.Instance);
         builder.Services.AddSingleton<IQuartzJobRegistrar, QuartzJobRegistrar>();
 
-        builder.Services.AddTransient<OrphanMetadataCleanupTriggerJob>();
         builder.Services.AddTransient<Jobs.ChannelUpdateCheckJob>();
         builder.Services.AddTransient<Jobs.ChannelAssetRefreshJob>();
         builder.Services.AddTransient<Jobs.ChannelMediaListJob>();
@@ -75,7 +74,6 @@ internal static class Program
         builder.Services.AddSingleton<IChannelUpdateChecker, ChannelUpdateChecker>();
         builder.Services.AddSingleton<IChannelAssetRefresher, ChannelAssetRefresher>();
         builder.Services.AddSingleton<IChannelMediaLister, ChannelMediaLister>();
-        builder.Services.AddSingleton<IOrphanMetadataCleanupScheduler, OrphanMetadataCleanupScheduler>();
         builder.Services.AddSingleton<IStaleEntryCleanupScheduler, StaleEntryCleanupScheduler>();
         builder.Services.AddSingleton<IDatabaseMaintenanceScheduler, DatabaseMaintenanceScheduler>();
         builder.Services.AddSingleton<ISearchReindexScheduler, SearchReindexScheduler>();

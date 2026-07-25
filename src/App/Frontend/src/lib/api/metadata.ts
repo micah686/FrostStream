@@ -1,45 +1,3 @@
-export type OrphanKind = 'media_without_metadata' | 'metadata_without_media';
-export type OrphanState = 'detected' | 'moved' | 'move_failed' | 'delete_failed' | 'finalized' | 'resolved';
-
-export interface OrphanCleanupItem {
-  id: number;
-  kind: OrphanKind;
-  state: OrphanState;
-  storageKey: string;
-  originalStoragePath: string;
-  orphanStoragePath: string | null;
-  mediaGuid: string | null;
-  detectedAt: string;
-  lastSeenAt: string;
-  deleteAfter: string;
-  movedAt: string | null;
-  finalizedAt: string | null;
-  resolvedAt: string | null;
-  lastError: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface OrphanCleanupPolicy {
-  enabled: boolean;
-  fileMoveAfterDays: number;
-  filePurgeAfterDays: number;
-  metadataDeleteAfterDays: number;
-  updatedBy: string | null;
-  updatedAt: string | null;
-  lastRunAt: string | null;
-  lastMovedCount: number;
-  lastDeletedFilesCount: number;
-  lastDeletedMetadataCount: number;
-}
-
-export interface OrphanCleanupPolicyUpdate {
-  enabled: boolean;
-  fileMoveAfterDays: number;
-  filePurgeAfterDays: number;
-  metadataDeleteAfterDays: number;
-}
-
 export interface MediaDeleteResult {
   success: boolean;
   errorCode: string | null;
@@ -62,49 +20,10 @@ export interface MetadataVersionsResponse {
   versions: MetadataVersion[];
 }
 
-export interface ListOrphansOptions {
-  kind?: OrphanKind;
-  state?: OrphanState;
-  pageSize?: number;
-  page?: number;
-}
-
 const BASE = '/api/global/metadata';
 
 export async function triggerReindex(fetchImpl: typeof fetch = fetch): Promise<void> {
   await sendEmpty(`${BASE}/reindex`, 'POST', fetchImpl);
-}
-
-export async function listOrphans(
-  options: ListOrphansOptions = {},
-  fetchImpl: typeof fetch = fetch
-): Promise<OrphanCleanupItem[]> {
-  const query = new URLSearchParams();
-  if (options.kind) query.set('kind', options.kind);
-  if (options.state) query.set('state', options.state);
-  if (options.pageSize) query.set('pageSize', String(options.pageSize));
-  if (options.page) query.set('page', String(options.page));
-  const suffix = query.size > 0 ? `?${query}` : '';
-  return getJson<OrphanCleanupItem[]>(`${BASE}/orphans${suffix}`, fetchImpl);
-}
-
-export async function restoreOrphanFile(id: number, fetchImpl: typeof fetch = fetch): Promise<void> {
-  await sendEmpty(`${BASE}/orphans/${id}/restore-file`, 'POST', fetchImpl);
-}
-
-export async function restoreOrphanMetadata(id: number, fetchImpl: typeof fetch = fetch): Promise<void> {
-  await sendEmpty(`${BASE}/orphans/${id}/restore-metadata`, 'POST', fetchImpl);
-}
-
-export async function getOrphanCleanupPolicy(fetchImpl: typeof fetch = fetch): Promise<OrphanCleanupPolicy> {
-  return getJson<OrphanCleanupPolicy>(`${BASE}/orphan-cleanup-policy`, fetchImpl);
-}
-
-export async function updateOrphanCleanupPolicy(
-  request: OrphanCleanupPolicyUpdate,
-  fetchImpl: typeof fetch = fetch
-): Promise<OrphanCleanupPolicy> {
-  return sendJson<OrphanCleanupPolicy>(`${BASE}/orphan-cleanup-policy`, 'PUT', request, fetchImpl);
 }
 
 export async function deleteMedia(mediaGuid: string, fetchImpl: typeof fetch = fetch): Promise<MediaDeleteResult> {
@@ -144,36 +63,6 @@ export async function getMetadataVersionCount(
   fetchImpl: typeof fetch = fetch
 ): Promise<number> {
   return getJson<number>(`/api/metadata/${encodeURIComponent(mediaGuid)}/versions?countOnly=true`, fetchImpl);
-}
-
-export function orphanKindLabel(kind: OrphanKind | string): string {
-  switch (kind) {
-    case 'media_without_metadata':
-      return 'Orphaned file';
-    case 'metadata_without_media':
-      return 'Orphaned metadata';
-    default:
-      return kind;
-  }
-}
-
-export function orphanStateLabel(state: OrphanState | string): string {
-  switch (state) {
-    case 'detected':
-      return 'Detected';
-    case 'moved':
-      return 'Moved';
-    case 'move_failed':
-      return 'Move failed';
-    case 'delete_failed':
-      return 'Delete failed';
-    case 'finalized':
-      return 'Finalized';
-    case 'resolved':
-      return 'Resolved';
-    default:
-      return state;
-  }
 }
 
 async function getJson<T>(url: string, fetchImpl: typeof fetch): Promise<T> {

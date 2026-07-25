@@ -280,7 +280,6 @@ public sealed class FilesystemRescanConsumerService(
                     FROM expected_all expected
                     WHERE expected.normalized_path = actual.path
                 )
-                AND lower(actual.path) NOT LIKE 'orphaned/%'
             ),
             combined_findings AS (
                 SELECT storage_path, finding_type, media_guid FROM missing_rows

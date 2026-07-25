@@ -56,49 +56,6 @@ public sealed class MetadataAdminControllerTests
         result.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status503ServiceUnavailable);
     }
 
-    [Test]
-    public async Task ListOrphans_Maps_Validation_Unavailable_And_Default_Errors()
-    {
-        var validation = await ListOrphansWith(new OrphanCleanupListResponse
-        {
-            Success = false,
-            ErrorCode = "validation",
-            ErrorMessage = "bad"
-        });
-        validation.Result!.ShouldBeOfType<BadRequestObjectResult>().Value!.ShouldBe("bad");
-
-        var unavailable = await ListOrphansWith(new OrphanCleanupListResponse
-        {
-            Success = false,
-            ErrorCode = "unavailable",
-            ErrorMessage = "down"
-        });
-        unavailable.Result!.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status503ServiceUnavailable);
-
-        var unknown = await ListOrphansWith(new OrphanCleanupListResponse
-        {
-            Success = false,
-            ErrorCode = "unknown",
-            ErrorMessage = "failed"
-        });
-        unknown.Result!.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status500InternalServerError);
-    }
-
-    private static async Task<ActionResult<IReadOnlyList<OrphanCleanupItemDto>>> ListOrphansWith(
-        OrphanCleanupListResponse response)
-    {
-        var bus = Substitute.For<IMessageBus>();
-        var controller = CreateController(bus: bus);
-        bus.RequestAsync<OrphanCleanupListRequest, OrphanCleanupListResponse>(
-                OrphanCleanupSubjects.AdminList,
-                Arg.Any<OrphanCleanupListRequest>(),
-                Arg.Any<TimeSpan>(),
-                Arg.Any<CancellationToken>())
-            .Returns(response);
-
-        return await controller.ListOrphans(cancellationToken: CancellationToken.None);
-    }
-
     private static MetadataAdminController CreateController(
         IJetStreamPublisher? publisher = null,
         IMessageBus? bus = null)

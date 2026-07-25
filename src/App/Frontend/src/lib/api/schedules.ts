@@ -32,7 +32,6 @@ export type ScheduleUpdateRequest = Omit<ScheduleCreateRequest, 'key'>;
 
 /** Task types registered in the Scheduler's TaskTypeRegistry; unregistered types are ignored by the scheduler. */
 export const scheduleTaskTypes = [
-  'orphan_metadata_cleanup',
   'channel_update_check',
   'channel_asset_refresh',
   'channel_media_list',

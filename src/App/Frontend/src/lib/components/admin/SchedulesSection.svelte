@@ -40,10 +40,6 @@
 
   const taskTypeHelp = [
     {
-      type: 'orphan_metadata_cleanup',
-      summary: 'Removes metadata rows that no longer point at any live media or imported asset.'
-    },
-    {
       type: 'channel_update_check',
       summary: 'Checks followed channels for new uploads and queues any newly discovered media.'
     },

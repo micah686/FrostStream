@@ -10,7 +10,6 @@ public sealed class BackgroundJobsTopology : ITopologySource
     public const string MediaProcessorQueueGroup = "mediaprocessor-bgjobs";
     public const string WorkerQueueGroup = "worker-bgjobs";
 
-    public const string OrphanMetadataCleanupConsumer = "databridge-orphan-metadata-cleanup";
     public const string ProcessedMessageCleanupConsumer = "databridge-processed-message-cleanup";
     public const string SearchReindexConsumer = "databridge-search-reindex";
     public const string DatabaseMaintenanceConsumer = "databridge-database-maintenance";
@@ -32,8 +31,8 @@ public sealed class BackgroundJobsTopology : ITopologySource
             Name = StreamName.From(StreamNameValue),
             // Only the JetStream background-job subjects may be captured here. Broad wildcards
             // (e.g. "fs.cleanup.>") must not be used: they also capture core request/reply
-            // subjects (orphan admin, worker file ops, filesystem reconcile), and JetStream's
-            // publish-ack then races the responder's reply on the request inbox.
+            // subjects (worker file ops, filesystem reconcile), and JetStream's publish-ack
+            // then races the responder's reply on the request inbox.
             Subjects =
             [
                 BackgroundJobSubjects.ChannelUpdateCheckRequest,
@@ -46,8 +45,7 @@ public sealed class BackgroundJobsTopology : ITopologySource
                 BackgroundJobSubjects.FilesystemRescanRequest,
                 BackgroundJobSubjects.AudioRenditionEncodeRequest,
                 BackgroundJobSubjects.StreamRenditionEncodeRequest,
-                BackgroundJobSubjects.BackupRequest,
-                ScheduleSubjects.OrphanMetadataCleanupRequest
+                BackgroundJobSubjects.BackupRequest
             ],
             MaxAge = TimeSpan.FromDays(7),
             RetentionPolicy = StreamRetention.WorkQueue,
@@ -58,17 +56,6 @@ public sealed class BackgroundJobsTopology : ITopologySource
 
     public IEnumerable<ConsumerSpec> GetConsumers()
     {
-        yield return new ConsumerSpec
-        {
-            StreamName = StreamName.From(StreamNameValue),
-            DurableName = ConsumerName.From(OrphanMetadataCleanupConsumer),
-            DeliverGroup = QueueGroup.From(DataBridgeQueueGroup),
-            FilterSubject = ScheduleSubjects.OrphanMetadataCleanupRequest,
-            AckPolicy = AckPolicy.Explicit,
-            AckWait = TimeSpan.FromMinutes(5),
-            MaxDeliver = 5
-        };
-
         yield return DataBridgeConsumer(ProcessedMessageCleanupConsumer, BackgroundJobSubjects.ProcessedMessageCleanupRequest, TimeSpan.FromMinutes(15), maxDeliver: 5);
         yield return DataBridgeConsumer(SearchReindexConsumer, BackgroundJobSubjects.SearchReindexRequest, TimeSpan.FromMinutes(30), maxDeliver: 3);
         yield return DataBridgeConsumer(DatabaseMaintenanceConsumer, BackgroundJobSubjects.DatabaseMaintenanceRequest, TimeSpan.FromHours(2), maxDeliver: 3);
