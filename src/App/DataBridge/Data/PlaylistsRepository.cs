@@ -1,3 +1,4 @@
+using DataBridge.Statistics;
 using Microsoft.EntityFrameworkCore;
 using NodaTime;
 using Shared.Database;
@@ -223,6 +224,14 @@ public sealed class PlaylistsRepository(
             db.PlaylistScanEntries.Remove(staging);
 
         await db.SaveChangesAsync(ct);
+
+        if (!jobExists)
+        {
+            var occurredAt = clock.GetCurrentInstant();
+            await DownloadStatisticsRecorder.RecordDailyActivityAsync(db, null, "created", occurredAt, 0, 0, ct);
+            if (request.InitialState == DownloadJobState.Ignored)
+                await DownloadStatisticsRecorder.RecordDailyActivityAsync(db, null, "ignored", occurredAt, 0, 0, ct);
+        }
     }
 
     public async Task<string?> RequeuePlaylistItemAsync(Guid playlistId, Guid jobId, CancellationToken ct = default)
