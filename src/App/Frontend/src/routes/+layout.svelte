@@ -9,26 +9,26 @@
   import { searchMedia, type SearchHit } from '$lib/api/search';
   import { accentFor, formatDuration, initialsFor } from '$lib/media';
   import {
-    ArrowRightToBracketOutline,
-    BarsOutline,
-    BellOutline,
-    ClipboardListOutline,
-    ClockArrowOutline,
-    ClockOutline,
-    CloseOutline,
-    CogOutline,
-    DownloadOutline,
-    HeartOutline,
-    HomeOutline,
-    RectangleListOutline,
-    SearchOutline,
-    ServerOutline,
-    ShieldCheckOutline,
-    UserOutline,
-    UsersGroupOutline
-  } from 'flowbite-svelte-icons';
+    Bell,
+    ClipboardList,
+    Clock,
+    Cog,
+    Download,
+    Heart,
+    History,
+    House,
+    LayoutList,
+    LogIn,
+    Menu,
+    Search,
+    Server,
+    ShieldCheck,
+    User,
+    Users,
+    X
+  } from '@lucide/svelte';
 
-  type IconComponent = typeof HomeOutline;
+  type IconComponent = typeof House;
 
   interface NavItem {
     label: string;
@@ -40,27 +40,27 @@
   let { children, data } = $props();
 
   const primaryNavigation: NavItem[] = [
-    { label: 'Home', icon: HomeOutline, href: '/' }
+    { label: 'Home', icon: House, href: '/' }
   ];
 
   const libraryNavigation: NavItem[] = [
-    { label: 'Library', icon: RectangleListOutline, href: '/library' },
-    { label: 'Channels', icon: UsersGroupOutline, href: '/library/creators' },
-    { label: 'History', icon: ClockArrowOutline, href: '/library?tab=History' },
-    { label: 'Watch later', icon: ClockOutline },
-    { label: 'Liked', icon: HeartOutline, href: '/library?tab=Liked' }
+    { label: 'Library', icon: LayoutList, href: '/library' },
+    { label: 'Channels', icon: Users, href: '/library/creators' },
+    { label: 'History', icon: History, href: '/library?tab=History' },
+    { label: 'Watch later', icon: Clock },
+    { label: 'Liked', icon: Heart, href: '/library?tab=Liked' }
   ];
 
   const serverNavigation: NavItem[] = [
-    { label: 'Download', icon: DownloadOutline, href: '/download' },
-    { label: 'Jobs', icon: ServerOutline, href: '/jobs' },
-    { label: 'Playlists', icon: ClipboardListOutline, href: '/playlists' },
-    { label: 'Creators', icon: UsersGroupOutline, href: '/creators' }
+    { label: 'Download', icon: Download, href: '/download' },
+    { label: 'Jobs', icon: Server, href: '/jobs' },
+    { label: 'Playlists', icon: ClipboardList, href: '/playlists' },
+    { label: 'Creators', icon: Users, href: '/creators' }
   ];
 
   const accountNavigation: NavItem[] = [
-    { label: 'Profile', icon: UserOutline, href: '/profile' },
-    { label: 'Settings', icon: CogOutline }
+    { label: 'Profile', icon: User, href: '/profile' },
+    { label: 'Settings', icon: Cog }
   ];
 
   let drawerOpen = $state(false);
@@ -261,7 +261,7 @@
   class="fixed inset-x-0 top-0 z-40 flex h-14 items-center border-b border-base-300/70 bg-[var(--color-page)]/95 px-3 backdrop-blur-xl sm:px-5"
 >
   <button class="btn btn-sm btn-ghost mr-2 h-10 w-10 lg:hidden" aria-label="Open navigation" onclick={() => (drawerOpen = true)}>
-    <BarsOutline class="h-5 w-5" />
+    <Menu class="h-5 w-5" />
   </button>
 
   <a href="/" class="flex shrink-0 items-center rounded-lg focus-visible:outline-offset-4">
@@ -275,7 +275,7 @@
 
   <div class="relative ml-3 w-full max-w-[39rem] sm:ml-4" onfocusout={onSearchFocusOut}>
     <form role="search" onsubmit={submitSearch}>
-      <SearchOutline
+      <Search
         class="pointer-events-none absolute left-4 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-base-content/50"
       />
       <input class="input h-10 w-full rounded-2xl pl-11 pr-11 text-sm sm:pr-20" id="global-search" type="search" autocomplete="off" aria-label="Search your library" placeholder="Search your library, channels, comments..." bind:value={searchQuery} oninput={onSearchInput} onkeydown={onSearchKeydown} />
@@ -291,7 +291,7 @@
         onclick={closeSuggestions}
         class="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-lg text-base-content/50 transition hover:bg-base-300/80 hover:text-base-content/80"
       >
-        <CogOutline class="h-4 w-4" />
+        <Cog class="h-4 w-4" />
       </a>
     </form>
 
@@ -353,7 +353,7 @@
               void goto(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
             }}
           >
-            <SearchOutline class="h-3.5 w-3.5" />
+            <Search class="h-3.5 w-3.5" />
             See all results for "{searchQuery.trim()}"
           </button>
         {/if}
@@ -363,15 +363,15 @@
 
   <div class="ml-auto flex shrink-0 items-center gap-1.5 pl-3 sm:gap-2">
     <a class="btn btn-sm btn-primary rounded-full hidden text-xs sm:flex" href="/download">
-      <DownloadOutline class="mr-1.5 h-4 w-4" />
+      <Download class="mr-1.5 h-4 w-4" />
       Download
     </a>
     <button class="btn btn-sm btn-ghost hidden h-10 w-10 sm:flex" aria-label="Notifications">
-      <BellOutline class="h-5 w-5" />
+      <Bell class="h-5 w-5" />
     </button>
     {#if data.user}
       <a class="btn btn-sm btn-ghost h-10 w-10" href="/admin" aria-label="Administration" title="Administration">
-        <ShieldCheckOutline class="h-5 w-5" />
+        <ShieldCheck class="h-5 w-5" />
       </a>
       <a
         href="/profile"
@@ -383,7 +383,7 @@
       </a>
     {:else}
       <a class="btn btn-sm btn-primary rounded-full text-xs" href="/auth/login">
-        <ArrowRightToBracketOutline class="mr-1.5 h-4 w-4" />
+        <LogIn class="mr-1.5 h-4 w-4" />
         Login
       </a>
     {/if}
@@ -401,7 +401,7 @@
   <div class="flex h-14 shrink-0 items-center justify-between border-b border-base-300/70 px-4">
     <span class="font-bold text-base-content">Navigation</span>
     <button class="btn btn-sm btn-ghost h-9 w-9" aria-label="Close navigation" onclick={closeDrawer}>
-      <CloseOutline class="h-5 w-5" />
+      <X class="h-5 w-5" />
     </button>
   </div>
   <div class="flex-1 overflow-y-auto">

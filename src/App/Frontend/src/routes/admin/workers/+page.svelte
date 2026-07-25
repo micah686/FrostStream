@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { RefreshOutline } from 'flowbite-svelte-icons';
+  import { RefreshCw } from '@lucide/svelte';
   import { listWorkers, type WorkerInfo } from '$lib/api/workers';
 
   let workers = $state<WorkerInfo[]>([]);
@@ -24,7 +24,7 @@
 <section class="card border border-base-300 bg-base-100 p-5 sm:p-6">
   <div class="flex items-center justify-between gap-3">
     <div><h1 class="text-xl font-bold text-base-content">Workers</h1><p class="mt-2 text-sm text-base-content/60">Workers report their name, routing tags, incoming folder, and heartbeat every 15 seconds.</p></div>
-    <button class="btn btn-sm btn-neutral text-xs" onclick={load} disabled={loading}><RefreshOutline class="mr-1.5 h-4 w-4" />Refresh</button>
+    <button class="btn btn-sm btn-neutral text-xs" onclick={load} disabled={loading}><RefreshCw class="mr-1.5 h-4 w-4" />Refresh</button>
   </div>
   {#if error}<p class="mt-5 rounded-lg border border-error/30 bg-error/10 p-3 text-sm text-error">{error}</p>{/if}
   {#if loading && !workers.length}<div class="mt-6 flex items-center gap-2 text-sm text-base-content/60"><span class="loading loading-spinner loading-xs"></span>Loading workers</div>

@@ -1,12 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import {
-    CookieSolid,
-    ExclamationCircleOutline,
-    PenOutline,
-    PlusOutline,
-    TrashBinOutline
-  } from 'flowbite-svelte-icons';
+    CircleAlert,
+    Cookie,
+    Pen,
+    Plus,
+    Trash2
+  } from '@lucide/svelte';
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
   import {
     COOKIE_PROFILE_KEY_PATTERN,
@@ -151,7 +151,7 @@
     </div>
     {#if !formOpen}
       <button class="btn btn-sm btn-neutral" onclick={openCreateForm}>
-        <PlusOutline class="mr-1.5 h-3.5 w-3.5" />
+        <Plus class="mr-1.5 h-3.5 w-3.5" />
         New cookie profile
       </button>
     {/if}
@@ -162,7 +162,7 @@
       class="mt-5 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{listError}</span>
     </div>
   {/if}
@@ -179,7 +179,7 @@
     </div>
   {:else if profiles.length === 0 && !formOpen}
     <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
-      <CookieSolid class="mx-auto h-9 w-9 text-base-content/30" />
+      <Cookie class="mx-auto h-9 w-9 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No cookie profiles yet</p>
       <p class="mt-1 text-sm text-base-content/50">Add one to download from sites that require a signed-in session.</p>
     </div>
@@ -191,7 +191,7 @@
         >
           <div class="flex min-w-0 items-center gap-3">
             <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-base-300/70 text-warning">
-              <CookieSolid class="h-4.5 w-4.5" />
+              <Cookie class="h-4.5 w-4.5" />
             </span>
             <div class="min-w-0">
               <div class="flex min-w-0 flex-wrap items-center gap-2">
@@ -220,7 +220,7 @@
               aria-label={`Replace cookies for ${profile.profileKey}`}
               onclick={() => openReplaceForm(profile)}
             >
-              <PenOutline class="h-4 w-4" />
+              <Pen class="h-4 w-4" />
               Replace
             </button>
             <button
@@ -230,7 +230,7 @@
               aria-label={`Delete cookie profile ${profile.profileKey}`}
               onclick={() => requestDelete(profile)}
             >
-              <TrashBinOutline class="h-4 w-4" />
+              <Trash2 class="h-4 w-4" />
             </button>
           </div>
         </article>
@@ -249,7 +249,7 @@
           class="flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
           role="alert"
         >
-          <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+          <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
           <span>{formError}</span>
         </div>
       {/if}

@@ -3,12 +3,12 @@
   import { page as pageState } from '$app/state';
   import { Select } from '$lib/components/ui';
   import {
-    ChevronLeftOutline,
-    ChevronRightOutline,
-    ExclamationCircleOutline,
-    PlaySolid,
-    SearchOutline
-  } from 'flowbite-svelte-icons';
+    ChevronLeft,
+    ChevronRight,
+    CircleAlert,
+    Play,
+    Search
+  } from '@lucide/svelte';
   import { accentFor, formatDuration, formatRelativeDate, formatViews, initialsFor } from '$lib/media';
   import { findSimilarMedia, searchMedia, searchMatchLabel, type SearchHit, type SearchScope } from '$lib/api/search';
 
@@ -251,7 +251,7 @@
       class="mt-6 flex items-center gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="h-4 w-4 shrink-0" />
+      <CircleAlert class="h-4 w-4 shrink-0" />
       <span>{loadError}</span>
     </div>
   {:else if loading}
@@ -260,7 +260,7 @@
     </div>
   {:else if similarGuid && hits.length === 0}
     <div class="mt-10 rounded-2xl border border-base-300/80 bg-base-200/40 p-10 text-center">
-      <SearchOutline class="mx-auto h-10 w-10 text-base-content/30" />
+      <Search class="mx-auto h-10 w-10 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No similar videos found</p>
       <p class="mt-1 text-sm text-base-content/50">
         Nothing else on the server is close enough to this video yet.
@@ -268,7 +268,7 @@
     </div>
   {:else if query && hits.length === 0}
     <div class="mt-10 rounded-2xl border border-base-300/80 bg-base-200/40 p-10 text-center">
-      <SearchOutline class="mx-auto h-10 w-10 text-base-content/30" />
+      <Search class="mx-auto h-10 w-10 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No results for "{query}"</p>
       <p class="mt-1 text-sm text-base-content/50">
         Try different keywords, a broader scope, or advanced filters like
@@ -314,7 +314,7 @@
             <span
               class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-white/95 text-slate-900 opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
             >
-              <PlaySolid class="ml-0.5 h-5 w-5" />
+              <Play class="ml-0.5 h-5 w-5" />
             </span>
           </a>
           <div class="mt-3 flex min-w-0 gap-3 px-1">
@@ -353,12 +353,12 @@
       </p>
       <div class="flex gap-2">
         <button class="btn btn-sm btn-neutral text-xs" disabled={currentPage <= 1 || loading} onclick={() => navigate({ page: currentPage - 1 })}>
-          <ChevronLeftOutline class="mr-1 h-3.5 w-3.5" />
+          <ChevronLeft class="mr-1 h-3.5 w-3.5" />
           Previous
         </button>
         <button class="btn btn-sm btn-neutral text-xs" disabled={!hasMore || loading} onclick={() => navigate({ page: currentPage + 1 })}>
           Next
-          <ChevronRightOutline class="ml-1 h-3.5 w-3.5" />
+          <ChevronRight class="ml-1 h-3.5 w-3.5" />
         </button>
       </div>
     </div>

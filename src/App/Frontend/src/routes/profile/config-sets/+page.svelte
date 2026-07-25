@@ -1,13 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import {
-    AdjustmentsHorizontalOutline,
-    ArchiveOutline,
-    ExclamationCircleOutline,
-    EyeOutline,
-    PlusOutline,
-    TrashBinOutline
-  } from 'flowbite-svelte-icons';
+    Archive,
+    CircleAlert,
+    Eye,
+    Plus,
+    SlidersHorizontal,
+    Trash2
+  } from '@lucide/svelte';
   import {
     deleteDownloadConfigSet,
     listDownloadConfigSets,
@@ -16,7 +16,7 @@
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
   import UnderDevelopmentBanner from '$lib/components/admin/UnderDevelopmentBanner.svelte';
 
-  type IconComponent = typeof AdjustmentsHorizontalOutline;
+  type IconComponent = typeof SlidersHorizontal;
 
   let { data } = $props();
 
@@ -69,7 +69,7 @@
   }
 
   function configIcon(config: DownloadConfigSet): IconComponent {
-    return config.ytDlpOptions ? AdjustmentsHorizontalOutline : ArchiveOutline;
+    return config.ytDlpOptions ? SlidersHorizontal : Archive;
   }
 </script>
 
@@ -93,7 +93,7 @@
       class="mt-5 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{configSetsError}</span>
     </div>
   {/if}
@@ -104,7 +104,7 @@
     </div>
   {:else if configSets.length === 0}
     <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
-      <AdjustmentsHorizontalOutline class="mx-auto h-9 w-9 text-base-content/30" />
+      <SlidersHorizontal class="mx-auto h-9 w-9 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No config sets yet</p>
       <p class="mt-1 text-sm text-base-content/50">Create one to reuse download and playlist settings.</p>
     </div>
@@ -138,7 +138,7 @@
               class="inline-flex h-10 min-w-24 items-center justify-center gap-2 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary"
               aria-label={`View config set ${config.name}`}
             >
-              <EyeOutline class="h-4 w-4" />
+              <Eye class="h-4 w-4" />
               View
             </a>
             <button
@@ -155,7 +155,7 @@
               {#if deletingKey === config.key}
                 <span class="loading loading-spinner loading-xs"></span>
               {:else}
-                <TrashBinOutline class="h-4 w-4" />
+                <Trash2 class="h-4 w-4" />
               {/if}
             </button>
           </div>
@@ -166,7 +166,7 @@
 
   <div class="mt-4">
     <a class="btn btn-sm btn-ghost text-xs" href="/profile/config-sets/new">
-      <PlusOutline class="mr-1.5 h-3.5 w-3.5" />
+      <Plus class="mr-1.5 h-3.5 w-3.5" />
       New config set
     </a>
   </div>

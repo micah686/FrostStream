@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { ArrowLeftOutline, CheckOutline, ExclamationCircleOutline, TrashBinOutline } from 'flowbite-svelte-icons';
+  import { ArrowLeft, Check, CircleAlert, Trash2 } from '@lucide/svelte';
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
   import PlaylistItemsManager from '$lib/components/profile/PlaylistItemsManager.svelte';
   import TargetNotePanel from '$lib/components/TargetNotePanel.svelte';
@@ -112,7 +112,7 @@
   {:else if loadError}
     <div class="rounded-2xl border border-error/30 bg-error/10 p-5 text-sm text-error" role="alert">
       <div class="flex items-start gap-3">
-        <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+        <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
         <span>{loadError}</span>
       </div>
       <a class="btn btn-sm btn-neutral mt-4 text-xs" href="/profile/playlists">
@@ -130,7 +130,7 @@
               class="flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
               role="alert"
             >
-              <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+              <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
               <span>{formError}</span>
             </div>
           {/if}
@@ -155,7 +155,7 @@
             </button>
             {#if formSaved && !formDirty}
               <span class="flex items-center gap-1.5 text-xs font-semibold text-success">
-                <CheckOutline class="h-3.5 w-3.5" />
+                <Check class="h-3.5 w-3.5" />
                 Saved
               </span>
             {/if}
@@ -197,7 +197,7 @@
             <p class="mt-1 text-sm text-base-content/60">The videos in it stay on the server.</p>
           </div>
           <button class="btn btn-sm btn-ghost shrink-0 text-xs" onclick={() => (deleteModalOpen = true)}>
-            <TrashBinOutline class="mr-1.5 h-3.5 w-3.5" />
+            <Trash2 class="mr-1.5 h-3.5 w-3.5" />
             Delete playlist
           </button>
         </div>
@@ -205,7 +205,7 @@
 
       <div class="border-t border-base-300/70 pt-5">
         <a class="btn btn-sm btn-ghost text-xs" href="/profile/playlists">
-          <ArrowLeftOutline class="mr-1.5 h-4 w-4" />
+          <ArrowLeft class="mr-1.5 h-4 w-4" />
           Back
         </a>
       </div>

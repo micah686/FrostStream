@@ -2,20 +2,20 @@
   import { onMount } from 'svelte';
   import { Modal, Select } from '$lib/components/ui';
   import {
-    BanOutline,
-    CirclePlusOutline,
-    DownloadOutline,
-    EditOutline,
-    ExclamationCircleOutline,
-    EyeSlashOutline,
-    ImageOutline,
-    LinkOutline,
-    PauseOutline,
-    PlayOutline,
-    RefreshOutline,
-    TrashBinOutline,
-    UsersGroupOutline
-  } from 'flowbite-svelte-icons';
+    Ban,
+    CircleAlert,
+    CirclePlus,
+    Download,
+    EyeOff,
+    Image,
+    Link,
+    Pause,
+    Pencil,
+    Play,
+    RefreshCw,
+    Trash2,
+    Users
+  } from '@lucide/svelte';
   import {
     createCreatorSource,
     creatorSourceTypes,
@@ -420,12 +420,12 @@
         {#if loading}
           <span class="loading loading-spinner loading-xs mr-1.5"></span>
         {:else}
-          <RefreshOutline class="mr-1.5 h-4 w-4" />
+          <RefreshCw class="mr-1.5 h-4 w-4" />
         {/if}
         Refresh
       </button>
       <button class="btn btn-sm btn-primary text-xs" onclick={openCreateForm}>
-        <CirclePlusOutline class="mr-1.5 h-4 w-4" />
+        <CirclePlus class="mr-1.5 h-4 w-4" />
         Track creator
       </button>
     </div>
@@ -459,7 +459,7 @@
       class="mt-5 flex items-start gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{actionError ?? loadError}</span>
     </div>
   {/if}
@@ -469,7 +469,7 @@
       class="mt-5 flex items-start gap-3 rounded-xl border border-success/30 bg-success/10 p-4 text-sm text-success"
       role="status"
     >
-      <RefreshOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <RefreshCw class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{actionNotice}</span>
     </div>
   {/if}
@@ -480,13 +480,13 @@
     </div>
   {:else if sources.length === 0}
     <div class="mt-8 rounded-xl border border-base-300/80 bg-base-200/40 p-10 text-center">
-      <UsersGroupOutline class="mx-auto h-10 w-10 text-base-content/30" />
+      <Users class="mx-auto h-10 w-10 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No creators tracked yet</p>
       <p class="mt-1 text-sm text-base-content/50">
         Track a channel to automatically discover and download everything it uploads.
       </p>
       <button class="btn btn-sm btn-primary mt-5 text-xs" onclick={openCreateForm}>
-        <CirclePlusOutline class="mr-1.5 h-4 w-4" />
+        <CirclePlus class="mr-1.5 h-4 w-4" />
         Track your first creator
       </button>
     </div>
@@ -527,7 +527,7 @@
                 rel="noopener noreferrer"
                 class="mt-1.5 inline-flex max-w-full items-center gap-1.5 text-xs text-base-content/50 transition hover:text-primary"
               >
-                <LinkOutline class="h-3.5 w-3.5 shrink-0" />
+                <Link class="h-3.5 w-3.5 shrink-0" />
                 <span class="truncate">{compactUrl(source.sourceUrl)}</span>
               </a>
             </div>
@@ -543,9 +543,9 @@
                 {#if busyAction === 'scan'}
                   <span class="loading loading-spinner loading-xs"></span>
                 {:else if source.scanEnabled}
-                  <PauseOutline class="h-4 w-4" />
+                  <Pause class="h-4 w-4" />
                 {:else}
-                  <PlayOutline class="h-4 w-4" />
+                  <Play class="h-4 w-4" />
                 {/if}
                 {source.scanEnabled ? 'Pause' : 'Resume'}
               </button>
@@ -559,7 +559,7 @@
                 {#if busyAction === 'assets'}
                   <span class="loading loading-spinner loading-xs"></span>
                 {:else}
-                  <ImageOutline class="h-4 w-4" />
+                  <Image class="h-4 w-4" />
                 {/if}
                 Refresh assets
               </button>
@@ -573,7 +573,7 @@
                 {#if busyAction === 'scan-now'}
                   <span class="loading loading-spinner loading-xs"></span>
                 {:else}
-                  <RefreshOutline class="h-4 w-4" />
+                  <RefreshCw class="h-4 w-4" />
                 {/if}
                 Scan now
               </button>
@@ -584,7 +584,7 @@
                 onclick={() => openDownloadModal(source)}
                 title="Queue a one-off download of the channel's full backlog"
               >
-                <DownloadOutline class="h-4 w-4" />
+                <Download class="h-4 w-4" />
                 Download channel
               </button>
               <button
@@ -593,7 +593,7 @@
                 disabled={Boolean(busyAction)}
                 onclick={() => openEditForm(source)}
               >
-                <EditOutline class="h-4 w-4" />
+                <Pencil class="h-4 w-4" />
                 Edit
               </button>
               <button
@@ -602,7 +602,7 @@
                 disabled={Boolean(busyAction)}
                 onclick={() => requestDelete(source)}
               >
-                <TrashBinOutline class="h-4 w-4" />
+                <Trash2 class="h-4 w-4" />
                 Delete
               </button>
             </div>
@@ -639,7 +639,7 @@
               class="inline-flex items-center gap-1.5 text-xs font-semibold text-base-content/50 transition hover:text-primary"
               onclick={() => toggleIgnored(source)}
             >
-              <EyeSlashOutline class="h-3.5 w-3.5" />
+              <EyeOff class="h-3.5 w-3.5" />
               {expandedIgnoredId === source.id ? 'Hide ignored videos' : 'Show ignored videos'}
             </button>
 
@@ -687,7 +687,7 @@
                           <span
                             class="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-bold text-warning ring-1 ring-warning/20"
                           >
-                            <BanOutline class="h-3 w-3" />
+                            <Ban class="h-3 w-3" />
                             {item.ignoredKeyword}
                           </span>
                         {/if}
@@ -792,7 +792,7 @@
 
     {#if formError}
       <div class="flex items-start gap-2 rounded-lg border border-error/30 bg-error/10 p-3 text-sm text-error" role="alert">
-        <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+        <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
         <span>{formError}</span>
       </div>
     {/if}
@@ -848,7 +848,7 @@
         class="flex items-start gap-2 rounded-lg border border-error/30 bg-error/10 p-3 text-sm text-error"
         role="alert"
       >
-        <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+        <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
         <span>{downloadError}</span>
       </div>
     {/if}
@@ -863,7 +863,7 @@
         {#if downloadBusy}
           <span class="loading loading-spinner loading-xs mr-1.5"></span>
         {:else}
-          <DownloadOutline class="mr-1.5 h-4 w-4" />
+          <Download class="mr-1.5 h-4 w-4" />
         {/if}
         Queue download
       </button>

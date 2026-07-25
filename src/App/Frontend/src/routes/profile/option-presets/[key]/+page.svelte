@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { ExclamationCircleOutline } from 'flowbite-svelte-icons';
+  import { CircleAlert } from '@lucide/svelte';
   import OptionPresetForm from '$lib/components/profile/OptionPresetForm.svelte';
   import { getOptionPreset, type OptionPreset } from '$lib/api/optionPresets';
 
@@ -49,7 +49,7 @@
   {:else if loadError}
     <div class="rounded-2xl border border-error/30 bg-error/10 p-5 text-sm text-error" role="alert">
       <div class="flex items-start gap-3">
-        <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+        <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
         <span>{loadError}</span>
       </div>
       <a class="btn btn-sm btn-neutral mt-4 text-xs" href="/profile/option-presets">

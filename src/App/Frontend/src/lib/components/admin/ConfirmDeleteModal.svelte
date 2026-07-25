@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Modal } from '$lib/components/ui';
-  import { ExclamationCircleOutline } from 'flowbite-svelte-icons';
+  import { CircleAlert } from '@lucide/svelte';
 
   interface Props {
     open: boolean;
@@ -41,7 +41,7 @@
   <div class="space-y-4">
     <div class="flex items-start gap-3">
       <span class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-error/10 text-error ring-1 ring-error/20">
-        <ExclamationCircleOutline class="h-5 w-5" />
+        <CircleAlert class="h-5 w-5" />
       </span>
       <div class="min-w-0">
         <p class="text-sm text-base-content/80">{message}</p>

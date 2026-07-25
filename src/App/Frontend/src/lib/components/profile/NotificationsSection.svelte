@@ -1,14 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import {
-    BellOutline,
-    BellRingOutline,
-    EditOutline,
-    ExclamationCircleOutline,
-    PlusOutline,
-    RefreshOutline,
-    TrashBinOutline
-  } from 'flowbite-svelte-icons';
+    Bell,
+    BellRing,
+    CircleAlert,
+    Pencil,
+    Plus,
+    RefreshCw,
+    Trash2
+  } from '@lucide/svelte';
   import {
     deleteNotificationProvider,
     getNotificationPreferences,
@@ -139,7 +139,7 @@
       class="mt-5 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{preferencesError}</span>
     </div>
   {/if}
@@ -162,11 +162,11 @@
     <h3 class="text-sm font-bold text-base-content">Providers</h3>
     <div class="flex shrink-0 gap-2">
       <button class="btn btn-sm btn-neutral" disabled={providersLoading} onclick={() => void loadProviders()}>
-        <RefreshOutline class="mr-1.5 h-3.5 w-3.5" />
+        <RefreshCw class="mr-1.5 h-3.5 w-3.5" />
         Refresh
       </button>
       <a class="btn btn-sm btn-neutral" href="/profile/notification-providers/new">
-        <PlusOutline class="mr-1.5 h-3.5 w-3.5" />
+        <Plus class="mr-1.5 h-3.5 w-3.5" />
         New provider
       </a>
     </div>
@@ -177,7 +177,7 @@
       class="mt-4 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{providersError}</span>
     </div>
   {/if}
@@ -188,7 +188,7 @@
     </div>
   {:else if providers.length === 0}
     <div class="mt-4 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
-      <BellOutline class="mx-auto h-9 w-9 text-base-content/30" />
+      <Bell class="mx-auto h-9 w-9 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No notification providers yet</p>
       <p class="mt-1 text-sm text-base-content/50">Create one to enable delivery through a channel like email or Slack.</p>
     </div>
@@ -201,9 +201,9 @@
           <div class="flex min-w-0 flex-1 items-center gap-3">
             <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-base-300/70 text-primary">
               {#if provider.enabled}
-                <BellRingOutline class="h-4.5 w-4.5" />
+                <BellRing class="h-4.5 w-4.5" />
               {:else}
-                <BellOutline class="h-4.5 w-4.5" />
+                <Bell class="h-4.5 w-4.5" />
               {/if}
             </span>
             <div class="min-w-0">
@@ -223,7 +223,7 @@
               class={rowActionClass}
               aria-label={`Edit notification provider ${provider.providerKey}`}
             >
-              <EditOutline class="h-4 w-4" />
+              <Pencil class="h-4 w-4" />
               Edit
             </a>
             <button
@@ -237,7 +237,7 @@
               {#if deletingProviderKey === provider.providerKey}
                 <span class="loading loading-spinner loading-xs"></span>
               {:else}
-                <TrashBinOutline class="h-4 w-4" />
+                <Trash2 class="h-4 w-4" />
               {/if}
             </button>
           </div>

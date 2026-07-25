@@ -4,15 +4,15 @@
   import { onMount } from 'svelte';
   import { Select } from '$lib/components/ui';
   import {
-    ChevronLeftOutline,
-    ChevronRightOutline,
-    ExclamationCircleOutline,
-    ListMusicOutline,
-    PenOutline,
-    PlaySolid,
-    PlusOutline,
-    RectangleListOutline
-  } from 'flowbite-svelte-icons';
+    ChevronLeft,
+    ChevronRight,
+    CircleAlert,
+    LayoutList,
+    ListMusic,
+    Pen,
+    Play,
+    Plus
+  } from '@lucide/svelte';
   import { getUserPlaylist, listUserPlaylists, type UserPlaylist } from '$lib/api/userPlaylists';
   import {
     getPlatformPlaylist,
@@ -386,7 +386,7 @@
       <p class="mt-1 text-sm text-base-content/50">Your playlists, saved videos, and files on this server.</p>
     </div>
     <a class="btn btn-sm btn-neutral text-xs" href="/profile/playlists">
-      <PlusOutline class="mr-1.5 h-4 w-4" />
+      <Plus class="mr-1.5 h-4 w-4" />
       New playlist
     </a>
   </div>
@@ -453,7 +453,7 @@
         class="mt-6 flex items-center gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
         role="alert"
       >
-        <ExclamationCircleOutline class="h-4 w-4 shrink-0" />
+        <CircleAlert class="h-4 w-4 shrink-0" />
         <span>{loadError}</span>
         {#if needsLogin}
           <a class="btn btn-sm btn-primary ml-auto text-xs" href="/auth/login">
@@ -467,7 +467,7 @@
       </div>
     {:else if items.length === 0}
       <div class="mt-10 rounded-2xl border border-base-300/80 bg-base-200/40 p-10 text-center">
-        <RectangleListOutline class="mx-auto h-10 w-10 text-base-content/30" />
+        <LayoutList class="mx-auto h-10 w-10 text-base-content/30" />
         <p class="mt-4 text-sm font-semibold text-base-content/80">{emptyTitle()}</p>
         <p class="mt-1 text-sm text-base-content/50">{emptyDescription()}</p>
         {#if activeTab === 'Videos'}
@@ -515,7 +515,7 @@
               <span
                 class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-white/95 text-slate-900 opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
               >
-                <PlaySolid class="ml-0.5 h-5 w-5" />
+                <Play class="ml-0.5 h-5 w-5" />
               </span>
             </a>
             <div class="mt-3 flex min-w-0 gap-3 px-1">
@@ -558,12 +558,12 @@
         </p>
         <div class="flex gap-2">
           <button class="btn btn-sm btn-neutral text-xs" disabled={currentPage <= 1 || loading} onclick={() => loadPage(currentPage - 1)}>
-            <ChevronLeftOutline class="mr-1 h-3.5 w-3.5" />
+            <ChevronLeft class="mr-1 h-3.5 w-3.5" />
             Previous
           </button>
           <button class="btn btn-sm btn-neutral text-xs" disabled={!hasMore || loading} onclick={() => loadPage(currentPage + 1)}>
             Next
-            <ChevronRightOutline class="ml-1 h-3.5 w-3.5" />
+            <ChevronRight class="ml-1 h-3.5 w-3.5" />
           </button>
         </div>
       </div>
@@ -585,7 +585,7 @@
           class="mt-4 flex items-center gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
           role="alert"
         >
-          <ExclamationCircleOutline class="h-4 w-4 shrink-0" />
+          <CircleAlert class="h-4 w-4 shrink-0" />
           <span>{userPlaylistsError}</span>
         </div>
       {:else if userPlaylistsLoading}
@@ -594,7 +594,7 @@
         </div>
       {:else if userPlaylistCards.length === 0}
         <div class="mt-4 rounded-2xl border border-base-300/80 bg-base-200/40 p-10 text-center">
-          <ListMusicOutline class="mx-auto h-10 w-10 text-base-content/30" />
+          <ListMusic class="mx-auto h-10 w-10 text-base-content/30" />
           <p class="mt-4 text-sm font-semibold text-base-content/80">No playlists yet</p>
           <p class="mt-1 text-sm text-base-content/50">
             Create one from your profile, or save a video to a playlist from the watch page.
@@ -611,7 +611,7 @@
                 class={`relative block aspect-video w-full overflow-hidden rounded-2xl bg-gradient-to-br ${accentFor(card.playlist.playlistId)} text-left shadow-lg shadow-black/20 transition duration-300 group-hover:-translate-y-1 group-hover:shadow-xl group-hover:shadow-black/30`}
                 aria-label={card.firstGuid ? `Play playlist ${card.playlist.name}` : `Edit playlist ${card.playlist.name}`}
               >
-                <ListMusicOutline
+                <ListMusic
                   class="absolute left-1/2 top-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 text-white/15"
                 />
                 {#if card.firstGuid}
@@ -628,7 +628,7 @@
                   class="absolute bottom-0 left-0 right-0 flex items-center justify-between bg-black/60 px-3 py-1.5 text-[11px] font-semibold text-white/90 backdrop-blur-sm"
                 >
                   <span class="flex items-center gap-1.5">
-                    <ListMusicOutline class="h-3.5 w-3.5" />
+                    <ListMusic class="h-3.5 w-3.5" />
                     Playlist
                   </span>
                   {card.playlist.itemCount} {card.playlist.itemCount === 1 ? 'video' : 'videos'}
@@ -637,7 +637,7 @@
                   <span
                     class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-white/95 text-slate-900 opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
                   >
-                    <PlaySolid class="ml-0.5 h-5 w-5" />
+                    <Play class="ml-0.5 h-5 w-5" />
                   </span>
                 {/if}
               </a>
@@ -654,7 +654,7 @@
                   title="Edit playlist"
                   aria-label={`Edit playlist ${card.playlist.name}`}
                 >
-                  <PenOutline class="h-3.5 w-3.5" />
+                  <Pen class="h-3.5 w-3.5" />
                 </a>
               </div>
             </article>
@@ -671,7 +671,7 @@
           class="mt-4 flex items-center gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
           role="alert"
         >
-          <ExclamationCircleOutline class="h-4 w-4 shrink-0" />
+          <CircleAlert class="h-4 w-4 shrink-0" />
           <span>{platformPlaylistsError}</span>
         </div>
       {:else if platformPlaylistsLoading}
@@ -680,7 +680,7 @@
         </div>
       {:else if platformPlaylistCards.length === 0}
         <div class="mt-4 rounded-2xl border border-base-300/80 bg-base-200/40 p-10 text-center">
-          <ListMusicOutline class="mx-auto h-10 w-10 text-base-content/30" />
+          <ListMusic class="mx-auto h-10 w-10 text-base-content/30" />
           <p class="mt-4 text-sm font-semibold text-base-content/80">No downloaded playlists</p>
           <p class="mt-1 text-sm text-base-content/50">
             Queue a provider playlist from the Download page and it will show up here.
@@ -696,7 +696,7 @@
                   class={`relative block aspect-video w-full overflow-hidden rounded-2xl bg-gradient-to-br ${accentFor(card.playlist.playlistId)} text-left shadow-lg shadow-black/20 transition duration-300 group-hover:-translate-y-1 group-hover:shadow-xl group-hover:shadow-black/30`}
                   aria-label={`Play playlist ${card.playlist.title ?? card.playlist.sourceUrl}`}
                 >
-                  <ListMusicOutline
+                  <ListMusic
                     class="absolute left-1/2 top-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 text-white/15"
                   />
                   <img
@@ -711,7 +711,7 @@
                     class="absolute bottom-0 left-0 right-0 flex items-center justify-between bg-black/60 px-3 py-1.5 text-[11px] font-semibold text-white/90 backdrop-blur-sm"
                   >
                     <span class="flex items-center gap-1.5">
-                      <ListMusicOutline class="h-3.5 w-3.5" />
+                      <ListMusic class="h-3.5 w-3.5" />
                       Playlist
                     </span>
                     {card.playlist.completedItems} / {card.playlist.totalItems}
@@ -719,14 +719,14 @@
                   <span
                     class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-white/95 text-slate-900 opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
                   >
-                    <PlaySolid class="ml-0.5 h-5 w-5" />
+                    <Play class="ml-0.5 h-5 w-5" />
                   </span>
                 </a>
               {:else}
                 <div
                   class="relative block aspect-video w-full overflow-hidden rounded-2xl bg-base-200/60 opacity-70"
                 >
-                  <ListMusicOutline
+                  <ListMusic
                     class="absolute left-1/2 top-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 text-white/10"
                   />
                   <span

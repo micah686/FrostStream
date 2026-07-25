@@ -3,19 +3,17 @@
   import { goto } from '$app/navigation';
   import { browser } from '$app/environment';
   import {
-    CheckCircleOutline,
-    CheckCircleSolid,
-    ChevronDownOutline,
-    ChevronUpOutline,
-    DotsHorizontalOutline,
-    EditOutline,
-    ExclamationCircleOutline,
-    HeartOutline,
-    HeartSolid,
-    SearchOutline,
-    ThumbsDownOutline,
-    ThumbsUpOutline
-  } from 'flowbite-svelte-icons';
+    ChevronDown,
+    ChevronUp,
+    CircleAlert,
+    CircleCheck,
+    Ellipsis,
+    Heart,
+    Pencil,
+    Search,
+    ThumbsDown,
+    ThumbsUp
+  } from '@lucide/svelte';
   import VideoJs10Player, { type TextTrackSource } from '$lib/components/players/VideoJs10Player.svelte';
   import CastDropdown from '$lib/components/players/CastDropdown.svelte';
   import SaveToPlaylistButton from '$lib/components/SaveToPlaylistButton.svelte';
@@ -981,7 +979,7 @@
         class="flex aspect-video items-center justify-center gap-2 rounded-2xl border border-error/30 bg-error/10 p-6 text-sm text-error"
         role="alert"
       >
-        <ExclamationCircleOutline class="h-5 w-5 shrink-0" />
+        <CircleAlert class="h-5 w-5 shrink-0" />
         <span>{loadError}</span>
       </div>
     {:else}
@@ -993,7 +991,7 @@
         {:else if streamError}
           <div class="flex h-full items-center justify-center p-6">
             <div class="max-w-xl rounded-2xl border border-warning/30 bg-warning/10 p-5 text-center text-warning">
-              <ExclamationCircleOutline class="mx-auto h-8 w-8 text-warning" />
+              <CircleAlert class="mx-auto h-8 w-8 text-warning" />
               <h2 class="mt-3 text-base font-bold text-warning">Playback file unavailable</h2>
               <p class="mt-2 text-sm leading-6 text-warning">{streamError}</p>
             </div>
@@ -1072,11 +1070,7 @@
                 : 'border-base-300 bg-base-200/70 text-base-content/60 hover:bg-base-300 hover:text-base-content/90'
             ]}
           >
-            {#if liked}
-              <HeartSolid class="h-4 w-4" />
-            {:else}
-              <HeartOutline class="h-4 w-4" />
-            {/if}
+            <Heart class="h-4 w-4" fill={liked ? 'currentColor' : 'none'} />
           </button>
           <button
             type="button"
@@ -1091,11 +1085,10 @@
                 : 'border-base-300 bg-base-200/70 text-base-content/80 hover:bg-base-300'
             ]}
           >
+            <CircleCheck class="h-4 w-4" />
             {#if watched}
-              <CheckCircleSolid class="h-4 w-4" />
               Watched
             {:else}
-              <CheckCircleOutline class="h-4 w-4" />
               Mark watched
             {/if}
           </button>
@@ -1129,7 +1122,7 @@
                 {:else}
                   Storage
                   <span class="max-w-24 truncate text-base-content/50">{selectedStorageLabel}</span>
-                  <ChevronDownOutline class="h-3.5 w-3.5" />
+                  <ChevronDown class="h-3.5 w-3.5" />
                 {/if}
               </button>
 
@@ -1155,7 +1148,7 @@
                       >
                         <span class="truncate">{option.name}</span>
                         {#if selectedStorage === option.value}
-                          <CheckCircleSolid class="h-4 w-4 shrink-0 text-primary" />
+                          <CircleCheck class="h-4 w-4 shrink-0 text-primary" />
                         {/if}
                       </button>
                     {/each}
@@ -1184,7 +1177,7 @@
               {:else}
                 Version
                 <span class="max-w-24 truncate text-base-content/50">{selectedVersionLabel}</span>
-                <ChevronDownOutline class="h-3.5 w-3.5" />
+                <ChevronDown class="h-3.5 w-3.5" />
               {/if}
             </button>
 
@@ -1213,7 +1206,7 @@
                     >
                       <span class="truncate">{option.name}</span>
                       {#if selectedVersion === option.value}
-                        <CheckCircleSolid class="h-4 w-4 shrink-0 text-primary" />
+                        <CircleCheck class="h-4 w-4 shrink-0 text-primary" />
                       {/if}
                     </button>
                   {/each}
@@ -1234,7 +1227,7 @@
                 moreMenuOpen ? 'bg-base-300' : 'bg-base-200/70'
               ]}
             >
-              <DotsHorizontalOutline class="h-4 w-4" />
+              <Ellipsis class="h-4 w-4" />
             </button>
 
             {#if moreMenuOpen}
@@ -1249,7 +1242,7 @@
                   onclick={() => (moreMenuOpen = false)}
                   class="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-base-content/90 transition hover:bg-base-300/70"
                 >
-                  <SearchOutline class="h-4 w-4 text-base-content/50" />
+                  <Search class="h-4 w-4 text-base-content/50" />
                   Find similar
                 </a>
                 <button
@@ -1259,13 +1252,13 @@
                   class="flex w-full items-center justify-between gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium text-base-content/90 transition hover:bg-base-300/70"
                 >
                   <span class="flex items-center gap-2.5">
-                    <EditOutline class={['h-4 w-4', detail.userNote ? 'text-primary' : 'text-base-content/50']} />
+                    <Pencil class={['h-4 w-4', detail.userNote ? 'text-primary' : 'text-base-content/50']} />
                     Note
                   </span>
                   {#if noteMenuOpen}
-                    <ChevronUpOutline class="h-3.5 w-3.5 text-base-content/50" />
+                    <ChevronUp class="h-3.5 w-3.5 text-base-content/50" />
                   {:else}
-                    <ChevronDownOutline class="h-3.5 w-3.5 text-base-content/50" />
+                    <ChevronDown class="h-3.5 w-3.5 text-base-content/50" />
                   {/if}
                 </button>
                 {#if noteMenuOpen}
@@ -1297,13 +1290,13 @@
           {#if formatRelativeDate(detail.releaseDate)}<span class="text-base-content/50">·</span><span>{formatRelativeDate(detail.releaseDate)}</span>{/if}
           {#if detail.likeCount != null}
             <span class="inline-flex items-center gap-1 text-base-content/60" title="Provider likes at download time">
-              <ThumbsUpOutline class="h-3.5 w-3.5" />
+              <ThumbsUp class="h-3.5 w-3.5" />
               {formatCount(detail.likeCount) ?? detail.likeCount.toLocaleString()}
             </span>
           {/if}
           {#if detail.dislikeCount != null}
             <span class="inline-flex items-center gap-1 text-base-content/50" title="Provider dislikes at download time">
-              <ThumbsDownOutline class="h-3.5 w-3.5" />
+              <ThumbsDown class="h-3.5 w-3.5" />
               {formatCount(detail.dislikeCount) ?? detail.dislikeCount.toLocaleString()}
             </span>
           {/if}
@@ -1329,9 +1322,9 @@
           >
             {descriptionExpanded ? 'Show less' : 'Show more'}
             {#if descriptionExpanded}
-              <ChevronUpOutline class="h-3 w-3" />
+              <ChevronUp class="h-3 w-3" />
             {:else}
-              <ChevronDownOutline class="h-3 w-3" />
+              <ChevronDown class="h-3 w-3" />
             {/if}
           </button>
         {/if}

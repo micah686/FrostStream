@@ -1,12 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import {
-    AdjustmentsVerticalOutline,
-    ExclamationCircleOutline,
-    EyeOutline,
-    PlusOutline,
-    TrashBinOutline
-  } from 'flowbite-svelte-icons';
+    CircleAlert,
+    Eye,
+    Plus,
+    SlidersVertical,
+    Trash2
+  } from '@lucide/svelte';
   import {
     deleteOptionPreset,
     listOptionPresets,
@@ -83,7 +83,7 @@
       class="mt-5 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{optionPresetsError}</span>
     </div>
   {/if}
@@ -94,7 +94,7 @@
     </div>
   {:else if optionPresets.length === 0}
     <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
-      <AdjustmentsVerticalOutline class="mx-auto h-9 w-9 text-base-content/30" />
+      <SlidersVertical class="mx-auto h-9 w-9 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No option presets yet</p>
       <p class="mt-1 text-sm text-base-content/50">Create one to reuse yt-dlp options across downloads.</p>
     </div>
@@ -106,7 +106,7 @@
         >
           <div class="flex min-w-0 items-center gap-3">
             <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-base-300/70 text-primary">
-              <AdjustmentsVerticalOutline class="h-4.5 w-4.5" />
+              <SlidersVertical class="h-4.5 w-4.5" />
             </span>
             <div class="min-w-0">
               <div class="flex min-w-0 flex-wrap items-center gap-2">
@@ -127,7 +127,7 @@
               class="inline-flex h-10 min-w-24 items-center justify-center gap-2 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary"
               aria-label={`Edit option preset ${preset.name}`}
             >
-              <EyeOutline class="h-4 w-4" />
+              <Eye class="h-4 w-4" />
               Edit
             </a>
             <button
@@ -144,7 +144,7 @@
               {#if deletingPresetKey === preset.key}
                 <span class="loading loading-spinner loading-xs"></span>
               {:else}
-                <TrashBinOutline class="h-4 w-4" />
+                <Trash2 class="h-4 w-4" />
               {/if}
             </button>
           </div>
@@ -155,7 +155,7 @@
 
   <div class="mt-4">
     <a class="btn btn-sm btn-ghost text-xs" href="/profile/option-presets/new">
-      <PlusOutline class="mr-1.5 h-3.5 w-3.5" />
+      <Plus class="mr-1.5 h-3.5 w-3.5" />
       New option preset
     </a>
   </div>

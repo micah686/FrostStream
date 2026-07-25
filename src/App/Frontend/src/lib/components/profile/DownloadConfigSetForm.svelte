@@ -3,11 +3,11 @@
   import { goto } from '$app/navigation';
   import { Select } from '$lib/components/ui';
   import {
-    ArrowLeftOutline,
-    CheckCircleOutline,
-    ExclamationCircleOutline,
-    PlusOutline
-  } from 'flowbite-svelte-icons';
+    ArrowLeft,
+    CircleAlert,
+    CircleCheck,
+    Plus
+  } from '@lucide/svelte';
   import {
     createDownloadConfigSet,
     updateDownloadConfigSet,
@@ -275,23 +275,23 @@
       class="flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{submitError}</span>
     </div>
   {/if}
 
   <div class="flex flex-col-reverse gap-3 border-t border-base-300/70 pt-5 sm:flex-row sm:justify-between">
     <a class="btn btn-sm btn-ghost text-xs" href="/profile/config-sets">
-      <ArrowLeftOutline class="mr-1.5 h-4 w-4" />
+      <ArrowLeft class="mr-1.5 h-4 w-4" />
       Back
     </a>
     <button class="btn btn-sm btn-primary text-xs" type="submit" disabled={submitting}>
       {#if submitting}
         <span class="loading loading-spinner loading-xs mr-2"></span>
       {:else if isUpdate}
-        <CheckCircleOutline class="mr-1.5 h-4 w-4" />
+        <CircleCheck class="mr-1.5 h-4 w-4" />
       {:else}
-        <PlusOutline class="mr-1.5 h-4 w-4" />
+        <Plus class="mr-1.5 h-4 w-4" />
       {/if}
       {isUpdate ? 'Save changes' : 'Create config set'}
     </button>

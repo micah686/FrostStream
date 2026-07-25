@@ -2,16 +2,16 @@
   import { onMount } from 'svelte';
   import { Modal, Select } from '$lib/components/ui';
   import {
-    ClockOutline,
-    CloseOutline,
-    EditOutline,
-    ExclamationCircleOutline,
-    InfoCircleOutline,
-    PlusOutline,
-    RefreshOutline,
-    ServerOutline,
-    TrashBinOutline
-  } from 'flowbite-svelte-icons';
+    CircleAlert,
+    Clock,
+    Info,
+    Pencil,
+    Plus,
+    RefreshCw,
+    Server,
+    Trash2,
+    X
+  } from '@lucide/svelte';
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
   import UnderDevelopmentBanner from '$lib/components/admin/UnderDevelopmentBanner.svelte';
   import { ApiRequestError } from '$lib/api/http';
@@ -245,7 +245,7 @@
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div class="min-w-0">
       <div class="flex items-center gap-2">
-        <ClockOutline class="h-5 w-5 text-primary" />
+        <Clock class="h-5 w-5 text-primary" />
         <h2 id="schedules-title" class="text-base font-bold text-base-content">Schedules</h2>
       </div>
       <p class="mt-2 text-sm text-base-content/60">
@@ -254,11 +254,11 @@
     </div>
     <div class="flex shrink-0 gap-2">
       <button class="btn btn-sm btn-neutral" disabled={loading} onclick={() => void load()}>
-        <RefreshOutline class="mr-1.5 h-3.5 w-3.5" />
+        <RefreshCw class="mr-1.5 h-3.5 w-3.5" />
         Refresh
       </button>
       <button class="btn btn-sm btn-primary" onclick={openCreateForm}>
-        <PlusOutline class="mr-1.5 h-3.5 w-3.5" />
+        <Plus class="mr-1.5 h-3.5 w-3.5" />
         New schedule
       </button>
     </div>
@@ -269,12 +269,12 @@
       class="mt-4 flex items-start gap-2 rounded-xl border border-warning/60 bg-warning/10 p-3 text-sm text-warning"
       role="alert"
     >
-      <ServerOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <Server class="mt-0.5 h-4 w-4 shrink-0" />
       <span>DataBridge is unreachable. Schedule operations route through DataBridge/NATS and cannot complete until it recovers.</span>
     </div>
   {:else if loadError}
     <div class="mt-4 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error" role="alert">
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{loadError.message}</span>
     </div>
   {/if}
@@ -289,7 +289,7 @@
           aria-label="Close form"
           onclick={() => (formOpen = false)}
         >
-          <CloseOutline class="h-4 w-4" />
+          <X class="h-4 w-4" />
         </button>
       </div>
 
@@ -310,7 +310,7 @@
               title="Explain task types"
               onclick={() => (taskTypeHelpOpen = true)}
             >
-              <InfoCircleOutline class="h-4 w-4" />
+              <Info class="h-4 w-4" />
             </button>
           </div>
           <Select id="schedule-task-type" items={taskTypeItems} bind:value={formTaskType} />
@@ -353,7 +353,7 @@
 
       {#if formError}
         <div class="flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error" role="alert">
-          <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+          <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
           <span>{formError}</span>
         </div>
       {/if}
@@ -374,7 +374,7 @@
     <div class="mt-10 flex justify-center"><span class="loading loading-spinner loading-md"></span></div>
   {:else if schedules.length === 0}
     <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
-      <ClockOutline class="mx-auto h-9 w-9 text-base-content/30" />
+      <Clock class="mx-auto h-9 w-9 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No schedules yet</p>
       <p class="mt-1 text-sm text-base-content/50">Create one to run maintenance tasks on a recurring basis.</p>
     </div>
@@ -386,7 +386,7 @@
         >
           <div class="flex min-w-0 flex-1 items-center gap-3">
             <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-base-300/70 text-primary">
-              <ClockOutline class="h-4.5 w-4.5" />
+              <Clock class="h-4.5 w-4.5" />
             </span>
             <div class="min-w-0">
               <div class="flex min-w-0 flex-wrap items-center gap-2">
@@ -420,7 +420,7 @@
               aria-label={`Edit schedule ${schedule.key}`}
               onclick={() => openEditForm(schedule)}
             >
-              <EditOutline class="h-4 w-4" />
+              <Pencil class="h-4 w-4" />
             </button>
             <button
               type="button"
@@ -436,7 +436,7 @@
               {#if mutation === `delete:${schedule.key}`}
                 <span class="loading loading-spinner loading-xs"></span>
               {:else}
-                <TrashBinOutline class="h-4 w-4" />
+                <Trash2 class="h-4 w-4" />
               {/if}
             </button>
           </div>

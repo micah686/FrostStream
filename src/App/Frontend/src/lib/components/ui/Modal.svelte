@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { CloseOutline } from 'flowbite-svelte-icons';
+  import { X } from '@lucide/svelte';
 
   type Size = 'sm' | 'md' | 'lg' | 'xl';
 
@@ -51,7 +51,7 @@
           aria-label="Close"
           onclick={() => (open = false)}
         >
-          <CloseOutline class="h-4 w-4" />
+          <X class="h-4 w-4" />
         </button>
       </div>
     {/if}

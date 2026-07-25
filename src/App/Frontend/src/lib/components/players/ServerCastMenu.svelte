@@ -21,14 +21,14 @@
   import { readEventStream } from '$lib/sse/eventStream';
   import RangeSlider from '$lib/components/RangeSlider.svelte';
   import {
-    ComputerSpeakerOutline,
-    PauseOutline,
-    PlaySolid,
-    RefreshOutline,
-    StopSolid,
-    VolumeMuteOutline,
-    VolumeUpOutline
-  } from 'flowbite-svelte-icons';
+    Cast,
+    Pause,
+    Play,
+    RefreshCw,
+    Square,
+    Volume2,
+    VolumeX
+  } from '@lucide/svelte';
 
   interface CaptionLanguage {
     languageCode: string;
@@ -322,7 +322,7 @@
           : 'border-base-300 bg-base-200/70 text-base-content/80 hover:bg-base-300'
       ]}
     >
-      <ComputerSpeakerOutline class="h-4 w-4" />
+      <Cast class="h-4 w-4" />
       {session ? `Casting · ${session.deviceName}` : triggerLabel}
     </button>
   {/if}
@@ -365,15 +365,15 @@
           <div class="flex items-center justify-center gap-2">
             {#if playing}
               <button type="button" class="cast-ctl" onclick={() => transport(castPause)} title="Pause">
-                <PauseOutline class="h-5 w-5" />
+                <Pause class="h-5 w-5" />
               </button>
             {:else}
               <button type="button" class="cast-ctl" onclick={() => transport(castPlay)} title="Play">
-                <PlaySolid class="h-5 w-5" />
+                <Play class="h-5 w-5" />
               </button>
             {/if}
             <button type="button" class="cast-ctl" onclick={() => transport(castStop)} title="Stop">
-              <StopSolid class="h-5 w-5" />
+              <Square class="h-5 w-5" />
             </button>
             <button
               type="button"
@@ -382,9 +382,9 @@
               title={session.snapshot.muted ? 'Unmute' : 'Mute'}
             >
               {#if session.snapshot.muted}
-                <VolumeMuteOutline class="h-5 w-5" />
+                <VolumeX class="h-5 w-5" />
               {:else}
-                <VolumeUpOutline class="h-5 w-5" />
+                <Volume2 class="h-5 w-5" />
               {/if}
             </button>
           </div>
@@ -420,7 +420,7 @@
             class="rounded-md p-1 text-base-content/60 transition hover:bg-base-300 hover:text-base-content/90 disabled:opacity-50"
             title="Scan again (takes a few seconds)"
           >
-            <RefreshOutline class={['h-4 w-4', devicesLoading && 'animate-spin']} />
+            <RefreshCw class={['h-4 w-4', devicesLoading && 'animate-spin']} />
           </button>
         </div>
 

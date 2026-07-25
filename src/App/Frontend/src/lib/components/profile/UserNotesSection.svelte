@@ -2,14 +2,14 @@
   import { onMount } from 'svelte';
   import { Select } from '$lib/components/ui';
   import {
-    CheckOutline,
-    EditOutline,
-    ExclamationCircleOutline,
-    EyeOutline,
-    FileSearchOutline,
-    SearchOutline,
-    TrashBinOutline
-  } from 'flowbite-svelte-icons';
+    Check,
+    CircleAlert,
+    Eye,
+    FileSearch,
+    Pencil,
+    Search,
+    Trash2
+  } from '@lucide/svelte';
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
   import {
     deleteNote,
@@ -176,7 +176,7 @@
 
   <form class="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_12rem_auto]" onsubmit={submitSearch}>
     <div class="relative">
-      <SearchOutline class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-base-content/40" />
+      <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-base-content/40" />
       <input class="input w-full pl-9" bind:value={query} placeholder="Search notes" />
     </div>
     <Select items={targetOptions} bind:value={targetType} />
@@ -193,7 +193,7 @@
       class="mt-5 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{error}</span>
     </div>
   {/if}
@@ -204,7 +204,7 @@
     </div>
   {:else if notes.length === 0}
     <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
-      <FileSearchOutline class="mx-auto h-9 w-9 text-base-content/30" />
+      <FileSearch class="mx-auto h-9 w-9 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No notes found</p>
       <p class="mt-1 text-sm text-base-content/50">Notes you add from videos, playlists, or channels appear here.</p>
     </div>
@@ -237,7 +237,7 @@
                 href={targetHref(note)}
                 class="inline-flex h-9 min-w-20 items-center justify-center gap-1.5 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary"
               >
-                <EyeOutline class="h-4 w-4" />
+                <Eye class="h-4 w-4" />
                 View
               </a>
               <button
@@ -245,7 +245,7 @@
                 class="inline-flex h-9 min-w-20 items-center justify-center gap-1.5 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary"
                 onclick={() => (editing ? (editingKey = null) : startEdit(note))}
               >
-                <EditOutline class="h-4 w-4" />
+                <Pencil class="h-4 w-4" />
                 {editing ? 'Close' : 'Edit'}
               </button>
               <button
@@ -262,7 +262,7 @@
                 {#if deletingKey === key}
                   <span class="loading loading-spinner loading-xs"></span>
                 {:else}
-                  <TrashBinOutline class="h-4 w-4" />
+                  <Trash2 class="h-4 w-4" />
                 {/if}
               </button>
             </div>
@@ -289,7 +289,7 @@
 
           {#if savedKey === key}
             <p class="mt-2 flex items-center gap-1.5 text-xs font-semibold text-success">
-              <CheckOutline class="h-3.5 w-3.5" />
+              <Check class="h-3.5 w-3.5" />
               Saved
             </p>
           {/if}

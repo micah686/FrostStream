@@ -2,15 +2,15 @@
   import { onDestroy, onMount } from 'svelte';
   import { Select } from '$lib/components/ui';
   import {
-    CheckCircleOutline,
-    CloseCircleOutline,
-    CloudArrowUpOutline,
-    ExclamationCircleOutline,
-    FileZipOutline,
-    PlayOutline,
-    RefreshOutline,
-    TerminalOutline
-  } from 'flowbite-svelte-icons';
+    CircleAlert,
+    CircleCheck,
+    CircleX,
+    CloudUpload,
+    FileArchive,
+    Play,
+    RefreshCw,
+    Terminal
+  } from '@lucide/svelte';
   import {
     buildRestorePlan,
     listBackupJobs,
@@ -237,7 +237,7 @@
       class="mt-5 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{startError}</span>
     </div>
   {/if}
@@ -255,7 +255,7 @@
       {#if startBusy}
         <span class="loading loading-spinner loading-xs mr-1.5"></span>
       {:else}
-        <PlayOutline class="mr-1.5 h-4 w-4" />
+        <Play class="mr-1.5 h-4 w-4" />
       {/if}
       Run backup now
     </button>
@@ -273,7 +273,7 @@
       </p>
     </div>
     <button class="btn btn-sm btn-neutral" disabled={jobsLoading} onclick={() => void loadJobs(true)}>
-      <RefreshOutline class="mr-1.5 h-3.5 w-3.5" />
+      <RefreshCw class="mr-1.5 h-3.5 w-3.5" />
       Refresh
     </button>
   </div>
@@ -283,7 +283,7 @@
       class="mt-5 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{jobsError}</span>
     </div>
   {/if}
@@ -294,7 +294,7 @@
     </div>
   {:else if jobs.length === 0}
     <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
-      <CloudArrowUpOutline class="mx-auto h-9 w-9 text-base-content/30" />
+      <CloudUpload class="mx-auto h-9 w-9 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No backup jobs yet</p>
       <p class="mt-1 text-sm text-base-content/50">Run a backup to see its progress here.</p>
     </div>
@@ -338,7 +338,7 @@
       </p>
     </div>
     <button class="btn btn-sm btn-neutral" disabled={archivesLoading} onclick={() => void loadArchives()}>
-      <RefreshOutline class="mr-1.5 h-3.5 w-3.5" />
+      <RefreshCw class="mr-1.5 h-3.5 w-3.5" />
       Refresh
     </button>
   </div>
@@ -348,7 +348,7 @@
       class="mt-5 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{archivesError}</span>
     </div>
   {/if}
@@ -359,7 +359,7 @@
     </div>
   {:else if archives.length === 0}
     <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
-      <FileZipOutline class="mx-auto h-9 w-9 text-base-content/30" />
+      <FileArchive class="mx-auto h-9 w-9 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No backup archives found</p>
       <p class="mt-1 text-sm text-base-content/50">Completed backups appear here once written to the backup directory.</p>
     </div>
@@ -372,7 +372,7 @@
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div class="flex min-w-0 items-center gap-3">
               <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-base-300/70 text-primary">
-                <FileZipOutline class="h-4.5 w-4.5" />
+                <FileArchive class="h-4.5 w-4.5" />
               </span>
               <div class="min-w-0">
                 <div class="flex min-w-0 flex-wrap items-center gap-2">
@@ -405,7 +405,7 @@
                 {#if verifyBusyPath === archive.archivePath}
                   <span class="loading loading-spinner loading-xs"></span>
                 {:else}
-                  <CheckCircleOutline class="h-4 w-4" />
+                  <CircleCheck class="h-4 w-4" />
                 {/if}
                 Verify
               </button>
@@ -418,7 +418,7 @@
                 {#if planBusyPath === archive.archivePath}
                   <span class="loading loading-spinner loading-xs"></span>
                 {:else}
-                  <TerminalOutline class="h-4 w-4" />
+                  <Terminal class="h-4 w-4" />
                 {/if}
                 {plan ? 'Hide restore plan' : 'Restore plan'}
               </button>
@@ -436,10 +436,10 @@
               role="status"
             >
               {#if verifyResult.success}
-                <CheckCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+                <CircleCheck class="mt-0.5 h-4 w-4 shrink-0" />
                 <span>Backup verified: checksums and manifest are intact.</span>
               {:else}
-                <CloseCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+                <CircleX class="mt-0.5 h-4 w-4 shrink-0" />
                 <span>{verifyResult.errorMessage || 'Verification failed.'}</span>
               {/if}
             </div>

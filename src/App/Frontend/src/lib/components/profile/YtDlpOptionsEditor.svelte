@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { Select } from '$lib/components/ui';
-  import { ChevronDownOutline } from 'flowbite-svelte-icons';
+  import { ChevronDown } from '@lucide/svelte';
   import TriStateSelect from './TriStateSelect.svelte';
   import {
     applyStateToOptions,
@@ -59,7 +59,7 @@
   <details open class="group rounded-xl border border-base-300/70 bg-base-200/40 p-4">
     <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
       <h3 class="text-sm font-semibold text-base-content/90">Video quality & format</h3>
-      <ChevronDownOutline class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
+      <ChevronDown class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
     </summary>
     <div class="mt-4 grid gap-4 sm:grid-cols-2">
       <div>
@@ -83,7 +83,7 @@
   <details class="group rounded-xl border border-base-300/70 bg-base-200/40 p-4">
     <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
       <h3 class="text-sm font-semibold text-base-content/90">Audio</h3>
-      <ChevronDownOutline class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
+      <ChevronDown class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
     </summary>
     <div class="mt-4 space-y-4">
       <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle" bind:checked={opts.audioOnly} /><span>Audio only <span class="ml-1 text-xs text-base-content/40">(skip the video, keep just the sound)</span></span></label>
@@ -103,7 +103,7 @@
   <details class="group rounded-xl border border-base-300/70 bg-base-200/40 p-4">
     <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
       <h3 class="text-sm font-semibold text-base-content/90">Subtitles</h3>
-      <ChevronDownOutline class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
+      <ChevronDown class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
     </summary>
     <div class="mt-4 grid gap-4 sm:grid-cols-2">
       <TriStateSelect id="opt-write-subs" label="Download subtitles" bind:value={opts.writeSubs} />
@@ -130,7 +130,7 @@
   <details class="group rounded-xl border border-base-300/70 bg-base-200/40 p-4">
     <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
       <h3 class="text-sm font-semibold text-base-content/90">Thumbnails & metadata</h3>
-      <ChevronDownOutline class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
+      <ChevronDown class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
     </summary>
     <div class="mt-4 grid gap-4 sm:grid-cols-2">
       <TriStateSelect id="opt-write-thumbnail" label="Save thumbnail file" bind:value={opts.writeThumbnail} />
@@ -146,7 +146,7 @@
   <details class="group rounded-xl border border-base-300/70 bg-base-200/40 p-4">
     <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
       <h3 class="text-sm font-semibold text-base-content/90">Comments & live streams</h3>
-      <ChevronDownOutline class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
+      <ChevronDown class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
     </summary>
     <div class="mt-4 grid gap-4 sm:grid-cols-2">
       <TriStateSelect id="opt-fetch-comments" label="Fetch comments" bind:value={opts.fetchComments} />
@@ -165,7 +165,7 @@
         <h3 class="text-sm font-semibold text-base-content/90">SponsorBlock</h3>
         <p class="mt-1 text-xs text-base-content/40">Marks or removes sponsored segments using community data.</p>
       </div>
-      <ChevronDownOutline class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
+      <ChevronDown class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
     </summary>
     <div class="mt-4 space-y-4">
       <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={opts.sponsorBlockDisabled} /><span>Disable SponsorBlock entirely</span></label>
@@ -213,7 +213,7 @@
   <details class="group rounded-xl border border-base-300/70 bg-base-200/40 p-4">
     <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
       <h3 class="text-sm font-semibold text-base-content/90">Download behavior & limits</h3>
-      <ChevronDownOutline class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
+      <ChevronDown class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
     </summary>
     <div class="mt-4 grid gap-4 sm:grid-cols-2">
       <div>
@@ -286,7 +286,7 @@
         <h3 class="text-sm font-semibold text-base-content/90">Network & authentication</h3>
         <p class="mt-1 text-xs text-base-content/40">For sites that need a login or a proxy. Prefer cookie profiles for site logins when possible.</p>
       </div>
-      <ChevronDownOutline class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
+      <ChevronDown class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
     </summary>
     <div class="mt-4 grid gap-4 sm:grid-cols-2">
       <div class="sm:col-span-2">
@@ -322,7 +322,7 @@
         <h3 class="text-sm font-semibold text-base-content/90">Workarounds</h3>
         <p class="mt-1 text-xs text-base-content/40">Only needed for sites that misbehave with the default settings.</p>
       </div>
-      <ChevronDownOutline class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
+      <ChevronDown class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
     </summary>
     <div class="mt-4 space-y-4">
       <div class="flex flex-wrap gap-x-8 gap-y-3">

@@ -1,12 +1,11 @@
 <script lang="ts">
   import {
-    CheckOutline,
-    ExclamationCircleOutline,
-    FolderOutline,
-    FolderSolid,
-    ListMusicOutline,
-    PlusOutline
-  } from 'flowbite-svelte-icons';
+    Check,
+    CircleAlert,
+    Folder,
+    ListMusic,
+    Plus
+  } from '@lucide/svelte';
   import {
     addUserPlaylistItem,
     createUserPlaylist,
@@ -167,11 +166,10 @@
         : 'border-base-300 bg-base-200/70 text-base-content/80 hover:bg-base-300'
     ]}
   >
+    <Folder class="h-4 w-4" />
     {#if isSaved}
-      <FolderSolid class="h-4 w-4" />
       Saved
     {:else}
-      <FolderOutline class="h-4 w-4" />
       Save
     {/if}
   </button>
@@ -188,7 +186,7 @@
 
       {#if loadError}
         <div class="flex items-start gap-2 rounded-lg bg-error/10 p-3 text-xs text-error" role="alert">
-          <ExclamationCircleOutline class="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <CircleAlert class="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>{loadError}</span>
         </div>
       {:else if loading || !loaded}
@@ -198,7 +196,7 @@
       {:else}
         {#if toggleError}
           <div class="mb-1 flex items-start gap-2 rounded-lg bg-error/10 p-2.5 text-xs text-error" role="alert">
-            <ExclamationCircleOutline class="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <CircleAlert class="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>{toggleError}</span>
           </div>
         {/if}
@@ -228,7 +226,7 @@
                     {#if busyPlaylistId === playlist.playlistId}
                       <span class="loading loading-spinner loading-xs"></span>
                     {:else}
-                      <CheckOutline class="h-3 w-3" />
+                      <Check class="h-3 w-3" />
                     {/if}
                   </span>
                   <span class="min-w-0 flex-1">
@@ -237,7 +235,7 @@
                       {playlist.itemCount} {playlist.itemCount === 1 ? 'item' : 'items'}
                     </span>
                   </span>
-                  <ListMusicOutline class="h-3.5 w-3.5 shrink-0 text-base-content/40" />
+                  <ListMusic class="h-3.5 w-3.5 shrink-0 text-base-content/40" />
                 </button>
               </li>
             {/each}
@@ -283,7 +281,7 @@
               onclick={() => (createOpen = true)}
               class="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left text-sm font-semibold text-base-content/80 transition hover:bg-base-300/70"
             >
-              <PlusOutline class="h-4 w-4" />
+              <Plus class="h-4 w-4" />
               New playlist
             </button>
           {/if}

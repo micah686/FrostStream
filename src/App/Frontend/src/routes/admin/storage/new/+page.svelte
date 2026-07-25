@@ -2,15 +2,15 @@
   import { goto } from '$app/navigation';
   import { Select } from '$lib/components/ui';
   import {
-    ArchiveOutline,
-    ArrowLeftOutline,
-    CloudArrowUpOutline,
-    DatabaseOutline,
-    ExclamationCircleOutline,
-    GlobeOutline,
-    LayersOutline,
-    PlusOutline
-  } from 'flowbite-svelte-icons';
+    Archive,
+    ArrowLeft,
+    CircleAlert,
+    CloudUpload,
+    Database,
+    Globe,
+    Layers,
+    Plus
+  } from '@lucide/svelte';
   import {
     createAzureBlobStorage,
     createGoogleCloudStorage,
@@ -23,7 +23,7 @@
     type S3CompatibleObjectStorageProvider
   } from '$lib/api/storage';
 
-  type IconComponent = typeof DatabaseOutline;
+  type IconComponent = typeof Database;
   type TargetType = 'local' | 'network' | 's3' | 'azure' | 'gcs';
   type NetworkAuthMode = 'anonymous' | 'password' | 'privateKey';
 
@@ -35,11 +35,11 @@
   }
 
   const targetOptions: TargetOption[] = [
-    { type: 'local', label: 'Local', icon: DatabaseOutline, summary: 'Directory on the server filesystem' },
-    { type: 'network', label: 'Network', icon: GlobeOutline, summary: 'FTP, FTPS, SFTP, NFS, SMB, or CIFS' },
-    { type: 's3', label: 'S3', icon: ArchiveOutline, summary: 'AWS S3, MinIO, or DigitalOcean Spaces' },
-    { type: 'azure', label: 'Azure Blob', icon: LayersOutline, summary: 'Azure Blob Storage container' },
-    { type: 'gcs', label: 'Google Cloud', icon: CloudArrowUpOutline, summary: 'Google Cloud Storage bucket' }
+    { type: 'local', label: 'Local', icon: Database, summary: 'Directory on the server filesystem' },
+    { type: 'network', label: 'Network', icon: Globe, summary: 'FTP, FTPS, SFTP, NFS, SMB, or CIFS' },
+    { type: 's3', label: 'S3', icon: Archive, summary: 'AWS S3, MinIO, or DigitalOcean Spaces' },
+    { type: 'azure', label: 'Azure Blob', icon: Layers, summary: 'Azure Blob Storage container' },
+    { type: 'gcs', label: 'Google Cloud', icon: CloudUpload, summary: 'Google Cloud Storage bucket' }
   ];
 
   const networkProtocolOptions = [
@@ -247,7 +247,7 @@
     href="/admin"
     class="inline-flex items-center gap-1.5 text-xs font-semibold text-base-content/60 transition hover:text-base-content/90"
   >
-    <ArrowLeftOutline class="h-3.5 w-3.5" />
+    <ArrowLeft class="h-3.5 w-3.5" />
     Back to administration
   </a>
 
@@ -481,7 +481,7 @@
         class="flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
         role="alert"
       >
-        <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+        <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
         <span>{submitError}</span>
       </div>
     {/if}
@@ -491,7 +491,7 @@
         {#if submitting}
           <span class="loading loading-spinner loading-xs mr-1.5"></span>
         {:else}
-          <PlusOutline class="mr-1.5 h-4 w-4" />
+          <Plus class="mr-1.5 h-4 w-4" />
         {/if}
         Register storage
       </button>

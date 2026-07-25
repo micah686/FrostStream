@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ClockOutline } from 'flowbite-svelte-icons';
+  import { Clock } from '@lucide/svelte';
 </script>
 
 <svelte:head>
@@ -15,7 +15,7 @@
   </div>
 
   <div class="mt-6 rounded-xl border border-base-300/80 bg-base-200/40 p-10 text-center">
-    <ClockOutline class="mx-auto h-10 w-10 text-base-content/30" />
+    <Clock class="mx-auto h-10 w-10 text-base-content/30" />
     <p class="mt-4 text-sm font-semibold text-base-content/80">Background jobs are coming soon</p>
     <p class="mt-1 text-sm text-base-content/50">
       Scheduled scans, cleanup, and other server tasks will appear here.

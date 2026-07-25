@@ -1,13 +1,13 @@
 <script lang="ts">
   import {
-    ArrowsRepeatOutline,
-    ArrowUpRightFromSquareOutline,
-    ChevronDownOutline,
-    ExclamationCircleOutline,
-    FireOutline,
-    PlayOutline,
-    StopOutline
-  } from 'flowbite-svelte-icons';
+    ChevronDown,
+    CircleAlert,
+    ExternalLink,
+    Flame,
+    Play,
+    Repeat,
+    Square
+  } from '@lucide/svelte';
   import {
     fetchJobHistory,
     fetchJobMediaGuid,
@@ -371,7 +371,7 @@
       </span>
       <div class="min-w-0">
         <div class="flex min-w-0 items-center gap-2">
-          <ChevronDownOutline class={['h-3.5 w-3.5 shrink-0 text-base-content/40 transition-transform', expanded ? 'rotate-180' : '']} />
+          <ChevronDown class={['h-3.5 w-3.5 shrink-0 text-base-content/40 transition-transform', expanded ? 'rotate-180' : '']} />
           <h2 class="min-w-0 truncate text-sm font-semibold text-base-content">
             {displayTitle(job.sourceUrl)}
           </h2>
@@ -435,7 +435,7 @@
           title="Watch"
           aria-label="Watch"
         >
-          <PlayOutline class="h-4 w-4" />
+          <Play class="h-4 w-4" />
         </a>
       {/if}
       {#if canUpdatePriority(job)}
@@ -453,7 +453,7 @@
           {#if busyAction === 'priority'}
             <span class="loading loading-spinner loading-xs"></span>
           {:else}
-            <FireOutline class="h-4 w-4" />
+            <Flame class="h-4 w-4" />
           {/if}
         </button>
       {/if}
@@ -472,7 +472,7 @@
           {#if busyAction === 'start'}
             <span class="loading loading-spinner loading-xs"></span>
           {:else}
-            <PlayOutline class="h-4 w-4" />
+            <Play class="h-4 w-4" />
           {/if}
         </button>
       {/if}
@@ -491,7 +491,7 @@
           {#if busyAction === 'clear-provider'}
             <span class="loading loading-spinner loading-xs"></span>
           {:else}
-            <ArrowsRepeatOutline class="h-3.5 w-3.5" />
+            <Repeat class="h-3.5 w-3.5" />
           {/if}
           Clear block
         </button>
@@ -511,7 +511,7 @@
           {#if busyAction === 'stop'}
             <span class="loading loading-spinner loading-xs"></span>
           {:else}
-            <StopOutline class="h-4 w-4" />
+            <Square class="h-4 w-4" />
           {/if}
         </button>
       {/if}
@@ -530,7 +530,7 @@
           {#if busyAction === 'group-start'}
             <span class="loading loading-spinner loading-xs"></span>
           {:else}
-            <ArrowsRepeatOutline class="h-3.5 w-3.5" />
+            <Repeat class="h-3.5 w-3.5" />
           {/if}
           Group
         </button>
@@ -550,7 +550,7 @@
           {#if busyAction === 'group-stop'}
             <span class="loading loading-spinner loading-xs"></span>
           {:else}
-            <StopOutline class="h-3.5 w-3.5" />
+            <Square class="h-3.5 w-3.5" />
           {/if}
           Group
         </button>
@@ -564,7 +564,7 @@
         title="View source"
         aria-label="View source"
       >
-        <ArrowUpRightFromSquareOutline class="h-4 w-4" />
+        <ExternalLink class="h-4 w-4" />
       </a>
     </div>
   </div>
@@ -619,7 +619,7 @@
       <div class="mt-3 max-h-48 overflow-y-auto rounded-lg border border-base-300/80 bg-base-200/60 p-3 font-mono text-xs">
         {#if job.failureMessage}
           <p class="flex items-start gap-1.5 whitespace-pre-wrap break-words text-error">
-            <ExclamationCircleOutline class="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <CircleAlert class="mt-0.5 h-3.5 w-3.5 shrink-0" />
             {job.failureKind ? `[${job.failureKind}] ` : ''}{job.failureCode ? `${job.failureCode}: ` : ''}{job.failureMessage}
           </p>
         {/if}

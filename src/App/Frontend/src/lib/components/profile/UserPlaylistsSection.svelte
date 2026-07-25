@@ -1,13 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import {
-    ArrowLeftOutline,
-    ExclamationCircleOutline,
-    ListMusicOutline,
-    PenOutline,
-    PlusOutline,
-    TrashBinOutline
-  } from 'flowbite-svelte-icons';
+    ArrowLeft,
+    CircleAlert,
+    ListMusic,
+    Pen,
+    Plus,
+    Trash2
+  } from '@lucide/svelte';
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
   import PlaylistItemsManager from '$lib/components/profile/PlaylistItemsManager.svelte';
   import { formatRelativeDate } from '$lib/media';
@@ -161,7 +161,7 @@
         </p>
       </div>
       <button class="btn btn-sm btn-neutral" onclick={openCreateForm}>
-        <PlusOutline class="mr-1.5 h-3.5 w-3.5" />
+        <Plus class="mr-1.5 h-3.5 w-3.5" />
         New playlist
       </button>
     </div>
@@ -171,7 +171,7 @@
         class="mt-5 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
         role="alert"
       >
-        <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+        <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
         <span>{listError}</span>
       </div>
     {/if}
@@ -215,7 +215,7 @@
       </div>
     {:else if playlists.length === 0}
       <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
-        <ListMusicOutline class="mx-auto h-9 w-9 text-base-content/30" />
+        <ListMusic class="mx-auto h-9 w-9 text-base-content/30" />
         <p class="mt-4 text-sm font-semibold text-base-content/80">No playlists yet</p>
         <p class="mt-1 text-sm text-base-content/50">Create one to group archived videos however you like.</p>
       </div>
@@ -232,7 +232,7 @@
               aria-label={`Open playlist ${playlist.name}`}
             >
               <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-base-300/70 text-primary">
-                <ListMusicOutline class="h-4.5 w-4.5" />
+                <ListMusic class="h-4.5 w-4.5" />
               </span>
               <span class="min-w-0">
                 <span class="block truncate text-sm font-semibold text-base-content">{playlist.name}</span>
@@ -252,7 +252,7 @@
                 title="Edit playlist"
                 aria-label={`Edit playlist ${playlist.name}`}
               >
-                <PenOutline class="h-4 w-4" />
+                <Pen class="h-4 w-4" />
               </a>
               <button
                 type="button"
@@ -261,7 +261,7 @@
                 aria-label={`Delete playlist ${playlist.name}`}
                 onclick={() => requestDelete(playlist)}
               >
-                <TrashBinOutline class="h-4 w-4" />
+                <Trash2 class="h-4 w-4" />
               </button>
             </div>
           </article>
@@ -276,7 +276,7 @@
           class="flex items-center gap-1.5 text-xs font-semibold text-base-content/50 transition hover:text-base-content/80"
           onclick={closeDetail}
         >
-          <ArrowLeftOutline class="h-3.5 w-3.5" />
+          <ArrowLeft class="h-3.5 w-3.5" />
           All playlists
         </button>
         <h2 id="user-playlists-title" class="mt-2 text-base font-bold text-base-content">{selected.name}</h2>
@@ -288,11 +288,11 @@
 
       <div class="flex shrink-0 gap-2">
         <a class="btn btn-sm btn-neutral" href={editHref(selected)}>
-          <PenOutline class="mr-1.5 h-3.5 w-3.5" />
+          <Pen class="mr-1.5 h-3.5 w-3.5" />
           Edit
         </a>
         <button class="btn btn-sm btn-ghost text-xs" onclick={() => requestDelete(selected!)}>
-          <TrashBinOutline class="mr-1.5 h-3.5 w-3.5" />
+          <Trash2 class="mr-1.5 h-3.5 w-3.5" />
           Delete
         </button>
       </div>
@@ -303,7 +303,7 @@
         class="mt-5 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
         role="alert"
       >
-        <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+        <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
         <span>{detailError}</span>
       </div>
     {:else if detailLoading}

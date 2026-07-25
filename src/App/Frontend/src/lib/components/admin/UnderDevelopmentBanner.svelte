@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ExclamationCircleOutline } from 'flowbite-svelte-icons';
+  import { CircleAlert } from '@lucide/svelte';
 
   interface Props {
     title?: string;
@@ -17,7 +17,7 @@
   role="note"
 >
   <span class="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-warning/15 text-warning">
-    <ExclamationCircleOutline class="h-4 w-4" />
+    <CircleAlert class="h-4 w-4" />
   </span>
   <div class="min-w-0">
     <p class="text-xs font-semibold uppercase tracking-wide text-warning">{title}</p>

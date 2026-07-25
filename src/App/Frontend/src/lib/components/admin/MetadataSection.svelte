@@ -2,15 +2,15 @@
   import { onMount } from 'svelte';
   import { Select } from '$lib/components/ui';
   import {
-    ArrowsRepeatOutline,
-    CheckCircleOutline,
-    ExclamationCircleOutline,
-    FileSearchOutline,
-    PlayOutline,
-    RefreshOutline,
-    TrashBinOutline,
-    UndoOutline
-  } from 'flowbite-svelte-icons';
+    CircleAlert,
+    CircleCheck,
+    FileSearch,
+    Play,
+    RefreshCw,
+    Repeat,
+    Trash2,
+    Undo2
+  } from '@lucide/svelte';
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
   import UnderDevelopmentBanner from '$lib/components/admin/UnderDevelopmentBanner.svelte';
   import {
@@ -306,13 +306,13 @@
       class="mt-4 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{reindexError}</span>
     </div>
   {/if}
   {#if reindexMessage}
     <div class="mt-4 flex items-start gap-2 rounded-xl border border-success/30 bg-success/10 p-3 text-sm text-success">
-      <CheckCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleCheck class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{reindexMessage}</span>
     </div>
   {/if}
@@ -322,7 +322,7 @@
       {#if reindexBusy}
         <span class="loading loading-spinner loading-xs mr-1.5"></span>
       {:else}
-        <ArrowsRepeatOutline class="mr-1.5 h-3.5 w-3.5" />
+        <Repeat class="mr-1.5 h-3.5 w-3.5" />
       {/if}
       Rebuild search index
     </button>
@@ -342,7 +342,7 @@
       class="mt-4 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{watchedError}</span>
     </div>
   {/if}
@@ -404,13 +404,13 @@
           {#if watchedRunBusy}
             <span class="loading loading-spinner loading-xs mr-1.5"></span>
           {:else}
-            <PlayOutline class="mr-1.5 h-3.5 w-3.5" />
+            <Play class="mr-1.5 h-3.5 w-3.5" />
           {/if}
           Run cleanup now
         </button>
         {#if watchedSaved}
           <span class="inline-flex items-center gap-1 text-xs font-semibold text-success">
-            <CheckCircleOutline class="h-3.5 w-3.5" />
+            <CircleCheck class="h-3.5 w-3.5" />
             Saved
           </span>
         {/if}
@@ -432,7 +432,7 @@
       class="mt-4 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{orphanPolicyError}</span>
     </div>
   {/if}
@@ -492,7 +492,7 @@
         </button>
         {#if orphanPolicySaved}
           <span class="inline-flex items-center gap-1 text-xs font-semibold text-success">
-            <CheckCircleOutline class="h-3.5 w-3.5" />
+            <CircleCheck class="h-3.5 w-3.5" />
             Saved
           </span>
         {/if}
@@ -511,7 +511,7 @@
       </p>
     </div>
     <button class="btn btn-sm btn-neutral" disabled={orphansLoading} onclick={() => void loadOrphans()}>
-      <RefreshOutline class="mr-1.5 h-3.5 w-3.5" />
+      <RefreshCw class="mr-1.5 h-3.5 w-3.5" />
       Refresh
     </button>
   </div>
@@ -526,7 +526,7 @@
       class="mt-4 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{orphansError}</span>
     </div>
   {/if}
@@ -537,7 +537,7 @@
     </div>
   {:else if orphans.length === 0}
     <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
-      <FileSearchOutline class="mx-auto h-9 w-9 text-base-content/30" />
+      <FileSearch class="mx-auto h-9 w-9 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">
         {orphanPage > 1 ? 'No more orphan items' : 'No orphan items'}
       </p>
@@ -583,7 +583,7 @@
                 {#if restoringId === item.id}
                   <span class="loading loading-spinner loading-xs"></span>
                 {:else}
-                  <UndoOutline class="h-4 w-4" />
+                  <Undo2 class="h-4 w-4" />
                 {/if}
                 {item.kind === 'media_without_metadata' ? 'Restore file' : 'Restore metadata'}
               </button>
@@ -618,13 +618,13 @@
       class="mt-4 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{deleteError}</span>
     </div>
   {/if}
   {#if deleteMessage}
     <div class="mt-4 flex items-start gap-2 rounded-xl border border-success/30 bg-success/10 p-3 text-sm text-success">
-      <CheckCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleCheck class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{deleteMessage}</span>
     </div>
   {/if}
@@ -645,7 +645,7 @@
       {#if deleteBusy}
         <span class="loading loading-spinner loading-xs mr-1.5"></span>
       {:else}
-        <TrashBinOutline class="mr-1.5 h-3.5 w-3.5" />
+        <Trash2 class="mr-1.5 h-3.5 w-3.5" />
       {/if}
       Delete video
     </button>

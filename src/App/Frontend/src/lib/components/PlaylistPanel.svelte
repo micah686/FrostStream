@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ExclamationCircleOutline, ListMusicOutline, PlaySolid } from 'flowbite-svelte-icons';
+  import { CircleAlert, ListMusic, Play } from '@lucide/svelte';
   import { accentFor, formatDuration } from '$lib/media';
   import { getUserPlaylist } from '$lib/api/userPlaylists';
   import { getPlatformPlaylist } from '$lib/api/playlists';
@@ -137,7 +137,7 @@
 >
   <header class="border-b border-base-300 px-4 py-3">
     <p class="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/50">
-      <ListMusicOutline class="h-3.5 w-3.5" />
+      <ListMusic class="h-3.5 w-3.5" />
       {subtitle ?? 'Playlist'}
     </p>
     <h2 class="mt-1 truncate text-sm font-bold text-base-content" {title}>{title}</h2>
@@ -157,7 +157,7 @@
     </div>
   {:else if loadError}
     <div class="flex items-start gap-2 p-4 text-sm text-error" role="alert">
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{loadError}</span>
     </div>
   {:else if entries.length === 0}
@@ -178,7 +178,7 @@
             >
               <span class="grid w-5 shrink-0 place-items-center font-mono text-[11px] text-base-content/40">
                 {#if isCurrent}
-                  <PlaySolid class="h-3 w-3 text-primary" />
+                  <Play class="h-3 w-3 text-primary" />
                 {:else}
                   {index + 1}
                 {/if}

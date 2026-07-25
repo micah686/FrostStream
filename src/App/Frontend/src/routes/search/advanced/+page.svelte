@@ -2,7 +2,7 @@
   import { goto } from '$app/navigation';
   import { page as pageState } from '$app/state';
   import { Select } from '$lib/components/ui';
-  import { SearchOutline, RefreshOutline } from 'flowbite-svelte-icons';
+  import { RefreshCw, Search } from '@lucide/svelte';
   import type { SearchScope } from '$lib/api/search';
 
   // Structured builder over the DataBridge advanced-query syntax (AdvancedQueryParser).
@@ -308,11 +308,11 @@
         </code>
         <div class="flex shrink-0 gap-2">
           <button class="btn btn-sm btn-neutral text-xs" type="button" onclick={reset}>
-            <RefreshOutline class="mr-1.5 h-3.5 w-3.5" />
+            <RefreshCw class="mr-1.5 h-3.5 w-3.5" />
             Reset
           </button>
           <button class="btn btn-sm btn-primary text-xs" type="submit" disabled={!canSearch}>
-            <SearchOutline class="mr-1.5 h-3.5 w-3.5" />
+            <Search class="mr-1.5 h-3.5 w-3.5" />
             Search
           </button>
         </div>

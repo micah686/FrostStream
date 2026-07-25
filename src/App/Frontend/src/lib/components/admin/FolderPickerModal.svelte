@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Modal } from '$lib/components/ui';
-  import { ArrowLeftOutline, ChevronRightOutline, ExclamationCircleOutline, FolderOutline } from 'flowbite-svelte-icons';
+  import { ArrowLeft, ChevronRight, CircleAlert, Folder } from '@lucide/svelte';
   import { browseImportIncoming } from '$lib/api/imports';
 
   interface Props { open: boolean; workerTag?: string; initialPath?: string; onselect: (path: string) => void; }
@@ -33,24 +33,24 @@
 <Modal bind:open title="Choose incoming folder" size="md">
   <div class="space-y-3">
     <div class="flex items-center gap-2 rounded-lg border border-base-300 bg-base-200/60 px-3 py-2.5">
-      <FolderOutline class="h-4 w-4 text-base-content/50" />
+      <Folder class="h-4 w-4 text-base-content/50" />
       <span class="truncate font-mono text-sm text-base-content/90">incoming/{currentPath}</span>
       {#if loading}<span class="loading loading-spinner loading-xs ml-auto"></span>{/if}
     </div>
     {#if error}
       <div class="flex gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error">
-        <ExclamationCircleOutline class="h-4 w-4 shrink-0" />{error}
+        <CircleAlert class="h-4 w-4 shrink-0" />{error}
       </div>
     {/if}
     <div class="max-h-72 overflow-y-auto rounded-xl border border-base-300 bg-base-200/40">
       {#if currentPath}
         <button type="button" class="flex w-full items-center gap-2 border-b border-base-300 px-4 py-3 text-left text-sm text-base-content/60 hover:bg-base-200" onclick={() => navigate(currentPath.split('/').slice(0, -1).join('/'))}>
-          <ArrowLeftOutline class="h-4 w-4" /> Up one level
+          <ArrowLeft class="h-4 w-4" /> Up one level
         </button>
       {/if}
       {#each directories as name (name)}
         <button type="button" class="flex w-full items-center justify-between border-b border-base-300/60 px-4 py-3 text-left text-sm text-base-content/90 last:border-0 hover:bg-base-200" onclick={() => navigate(currentPath ? `${currentPath}/${name}` : name)}>
-          <span class="truncate">{name}</span><ChevronRightOutline class="h-4 w-4 text-base-content/50" />
+          <span class="truncate">{name}</span><ChevronRight class="h-4 w-4 text-base-content/50" />
         </button>
       {:else}
         {#if !loading}<p class="px-4 py-6 text-center text-sm text-base-content/50">No sub-folders here.</p>{/if}

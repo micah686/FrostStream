@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { ArrowLeftOutline, ExclamationCircleOutline, TrashBinOutline } from 'flowbite-svelte-icons';
+  import { ArrowLeft, CircleAlert, Trash2 } from '@lucide/svelte';
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
   import {
     deleteStorage,
@@ -123,7 +123,7 @@
     href="/admin"
     class="inline-flex items-center gap-1.5 text-xs font-semibold text-base-content/60 transition hover:text-base-content/90"
   >
-    <ArrowLeftOutline class="h-3.5 w-3.5" />
+    <ArrowLeft class="h-3.5 w-3.5" />
     Back to administration
   </a>
 
@@ -136,7 +136,7 @@
       class="mt-6 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{error ?? 'Storage target not found.'}</span>
     </div>
   {:else}
@@ -158,7 +158,7 @@
           {#if deleting}
             <span class="loading loading-spinner loading-xs mr-1.5"></span>
           {:else}
-            <TrashBinOutline class="mr-1.5 h-4 w-4" />
+            <Trash2 class="mr-1.5 h-4 w-4" />
           {/if}
           Delete
         </button>
@@ -170,7 +170,7 @@
         class="mt-5 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
         role="alert"
       >
-        <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+        <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
         <span>{error}</span>
       </div>
     {/if}

@@ -3,14 +3,14 @@
   import { goto } from '$app/navigation';
   import { Select } from '$lib/components/ui';
   import {
-    ArrowLeftOutline,
-    BellOutline,
-    CheckCircleOutline,
-    ExclamationCircleOutline,
-    FlaskOutline,
-    PaperPlaneOutline,
-    PlusOutline
-  } from 'flowbite-svelte-icons';
+    ArrowLeft,
+    Bell,
+    CircleAlert,
+    CircleCheck,
+    FlaskConical,
+    Plus,
+    Send
+  } from '@lucide/svelte';
   import {
     NOTIFICATION_PROVIDER_KEY_PATTERN,
     NOTIFICATION_PROVIDER_KINDS,
@@ -643,7 +643,7 @@
 
   <div class="border-t border-base-300/70 pt-5">
     <div class="flex items-center gap-2">
-      <BellOutline class="h-4 w-4 text-primary" />
+      <Bell class="h-4 w-4 text-primary" />
       <h3 class="text-sm font-bold text-base-content">{activeDefinition.name} settings</h3>
     </div>
 
@@ -712,7 +712,7 @@
       class="flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{submitError}</span>
     </div>
   {/if}
@@ -721,16 +721,16 @@
     <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={providerEnabled} /><span>Enabled</span></label>
     <div class="flex flex-col-reverse gap-3 sm:flex-row">
       <a class="btn btn-sm btn-ghost text-xs" href="/profile/notifications">
-        <ArrowLeftOutline class="mr-1.5 h-4 w-4" />
+        <ArrowLeft class="mr-1.5 h-4 w-4" />
         Back
       </a>
       <button class="btn btn-sm btn-primary text-xs" type="submit" disabled={savingProvider}>
         {#if savingProvider}
           <span class="loading loading-spinner loading-xs mr-2"></span>
         {:else if isUpdate}
-          <CheckCircleOutline class="mr-1.5 h-4 w-4" />
+          <CircleCheck class="mr-1.5 h-4 w-4" />
         {:else}
-          <PlusOutline class="mr-1.5 h-4 w-4" />
+          <Plus class="mr-1.5 h-4 w-4" />
         {/if}
         {isUpdate ? 'Save changes' : 'Create provider'}
       </button>
@@ -741,7 +741,7 @@
 {#if isUpdate && initial}
   <section class="mt-5 rounded-xl border border-base-300/80 bg-base-200/20 p-4" aria-labelledby="notification-test-title">
     <h3 id="notification-test-title" class="flex items-center gap-2 text-sm font-bold text-base-content">
-      <FlaskOutline class="h-4 w-4 text-primary" />
+      <FlaskConical class="h-4 w-4 text-primary" />
       Test delivery
     </h3>
 
@@ -750,7 +750,7 @@
         class="mt-4 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
         role="alert"
       >
-        <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+        <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
         <span>{testError}</span>
       </div>
     {/if}
@@ -760,7 +760,7 @@
         class="mt-4 flex items-start gap-2 rounded-xl border border-success/30 bg-success/10 p-3 text-sm text-success"
         role="status"
       >
-        <CheckCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+        <CircleCheck class="mt-0.5 h-4 w-4 shrink-0" />
         <span>{testStatus}</span>
       </div>
     {/if}
@@ -778,7 +778,7 @@
       {#if testingProvider}
         <span class="loading loading-spinner loading-xs mr-1.5"></span>
       {:else}
-        <PaperPlaneOutline class="mr-1.5 h-4 w-4" />
+        <Send class="mr-1.5 h-4 w-4" />
       {/if}
       Send test
     </button>

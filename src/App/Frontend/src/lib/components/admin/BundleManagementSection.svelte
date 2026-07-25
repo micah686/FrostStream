@@ -2,18 +2,18 @@
   import { onMount } from 'svelte';
   import { Modal } from '$lib/components/ui';
   import {
-    CheckOutline,
-    ChevronDownOutline,
-    ChevronUpOutline,
-    CubesStackedOutline,
-    EditOutline,
-    ExclamationCircleOutline,
-    PlusOutline,
-    RefreshOutline,
-    ServerOutline,
-    TrashBinOutline,
-    UsersGroupOutline
-  } from 'flowbite-svelte-icons';
+    Boxes,
+    Check,
+    ChevronDown,
+    ChevronUp,
+    CircleAlert,
+    Pencil,
+    Plus,
+    RefreshCw,
+    Server,
+    Trash2,
+    Users
+  } from '@lucide/svelte';
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
   import { ApiRequestError } from '$lib/api/http';
   import {
@@ -270,7 +270,7 @@
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div class="min-w-0">
       <div class="flex items-center gap-2">
-        <CubesStackedOutline class="h-5 w-5 text-primary" />
+        <Boxes class="h-5 w-5 text-primary" />
         <h2 id="bundle-management-title" class="text-base font-bold text-base-content">Bundle management</h2>
       </div>
       <p class="mt-2 text-sm text-base-content/60">
@@ -279,11 +279,11 @@
     </div>
     <div class="flex flex-wrap gap-2">
       <button class="btn btn-sm btn-neutral" disabled={loading} onclick={() => void loadAll()}>
-        <RefreshOutline class="mr-1.5 h-3.5 w-3.5" />
+        <RefreshCw class="mr-1.5 h-3.5 w-3.5" />
         Refresh
       </button>
       <button class="btn btn-sm btn-primary" onclick={openCreateModal}>
-        <PlusOutline class="mr-1.5 h-3.5 w-3.5" />
+        <Plus class="mr-1.5 h-3.5 w-3.5" />
         Create runtime bundle
       </button>
     </div>
@@ -294,20 +294,20 @@
       class="mt-4 flex items-start gap-2 rounded-xl border border-warning/60 bg-warning/10 p-3 text-sm text-warning"
       role="alert"
     >
-      <ServerOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <Server class="mt-0.5 h-4 w-4 shrink-0" />
       <span>OpenFGA is unavailable. Bundle authorization changes cannot complete until it recovers.</span>
     </div>
   {/if}
 
   {#if loadError}
     <div class="mt-4 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error" role="alert">
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{displayError(loadError, 'Could not load bundle management data.')}</span>
     </div>
   {/if}
   {#if mutationError}
     <div class="mt-4 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error" role="alert">
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{displayError(mutationError, 'Bundle operation failed.')}</span>
     </div>
   {/if}
@@ -316,7 +316,7 @@
     <div class="mt-10 flex justify-center"><span class="loading loading-spinner loading-md"></span></div>
   {:else if bundles.length === 0}
     <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
-      <CubesStackedOutline class="mx-auto h-9 w-9 text-base-content/30" />
+      <Boxes class="mx-auto h-9 w-9 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No bundles</p>
       <p class="mt-1 text-sm text-base-content/50">Create a runtime bundle after the catalog is available.</p>
     </div>
@@ -356,9 +356,9 @@
             <span class="flex shrink-0 items-center gap-1.5 text-xs text-base-content/40">
               {items.length}
               {#if open}
-                <ChevronUpOutline class="h-3 w-3" />
+                <ChevronUp class="h-3 w-3" />
               {:else}
-                <ChevronDownOutline class="h-3 w-3" />
+                <ChevronDown class="h-3 w-3" />
               {/if}
             </span>
           </button>
@@ -403,7 +403,7 @@
                     class="inline-flex h-9 min-w-9 items-center justify-center gap-2 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary"
                     onclick={() => openEditModal(selectedBundle)}
                   >
-                    <EditOutline class="h-4 w-4" />
+                    <Pencil class="h-4 w-4" />
                     Edit endpoints
                   </button>
                   <button
@@ -420,7 +420,7 @@
                     {#if deletingBundleId === selectedBundle.id}
                       <span class="loading loading-spinner loading-xs"></span>
                     {:else}
-                      <TrashBinOutline class="h-4 w-4" />
+                      <Trash2 class="h-4 w-4" />
                     {/if}
                   </button>
                 </div>
@@ -501,7 +501,7 @@
                   <div class="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center">
                     <div class="flex min-w-0 items-center gap-2">
                       <span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-base-300/70 text-primary">
-                        <UsersGroupOutline class="h-4 w-4" />
+                        <Users class="h-4 w-4" />
                       </span>
                       <div class="min-w-0">
                         <div class="flex flex-wrap items-center gap-2">
@@ -583,7 +583,7 @@
 
     {#if pickerError}
       <div class="flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error" role="alert">
-        <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+        <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
         <span>{displayError(pickerError, 'Could not save the bundle.')}</span>
       </div>
     {/if}
@@ -627,7 +627,7 @@
     </div>
 
     <div class="flex flex-wrap items-center gap-2 text-xs text-base-content/50">
-      <CheckOutline class="h-3.5 w-3.5 text-success" />
+      <Check class="h-3.5 w-3.5 text-success" />
       {selectedEndpointCount()} endpoint{selectedEndpointCount() === 1 ? '' : 's'} selected
     </div>
   </div>

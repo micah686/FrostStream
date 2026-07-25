@@ -1,8 +1,8 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { ClockOutline, DownloadOutline, VideoCameraOutline } from 'flowbite-svelte-icons';
+  import { Clock, Download, Video } from '@lucide/svelte';
 
-  type IconComponent = typeof DownloadOutline;
+  type IconComponent = typeof Download;
 
   interface JobsSection {
     label: string;
@@ -13,9 +13,9 @@
   let { children } = $props();
 
   const sections: JobsSection[] = [
-    { label: 'Downloads', icon: DownloadOutline, href: '/jobs' },
-    { label: 'Encoding', icon: VideoCameraOutline, href: '/jobs/encoding' },
-    { label: 'Background', icon: ClockOutline, href: '/jobs/background' }
+    { label: 'Downloads', icon: Download, href: '/jobs' },
+    { label: 'Encoding', icon: Video, href: '/jobs/encoding' },
+    { label: 'Background', icon: Clock, href: '/jobs/background' }
   ];
 
   function isActive(section: JobsSection): boolean {

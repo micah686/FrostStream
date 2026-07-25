@@ -3,18 +3,18 @@
   import type { ChartConfiguration } from 'chart.js';
   import { Select } from '$lib/components/ui';
   import {
-    ChartLineUpOutline,
-    ChevronLeftOutline,
-    ChevronRightOutline,
-    ClockOutline,
-    DatabaseOutline,
-    DownloadOutline,
-    ExclamationCircleOutline,
-    EyeOutline,
-    RectangleListOutline,
-    RefreshOutline,
-    SearchOutline
-  } from 'flowbite-svelte-icons';
+    ChevronLeft,
+    ChevronRight,
+    CircleAlert,
+    Clock,
+    Database,
+    Download,
+    Eye,
+    LayoutList,
+    RefreshCw,
+    Search,
+    TrendingUp
+  } from '@lucide/svelte';
   import { formatBytes, formatDuration, formatRelativeDate } from '$lib/media';
   import StatisticsChart from './StatisticsChart.svelte';
   import {
@@ -492,7 +492,7 @@
         <p class="mt-2 max-w-2xl text-sm text-base-content/60">See what is in your library, how downloads are progressing, and which channels have the best coverage.</p>
       </div>
       <button class="btn btn-sm btn-neutral text-sm" disabled={loading || channelsLoading || downloadsLoading} onclick={loadAll}>
-        <RefreshOutline class={['mr-2 h-4 w-4', (loading || channelsLoading || downloadsLoading) && 'animate-spin']} />
+        <RefreshCw class={['mr-2 h-4 w-4', (loading || channelsLoading || downloadsLoading) && 'animate-spin']} />
         Refresh data
       </button>
     </div>
@@ -501,7 +501,7 @@
   <div class="p-5 sm:p-7">
     {#if error}
       <div class="mb-5 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error" role="alert">
-        <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+        <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
         <span>{error}</span>
       </div>
     {/if}
@@ -517,7 +517,7 @@
               <p class="mt-3 text-3xl font-bold tracking-tight text-base-content">{overview?.inventory.totalMedia.toLocaleString() ?? '-'}</p>
               <p class="mt-1 text-xs text-base-content/50">Across {overview?.inventory.totalChannels.toLocaleString() ?? '-'} channels</p>
             </div>
-            <span class="grid h-10 w-10 place-items-center rounded-xl bg-base-200/80 text-base-content/60"><RectangleListOutline class="h-5 w-5" /></span>
+            <span class="grid h-10 w-10 place-items-center rounded-xl bg-base-200/80 text-base-content/60"><LayoutList class="h-5 w-5" /></span>
           </div>
         </article>
         <article class="relative overflow-hidden rounded-2xl border border-base-300/80 bg-base-200/25 p-5">
@@ -527,7 +527,7 @@
               <p class="mt-3 text-3xl font-bold tracking-tight text-base-content">{overview?.inventory.totalDownloads.toLocaleString() ?? '-'}</p>
               <p class="mt-1 text-xs text-base-content/50">{overview ? formatBytes(overview.inventory.totalBytes) : '-'} stored</p>
             </div>
-            <span class="grid h-10 w-10 place-items-center rounded-xl bg-base-200/80 text-base-content/60"><DownloadOutline class="h-5 w-5" /></span>
+            <span class="grid h-10 w-10 place-items-center rounded-xl bg-base-200/80 text-base-content/60"><Download class="h-5 w-5" /></span>
           </div>
         </article>
         <article class="relative overflow-hidden rounded-2xl border border-base-300/80 bg-base-200/25 p-5">
@@ -537,7 +537,7 @@
               <p class="mt-3 text-3xl font-bold tracking-tight text-base-content">{formatDuration(overview?.inventory.totalDurationSeconds) ?? '-'}</p>
               <p class="mt-1 text-xs text-base-content/50">Playable media duration</p>
             </div>
-            <span class="grid h-10 w-10 place-items-center rounded-xl bg-base-200/80 text-base-content/60"><ClockOutline class="h-5 w-5" /></span>
+            <span class="grid h-10 w-10 place-items-center rounded-xl bg-base-200/80 text-base-content/60"><Clock class="h-5 w-5" /></span>
           </div>
         </article>
         <article class="relative overflow-hidden rounded-2xl border border-base-300/80 bg-base-200/25 p-5">
@@ -547,7 +547,7 @@
               <p class="mt-3 text-3xl font-bold tracking-tight text-base-content">{overview ? percent(overview.watchProgress.watchedPercent) : '-'}</p>
               <p class="mt-1 text-xs text-base-content/50">{overview?.watchProgress.watchedCount.toLocaleString() ?? '-'} completed</p>
             </div>
-            <span class="grid h-10 w-10 place-items-center rounded-xl bg-base-200/80 text-base-content/60"><EyeOutline class="h-5 w-5" /></span>
+            <span class="grid h-10 w-10 place-items-center rounded-xl bg-base-200/80 text-base-content/60"><Eye class="h-5 w-5" /></span>
           </div>
         </article>
       </div>
@@ -627,14 +627,14 @@
 
         {#if downloadsError}
           <div class="mt-4 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error" role="alert">
-            <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+            <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
             <span>{downloadsError}</span>
           </div>
         {:else if downloadsLoading}
           <div class="mt-8 flex min-h-64 items-center justify-center"><span class="loading loading-spinner loading-sm"></span></div>
         {:else if downloads.length === 0}
           <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-10 text-center">
-            <ChartLineUpOutline class="mx-auto h-9 w-9 text-base-content/30" />
+            <TrendingUp class="mx-auto h-9 w-9 text-base-content/30" />
             <p class="mt-4 text-sm font-semibold text-base-content/80">No activity in this date range</p>
             <p class="mt-1 text-xs text-base-content/40">Try a wider range or another interval.</p>
           </div>
@@ -659,7 +659,7 @@
             <form class="min-w-0 sm:w-[28rem] xl:w-[34rem]" onsubmit={submitChannelSearch} role="search">
               <label class="relative min-w-0 flex-1">
                 <span class="sr-only">Search channels</span>
-                <SearchOutline class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-base-content/40" />
+                <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-base-content/40" />
                 <input
                   type="search"
                   bind:value={channelSearchDraft}
@@ -721,7 +721,7 @@
 
         {#if channelsError}
           <div class="mt-4 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error" role="alert">
-            <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+            <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
             <span>{channelsError}</span>
           </div>
         {:else if channelsLoading}
@@ -729,11 +729,11 @@
         {:else if channels.length === 0}
           <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-10 text-center">
             {#if channelSearch}
-              <SearchOutline class="mx-auto h-9 w-9 text-base-content/30" />
+              <Search class="mx-auto h-9 w-9 text-base-content/30" />
               <p class="mt-4 text-sm font-semibold text-base-content/80">No matching channels</p>
               <p class="mt-1 text-xs text-base-content/40">Try a channel name, handle, or platform.</p>
             {:else}
-              <DatabaseOutline class="mx-auto h-9 w-9 text-base-content/30" />
+              <Database class="mx-auto h-9 w-9 text-base-content/30" />
               <p class="mt-4 text-sm font-semibold text-base-content/80">No channel statistics</p>
             {/if}
           </div>
@@ -755,7 +755,7 @@
                     <td class="px-3 py-4">
                       <div class="flex min-w-56 items-center gap-3">
                         <span class="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-base-content/20 bg-base-300/60 text-primary">
-                          <DatabaseOutline class="h-4.5 w-4.5" />
+                          <Database class="h-4.5 w-4.5" />
                         </span>
                         <div class="min-w-0">
                           {#if channel.accountId}
@@ -791,12 +791,12 @@
             <p class="text-xs text-base-content/40">Page {channelPage} of {totalChannelPages}</p>
             <div class="flex gap-2">
               <button class="btn btn-sm btn-neutral text-xs" disabled={channelPage <= 1 || channelsLoading} onclick={() => loadChannels(channelPage - 1)}>
-                <ChevronLeftOutline class="mr-1 h-3.5 w-3.5" />
+                <ChevronLeft class="mr-1 h-3.5 w-3.5" />
                 Previous
               </button>
               <button class="btn btn-sm btn-neutral text-xs" disabled={!hasMoreChannels || channelsLoading} onclick={() => loadChannels(channelPage + 1)}>
                 Next
-                <ChevronRightOutline class="ml-1 h-3.5 w-3.5" />
+                <ChevronRight class="ml-1 h-3.5 w-3.5" />
               </button>
             </div>
           </div>

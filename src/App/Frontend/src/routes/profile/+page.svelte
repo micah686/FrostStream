@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { UsersGroupOutline } from 'flowbite-svelte-icons';
+  import { Users } from '@lucide/svelte';
 
   let { data } = $props();
 
@@ -21,7 +21,7 @@
   {/if}
   <div class="rounded-xl border border-base-300/80 bg-base-200/40 p-4">
     <p class="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">
-      <UsersGroupOutline class="h-3.5 w-3.5" />
+      <Users class="h-3.5 w-3.5" />
       Groups
     </p>
     <div class="mt-2 flex flex-wrap gap-1.5">

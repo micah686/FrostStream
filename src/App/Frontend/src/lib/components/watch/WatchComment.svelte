@@ -1,12 +1,12 @@
 <script lang="ts">
   import {
-    ArrowDownOutline,
-    BadgeCheckSolid,
-    HeartSolid,
-    MapPinSolid,
-    ThumbsDownOutline,
-    ThumbsUpOutline
-  } from 'flowbite-svelte-icons';
+    ArrowDown,
+    BadgeCheck,
+    Heart,
+    MapPin,
+    ThumbsDown,
+    ThumbsUp
+  } from '@lucide/svelte';
   import { accentFor, formatCount, formatRelativeDate, initialsFor } from '$lib/media';
   import WatchComment from './WatchComment.svelte';
 
@@ -73,7 +73,7 @@
     <div class="min-w-0 flex-1">
       {#if comment.isPinned}
         <p class="mb-1 flex flex-wrap items-center gap-1.5 text-[11px] font-medium text-base-content/50">
-          <MapPinSolid class="h-3 w-3 text-base-content/50" />
+          <MapPin class="h-3 w-3 text-base-content/50" />
           <span>Pinned by {authorHandle}</span>
         </p>
       {/if}
@@ -82,7 +82,7 @@
         {#if comment.isUploader}
           <span class="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/20 px-3 py-1 font-semibold text-primary shadow-sm shadow-primary/30">
             <span>{displayName}</span>
-            <BadgeCheckSolid class="h-3.5 w-3.5 shrink-0 text-primary" />
+            <BadgeCheck class="h-3.5 w-3.5 shrink-0 text-primary" />
           </span>
         {:else}
           <span class="font-semibold text-base-content/90">{authorHandle}</span>
@@ -96,13 +96,13 @@
         <div class="flex items-center gap-2 text-xs text-base-content/50">
           {#if comment.likeCount != null}
             <span class="inline-flex items-center gap-1">
-              <ThumbsUpOutline class="h-3.5 w-3.5" />
+              <ThumbsUp class="h-3.5 w-3.5" />
               {formatCount(comment.likeCount)}
             </span>
           {/if}
           {#if comment.dislikeCount != null}
             <span class="inline-flex items-center gap-1">
-              <ThumbsDownOutline class="h-3.5 w-3.5" />
+              <ThumbsDown class="h-3.5 w-3.5" />
               {formatCount(comment.dislikeCount)}
             </span>
           {/if}
@@ -127,7 +127,7 @@
                   />
                 {/if}
               </span>
-              <HeartSolid class="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-base-200 p-0.5 text-rose-400 shadow" />
+              <Heart class="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-base-200 p-0.5 text-rose-400 shadow" />
             </span>
           {/if}
         </div>
@@ -139,7 +139,7 @@
           onclick={() => (expanded = !expanded)}
           class="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-base-content/50 transition hover:text-base-content/80"
         >
-          <ArrowDownOutline class={['h-3.5 w-3.5 transition-transform', expanded ? 'rotate-180' : '']} />
+          <ArrowDown class={['h-3.5 w-3.5 transition-transform', expanded ? 'rotate-180' : '']} />
           {comment.replies.length} {comment.replies.length === 1 ? 'reply' : 'replies'}
         </button>
       {/if}

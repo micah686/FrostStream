@@ -2,14 +2,14 @@
   import { onMount } from 'svelte';
   import { Select } from '$lib/components/ui';
   import {
-    CheckCircleOutline,
-    DownloadOutline,
-    ExclamationCircleOutline,
-    ListOutline,
-    UsersGroupOutline,
-    VideoCameraOutline,
-    CloseOutline
-  } from 'flowbite-svelte-icons';
+    CircleAlert,
+    CircleCheck,
+    Download,
+    List,
+    Users,
+    Video,
+    X
+  } from '@lucide/svelte';
   import { listOptionPresets, type OptionPreset } from '$lib/api/optionPresets';
   import { listDownloadConfigSets, type DownloadConfigSet } from '$lib/api/downloadConfigSets';
   import { queuePlaylistDownload } from '$lib/api/playlists';
@@ -32,10 +32,10 @@
   }
 
 
-  const tabs: { key: TabKey; label: string; icon: typeof VideoCameraOutline }[] = [
-    { key: 'video', label: 'Video', icon: VideoCameraOutline },
-    { key: 'playlist', label: 'Playlist', icon: ListOutline },
-    { key: 'creator', label: 'Creator', icon: UsersGroupOutline }
+  const tabs: { key: TabKey; label: string; icon: typeof Video }[] = [
+    { key: 'video', label: 'Video', icon: Video },
+    { key: 'playlist', label: 'Playlist', icon: List },
+    { key: 'creator', label: 'Creator', icon: Users }
   ];
 
   const kindLabels: Record<TabKey, string> = {
@@ -379,7 +379,7 @@
       class="flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{submitError}</span>
     </div>
   {/if}
@@ -389,7 +389,7 @@
       {#if submitting}
         <span class="loading loading-spinner loading-xs mr-2"></span>
       {:else}
-        <DownloadOutline class="mr-2 h-4 w-4" />
+        <Download class="mr-2 h-4 w-4" />
       {/if}
       {label}
     </button>
@@ -472,7 +472,7 @@
               <span class="text-xs text-base-content/40">{overrideStatus(audioOnlyOverride)}</span>
               {#if audioOnlyOverride !== null}
                 <button type="button" aria-label="Use preset audio setting" title="Use preset" onclick={() => (audioOnlyOverride = null)} class="rounded p-1 text-base-content/50 hover:bg-base-300 hover:text-base-content/80">
-                  <CloseOutline class="h-3.5 w-3.5" />
+                  <X class="h-3.5 w-3.5" />
                 </button>
               {/if}
             </div>
@@ -481,7 +481,7 @@
               <span class="text-xs text-base-content/40">{overrideStatus(downloadInfoJsonOverride)}</span>
               {#if downloadInfoJsonOverride !== null}
                 <button type="button" aria-label="Use preset info JSON setting" title="Use preset" onclick={() => (downloadInfoJsonOverride = null)} class="rounded p-1 text-base-content/50 hover:bg-base-300 hover:text-base-content/80">
-                  <CloseOutline class="h-3.5 w-3.5" />
+                  <X class="h-3.5 w-3.5" />
                 </button>
               {/if}
             </div>
@@ -490,7 +490,7 @@
               <span class="text-xs text-base-content/40">{overrideStatus(downloadThumbnailOverride)}</span>
               {#if downloadThumbnailOverride !== null}
                 <button type="button" aria-label="Use preset thumbnail setting" title="Use preset" onclick={() => (downloadThumbnailOverride = null)} class="rounded p-1 text-base-content/50 hover:bg-base-300 hover:text-base-content/80">
-                  <CloseOutline class="h-3.5 w-3.5" />
+                  <X class="h-3.5 w-3.5" />
                 </button>
               {/if}
             </div>
@@ -499,7 +499,7 @@
               <span class="text-xs text-base-content/40">{overrideStatus(downloadSubtitlesOverride)}</span>
               {#if downloadSubtitlesOverride !== null}
                 <button type="button" aria-label="Use preset subtitles setting" title="Use preset" onclick={() => (downloadSubtitlesOverride = null)} class="rounded p-1 text-base-content/50 hover:bg-base-300 hover:text-base-content/80">
-                  <CloseOutline class="h-3.5 w-3.5" />
+                  <X class="h-3.5 w-3.5" />
                 </button>
               {/if}
             </div>
@@ -604,7 +604,7 @@
       <ul class="mt-3 space-y-2">
         {#each queued as job (job.id)}
           <li class="flex items-center gap-3 rounded-xl bg-base-200/40 px-4 py-3">
-            <CheckCircleOutline class="h-5 w-5 shrink-0 text-success" />
+            <CircleCheck class="h-5 w-5 shrink-0 text-success" />
             <div class="min-w-0 flex-1">
               <p class="truncate text-sm text-base-content/90">{job.sourceUrl}</p>
               <p class="mt-0.5 truncate font-mono text-xs text-base-content/40">{job.id}</p>

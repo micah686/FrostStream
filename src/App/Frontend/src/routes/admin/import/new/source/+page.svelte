@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { Select } from '$lib/components/ui';
-  import { FolderOpenOutline } from 'flowbite-svelte-icons';
+  import { FolderOpen } from '@lucide/svelte';
   import FolderPickerModal from '$lib/components/admin/FolderPickerModal.svelte';
   import ImportNotice from '$lib/components/admin/ImportNotice.svelte';
   import ImportWizardStepper from '$lib/components/admin/ImportWizardStepper.svelte';
@@ -45,7 +45,7 @@
     <div><label class="label mb-2" for="storage">Destination storage</label>{#if storageKeys.length}<Select id="storage" items={storageItems} bind:value={storageKey} />{:else}<input class="input w-full" id="storage" bind:value={storageKey} placeholder="default" />{/if}<span class="mt-1 block text-xs text-base-content/50">The storage key that receives imported files.</span></div>
     <div><label class="label mb-2" for="worker">Worker tag</label><input class="input w-full" id="worker" list="worker-tags" bind:value={workerTag} placeholder="Optional — search tags" /><datalist id="worker-tags">{#each workerTags as tag}<option value={tag}></option>{/each}</datalist><span class="mt-1 block text-xs text-base-content/50">Tags are reported by available workers. Leave blank when any worker can handle the import.</span></div>
     <div><span class="label mb-2 block">Available workers</span><div class="min-h-10 rounded-lg border border-base-300 bg-base-200/60 px-3 py-2 text-xs text-base-content/60">{#if visibleWorkers.length}{visibleWorkers.map((worker) => worker.name).join(', ')}{:else}No matching workers online{/if}</div></div>
-    <div class="lg:col-span-2"><label class="label mb-2" for="subpath">Source folder</label><div class="flex gap-2"><input class="input w-full min-w-0 flex-1" id="subpath" bind:value={subPath} placeholder="Select a folder on the chosen worker" /><button class="btn btn-sm btn-neutral" type="button" onclick={() => (pickerOpen = true)} disabled={!visibleWorkers.length}><FolderOpenOutline class="mr-2 h-4 w-4" />Browse</button></div></div>
+    <div class="lg:col-span-2"><label class="label mb-2" for="subpath">Source folder</label><div class="flex gap-2"><input class="input w-full min-w-0 flex-1" id="subpath" bind:value={subPath} placeholder="Select a folder on the chosen worker" /><button class="btn btn-sm btn-neutral" type="button" onclick={() => (pickerOpen = true)} disabled={!visibleWorkers.length}><FolderOpen class="mr-2 h-4 w-4" />Browse</button></div></div>
     <div class="flex justify-between gap-3 lg:col-span-2"><a href="/admin/import" class="rounded-lg px-4 py-2.5 text-sm font-semibold text-base-content/60 hover:text-base-content">Cancel</a><button class="btn btn-sm btn-primary" type="submit" disabled={busy}>{#if busy}<span class="loading loading-spinner loading-xs mr-2"></span>{/if}Scan files and continue</button></div>
   </form>
 </section>

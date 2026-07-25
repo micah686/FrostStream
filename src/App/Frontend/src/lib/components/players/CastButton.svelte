@@ -8,7 +8,7 @@
    * Requires a secure context (HTTPS or localhost) — the Cast SDK does not initialize on
    * plain-HTTP origins, in which case the button simply stays hidden.
   */
-  import { ComputerSpeakerOutline } from 'flowbite-svelte-icons';
+  import { Cast } from '@lucide/svelte';
   import { canUseBrowserCast, startBrowserCast } from './browserCast';
 
   let {
@@ -55,7 +55,7 @@
         : 'border-base-300 bg-base-200/70 text-base-content/80 hover:bg-base-300'
     ]}
   >
-    <ComputerSpeakerOutline class="h-4 w-4" />
+    <Cast class="h-4 w-4" />
     Cast
   </button>
 {/if}

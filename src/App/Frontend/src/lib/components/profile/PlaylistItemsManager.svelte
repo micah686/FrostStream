@@ -1,11 +1,11 @@
 <script lang="ts">
   import {
-    ChevronDownOutline,
-    ChevronUpOutline,
-    ExclamationCircleOutline,
-    ListMusicOutline,
-    TrashBinOutline
-  } from 'flowbite-svelte-icons';
+    ChevronDown,
+    ChevronUp,
+    CircleAlert,
+    ListMusic,
+    Trash2
+  } from '@lucide/svelte';
   import { accentFor, formatDuration, formatRelativeDate, initialsFor } from '$lib/media';
   import {
     removeUserPlaylistItem,
@@ -106,7 +106,7 @@
 
 {#if !playlist.items || playlist.items.length === 0}
   <div class="rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
-    <ListMusicOutline class="mx-auto h-9 w-9 text-base-content/30" />
+    <ListMusic class="mx-auto h-9 w-9 text-base-content/30" />
     <p class="mt-4 text-sm font-semibold text-base-content/80">This playlist is empty</p>
     <p class="mt-1 text-sm text-base-content/50">Add videos to it from the watch page.</p>
   </div>
@@ -116,7 +116,7 @@
       class="mb-3 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{itemActionError}</span>
     </div>
   {/if}
@@ -186,7 +186,7 @@
               disabled={index === 0 || busyItemGuid !== null}
               onclick={() => moveItem(item.mediaGuid, -1)}
             >
-              <ChevronUpOutline class="h-4 w-4" />
+              <ChevronUp class="h-4 w-4" />
             </button>
             <button
               type="button"
@@ -196,7 +196,7 @@
               disabled={index === (playlist.items?.length ?? 0) - 1 || busyItemGuid !== null}
               onclick={() => moveItem(item.mediaGuid, 1)}
             >
-              <ChevronDownOutline class="h-4 w-4" />
+              <ChevronDown class="h-4 w-4" />
             </button>
             <button
               type="button"
@@ -206,7 +206,7 @@
               disabled={busyItemGuid !== null}
               onclick={() => removeItem(item.mediaGuid)}
             >
-              <TrashBinOutline class="h-4 w-4" />
+              <Trash2 class="h-4 w-4" />
             </button>
           {/if}
         </div>

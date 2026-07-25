@@ -2,13 +2,13 @@
   import { onDestroy, onMount } from 'svelte';
   import { Select } from '$lib/components/ui';
   import {
-    ChevronLeftOutline,
-    ChevronRightOutline,
-    DownloadOutline,
-    ExclamationCircleOutline,
-    RefreshOutline,
-    ServerOutline
-  } from 'flowbite-svelte-icons';
+    ChevronLeft,
+    ChevronRight,
+    CircleAlert,
+    Download,
+    RefreshCw,
+    Server
+  } from '@lucide/svelte';
   import {
     clearProviderCircuit,
     setPriority,
@@ -308,12 +308,12 @@
         {#if queueState.loading}
           <span class="loading loading-spinner loading-xs mr-1.5"></span>
         {:else}
-          <RefreshOutline class="mr-1.5 h-4 w-4" />
+          <RefreshCw class="mr-1.5 h-4 w-4" />
         {/if}
         Refresh
       </button>
       <a class="btn btn-sm btn-primary text-xs" href="/download">
-        <DownloadOutline class="mr-1.5 h-4 w-4" />
+        <Download class="mr-1.5 h-4 w-4" />
         New
       </a>
     </div>
@@ -400,7 +400,7 @@
       class="mt-5 flex items-start gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{actionError ?? queueState.error}</span>
     </div>
   {/if}
@@ -411,7 +411,7 @@
     </div>
   {:else if queueState.rows.length === 0}
     <div class="mt-8 rounded-xl border border-base-300/80 bg-base-200/40 p-10 text-center">
-      <ServerOutline class="mx-auto h-10 w-10 text-base-content/30" />
+      <Server class="mx-auto h-10 w-10 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No jobs match this view</p>
       <p class="mt-1 text-sm text-base-content/50">Queue a download or change the filters.</p>
     </div>
@@ -440,12 +440,12 @@
       </p>
       <div class="flex gap-2">
         <button class="btn btn-sm btn-neutral text-xs" disabled={page <= 1 || queueState.loading} onclick={previousPage}>
-          <ChevronLeftOutline class="mr-1 h-3.5 w-3.5" />
+          <ChevronLeft class="mr-1 h-3.5 w-3.5" />
           Previous
         </button>
         <button class="btn btn-sm btn-neutral text-xs" disabled={!queueState.nextCursor || queueState.loading} onclick={nextPage}>
           Next
-          <ChevronRightOutline class="ml-1 h-3.5 w-3.5" />
+          <ChevronRight class="ml-1 h-3.5 w-3.5" />
         </button>
       </div>
     </div>

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { FileImportOutline } from 'flowbite-svelte-icons';
+  import { FileInput } from '@lucide/svelte';
 
   const card = 'card border border-base-300 bg-base-100 p-5 sm:p-6';
 </script>
@@ -11,7 +11,7 @@
       <p class="mt-2 max-w-2xl text-sm leading-6 text-base-content/60">Choose files from a worker’s incoming folder, attach the best available metadata, review everything, and monitor the import.</p>
     </div>
     <a href="/admin/import/new/source" class="sm:ml-auto">
-      <button class="btn btn-sm btn-primary"><FileImportOutline class="mr-2 h-5 w-5" />Start import</button>
+      <button class="btn btn-sm btn-primary"><FileInput class="mr-2 h-5 w-5" />Start import</button>
     </a>
   </div>
 </section>

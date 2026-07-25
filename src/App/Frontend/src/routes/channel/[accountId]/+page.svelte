@@ -3,19 +3,19 @@
   import { onDestroy } from 'svelte';
   import { Select } from '$lib/components/ui';
   import {
-    ArrowUpRightFromSquareOutline,
-    ChevronDownOutline,
-    ChevronLeftOutline,
-    ChevronRightOutline,
-    ChevronUpOutline,
-    ExclamationCircleOutline,
-    FileCopyOutline,
-    HeadphonesOutline,
-    ImageOutline,
-    MusicOutline,
-    PlaySolid,
-    RectangleListOutline
-  } from 'flowbite-svelte-icons';
+    ChevronDown,
+    ChevronLeft,
+    ChevronRight,
+    ChevronUp,
+    CircleAlert,
+    Copy,
+    ExternalLink,
+    Headphones,
+    Image,
+    LayoutList,
+    Music,
+    Play
+  } from '@lucide/svelte';
   import { accentFor, formatBytes, formatCount, formatDuration, formatRelativeDate, formatViews, initialsFor } from '$lib/media';
   import { refreshAccountAssets } from '$lib/api/metadata';
   import {
@@ -490,7 +490,7 @@
     class="flex items-center gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
     role="alert"
   >
-    <ExclamationCircleOutline class="h-4 w-4 shrink-0" />
+    <CircleAlert class="h-4 w-4 shrink-0" />
     <span>{loadError}</span>
   </div>
 {:else if !account}
@@ -568,9 +568,9 @@
           >
             {descriptionExpanded ? 'Show less' : 'Show more'}
             {#if descriptionExpanded}
-              <ChevronUpOutline class="h-3 w-3" />
+              <ChevronUp class="h-3 w-3" />
             {:else}
-              <ChevronDownOutline class="h-3 w-3" />
+              <ChevronDown class="h-3 w-3" />
             {/if}
           </button>
         {/if}
@@ -593,7 +593,7 @@
       <div class="flex shrink-0 flex-col gap-2 sm:items-end">
         {#if account.accountUrl}
           <a class="btn btn-sm btn-neutral text-xs" href={account.accountUrl} target="_blank" rel="noopener noreferrer">
-            <ArrowUpRightFromSquareOutline class="mr-1.5 h-3.5 w-3.5" />
+            <ExternalLink class="mr-1.5 h-3.5 w-3.5" />
             View on {account.platform}
           </a>
         {/if}
@@ -601,7 +601,7 @@
           {#if assetRefreshBusy}
             <span class="loading loading-spinner loading-xs mr-1.5"></span>
           {:else}
-            <ImageOutline class="mr-1.5 h-3.5 w-3.5" />
+            <Image class="mr-1.5 h-3.5 w-3.5" />
           {/if}
           Refresh assets
         </button>
@@ -609,7 +609,7 @@
           {#if channelAudioBusy}
             <span class="loading loading-spinner loading-xs mr-1.5"></span>
           {:else}
-            <MusicOutline class="mr-1.5 h-3.5 w-3.5" />
+            <Music class="mr-1.5 h-3.5 w-3.5" />
           {/if}
           Encode as audio
         </button>
@@ -620,14 +620,14 @@
             ]} bind:value={selectedStorageKey} onchange={changeAudioStorageKey} disabled={channelAudioBusy || channelAudioLoading} aria-label="Storage key to encode" title="Scope encoding to a single storage key, or encode across all of them" class="w-40 text-xs" />
         {/if}
         <button class="btn btn-sm btn-neutral text-xs" disabled={!audioComplete} onclick={playAudio} title={audioComplete ? 'Play every archived video as Opus audio' : 'Encode every item before starting the complete channel playlist'}>
-          <HeadphonesOutline class="mr-1.5 h-3.5 w-3.5" />
+          <Headphones class="mr-1.5 h-3.5 w-3.5" />
           Play as audio
         </button>
         <button class="btn btn-sm btn-neutral text-xs" disabled={podcastBusy} onclick={copyPodcastFeed} title="Create and copy a channel-scoped podcast subscription URL">
           {#if podcastBusy}
             <span class="loading loading-spinner loading-xs mr-1.5"></span>
           {:else}
-            <FileCopyOutline class="mr-1.5 h-3.5 w-3.5" />
+            <Copy class="mr-1.5 h-3.5 w-3.5" />
           {/if}
           Copy podcast RSS
         </button>
@@ -716,9 +716,9 @@
             {#if statisticsLoading && !statistics}
               <span class="loading loading-spinner loading-xs mr-1.5"></span>
             {:else if statisticsExpanded}
-              <ChevronUpOutline class="mr-1 h-3.5 w-3.5" />
+              <ChevronUp class="mr-1 h-3.5 w-3.5" />
             {:else}
-              <ChevronDownOutline class="mr-1 h-3.5 w-3.5" />
+              <ChevronDown class="mr-1 h-3.5 w-3.5" />
             {/if}
             Statistics
           </button>
@@ -734,7 +734,7 @@
           class="mt-4 flex items-center gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
           role="alert"
         >
-          <ExclamationCircleOutline class="h-4 w-4 shrink-0" />
+          <CircleAlert class="h-4 w-4 shrink-0" />
           <span>{statisticsError}</span>
         </div>
       {:else if statistics}
@@ -839,7 +839,7 @@
         class="mt-6 flex items-center gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
         role="alert"
       >
-        <ExclamationCircleOutline class="h-4 w-4 shrink-0" />
+        <CircleAlert class="h-4 w-4 shrink-0" />
         <span>{mediaError}</span>
       </div>
     {:else if mediaLoading}
@@ -848,7 +848,7 @@
       </div>
     {:else if items.length === 0}
       <div class="mt-10 rounded-2xl border border-base-300/80 bg-base-200/40 p-10 text-center">
-        <RectangleListOutline class="mx-auto h-10 w-10 text-base-content/30" />
+        <LayoutList class="mx-auto h-10 w-10 text-base-content/30" />
         <p class="mt-4 text-sm font-semibold text-base-content/80">No videos archived yet</p>
         <p class="mt-1 text-sm text-base-content/50">
           Nothing from this creator has been downloaded to the server so far.
@@ -888,7 +888,7 @@
               <span
                 class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-white/95 text-slate-900 opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
               >
-                <PlaySolid class="ml-0.5 h-5 w-5" />
+                <Play class="ml-0.5 h-5 w-5" />
               </span>
             </a>
             <div class="mt-3 min-w-0 px-1">
@@ -909,12 +909,12 @@
         </p>
         <div class="flex gap-2">
           <button class="btn btn-sm btn-neutral text-xs" disabled={mediaPage <= 1 || mediaLoading} onclick={() => loadMedia(accountId, mediaPage - 1)}>
-            <ChevronLeftOutline class="mr-1 h-3.5 w-3.5" />
+            <ChevronLeft class="mr-1 h-3.5 w-3.5" />
             Previous
           </button>
           <button class="btn btn-sm btn-neutral text-xs" disabled={!hasMore || mediaLoading} onclick={() => loadMedia(accountId, mediaPage + 1)}>
             Next
-            <ChevronRightOutline class="ml-1 h-3.5 w-3.5" />
+            <ChevronRight class="ml-1 h-3.5 w-3.5" />
           </button>
         </div>
       </div>

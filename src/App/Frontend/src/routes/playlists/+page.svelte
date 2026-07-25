@@ -3,17 +3,17 @@
   import { page } from '$app/state';
   import { Modal, Select } from '$lib/components/ui';
   import {
-    BanOutline,
-    ChevronDownOutline,
-    ChevronUpOutline,
-    CirclePlusOutline,
-    ClipboardListOutline,
-    DownloadOutline,
-    ExclamationCircleOutline,
-    LinkOutline,
-    PlayOutline,
-    RefreshOutline
-  } from 'flowbite-svelte-icons';
+    Ban,
+    ChevronDown,
+    ChevronUp,
+    CircleAlert,
+    CirclePlus,
+    ClipboardList,
+    Download,
+    Link,
+    Play,
+    RefreshCw
+  } from '@lucide/svelte';
   import {
     forceQueuePlaylistItem,
     getPlatformPlaylist,
@@ -282,12 +282,12 @@
         {#if loading}
           <span class="loading loading-spinner loading-xs mr-1.5"></span>
         {:else}
-          <RefreshOutline class="mr-1.5 h-4 w-4" />
+          <RefreshCw class="mr-1.5 h-4 w-4" />
         {/if}
         Refresh
       </button>
       <button class="btn btn-sm btn-primary text-xs" onclick={openSubmitModal}>
-        <CirclePlusOutline class="mr-1.5 h-4 w-4" />
+        <CirclePlus class="mr-1.5 h-4 w-4" />
         Download playlist
       </button>
     </div>
@@ -321,7 +321,7 @@
       class="mt-5 flex items-start gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{actionError ?? loadError}</span>
     </div>
   {/if}
@@ -331,7 +331,7 @@
       class="mt-5 flex items-start gap-3 rounded-xl border border-success/30 bg-success/10 p-4 text-sm text-success"
       role="status"
     >
-      <RefreshOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <RefreshCw class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{actionNotice}</span>
     </div>
   {/if}
@@ -342,13 +342,13 @@
     </div>
   {:else if playlists.length === 0}
     <div class="mt-8 rounded-xl border border-base-300/80 bg-base-200/40 p-10 text-center">
-      <ClipboardListOutline class="mx-auto h-10 w-10 text-base-content/30" />
+      <ClipboardList class="mx-auto h-10 w-10 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No playlists downloaded yet</p>
       <p class="mt-1 text-sm text-base-content/50">
         Queue a playlist URL and every entry will be downloaded into your library.
       </p>
       <button class="btn btn-sm btn-primary mt-5 text-xs" onclick={openSubmitModal}>
-        <CirclePlusOutline class="mr-1.5 h-4 w-4" />
+        <CirclePlus class="mr-1.5 h-4 w-4" />
         Download your first playlist
       </button>
     </div>
@@ -381,7 +381,7 @@
                 rel="noopener noreferrer"
                 class="mt-1.5 inline-flex max-w-full items-center gap-1.5 text-xs text-base-content/50 transition hover:text-primary"
               >
-                <LinkOutline class="h-3.5 w-3.5 shrink-0" />
+                <Link class="h-3.5 w-3.5 shrink-0" />
                 <span class="truncate">{compactUrl(playlist.sourceUrl)}</span>
               </a>
             </div>
@@ -392,10 +392,10 @@
               onclick={() => toggleDetail(playlist)}
             >
               {#if expanded}
-                <ChevronUpOutline class="h-4 w-4" />
+                <ChevronUp class="h-4 w-4" />
                 Hide items
               {:else}
-                <ChevronDownOutline class="h-4 w-4" />
+                <ChevronDown class="h-4 w-4" />
                 Show items
               {/if}
             </button>
@@ -503,7 +503,7 @@
                           <span
                             class="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-bold text-warning ring-1 ring-warning/20"
                           >
-                            <BanOutline class="h-3 w-3" />
+                            <Ban class="h-3 w-3" />
                             {item.ignoredKeyword}
                           </span>
                         {/if}
@@ -523,7 +523,7 @@
                             {#if forceQueueBusy[item.jobId]}
                               <span class="loading loading-spinner loading-xs"></span>
                             {:else}
-                              <PlayOutline class="h-3 w-3" />
+                              <Play class="h-3 w-3" />
                             {/if}
                             Download anyway
                           </button>
@@ -575,7 +575,7 @@
         class="flex items-start gap-2 rounded-lg border border-error/30 bg-error/10 p-3 text-sm text-error"
         role="alert"
       >
-        <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+        <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
         <span>{submitError}</span>
       </div>
     {/if}
@@ -590,7 +590,7 @@
         {#if submitBusy}
           <span class="loading loading-spinner loading-xs mr-1.5"></span>
         {:else}
-          <DownloadOutline class="mr-1.5 h-4 w-4" />
+          <Download class="mr-1.5 h-4 w-4" />
         {/if}
         Queue download
       </button>

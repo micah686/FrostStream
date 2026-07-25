@@ -1,13 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import {
-    ArrowUpRightFromSquareOutline,
-    ChevronRightOutline,
-    ExclamationCircleOutline,
-    RefreshOutline,
-    SearchOutline,
-    UsersGroupOutline
-  } from 'flowbite-svelte-icons';
+    ChevronRight,
+    CircleAlert,
+    ExternalLink,
+    RefreshCw,
+    Search,
+    Users
+  } from '@lucide/svelte';
   import { listAccounts, type AccountSummary } from '$lib/api/accounts';
   import { accentFor, formatCount, initialsFor } from '$lib/media';
 
@@ -113,7 +113,7 @@
       {#if loading}
         <span class="loading loading-spinner loading-xs mr-1.5"></span>
       {:else}
-        <RefreshOutline class="mr-1.5 h-4 w-4" />
+        <RefreshCw class="mr-1.5 h-4 w-4" />
       {/if}
       Refresh
     </button>
@@ -125,7 +125,7 @@
         Platform
       </label>
       <div class="relative">
-        <SearchOutline class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-base-content/40" />
+        <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-base-content/40" />
         <input class="input w-full pl-9 text-sm" id="platform-filter" bind:value={platformFilter} placeholder="youtube, twitch, soundcloud..." />
       </div>
     </div>
@@ -158,7 +158,7 @@
       class="mt-6 flex items-center gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="h-4 w-4 shrink-0" />
+      <CircleAlert class="h-4 w-4 shrink-0" />
       <span>{loadError}</span>
     </div>
   {:else if loading}
@@ -167,7 +167,7 @@
     </div>
   {:else if accounts.length === 0}
     <div class="mt-8 rounded-2xl border border-base-300/80 bg-base-200/40 p-10 text-center">
-      <UsersGroupOutline class="mx-auto h-10 w-10 text-base-content/30" />
+      <Users class="mx-auto h-10 w-10 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No creators found</p>
       <p class="mt-1 text-sm text-base-content/50">Archived media accounts will appear here once metadata is indexed.</p>
     </div>
@@ -226,7 +226,7 @@
               class="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary"
             >
               View channel
-              <ChevronRightOutline class="h-3.5 w-3.5" />
+              <ChevronRight class="h-3.5 w-3.5" />
             </a>
             {#if account.accountUrl}
               <a
@@ -236,7 +236,7 @@
                 class="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/80 transition hover:border-base-content/30 hover:bg-base-300"
               >
                 Source
-                <ArrowUpRightFromSquareOutline class="h-3.5 w-3.5" />
+                <ExternalLink class="h-3.5 w-3.5" />
               </a>
             {/if}
           </div>

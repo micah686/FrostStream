@@ -1,12 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import {
-    CameraPhotoOutline,
-    ChevronRightOutline,
-    ClockOutline,
-    GlobeOutline,
-    PlaySolid
-  } from 'flowbite-svelte-icons';
+    Camera,
+    ChevronRight,
+    Clock,
+    Globe,
+    Play
+  } from '@lucide/svelte';
   import { accentFor, formatBytes, formatDuration, formatRelativeDate, initialsFor } from '$lib/media';
   import { getGlobalStatistics, type StatisticsOverview } from '$lib/api/statistics';
   import { listInProgress } from '$lib/api/watchState';
@@ -130,7 +130,7 @@
       </a>
       <a href="/library" class="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-base-content/50 transition hover:text-primary">
         See all
-        <ChevronRightOutline class="h-3 w-3" />
+        <ChevronRight class="h-3 w-3" />
       </a>
     </div>
   </div>
@@ -141,7 +141,7 @@
     </div>
   {:else if continueCards.length === 0}
     <div class="rounded-2xl border border-base-300/80 bg-base-200/40 p-10 text-center">
-      <ClockOutline class="mx-auto h-10 w-10 text-base-content/30" />
+      <Clock class="mx-auto h-10 w-10 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">Nothing in progress</p>
       <p class="mt-1 text-sm text-base-content/50">Start a video from your library and it will show up here.</p>
     </div>
@@ -182,7 +182,7 @@
             <span
               class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-white/95 text-slate-900 opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
             >
-              <PlaySolid class="ml-0.5 h-5 w-5" />
+              <Play class="ml-0.5 h-5 w-5" />
             </span>
           </a>
           <div class="mt-3 min-w-0 px-1">
@@ -205,17 +205,17 @@
 
 <section class="mt-10 grid gap-4 md:grid-cols-3" aria-label="Library overview">
   <div class="rounded-2xl border border-base-300/80 bg-base-200/40 p-5">
-    <CameraPhotoOutline class="h-5 w-5 text-primary" />
+    <Camera class="h-5 w-5 text-primary" />
     <p class="mt-4 text-2xl font-bold text-base-content">{overview?.inventory.totalMedia.toLocaleString() ?? '-'}</p>
     <p class="mt-1 text-xs text-base-content/50">Videos in your library</p>
   </div>
   <div class="rounded-2xl border border-base-300/80 bg-base-200/40 p-5">
-    <GlobeOutline class="h-5 w-5 text-secondary" />
+    <Globe class="h-5 w-5 text-secondary" />
     <p class="mt-4 text-2xl font-bold text-base-content">{overview?.inventory.totalChannels.toLocaleString() ?? '-'}</p>
     <p class="mt-1 text-xs text-base-content/50">Channels followed</p>
   </div>
   <div class="rounded-2xl border border-base-300/80 bg-base-200/40 p-5">
-    <ClockOutline class="h-5 w-5 text-success" />
+    <Clock class="h-5 w-5 text-success" />
     <p class="mt-4 text-2xl font-bold text-base-content">{overview ? formatBytes(overview.inventory.totalBytes) : '-'}</p>
     <p class="mt-1 text-xs text-base-content/50">Ready to watch offline</p>
   </div>

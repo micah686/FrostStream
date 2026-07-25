@@ -1,12 +1,12 @@
 <script lang="ts">
   import {
-    CheckOutline,
-    ChevronDownOutline,
-    ChevronUpOutline,
-    EditOutline,
-    ExclamationCircleOutline,
-    TrashBinOutline
-  } from 'flowbite-svelte-icons';
+    Check,
+    ChevronDown,
+    ChevronUp,
+    CircleAlert,
+    Pencil,
+    Trash2
+  } from '@lucide/svelte';
   import { deleteNote, getNote, saveNote, type NoteTargetType } from '$lib/api/notes';
 
   interface Props {
@@ -155,16 +155,16 @@
       onclick={toggleOpen}
     >
       <span class="flex min-w-0 items-center gap-2">
-        <EditOutline class={['h-4 w-4 shrink-0', hasNote ? 'text-primary' : 'text-base-content/40']} />
+        <Pencil class={['h-4 w-4 shrink-0', hasNote ? 'text-primary' : 'text-base-content/40']} />
         <span class="truncate text-sm font-semibold text-base-content/90">Note</span>
         {#if hasNote}
           <span class="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">Saved</span>
         {/if}
       </span>
       {#if open}
-        <ChevronUpOutline class="h-4 w-4 text-base-content/50" />
+        <ChevronUp class="h-4 w-4 text-base-content/50" />
       {:else}
-        <ChevronDownOutline class="h-4 w-4 text-base-content/50" />
+        <ChevronDown class="h-4 w-4 text-base-content/50" />
       {/if}
     </button>
   {/if}
@@ -182,7 +182,7 @@
               class="flex items-start gap-2 rounded-lg border border-error/30 bg-error/10 p-3 text-sm text-error"
               role="alert"
             >
-              <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+              <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
               <span>{error}</span>
             </div>
           {/if}
@@ -200,13 +200,13 @@
               {#if deleting}
                 <span class="loading loading-spinner loading-xs mr-1.5"></span>
               {:else}
-                <TrashBinOutline class="mr-1.5 h-3.5 w-3.5" />
+                <Trash2 class="mr-1.5 h-3.5 w-3.5" />
               {/if}
               Delete
             </button>
             {#if saved && !dirty}
               <span class="flex items-center gap-1.5 text-xs font-semibold text-success">
-                <CheckOutline class="h-3.5 w-3.5" />
+                <Check class="h-3.5 w-3.5" />
                 Saved
               </span>
             {/if}

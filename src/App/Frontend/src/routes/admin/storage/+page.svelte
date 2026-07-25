@@ -1,14 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import {
-    CloudArrowUpOutline,
-    DatabaseOutline,
-    ExclamationCircleOutline,
-    EyeOutline,
-    GlobeOutline,
-    PlusOutline,
-    TrashBinOutline
-  } from 'flowbite-svelte-icons';
+    CircleAlert,
+    CloudUpload,
+    Database,
+    Eye,
+    Globe,
+    Plus,
+    Trash2
+  } from '@lucide/svelte';
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
   import {
     deleteStorage,
@@ -18,7 +18,7 @@
     type StorageConfig
   } from '$lib/api/storage';
 
-  type IconComponent = typeof DatabaseOutline;
+  type IconComponent = typeof Database;
 
   let storageTargets = $state<StorageConfig[]>([]);
   let storageLoading = $state(true);
@@ -60,12 +60,12 @@
 
   function storageIcon(storage: StorageConfig): IconComponent {
     if (storage.method === 'ObjectStorage') {
-      return CloudArrowUpOutline;
+      return CloudUpload;
     }
     if (storage.method === 'Network') {
-      return GlobeOutline;
+      return Globe;
     }
-    return DatabaseOutline;
+    return Database;
   }
 </script>
 
@@ -83,7 +83,7 @@
       class="mt-5 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{storageError}</span>
     </div>
   {/if}
@@ -94,7 +94,7 @@
     </div>
   {:else if storageTargets.length === 0}
     <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
-      <DatabaseOutline class="mx-auto h-9 w-9 text-base-content/30" />
+      <Database class="mx-auto h-9 w-9 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No storage targets yet</p>
       <p class="mt-1 text-sm text-base-content/50">Register one so downloads have somewhere to land.</p>
     </div>
@@ -131,7 +131,7 @@
               class="inline-flex h-10 min-w-24 items-center justify-center gap-2 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary"
               aria-label={`View settings for storage target ${storage.key}`}
             >
-              <EyeOutline class="h-4 w-4" />
+              <Eye class="h-4 w-4" />
               Settings
             </a>
             {#if storage.key !== 'default'}
@@ -149,7 +149,7 @@
                 {#if deletingKey === storage.key}
                   <span class="loading loading-spinner loading-xs"></span>
                 {:else}
-                  <TrashBinOutline class="h-4 w-4" />
+                  <Trash2 class="h-4 w-4" />
                 {/if}
               </button>
             {/if}
@@ -161,7 +161,7 @@
 
   <div class="mt-4">
     <a class="btn btn-sm btn-ghost text-xs" href="/admin/storage/new">
-      <PlusOutline class="mr-1.5 h-3.5 w-3.5" />
+      <Plus class="mr-1.5 h-3.5 w-3.5" />
       Register storage
     </a>
   </div>

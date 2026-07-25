@@ -2,19 +2,19 @@
   import { page } from '$app/state';
   import { logout } from '$lib/api/http';
   import {
-    AdjustmentsHorizontalOutline,
-    AdjustmentsVerticalOutline,
-    ArrowRightToBracketOutline,
-    BellOutline,
-    CogOutline,
-    CookieSolid,
-    FileSearchOutline,
-    ListMusicOutline,
-    PaletteOutline,
-    UserOutline
-  } from 'flowbite-svelte-icons';
+    Bell,
+    Cog,
+    Cookie,
+    FileSearch,
+    ListMusic,
+    LogOut,
+    Palette,
+    SlidersHorizontal,
+    SlidersVertical,
+    User
+  } from '@lucide/svelte';
 
-  type IconComponent = typeof UserOutline;
+  type IconComponent = typeof User;
 
   interface ProfileSection {
     label: string;
@@ -28,19 +28,19 @@
   const authLabel = $derived(data.singleUser ? 'Owner' : 'Signed in');
 
   const sections: ProfileSection[] = [
-    { label: 'Overview', icon: UserOutline, href: '/profile' },
-    { label: 'Config sets', icon: AdjustmentsHorizontalOutline, href: '/profile/config-sets' },
-    { label: 'Option presets', icon: AdjustmentsVerticalOutline, href: '/profile/option-presets' },
-    { label: 'Cookie management', icon: CookieSolid, href: '/profile/cookie-management' },
+    { label: 'Overview', icon: User, href: '/profile' },
+    { label: 'Config sets', icon: SlidersHorizontal, href: '/profile/config-sets' },
+    { label: 'Option presets', icon: SlidersVertical, href: '/profile/option-presets' },
+    { label: 'Cookie management', icon: Cookie, href: '/profile/cookie-management' },
     {
       label: 'Notifications',
-      icon: BellOutline,
+      icon: Bell,
       href: '/profile/notifications',
       extra: ['/profile/notification-providers']
     },
-    { label: 'Playlists', icon: ListMusicOutline, href: '/profile/playlists' },
-    { label: 'Notes', icon: FileSearchOutline, href: '/profile/notes' },
-    { label: 'Appearance', icon: PaletteOutline, href: '/profile/appearance' }
+    { label: 'Playlists', icon: ListMusic, href: '/profile/playlists' },
+    { label: 'Notes', icon: FileSearch, href: '/profile/notes' },
+    { label: 'Appearance', icon: Palette, href: '/profile/appearance' }
   ];
 
   function isActive(section: ProfileSection): boolean {
@@ -71,12 +71,12 @@
     <div class="flex flex-wrap items-center gap-2">
       {#if !data.singleUser}
         <button class="btn btn-sm btn-neutral text-xs" onclick={() => void logout()}>
-          <ArrowRightToBracketOutline class="mr-1.5 h-4 w-4" />
+          <LogOut class="mr-1.5 h-4 w-4" />
           Sign out
         </button>
       {/if}
       <button class="btn btn-sm btn-neutral text-xs">
-        <CogOutline class="mr-1.5 h-4 w-4" />
+        <Cog class="mr-1.5 h-4 w-4" />
         Edit profile
       </button>
     </div>

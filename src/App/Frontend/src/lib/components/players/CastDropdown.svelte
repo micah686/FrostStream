@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronDownOutline, ComputerSpeakerOutline } from 'flowbite-svelte-icons';
+  import { Cast, ChevronDown } from '@lucide/svelte';
   import ServerCastMenu from './ServerCastMenu.svelte';
   import { canUseBrowserCast, startBrowserCast } from './browserCast';
 
@@ -99,9 +99,9 @@
         : 'border-base-300 bg-base-200/70 text-base-content/80 hover:bg-base-300'
     ]}
   >
-    <ComputerSpeakerOutline class="h-4 w-4" />
+    <Cast class="h-4 w-4" />
     Cast
-    <ChevronDownOutline class="h-3.5 w-3.5" />
+    <ChevronDown class="h-3.5 w-3.5" />
   </button>
 
   {#if open}

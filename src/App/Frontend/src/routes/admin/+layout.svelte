@@ -1,17 +1,17 @@
 <script lang="ts">
   import { page } from '$app/state';
   import {
-    ApiKeyOutline,
-    ChartMixedOutline,
-    ClockOutline,
-    CloudArrowUpOutline,
-    DatabaseOutline,
-    FileImportOutline,
-    ServerOutline,
-    TagOutline
-  } from 'flowbite-svelte-icons';
+    ChartColumn,
+    Clock,
+    CloudUpload,
+    Database,
+    FileInput,
+    KeyRound,
+    Server,
+    Tag
+  } from '@lucide/svelte';
 
-  type IconComponent = typeof DatabaseOutline;
+  type IconComponent = typeof Database;
 
   interface AdminSection {
     label: string;
@@ -22,14 +22,14 @@
   let { children, data } = $props();
 
   const allSections: AdminSection[] = [
-    { label: 'Storage', icon: DatabaseOutline, href: '/admin/storage' },
-    { label: 'Statistics', icon: ChartMixedOutline, href: '/admin/statistics' },
-    { label: 'Metadata', icon: TagOutline, href: '/admin/metadata' },
-    { label: 'Import', icon: FileImportOutline, href: '/admin/import' },
-    { label: 'Workers', icon: ServerOutline, href: '/admin/workers' },
-    { label: 'Access control', icon: ApiKeyOutline, href: '/admin/access-control' },
-    { label: 'Backups', icon: CloudArrowUpOutline, href: '/admin/backups' },
-    { label: 'Schedules', icon: ClockOutline, href: '/admin/schedules' }
+    { label: 'Storage', icon: Database, href: '/admin/storage' },
+    { label: 'Statistics', icon: ChartColumn, href: '/admin/statistics' },
+    { label: 'Metadata', icon: Tag, href: '/admin/metadata' },
+    { label: 'Import', icon: FileInput, href: '/admin/import' },
+    { label: 'Workers', icon: Server, href: '/admin/workers' },
+    { label: 'Access control', icon: KeyRound, href: '/admin/access-control' },
+    { label: 'Backups', icon: CloudUpload, href: '/admin/backups' },
+    { label: 'Schedules', icon: Clock, href: '/admin/schedules' }
   ];
 
   const sections = $derived(

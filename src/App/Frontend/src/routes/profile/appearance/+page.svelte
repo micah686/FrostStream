@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { PaletteOutline } from 'flowbite-svelte-icons';
+  import { Palette } from '@lucide/svelte';
   import { theme, themes, themeLabels, setTheme } from '$lib/stores/theme';
 </script>
 
@@ -9,7 +9,7 @@
 
 <section class="max-w-xl" aria-labelledby="appearance-title">
   <h2 id="appearance-title" class="flex items-center gap-2 text-lg font-semibold text-base-content">
-    <PaletteOutline class="h-5 w-5" />
+    <Palette class="h-5 w-5" />
     Appearance
   </h2>
   <p class="mt-1 text-sm text-base-content/60">Choose how FrostStream looks on this device.</p>
