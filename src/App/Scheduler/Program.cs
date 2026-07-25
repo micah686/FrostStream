@@ -66,6 +66,7 @@ internal static class Program
         builder.Services.AddTransient<Jobs.ChannelMediaListJob>();
         builder.Services.AddTransient<Jobs.StaleDatabaseCleanupJob>();
         builder.Services.AddTransient<Jobs.DatabaseMaintenanceJob>();
+        builder.Services.AddTransient<Jobs.DatabaseMaintenanceReindexJob>();
         builder.Services.AddTransient<Jobs.SearchReindexJob>();
         builder.Services.AddTransient<Jobs.ProcessedMessageCleanupJob>();
         builder.Services.AddTransient<Jobs.BackupJob>();
@@ -75,6 +76,7 @@ internal static class Program
         builder.Services.AddSingleton<IChannelMediaLister, ChannelMediaLister>();
         builder.Services.AddSingleton<IStaleEntryCleanupScheduler, StaleEntryCleanupScheduler>();
         builder.Services.AddSingleton<IDatabaseMaintenanceScheduler, DatabaseMaintenanceScheduler>();
+        builder.Services.AddSingleton<IDatabaseMaintenanceReindexScheduler, DatabaseMaintenanceReindexScheduler>();
         builder.Services.AddSingleton<ISearchReindexScheduler, SearchReindexScheduler>();
         builder.Services.AddSingleton<IProcessedMessageCleanupScheduler, ProcessedMessageCleanupScheduler>();
         builder.Services.AddSingleton<IBackupScheduler, BackupScheduler>();

@@ -1,9 +1,15 @@
 <script lang="ts">
-  import { CircleAlert, CircleCheck, Repeat, Trash2 } from '@lucide/svelte';
+  import { CircleAlert, CircleCheck, Database, Repeat, Trash2 } from '@lucide/svelte';
   import { Select } from '$lib/components/ui';
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
   import UnderDevelopmentBanner from '$lib/components/admin/UnderDevelopmentBanner.svelte';
-  import { deleteMedia, deleteMediaForStorageKey, getMetadataVersions, triggerReindex } from '$lib/api/metadata';
+  import {
+    deleteMedia,
+    deleteMediaForStorageKey,
+    getMetadataVersions,
+    triggerDatabaseReindex,
+    triggerReindex
+  } from '$lib/api/metadata';
 
   const cardClass = 'card border border-base-300 bg-base-100 p-5 sm:p-6';
 
@@ -11,6 +17,11 @@
   let reindexBusy = $state(false);
   let reindexMessage = $state<string | null>(null);
   let reindexError = $state<string | null>(null);
+
+  // Whole-database reindex
+  let databaseReindexBusy = $state(false);
+  let databaseReindexMessage = $state<string | null>(null);
+  let databaseReindexError = $state<string | null>(null);
 
   // Delete media
   let deleteGuid = $state('');
@@ -78,6 +89,20 @@
     }
   }
 
+  async function reindexDatabase() {
+    databaseReindexBusy = true;
+    databaseReindexMessage = null;
+    databaseReindexError = null;
+    try {
+      await triggerDatabaseReindex();
+      databaseReindexMessage = 'Database reindex queued. PostgreSQL will rebuild indexes concurrently in the background.';
+    } catch (err) {
+      databaseReindexError = err instanceof Error ? err.message : 'Could not queue the database reindex.';
+    } finally {
+      databaseReindexBusy = false;
+    }
+  }
+
   async function removeMedia() {
     deleteBusy = true;
     deleteError = null;
@@ -133,6 +158,41 @@
         <Repeat class="mr-1.5 h-3.5 w-3.5" />
       {/if}
       Rebuild search index
+    </button>
+  </div>
+</section>
+
+<!-- Database maintenance -->
+<section class={cardClass} aria-labelledby="metadata-database-reindex-title">
+  <h2 id="metadata-database-reindex-title" class="text-base font-bold text-base-content">Database maintenance reindex</h2>
+  <p class="mt-2 text-sm text-base-content/60">
+    Rebuild every index in the PostgreSQL database using REINDEX CONCURRENTLY. This is a long-running maintenance operation.
+  </p>
+
+  {#if databaseReindexError}
+    <div
+      class="mt-4 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
+      role="alert"
+    >
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
+      <span>{databaseReindexError}</span>
+    </div>
+  {/if}
+  {#if databaseReindexMessage}
+    <div class="mt-4 flex items-start gap-2 rounded-xl border border-success/30 bg-success/10 p-3 text-sm text-success" role="status">
+      <CircleCheck class="mt-0.5 h-4 w-4 shrink-0" />
+      <span>{databaseReindexMessage}</span>
+    </div>
+  {/if}
+
+  <div class="mt-4">
+    <button class="btn btn-sm btn-neutral" disabled={databaseReindexBusy} onclick={reindexDatabase}>
+      {#if databaseReindexBusy}
+        <span class="loading loading-spinner loading-xs mr-1.5"></span>
+      {:else}
+        <Database class="mr-1.5 h-3.5 w-3.5" />
+      {/if}
+      Reindex database
     </button>
   </div>
 </section>

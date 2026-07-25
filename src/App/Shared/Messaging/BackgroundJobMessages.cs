@@ -60,6 +60,8 @@ public sealed record ProcessedMessageCleanupRequested : ScheduledBackgroundReque
 
 public sealed record DatabaseMaintenanceRequested : ScheduledBackgroundRequest;
 
+public sealed record DatabaseMaintenanceReindexRequested : ScheduledBackgroundRequest;
+
 public sealed record SearchReindexRequested : ScheduledBackgroundRequest;
 
 public sealed record BackupRequested : ScheduledBackgroundRequest

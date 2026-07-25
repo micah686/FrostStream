@@ -25,6 +25,7 @@ public sealed class BackgroundJobConsumerService(
         {
             Consume<SearchReindexRequested>(BackgroundJobsTopology.SearchReindexConsumer, HandleSearchReindexAsync, stoppingToken),
             Consume<DatabaseMaintenanceRequested>(BackgroundJobsTopology.DatabaseMaintenanceConsumer, HandleDatabaseMaintenanceAsync, stoppingToken),
+            Consume<DatabaseMaintenanceReindexRequested>(BackgroundJobsTopology.DatabaseMaintenanceReindexConsumer, HandleDatabaseMaintenanceReindexAsync, stoppingToken),
             Consume<StaleDatabaseCleanupRequested>(BackgroundJobsTopology.StaleDatabaseCleanupConsumer, HandleStaleDatabaseCleanupAsync, stoppingToken),
             Consume<ProcessedMessageCleanupRequested>(BackgroundJobsTopology.ProcessedMessageCleanupConsumer, HandleProcessedMessageCleanupAsync, stoppingToken)
         };
@@ -92,6 +93,35 @@ public sealed class BackgroundJobConsumerService(
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed handling database maintenance request {IdempotencyKey}; nacking", message.IdempotencyKey);
+            await MarkFailureAsync(message);
+            await context.NackAsync();
+        }
+    }
+
+    private async Task HandleDatabaseMaintenanceReindexAsync(IJsMessageContext<DatabaseMaintenanceReindexRequested> context)
+    {
+        var message = context.Message;
+        try
+        {
+            await MarkAttemptAsync(message);
+            await using var connection = await dataSource.OpenConnectionAsync();
+            var databaseName = connection.Database.Replace("\"", "\"\"", StringComparison.Ordinal);
+            await using var command = new NpgsqlCommand(
+                $"REINDEX DATABASE CONCURRENTLY \"{databaseName}\";",
+                connection)
+            {
+                CommandTimeout = 0
+            };
+            await command.ExecuteNonQueryAsync();
+            await MarkSuccessAsync(message);
+            logger.LogInformation(
+                "Completed PostgreSQL REINDEX DATABASE CONCURRENTLY for background request {IdempotencyKey}.",
+                message.IdempotencyKey);
+            await context.AckAsync();
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed handling database reindex request {IdempotencyKey}; nacking", message.IdempotencyKey);
             await MarkFailureAsync(message);
             await context.NackAsync();
         }

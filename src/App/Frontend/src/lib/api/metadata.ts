@@ -26,6 +26,10 @@ export async function triggerReindex(fetchImpl: typeof fetch = fetch): Promise<v
   await sendEmpty(`${BASE}/reindex`, 'POST', fetchImpl);
 }
 
+export async function triggerDatabaseReindex(fetchImpl: typeof fetch = fetch): Promise<void> {
+  await sendEmpty(`${BASE}/database-reindex`, 'POST', fetchImpl);
+}
+
 export async function deleteMedia(mediaGuid: string, fetchImpl: typeof fetch = fetch): Promise<MediaDeleteResult> {
   return sendJson<MediaDeleteResult>(`${BASE}/${encodeURIComponent(mediaGuid)}`, 'DELETE', undefined, fetchImpl);
 }

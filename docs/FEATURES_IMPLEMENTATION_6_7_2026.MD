@@ -82,7 +82,7 @@ Manages DB-backed scheduled tasks that the Scheduler service hydrates into Quart
 | `GET` | `/api/schedules` | List all scheduled tasks. |
 | `DELETE` | `/api/schedules/{key}` | Delete a scheduled task. |
 
-**Registered Task Types:** `channel_update_check`, `channel_media_list`, `channel_asset_refresh`, `database_maintenance`, `processed_message_cleanup`, `search_reindex`, `stale_database_cleanup`.
+**Registered Task Types:** `channel_update_check`, `channel_media_list`, `channel_asset_refresh`, `database_maintenance`, `database_maintenance_reindex`, `processed_message_cleanup`, `search_reindex`, `stale_database_cleanup`.
 
 ### 2.5 Option Presets (`/api/option-presets`)
 
@@ -324,6 +324,7 @@ Uses Quartz.NET with a CrystalQuartz visual dashboard.
 | `ChannelMediaListJob` | `channel_media_list` | Publishes `ChannelMediaListRequested`. Worker performs full scan. |
 | `ChannelAssetRefreshJob` | `channel_asset_refresh` | Publishes `ChannelAssetRefreshRequested` (no `TargetSourceId` = all sources). Worker refreshes avatar/banner assets. |
 | `DatabaseMaintenanceJob` | `database_maintenance` | Publishes `DatabaseMaintenanceRequested`. DataBridge runs VACUUM/ANALYZE or equivalent maintenance. |
+| `DatabaseMaintenanceReindexJob` | `database_maintenance_reindex` | Publishes `DatabaseMaintenanceReindexRequested`. DataBridge runs `REINDEX DATABASE CONCURRENTLY` for the current PostgreSQL database. |
 | `ProcessedMessageCleanupJob` | `processed_message_cleanup` | Publishes `ProcessedMessageCleanupRequested`. DataBridge purges old rows from `processed_messages`. |
 | `SearchReindexJob` | `search_reindex` | Publishes `SearchReindexRequested`. DataBridge rebuilds Typesense from Postgres. |
 | `StaleDatabaseCleanupJob` | `stale_database_cleanup` | Publishes `StaleDatabaseCleanupRequested`. DataBridge removes stale/orphaned DB entries. |

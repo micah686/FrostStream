@@ -6,6 +6,7 @@ public static class BackgroundJobRequestFactory
 {
     public const string ManualScheduleKey = "manual";
     public const string ManualSearchReindexTaskType = "manual_search_reindex";
+    public const string ManualDatabaseMaintenanceReindexTaskType = "manual_database_maintenance_reindex";
 
     public static SearchReindexRequested CreateSearchReindex(
         string scheduleKey,
@@ -15,6 +16,23 @@ public static class BackgroundJobRequestFactory
     {
         var idempotencyKey = BuildIdempotencyKey(taskType, scheduleKey, dueWindowUtc);
         return new SearchReindexRequested
+        {
+            ScheduleKey = scheduleKey,
+            TaskType = taskType,
+            DueWindowUtc = dueWindowUtc,
+            IdempotencyKey = idempotencyKey,
+            OccurredAt = occurredAt
+        };
+    }
+
+    public static DatabaseMaintenanceReindexRequested CreateDatabaseMaintenanceReindex(
+        string scheduleKey,
+        string taskType,
+        Instant dueWindowUtc,
+        Instant occurredAt)
+    {
+        var idempotencyKey = BuildIdempotencyKey(taskType, scheduleKey, dueWindowUtc);
+        return new DatabaseMaintenanceReindexRequested
         {
             ScheduleKey = scheduleKey,
             TaskType = taskType,

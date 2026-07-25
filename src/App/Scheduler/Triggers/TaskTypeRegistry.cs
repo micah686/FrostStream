@@ -10,6 +10,7 @@ internal static class TaskTypeRegistry
     public const string ChannelMediaList = "channel_media_list";
     public const string StaleDatabaseCleanup = "stale_database_cleanup";
     public const string DatabaseMaintenance = "database_maintenance";
+    public const string DatabaseMaintenanceReindex = "database_maintenance_reindex";
     public const string SearchReindex = "search_reindex";
     public const string ProcessedMessageCleanup = "processed_message_cleanup";
     public const string Backup = "backup";
@@ -21,6 +22,7 @@ internal static class TaskTypeRegistry
         [ChannelMediaList] = typeof(ChannelMediaListJob),
         [StaleDatabaseCleanup] = typeof(StaleDatabaseCleanupJob),
         [DatabaseMaintenance] = typeof(DatabaseMaintenanceJob),
+        [DatabaseMaintenanceReindex] = typeof(DatabaseMaintenanceReindexJob),
         [SearchReindex] = typeof(SearchReindexJob),
         [ProcessedMessageCleanup] = typeof(ProcessedMessageCleanupJob),
         [Backup] = typeof(BackupJob)

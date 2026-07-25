@@ -101,6 +101,10 @@
       summary: 'Runs routine database maintenance work such as housekeeping and compaction.'
     },
     {
+      type: 'database_maintenance_reindex',
+      summary: 'Rebuilds all indexes in the PostgreSQL database using concurrent reindexing.'
+    },
+    {
       type: 'search_reindex',
       summary: 'Rebuilds the search index from the authoritative metadata store.'
     },

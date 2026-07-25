@@ -47,6 +47,36 @@ public sealed class MetadataAdminController(
         return Accepted();
     }
 
+    [HttpPost("database-reindex")]
+    [Endpoint(EndpointIds.MetadataDatabaseReindex)]
+    [EndpointSummary("Queue a whole-database concurrent reindex")]
+    [EndpointDescription("Publishes an asynchronous background job that runs PostgreSQL REINDEX DATABASE CONCURRENTLY for the current database. The endpoint returns 202 once the request is accepted and does not wait for reindexing to finish.")]
+    public async Task<IActionResult> TriggerDatabaseReindex(CancellationToken cancellationToken)
+    {
+        var now = clock.GetCurrentInstant();
+        var request = BackgroundJobRequestFactory.CreateDatabaseMaintenanceReindex(
+            BackgroundJobRequestFactory.ManualScheduleKey,
+            BackgroundJobRequestFactory.ManualDatabaseMaintenanceReindexTaskType,
+            now,
+            now);
+
+        try
+        {
+            await publisher.PublishAsync(
+                BackgroundJobSubjects.DatabaseMaintenanceReindexRequest,
+                request,
+                request.IdempotencyKey,
+                cancellationToken: cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed publishing database reindex request.");
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to publish database reindex request.");
+        }
+
+        return Accepted();
+    }
+
     [HttpDelete("{mediaGuid:guid}")]
     [Endpoint(EndpointIds.MediaDelete)]
     [EndpointSummary("Delete a video globally")]

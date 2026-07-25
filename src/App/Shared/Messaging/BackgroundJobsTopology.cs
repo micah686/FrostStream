@@ -12,6 +12,7 @@ public sealed class BackgroundJobsTopology : ITopologySource
     public const string ProcessedMessageCleanupConsumer = "databridge-processed-message-cleanup";
     public const string SearchReindexConsumer = "databridge-search-reindex";
     public const string DatabaseMaintenanceConsumer = "databridge-database-maintenance";
+    public const string DatabaseMaintenanceReindexConsumer = "databridge-database-maintenance-reindex";
     public const string StaleDatabaseCleanupConsumer = "databridge-stale-database-cleanup";
     public const string WorkerChannelUpdateCheckConsumer = "worker-channel-update-check";
     public const string WorkerChannelMediaListConsumer = "worker-channel-media-list";
@@ -39,6 +40,7 @@ public sealed class BackgroundJobsTopology : ITopologySource
                 BackgroundJobSubjects.StaleDatabaseCleanupRequest,
                 BackgroundJobSubjects.ProcessedMessageCleanupRequest,
                 BackgroundJobSubjects.DatabaseMaintenanceRequest,
+                BackgroundJobSubjects.DatabaseMaintenanceReindexRequest,
                 BackgroundJobSubjects.SearchReindexRequest,
                 BackgroundJobSubjects.AudioRenditionEncodeRequest,
                 BackgroundJobSubjects.StreamRenditionEncodeRequest,
@@ -56,6 +58,7 @@ public sealed class BackgroundJobsTopology : ITopologySource
         yield return DataBridgeConsumer(ProcessedMessageCleanupConsumer, BackgroundJobSubjects.ProcessedMessageCleanupRequest, TimeSpan.FromMinutes(15), maxDeliver: 5);
         yield return DataBridgeConsumer(SearchReindexConsumer, BackgroundJobSubjects.SearchReindexRequest, TimeSpan.FromMinutes(30), maxDeliver: 3);
         yield return DataBridgeConsumer(DatabaseMaintenanceConsumer, BackgroundJobSubjects.DatabaseMaintenanceRequest, TimeSpan.FromHours(2), maxDeliver: 3);
+        yield return DataBridgeConsumer(DatabaseMaintenanceReindexConsumer, BackgroundJobSubjects.DatabaseMaintenanceReindexRequest, TimeSpan.FromHours(24), maxDeliver: 2);
         yield return DataBridgeConsumer(StaleDatabaseCleanupConsumer, BackgroundJobSubjects.StaleDatabaseCleanupRequest, TimeSpan.FromMinutes(15), maxDeliver: 5);
         yield return WorkerConsumer(WorkerChannelUpdateCheckConsumer, BackgroundJobSubjects.ChannelUpdateCheckRequest, TimeSpan.FromMinutes(30), maxDeliver: 5);
         yield return WorkerConsumer(WorkerChannelMediaListConsumer, BackgroundJobSubjects.ChannelMediaListRequest, TimeSpan.FromHours(2), maxDeliver: 3);

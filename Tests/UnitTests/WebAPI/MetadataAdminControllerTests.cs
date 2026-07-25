@@ -56,6 +56,28 @@ public sealed class MetadataAdminControllerTests
         result.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status503ServiceUnavailable);
     }
 
+    [Test]
+    public async Task TriggerDatabaseReindex_Publishes_Manual_Database_Reindex_Request()
+    {
+        var publisher = Substitute.For<IJetStreamPublisher>();
+        var controller = CreateController(publisher: publisher);
+
+        var result = await controller.TriggerDatabaseReindex(CancellationToken.None);
+
+        result.ShouldBeOfType<AcceptedResult>();
+        await publisher.Received(1).PublishAsync(
+            BackgroundJobSubjects.DatabaseMaintenanceReindexRequest,
+            Arg.Is<DatabaseMaintenanceReindexRequested>(x => x != null &&
+                x.ScheduleKey == BackgroundJobRequestFactory.ManualScheduleKey &&
+                x.TaskType == BackgroundJobRequestFactory.ManualDatabaseMaintenanceReindexTaskType &&
+                x.DueWindowUtc == Now &&
+                x.OccurredAt == Now &&
+                x.IdempotencyKey == "manual_database_maintenance_reindex:manual:2026-06-03T18:00:00Z"),
+            "manual_database_maintenance_reindex:manual:2026-06-03T18:00:00Z",
+            null,
+            Arg.Any<CancellationToken>());
+    }
+
     private static MetadataAdminController CreateController(
         IJetStreamPublisher? publisher = null,
         IMessageBus? bus = null)

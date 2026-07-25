@@ -8,6 +8,7 @@ public static class BackgroundJobSubjects
     public const string StaleDatabaseCleanupRequest = "fs.cleanup.database.stale.request";
     public const string ProcessedMessageCleanupRequest = "fs.cleanup.database.processed-messages.request";
     public const string DatabaseMaintenanceRequest = "fs.cleanup.database.maintenance.request";
+    public const string DatabaseMaintenanceReindexRequest = "fs.cleanup.database.reindex.request";
     public const string SearchReindexRequest = "fs.index.search.rebuild.request";
     public const string AudioRenditionEncodeRequest = "fs.media.audio-rendition.encode.request";
     public const string StreamRenditionEncodeRequest = "fs.media.stream-rendition.encode.request";

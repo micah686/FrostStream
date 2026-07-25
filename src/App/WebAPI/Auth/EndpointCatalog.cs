@@ -113,6 +113,7 @@ public static class EndpointIds
 
     // Metadata (admin)
     public const string MetadataReindex = "metadata.reindex";
+    public const string MetadataDatabaseReindex = "metadata.database-reindex";
     public const string MediaDelete = "media.delete";
     public const string MediaDeleteForStorageKey = "media.delete-for-key";
 
@@ -342,6 +343,7 @@ public static class EndpointCatalog
         new(EndpointIds.SearchSimilar, Bundles.Metadata),
 
         new(EndpointIds.MetadataReindex, Bundles.MetadataAdmin),
+        new(EndpointIds.MetadataDatabaseReindex, Bundles.MetadataAdmin),
         new(EndpointIds.MediaDelete, Bundles.MetadataAdmin),
         new(EndpointIds.MediaDeleteForStorageKey, Bundles.MetadataAdmin),
 
