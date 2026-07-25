@@ -6,18 +6,13 @@
     Clock,
     Info,
     Pencil,
-    Plus,
     RefreshCw,
     Server,
-    Trash2,
     X
   } from '@lucide/svelte';
-  import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
   import UnderDevelopmentBanner from '$lib/components/admin/UnderDevelopmentBanner.svelte';
   import { ApiRequestError } from '$lib/api/http';
   import {
-    createSchedule,
-    deleteSchedule,
     listSchedules,
     scheduleTaskTypes,
     scheduleTimingSummary,
@@ -36,6 +31,52 @@
   const catchupItems: { value: ScheduleCatchupPolicy; name: string }[] = [
     { value: 'Coalesce', name: 'Coalesce — run once to catch up' },
     { value: 'Skip', name: 'Skip — wait for the next occurrence' }
+  ];
+  const secondItems = Array.from({ length: 60 }, (_, value) => ({ value: String(value), name: String(value).padStart(2, '0') }));
+  const minuteItems = [
+    ...secondItems,
+    { value: '*/5', name: 'Every 5 minutes' },
+    { value: '*/10', name: 'Every 10 minutes' },
+    { value: '*/15', name: 'Every 15 minutes' },
+    { value: '*/30', name: 'Every 30 minutes' }
+  ];
+  const hourItems = [
+    ...Array.from({ length: 24 }, (_, value) => ({ value: String(value), name: String(value).padStart(2, '0') })),
+    { value: '*/2', name: 'Every 2 hours' },
+    { value: '*/4', name: 'Every 4 hours' },
+    { value: '*/6', name: 'Every 6 hours' },
+    { value: '*/12', name: 'Every 12 hours' }
+  ];
+  const dayOfMonthItems = [
+    { value: '*', name: 'Every day' },
+    { value: '?', name: 'No specific day' },
+    ...Array.from({ length: 31 }, (_, index) => ({ value: String(index + 1), name: String(index + 1) }))
+  ];
+  const monthItems = [
+    { value: '*', name: 'Every month' },
+    { value: 'JAN', name: 'January' },
+    { value: 'FEB', name: 'February' },
+    { value: 'MAR', name: 'March' },
+    { value: 'APR', name: 'April' },
+    { value: 'MAY', name: 'May' },
+    { value: 'JUN', name: 'June' },
+    { value: 'JUL', name: 'July' },
+    { value: 'AUG', name: 'August' },
+    { value: 'SEP', name: 'September' },
+    { value: 'OCT', name: 'October' },
+    { value: 'NOV', name: 'November' },
+    { value: 'DEC', name: 'December' }
+  ];
+  const dayOfWeekItems = [
+    { value: '?', name: 'No specific weekday' },
+    { value: '*', name: 'Every weekday' },
+    { value: 'MON', name: 'Monday' },
+    { value: 'TUE', name: 'Tuesday' },
+    { value: 'WED', name: 'Wednesday' },
+    { value: 'THU', name: 'Thursday' },
+    { value: 'FRI', name: 'Friday' },
+    { value: 'SAT', name: 'Saturday' },
+    { value: 'SUN', name: 'Sunday' }
   ];
 
   const taskTypeHelp = [
@@ -95,10 +136,15 @@
   let formTimezone = $state('UTC');
   let formEnabled = $state(true);
   let formCatchupPolicy = $state<ScheduleCatchupPolicy>('Coalesce');
+  let cronSecond = $state('0');
+  let cronMinute = $state('0');
+  let cronHour = $state('3');
+  let cronDayOfMonth = $state('*');
+  let cronMonth = $state('*');
+  let cronDayOfWeek = $state('?');
 
-  let deleteTarget = $state<ScheduledTask | null>(null);
-  let deleteModalOpen = $state(false);
   let taskTypeHelpOpen = $state(false);
+  const cronBuilderExpression = $derived(`${cronSecond} ${cronMinute} ${cronHour} ${cronDayOfMonth} ${cronMonth} ${cronDayOfWeek}`);
 
   const bridgeUnavailable = $derived(loadError instanceof ApiRequestError && loadError.status === 503);
 
@@ -118,20 +164,6 @@
     }
   }
 
-  function openCreateForm() {
-    editingKey = null;
-    formKey = '';
-    formTaskType = scheduleTaskTypes[0];
-    formTiming = 'interval';
-    formCron = '';
-    formIntervalSeconds = 3600;
-    formTimezone = 'UTC';
-    formEnabled = true;
-    formCatchupPolicy = 'Coalesce';
-    formError = null;
-    formOpen = true;
-  }
-
   function openEditForm(schedule: ScheduledTask) {
     editingKey = schedule.key;
     formKey = schedule.key;
@@ -142,6 +174,7 @@
     formTimezone = schedule.timezone;
     formEnabled = schedule.enabled;
     formCatchupPolicy = schedule.catchupPolicy;
+    syncCronBuilderFromExpression(formCron);
     formError = null;
     formOpen = true;
   }
@@ -172,11 +205,7 @@
 
     formSaving = true;
     try {
-      if (editingKey) {
-        await updateSchedule(editingKey, request);
-      } else {
-        await createSchedule({ key: formKey.trim(), ...request });
-      }
+      await updateSchedule(editingKey ?? formKey, request);
       formOpen = false;
       await load();
     } catch (err) {
@@ -206,28 +235,44 @@
     }
   }
 
-  async function removeSchedule(schedule: ScheduledTask) {
-    mutation = `delete:${schedule.key}`;
-    loadError = null;
-    try {
-      await deleteSchedule(schedule.key);
-      schedules = schedules.filter((item) => item.key !== schedule.key);
-      deleteTarget = null;
-      deleteModalOpen = false;
-    } catch (err) {
-      loadError = err instanceof Error ? err : new Error('Could not delete the schedule.');
-      throw err;
-    } finally {
-      mutation = null;
-    }
-  }
-
   function formatDate(value: string | null): string {
     if (!value) {
       return 'never';
     }
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? 'unknown' : date.toLocaleString();
+  }
+
+  function syncCronBuilderFromExpression(expression: string) {
+    const parts = expression.trim().split(/\s+/);
+    if (parts.length < 6) {
+      return;
+    }
+
+    cronSecond = parts[0];
+    cronMinute = parts[1];
+    cronHour = parts[2];
+    cronDayOfMonth = parts[3];
+    cronMonth = parts[4];
+    cronDayOfWeek = parts[5];
+  }
+
+  function updateCronExpression() {
+    formCron = cronBuilderExpression;
+  }
+
+  function handleCronDayOfMonthChange() {
+    if (cronDayOfMonth !== '?') {
+      cronDayOfWeek = '?';
+    }
+    updateCronExpression();
+  }
+
+  function handleCronDayOfWeekChange() {
+    if (cronDayOfWeek !== '?') {
+      cronDayOfMonth = '?';
+    }
+    updateCronExpression();
   }
 </script>
 
@@ -248,10 +293,6 @@
       <button class="btn btn-sm btn-neutral" disabled={loading} onclick={() => void load()}>
         <RefreshCw class="mr-1.5 h-3.5 w-3.5" />
         Refresh
-      </button>
-      <button class="btn btn-sm btn-primary" onclick={openCreateForm}>
-        <Plus class="mr-1.5 h-3.5 w-3.5" />
-        New schedule
       </button>
     </div>
   </div>
@@ -274,7 +315,7 @@
   {#if formOpen}
     <form class="mt-5 space-y-4 rounded-xl border border-base-300/80 bg-base-200/25 p-4" onsubmit={saveForm}>
       <div class="flex items-center justify-between gap-3">
-        <h3 class="text-sm font-bold text-base-content">{editingKey ? `Edit schedule "${editingKey}"` : 'New schedule'}</h3>
+        <h3 class="text-sm font-bold text-base-content">Edit schedule "{editingKey}"</h3>
         <button
           type="button"
           class="grid h-8 w-8 place-items-center rounded-lg text-base-content/60 hover:bg-base-300 hover:text-base-content"
@@ -289,8 +330,7 @@
         <div>
           <label class="label mb-2 text-sm" for="schedule-key">Key</label>
           <input class="input w-full" id="schedule-key" required
-             pattern={'[a-z0-9-]{2,100}'} minlength={2} maxlength={100} disabled={editingKey !== null} bind:value={formKey} placeholder="nightly-backup" />
-          <p class="mt-1.5 text-xs text-base-content/40">Lowercase letters, numbers, and hyphens.</p>
+             pattern={'[a-z0-9-]{2,100}'} minlength={2} maxlength={100} disabled bind:value={formKey} />
         </div>
         <div>
           <div class="mb-2 flex items-center gap-1.5">
@@ -305,7 +345,7 @@
               <Info class="h-4 w-4" />
             </button>
           </div>
-          <Select id="schedule-task-type" items={taskTypeItems} bind:value={formTaskType} />
+          <Select id="schedule-task-type" items={taskTypeItems} bind:value={formTaskType} disabled />
         </div>
       </div>
 
@@ -319,6 +359,38 @@
             <label class="label mb-2 text-sm" for="schedule-cron">Cron expression</label>
             <input class="input w-full font-mono" id="schedule-cron" bind:value={formCron} placeholder="0 0 3 * * ?" />
             <p class="mt-1.5 text-xs text-base-content/40">Quartz format: seconds minutes hours day-of-month month day-of-week.</p>
+          </div>
+          <div class="sm:col-span-3 rounded-lg border border-base-300/80 bg-base-100 p-3">
+            <div class="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              <div>
+                <label class="label mb-1.5 text-xs" for="cron-second">Seconds</label>
+                <Select id="cron-second" items={secondItems} bind:value={cronSecond} onchange={updateCronExpression} />
+              </div>
+              <div>
+                <label class="label mb-1.5 text-xs" for="cron-minute">Minutes</label>
+                <Select id="cron-minute" items={minuteItems} bind:value={cronMinute} onchange={updateCronExpression} />
+              </div>
+              <div>
+                <label class="label mb-1.5 text-xs" for="cron-hour">Hours</label>
+                <Select id="cron-hour" items={hourItems} bind:value={cronHour} onchange={updateCronExpression} />
+              </div>
+              <div>
+                <label class="label mb-1.5 text-xs" for="cron-day-month">Day</label>
+                <Select id="cron-day-month" items={dayOfMonthItems} bind:value={cronDayOfMonth} onchange={handleCronDayOfMonthChange} />
+              </div>
+              <div>
+                <label class="label mb-1.5 text-xs" for="cron-month">Month</label>
+                <Select id="cron-month" items={monthItems} bind:value={cronMonth} onchange={updateCronExpression} />
+              </div>
+              <div>
+                <label class="label mb-1.5 text-xs" for="cron-day-week">Weekday</label>
+                <Select id="cron-day-week" items={dayOfWeekItems} bind:value={cronDayOfWeek} onchange={handleCronDayOfWeekChange} />
+              </div>
+            </div>
+            <div class="mt-3 flex flex-wrap items-center justify-between gap-2">
+              <span class="text-xs text-base-content/50">Generated expression</span>
+              <code class="rounded bg-base-200 px-2 py-1 font-mono text-xs text-base-content/70">{cronBuilderExpression}</code>
+            </div>
           </div>
         {:else}
           <div class="sm:col-span-2">
@@ -352,11 +424,11 @@
 
       <div class="flex justify-end gap-2">
         <button class="btn btn-sm btn-neutral" onclick={() => (formOpen = false)}>Cancel</button>
-        <button class="btn btn-sm btn-primary" type="submit" disabled={formSaving || (!editingKey && !formKey.trim())}>
+        <button class="btn btn-sm btn-primary" type="submit" disabled={formSaving}>
           {#if formSaving}
             <span class="loading loading-spinner loading-xs mr-1.5"></span>
           {/if}
-          {editingKey ? 'Save changes' : 'Create schedule'}
+          Save changes
         </button>
       </div>
     </form>
@@ -368,7 +440,7 @@
     <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
       <Clock class="mx-auto h-9 w-9 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No schedules yet</p>
-      <p class="mt-1 text-sm text-base-content/50">Create one to run maintenance tasks on a recurring basis.</p>
+      <p class="mt-1 text-sm text-base-content/50">Run migrations to seed the registered scheduler task types.</p>
     </div>
   {:else}
     <div class="mt-5 space-y-2">
@@ -414,23 +486,6 @@
             >
               <Pencil class="h-4 w-4" />
             </button>
-            <button
-              type="button"
-              class="inline-flex h-10 min-w-10 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-base-content/80 transition hover:border-error/60 hover:bg-error/10 hover:text-error disabled:opacity-50"
-              title="Delete schedule"
-              aria-label={`Delete schedule ${schedule.key}`}
-              disabled={mutation === `delete:${schedule.key}`}
-              onclick={() => {
-                deleteTarget = schedule;
-                deleteModalOpen = true;
-              }}
-            >
-              {#if mutation === `delete:${schedule.key}`}
-                <span class="loading loading-spinner loading-xs"></span>
-              {:else}
-                <Trash2 class="h-4 w-4" />
-              {/if}
-            </button>
           </div>
         </article>
       {/each}
@@ -453,15 +508,3 @@
     </div>
   </div>
 </Modal>
-
-<ConfirmDeleteModal
-  bind:open={deleteModalOpen}
-  title="Delete schedule"
-  message={deleteTarget ? `Delete schedule "${deleteTarget.key}"? The ${deleteTarget.taskType} task will no longer run automatically.` : ''}
-  confirmLabel="Delete schedule"
-  onConfirm={async () => {
-    if (deleteTarget) {
-      await removeSchedule(deleteTarget);
-    }
-  }}
-/>
