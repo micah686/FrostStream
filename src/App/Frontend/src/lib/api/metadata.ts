@@ -40,32 +40,6 @@ export interface OrphanCleanupPolicyUpdate {
   metadataDeleteAfterDays: number;
 }
 
-export interface WatchedAutoDeletePolicy {
-  enabled: boolean;
-  deleteAfterDays: number;
-  maxDeletionsPerRun: number;
-  updatedBy: string | null;
-  updatedAt: string | null;
-  lastRunAt: string | null;
-  lastDeletedCount: number;
-  lastFailedCount: number;
-}
-
-export interface WatchedAutoDeletePolicyUpdate {
-  enabled: boolean;
-  deleteAfterDays: number;
-  maxDeletionsPerRun: number;
-}
-
-export interface WatchedAutoDeleteCleanupResult {
-  policyEnabled: boolean;
-  cutoff: string | null;
-  candidatesFound: number;
-  deletedCount: number;
-  failedCount: number;
-  filesDeleted: number;
-}
-
 export interface MediaDeleteResult {
   success: boolean;
   errorCode: string | null;
@@ -131,21 +105,6 @@ export async function updateOrphanCleanupPolicy(
   fetchImpl: typeof fetch = fetch
 ): Promise<OrphanCleanupPolicy> {
   return sendJson<OrphanCleanupPolicy>(`${BASE}/orphan-cleanup-policy`, 'PUT', request, fetchImpl);
-}
-
-export async function getWatchedAutoDeletePolicy(fetchImpl: typeof fetch = fetch): Promise<WatchedAutoDeletePolicy> {
-  return getJson<WatchedAutoDeletePolicy>(`${BASE}/watched-auto-delete`, fetchImpl);
-}
-
-export async function updateWatchedAutoDeletePolicy(
-  request: WatchedAutoDeletePolicyUpdate,
-  fetchImpl: typeof fetch = fetch
-): Promise<WatchedAutoDeletePolicy> {
-  return sendJson<WatchedAutoDeletePolicy>(`${BASE}/watched-auto-delete`, 'PUT', request, fetchImpl);
-}
-
-export async function runWatchedAutoDelete(fetchImpl: typeof fetch = fetch): Promise<WatchedAutoDeleteCleanupResult> {
-  return sendJson<WatchedAutoDeleteCleanupResult>(`${BASE}/watched-auto-delete/run`, 'POST', undefined, fetchImpl);
 }
 
 export async function deleteMedia(mediaGuid: string, fetchImpl: typeof fetch = fetch): Promise<MediaDeleteResult> {

@@ -13,7 +13,6 @@ public sealed class BackgroundJobConsumerService(
     IMessageBus messageBus,
     NpgsqlDataSource dataSource,
     IMetadataRebuildCoordinator rebuildCoordinator,
-    WatchedItemAutoDeleteExecutor watchedAutoDeleteExecutor,
     INotificationDispatcher notificationDispatcher,
     IClock clock,
     ILogger<BackgroundJobConsumerService> logger) : BackgroundService
@@ -27,7 +26,6 @@ public sealed class BackgroundJobConsumerService(
             Consume<SearchReindexRequested>(BackgroundJobsTopology.SearchReindexConsumer, HandleSearchReindexAsync, stoppingToken),
             Consume<DatabaseMaintenanceRequested>(BackgroundJobsTopology.DatabaseMaintenanceConsumer, HandleDatabaseMaintenanceAsync, stoppingToken),
             Consume<StaleDatabaseCleanupRequested>(BackgroundJobsTopology.StaleDatabaseCleanupConsumer, HandleStaleDatabaseCleanupAsync, stoppingToken),
-            Consume<WatchedItemAutoDeleteRequested>(BackgroundJobsTopology.WatchedItemAutoDeleteConsumer, HandleWatchedItemAutoDeleteAsync, stoppingToken),
             Consume<ProcessedMessageCleanupRequested>(BackgroundJobsTopology.ProcessedMessageCleanupConsumer, HandleProcessedMessageCleanupAsync, stoppingToken)
         };
 
@@ -173,42 +171,6 @@ public sealed class BackgroundJobConsumerService(
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed handling processed message cleanup request {IdempotencyKey}; nacking", message.IdempotencyKey);
-            await MarkFailureAsync(message);
-            await context.NackAsync();
-        }
-    }
-
-    private async Task HandleWatchedItemAutoDeleteAsync(IJsMessageContext<WatchedItemAutoDeleteRequested> context)
-    {
-        var message = context.Message;
-        try
-        {
-            await MarkAttemptAsync(message);
-            var response = await watchedAutoDeleteExecutor.CleanupAsync(CancellationToken.None);
-            if (!response.Success)
-            {
-                logger.LogWarning(
-                    "Watched item auto-delete request {IdempotencyKey} failed: {ErrorCode} {ErrorMessage}",
-                    message.IdempotencyKey,
-                    response.ErrorCode,
-                    response.ErrorMessage);
-                await MarkFailureAsync(message);
-                await context.NackAsync();
-                return;
-            }
-
-            await MarkSuccessAsync(message);
-            logger.LogInformation(
-                "Watched item auto-delete request {IdempotencyKey} completed: deleted {DeletedCount}, failed {FailedCount}, files {FilesDeleted}.",
-                message.IdempotencyKey,
-                response.Result?.DeletedCount ?? 0,
-                response.Result?.FailedCount ?? 0,
-                response.Result?.FilesDeleted ?? 0);
-            await context.AckAsync();
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed handling watched item auto-delete request {IdempotencyKey}; nacking", message.IdempotencyKey);
             await MarkFailureAsync(message);
             await context.NackAsync();
         }

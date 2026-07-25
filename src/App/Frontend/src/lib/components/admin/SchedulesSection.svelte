@@ -60,10 +60,6 @@
       summary: 'Cleans up stale maintenance records and other aged scheduler data.'
     },
     {
-      type: 'watched_item_auto_delete',
-      summary: 'Deletes watched media items that satisfy the watched-item retention policy.'
-    },
-    {
       type: 'database_maintenance',
       summary: 'Runs routine database maintenance work such as housekeeping and compaction.'
     },

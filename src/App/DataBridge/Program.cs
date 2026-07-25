@@ -153,7 +153,6 @@ class Program
         builder.Services.AddSingleton<AccessPolicyExecutor>();
         builder.Services.Configure<MediaAccessOptions>(
             builder.Configuration.GetSection(MediaAccessOptions.SectionName));
-        builder.Services.AddSingleton<WatchedItemAutoDeleteExecutor>();
         builder.Services.AddSingleton<DownloadFlowStartupState>();
         builder.Services.AddSingleton<INotificationDispatcher, NotificationDispatcher>();
         builder.Services.AddSingleton<ImportSessionRequestReplyService>();
@@ -189,7 +188,6 @@ class Program
         builder.Services.AddHostedService<ScheduleCrudConsumerService>();
         builder.Services.AddHostedService<CreatorDiscoveryConsumerService>();
         builder.Services.AddHostedService<WatchStateConsumerService>();
-        builder.Services.AddHostedService<WatchedAutoDeleteAdminConsumerService>();
         builder.Services.AddHostedService<OrphanCleanupAdminConsumerService>();
         builder.Services.AddHostedService<OrphanMetadataCleanupConsumerService>();
         builder.Services.AddHostedService<FilesystemRescanConsumerService>();

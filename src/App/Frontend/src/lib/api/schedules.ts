@@ -37,7 +37,6 @@ export const scheduleTaskTypes = [
   'channel_asset_refresh',
   'channel_media_list',
   'stale_database_cleanup',
-  'watched_item_auto_delete',
   'database_maintenance',
   'search_reindex',
   'filesystem_rescan',

@@ -66,7 +66,6 @@ internal static class Program
         builder.Services.AddTransient<Jobs.ChannelAssetRefreshJob>();
         builder.Services.AddTransient<Jobs.ChannelMediaListJob>();
         builder.Services.AddTransient<Jobs.StaleDatabaseCleanupJob>();
-        builder.Services.AddTransient<Jobs.WatchedItemAutoDeleteJob>();
         builder.Services.AddTransient<Jobs.DatabaseMaintenanceJob>();
         builder.Services.AddTransient<Jobs.SearchReindexJob>();
         builder.Services.AddTransient<Jobs.FilesystemRescanJob>();
@@ -78,7 +77,6 @@ internal static class Program
         builder.Services.AddSingleton<IChannelMediaLister, ChannelMediaLister>();
         builder.Services.AddSingleton<IOrphanMetadataCleanupScheduler, OrphanMetadataCleanupScheduler>();
         builder.Services.AddSingleton<IStaleEntryCleanupScheduler, StaleEntryCleanupScheduler>();
-        builder.Services.AddSingleton<IWatchedItemAutoDeleteScheduler, WatchedItemAutoDeleteScheduler>();
         builder.Services.AddSingleton<IDatabaseMaintenanceScheduler, DatabaseMaintenanceScheduler>();
         builder.Services.AddSingleton<ISearchReindexScheduler, SearchReindexScheduler>();
         builder.Services.AddSingleton<IFilesystemRescanScheduler, FilesystemRescanScheduler>();

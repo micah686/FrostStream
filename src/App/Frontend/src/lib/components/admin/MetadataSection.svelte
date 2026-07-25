@@ -5,7 +5,6 @@
     CircleAlert,
     CircleCheck,
     FileSearch,
-    Play,
     RefreshCw,
     Repeat,
     Trash2,
@@ -17,22 +16,17 @@
     deleteMedia,
     deleteMediaForStorageKey,
     getOrphanCleanupPolicy,
-    getWatchedAutoDeletePolicy,
     listOrphans,
     orphanKindLabel,
     orphanStateLabel,
     restoreOrphanFile,
     restoreOrphanMetadata,
-    runWatchedAutoDelete,
     triggerReindex,
     updateOrphanCleanupPolicy,
-    updateWatchedAutoDeletePolicy,
     type OrphanCleanupItem,
     type OrphanCleanupPolicy,
     type OrphanKind,
-    type OrphanState,
-    type WatchedAutoDeleteCleanupResult,
-    type WatchedAutoDeletePolicy
+    type OrphanState
   } from '$lib/api/metadata';
 
 
@@ -44,18 +38,6 @@
   let reindexBusy = $state(false);
   let reindexMessage = $state<string | null>(null);
   let reindexError = $state<string | null>(null);
-
-  // Watched auto-delete policy
-  let watchedPolicy = $state<WatchedAutoDeletePolicy | null>(null);
-  let watchedLoading = $state(true);
-  let watchedError = $state<string | null>(null);
-  let watchedSaved = $state(false);
-  let watchedEnabled = $state(false);
-  let watchedDeleteAfterDays = $state<number | string>(30);
-  let watchedMaxPerRun = $state<number | string>(100);
-  let watchedSaving = $state(false);
-  let watchedRunBusy = $state(false);
-  let watchedRunResult = $state<WatchedAutoDeleteCleanupResult | null>(null);
 
   // Orphan cleanup policy
   let orphanPolicy = $state<OrphanCleanupPolicy | null>(null);
@@ -105,7 +87,6 @@
   const deleteGuidValid = $derived(GUID_PATTERN.test(deleteGuid.trim()));
 
   onMount(() => {
-    void loadWatchedPolicy();
     void loadOrphanPolicy();
     void loadOrphans();
   });
@@ -125,59 +106,6 @@
       reindexError = err instanceof Error ? err.message : 'Could not queue the reindex.';
     } finally {
       reindexBusy = false;
-    }
-  }
-
-  async function loadWatchedPolicy() {
-    watchedLoading = true;
-    watchedError = null;
-    try {
-      applyWatchedPolicy(await getWatchedAutoDeletePolicy());
-    } catch (err) {
-      watchedError = err instanceof Error ? err.message : 'Could not load the watched auto-delete policy.';
-    } finally {
-      watchedLoading = false;
-    }
-  }
-
-  function applyWatchedPolicy(policy: WatchedAutoDeletePolicy) {
-    watchedPolicy = policy;
-    watchedEnabled = policy.enabled;
-    watchedDeleteAfterDays = policy.deleteAfterDays;
-    watchedMaxPerRun = policy.maxDeletionsPerRun;
-  }
-
-  async function saveWatchedPolicy() {
-    watchedSaving = true;
-    watchedError = null;
-    watchedSaved = false;
-    try {
-      applyWatchedPolicy(
-        await updateWatchedAutoDeletePolicy({
-          enabled: watchedEnabled,
-          deleteAfterDays: Number(watchedDeleteAfterDays),
-          maxDeletionsPerRun: Number(watchedMaxPerRun)
-        })
-      );
-      watchedSaved = true;
-    } catch (err) {
-      watchedError = err instanceof Error ? err.message : 'Could not save the watched auto-delete policy.';
-    } finally {
-      watchedSaving = false;
-    }
-  }
-
-  async function runWatchedCleanupNow() {
-    watchedRunBusy = true;
-    watchedError = null;
-    watchedRunResult = null;
-    try {
-      watchedRunResult = await runWatchedAutoDelete();
-      await loadWatchedPolicy();
-    } catch (err) {
-      watchedError = err instanceof Error ? err.message : 'Watched auto-delete cleanup failed.';
-    } finally {
-      watchedRunBusy = false;
     }
   }
 
@@ -327,96 +255,6 @@
       Rebuild search index
     </button>
   </div>
-</section>
-
-<!-- Watched auto-delete policy -->
-<section class={cardClass} aria-labelledby="metadata-watched-title">
-  <h2 id="metadata-watched-title" class="text-base font-bold text-base-content">Watched auto-delete</h2>
-  <p class="mt-2 text-sm text-base-content/60">
-    Automatically delete videos after they have been watched. Deletion removes stored files, metadata, and search
-    entries.
-  </p>
-
-  {#if watchedError}
-    <div
-      class="mt-4 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
-      role="alert"
-    >
-      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
-      <span>{watchedError}</span>
-    </div>
-  {/if}
-
-  {#if watchedLoading}
-    <div class="mt-8 flex justify-center">
-      <span class="loading loading-spinner loading-md"></span>
-    </div>
-  {:else}
-    <div class="mt-5 space-y-4">
-      <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle" bind:checked={watchedEnabled} /><span>Enable automatic deletion of watched videos</span></label>
-
-      <div class="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label class="label mb-2 text-sm" for="watched-delete-after">Delete after (days)</label>
-          <input class="input w-full" id="watched-delete-after" type="number" min={1} bind:value={watchedDeleteAfterDays} />
-        </div>
-        <div>
-          <label class="label mb-2 text-sm" for="watched-max-per-run">Max deletions per run</label>
-          <input class="input w-full" id="watched-max-per-run" type="number" min={1} bind:value={watchedMaxPerRun} />
-        </div>
-      </div>
-
-      {#if watchedPolicy}
-        <dl class="grid gap-x-6 gap-y-1 text-xs text-base-content/50 sm:grid-cols-2">
-          <div class="flex gap-1.5">
-            <dt class="font-semibold">Last run:</dt>
-            <dd>{formatDate(watchedPolicy.lastRunAt)}</dd>
-          </div>
-          <div class="flex gap-1.5">
-            <dt class="font-semibold">Last run deleted:</dt>
-            <dd>{watchedPolicy.lastDeletedCount} deleted · {watchedPolicy.lastFailedCount} failed</dd>
-          </div>
-          <div class="flex gap-1.5">
-            <dt class="font-semibold">Updated:</dt>
-            <dd>{formatDate(watchedPolicy.updatedAt)}{watchedPolicy.updatedBy ? ` by ${watchedPolicy.updatedBy}` : ''}</dd>
-          </div>
-        </dl>
-      {/if}
-
-      {#if watchedRunResult}
-        <div class="rounded-xl border border-base-300/80 bg-base-200/30 p-3 text-xs text-base-content/60">
-          Cleanup finished: {watchedRunResult.candidatesFound} candidate(s), {watchedRunResult.deletedCount} deleted,
-          {watchedRunResult.failedCount} failed, {watchedRunResult.filesDeleted} file(s) removed.
-          {#if !watchedRunResult.policyEnabled}
-            The policy is disabled, so nothing was deleted.
-          {/if}
-        </div>
-      {/if}
-
-      <div class="flex flex-wrap items-center gap-2">
-        <button class="btn btn-sm btn-primary" disabled={watchedSaving} onclick={saveWatchedPolicy}>
-          {#if watchedSaving}
-            <span class="loading loading-spinner loading-xs mr-1.5"></span>
-          {/if}
-          Save policy
-        </button>
-        <button class="btn btn-sm btn-neutral" disabled={watchedRunBusy} onclick={runWatchedCleanupNow}>
-          {#if watchedRunBusy}
-            <span class="loading loading-spinner loading-xs mr-1.5"></span>
-          {:else}
-            <Play class="mr-1.5 h-3.5 w-3.5" />
-          {/if}
-          Run cleanup now
-        </button>
-        {#if watchedSaved}
-          <span class="inline-flex items-center gap-1 text-xs font-semibold text-success">
-            <CircleCheck class="h-3.5 w-3.5" />
-            Saved
-          </span>
-        {/if}
-      </div>
-    </div>
-  {/if}
 </section>
 
 <!-- Orphan cleanup policy -->

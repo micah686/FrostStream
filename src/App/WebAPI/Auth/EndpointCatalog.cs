@@ -120,9 +120,6 @@ public static class EndpointIds
     public const string OrphanCleanupPolicyUpdate = "metadata.orphan-cleanup-policy.update";
     public const string MediaDelete = "media.delete";
     public const string MediaDeleteForStorageKey = "media.delete-for-key";
-    public const string WatchedAutoDeletePolicyGet = "watched-auto-delete.policy.get";
-    public const string WatchedAutoDeletePolicyUpdate = "watched-auto-delete.policy.update";
-    public const string WatchedAutoDeleteRun = "watched-auto-delete.run";
 
     // Playlists
     public const string PlaylistsCreate = "playlists.create";
@@ -357,9 +354,6 @@ public static class EndpointCatalog
         new(EndpointIds.OrphanCleanupPolicyUpdate, Bundles.MetadataAdmin),
         new(EndpointIds.MediaDelete, Bundles.MetadataAdmin),
         new(EndpointIds.MediaDeleteForStorageKey, Bundles.MetadataAdmin),
-        new(EndpointIds.WatchedAutoDeletePolicyGet, Bundles.MetadataAdmin),
-        new(EndpointIds.WatchedAutoDeletePolicyUpdate, Bundles.MetadataAdmin),
-        new(EndpointIds.WatchedAutoDeleteRun, Bundles.MetadataAdmin),
 
         new(EndpointIds.PlaylistsCreate, Bundles.Playlists),
         new(EndpointIds.PlaylistsList, Bundles.Playlists),
