@@ -82,7 +82,7 @@ Manages DB-backed scheduled tasks that the Scheduler service hydrates into Quart
 | `GET` | `/api/schedules` | List all scheduled tasks. |
 | `DELETE` | `/api/schedules/{key}` | Delete a scheduled task. |
 
-**Registered Task Types:** `channel_update_check`, `channel_media_list`, `channel_asset_refresh`, `database_maintenance`, `filesystem_rescan`, `processed_message_cleanup`, `search_reindex`, `stale_database_cleanup`.
+**Registered Task Types:** `channel_update_check`, `channel_media_list`, `channel_asset_refresh`, `database_maintenance`, `processed_message_cleanup`, `search_reindex`, `stale_database_cleanup`.
 
 ### 2.5 Option Presets (`/api/option-presets`)
 
@@ -211,18 +211,6 @@ Subscribes to 1 durable consumer on the `FROSTSTREAM_BACKGROUND_JOBS` stream:
 
 Can target a single source (via `TargetSourceId`) or all enabled sources.
 
-### 3.5 Filesystem Rescan
-
-Subscribes to 1 durable consumer on the `FROSTSTREAM_BACKGROUND_JOBS` stream:
-
-| Consumer | Trigger | What It Does |
-|----------|---------|--------------|
-| `worker-filesystem-rescan` | `FilesystemRescanRequested` | Enumerates every file in every configured storage backend. Serializes paths as NDJSON and uploads to a NATS object store bucket. Requests DataBridge to reconcile the listing against the database (`FilesystemRescanSubjects.Reconcile`). Reports `MissingCount` (in DB but not on disk) and `UnexpectedCount` (on disk but not in DB). |
-
-Paths are normalized before upload (`StoragePathNormalizer.Normalize`). A per-message NATS heartbeat fires every 10 seconds to keep JetStream from timing out during long-running scans.
-
----
-
 ## 4. DataBridge — Capabilities
 
 DataBridge is the persistence hub. It owns PostgreSQL, runs Cleipnir resilient flows, and handles all NATS-facing data operations.
@@ -267,7 +255,6 @@ A durable, resumable saga per `jobId`. Steps:
 | `ScheduleCrudConsumerService` | `schedule.*` (CRUD + mark-attempt/success/failure) | Manages scheduled task records in DB. Notifies Scheduler of changes. |
 | `CreatorDiscoveryConsumerService` | `creator.*` (CRUD + upsert-batch + update-assets) | Manages creator sources and discovered media candidates. |
 | `BackgroundJobConsumerService` | Background job subjects | Routes background job requests to internal handlers. |
-| `FilesystemRescanConsumerService` | `fs.rescan.*` | Reads the NDJSON listing uploaded by the Worker and reconciles against `download_jobs` / `filesystem_rescan_findings`. |
 | `MetadataQueryConsumerService` | `metadata.*` (all read subjects) | Queries media metadata, accounts, taxonomy, technical details, comments, captions from DB. |
 | `MetadataSearchConsumerService` | `metadata.search` | Routes to Typesense for full-text search. |
 | `MetadataCaptionsConsumerService` | Typesense captions sync | Syncs captions to Typesense. |
@@ -291,14 +278,12 @@ A durable, resumable saga per `jobId`. Steps:
 | 009 | `public.playlist_metadata` |
 | 010 | `public.download_option_presets` |
 | 011 | `public.scheduled_tasks` |
-| 012 | Seed: monthly maintenance scheduled tasks (database_maintenance, stale_database_cleanup, filesystem_rescan, search_reindex) |
+| 012 | Seed: monthly maintenance scheduled tasks (database_maintenance, stale_database_cleanup, search_reindex) |
 | 013 | `public.creator_sources`, `public.discovered_media` |
 | 014 | Add avatar/banner/asset columns to `creator_sources` |
 | 015 | Add `info_json_*` columns to `download_jobs` |
 | 016 | Add `run_status` column to `scheduled_tasks` |
 | 017 | Seed: `processed_message_cleanup` scheduled task |
-| 018 | `public.filesystem_rescan_findings` |
-| 019 | Path normalization columns on `filesystem_rescan_findings` |
 
 ### 4.4 Rich Metadata Model (`CapturedMediaMetadata`)
 
@@ -339,7 +324,6 @@ Uses Quartz.NET with a CrystalQuartz visual dashboard.
 | `ChannelMediaListJob` | `channel_media_list` | Publishes `ChannelMediaListRequested`. Worker performs full scan. |
 | `ChannelAssetRefreshJob` | `channel_asset_refresh` | Publishes `ChannelAssetRefreshRequested` (no `TargetSourceId` = all sources). Worker refreshes avatar/banner assets. |
 | `DatabaseMaintenanceJob` | `database_maintenance` | Publishes `DatabaseMaintenanceRequested`. DataBridge runs VACUUM/ANALYZE or equivalent maintenance. |
-| `FilesystemRescanJob` | `filesystem_rescan` | Publishes `FilesystemRescanRequested`. Worker enumerates storage; DataBridge reconciles. |
 | `ProcessedMessageCleanupJob` | `processed_message_cleanup` | Publishes `ProcessedMessageCleanupRequested`. DataBridge purges old rows from `processed_messages`. |
 | `SearchReindexJob` | `search_reindex` | Publishes `SearchReindexRequested`. DataBridge rebuilds Typesense from Postgres. |
 | `StaleDatabaseCleanupJob` | `stale_database_cleanup` | Publishes `StaleDatabaseCleanupRequested`. DataBridge removes stale/orphaned DB entries. |
@@ -393,7 +377,6 @@ All jobs use `[DisallowConcurrentExecution]`.
 | `fs.channel.update-check.request` | Worker (incremental scan) |
 | `fs.channel.media-list.request` | Worker (full scan) |
 | `fs.channel.asset-refresh.request` | Worker (asset download) |
-| `fs.media.filesystem.rescan.request` | Worker (storage enumeration) |
 | `fs.cleanup.database.stale.request` | DataBridge |
 | `fs.cleanup.database.processed-messages.request` | DataBridge |
 | `fs.cleanup.database.maintenance.request` | DataBridge |
@@ -419,9 +402,6 @@ All jobs use `[DisallowConcurrentExecution]`.
 
 ### Playlist Queries (WebAPI → DataBridge, request/reply)
 `playlist.list`, `playlist.get`
-
-### Filesystem Rescan (Worker ↔ DataBridge)
-`fs.rescan.storage-keys` (DataBridge → Worker), `fs.rescan.reconcile` (Worker → DataBridge)
 
 ---
 

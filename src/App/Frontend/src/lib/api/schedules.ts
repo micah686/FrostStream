@@ -38,7 +38,6 @@ export const scheduleTaskTypes = [
   'stale_database_cleanup',
   'database_maintenance',
   'search_reindex',
-  'filesystem_rescan',
   'processed_message_cleanup',
   'backup'
 ] as const;

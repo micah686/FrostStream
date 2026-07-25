@@ -105,10 +105,6 @@
       summary: 'Rebuilds the search index from the authoritative metadata store.'
     },
     {
-      type: 'filesystem_rescan',
-      summary: 'Scans the filesystem for new, changed, or removed media entries.'
-    },
-    {
       type: 'processed_message_cleanup',
       summary: 'Removes old processed-message records so the job history stays small.'
     },

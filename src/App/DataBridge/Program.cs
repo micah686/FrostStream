@@ -187,7 +187,6 @@ class Program
         builder.Services.AddHostedService<ScheduleCrudConsumerService>();
         builder.Services.AddHostedService<CreatorDiscoveryConsumerService>();
         builder.Services.AddHostedService<WatchStateConsumerService>();
-        builder.Services.AddHostedService<FilesystemRescanConsumerService>();
         builder.Services.AddHostedService<BackgroundJobConsumerService>();
         builder.Services.AddHostedService<DownloadFlowStartupService>();
         builder.Services.AddHostedService<DownloadAdminConsumerService>();

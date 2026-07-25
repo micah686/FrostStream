@@ -47,7 +47,6 @@ public sealed class DataBridgeDbContext(DbContextOptions<DataBridgeDbContext> op
     public DbSet<OptionPresetEntity> OptionPresets => Set<OptionPresetEntity>();
     public DbSet<DownloadConfigSetEntity> DownloadConfigSets => Set<DownloadConfigSetEntity>();
     public DbSet<ScheduledTaskEntity> ScheduledTasks => Set<ScheduledTaskEntity>();
-    public DbSet<FilesystemRescanFindingEntity> FilesystemRescanFindings => Set<FilesystemRescanFindingEntity>();
     public DbSet<CreatorSourceEntity> CreatorSources => Set<CreatorSourceEntity>();
     public DbSet<DiscoveredMediaEntity> DiscoveredMedia => Set<DiscoveredMediaEntity>();
     public DbSet<FrostStreamUserEntity> FrostStreamUsers => Set<FrostStreamUserEntity>();

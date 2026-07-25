@@ -67,7 +67,6 @@ internal static class Program
         builder.Services.AddTransient<Jobs.StaleDatabaseCleanupJob>();
         builder.Services.AddTransient<Jobs.DatabaseMaintenanceJob>();
         builder.Services.AddTransient<Jobs.SearchReindexJob>();
-        builder.Services.AddTransient<Jobs.FilesystemRescanJob>();
         builder.Services.AddTransient<Jobs.ProcessedMessageCleanupJob>();
         builder.Services.AddTransient<Jobs.BackupJob>();
 
@@ -77,7 +76,6 @@ internal static class Program
         builder.Services.AddSingleton<IStaleEntryCleanupScheduler, StaleEntryCleanupScheduler>();
         builder.Services.AddSingleton<IDatabaseMaintenanceScheduler, DatabaseMaintenanceScheduler>();
         builder.Services.AddSingleton<ISearchReindexScheduler, SearchReindexScheduler>();
-        builder.Services.AddSingleton<IFilesystemRescanScheduler, FilesystemRescanScheduler>();
         builder.Services.AddSingleton<IProcessedMessageCleanupScheduler, ProcessedMessageCleanupScheduler>();
         builder.Services.AddSingleton<IBackupScheduler, BackupScheduler>();
 

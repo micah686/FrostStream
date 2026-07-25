@@ -5,7 +5,7 @@ namespace DataBridge.Migrations.FluentMigrator;
 /// <summary>
 /// Removes the orphan metadata/file cleanup feature: its lifecycle table (020), its retention
 /// policy table (046), and the seeded nightly scheduled task (011). The `maintenance` schema
-/// itself is retained — `maintenance.filesystem_rescan_findings` (a separate feature) still owns it.
+/// itself is retained for other maintenance data.
 /// </summary>
 [Migration(70, "Drop orphan cleanup feature")]
 public sealed class M070_DropOrphanCleanupFeature : Migration

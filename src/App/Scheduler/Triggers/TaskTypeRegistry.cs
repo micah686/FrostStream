@@ -11,7 +11,6 @@ internal static class TaskTypeRegistry
     public const string StaleDatabaseCleanup = "stale_database_cleanup";
     public const string DatabaseMaintenance = "database_maintenance";
     public const string SearchReindex = "search_reindex";
-    public const string FilesystemRescan = "filesystem_rescan";
     public const string ProcessedMessageCleanup = "processed_message_cleanup";
     public const string Backup = "backup";
 
@@ -23,7 +22,6 @@ internal static class TaskTypeRegistry
         [StaleDatabaseCleanup] = typeof(StaleDatabaseCleanupJob),
         [DatabaseMaintenance] = typeof(DatabaseMaintenanceJob),
         [SearchReindex] = typeof(SearchReindexJob),
-        [FilesystemRescan] = typeof(FilesystemRescanJob),
         [ProcessedMessageCleanup] = typeof(ProcessedMessageCleanupJob),
         [Backup] = typeof(BackupJob)
     };
