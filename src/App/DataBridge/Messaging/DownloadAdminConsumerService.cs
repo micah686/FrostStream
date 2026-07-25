@@ -272,6 +272,7 @@ public sealed class DownloadAdminConsumerService(
 public sealed class DownloadLeaseMonitorService(
     IServiceScopeFactory scopeFactory,
     DownloadJobV2Flows flows,
+    INotificationDispatcher notificationDispatcher,
     ILogger<DownloadLeaseMonitorService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -292,9 +293,16 @@ public sealed class DownloadLeaseMonitorService(
                         await panel.Delete();
                 }
                 if (expired.Count > 0)
+                {
                     logger.LogWarning(
                         "Failed {Count} Download V2 dispatches after worker lease expiry; their immutable flow instances were deleted.",
                         expired.Count);
+                    await notificationDispatcher.NotifyAdminEventAsync(
+                        NotificationEventKeys.WorkerUnavailable,
+                        "FrostStream worker lease expired",
+                        $"Failed {expired.Count} download dispatch(es) after worker lease expiry.",
+                        cancellationToken: stoppingToken);
+                }
 
                 // A terminal flow paired with an active database run leaves the job "running"
                 // forever while worker results pile up in a mailbox nobody reads. Convert the
@@ -316,6 +324,12 @@ public sealed class DownloadLeaseMonitorService(
                         logger.LogWarning(
                             "Failed Download V2 run without a flow instance for JobId {JobId} RunId {RunId} (run marked failed: {Failed}).",
                             active.JobId, active.RunId, healed);
+                        if (healed)
+                            await notificationDispatcher.NotifyAdminEventAsync(
+                                NotificationEventKeys.DownloadDeadLettered,
+                                "FrostStream download run dead-lettered",
+                                $"Download run {active.RunId} for job {active.JobId} had no durable flow instance and was marked failed.",
+                                cancellationToken: stoppingToken);
                         continue;
                     }
                     if (panel.Status is not (Status.Failed or Status.Succeeded))
@@ -328,6 +342,12 @@ public sealed class DownloadLeaseMonitorService(
                     logger.LogWarning(
                         "Deleted terminal Download V2 flow instance with active run for JobId {JobId} RunId {RunId} FlowStatus {FlowStatus} (run marked failed: {Failed}).",
                         active.JobId, active.RunId, panel.Status, failed);
+                    if (failed)
+                        await notificationDispatcher.NotifyAdminEventAsync(
+                            NotificationEventKeys.DownloadDeadLettered,
+                            "FrostStream download run dead-lettered",
+                            $"Download run {active.RunId} for job {active.JobId} had terminal flow status {panel.Status} while still active and was marked failed.",
+                            cancellationToken: stoppingToken);
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

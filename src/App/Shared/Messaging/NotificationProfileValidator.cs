@@ -33,17 +33,6 @@ public static partial class NotificationProfileValidator
                 return $"Duplicate notification provider key '{provider.ProviderKey}'.";
         }
 
-        foreach (var rule in preferences.Rules)
-        {
-            if (!NotificationEventKeys.Supported.Contains(rule.EventKey))
-                return $"Unsupported notification event '{rule.EventKey}'.";
-            foreach (var providerKey in rule.ProviderKeys)
-            {
-                if (!providerKeys.Contains(providerKey))
-                    return $"Notification rule '{rule.EventKey}' references unknown provider '{providerKey}'.";
-            }
-        }
-
         return null;
     }
 
@@ -53,6 +42,11 @@ public static partial class NotificationProfileValidator
             return "Provider key must match ^[a-z0-9-]{2,100}$.";
         if (!SupportedProviderKinds.Contains(provider.ProviderKind))
             return $"Unsupported notification provider kind '{provider.ProviderKind}'.";
+        foreach (var eventKey in provider.EventKeys)
+        {
+            if (!NotificationEventKeys.Supported.Contains(eventKey))
+                return $"Unsupported notification event '{eventKey}'.";
+        }
         if (provider.NotifyConfig.ValueKind is not System.Text.Json.JsonValueKind.Object)
             return "notifyConfig must be a JSON object.";
 

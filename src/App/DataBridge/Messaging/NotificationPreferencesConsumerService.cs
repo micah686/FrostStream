@@ -27,6 +27,7 @@ public sealed class NotificationPreferencesConsumerService(
         await SubscribeAsync<NotificationUpsertProviderRequestMessage>(messageBus, NotificationSubjects.UpsertProvider, HandleUpsertProviderAsync, QueueGroup, stoppingToken);
         await SubscribeAsync<NotificationDeleteProviderRequestMessage>(messageBus, NotificationSubjects.DeleteProvider, HandleDeleteProviderAsync, QueueGroup, stoppingToken);
         await SubscribeAsync<NotificationTestRequestMessage>(messageBus, NotificationSubjects.Test, HandleTestAsync, QueueGroup, stoppingToken);
+        await SubscribeAsync<NotificationDispatchAdminEventMessage>(messageBus, NotificationSubjects.DispatchAdmin, HandleDispatchAdminAsync, QueueGroup, stoppingToken);
         logger.LogInformation("Subscribed to notification preference subjects.");
     }
 
@@ -79,9 +80,11 @@ public sealed class NotificationPreferencesConsumerService(
             }
 
             var result = await WithDb(db => UpsertProviderAsync(db, context.Message.OwnerSubject, context.Message.Provider));
+            var savedProvider = result?.Providers.FirstOrDefault(x =>
+                string.Equals(x.ProviderKey, context.Message.Provider.ProviderKey, StringComparison.Ordinal));
             await context.RespondAsync(result is null
                 ? Failure("not_found", "User was not found.")
-                : new NotificationOperationResponseMessage { Success = true, Preferences = result, Provider = context.Message.Provider });
+                : new NotificationOperationResponseMessage { Success = true, Preferences = result, Provider = savedProvider });
         }
         catch (Exception ex)
         {
@@ -124,6 +127,28 @@ public sealed class NotificationPreferencesConsumerService(
         }
     }
 
+    private async Task HandleDispatchAdminAsync(IMessageContext<NotificationDispatchAdminEventMessage> context)
+    {
+        try
+        {
+            if (!NotificationEventKeys.Supported.Contains(context.Message.EventKey))
+            {
+                logger.LogWarning("Ignoring unsupported admin notification event {EventKey}.", context.Message.EventKey);
+                return;
+            }
+
+            await dispatcher.NotifyAdminEventAsync(
+                context.Message.EventKey,
+                context.Message.Subject,
+                context.Message.Body,
+                cancellationToken: CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed dispatching admin notification event {EventKey}.", context.Message.EventKey);
+        }
+    }
+
     private Task<TResult> WithDb<TResult>(Func<DataBridgeDbContext, Task<TResult>> action)
         => scopeFactory.WithScopedAsync(action);
 
@@ -143,10 +168,11 @@ public sealed class NotificationPreferencesConsumerService(
         if (user is null)
             return null;
 
-        user.Preferences = NotificationPreferencesJson.Write(user.Preferences, preferences);
+        var normalized = NotificationPreferencesJson.Normalize(preferences);
+        user.Preferences = NotificationPreferencesJson.Write(user.Preferences, normalized);
         user.LastUpdated = clock.GetCurrentInstant();
         await db.SaveChangesAsync();
-        return preferences;
+        return normalized;
     }
 
     private async Task<NotificationPreferencesDto?> UpsertProviderAsync(
@@ -180,16 +206,7 @@ public sealed class NotificationPreferencesConsumerService(
         var providers = current.Providers
             .Where(x => !string.Equals(x.ProviderKey, providerKey, StringComparison.Ordinal))
             .ToArray();
-        var rules = current.Rules
-            .Select(rule => rule with
-            {
-                ProviderKeys = rule.ProviderKeys
-                    .Where(key => !string.Equals(key, providerKey, StringComparison.Ordinal))
-                    .ToArray()
-            })
-            .ToArray();
-
-        var next = current with { Providers = providers, Rules = rules };
+        var next = current with { Providers = providers };
         return await WritePreferencesAsync(db, ownerSubject, next);
     }
 
@@ -210,7 +227,7 @@ internal static class NotificationPreferencesJson
         if (root is null || root["notifications"] is not { } notifications)
             return new NotificationPreferencesDto();
 
-        return notifications.Deserialize<NotificationPreferencesDto>(JsonOptions) ?? new NotificationPreferencesDto();
+        return Normalize(notifications.Deserialize<NotificationPreferencesDto>(JsonOptions) ?? new NotificationPreferencesDto());
     }
 
     public static string Write(string? preferencesJson, NotificationPreferencesDto preferences)
@@ -225,7 +242,21 @@ internal static class NotificationPreferencesJson
             root = JsonNode.Parse(preferencesJson)?.AsObject() ?? [];
         }
 
-        root["notifications"] = JsonSerializer.SerializeToNode(preferences, JsonOptions);
+        root["notifications"] = JsonSerializer.SerializeToNode(Normalize(preferences), JsonOptions);
         return root.ToJsonString(JsonOptions);
     }
+
+    public static NotificationPreferencesDto Normalize(NotificationPreferencesDto preferences)
+        => preferences with
+        {
+            Providers = preferences.Providers
+                .Select(provider => provider with
+                {
+                    EventKeys = provider.EventKeys
+                        .Where(NotificationEventKeys.Supported.Contains)
+                        .Distinct(StringComparer.Ordinal)
+                        .ToArray()
+                })
+                .ToArray()
+        };
 }

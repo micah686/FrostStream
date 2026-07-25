@@ -115,9 +115,14 @@
   }
 
   function providerSummary(provider: NotificationProvider): string {
+    const eventKeys = provider.eventKeys ?? [];
+    const eventSummary = eventKeys.length === 0
+      ? 'no sources'
+      : `${eventKeys.length} source${eventKeys.length === 1 ? '' : 's'}`;
     return [
       provider.providerKind,
       provider.defaultTo ? `to ${provider.defaultTo}` : null,
+      eventSummary,
       provider.enabled ? 'enabled' : 'disabled'
     ].filter(Boolean).join(' · ');
   }

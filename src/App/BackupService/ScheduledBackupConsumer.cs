@@ -45,6 +45,12 @@ internal sealed class ScheduledBackupConsumer(
         catch (Exception ex)
         {
             logger.LogError(ex, "Scheduled backup {IdempotencyKey} failed.", message.IdempotencyKey);
+            await messageBus.PublishAsync(NotificationSubjects.DispatchAdmin, new NotificationDispatchAdminEventMessage
+            {
+                EventKey = NotificationEventKeys.BackupFailed,
+                Subject = "FrostStream backup failed",
+                Body = $"Scheduled backup '{message.ScheduleKey}' failed: {ex.Message}"
+            }, cancellationToken: CancellationToken.None);
             await messageBus.PublishAsync(ScheduleSubjects.MarkFailure, new ScheduleMarkFailureRequestMessage
             {
                 Key = message.ScheduleKey,

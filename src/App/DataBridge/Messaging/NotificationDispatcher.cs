@@ -14,9 +14,11 @@ public interface INotificationDispatcher
 {
     Task<NotificationDispatchResult> SendTestAsync(NotificationTestRequestMessage request, CancellationToken cancellationToken = default);
 
-    Task NotifyDownloadOutcomeAsync(Guid jobId, string eventKey, string subject, string body, CancellationToken cancellationToken = default);
-
     Task NotifyScheduleFailureAsync(string scheduleKey, string failureMessage, CancellationToken cancellationToken = default);
+
+    Task NotifyDownloadEventAsync(Guid jobId, string eventKey, string subject, string body, CancellationToken cancellationToken = default);
+
+    Task NotifyAdminEventAsync(string eventKey, string subject, string body, string? excludedOwnerSubject = null, CancellationToken cancellationToken = default);
 }
 
 public sealed record NotificationDispatchResult(bool Success, string? ErrorCode = null, string? ErrorMessage = null);
@@ -53,34 +55,6 @@ public sealed class NotificationDispatcher(
             cancellationToken);
     }
 
-    public async Task NotifyDownloadOutcomeAsync(
-        Guid jobId,
-        string eventKey,
-        string subject,
-        string body,
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            await using var scope = scopeFactory.CreateAsyncScope();
-            var db = scope.ServiceProvider.GetRequiredService<DataBridgeDbContext>();
-            var job = await db.DownloadJobs
-                .AsNoTracking()
-                .Where(x => x.JobId == jobId)
-                .Select(x => new { x.RequestedBy })
-                .FirstOrDefaultAsync(cancellationToken);
-
-            if (string.IsNullOrWhiteSpace(job?.RequestedBy))
-                return;
-
-            await NotifyUserAsync(job.RequestedBy, eventKey, subject, body, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed dispatching download notification for JobId {JobId}.", jobId);
-        }
-    }
-
     public async Task NotifyScheduleFailureAsync(
         string scheduleKey,
         string failureMessage,
@@ -110,6 +84,62 @@ public sealed class NotificationDispatcher(
         }
     }
 
+    public async Task NotifyDownloadEventAsync(
+        Guid jobId,
+        string eventKey,
+        string subject,
+        string body,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<DataBridgeDbContext>();
+            var ownerSubject = await db.DownloadJobs
+                .AsNoTracking()
+                .Where(x => x.JobId == jobId)
+                .Select(x => x.RequestedBy)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (!string.IsNullOrWhiteSpace(ownerSubject))
+                await NotifyUserAsync(ownerSubject, eventKey, subject, body, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed dispatching download notification for JobId {JobId} event {EventKey}.", jobId, eventKey);
+        }
+    }
+
+    public async Task NotifyAdminEventAsync(
+        string eventKey,
+        string subject,
+        string body,
+        string? excludedOwnerSubject = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<DataBridgeDbContext>();
+            var users = await db.FrostStreamUsers
+                .AsNoTracking()
+                .Where(x => x.Preferences != null)
+                .Select(x => x.AuthentikSubjectId)
+                .ToArrayAsync(cancellationToken);
+
+            foreach (var user in users)
+            {
+                if (string.Equals(user, excludedOwnerSubject, StringComparison.Ordinal))
+                    continue;
+                await NotifyUserAsync(user, eventKey, subject, body, cancellationToken);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed dispatching admin notification for event {EventKey}.", eventKey);
+        }
+    }
+
     private async Task NotifyUserAsync(
         string ownerSubject,
         string eventKey,
@@ -121,18 +151,9 @@ public sealed class NotificationDispatcher(
         if (preferences is not { Enabled: true })
             return;
 
-        var rule = preferences.Rules.FirstOrDefault(x =>
-            x.Enabled && string.Equals(x.EventKey, eventKey, StringComparison.Ordinal));
-        if (rule is null || rule.ProviderKeys.Count == 0)
-            return;
-
-        foreach (var providerKey in rule.ProviderKeys.Distinct(StringComparer.Ordinal))
+        foreach (var provider in preferences.Providers.Where(x =>
+            x.Enabled && x.EventKeys.Contains(eventKey, StringComparer.Ordinal)))
         {
-            var provider = preferences.Providers.FirstOrDefault(x =>
-                x.Enabled && string.Equals(x.ProviderKey, providerKey, StringComparison.Ordinal));
-            if (provider is null)
-                continue;
-
             var result = await SendProviderAsync(ownerSubject, provider, eventKey, subject, body, cancellationToken);
             if (!result.Success)
             {

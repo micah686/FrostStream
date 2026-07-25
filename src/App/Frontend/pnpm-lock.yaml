@@ -20,9 +20,6 @@ importers:
       jassub:
         specifier: 2.4.1
         version: 2.4.1
-      svelte-video-player:
-        specifier: ^2.2.0
-        version: 2.2.0(hls.js@1.6.16)(svelte@5.56.3)
     devDependencies:
       '@sveltejs/adapter-static':
         specifier: ^3.0.10
@@ -722,18 +719,6 @@ packages:
       svelte: ^4.0.0 || ^5.0.0-next.0
       typescript: '>=5.0.0'
 
-  svelte-video-player@2.2.0:
-    resolution: {integrity: sha512-1FD2tXuXYMcjxeOi8d4PeHgFpZc5SciNjLdxh1qRzcq0gq+3z39viMh1fRVcdqR3A+EY/2o4NU0HA76DMeC9lA==}
-    peerDependencies:
-      dashjs: ^4.0.0
-      hls.js: ^1.0.0
-      svelte: ^5.0.0
-    peerDependenciesMeta:
-      dashjs:
-        optional: true
-      hls.js:
-        optional: true
-
   svelte@5.56.3:
     resolution: {integrity: sha512-w7JvrM5IFl5cmfbY0TLik9o7mjRUJmRMhOR51tBPu708Gr/MjbGs7VnJnr/B0CaXeI4vtnOh7RKxDr0cwhMdDA==}
     engines: {node: '>=18'}
@@ -1401,12 +1386,6 @@ snapshots:
       typescript: 6.0.3
     transitivePeerDependencies:
       - picomatch
-
-  svelte-video-player@2.2.0(hls.js@1.6.16)(svelte@5.56.3):
-    dependencies:
-      svelte: 5.56.3
-    optionalDependencies:
-      hls.js: 1.6.16
 
   svelte@5.56.3:
     dependencies:

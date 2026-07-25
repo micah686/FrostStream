@@ -4,7 +4,6 @@ export interface NotificationPreferences {
   version: number;
   enabled: boolean;
   providers: NotificationProvider[];
-  rules: NotificationRule[];
 }
 
 export interface NotificationProvider {
@@ -13,14 +12,21 @@ export interface NotificationProvider {
   enabled: boolean;
   displayName: string | null;
   defaultTo: string | null;
+  eventKeys?: NotificationEventKey[];
   notifyConfig: Record<string, unknown>;
 }
 
-export interface NotificationRule {
-  eventKey: string;
-  enabled: boolean;
-  providerKeys: string[];
-}
+export type NotificationEventKey =
+  | 'download.completed'
+  | 'download.failed-permanent'
+  | 'download.provider-halted'
+  | 'schedule.failed'
+  | 'download.dead-lettered'
+  | 'worker.unavailable'
+  | 'storage.failed-permanent'
+  | 'backup.failed'
+  | 'index.rebuild.failed'
+  | 'system.integration.failed';
 
 export interface NotificationSecretsUpsertRequest {
   secrets: Record<string, string>;
@@ -50,6 +56,74 @@ export const NOTIFICATION_PROVIDER_KINDS = [
   'mattermost',
   'rocketchat'
 ] as const;
+
+export const NOTIFICATION_EVENT_OPTIONS: {
+  key: NotificationEventKey;
+  label: string;
+  group: 'User events' | 'Admin operational events';
+  description: string;
+}[] = [
+  {
+    key: 'download.completed',
+    label: 'Download completed',
+    group: 'User events',
+    description: 'A requested download finished successfully.'
+  },
+  {
+    key: 'download.failed-permanent',
+    label: 'Download failed permanently',
+    group: 'User events',
+    description: 'A download failed and will not retry automatically.'
+  },
+  {
+    key: 'download.provider-halted',
+    label: 'Provider halted',
+    group: 'User events',
+    description: 'A provider halt blocked download work; matching users and subscribed admin providers can receive it.'
+  },
+  {
+    key: 'schedule.failed',
+    label: 'Any schedule failed',
+    group: 'Admin operational events',
+    description: 'Any scheduled task failed.'
+  },
+  {
+    key: 'download.dead-lettered',
+    label: 'Download dead-lettered',
+    group: 'Admin operational events',
+    description: 'A download flow or message is stuck or exhausted.'
+  },
+  {
+    key: 'worker.unavailable',
+    label: 'Worker unavailable',
+    group: 'Admin operational events',
+    description: 'No eligible worker is available or leases are expiring repeatedly.'
+  },
+  {
+    key: 'storage.failed-permanent',
+    label: 'Storage failed permanently',
+    group: 'Admin operational events',
+    description: 'Storage upload, delete, or access failed after retries.'
+  },
+  {
+    key: 'backup.failed',
+    label: 'Backup failed',
+    group: 'Admin operational events',
+    description: 'A backup job failed.'
+  },
+  {
+    key: 'index.rebuild.failed',
+    label: 'Index rebuild failed',
+    group: 'Admin operational events',
+    description: 'Search index rebuild failed.'
+  },
+  {
+    key: 'system.integration.failed',
+    label: 'System integration failed',
+    group: 'Admin operational events',
+    description: 'A required integration such as NATS, OpenBAO, OpenFGA, or Typesense is unavailable.'
+  }
+];
 
 const BASE = '/api/user/notifications';
 

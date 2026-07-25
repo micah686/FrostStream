@@ -12,11 +12,13 @@
     Send
   } from '@lucide/svelte';
   import {
+    NOTIFICATION_EVENT_OPTIONS,
     NOTIFICATION_PROVIDER_KEY_PATTERN,
     NOTIFICATION_PROVIDER_KINDS,
     sendTestNotification,
     upsertNotificationProvider,
     upsertNotificationProviderSecrets,
+    type NotificationEventKey,
     type NotificationProvider
   } from '$lib/api/notifications';
 
@@ -66,6 +68,7 @@
   let providerEnabled = $state(untrack(() => initial?.enabled ?? true));
   let displayName = $state(untrack(() => initial?.displayName ?? ''));
   let defaultTo = $state(untrack(() => initial?.defaultTo ?? ''));
+  let eventKeys = $state<NotificationEventKey[]>(untrack(() => initial?.eventKeys ?? []));
   let serviceProvider = $state('');
   let configValues = $state<Record<string, string | boolean>>({});
   let secretValues = $state<Record<string, string>>({});
@@ -82,6 +85,8 @@
   const activeDefinition = $derived(providerDefinition(providerKind));
   const activeService = $derived(activeDefinition.services?.find((service) => service.value === serviceProvider) ?? null);
   const activeFields = $derived(activeService?.fields ?? activeDefinition.fields ?? []);
+  const userEventOptions = NOTIFICATION_EVENT_OPTIONS.filter((option) => option.group === 'User events');
+  const adminEventOptions = NOTIFICATION_EVENT_OPTIONS.filter((option) => option.group === 'Admin operational events');
 
   const providerDefinitions: Record<string, ProviderFormDefinition> = {
     email: {
@@ -401,6 +406,7 @@
         enabled: providerEnabled,
         displayName: displayName.trim() || null,
         defaultTo: defaultTo.trim() || null,
+        eventKeys: [...new Set(eventKeys)],
         notifyConfig
       });
       if (Object.keys(secrets).length > 0) {
@@ -638,6 +644,62 @@
     <div>
       <label class="label mb-2 text-sm" for="notification-default-to">Default recipient</label>
       <input class="input w-full" id="notification-default-to" maxlength={512} bind:value={defaultTo} placeholder="#ops-alerts" />
+    </div>
+  </div>
+
+  <div class="border-t border-base-300/70 pt-5">
+    <div class="flex items-center gap-2">
+      <Bell class="h-4 w-4 text-primary" />
+      <h3 class="text-sm font-bold text-base-content">Notification sources</h3>
+    </div>
+    <p class="mt-1 text-sm text-base-content/60">
+      Choose which events this provider should receive. Operational events should be routed to admin-owned providers.
+    </p>
+
+    <div class="mt-4 grid gap-4 lg:grid-cols-2">
+      <section class="rounded-xl border border-base-300/80 bg-base-200/20 p-4" aria-labelledby="user-notification-sources">
+        <h4 id="user-notification-sources" class="text-xs font-bold uppercase tracking-wide text-base-content/60">
+          User events
+        </h4>
+        <div class="mt-3 space-y-3">
+          {#each userEventOptions as option (option.group + option.key + option.label)}
+            <label class="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                class="checkbox mt-0.5"
+                value={option.key}
+                bind:group={eventKeys}
+              />
+              <span class="min-w-0">
+                <span class="block text-sm font-semibold text-base-content">{option.label}</span>
+                <span class="block text-xs leading-5 text-base-content/50">{option.description}</span>
+              </span>
+            </label>
+          {/each}
+        </div>
+      </section>
+
+      <section class="rounded-xl border border-base-300/80 bg-base-200/20 p-4" aria-labelledby="admin-notification-sources">
+        <h4 id="admin-notification-sources" class="text-xs font-bold uppercase tracking-wide text-base-content/60">
+          Admin operational events
+        </h4>
+        <div class="mt-3 space-y-3">
+          {#each adminEventOptions as option (option.group + option.key + option.label)}
+            <label class="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                class="checkbox mt-0.5"
+                value={option.key}
+                bind:group={eventKeys}
+              />
+              <span class="min-w-0">
+                <span class="block text-sm font-semibold text-base-content">{option.label}</span>
+                <span class="block text-xs leading-5 text-base-content/50">{option.description}</span>
+              </span>
+            </label>
+          {/each}
+        </div>
+      </section>
     </div>
   </div>
 

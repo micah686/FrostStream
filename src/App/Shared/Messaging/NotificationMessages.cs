@@ -9,6 +9,7 @@ public static class NotificationSubjects
     public const string UpsertProvider = "notifications.providers.upsert";
     public const string DeleteProvider = "notifications.providers.delete";
     public const string Test = "notifications.test";
+    public const string DispatchAdmin = "notifications.dispatch.admin";
 }
 
 public static class NotificationEventKeys
@@ -18,6 +19,11 @@ public static class NotificationEventKeys
     public const string DownloadDeadLettered = "download.dead-lettered";
     public const string DownloadProviderHalted = "download.provider-halted";
     public const string ScheduleFailed = "schedule.failed";
+    public const string WorkerUnavailable = "worker.unavailable";
+    public const string StorageFailedPermanent = "storage.failed-permanent";
+    public const string BackupFailed = "backup.failed";
+    public const string IndexRebuildFailed = "index.rebuild.failed";
+    public const string SystemIntegrationFailed = "system.integration.failed";
 
     public static readonly IReadOnlySet<string> Supported = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -25,7 +31,12 @@ public static class NotificationEventKeys
         DownloadFailedPermanent,
         DownloadDeadLettered,
         DownloadProviderHalted,
-        ScheduleFailed
+        ScheduleFailed,
+        WorkerUnavailable,
+        StorageFailedPermanent,
+        BackupFailed,
+        IndexRebuildFailed,
+        SystemIntegrationFailed
     };
 }
 
@@ -36,8 +47,6 @@ public sealed record NotificationPreferencesDto
     public bool Enabled { get; init; }
 
     public IReadOnlyList<NotificationProviderDto> Providers { get; init; } = [];
-
-    public IReadOnlyList<NotificationRuleDto> Rules { get; init; } = [];
 }
 
 public sealed record NotificationProviderDto
@@ -52,16 +61,9 @@ public sealed record NotificationProviderDto
 
     public string? DefaultTo { get; init; }
 
+    public IReadOnlyList<string> EventKeys { get; init; } = [];
+
     public JsonElement NotifyConfig { get; init; }
-}
-
-public sealed record NotificationRuleDto
-{
-    public required string EventKey { get; init; }
-
-    public bool Enabled { get; init; } = true;
-
-    public IReadOnlyList<string> ProviderKeys { get; init; } = [];
 }
 
 public sealed record NotificationGetPreferencesRequestMessage
@@ -99,6 +101,15 @@ public sealed record NotificationTestRequestMessage
     public string? Subject { get; init; }
 
     public string? Body { get; init; }
+}
+
+public sealed record NotificationDispatchAdminEventMessage
+{
+    public required string EventKey { get; init; }
+
+    public required string Subject { get; init; }
+
+    public required string Body { get; init; }
 }
 
 public sealed record NotificationOperationResponseMessage

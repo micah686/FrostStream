@@ -22,13 +22,14 @@ public sealed class NotificationPreferencesConsumerServiceTests
         await SeedUserAsync(services, "user-1");
         var service = BuildService(bus, services);
         await service.StartAsync(CancellationToken.None);
-        await WaitForSubscriptionsAsync(bus, 5);
+        await WaitForSubscriptionsAsync(bus, 6);
 
         var provider = new NotificationProviderDto
         {
             ProviderKey = "discord-main",
             ProviderKind = "discord",
             DisplayName = "Main Discord",
+            EventKeys = [NotificationEventKeys.ScheduleFailed],
             NotifyConfig = JsonDocument.Parse("""{ "webhookUrl": "secret://discord-main/webhook" }""").RootElement.Clone()
         };
 
@@ -45,19 +46,20 @@ public sealed class NotificationPreferencesConsumerServiceTests
 
         get!.Success.ShouldBeTrue();
         get.Preferences!.Providers.ShouldHaveSingleItem().DisplayName.ShouldBe("Main Discord");
+        get.Preferences.Providers.Single().EventKeys.ShouldBe([NotificationEventKeys.ScheduleFailed]);
 
         await service.StopAsync(CancellationToken.None);
     }
 
     [Test]
-    public async Task Delete_Provider_Removes_It_From_Rules()
+    public async Task Delete_Provider_Removes_It_From_Preferences()
     {
         var bus = new FakeMessageBus();
         await using var services = StorageTestHelpers.BuildDbServices(Guid.NewGuid().ToString("n"), new InMemorySecretStore(), bus);
         await SeedUserAsync(services, "user-1");
         var service = BuildService(bus, services);
         await service.StartAsync(CancellationToken.None);
-        await WaitForSubscriptionsAsync(bus, 5);
+        await WaitForSubscriptionsAsync(bus, 6);
 
         var preferences = new NotificationPreferencesDto
         {
@@ -68,15 +70,8 @@ public sealed class NotificationPreferencesConsumerServiceTests
                 {
                     ProviderKey = "slack-main",
                     ProviderKind = "slack",
+                    EventKeys = [NotificationEventKeys.ScheduleFailed],
                     NotifyConfig = JsonDocument.Parse("""{ "webhookUrl": "secret://slack-main/webhook" }""").RootElement.Clone()
-                }
-            ],
-            Rules =
-            [
-                new NotificationRuleDto
-                {
-                    EventKey = NotificationEventKeys.DownloadCompleted,
-                    ProviderKeys = ["slack-main"]
                 }
             ]
         };
@@ -91,7 +86,6 @@ public sealed class NotificationPreferencesConsumerServiceTests
 
         deleted!.Success.ShouldBeTrue();
         deleted.Preferences!.Providers.ShouldBeEmpty();
-        deleted.Preferences.Rules.ShouldHaveSingleItem().ProviderKeys.ShouldBeEmpty();
 
         await service.StopAsync(CancellationToken.None);
     }
@@ -136,10 +130,13 @@ public sealed class NotificationPreferencesConsumerServiceTests
         public Task<NotificationDispatchResult> SendTestAsync(NotificationTestRequestMessage request, CancellationToken cancellationToken = default)
             => Task.FromResult(new NotificationDispatchResult(true));
 
-        public Task NotifyDownloadOutcomeAsync(Guid jobId, string eventKey, string subject, string body, CancellationToken cancellationToken = default)
+        public Task NotifyScheduleFailureAsync(string scheduleKey, string failureMessage, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
 
-        public Task NotifyScheduleFailureAsync(string scheduleKey, string failureMessage, CancellationToken cancellationToken = default)
+        public Task NotifyDownloadEventAsync(Guid jobId, string eventKey, string subject, string body, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task NotifyAdminEventAsync(string eventKey, string subject, string body, string? excludedOwnerSubject = null, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
     }
 }

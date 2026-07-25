@@ -20,7 +20,7 @@ public sealed class NotificationsController(
     [HttpGet("preferences")]
     [Endpoint(EndpointIds.NotificationsPreferencesGet)]
     [EndpointSummary("Get notification preferences")]
-    [EndpointDescription("Returns the authenticated user's notification settings, including provider metadata and event rules. Secret values are never returned; provider configuration contains only safe values and secret references.")]
+    [EndpointDescription("Returns the authenticated user's notification settings, including provider metadata and selected event sources. Secret values are never returned; provider configuration contains only safe values and secret references.")]
     public async Task<ActionResult<NotificationPreferencesDto>> GetPreferences(CancellationToken cancellationToken)
     {
         if (ResolveSubject() is not { } subject)
@@ -144,7 +144,7 @@ public sealed class NotificationsController(
     [HttpDelete("providers/{providerKey}")]
     [Endpoint(EndpointIds.NotificationsProvidersDelete)]
     [EndpointSummary("Delete a notification provider")]
-    [EndpointDescription("Deletes the authenticated user's notification provider profile and removes the matching provider secret document from OpenBAO. Rules that referenced the provider are retained with that provider removed.")]
+    [EndpointDescription("Deletes the authenticated user's notification provider profile and removes the matching provider secret document from OpenBAO.")]
     public async Task<ActionResult<NotificationPreferencesDto>> DeleteProvider(
         string providerKey,
         CancellationToken cancellationToken)
