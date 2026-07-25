@@ -8,6 +8,7 @@ internal sealed class ScheduledBackupConsumer(
     IJetStreamConsumer consumer,
     IMessageBus messageBus,
     BackupCoordinator coordinator,
+    IBackgroundRunReporter runReporter,
     IClock clock,
     ILogger<ScheduledBackupConsumer> logger) : BackgroundService
 {
@@ -21,6 +22,7 @@ internal sealed class ScheduledBackupConsumer(
     private async Task HandleAsync(IJsMessageContext<BackupRequested> context, CancellationToken cancellationToken)
     {
         var message = context.Message;
+        await using var run = await runReporter.BeginAsync("backup", message, "snapshot", cancellationToken);
         try
         {
             await messageBus.PublishAsync(ScheduleSubjects.MarkAttempt, new ScheduleMarkAttemptRequestMessage
@@ -30,11 +32,14 @@ internal sealed class ScheduledBackupConsumer(
             }, cancellationToken: cancellationToken);
 
             var name = $"scheduled-{message.ScheduleKey}-{message.DueWindowUtc:yyyyMMddHHmmss}";
+            await run.ReportAsync($"Queueing snapshot backup '{name}'…");
             var queued = await coordinator.QueueAsync(name, "snapshot", true, message.IdempotencyKey, cancellationToken);
+            await run.ReportAsync("Backup running; waiting for the archive to finish…");
             var completed = await coordinator.WaitAsync(queued.JobId, cancellationToken);
             if (completed.Status != "completed")
                 throw new InvalidOperationException(completed.ErrorMessage ?? "Scheduled backup failed.");
 
+            run.Succeed(completed.ArchivePath is { } path ? $"Archive written to {path}." : "Backup completed.");
             await messageBus.PublishAsync(ScheduleSubjects.MarkSuccess, new ScheduleMarkSuccessRequestMessage
             {
                 Key = message.ScheduleKey,
@@ -45,6 +50,7 @@ internal sealed class ScheduledBackupConsumer(
         catch (Exception ex)
         {
             logger.LogError(ex, "Scheduled backup {IdempotencyKey} failed.", message.IdempotencyKey);
+            run.Fail(ex.Message);
             await messageBus.PublishAsync(NotificationSubjects.DispatchAdmin, new NotificationDispatchAdminEventMessage
             {
                 EventKey = NotificationEventKeys.BackupFailed,

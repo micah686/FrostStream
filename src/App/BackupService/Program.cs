@@ -26,6 +26,11 @@ builder.Services.AddSingleton<BackupCoordinator>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<BackupCoordinator>());
 builder.Services.AddHostedService<ScheduledBackupConsumer>();
 builder.Services.AddSingleton<IClock>(SystemClock.Instance);
+builder.Services.AddSingleton<IBackgroundRunReporter>(sp => new BackgroundRunReporter(
+    sp.GetRequiredService<IMessageBus>(),
+    sp.GetRequiredService<IClock>(),
+    "backupservice",
+    sp.GetService<ILogger<BackgroundRunReporter>>()));
 
 builder.AddNats("nats", options => options.EnableTopologyProvisioning = true);
 builder.Services.AddNatsTopologySource<BackgroundJobsTopology>();

@@ -19,6 +19,7 @@ public sealed class ChannelDiscoveryConsumerService(
     IMessageBus messageBus,
     IYtDlpClient ytDlp,
     PotOptionsApplier potOptionsApplier,
+    IBackgroundRunReporter runReporter,
     IClock clock,
     ILogger<ChannelDiscoveryConsumerService> logger) : BackgroundService
 {
@@ -130,22 +131,51 @@ public sealed class ChannelDiscoveryConsumerService(
         CreatorSourceScanMode scanMode,
         CancellationToken cancellationToken)
     {
-        await MarkAttemptAsync(request, cancellationToken);
-
-        var sources = await ResolveSourcesAsync(request, scanMode, cancellationToken);
-        var expectedJobs = 0;
-        foreach (var source in sources)
+        var taskType = scanMode == CreatorSourceScanMode.Full ? "channel_media_list" : "channel_update_check";
+        await using var run = await runReporter.BeginAsync(
+            taskType, request, $"{scanMode} scan", cancellationToken);
+        try
         {
-            expectedJobs += await ScanSourceAsync(request, scanMode, source, cancellationToken);
-        }
+            await MarkAttemptAsync(request, cancellationToken);
+            await run.ReportAsync("Resolving creator sources to scan…");
 
-        await MarkSuccessAsync(request, cancellationToken);
-        logger.LogInformation(
-            "Completed {ScanMode} channel discovery request {IdempotencyKey} across {SourceCount} source(s).",
-            scanMode,
-            request.IdempotencyKey,
-            sources.Count);
-        return expectedJobs;
+            var sources = await ResolveSourcesAsync(request, scanMode, cancellationToken);
+            var expectedJobs = 0;
+            var scanned = 0;
+            await run.ReportAsync($"Scanning {sources.Count} source(s).", 0, sources.Count);
+            foreach (var source in sources)
+            {
+                await run.ReportAsync(
+                    $"Scanning {SourceLabel(source)}…", scanned, sources.Count);
+                expectedJobs += await ScanSourceAsync(request, scanMode, source, cancellationToken);
+                scanned++;
+                await run.ReportAsync(
+                    $"Scanned {SourceLabel(source)} · {expectedJobs} item(s) queued so far.", scanned, sources.Count);
+            }
+
+            run.Succeed($"Scanned {sources.Count} source(s); queued {expectedJobs} item(s).");
+            await MarkSuccessAsync(request, cancellationToken);
+            logger.LogInformation(
+                "Completed {ScanMode} channel discovery request {IdempotencyKey} across {SourceCount} source(s).",
+                scanMode,
+                request.IdempotencyKey,
+                sources.Count);
+            return expectedJobs;
+        }
+        catch (Exception ex)
+        {
+            run.Fail(ex.Message);
+            throw;
+        }
+    }
+
+    private static string SourceLabel(CreatorMonitorDto source)
+    {
+        // Prefer the last URL path segment (usually the handle) so a progress line stays readable.
+        var handle = Uri.TryCreate(source.SourceUrl, UriKind.Absolute, out var uri)
+            ? uri.Segments.Select(x => x.Trim('/')).LastOrDefault(x => x.Length > 0)
+            : null;
+        return $"{handle ?? source.SourceUrl} ({source.SourceType})";
     }
 
     private async Task<IReadOnlyList<CreatorMonitorDto>> ResolveSourcesAsync(

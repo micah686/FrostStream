@@ -154,6 +154,11 @@ class Program
             builder.Configuration.GetSection(MediaAccessOptions.SectionName));
         builder.Services.AddSingleton<DownloadFlowStartupState>();
         builder.Services.AddSingleton<INotificationDispatcher, NotificationDispatcher>();
+        builder.Services.AddSingleton<IBackgroundRunReporter>(sp => new BackgroundRunReporter(
+            sp.GetRequiredService<IMessageBus>(),
+            sp.GetRequiredService<IClock>(),
+            "databridge",
+            sp.GetService<Microsoft.Extensions.Logging.ILogger<BackgroundRunReporter>>()));
         builder.Services.AddSingleton<ImportSessionRequestReplyService>();
         builder.Services.AddSingleton<WorkerRegistryConsumerService>();
         builder.Services.AddSingleton<LocalImportItemV2Flows>();

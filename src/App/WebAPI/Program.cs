@@ -17,6 +17,7 @@ using Shared.Secrets;
 using Shared.Storage;
 using System.Text.Json.Serialization;
 using WebAPI.Auth;
+using WebAPI.Features.BackgroundJobs;
 using WebAPI.Features.Backups;
 using WebAPI.Features.Downloads;
 using WebAPI.Features.Media;
@@ -323,6 +324,8 @@ public class Program
         builder.Services.AddHostedService<DownloadQueueHub>(p => p.GetRequiredService<DownloadQueueHub>());
         builder.Services.AddSingleton<RenditionProgressHub>();
         builder.Services.AddHostedService<RenditionProgressHub>(p => p.GetRequiredService<RenditionProgressHub>());
+        builder.Services.AddSingleton<BackgroundJobHub>();
+        builder.Services.AddHostedService<BackgroundJobHub>(p => p.GetRequiredService<BackgroundJobHub>());
         builder.Services.AddOpenBaoSecretStore(builder.Configuration);
         builder.Services.AddFrostStreamStorage();
 

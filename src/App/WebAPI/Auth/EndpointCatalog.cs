@@ -148,6 +148,10 @@ public static class EndpointIds
     public const string NotificationsSecretsDelete = "notifications.secrets.delete";
     public const string NotificationsTest = "notifications.test";
 
+    // Background job runs (live, in-memory)
+    public const string JobsBackgroundList = "jobs.background.list";
+    public const string JobsBackgroundStream = "jobs.background.stream";
+
     // Schedules
     public const string SchedulesCreate = "schedules.create";
     public const string SchedulesUpdate = "schedules.update";
@@ -380,6 +384,9 @@ public static class EndpointCatalog
         new(EndpointIds.SchedulesGet, Bundles.Schedules),
         new(EndpointIds.SchedulesList, Bundles.Schedules),
         new(EndpointIds.SchedulesDelete, Bundles.Schedules),
+
+        new(EndpointIds.JobsBackgroundList, Bundles.Schedules),
+        new(EndpointIds.JobsBackgroundStream, Bundles.Schedules),
 
         new(EndpointIds.OptionPresetsCreate, Bundles.Presets),
         new(EndpointIds.OptionPresetsUpdate, Bundles.Presets),

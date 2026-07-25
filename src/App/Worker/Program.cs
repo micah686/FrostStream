@@ -52,6 +52,11 @@ class Program
         builder.Services.AddNatsTopologySource<LocalImportTopology>();
 
         builder.Services.AddSingleton<IClock>(SystemClock.Instance);
+        builder.Services.AddSingleton<IBackgroundRunReporter>(sp => new BackgroundRunReporter(
+            sp.GetRequiredService<IMessageBus>(),
+            sp.GetRequiredService<IClock>(),
+            "worker",
+            sp.GetService<Microsoft.Extensions.Logging.ILogger<BackgroundRunReporter>>()));
         builder.Services.AddOpenBaoSecretStore(builder.Configuration);
         builder.Services.AddFrostStreamStorage();
 
