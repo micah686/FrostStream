@@ -10,6 +10,7 @@
     CookieSolid,
     FileSearchOutline,
     ListMusicOutline,
+    PaletteOutline,
     UserOutline
   } from 'flowbite-svelte-icons';
 
@@ -38,7 +39,8 @@
       extra: ['/profile/notification-providers']
     },
     { label: 'Playlists', icon: ListMusicOutline, href: '/profile/playlists' },
-    { label: 'Notes', icon: FileSearchOutline, href: '/profile/notes' }
+    { label: 'Notes', icon: FileSearchOutline, href: '/profile/notes' },
+    { label: 'Appearance', icon: PaletteOutline, href: '/profile/appearance' }
   ];
 
   function isActive(section: ProfileSection): boolean {

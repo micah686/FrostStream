@@ -177,7 +177,7 @@
   <form class="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_12rem_auto]" onsubmit={submitSearch}>
     <div class="relative">
       <SearchOutline class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-base-content/40" />
-      <input class="input w-full {`$ pl-9!`}" bind:value={query} placeholder="Search notes" />
+      <input class="input w-full pl-9" bind:value={query} placeholder="Search notes" />
     </div>
     <Select items={targetOptions} bind:value={targetType} />
     <button class="btn btn-sm btn-neutral text-xs" type="submit" disabled={loading}>

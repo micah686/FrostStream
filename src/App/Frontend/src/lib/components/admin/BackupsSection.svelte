@@ -457,7 +457,7 @@
                 </p>
               {/if}
               {#if plan.restoreCommand}
-                <pre class="mt-2 overflow-x-auto rounded bg-black/40 p-2.5 font-mono text-xs text-base-content/80">{plan.restoreCommand}</pre>
+                <pre class="mt-2 overflow-x-auto rounded bg-black/40 p-2.5 font-mono text-xs text-white/80">{plan.restoreCommand}</pre>
               {/if}
             </div>
           {/if}

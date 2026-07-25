@@ -458,11 +458,11 @@
 
         <div class="space-y-2 border-t border-base-300 pt-3 text-xs text-base-content/80">
           <label class="flex items-center gap-2">
-            <input type="checkbox" bind:checked={audioOnly} class="accent-blue-500" />
+            <input type="checkbox" bind:checked={audioOnly} class="checkbox checkbox-sm checkbox-primary" />
             Audio only
           </label>
           <label class="flex items-center gap-2">
-            <input type="checkbox" bind:checked={fromCurrentPosition} class="accent-blue-500" />
+            <input type="checkbox" bind:checked={fromCurrentPosition} class="checkbox checkbox-sm checkbox-primary" />
             Start from current position
           </label>
           {#if captionLanguages.length > 0 && !audioOnly}

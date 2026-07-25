@@ -774,7 +774,7 @@
                           <span class="text-xs text-base-content/40">{channel.downloadedCount.toLocaleString()} / {channel.availableCount.toLocaleString()}</span>
                         </div>
                         <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-base-300">
-                          <div class="h-full rounded-full bg-gradient-to-r from-blue-500 to-emerald-400" style={`width: ${Math.min(100, channel.downloadedPercent)}%`}></div>
+                          <div class="h-full rounded-full bg-gradient-to-r from-primary to-success" style={`width: ${Math.min(100, channel.downloadedPercent)}%`}></div>
                         </div>
                       </div>
                     </td>

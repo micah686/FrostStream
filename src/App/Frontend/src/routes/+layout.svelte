@@ -5,6 +5,7 @@
   import { page } from '$app/state';
   import { Drawer } from '$lib/components/ui';
   import { installApiFetch } from '$lib/api/http';
+  import { initTheme } from '$lib/stores/theme';
   import { searchMedia, type SearchHit } from '$lib/api/search';
   import { accentFor, formatDuration, initialsFor } from '$lib/media';
   import {
@@ -66,6 +67,7 @@
 
   onMount(() => {
     installApiFetch();
+    initTheme();
   });
 
   const closeDrawer = () => {

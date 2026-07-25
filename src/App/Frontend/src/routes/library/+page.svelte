@@ -501,7 +501,7 @@
                 />
               {/if}
               <span
-                class="absolute left-3 top-3 rounded-md bg-black/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-base-content/80"
+                class="absolute left-3 top-3 rounded-md bg-black/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/80"
               >
                 {card.account.platform}
               </span>
@@ -513,7 +513,7 @@
                 </span>
               {/if}
               <span
-                class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-white/95 text-base-100 opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
+                class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-white/95 text-slate-900 opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
               >
                 <PlaySolid class="ml-0.5 h-5 w-5" />
               </span>
@@ -625,7 +625,7 @@
                   />
                 {/if}
                 <span
-                  class="absolute bottom-0 left-0 right-0 flex items-center justify-between bg-black/60 px-3 py-1.5 text-[11px] font-semibold text-base-content/90 backdrop-blur-sm"
+                  class="absolute bottom-0 left-0 right-0 flex items-center justify-between bg-black/60 px-3 py-1.5 text-[11px] font-semibold text-white/90 backdrop-blur-sm"
                 >
                   <span class="flex items-center gap-1.5">
                     <ListMusicOutline class="h-3.5 w-3.5" />
@@ -635,7 +635,7 @@
                 </span>
                 {#if card.firstGuid}
                   <span
-                    class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-white/95 text-base-100 opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
+                    class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-white/95 text-slate-900 opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
                   >
                     <PlaySolid class="ml-0.5 h-5 w-5" />
                   </span>
@@ -708,7 +708,7 @@
                     onerror={hideBrokenImage}
                   />
                   <span
-                    class="absolute bottom-0 left-0 right-0 flex items-center justify-between bg-black/60 px-3 py-1.5 text-[11px] font-semibold text-base-content/90 backdrop-blur-sm"
+                    class="absolute bottom-0 left-0 right-0 flex items-center justify-between bg-black/60 px-3 py-1.5 text-[11px] font-semibold text-white/90 backdrop-blur-sm"
                   >
                     <span class="flex items-center gap-1.5">
                       <ListMusicOutline class="h-3.5 w-3.5" />
@@ -717,7 +717,7 @@
                     {card.playlist.completedItems} / {card.playlist.totalItems}
                   </span>
                   <span
-                    class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-white/95 text-base-100 opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
+                    class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-white/95 text-slate-900 opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
                   >
                     <PlaySolid class="ml-0.5 h-5 w-5" />
                   </span>
@@ -730,7 +730,7 @@
                     class="absolute left-1/2 top-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 text-white/10"
                   />
                   <span
-                    class="absolute bottom-0 left-0 right-0 bg-black/60 px-3 py-1.5 text-[11px] font-semibold text-base-content/60"
+                    class="absolute bottom-0 left-0 right-0 bg-black/60 px-3 py-1.5 text-[11px] font-semibold text-white/60"
                   >
                     Nothing downloaded yet
                   </span>
