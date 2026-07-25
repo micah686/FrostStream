@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Badge, Button, Spinner } from 'flowbite-svelte';
   import {
     AdjustmentsHorizontalOutline,
     ArchiveOutline,
@@ -76,22 +75,22 @@
 
 <UnderDevelopmentBanner />
 
-<section class="rounded-2xl border border-slate-800 bg-[#151a26] p-5 shadow-xl shadow-black/15 sm:p-6">
+<section class="card border border-base-300 bg-base-100 p-5 sm:p-6">
   <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
     <div>
-      <h2 class="text-base font-bold text-slate-100">Config sets</h2>
-      <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+      <h2 class="text-base font-bold text-base-content">Config sets</h2>
+      <p class="mt-2 max-w-3xl text-sm leading-6 text-base-content/60">
         Named presets for download and transcode options. Pick one when starting a new download, or set a default.
       </p>
     </div>
-    <Badge rounded color="gray" class="w-fit bg-slate-800! px-2.5! py-1! text-[10px]! text-slate-400!">
+    <span class="badge badge-sm badge-ghost rounded-full w-fit text-[10px]">
       {sessionLabel}
-    </Badge>
+    </span>
   </div>
 
   {#if configSetsError}
     <div
-      class="mt-5 flex items-start gap-2 rounded-xl border border-red-900/60 bg-red-950/35 p-3 text-sm text-red-300"
+      class="mt-5 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
       <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
@@ -101,33 +100,33 @@
 
   {#if configSetsLoading}
     <div class="mt-10 flex justify-center">
-      <Spinner size="8" />
+      <span class="loading loading-spinner loading-md"></span>
     </div>
   {:else if configSets.length === 0}
-    <div class="mt-5 rounded-xl border border-slate-800/80 bg-slate-950/30 p-8 text-center">
-      <AdjustmentsHorizontalOutline class="mx-auto h-9 w-9 text-slate-700" />
-      <p class="mt-4 text-sm font-semibold text-slate-300">No config sets yet</p>
-      <p class="mt-1 text-sm text-slate-500">Create one to reuse download and playlist settings.</p>
+    <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
+      <AdjustmentsHorizontalOutline class="mx-auto h-9 w-9 text-base-content/30" />
+      <p class="mt-4 text-sm font-semibold text-base-content/80">No config sets yet</p>
+      <p class="mt-1 text-sm text-base-content/50">Create one to reuse download and playlist settings.</p>
     </div>
   {:else}
     <div class="mt-5 space-y-2">
       {#each configSets as config (config.key)}
         {@const Icon = configIcon(config)}
         <article
-          class="flex min-h-[3.95rem] flex-col gap-3 rounded-lg border border-slate-700/70 bg-[#151a26] px-3 py-3 transition hover:border-slate-600 hover:bg-slate-800/30 sm:flex-row sm:items-center sm:px-4"
+          class="flex min-h-[3.95rem] flex-col gap-3 rounded-lg border border-base-content/20 bg-base-100 px-3 py-3 transition hover:border-base-content/30 hover:bg-base-300/30 sm:flex-row sm:items-center sm:px-4"
         >
           <div class="flex min-w-0 items-center gap-3">
-            <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-800/70 text-blue-400">
+            <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-base-300/70 text-primary">
               <Icon class="h-4.5 w-4.5" />
             </span>
             <div class="min-w-0">
               <div class="flex min-w-0 flex-wrap items-center gap-2">
-                <h3 class="truncate text-sm font-semibold text-slate-100">{config.name}</h3>
-                <span class="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-400">
+                <h3 class="truncate text-sm font-semibold text-base-content">{config.name}</h3>
+                <span class="rounded-full bg-base-300 px-2 py-0.5 text-[10px] font-semibold text-base-content/60">
                   {config.key}
                 </span>
               </div>
-              <p class="mt-0.5 truncate text-xs text-slate-400">
+              <p class="mt-0.5 truncate text-xs text-base-content/60">
                 {config.description || configSummary(config)}
               </p>
             </div>
@@ -136,7 +135,7 @@
           <div class="flex shrink-0 gap-2 sm:ml-auto">
             <a
               href={`/profile/config-sets/${encodeURIComponent(config.key)}`}
-              class="inline-flex h-10 min-w-24 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-900/70 px-3 text-xs font-semibold text-slate-200 transition hover:border-blue-500/60 hover:bg-blue-500/10 hover:text-blue-200"
+              class="inline-flex h-10 min-w-24 items-center justify-center gap-2 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary"
               aria-label={`View config set ${config.name}`}
             >
               <EyeOutline class="h-4 w-4" />
@@ -144,7 +143,7 @@
             </a>
             <button
               type="button"
-              class="inline-flex h-10 min-w-10 items-center justify-center rounded-lg border border-slate-700 bg-slate-900/70 px-3 text-slate-300 transition hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-200 disabled:opacity-50"
+              class="inline-flex h-10 min-w-10 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-base-content/80 transition hover:border-error/60 hover:bg-error/10 hover:text-error disabled:opacity-50"
               title="Delete config set"
               aria-label={`Delete config set ${config.name}`}
               disabled={deletingKey === config.key}
@@ -154,7 +153,7 @@
               }}
             >
               {#if deletingKey === config.key}
-                <Spinner size="4" />
+                <span class="loading loading-spinner loading-xs"></span>
               {:else}
                 <TrashBinOutline class="h-4 w-4" />
               {/if}
@@ -166,14 +165,10 @@
   {/if}
 
   <div class="mt-4">
-    <Button
-      href="/profile/config-sets/new"
-      color="dark"
-      class="border-slate-700! bg-transparent! px-3! py-1.5! text-xs! font-semibold! text-slate-200! hover:border-slate-600! hover:bg-slate-800!"
-    >
+    <a class="btn btn-sm btn-ghost text-xs" href="/profile/config-sets/new">
       <PlusOutline class="mr-1.5 h-3.5 w-3.5" />
       New config set
-    </Button>
+    </a>
   </div>
 </section>
 

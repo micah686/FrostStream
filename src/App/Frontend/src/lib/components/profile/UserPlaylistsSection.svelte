@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Button, Input, Label, Spinner, Textarea } from 'flowbite-svelte';
   import {
     ArrowLeftOutline,
     ExclamationCircleOutline,
@@ -20,10 +19,6 @@
     type UserPlaylist
   } from '$lib/api/userPlaylists';
 
-  const inputClass =
-    'border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!';
-  const outlineButtonClass =
-    'border-slate-700! bg-transparent! px-3! py-1.5! text-xs! font-semibold! text-slate-200! hover:border-slate-600! hover:bg-slate-800!';
 
   let playlists = $state<UserPlaylist[]>([]);
   let loading = $state(true);
@@ -154,26 +149,26 @@
 </script>
 
 <section
-  class="rounded-2xl border border-slate-800 bg-[#151a26] p-5 shadow-xl shadow-black/15 sm:p-6"
+  class="card border border-base-300 bg-base-100 p-5 sm:p-6"
   aria-labelledby="user-playlists-title"
 >
   {#if !selected}
     <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
       <div>
-        <h2 id="user-playlists-title" class="text-base font-bold text-slate-100">Playlists</h2>
-        <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+        <h2 id="user-playlists-title" class="text-base font-bold text-base-content">Playlists</h2>
+        <p class="mt-2 max-w-3xl text-sm leading-6 text-base-content/60">
           Your private playlists on this server. They reference archived media and are visible only to you.
         </p>
       </div>
-      <Button color="dark" class={outlineButtonClass} onclick={openCreateForm}>
+      <button class="btn btn-sm btn-neutral" onclick={openCreateForm}>
         <PlusOutline class="mr-1.5 h-3.5 w-3.5" />
         New playlist
-      </Button>
+      </button>
     </div>
 
     {#if listError}
       <div
-        class="mt-5 flex items-start gap-2 rounded-xl border border-red-900/60 bg-red-950/35 p-3 text-sm text-red-300"
+        class="mt-5 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
         role="alert"
       >
         <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
@@ -183,64 +178,52 @@
 
     {#if formOpen}
       <form
-        class="mt-5 space-y-4 rounded-xl border border-slate-800/80 bg-slate-950/30 p-4"
+        class="mt-5 space-y-4 rounded-xl border border-base-300/80 bg-base-200/30 p-4"
         onsubmit={saveForm}
       >
-        <h3 class="text-sm font-semibold text-slate-200">New playlist</h3>
+        <h3 class="text-sm font-semibold text-base-content/90">New playlist</h3>
         {#if formError}
-          <p class="text-sm text-red-300" role="alert">{formError}</p>
+          <p class="text-sm text-error" role="alert">{formError}</p>
         {/if}
         <div>
-          <Label for="playlist-name" class="mb-1.5 text-xs! font-semibold! text-slate-400!">Name</Label>
-          <Input id="playlist-name" bind:value={formName} maxlength={255} placeholder="Watch later, favourites…" class={inputClass} />
+          <label class="label mb-1.5 text-xs" for="playlist-name">Name</label>
+          <input class="input w-full" id="playlist-name" bind:value={formName} maxlength={255} placeholder="Watch later, favourites…" />
         </div>
         <div>
-          <Label for="playlist-description" class="mb-1.5 text-xs! font-semibold! text-slate-400!">
+          <label class="label mb-1.5 text-xs" for="playlist-description">
             Description (optional)
-          </Label>
-          <Textarea
-            id="playlist-description"
-            bind:value={formDescription}
-            maxlength={2048}
-            rows={2}
-            placeholder="What belongs in this playlist?"
-            class={inputClass}
-          />
+          </label>
+          <textarea class="textarea w-full" id="playlist-description" bind:value={formDescription} maxlength={2048} rows={2} placeholder="What belongs in this playlist?"></textarea>
         </div>
         <div class="flex flex-wrap gap-2">
-          <Button
-            type="submit"
-            color="blue"
-            disabled={!formValid || formBusy}
-            class="border-0! bg-blue-500! px-4! py-2! text-xs! font-semibold! hover:bg-blue-400! disabled:opacity-60"
-          >
+          <button class="btn btn-sm btn-primary text-xs" type="submit" disabled={!formValid || formBusy}>
             {#if formBusy}
-              <Spinner size="4" class="mr-1.5" />
+              <span class="loading loading-spinner loading-xs mr-1.5"></span>
             {/if}
             Create playlist
-          </Button>
-          <Button color="dark" class={outlineButtonClass} disabled={formBusy} onclick={() => (formOpen = false)}>
+          </button>
+          <button class="btn btn-sm btn-neutral" disabled={formBusy} onclick={() => (formOpen = false)}>
             Cancel
-          </Button>
+          </button>
         </div>
       </form>
     {/if}
 
     {#if loading}
       <div class="mt-10 flex justify-center">
-        <Spinner size="8" />
+        <span class="loading loading-spinner loading-md"></span>
       </div>
     {:else if playlists.length === 0}
-      <div class="mt-5 rounded-xl border border-slate-800/80 bg-slate-950/30 p-8 text-center">
-        <ListMusicOutline class="mx-auto h-9 w-9 text-slate-700" />
-        <p class="mt-4 text-sm font-semibold text-slate-300">No playlists yet</p>
-        <p class="mt-1 text-sm text-slate-500">Create one to group archived videos however you like.</p>
+      <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
+        <ListMusicOutline class="mx-auto h-9 w-9 text-base-content/30" />
+        <p class="mt-4 text-sm font-semibold text-base-content/80">No playlists yet</p>
+        <p class="mt-1 text-sm text-base-content/50">Create one to group archived videos however you like.</p>
       </div>
     {:else}
       <div class="mt-5 space-y-2">
         {#each playlists as playlist (playlist.playlistId)}
           <article
-            class="flex min-h-[3.95rem] flex-col gap-3 rounded-lg border border-slate-700/70 bg-[#151a26] px-3 py-3 transition hover:border-slate-600 hover:bg-slate-800/30 sm:flex-row sm:items-center sm:px-4"
+            class="flex min-h-[3.95rem] flex-col gap-3 rounded-lg border border-base-content/20 bg-base-100 px-3 py-3 transition hover:border-base-content/30 hover:bg-base-300/30 sm:flex-row sm:items-center sm:px-4"
           >
             <button
               type="button"
@@ -248,24 +231,24 @@
               onclick={() => openDetail(playlist)}
               aria-label={`Open playlist ${playlist.name}`}
             >
-              <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-800/70 text-blue-400">
+              <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-base-300/70 text-primary">
                 <ListMusicOutline class="h-4.5 w-4.5" />
               </span>
               <span class="min-w-0">
-                <span class="block truncate text-sm font-semibold text-slate-100">{playlist.name}</span>
-                <span class="mt-0.5 block truncate text-xs text-slate-400">
+                <span class="block truncate text-sm font-semibold text-base-content">{playlist.name}</span>
+                <span class="mt-0.5 block truncate text-xs text-base-content/60">
                   {playlist.description || playlistMeta(playlist)}
                 </span>
               </span>
             </button>
 
             <div class="flex shrink-0 items-center gap-2 sm:ml-auto">
-              <span class="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-400">
+              <span class="rounded-full bg-base-300 px-2 py-0.5 text-[10px] font-semibold text-base-content/60">
                 {playlistMeta(playlist)}
               </span>
               <a
                 href={editHref(playlist)}
-                class="inline-flex h-10 min-w-10 items-center justify-center rounded-lg border border-slate-700 bg-slate-900/70 px-3 text-slate-300 transition hover:border-blue-500/60 hover:bg-blue-500/10 hover:text-blue-200"
+                class="inline-flex h-10 min-w-10 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-base-content/80 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary"
                 title="Edit playlist"
                 aria-label={`Edit playlist ${playlist.name}`}
               >
@@ -273,7 +256,7 @@
               </a>
               <button
                 type="button"
-                class="inline-flex h-10 min-w-10 items-center justify-center rounded-lg border border-slate-700 bg-slate-900/70 px-3 text-slate-300 transition hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-200"
+                class="inline-flex h-10 min-w-10 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-base-content/80 transition hover:border-error/60 hover:bg-error/10 hover:text-error"
                 title="Delete playlist"
                 aria-label={`Delete playlist ${playlist.name}`}
                 onclick={() => requestDelete(playlist)}
@@ -290,38 +273,34 @@
       <div class="min-w-0">
         <button
           type="button"
-          class="flex items-center gap-1.5 text-xs font-semibold text-slate-500 transition hover:text-slate-300"
+          class="flex items-center gap-1.5 text-xs font-semibold text-base-content/50 transition hover:text-base-content/80"
           onclick={closeDetail}
         >
           <ArrowLeftOutline class="h-3.5 w-3.5" />
           All playlists
         </button>
-        <h2 id="user-playlists-title" class="mt-2 text-base font-bold text-slate-100">{selected.name}</h2>
+        <h2 id="user-playlists-title" class="mt-2 text-base font-bold text-base-content">{selected.name}</h2>
         {#if selected.description}
-          <p class="mt-1 max-w-3xl text-sm leading-6 text-slate-400">{selected.description}</p>
+          <p class="mt-1 max-w-3xl text-sm leading-6 text-base-content/60">{selected.description}</p>
         {/if}
-        <p class="mt-1 text-xs text-slate-500">{playlistMeta(selected)}</p>
+        <p class="mt-1 text-xs text-base-content/50">{playlistMeta(selected)}</p>
       </div>
 
       <div class="flex shrink-0 gap-2">
-        <Button href={editHref(selected)} color="dark" class={outlineButtonClass}>
+        <a class="btn btn-sm btn-neutral" href={editHref(selected)}>
           <PenOutline class="mr-1.5 h-3.5 w-3.5" />
           Edit
-        </Button>
-        <Button
-          color="dark"
-          class="border-slate-700! bg-transparent! px-3! py-1.5! text-xs! font-semibold! text-slate-200! hover:border-red-500/60! hover:bg-red-500/10! hover:text-red-200!"
-          onclick={() => requestDelete(selected!)}
-        >
+        </a>
+        <button class="btn btn-sm btn-ghost text-xs" onclick={() => requestDelete(selected!)}>
           <TrashBinOutline class="mr-1.5 h-3.5 w-3.5" />
           Delete
-        </Button>
+        </button>
       </div>
     </div>
 
     {#if detailError}
       <div
-        class="mt-5 flex items-start gap-2 rounded-xl border border-red-900/60 bg-red-950/35 p-3 text-sm text-red-300"
+        class="mt-5 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
         role="alert"
       >
         <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
@@ -329,7 +308,7 @@
       </div>
     {:else if detailLoading}
       <div class="mt-10 flex justify-center">
-        <Spinner size="8" />
+        <span class="loading loading-spinner loading-md"></span>
       </div>
     {:else}
       <div class="mt-5">

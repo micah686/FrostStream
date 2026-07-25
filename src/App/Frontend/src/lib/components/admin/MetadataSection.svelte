@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Button, Input, Label, Select, Spinner, Toggle } from 'flowbite-svelte';
+  import { Select } from '$lib/components/ui';
   import {
     ArrowsRepeatOutline,
     CheckCircleOutline,
@@ -35,13 +35,8 @@
     type WatchedAutoDeletePolicy
   } from '$lib/api/metadata';
 
-  const inputClass =
-    'border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!';
 
-  const cardClass = 'rounded-2xl border border-slate-800 bg-[#151a26] p-5 shadow-xl shadow-black/15 sm:p-6';
-  const saveButtonClass = 'border-0! px-4! py-2! text-xs! font-semibold! disabled:opacity-60';
-  const outlineButtonClass =
-    'border-slate-700! bg-transparent! px-3! py-1.5! text-xs! font-semibold! text-slate-200! hover:border-slate-600! hover:bg-slate-800!';
+  const cardClass = 'card border border-base-300 bg-base-100 p-5 sm:p-6';
 
   const ORPHAN_PAGE_SIZE = 25;
 
@@ -301,14 +296,14 @@
 
 <!-- Search index -->
 <section class={cardClass} aria-labelledby="metadata-search-title">
-  <h2 id="metadata-search-title" class="text-base font-bold text-slate-100">Search index</h2>
-  <p class="mt-2 text-sm text-slate-400">
+  <h2 id="metadata-search-title" class="text-base font-bold text-base-content">Search index</h2>
+  <p class="mt-2 text-sm text-base-content/60">
     Rebuild the derived search index from authoritative metadata records. Runs as a background job.
   </p>
 
   {#if reindexError}
     <div
-      class="mt-4 flex items-start gap-2 rounded-xl border border-red-900/60 bg-red-950/35 p-3 text-sm text-red-300"
+      class="mt-4 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
       <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
@@ -316,35 +311,35 @@
     </div>
   {/if}
   {#if reindexMessage}
-    <div class="mt-4 flex items-start gap-2 rounded-xl border border-emerald-900/60 bg-emerald-950/35 p-3 text-sm text-emerald-300">
+    <div class="mt-4 flex items-start gap-2 rounded-xl border border-success/30 bg-success/10 p-3 text-sm text-success">
       <CheckCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{reindexMessage}</span>
     </div>
   {/if}
 
   <div class="mt-4">
-    <Button color="dark" class={outlineButtonClass} disabled={reindexBusy} onclick={rebuildSearchIndex}>
+    <button class="btn btn-sm btn-neutral" disabled={reindexBusy} onclick={rebuildSearchIndex}>
       {#if reindexBusy}
-        <Spinner size="4" class="mr-1.5" />
+        <span class="loading loading-spinner loading-xs mr-1.5"></span>
       {:else}
         <ArrowsRepeatOutline class="mr-1.5 h-3.5 w-3.5" />
       {/if}
       Rebuild search index
-    </Button>
+    </button>
   </div>
 </section>
 
 <!-- Watched auto-delete policy -->
 <section class={cardClass} aria-labelledby="metadata-watched-title">
-  <h2 id="metadata-watched-title" class="text-base font-bold text-slate-100">Watched auto-delete</h2>
-  <p class="mt-2 text-sm text-slate-400">
+  <h2 id="metadata-watched-title" class="text-base font-bold text-base-content">Watched auto-delete</h2>
+  <p class="mt-2 text-sm text-base-content/60">
     Automatically delete videos after they have been watched. Deletion removes stored files, metadata, and search
     entries.
   </p>
 
   {#if watchedError}
     <div
-      class="mt-4 flex items-start gap-2 rounded-xl border border-red-900/60 bg-red-950/35 p-3 text-sm text-red-300"
+      class="mt-4 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
       <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
@@ -354,27 +349,25 @@
 
   {#if watchedLoading}
     <div class="mt-8 flex justify-center">
-      <Spinner size="8" />
+      <span class="loading loading-spinner loading-md"></span>
     </div>
   {:else}
     <div class="mt-5 space-y-4">
-      <Toggle bind:checked={watchedEnabled} class="text-sm font-medium text-slate-300">
-        Enable automatic deletion of watched videos
-      </Toggle>
+      <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle" bind:checked={watchedEnabled} /><span>Enable automatic deletion of watched videos</span></label>
 
       <div class="grid gap-4 sm:grid-cols-2">
         <div>
-          <Label for="watched-delete-after" class="mb-2 text-sm font-medium text-slate-300">Delete after (days)</Label>
-          <Input id="watched-delete-after" type="number" min={1} bind:value={watchedDeleteAfterDays} class={inputClass} />
+          <label class="label mb-2 text-sm" for="watched-delete-after">Delete after (days)</label>
+          <input class="input w-full" id="watched-delete-after" type="number" min={1} bind:value={watchedDeleteAfterDays} />
         </div>
         <div>
-          <Label for="watched-max-per-run" class="mb-2 text-sm font-medium text-slate-300">Max deletions per run</Label>
-          <Input id="watched-max-per-run" type="number" min={1} bind:value={watchedMaxPerRun} class={inputClass} />
+          <label class="label mb-2 text-sm" for="watched-max-per-run">Max deletions per run</label>
+          <input class="input w-full" id="watched-max-per-run" type="number" min={1} bind:value={watchedMaxPerRun} />
         </div>
       </div>
 
       {#if watchedPolicy}
-        <dl class="grid gap-x-6 gap-y-1 text-xs text-slate-500 sm:grid-cols-2">
+        <dl class="grid gap-x-6 gap-y-1 text-xs text-base-content/50 sm:grid-cols-2">
           <div class="flex gap-1.5">
             <dt class="font-semibold">Last run:</dt>
             <dd>{formatDate(watchedPolicy.lastRunAt)}</dd>
@@ -391,7 +384,7 @@
       {/if}
 
       {#if watchedRunResult}
-        <div class="rounded-xl border border-slate-800/80 bg-slate-950/30 p-3 text-xs text-slate-400">
+        <div class="rounded-xl border border-base-300/80 bg-base-200/30 p-3 text-xs text-base-content/60">
           Cleanup finished: {watchedRunResult.candidatesFound} candidate(s), {watchedRunResult.deletedCount} deleted,
           {watchedRunResult.failedCount} failed, {watchedRunResult.filesDeleted} file(s) removed.
           {#if !watchedRunResult.policyEnabled}
@@ -401,22 +394,22 @@
       {/if}
 
       <div class="flex flex-wrap items-center gap-2">
-        <Button color="blue" class={saveButtonClass} disabled={watchedSaving} onclick={saveWatchedPolicy}>
+        <button class="btn btn-sm btn-primary" disabled={watchedSaving} onclick={saveWatchedPolicy}>
           {#if watchedSaving}
-            <Spinner size="4" class="mr-1.5" />
+            <span class="loading loading-spinner loading-xs mr-1.5"></span>
           {/if}
           Save policy
-        </Button>
-        <Button color="dark" class={outlineButtonClass} disabled={watchedRunBusy} onclick={runWatchedCleanupNow}>
+        </button>
+        <button class="btn btn-sm btn-neutral" disabled={watchedRunBusy} onclick={runWatchedCleanupNow}>
           {#if watchedRunBusy}
-            <Spinner size="4" class="mr-1.5" />
+            <span class="loading loading-spinner loading-xs mr-1.5"></span>
           {:else}
             <PlayOutline class="mr-1.5 h-3.5 w-3.5" />
           {/if}
           Run cleanup now
-        </Button>
+        </button>
         {#if watchedSaved}
-          <span class="inline-flex items-center gap-1 text-xs font-semibold text-emerald-400">
+          <span class="inline-flex items-center gap-1 text-xs font-semibold text-success">
             <CheckCircleOutline class="h-3.5 w-3.5" />
             Saved
           </span>
@@ -428,15 +421,15 @@
 
 <!-- Orphan cleanup policy -->
 <section class={cardClass} aria-labelledby="metadata-orphan-policy-title">
-  <h2 id="metadata-orphan-policy-title" class="text-base font-bold text-slate-100">Orphan cleanup policy</h2>
-  <p class="mt-2 text-sm text-slate-400">
+  <h2 id="metadata-orphan-policy-title" class="text-base font-bold text-base-content">Orphan cleanup policy</h2>
+  <p class="mt-2 text-sm text-base-content/60">
     Controls what happens to files with no metadata and metadata with no file. Destructive cleanup only runs while
     this policy is enabled.
   </p>
 
   {#if orphanPolicyError}
     <div
-      class="mt-4 flex items-start gap-2 rounded-xl border border-red-900/60 bg-red-950/35 p-3 text-sm text-red-300"
+      class="mt-4 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
       <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
@@ -446,34 +439,32 @@
 
   {#if orphanPolicyLoading}
     <div class="mt-8 flex justify-center">
-      <Spinner size="8" />
+      <span class="loading loading-spinner loading-md"></span>
     </div>
   {:else}
     <div class="mt-5 space-y-4">
-      <Toggle bind:checked={orphanEnabled} class="text-sm font-medium text-slate-300">
-        Enable automatic orphan cleanup
-      </Toggle>
+      <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle" bind:checked={orphanEnabled} /><span>Enable automatic orphan cleanup</span></label>
 
       <div class="grid gap-4 sm:grid-cols-3">
         <div>
-          <Label for="orphan-move-days" class="mb-2 text-sm font-medium text-slate-300">Move file after (days)</Label>
-          <Input id="orphan-move-days" type="number" min={1} bind:value={orphanFileMoveDays} class={inputClass} />
-          <p class="mt-1.5 text-xs text-slate-500">Days before a file with no metadata is moved to the orphaned folder.</p>
+          <label class="label mb-2 text-sm" for="orphan-move-days">Move file after (days)</label>
+          <input class="input w-full" id="orphan-move-days" type="number" min={1} bind:value={orphanFileMoveDays} />
+          <p class="mt-1.5 text-xs text-base-content/50">Days before a file with no metadata is moved to the orphaned folder.</p>
         </div>
         <div>
-          <Label for="orphan-purge-days" class="mb-2 text-sm font-medium text-slate-300">Purge file after (days)</Label>
-          <Input id="orphan-purge-days" type="number" min={1} bind:value={orphanFilePurgeDays} class={inputClass} />
-          <p class="mt-1.5 text-xs text-slate-500">Days a moved file is kept before permanent deletion.</p>
+          <label class="label mb-2 text-sm" for="orphan-purge-days">Purge file after (days)</label>
+          <input class="input w-full" id="orphan-purge-days" type="number" min={1} bind:value={orphanFilePurgeDays} />
+          <p class="mt-1.5 text-xs text-base-content/50">Days a moved file is kept before permanent deletion.</p>
         </div>
         <div>
-          <Label for="orphan-metadata-days" class="mb-2 text-sm font-medium text-slate-300">Delete metadata after (days)</Label>
-          <Input id="orphan-metadata-days" type="number" min={1} bind:value={orphanMetadataDeleteDays} class={inputClass} />
-          <p class="mt-1.5 text-xs text-slate-500">Days before metadata whose file is missing is deleted.</p>
+          <label class="label mb-2 text-sm" for="orphan-metadata-days">Delete metadata after (days)</label>
+          <input class="input w-full" id="orphan-metadata-days" type="number" min={1} bind:value={orphanMetadataDeleteDays} />
+          <p class="mt-1.5 text-xs text-base-content/50">Days before metadata whose file is missing is deleted.</p>
         </div>
       </div>
 
       {#if orphanPolicy}
-        <dl class="grid gap-x-6 gap-y-1 text-xs text-slate-500 sm:grid-cols-2">
+        <dl class="grid gap-x-6 gap-y-1 text-xs text-base-content/50 sm:grid-cols-2">
           <div class="flex gap-1.5">
             <dt class="font-semibold">Last run:</dt>
             <dd>{formatDate(orphanPolicy.lastRunAt)}</dd>
@@ -493,14 +484,14 @@
       {/if}
 
       <div class="flex flex-wrap items-center gap-2">
-        <Button color="blue" class={saveButtonClass} disabled={orphanPolicySaving} onclick={saveOrphanPolicy}>
+        <button class="btn btn-sm btn-primary" disabled={orphanPolicySaving} onclick={saveOrphanPolicy}>
           {#if orphanPolicySaving}
-            <Spinner size="4" class="mr-1.5" />
+            <span class="loading loading-spinner loading-xs mr-1.5"></span>
           {/if}
           Save policy
-        </Button>
+        </button>
         {#if orphanPolicySaved}
-          <span class="inline-flex items-center gap-1 text-xs font-semibold text-emerald-400">
+          <span class="inline-flex items-center gap-1 text-xs font-semibold text-success">
             <CheckCircleOutline class="h-3.5 w-3.5" />
             Saved
           </span>
@@ -514,37 +505,25 @@
 <section class={cardClass} aria-labelledby="metadata-orphans-title">
   <div class="flex flex-wrap items-center justify-between gap-3">
     <div>
-      <h2 id="metadata-orphans-title" class="text-base font-bold text-slate-100">Orphan items</h2>
-      <p class="mt-2 text-sm text-slate-400">
+      <h2 id="metadata-orphans-title" class="text-base font-bold text-base-content">Orphan items</h2>
+      <p class="mt-2 text-sm text-base-content/60">
         Files and metadata flagged by filesystem reconciliation. Restore items before cleanup finalizes them.
       </p>
     </div>
-    <Button color="dark" class={outlineButtonClass} disabled={orphansLoading} onclick={() => void loadOrphans()}>
+    <button class="btn btn-sm btn-neutral" disabled={orphansLoading} onclick={() => void loadOrphans()}>
       <RefreshOutline class="mr-1.5 h-3.5 w-3.5" />
       Refresh
-    </Button>
+    </button>
   </div>
 
   <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:max-w-xl">
-    <Select
-      items={orphanKindOptions}
-      bind:value={orphanKindFilter}
-      class={inputClass}
-      aria-label="Filter by orphan kind"
-      onchange={applyOrphanFilters}
-    />
-    <Select
-      items={orphanStateOptions}
-      bind:value={orphanStateFilter}
-      class={inputClass}
-      aria-label="Filter by orphan state"
-      onchange={applyOrphanFilters}
-    />
+    <Select items={orphanKindOptions} bind:value={orphanKindFilter} aria-label="Filter by orphan kind" onchange={applyOrphanFilters} />
+    <Select items={orphanStateOptions} bind:value={orphanStateFilter} aria-label="Filter by orphan state" onchange={applyOrphanFilters} />
   </div>
 
   {#if orphansError}
     <div
-      class="mt-4 flex items-start gap-2 rounded-xl border border-red-900/60 bg-red-950/35 p-3 text-sm text-red-300"
+      class="mt-4 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
       <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
@@ -554,15 +533,15 @@
 
   {#if orphansLoading}
     <div class="mt-10 flex justify-center">
-      <Spinner size="8" />
+      <span class="loading loading-spinner loading-md"></span>
     </div>
   {:else if orphans.length === 0}
-    <div class="mt-5 rounded-xl border border-slate-800/80 bg-slate-950/30 p-8 text-center">
-      <FileSearchOutline class="mx-auto h-9 w-9 text-slate-700" />
-      <p class="mt-4 text-sm font-semibold text-slate-300">
+    <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
+      <FileSearchOutline class="mx-auto h-9 w-9 text-base-content/30" />
+      <p class="mt-4 text-sm font-semibold text-base-content/80">
         {orphanPage > 1 ? 'No more orphan items' : 'No orphan items'}
       </p>
-      <p class="mt-1 text-sm text-slate-500">
+      <p class="mt-1 text-sm text-base-content/50">
         {orphanPage > 1 ? 'You have paged past the last result.' : 'Reconciliation has not flagged anything.'}
       </p>
     </div>
@@ -570,26 +549,26 @@
     <div class="mt-5 space-y-2">
       {#each orphans as item (item.id)}
         <article
-          class="flex flex-col gap-3 rounded-lg border border-slate-700/70 bg-[#151a26] px-3 py-3 sm:flex-row sm:items-center sm:px-4"
+          class="flex flex-col gap-3 rounded-lg border border-base-content/20 bg-base-100 px-3 py-3 sm:flex-row sm:items-center sm:px-4"
         >
           <div class="min-w-0">
             <div class="flex min-w-0 flex-wrap items-center gap-2">
-              <h3 class="text-sm font-semibold text-slate-100">{orphanKindLabel(item.kind)}</h3>
-              <span class="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-400">
+              <h3 class="text-sm font-semibold text-base-content">{orphanKindLabel(item.kind)}</h3>
+              <span class="rounded-full bg-base-300 px-2 py-0.5 text-[10px] font-semibold text-base-content/60">
                 {orphanStateLabel(item.state)}
               </span>
-              <span class="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-400">
+              <span class="rounded-full bg-base-300 px-2 py-0.5 text-[10px] font-semibold text-base-content/60">
                 {item.storageKey}
               </span>
             </div>
-            <p class="mt-0.5 truncate font-mono text-xs text-slate-400" title={item.originalStoragePath}>
+            <p class="mt-0.5 truncate font-mono text-xs text-base-content/60" title={item.originalStoragePath}>
               {item.originalStoragePath}
             </p>
-            <p class="mt-0.5 text-xs text-slate-500">
+            <p class="mt-0.5 text-xs text-base-content/50">
               Detected {formatDate(item.detectedAt)} · scheduled for cleanup {formatDate(item.deleteAfter)}
             </p>
             {#if item.lastError}
-              <p class="mt-0.5 truncate text-xs text-red-400" title={item.lastError}>{item.lastError}</p>
+              <p class="mt-0.5 truncate text-xs text-error" title={item.lastError}>{item.lastError}</p>
             {/if}
           </div>
 
@@ -597,12 +576,12 @@
             <div class="flex shrink-0 gap-2 sm:ml-auto">
               <button
                 type="button"
-                class="inline-flex h-10 min-w-24 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-900/70 px-3 text-xs font-semibold text-slate-200 transition hover:border-blue-500/60 hover:bg-blue-500/10 hover:text-blue-200 disabled:opacity-50"
+                class="inline-flex h-10 min-w-24 items-center justify-center gap-2 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary disabled:opacity-50"
                 disabled={restoringId === item.id}
                 onclick={() => void restoreOrphan(item)}
               >
                 {#if restoringId === item.id}
-                  <Spinner size="4" />
+                  <span class="loading loading-spinner loading-xs"></span>
                 {:else}
                   <UndoOutline class="h-4 w-4" />
                 {/if}
@@ -616,37 +595,27 @@
   {/if}
 
   <div class="mt-4 flex items-center justify-between">
-    <Button
-      color="dark"
-      class={outlineButtonClass}
-      disabled={orphansLoading || orphanPage <= 1}
-      onclick={() => changeOrphanPage(-1)}
-    >
+    <button class="btn btn-sm btn-neutral" disabled={orphansLoading || orphanPage <= 1} onclick={() => changeOrphanPage(-1)}>
       Previous
-    </Button>
-    <span class="text-xs font-semibold text-slate-500">Page {orphanPage}</span>
-    <Button
-      color="dark"
-      class={outlineButtonClass}
-      disabled={orphansLoading || orphans.length < ORPHAN_PAGE_SIZE}
-      onclick={() => changeOrphanPage(1)}
-    >
+    </button>
+    <span class="text-xs font-semibold text-base-content/50">Page {orphanPage}</span>
+    <button class="btn btn-sm btn-neutral" disabled={orphansLoading || orphans.length < ORPHAN_PAGE_SIZE} onclick={() => changeOrphanPage(1)}>
       Next
-    </Button>
+    </button>
   </div>
 </section>
 
 <!-- Delete media -->
-<section class="rounded-2xl border border-red-900/40 bg-[#151a26] p-5 shadow-xl shadow-black/15 sm:p-6" aria-labelledby="metadata-delete-title">
-  <h2 id="metadata-delete-title" class="text-base font-bold text-slate-100">Delete a video</h2>
-  <p class="mt-2 text-sm text-slate-400">
+<section class="rounded-2xl border border-error/30 bg-base-100 p-5 shadow-xl shadow-black/15 sm:p-6" aria-labelledby="metadata-delete-title">
+  <h2 id="metadata-delete-title" class="text-base font-bold text-base-content">Delete a video</h2>
+  <p class="mt-2 text-sm text-base-content/60">
     Permanently delete a video by its GUID. Leave the storage key empty to remove every copy, its metadata, and search
     entries; set it to delete only that storage target's copy.
   </p>
 
   {#if deleteError}
     <div
-      class="mt-4 flex items-start gap-2 rounded-xl border border-red-900/60 bg-red-950/35 p-3 text-sm text-red-300"
+      class="mt-4 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
       <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
@@ -654,7 +623,7 @@
     </div>
   {/if}
   {#if deleteMessage}
-    <div class="mt-4 flex items-start gap-2 rounded-xl border border-emerald-900/60 bg-emerald-950/35 p-3 text-sm text-emerald-300">
+    <div class="mt-4 flex items-start gap-2 rounded-xl border border-success/30 bg-success/10 p-3 text-sm text-success">
       <CheckCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{deleteMessage}</span>
     </div>
@@ -662,34 +631,24 @@
 
   <div class="mt-4 grid gap-4 sm:grid-cols-2">
     <div>
-      <Label for="delete-media-guid" class="mb-2 text-sm font-medium text-slate-300">Media GUID</Label>
-      <Input
-        id="delete-media-guid"
-        bind:value={deleteGuid}
-        placeholder="00000000-0000-0000-0000-000000000000"
-        class={inputClass}
-      />
+      <label class="label mb-2 text-sm" for="delete-media-guid">Media GUID</label>
+      <input class="input w-full" id="delete-media-guid" bind:value={deleteGuid} placeholder="00000000-0000-0000-0000-000000000000" />
     </div>
     <div>
-      <Label for="delete-media-storage-key" class="mb-2 text-sm font-medium text-slate-300">Storage key (optional)</Label>
-      <Input id="delete-media-storage-key" bind:value={deleteStorageKey} placeholder="All storage targets" class={inputClass} />
+      <label class="label mb-2 text-sm" for="delete-media-storage-key">Storage key (optional)</label>
+      <input class="input w-full" id="delete-media-storage-key" bind:value={deleteStorageKey} placeholder="All storage targets" />
     </div>
   </div>
 
   <div class="mt-4">
-    <Button
-      color="red"
-      class={saveButtonClass}
-      disabled={deleteBusy || !deleteGuidValid}
-      onclick={() => (deleteModalOpen = true)}
-    >
+    <button class="btn btn-sm btn-error" disabled={deleteBusy || !deleteGuidValid} onclick={() => (deleteModalOpen = true)}>
       {#if deleteBusy}
-        <Spinner size="4" class="mr-1.5" />
+        <span class="loading loading-spinner loading-xs mr-1.5"></span>
       {:else}
         <TrashBinOutline class="mr-1.5 h-3.5 w-3.5" />
       {/if}
       Delete video
-    </Button>
+    </button>
   </div>
 </section>
 

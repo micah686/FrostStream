@@ -1,7 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { logout } from '$lib/api/http';
-  import { Button } from 'flowbite-svelte';
   import {
     AdjustmentsHorizontalOutline,
     AdjustmentsVerticalOutline,
@@ -61,30 +60,23 @@
 <section class="min-h-[calc(100vh-7rem)]" aria-labelledby="profile-title">
   <div class="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
     <div class="min-w-0">
-      <h1 id="profile-title" class="text-2xl font-bold tracking-tight text-slate-100">Your profile</h1>
-      <p class="mt-2 text-sm text-slate-400">
+      <h1 id="profile-title" class="text-2xl font-bold tracking-tight text-base-content">Your profile</h1>
+      <p class="mt-2 text-sm text-base-content/60">
         {data.user.name} · {authLabel} · Signed in to FrostStream
       </p>
     </div>
 
     <div class="flex flex-wrap items-center gap-2">
       {#if !data.singleUser}
-        <Button
-          onclick={() => void logout()}
-          color="dark"
-          class="border-slate-700! bg-[#0f1420]! px-4! py-2! text-xs! font-semibold! text-slate-200! hover:border-slate-600! hover:bg-slate-800!"
-        >
+        <button class="btn btn-sm btn-neutral text-xs" onclick={() => void logout()}>
           <ArrowRightToBracketOutline class="mr-1.5 h-4 w-4" />
           Sign out
-        </Button>
+        </button>
       {/if}
-      <Button
-        color="dark"
-        class="border-slate-700! bg-[#0f1420]! px-4! py-2! text-xs! font-semibold! text-slate-200! hover:border-slate-600! hover:bg-slate-800!"
-      >
+      <button class="btn btn-sm btn-neutral text-xs">
         <CogOutline class="mr-1.5 h-4 w-4" />
         Edit profile
-      </Button>
+      </button>
     </div>
   </div>
 
@@ -99,8 +91,8 @@
             class={[
               'flex h-10 shrink-0 items-center gap-3 rounded-lg px-4 text-sm font-medium transition xl:w-full',
               active
-                ? 'bg-blue-500/18 text-blue-400'
-                : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-100'
+                ? 'bg-primary/18 text-primary'
+                : 'text-base-content/60 hover:bg-base-300/70 hover:text-base-content'
             ]}
             aria-current={active ? 'page' : undefined}
           >

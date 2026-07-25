@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import { Button, Input, Select, Spinner } from 'flowbite-svelte';
+  import { Select } from '$lib/components/ui';
   import {
     ChevronLeftOutline,
     ChevronRightOutline,
@@ -141,13 +141,13 @@
   function statusClass(status: RenditionStatus): string {
     switch (status) {
       case 'Ready':
-        return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
+        return 'border-success/30 bg-success/10 text-success';
       case 'Failed':
-        return 'border-red-500/30 bg-red-500/10 text-red-300';
+        return 'border-error/30 bg-error/10 text-error';
       case 'Processing':
-        return 'border-blue-500/30 bg-blue-500/10 text-blue-300';
+        return 'border-primary/30 bg-primary/10 text-primary';
       default:
-        return 'border-slate-700 bg-slate-900 text-slate-400';
+        return 'border-base-content/20 bg-base-200 text-base-content/60';
     }
   }
 
@@ -168,8 +168,8 @@
 <div aria-labelledby="encoding-title">
   <div class="flex flex-wrap items-start justify-between gap-4">
     <div>
-      <h2 id="encoding-title" class="text-lg font-semibold tracking-tight text-white">Encoding</h2>
-      <p class="mt-1 text-sm text-slate-500">
+      <h2 id="encoding-title" class="text-lg font-semibold tracking-tight text-base-content">Encoding</h2>
+      <p class="mt-1 text-sm text-base-content/50">
         Stream (HLS) and audio (Opus) rendition jobs · page {page} · {queueState.rows.length} shown · {queueState.totalCount} matching
       </p>
     </div>
@@ -179,31 +179,26 @@
         class={[
           'inline-flex h-9 items-center gap-2 rounded-full border px-3 text-xs font-semibold',
           queueState.connected
-            ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300'
-            : 'border-slate-700 bg-slate-900 text-slate-400'
+            ? 'border-success/25 bg-success/10 text-success'
+            : 'border-base-content/20 bg-base-200 text-base-content/60'
         ]}
       >
         <span
           class={[
             'h-2 w-2 rounded-full',
-            queueState.connected ? 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)]' : 'bg-slate-600'
+            queueState.connected ? 'bg-success shadow-[0_0_10px_rgba(52,211,153,0.8)]' : 'bg-base-300'
           ]}
         ></span>
         {queueState.connected ? 'SSE live' : 'Connecting'}
       </span>
-      <Button
-        color="dark"
-        onclick={refreshQueue}
-        disabled={queueState.loading}
-        class="border-slate-700! bg-slate-900! px-3! py-2! text-xs! font-semibold! text-slate-200! hover:bg-slate-800! disabled:opacity-50"
-      >
+      <button class="btn btn-sm btn-neutral text-xs" onclick={refreshQueue} disabled={queueState.loading}>
         {#if queueState.loading}
-          <Spinner size="4" class="mr-1.5" />
+          <span class="loading loading-spinner loading-xs mr-1.5"></span>
         {:else}
           <RefreshOutline class="mr-1.5 h-4 w-4" />
         {/if}
         Refresh
-      </Button>
+      </button>
     </div>
   </div>
 
@@ -215,8 +210,8 @@
         class={[
           'inline-flex h-8 shrink-0 items-center rounded-lg border px-3 text-xs font-semibold transition',
           kindFilter === tab.key
-            ? 'border-blue-500/60 bg-blue-500/15 text-blue-200'
-            : 'border-slate-800 bg-slate-900/60 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+            ? 'border-primary/60 bg-primary/15 text-primary'
+            : 'border-base-300 bg-base-200/60 text-base-content/60 hover:bg-base-300 hover:text-base-content/90'
         ]}
         aria-pressed={kindFilter === tab.key}
       >
@@ -234,8 +229,8 @@
           class={[
             'inline-flex h-9 shrink-0 items-center gap-2 rounded-full px-4 text-xs font-semibold transition',
             statusFilter === tab.key
-              ? 'bg-slate-100 text-slate-950'
-              : 'bg-slate-800/75 text-slate-300 hover:bg-slate-700'
+              ? 'bg-base-content text-base-100'
+              : 'bg-base-300/75 text-base-content/80 hover:bg-base-300'
           ]}
           aria-current={statusFilter === tab.key ? 'page' : undefined}
         >
@@ -245,35 +240,15 @@
     </div>
 
     <div class="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
-      <Select
-        items={pageSizeOptions}
-        bind:value={pageSize}
-        onchange={changePageSize}
-        aria-label="Jobs per page"
-        class="h-10 w-full border-slate-800! bg-slate-900/80! text-sm! text-slate-300! focus:border-blue-500! focus:ring-blue-500! sm:w-40"
-      />
-      <Input
-        type="search"
-        bind:value={storageKey}
-        oninput={scheduleSearch}
-        aria-label="Filter by storage key"
-        placeholder="Storage key..."
-        class="h-10 w-full border-slate-800! bg-slate-900/80! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500! sm:w-48"
-      />
-      <Input
-        type="search"
-        bind:value={query}
-        oninput={scheduleSearch}
-        aria-label="Search encoding jobs"
-        placeholder="Search title or media guid..."
-        class="h-10 w-full border-slate-800! bg-slate-900/80! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500! lg:w-80"
-      />
+      <Select items={pageSizeOptions} bind:value={pageSize} onchange={changePageSize} aria-label="Jobs per page" class="h-10 w-full text-sm sm:w-40" />
+      <input class="input w-full h-10 text-sm sm:w-48" type="search" bind:value={storageKey} oninput={scheduleSearch} aria-label="Filter by storage key" placeholder="Storage key..." />
+      <input class="input w-full h-10 text-sm lg:w-80" type="search" bind:value={query} oninput={scheduleSearch} aria-label="Search encoding jobs" placeholder="Search title or media guid..." />
     </div>
   </div>
 
   {#if queueState.error || actionError}
     <div
-      class="mt-5 flex items-start gap-3 rounded-xl border border-red-900/60 bg-red-950/35 p-4 text-sm text-red-300"
+      class="mt-5 flex items-start gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
       role="alert"
     >
       <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
@@ -283,33 +258,33 @@
 
   {#if queueState.loading && queueState.rows.length === 0}
     <div class="mt-16 flex justify-center">
-      <Spinner size="8" />
+      <span class="loading loading-spinner loading-md"></span>
     </div>
   {:else if queueState.rows.length === 0}
-    <div class="mt-8 rounded-xl border border-slate-800/80 bg-slate-900/40 p-10 text-center">
-      <VideoCameraOutline class="mx-auto h-10 w-10 text-slate-700" />
-      <p class="mt-4 text-sm font-semibold text-slate-300">No encoding jobs match this view</p>
-      <p class="mt-1 text-sm text-slate-500">Encode a channel or watch/cast an item to queue one.</p>
+    <div class="mt-8 rounded-xl border border-base-300/80 bg-base-200/40 p-10 text-center">
+      <VideoCameraOutline class="mx-auto h-10 w-10 text-base-content/30" />
+      <p class="mt-4 text-sm font-semibold text-base-content/80">No encoding jobs match this view</p>
+      <p class="mt-1 text-sm text-base-content/50">Encode a channel or watch/cast an item to queue one.</p>
     </div>
   {:else}
     <div class="mt-5 space-y-2">
       {#each queueState.rows as row (row.item.renditionId)}
-        <div class="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4">
+        <div class="rounded-xl border border-base-300/80 bg-base-200/40 p-4">
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div class="min-w-0">
               <div class="flex items-center gap-2">
-                <span class="rounded-md bg-slate-800/80 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.06em] text-slate-400">
+                <span class="rounded-md bg-base-300/80 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.06em] text-base-content/60">
                   {row.item.kind === 'Stream' ? 'HLS' : 'Opus'}
                 </span>
                 <a
                   href={`/watch/${row.item.mediaGuid}`}
-                  class="truncate text-sm font-semibold text-slate-100 hover:text-blue-300"
+                  class="truncate text-sm font-semibold text-base-content hover:text-primary"
                   title={row.item.title}
                 >
                   {row.item.title}
                 </a>
               </div>
-              <p class="mt-1 truncate text-xs text-slate-500">
+              <p class="mt-1 truncate text-xs text-base-content/50">
                 {row.item.storageKey}
                 {#if row.item.storagePath} · {row.item.storagePath}{/if}
               </p>
@@ -321,22 +296,22 @@
 
           {#if row.progress}
             <div class="mt-3">
-              <div class="flex justify-between gap-3 text-[11px] text-slate-500">
+              <div class="flex justify-between gap-3 text-[11px] text-base-content/50">
                 <span>{progressLine(row.progress)}</span>
                 {#if row.progress.percent !== null}<span>{Math.round(row.progress.percent)}%</span>{/if}
               </div>
-              <div class="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-800">
+              <div class="mt-1 h-1.5 overflow-hidden rounded-full bg-base-300">
                 <div
-                  class="h-full rounded-full bg-blue-500 transition-all"
+                  class="h-full rounded-full bg-primary transition-all"
                   style={`width: ${row.progress.percent ?? 0}%`}
                 ></div>
               </div>
             </div>
           {:else if row.item.status === 'Failed' && row.item.errorMessage}
-            <p class="mt-2 text-xs text-red-400">{row.item.errorMessage}</p>
+            <p class="mt-2 text-xs text-error">{row.item.errorMessage}</p>
           {/if}
 
-          <p class="mt-2 text-[11px] text-slate-600">
+          <p class="mt-2 text-[11px] text-base-content/40">
             {row.item.sizeBytes ? formatBytes(row.item.sizeBytes) : '—'}
             {#if row.item.durationSeconds}· {formatDuration(row.item.durationSeconds)}{/if}
             · updated {formatRelativeDate(row.item.updatedAt)}
@@ -345,30 +320,20 @@
       {/each}
     </div>
 
-    <div class="mt-6 flex flex-col gap-3 border-t border-slate-800/70 pt-5 sm:flex-row sm:items-center sm:justify-between">
-      <p class="text-xs text-slate-600">
+    <div class="mt-6 flex flex-col gap-3 border-t border-base-300/70 pt-5 sm:flex-row sm:items-center sm:justify-between">
+      <p class="text-xs text-base-content/40">
         Showing {Math.min((page - 1) * pageSize + 1, queueState.totalCount)}-{Math.min(page * pageSize, queueState.totalCount)}
         of {queueState.totalCount}
       </p>
       <div class="flex gap-2">
-        <Button
-          color="dark"
-          disabled={page <= 1 || queueState.loading}
-          onclick={previousPage}
-          class="border-slate-700! bg-slate-900! px-3! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800! disabled:opacity-40"
-        >
+        <button class="btn btn-sm btn-neutral text-xs" disabled={page <= 1 || queueState.loading} onclick={previousPage}>
           <ChevronLeftOutline class="mr-1 h-3.5 w-3.5" />
           Previous
-        </Button>
-        <Button
-          color="dark"
-          disabled={!queueState.nextCursor || queueState.loading}
-          onclick={nextPage}
-          class="border-slate-700! bg-slate-900! px-3! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800! disabled:opacity-40"
-        >
+        </button>
+        <button class="btn btn-sm btn-neutral text-xs" disabled={!queueState.nextCursor || queueState.loading} onclick={nextPage}>
           Next
           <ChevronRightOutline class="ml-1 h-3.5 w-3.5" />
-        </Button>
+        </button>
       </div>
     </div>
   {/if}

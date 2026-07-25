@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import { Button, Input, Select, Spinner } from 'flowbite-svelte';
+  import { Select } from '$lib/components/ui';
   import {
     ChevronLeftOutline,
     ChevronRightOutline,
@@ -281,8 +281,8 @@
 <div aria-labelledby="downloads-title">
   <div class="flex flex-wrap items-start justify-between gap-4">
     <div>
-      <h2 id="downloads-title" class="text-lg font-semibold tracking-tight text-white">Downloads</h2>
-      <p class="mt-1 text-sm text-slate-500">
+      <h2 id="downloads-title" class="text-lg font-semibold tracking-tight text-base-content">Downloads</h2>
+      <p class="mt-1 text-sm text-base-content/50">
         Download queue · page {page} · {queueState.rows.length} shown · {queueState.totalCount} matching
       </p>
     </div>
@@ -292,62 +292,53 @@
         class={[
           'inline-flex h-9 items-center gap-2 rounded-full border px-3 text-xs font-semibold',
           queueState.connected
-            ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300'
-            : 'border-slate-700 bg-slate-900 text-slate-400'
+            ? 'border-success/25 bg-success/10 text-success'
+            : 'border-base-content/20 bg-base-200 text-base-content/60'
         ]}
       >
         <span
           class={[
             'h-2 w-2 rounded-full',
-            queueState.connected ? 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)]' : 'bg-slate-600'
+            queueState.connected ? 'bg-success shadow-[0_0_10px_rgba(52,211,153,0.8)]' : 'bg-base-300'
           ]}
         ></span>
         {queueState.connected ? 'SSE live' : 'Connecting'}
       </span>
-      <Button
-        color="dark"
-        onclick={refreshQueue}
-        disabled={queueState.loading}
-        class="border-slate-700! bg-slate-900! px-3! py-2! text-xs! font-semibold! text-slate-200! hover:bg-slate-800! disabled:opacity-50"
-      >
+      <button class="btn btn-sm btn-neutral text-xs" onclick={refreshQueue} disabled={queueState.loading}>
         {#if queueState.loading}
-          <Spinner size="4" class="mr-1.5" />
+          <span class="loading loading-spinner loading-xs mr-1.5"></span>
         {:else}
           <RefreshOutline class="mr-1.5 h-4 w-4" />
         {/if}
         Refresh
-      </Button>
-      <Button
-        href="/download"
-        color="blue"
-        class="border-0! bg-blue-500! px-3! py-2! text-xs! font-semibold! hover:bg-blue-400!"
-      >
+      </button>
+      <a class="btn btn-sm btn-primary text-xs" href="/download">
         <DownloadOutline class="mr-1.5 h-4 w-4" />
         New
-      </Button>
+      </a>
     </div>
   </div>
 
   <div class="mt-6 grid gap-3 md:grid-cols-4">
-    <div class="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4">
-      <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-600">Tracked</p>
-      <p class="mt-2 text-2xl font-bold text-white">{queueState.totalCount}</p>
-      <p class="mt-1 text-xs text-slate-500">{queueState.rows.length} loaded</p>
+    <div class="rounded-xl border border-base-300/80 bg-base-200/40 p-4">
+      <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Tracked</p>
+      <p class="mt-2 text-2xl font-bold text-base-content">{queueState.totalCount}</p>
+      <p class="mt-1 text-xs text-base-content/50">{queueState.rows.length} loaded</p>
     </div>
-    <div class="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4">
-      <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-600">Running</p>
-      <p class="mt-2 text-2xl font-bold text-white">{activeCount}</p>
-      <p class="mt-1 text-xs text-slate-500">active workflow states</p>
+    <div class="rounded-xl border border-base-300/80 bg-base-200/40 p-4">
+      <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Running</p>
+      <p class="mt-2 text-2xl font-bold text-base-content">{activeCount}</p>
+      <p class="mt-1 text-xs text-base-content/50">active workflow states</p>
     </div>
-    <div class="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4">
-      <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-600">Waiting</p>
-      <p class="mt-2 text-2xl font-bold text-white">{queuedCount}</p>
-      <p class="mt-1 text-xs text-slate-500">not yet dispatched</p>
+    <div class="rounded-xl border border-base-300/80 bg-base-200/40 p-4">
+      <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Waiting</p>
+      <p class="mt-2 text-2xl font-bold text-base-content">{queuedCount}</p>
+      <p class="mt-1 text-xs text-base-content/50">not yet dispatched</p>
     </div>
-    <div class="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4">
-      <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-600">Size</p>
-      <p class="mt-2 text-2xl font-bold text-white">{formatOptionalBytes(totalBytes)}</p>
-      <p class="mt-1 text-xs text-slate-500">known total bytes</p>
+    <div class="rounded-xl border border-base-300/80 bg-base-200/40 p-4">
+      <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Size</p>
+      <p class="mt-2 text-2xl font-bold text-base-content">{formatOptionalBytes(totalBytes)}</p>
+      <p class="mt-1 text-xs text-base-content/50">known total bytes</p>
     </div>
   </div>
 
@@ -359,8 +350,8 @@
         class={[
           'inline-flex h-8 shrink-0 items-center rounded-lg border px-3 text-xs font-semibold transition',
           sourceFilter === tab.key
-            ? 'border-blue-500/60 bg-blue-500/15 text-blue-200'
-            : 'border-slate-800 bg-slate-900/60 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+            ? 'border-primary/60 bg-primary/15 text-primary'
+            : 'border-base-300 bg-base-200/60 text-base-content/60 hover:bg-base-300 hover:text-base-content/90'
         ]}
         aria-pressed={sourceFilter === tab.key}
       >
@@ -378,8 +369,8 @@
           class={[
             'inline-flex h-9 shrink-0 items-center gap-2 rounded-full px-4 text-xs font-semibold transition',
             activeFilter === tab.key
-              ? 'bg-slate-100 text-slate-950'
-              : 'bg-slate-800/75 text-slate-300 hover:bg-slate-700'
+              ? 'bg-base-content text-base-100'
+              : 'bg-base-300/75 text-base-content/80 hover:bg-base-300'
           ]}
           aria-current={activeFilter === tab.key ? 'page' : undefined}
         >
@@ -388,7 +379,7 @@
             <span
               class={[
                 'rounded-full px-1.5 py-0.5 text-[10px]',
-                activeFilter === tab.key ? 'bg-slate-300 text-slate-800' : 'bg-slate-950/50 text-slate-500'
+                activeFilter === tab.key ? 'bg-base-content/80 text-base-100' : 'bg-base-200/50 text-base-content/50'
               ]}
             >
               {tab.count}
@@ -399,27 +390,14 @@
     </div>
 
     <div class="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
-      <Select
-        items={pageSizeOptions}
-        bind:value={pageSize}
-        onchange={changePageSize}
-        aria-label="Jobs per page"
-        class="h-10 w-full border-slate-800! bg-slate-900/80! text-sm! text-slate-300! focus:border-blue-500! focus:ring-blue-500! sm:w-40"
-      />
-      <Input
-        type="search"
-        bind:value={query}
-        oninput={scheduleSearch}
-        aria-label="Search jobs"
-        placeholder="Search source, job id, storage..."
-        class="h-10 w-full border-slate-800! bg-slate-900/80! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500! lg:w-80"
-      />
+      <Select items={pageSizeOptions} bind:value={pageSize} onchange={changePageSize} aria-label="Jobs per page" class="h-10 w-full text-sm sm:w-40" />
+      <input class="input w-full h-10 text-sm lg:w-80" type="search" bind:value={query} oninput={scheduleSearch} aria-label="Search jobs" placeholder="Search source, job id, storage..." />
     </div>
   </div>
 
   {#if queueState.error || actionError}
     <div
-      class="mt-5 flex items-start gap-3 rounded-xl border border-red-900/60 bg-red-950/35 p-4 text-sm text-red-300"
+      class="mt-5 flex items-start gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
       role="alert"
     >
       <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
@@ -429,13 +407,13 @@
 
   {#if queueState.loading && queueState.rows.length === 0}
     <div class="mt-16 flex justify-center">
-      <Spinner size="8" />
+      <span class="loading loading-spinner loading-md"></span>
     </div>
   {:else if queueState.rows.length === 0}
-    <div class="mt-8 rounded-xl border border-slate-800/80 bg-slate-900/40 p-10 text-center">
-      <ServerOutline class="mx-auto h-10 w-10 text-slate-700" />
-      <p class="mt-4 text-sm font-semibold text-slate-300">No jobs match this view</p>
-      <p class="mt-1 text-sm text-slate-500">Queue a download or change the filters.</p>
+    <div class="mt-8 rounded-xl border border-base-300/80 bg-base-200/40 p-10 text-center">
+      <ServerOutline class="mx-auto h-10 w-10 text-base-content/30" />
+      <p class="mt-4 text-sm font-semibold text-base-content/80">No jobs match this view</p>
+      <p class="mt-1 text-sm text-base-content/50">Queue a download or change the filters.</p>
     </div>
   {:else}
     <div class="mt-5 space-y-2">
@@ -455,30 +433,20 @@
       {/each}
     </div>
 
-    <div class="mt-6 flex flex-col gap-3 border-t border-slate-800/70 pt-5 sm:flex-row sm:items-center sm:justify-between">
-      <p class="text-xs text-slate-600">
+    <div class="mt-6 flex flex-col gap-3 border-t border-base-300/70 pt-5 sm:flex-row sm:items-center sm:justify-between">
+      <p class="text-xs text-base-content/40">
         Showing {Math.min((page - 1) * pageSize + 1, queueState.totalCount)}-{Math.min(page * pageSize, queueState.totalCount)}
         of {queueState.totalCount}
       </p>
       <div class="flex gap-2">
-        <Button
-          color="dark"
-          disabled={page <= 1 || queueState.loading}
-          onclick={previousPage}
-          class="border-slate-700! bg-slate-900! px-3! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800! disabled:opacity-40"
-        >
+        <button class="btn btn-sm btn-neutral text-xs" disabled={page <= 1 || queueState.loading} onclick={previousPage}>
           <ChevronLeftOutline class="mr-1 h-3.5 w-3.5" />
           Previous
-        </Button>
-        <Button
-          color="dark"
-          disabled={!queueState.nextCursor || queueState.loading}
-          onclick={nextPage}
-          class="border-slate-700! bg-slate-900! px-3! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800! disabled:opacity-40"
-        >
+        </button>
+        <button class="btn btn-sm btn-neutral text-xs" disabled={!queueState.nextCursor || queueState.loading} onclick={nextPage}>
           Next
           <ChevronRightOutline class="ml-1 h-3.5 w-3.5" />
-        </Button>
+        </button>
       </div>
     </div>
   {/if}

@@ -318,8 +318,8 @@
       class={[
         'flex items-center gap-1.5 rounded-lg border px-4 py-2 text-xs font-semibold transition',
         session
-          ? 'border-blue-900/60 bg-blue-950/40 text-blue-300 hover:bg-blue-950/60'
-          : 'border-slate-800 bg-slate-900/70 text-slate-300 hover:bg-slate-800'
+          ? 'border-primary/30 bg-primary/10 text-primary hover:bg-primary/10'
+          : 'border-base-300 bg-base-200/70 text-base-content/80 hover:bg-base-300'
       ]}
     >
       <ComputerSpeakerOutline class="h-4 w-4" />
@@ -331,20 +331,20 @@
     <div
       class={[
         embedded
-          ? 'w-full rounded-xl border border-slate-800 bg-slate-950/95 p-4 shadow-2xl shadow-black/50 backdrop-blur'
-          : 'absolute right-0 z-30 mt-2 w-80 rounded-xl border border-slate-800 bg-slate-950/95 p-4 shadow-2xl shadow-black/50 backdrop-blur'
+          ? 'w-full rounded-xl border border-base-300 bg-base-200/95 p-4 shadow-2xl shadow-black/50 backdrop-blur'
+          : 'absolute right-0 z-30 mt-2 w-80 rounded-xl border border-base-300 bg-base-200/95 p-4 shadow-2xl shadow-black/50 backdrop-blur'
       ]}
     >
       {#if error}
-        <p class="mb-3 rounded-lg border border-red-900/60 bg-red-950/30 px-3 py-2 text-xs text-red-300">{error}</p>
+        <p class="mb-3 rounded-lg border border-error/30 bg-error/10 px-3 py-2 text-xs text-error">{error}</p>
       {/if}
 
       {#if session}
         <!-- Remote control panel -->
         <div class="space-y-3">
           <div>
-            <p class="truncate text-sm font-semibold text-white">{session.title}</p>
-            <p class="text-xs text-slate-400">
+            <p class="truncate text-sm font-semibold text-base-content">{session.title}</p>
+            <p class="text-xs text-base-content/60">
               {session.deviceName} · {session.snapshot.playerState}
             </p>
           </div>
@@ -356,7 +356,7 @@
             >
               <RangeSlider min={0} max={Math.max(duration, 1)} step={1} bind:value={seekValue} disabled={!duration} />
             </div>
-            <div class="mt-1 flex justify-between text-[11px] text-slate-400">
+            <div class="mt-1 flex justify-between text-[11px] text-base-content/60">
               <span>{formatTime(seeking ? seekValue : displayTime)}</span>
               <span>{formatTime(duration)}</span>
             </div>
@@ -390,7 +390,7 @@
           </div>
 
           <div class="flex items-center gap-2">
-            <span class="text-[11px] text-slate-400">Vol</span>
+            <span class="text-[11px] text-base-content/60">Vol</span>
             <div
               class="flex-1"
               onpointerdowncapture={() => (volumeDragging = true)}
@@ -398,13 +398,13 @@
             >
               <RangeSlider min={0} max={100} step={1} bind:value={volumeValue} />
             </div>
-            <span class="w-8 text-right text-[11px] text-slate-400">{volumeValue}%</span>
+            <span class="w-8 text-right text-[11px] text-base-content/60">{volumeValue}%</span>
           </div>
 
           <button
             type="button"
             onclick={disconnect}
-            class="w-full rounded-lg border border-red-900/60 bg-red-950/30 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-950/50"
+            class="w-full rounded-lg border border-error/30 bg-error/10 px-3 py-2 text-xs font-semibold text-error transition hover:bg-error/10"
           >
             Stop casting
           </button>
@@ -412,12 +412,12 @@
       {:else}
         <!-- Device picker -->
         <div class="mb-3 flex items-center justify-between">
-          <p class="text-xs font-semibold tracking-wide text-slate-400 uppercase">{panelLabel}</p>
+          <p class="text-xs font-semibold tracking-wide text-base-content/60 uppercase">{panelLabel}</p>
           <button
             type="button"
             onclick={() => loadDevices(true)}
             disabled={devicesLoading}
-            class="rounded-md p-1 text-slate-400 transition hover:bg-slate-800 hover:text-slate-200 disabled:opacity-50"
+            class="rounded-md p-1 text-base-content/60 transition hover:bg-base-300 hover:text-base-content/90 disabled:opacity-50"
             title="Scan again (takes a few seconds)"
           >
             <RefreshOutline class={['h-4 w-4', devicesLoading && 'animate-spin']} />
@@ -425,15 +425,15 @@
         </div>
 
         {#if preparingAudio}
-          <p class="mb-3 rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs text-slate-300">
+          <p class="mb-3 rounded-lg border border-base-content/20 bg-base-200/70 px-3 py-2 text-xs text-base-content/80">
             The audio version is being prepared — try again in a moment.
           </p>
         {/if}
 
         {#if devicesLoading && devices.length === 0}
-          <p class="py-2 text-xs text-slate-400">Scanning the network…</p>
+          <p class="py-2 text-xs text-base-content/60">Scanning the network…</p>
         {:else if devices.length === 0}
-          <p class="py-2 text-xs text-slate-400">
+          <p class="py-2 text-xs text-base-content/60">
             {emptyMessage}
           </p>
         {:else}
@@ -444,10 +444,10 @@
                   type="button"
                   onclick={() => startCast(device)}
                   disabled={busy}
-                  class="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-200 transition hover:bg-slate-800 disabled:opacity-50"
+                  class="w-full rounded-lg px-3 py-2 text-left text-sm text-base-content/90 transition hover:bg-base-300 disabled:opacity-50"
                 >
                   <span class="block truncate font-medium">{device.name}</span>
-                  <span class="block truncate text-[11px] text-slate-500">
+                  <span class="block truncate text-[11px] text-base-content/50">
                     {device.model ?? 'Cast device'} · {device.host}
                   </span>
                 </button>
@@ -456,7 +456,7 @@
           </ul>
         {/if}
 
-        <div class="space-y-2 border-t border-slate-800 pt-3 text-xs text-slate-300">
+        <div class="space-y-2 border-t border-base-300 pt-3 text-xs text-base-content/80">
           <label class="flex items-center gap-2">
             <input type="checkbox" bind:checked={audioOnly} class="accent-blue-500" />
             Audio only
@@ -470,7 +470,7 @@
               <span class="shrink-0">Subtitles</span>
               <select
                 bind:value={subtitleChoice}
-                class="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200"
+                class="w-full rounded-md border border-base-content/20 bg-base-200 px-2 py-1 text-xs text-base-content/90"
               >
                 <option value="">Off</option>
                 {#each captionLanguages as caption (caption.languageCode + caption.captionType)}
@@ -492,12 +492,12 @@
     width: 2.25rem;
     height: 2.25rem;
     border-radius: 9999px;
-    border: 1px solid var(--color-slate-700, #334155);
-    background: color-mix(in srgb, var(--color-slate-900, #0f172a) 70%, transparent);
-    color: var(--color-slate-200, #e2e8f0);
+    border: 1px solid color-mix(in srgb, var(--color-base-content) 20%, transparent);
+    background: color-mix(in srgb, var(--color-base-200) 70%, transparent);
+    color: var(--color-base-content);
     transition: background 150ms;
   }
   .cast-ctl:hover {
-    background: var(--color-slate-800, #1e293b);
+    background: var(--color-base-300);
   }
 </style>

@@ -95,8 +95,8 @@
     class={[
       'flex items-center gap-1.5 rounded-lg border px-4 py-2 text-xs font-semibold transition',
       open || protocol
-        ? 'border-blue-900/60 bg-blue-950/40 text-blue-300 hover:bg-blue-950/60'
-        : 'border-slate-800 bg-slate-900/70 text-slate-300 hover:bg-slate-800'
+        ? 'border-primary/30 bg-primary/10 text-primary hover:bg-primary/10'
+        : 'border-base-300 bg-base-200/70 text-base-content/80 hover:bg-base-300'
     ]}
   >
     <ComputerSpeakerOutline class="h-4 w-4" />
@@ -105,14 +105,14 @@
   </button>
 
   {#if open}
-    <div class="absolute right-0 z-30 mt-2 w-96 rounded-xl border border-slate-800 bg-slate-950/95 p-3 shadow-2xl shadow-black/50 backdrop-blur">
+    <div class="absolute right-0 z-30 mt-2 w-96 rounded-xl border border-base-300 bg-base-200/95 p-3 shadow-2xl shadow-black/50 backdrop-blur">
       {#if error}
-        <p class="mb-2 rounded-lg border border-red-900/60 bg-red-950/30 px-3 py-2 text-xs text-red-300">{error}</p>
+        <p class="mb-2 rounded-lg border border-error/30 bg-error/10 px-3 py-2 text-xs text-error">{error}</p>
       {/if}
 
-      <div class="mb-2 rounded-lg border border-amber-700/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-100">
-        <p class="font-semibold uppercase tracking-wide text-amber-300">Under development</p>
-        <p class="mt-1 leading-5 text-amber-100/90">
+      <div class="mb-2 rounded-lg border border-warning/60 bg-warning/10 px-3 py-2 text-xs text-warning">
+        <p class="font-semibold uppercase tracking-wide text-warning">Under development</p>
+        <p class="mt-1 leading-5 text-warning">
           Cast (Browser) and Cast (Server) are still in progress.
         </p>
       </div>
@@ -123,12 +123,12 @@
             type="button"
             onclick={castBrowser}
             disabled={busy || !canUseBrowserCast()}
-            class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-slate-200 transition hover:bg-slate-800/70 disabled:opacity-50"
+            class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-base-content/90 transition hover:bg-base-300/70 disabled:opacity-50"
             title={canUseBrowserCast() ? 'Cast from this browser' : 'Browser casting requires HTTPS or localhost'}
           >
             <span>
               <span class="block font-medium">Cast (Browser)</span>
-              <span class="block text-[11px] text-slate-500">Google Cast sender SDK in the page</span>
+              <span class="block text-[11px] text-base-content/50">Google Cast sender SDK in the page</span>
             </span>
           </button>
 
@@ -136,11 +136,11 @@
             type="button"
             onclick={() => (protocol = 'chromecast')}
             disabled={busy}
-            class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-slate-200 transition hover:bg-slate-800/70 disabled:opacity-50"
+            class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-base-content/90 transition hover:bg-base-300/70 disabled:opacity-50"
           >
             <span>
               <span class="block font-medium">Cast (Server)</span>
-              <span class="block text-[11px] text-slate-500">Chromecast devices discovered by WebAPI</span>
+              <span class="block text-[11px] text-base-content/50">Chromecast devices discovered by WebAPI</span>
             </span>
           </button>
 
@@ -148,11 +148,11 @@
             type="button"
             onclick={() => (protocol = 'fcast')}
             disabled={busy}
-            class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-slate-200 transition hover:bg-slate-800/70 disabled:opacity-50"
+            class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-base-content/90 transition hover:bg-base-300/70 disabled:opacity-50"
           >
             <span>
               <span class="block font-medium">FCast</span>
-              <span class="block text-[11px] text-slate-500">FCast devices discovered by WebAPI</span>
+              <span class="block text-[11px] text-base-content/50">FCast devices discovered by WebAPI</span>
             </span>
           </button>
         </div>
@@ -161,17 +161,17 @@
           <button
             type="button"
             onclick={() => (protocol = null)}
-            class="rounded-md px-2 py-1 text-xs font-semibold text-slate-400 transition hover:bg-slate-800 hover:text-slate-200"
+            class="rounded-md px-2 py-1 text-xs font-semibold text-base-content/60 transition hover:bg-base-300 hover:text-base-content/90"
           >
             Back
           </button>
-          <p class="truncate text-xs font-semibold tracking-wide text-slate-400 uppercase">
+          <p class="truncate text-xs font-semibold tracking-wide text-base-content/60 uppercase">
             {protocol === 'chromecast' ? 'Cast (Server)' : 'FCast'}
           </p>
           <button
             type="button"
             onclick={close}
-            class="rounded-md px-2 py-1 text-xs font-semibold text-slate-400 transition hover:bg-slate-800 hover:text-slate-200"
+            class="rounded-md px-2 py-1 text-xs font-semibold text-base-content/60 transition hover:bg-base-300 hover:text-base-content/90"
           >
             Close
           </button>

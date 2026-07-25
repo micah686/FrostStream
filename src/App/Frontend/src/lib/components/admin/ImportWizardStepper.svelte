@@ -1,7 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { DetailedStepper } from 'flowbite-svelte';
-
+  import { Stepper } from '$lib/components/ui';
   interface Props { current: number; sessionId?: string; }
   let { current, sessionId }: Props = $props();
   const steps = [
@@ -20,6 +19,6 @@
   }
 </script>
 
-<div class="mb-6 overflow-x-auto rounded-2xl border border-slate-800 bg-[#151a26] p-4">
-  <DetailedStepper {steps} {current} clickable={!!sessionId || current === 1} onStepClick={navigate} class="min-w-[760px]" />
+<div class="mb-6 overflow-x-auto rounded-2xl border border-base-300 bg-base-100 p-4">
+  <Stepper {steps} {current} clickable={!!sessionId || current === 1} onStepClick={navigate} class="min-w-[760px]" />
 </div>

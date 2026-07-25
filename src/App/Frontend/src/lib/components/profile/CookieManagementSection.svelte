@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Badge, Button, Input, Label, Spinner, Textarea } from 'flowbite-svelte';
   import {
     CookieSolid,
     ExclamationCircleOutline,
@@ -17,10 +16,6 @@
     type CookieProfile
   } from '$lib/api/cookies';
 
-  const inputClass =
-    'border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!';
-  const outlineButtonClass =
-    'border-slate-700! bg-transparent! px-3! py-1.5! text-xs! font-semibold! text-slate-200! hover:border-slate-600! hover:bg-slate-800!';
 
   let profiles = $state<CookieProfile[]>([]);
   let loading = $state(true);
@@ -144,27 +139,27 @@
   }
 </script>
 
-<section class="rounded-2xl border border-slate-800 bg-[#151a26] p-5 shadow-xl shadow-black/15 sm:p-6" aria-labelledby="cookie-management-title">
+<section class="card border border-base-300 bg-base-100 p-5 sm:p-6" aria-labelledby="cookie-management-title">
   <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
     <div>
-      <h2 id="cookie-management-title" class="text-base font-bold text-slate-100">Cookie management</h2>
-      <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+      <h2 id="cookie-management-title" class="text-base font-bold text-base-content">Cookie management</h2>
+      <p class="mt-2 max-w-3xl text-sm leading-6 text-base-content/60">
         Store Netscape-formatted cookies for sites that need a signed-in session to download. Cookie contents are
         write-only: once saved they are kept in the secret store and can never be viewed again, only replaced or
         deleted.
       </p>
     </div>
     {#if !formOpen}
-      <Button color="dark" class={outlineButtonClass} onclick={openCreateForm}>
+      <button class="btn btn-sm btn-neutral" onclick={openCreateForm}>
         <PlusOutline class="mr-1.5 h-3.5 w-3.5" />
         New cookie profile
-      </Button>
+      </button>
     {/if}
   </div>
 
   {#if listError}
     <div
-      class="mt-5 flex items-start gap-2 rounded-xl border border-red-900/60 bg-red-950/35 p-3 text-sm text-red-300"
+      class="mt-5 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
       <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
@@ -173,46 +168,46 @@
   {/if}
 
   {#if formMessage}
-    <div class="mt-5 rounded-xl border border-emerald-900/60 bg-emerald-950/35 p-3 text-sm text-emerald-300" role="status">
+    <div class="mt-5 rounded-xl border border-success/30 bg-success/10 p-3 text-sm text-success" role="status">
       {formMessage}
     </div>
   {/if}
 
   {#if loading}
     <div class="mt-10 flex justify-center">
-      <Spinner size="8" />
+      <span class="loading loading-spinner loading-md"></span>
     </div>
   {:else if profiles.length === 0 && !formOpen}
-    <div class="mt-5 rounded-xl border border-slate-800/80 bg-slate-950/30 p-8 text-center">
-      <CookieSolid class="mx-auto h-9 w-9 text-slate-700" />
-      <p class="mt-4 text-sm font-semibold text-slate-300">No cookie profiles yet</p>
-      <p class="mt-1 text-sm text-slate-500">Add one to download from sites that require a signed-in session.</p>
+    <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
+      <CookieSolid class="mx-auto h-9 w-9 text-base-content/30" />
+      <p class="mt-4 text-sm font-semibold text-base-content/80">No cookie profiles yet</p>
+      <p class="mt-1 text-sm text-base-content/50">Add one to download from sites that require a signed-in session.</p>
     </div>
   {:else if profiles.length > 0}
     <div class="mt-5 space-y-2">
       {#each profiles as profile (profile.profileKey)}
         <article
-          class="flex min-h-[3.95rem] flex-col gap-3 rounded-lg border border-slate-700/70 bg-[#151a26] px-3 py-3 transition hover:border-slate-600 hover:bg-slate-800/30 sm:flex-row sm:items-center sm:px-4"
+          class="flex min-h-[3.95rem] flex-col gap-3 rounded-lg border border-base-content/20 bg-base-100 px-3 py-3 transition hover:border-base-content/30 hover:bg-base-300/30 sm:flex-row sm:items-center sm:px-4"
         >
           <div class="flex min-w-0 items-center gap-3">
-            <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-800/70 text-amber-400">
+            <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-base-300/70 text-warning">
               <CookieSolid class="h-4.5 w-4.5" />
             </span>
             <div class="min-w-0">
               <div class="flex min-w-0 flex-wrap items-center gap-2">
-                <h3 class="truncate text-sm font-semibold text-slate-100">
+                <h3 class="truncate text-sm font-semibold text-base-content">
                   {profile.displayName || profile.profileKey}
                 </h3>
-                <span class="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-400">
+                <span class="rounded-full bg-base-300 px-2 py-0.5 text-[10px] font-semibold text-base-content/60">
                   {profile.profileKey}
                 </span>
                 {#if profile.site}
-                  <Badge rounded color="gray" class="bg-slate-800! px-2! py-0.5! text-[10px]! text-slate-400!">
+                  <span class="badge badge-sm badge-ghost rounded-full text-[10px]">
                     {profile.site}
-                  </Badge>
+                  </span>
                 {/if}
               </div>
-              <p class="mt-0.5 truncate text-xs text-slate-400">
+              <p class="mt-0.5 truncate text-xs text-base-content/60">
                 Updated {formatDate(profile.lastUpdated ?? profile.createdAt)}
               </p>
             </div>
@@ -221,7 +216,7 @@
           <div class="flex shrink-0 gap-2 sm:ml-auto">
             <button
               type="button"
-              class="inline-flex h-10 min-w-24 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-900/70 px-3 text-xs font-semibold text-slate-200 transition hover:border-blue-500/60 hover:bg-blue-500/10 hover:text-blue-200"
+              class="inline-flex h-10 min-w-24 items-center justify-center gap-2 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary"
               aria-label={`Replace cookies for ${profile.profileKey}`}
               onclick={() => openReplaceForm(profile)}
             >
@@ -230,7 +225,7 @@
             </button>
             <button
               type="button"
-              class="inline-flex h-10 min-w-10 items-center justify-center rounded-lg border border-slate-700 bg-slate-900/70 px-3 text-slate-300 transition hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-200"
+              class="inline-flex h-10 min-w-10 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-base-content/80 transition hover:border-error/60 hover:bg-error/10 hover:text-error"
               title="Delete cookie profile"
               aria-label={`Delete cookie profile ${profile.profileKey}`}
               onclick={() => requestDelete(profile)}
@@ -244,14 +239,14 @@
   {/if}
 
   {#if formOpen}
-    <form onsubmit={save} class="mt-5 space-y-5 rounded-xl border border-slate-800/80 bg-slate-950/30 p-4 sm:p-5">
-      <h3 class="text-sm font-bold text-slate-100">
+    <form onsubmit={save} class="mt-5 space-y-5 rounded-xl border border-base-300/80 bg-base-200/30 p-4 sm:p-5">
+      <h3 class="text-sm font-bold text-base-content">
         {formIsUpdate ? `Replace cookies for "${formKey}"` : 'New cookie profile'}
       </h3>
 
       {#if formError}
         <div
-          class="flex items-start gap-2 rounded-xl border border-red-900/60 bg-red-950/35 p-3 text-sm text-red-300"
+          class="flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
           role="alert"
         >
           <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
@@ -261,76 +256,50 @@
 
       <div class="grid gap-5 sm:grid-cols-2">
         <div>
-          <Label for="cookie-profile-key" class="mb-2 text-sm font-medium text-slate-300">Profile key</Label>
-          <Input
-            id="cookie-profile-key"
-            required
-            pattern={'[a-z0-9-]{2,100}'}
-            minlength={2}
-            maxlength={100}
-            disabled={formIsUpdate}
-            bind:value={formKey}
-            placeholder="youtube-main"
-            class="{inputClass} disabled:opacity-60"
-          />
-          <p class="mt-1.5 text-xs text-slate-600">Lowercase letters, numbers, and hyphens.</p>
+          <label class="label mb-2 text-sm" for="cookie-profile-key">Profile key</label>
+          <input class="input w-full" id="cookie-profile-key" required
+             pattern={'[a-z0-9-]{2,100}'} minlength={2} maxlength={100} disabled={formIsUpdate} bind:value={formKey} placeholder="youtube-main" />
+          <p class="mt-1.5 text-xs text-base-content/40">Lowercase letters, numbers, and hyphens.</p>
         </div>
         <div>
-          <Label for="cookie-display-name" class="mb-2 text-sm font-medium text-slate-300">Display name (optional)</Label>
-          <Input
-            id="cookie-display-name"
-            maxlength={255}
-            bind:value={formDisplayName}
-            placeholder="YouTube main account"
-            class={inputClass}
-          />
+          <label class="label mb-2 text-sm" for="cookie-display-name">Display name (optional)</label>
+          <input class="input w-full" id="cookie-display-name" maxlength={255} bind:value={formDisplayName} placeholder="YouTube main account" />
         </div>
       </div>
 
       <div>
-        <Label for="cookie-site" class="mb-2 text-sm font-medium text-slate-300">Site (optional)</Label>
-        <Input id="cookie-site" maxlength={255} bind:value={formSite} placeholder="youtube.com" class={inputClass} />
+        <label class="label mb-2 text-sm" for="cookie-site">Site (optional)</label>
+        <input class="input w-full" id="cookie-site" maxlength={255} bind:value={formSite} placeholder="youtube.com" />
       </div>
 
       <div>
         <div class="mb-2 flex items-center justify-between">
-          <Label for="cookie-content" class="text-sm font-medium text-slate-300">Cookie content</Label>
+          <label class="label text-sm" for="cookie-content">Cookie content</label>
           <label
-            class="cursor-pointer rounded-lg border border-slate-700 px-2.5 py-1 text-[11px] font-semibold text-slate-300 transition hover:border-slate-600 hover:bg-slate-800"
+            class="cursor-pointer rounded-lg border border-base-content/20 px-2.5 py-1 text-[11px] font-semibold text-base-content/80 transition hover:border-base-content/30 hover:bg-base-300"
           >
             Import cookies.txt
             <input type="file" accept=".txt,text/plain" class="hidden" onchange={importFile} />
           </label>
         </div>
-        <Textarea
-          id="cookie-content"
-          required
-          rows={8}
-          bind:value={formContent}
-          placeholder={'# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t...'}
-          class="{inputClass} font-mono text-xs!"
-        />
-        <p class="mt-1.5 text-xs text-slate-600">
+        <textarea class="textarea w-full font-mono text-xs" id="cookie-content" required
+           rows={8} bind:value={formContent} placeholder={'# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t...'}></textarea>
+        <p class="mt-1.5 text-xs text-base-content/40">
           Paste the Netscape-format export (e.g. from a "Get cookies.txt" browser extension). It is stored write-only
           and never shown again.
         </p>
       </div>
 
       <div class="flex flex-wrap justify-end gap-2">
-        <Button color="dark" class={outlineButtonClass} disabled={formBusy} onclick={() => (formOpen = false)}>
+        <button class="btn btn-sm btn-neutral" disabled={formBusy} onclick={() => (formOpen = false)}>
           Cancel
-        </Button>
-        <Button
-          type="submit"
-          color="blue"
-          class="border-0! px-4! py-2! text-xs! font-semibold! disabled:opacity-60"
-          disabled={formBusy || !formValid}
-        >
+        </button>
+        <button class="btn btn-sm btn-primary text-xs" type="submit" disabled={formBusy || !formValid}>
           {#if formBusy}
-            <Spinner size="4" class="mr-1.5" />
+            <span class="loading loading-spinner loading-xs mr-1.5"></span>
           {/if}
           {formIsUpdate ? 'Replace cookies' : 'Save cookie profile'}
-        </Button>
+        </button>
       </div>
     </form>
   {/if}

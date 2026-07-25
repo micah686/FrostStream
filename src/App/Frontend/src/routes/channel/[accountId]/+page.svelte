@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { onDestroy } from 'svelte';
-  import { Button, Select, Spinner } from 'flowbite-svelte';
+  import { Select } from '$lib/components/ui';
   import {
     ArrowUpRightFromSquareOutline,
     ChevronDownOutline,
@@ -487,7 +487,7 @@
 
 {#if loadError}
   <div
-    class="flex items-center gap-3 rounded-xl border border-red-900/60 bg-red-950/40 p-4 text-sm text-red-300"
+    class="flex items-center gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
     role="alert"
   >
     <ExclamationCircleOutline class="h-4 w-4 shrink-0" />
@@ -495,7 +495,7 @@
   </div>
 {:else if !account}
   <div class="mt-16 flex justify-center">
-    <Spinner size="8" />
+    <span class="loading loading-spinner loading-md"></span>
   </div>
 {:else}
   <section aria-labelledby="channel-title">
@@ -521,7 +521,7 @@
 
     <div class="mt-4 flex flex-col gap-5 px-1 sm:mt-5 sm:flex-row sm:items-start sm:gap-6">
       <span
-        class={`relative -mt-14 grid h-28 w-28 shrink-0 place-items-center overflow-hidden rounded-full border-4 border-slate-950 bg-gradient-to-br text-3xl font-bold text-white sm:-mt-16 sm:h-36 sm:w-36 sm:text-4xl ${accentFor(account.accountName)} shadow-xl shadow-black/30`}
+        class={`relative -mt-14 grid h-28 w-28 shrink-0 place-items-center overflow-hidden rounded-full border-4 border-base-300 bg-gradient-to-br text-3xl font-bold text-white sm:-mt-16 sm:h-36 sm:w-36 sm:text-4xl ${accentFor(account.accountName)} shadow-xl shadow-black/30`}
       >
         {initialsFor(account.accountName)}
         {#if avatarUrl}
@@ -537,25 +537,25 @@
 
       <div class="min-w-0 flex-1">
         <div class="flex flex-wrap items-center gap-2">
-          <h1 id="channel-title" class="text-2xl font-bold tracking-tight text-white sm:text-3xl">
+          <h1 id="channel-title" class="text-2xl font-bold tracking-tight text-base-content sm:text-3xl">
             {account.accountName}
           </h1>
           {#if account.isVerified}
-            <span class="text-lg text-blue-400" title="Verified">✓</span>
+            <span class="text-lg text-primary" title="Verified">✓</span>
           {/if}
           <span
-            class="rounded-md bg-slate-800/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400"
+            class="rounded-md bg-base-300/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-base-content/60"
           >
             {account.platform}
           </span>
         </div>
-        <p class="mt-1 text-sm text-slate-500">@{account.accountHandle}</p>
-        <p class="mt-1.5 text-sm text-slate-400">{statLine(account)}</p>
+        <p class="mt-1 text-sm text-base-content/50">@{account.accountHandle}</p>
+        <p class="mt-1.5 text-sm text-base-content/60">{statLine(account)}</p>
 
         {#if account.description}
           <p
             class={[
-              'mt-3 max-w-3xl whitespace-pre-line text-sm leading-6 text-slate-400',
+              'mt-3 max-w-3xl whitespace-pre-line text-sm leading-6 text-base-content/60',
               !descriptionExpanded && 'line-clamp-2'
             ]}
           >
@@ -564,7 +564,7 @@
           <button
             type="button"
             onclick={() => (descriptionExpanded = !descriptionExpanded)}
-            class="mt-1.5 flex items-center gap-1 text-xs font-semibold text-slate-500 transition hover:text-slate-300"
+            class="mt-1.5 flex items-center gap-1 text-xs font-semibold text-base-content/50 transition hover:text-base-content/80"
           >
             {descriptionExpanded ? 'Show less' : 'Show more'}
             {#if descriptionExpanded}
@@ -592,113 +592,76 @@
 
       <div class="flex shrink-0 flex-col gap-2 sm:items-end">
         {#if account.accountUrl}
-          <Button
-            href={account.accountUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            color="dark"
-            class="border-slate-700! bg-slate-900! px-4! py-2! text-xs! font-semibold! text-slate-200! hover:bg-slate-800!"
-          >
+          <a class="btn btn-sm btn-neutral text-xs" href={account.accountUrl} target="_blank" rel="noopener noreferrer">
             <ArrowUpRightFromSquareOutline class="mr-1.5 h-3.5 w-3.5" />
             View on {account.platform}
-          </Button>
+          </a>
         {/if}
-        <Button
-          color="dark"
-          disabled={assetRefreshBusy}
-          onclick={(event: MouseEvent) => refreshAssets(event.shiftKey)}
-          title="Queue a refresh of the avatar and banner (hold Shift to force re-download)"
-          class="border-slate-700! bg-slate-900! px-4! py-2! text-xs! font-semibold! text-slate-200! hover:bg-slate-800! disabled:opacity-40"
-        >
+        <button class="btn btn-sm btn-neutral text-xs" disabled={assetRefreshBusy} onclick={(event: MouseEvent) => refreshAssets(event.shiftKey)} title="Queue a refresh of the avatar and banner (hold Shift to force re-download)">
           {#if assetRefreshBusy}
-            <Spinner size="4" class="mr-1.5" />
+            <span class="loading loading-spinner loading-xs mr-1.5"></span>
           {:else}
             <ImageOutline class="mr-1.5 h-3.5 w-3.5" />
           {/if}
           Refresh assets
-        </Button>
-        <Button
-          color="dark"
-          disabled={channelAudioBusy || channelAudioLoading}
-          onclick={encodeAudio}
-          class="border-slate-700! bg-slate-900! px-4! py-2! text-xs! font-semibold! text-slate-200! hover:bg-slate-800! disabled:opacity-40"
-        >
+        </button>
+        <button class="btn btn-sm btn-neutral text-xs" disabled={channelAudioBusy || channelAudioLoading} onclick={encodeAudio}>
           {#if channelAudioBusy}
-            <Spinner size="4" class="mr-1.5" />
+            <span class="loading loading-spinner loading-xs mr-1.5"></span>
           {:else}
             <MusicOutline class="mr-1.5 h-3.5 w-3.5" />
           {/if}
           Encode as audio
-        </Button>
+        </button>
         {#if channelAudio && channelAudio.availableStorageKeys.length > 0}
-          <Select
-            items={[
-              { value: '', name: 'All storage keys' },
+          <Select items={[
+ { value: '', name: 'All storage keys' },
               ...channelAudio.availableStorageKeys.map((key) => ({ value: key, name: key }))
-            ]}
-            bind:value={selectedStorageKey}
-            onchange={changeAudioStorageKey}
-            disabled={channelAudioBusy || channelAudioLoading}
-            aria-label="Storage key to encode"
-            title="Scope encoding to a single storage key, or encode across all of them"
-            class="w-40! border-slate-700! bg-slate-900! text-xs! text-slate-200! focus:border-blue-500! focus:ring-blue-500!"
-          />
+            ]} bind:value={selectedStorageKey} onchange={changeAudioStorageKey} disabled={channelAudioBusy || channelAudioLoading} aria-label="Storage key to encode" title="Scope encoding to a single storage key, or encode across all of them" class="w-40 text-xs" />
         {/if}
-        <Button
-          color="dark"
-          disabled={!audioComplete}
-          onclick={playAudio}
-          title={audioComplete ? 'Play every archived video as Opus audio' : 'Encode every item before starting the complete channel playlist'}
-          class="border-slate-700! bg-slate-900! px-4! py-2! text-xs! font-semibold! text-slate-200! hover:bg-slate-800! disabled:opacity-40"
-        >
+        <button class="btn btn-sm btn-neutral text-xs" disabled={!audioComplete} onclick={playAudio} title={audioComplete ? 'Play every archived video as Opus audio' : 'Encode every item before starting the complete channel playlist'}>
           <HeadphonesOutline class="mr-1.5 h-3.5 w-3.5" />
           Play as audio
-        </Button>
-        <Button
-          color="dark"
-          disabled={podcastBusy}
-          onclick={copyPodcastFeed}
-          title="Create and copy a channel-scoped podcast subscription URL"
-          class="border-slate-700! bg-slate-900! px-4! py-2! text-xs! font-semibold! text-slate-200! hover:bg-slate-800! disabled:opacity-40"
-        >
+        </button>
+        <button class="btn btn-sm btn-neutral text-xs" disabled={podcastBusy} onclick={copyPodcastFeed} title="Create and copy a channel-scoped podcast subscription URL">
           {#if podcastBusy}
-            <Spinner size="4" class="mr-1.5" />
+            <span class="loading loading-spinner loading-xs mr-1.5"></span>
           {:else}
             <FileCopyOutline class="mr-1.5 h-3.5 w-3.5" />
           {/if}
           Copy podcast RSS
-        </Button>
+        </button>
         {#if channelAudio && channelAudio.totalCount > 0}
           <div class="w-full max-w-60" aria-label={`Audio encoding ${audioProgress}% complete`}>
-            <div class="flex justify-between gap-3 text-[11px] text-slate-500">
+            <div class="flex justify-between gap-3 text-[11px] text-base-content/50">
               <span>{channelAudio.readyCount.toLocaleString()} / {channelAudio.totalCount.toLocaleString()} encoded</span>
               <span>{audioProgress}%</span>
             </div>
-            <div class="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-800">
-              <div class="h-full rounded-full bg-emerald-500 transition-all" style={`width: ${audioProgress}%`}></div>
+            <div class="mt-1 h-1.5 overflow-hidden rounded-full bg-base-300">
+              <div class="h-full rounded-full bg-success transition-all" style={`width: ${audioProgress}%`}></div>
             </div>
             {#if channelAudio.processingCount || channelAudio.pendingCount}
-              <p class="mt-1 text-[11px] text-slate-600">
+              <p class="mt-1 text-[11px] text-base-content/40">
                 {channelAudio.processingCount} processing · {channelAudio.pendingCount} queued
               </p>
               {#each Object.values(liveRenditionProgress) as frame (frame.renditionId)}
-                <p class="mt-0.5 truncate text-[11px] text-slate-500" title={renditionItemTitle(frame)}>
+                <p class="mt-0.5 truncate text-[11px] text-base-content/50" title={renditionItemTitle(frame)}>
                   {renditionItemTitle(frame)} — {renditionProgressLine(frame)}
                 </p>
               {/each}
             {:else if channelAudio.failedCount}
-              <p class="mt-1 text-[11px] text-red-400">{channelAudio.failedCount} failed · Encode as audio retries them</p>
+              <p class="mt-1 text-[11px] text-error">{channelAudio.failedCount} failed · Encode as audio retries them</p>
             {/if}
           </div>
         {/if}
         {#if assetRefreshNotice}
-          <p class="max-w-60 text-xs text-slate-500 sm:text-right">{assetRefreshNotice}</p>
+          <p class="max-w-60 text-xs text-base-content/50 sm:text-right">{assetRefreshNotice}</p>
         {/if}
         {#if channelAudioNotice}
-          <p class="max-w-60 text-xs text-slate-500 sm:text-right">{channelAudioNotice}</p>
+          <p class="max-w-60 text-xs text-base-content/50 sm:text-right">{channelAudioNotice}</p>
         {/if}
         {#if podcastFeedUrl}
-          <a class="max-w-60 truncate text-xs text-blue-400 hover:text-blue-300" href={podcastFeedUrl} target="_blank" rel="noopener noreferrer">
+          <a class="max-w-60 truncate text-xs text-primary hover:text-primary" href={podcastFeedUrl} target="_blank" rel="noopener noreferrer">
             Open RSS feed
           </a>
         {/if}
@@ -706,13 +669,13 @@
     </div>
 
     {#if audioPlayerOpen && currentAudioItem}
-      <section class="mt-6 border-y border-slate-800/80 bg-slate-900/35 px-4 py-4" aria-labelledby="channel-audio-player-title">
+      <section class="mt-6 border-y border-base-300/80 bg-base-200/35 px-4 py-4" aria-labelledby="channel-audio-player-title">
         <div class="mx-auto flex max-w-4xl flex-col gap-3 sm:flex-row sm:items-center">
           <div class="min-w-0 flex-1">
-            <p class="text-[11px] font-semibold uppercase tracking-wide text-emerald-400">
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-success">
               Channel audio · {audioIndex + 1} of {readyAudioItems.length}
             </p>
-            <h2 id="channel-audio-player-title" class="mt-1 truncate text-sm font-semibold text-slate-100">
+            <h2 id="channel-audio-player-title" class="mt-1 truncate text-sm font-semibold text-base-content">
               {currentAudioItem.title}
             </h2>
           </div>
@@ -732,48 +695,35 @@
       </section>
     {/if}
 
-    <div class="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-slate-800/70 pt-5">
+    <div class="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-base-300/70 pt-5">
       <div class="min-w-0">
-        <p class="text-sm text-slate-500">
+        <p class="text-sm text-base-content/50">
           {mediaLoading ? 'Loading…' : `${totalCount} ${totalCount === 1 ? 'video' : 'videos'} on the server`}
         </p>
         {#if statistics}
-          <p class="mt-1 text-xs text-slate-600">
+          <p class="mt-1 text-xs text-base-content/40">
             {percent(statistics.summary.downloadedPercent)} downloaded · {formatBytes(statistics.summary.totalBytes)}
           </p>
         {:else if statisticsLoading}
-          <p class="mt-1 text-xs text-slate-600">Loading channel statistics…</p>
+          <p class="mt-1 text-xs text-base-content/40">Loading channel statistics…</p>
         {:else if statisticsError}
-          <p class="mt-1 text-xs text-red-400">Channel statistics unavailable</p>
+          <p class="mt-1 text-xs text-error">Channel statistics unavailable</p>
         {/if}
       </div>
       <div class="flex flex-wrap items-center gap-2">
         {#if statistics || statisticsLoading || statisticsError}
-          <Button
-            color="dark"
-            disabled={statisticsLoading && !statistics}
-            aria-expanded={statisticsExpanded}
-            aria-controls="channel-statistics-panel"
-            onclick={() => (statisticsExpanded = !statisticsExpanded)}
-            class="border-slate-700! bg-slate-900! px-3! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800! disabled:opacity-40"
-          >
+          <button class="btn btn-sm btn-neutral text-xs" disabled={statisticsLoading && !statistics} aria-expanded={statisticsExpanded} aria-controls="channel-statistics-panel" onclick={() => (statisticsExpanded = !statisticsExpanded)}>
             {#if statisticsLoading && !statistics}
-              <Spinner size="4" class="mr-1.5" />
+              <span class="loading loading-spinner loading-xs mr-1.5"></span>
             {:else if statisticsExpanded}
               <ChevronUpOutline class="mr-1 h-3.5 w-3.5" />
             {:else}
               <ChevronDownOutline class="mr-1 h-3.5 w-3.5" />
             {/if}
             Statistics
-          </Button>
+          </button>
         {/if}
-        <Select
-          items={sortOptions}
-          bind:value={sort}
-          onchange={changeSort}
-          aria-label="Sort videos"
-          class="w-48! border-slate-800! bg-slate-900/80! text-sm! text-slate-300! focus:border-blue-500! focus:ring-blue-500!"
-        />
+        <Select items={sortOptions} bind:value={sort} onchange={changeSort} aria-label="Sort videos" class="w-48 text-sm" />
       </div>
     </div>
 
@@ -781,50 +731,50 @@
       {#if statisticsError}
         <div
           id="channel-statistics-panel"
-          class="mt-4 flex items-center gap-3 rounded-xl border border-red-900/60 bg-red-950/40 p-4 text-sm text-red-300"
+          class="mt-4 flex items-center gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
           role="alert"
         >
           <ExclamationCircleOutline class="h-4 w-4 shrink-0" />
           <span>{statisticsError}</span>
         </div>
       {:else if statistics}
-        <section id="channel-statistics-panel" class="mt-4 rounded-2xl border border-slate-800/80 bg-slate-900/35 p-5" aria-labelledby="channel-statistics-title">
+        <section id="channel-statistics-panel" class="mt-4 rounded-2xl border border-base-300/80 bg-base-200/35 p-5" aria-labelledby="channel-statistics-title">
         <div class="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 id="channel-statistics-title" class="text-base font-bold text-slate-100">Channel statistics</h2>
-            <p class="mt-1 text-sm text-slate-500">
+            <h2 id="channel-statistics-title" class="text-base font-bold text-base-content">Channel statistics</h2>
+            <p class="mt-1 text-sm text-base-content/50">
               {statistics.summary.downloadedCount.toLocaleString()} of {statistics.summary.availableCount.toLocaleString()} available items downloaded
             </p>
           </div>
-          <p class="text-sm font-semibold text-blue-300">{percent(statistics.summary.downloadedPercent)} coverage</p>
+          <p class="text-sm font-semibold text-primary">{percent(statistics.summary.downloadedPercent)} coverage</p>
         </div>
 
         <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <article class="rounded-xl border border-slate-800/80 bg-slate-950/30 p-4">
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Downloaded</p>
-            <p class="mt-3 text-3xl font-bold text-white">{statistics.summary.downloadedCount.toLocaleString()}</p>
-            <p class="mt-1 text-xs text-slate-500">{formatDuration(statistics.summary.downloadedDurationSeconds) ?? 'no duration'} archived</p>
+          <article class="rounded-xl border border-base-300/80 bg-base-200/30 p-4">
+            <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50">Downloaded</p>
+            <p class="mt-3 text-3xl font-bold text-base-content">{statistics.summary.downloadedCount.toLocaleString()}</p>
+            <p class="mt-1 text-xs text-base-content/50">{formatDuration(statistics.summary.downloadedDurationSeconds) ?? 'no duration'} archived</p>
           </article>
-          <article class="rounded-xl border border-slate-800/80 bg-slate-950/30 p-4">
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Available</p>
-            <p class="mt-3 text-3xl font-bold text-white">{statistics.summary.availableCount.toLocaleString()}</p>
-            <p class="mt-1 text-xs text-slate-500">{formatDuration(statistics.summary.totalDurationSeconds) ?? 'no duration'} discovered</p>
+          <article class="rounded-xl border border-base-300/80 bg-base-200/30 p-4">
+            <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50">Available</p>
+            <p class="mt-3 text-3xl font-bold text-base-content">{statistics.summary.availableCount.toLocaleString()}</p>
+            <p class="mt-1 text-xs text-base-content/50">{formatDuration(statistics.summary.totalDurationSeconds) ?? 'no duration'} discovered</p>
           </article>
-          <article class="rounded-xl border border-slate-800/80 bg-slate-950/30 p-4">
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Storage</p>
-            <p class="mt-3 text-3xl font-bold text-white">{formatBytes(statistics.summary.totalBytes)}</p>
-            <p class="mt-1 text-xs text-slate-500">downloaded bytes</p>
+          <article class="rounded-xl border border-base-300/80 bg-base-200/30 p-4">
+            <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50">Storage</p>
+            <p class="mt-3 text-3xl font-bold text-base-content">{formatBytes(statistics.summary.totalBytes)}</p>
+            <p class="mt-1 text-xs text-base-content/50">downloaded bytes</p>
           </article>
-          <article class="rounded-xl border border-slate-800/80 bg-slate-950/30 p-4">
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Last scan</p>
-            <p class="mt-3 text-3xl font-bold text-white">{formatRelativeDate(statistics.summary.lastSuccessfulScanAt) ?? '-'}</p>
-            <p class="mt-1 text-xs text-slate-500">successful discovery scan</p>
+          <article class="rounded-xl border border-base-300/80 bg-base-200/30 p-4">
+            <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50">Last scan</p>
+            <p class="mt-3 text-3xl font-bold text-base-content">{formatRelativeDate(statistics.summary.lastSuccessfulScanAt) ?? '-'}</p>
+            <p class="mt-1 text-xs text-base-content/50">successful discovery scan</p>
           </article>
         </div>
 
         <div class="mt-5 grid gap-5 xl:grid-cols-3">
-          <section class="rounded-xl border border-slate-800/80 bg-slate-950/25 p-4" aria-labelledby="channel-status-title">
-            <h3 id="channel-status-title" class="text-sm font-bold text-slate-200">Discovery status</h3>
+          <section class="rounded-xl border border-base-300/80 bg-base-200/25 p-4" aria-labelledby="channel-status-title">
+            <h3 id="channel-status-title" class="text-sm font-bold text-base-content/90">Discovery status</h3>
             <div class="mt-4 grid gap-2">
               {#each [
                 { label: 'Available', value: statistics.summary.availableCount },
@@ -835,47 +785,47 @@
                 {@const total = Math.max(statusTotal(statistics), 1)}
                 <div>
                   <div class="flex justify-between gap-3 text-xs">
-                    <span class="font-semibold text-slate-300">{item.label}</span>
-                    <span class="text-slate-500">{item.value.toLocaleString()}</span>
+                    <span class="font-semibold text-base-content/80">{item.label}</span>
+                    <span class="text-base-content/50">{item.value.toLocaleString()}</span>
                   </div>
-                  <div class="mt-1 h-2 overflow-hidden rounded-full bg-slate-800">
-                    <div class="h-full rounded-full bg-blue-500" style={`width: ${Math.max(3, (item.value / total) * 100)}%`}></div>
+                  <div class="mt-1 h-2 overflow-hidden rounded-full bg-base-300">
+                    <div class="h-full rounded-full bg-primary" style={`width: ${Math.max(3, (item.value / total) * 100)}%`}></div>
                   </div>
                 </div>
               {/each}
             </div>
           </section>
 
-          <section class="rounded-xl border border-slate-800/80 bg-slate-950/25 p-4" aria-labelledby="channel-media-types-title">
-            <h3 id="channel-media-types-title" class="text-sm font-bold text-slate-200">Media types</h3>
+          <section class="rounded-xl border border-base-300/80 bg-base-200/25 p-4" aria-labelledby="channel-media-types-title">
+            <h3 id="channel-media-types-title" class="text-sm font-bold text-base-content/90">Media types</h3>
             <div class="mt-4 space-y-3">
               {#each statistics.mediaTypes as item (item.type)}
                 {@const maxCount = Math.max(...statistics.mediaTypes.map((type) => type.count), 1)}
                 <div>
                   <div class="flex justify-between gap-3 text-xs">
-                    <span class="font-semibold text-slate-300">{item.type || 'Unknown'}</span>
-                    <span class="text-slate-500">{item.count.toLocaleString()} · {formatBytes(item.bytes)}</span>
+                    <span class="font-semibold text-base-content/80">{item.type || 'Unknown'}</span>
+                    <span class="text-base-content/50">{item.count.toLocaleString()} · {formatBytes(item.bytes)}</span>
                   </div>
-                  <div class="mt-1 h-2 overflow-hidden rounded-full bg-slate-800">
-                    <div class="h-full rounded-full bg-emerald-500" style={`width: ${Math.max(3, (item.count / maxCount) * 100)}%`}></div>
+                  <div class="mt-1 h-2 overflow-hidden rounded-full bg-base-300">
+                    <div class="h-full rounded-full bg-success" style={`width: ${Math.max(3, (item.count / maxCount) * 100)}%`}></div>
                   </div>
                 </div>
               {:else}
-                <p class="text-sm text-slate-500">No media type statistics yet.</p>
+                <p class="text-sm text-base-content/50">No media type statistics yet.</p>
               {/each}
             </div>
           </section>
 
-          <section class="rounded-xl border border-slate-800/80 bg-slate-950/25 p-4" aria-labelledby="channel-download-states-title">
-            <h3 id="channel-download-states-title" class="text-sm font-bold text-slate-200">Recent download states</h3>
+          <section class="rounded-xl border border-base-300/80 bg-base-200/25 p-4" aria-labelledby="channel-download-states-title">
+            <h3 id="channel-download-states-title" class="text-sm font-bold text-base-content/90">Recent download states</h3>
             <div class="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
               {#each statistics.recentDownloadStates as state (state.state)}
-                <div class="rounded-lg border border-slate-800/70 bg-slate-900/45 p-3">
-                  <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{state.state}</p>
-                  <p class="mt-2 text-xl font-bold text-white">{state.count.toLocaleString()}</p>
+                <div class="rounded-lg border border-base-300/70 bg-base-200/45 p-3">
+                  <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50">{state.state}</p>
+                  <p class="mt-2 text-xl font-bold text-base-content">{state.count.toLocaleString()}</p>
                 </div>
               {:else}
-                <p class="text-sm text-slate-500">No recent download states yet.</p>
+                <p class="text-sm text-base-content/50">No recent download states yet.</p>
               {/each}
             </div>
           </section>
@@ -886,7 +836,7 @@
 
     {#if mediaError}
       <div
-        class="mt-6 flex items-center gap-3 rounded-xl border border-red-900/60 bg-red-950/40 p-4 text-sm text-red-300"
+        class="mt-6 flex items-center gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
         role="alert"
       >
         <ExclamationCircleOutline class="h-4 w-4 shrink-0" />
@@ -894,13 +844,13 @@
       </div>
     {:else if mediaLoading}
       <div class="mt-16 flex justify-center">
-        <Spinner size="8" />
+        <span class="loading loading-spinner loading-md"></span>
       </div>
     {:else if items.length === 0}
-      <div class="mt-10 rounded-2xl border border-slate-800/80 bg-slate-900/40 p-10 text-center">
-        <RectangleListOutline class="mx-auto h-10 w-10 text-slate-700" />
-        <p class="mt-4 text-sm font-semibold text-slate-300">No videos archived yet</p>
-        <p class="mt-1 text-sm text-slate-500">
+      <div class="mt-10 rounded-2xl border border-base-300/80 bg-base-200/40 p-10 text-center">
+        <RectangleListOutline class="mx-auto h-10 w-10 text-base-content/30" />
+        <p class="mt-4 text-sm font-semibold text-base-content/80">No videos archived yet</p>
+        <p class="mt-1 text-sm text-base-content/50">
           Nothing from this creator has been downloaded to the server so far.
         </p>
       </div>
@@ -936,46 +886,36 @@
                 </span>
               {/if}
               <span
-                class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-white/95 text-slate-950 opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
+                class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-white/95 text-base-100 opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
               >
                 <PlaySolid class="ml-0.5 h-5 w-5" />
               </span>
             </a>
             <div class="mt-3 min-w-0 px-1">
-              <h3 class="line-clamp-2 text-sm font-semibold leading-snug text-slate-200">
+              <h3 class="line-clamp-2 text-sm font-semibold leading-snug text-base-content/90">
                 {card.title}
               </h3>
               {#if cardMeta(card)}
-                <p class="mt-1 truncate text-xs text-slate-600">{cardMeta(card)}</p>
+                <p class="mt-1 truncate text-xs text-base-content/40">{cardMeta(card)}</p>
               {/if}
             </div>
           </article>
         {/each}
       </div>
 
-      <div class="mt-8 flex items-center justify-between border-t border-slate-800/70 pt-5">
-        <p class="text-xs text-slate-600">
+      <div class="mt-8 flex items-center justify-between border-t border-base-300/70 pt-5">
+        <p class="text-xs text-base-content/40">
           Page {mediaPage} of {totalPages}
         </p>
         <div class="flex gap-2">
-          <Button
-            color="dark"
-            disabled={mediaPage <= 1 || mediaLoading}
-            onclick={() => loadMedia(accountId, mediaPage - 1)}
-            class="border-slate-700! bg-slate-900! px-3! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800! disabled:opacity-40"
-          >
+          <button class="btn btn-sm btn-neutral text-xs" disabled={mediaPage <= 1 || mediaLoading} onclick={() => loadMedia(accountId, mediaPage - 1)}>
             <ChevronLeftOutline class="mr-1 h-3.5 w-3.5" />
             Previous
-          </Button>
-          <Button
-            color="dark"
-            disabled={!hasMore || mediaLoading}
-            onclick={() => loadMedia(accountId, mediaPage + 1)}
-            class="border-slate-700! bg-slate-900! px-3! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800! disabled:opacity-40"
-          >
+          </button>
+          <button class="btn btn-sm btn-neutral text-xs" disabled={!hasMore || mediaLoading} onclick={() => loadMedia(accountId, mediaPage + 1)}>
             Next
             <ChevronRightOutline class="ml-1 h-3.5 w-3.5" />
-          </Button>
+          </button>
         </div>
       </div>
     {/if}

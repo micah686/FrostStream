@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { page as pageState } from '$app/state';
-  import { Button, Select, Spinner } from 'flowbite-svelte';
+  import { Select } from '$lib/components/ui';
   import {
     ChevronLeftOutline,
     ChevronRightOutline,
@@ -184,17 +184,17 @@
 <section aria-labelledby="search-title">
   <div class="flex flex-wrap items-start justify-between gap-4">
     <div class="min-w-0">
-      <h1 id="search-title" class="text-2xl font-bold tracking-tight text-white">
+      <h1 id="search-title" class="text-2xl font-bold tracking-tight text-base-content">
         {similarGuid ? 'Similar videos' : query ? `Results for "${query}"` : 'Search'}
       </h1>
-      <p class="mt-1 text-sm text-slate-500">
+      <p class="mt-1 text-sm text-base-content/50">
         {#if similarGuid}
           {#if loading}
             Finding similar videos…
           {:else}
             {totalCount} {totalCount === 1 ? 'video' : 'videos'} similar to
             {#if similarSourceTitle}
-              <a href={`/watch/${similarGuid}`} class="text-slate-400 hover:text-slate-200 hover:underline">
+              <a href={`/watch/${similarGuid}`} class="text-base-content/60 hover:text-base-content/90 hover:underline">
                 "{similarSourceTitle}"
               </a>
             {:else}
@@ -203,9 +203,9 @@
           {/if}
         {:else if !query}
           Type in the search box above. Advanced syntax is supported, e.g.
-          <code class="rounded bg-slate-800/80 px-1.5 py-0.5 font-mono text-xs text-slate-400">channel:LinusTechTips codec:h264 after:2023 duration:&gt;600</code>
+          <code class="rounded bg-base-300/80 px-1.5 py-0.5 font-mono text-xs text-base-content/60">channel:LinusTechTips codec:h264 after:2023 duration:&gt;600</code>
           — or use the
-          <a href="/search/advanced" class="text-blue-400 hover:text-blue-300 hover:underline">advanced search builder</a>.
+          <a href="/search/advanced" class="text-primary hover:text-primary hover:underline">advanced search builder</a>.
         {:else if loading}
           Searching…
         {:else}
@@ -217,23 +217,17 @@
       <div class="flex shrink-0 items-center gap-3">
         <a
           href={`/search/advanced?q=${encodeURIComponent(query)}`}
-          class="text-xs font-medium text-slate-400 transition hover:text-slate-200 hover:underline"
+          class="text-xs font-medium text-base-content/60 transition hover:text-base-content/90 hover:underline"
         >
           Advanced
         </a>
-        <Select
-          items={sortOptions}
-          value={sort}
-          onchange={(event) => navigate({ sort: (event.currentTarget as HTMLSelectElement).value })}
-          aria-label="Sort results"
-          class="w-48! border-slate-800! bg-slate-900/80! text-sm! text-slate-300! focus:border-blue-500! focus:ring-blue-500!"
-        />
+        <Select items={sortOptions} value={sort} onchange={(event) => navigate({ sort: (event.currentTarget as HTMLSelectElement).value })} aria-label="Sort results" class="w-48 text-sm" />
       </div>
     {/if}
   </div>
 
   {#if query}
-    <nav class="mt-6 flex gap-6 border-b border-slate-800/70" aria-label="Search scope">
+    <nav class="mt-6 flex gap-6 border-b border-base-300/70" aria-label="Search scope">
       {#each scopes as item}
         <button
           type="button"
@@ -241,8 +235,8 @@
           class={[
             '-mb-px border-b-2 pb-2.5 text-sm font-medium transition',
             scope === item.value
-              ? 'border-blue-500 font-semibold text-white'
-              : 'border-transparent text-slate-500 hover:text-slate-300'
+              ? 'border-primary font-semibold text-base-content'
+              : 'border-transparent text-base-content/50 hover:text-base-content/80'
           ]}
           aria-current={scope === item.value ? 'page' : undefined}
         >
@@ -254,7 +248,7 @@
 
   {#if loadError}
     <div
-      class="mt-6 flex items-center gap-3 rounded-xl border border-red-900/60 bg-red-950/40 p-4 text-sm text-red-300"
+      class="mt-6 flex items-center gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
       role="alert"
     >
       <ExclamationCircleOutline class="h-4 w-4 shrink-0" />
@@ -262,25 +256,25 @@
     </div>
   {:else if loading}
     <div class="mt-16 flex justify-center">
-      <Spinner size="8" />
+      <span class="loading loading-spinner loading-md"></span>
     </div>
   {:else if similarGuid && hits.length === 0}
-    <div class="mt-10 rounded-2xl border border-slate-800/80 bg-slate-900/40 p-10 text-center">
-      <SearchOutline class="mx-auto h-10 w-10 text-slate-700" />
-      <p class="mt-4 text-sm font-semibold text-slate-300">No similar videos found</p>
-      <p class="mt-1 text-sm text-slate-500">
+    <div class="mt-10 rounded-2xl border border-base-300/80 bg-base-200/40 p-10 text-center">
+      <SearchOutline class="mx-auto h-10 w-10 text-base-content/30" />
+      <p class="mt-4 text-sm font-semibold text-base-content/80">No similar videos found</p>
+      <p class="mt-1 text-sm text-base-content/50">
         Nothing else on the server is close enough to this video yet.
       </p>
     </div>
   {:else if query && hits.length === 0}
-    <div class="mt-10 rounded-2xl border border-slate-800/80 bg-slate-900/40 p-10 text-center">
-      <SearchOutline class="mx-auto h-10 w-10 text-slate-700" />
-      <p class="mt-4 text-sm font-semibold text-slate-300">No results for "{query}"</p>
-      <p class="mt-1 text-sm text-slate-500">
+    <div class="mt-10 rounded-2xl border border-base-300/80 bg-base-200/40 p-10 text-center">
+      <SearchOutline class="mx-auto h-10 w-10 text-base-content/30" />
+      <p class="mt-4 text-sm font-semibold text-base-content/80">No results for "{query}"</p>
+      <p class="mt-1 text-sm text-base-content/50">
         Try different keywords, a broader scope, or advanced filters like
-        <code class="rounded bg-slate-800/80 px-1.5 py-0.5 font-mono text-xs">channel:</code>,
-        <code class="rounded bg-slate-800/80 px-1.5 py-0.5 font-mono text-xs">resolution:</code>, or
-        <code class="rounded bg-slate-800/80 px-1.5 py-0.5 font-mono text-xs">after:</code>.
+        <code class="rounded bg-base-300/80 px-1.5 py-0.5 font-mono text-xs">channel:</code>,
+        <code class="rounded bg-base-300/80 px-1.5 py-0.5 font-mono text-xs">resolution:</code>, or
+        <code class="rounded bg-base-300/80 px-1.5 py-0.5 font-mono text-xs">after:</code>.
       </p>
     </div>
   {:else if hits.length > 0}
@@ -306,7 +300,7 @@
               />
             {/if}
             <span
-              class="absolute left-3 top-3 rounded-md bg-black/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-300"
+              class="absolute left-3 top-3 rounded-md bg-black/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-base-content/80"
             >
               {hit.media.account.platform}
             </span>
@@ -318,7 +312,7 @@
               </span>
             {/if}
             <span
-              class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-white/95 text-slate-950 opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
+              class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-white/95 text-base-100 opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
             >
               <PlaySolid class="ml-0.5 h-5 w-5" />
             </span>
@@ -330,17 +324,17 @@
               {initialsFor(hit.media.account.accountName)}
             </span>
             <div class="min-w-0">
-              <h3 class="line-clamp-2 text-sm font-semibold leading-snug text-slate-200">
+              <h3 class="line-clamp-2 text-sm font-semibold leading-snug text-base-content/90">
                 {hit.media.title}
               </h3>
-              <p class="mt-1 truncate text-xs text-slate-500">{hit.media.account.accountName}</p>
+              <p class="mt-1 truncate text-xs text-base-content/50">{hit.media.account.accountName}</p>
               {#if metaLine(hit)}
-                <p class="mt-0.5 truncate text-xs text-slate-600">{metaLine(hit)}</p>
+                <p class="mt-0.5 truncate text-xs text-base-content/40">{metaLine(hit)}</p>
               {/if}
               {#if hit.matchedIn.length > 0 && !(hit.matchedIn.length === 1 && hit.matchedIn[0] === 'metadata')}
                 <div class="mt-1.5 flex flex-wrap gap-1">
                   {#each hit.matchedIn as match (match)}
-                    <span class="rounded-full bg-blue-500/12 px-2 py-0.5 text-[10px] font-semibold text-blue-300/90">
+                    <span class="rounded-full bg-primary/12 px-2 py-0.5 text-[10px] font-semibold text-primary">
                       {searchMatchLabel(match)}
                     </span>
                   {/each}
@@ -353,29 +347,19 @@
     </div>
 
     {#if !similarGuid}
-    <div class="mt-8 flex items-center justify-between border-t border-slate-800/70 pt-5">
-      <p class="text-xs text-slate-600">
+    <div class="mt-8 flex items-center justify-between border-t border-base-300/70 pt-5">
+      <p class="text-xs text-base-content/40">
         Page {currentPage} of {totalPages}
       </p>
       <div class="flex gap-2">
-        <Button
-          color="dark"
-          disabled={currentPage <= 1 || loading}
-          onclick={() => navigate({ page: currentPage - 1 })}
-          class="border-slate-700! bg-slate-900! px-3! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800! disabled:opacity-40"
-        >
+        <button class="btn btn-sm btn-neutral text-xs" disabled={currentPage <= 1 || loading} onclick={() => navigate({ page: currentPage - 1 })}>
           <ChevronLeftOutline class="mr-1 h-3.5 w-3.5" />
           Previous
-        </Button>
-        <Button
-          color="dark"
-          disabled={!hasMore || loading}
-          onclick={() => navigate({ page: currentPage + 1 })}
-          class="border-slate-700! bg-slate-900! px-3! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800! disabled:opacity-40"
-        >
+        </button>
+        <button class="btn btn-sm btn-neutral text-xs" disabled={!hasMore || loading} onclick={() => navigate({ page: currentPage + 1 })}>
           Next
           <ChevronRightOutline class="ml-1 h-3.5 w-3.5" />
-        </Button>
+        </button>
       </div>
     </div>
     {/if}

@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { Spinner } from 'flowbite-svelte';
   import { ExclamationCircleOutline, ListMusicOutline, PlaySolid } from 'flowbite-svelte-icons';
   import { accentFor, formatDuration } from '$lib/media';
   import { getUserPlaylist } from '$lib/api/userPlaylists';
@@ -133,17 +132,17 @@
 </script>
 
 <section
-  class="overflow-hidden rounded-2xl border border-slate-800 bg-[#151a26] shadow-xl shadow-black/20"
+  class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-xl shadow-black/20"
   aria-label="Playlist"
 >
-  <header class="border-b border-slate-800 px-4 py-3">
-    <p class="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.08em] text-slate-500">
+  <header class="border-b border-base-300 px-4 py-3">
+    <p class="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/50">
       <ListMusicOutline class="h-3.5 w-3.5" />
       {subtitle ?? 'Playlist'}
     </p>
-    <h2 class="mt-1 truncate text-sm font-bold text-white" {title}>{title}</h2>
+    <h2 class="mt-1 truncate text-sm font-bold text-base-content" {title}>{title}</h2>
     {#if !loading && !loadError}
-      <p class="mt-0.5 text-xs text-slate-500">
+      <p class="mt-0.5 text-xs text-base-content/50">
         {currentIndex >= 0 ? `${currentIndex + 1} / ${entries.length}` : `${entries.length} ${entries.length === 1 ? 'video' : 'videos'}`}
         {#if playableCount < entries.length}
           · {playableCount} available
@@ -154,15 +153,15 @@
 
   {#if loading}
     <div class="flex justify-center py-8">
-      <Spinner size="5" />
+      <span class="loading loading-spinner loading-sm"></span>
     </div>
   {:else if loadError}
-    <div class="flex items-start gap-2 p-4 text-sm text-red-300" role="alert">
+    <div class="flex items-start gap-2 p-4 text-sm text-error" role="alert">
       <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{loadError}</span>
     </div>
   {:else if entries.length === 0}
-    <p class="p-4 text-sm text-slate-500">This playlist is empty.</p>
+    <p class="p-4 text-sm text-base-content/50">This playlist is empty.</p>
   {:else}
     <ol bind:this={listElement} class="max-h-[26rem] overflow-y-auto py-1.5">
       {#each entries as entry, index (index)}
@@ -174,12 +173,12 @@
               aria-current={isCurrent ? 'page' : undefined}
               class={[
                 'flex items-center gap-2.5 px-3 py-2 transition',
-                isCurrent ? 'bg-blue-500/10' : 'hover:bg-slate-800/60'
+                isCurrent ? 'bg-primary/10' : 'hover:bg-base-300/60'
               ]}
             >
-              <span class="grid w-5 shrink-0 place-items-center font-mono text-[11px] text-slate-600">
+              <span class="grid w-5 shrink-0 place-items-center font-mono text-[11px] text-base-content/40">
                 {#if isCurrent}
-                  <PlaySolid class="h-3 w-3 text-blue-400" />
+                  <PlaySolid class="h-3 w-3 text-primary" />
                 {:else}
                   {index + 1}
                 {/if}
@@ -205,26 +204,26 @@
                 <span
                   class={[
                     'line-clamp-2 text-xs font-semibold leading-snug',
-                    isCurrent ? 'text-blue-300' : 'text-slate-200'
+                    isCurrent ? 'text-primary' : 'text-base-content/90'
                   ]}
                 >
                   {entry.title}
                 </span>
                 {#if entry.subtitle}
-                  <span class="mt-0.5 block truncate text-[11px] text-slate-500">{entry.subtitle}</span>
+                  <span class="mt-0.5 block truncate text-[11px] text-base-content/50">{entry.subtitle}</span>
                 {/if}
               </span>
             </a>
           {:else}
             <div class="flex items-center gap-2.5 px-3 py-2 opacity-50">
-              <span class="grid w-5 shrink-0 place-items-center font-mono text-[11px] text-slate-600">
+              <span class="grid w-5 shrink-0 place-items-center font-mono text-[11px] text-base-content/40">
                 {index + 1}
               </span>
-              <span class="relative block aspect-video w-20 shrink-0 overflow-hidden rounded-md bg-slate-800/70"></span>
+              <span class="relative block aspect-video w-20 shrink-0 overflow-hidden rounded-md bg-base-300/70"></span>
               <span class="min-w-0">
-                <span class="line-clamp-2 text-xs font-semibold leading-snug text-slate-400">{entry.title}</span>
+                <span class="line-clamp-2 text-xs font-semibold leading-snug text-base-content/60">{entry.title}</span>
                 {#if entry.subtitle}
-                  <span class="mt-0.5 block truncate text-[11px] text-slate-600">{entry.subtitle}</span>
+                  <span class="mt-0.5 block truncate text-[11px] text-base-content/40">{entry.subtitle}</span>
                 {/if}
               </span>
             </div>

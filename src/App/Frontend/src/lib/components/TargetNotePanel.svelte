@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { Button, Spinner, Textarea } from 'flowbite-svelte';
   import {
     CheckOutline,
     ChevronDownOutline,
@@ -30,8 +29,6 @@
     initialOpen = false
   }: Props = $props();
 
-  const fieldClass =
-    'border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!';
 
   let open = $state(false);
   let loadedTarget = $state('');
@@ -149,7 +146,7 @@
   }
 </script>
 
-<section class={embedded ? '' : 'rounded-xl border border-slate-800/80 bg-slate-900/35'} aria-label={`${targetLabel} note`}>
+<section class={embedded ? '' : 'rounded-xl border border-base-300/80 bg-base-200/35'} aria-label={`${targetLabel} note`}>
   {#if !embedded}
     <button
       type="button"
@@ -158,31 +155,31 @@
       onclick={toggleOpen}
     >
       <span class="flex min-w-0 items-center gap-2">
-        <EditOutline class={['h-4 w-4 shrink-0', hasNote ? 'text-blue-400' : 'text-slate-600']} />
-        <span class="truncate text-sm font-semibold text-slate-200">Note</span>
+        <EditOutline class={['h-4 w-4 shrink-0', hasNote ? 'text-primary' : 'text-base-content/40']} />
+        <span class="truncate text-sm font-semibold text-base-content/90">Note</span>
         {#if hasNote}
-          <span class="rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-semibold text-blue-300">Saved</span>
+          <span class="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">Saved</span>
         {/if}
       </span>
       {#if open}
-        <ChevronUpOutline class="h-4 w-4 text-slate-500" />
+        <ChevronUpOutline class="h-4 w-4 text-base-content/50" />
       {:else}
-        <ChevronDownOutline class="h-4 w-4 text-slate-500" />
+        <ChevronDownOutline class="h-4 w-4 text-base-content/50" />
       {/if}
     </button>
   {/if}
 
   {#if open || embedded}
-    <div class={embedded ? '' : 'border-t border-slate-800/70 px-4 py-4'}>
+    <div class={embedded ? '' : 'border-t border-base-300/70 px-4 py-4'}>
       {#if loading}
         <div class="flex justify-center py-4">
-          <Spinner size="5" />
+          <span class="loading loading-spinner loading-sm"></span>
         </div>
       {:else}
         <form class="space-y-3" onsubmit={submit}>
           {#if error}
             <div
-              class="flex items-start gap-2 rounded-lg border border-red-900/60 bg-red-950/35 p-3 text-sm text-red-300"
+              class="flex items-start gap-2 rounded-lg border border-error/30 bg-error/10 p-3 text-sm text-error"
               role="alert"
             >
               <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
@@ -190,42 +187,25 @@
             </div>
           {/if}
 
-          <Textarea
-            bind:value={draft}
-            rows={4}
-            maxlength={4096}
-            placeholder={`Add a private note for this ${targetLabel.toLowerCase()}`}
-            class={fieldClass}
-          />
+          <textarea class="textarea w-full" bind:value={draft} rows={4} maxlength={4096} placeholder={`Add a private note for this ${targetLabel.toLowerCase()}`}></textarea>
 
           <div class="flex flex-wrap items-center gap-2">
-            <Button
-              type="submit"
-              color="blue"
-              disabled={saving || deleting || (!dirty && hasNote)}
-              class="border-0! bg-blue-500! px-3! py-2! text-xs! font-semibold! hover:bg-blue-400! disabled:opacity-60"
-            >
+            <button class="btn btn-sm btn-primary text-xs" type="submit" disabled={saving || deleting || (!dirty && hasNote)}>
               {#if saving}
-                <Spinner size="4" class="mr-1.5" />
+                <span class="loading loading-spinner loading-xs mr-1.5"></span>
               {/if}
               Save note
-            </Button>
-            <Button
-              type="button"
-              color="dark"
-              disabled={saving || deleting || (!hasNote && !draft.trim())}
-              onclick={remove}
-              class="border-slate-700! bg-transparent! px-3! py-2! text-xs! font-semibold! text-slate-300! hover:border-red-500/60! hover:bg-red-500/10! hover:text-red-200! disabled:opacity-60"
-            >
+            </button>
+            <button class="btn btn-sm btn-ghost text-xs" type="button" disabled={saving || deleting || (!hasNote && !draft.trim())} onclick={remove}>
               {#if deleting}
-                <Spinner size="4" class="mr-1.5" />
+                <span class="loading loading-spinner loading-xs mr-1.5"></span>
               {:else}
                 <TrashBinOutline class="mr-1.5 h-3.5 w-3.5" />
               {/if}
               Delete
-            </Button>
+            </button>
             {#if saved && !dirty}
-              <span class="flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
+              <span class="flex items-center gap-1.5 text-xs font-semibold text-success">
                 <CheckOutline class="h-3.5 w-3.5" />
                 Saved
               </span>

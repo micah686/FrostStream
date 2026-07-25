@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { Spinner } from 'flowbite-svelte';
   import {
     ArrowsRepeatOutline,
     ArrowUpRightFromSquareOutline,
@@ -221,47 +220,47 @@
 
   function statusTone(status: string): string {
     if (normalizeStatus(status) === 'completedwithwarnings') {
-      return 'bg-amber-500/12 text-amber-300 ring-amber-500/25';
+      return 'bg-warning/12 text-warning ring-warning/25';
     }
     if (isDone(status)) {
-      return 'bg-emerald-500/12 text-emerald-300 ring-emerald-500/20';
+      return 'bg-success/12 text-success ring-success/20';
     }
     if (isFailed(status)) {
-      return 'bg-red-500/12 text-red-300 ring-red-500/25';
+      return 'bg-error/12 text-error ring-error/25';
     }
     if (isStopped(status)) {
-      return 'bg-slate-500/12 text-slate-300 ring-slate-500/20';
+      return 'bg-base-200/12 text-base-content/80 ring-base-300/20';
     }
     if (isQueued(status)) {
-      return 'bg-slate-700/50 text-slate-300 ring-slate-600/40';
+      return 'bg-base-300/50 text-base-content/80 ring-base-content/30';
     }
-    return 'bg-blue-500/12 text-blue-300 ring-blue-500/20';
+    return 'bg-primary/12 text-primary ring-primary/20';
   }
 
   function barColor(status: string): string {
     if (normalizeStatus(status) === 'completedwithwarnings') {
-      return 'bg-amber-400';
+      return 'bg-warning';
     }
     if (isDone(status)) {
-      return 'bg-emerald-500';
+      return 'bg-success';
     }
     if (isFailed(status)) {
-      return 'bg-red-400';
+      return 'bg-error';
     }
     if (isStopped(status)) {
-      return 'bg-slate-500';
+      return 'bg-base-200';
     }
-    return 'bg-blue-500';
+    return 'bg-primary';
   }
 
   function rowTone(status: string): string {
     if (isFailed(status)) {
-      return 'border-red-500/45 bg-red-950/10';
+      return 'border-error/45 bg-error/10';
     }
     if (isActive(status)) {
-      return 'border-blue-500/60 bg-blue-950/10';
+      return 'border-primary/60 bg-primary/10';
     }
-    return 'border-slate-800/90 bg-slate-900/45';
+    return 'border-base-300/90 bg-base-200/45';
   }
 
   function sourceInitial(p: string): string {
@@ -271,9 +270,9 @@
   function originBadge(sourceKind: string): { label: string; tone: string } | null {
     switch (sourceKind.toLowerCase()) {
       case 'playlist':
-        return { label: 'PLAYLIST', tone: 'bg-violet-500/12 text-violet-300 ring-violet-500/25' };
+        return { label: 'PLAYLIST', tone: 'bg-secondary/12 text-secondary ring-secondary/25' };
       case 'channel':
-        return { label: 'CHANNEL', tone: 'bg-cyan-500/12 text-cyan-300 ring-cyan-500/25' };
+        return { label: 'CHANNEL', tone: 'bg-accent/12 text-accent ring-accent/25' };
       default:
         return null;
     }
@@ -365,15 +364,15 @@
   >
     <div class="flex min-w-0 items-start gap-3">
       <span
-        class="mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-slate-800 text-sm font-bold text-blue-300 ring-1 ring-slate-700"
+        class="mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-base-300 text-sm font-bold text-primary ring-1 ring-base-content/20"
         aria-hidden="true"
       >
         {sourceInitial(provider)}
       </span>
       <div class="min-w-0">
         <div class="flex min-w-0 items-center gap-2">
-          <ChevronDownOutline class={['h-3.5 w-3.5 shrink-0 text-slate-600 transition-transform', expanded ? 'rotate-180' : '']} />
-          <h2 class="min-w-0 truncate text-sm font-semibold text-slate-100">
+          <ChevronDownOutline class={['h-3.5 w-3.5 shrink-0 text-base-content/40 transition-transform', expanded ? 'rotate-180' : '']} />
+          <h2 class="min-w-0 truncate text-sm font-semibold text-base-content">
             {displayTitle(job.sourceUrl)}
           </h2>
           <span class={['shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ring-1', statusTone(job.status)]}>
@@ -386,14 +385,14 @@
             </span>
           {/if}
         </div>
-        <p class="mt-1 truncate text-xs text-slate-500">
+        <p class="mt-1 truncate text-xs text-base-content/50">
           {provider} · {job.storageKey ?? 'default'} · {formatOptionalBytes(row.progress?.totalBytes ?? job.fileSizeBytes)}
           {#if isCollectionJob(job)}
             · group <span class="font-mono">{shortCollectionId(job.correlationId)}</span>
           {/if}
         </p>
         {#if isActive(job.status) || isQueued(job.status) || isFailed(job.status) || isStopped(job.status)}
-          <p class="mt-1 truncate text-[11px] text-slate-500">
+          <p class="mt-1 truncate text-[11px] text-base-content/50">
             {displayStage(row)}
             {#if job.artifactKey}
               · <span class="font-mono">{job.artifactKey}</span>
@@ -401,7 +400,7 @@
           </p>
         {/if}
         {#if job.failureMessage}
-          <p class="mt-2 line-clamp-1 text-xs text-red-300">
+          <p class="mt-2 line-clamp-1 text-xs text-error">
             {job.failureCode ? `${job.failureCode}: ` : ''}{job.failureMessage}
           </p>
         {/if}
@@ -410,19 +409,19 @@
 
     <div class="flex items-center gap-3">
       <div class="min-w-0 flex-1">
-        <div class="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
+        <div class="h-1.5 w-full overflow-hidden rounded-full bg-base-300">
           <div class={['h-full rounded-full', barColor(job.status)]} style={`width: ${percent}%`}></div>
         </div>
         {#if showProgressDetails}
-          <p class="mt-1 text-xs text-slate-500">
+          <p class="mt-1 text-xs text-base-content/50">
             {formatPercent(row)} · {formatSpeed(row.progress?.speed)} · {formatElapsed(job)}
           </p>
         {/if}
       </div>
       {#if showProgressDetails}
         <div class="w-20 shrink-0 text-right">
-          <p class="text-xs font-medium text-slate-300">eta {formatEta(row.progress?.etaSeconds)}</p>
-          <p class="mt-0.5 text-[11px] text-slate-500">{formatByteProgress(row.progress, job)}</p>
+          <p class="text-xs font-medium text-base-content/80">eta {formatEta(row.progress?.etaSeconds)}</p>
+          <p class="mt-0.5 text-[11px] text-base-content/50">{formatByteProgress(row.progress, job)}</p>
         </div>
       {/if}
     </div>
@@ -432,7 +431,7 @@
         <a
           href={`/watch/${mediaGuid}`}
           onclick={stop}
-          class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-700 bg-slate-900/70 text-slate-200 transition hover:border-emerald-500/60 hover:bg-emerald-500/10 hover:text-emerald-200"
+          class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/70 text-base-content/90 transition hover:border-success/60 hover:bg-success/10 hover:text-success"
           title="Watch"
           aria-label="Watch"
         >
@@ -442,7 +441,7 @@
       {#if canUpdatePriority(job)}
         <button
           type="button"
-          class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-700 bg-slate-900/70 text-slate-200 transition hover:border-blue-500/60 hover:bg-blue-500/10 hover:text-blue-200 disabled:opacity-40"
+          class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/70 text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary disabled:opacity-40"
           title="Set priority"
           aria-label="Set priority"
           disabled={Boolean(busyAction)}
@@ -452,7 +451,7 @@
           }}
         >
           {#if busyAction === 'priority'}
-            <Spinner size="4" />
+            <span class="loading loading-spinner loading-xs"></span>
           {:else}
             <FireOutline class="h-4 w-4" />
           {/if}
@@ -461,7 +460,7 @@
       {#if canStart(job.status)}
         <button
           type="button"
-          class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-700 bg-slate-900/70 text-slate-200 transition hover:border-blue-500/60 hover:bg-slate-800 hover:text-white disabled:opacity-40"
+          class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/70 text-base-content/90 transition hover:border-primary/60 hover:bg-base-300 hover:text-base-content disabled:opacity-40"
           title="Start a new run"
           aria-label="Start a new run"
           disabled={Boolean(busyAction)}
@@ -471,7 +470,7 @@
           }}
         >
           {#if busyAction === 'start'}
-            <Spinner size="4" />
+            <span class="loading loading-spinner loading-xs"></span>
           {:else}
             <PlayOutline class="h-4 w-4" />
           {/if}
@@ -480,7 +479,7 @@
       {#if job.failureCode === 'provider_circuit_open' || job.failureKind?.toLowerCase() === 'providerblocked'}
         <button
           type="button"
-          class="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-amber-500/35 bg-amber-500/10 px-2 text-[11px] font-semibold text-amber-200 transition hover:border-amber-400/70 hover:bg-amber-500/20 disabled:opacity-40"
+          class="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-warning/35 bg-warning/10 px-2 text-[11px] font-semibold text-warning transition hover:border-warning/70 hover:bg-warning/20 disabled:opacity-40"
           title="Clear the provider block; this job will still require Start"
           aria-label="Clear provider block"
           disabled={Boolean(busyAction)}
@@ -490,7 +489,7 @@
           }}
         >
           {#if busyAction === 'clear-provider'}
-            <Spinner size="4" />
+            <span class="loading loading-spinner loading-xs"></span>
           {:else}
             <ArrowsRepeatOutline class="h-3.5 w-3.5" />
           {/if}
@@ -500,7 +499,7 @@
       {#if canStop(job.status)}
         <button
           type="button"
-          class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-700 bg-slate-900/70 text-slate-200 transition hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-200 disabled:opacity-40"
+          class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/70 text-base-content/90 transition hover:border-error/60 hover:bg-error/10 hover:text-error disabled:opacity-40"
           title="Stop job"
           aria-label="Stop job"
           disabled={Boolean(busyAction)}
@@ -510,7 +509,7 @@
           }}
         >
           {#if busyAction === 'stop'}
-            <Spinner size="4" />
+            <span class="loading loading-spinner loading-xs"></span>
           {:else}
             <StopOutline class="h-4 w-4" />
           {/if}
@@ -519,7 +518,7 @@
       {#if isCollectionJob(job) && canStart(job.status)}
         <button
           type="button"
-          class="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900/70 px-2 text-[11px] font-semibold text-slate-200 transition hover:border-blue-500/60 hover:bg-blue-500/10 hover:text-blue-200 disabled:opacity-40"
+          class="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-base-content/20 bg-base-200/70 px-2 text-[11px] font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary disabled:opacity-40"
           title="Start every failed or stopped job in this group"
           aria-label="Start group"
           disabled={Boolean(busyAction)}
@@ -529,7 +528,7 @@
           }}
         >
           {#if busyAction === 'group-start'}
-            <Spinner size="4" />
+            <span class="loading loading-spinner loading-xs"></span>
           {:else}
             <ArrowsRepeatOutline class="h-3.5 w-3.5" />
           {/if}
@@ -539,7 +538,7 @@
       {#if isCollectionJob(job) && canStop(job.status)}
         <button
           type="button"
-          class="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900/70 px-2 text-[11px] font-semibold text-slate-200 transition hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-200 disabled:opacity-40"
+          class="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-base-content/20 bg-base-200/70 px-2 text-[11px] font-semibold text-base-content/90 transition hover:border-error/60 hover:bg-error/10 hover:text-error disabled:opacity-40"
           title="Stop every queued or running job in this group"
           aria-label="Stop group"
           disabled={Boolean(busyAction)}
@@ -549,7 +548,7 @@
           }}
         >
           {#if busyAction === 'group-stop'}
-            <Spinner size="4" />
+            <span class="loading loading-spinner loading-xs"></span>
           {:else}
             <StopOutline class="h-3.5 w-3.5" />
           {/if}
@@ -561,7 +560,7 @@
         target="_blank"
         rel="noreferrer"
         onclick={stop}
-        class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-700 bg-slate-900/70 text-slate-200 transition hover:border-slate-500 hover:bg-slate-800 hover:text-white"
+        class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/70 text-base-content/90 transition hover:border-base-300 hover:bg-base-300 hover:text-base-content"
         title="View source"
         aria-label="View source"
       >
@@ -571,77 +570,77 @@
   </div>
 
   {#if expanded}
-    <div class="mt-3 border-t border-slate-800/70 pt-3">
-      <div class="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-slate-500">
+    <div class="mt-3 border-t border-base-300/70 pt-3">
+      <div class="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-base-content/50">
         <span class="inline-flex min-w-0 items-center gap-1">
-          <span class="shrink-0 text-slate-600">Job ID</span>
-          <span class="break-all font-mono text-slate-400">{job.jobId}</span>
+          <span class="shrink-0 text-base-content/40">Job ID</span>
+          <span class="break-all font-mono text-base-content/60">{job.jobId}</span>
         </span>
         {#if isCollectionJob(job)}
           <span class="inline-flex min-w-0 items-center gap-1">
-            <span class="shrink-0 text-slate-600">Collection ID</span>
-            <span class="break-all font-mono text-slate-400">{job.correlationId}</span>
+            <span class="shrink-0 text-base-content/40">Collection ID</span>
+            <span class="break-all font-mono text-base-content/60">{job.correlationId}</span>
           </span>
         {/if}
         <span class="inline-flex items-center gap-1">
-          <span class="shrink-0 text-slate-600">Option set</span>
-          <span class="text-slate-400">{optionSetLabel(history)}</span>
+          <span class="shrink-0 text-base-content/40">Option set</span>
+          <span class="text-base-content/60">{optionSetLabel(history)}</span>
         </span>
         <span class="inline-flex items-center gap-1">
-          <span class="shrink-0 text-slate-600">Run</span>
-          <span class="text-slate-400">#{job.runNumber}</span>
+          <span class="shrink-0 text-base-content/40">Run</span>
+          <span class="text-base-content/60">#{job.runNumber}</span>
         </span>
         {#if job.runId}
           <span class="inline-flex min-w-0 items-center gap-1">
-            <span class="shrink-0 text-slate-600">Run ID</span>
-            <span class="break-all font-mono text-slate-400">{job.runId}</span>
+            <span class="shrink-0 text-base-content/40">Run ID</span>
+            <span class="break-all font-mono text-base-content/60">{job.runId}</span>
           </span>
         {/if}
         <span class="inline-flex items-center gap-1">
-          <span class="shrink-0 text-slate-600">Stage</span>
-          <span class="text-slate-400">{humanizeDownloadName(job.stage)} · {humanizeDownloadName(job.stageStatus)}</span>
+          <span class="shrink-0 text-base-content/40">Stage</span>
+          <span class="text-base-content/60">{humanizeDownloadName(job.stage)} · {humanizeDownloadName(job.stageStatus)}</span>
         </span>
         <span class="inline-flex items-center gap-1">
-          <span class="shrink-0 text-slate-600">Attempt</span>
-          <span class="text-slate-400">{job.attempt || '-'} / {job.maxAttempts}</span>
+          <span class="shrink-0 text-base-content/40">Attempt</span>
+          <span class="text-base-content/60">{job.attempt || '-'} / {job.maxAttempts}</span>
         </span>
         {#if job.warningCount > 0}
-          <span class="inline-flex items-center gap-1 text-amber-300">
-            <span class="shrink-0 text-amber-500">Warnings</span>
+          <span class="inline-flex items-center gap-1 text-warning">
+            <span class="shrink-0 text-warning">Warnings</span>
             <span>{job.warningCount}</span>
           </span>
         {/if}
         <span class="inline-flex items-center gap-1">
-          <span class="shrink-0 text-slate-600">Priority</span>
-          <span class="text-slate-400">{job.priority}</span>
+          <span class="shrink-0 text-base-content/40">Priority</span>
+          <span class="text-base-content/60">{job.priority}</span>
         </span>
       </div>
 
-      <div class="mt-3 max-h-48 overflow-y-auto rounded-lg border border-slate-800/80 bg-slate-950/60 p-3 font-mono text-xs">
+      <div class="mt-3 max-h-48 overflow-y-auto rounded-lg border border-base-300/80 bg-base-200/60 p-3 font-mono text-xs">
         {#if job.failureMessage}
-          <p class="flex items-start gap-1.5 whitespace-pre-wrap break-words text-red-300">
+          <p class="flex items-start gap-1.5 whitespace-pre-wrap break-words text-error">
             <ExclamationCircleOutline class="mt-0.5 h-3.5 w-3.5 shrink-0" />
             {job.failureKind ? `[${job.failureKind}] ` : ''}{job.failureCode ? `${job.failureCode}: ` : ''}{job.failureMessage}
           </p>
         {/if}
         {#if history === 'loading'}
-          <p class="text-slate-600">Loading history…</p>
+          <p class="text-base-content/40">Loading history…</p>
         {:else if history === 'error'}
-          <p class="text-red-400">Could not load job history.</p>
+          <p class="text-error">Could not load job history.</p>
         {:else if history === undefined}
-          <p class="text-slate-600">-</p>
+          <p class="text-base-content/40">-</p>
         {:else if history.length === 0}
-          <p class="text-slate-600">No recorded events.</p>
+          <p class="text-base-content/40">No recorded events.</p>
         {:else}
           {#each history as entry (entry.id)}
-            <p class="whitespace-pre-wrap break-words text-slate-400">
-              <span class="text-slate-600">[{formatLogTime(entry.recordedAt)}]</span>
+            <p class="whitespace-pre-wrap break-words text-base-content/60">
+              <span class="text-base-content/40">[{formatLogTime(entry.recordedAt)}]</span>
               {entry.eventName === 'ProgressLine' ? entry.payloadJson : entry.eventName}
             </p>
           {/each}
         {/if}
         {#each liveMessages as entry (entry.at)}
-          <p class="whitespace-pre-wrap break-words text-slate-500">{entry.text}</p>
+          <p class="whitespace-pre-wrap break-words text-base-content/50">{entry.text}</p>
         {/each}
       </div>
     </div>

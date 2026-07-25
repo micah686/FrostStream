@@ -51,8 +51,8 @@
     class={[
       'flex items-center gap-1.5 rounded-lg border px-4 py-2 text-xs font-semibold transition disabled:opacity-60',
       castError
-        ? 'border-red-900/60 bg-red-950/30 text-red-300 hover:bg-red-950/50'
-        : 'border-slate-800 bg-slate-900/70 text-slate-300 hover:bg-slate-800'
+        ? 'border-error/30 bg-error/10 text-error hover:bg-error/10'
+        : 'border-base-300 bg-base-200/70 text-base-content/80 hover:bg-base-300'
     ]}
   >
     <ComputerSpeakerOutline class="h-4 w-4" />

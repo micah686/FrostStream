@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Button, Modal, Spinner } from 'flowbite-svelte';
+  import { Modal } from '$lib/components/ui';
   import { ArrowLeftOutline, ChevronRightOutline, ExclamationCircleOutline, FolderOutline } from 'flowbite-svelte-icons';
   import { browseImportIncoming } from '$lib/api/imports';
 
@@ -30,37 +30,37 @@
   }
 </script>
 
-<Modal bind:open title="Choose incoming folder" size="md" class="z-50">
+<Modal bind:open title="Choose incoming folder" size="md">
   <div class="space-y-3">
-    <div class="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2.5">
-      <FolderOutline class="h-4 w-4 text-slate-500" />
-      <span class="truncate font-mono text-sm text-slate-200">incoming/{currentPath}</span>
-      {#if loading}<Spinner size="4" class="ml-auto" />{/if}
+    <div class="flex items-center gap-2 rounded-lg border border-base-300 bg-base-200/60 px-3 py-2.5">
+      <FolderOutline class="h-4 w-4 text-base-content/50" />
+      <span class="truncate font-mono text-sm text-base-content/90">incoming/{currentPath}</span>
+      {#if loading}<span class="loading loading-spinner loading-xs ml-auto"></span>{/if}
     </div>
     {#if error}
-      <div class="flex gap-2 rounded-xl border border-red-900/60 bg-red-950/35 p-3 text-sm text-red-300">
+      <div class="flex gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error">
         <ExclamationCircleOutline class="h-4 w-4 shrink-0" />{error}
       </div>
     {/if}
-    <div class="max-h-72 overflow-y-auto rounded-xl border border-slate-800 bg-slate-950/40">
+    <div class="max-h-72 overflow-y-auto rounded-xl border border-base-300 bg-base-200/40">
       {#if currentPath}
-        <button type="button" class="flex w-full items-center gap-2 border-b border-slate-800 px-4 py-3 text-left text-sm text-slate-400 hover:bg-slate-900" onclick={() => navigate(currentPath.split('/').slice(0, -1).join('/'))}>
+        <button type="button" class="flex w-full items-center gap-2 border-b border-base-300 px-4 py-3 text-left text-sm text-base-content/60 hover:bg-base-200" onclick={() => navigate(currentPath.split('/').slice(0, -1).join('/'))}>
           <ArrowLeftOutline class="h-4 w-4" /> Up one level
         </button>
       {/if}
       {#each directories as name (name)}
-        <button type="button" class="flex w-full items-center justify-between border-b border-slate-800/60 px-4 py-3 text-left text-sm text-slate-200 last:border-0 hover:bg-slate-900" onclick={() => navigate(currentPath ? `${currentPath}/${name}` : name)}>
-          <span class="truncate">{name}</span><ChevronRightOutline class="h-4 w-4 text-slate-500" />
+        <button type="button" class="flex w-full items-center justify-between border-b border-base-300/60 px-4 py-3 text-left text-sm text-base-content/90 last:border-0 hover:bg-base-200" onclick={() => navigate(currentPath ? `${currentPath}/${name}` : name)}>
+          <span class="truncate">{name}</span><ChevronRightOutline class="h-4 w-4 text-base-content/50" />
         </button>
       {:else}
-        {#if !loading}<p class="px-4 py-6 text-center text-sm text-slate-500">No sub-folders here.</p>{/if}
+        {#if !loading}<p class="px-4 py-6 text-center text-sm text-base-content/50">No sub-folders here.</p>{/if}
       {/each}
     </div>
   </div>
   {#snippet footer()}
     <div class="flex w-full justify-end gap-2">
-      <Button color="dark" class="border-slate-700! bg-transparent! text-xs!" onclick={() => (open = false)}>Cancel</Button>
-      <Button color="blue" class="border-0! text-xs!" disabled={loading || !!error} onclick={() => { onselect(currentPath); open = false; }}>Select folder</Button>
+      <button class="btn btn-sm btn-ghost text-xs" onclick={() => (open = false)}>Cancel</button>
+      <button class="btn btn-sm btn-primary text-xs" disabled={loading || !!error} onclick={() => { onselect(currentPath); open = false; }}>Select folder</button>
     </div>
   {/snippet}
 </Modal>

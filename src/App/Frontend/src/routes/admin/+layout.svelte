@@ -48,8 +48,8 @@
 
 <section class="min-h-[calc(100vh-7rem)]" aria-labelledby="admin-title">
   <div class="min-w-0">
-    <h1 id="admin-title" class="text-2xl font-bold tracking-tight text-slate-100">Administration</h1>
-    <p class="mt-2 text-sm text-slate-400">Server-wide settings · requires Owner</p>
+    <h1 id="admin-title" class="text-2xl font-bold tracking-tight text-base-content">Administration</h1>
+    <p class="mt-2 text-sm text-base-content/60">Server-wide settings · requires Owner</p>
   </div>
 
   <div class="mt-6 grid gap-6 xl:grid-cols-[16rem_minmax(0,1fr)]">
@@ -63,8 +63,8 @@
             class={[
               'flex h-10 shrink-0 items-center gap-3 rounded-lg px-4 text-sm font-medium transition xl:w-full',
               active
-                ? 'bg-blue-500/18 text-blue-400'
-                : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-100'
+                ? 'bg-primary/18 text-primary'
+                : 'text-base-content/60 hover:bg-base-300/70 hover:text-base-content'
             ]}
             aria-current={active ? 'page' : undefined}
           >

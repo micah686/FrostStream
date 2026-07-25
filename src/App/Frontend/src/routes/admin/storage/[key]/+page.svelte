@@ -2,7 +2,6 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { Button, Spinner } from 'flowbite-svelte';
   import { ArrowLeftOutline, ExclamationCircleOutline, TrashBinOutline } from 'flowbite-svelte-icons';
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
   import {
@@ -122,7 +121,7 @@
 <section class="mx-auto min-h-[calc(100vh-7rem)] max-w-4xl" aria-labelledby="storage-detail-title">
   <a
     href="/admin"
-    class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 transition hover:text-slate-200"
+    class="inline-flex items-center gap-1.5 text-xs font-semibold text-base-content/60 transition hover:text-base-content/90"
   >
     <ArrowLeftOutline class="h-3.5 w-3.5" />
     Back to administration
@@ -130,11 +129,11 @@
 
   {#if loading}
     <div class="mt-16 flex justify-center">
-      <Spinner size="8" />
+      <span class="loading loading-spinner loading-md"></span>
     </div>
   {:else if !storage}
     <div
-      class="mt-6 flex items-start gap-2 rounded-xl border border-red-900/60 bg-red-950/35 p-3 text-sm text-red-300"
+      class="mt-6 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
       <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
@@ -144,36 +143,31 @@
     <div class="mt-4 flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
       <div class="min-w-0">
         <div class="flex flex-wrap items-center gap-2.5">
-          <h1 id="storage-detail-title" class="truncate text-2xl font-bold tracking-tight text-slate-100">
+          <h1 id="storage-detail-title" class="truncate text-2xl font-bold tracking-tight text-base-content">
             {storage.key}
           </h1>
-          <span class="rounded-full bg-slate-800 px-2.5 py-0.5 text-[10px] font-semibold text-slate-400">
+          <span class="rounded-full bg-base-300 px-2.5 py-0.5 text-[10px] font-semibold text-base-content/60">
             {storageMethodLabel(storage)}
           </span>
         </div>
-        <p class="mt-2 text-sm text-slate-400">{storage.description || 'No description'}</p>
+        <p class="mt-2 text-sm text-base-content/60">{storage.description || 'No description'}</p>
       </div>
 
       {#if storage.key !== 'default'}
-        <Button
-          color="dark"
-          disabled={deleting}
-          class="shrink-0 border-slate-700! bg-[#0f1420]! px-4! py-2! text-xs! font-semibold! text-slate-200! hover:border-red-500/60! hover:bg-red-500/10! hover:text-red-200! disabled:opacity-60"
-          onclick={() => (deleteModalOpen = true)}
-        >
+        <button class="btn btn-sm btn-neutral shrink-0 text-xs" disabled={deleting} onclick={() => (deleteModalOpen = true)}>
           {#if deleting}
-            <Spinner size="4" class="mr-1.5" />
+            <span class="loading loading-spinner loading-xs mr-1.5"></span>
           {:else}
             <TrashBinOutline class="mr-1.5 h-4 w-4" />
           {/if}
           Delete
-        </Button>
+        </button>
       {/if}
     </div>
 
     {#if error}
       <div
-        class="mt-5 flex items-start gap-2 rounded-xl border border-red-900/60 bg-red-950/35 p-3 text-sm text-red-300"
+        class="mt-5 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
         role="alert"
       >
         <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
@@ -182,36 +176,36 @@
     {/if}
 
     <section
-      class="mt-6 rounded-2xl border border-slate-800 bg-[#151a26] p-5 shadow-xl shadow-black/15 sm:p-6"
+      class="mt-6 card border border-base-300 bg-base-100 p-5 sm:p-6"
       aria-label="Storage settings"
     >
-      <h2 class="text-base font-bold text-slate-100">Settings</h2>
-      <p class="mt-2 text-sm text-slate-400">
+      <h2 class="text-base font-bold text-base-content">Settings</h2>
+      <p class="mt-2 text-sm text-base-content/60">
         Credentials are stored in the secret store and are not shown here.
       </p>
 
       <dl class="mt-5 grid gap-3 sm:grid-cols-2">
         {#each settings as entry (entry.label)}
-          <div class="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4">
-            <dt class="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-600">{entry.label}</dt>
-            <dd class={['mt-1 break-all text-sm text-slate-300', entry.mono && 'font-mono']}>{entry.value}</dd>
+          <div class="rounded-xl border border-base-300/80 bg-base-200/40 p-4">
+            <dt class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">{entry.label}</dt>
+            <dd class={['mt-1 break-all text-sm text-base-content/80', entry.mono && 'font-mono']}>{entry.value}</dd>
           </div>
         {/each}
       </dl>
     </section>
 
     <section class="mt-5 grid gap-3 sm:grid-cols-3" aria-label="Storage metadata">
-      <div class="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4">
-        <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-600">Created</p>
-        <p class="mt-1 text-sm text-slate-300">{formatInstant(storage.createdAt)}</p>
+      <div class="rounded-xl border border-base-300/80 bg-base-200/40 p-4">
+        <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Created</p>
+        <p class="mt-1 text-sm text-base-content/80">{formatInstant(storage.createdAt)}</p>
       </div>
-      <div class="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4">
-        <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-600">Last updated</p>
-        <p class="mt-1 text-sm text-slate-300">{formatInstant(storage.lastUpdated)}</p>
+      <div class="rounded-xl border border-base-300/80 bg-base-200/40 p-4">
+        <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Last updated</p>
+        <p class="mt-1 text-sm text-base-content/80">{formatInstant(storage.lastUpdated)}</p>
       </div>
-      <div class="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4">
-        <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-600">Worker tag</p>
-        <p class="mt-1 text-sm text-slate-300">{storage.workerTag ?? 'Any worker'}</p>
+      <div class="rounded-xl border border-base-300/80 bg-base-200/40 p-4">
+        <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Worker tag</p>
+        <p class="mt-1 text-sm text-base-content/80">{storage.workerTag ?? 'Any worker'}</p>
       </div>
     </section>
   {/if}

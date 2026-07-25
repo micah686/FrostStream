@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { Checkbox, Input, Label, Select, Textarea, Toggle } from 'flowbite-svelte';
+  import { Select } from '$lib/components/ui';
   import { ChevronDownOutline } from 'flowbite-svelte-icons';
   import TriStateSelect from './TriStateSelect.svelte';
   import {
@@ -21,8 +21,6 @@
 
   let { value = $bindable({}) }: Props = $props();
 
-  const fieldClass =
-    'border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!';
 
   // Options the GUI does not manage are carried through from the loaded preset.
   const base = untrack(() => clonePlainOptions(value));
@@ -53,107 +51,86 @@
 </script>
 
 <div class="space-y-4">
-  <p class="text-xs text-slate-500">
+  <p class="text-xs text-base-content/50">
     Everything is optional — leave a field on “Default” to use the server’s normal behavior for that
     setting. Only the values you change are stored in the preset.
   </p>
 
-  <details open class="group rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
+  <details open class="group rounded-xl border border-base-300/70 bg-base-200/40 p-4">
     <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
-      <h3 class="text-sm font-semibold text-slate-200">Video quality & format</h3>
-      <ChevronDownOutline class="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-180" />
+      <h3 class="text-sm font-semibold text-base-content/90">Video quality & format</h3>
+      <ChevronDownOutline class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
     </summary>
     <div class="mt-4 grid gap-4 sm:grid-cols-2">
       <div>
-        <Label for="opt-resolution" class="mb-2 text-sm font-medium text-slate-300">Maximum resolution</Label>
-        <Select id="opt-resolution" items={resolutionItems} bind:value={opts.resolution} class={fieldClass} />
+        <label class="label mb-2 text-sm" for="opt-resolution">Maximum resolution</label>
+        <Select id="opt-resolution" items={resolutionItems} bind:value={opts.resolution} />
       </div>
       <div>
-        <Label for="opt-container" class="mb-2 text-sm font-medium text-slate-300">Container</Label>
-        <Select id="opt-container" items={containerItems} bind:value={opts.container} class={fieldClass} />
+        <label class="label mb-2 text-sm" for="opt-container">Container</label>
+        <Select id="opt-container" items={containerItems} bind:value={opts.container} />
       </div>
       {#if opts.resolution === 'custom'}
         <div class="sm:col-span-2">
-          <Label for="opt-custom-format" class="mb-2 text-sm font-medium text-slate-300">Custom format string</Label>
-          <Input
-            id="opt-custom-format"
-            bind:value={opts.customFormat}
-            placeholder="bestvideo[height<=1080]+bestaudio/best"
-            class="font-mono! {fieldClass}"
-          />
-          <p class="mt-1.5 text-xs text-slate-600">A raw yt-dlp format selector, for advanced use.</p>
+          <label class="label mb-2 text-sm" for="opt-custom-format">Custom format string</label>
+          <input class="input w-full font-mono" id="opt-custom-format" bind:value={opts.customFormat} placeholder="bestvideo[height<=1080]+bestaudio/best" />
+          <p class="mt-1.5 text-xs text-base-content/40">A raw yt-dlp format selector, for advanced use.</p>
         </div>
       {/if}
     </div>
   </details>
 
-  <details class="group rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
+  <details class="group rounded-xl border border-base-300/70 bg-base-200/40 p-4">
     <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
-      <h3 class="text-sm font-semibold text-slate-200">Audio</h3>
-      <ChevronDownOutline class="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-180" />
+      <h3 class="text-sm font-semibold text-base-content/90">Audio</h3>
+      <ChevronDownOutline class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
     </summary>
     <div class="mt-4 space-y-4">
-      <Toggle bind:checked={opts.audioOnly} class="text-sm text-slate-300">
-        Audio only <span class="ml-1 text-xs text-slate-600">(skip the video, keep just the sound)</span>
-      </Toggle>
+      <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle" bind:checked={opts.audioOnly} /><span>Audio only <span class="ml-1 text-xs text-base-content/40">(skip the video, keep just the sound)</span></span></label>
       <div class="grid gap-4 sm:grid-cols-2">
         <div>
-          <Label for="opt-audio-format" class="mb-2 text-sm font-medium text-slate-300">Audio format</Label>
-          <Select
-            id="opt-audio-format"
-            items={audioFormatItems}
-            bind:value={opts.audioFormat}
-            disabled={!opts.audioOnly}
-            class="{fieldClass} disabled:opacity-60"
-          />
+          <label class="label mb-2 text-sm" for="opt-audio-format">Audio format</label>
+          <Select id="opt-audio-format" items={audioFormatItems} bind:value={opts.audioFormat} disabled={!opts.audioOnly} />
         </div>
         <div>
-          <Label for="opt-audio-quality" class="mb-2 text-sm font-medium text-slate-300">Audio quality</Label>
-          <Select
-            id="opt-audio-quality"
-            items={audioQualityItems}
-            bind:value={opts.audioQuality}
-            disabled={!opts.audioOnly}
-            class="{fieldClass} disabled:opacity-60"
-          />
+          <label class="label mb-2 text-sm" for="opt-audio-quality">Audio quality</label>
+          <Select id="opt-audio-quality" items={audioQualityItems} bind:value={opts.audioQuality} disabled={!opts.audioOnly} />
         </div>
       </div>
     </div>
   </details>
 
-  <details class="group rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
+  <details class="group rounded-xl border border-base-300/70 bg-base-200/40 p-4">
     <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
-      <h3 class="text-sm font-semibold text-slate-200">Subtitles</h3>
-      <ChevronDownOutline class="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-180" />
+      <h3 class="text-sm font-semibold text-base-content/90">Subtitles</h3>
+      <ChevronDownOutline class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
     </summary>
     <div class="mt-4 grid gap-4 sm:grid-cols-2">
       <TriStateSelect id="opt-write-subs" label="Download subtitles" bind:value={opts.writeSubs} />
       <TriStateSelect id="opt-write-auto-subs" label="Auto-generated subtitles" bind:value={opts.writeAutoSubs} />
       <div>
-        <Label for="opt-sub-langs" class="mb-2 text-sm font-medium text-slate-300">Languages</Label>
-        <Input id="opt-sub-langs" bind:value={opts.subLangs} placeholder="en.*,ja or all" class={fieldClass} />
-        <p class="mt-1.5 text-xs text-slate-600">Comma separated language codes.</p>
+        <label class="label mb-2 text-sm" for="opt-sub-langs">Languages</label>
+        <input class="input w-full" id="opt-sub-langs" bind:value={opts.subLangs} placeholder="en.*,ja or all" />
+        <p class="mt-1.5 text-xs text-base-content/40">Comma separated language codes.</p>
       </div>
       <div>
-        <Label for="opt-sub-format" class="mb-2 text-sm font-medium text-slate-300">Subtitle format</Label>
-        <Select id="opt-sub-format" items={subtitleFormatItems} bind:value={opts.subFormat} class={fieldClass} />
+        <label class="label mb-2 text-sm" for="opt-sub-format">Subtitle format</label>
+        <Select id="opt-sub-format" items={subtitleFormatItems} bind:value={opts.subFormat} />
       </div>
       <TriStateSelect id="opt-embed-subs" label="Embed subtitles in the video" bind:value={opts.embedSubs} />
       <div class="sm:col-span-2">
-        <Toggle bind:checked={opts.includeLiveChat} class="text-sm text-slate-300">
-          Include live chat
-          <span class="ml-1 text-xs text-slate-600">
+        <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle" bind:checked={opts.includeLiveChat} /><span>Include live chat
+          <span class="ml-1 text-xs text-base-content/40">
             (keep the live-chat replay; off by default, so it is dropped even when Languages is “all”)
-          </span>
-        </Toggle>
+          </span></span></label>
       </div>
     </div>
   </details>
 
-  <details class="group rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
+  <details class="group rounded-xl border border-base-300/70 bg-base-200/40 p-4">
     <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
-      <h3 class="text-sm font-semibold text-slate-200">Thumbnails & metadata</h3>
-      <ChevronDownOutline class="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-180" />
+      <h3 class="text-sm font-semibold text-base-content/90">Thumbnails & metadata</h3>
+      <ChevronDownOutline class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
     </summary>
     <div class="mt-4 grid gap-4 sm:grid-cols-2">
       <TriStateSelect id="opt-write-thumbnail" label="Save thumbnail file" bind:value={opts.writeThumbnail} />
@@ -166,186 +143,136 @@
     </div>
   </details>
 
-  <details class="group rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
+  <details class="group rounded-xl border border-base-300/70 bg-base-200/40 p-4">
     <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
-      <h3 class="text-sm font-semibold text-slate-200">Comments & live streams</h3>
-      <ChevronDownOutline class="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-180" />
+      <h3 class="text-sm font-semibold text-base-content/90">Comments & live streams</h3>
+      <ChevronDownOutline class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
     </summary>
     <div class="mt-4 grid gap-4 sm:grid-cols-2">
       <TriStateSelect id="opt-fetch-comments" label="Fetch comments" bind:value={opts.fetchComments} />
       <TriStateSelect id="opt-live-from-start" label="Record live streams from the start" bind:value={opts.liveFromStart} />
       <div>
-        <Label for="opt-wait-for-video" class="mb-2 text-sm font-medium text-slate-300">Wait for scheduled premieres</Label>
-        <Input
-          id="opt-wait-for-video"
-          bind:value={opts.waitForVideo}
-          placeholder="e.g. 60 (poll every 60s until it airs)"
-          class={fieldClass}
-        />
-        <p class="mt-1.5 text-xs text-slate-600">Poll interval in seconds; blank means don't wait for an upcoming video.</p>
+        <label class="label mb-2 text-sm" for="opt-wait-for-video">Wait for scheduled premieres</label>
+        <input class="input w-full" id="opt-wait-for-video" bind:value={opts.waitForVideo} placeholder="e.g. 60 (poll every 60s until it airs)" />
+        <p class="mt-1.5 text-xs text-base-content/40">Poll interval in seconds; blank means don't wait for an upcoming video.</p>
       </div>
     </div>
   </details>
 
-  <details class="group rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
+  <details class="group rounded-xl border border-base-300/70 bg-base-200/40 p-4">
     <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
       <div>
-        <h3 class="text-sm font-semibold text-slate-200">SponsorBlock</h3>
-        <p class="mt-1 text-xs text-slate-600">Marks or removes sponsored segments using community data.</p>
+        <h3 class="text-sm font-semibold text-base-content/90">SponsorBlock</h3>
+        <p class="mt-1 text-xs text-base-content/40">Marks or removes sponsored segments using community data.</p>
       </div>
-      <ChevronDownOutline class="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-180" />
+      <ChevronDownOutline class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
     </summary>
     <div class="mt-4 space-y-4">
-      <Checkbox bind:checked={opts.sponsorBlockDisabled} class="text-sm text-slate-300">
-        Disable SponsorBlock entirely
-      </Checkbox>
+      <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={opts.sponsorBlockDisabled} /><span>Disable SponsorBlock entirely</span></label>
       {#if !opts.sponsorBlockDisabled}
         <div>
-          <p class="mb-2 text-sm font-medium text-slate-300">Mark segments as chapters</p>
+          <p class="mb-2 text-sm font-medium text-base-content/80">Mark segments as chapters</p>
           <div class="grid gap-x-6 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">
             {#each markCategories as category (category.value)}
-              <Checkbox
-                checked={opts.sponsorBlockMark.includes(category.value)}
-                onchange={(event) =>
+              <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" checked={opts.sponsorBlockMark.includes(category.value)} onchange={(event) =>
                   (opts.sponsorBlockMark = toggleCategory(
                     opts.sponsorBlockMark,
                     category.value,
                     event.currentTarget.checked
-                  ))}
-                class="text-sm text-slate-300"
-              >
-                {category.name}
-              </Checkbox>
+                  ))} /><span>{category.name}</span></label>
             {/each}
           </div>
         </div>
         <div>
-          <p class="mb-2 text-sm font-medium text-slate-300">Cut segments out of the video</p>
+          <p class="mb-2 text-sm font-medium text-base-content/80">Cut segments out of the video</p>
           <div class="grid gap-x-6 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">
             {#each sponsorBlockCategories as category (category.value)}
-              <Checkbox
-                checked={opts.sponsorBlockRemove.includes(category.value)}
-                onchange={(event) =>
+              <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" checked={opts.sponsorBlockRemove.includes(category.value)} onchange={(event) =>
                   (opts.sponsorBlockRemove = toggleCategory(
                     opts.sponsorBlockRemove,
                     category.value,
                     event.currentTarget.checked
-                  ))}
-                class="text-sm text-slate-300"
-              >
-                {category.name}
-              </Checkbox>
+                  ))} /><span>{category.name}</span></label>
             {/each}
           </div>
         </div>
         <div class="grid gap-4 sm:grid-cols-2">
           <div>
-            <Label for="opt-sb-chapter-title" class="mb-2 text-sm font-medium text-slate-300">Chapter title template</Label>
-            <Input
-              id="opt-sb-chapter-title"
-              bind:value={opts.sponsorBlockChapterTitle}
-              placeholder="[SponsorBlock]: %(category_names)l"
-              class={fieldClass}
-            />
+            <label class="label mb-2 text-sm" for="opt-sb-chapter-title">Chapter title template</label>
+            <input class="input w-full" id="opt-sb-chapter-title" bind:value={opts.sponsorBlockChapterTitle} placeholder="[SponsorBlock]: %(category_names)l" />
           </div>
           <div>
-            <Label for="opt-sb-api" class="mb-2 text-sm font-medium text-slate-300">SponsorBlock API URL</Label>
-            <Input
-              id="opt-sb-api"
-              type="url"
-              bind:value={opts.sponsorBlockApi}
-              placeholder="https://sponsor.ajay.app"
-              class={fieldClass}
-            />
+            <label class="label mb-2 text-sm" for="opt-sb-api">SponsorBlock API URL</label>
+            <input class="input w-full" id="opt-sb-api" type="url" bind:value={opts.sponsorBlockApi} placeholder="https://sponsor.ajay.app" />
           </div>
         </div>
       {/if}
     </div>
   </details>
 
-  <details class="group rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
+  <details class="group rounded-xl border border-base-300/70 bg-base-200/40 p-4">
     <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
-      <h3 class="text-sm font-semibold text-slate-200">Download behavior & limits</h3>
-      <ChevronDownOutline class="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-180" />
+      <h3 class="text-sm font-semibold text-base-content/90">Download behavior & limits</h3>
+      <ChevronDownOutline class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
     </summary>
     <div class="mt-4 grid gap-4 sm:grid-cols-2">
       <div>
-        <Label for="opt-limit-rate" class="mb-2 text-sm font-medium text-slate-300">Speed limit</Label>
-        <Input
-          id="opt-limit-rate"
-          bind:value={opts.limitRate}
-          pattern={'\\d+(\\.\\d+)?[KMG]?'}
-          placeholder="e.g. 4.2M"
-          class={fieldClass}
-        />
-        <p class="mt-1.5 text-xs text-slate-600">Maximum download rate, e.g. 50K or 4.2M.</p>
+        <label class="label mb-2 text-sm" for="opt-limit-rate">Speed limit</label>
+        <input class="input w-full" id="opt-limit-rate" bind:value={opts.limitRate} pattern={'\\d+(\\.\\d+)?[KMG]?'} placeholder="e.g. 4.2M" />
+        <p class="mt-1.5 text-xs text-base-content/40">Maximum download rate, e.g. 50K or 4.2M.</p>
       </div>
       <div>
-        <Label for="opt-concurrent-fragments" class="mb-2 text-sm font-medium text-slate-300">Concurrent fragments</Label>
-        <Input
-          id="opt-concurrent-fragments"
-          type="number"
-          min={1}
-          max={16}
-          bind:value={opts.concurrentFragments}
-          placeholder="Default"
-          class={fieldClass}
-        />
+        <label class="label mb-2 text-sm" for="opt-concurrent-fragments">Concurrent fragments</label>
+        <input class="input w-full" id="opt-concurrent-fragments" type="number" min={1} max={16} bind:value={opts.concurrentFragments} placeholder="Default" />
       </div>
       <div>
-        <Label for="opt-retries" class="mb-2 text-sm font-medium text-slate-300">Retries</Label>
-        <Input id="opt-retries" bind:value={opts.retries} placeholder={'e.g. 10 or "infinite"'} class={fieldClass} />
+        <label class="label mb-2 text-sm" for="opt-retries">Retries</label>
+        <input class="input w-full" id="opt-retries" bind:value={opts.retries} placeholder={'e.g. 10 or "infinite"'} />
       </div>
       <div>
-        <Label for="opt-playlist-items" class="mb-2 text-sm font-medium text-slate-300">Playlist items</Label>
-        <Input id="opt-playlist-items" bind:value={opts.playlistItems} placeholder="e.g. 1:100" class={fieldClass} />
-        <p class="mt-1.5 text-xs text-slate-600">Which entries to take when the link is a playlist.</p>
+        <label class="label mb-2 text-sm" for="opt-playlist-items">Playlist items</label>
+        <input class="input w-full" id="opt-playlist-items" bind:value={opts.playlistItems} placeholder="e.g. 1:100" />
+        <p class="mt-1.5 text-xs text-base-content/40">Which entries to take when the link is a playlist.</p>
       </div>
       <div>
-        <Label for="opt-max-filesize" class="mb-2 text-sm font-medium text-slate-300">Max file size</Label>
-        <Input id="opt-max-filesize" bind:value={opts.maxFilesize} placeholder="e.g. 500M" class={fieldClass} />
+        <label class="label mb-2 text-sm" for="opt-max-filesize">Max file size</label>
+        <input class="input w-full" id="opt-max-filesize" bind:value={opts.maxFilesize} placeholder="e.g. 500M" />
       </div>
       <div>
-        <Label for="opt-min-filesize" class="mb-2 text-sm font-medium text-slate-300">Min file size</Label>
-        <Input id="opt-min-filesize" bind:value={opts.minFilesize} placeholder="e.g. 1M" class={fieldClass} />
+        <label class="label mb-2 text-sm" for="opt-min-filesize">Min file size</label>
+        <input class="input w-full" id="opt-min-filesize" bind:value={opts.minFilesize} placeholder="e.g. 1M" />
       </div>
       <div>
-        <Label for="opt-date" class="mb-2 text-sm font-medium text-slate-300">Uploaded on</Label>
-        <Input id="opt-date" type="date" bind:value={opts.date} class={fieldClass} />
+        <label class="label mb-2 text-sm" for="opt-date">Uploaded on</label>
+        <input class="input w-full" id="opt-date" type="date" bind:value={opts.date} />
       </div>
       <div>
-        <Label for="opt-date-after" class="mb-2 text-sm font-medium text-slate-300">Uploaded on or after</Label>
-        <Input id="opt-date-after" type="date" bind:value={opts.dateAfter} class={fieldClass} />
+        <label class="label mb-2 text-sm" for="opt-date-after">Uploaded on or after</label>
+        <input class="input w-full" id="opt-date-after" type="date" bind:value={opts.dateAfter} />
       </div>
       <div>
-        <Label for="opt-date-before" class="mb-2 text-sm font-medium text-slate-300">Uploaded on or before</Label>
-        <Input id="opt-date-before" type="date" bind:value={opts.dateBefore} class={fieldClass} />
+        <label class="label mb-2 text-sm" for="opt-date-before">Uploaded on or before</label>
+        <input class="input w-full" id="opt-date-before" type="date" bind:value={opts.dateBefore} />
       </div>
       <div>
-        <Label for="opt-throttled-rate" class="mb-2 text-sm font-medium text-slate-300">Throttled rate threshold</Label>
-        <Input id="opt-throttled-rate" bind:value={opts.throttledRate} placeholder="e.g. 100K" class={fieldClass} />
-        <p class="mt-1.5 text-xs text-slate-600">Re-extract the download if speed drops below this, for sites that throttle.</p>
+        <label class="label mb-2 text-sm" for="opt-throttled-rate">Throttled rate threshold</label>
+        <input class="input w-full" id="opt-throttled-rate" bind:value={opts.throttledRate} placeholder="e.g. 100K" />
+        <p class="mt-1.5 text-xs text-base-content/40">Re-extract the download if speed drops below this, for sites that throttle.</p>
       </div>
       <div>
-        <Label for="opt-buffer-size" class="mb-2 text-sm font-medium text-slate-300">Buffer size</Label>
-        <Input id="opt-buffer-size" bind:value={opts.bufferSize} placeholder="e.g. 16K" class={fieldClass} />
+        <label class="label mb-2 text-sm" for="opt-buffer-size">Buffer size</label>
+        <input class="input w-full" id="opt-buffer-size" bind:value={opts.bufferSize} placeholder="e.g. 16K" />
       </div>
       <div>
-        <Label for="opt-http-chunk-size" class="mb-2 text-sm font-medium text-slate-300">HTTP chunk size</Label>
-        <Input id="opt-http-chunk-size" bind:value={opts.httpChunkSize} placeholder="e.g. 10M" class={fieldClass} />
-        <p class="mt-1.5 text-xs text-slate-600">Splits downloads into chunks of this size; helps with some rate limits.</p>
+        <label class="label mb-2 text-sm" for="opt-http-chunk-size">HTTP chunk size</label>
+        <input class="input w-full" id="opt-http-chunk-size" bind:value={opts.httpChunkSize} placeholder="e.g. 10M" />
+        <p class="mt-1.5 text-xs text-base-content/40">Splits downloads into chunks of this size; helps with some rate limits.</p>
       </div>
       <TriStateSelect id="opt-resize-buffer" label="Resize the download buffer automatically" bind:value={opts.resizeBuffer} />
       <div class="sm:col-span-2">
-        <Label for="opt-retry-sleep" class="mb-2 text-sm font-medium text-slate-300">Retry sleep expressions</Label>
-        <Textarea
-          id="opt-retry-sleep"
-          rows={2}
-          bind:value={opts.retrySleep}
-          placeholder={'exp=1:20\nfragment:exp=1:10'}
-          class="font-mono! {fieldClass}"
-        />
-        <p class="mt-1.5 text-xs text-slate-600">
+        <label class="label mb-2 text-sm" for="opt-retry-sleep">Retry sleep expressions</label>
+        <textarea class="textarea w-full font-mono" id="opt-retry-sleep" rows={2} bind:value={opts.retrySleep} placeholder={'exp=1:20\nfragment:exp=1:10'}></textarea>
+        <p class="mt-1.5 text-xs text-base-content/40">
           One <code>[type:]EXPR</code> per line (types: http, fragment, file_access, extractor). See yt-dlp's
           <code>--retry-sleep</code> docs for the expression syntax.
         </p>
@@ -353,92 +280,77 @@
     </div>
   </details>
 
-  <details class="group rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
+  <details class="group rounded-xl border border-base-300/70 bg-base-200/40 p-4">
     <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
       <div>
-        <h3 class="text-sm font-semibold text-slate-200">Network & authentication</h3>
-        <p class="mt-1 text-xs text-slate-600">For sites that need a login or a proxy. Prefer cookie profiles for site logins when possible.</p>
+        <h3 class="text-sm font-semibold text-base-content/90">Network & authentication</h3>
+        <p class="mt-1 text-xs text-base-content/40">For sites that need a login or a proxy. Prefer cookie profiles for site logins when possible.</p>
       </div>
-      <ChevronDownOutline class="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-180" />
+      <ChevronDownOutline class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
     </summary>
     <div class="mt-4 grid gap-4 sm:grid-cols-2">
       <div class="sm:col-span-2">
-        <Label for="opt-proxy" class="mb-2 text-sm font-medium text-slate-300">Proxy URL</Label>
-        <Input
-          id="opt-proxy"
-          bind:value={opts.proxy}
-          placeholder="socks5://127.0.0.1:1080"
-          class={fieldClass}
-        />
-        <p class="mt-1.5 text-xs text-slate-600">Routes the server’s download traffic through this proxy.</p>
+        <label class="label mb-2 text-sm" for="opt-proxy">Proxy URL</label>
+        <input class="input w-full" id="opt-proxy" bind:value={opts.proxy} placeholder="socks5://127.0.0.1:1080" />
+        <p class="mt-1.5 text-xs text-base-content/40">Routes the server’s download traffic through this proxy.</p>
       </div>
       <div>
-        <Label for="opt-username" class="mb-2 text-sm font-medium text-slate-300">Username</Label>
-        <Input id="opt-username" autocomplete="off" bind:value={opts.username} class={fieldClass} />
+        <label class="label mb-2 text-sm" for="opt-username">Username</label>
+        <input class="input w-full" id="opt-username" autocomplete="off" bind:value={opts.username} />
       </div>
       <div>
-        <Label for="opt-password" class="mb-2 text-sm font-medium text-slate-300">Password</Label>
-        <Input id="opt-password" type="password" autocomplete="new-password" bind:value={opts.password} class={fieldClass} />
+        <label class="label mb-2 text-sm" for="opt-password">Password</label>
+        <input class="input w-full" id="opt-password" type="password" autocomplete="new-password" bind:value={opts.password} />
       </div>
       <div>
-        <Label for="opt-two-factor" class="mb-2 text-sm font-medium text-slate-300">Two-factor code</Label>
-        <Input id="opt-two-factor" autocomplete="off" bind:value={opts.twoFactor} class={fieldClass} />
+        <label class="label mb-2 text-sm" for="opt-two-factor">Two-factor code</label>
+        <input class="input w-full" id="opt-two-factor" autocomplete="off" bind:value={opts.twoFactor} />
       </div>
       <div>
-        <Label for="opt-video-password" class="mb-2 text-sm font-medium text-slate-300">Video password</Label>
-        <Input id="opt-video-password" type="password" autocomplete="new-password" bind:value={opts.videoPassword} class={fieldClass} />
+        <label class="label mb-2 text-sm" for="opt-video-password">Video password</label>
+        <input class="input w-full" id="opt-video-password" type="password" autocomplete="new-password" bind:value={opts.videoPassword} />
       </div>
-      <p class="text-xs text-amber-500/80 sm:col-span-2">
+      <p class="text-xs text-warning sm:col-span-2">
         Credentials are stored as plain text in the preset and sent to the site during downloads.
       </p>
     </div>
   </details>
 
-  <details class="group rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
+  <details class="group rounded-xl border border-base-300/70 bg-base-200/40 p-4">
     <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
       <div>
-        <h3 class="text-sm font-semibold text-slate-200">Workarounds</h3>
-        <p class="mt-1 text-xs text-slate-600">Only needed for sites that misbehave with the default settings.</p>
+        <h3 class="text-sm font-semibold text-base-content/90">Workarounds</h3>
+        <p class="mt-1 text-xs text-base-content/40">Only needed for sites that misbehave with the default settings.</p>
       </div>
-      <ChevronDownOutline class="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-180" />
+      <ChevronDownOutline class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
     </summary>
     <div class="mt-4 space-y-4">
       <div class="flex flex-wrap gap-x-8 gap-y-3">
-        <Toggle bind:checked={opts.noCheckCertificates} class="text-sm text-slate-300">
-          Skip certificate checks
-        </Toggle>
-        <Toggle bind:checked={opts.legacyServerConnect} class="text-sm text-slate-300">
-          Allow legacy server connections
-        </Toggle>
+        <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle" bind:checked={opts.noCheckCertificates} /><span>Skip certificate checks</span></label>
+        <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle" bind:checked={opts.legacyServerConnect} /><span>Allow legacy server connections</span></label>
       </div>
       <div class="grid gap-4 sm:grid-cols-2">
         <div>
-          <Label for="opt-sleep-requests" class="mb-2 text-sm font-medium text-slate-300">Sleep between requests (s)</Label>
-          <Input id="opt-sleep-requests" type="number" min={0} step="any" bind:value={opts.sleepRequests} placeholder="Default" class={fieldClass} />
+          <label class="label mb-2 text-sm" for="opt-sleep-requests">Sleep between requests (s)</label>
+          <input class="input w-full" id="opt-sleep-requests" type="number" min={0} step="any" bind:value={opts.sleepRequests} placeholder="Default" />
         </div>
         <div>
-          <Label for="opt-sleep-subtitles" class="mb-2 text-sm font-medium text-slate-300">Sleep between subtitles (s)</Label>
-          <Input id="opt-sleep-subtitles" type="number" min={0} step="any" bind:value={opts.sleepSubtitles} placeholder="Default" class={fieldClass} />
+          <label class="label mb-2 text-sm" for="opt-sleep-subtitles">Sleep between subtitles (s)</label>
+          <input class="input w-full" id="opt-sleep-subtitles" type="number" min={0} step="any" bind:value={opts.sleepSubtitles} placeholder="Default" />
         </div>
         <div>
-          <Label for="opt-sleep-interval" class="mb-2 text-sm font-medium text-slate-300">Sleep before download (s)</Label>
-          <Input id="opt-sleep-interval" type="number" min={0} step="any" bind:value={opts.sleepInterval} placeholder="Default" class={fieldClass} />
+          <label class="label mb-2 text-sm" for="opt-sleep-interval">Sleep before download (s)</label>
+          <input class="input w-full" id="opt-sleep-interval" type="number" min={0} step="any" bind:value={opts.sleepInterval} placeholder="Default" />
         </div>
         <div>
-          <Label for="opt-max-sleep-interval" class="mb-2 text-sm font-medium text-slate-300">Max sleep before download (s)</Label>
-          <Input id="opt-max-sleep-interval" type="number" min={0} step="any" bind:value={opts.maxSleepInterval} placeholder="Default" class={fieldClass} />
+          <label class="label mb-2 text-sm" for="opt-max-sleep-interval">Max sleep before download (s)</label>
+          <input class="input w-full" id="opt-max-sleep-interval" type="number" min={0} step="any" bind:value={opts.maxSleepInterval} placeholder="Default" />
         </div>
       </div>
       <div>
-        <Label for="opt-add-headers" class="mb-2 text-sm font-medium text-slate-300">Extra HTTP headers</Label>
-        <Textarea
-          id="opt-add-headers"
-          rows={3}
-          bind:value={opts.addHeaders}
-          placeholder={'Referer: https://example.com\nX-Custom: value'}
-          class="font-mono! {fieldClass}"
-        />
-        <p class="mt-1.5 text-xs text-slate-600">One <code>Header: value</code> per line.</p>
+        <label class="label mb-2 text-sm" for="opt-add-headers">Extra HTTP headers</label>
+        <textarea class="textarea w-full font-mono" id="opt-add-headers" rows={3} bind:value={opts.addHeaders} placeholder={'Referer: https://example.com\nX-Custom: value'}></textarea>
+        <p class="mt-1.5 text-xs text-base-content/40">One <code>Header: value</code> per line.</p>
       </div>
     </div>
   </details>

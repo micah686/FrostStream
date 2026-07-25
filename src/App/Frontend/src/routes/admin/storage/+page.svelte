@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Button, Spinner } from 'flowbite-svelte';
   import {
     CloudArrowUpOutline,
     DatabaseOutline,
@@ -71,17 +70,17 @@
 </script>
 
 <section
-  class="rounded-2xl border border-slate-800 bg-[#151a26] p-5 shadow-xl shadow-black/15 sm:p-6"
+  class="card border border-base-300 bg-base-100 p-5 sm:p-6"
   aria-labelledby="storage-title"
 >
-  <h2 id="storage-title" class="text-base font-bold text-slate-100">Storage targets</h2>
-  <p class="mt-2 text-sm text-slate-400">
+  <h2 id="storage-title" class="text-base font-bold text-base-content">Storage targets</h2>
+  <p class="mt-2 text-sm text-base-content/60">
     Filesystems, network shares, and object stores FrostStream can index or write to.
   </p>
 
   {#if storageError}
     <div
-      class="mt-5 flex items-start gap-2 rounded-xl border border-red-900/60 bg-red-950/35 p-3 text-sm text-red-300"
+      class="mt-5 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
       <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
@@ -91,37 +90,37 @@
 
   {#if storageLoading}
     <div class="mt-10 flex justify-center">
-      <Spinner size="8" />
+      <span class="loading loading-spinner loading-md"></span>
     </div>
   {:else if storageTargets.length === 0}
-    <div class="mt-5 rounded-xl border border-slate-800/80 bg-slate-950/30 p-8 text-center">
-      <DatabaseOutline class="mx-auto h-9 w-9 text-slate-700" />
-      <p class="mt-4 text-sm font-semibold text-slate-300">No storage targets yet</p>
-      <p class="mt-1 text-sm text-slate-500">Register one so downloads have somewhere to land.</p>
+    <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
+      <DatabaseOutline class="mx-auto h-9 w-9 text-base-content/30" />
+      <p class="mt-4 text-sm font-semibold text-base-content/80">No storage targets yet</p>
+      <p class="mt-1 text-sm text-base-content/50">Register one so downloads have somewhere to land.</p>
     </div>
   {:else}
     <div class="mt-5 space-y-2">
       {#each storageTargets as storage (storage.key)}
         {@const Icon = storageIcon(storage)}
         <article
-          class="flex min-h-[3.95rem] flex-col gap-3 rounded-lg border border-slate-700/70 bg-[#151a26] px-3 py-3 transition hover:border-slate-600 hover:bg-slate-800/30 sm:flex-row sm:items-center sm:px-4"
+          class="flex min-h-[3.95rem] flex-col gap-3 rounded-lg border border-base-content/20 bg-base-100 px-3 py-3 transition hover:border-base-content/30 hover:bg-base-300/30 sm:flex-row sm:items-center sm:px-4"
         >
           <div class="flex min-w-0 items-center gap-3">
-            <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-800/70 text-blue-400">
+            <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-base-300/70 text-primary">
               <Icon class="h-4.5 w-4.5" />
             </span>
             <div class="min-w-0">
               <div class="flex min-w-0 flex-wrap items-center gap-2">
-                <h3 class="truncate text-sm font-semibold text-slate-100">{storage.key}</h3>
-                <span class="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-400">
+                <h3 class="truncate text-sm font-semibold text-base-content">{storage.key}</h3>
+                <span class="rounded-full bg-base-300 px-2 py-0.5 text-[10px] font-semibold text-base-content/60">
                   {storageMethodLabel(storage)}
                 </span>
               </div>
-              <p class="mt-0.5 truncate font-mono text-xs text-slate-400" title={storageSummary(storage)}>
+              <p class="mt-0.5 truncate font-mono text-xs text-base-content/60" title={storageSummary(storage)}>
                 {storageSummary(storage)}
               </p>
               {#if storage.description}
-                <p class="mt-0.5 truncate text-xs text-slate-500">{storage.description}</p>
+                <p class="mt-0.5 truncate text-xs text-base-content/50">{storage.description}</p>
               {/if}
             </div>
           </div>
@@ -129,7 +128,7 @@
           <div class="flex shrink-0 gap-2 sm:ml-auto">
             <a
               href={`/admin/storage/${encodeURIComponent(storage.key)}`}
-              class="inline-flex h-10 min-w-24 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-900/70 px-3 text-xs font-semibold text-slate-200 transition hover:border-blue-500/60 hover:bg-blue-500/10 hover:text-blue-200"
+              class="inline-flex h-10 min-w-24 items-center justify-center gap-2 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary"
               aria-label={`View settings for storage target ${storage.key}`}
             >
               <EyeOutline class="h-4 w-4" />
@@ -138,7 +137,7 @@
             {#if storage.key !== 'default'}
               <button
                 type="button"
-                class="inline-flex h-10 min-w-10 items-center justify-center rounded-lg border border-slate-700 bg-slate-900/70 px-3 text-slate-300 transition hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-200 disabled:opacity-50"
+                class="inline-flex h-10 min-w-10 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-base-content/80 transition hover:border-error/60 hover:bg-error/10 hover:text-error disabled:opacity-50"
                 title="Delete storage target"
                 aria-label={`Delete storage target ${storage.key}`}
                 disabled={deletingKey === storage.key}
@@ -148,7 +147,7 @@
                 }}
               >
                 {#if deletingKey === storage.key}
-                  <Spinner size="4" />
+                  <span class="loading loading-spinner loading-xs"></span>
                 {:else}
                   <TrashBinOutline class="h-4 w-4" />
                 {/if}
@@ -161,14 +160,10 @@
   {/if}
 
   <div class="mt-4">
-    <Button
-      href="/admin/storage/new"
-      color="dark"
-      class="border-slate-700! bg-transparent! px-3! py-1.5! text-xs! font-semibold! text-slate-200! hover:border-slate-600! hover:bg-slate-800!"
-    >
+    <a class="btn btn-sm btn-ghost text-xs" href="/admin/storage/new">
       <PlusOutline class="mr-1.5 h-3.5 w-3.5" />
       Register storage
-    </Button>
+    </a>
   </div>
 </section>
 
