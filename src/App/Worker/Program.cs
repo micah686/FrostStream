@@ -52,9 +52,13 @@ class Program
         builder.Services.AddNatsTopologySource<LocalImportTopology>();
 
         builder.Services.AddSingleton<IClock>(SystemClock.Instance);
+        builder.Services.AddSingleton<IBackgroundRunReporter>(sp => new BackgroundRunReporter(
+            sp.GetRequiredService<IMessageBus>(),
+            sp.GetRequiredService<IClock>(),
+            "worker",
+            sp.GetService<Microsoft.Extensions.Logging.ILogger<BackgroundRunReporter>>()));
         builder.Services.AddOpenBaoSecretStore(builder.Configuration);
         builder.Services.AddFrostStreamStorage();
-        builder.Services.AddSingleton<IStorageEnumerator, StorageEnumerator>();
 
         // yt-dlp wiring. The binary downloader writes into <BaseDirectory>/tools and the
         // client points at the predicted absolute paths so the first invocation finds them
@@ -145,8 +149,6 @@ class Program
         builder.Services.AddHostedService<PlaylistCommandsConsumerService>();
         builder.Services.AddHostedService<ChannelDiscoveryConsumerService>();
         builder.Services.AddHostedService<ChannelAssetRefreshConsumerService>();
-        builder.Services.AddHostedService<FilesystemRescanConsumerService>();
-        builder.Services.AddHostedService<OrphanCleanupConsumerService>();
         builder.Services.AddHostedService<MediaFileDeleteConsumerService>();
 
         var app = builder.Build();

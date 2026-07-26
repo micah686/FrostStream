@@ -199,7 +199,7 @@ public sealed class CreatorMonitorControllerTests
                 g.CorrelationId == payload.CorrelationId &&
                 g.ChannelRequest != null &&
                 g.ChannelRequest.ScheduleKey == "manual-channel-download" &&
-                g.ChannelRequest.TaskType == "channel_media_list" &&
+                g.ChannelRequest.TaskType == "channel_scan_full" &&
                 g.ChannelRequest.DueWindowUtc == Now &&
                 g.ChannelRequest.OccurredAt == Now &&
                 g.ChannelRequest.TargetSourceId == 42 &&

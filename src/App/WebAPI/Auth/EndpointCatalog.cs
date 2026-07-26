@@ -113,16 +113,9 @@ public static class EndpointIds
 
     // Metadata (admin)
     public const string MetadataReindex = "metadata.reindex";
-    public const string MetadataOrphansList = "metadata.orphans.list";
-    public const string MetadataOrphansRestoreFile = "metadata.orphans.restore-file";
-    public const string MetadataOrphansRestoreMetadata = "metadata.orphans.restore-metadata";
-    public const string OrphanCleanupPolicyGet = "metadata.orphan-cleanup-policy.get";
-    public const string OrphanCleanupPolicyUpdate = "metadata.orphan-cleanup-policy.update";
+    public const string MetadataDatabaseReindex = "metadata.database-reindex";
     public const string MediaDelete = "media.delete";
     public const string MediaDeleteForStorageKey = "media.delete-for-key";
-    public const string WatchedAutoDeletePolicyGet = "watched-auto-delete.policy.get";
-    public const string WatchedAutoDeletePolicyUpdate = "watched-auto-delete.policy.update";
-    public const string WatchedAutoDeleteRun = "watched-auto-delete.run";
 
     // Playlists
     public const string PlaylistsCreate = "playlists.create";
@@ -154,6 +147,10 @@ public static class EndpointIds
     public const string NotificationsSecretsUpsert = "notifications.secrets.upsert";
     public const string NotificationsSecretsDelete = "notifications.secrets.delete";
     public const string NotificationsTest = "notifications.test";
+
+    // Background job runs (live, in-memory)
+    public const string JobsBackgroundList = "jobs.background.list";
+    public const string JobsBackgroundStream = "jobs.background.stream";
 
     // Schedules
     public const string SchedulesCreate = "schedules.create";
@@ -350,16 +347,9 @@ public static class EndpointCatalog
         new(EndpointIds.SearchSimilar, Bundles.Metadata),
 
         new(EndpointIds.MetadataReindex, Bundles.MetadataAdmin),
-        new(EndpointIds.MetadataOrphansList, Bundles.MetadataAdmin),
-        new(EndpointIds.MetadataOrphansRestoreFile, Bundles.MetadataAdmin),
-        new(EndpointIds.MetadataOrphansRestoreMetadata, Bundles.MetadataAdmin),
-        new(EndpointIds.OrphanCleanupPolicyGet, Bundles.MetadataAdmin),
-        new(EndpointIds.OrphanCleanupPolicyUpdate, Bundles.MetadataAdmin),
+        new(EndpointIds.MetadataDatabaseReindex, Bundles.MetadataAdmin),
         new(EndpointIds.MediaDelete, Bundles.MetadataAdmin),
         new(EndpointIds.MediaDeleteForStorageKey, Bundles.MetadataAdmin),
-        new(EndpointIds.WatchedAutoDeletePolicyGet, Bundles.MetadataAdmin),
-        new(EndpointIds.WatchedAutoDeletePolicyUpdate, Bundles.MetadataAdmin),
-        new(EndpointIds.WatchedAutoDeleteRun, Bundles.MetadataAdmin),
 
         new(EndpointIds.PlaylistsCreate, Bundles.Playlists),
         new(EndpointIds.PlaylistsList, Bundles.Playlists),
@@ -394,6 +384,9 @@ public static class EndpointCatalog
         new(EndpointIds.SchedulesGet, Bundles.Schedules),
         new(EndpointIds.SchedulesList, Bundles.Schedules),
         new(EndpointIds.SchedulesDelete, Bundles.Schedules),
+
+        new(EndpointIds.JobsBackgroundList, Bundles.Schedules),
+        new(EndpointIds.JobsBackgroundStream, Bundles.Schedules),
 
         new(EndpointIds.OptionPresetsCreate, Bundles.Presets),
         new(EndpointIds.OptionPresetsUpdate, Bundles.Presets),

@@ -21,6 +21,8 @@ internal sealed class ScheduledBackupConsumer(
     private async Task HandleAsync(IJsMessageContext<BackupRequested> context, CancellationToken cancellationToken)
     {
         var message = context.Message;
+        // No run reporting here: BackupCoordinator reports the run, so both the scheduled and the
+        // admin-triggered path produce exactly one row on Jobs > Background.
         try
         {
             await messageBus.PublishAsync(ScheduleSubjects.MarkAttempt, new ScheduleMarkAttemptRequestMessage
@@ -30,7 +32,8 @@ internal sealed class ScheduledBackupConsumer(
             }, cancellationToken: cancellationToken);
 
             var name = $"scheduled-{message.ScheduleKey}-{message.DueWindowUtc:yyyyMMddHHmmss}";
-            var queued = await coordinator.QueueAsync(name, "snapshot", true, message.IdempotencyKey, cancellationToken);
+            var queued = await coordinator.QueueAsync(
+                name, "snapshot", true, message.IdempotencyKey, cancellationToken, message.ScheduleKey);
             var completed = await coordinator.WaitAsync(queued.JobId, cancellationToken);
             if (completed.Status != "completed")
                 throw new InvalidOperationException(completed.ErrorMessage ?? "Scheduled backup failed.");
@@ -45,6 +48,12 @@ internal sealed class ScheduledBackupConsumer(
         catch (Exception ex)
         {
             logger.LogError(ex, "Scheduled backup {IdempotencyKey} failed.", message.IdempotencyKey);
+            await messageBus.PublishAsync(NotificationSubjects.DispatchAdmin, new NotificationDispatchAdminEventMessage
+            {
+                EventKey = NotificationEventKeys.BackupFailed,
+                Subject = "FrostStream backup failed",
+                Body = $"Scheduled backup '{message.ScheduleKey}' failed: {ex.Message}"
+            }, cancellationToken: CancellationToken.None);
             await messageBus.PublishAsync(ScheduleSubjects.MarkFailure, new ScheduleMarkFailureRequestMessage
             {
                 Key = message.ScheduleKey,

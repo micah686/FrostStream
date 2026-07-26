@@ -1,8 +1,8 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { ClockOutline, DownloadOutline, VideoCameraOutline } from 'flowbite-svelte-icons';
+  import { Clock, Download, Video } from '@lucide/svelte';
 
-  type IconComponent = typeof DownloadOutline;
+  type IconComponent = typeof Download;
 
   interface JobsSection {
     label: string;
@@ -13,9 +13,9 @@
   let { children } = $props();
 
   const sections: JobsSection[] = [
-    { label: 'Downloads', icon: DownloadOutline, href: '/jobs' },
-    { label: 'Encoding', icon: VideoCameraOutline, href: '/jobs/encoding' },
-    { label: 'Background', icon: ClockOutline, href: '/jobs/background' }
+    { label: 'Downloads', icon: Download, href: '/jobs' },
+    { label: 'Encoding', icon: Video, href: '/jobs/encoding' },
+    { label: 'Background', icon: Clock, href: '/jobs/background' }
   ];
 
   function isActive(section: JobsSection): boolean {
@@ -33,8 +33,8 @@
 
 <section class="min-h-[calc(100vh-7rem)]" aria-labelledby="jobs-title">
   <div class="min-w-0">
-    <h1 id="jobs-title" class="text-2xl font-bold tracking-tight text-slate-100">Jobs</h1>
-    <p class="mt-2 text-sm text-slate-400">Downloads, encoding, and background work</p>
+    <h1 id="jobs-title" class="text-2xl font-bold tracking-tight text-base-content">Jobs</h1>
+    <p class="mt-2 text-sm text-base-content/60">Downloads, encoding, and background work</p>
   </div>
 
   <div class="mt-6 grid gap-6 xl:grid-cols-[14rem_minmax(0,1fr)]">
@@ -48,8 +48,8 @@
             class={[
               'flex h-10 shrink-0 items-center gap-3 rounded-lg px-4 text-sm font-medium transition xl:w-full',
               active
-                ? 'bg-blue-500/18 text-blue-400'
-                : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-100'
+                ? 'bg-primary/18 text-primary'
+                : 'text-base-content/60 hover:bg-base-300/70 hover:text-base-content'
             ]}
             aria-current={active ? 'page' : undefined}
           >

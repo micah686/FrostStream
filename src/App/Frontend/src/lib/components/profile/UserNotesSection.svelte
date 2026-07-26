@@ -1,15 +1,15 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Button, Input, Select, Spinner, Textarea } from 'flowbite-svelte';
+  import { Select } from '$lib/components/ui';
   import {
-    CheckOutline,
-    EditOutline,
-    ExclamationCircleOutline,
-    EyeOutline,
-    FileSearchOutline,
-    SearchOutline,
-    TrashBinOutline
-  } from 'flowbite-svelte-icons';
+    Check,
+    CircleAlert,
+    Eye,
+    FileSearch,
+    Pencil,
+    Search,
+    Trash2
+  } from '@lucide/svelte';
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
   import {
     deleteNote,
@@ -19,8 +19,6 @@
     type UserNote
   } from '$lib/api/notes';
 
-  const fieldClass =
-    'border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!';
 
   const targetOptions = [
     { value: 'all', name: 'All targets' },
@@ -163,101 +161,96 @@
   }
 </script>
 
-<section class="rounded-2xl border border-slate-800 bg-[#151a26] p-5 shadow-xl shadow-black/15 sm:p-6">
+<section class="card border border-base-300 bg-base-100 p-5 sm:p-6">
   <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
     <div>
-      <h2 class="text-base font-bold text-slate-100">Notes</h2>
-      <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+      <h2 class="text-base font-bold text-base-content">Notes</h2>
+      <p class="mt-2 max-w-3xl text-sm leading-6 text-base-content/60">
         Private notes saved against videos, playlists, and channels.
       </p>
     </div>
-    <span class="rounded-full bg-slate-800 px-2.5 py-1 text-[10px] font-semibold text-slate-400">
+    <span class="rounded-full bg-base-300 px-2.5 py-1 text-[10px] font-semibold text-base-content/60">
       {totalCount} {totalCount === 1 ? 'note' : 'notes'}
     </span>
   </div>
 
   <form class="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_12rem_auto]" onsubmit={submitSearch}>
     <div class="relative">
-      <SearchOutline class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
-      <Input bind:value={query} placeholder="Search notes" class={`${fieldClass} pl-9!`} />
+      <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-base-content/40" />
+      <input class="input w-full pl-9" bind:value={query} placeholder="Search notes" />
     </div>
-    <Select items={targetOptions} bind:value={targetType} class={fieldClass} />
-    <Button
-      type="submit"
-      color="dark"
-      disabled={loading}
-      class="border-slate-700! bg-slate-900! px-4! py-2! text-xs! font-semibold! text-slate-200! hover:bg-slate-800! disabled:opacity-50"
-    >
+    <Select items={targetOptions} bind:value={targetType} />
+    <button class="btn btn-sm btn-neutral text-xs" type="submit" disabled={loading}>
       {#if loading}
-        <Spinner size="4" class="mr-1.5" />
+        <span class="loading loading-spinner loading-xs mr-1.5"></span>
       {/if}
       Search
-    </Button>
+    </button>
   </form>
 
   {#if error}
     <div
-      class="mt-5 flex items-start gap-2 rounded-xl border border-red-900/60 bg-red-950/35 p-3 text-sm text-red-300"
+      class="mt-5 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{error}</span>
     </div>
   {/if}
 
   {#if loading && notes.length === 0}
     <div class="mt-10 flex justify-center">
-      <Spinner size="8" />
+      <span class="loading loading-spinner loading-md"></span>
     </div>
   {:else if notes.length === 0}
-    <div class="mt-5 rounded-xl border border-slate-800/80 bg-slate-950/30 p-8 text-center">
-      <FileSearchOutline class="mx-auto h-9 w-9 text-slate-700" />
-      <p class="mt-4 text-sm font-semibold text-slate-300">No notes found</p>
-      <p class="mt-1 text-sm text-slate-500">Notes you add from videos, playlists, or channels appear here.</p>
+    <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
+      <FileSearch class="mx-auto h-9 w-9 text-base-content/30" />
+      <p class="mt-4 text-sm font-semibold text-base-content/80">No notes found</p>
+      <p class="mt-1 text-sm text-base-content/50">Notes you add from videos, playlists, or channels appear here.</p>
     </div>
   {:else}
     <div class="mt-5 space-y-2">
       {#each notes as note (noteKey(note))}
         {@const key = noteKey(note)}
         {@const editing = editingKey === key}
-        <article class="rounded-lg border border-slate-700/70 bg-[#151a26] px-3 py-3 transition hover:border-slate-600 hover:bg-slate-800/30 sm:px-4">
+        <article class="rounded-lg border border-base-content/20 bg-base-100 px-3 py-3 transition hover:border-base-content/30 hover:bg-base-300/30 sm:px-4">
           <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div class="min-w-0">
               <div class="flex min-w-0 flex-wrap items-center gap-2">
-                <span class="rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-bold uppercase text-blue-300">
+                <span class="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase text-primary">
                   {targetLabel(note)}
                 </span>
-                <h3 class="truncate text-sm font-semibold text-slate-100">
+                <h3 class="truncate text-sm font-semibold text-base-content">
                   {note.targetTitle ?? note.targetId}
                 </h3>
                 {#if displayDate(note.updatedAt ?? note.createdAt)}
-                  <span class="text-xs text-slate-600">updated {displayDate(note.updatedAt ?? note.createdAt)}</span>
+                  <span class="text-xs text-base-content/40">updated {displayDate(note.updatedAt ?? note.createdAt)}</span>
                 {/if}
               </div>
               {#if note.targetSubtitle}
-                <p class="mt-1 truncate text-xs text-slate-500">{note.targetSubtitle}</p>
+                <p class="mt-1 truncate text-xs text-base-content/50">{note.targetSubtitle}</p>
               {/if}
             </div>
 
             <div class="flex shrink-0 flex-wrap gap-2">
               <a
                 href={targetHref(note)}
-                class="inline-flex h-9 min-w-20 items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900/70 px-3 text-xs font-semibold text-slate-200 transition hover:border-blue-500/60 hover:bg-blue-500/10 hover:text-blue-200"
+                class="inline-flex h-9 min-w-20 items-center justify-center gap-1.5 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary"
               >
-                <EyeOutline class="h-4 w-4" />
+                <Eye class="h-4 w-4" />
                 View
               </a>
               <button
                 type="button"
-                class="inline-flex h-9 min-w-20 items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900/70 px-3 text-xs font-semibold text-slate-200 transition hover:border-blue-500/60 hover:bg-blue-500/10 hover:text-blue-200"
+                class="inline-flex h-9 min-w-20 items-center justify-center gap-1.5 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary"
                 onclick={() => (editing ? (editingKey = null) : startEdit(note))}
               >
-                <EditOutline class="h-4 w-4" />
+                <Pencil class="h-4 w-4" />
                 {editing ? 'Close' : 'Edit'}
               </button>
               <button
                 type="button"
-                class="inline-flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-700 bg-slate-900/70 px-3 text-slate-300 transition hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-200 disabled:opacity-50"
+                class="inline-flex h-9 min-w-9 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-base-content/80 transition hover:border-error/60 hover:bg-error/10 hover:text-error disabled:opacity-50"
                 title="Delete note"
                 aria-label={`Delete note for ${note.targetTitle ?? note.targetId}`}
                 disabled={deletingKey === key}
@@ -267,9 +260,9 @@
                 }}
               >
                 {#if deletingKey === key}
-                  <Spinner size="4" />
+                  <span class="loading loading-spinner loading-xs"></span>
                 {:else}
-                  <TrashBinOutline class="h-4 w-4" />
+                  <Trash2 class="h-4 w-4" />
                 {/if}
               </button>
             </div>
@@ -277,35 +270,26 @@
 
           {#if editing}
             <div class="mt-3 space-y-3">
-              <Textarea bind:value={draft} rows={4} maxlength={4096} class={fieldClass} />
+              <textarea class="textarea w-full" bind:value={draft} rows={4} maxlength={4096}></textarea>
               <div class="flex flex-wrap items-center gap-2">
-                <Button
-                  color="blue"
-                  disabled={savingKey === key || draft.trim() === note.note.trim()}
-                  onclick={() => saveCurrent(note)}
-                  class="border-0! bg-blue-500! px-3! py-2! text-xs! font-semibold! hover:bg-blue-400! disabled:opacity-60"
-                >
+                <button class="btn btn-sm btn-primary text-xs" disabled={savingKey === key || draft.trim() === note.note.trim()} onclick={() => saveCurrent(note)}>
                   {#if savingKey === key}
-                    <Spinner size="4" class="mr-1.5" />
+                    <span class="loading loading-spinner loading-xs mr-1.5"></span>
                   {/if}
                   Save changes
-                </Button>
-                <Button
-                  color="dark"
-                  onclick={() => (editingKey = null)}
-                  class="border-slate-700! bg-transparent! px-3! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800!"
-                >
+                </button>
+                <button class="btn btn-sm btn-ghost text-xs" onclick={() => (editingKey = null)}>
                   Cancel
-                </Button>
+                </button>
               </div>
             </div>
           {:else}
-            <p class="mt-3 line-clamp-3 whitespace-pre-line text-sm leading-6 text-slate-300">{note.note}</p>
+            <p class="mt-3 line-clamp-3 whitespace-pre-line text-sm leading-6 text-base-content/80">{note.note}</p>
           {/if}
 
           {#if savedKey === key}
-            <p class="mt-2 flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
-              <CheckOutline class="h-3.5 w-3.5" />
+            <p class="mt-2 flex items-center gap-1.5 text-xs font-semibold text-success">
+              <Check class="h-3.5 w-3.5" />
               Saved
             </p>
           {/if}
@@ -313,25 +297,15 @@
       {/each}
     </div>
 
-    <div class="mt-5 flex items-center justify-between border-t border-slate-800/70 pt-4">
-      <p class="text-xs text-slate-600">Page {page} of {totalPages}</p>
+    <div class="mt-5 flex items-center justify-between border-t border-base-300/70 pt-4">
+      <p class="text-xs text-base-content/40">Page {page} of {totalPages}</p>
       <div class="flex gap-2">
-        <Button
-          color="dark"
-          disabled={page <= 1 || loading}
-          onclick={() => loadNotes(page - 1)}
-          class="border-slate-700! bg-transparent! px-3! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800! disabled:opacity-40"
-        >
+        <button class="btn btn-sm btn-ghost text-xs" disabled={page <= 1 || loading} onclick={() => loadNotes(page - 1)}>
           Previous
-        </Button>
-        <Button
-          color="dark"
-          disabled={!hasMore || loading}
-          onclick={() => loadNotes(page + 1)}
-          class="border-slate-700! bg-transparent! px-3! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800! disabled:opacity-40"
-        >
+        </button>
+        <button class="btn btn-sm btn-ghost text-xs" disabled={!hasMore || loading} onclick={() => loadNotes(page + 1)}>
           Next
-        </Button>
+        </button>
       </div>
     </div>
   {/if}

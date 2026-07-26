@@ -54,7 +54,7 @@ public sealed class MediaWatchStateController(
     [HttpPut]
     [Endpoint(EndpointIds.MediaWatchStateUpsert)]
     [EndpointSummary("Update the caller's watch state for a video")]
-    [EndpointDescription("Records playback progress for the authenticated caller and optionally marks the media item as completed. Completed watch states can later be selected by the admin-controlled watched-item auto-delete policy.")]
+    [EndpointDescription("Records playback progress for the authenticated caller and optionally marks the media item as completed.")]
     public async Task<IActionResult> Upsert(
         Guid mediaGuid,
         [FromBody] WatchStateUpdateRequest request,

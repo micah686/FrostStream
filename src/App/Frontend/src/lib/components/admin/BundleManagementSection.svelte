@@ -1,19 +1,19 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Button, Input, Label, Modal, Spinner } from 'flowbite-svelte';
+  import { Modal } from '$lib/components/ui';
   import {
-    CheckOutline,
-    ChevronDownOutline,
-    ChevronUpOutline,
-    CubesStackedOutline,
-    EditOutline,
-    ExclamationCircleOutline,
-    PlusOutline,
-    RefreshOutline,
-    ServerOutline,
-    TrashBinOutline,
-    UsersGroupOutline
-  } from 'flowbite-svelte-icons';
+    Boxes,
+    Check,
+    ChevronDown,
+    ChevronUp,
+    CircleAlert,
+    Pencil,
+    Plus,
+    RefreshCw,
+    Server,
+    Trash2,
+    Users
+  } from '@lucide/svelte';
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
   import { ApiRequestError } from '$lib/api/http';
   import {
@@ -33,12 +33,7 @@
     entries: CatalogEntry[];
   }
 
-  const inputClass =
-    'border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!';
-  const cardClass = 'rounded-2xl border border-slate-800 bg-[#151a26] p-5 shadow-xl shadow-black/15 sm:p-6';
-  const outlineButtonClass =
-    'border-slate-700! bg-transparent! px-3! py-1.5! text-xs! font-semibold! text-slate-200! hover:border-slate-600! hover:bg-slate-800!';
-  const saveButtonClass = 'border-0! px-4! py-2! text-xs! font-semibold! disabled:opacity-60';
+  const cardClass = 'card border border-base-300 bg-base-100 p-5 sm:p-6';
 
   let bundles = $state<BundleView[]>([]);
   let catalog = $state<CatalogEntry[]>([]);
@@ -138,8 +133,8 @@
 
   function ownershipClass(bundle: BundleView): string {
     return bundle.systemOwned
-      ? 'border-blue-500/25 bg-blue-500/10 text-blue-200'
-      : 'border-emerald-500/25 bg-emerald-500/10 text-emerald-200';
+      ? 'border-primary/25 bg-primary/10 text-primary'
+      : 'border-success/25 bg-success/10 text-success';
   }
 
   function catalogGroups(entries: CatalogEntry[] = catalog): CatalogGroup[] {
@@ -275,75 +270,75 @@
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div class="min-w-0">
       <div class="flex items-center gap-2">
-        <CubesStackedOutline class="h-5 w-5 text-blue-400" />
-        <h2 id="bundle-management-title" class="text-base font-bold text-slate-100">Bundle management</h2>
+        <Boxes class="h-5 w-5 text-primary" />
+        <h2 id="bundle-management-title" class="text-base font-bold text-base-content">Bundle management</h2>
       </div>
-      <p class="mt-2 text-sm text-slate-400">
+      <p class="mt-2 text-sm text-base-content/60">
         Define which endpoints belong to each bundle. Assign users and groups from Policies.
       </p>
     </div>
     <div class="flex flex-wrap gap-2">
-      <Button color="dark" class={outlineButtonClass} disabled={loading} onclick={() => void loadAll()}>
-        <RefreshOutline class="mr-1.5 h-3.5 w-3.5" />
+      <button class="btn btn-sm btn-neutral" disabled={loading} onclick={() => void loadAll()}>
+        <RefreshCw class="mr-1.5 h-3.5 w-3.5" />
         Refresh
-      </Button>
-      <Button color="blue" class={saveButtonClass} onclick={openCreateModal}>
-        <PlusOutline class="mr-1.5 h-3.5 w-3.5" />
+      </button>
+      <button class="btn btn-sm btn-primary" onclick={openCreateModal}>
+        <Plus class="mr-1.5 h-3.5 w-3.5" />
         Create runtime bundle
-      </Button>
+      </button>
     </div>
   </div>
 
   {#if openFgaUnavailable}
     <div
-      class="mt-4 flex items-start gap-2 rounded-xl border border-amber-700/60 bg-amber-950/30 p-3 text-sm text-amber-200"
+      class="mt-4 flex items-start gap-2 rounded-xl border border-warning/60 bg-warning/10 p-3 text-sm text-warning"
       role="alert"
     >
-      <ServerOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <Server class="mt-0.5 h-4 w-4 shrink-0" />
       <span>OpenFGA is unavailable. Bundle authorization changes cannot complete until it recovers.</span>
     </div>
   {/if}
 
   {#if loadError}
-    <div class="mt-4 flex items-start gap-2 rounded-xl border border-red-900/60 bg-red-950/35 p-3 text-sm text-red-300" role="alert">
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+    <div class="mt-4 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error" role="alert">
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{displayError(loadError, 'Could not load bundle management data.')}</span>
     </div>
   {/if}
   {#if mutationError}
-    <div class="mt-4 flex items-start gap-2 rounded-xl border border-red-900/60 bg-red-950/35 p-3 text-sm text-red-300" role="alert">
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+    <div class="mt-4 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error" role="alert">
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{displayError(mutationError, 'Bundle operation failed.')}</span>
     </div>
   {/if}
 
   {#if loading}
-    <div class="mt-10 flex justify-center"><Spinner size="8" /></div>
+    <div class="mt-10 flex justify-center"><span class="loading loading-spinner loading-md"></span></div>
   {:else if bundles.length === 0}
-    <div class="mt-5 rounded-xl border border-slate-800/80 bg-slate-950/30 p-8 text-center">
-      <CubesStackedOutline class="mx-auto h-9 w-9 text-slate-700" />
-      <p class="mt-4 text-sm font-semibold text-slate-300">No bundles</p>
-      <p class="mt-1 text-sm text-slate-500">Create a runtime bundle after the catalog is available.</p>
+    <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
+      <Boxes class="mx-auto h-9 w-9 text-base-content/30" />
+      <p class="mt-4 text-sm font-semibold text-base-content/80">No bundles</p>
+      <p class="mt-1 text-sm text-base-content/50">Create a runtime bundle after the catalog is available.</p>
     </div>
   {:else}
     <div class="mt-5 grid gap-5 2xl:grid-cols-[21rem_minmax(0,1fr)]">
-      <aside class="min-w-0 rounded-xl border border-slate-800 bg-slate-950/20" aria-label="Bundles">
+      <aside class="min-w-0 rounded-xl border border-base-300 bg-base-200/20" aria-label="Bundles">
         {#snippet bundleRow(bundle: BundleView)}
           <button
             type="button"
             class={[
               'block w-full px-3 py-3 text-left transition',
-              selectedBundle?.id === bundle.id ? 'bg-blue-500/10' : 'hover:bg-slate-800/45'
+              selectedBundle?.id === bundle.id ? 'bg-primary/10' : 'hover:bg-base-300/45'
             ]}
             onclick={() => (selectedBundleId = bundle.id)}
           >
             <div class="flex min-w-0 items-center justify-between gap-2">
-              <span class="truncate font-mono text-sm font-semibold text-slate-100">{bundle.id}</span>
+              <span class="truncate font-mono text-sm font-semibold text-base-content">{bundle.id}</span>
               <span class={['shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold', ownershipClass(bundle)]}>
                 {ownershipLabel(bundle)}
               </span>
             </div>
-            <div class="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
+            <div class="mt-1 flex flex-wrap gap-2 text-xs text-base-content/50">
               <span>{bundle.endpointCount} endpoint{bundle.endpointCount === 1 ? '' : 's'}</span>
               <span>{bundle.policyCount} {bundle.policyCount === 1 ? 'policy' : 'policies'}</span>
             </div>
@@ -353,25 +348,25 @@
         {#snippet bundleGroup(label: string, items: BundleView[], open: boolean, toggle: () => void)}
           <button
             type="button"
-            class="flex w-full items-center justify-between gap-2 border-b border-slate-800 px-3 py-2 text-left transition hover:bg-slate-800/35"
+            class="flex w-full items-center justify-between gap-2 border-b border-base-300 px-3 py-2 text-left transition hover:bg-base-300/35"
             aria-expanded={open}
             onclick={toggle}
           >
-            <span class="text-xs font-semibold uppercase text-slate-500">{label}</span>
-            <span class="flex shrink-0 items-center gap-1.5 text-xs text-slate-600">
+            <span class="text-xs font-semibold uppercase text-base-content/50">{label}</span>
+            <span class="flex shrink-0 items-center gap-1.5 text-xs text-base-content/40">
               {items.length}
               {#if open}
-                <ChevronUpOutline class="h-3 w-3" />
+                <ChevronUp class="h-3 w-3" />
               {:else}
-                <ChevronDownOutline class="h-3 w-3" />
+                <ChevronDown class="h-3 w-3" />
               {/if}
             </span>
           </button>
           {#if open}
             {#if items.length === 0}
-              <div class="border-b border-slate-800/80 px-3 py-3 text-xs text-slate-600">No bundles.</div>
+              <div class="border-b border-base-300/80 px-3 py-3 text-xs text-base-content/40">No bundles.</div>
             {:else}
-              <div class="divide-y divide-slate-800/80 border-b border-slate-800/80">
+              <div class="divide-y divide-base-300/80 border-b border-base-300/80">
                 {#each items as bundle (bundle.id)}
                   {@render bundleRow(bundle)}
                 {/each}
@@ -388,16 +383,16 @@
 
       {#if selectedBundle}
         <div class="min-w-0 space-y-5">
-          <section class="rounded-xl border border-slate-800 bg-slate-950/20 p-4">
+          <section class="rounded-xl border border-base-300 bg-base-200/20 p-4">
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div class="min-w-0">
                 <div class="flex min-w-0 flex-wrap items-center gap-2">
-                  <h3 class="truncate font-mono text-base font-bold text-slate-100">{selectedBundle.id}</h3>
+                  <h3 class="truncate font-mono text-base font-bold text-base-content">{selectedBundle.id}</h3>
                   <span class={['rounded-full border px-2 py-0.5 text-[10px] font-bold', ownershipClass(selectedBundle)]}>
                     {ownershipLabel(selectedBundle)}
                   </span>
                 </div>
-                <p class="mt-1 text-xs text-slate-500">
+                <p class="mt-1 text-xs text-base-content/50">
                   {selectedBundle.endpointCount} endpoints · {selectedBundle.policyCount} {selectedBundle.policyCount === 1 ? 'policy' : 'policies'}
                 </p>
               </div>
@@ -405,15 +400,15 @@
                 <div class="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    class="inline-flex h-9 min-w-9 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-900/70 px-3 text-xs font-semibold text-slate-200 transition hover:border-blue-500/60 hover:bg-blue-500/10 hover:text-blue-200"
+                    class="inline-flex h-9 min-w-9 items-center justify-center gap-2 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary"
                     onclick={() => openEditModal(selectedBundle)}
                   >
-                    <EditOutline class="h-4 w-4" />
+                    <Pencil class="h-4 w-4" />
                     Edit endpoints
                   </button>
                   <button
                     type="button"
-                    class="inline-flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-700 bg-slate-900/70 px-3 text-slate-300 transition hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-45"
+                    class="inline-flex h-9 min-w-9 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-base-content/80 transition hover:border-error/60 hover:bg-error/10 hover:text-error disabled:cursor-not-allowed disabled:opacity-45"
                     title="Delete runtime bundle"
                     aria-label={`Delete bundle ${selectedBundle.id}`}
                     disabled={deletingBundleId === selectedBundle.id}
@@ -423,9 +418,9 @@
                     }}
                   >
                     {#if deletingBundleId === selectedBundle.id}
-                      <Spinner size="4" />
+                      <span class="loading loading-spinner loading-xs"></span>
                     {:else}
-                      <TrashBinOutline class="h-4 w-4" />
+                      <Trash2 class="h-4 w-4" />
                     {/if}
                   </button>
                 </div>
@@ -433,22 +428,22 @@
             </div>
           </section>
 
-          <section class="rounded-xl border border-slate-800 bg-slate-950/20 p-4" aria-labelledby="bundle-endpoints-title">
-            <h3 id="bundle-endpoints-title" class="text-sm font-bold text-slate-100">Endpoint membership</h3>
+          <section class="rounded-xl border border-base-300 bg-base-200/20 p-4" aria-labelledby="bundle-endpoints-title">
+            <h3 id="bundle-endpoints-title" class="text-sm font-bold text-base-content">Endpoint membership</h3>
             {#if selectedBundle.endpoints.length === 0}
-              <div class="mt-3 rounded-lg border border-slate-800 bg-slate-950/35 px-3 py-3 text-sm text-slate-500">
+              <div class="mt-3 rounded-lg border border-base-300 bg-base-200/35 px-3 py-3 text-sm text-base-content/50">
                 No endpoints assigned.
               </div>
             {:else}
               <div class="mt-3">
-                <div class="flex gap-1 overflow-x-auto border-b border-slate-800" role="tablist" aria-label="Endpoint sections">
+                <div class="flex gap-1 overflow-x-auto border-b border-base-300" role="tablist" aria-label="Endpoint sections">
                   <button
                     type="button"
                     role="tab"
                     aria-selected={selectedEndpointSection === 'all'}
                     class={[
                       'shrink-0 border-b-2 px-3 py-2 text-xs font-semibold transition',
-                      selectedEndpointSection === 'all' ? 'border-blue-400 text-blue-300' : 'border-transparent text-slate-500 hover:text-slate-200'
+                      selectedEndpointSection === 'all' ? 'border-primary text-primary' : 'border-transparent text-base-content/50 hover:text-base-content/90'
                     ]}
                     onclick={() => (selectedEndpointSection = 'all')}
                   >
@@ -461,7 +456,7 @@
                       aria-selected={selectedEndpointSection === group.bundle}
                       class={[
                         'shrink-0 border-b-2 px-3 py-2 text-xs font-semibold transition',
-                        selectedEndpointSection === group.bundle ? 'border-blue-400 text-blue-300' : 'border-transparent text-slate-500 hover:text-slate-200'
+                        selectedEndpointSection === group.bundle ? 'border-primary text-primary' : 'border-transparent text-base-content/50 hover:text-base-content/90'
                       ]}
                       onclick={() => (selectedEndpointSection = group.bundle)}
                     >
@@ -469,27 +464,26 @@
                     </button>
                   {/each}
                 </div>
-                <div class="divide-y divide-slate-800/70 overflow-hidden rounded-b-lg border border-t-0 border-slate-800 bg-[#151a26]">
+                <div class="divide-y divide-base-300/70 overflow-hidden rounded-b-lg border border-t-0 border-base-300 bg-base-100">
                   {#each endpointSectionEntries(selectedBundle) as endpoint (endpoint.id)}
-                    <div class="px-3 py-2 font-mono text-xs text-slate-300">{endpoint.id}</div>
+                    <div class="px-3 py-2 font-mono text-xs text-base-content/80">{endpoint.id}</div>
                   {/each}
                 </div>
               </div>
             {/if}
           </section>
 
-          <section class="rounded-xl border border-slate-800 bg-slate-950/20 p-4" aria-labelledby="bundle-policies-title">
+          <section class="rounded-xl border border-base-300 bg-base-200/20 p-4" aria-labelledby="bundle-policies-title">
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h3 id="bundle-policies-title" class="text-sm font-bold text-slate-100">Policy membership</h3>
-                <p class="mt-1 max-w-2xl text-xs text-slate-500">
+                <h3 id="bundle-policies-title" class="text-sm font-bold text-base-content">Policy membership</h3>
+                <p class="mt-1 max-w-2xl text-xs text-base-content/50">
                   Policies are the only way to assign this bundle to users or groups. Remove the bundle from every policy before deleting it.
                 </p>
               </div>
               {#if onManagePolicies}
                 <button
                   type="button"
-                  class={outlineButtonClass}
                   onclick={onManagePolicies}
                 >
                   Manage policies
@@ -498,33 +492,33 @@
             </div>
 
             {#if selectedBundle.memberPolicies.length === 0}
-              <div class="mt-4 rounded-lg border border-slate-800 bg-slate-950/35 px-3 py-3 text-sm text-slate-500">
+              <div class="mt-4 rounded-lg border border-base-300 bg-base-200/35 px-3 py-3 text-sm text-base-content/50">
                 No policies reference this bundle.
               </div>
             {:else}
-              <div class="mt-4 divide-y divide-slate-800 overflow-hidden rounded-lg border border-slate-800">
+              <div class="mt-4 divide-y divide-base-300 overflow-hidden rounded-lg border border-base-300">
                 {#each selectedBundle.memberPolicies as policy (policy.policyId)}
                   <div class="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center">
                     <div class="flex min-w-0 items-center gap-2">
-                      <span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-slate-800/70 text-blue-300">
-                        <UsersGroupOutline class="h-4 w-4" />
+                      <span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-base-300/70 text-primary">
+                        <Users class="h-4 w-4" />
                       </span>
                       <div class="min-w-0">
                         <div class="flex flex-wrap items-center gap-2">
-                          <span class="truncate text-sm font-semibold text-slate-100">{policy.name}</span>
+                          <span class="truncate text-sm font-semibold text-base-content">{policy.name}</span>
                           <span class={[
                             'rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase',
                             policy.enabled
-                              ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-200'
-                              : 'border-slate-700 bg-slate-800/60 text-slate-400'
+                              ? 'border-success/25 bg-success/10 text-success'
+                              : 'border-base-content/20 bg-base-300/60 text-base-content/60'
                           ]}>
                             {policy.enabled ? 'Enabled' : 'Disabled'}
                           </span>
                         </div>
-                        <div class="mt-1 font-mono text-xs text-slate-500">{policy.policyId}</div>
+                        <div class="mt-1 font-mono text-xs text-base-content/50">{policy.policyId}</div>
                       </div>
                     </div>
-                    <span class="shrink-0 rounded-full border border-slate-700 bg-slate-950/40 px-2.5 py-1 text-[10px] font-bold uppercase text-slate-400 sm:ml-auto">
+                    <span class="shrink-0 rounded-full border border-base-content/20 bg-base-200/40 px-2.5 py-1 text-[10px] font-bold uppercase text-base-content/60 sm:ml-auto">
                       {policy.syncStatus}
                     </span>
                   </div>
@@ -538,13 +532,13 @@
   {/if}
 </section>
 
-<Modal bind:open={pickerOpen} title={pickerMode === 'create' ? 'Create runtime bundle' : 'Edit endpoint membership'} size="xl" class="z-50">
+<Modal bind:open={pickerOpen} title={pickerMode === 'create' ? 'Create runtime bundle' : 'Edit endpoint membership'} size="xl">
   <div class="space-y-4">
     <div>
-      <Label for="bundle-picker-id" class="mb-2 text-sm font-medium text-slate-300">Bundle id</Label>
+      <label class="label mb-2 text-sm" for="bundle-picker-id">Bundle id</label>
       {#if pickerMode === 'create'}
-        <div class="flex overflow-hidden rounded-lg border border-slate-800 bg-slate-950/60 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500">
-          <span class="flex items-center border-r border-slate-800 bg-slate-900/80 px-3 font-mono text-sm text-slate-500 select-none" aria-hidden="true">
+        <div class="flex overflow-hidden rounded-lg border border-base-300 bg-base-200/60 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary">
+          <span class="flex items-center border-r border-base-300 bg-base-200/80 px-3 font-mono text-sm text-base-content/50 select-none" aria-hidden="true">
             user.
           </span>
           <input
@@ -554,75 +548,75 @@
             placeholder="example"
             autocomplete="off"
             aria-label="Bundle id (after the user. prefix)"
-            class="w-full min-w-0 border-0 bg-transparent px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-600 focus:ring-0 focus:outline-none"
+            class="w-full min-w-0 border-0 bg-transparent px-3 py-2.5 text-sm text-base-content/90 placeholder:text-base-content/40 focus:ring-0 focus:outline-none"
           />
         </div>
-        <p class="mt-1.5 text-xs text-slate-500">Runtime bundle ids always start with the fixed user. prefix.</p>
+        <p class="mt-1.5 text-xs text-base-content/50">Runtime bundle ids always start with the fixed user. prefix.</p>
       {:else}
-        <Input id="bundle-picker-id" bind:value={pickerBundleId} readonly class={inputClass} />
+        <input class="input w-full" id="bundle-picker-id" bind:value={pickerBundleId} readonly />
       {/if}
     </div>
 
     {#if pickerMode === 'create'}
       <div>
-        <Label for="bundle-clone-source" class="mb-2 text-sm font-medium text-slate-300">Start from a system bundle</Label>
+        <label class="label mb-2 text-sm" for="bundle-clone-source">Start from a system bundle</label>
         <select
           id="bundle-clone-source"
           bind:value={pickerCloneFrom}
-          class="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          class="w-full rounded-lg border border-base-300 bg-base-200/60 px-3 py-2.5 text-sm text-base-content/90 outline-none focus:border-primary focus:ring-1 focus:ring-primary"
         >
           <option value="">Start empty</option>
           {#each cloneSources as bundle (bundle.id)}
             <option value={bundle.id}>{bundle.id} · {bundle.endpointCount} endpoints</option>
           {/each}
         </select>
-        <p class="mt-1.5 text-xs text-slate-500">
+        <p class="mt-1.5 text-xs text-base-content/50">
           The baseline is copied when the bundle is created. Add extra endpoints here; edit the new bundle afterward to remove copied endpoints.
         </p>
       </div>
     {/if}
 
     <div>
-      <Label for="endpoint-search" class="mb-2 text-sm font-medium text-slate-300">Endpoints</Label>
-      <Input id="endpoint-search" bind:value={pickerSearch} placeholder="Search endpoint or seeded bundle" class={inputClass} />
+      <label class="label mb-2 text-sm" for="endpoint-search">Endpoints</label>
+      <input class="input w-full" id="endpoint-search" bind:value={pickerSearch} placeholder="Search endpoint or seeded bundle" />
     </div>
 
     {#if pickerError}
-      <div class="flex items-start gap-2 rounded-xl border border-red-900/60 bg-red-950/35 p-3 text-sm text-red-300" role="alert">
-        <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <div class="flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error" role="alert">
+        <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
         <span>{displayError(pickerError, 'Could not save the bundle.')}</span>
       </div>
     {/if}
 
-    <div class="max-h-[26rem] space-y-3 overflow-y-auto rounded-xl border border-slate-800 bg-slate-950/20 p-3">
+    <div class="max-h-[26rem] space-y-3 overflow-y-auto rounded-xl border border-base-300 bg-base-200/20 p-3">
       {#if catalog.length === 0}
-        <div class="rounded-lg border border-slate-800 bg-slate-950/35 px-3 py-3 text-sm text-slate-500">
+        <div class="rounded-lg border border-base-300 bg-base-200/35 px-3 py-3 text-sm text-base-content/50">
           No catalog endpoints are available.
         </div>
       {:else if filteredCatalog().length === 0}
-        <div class="rounded-lg border border-slate-800 bg-slate-950/35 px-3 py-3 text-sm text-slate-500">
+        <div class="rounded-lg border border-base-300 bg-base-200/35 px-3 py-3 text-sm text-base-content/50">
           No endpoints match the search.
         </div>
       {:else}
         {#each catalogGroups(filteredCatalog()) as group (group.bundle)}
-          <div class="rounded-lg border border-slate-800 bg-[#151a26]">
-            <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-3 py-2">
-              <span class="text-xs font-semibold uppercase text-slate-500">{group.bundle}</span>
-              <span class="text-xs text-slate-600">{group.entries.length}</span>
+          <div class="rounded-lg border border-base-300 bg-base-100">
+            <div class="flex items-center justify-between gap-3 border-b border-base-300 px-3 py-2">
+              <span class="text-xs font-semibold uppercase text-base-content/50">{group.bundle}</span>
+              <span class="text-xs text-base-content/40">{group.entries.length}</span>
             </div>
-            <div class="divide-y divide-slate-800/70">
+            <div class="divide-y divide-base-300/70">
               {#each group.entries as endpoint (endpoint.id)}
-                <label class="flex cursor-pointer items-center gap-3 px-3 py-2 transition hover:bg-slate-800/35">
+                <label class="flex cursor-pointer items-center gap-3 px-3 py-2 transition hover:bg-base-300/35">
                   <input
                     type="checkbox"
-                    class="h-4 w-4 rounded border-slate-700 bg-slate-950 text-blue-600 focus:ring-blue-600"
+                    class="h-4 w-4 rounded border-base-content/20 bg-base-200 text-primary focus:ring-primary"
                     checked={cloneBaselineEndpoints().includes(endpoint.id) || pickerEndpoints.includes(endpoint.id)}
                     disabled={cloneBaselineEndpoints().includes(endpoint.id)}
                     onchange={() => toggleEndpoint(endpoint.id)}
                   />
-                  <span class="min-w-0 truncate font-mono text-xs text-slate-300">{endpoint.id}</span>
+                  <span class="min-w-0 truncate font-mono text-xs text-base-content/80">{endpoint.id}</span>
                   {#if cloneBaselineEndpoints().includes(endpoint.id)}
-                    <span class="ml-auto shrink-0 text-[10px] font-semibold uppercase text-blue-400">baseline</span>
+                    <span class="ml-auto shrink-0 text-[10px] font-semibold uppercase text-primary">baseline</span>
                   {/if}
                 </label>
               {/each}
@@ -632,28 +626,23 @@
       {/if}
     </div>
 
-    <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-      <CheckOutline class="h-3.5 w-3.5 text-emerald-400" />
+    <div class="flex flex-wrap items-center gap-2 text-xs text-base-content/50">
+      <Check class="h-3.5 w-3.5 text-success" />
       {selectedEndpointCount()} endpoint{selectedEndpointCount() === 1 ? '' : 's'} selected
     </div>
   </div>
 
   {#snippet footer()}
     <div class="flex w-full flex-wrap justify-end gap-2">
-      <Button
-        color="dark"
-        class="border-slate-700! bg-transparent! px-4! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800!"
-        disabled={pickerSaving}
-        onclick={() => (pickerOpen = false)}
-      >
+      <button class="btn btn-sm btn-ghost text-xs" disabled={pickerSaving} onclick={() => (pickerOpen = false)}>
         Cancel
-      </Button>
-      <Button color="blue" class={saveButtonClass} disabled={pickerSaving} onclick={submitPicker}>
+      </button>
+      <button class="btn btn-sm btn-primary" disabled={pickerSaving} onclick={submitPicker}>
         {#if pickerSaving}
-          <Spinner size="4" class="mr-1.5" />
+          <span class="loading loading-spinner loading-xs mr-1.5"></span>
         {/if}
         {pickerMode === 'create' ? 'Create bundle' : 'Save endpoints'}
-      </Button>
+      </button>
     </div>
   {/snippet}
 </Modal>

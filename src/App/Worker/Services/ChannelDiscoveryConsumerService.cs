@@ -19,6 +19,7 @@ public sealed class ChannelDiscoveryConsumerService(
     IMessageBus messageBus,
     IYtDlpClient ytDlp,
     PotOptionsApplier potOptionsApplier,
+    IBackgroundRunReporter runReporter,
     IClock clock,
     ILogger<ChannelDiscoveryConsumerService> logger) : BackgroundService
 {
@@ -33,13 +34,13 @@ public sealed class ChannelDiscoveryConsumerService(
     {
         var consumers = new[]
         {
-            Consume<ChannelUpdateCheckRequested>(
-                BackgroundJobsTopology.WorkerChannelUpdateCheckConsumer,
+            Consume<ChannelScanRefreshRequested>(
+                BackgroundJobsTopology.WorkerChannelScanRefreshConsumer,
                 async message => { await HandleScheduledScanAsync(message, CreatorSourceScanMode.Incremental, stoppingToken); },
                 stoppingToken),
-            Consume<ChannelMediaListRequested>(
-                BackgroundJobsTopology.WorkerChannelMediaListConsumer,
-                message => HandleChannelMediaListAsync(message, stoppingToken),
+            Consume<ChannelScanFullRequested>(
+                BackgroundJobsTopology.WorkerChannelScanFullConsumer,
+                message => HandleChannelScanFullAsync(message, stoppingToken),
                 stoppingToken)
         };
 
@@ -71,8 +72,8 @@ public sealed class ChannelDiscoveryConsumerService(
             options: null,
             cancellationToken: stoppingToken);
 
-    private async Task HandleChannelMediaListAsync(
-        ChannelMediaListRequested request,
+    private async Task HandleChannelScanFullAsync(
+        ChannelScanFullRequested request,
         CancellationToken cancellationToken)
     {
         if (request.GroupId is null || request.ExpansionDispatchId is null
@@ -130,22 +131,51 @@ public sealed class ChannelDiscoveryConsumerService(
         CreatorSourceScanMode scanMode,
         CancellationToken cancellationToken)
     {
-        await MarkAttemptAsync(request, cancellationToken);
-
-        var sources = await ResolveSourcesAsync(request, scanMode, cancellationToken);
-        var expectedJobs = 0;
-        foreach (var source in sources)
+        var taskType = scanMode == CreatorSourceScanMode.Full ? "channel_scan_full" : "channel_scan_refresh";
+        await using var run = await runReporter.BeginAsync(
+            taskType, request, $"{scanMode} scan", cancellationToken);
+        try
         {
-            expectedJobs += await ScanSourceAsync(request, scanMode, source, cancellationToken);
-        }
+            await MarkAttemptAsync(request, cancellationToken);
+            await run.ReportAsync("Resolving creator sources to scan…");
 
-        await MarkSuccessAsync(request, cancellationToken);
-        logger.LogInformation(
-            "Completed {ScanMode} channel discovery request {IdempotencyKey} across {SourceCount} source(s).",
-            scanMode,
-            request.IdempotencyKey,
-            sources.Count);
-        return expectedJobs;
+            var sources = await ResolveSourcesAsync(request, scanMode, cancellationToken);
+            var expectedJobs = 0;
+            var scanned = 0;
+            await run.ReportAsync($"Scanning {sources.Count} source(s).", 0, sources.Count);
+            foreach (var source in sources)
+            {
+                await run.ReportAsync(
+                    $"Scanning {SourceLabel(source)}…", scanned, sources.Count);
+                expectedJobs += await ScanSourceAsync(request, scanMode, source, cancellationToken);
+                scanned++;
+                await run.ReportAsync(
+                    $"Scanned {SourceLabel(source)} · {expectedJobs} item(s) queued so far.", scanned, sources.Count);
+            }
+
+            run.Succeed($"Scanned {sources.Count} source(s); queued {expectedJobs} item(s).");
+            await MarkSuccessAsync(request, cancellationToken);
+            logger.LogInformation(
+                "Completed {ScanMode} channel discovery request {IdempotencyKey} across {SourceCount} source(s).",
+                scanMode,
+                request.IdempotencyKey,
+                sources.Count);
+            return expectedJobs;
+        }
+        catch (Exception ex)
+        {
+            run.Fail(ex.Message);
+            throw;
+        }
+    }
+
+    private static string SourceLabel(CreatorMonitorDto source)
+    {
+        // Prefer the last URL path segment (usually the handle) so a progress line stays readable.
+        var handle = Uri.TryCreate(source.SourceUrl, UriKind.Absolute, out var uri)
+            ? uri.Segments.Select(x => x.Trim('/')).LastOrDefault(x => x.Length > 0)
+            : null;
+        return $"{handle ?? source.SourceUrl} ({source.SourceType})";
     }
 
     private async Task<IReadOnlyList<CreatorMonitorDto>> ResolveSourcesAsync(
@@ -155,8 +185,8 @@ public sealed class ChannelDiscoveryConsumerService(
     {
         var requestedSourceId = request switch
         {
-            ChannelMediaListRequested { TargetSourceId: { } id } => (long?)id,
-            ChannelUpdateCheckRequested { TargetSourceId: { } id } => id,
+            ChannelScanFullRequested { TargetSourceId: { } id } => (long?)id,
+            ChannelScanRefreshRequested { TargetSourceId: { } id } => id,
             _ => null
         };
 
@@ -372,41 +402,41 @@ public sealed class ChannelDiscoveryConsumerService(
             : MaxFullScanEntriesPerSource;
 
     private static string? ChannelStorageKey(ScheduledBackgroundRequest request)
-        => request is ChannelMediaListRequested channelRequest && !string.IsNullOrWhiteSpace(channelRequest.StorageKey)
+        => request is ChannelScanFullRequested channelRequest && !string.IsNullOrWhiteSpace(channelRequest.StorageKey)
             ? channelRequest.StorageKey
             : null;
 
     private static string? ChannelRequestedBy(ScheduledBackgroundRequest request)
-        => request is ChannelMediaListRequested channelRequest && !string.IsNullOrWhiteSpace(channelRequest.RequestedBy)
+        => request is ChannelScanFullRequested channelRequest && !string.IsNullOrWhiteSpace(channelRequest.RequestedBy)
             ? channelRequest.RequestedBy
             : null;
 
     private static string? ChannelConfigSetKey(ScheduledBackgroundRequest request)
-        => request is ChannelMediaListRequested channelRequest ? channelRequest.ConfigSetKey : null;
+        => request is ChannelScanFullRequested channelRequest ? channelRequest.ConfigSetKey : null;
 
     private static bool ChannelEncodeForPlaylist(ScheduledBackgroundRequest request)
-        => request is ChannelMediaListRequested channelRequest && channelRequest.EncodeForPlaylist;
+        => request is ChannelScanFullRequested channelRequest && channelRequest.EncodeForPlaylist;
 
     private static string? ChannelCookieSecretPath(ScheduledBackgroundRequest request)
-        => request is ChannelMediaListRequested channelRequest ? channelRequest.CookieSecretPath : null;
+        => request is ChannelScanFullRequested channelRequest ? channelRequest.CookieSecretPath : null;
 
     private static int ChannelPriority(ScheduledBackgroundRequest request)
-        => request is ChannelMediaListRequested channelRequest ? channelRequest.Priority : 0;
+        => request is ChannelScanFullRequested channelRequest ? channelRequest.Priority : 0;
 
     private static bool ChannelFetchComments(ScheduledBackgroundRequest request)
-        => request is ChannelMediaListRequested channelRequest && channelRequest.FetchComments;
+        => request is ChannelScanFullRequested channelRequest && channelRequest.FetchComments;
 
     private static bool ChannelQueueAllItems(ScheduledBackgroundRequest request)
-        => request is ChannelMediaListRequested channelRequest && channelRequest.QueueAllItems;
+        => request is ChannelScanFullRequested channelRequest && channelRequest.QueueAllItems;
 
     private static bool ChannelForceDownload(ScheduledBackgroundRequest request)
-        => request is ChannelMediaListRequested channelRequest && channelRequest.ForceDownload;
+        => request is ChannelScanFullRequested channelRequest && channelRequest.ForceDownload;
 
     private static YtDlpOptions? ChannelYtDlpOptions(ScheduledBackgroundRequest request)
-        => request is ChannelMediaListRequested channelRequest ? channelRequest.YtDlpOptions : null;
+        => request is ChannelScanFullRequested channelRequest ? channelRequest.YtDlpOptions : null;
 
     private static CreatorSourceProviderQueryLimits? ChannelProviderQueryLimits(ScheduledBackgroundRequest request)
-        => request is ChannelMediaListRequested channelRequest ? channelRequest.ProviderQueryLimits : null;
+        => request is ChannelScanFullRequested channelRequest ? channelRequest.ProviderQueryLimits : null;
 
     private static IEnumerable<DiscoveredMediaCandidate> ExtractCandidates(CreatorMonitorDto source, VideoInfo container)
     {
@@ -462,7 +492,7 @@ public sealed class ChannelDiscoveryConsumerService(
 
     internal static Guid ChannelCorrelationId(ScheduledBackgroundRequest request, long sourceId)
     {
-        if (request is ChannelMediaListRequested { CorrelationId: { } explicitId } && explicitId != Guid.Empty)
+        if (request is ChannelScanFullRequested { CorrelationId: { } explicitId } && explicitId != Guid.Empty)
             return explicitId;
 
         var input = Encoding.UTF8.GetBytes($"channel/{sourceId}/{request.IdempotencyKey}");

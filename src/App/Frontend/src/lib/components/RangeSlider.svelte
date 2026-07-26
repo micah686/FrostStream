@@ -22,7 +22,7 @@
   {disabled}
   bind:value
   style="--range-fill: {fillPercent}%"
-  class="range-trail h-2 w-full cursor-pointer appearance-none rounded-full bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+  class="range-trail h-2 w-full cursor-pointer appearance-none rounded-full bg-base-300 disabled:cursor-not-allowed disabled:opacity-60"
 />
 
 <style>
@@ -32,10 +32,31 @@
     background:
       linear-gradient(
         to right,
-        var(--color-frost-500) 0%,
-        var(--color-frost-500) var(--range-fill),
-        #1e293b var(--range-fill),
-        #1e293b 100%
+        var(--color-primary) 0%,
+        var(--color-primary) var(--range-fill),
+        var(--color-base-300) var(--range-fill),
+        var(--color-base-300) 100%
       );
+  }
+
+  /* appearance-none drops the native thumb, so it has to be rebuilt. */
+  .range-trail::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 1.125rem;
+    width: 1.125rem;
+    border: 2px solid var(--color-base-100);
+    border-radius: 9999px;
+    background: var(--color-primary);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 40%);
+  }
+
+  .range-trail::-moz-range-thumb {
+    height: 1.125rem;
+    width: 1.125rem;
+    border: 2px solid var(--color-base-100);
+    border-radius: 9999px;
+    background: var(--color-primary);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 40%);
   }
 </style>

@@ -1,13 +1,13 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
   import { goto } from '$app/navigation';
-  import { Alert, Button, Input, Label, Select, Spinner, Textarea } from 'flowbite-svelte';
+  import { Select } from '$lib/components/ui';
   import {
-    ArrowLeftOutline,
-    CheckCircleOutline,
-    ExclamationCircleOutline,
-    PlusOutline
-  } from 'flowbite-svelte-icons';
+    ArrowLeft,
+    CircleAlert,
+    CircleCheck,
+    Plus
+  } from '@lucide/svelte';
   import {
     createDownloadConfigSet,
     updateDownloadConfigSet,
@@ -199,158 +199,101 @@
 <form onsubmit={save} class="space-y-5">
   <div class="grid gap-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
     <div>
-      <Label for="config-key" class="mb-2 text-sm font-medium text-slate-300">Key</Label>
-      <Input
-        id="config-key"
-        required
-        pattern={'[a-z0-9-]{2,100}'}
-        minlength={2}
-        maxlength={100}
-        disabled={isUpdate}
-        bind:value={key}
-        placeholder="mobile-friendly"
-        class="border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500! disabled:opacity-60"
-      />
-      <p class="mt-1.5 text-xs text-slate-600">Lowercase letters, numbers, and hyphens.</p>
+      <label class="label mb-2 text-sm" for="config-key">Key</label>
+      <input class="input w-full text-sm" id="config-key" required
+         pattern={'[a-z0-9-]{2,100}'} minlength={2} maxlength={100} disabled={isUpdate} bind:value={key} placeholder="mobile-friendly" />
+      <p class="mt-1.5 text-xs text-base-content/40">Lowercase letters, numbers, and hyphens.</p>
     </div>
 
     <div>
-      <Label for="config-name" class="mb-2 text-sm font-medium text-slate-300">Name</Label>
-      <Input
-        id="config-name"
-        required
-        maxlength={255}
-        bind:value={name}
-        placeholder="Mobile-friendly"
-        class="border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!"
-      />
+      <label class="label mb-2 text-sm" for="config-name">Name</label>
+      <input class="input w-full text-sm" id="config-name" required
+         maxlength={255} bind:value={name} placeholder="Mobile-friendly" />
     </div>
   </div>
 
   <div>
-    <Label for="config-description" class="mb-2 text-sm font-medium text-slate-300">Description</Label>
-    <Textarea
-      id="config-description"
-      rows={3}
-      maxlength={2000}
-      bind:value={description}
-      placeholder="720p H.264 with fast transcode settings"
-      class="border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!"
-    />
+    <label class="label mb-2 text-sm" for="config-description">Description</label>
+    <textarea class="textarea w-full text-sm" id="config-description" rows={3} maxlength={2000} bind:value={description} placeholder="720p H.264 with fast transcode settings"></textarea>
   </div>
 
   <div class="grid gap-5 sm:grid-cols-2">
     <div>
-      <Label for="storage-key" class="mb-2 text-sm font-medium text-slate-300">Storage key</Label>
+      <label class="label mb-2 text-sm" for="storage-key">Storage key</label>
       {#if storageLoadFailed}
-        <Input
-          id="storage-key"
-          bind:value={storageKey}
-          placeholder="default"
-          class="border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!"
-        />
+        <input class="input w-full text-sm" id="storage-key" bind:value={storageKey} placeholder="default" />
       {:else}
-        <Select
-          id="storage-key"
-          items={storageOptions}
-          bind:value={storageKey}
-          class="border-slate-800! bg-slate-950/60! text-sm! text-slate-200! focus:border-blue-500! focus:ring-blue-500!"
-        />
+        <Select id="storage-key" items={storageOptions} bind:value={storageKey} class="text-sm" />
       {/if}
     </div>
 
     <div>
-      <Label for="cookie-profile-key" class="mb-2 text-sm font-medium text-slate-300">Cookie profile key</Label>
-      <Select
-        id="cookie-profile-key"
-        items={cookieProfileItems}
-        bind:value={cookieProfileKey}
-        class="border-slate-800! bg-slate-950/60! text-sm! text-slate-200! focus:border-blue-500! focus:ring-blue-500!"
-      />
+      <label class="label mb-2 text-sm" for="cookie-profile-key">Cookie profile key</label>
+      <Select id="cookie-profile-key" items={cookieProfileItems} bind:value={cookieProfileKey} class="text-sm" />
     </div>
   </div>
 
   <div>
-    <Label for="option-preset" class="mb-2 text-sm font-medium text-slate-300">Option preset</Label>
+    <label class="label mb-2 text-sm" for="option-preset">Option preset</label>
     {#if optionPresetsLoading}
-      <div class="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-500">
-        <Spinner size="4" />
+      <div class="flex items-center gap-2 rounded-lg border border-base-300 bg-base-200/60 px-3 py-2 text-sm text-base-content/50">
+        <span class="loading loading-spinner loading-xs"></span>
         Loading option presets...
       </div>
     {:else}
-      <Select
-        id="option-preset"
-        items={optionPresetItems}
-        bind:value={selectedOptionPresetKey}
-        class="border-slate-800! bg-slate-950/60! text-sm! text-slate-200! focus:border-blue-500! focus:ring-blue-500!"
-      />
+      <Select id="option-preset" items={optionPresetItems} bind:value={selectedOptionPresetKey} class="text-sm" />
     {/if}
-    <p class="mt-1.5 text-xs text-slate-600">
+    <p class="mt-1.5 text-xs text-base-content/40">
       Pick a saved option preset to apply its yt-dlp options to this config set. Choose none to use server defaults.
     </p>
     {#if optionPresetsError}
-      <Alert color="red" class="mt-3 border-red-900/60! bg-red-950/35! text-red-300!">
+      <div class="alert alert-error mt-3">
         {optionPresetsError}
-      </Alert>
+      </div>
     {:else if !optionPresetsLoading && optionPresets.length === 0 && !initial?.ytDlpOptions}
-      <Alert color="gray" class="mt-3 border-slate-800! bg-slate-950/35! text-slate-400!">
+      <div class="alert mt-3">
         No option presets exist yet. Create one from Profile → Option presets if this config set needs custom yt-dlp options.
-      </Alert>
+      </div>
     {/if}
   </div>
 
   <div>
-    <Label for="priority" class="mb-2 text-sm font-medium text-slate-300">
-      Priority <span class="font-normal text-slate-500">({priority})</span>
-    </Label>
+    <label class="label mb-2 text-sm" for="priority">
+      Priority <span class="font-normal text-base-content/50">({priority})</span>
+    </label>
     <RangeSlider id="priority" min={0} max={100} step={1} bind:value={priority} />
   </div>
 
   <div>
-    <Label for="ignore-keywords" class="mb-2 text-sm font-medium text-slate-300">Ignore keywords</Label>
-    <Textarea
-      id="ignore-keywords"
-      rows={5}
-      bind:value={ignoreKeywordsText}
-      placeholder={'shorts\nregex:\\btrailer\\b'}
-      class="font-mono! border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!"
-    />
-    <p class="mt-1.5 text-xs text-slate-600">One per line. Prefix with <code>regex:</code> for regex matching.</p>
+    <label class="label mb-2 text-sm" for="ignore-keywords">Ignore keywords</label>
+    <textarea class="textarea w-full font-mono text-sm" id="ignore-keywords" rows={5} bind:value={ignoreKeywordsText} placeholder={'shorts\nregex:\\btrailer\\b'}></textarea>
+    <p class="mt-1.5 text-xs text-base-content/40">One per line. Prefix with <code>regex:</code> for regex matching.</p>
   </div>
 
   {#if submitError}
     <div
-      class="flex items-start gap-2 rounded-xl border border-red-900/60 bg-red-950/40 p-3 text-sm text-red-300"
+      class="flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{submitError}</span>
     </div>
   {/if}
 
-  <div class="flex flex-col-reverse gap-3 border-t border-slate-800/70 pt-5 sm:flex-row sm:justify-between">
-    <Button
-      href="/profile/config-sets"
-      color="dark"
-      class="border-slate-700! bg-transparent! px-4! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800!"
-    >
-      <ArrowLeftOutline class="mr-1.5 h-4 w-4" />
+  <div class="flex flex-col-reverse gap-3 border-t border-base-300/70 pt-5 sm:flex-row sm:justify-between">
+    <a class="btn btn-sm btn-ghost text-xs" href="/profile/config-sets">
+      <ArrowLeft class="mr-1.5 h-4 w-4" />
       Back
-    </Button>
-    <Button
-      type="submit"
-      color="blue"
-      disabled={submitting}
-      class="border-0! bg-blue-500! px-5! py-2! text-xs! font-semibold! hover:bg-blue-400! disabled:opacity-60"
-    >
+    </a>
+    <button class="btn btn-sm btn-primary text-xs" type="submit" disabled={submitting}>
       {#if submitting}
-        <Spinner size="4" class="mr-2" />
+        <span class="loading loading-spinner loading-xs mr-2"></span>
       {:else if isUpdate}
-        <CheckCircleOutline class="mr-1.5 h-4 w-4" />
+        <CircleCheck class="mr-1.5 h-4 w-4" />
       {:else}
-        <PlusOutline class="mr-1.5 h-4 w-4" />
+        <Plus class="mr-1.5 h-4 w-4" />
       {/if}
       {isUpdate ? 'Save changes' : 'Create config set'}
-    </Button>
+    </button>
   </div>
 </form>

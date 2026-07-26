@@ -12,10 +12,9 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
 
     private const string ClassifiedMediaCte = """
         WITH media_bytes AS (
-            SELECT msv.media_guid, MAX(dj.file_size_bytes) FILTER (WHERE dj.state = 'completed') AS size_bytes
-            FROM media.media_source_versions msv
-            JOIN downloads.download_jobs dj ON dj.job_id = msv.latest_job_id
-            GROUP BY msv.media_guid
+            SELECT DISTINCT ON (cmd.media_guid) cmd.media_guid, cmd.bytes AS size_bytes
+            FROM statistics.channel_media_downloads cmd
+            ORDER BY cmd.media_guid, cmd.completed_at DESC
         ),
         stream_flags AS (
             SELECT
@@ -226,38 +225,17 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
             SELECT
                 b.bucket_start,
                 b.bucket_end,
-                (SELECT COUNT(*) FROM downloads.download_jobs dj
-                 WHERE dj.created_at >= b.bucket_start AND dj.created_at < b.bucket_end) AS created,
-                (SELECT COUNT(*) FROM downloads.download_jobs dj
-                 WHERE dj.completed_at >= b.bucket_start AND dj.completed_at < b.bucket_end AND dj.state = 'completed') AS completed,
-                (SELECT COUNT(*) FROM downloads.download_jobs dj
-                 WHERE dj.updated_at >= b.bucket_start AND dj.updated_at < b.bucket_end
-                   AND dj.state IN ('failed_transient', 'failed_permanent', 'dead_lettered')) AS failed,
-                (SELECT COUNT(*) FROM downloads.download_jobs dj
-                 WHERE dj.updated_at >= b.bucket_start AND dj.updated_at < b.bucket_end AND dj.state = 'cancelled') AS cancelled,
-                (SELECT COUNT(*) FROM downloads.download_jobs dj
-                 WHERE dj.updated_at >= b.bucket_start AND dj.updated_at < b.bucket_end AND dj.state = 'ignored') AS ignored,
-                COALESCE(completed_rollup.bytes_completed, 0) AS bytes_completed,
-                COALESCE(completed_rollup.duration_completed_seconds, 0) AS duration_completed_seconds
+                COALESCE(SUM(a.job_count) FILTER (WHERE a.state = 'created'), 0) AS created,
+                COALESCE(SUM(a.job_count) FILTER (WHERE a.state = 'completed'), 0) AS completed,
+                COALESCE(SUM(a.job_count) FILTER (WHERE a.state IN ('failed_transient', 'failed_permanent', 'dead_lettered')), 0) AS failed,
+                COALESCE(SUM(a.job_count) FILTER (WHERE a.state = 'cancelled'), 0) AS cancelled,
+                COALESCE(SUM(a.job_count) FILTER (WHERE a.state = 'ignored'), 0) AS ignored,
+                COALESCE(SUM(a.bytes) FILTER (WHERE a.state = 'completed'), 0)::bigint AS bytes_completed,
+                COALESCE(SUM(a.duration_seconds) FILTER (WHERE a.state = 'completed'), 0) AS duration_completed_seconds
             FROM buckets b
-            LEFT JOIN LATERAL (
-                SELECT
-                    COALESCE(SUM(job_bytes), 0)::bigint AS bytes_completed,
-                    COALESCE(SUM(duration_seconds), 0) AS duration_completed_seconds
-                FROM (
-                    SELECT
-                        dj.job_id,
-                        COALESCE(dj.file_size_bytes, 0) AS job_bytes,
-                        MAX(COALESCE(mm.duration, 0)) AS duration_seconds
-                    FROM downloads.download_jobs dj
-                    LEFT JOIN media.media_source_versions msv ON msv.latest_job_id = dj.job_id
-                    LEFT JOIN metadata.media_metadata mm ON mm.media_guid = msv.media_guid
-                    WHERE dj.completed_at >= b.bucket_start
-                      AND dj.completed_at < b.bucket_end
-                      AND dj.state = 'completed'
-                    GROUP BY dj.job_id, dj.file_size_bytes
-                ) completed_jobs
-            ) completed_rollup ON true
+            LEFT JOIN statistics.download_daily_activity a
+                ON a.day >= b.bucket_start::date AND a.day < b.bucket_end::date
+            GROUP BY b.bucket_start, b.bucket_end
             ORDER BY b.bucket_start
             """);
         command.Parameters.AddWithValue("@from", request.From.ToDateTimeOffset());
@@ -294,8 +272,8 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
                 (SELECT COUNT(*) FROM metadata.accounts) AS total_channels,
                 (SELECT COUNT(*) FROM discovery.creator_sources) AS total_creator_sources,
                 (SELECT COUNT(*) FROM playlists.playlists) AS total_playlists,
-                (SELECT COUNT(*) FROM downloads.download_jobs) AS total_downloads,
-                COALESCE((SELECT SUM(file_size_bytes) FROM downloads.download_jobs WHERE state = 'completed'), 0)::bigint AS total_bytes,
+                COALESCE((SELECT SUM(job_count) FROM statistics.download_daily_activity WHERE state = 'created'), 0) AS total_downloads,
+                COALESCE((SELECT SUM(bytes) FROM statistics.download_daily_activity WHERE state = 'completed'), 0)::bigint AS total_bytes,
                 COALESCE((SELECT SUM(duration_seconds) FROM classified_media), 0) AS total_duration_seconds
             """);
 
@@ -414,10 +392,8 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
     private static string AccountSummarySql(string suffix) => $"""
         {ClassifiedMediaCte},
         downloaded_guids AS (
-            SELECT DISTINCT msv.media_guid
-            FROM media.media_source_versions msv
-            JOIN downloads.download_jobs dj ON dj.job_id = msv.latest_job_id
-            WHERE dj.state = 'completed'
+            SELECT DISTINCT media_guid
+            FROM statistics.channel_media_downloads
         ),
         account_rollup AS (
             SELECT
@@ -481,6 +457,7 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
                 cm.size_bytes
             FROM discovery.discovered_media dm
             JOIN classified_media cm ON cm.platform = dm.platform AND cm.external_media_id = dm.external_media_id
+            JOIN statistics.channel_media_downloads cmd ON cmd.media_guid = cm.media_guid
         ),
         source_rollup AS (
             SELECT

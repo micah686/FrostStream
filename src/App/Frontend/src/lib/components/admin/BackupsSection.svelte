@@ -1,16 +1,16 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import { Badge, Button, Input, Label, Select, Spinner } from 'flowbite-svelte';
+  import { Select } from '$lib/components/ui';
   import {
-    CheckCircleOutline,
-    CloseCircleOutline,
-    CloudArrowUpOutline,
-    ExclamationCircleOutline,
-    FileZipOutline,
-    PlayOutline,
-    RefreshOutline,
-    TerminalOutline
-  } from 'flowbite-svelte-icons';
+    CircleAlert,
+    CircleCheck,
+    CircleX,
+    CloudUpload,
+    FileArchive,
+    Play,
+    RefreshCw,
+    Terminal
+  } from '@lucide/svelte';
   import {
     buildRestorePlan,
     listBackupJobs,
@@ -37,13 +37,9 @@
     'wal-archive': 'Initializes the continuous WAL archive store and prints the server settings to apply.'
   };
 
-  const inputClass =
-    'border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!';
-  const cardClass = 'rounded-2xl border border-slate-800 bg-[#151a26] p-5 shadow-xl shadow-black/15 sm:p-6';
-  const outlineButtonClass =
-    'border-slate-700! bg-transparent! px-3! py-1.5! text-xs! font-semibold! text-slate-200! hover:border-slate-600! hover:bg-slate-800!';
+  const cardClass = 'card border border-base-300 bg-base-100 p-5 sm:p-6';
   const rowActionClass =
-    'inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900/70 px-3 text-xs font-semibold text-slate-200 transition hover:border-blue-500/60 hover:bg-blue-500/10 hover:text-blue-200 disabled:opacity-50';
+    'inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary disabled:opacity-50';
 
   const JOB_POLL_INTERVAL_MS = 4000;
 
@@ -190,13 +186,13 @@
   function statusBadgeClass(status: BackupJob['status']): string {
     switch (status) {
       case 'completed':
-        return 'bg-emerald-500/15! text-emerald-300!';
+        return 'bg-success/15 text-success';
       case 'failed':
-        return 'bg-red-500/15! text-red-300!';
+        return 'bg-error/15 text-error';
       case 'running':
-        return 'bg-blue-500/15! text-blue-300!';
+        return 'bg-primary/15 text-primary';
       default:
-        return 'bg-slate-800! text-slate-400!';
+        return 'bg-base-300 text-base-content/60';
     }
   }
 
@@ -230,105 +226,100 @@
 
 <!-- Run backup -->
 <section class={cardClass} aria-labelledby="backups-run-title">
-  <h2 id="backups-run-title" class="text-base font-bold text-slate-100">Backups</h2>
-  <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+  <h2 id="backups-run-title" class="text-base font-bold text-base-content">Backups</h2>
+  <p class="mt-2 max-w-3xl text-sm leading-6 text-base-content/60">
     Core-data backups cover the FrostStream, Authentik, and OpenFGA databases plus OpenBao secrets. Media files and
     rebuildable search or queue state are excluded.
   </p>
 
   {#if startError}
     <div
-      class="mt-5 flex items-start gap-2 rounded-xl border border-red-900/60 bg-red-950/35 p-3 text-sm text-red-300"
+      class="mt-5 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{startError}</span>
     </div>
   {/if}
 
   <form onsubmit={runBackup} class="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end">
     <div class="min-w-0 flex-1 sm:max-w-xs">
-      <Label for="backup-name" class="mb-2 text-sm font-medium text-slate-300">Backup name (optional)</Label>
-      <Input id="backup-name" maxlength={100} bind:value={backupName} placeholder="pre-upgrade" class={inputClass} />
+      <label class="label mb-2 text-sm" for="backup-name">Backup name (optional)</label>
+      <input class="input w-full" id="backup-name" maxlength={100} bind:value={backupName} placeholder="pre-upgrade" />
     </div>
     <div class="min-w-0 flex-1 sm:max-w-xs">
-      <Label for="backup-mode" class="mb-2 text-sm font-medium text-slate-300">Mode</Label>
-      <Select id="backup-mode" bind:value={backupMode} items={backupModeOptions} class={inputClass} />
+      <label class="label mb-2 text-sm" for="backup-mode">Mode</label>
+      <Select id="backup-mode" bind:value={backupMode} items={backupModeOptions} />
     </div>
-    <Button
-      type="submit"
-      color="blue"
-      class="border-0! px-4! py-2.5! text-xs! font-semibold! disabled:opacity-60"
-      disabled={startBusy}
-    >
+    <button class="btn btn-sm btn-primary text-xs" type="submit" disabled={startBusy}>
       {#if startBusy}
-        <Spinner size="4" class="mr-1.5" />
+        <span class="loading loading-spinner loading-xs mr-1.5"></span>
       {:else}
-        <PlayOutline class="mr-1.5 h-4 w-4" />
+        <Play class="mr-1.5 h-4 w-4" />
       {/if}
       Run backup now
-    </Button>
+    </button>
   </form>
-  <p class="mt-2 text-xs text-slate-500">{backupModeHints[backupMode]}</p>
+  <p class="mt-2 text-xs text-base-content/50">{backupModeHints[backupMode]}</p>
 </section>
 
 <!-- Jobs -->
 <section class={cardClass} aria-labelledby="backups-jobs-title">
   <div class="flex items-start justify-between gap-2">
     <div>
-      <h2 id="backups-jobs-title" class="text-base font-bold text-slate-100">Backup jobs</h2>
-      <p class="mt-2 text-sm text-slate-400">
+      <h2 id="backups-jobs-title" class="text-base font-bold text-base-content">Backup jobs</h2>
+      <p class="mt-2 text-sm text-base-content/60">
         Jobs started by the current server process. This list resets when the server restarts.
       </p>
     </div>
-    <Button color="dark" class={outlineButtonClass} disabled={jobsLoading} onclick={() => void loadJobs(true)}>
-      <RefreshOutline class="mr-1.5 h-3.5 w-3.5" />
+    <button class="btn btn-sm btn-neutral" disabled={jobsLoading} onclick={() => void loadJobs(true)}>
+      <RefreshCw class="mr-1.5 h-3.5 w-3.5" />
       Refresh
-    </Button>
+    </button>
   </div>
 
   {#if jobsError}
     <div
-      class="mt-5 flex items-start gap-2 rounded-xl border border-red-900/60 bg-red-950/35 p-3 text-sm text-red-300"
+      class="mt-5 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{jobsError}</span>
     </div>
   {/if}
 
   {#if jobsLoading}
     <div class="mt-10 flex justify-center">
-      <Spinner size="8" />
+      <span class="loading loading-spinner loading-md"></span>
     </div>
   {:else if jobs.length === 0}
-    <div class="mt-5 rounded-xl border border-slate-800/80 bg-slate-950/30 p-8 text-center">
-      <CloudArrowUpOutline class="mx-auto h-9 w-9 text-slate-700" />
-      <p class="mt-4 text-sm font-semibold text-slate-300">No backup jobs yet</p>
-      <p class="mt-1 text-sm text-slate-500">Run a backup to see its progress here.</p>
+    <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
+      <CloudUpload class="mx-auto h-9 w-9 text-base-content/30" />
+      <p class="mt-4 text-sm font-semibold text-base-content/80">No backup jobs yet</p>
+      <p class="mt-1 text-sm text-base-content/50">Run a backup to see its progress here.</p>
     </div>
   {:else}
     <div class="mt-5 space-y-2">
       {#each jobs as job (job.jobId)}
-        <article class="rounded-lg border border-slate-700/70 bg-[#151a26] px-3 py-3 sm:px-4">
+        <article class="rounded-lg border border-base-content/20 bg-base-100 px-3 py-3 sm:px-4">
           <div class="flex flex-wrap items-center gap-2">
             {#if job.status === 'queued' || job.status === 'running'}
-              <Spinner size="4" />
+              <span class="loading loading-spinner loading-xs"></span>
             {/if}
-            <Badge rounded class="px-2.5! py-0.5! text-[10px]! font-semibold! uppercase! {statusBadgeClass(job.status)}">
+            <span class="badge badge-sm badge-ghost rounded-full text-[10px] uppercase {statusBadgeClass(job.status)}">
               {job.status}
-            </Badge>
-            <span class="text-xs text-slate-400">Started {formatDate(job.createdAt)}</span>
+            </span>
+            <span class="text-xs text-base-content/60">Started {formatDate(job.createdAt)}</span>
             {#if job.completedAt}
-              <span class="text-xs text-slate-500">· finished {formatDate(job.completedAt)}</span>
+              <span class="text-xs text-base-content/50">· finished {formatDate(job.completedAt)}</span>
             {/if}
-            <span class="ml-auto font-mono text-[10px] text-slate-600">{job.jobId}</span>
+            <span class="ml-auto font-mono text-[10px] text-base-content/40">{job.jobId}</span>
           </div>
           {#if job.archivePath}
-            <p class="mt-2 truncate font-mono text-xs text-slate-400" title={job.archivePath}>{job.archivePath}</p>
+            <p class="mt-2 truncate font-mono text-xs text-base-content/60" title={job.archivePath}>{job.archivePath}</p>
           {/if}
           {#if job.errorMessage}
-            <p class="mt-2 text-xs text-red-300">{job.errorMessage}</p>
+            <p class="mt-2 text-xs text-error">{job.errorMessage}</p>
           {/if}
         </article>
       {/each}
@@ -340,67 +331,67 @@
 <section class={cardClass} aria-labelledby="backups-archives-title">
   <div class="flex items-start justify-between gap-2">
     <div>
-      <h2 id="backups-archives-title" class="text-base font-bold text-slate-100">Backup archives</h2>
-      <p class="mt-2 text-sm text-slate-400">
+      <h2 id="backups-archives-title" class="text-base font-bold text-base-content">Backup archives</h2>
+      <p class="mt-2 text-sm text-base-content/60">
         Archives found in the server's backup directory. Verify an archive before relying on it, or build the offline
         restore command.
       </p>
     </div>
-    <Button color="dark" class={outlineButtonClass} disabled={archivesLoading} onclick={() => void loadArchives()}>
-      <RefreshOutline class="mr-1.5 h-3.5 w-3.5" />
+    <button class="btn btn-sm btn-neutral" disabled={archivesLoading} onclick={() => void loadArchives()}>
+      <RefreshCw class="mr-1.5 h-3.5 w-3.5" />
       Refresh
-    </Button>
+    </button>
   </div>
 
   {#if archivesError}
     <div
-      class="mt-5 flex items-start gap-2 rounded-xl border border-red-900/60 bg-red-950/35 p-3 text-sm text-red-300"
+      class="mt-5 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{archivesError}</span>
     </div>
   {/if}
 
   {#if archivesLoading}
     <div class="mt-10 flex justify-center">
-      <Spinner size="8" />
+      <span class="loading loading-spinner loading-md"></span>
     </div>
   {:else if archives.length === 0}
-    <div class="mt-5 rounded-xl border border-slate-800/80 bg-slate-950/30 p-8 text-center">
-      <FileZipOutline class="mx-auto h-9 w-9 text-slate-700" />
-      <p class="mt-4 text-sm font-semibold text-slate-300">No backup archives found</p>
-      <p class="mt-1 text-sm text-slate-500">Completed backups appear here once written to the backup directory.</p>
+    <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
+      <FileArchive class="mx-auto h-9 w-9 text-base-content/30" />
+      <p class="mt-4 text-sm font-semibold text-base-content/80">No backup archives found</p>
+      <p class="mt-1 text-sm text-base-content/50">Completed backups appear here once written to the backup directory.</p>
     </div>
   {:else}
     <div class="mt-5 space-y-2">
       {#each archives as archive (archive.archivePath)}
         {@const verifyResult = verifyResults[archive.archivePath]}
         {@const plan = restorePlans[archive.archivePath]}
-        <article class="rounded-lg border border-slate-700/70 bg-[#151a26] px-3 py-3 transition hover:border-slate-600 sm:px-4">
+        <article class="rounded-lg border border-base-content/20 bg-base-100 px-3 py-3 transition hover:border-base-content/30 sm:px-4">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div class="flex min-w-0 items-center gap-3">
-              <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-800/70 text-blue-400">
-                <FileZipOutline class="h-4.5 w-4.5" />
+              <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-base-300/70 text-primary">
+                <FileArchive class="h-4.5 w-4.5" />
               </span>
               <div class="min-w-0">
                 <div class="flex min-w-0 flex-wrap items-center gap-2">
-                  <h3 class="truncate text-sm font-semibold text-slate-100" title={archive.archivePath}>
+                  <h3 class="truncate text-sm font-semibold text-base-content" title={archive.archivePath}>
                     {archiveName(archive.archivePath)}
                   </h3>
-                  <span class="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-semibold text-blue-300">
+                  <span class="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary">
                     {formatMode(archive.mode)}
                   </span>
-                  <span class="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-400">
+                  <span class="rounded-full bg-base-300 px-2 py-0.5 text-[10px] font-semibold text-base-content/60">
                     schema v{archive.schemaVersion}
                   </span>
                   {#if !archive.mediaIncluded}
-                    <span class="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-400">
+                    <span class="rounded-full bg-base-300 px-2 py-0.5 text-[10px] font-semibold text-base-content/60">
                       media excluded
                     </span>
                   {/if}
                 </div>
-                <p class="mt-0.5 truncate text-xs text-slate-400">Created {formatDate(archive.createdAt)}</p>
+                <p class="mt-0.5 truncate text-xs text-base-content/60">Created {formatDate(archive.createdAt)}</p>
               </div>
             </div>
 
@@ -412,9 +403,9 @@
                 onclick={() => void verify(archive)}
               >
                 {#if verifyBusyPath === archive.archivePath}
-                  <Spinner size="4" />
+                  <span class="loading loading-spinner loading-xs"></span>
                 {:else}
-                  <CheckCircleOutline class="h-4 w-4" />
+                  <CircleCheck class="h-4 w-4" />
                 {/if}
                 Verify
               </button>
@@ -425,9 +416,9 @@
                 onclick={() => void showRestorePlan(archive)}
               >
                 {#if planBusyPath === archive.archivePath}
-                  <Spinner size="4" />
+                  <span class="loading loading-spinner loading-xs"></span>
                 {:else}
-                  <TerminalOutline class="h-4 w-4" />
+                  <Terminal class="h-4 w-4" />
                 {/if}
                 {plan ? 'Hide restore plan' : 'Restore plan'}
               </button>
@@ -439,34 +430,34 @@
               class={[
                 'mt-3 flex items-start gap-2 rounded-lg border p-3 text-xs',
                 verifyResult.success
-                  ? 'border-emerald-900/60 bg-emerald-950/35 text-emerald-300'
-                  : 'border-red-900/60 bg-red-950/35 text-red-300'
+                  ? 'border-success/30 bg-success/10 text-success'
+                  : 'border-error/30 bg-error/10 text-error'
               ]}
               role="status"
             >
               {#if verifyResult.success}
-                <CheckCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+                <CircleCheck class="mt-0.5 h-4 w-4 shrink-0" />
                 <span>Backup verified: checksums and manifest are intact.</span>
               {:else}
-                <CloseCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+                <CircleX class="mt-0.5 h-4 w-4 shrink-0" />
                 <span>{verifyResult.errorMessage || 'Verification failed.'}</span>
               {/if}
             </div>
           {/if}
 
           {#if plan}
-            <div class="mt-3 rounded-lg border border-slate-800 bg-slate-950/60 p-3">
+            <div class="mt-3 rounded-lg border border-base-300 bg-base-200/60 p-3">
               {#if plan.errorMessage}
-                <p class="text-xs text-red-300">{plan.errorMessage}</p>
+                <p class="text-xs text-error">{plan.errorMessage}</p>
               {:else}
-                <p class="text-xs text-slate-400">
+                <p class="text-xs text-base-content/60">
                   {plan.preflightOk
                     ? 'Preflight checks passed. Stop all FrostStream services, then run:'
                     : 'Preflight checks failed — resolve the issue before restoring. Planned command:'}
                 </p>
               {/if}
               {#if plan.restoreCommand}
-                <pre class="mt-2 overflow-x-auto rounded bg-black/40 p-2.5 font-mono text-xs text-slate-300">{plan.restoreCommand}</pre>
+                <pre class="mt-2 overflow-x-auto rounded bg-black/40 p-2.5 font-mono text-xs text-white/80">{plan.restoreCommand}</pre>
               {/if}
             </div>
           {/if}

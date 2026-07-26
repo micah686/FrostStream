@@ -325,7 +325,11 @@ public sealed class DownloadJobV2Flow(
 
         await Capture(() => QueueAudioRenditionAsync(
             request, reservation.MediaGuid, reservation.VersionNum, storageKey));
-        await Capture(() => NotifyCompletionAsync(jobId, request.SourceUrl));
+        await Capture(() => notificationDispatcher.NotifyDownloadEventAsync(
+            jobId,
+            NotificationEventKeys.DownloadCompleted,
+            "FrostStream download completed",
+            $"Download completed for {request.SourceUrl}"));
 
         logger.LogInformation("Download V2 run completed JobId {JobId} RunId {RunId}", jobId, runId);
     }
@@ -467,6 +471,7 @@ public sealed class DownloadJobV2Flow(
                 circuitProvider is null
                     ? failure.ErrorMessage
                     : $"The provider circuit for '{circuitProvider}' is open. {failure.ErrorMessage}")));
+            await Capture(() => NotifyProviderHaltedAsync(run.Request, failure.ErrorMessage, circuitProvider));
             return false;
         }
 
@@ -508,6 +513,8 @@ public sealed class DownloadJobV2Flow(
             failure.FailureKind,
             failure.ErrorCode ?? "stage_failed",
             failure.ErrorMessage)));
+        await Capture(() => NotifyDownloadTerminalFailureAsync(run.Request, failure.FailureKind,
+            failure.ErrorCode ?? "stage_failed", failure.ErrorMessage));
         return false;
     }
 
@@ -917,6 +924,9 @@ public sealed class DownloadJobV2Flow(
             await Capture(() => V2(r => r.FailRunAsync(request.JobId, run.RunId, FailureKind.Permanent,
                 "compensation_incomplete",
                 "The run failed and one or more side effects could not be removed. Review the residual artifact warnings.")));
+            await Capture(() => NotifyDownloadTerminalFailureAsync(request, FailureKind.Permanent,
+                "compensation_incomplete",
+                "The run failed and one or more side effects could not be removed. Review the residual artifact warnings."));
             return;
         }
 
@@ -1092,6 +1102,7 @@ public sealed class DownloadJobV2Flow(
                 circuitProvider is null
                     ? message
                     : $"The provider circuit for '{circuitProvider}' is open. {message}")));
+            await Capture(() => NotifyProviderHaltedAsync(run.Request, message, circuitProvider));
             return false;
         }
 
@@ -1111,8 +1122,59 @@ public sealed class DownloadJobV2Flow(
             code ?? "stage_failed", message)));
         await Capture(() => V2(r => r.FailRunAsync(execution.JobId, execution.RunId, kind,
             code ?? "stage_failed", message)));
+        await Capture(() => NotifyDownloadTerminalFailureAsync(run.Request, kind, code ?? "stage_failed", message));
         return false;
     }
+
+    private async Task NotifyDownloadTerminalFailureAsync(
+        DownloadRequested request,
+        FailureKind kind,
+        string code,
+        string message)
+    {
+        if (kind == FailureKind.Permanent)
+        {
+            await notificationDispatcher.NotifyDownloadEventAsync(
+                request.JobId,
+                NotificationEventKeys.DownloadFailedPermanent,
+                "FrostStream download failed permanently",
+                $"Download failed permanently for {request.SourceUrl}: {message}");
+        }
+
+        if (kind == FailureKind.Permanent && IsStoragePermanentFailureCode(code))
+        {
+            await notificationDispatcher.NotifyAdminEventAsync(
+                NotificationEventKeys.StorageFailedPermanent,
+                "FrostStream storage operation failed permanently",
+                $"Storage operation failed permanently for download {request.JobId}: {message}");
+        }
+    }
+
+    private async Task NotifyProviderHaltedAsync(DownloadRequested request, string message, string? provider)
+    {
+        var owner = string.IsNullOrWhiteSpace(request.RequestedBy) ? null : request.RequestedBy;
+        var subject = provider is null
+            ? "FrostStream download provider halted"
+            : $"FrostStream download provider halted: {provider}";
+        var body = $"Provider halt affected download {request.JobId} ({request.SourceUrl}): {message}";
+
+        await notificationDispatcher.NotifyDownloadEventAsync(
+            request.JobId,
+            NotificationEventKeys.DownloadProviderHalted,
+            subject,
+            body);
+        await notificationDispatcher.NotifyAdminEventAsync(
+            NotificationEventKeys.DownloadProviderHalted,
+            subject,
+            body,
+            excludedOwnerSubject: owner);
+    }
+
+    private static bool IsStoragePermanentFailureCode(string code)
+        => code.Contains("upload", StringComparison.OrdinalIgnoreCase)
+           || code.Contains("storage", StringComparison.OrdinalIgnoreCase)
+           || code.Contains("object_delete", StringComparison.OrdinalIgnoreCase)
+           || code.Contains("compensation_incomplete", StringComparison.OrdinalIgnoreCase);
 
     private async Task<bool> StopIfRequestedAsync(DownloadRunRequest run, string message, Func<Task>? compensate = null)
     {
@@ -1225,22 +1287,6 @@ public sealed class DownloadJobV2Flow(
                 "Download completed but audio-rendition follow-up could not be queued for JobId {JobId} MediaGuid {MediaGuid}.",
                 request.JobId,
                 mediaGuid);
-        }
-    }
-
-    private async Task NotifyCompletionAsync(Guid jobId, string sourceUrl)
-    {
-        try
-        {
-            await notificationDispatcher.NotifyDownloadOutcomeAsync(
-                jobId,
-                NotificationEventKeys.DownloadCompleted,
-                "FrostStream download completed",
-                $"Download completed for {sourceUrl}");
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Download completed but its notification failed for JobId {JobId}.", jobId);
         }
     }
 

@@ -129,7 +129,7 @@ public sealed record DownloadGroupRequested
     public int Priority { get; init; }
     public DownloadRequested? DirectRequest { get; init; }
     public PlaylistRequested? CollectionRequest { get; init; }
-    public ChannelMediaListRequested? ChannelRequest { get; init; }
+    public ChannelScanFullRequested? ChannelRequest { get; init; }
 }
 
 public sealed record DownloadGroupExpansionSucceeded

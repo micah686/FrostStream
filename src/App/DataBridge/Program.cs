@@ -148,14 +148,17 @@ class Program
         builder.Services.AddScoped<IDownloadConfigSetsRepository, DownloadConfigSetsRepository>();
         builder.Services.AddScoped<IScheduledTasksRepository, ScheduledTasksRepository>();
         builder.Services.AddScoped<ICreatorDiscoveryRepository, CreatorDiscoveryRepository>();
-        builder.Services.AddSingleton<OrphanMetadataCleanupExecutor>();
         builder.Services.AddSingleton<MediaDeleteExecutor>();
         builder.Services.AddSingleton<AccessPolicyExecutor>();
         builder.Services.Configure<MediaAccessOptions>(
             builder.Configuration.GetSection(MediaAccessOptions.SectionName));
-        builder.Services.AddSingleton<WatchedItemAutoDeleteExecutor>();
         builder.Services.AddSingleton<DownloadFlowStartupState>();
         builder.Services.AddSingleton<INotificationDispatcher, NotificationDispatcher>();
+        builder.Services.AddSingleton<IBackgroundRunReporter>(sp => new BackgroundRunReporter(
+            sp.GetRequiredService<IMessageBus>(),
+            sp.GetRequiredService<IClock>(),
+            "databridge",
+            sp.GetService<Microsoft.Extensions.Logging.ILogger<BackgroundRunReporter>>()));
         builder.Services.AddSingleton<ImportSessionRequestReplyService>();
         builder.Services.AddSingleton<WorkerRegistryConsumerService>();
         builder.Services.AddSingleton<LocalImportItemV2Flows>();
@@ -189,10 +192,6 @@ class Program
         builder.Services.AddHostedService<ScheduleCrudConsumerService>();
         builder.Services.AddHostedService<CreatorDiscoveryConsumerService>();
         builder.Services.AddHostedService<WatchStateConsumerService>();
-        builder.Services.AddHostedService<WatchedAutoDeleteAdminConsumerService>();
-        builder.Services.AddHostedService<OrphanCleanupAdminConsumerService>();
-        builder.Services.AddHostedService<OrphanMetadataCleanupConsumerService>();
-        builder.Services.AddHostedService<FilesystemRescanConsumerService>();
         builder.Services.AddHostedService<BackgroundJobConsumerService>();
         builder.Services.AddHostedService<DownloadFlowStartupService>();
         builder.Services.AddHostedService<DownloadAdminConsumerService>();

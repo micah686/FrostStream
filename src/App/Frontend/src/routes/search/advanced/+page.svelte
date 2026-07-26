@@ -1,17 +1,15 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { page as pageState } from '$app/state';
-  import { Button, Input, Label, Select } from 'flowbite-svelte';
-  import { SearchOutline, RefreshOutline } from 'flowbite-svelte-icons';
+  import { Select } from '$lib/components/ui';
+  import { RefreshCw, Search } from '@lucide/svelte';
   import type { SearchScope } from '$lib/api/search';
 
   // Structured builder over the DataBridge advanced-query syntax (AdvancedQueryParser).
   // Every control maps to one or more `field:value` tokens that the /search page already understands,
   // so this page is purely a query composer — it never calls the search API itself.
 
-  const inputClass =
-    'w-full! border-slate-800! bg-slate-900/80! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!';
-  const labelClass = 'mb-1.5 text-xs font-medium text-slate-400';
+  const labelClass = 'mb-1.5 text-xs font-medium text-base-content/60';
 
   const codecOptions = [
     { value: '', name: 'Any codec' },
@@ -173,16 +171,16 @@
 <section aria-labelledby="advanced-search-title" class="mx-auto max-w-5xl">
   <div class="flex flex-wrap items-start justify-between gap-4">
     <div class="min-w-0">
-      <h1 id="advanced-search-title" class="text-2xl font-bold tracking-tight text-white">Advanced search</h1>
-      <p class="mt-1 text-sm text-slate-500">
+      <h1 id="advanced-search-title" class="text-2xl font-bold tracking-tight text-base-content">Advanced search</h1>
+      <p class="mt-1 text-sm text-base-content/50">
         Fill in any fields to build a search. Everything maps to the
-        <code class="rounded bg-slate-800/80 px-1.5 py-0.5 font-mono text-xs text-slate-400">field:value</code>
+        <code class="rounded bg-base-300/80 px-1.5 py-0.5 font-mono text-xs text-base-content/60">field:value</code>
         syntax you can also type directly in the search bar.
       </p>
     </div>
     <a
       href="/search"
-      class="text-sm font-medium text-slate-400 transition hover:text-slate-200 hover:underline"
+      class="text-sm font-medium text-base-content/60 transition hover:text-base-content/90 hover:underline"
     >
       ← Back to search
     </a>
@@ -190,159 +188,149 @@
 
   <form class="mt-6 space-y-6" onsubmit={runSearch}>
     <!-- Creator & taxonomy -->
-    <fieldset class="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-5">
-      <legend class="px-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Creator & tags</legend>
+    <fieldset class="rounded-2xl border border-base-300/80 bg-base-200/40 p-5">
+      <legend class="px-2 text-xs font-semibold uppercase tracking-wide text-base-content/50">Creator & tags</legend>
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div>
-          <Label class={labelClass}>Channel / creator</Label>
-          <Input bind:value={channel} placeholder="e.g. Linus Tech Tips" class={inputClass} />
+          <label class="label {labelClass}" for="adv-channel-creator">Channel / creator</label>
+          <input id="adv-channel-creator" class="input w-full" bind:value={channel} placeholder="e.g. Linus Tech Tips" />
         </div>
         <div>
-          <Label class={labelClass}>Platform</Label>
-          <Input bind:value={platform} placeholder="e.g. youtube" class={inputClass} />
+          <label class="label {labelClass}" for="adv-platform">Platform</label>
+          <input id="adv-platform" class="input w-full" bind:value={platform} placeholder="e.g. youtube" />
         </div>
         <div>
-          <Label class={labelClass}>Language</Label>
-          <Input bind:value={language} placeholder="e.g. en" class={inputClass} />
+          <label class="label {labelClass}" for="adv-language">Language</label>
+          <input id="adv-language" class="input w-full" bind:value={language} placeholder="e.g. en" />
         </div>
         <div>
-          <Label class={labelClass}>Tag</Label>
-          <Input bind:value={tag} placeholder="e.g. review" class={inputClass} />
+          <label class="label {labelClass}" for="adv-tag">Tag</label>
+          <input id="adv-tag" class="input w-full" bind:value={tag} placeholder="e.g. review" />
         </div>
         <div>
-          <Label class={labelClass}>Category</Label>
-          <Input bind:value={category} placeholder="e.g. Gaming" class={inputClass} />
+          <label class="label {labelClass}" for="adv-category">Category</label>
+          <input id="adv-category" class="input w-full" bind:value={category} placeholder="e.g. Gaming" />
         </div>
         <div>
-          <Label class={labelClass}>Genre</Label>
-          <Input bind:value={genre} placeholder="e.g. Rock" class={inputClass} />
+          <label class="label {labelClass}" for="adv-genre">Genre</label>
+          <input id="adv-genre" class="input w-full" bind:value={genre} placeholder="e.g. Rock" />
         </div>
         <div>
-          <Label class={labelClass}>Artist</Label>
-          <Input bind:value={artist} placeholder="e.g. Daft Punk" class={inputClass} />
+          <label class="label {labelClass}" for="adv-artist">Artist</label>
+          <input id="adv-artist" class="input w-full" bind:value={artist} placeholder="e.g. Daft Punk" />
         </div>
       </div>
     </fieldset>
 
     <!-- Technical -->
-    <fieldset class="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-5">
-      <legend class="px-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Technical</legend>
+    <fieldset class="rounded-2xl border border-base-300/80 bg-base-200/40 p-5">
+      <legend class="px-2 text-xs font-semibold uppercase tracking-wide text-base-content/50">Technical</legend>
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div>
-          <Label class={labelClass}>Codec</Label>
-          <Select items={codecOptions} bind:value={codec} class={inputClass} />
+          <label class="label {labelClass}" for="adv-codec">Codec</label>
+          <Select id="adv-codec" items={codecOptions} bind:value={codec} />
         </div>
         <div>
-          <Label class={labelClass}>Resolution</Label>
-          <Select items={resolutionOptions} bind:value={resolution} class={inputClass} />
+          <label class="label {labelClass}" for="adv-resolution">Resolution</label>
+          <Select id="adv-resolution" items={resolutionOptions} bind:value={resolution} />
         </div>
         <div>
-          <Label class={labelClass}>HDR</Label>
-          <Select items={hdrOptions} bind:value={hdr} class={inputClass} />
+          <label class="label {labelClass}" for="adv-hdr">HDR</label>
+          <Select id="adv-hdr" items={hdrOptions} bind:value={hdr} />
         </div>
         <div>
-          <Label class={labelClass}>Audio channels</Label>
-          <Select items={audioOptions} bind:value={audio} class={inputClass} />
+          <label class="label {labelClass}" for="adv-audio-channels">Audio channels</label>
+          <Select id="adv-audio-channels" items={audioOptions} bind:value={audio} />
         </div>
       </div>
     </fieldset>
 
     <!-- Ranges -->
-    <fieldset class="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-5">
-      <legend class="px-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Dates & ranges</legend>
+    <fieldset class="rounded-2xl border border-base-300/80 bg-base-200/40 p-5">
+      <legend class="px-2 text-xs font-semibold uppercase tracking-wide text-base-content/50">Dates & ranges</legend>
       <div class="grid gap-4 sm:grid-cols-2">
         <div>
-          <Label class={labelClass}>Released after</Label>
-          <Input bind:value={after} placeholder="year or date, e.g. 2023" class={inputClass} />
+          <label class="label {labelClass}" for="adv-released-after">Released after</label>
+          <input id="adv-released-after" class="input w-full" bind:value={after} placeholder="year or date, e.g. 2023" />
         </div>
         <div>
-          <Label class={labelClass}>Released before</Label>
-          <Input bind:value={before} placeholder="year or date, e.g. 2024-06-01" class={inputClass} />
+          <label class="label {labelClass}" for="adv-released-before">Released before</label>
+          <input id="adv-released-before" class="input w-full" bind:value={before} placeholder="year or date, e.g. 2024-06-01" />
         </div>
         <div>
-          <Label class={labelClass}>Duration (seconds)</Label>
+          <span class="label {labelClass} block">Duration (seconds)</span>
           <div class="flex items-center gap-2">
-            <Input type="number" min="0" bind:value={durationMin} placeholder="min" class={inputClass} />
-            <span class="text-slate-600">–</span>
-            <Input type="number" min="0" bind:value={durationMax} placeholder="max" class={inputClass} />
+            <input class="input w-full" type="number" min="0" bind:value={durationMin} aria-label="Minimum duration" placeholder="min" />
+            <span class="text-base-content/40">–</span>
+            <input class="input w-full" type="number" min="0" bind:value={durationMax} aria-label="Maximum duration" placeholder="max" />
           </div>
         </div>
         <div>
-          <Label class={labelClass}>Views</Label>
+          <span class="label {labelClass} block">Views</span>
           <div class="flex items-center gap-2">
-            <Input type="number" min="0" bind:value={viewsMin} placeholder="min" class={inputClass} />
-            <span class="text-slate-600">–</span>
-            <Input type="number" min="0" bind:value={viewsMax} placeholder="max" class={inputClass} />
+            <input class="input w-full" type="number" min="0" bind:value={viewsMin} aria-label="Minimum views" placeholder="min" />
+            <span class="text-base-content/40">–</span>
+            <input class="input w-full" type="number" min="0" bind:value={viewsMax} aria-label="Maximum views" placeholder="max" />
           </div>
         </div>
         <div>
-          <Label class={labelClass}>Likes</Label>
+          <span class="label {labelClass} block">Likes</span>
           <div class="flex items-center gap-2">
-            <Input type="number" min="0" bind:value={likesMin} placeholder="min" class={inputClass} />
-            <span class="text-slate-600">–</span>
-            <Input type="number" min="0" bind:value={likesMax} placeholder="max" class={inputClass} />
+            <input class="input w-full" type="number" min="0" bind:value={likesMin} aria-label="Minimum likes" placeholder="min" />
+            <span class="text-base-content/40">–</span>
+            <input class="input w-full" type="number" min="0" bind:value={likesMax} aria-label="Maximum likes" placeholder="max" />
           </div>
         </div>
       </div>
     </fieldset>
 
     <!-- Free text & scope -->
-    <fieldset class="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-5">
-      <legend class="px-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Keywords & scope</legend>
+    <fieldset class="rounded-2xl border border-base-300/80 bg-base-200/40 p-5">
+      <legend class="px-2 text-xs font-semibold uppercase tracking-wide text-base-content/50">Keywords & scope</legend>
       <div class="grid gap-4 sm:grid-cols-3">
         <div class="sm:col-span-2">
-          <Label class={labelClass}>Free text</Label>
-          <Input bind:value={freeText} placeholder="Any additional keywords" class={inputClass} />
+          <label class="label {labelClass}" for="adv-free-text">Free text</label>
+          <input id="adv-free-text" class="input w-full" bind:value={freeText} placeholder="Any additional keywords" />
         </div>
         <div>
-          <Label class={labelClass}>Search in</Label>
-          <Select items={scopeOptions} bind:value={scope} class={inputClass} />
+          <label class="label {labelClass}" for="adv-search-in">Search in</label>
+          <Select id="adv-search-in" items={scopeOptions} bind:value={scope} />
         </div>
       </div>
     </fieldset>
 
     <!-- Preview + actions -->
-    <div class="rounded-2xl border border-slate-800/80 bg-slate-950/50 p-4">
-      <p class="text-xs font-medium text-slate-500">Query preview</p>
+    <div class="rounded-2xl border border-base-300/80 bg-base-200/50 p-4">
+      <p class="text-xs font-medium text-base-content/50">Query preview</p>
       <div class="mt-2 flex flex-wrap items-center justify-between gap-4">
-        <code class="min-w-0 break-all font-mono text-sm text-blue-300/90">
+        <code class="min-w-0 break-all font-mono text-sm text-primary">
           {builtQuery || 'Nothing selected yet'}
         </code>
         <div class="flex shrink-0 gap-2">
-          <Button
-            type="button"
-            color="dark"
-            onclick={reset}
-            class="border-slate-700! bg-slate-900! px-3! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800!"
-          >
-            <RefreshOutline class="mr-1.5 h-3.5 w-3.5" />
+          <button class="btn btn-sm btn-neutral text-xs" type="button" onclick={reset}>
+            <RefreshCw class="mr-1.5 h-3.5 w-3.5" />
             Reset
-          </Button>
-          <Button
-            type="submit"
-            color="blue"
-            disabled={!canSearch}
-            class="border-0! bg-blue-500! px-4! py-2! text-xs! font-semibold! text-white! hover:bg-blue-400! disabled:opacity-40"
-          >
-            <SearchOutline class="mr-1.5 h-3.5 w-3.5" />
+          </button>
+          <button class="btn btn-sm btn-primary text-xs" type="submit" disabled={!canSearch}>
+            <Search class="mr-1.5 h-3.5 w-3.5" />
             Search
-          </Button>
+          </button>
         </div>
       </div>
     </div>
   </form>
 
   <!-- Prefix key reference -->
-  <div class="mt-8 rounded-2xl border border-slate-800/80 bg-slate-900/40 p-5">
-    <h2 class="text-sm font-bold text-slate-100">Available prefix keys</h2>
-    <p class="mt-1 text-sm text-slate-500">
+  <div class="mt-8 rounded-2xl border border-base-300/80 bg-base-200/40 p-5">
+    <h2 class="text-sm font-bold text-base-content">Available prefix keys</h2>
+    <p class="mt-1 text-sm text-base-content/50">
       Type any of these directly in the search bar, or click an example to add it to the free-text box.
       Unknown prefixes fall back to plain keywords. Wrap values with spaces in quotes.
     </p>
     <div class="mt-4 overflow-x-auto">
       <table class="w-full border-collapse text-left text-sm">
         <thead>
-          <tr class="border-b border-slate-800 text-xs uppercase tracking-wide text-slate-500">
+          <tr class="border-b border-base-300 text-xs uppercase tracking-wide text-base-content/50">
             <th class="py-2 pr-4 font-medium">Key(s)</th>
             <th class="py-2 pr-4 font-medium">Matches</th>
             <th class="py-2 font-medium">Example</th>
@@ -350,14 +338,14 @@
         </thead>
         <tbody>
           {#each prefixReference as row (row.keys)}
-            <tr class="border-b border-slate-800/50 align-top">
-              <td class="py-2 pr-4 font-mono text-xs text-slate-300">{row.keys}</td>
-              <td class="py-2 pr-4 text-slate-400">{row.description}</td>
+            <tr class="border-b border-base-300/50 align-top">
+              <td class="py-2 pr-4 font-mono text-xs text-base-content/80">{row.keys}</td>
+              <td class="py-2 pr-4 text-base-content/60">{row.description}</td>
               <td class="py-2">
                 <button
                   type="button"
                   onclick={() => applyExample(row.example)}
-                  class="rounded bg-slate-800/80 px-1.5 py-0.5 font-mono text-xs text-blue-300/90 transition hover:bg-slate-700/80"
+                  class="rounded bg-base-300/80 px-1.5 py-0.5 font-mono text-xs text-primary transition hover:bg-base-300/80"
                   title="Add to free text"
                 >
                   {row.example}

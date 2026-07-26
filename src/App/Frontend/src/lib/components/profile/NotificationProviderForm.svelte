@@ -1,22 +1,24 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { goto } from '$app/navigation';
-  import { Badge, Button, Checkbox, Input, Label, Select, Spinner, Textarea } from 'flowbite-svelte';
+  import { Select } from '$lib/components/ui';
   import {
-    ArrowLeftOutline,
-    BellOutline,
-    CheckCircleOutline,
-    ExclamationCircleOutline,
-    FlaskOutline,
-    PaperPlaneOutline,
-    PlusOutline
-  } from 'flowbite-svelte-icons';
+    ArrowLeft,
+    Bell,
+    CircleAlert,
+    CircleCheck,
+    FlaskConical,
+    Plus,
+    Send
+  } from '@lucide/svelte';
   import {
+    NOTIFICATION_EVENT_OPTIONS,
     NOTIFICATION_PROVIDER_KEY_PATTERN,
     NOTIFICATION_PROVIDER_KINDS,
     sendTestNotification,
     upsertNotificationProvider,
     upsertNotificationProviderSecrets,
+    type NotificationEventKey,
     type NotificationProvider
   } from '$lib/api/notifications';
 
@@ -57,9 +59,7 @@
     services?: ServiceOption[];
   }
 
-  const inputClass =
-    'border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!';
-  const checkboxClass = 'text-sm text-slate-300';
+  const checkboxClass = 'text-sm text-base-content/80';
 
   const isUpdate = untrack(() => mode === 'update');
 
@@ -68,6 +68,7 @@
   let providerEnabled = $state(untrack(() => initial?.enabled ?? true));
   let displayName = $state(untrack(() => initial?.displayName ?? ''));
   let defaultTo = $state(untrack(() => initial?.defaultTo ?? ''));
+  let eventKeys = $state<NotificationEventKey[]>(untrack(() => initial?.eventKeys ?? []));
   let serviceProvider = $state('');
   let configValues = $state<Record<string, string | boolean>>({});
   let secretValues = $state<Record<string, string>>({});
@@ -84,6 +85,8 @@
   const activeDefinition = $derived(providerDefinition(providerKind));
   const activeService = $derived(activeDefinition.services?.find((service) => service.value === serviceProvider) ?? null);
   const activeFields = $derived(activeService?.fields ?? activeDefinition.fields ?? []);
+  const userEventOptions = NOTIFICATION_EVENT_OPTIONS.filter((option) => option.group === 'User events');
+  const adminEventOptions = NOTIFICATION_EVENT_OPTIONS.filter((option) => option.group === 'Admin operational events');
 
   const providerDefinitions: Record<string, ProviderFormDefinition> = {
     email: {
@@ -403,6 +406,7 @@
         enabled: providerEnabled,
         displayName: displayName.trim() || null,
         defaultTo: defaultTo.trim() || null,
+        eventKeys: [...new Set(eventKeys)],
         notifyConfig
       });
       if (Object.keys(secrets).length > 0) {
@@ -621,109 +625,119 @@
 <form onsubmit={saveProvider} class="space-y-5">
   <div class="grid gap-4 md:grid-cols-2">
     <div>
-      <Label for="notification-provider-key" class="mb-2 text-sm font-medium text-slate-300">Provider key</Label>
-      <Input
-        id="notification-provider-key"
-        required
-        pattern={'[a-z0-9-]{2,100}'}
-        minlength={2}
-        maxlength={100}
-        disabled={isUpdate}
-        bind:value={providerKey}
-        placeholder="alerts"
-        class={inputClass}
-      />
-      <p class="mt-1.5 text-xs text-slate-600">Lowercase letters, numbers, and hyphens.</p>
+      <label class="label mb-2 text-sm" for="notification-provider-key">Provider key</label>
+      <input class="input w-full" id="notification-provider-key" required
+         pattern={'[a-z0-9-]{2,100}'} minlength={2} maxlength={100} disabled={isUpdate} bind:value={providerKey} placeholder="alerts" />
+      <p class="mt-1.5 text-xs text-base-content/40">Lowercase letters, numbers, and hyphens.</p>
     </div>
     <div>
-      <Label for="notification-provider-kind" class="mb-2 text-sm font-medium text-slate-300">Provider kind</Label>
-      <Select
-        id="notification-provider-kind"
-        items={providerKindItems}
-        bind:value={providerKind}
-        onchange={onProviderKindChange}
-        class="border-slate-800! bg-slate-950/60! text-sm! text-slate-200! focus:border-blue-500! focus:ring-blue-500!"
-      />
+      <label class="label mb-2 text-sm" for="notification-provider-kind">Provider kind</label>
+      <Select id="notification-provider-kind" items={providerKindItems} bind:value={providerKind} onchange={onProviderKindChange} class="text-sm" />
     </div>
   </div>
 
   <div class="grid gap-4 md:grid-cols-2">
     <div>
-      <Label for="notification-display-name" class="mb-2 text-sm font-medium text-slate-300">Display name</Label>
-      <Input
-        id="notification-display-name"
-        maxlength={255}
-        bind:value={displayName}
-        placeholder="Operations alerts"
-        class={inputClass}
-      />
+      <label class="label mb-2 text-sm" for="notification-display-name">Display name</label>
+      <input class="input w-full" id="notification-display-name" maxlength={255} bind:value={displayName} placeholder="Operations alerts" />
     </div>
     <div>
-      <Label for="notification-default-to" class="mb-2 text-sm font-medium text-slate-300">Default recipient</Label>
-      <Input
-        id="notification-default-to"
-        maxlength={512}
-        bind:value={defaultTo}
-        placeholder="#ops-alerts"
-        class={inputClass}
-      />
+      <label class="label mb-2 text-sm" for="notification-default-to">Default recipient</label>
+      <input class="input w-full" id="notification-default-to" maxlength={512} bind:value={defaultTo} placeholder="#ops-alerts" />
     </div>
   </div>
 
-  <div class="border-t border-slate-800/70 pt-5">
+  <div class="border-t border-base-300/70 pt-5">
     <div class="flex items-center gap-2">
-      <BellOutline class="h-4 w-4 text-blue-400" />
-      <h3 class="text-sm font-bold text-slate-100">{activeDefinition.name} settings</h3>
+      <Bell class="h-4 w-4 text-primary" />
+      <h3 class="text-sm font-bold text-base-content">Notification sources</h3>
+    </div>
+    <p class="mt-1 text-sm text-base-content/60">
+      Choose which events this provider should receive. Operational events should be routed to admin-owned providers.
+    </p>
+
+    <div class="mt-4 grid gap-4 lg:grid-cols-2">
+      <section class="rounded-xl border border-base-300/80 bg-base-200/20 p-4" aria-labelledby="user-notification-sources">
+        <h4 id="user-notification-sources" class="text-xs font-bold uppercase tracking-wide text-base-content/60">
+          User events
+        </h4>
+        <div class="mt-3 space-y-3">
+          {#each userEventOptions as option (option.group + option.key + option.label)}
+            <label class="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                class="checkbox mt-0.5"
+                value={option.key}
+                bind:group={eventKeys}
+              />
+              <span class="min-w-0">
+                <span class="block text-sm font-semibold text-base-content">{option.label}</span>
+                <span class="block text-xs leading-5 text-base-content/50">{option.description}</span>
+              </span>
+            </label>
+          {/each}
+        </div>
+      </section>
+
+      <section class="rounded-xl border border-base-300/80 bg-base-200/20 p-4" aria-labelledby="admin-notification-sources">
+        <h4 id="admin-notification-sources" class="text-xs font-bold uppercase tracking-wide text-base-content/60">
+          Admin operational events
+        </h4>
+        <div class="mt-3 space-y-3">
+          {#each adminEventOptions as option (option.group + option.key + option.label)}
+            <label class="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                class="checkbox mt-0.5"
+                value={option.key}
+                bind:group={eventKeys}
+              />
+              <span class="min-w-0">
+                <span class="block text-sm font-semibold text-base-content">{option.label}</span>
+                <span class="block text-xs leading-5 text-base-content/50">{option.description}</span>
+              </span>
+            </label>
+          {/each}
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="border-t border-base-300/70 pt-5">
+    <div class="flex items-center gap-2">
+      <Bell class="h-4 w-4 text-primary" />
+      <h3 class="text-sm font-bold text-base-content">{activeDefinition.name} settings</h3>
     </div>
 
     {#if activeDefinition.services}
       <div class="mt-4 max-w-sm">
-        <Label for="notification-service-provider" class="mb-2 text-sm font-medium text-slate-300">
+        <label class="label mb-2 text-sm" for="notification-service-provider">
           {activeDefinition.serviceLabel ?? 'Service'}
-        </Label>
-        <Select
-          id="notification-service-provider"
-          items={serviceItems(activeDefinition)}
-          bind:value={serviceProvider}
-          onchange={onServiceProviderChange}
-          class="border-slate-800! bg-slate-950/60! text-sm! text-slate-200! focus:border-blue-500! focus:ring-blue-500!"
-        />
+        </label>
+        <Select id="notification-service-provider" items={serviceItems(activeDefinition)} bind:value={serviceProvider} onchange={onServiceProviderChange} class="text-sm" />
       </div>
     {/if}
 
     <div class="mt-4 grid gap-4 md:grid-cols-2">
       {#each activeFields as field (field.key)}
         {#if field.type === 'checkbox'}
-          <label class="flex min-h-10 items-center pt-7">
-            <Checkbox
-              checked={configValues[field.key] === true}
-              onchange={(event) => updateCheckboxValue(field.key, event.currentTarget.checked)}
-              class={checkboxClass}
-            >
-              {field.label}
-            </Checkbox>
-          </label>
+          <div class="flex min-h-10 items-center pt-7">
+            <label class="label inline-flex cursor-pointer items-center gap-2"><input type="checkbox" class="checkbox" checked={configValues[field.key] === true} onchange={(event) => updateCheckboxValue(field.key, event.currentTarget.checked)} /><span>{field.label}</span></label>
+          </div>
         {:else if field.type === 'textarea'}
           <div class="md:col-span-2">
-            <Label for={`notification-field-${field.key}`} class="mb-2 text-sm font-medium text-slate-300">
+            <label class="label mb-2 text-sm" for={`notification-field-${field.key}`}>
               {field.label}
-            </Label>
-            <Textarea
-              id={`notification-field-${field.key}`}
-              rows={field.secret ? 4 : 5}
-              value={field.secret ? (secretValues[field.key] ?? '') : String(configValues[field.key] ?? '')}
-              oninput={(event) => {
+            </label>
+            <textarea class="textarea w-full text-sm" id={`notification-field-${field.key}`} rows={field.secret ? 4 : 5} value={field.secret ? (secretValues[field.key] ?? '') : String(configValues[field.key] ?? '')} oninput={(event) => {
                 if (field.secret) {
                   updateSecretValue(field.key, inputValue(event));
                 } else {
                   updateConfigValue(field.key, inputValue(event));
                 }
-              }}
-              placeholder={field.secret && preservedSecretRefs[field.key] ? 'Stored secret is already configured' : field.placeholder}
-              class="border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!"
-            />
+              }} placeholder={field.secret && preservedSecretRefs[field.key] ? 'Stored secret is already configured' : field.placeholder}></textarea>
             {#if field.secret}
-              <p class="mt-1.5 text-xs text-slate-600">
+              <p class="mt-1.5 text-xs text-base-content/40">
                 {preservedSecretRefs[field.key]
                   ? `Leave blank to keep ${preservedSecretRefs[field.key]}.`
                   : `Stored as secret://${providerKey.trim() || 'provider'}/${secretNameForField(field.key)}.`}
@@ -732,25 +746,18 @@
           </div>
         {:else}
           <div>
-            <Label for={`notification-field-${field.key}`} class="mb-2 text-sm font-medium text-slate-300">
+            <label class="label mb-2 text-sm" for={`notification-field-${field.key}`}>
               {field.label}
-            </Label>
-            <Input
-              id={`notification-field-${field.key}`}
-              type={fieldInputType(field)}
-              value={field.secret ? (secretValues[field.key] ?? '') : String(configValues[field.key] ?? '')}
-              placeholder={field.secret && preservedSecretRefs[field.key] ? 'Stored secret is already configured' : field.placeholder}
-              class={inputClass}
-              oninput={(event) => {
+            </label>
+            <input class="input w-full" id={`notification-field-${field.key}`} type={fieldInputType(field)} value={field.secret ? (secretValues[field.key] ?? '') : String(configValues[field.key] ?? '')} placeholder={field.secret && preservedSecretRefs[field.key] ? 'Stored secret is already configured' : field.placeholder} oninput={(event) => {
                 if (field.secret) {
                   updateSecretValue(field.key, inputValue(event));
                 } else {
                   updateConfigValue(field.key, inputValue(event));
                 }
-              }}
-            />
+              }} />
             {#if field.secret}
-              <p class="mt-1.5 text-xs text-slate-600">
+              <p class="mt-1.5 text-xs text-base-content/40">
                 {preservedSecretRefs[field.key]
                   ? `Leave blank to keep ${preservedSecretRefs[field.key]}.`
                   : `Stored as secret://${providerKey.trim() || 'provider'}/${secretNameForField(field.key)}.`}
@@ -764,98 +771,78 @@
 
   {#if submitError}
     <div
-      class="flex items-start gap-2 rounded-xl border border-red-900/60 bg-red-950/40 p-3 text-sm text-red-300"
+      class="flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{submitError}</span>
     </div>
   {/if}
 
-  <div class="flex flex-col-reverse gap-3 border-t border-slate-800/70 pt-5 sm:flex-row sm:items-center sm:justify-between">
-    <Checkbox bind:checked={providerEnabled} class="text-sm text-slate-300">Enabled</Checkbox>
+  <div class="flex flex-col-reverse gap-3 border-t border-base-300/70 pt-5 sm:flex-row sm:items-center sm:justify-between">
+    <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={providerEnabled} /><span>Enabled</span></label>
     <div class="flex flex-col-reverse gap-3 sm:flex-row">
-      <Button
-        href="/profile/notifications"
-        color="dark"
-        class="border-slate-700! bg-transparent! px-4! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800!"
-      >
-        <ArrowLeftOutline class="mr-1.5 h-4 w-4" />
+      <a class="btn btn-sm btn-ghost text-xs" href="/profile/notifications">
+        <ArrowLeft class="mr-1.5 h-4 w-4" />
         Back
-      </Button>
-      <Button
-        type="submit"
-        color="blue"
-        disabled={savingProvider}
-        class="border-0! bg-blue-500! px-5! py-2! text-xs! font-semibold! hover:bg-blue-400! disabled:opacity-60"
-      >
+      </a>
+      <button class="btn btn-sm btn-primary text-xs" type="submit" disabled={savingProvider}>
         {#if savingProvider}
-          <Spinner size="4" class="mr-2" />
+          <span class="loading loading-spinner loading-xs mr-2"></span>
         {:else if isUpdate}
-          <CheckCircleOutline class="mr-1.5 h-4 w-4" />
+          <CircleCheck class="mr-1.5 h-4 w-4" />
         {:else}
-          <PlusOutline class="mr-1.5 h-4 w-4" />
+          <Plus class="mr-1.5 h-4 w-4" />
         {/if}
         {isUpdate ? 'Save changes' : 'Create provider'}
-      </Button>
+      </button>
     </div>
   </div>
 </form>
 
 {#if isUpdate && initial}
-  <section class="mt-5 rounded-xl border border-slate-800/80 bg-slate-950/20 p-4" aria-labelledby="notification-test-title">
-    <h3 id="notification-test-title" class="flex items-center gap-2 text-sm font-bold text-slate-100">
-      <FlaskOutline class="h-4 w-4 text-blue-400" />
+  <section class="mt-5 rounded-xl border border-base-300/80 bg-base-200/20 p-4" aria-labelledby="notification-test-title">
+    <h3 id="notification-test-title" class="flex items-center gap-2 text-sm font-bold text-base-content">
+      <FlaskConical class="h-4 w-4 text-primary" />
       Test delivery
     </h3>
 
     {#if testError}
       <div
-        class="mt-4 flex items-start gap-2 rounded-xl border border-red-900/60 bg-red-950/35 p-3 text-sm text-red-300"
+        class="mt-4 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
         role="alert"
       >
-        <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+        <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
         <span>{testError}</span>
       </div>
     {/if}
 
     {#if testStatus}
       <div
-        class="mt-4 flex items-start gap-2 rounded-xl border border-emerald-900/60 bg-emerald-950/30 p-3 text-sm text-emerald-300"
+        class="mt-4 flex items-start gap-2 rounded-xl border border-success/30 bg-success/10 p-3 text-sm text-success"
         role="status"
       >
-        <CheckCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+        <CircleCheck class="mt-0.5 h-4 w-4 shrink-0" />
         <span>{testStatus}</span>
       </div>
     {/if}
 
     <div class="mt-4">
-      <Label for="notification-test-subject" class="mb-2 text-sm font-medium text-slate-300">Subject</Label>
-      <Input id="notification-test-subject" bind:value={testSubject} class={inputClass} />
+      <label class="label mb-2 text-sm" for="notification-test-subject">Subject</label>
+      <input class="input w-full" id="notification-test-subject" bind:value={testSubject} />
     </div>
     <div class="mt-4">
-      <Label for="notification-test-body" class="mb-2 text-sm font-medium text-slate-300">Body</Label>
-      <Textarea
-        id="notification-test-body"
-        rows={5}
-        bind:value={testBody}
-        class="border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!"
-      />
+      <label class="label mb-2 text-sm" for="notification-test-body">Body</label>
+      <textarea class="textarea w-full text-sm" id="notification-test-body" rows={5} bind:value={testBody}></textarea>
     </div>
 
-    <Button
-      type="button"
-      color="blue"
-      disabled={testingProvider}
-      class="mt-4 border-0! px-4! py-2! text-xs! font-semibold! disabled:opacity-60"
-      onclick={sendTest}
-    >
+    <button class="btn btn-sm btn-primary mt-4 text-xs" type="button" disabled={testingProvider} onclick={sendTest}>
       {#if testingProvider}
-        <Spinner size="4" class="mr-1.5" />
+        <span class="loading loading-spinner loading-xs mr-1.5"></span>
       {:else}
-        <PaperPlaneOutline class="mr-1.5 h-4 w-4" />
+        <Send class="mr-1.5 h-4 w-4" />
       {/if}
       Send test
-    </Button>
+    </button>
   </section>
 {/if}

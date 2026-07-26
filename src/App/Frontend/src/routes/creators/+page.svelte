@@ -1,21 +1,21 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Badge, Button, Checkbox, Input, Label, Modal, Select, Spinner, Toggle } from 'flowbite-svelte';
+  import { Modal, Select } from '$lib/components/ui';
   import {
-    BanOutline,
-    CirclePlusOutline,
-    DownloadOutline,
-    EditOutline,
-    ExclamationCircleOutline,
-    EyeSlashOutline,
-    ImageOutline,
-    LinkOutline,
-    PauseOutline,
-    PlayOutline,
-    RefreshOutline,
-    TrashBinOutline,
-    UsersGroupOutline
-  } from 'flowbite-svelte-icons';
+    Ban,
+    CircleAlert,
+    CirclePlus,
+    Download,
+    EyeOff,
+    Image,
+    Link,
+    Pause,
+    Pencil,
+    Play,
+    RefreshCw,
+    Trash2,
+    Users
+  } from '@lucide/svelte';
   import {
     createCreatorSource,
     creatorSourceTypes,
@@ -37,9 +37,7 @@
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
 
   const rowActionClass =
-    'inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900/70 px-3 text-xs font-semibold text-slate-200 transition hover:border-blue-500/60 hover:bg-blue-500/10 hover:text-blue-200 disabled:opacity-50';
-  const fieldClass =
-    'border-slate-700! bg-slate-900/80! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!';
+    'inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary disabled:opacity-50';
 
   interface SourceForm {
     platform: string;
@@ -411,99 +409,86 @@
 <section aria-labelledby="creators-title">
   <div class="flex flex-wrap items-start justify-between gap-4">
     <div>
-      <h1 id="creators-title" class="text-2xl font-bold tracking-tight text-white">Creators</h1>
-      <p class="mt-1 text-sm text-slate-500">
+      <h1 id="creators-title" class="text-2xl font-bold tracking-tight text-base-content">Creators</h1>
+      <p class="mt-1 text-sm text-base-content/50">
         Channels tracked for automatic discovery and download of new uploads
       </p>
     </div>
 
     <div class="flex flex-wrap items-center gap-2">
-      <Button
-        color="dark"
-        onclick={loadSources}
-        disabled={loading}
-        class="border-slate-700! bg-slate-900! px-3! py-2! text-xs! font-semibold! text-slate-200! hover:bg-slate-800! disabled:opacity-50"
-      >
+      <button class="btn btn-sm btn-neutral text-xs" onclick={loadSources} disabled={loading}>
         {#if loading}
-          <Spinner size="4" class="mr-1.5" />
+          <span class="loading loading-spinner loading-xs mr-1.5"></span>
         {:else}
-          <RefreshOutline class="mr-1.5 h-4 w-4" />
+          <RefreshCw class="mr-1.5 h-4 w-4" />
         {/if}
         Refresh
-      </Button>
-      <Button
-        color="blue"
-        onclick={openCreateForm}
-        class="border-0! bg-blue-500! px-3! py-2! text-xs! font-semibold! hover:bg-blue-400!"
-      >
-        <CirclePlusOutline class="mr-1.5 h-4 w-4" />
+      </button>
+      <button class="btn btn-sm btn-primary text-xs" onclick={openCreateForm}>
+        <CirclePlus class="mr-1.5 h-4 w-4" />
         Track creator
-      </Button>
+      </button>
     </div>
   </div>
 
   <div class="mt-6 grid gap-3 md:grid-cols-4">
-    <div class="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4">
-      <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-600">Tracked</p>
-      <p class="mt-2 text-2xl font-bold text-white">{trackedCount}</p>
-      <p class="mt-1 text-xs text-slate-500">creator sources</p>
+    <div class="rounded-xl border border-base-300/80 bg-base-200/40 p-4">
+      <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Tracked</p>
+      <p class="mt-2 text-2xl font-bold text-base-content">{trackedCount}</p>
+      <p class="mt-1 text-xs text-base-content/50">creator sources</p>
     </div>
-    <div class="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4">
-      <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-600">Scanning</p>
-      <p class="mt-2 text-2xl font-bold text-white">{scanningCount}</p>
-      <p class="mt-1 text-xs text-slate-500">enabled for discovery</p>
+    <div class="rounded-xl border border-base-300/80 bg-base-200/40 p-4">
+      <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Scanning</p>
+      <p class="mt-2 text-2xl font-bold text-base-content">{scanningCount}</p>
+      <p class="mt-1 text-xs text-base-content/50">enabled for discovery</p>
     </div>
-    <div class="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4">
-      <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-600">Platforms</p>
-      <p class="mt-2 text-2xl font-bold text-white">{platformCount}</p>
-      <p class="mt-1 text-xs text-slate-500">distinct providers</p>
+    <div class="rounded-xl border border-base-300/80 bg-base-200/40 p-4">
+      <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Platforms</p>
+      <p class="mt-2 text-2xl font-bold text-base-content">{platformCount}</p>
+      <p class="mt-1 text-xs text-base-content/50">distinct providers</p>
     </div>
-    <div class="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4">
-      <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-600">Scanned</p>
-      <p class="mt-2 text-2xl font-bold text-white">{scannedCount}</p>
-      <p class="mt-1 text-xs text-slate-500">completed at least one scan</p>
+    <div class="rounded-xl border border-base-300/80 bg-base-200/40 p-4">
+      <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Scanned</p>
+      <p class="mt-2 text-2xl font-bold text-base-content">{scannedCount}</p>
+      <p class="mt-1 text-xs text-base-content/50">completed at least one scan</p>
     </div>
   </div>
 
   {#if loadError || actionError}
     <div
-      class="mt-5 flex items-start gap-3 rounded-xl border border-red-900/60 bg-red-950/35 p-4 text-sm text-red-300"
+      class="mt-5 flex items-start gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{actionError ?? loadError}</span>
     </div>
   {/if}
 
   {#if actionNotice}
     <div
-      class="mt-5 flex items-start gap-3 rounded-xl border border-emerald-900/60 bg-emerald-950/35 p-4 text-sm text-emerald-300"
+      class="mt-5 flex items-start gap-3 rounded-xl border border-success/30 bg-success/10 p-4 text-sm text-success"
       role="status"
     >
-      <RefreshOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <RefreshCw class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{actionNotice}</span>
     </div>
   {/if}
 
   {#if loading && sources.length === 0}
     <div class="mt-16 flex justify-center">
-      <Spinner size="8" />
+      <span class="loading loading-spinner loading-md"></span>
     </div>
   {:else if sources.length === 0}
-    <div class="mt-8 rounded-xl border border-slate-800/80 bg-slate-900/40 p-10 text-center">
-      <UsersGroupOutline class="mx-auto h-10 w-10 text-slate-700" />
-      <p class="mt-4 text-sm font-semibold text-slate-300">No creators tracked yet</p>
-      <p class="mt-1 text-sm text-slate-500">
+    <div class="mt-8 rounded-xl border border-base-300/80 bg-base-200/40 p-10 text-center">
+      <Users class="mx-auto h-10 w-10 text-base-content/30" />
+      <p class="mt-4 text-sm font-semibold text-base-content/80">No creators tracked yet</p>
+      <p class="mt-1 text-sm text-base-content/50">
         Track a channel to automatically discover and download everything it uploads.
       </p>
-      <Button
-        color="blue"
-        onclick={openCreateForm}
-        class="mt-5 border-0! bg-blue-500! px-4! py-2! text-xs! font-semibold! hover:bg-blue-400!"
-      >
-        <CirclePlusOutline class="mr-1.5 h-4 w-4" />
+      <button class="btn btn-sm btn-primary mt-5 text-xs" onclick={openCreateForm}>
+        <CirclePlus class="mr-1.5 h-4 w-4" />
         Track your first creator
-      </Button>
+      </button>
     </div>
   {:else}
     <ul class="mt-6 space-y-3">
@@ -512,33 +497,25 @@
         <li
           class={[
             'rounded-2xl border p-5',
-            source.scanEnabled ? 'border-slate-800/90 bg-slate-900/45' : 'border-slate-800/60 bg-slate-900/25'
+            source.scanEnabled ? 'border-base-300/90 bg-base-200/45' : 'border-base-300/60 bg-base-200/25'
           ]}
         >
           <div class="flex flex-wrap items-start justify-between gap-4">
             <div class="min-w-0">
               <div class="flex flex-wrap items-center gap-2">
-                <h2 class="truncate text-base font-semibold text-slate-100">{displayName(source)}</h2>
-                <Badge
-                  rounded
-                  color="gray"
-                  class="bg-slate-800! px-2! py-0.5! text-[10px]! font-bold! uppercase! tracking-wide! text-slate-300!"
-                >
+                <h2 class="truncate text-base font-semibold text-base-content">{displayName(source)}</h2>
+                <span class="badge badge-sm badge-ghost rounded-full text-[10px] uppercase tracking-wide">
                   {source.platform}
-                </Badge>
-                <Badge
-                  rounded
-                  color="gray"
-                  class="bg-slate-800! px-2! py-0.5! text-[10px]! font-bold! text-slate-400!"
-                >
+                </span>
+                <span class="badge badge-sm badge-ghost rounded-full text-[10px]">
                   {source.sourceType}
-                </Badge>
+                </span>
                 <span
                   class={[
                     'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold ring-1',
                     source.scanEnabled
-                      ? 'bg-emerald-500/12 text-emerald-300 ring-emerald-500/20'
-                      : 'bg-slate-500/12 text-slate-400 ring-slate-500/20'
+                      ? 'bg-success/12 text-success ring-success/20'
+                      : 'bg-base-200/12 text-base-content/60 ring-base-300/20'
                   ]}
                 >
                   {source.scanEnabled ? 'SCANNING' : 'PAUSED'}
@@ -548,9 +525,9 @@
                 href={source.sourceUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                class="mt-1.5 inline-flex max-w-full items-center gap-1.5 text-xs text-slate-500 transition hover:text-blue-400"
+                class="mt-1.5 inline-flex max-w-full items-center gap-1.5 text-xs text-base-content/50 transition hover:text-primary"
               >
-                <LinkOutline class="h-3.5 w-3.5 shrink-0" />
+                <Link class="h-3.5 w-3.5 shrink-0" />
                 <span class="truncate">{compactUrl(source.sourceUrl)}</span>
               </a>
             </div>
@@ -564,11 +541,11 @@
                 title={source.scanEnabled ? 'Pause automatic scanning' : 'Resume automatic scanning'}
               >
                 {#if busyAction === 'scan'}
-                  <Spinner size="4" />
+                  <span class="loading loading-spinner loading-xs"></span>
                 {:else if source.scanEnabled}
-                  <PauseOutline class="h-4 w-4" />
+                  <Pause class="h-4 w-4" />
                 {:else}
-                  <PlayOutline class="h-4 w-4" />
+                  <Play class="h-4 w-4" />
                 {/if}
                 {source.scanEnabled ? 'Pause' : 'Resume'}
               </button>
@@ -580,9 +557,9 @@
                 title="Queue a refresh of the avatar and banner (hold Shift to force re-download)"
               >
                 {#if busyAction === 'assets'}
-                  <Spinner size="4" />
+                  <span class="loading loading-spinner loading-xs"></span>
                 {:else}
-                  <ImageOutline class="h-4 w-4" />
+                  <Image class="h-4 w-4" />
                 {/if}
                 Refresh assets
               </button>
@@ -594,9 +571,9 @@
                 title="Queue an immediate scan for new uploads (hold Shift for a full channel rescan)"
               >
                 {#if busyAction === 'scan-now'}
-                  <Spinner size="4" />
+                  <span class="loading loading-spinner loading-xs"></span>
                 {:else}
-                  <RefreshOutline class="h-4 w-4" />
+                  <RefreshCw class="h-4 w-4" />
                 {/if}
                 Scan now
               </button>
@@ -607,7 +584,7 @@
                 onclick={() => openDownloadModal(source)}
                 title="Queue a one-off download of the channel's full backlog"
               >
-                <DownloadOutline class="h-4 w-4" />
+                <Download class="h-4 w-4" />
                 Download channel
               </button>
               <button
@@ -616,16 +593,16 @@
                 disabled={Boolean(busyAction)}
                 onclick={() => openEditForm(source)}
               >
-                <EditOutline class="h-4 w-4" />
+                <Pencil class="h-4 w-4" />
                 Edit
               </button>
               <button
                 type="button"
-                class="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900/70 px-3 text-xs font-semibold text-slate-200 transition hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-300 disabled:opacity-50"
+                class="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/90 transition hover:border-error/60 hover:bg-error/10 hover:text-error disabled:opacity-50"
                 disabled={Boolean(busyAction)}
                 onclick={() => requestDelete(source)}
               >
-                <TrashBinOutline class="h-4 w-4" />
+                <Trash2 class="h-4 w-4" />
                 Delete
               </button>
             </div>
@@ -633,36 +610,36 @@
 
           <dl class="mt-4 grid gap-x-6 gap-y-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
             <div>
-              <dt class="font-bold uppercase tracking-[0.08em] text-slate-600">Last scan</dt>
-              <dd class="mt-0.5 text-slate-300">{formatScan(source.lastSuccessfulScanAt)}</dd>
+              <dt class="font-bold uppercase tracking-[0.08em] text-base-content/40">Last scan</dt>
+              <dd class="mt-0.5 text-base-content/80">{formatScan(source.lastSuccessfulScanAt)}</dd>
             </div>
             <div>
-              <dt class="font-bold uppercase tracking-[0.08em] text-slate-600">Last full scan</dt>
-              <dd class="mt-0.5 text-slate-300">{formatScan(source.lastFullScanAt)}</dd>
+              <dt class="font-bold uppercase tracking-[0.08em] text-base-content/40">Last full scan</dt>
+              <dd class="mt-0.5 text-base-content/80">{formatScan(source.lastFullScanAt)}</dd>
             </div>
             <div>
-              <dt class="font-bold uppercase tracking-[0.08em] text-slate-600">Update check</dt>
-              <dd class="mt-0.5 text-slate-300">every {source.updateCheckIntervalHours} h</dd>
+              <dt class="font-bold uppercase tracking-[0.08em] text-base-content/40">Update check</dt>
+              <dd class="mt-0.5 text-base-content/80">every {source.updateCheckIntervalHours} h</dd>
             </div>
             <div>
-              <dt class="font-bold uppercase tracking-[0.08em] text-slate-600">Full rescan</dt>
-              <dd class="mt-0.5 text-slate-300">every {source.fullRescanIntervalDays} days</dd>
+              <dt class="font-bold uppercase tracking-[0.08em] text-base-content/40">Full rescan</dt>
+              <dd class="mt-0.5 text-base-content/80">every {source.fullRescanIntervalDays} days</dd>
             </div>
             <div>
-              <dt class="font-bold uppercase tracking-[0.08em] text-slate-600">Scan paging</dt>
-              <dd class="mt-0.5 text-slate-300">
+              <dt class="font-bold uppercase tracking-[0.08em] text-base-content/40">Scan paging</dt>
+              <dd class="mt-0.5 text-base-content/80">
                 {source.incrementalPageSize} per page · stop after {source.consecutiveKnownThreshold} known
               </dd>
             </div>
           </dl>
 
-          <div class="mt-4 border-t border-slate-800/70 pt-3">
+          <div class="mt-4 border-t border-base-300/70 pt-3">
             <button
               type="button"
-              class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 transition hover:text-blue-400"
+              class="inline-flex items-center gap-1.5 text-xs font-semibold text-base-content/50 transition hover:text-primary"
               onclick={() => toggleIgnored(source)}
             >
-              <EyeSlashOutline class="h-3.5 w-3.5" />
+              <EyeOff class="h-3.5 w-3.5" />
               {expandedIgnoredId === source.id ? 'Hide ignored videos' : 'Show ignored videos'}
             </button>
 
@@ -670,30 +647,30 @@
               <div class="mt-3">
                 {#if ignoredLoading}
                   <div class="flex justify-center py-6">
-                    <Spinner size="6" />
+                    <span class="loading loading-spinner loading-sm"></span>
                   </div>
                 {:else if ignoredError}
-                  <p class="text-xs text-red-300">{ignoredError}</p>
+                  <p class="text-xs text-error">{ignoredError}</p>
                 {:else if ignoredItems.length === 0}
-                  <p class="text-xs text-slate-500">
+                  <p class="text-xs text-base-content/50">
                     No videos have been suppressed by ignore keywords for this creator.
                   </p>
                 {:else}
                   <ul class="space-y-2">
                     {#each ignoredItems as item (item.id)}
                       <li
-                        class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-800/70 bg-slate-950/40 px-3 py-2"
+                        class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-base-300/70 bg-base-200/40 px-3 py-2"
                       >
                         <div class="min-w-0">
                           <a
                             href={item.canonicalUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            class="block truncate text-xs font-medium text-slate-300 transition hover:text-blue-400"
+                            class="block truncate text-xs font-medium text-base-content/80 transition hover:text-primary"
                           >
                             {item.title?.trim() || item.canonicalUrl}
                           </a>
-                          <p class="mt-0.5 text-[11px] text-slate-600">
+                          <p class="mt-0.5 text-[11px] text-base-content/40">
                             {[
                               formatRelativeDate(item.firstSeenAt)
                                 ? `first seen ${formatRelativeDate(item.firstSeenAt)}`
@@ -708,9 +685,9 @@
                         </div>
                         {#if item.ignoredKeyword}
                           <span
-                            class="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-300 ring-1 ring-amber-500/20"
+                            class="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-bold text-warning ring-1 ring-warning/20"
                           >
-                            <BanOutline class="h-3 w-3" />
+                            <Ban class="h-3 w-3" />
                             {item.ignoredKeyword}
                           </span>
                         {/if}
@@ -727,151 +704,95 @@
   {/if}
 </section>
 
-<Modal
-  bind:open={formOpen}
-  title={editingSource ? 'Edit creator source' : 'Track a creator'}
-  size="lg"
-  class="z-50"
->
+<Modal bind:open={formOpen} title={editingSource ? 'Edit creator source' : 'Track a creator'} size="lg">
   <form id="creator-source-form" class="space-y-4" onsubmit={submitForm}>
     <div>
-      <Label for="creator-source-url" class="mb-1.5 text-xs font-semibold text-slate-400">
+      <label class="label mb-1.5 text-xs" for="creator-source-url">
         Channel URL
-      </Label>
-      <Input
-        id="creator-source-url"
-        type="url"
-        required
-        bind:value={form.sourceUrl}
-        placeholder="https://www.youtube.com/@creator/videos"
-        class={fieldClass}
-      />
-      <p class="mt-1.5 text-[11px] text-slate-600">
+      </label>
+      <input class="input w-full" id="creator-source-url" type="url" required
+         bind:value={form.sourceUrl} placeholder="https://www.youtube.com/@creator/videos" />
+      <p class="mt-1.5 text-[11px] text-base-content/40">
         The channel or listing page that discovery scans will page through for new uploads.
       </p>
     </div>
 
     <div class="grid gap-4 sm:grid-cols-2">
       <div>
-        <Label for="creator-platform" class="mb-1.5 text-xs font-semibold text-slate-400">Platform</Label>
-        <Input
-          id="creator-platform"
-          required
-          bind:value={form.platform}
-          placeholder="youtube"
-          class={fieldClass}
-        />
+        <label class="label mb-1.5 text-xs" for="creator-platform">Platform</label>
+        <input class="input w-full" id="creator-platform" required
+           bind:value={form.platform} placeholder="youtube" />
       </div>
       <div>
-        <Label for="creator-source-type" class="mb-1.5 text-xs font-semibold text-slate-400">
+        <label class="label mb-1.5 text-xs" for="creator-source-type">
           Content type
-        </Label>
-        <Select
-          id="creator-source-type"
-          items={sourceTypeOptions}
-          bind:value={form.sourceType}
-          class={fieldClass}
-        />
+        </label>
+        <Select id="creator-source-type" items={sourceTypeOptions} bind:value={form.sourceType} />
       </div>
     </div>
 
     <div class="grid gap-4 sm:grid-cols-2">
       <div>
-        <Label for="creator-page-size" class="mb-1.5 text-xs font-semibold text-slate-400">
+        <label class="label mb-1.5 text-xs" for="creator-page-size">
           Incremental page size
-        </Label>
-        <Input
-          id="creator-page-size"
-          type="number"
-          min="1"
-          max="500"
-          required
-          bind:value={form.incrementalPageSize}
-          class={fieldClass}
-        />
-        <p class="mt-1.5 text-[11px] text-slate-600">Videos fetched per page during a scan (1-500).</p>
+        </label>
+        <input class="input w-full" id="creator-page-size" type="number" min="1" max="500" required
+           bind:value={form.incrementalPageSize} />
+        <p class="mt-1.5 text-[11px] text-base-content/40">Videos fetched per page during a scan (1-500).</p>
       </div>
       <div>
-        <Label for="creator-known-threshold" class="mb-1.5 text-xs font-semibold text-slate-400">
+        <label class="label mb-1.5 text-xs" for="creator-known-threshold">
           Consecutive known threshold
-        </Label>
-        <Input
-          id="creator-known-threshold"
-          type="number"
-          min="1"
-          max="500"
-          required
-          bind:value={form.consecutiveKnownThreshold}
-          class={fieldClass}
-        />
-        <p class="mt-1.5 text-[11px] text-slate-600">
+        </label>
+        <input class="input w-full" id="creator-known-threshold" type="number" min="1" max="500" required
+           bind:value={form.consecutiveKnownThreshold} />
+        <p class="mt-1.5 text-[11px] text-base-content/40">
           Stop scanning after this many already-known videos in a row (1-500).
         </p>
       </div>
       <div>
-        <Label for="creator-rescan-days" class="mb-1.5 text-xs font-semibold text-slate-400">
+        <label class="label mb-1.5 text-xs" for="creator-rescan-days">
           Full rescan interval (days)
-        </Label>
-        <Input
-          id="creator-rescan-days"
-          type="number"
-          min="1"
-          max="365"
-          required
-          bind:value={form.fullRescanIntervalDays}
-          class={fieldClass}
-        />
-        <p class="mt-1.5 text-[11px] text-slate-600">How often the entire channel is re-walked (1-365).</p>
+        </label>
+        <input class="input w-full" id="creator-rescan-days" type="number" min="1" max="365" required
+           bind:value={form.fullRescanIntervalDays} />
+        <p class="mt-1.5 text-[11px] text-base-content/40">How often the entire channel is re-walked (1-365).</p>
       </div>
       <div>
-        <Label for="creator-update-check-hours" class="mb-1.5 text-xs font-semibold text-slate-400">
+        <label class="label mb-1.5 text-xs" for="creator-update-check-hours">
           Update check interval (hours)
-        </Label>
-        <Input
-          id="creator-update-check-hours"
-          type="number"
-          min="1"
-          max="168"
-          required
-          bind:value={form.updateCheckIntervalHours}
-          class={fieldClass}
-        />
-        <p class="mt-1.5 text-[11px] text-slate-600">
+        </label>
+        <input class="input w-full" id="creator-update-check-hours" type="number" min="1" max="168" required
+           bind:value={form.updateCheckIntervalHours} />
+        <p class="mt-1.5 text-[11px] text-base-content/40">
           Minimum hours between checks for new uploads (1-168).
         </p>
       </div>
       <div>
-        <Label for="creator-metadata-window" class="mb-1.5 text-xs font-semibold text-slate-400">
+        <label class="label mb-1.5 text-xs" for="creator-metadata-window">
           Metadata refresh window
-        </Label>
-        <Input
-          id="creator-metadata-window"
-          type="number"
-          min="1"
-          max="500"
-          required
-          bind:value={form.metadataRefreshWindow}
-          class={fieldClass}
-        />
-        <p class="mt-1.5 text-[11px] text-slate-600">
+        </label>
+        <input class="input w-full" id="creator-metadata-window" type="number" min="1" max="500" required
+           bind:value={form.metadataRefreshWindow} />
+        <p class="mt-1.5 text-[11px] text-base-content/40">
           Recent videos whose metadata is refreshed on each scan (1-500).
         </p>
       </div>
     </div>
 
-    <div class="flex items-center justify-between rounded-xl border border-slate-800/80 bg-slate-950/40 px-4 py-3">
+    <div class="flex items-center justify-between rounded-xl border border-base-300/80 bg-base-200/40 px-4 py-3">
       <div>
-        <p class="text-sm font-semibold text-slate-200">Automatic scanning</p>
-        <p class="mt-0.5 text-xs text-slate-500">
+        <p class="text-sm font-semibold text-base-content/90">Automatic scanning</p>
+        <p class="mt-0.5 text-xs text-base-content/50">
           Discover and download new uploads from this creator on the recurring schedule.
         </p>
       </div>
-      <Toggle bind:checked={form.scanEnabled} />
+      <input type="checkbox" class="toggle" bind:checked={form.scanEnabled} />
     </div>
 
     {#if formError}
-      <div class="flex items-start gap-2 rounded-lg border border-red-900/60 bg-red-950/35 p-3 text-sm text-red-300" role="alert">
-        <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <div class="flex items-start gap-2 rounded-lg border border-error/30 bg-error/10 p-3 text-sm text-error" role="alert">
+        <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
         <span>{formError}</span>
       </div>
     {/if}
@@ -879,80 +800,55 @@
 
   {#snippet footer()}
     <div class="flex w-full flex-wrap justify-end gap-2">
-      <Button
-        color="dark"
-        class="border-slate-700! bg-transparent! px-4! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800!"
-        disabled={formBusy}
-        onclick={() => (formOpen = false)}
-      >
+      <button class="btn btn-sm btn-ghost text-xs" disabled={formBusy} onclick={() => (formOpen = false)}>
         Cancel
-      </Button>
-      <Button
-        type="submit"
-        form="creator-source-form"
-        color="blue"
-        class="border-0! bg-blue-500! px-4! py-2! text-xs! font-semibold! hover:bg-blue-400! disabled:opacity-60"
-        disabled={formBusy}
-      >
+      </button>
+      <button class="btn btn-sm btn-primary text-xs" type="submit" form="creator-source-form" disabled={formBusy}>
         {#if formBusy}
-          <Spinner size="4" class="mr-1.5" />
+          <span class="loading loading-spinner loading-xs mr-1.5"></span>
         {/if}
         {editingSource ? 'Save changes' : 'Track creator'}
-      </Button>
+      </button>
     </div>
   {/snippet}
 </Modal>
 
-<Modal bind:open={downloadModalOpen} title="Queue full channel download" size="md" class="z-50">
+<Modal bind:open={downloadModalOpen} title="Queue full channel download" size="md">
   <form id="channel-download-form" class="space-y-4" onsubmit={submitChannelDownload}>
-    <p class="text-sm text-slate-400">
+    <p class="text-sm text-base-content/60">
       Queue a full scan and download of
-      <span class="font-semibold text-slate-200">
+      <span class="font-semibold text-base-content/90">
         {sourcePendingDownload ? displayName(sourcePendingDownload) : 'this channel'}
       </span>. Videos already in the library are skipped, and config-set ignore keywords are applied.
     </p>
 
     <div>
-      <Label for="channel-download-storage" class="mb-1.5 text-xs font-semibold text-slate-400">
+      <label class="label mb-1.5 text-xs" for="channel-download-storage">
         Storage target
-      </Label>
-      <Select
-        id="channel-download-storage"
-        items={storageOptions}
-        bind:value={downloadStorageKey}
-        class={fieldClass}
-      />
+      </label>
+      <Select id="channel-download-storage" items={storageOptions} bind:value={downloadStorageKey} />
     </div>
 
     <div>
-      <Label for="channel-download-config-set" class="mb-1.5 text-xs font-semibold text-slate-400">
+      <label class="label mb-1.5 text-xs" for="channel-download-config-set">
         Config set
-      </Label>
-      <Select
-        id="channel-download-config-set"
-        items={configSetOptions}
-        bind:value={downloadConfigSetKey}
-        class={fieldClass}
-      />
-      <p class="mt-1.5 text-[11px] text-slate-600">
+      </label>
+      <Select id="channel-download-config-set" items={configSetOptions} bind:value={downloadConfigSetKey} />
+      <p class="mt-1.5 text-[11px] text-base-content/40">
         Applies its saved yt-dlp options and ignore keywords to every discovered video.
       </p>
     </div>
 
-    <Checkbox bind:checked={downloadFetchComments} class="text-sm text-slate-300">
-      Fetch comments
-    </Checkbox>
+    <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={downloadFetchComments} /><span>Fetch comments</span></label>
 
-    <Checkbox bind:checked={downloadForce} class="text-sm text-slate-300">
-      Force re-download videos already in the library
-    </Checkbox>
+    <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={downloadForce} /><span>Force re-download videos already in the library</span></label>
 
     {#if downloadError}
       <div
-        class="flex items-start gap-2 rounded-lg border border-red-900/60 bg-red-950/35 p-3 text-sm text-red-300"
+        class="flex items-start gap-2 rounded-lg border border-error/30 bg-error/10 p-3 text-sm text-error"
         role="alert"
       >
-        <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+        <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
         <span>{downloadError}</span>
       </div>
     {/if}
@@ -960,28 +856,17 @@
 
   {#snippet footer()}
     <div class="flex w-full flex-wrap justify-end gap-2">
-      <Button
-        color="dark"
-        class="border-slate-700! bg-transparent! px-4! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800!"
-        disabled={downloadBusy}
-        onclick={() => (downloadModalOpen = false)}
-      >
+      <button class="btn btn-sm btn-ghost text-xs" disabled={downloadBusy} onclick={() => (downloadModalOpen = false)}>
         Cancel
-      </Button>
-      <Button
-        type="submit"
-        form="channel-download-form"
-        color="blue"
-        class="border-0! bg-blue-500! px-4! py-2! text-xs! font-semibold! hover:bg-blue-400! disabled:opacity-60"
-        disabled={downloadBusy}
-      >
+      </button>
+      <button class="btn btn-sm btn-primary text-xs" type="submit" form="channel-download-form" disabled={downloadBusy}>
         {#if downloadBusy}
-          <Spinner size="4" class="mr-1.5" />
+          <span class="loading loading-spinner loading-xs mr-1.5"></span>
         {:else}
-          <DownloadOutline class="mr-1.5 h-4 w-4" />
+          <Download class="mr-1.5 h-4 w-4" />
         {/if}
         Queue download
-      </Button>
+      </button>
     </div>
   {/snippet}
 </Modal>

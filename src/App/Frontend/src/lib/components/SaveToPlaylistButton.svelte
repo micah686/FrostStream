@@ -1,13 +1,11 @@
 <script lang="ts">
-  import { Spinner } from 'flowbite-svelte';
   import {
-    CheckOutline,
-    ExclamationCircleOutline,
-    FolderOutline,
-    FolderSolid,
-    ListMusicOutline,
-    PlusOutline
-  } from 'flowbite-svelte-icons';
+    Check,
+    CircleAlert,
+    Folder,
+    ListMusic,
+    Plus
+  } from '@lucide/svelte';
   import {
     addUserPlaylistItem,
     createUserPlaylist,
@@ -164,48 +162,47 @@
     class={[
       'flex items-center gap-1.5 rounded-lg border px-4 py-2 text-xs font-semibold transition',
       isSaved
-        ? 'border-blue-500/50 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20'
-        : 'border-slate-800 bg-slate-900/70 text-slate-300 hover:bg-slate-800'
+        ? 'border-primary/50 bg-primary/10 text-primary hover:bg-primary/20'
+        : 'border-base-300 bg-base-200/70 text-base-content/80 hover:bg-base-300'
     ]}
   >
+    <Folder class="h-4 w-4" />
     {#if isSaved}
-      <FolderSolid class="h-4 w-4" />
       Saved
     {:else}
-      <FolderOutline class="h-4 w-4" />
       Save
     {/if}
   </button>
 
   {#if open}
     <div
-      class="absolute right-0 top-full z-40 mt-2 w-72 rounded-xl border border-slate-700/80 bg-[#151a26] p-2 shadow-2xl shadow-black/50"
+      class="absolute right-0 top-full z-40 mt-2 w-72 rounded-xl border border-base-content/20 bg-base-100 p-2 shadow-2xl shadow-black/50"
       role="dialog"
       aria-label="Save to playlist"
     >
-      <p class="px-2 pb-1.5 pt-1 text-[10px] font-bold uppercase tracking-[0.08em] text-slate-500">
+      <p class="px-2 pb-1.5 pt-1 text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/50">
         Save to playlist
       </p>
 
       {#if loadError}
-        <div class="flex items-start gap-2 rounded-lg bg-red-950/40 p-3 text-xs text-red-300" role="alert">
-          <ExclamationCircleOutline class="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <div class="flex items-start gap-2 rounded-lg bg-error/10 p-3 text-xs text-error" role="alert">
+          <CircleAlert class="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>{loadError}</span>
         </div>
       {:else if loading || !loaded}
         <div class="flex justify-center py-5">
-          <Spinner size="5" />
+          <span class="loading loading-spinner loading-sm"></span>
         </div>
       {:else}
         {#if toggleError}
-          <div class="mb-1 flex items-start gap-2 rounded-lg bg-red-950/40 p-2.5 text-xs text-red-300" role="alert">
-            <ExclamationCircleOutline class="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <div class="mb-1 flex items-start gap-2 rounded-lg bg-error/10 p-2.5 text-xs text-error" role="alert">
+            <CircleAlert class="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>{toggleError}</span>
           </div>
         {/if}
 
         {#if playlists.length === 0}
-          <p class="px-2 py-3 text-center text-xs text-slate-500">You have no playlists yet.</p>
+          <p class="px-2 py-3 text-center text-xs text-base-content/50">You have no playlists yet.</p>
         {:else}
           <ul class="max-h-64 space-y-0.5 overflow-y-auto">
             {#each playlists as playlist (playlist.playlistId)}
@@ -216,36 +213,36 @@
                   aria-checked={membership[playlist.playlistId] === true}
                   disabled={busyPlaylistId !== null}
                   onclick={() => toggleMembership(playlist)}
-                  class="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition hover:bg-slate-800/70 disabled:opacity-60"
+                  class="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition hover:bg-base-300/70 disabled:opacity-60"
                 >
                   <span
                     class={[
                       'grid h-4.5 w-4.5 shrink-0 place-items-center rounded border transition',
                       membership[playlist.playlistId]
-                        ? 'border-blue-500 bg-blue-500 text-white'
-                        : 'border-slate-600 bg-slate-950/60 text-transparent'
+                        ? 'border-primary bg-primary text-primary-content'
+                        : 'border-base-content/30 bg-base-200/60 text-transparent'
                     ]}
                   >
                     {#if busyPlaylistId === playlist.playlistId}
-                      <Spinner size="4" />
+                      <span class="loading loading-spinner loading-xs"></span>
                     {:else}
-                      <CheckOutline class="h-3 w-3" />
+                      <Check class="h-3 w-3" />
                     {/if}
                   </span>
                   <span class="min-w-0 flex-1">
-                    <span class="block truncate text-sm text-slate-200">{playlist.name}</span>
-                    <span class="block text-[11px] text-slate-500">
+                    <span class="block truncate text-sm text-base-content/90">{playlist.name}</span>
+                    <span class="block text-[11px] text-base-content/50">
                       {playlist.itemCount} {playlist.itemCount === 1 ? 'item' : 'items'}
                     </span>
                   </span>
-                  <ListMusicOutline class="h-3.5 w-3.5 shrink-0 text-slate-600" />
+                  <ListMusic class="h-3.5 w-3.5 shrink-0 text-base-content/40" />
                 </button>
               </li>
             {/each}
           </ul>
         {/if}
 
-        <div class="mt-1 border-t border-slate-800 pt-1">
+        <div class="mt-1 border-t border-base-300 pt-1">
           {#if createOpen}
             <form class="space-y-2 p-2" onsubmit={createAndAdd}>
               <!-- svelte-ignore a11y_autofocus -->
@@ -255,16 +252,16 @@
                 maxlength={255}
                 placeholder="Playlist name"
                 autofocus
-                class="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                class="w-full rounded-lg border border-base-300 bg-base-200/60 px-3 py-2 text-sm text-base-content/90 placeholder:text-base-content/40 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               />
               <div class="flex gap-2">
                 <button
                   type="submit"
                   disabled={createName.trim().length === 0 || createBusy}
-                  class="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-400 disabled:opacity-50"
+                  class="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-content transition hover:bg-primary disabled:opacity-50"
                 >
                   {#if createBusy}
-                    <Spinner size="4" />
+                    <span class="loading loading-spinner loading-xs"></span>
                   {/if}
                   Create & save
                 </button>
@@ -272,7 +269,7 @@
                   type="button"
                   disabled={createBusy}
                   onclick={() => (createOpen = false)}
-                  class="rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:bg-slate-800"
+                  class="rounded-lg border border-base-content/20 px-3 py-1.5 text-xs font-semibold text-base-content/80 transition hover:bg-base-300"
                 >
                   Cancel
                 </button>
@@ -282,9 +279,9 @@
             <button
               type="button"
               onclick={() => (createOpen = true)}
-              class="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left text-sm font-semibold text-slate-300 transition hover:bg-slate-800/70"
+              class="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left text-sm font-semibold text-base-content/80 transition hover:bg-base-300/70"
             >
-              <PlusOutline class="h-4 w-4" />
+              <Plus class="h-4 w-4" />
               New playlist
             </button>
           {/if}

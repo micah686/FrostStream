@@ -9,8 +9,8 @@ public sealed class StaleEntryCleanupScheduler(INatsMessagePublisher publisher, 
 {
     public Task QueueCleanupAsync(ScheduledJobContext context, CancellationToken cancellationToken)
         => publisher.PublishAsync(
-            BackgroundJobSubjects.StaleDatabaseCleanupRequest,
-            new StaleDatabaseCleanupRequested
+            BackgroundJobSubjects.DatabaseStaleMediaCleanupRequest,
+            new DatabaseStaleMediaCleanupRequested
             {
                 ScheduleKey = context.ScheduleKey,
                 TaskType = context.TaskType,

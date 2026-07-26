@@ -1,12 +1,11 @@
 <script lang="ts">
-  import { Spinner } from 'flowbite-svelte';
   import {
-    ChevronDownOutline,
-    ChevronUpOutline,
-    ExclamationCircleOutline,
-    ListMusicOutline,
-    TrashBinOutline
-  } from 'flowbite-svelte-icons';
+    ChevronDown,
+    ChevronUp,
+    CircleAlert,
+    ListMusic,
+    Trash2
+  } from '@lucide/svelte';
   import { accentFor, formatDuration, formatRelativeDate, initialsFor } from '$lib/media';
   import {
     removeUserPlaylistItem,
@@ -29,7 +28,7 @@
   let { playlist, onUpdated }: Props = $props();
 
   const rowActionClass =
-    'inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 bg-slate-900/70 text-slate-300 transition hover:border-blue-500/60 hover:bg-blue-500/10 hover:text-blue-200 disabled:pointer-events-none disabled:opacity-40';
+    'inline-flex h-8 w-8 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/70 text-base-content/80 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary disabled:pointer-events-none disabled:opacity-40';
 
   let mediaCards = $state<Record<string, MediaSummary | null>>({});
   let busyItemGuid = $state<string | null>(null);
@@ -106,18 +105,18 @@
 </script>
 
 {#if !playlist.items || playlist.items.length === 0}
-  <div class="rounded-xl border border-slate-800/80 bg-slate-950/30 p-8 text-center">
-    <ListMusicOutline class="mx-auto h-9 w-9 text-slate-700" />
-    <p class="mt-4 text-sm font-semibold text-slate-300">This playlist is empty</p>
-    <p class="mt-1 text-sm text-slate-500">Add videos to it from the watch page.</p>
+  <div class="rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
+    <ListMusic class="mx-auto h-9 w-9 text-base-content/30" />
+    <p class="mt-4 text-sm font-semibold text-base-content/80">This playlist is empty</p>
+    <p class="mt-1 text-sm text-base-content/50">Add videos to it from the watch page.</p>
   </div>
 {:else}
   {#if itemActionError}
     <div
-      class="mb-3 flex items-start gap-2 rounded-xl border border-red-900/60 bg-red-950/35 p-3 text-sm text-red-300"
+      class="mb-3 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{itemActionError}</span>
     </div>
   {/if}
@@ -126,9 +125,9 @@
     {#each playlist.items as item, index (item.mediaGuid)}
       {@const media = mediaCards[item.mediaGuid]}
       <li
-        class="flex items-center gap-3 rounded-lg border border-slate-700/70 bg-[#151a26] px-3 py-2.5 transition hover:border-slate-600 hover:bg-slate-800/30 sm:px-4"
+        class="flex items-center gap-3 rounded-lg border border-base-content/20 bg-base-100 px-3 py-2.5 transition hover:border-base-content/30 hover:bg-base-300/30 sm:px-4"
       >
-        <span class="w-6 shrink-0 text-center font-mono text-xs text-slate-600">{index + 1}</span>
+        <span class="w-6 shrink-0 text-center font-mono text-xs text-base-content/40">{index + 1}</span>
 
         <a
           href={`/watch/${item.mediaGuid}`}
@@ -159,25 +158,25 @@
 
         <div class="min-w-0 flex-1">
           {#if media}
-            <a href={`/watch/${item.mediaGuid}`} class="block truncate text-sm font-semibold text-slate-200 hover:text-white">
+            <a href={`/watch/${item.mediaGuid}`} class="block truncate text-sm font-semibold text-base-content/90 hover:text-base-content">
               {media.title}
             </a>
-            <p class="mt-0.5 truncate text-xs text-slate-500">
+            <p class="mt-0.5 truncate text-xs text-base-content/50">
               {[media.account.accountName, formatRelativeDate(item.addedAt) ? `added ${formatRelativeDate(item.addedAt)}` : null]
                 .filter(Boolean)
                 .join(' · ')}
             </p>
           {:else if media === null}
-            <p class="truncate text-sm font-semibold text-slate-500">Media unavailable</p>
-            <p class="mt-0.5 truncate font-mono text-xs text-slate-600">{item.mediaGuid}</p>
+            <p class="truncate text-sm font-semibold text-base-content/50">Media unavailable</p>
+            <p class="mt-0.5 truncate font-mono text-xs text-base-content/40">{item.mediaGuid}</p>
           {:else}
-            <div class="h-4 w-40 animate-pulse rounded bg-slate-800/70"></div>
+            <div class="h-4 w-40 animate-pulse rounded bg-base-300/70"></div>
           {/if}
         </div>
 
         <div class="flex shrink-0 items-center gap-1.5">
           {#if busyItemGuid === item.mediaGuid}
-            <Spinner size="4" class="mx-2" />
+            <span class="loading loading-spinner loading-xs mx-2"></span>
           {:else}
             <button
               type="button"
@@ -187,7 +186,7 @@
               disabled={index === 0 || busyItemGuid !== null}
               onclick={() => moveItem(item.mediaGuid, -1)}
             >
-              <ChevronUpOutline class="h-4 w-4" />
+              <ChevronUp class="h-4 w-4" />
             </button>
             <button
               type="button"
@@ -197,17 +196,17 @@
               disabled={index === (playlist.items?.length ?? 0) - 1 || busyItemGuid !== null}
               onclick={() => moveItem(item.mediaGuid, 1)}
             >
-              <ChevronDownOutline class="h-4 w-4" />
+              <ChevronDown class="h-4 w-4" />
             </button>
             <button
               type="button"
-              class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 bg-slate-900/70 text-slate-300 transition hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-200 disabled:pointer-events-none disabled:opacity-40"
+              class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/70 text-base-content/80 transition hover:border-error/60 hover:bg-error/10 hover:text-error disabled:pointer-events-none disabled:opacity-40"
               title="Remove from playlist"
               aria-label="Remove from playlist"
               disabled={busyItemGuid !== null}
               onclick={() => removeItem(item.mediaGuid)}
             >
-              <TrashBinOutline class="h-4 w-4" />
+              <Trash2 class="h-4 w-4" />
             </button>
           {/if}
         </div>

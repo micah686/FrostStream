@@ -17,9 +17,7 @@
     "@sveltejs/vite-plugin-svelte": "^7.1.2",
     "@tailwindcss/vite": "^4.3.0",
     "@types/node": "^25.9.2",
-    "flowbite": "^4.0.2",
-    "flowbite-svelte": "^1.33.1",
-    "flowbite-svelte-icons": "^3.1.0",
+    "daisyui": "^5.7.0",
     "svelte": "^5.56.3",
     "svelte-check": "^4.6.0",
     "tailwindcss": "^4.3.0",
@@ -31,9 +29,9 @@
   },
   "packageManager": "pnpm@10.28.1",
   "dependencies": {
+    "@lucide/svelte": "^1.26.0",
     "@videojs/html": "10.0.0-beta.25",
     "chart.js": "^4.5.1",
-    "jassub": "2.4.1",
-    "svelte-video-player": "^2.2.0"
+    "jassub": "2.4.1"
   }
 }

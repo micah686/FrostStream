@@ -57,117 +57,25 @@ public sealed class MetadataAdminControllerTests
     }
 
     [Test]
-    public async Task ListOrphans_Maps_Validation_Unavailable_And_Default_Errors()
+    public async Task TriggerDatabaseReindex_Publishes_Manual_Database_Reindex_Request()
     {
-        var validation = await ListOrphansWith(new OrphanCleanupListResponse
-        {
-            Success = false,
-            ErrorCode = "validation",
-            ErrorMessage = "bad"
-        });
-        validation.Result!.ShouldBeOfType<BadRequestObjectResult>().Value!.ShouldBe("bad");
+        var publisher = Substitute.For<IJetStreamPublisher>();
+        var controller = CreateController(publisher: publisher);
 
-        var unavailable = await ListOrphansWith(new OrphanCleanupListResponse
-        {
-            Success = false,
-            ErrorCode = "unavailable",
-            ErrorMessage = "down"
-        });
-        unavailable.Result!.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status503ServiceUnavailable);
+        var result = await controller.TriggerDatabaseReindex(CancellationToken.None);
 
-        var unknown = await ListOrphansWith(new OrphanCleanupListResponse
-        {
-            Success = false,
-            ErrorCode = "unknown",
-            ErrorMessage = "failed"
-        });
-        unknown.Result!.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status500InternalServerError);
-    }
-
-    [Test]
-    public async Task UpdateWatchedAutoDeletePolicy_Forwards_Admin_Request()
-    {
-        var bus = Substitute.For<IMessageBus>();
-        var controller = CreateController(bus: bus);
-        bus.RequestAsync<WatchedAutoDeletePolicyUpdateRequest, WatchedAutoDeletePolicyResponse>(
-                WatchedAutoDeleteSubjects.UpdatePolicy,
-                Arg.Is<WatchedAutoDeletePolicyUpdateRequest>(x => x != null &&
-                    x.Enabled &&
-                    x.DeleteAfterDays == 14 &&
-                    x.MaxDeletionsPerRun == 25),
-                Arg.Any<TimeSpan>(),
-                Arg.Any<CancellationToken>())
-            .Returns(new WatchedAutoDeletePolicyResponse
-            {
-                Success = true,
-                Policy = new WatchedAutoDeletePolicyDto
-                {
-                    Enabled = true,
-                    DeleteAfterDays = 14,
-                    MaxDeletionsPerRun = 25
-                }
-            });
-
-        var result = await controller.UpdateWatchedAutoDeletePolicy(
-            new WatchedAutoDeletePolicyUpdateHttpRequest
-            {
-                Enabled = true,
-                DeleteAfterDays = 14,
-                MaxDeletionsPerRun = 25
-            },
-            CancellationToken.None);
-
-        var payload = result.ShouldBeOfType<OkObjectResult>().Value!.ShouldBeOfType<WatchedAutoDeletePolicyDto>();
-        payload.Enabled.ShouldBeTrue();
-        payload.DeleteAfterDays.ShouldBe(14);
-        payload.MaxDeletionsPerRun.ShouldBe(25);
-    }
-
-    [Test]
-    public async Task RunWatchedAutoDelete_Returns_Cleanup_Result()
-    {
-        var bus = Substitute.For<IMessageBus>();
-        var controller = CreateController(bus: bus);
-        bus.RequestAsync<WatchedAutoDeleteCleanupRunRequest, WatchedAutoDeleteCleanupResponse>(
-                WatchedAutoDeleteSubjects.RunCleanup,
-                Arg.Any<WatchedAutoDeleteCleanupRunRequest>(),
-                Arg.Any<TimeSpan>(),
-                Arg.Any<CancellationToken>())
-            .Returns(new WatchedAutoDeleteCleanupResponse
-            {
-                Success = true,
-                Result = new WatchedAutoDeleteCleanupResultDto
-                {
-                    PolicyEnabled = true,
-                    Cutoff = Now,
-                    CandidatesFound = 2,
-                    DeletedCount = 1,
-                    FailedCount = 1,
-                    FilesDeleted = 3
-                }
-            });
-
-        var result = await controller.RunWatchedAutoDelete(CancellationToken.None);
-
-        var payload = result.ShouldBeOfType<OkObjectResult>().Value!.ShouldBeOfType<WatchedAutoDeleteCleanupResultDto>();
-        payload.DeletedCount.ShouldBe(1);
-        payload.FailedCount.ShouldBe(1);
-        payload.FilesDeleted.ShouldBe(3);
-    }
-
-    private static async Task<ActionResult<IReadOnlyList<OrphanCleanupItemDto>>> ListOrphansWith(
-        OrphanCleanupListResponse response)
-    {
-        var bus = Substitute.For<IMessageBus>();
-        var controller = CreateController(bus: bus);
-        bus.RequestAsync<OrphanCleanupListRequest, OrphanCleanupListResponse>(
-                OrphanCleanupSubjects.AdminList,
-                Arg.Any<OrphanCleanupListRequest>(),
-                Arg.Any<TimeSpan>(),
-                Arg.Any<CancellationToken>())
-            .Returns(response);
-
-        return await controller.ListOrphans(cancellationToken: CancellationToken.None);
+        result.ShouldBeOfType<AcceptedResult>();
+        await publisher.Received(1).PublishAsync(
+            BackgroundJobSubjects.DatabaseMaintenanceReindexRequest,
+            Arg.Is<DatabaseMaintenanceReindexRequested>(x => x != null &&
+                x.ScheduleKey == BackgroundJobRequestFactory.ManualScheduleKey &&
+                x.TaskType == BackgroundJobRequestFactory.ManualDatabaseMaintenanceReindexTaskType &&
+                x.DueWindowUtc == Now &&
+                x.OccurredAt == Now &&
+                x.IdempotencyKey == "manual_database_maintenance_reindex:manual:2026-06-03T18:00:00Z"),
+            "manual_database_maintenance_reindex:manual:2026-06-03T18:00:00Z",
+            null,
+            Arg.Any<CancellationToken>());
     }
 
     private static MetadataAdminController CreateController(

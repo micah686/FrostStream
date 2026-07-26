@@ -18,6 +18,7 @@ public sealed class ChannelAssetRefreshConsumerService(
     PotOptionsApplier potOptionsApplier,
     AssetCacheWriter assetCacheWriter,
     IOptions<AssetCacheOptions> assetCacheOptions,
+    IBackgroundRunReporter runReporter,
     IClock clock,
     ILogger<ChannelAssetRefreshConsumerService> logger) : BackgroundService
 {
@@ -51,42 +52,66 @@ public sealed class ChannelAssetRefreshConsumerService(
 
     private async Task HandleAsync(ChannelAssetRefreshRequested request, CancellationToken cancellationToken)
     {
-        if (request.TargetAccountId is { } accountId)
+        await using var run = await runReporter.BeginAsync(
+            "channel_asset_refresh", request, request.Force ? "forced" : null, cancellationToken);
+        try
         {
-            await RefreshAccountAsync(accountId, request, cancellationToken);
-            return;
-        }
-
-        var sources = await ResolveSourcesAsync(request, cancellationToken);
-        if (sources.Count == 0)
-        {
-            logger.LogInformation("Channel asset refresh {IdempotencyKey} produced no sources.", request.IdempotencyKey);
-            return;
-        }
-
-        var now = clock.GetCurrentInstant();
-        var freshnessThreshold = now.Minus(Duration.FromTimeSpan(_options.FreshnessWindow));
-
-        foreach (var source in sources)
-        {
-            if (!request.Force &&
-                source.AssetsLastRefreshedAt is { } last &&
-                last >= freshnessThreshold)
+            if (request.TargetAccountId is { } accountId)
             {
-                logger.LogDebug(
-                    "Skipping asset refresh for source {SourceId}; last refreshed {LastRefreshed} is within freshness window.",
-                    source.Id,
-                    last);
-                continue;
+                await run.ReportAsync($"Refreshing assets for account {accountId}…");
+                await RefreshAccountAsync(accountId, request, cancellationToken);
+                run.Succeed("Account assets refreshed.");
+                return;
             }
 
-            await RefreshSourceAsync(source, cancellationToken);
-        }
+            await run.ReportAsync("Resolving creator sources…");
+            var sources = await ResolveSourcesAsync(request, cancellationToken);
+            if (sources.Count == 0)
+            {
+                logger.LogInformation("Channel asset refresh {IdempotencyKey} produced no sources.", request.IdempotencyKey);
+                run.Succeed("No sources needed an asset refresh.");
+                return;
+            }
 
-        logger.LogInformation(
-            "Completed channel asset refresh {IdempotencyKey} across {Count} source(s).",
-            request.IdempotencyKey,
-            sources.Count);
+            var now = clock.GetCurrentInstant();
+            var freshnessThreshold = now.Minus(Duration.FromTimeSpan(_options.FreshnessWindow));
+            var processed = 0;
+            var refreshed = 0;
+            var skipped = 0;
+
+            foreach (var source in sources)
+            {
+                if (!request.Force &&
+                    source.AssetsLastRefreshedAt is { } last &&
+                    last >= freshnessThreshold)
+                {
+                    logger.LogDebug(
+                        "Skipping asset refresh for source {SourceId}; last refreshed {LastRefreshed} is within freshness window.",
+                        source.Id,
+                        last);
+                    processed++;
+                    skipped++;
+                    continue;
+                }
+
+                await run.ReportAsync($"Refreshing assets for source {source.Id}…", processed, sources.Count);
+                await RefreshSourceAsync(source, cancellationToken);
+                processed++;
+                refreshed++;
+                await run.ReportAsync($"Refreshed source {source.Id}.", processed, sources.Count);
+            }
+
+            run.Succeed($"Refreshed {refreshed} source(s); skipped {skipped} still within the freshness window.");
+            logger.LogInformation(
+                "Completed channel asset refresh {IdempotencyKey} across {Count} source(s).",
+                request.IdempotencyKey,
+                sources.Count);
+        }
+        catch (Exception ex)
+        {
+            run.Fail(ex.Message);
+            throw;
+        }
     }
 
     private async Task<IReadOnlyList<CreatorMonitorDto>> ResolveSourcesAsync(

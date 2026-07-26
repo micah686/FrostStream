@@ -13,8 +13,8 @@ public sealed class BackgroundJobConsumerService(
     IMessageBus messageBus,
     NpgsqlDataSource dataSource,
     IMetadataRebuildCoordinator rebuildCoordinator,
-    WatchedItemAutoDeleteExecutor watchedAutoDeleteExecutor,
     INotificationDispatcher notificationDispatcher,
+    IBackgroundRunReporter runReporter,
     IClock clock,
     ILogger<BackgroundJobConsumerService> logger) : BackgroundService
 {
@@ -26,8 +26,8 @@ public sealed class BackgroundJobConsumerService(
         {
             Consume<SearchReindexRequested>(BackgroundJobsTopology.SearchReindexConsumer, HandleSearchReindexAsync, stoppingToken),
             Consume<DatabaseMaintenanceRequested>(BackgroundJobsTopology.DatabaseMaintenanceConsumer, HandleDatabaseMaintenanceAsync, stoppingToken),
-            Consume<StaleDatabaseCleanupRequested>(BackgroundJobsTopology.StaleDatabaseCleanupConsumer, HandleStaleDatabaseCleanupAsync, stoppingToken),
-            Consume<WatchedItemAutoDeleteRequested>(BackgroundJobsTopology.WatchedItemAutoDeleteConsumer, HandleWatchedItemAutoDeleteAsync, stoppingToken),
+            Consume<DatabaseMaintenanceReindexRequested>(BackgroundJobsTopology.DatabaseMaintenanceReindexConsumer, HandleDatabaseMaintenanceReindexAsync, stoppingToken),
+            Consume<DatabaseStaleMediaCleanupRequested>(BackgroundJobsTopology.DatabaseStaleMediaCleanupConsumer, HandleDatabaseStaleMediaCleanupAsync, stoppingToken),
             Consume<ProcessedMessageCleanupRequested>(BackgroundJobsTopology.ProcessedMessageCleanupConsumer, HandleProcessedMessageCleanupAsync, stoppingToken)
         };
 
@@ -50,9 +50,11 @@ public sealed class BackgroundJobConsumerService(
     private async Task HandleSearchReindexAsync(IJsMessageContext<SearchReindexRequested> context)
     {
         var message = context.Message;
+        await using var run = await runReporter.BeginAsync("search_reindex", message);
         try
         {
             await MarkAttemptAsync(message);
+            await run.ReportAsync("Rebuilding the Typesense search index…");
 
             // Await the rebuild so the schedule is only marked completed once the
             // synchronous index rebuild actually finishes (not just when accepted).
@@ -62,17 +64,20 @@ public sealed class BackgroundJobConsumerService(
             if (!result.Accepted)
             {
                 logger.LogWarning("Typesense reindex request {IdempotencyKey} was not accepted: {Error}", message.IdempotencyKey, result.ErrorMessage);
+                run.Fail(result.ErrorMessage ?? "The search index rebuild was not accepted.");
                 await MarkFailureAsync(message, result.ErrorMessage);
                 await context.NackAsync();
                 return;
             }
 
+            run.Succeed("Search index rebuilt.");
             await MarkSuccessAsync(message);
             await context.AckAsync();
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed handling Typesense reindex request {IdempotencyKey}; nacking", message.IdempotencyKey);
+            run.Fail(ex.Message);
             await MarkFailureAsync(message);
             await context.NackAsync();
         }
@@ -81,12 +86,15 @@ public sealed class BackgroundJobConsumerService(
     private async Task HandleDatabaseMaintenanceAsync(IJsMessageContext<DatabaseMaintenanceRequested> context)
     {
         var message = context.Message;
+        await using var run = await runReporter.BeginAsync("database_maintenance", message);
         try
         {
             await MarkAttemptAsync(message);
+            await run.ReportAsync("Running VACUUM (ANALYZE) over the database…");
             await using var command = dataSource.CreateCommand("VACUUM (ANALYZE);");
             command.CommandTimeout = 0;
             await command.ExecuteNonQueryAsync();
+            run.Succeed("VACUUM (ANALYZE) completed.");
             await MarkSuccessAsync(message);
             logger.LogInformation("Completed PostgreSQL VACUUM ANALYZE for background request {IdempotencyKey}.", message.IdempotencyKey);
             await context.AckAsync();
@@ -94,17 +102,53 @@ public sealed class BackgroundJobConsumerService(
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed handling database maintenance request {IdempotencyKey}; nacking", message.IdempotencyKey);
+            run.Fail(ex.Message);
             await MarkFailureAsync(message);
             await context.NackAsync();
         }
     }
 
-    private async Task HandleStaleDatabaseCleanupAsync(IJsMessageContext<StaleDatabaseCleanupRequested> context)
+    private async Task HandleDatabaseMaintenanceReindexAsync(IJsMessageContext<DatabaseMaintenanceReindexRequested> context)
     {
         var message = context.Message;
+        await using var run = await runReporter.BeginAsync("database_maintenance_reindex", message);
         try
         {
             await MarkAttemptAsync(message);
+            await using var connection = await dataSource.OpenConnectionAsync();
+            var databaseName = connection.Database.Replace("\"", "\"\"", StringComparison.Ordinal);
+            await run.ReportAsync($"Reindexing database \"{connection.Database}\" concurrently…");
+            await using var command = new NpgsqlCommand(
+                $"REINDEX DATABASE CONCURRENTLY \"{databaseName}\";",
+                connection)
+            {
+                CommandTimeout = 0
+            };
+            await command.ExecuteNonQueryAsync();
+            run.Succeed("Database reindex completed.");
+            await MarkSuccessAsync(message);
+            logger.LogInformation(
+                "Completed PostgreSQL REINDEX DATABASE CONCURRENTLY for background request {IdempotencyKey}.",
+                message.IdempotencyKey);
+            await context.AckAsync();
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed handling database reindex request {IdempotencyKey}; nacking", message.IdempotencyKey);
+            run.Fail(ex.Message);
+            await MarkFailureAsync(message);
+            await context.NackAsync();
+        }
+    }
+
+    private async Task HandleDatabaseStaleMediaCleanupAsync(IJsMessageContext<DatabaseStaleMediaCleanupRequested> context)
+    {
+        var message = context.Message;
+        await using var run = await runReporter.BeginAsync("database_stale_media_cleanup", message);
+        try
+        {
+            await MarkAttemptAsync(message);
+            await run.ReportAsync("Scanning for media rows with no remaining content storage…");
             await using var command = dataSource.CreateCommand("""
                 WITH candidates AS (
                     SELECT m.media_guid
@@ -133,6 +177,7 @@ public sealed class BackgroundJobConsumerService(
             DownloadJobStateSql.AddActiveStatesParameter(command);
             command.CommandTimeout = 0;
             var deletedCount = (long)(await command.ExecuteScalarAsync() ?? 0L);
+            run.Succeed($"Deleted {deletedCount} stale media row(s).");
             await MarkSuccessAsync(message);
             logger.LogInformation(
                 "Deleted {Count} stale media root row(s) with no content storage for background request {IdempotencyKey}.",
@@ -143,6 +188,7 @@ public sealed class BackgroundJobConsumerService(
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed handling stale database cleanup request {IdempotencyKey}; nacking", message.IdempotencyKey);
+            run.Fail(ex.Message);
             await MarkFailureAsync(message);
             await context.NackAsync();
         }
@@ -151,17 +197,20 @@ public sealed class BackgroundJobConsumerService(
     private async Task HandleProcessedMessageCleanupAsync(IJsMessageContext<ProcessedMessageCleanupRequested> context)
     {
         var message = context.Message;
+        await using var run = await runReporter.BeginAsync("processed_message_cleanup", message);
         try
         {
             await MarkAttemptAsync(message);
 
             var cutoff = clock.GetCurrentInstant().Minus(Duration.FromDays(30));
+            await run.ReportAsync($"Deleting processed messages recorded before {cutoff}…");
             await using var command = dataSource.CreateCommand(
                 "DELETE FROM downloads.processed_messages WHERE processed_at < @cutoff;");
             command.Parameters.AddWithValue("cutoff", cutoff.ToDateTimeOffset());
             command.CommandTimeout = 0;
             var deletedCount = await command.ExecuteNonQueryAsync();
 
+            run.Succeed($"Deleted {deletedCount} processed message row(s).");
             await MarkSuccessAsync(message);
             logger.LogInformation(
                 "Deleted {Count} processed message row(s) older than {Cutoff} for background request {IdempotencyKey}.",
@@ -173,42 +222,7 @@ public sealed class BackgroundJobConsumerService(
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed handling processed message cleanup request {IdempotencyKey}; nacking", message.IdempotencyKey);
-            await MarkFailureAsync(message);
-            await context.NackAsync();
-        }
-    }
-
-    private async Task HandleWatchedItemAutoDeleteAsync(IJsMessageContext<WatchedItemAutoDeleteRequested> context)
-    {
-        var message = context.Message;
-        try
-        {
-            await MarkAttemptAsync(message);
-            var response = await watchedAutoDeleteExecutor.CleanupAsync(CancellationToken.None);
-            if (!response.Success)
-            {
-                logger.LogWarning(
-                    "Watched item auto-delete request {IdempotencyKey} failed: {ErrorCode} {ErrorMessage}",
-                    message.IdempotencyKey,
-                    response.ErrorCode,
-                    response.ErrorMessage);
-                await MarkFailureAsync(message);
-                await context.NackAsync();
-                return;
-            }
-
-            await MarkSuccessAsync(message);
-            logger.LogInformation(
-                "Watched item auto-delete request {IdempotencyKey} completed: deleted {DeletedCount}, failed {FailedCount}, files {FilesDeleted}.",
-                message.IdempotencyKey,
-                response.Result?.DeletedCount ?? 0,
-                response.Result?.FailedCount ?? 0,
-                response.Result?.FilesDeleted ?? 0);
-            await context.AckAsync();
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed handling watched item auto-delete request {IdempotencyKey}; nacking", message.IdempotencyKey);
+            run.Fail(ex.Message);
             await MarkFailureAsync(message);
             await context.NackAsync();
         }

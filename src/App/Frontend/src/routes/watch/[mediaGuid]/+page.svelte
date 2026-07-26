@@ -2,21 +2,18 @@
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
   import { browser } from '$app/environment';
-  import { Button, Spinner } from 'flowbite-svelte';
   import {
-    CheckCircleOutline,
-    CheckCircleSolid,
-    ChevronDownOutline,
-    ChevronUpOutline,
-    DotsHorizontalOutline,
-    EditOutline,
-    ExclamationCircleOutline,
-    HeartOutline,
-    HeartSolid,
-    SearchOutline,
-    ThumbsDownOutline,
-    ThumbsUpOutline
-  } from 'flowbite-svelte-icons';
+    ChevronDown,
+    ChevronUp,
+    CircleAlert,
+    CircleCheck,
+    Ellipsis,
+    Heart,
+    Pencil,
+    Search,
+    ThumbsDown,
+    ThumbsUp
+  } from '@lucide/svelte';
   import VideoJs10Player, { type TextTrackSource } from '$lib/components/players/VideoJs10Player.svelte';
   import CastDropdown from '$lib/components/players/CastDropdown.svelte';
   import SaveToPlaylistButton from '$lib/components/SaveToPlaylistButton.svelte';
@@ -979,24 +976,24 @@
   <section class="min-w-0" aria-label="Video player">
     {#if loadError}
       <div
-        class="flex aspect-video items-center justify-center gap-2 rounded-2xl border border-red-900/60 bg-red-950/30 p-6 text-sm text-red-300"
+        class="flex aspect-video items-center justify-center gap-2 rounded-2xl border border-error/30 bg-error/10 p-6 text-sm text-error"
         role="alert"
       >
-        <ExclamationCircleOutline class="h-5 w-5 shrink-0" />
+        <CircleAlert class="h-5 w-5 shrink-0" />
         <span>{loadError}</span>
       </div>
     {:else}
       <div class="aspect-video overflow-hidden rounded-2xl bg-black shadow-2xl shadow-black/30">
         {#if !watchStateLoaded || streamChecking}
           <div class="grid h-full w-full place-items-center">
-            <Spinner size="8" />
+            <span class="loading loading-spinner loading-md"></span>
           </div>
         {:else if streamError}
           <div class="flex h-full items-center justify-center p-6">
-            <div class="max-w-xl rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5 text-center text-amber-100">
-              <ExclamationCircleOutline class="mx-auto h-8 w-8 text-amber-300" />
-              <h2 class="mt-3 text-base font-bold text-amber-50">Playback file unavailable</h2>
-              <p class="mt-2 text-sm leading-6 text-amber-100/85">{streamError}</p>
+            <div class="max-w-xl rounded-2xl border border-warning/30 bg-warning/10 p-5 text-center text-warning">
+              <CircleAlert class="mx-auto h-8 w-8 text-warning" />
+              <h2 class="mt-3 text-base font-bold text-warning">Playback file unavailable</h2>
+              <p class="mt-2 text-sm leading-6 text-warning">{streamError}</p>
             </div>
           </div>
         {:else}
@@ -1022,7 +1019,7 @@
     {/if}
 
     {#if detail}
-      <h1 class="mt-4 text-xl font-bold tracking-tight text-white sm:text-2xl">{detail.title}</h1>
+      <h1 class="mt-4 text-xl font-bold tracking-tight text-base-content sm:text-2xl">{detail.title}</h1>
 
       <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
         <div class="flex items-center gap-3">
@@ -1042,18 +1039,18 @@
             />
           </a>
           <div class="min-w-0">
-            <p class="flex items-center gap-1 text-sm font-semibold text-slate-200">
-              <a href={`/channel/${detail.account.accountId}`} class="hover:text-white">
+            <p class="flex items-center gap-1 text-sm font-semibold text-base-content/90">
+              <a href={`/channel/${detail.account.accountId}`} class="hover:text-base-content">
                 {detail.account.accountName}
               </a>
               {#if detail.account.isVerified}
-                <span class="text-blue-400" title="Verified">✓</span>
+                <span class="text-primary" title="Verified">✓</span>
               {/if}
             </p>
             {#if formatCount(detail.account.followerCount)}
-              <p class="text-xs text-slate-500">{formatCount(detail.account.followerCount)} subscribers</p>
+              <p class="text-xs text-base-content/50">{formatCount(detail.account.followerCount)} subscribers</p>
             {:else}
-              <p class="text-xs text-slate-500">@{detail.account.accountHandle}</p>
+              <p class="text-xs text-base-content/50">@{detail.account.accountHandle}</p>
             {/if}
           </div>
         </div>
@@ -1070,14 +1067,10 @@
               'grid h-9 w-9 place-items-center rounded-lg border transition disabled:opacity-60',
               liked
                 ? 'border-rose-500/50 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20'
-                : 'border-slate-800 bg-slate-900/70 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                : 'border-base-300 bg-base-200/70 text-base-content/60 hover:bg-base-300 hover:text-base-content/90'
             ]}
           >
-            {#if liked}
-              <HeartSolid class="h-4 w-4" />
-            {:else}
-              <HeartOutline class="h-4 w-4" />
-            {/if}
+            <Heart class="h-4 w-4" fill={liked ? 'currentColor' : 'none'} />
           </button>
           <button
             type="button"
@@ -1088,15 +1081,14 @@
             class={[
               'flex items-center gap-1.5 rounded-lg border px-4 py-2 text-xs font-semibold transition disabled:opacity-60',
               watched
-                ? 'border-blue-500/50 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20'
-                : 'border-slate-800 bg-slate-900/70 text-slate-300 hover:bg-slate-800'
+                ? 'border-primary/50 bg-primary/10 text-primary hover:bg-primary/20'
+                : 'border-base-300 bg-base-200/70 text-base-content/80 hover:bg-base-300'
             ]}
           >
+            <CircleCheck class="h-4 w-4" />
             {#if watched}
-              <CheckCircleSolid class="h-4 w-4" />
               Watched
             {:else}
-              <CheckCircleOutline class="h-4 w-4" />
               Mark watched
             {/if}
           </button>
@@ -1120,23 +1112,23 @@
                 class={[
                   'flex items-center gap-1.5 rounded-lg border px-4 py-2 text-xs font-semibold transition disabled:cursor-wait disabled:opacity-60',
                   storageMenuOpen
-                    ? 'border-blue-900/60 bg-blue-950/40 text-blue-300 hover:bg-blue-950/60'
-                    : 'border-slate-800 bg-slate-900/70 text-slate-300 hover:bg-slate-800'
+                    ? 'border-primary/30 bg-primary/10 text-primary hover:bg-primary/10'
+                    : 'border-base-300 bg-base-200/70 text-base-content/80 hover:bg-base-300'
                 ]}
               >
                 {#if versionsLoading}
-                  <Spinner size="4" />
+                  <span class="loading loading-spinner loading-xs"></span>
                   Storage
                 {:else}
                   Storage
-                  <span class="max-w-24 truncate text-slate-500">{selectedStorageLabel}</span>
-                  <ChevronDownOutline class="h-3.5 w-3.5" />
+                  <span class="max-w-24 truncate text-base-content/50">{selectedStorageLabel}</span>
+                  <ChevronDown class="h-3.5 w-3.5" />
                 {/if}
               </button>
 
               {#if storageMenuOpen}
                 <div
-                  class="absolute right-0 z-30 mt-2 w-64 rounded-xl border border-slate-800 bg-slate-950/95 p-2 shadow-2xl shadow-black/50 backdrop-blur"
+                  class="absolute right-0 z-30 mt-2 w-64 rounded-xl border border-base-300 bg-base-200/95 p-2 shadow-2xl shadow-black/50 backdrop-blur"
                   role="menu"
                   aria-label="Select storage backend"
                 >
@@ -1150,13 +1142,13 @@
                         class={[
                           'flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition',
                           selectedStorage === option.value
-                            ? 'bg-blue-500/15 text-blue-300'
-                            : 'text-slate-200 hover:bg-slate-800/70'
+                            ? 'bg-primary/15 text-primary'
+                            : 'text-base-content/90 hover:bg-base-300/70'
                         ]}
                       >
                         <span class="truncate">{option.name}</span>
                         {#if selectedStorage === option.value}
-                          <CheckCircleSolid class="h-4 w-4 shrink-0 text-blue-400" />
+                          <CircleCheck class="h-4 w-4 shrink-0 text-primary" />
                         {/if}
                       </button>
                     {/each}
@@ -1175,23 +1167,23 @@
               class={[
                 'flex items-center gap-1.5 rounded-lg border px-4 py-2 text-xs font-semibold transition disabled:cursor-wait disabled:opacity-60',
                 versionMenuOpen
-                  ? 'border-blue-900/60 bg-blue-950/40 text-blue-300 hover:bg-blue-950/60'
-                  : 'border-slate-800 bg-slate-900/70 text-slate-300 hover:bg-slate-800'
+                  ? 'border-primary/30 bg-primary/10 text-primary hover:bg-primary/10'
+                  : 'border-base-300 bg-base-200/70 text-base-content/80 hover:bg-base-300'
               ]}
             >
               {#if versionsLoading}
-                <Spinner size="4" />
+                <span class="loading loading-spinner loading-xs"></span>
                 Versions
               {:else}
                 Version
-                <span class="max-w-24 truncate text-slate-500">{selectedVersionLabel}</span>
-                <ChevronDownOutline class="h-3.5 w-3.5" />
+                <span class="max-w-24 truncate text-base-content/50">{selectedVersionLabel}</span>
+                <ChevronDown class="h-3.5 w-3.5" />
               {/if}
             </button>
 
             {#if versionMenuOpen}
               <div
-                class="absolute right-0 z-30 mt-2 w-64 rounded-xl border border-slate-800 bg-slate-950/95 p-2 shadow-2xl shadow-black/50 backdrop-blur"
+                class="absolute right-0 z-30 mt-2 w-64 rounded-xl border border-base-300 bg-base-200/95 p-2 shadow-2xl shadow-black/50 backdrop-blur"
                 role="menu"
                 aria-label="Select media version"
               >
@@ -1208,13 +1200,13 @@
                       class={[
                         'flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition',
                         selectedVersion === option.value
-                          ? 'bg-blue-500/15 text-blue-300'
-                          : 'text-slate-200 hover:bg-slate-800/70'
+                          ? 'bg-primary/15 text-primary'
+                          : 'text-base-content/90 hover:bg-base-300/70'
                       ]}
                     >
                       <span class="truncate">{option.name}</span>
                       {#if selectedVersion === option.value}
-                        <CheckCircleSolid class="h-4 w-4 shrink-0 text-blue-400" />
+                        <CircleCheck class="h-4 w-4 shrink-0 text-primary" />
                       {/if}
                     </button>
                   {/each}
@@ -1231,16 +1223,16 @@
               aria-expanded={moreMenuOpen}
               onclick={() => (moreMenuOpen = !moreMenuOpen)}
               class={[
-                'grid h-9 w-9 place-items-center rounded-lg border border-slate-800 text-slate-400 transition hover:bg-slate-800',
-                moreMenuOpen ? 'bg-slate-800' : 'bg-slate-900/70'
+                'grid h-9 w-9 place-items-center rounded-lg border border-base-300 text-base-content/60 transition hover:bg-base-300',
+                moreMenuOpen ? 'bg-base-300' : 'bg-base-200/70'
               ]}
             >
-              <DotsHorizontalOutline class="h-4 w-4" />
+              <Ellipsis class="h-4 w-4" />
             </button>
 
             {#if moreMenuOpen}
               <div
-                class="absolute right-0 top-full z-40 mt-2 w-80 rounded-xl border border-slate-700/80 bg-[#151a26] p-1.5 shadow-2xl shadow-black/50"
+                class="absolute right-0 top-full z-40 mt-2 w-80 rounded-xl border border-base-content/20 bg-base-100 p-1.5 shadow-2xl shadow-black/50"
                 role="menu"
                 aria-label="More actions"
               >
@@ -1248,29 +1240,29 @@
                   role="menuitem"
                   href={`/search?similar=${mediaGuid}`}
                   onclick={() => (moreMenuOpen = false)}
-                  class="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-slate-200 transition hover:bg-slate-800/70"
+                  class="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-base-content/90 transition hover:bg-base-300/70"
                 >
-                  <SearchOutline class="h-4 w-4 text-slate-500" />
+                  <Search class="h-4 w-4 text-base-content/50" />
                   Find similar
                 </a>
                 <button
                   type="button"
                   role="menuitem"
                   onclick={() => (noteMenuOpen = !noteMenuOpen)}
-                  class="flex w-full items-center justify-between gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-200 transition hover:bg-slate-800/70"
+                  class="flex w-full items-center justify-between gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium text-base-content/90 transition hover:bg-base-300/70"
                 >
                   <span class="flex items-center gap-2.5">
-                    <EditOutline class={['h-4 w-4', detail.userNote ? 'text-blue-400' : 'text-slate-500']} />
+                    <Pencil class={['h-4 w-4', detail.userNote ? 'text-primary' : 'text-base-content/50']} />
                     Note
                   </span>
                   {#if noteMenuOpen}
-                    <ChevronUpOutline class="h-3.5 w-3.5 text-slate-500" />
+                    <ChevronUp class="h-3.5 w-3.5 text-base-content/50" />
                   {:else}
-                    <ChevronDownOutline class="h-3.5 w-3.5 text-slate-500" />
+                    <ChevronDown class="h-3.5 w-3.5 text-base-content/50" />
                   {/if}
                 </button>
                 {#if noteMenuOpen}
-                  <div class="mt-1 rounded-lg border border-slate-700/70 bg-slate-950/45 p-3">
+                  <div class="mt-1 rounded-lg border border-base-content/20 bg-base-200/45 p-3">
                     <TargetNotePanel
                       targetType="video"
                       targetId={mediaGuid}
@@ -1292,24 +1284,24 @@
         </div>
       </div>
 
-      <div class="mt-4 rounded-2xl border border-slate-800/80 bg-slate-900/40 p-5">
-        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-semibold text-slate-300">
+      <div class="mt-4 rounded-2xl border border-base-300/80 bg-base-200/40 p-5">
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-semibold text-base-content/80">
           {#if formatViews(detail.viewCount)}<span>{formatViews(detail.viewCount)}</span>{/if}
-          {#if formatRelativeDate(detail.releaseDate)}<span class="text-slate-500">·</span><span>{formatRelativeDate(detail.releaseDate)}</span>{/if}
+          {#if formatRelativeDate(detail.releaseDate)}<span class="text-base-content/50">·</span><span>{formatRelativeDate(detail.releaseDate)}</span>{/if}
           {#if detail.likeCount != null}
-            <span class="inline-flex items-center gap-1 text-slate-400" title="Provider likes at download time">
-              <ThumbsUpOutline class="h-3.5 w-3.5" />
+            <span class="inline-flex items-center gap-1 text-base-content/60" title="Provider likes at download time">
+              <ThumbsUp class="h-3.5 w-3.5" />
               {formatCount(detail.likeCount) ?? detail.likeCount.toLocaleString()}
             </span>
           {/if}
           {#if detail.dislikeCount != null}
-            <span class="inline-flex items-center gap-1 text-slate-500" title="Provider dislikes at download time">
-              <ThumbsDownOutline class="h-3.5 w-3.5" />
+            <span class="inline-flex items-center gap-1 text-base-content/50" title="Provider dislikes at download time">
+              <ThumbsDown class="h-3.5 w-3.5" />
               {formatCount(detail.dislikeCount) ?? detail.dislikeCount.toLocaleString()}
             </span>
           {/if}
           {#each detail.tags.slice(0, 6) as tag}
-            <span class="rounded-full bg-slate-800/80 px-2.5 py-0.5 text-xs font-medium text-slate-400">
+            <span class="rounded-full bg-base-300/80 px-2.5 py-0.5 text-xs font-medium text-base-content/60">
               #{tag}
             </span>
           {/each}
@@ -1317,7 +1309,7 @@
         {#if detail.description}
           <p
             class={[
-              'mt-3 whitespace-pre-line text-sm leading-6 text-slate-400',
+              'mt-3 whitespace-pre-line text-sm leading-6 text-base-content/60',
               !descriptionExpanded && 'line-clamp-3'
             ]}
           >
@@ -1326,20 +1318,20 @@
           <button
             type="button"
             onclick={() => (descriptionExpanded = !descriptionExpanded)}
-            class="mt-2 flex items-center gap-1 text-xs font-semibold text-slate-500 transition hover:text-slate-300"
+            class="mt-2 flex items-center gap-1 text-xs font-semibold text-base-content/50 transition hover:text-base-content/80"
           >
             {descriptionExpanded ? 'Show less' : 'Show more'}
             {#if descriptionExpanded}
-              <ChevronUpOutline class="h-3 w-3" />
+              <ChevronUp class="h-3 w-3" />
             {:else}
-              <ChevronDownOutline class="h-3 w-3" />
+              <ChevronDown class="h-3 w-3" />
             {/if}
           </button>
         {/if}
       </div>
 
-      <section class="mt-4 rounded-2xl border border-slate-800/80 bg-slate-900/40" aria-label="Media metadata">
-        <div class="flex gap-1 border-b border-slate-800/80 p-2" role="tablist" aria-label="Metadata sections">
+      <section class="mt-4 rounded-2xl border border-base-300/80 bg-base-200/40" aria-label="Media metadata">
+        <div class="flex gap-1 border-b border-base-300/80 p-2" role="tablist" aria-label="Metadata sections">
           <button
             type="button"
             role="tab"
@@ -1348,8 +1340,8 @@
             class={[
               'rounded-lg px-4 py-2 text-xs font-semibold transition',
               metaTab === 'details'
-                ? 'bg-blue-500/15 text-blue-400'
-                : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-300'
+                ? 'bg-primary/15 text-primary'
+                : 'text-base-content/50 hover:bg-base-300/70 hover:text-base-content/80'
             ]}
           >
             Details
@@ -1362,8 +1354,8 @@
             class={[
               'rounded-lg px-4 py-2 text-xs font-semibold transition',
               metaTab === 'technical'
-                ? 'bg-blue-500/15 text-blue-400'
-                : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-300'
+                ? 'bg-primary/15 text-primary'
+                : 'text-base-content/50 hover:bg-base-300/70 hover:text-base-content/80'
             ]}
           >
             Technical
@@ -1376,14 +1368,14 @@
               <dl class="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
                 {#each detailRows as row (row.label)}
                   <div class="flex min-w-0 gap-2">
-                    <dt class="w-32 shrink-0 text-slate-500">{row.label}</dt>
-                    <dd class="min-w-0 flex-1 truncate text-slate-300">
+                    <dt class="w-32 shrink-0 text-base-content/50">{row.label}</dt>
+                    <dd class="min-w-0 flex-1 truncate text-base-content/80">
                       {#if row.href}
                         <a
                           href={row.href}
                           target="_blank"
                           rel="noopener noreferrer"
-                          class="text-blue-400 hover:underline"
+                          class="text-primary hover:underline"
                         >
                           {row.value}
                         </a>
@@ -1398,29 +1390,29 @@
 
             {#if detail.series}
               <div>
-                <h3 class="text-xs font-bold uppercase tracking-[0.08em] text-slate-500">Series</h3>
-                <p class="mt-1.5 text-sm text-slate-300">{seriesSummary(detail.series)}</p>
+                <h3 class="text-xs font-bold uppercase tracking-[0.08em] text-base-content/50">Series</h3>
+                <p class="mt-1.5 text-sm text-base-content/80">{seriesSummary(detail.series)}</p>
               </div>
             {/if}
 
             {#if detail.music}
               <div>
-                <h3 class="text-xs font-bold uppercase tracking-[0.08em] text-slate-500">Music</h3>
-                <p class="mt-1.5 text-sm text-slate-300">{musicSummary(detail.music)}</p>
+                <h3 class="text-xs font-bold uppercase tracking-[0.08em] text-base-content/50">Music</h3>
+                <p class="mt-1.5 text-sm text-base-content/80">{musicSummary(detail.music)}</p>
               </div>
             {/if}
 
             {#each [
-              { label: 'Tags', values: detail.tags, prefix: '#', chip: 'bg-slate-800/80 text-slate-400' },
-              { label: 'Categories', values: detail.categories, prefix: '', chip: 'bg-blue-500/10 text-blue-300' },
-              { label: 'Genres', values: detail.genres, prefix: '', chip: 'bg-purple-500/10 text-purple-300' },
-              { label: 'Cast', values: detail.cast, prefix: '', chip: 'bg-slate-800/80 text-slate-400' },
-              { label: 'Artists', values: detail.artists, prefix: '', chip: 'bg-slate-800/80 text-slate-400' },
-              { label: 'Album artists', values: detail.albumArtists, prefix: '', chip: 'bg-slate-800/80 text-slate-400' }
+              { label: 'Tags', values: detail.tags, prefix: '#', chip: 'bg-base-300/80 text-base-content/60' },
+              { label: 'Categories', values: detail.categories, prefix: '', chip: 'bg-primary/10 text-primary' },
+              { label: 'Genres', values: detail.genres, prefix: '', chip: 'bg-secondary/10 text-secondary' },
+              { label: 'Cast', values: detail.cast, prefix: '', chip: 'bg-base-300/80 text-base-content/60' },
+              { label: 'Artists', values: detail.artists, prefix: '', chip: 'bg-base-300/80 text-base-content/60' },
+              { label: 'Album artists', values: detail.albumArtists, prefix: '', chip: 'bg-base-300/80 text-base-content/60' }
             ] as group (group.label)}
               {#if group.values.length > 0}
                 <div>
-                  <h3 class="text-xs font-bold uppercase tracking-[0.08em] text-slate-500">{group.label}</h3>
+                  <h3 class="text-xs font-bold uppercase tracking-[0.08em] text-base-content/50">{group.label}</h3>
                   <div class="mt-1.5 flex flex-wrap gap-1.5">
                     {#each group.values as value}
                       <span class={`rounded-full px-2.5 py-0.5 text-xs font-medium ${group.chip}`}>
@@ -1436,54 +1428,54 @@
         {:else}
           <div class="space-y-5 p-5">
             {#if technicalError}
-              <p class="text-sm text-slate-500">{technicalError}</p>
+              <p class="text-sm text-base-content/50">{technicalError}</p>
             {:else if !technical}
               <div class="flex justify-center py-4">
-                <Spinner size="5" />
+                <span class="loading loading-spinner loading-sm"></span>
               </div>
             {:else}
               {#if technical.format}
                 <dl class="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
                   <div class="flex gap-2">
-                    <dt class="w-32 shrink-0 text-slate-500">Container</dt>
-                    <dd class="min-w-0 text-slate-300">{technical.format.formatLongNames}</dd>
+                    <dt class="w-32 shrink-0 text-base-content/50">Container</dt>
+                    <dd class="min-w-0 text-base-content/80">{technical.format.formatLongNames}</dd>
                   </div>
                   {#if formatTicks(technical.format.durationTicks)}
                     <div class="flex gap-2">
-                      <dt class="w-32 shrink-0 text-slate-500">Duration</dt>
-                      <dd class="text-slate-300">{formatTicks(technical.format.durationTicks)}</dd>
+                      <dt class="w-32 shrink-0 text-base-content/50">Duration</dt>
+                      <dd class="text-base-content/80">{formatTicks(technical.format.durationTicks)}</dd>
                     </div>
                   {/if}
                   {#if formatBitRate(technical.format.bitRate)}
                     <div class="flex gap-2">
-                      <dt class="w-32 shrink-0 text-slate-500">Overall bitrate</dt>
-                      <dd class="text-slate-300">{formatBitRate(technical.format.bitRate)}</dd>
+                      <dt class="w-32 shrink-0 text-base-content/50">Overall bitrate</dt>
+                      <dd class="text-base-content/80">{formatBitRate(technical.format.bitRate)}</dd>
                     </div>
                   {/if}
                   <div class="flex gap-2">
-                    <dt class="w-32 shrink-0 text-slate-500">Streams</dt>
-                    <dd class="text-slate-300">{technical.format.streamCount}</dd>
+                    <dt class="w-32 shrink-0 text-base-content/50">Streams</dt>
+                    <dd class="text-base-content/80">{technical.format.streamCount}</dd>
                   </div>
                 </dl>
               {/if}
 
               {#if technical.streams.length > 0}
                 <div>
-                  <h3 class="text-xs font-bold uppercase tracking-[0.08em] text-slate-500">Streams</h3>
+                  <h3 class="text-xs font-bold uppercase tracking-[0.08em] text-base-content/50">Streams</h3>
                   <ul class="mt-2 space-y-2">
                     {#each technical.streams as stream}
-                      <li class="rounded-xl border border-slate-800/80 bg-slate-950/40 px-4 py-3">
+                      <li class="rounded-xl border border-base-300/80 bg-base-200/40 px-4 py-3">
                         <p class="flex flex-wrap items-center gap-2 text-xs">
-                          <span class="rounded-full bg-slate-800 px-2 py-0.5 font-semibold uppercase tracking-wide text-slate-300">
+                          <span class="rounded-full bg-base-300 px-2 py-0.5 font-semibold uppercase tracking-wide text-base-content/80">
                             {stream.streamType}
                           </span>
                           {#if stream.isPrimary}
-                            <span class="rounded-full bg-blue-500/15 px-2 py-0.5 font-semibold text-blue-400">Primary</span>
+                            <span class="rounded-full bg-primary/15 px-2 py-0.5 font-semibold text-primary">Primary</span>
                           {/if}
-                          <span class="font-semibold text-slate-300" title={stream.codecLongName}>{stream.codecName}</span>
+                          <span class="font-semibold text-base-content/80" title={stream.codecLongName}>{stream.codecName}</span>
                         </p>
                         {#if streamSummary(stream)}
-                          <p class="mt-1 text-xs text-slate-500">{streamSummary(stream)}</p>
+                          <p class="mt-1 text-xs text-base-content/50">{streamSummary(stream)}</p>
                         {/if}
                       </li>
                     {/each}
@@ -1493,19 +1485,19 @@
 
               {#if technical.chapters.length > 0}
                 <div>
-                  <h3 class="text-xs font-bold uppercase tracking-[0.08em] text-slate-500">Chapters</h3>
+                  <h3 class="text-xs font-bold uppercase tracking-[0.08em] text-base-content/50">Chapters</h3>
                   <ul class="mt-2 space-y-1">
                     {#each technical.chapters as chapter}
                       <li class="flex gap-3 text-sm">
                         <button
                           type="button"
-                          class="w-16 shrink-0 rounded text-left font-mono text-xs leading-6 text-blue-400 transition hover:text-blue-300 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500/60"
+                          class="w-16 shrink-0 rounded text-left font-mono text-xs leading-6 text-primary transition hover:text-primary hover:underline focus:outline-none focus:ring-2 focus:ring-primary/60"
                           title={`Jump to ${formatTicks(chapter.startTicks) ?? '0:00'}`}
                           onclick={() => seekToChapter(chapter.startTicks)}
                         >
                           {formatTicks(chapter.startTicks) ?? '0:00'}
                         </button>
-                        <span class="min-w-0 truncate text-slate-300">{chapter.title}</span>
+                        <span class="min-w-0 truncate text-base-content/80">{chapter.title}</span>
                       </li>
                     {/each}
                   </ul>
@@ -1513,7 +1505,7 @@
               {/if}
 
               {#if !technical.format && technical.streams.length === 0 && technical.chapters.length === 0}
-                <p class="text-sm text-slate-500">No technical metadata was archived for this video.</p>
+                <p class="text-sm text-base-content/50">No technical metadata was archived for this video.</p>
               {/if}
             {/if}
           </div>
@@ -1521,12 +1513,12 @@
       </section>
 
       <section class="mt-8" aria-label="Comments">
-        <h2 class="text-lg font-bold text-white">
+        <h2 class="text-lg font-bold text-base-content">
           {commentTotal > 0 ? `${commentTotal} comments` : 'Comments'}
         </h2>
 
         {#if commentThreads.length === 0}
-          <p class="mt-4 text-sm text-slate-500">No comments were archived for this video.</p>
+          <p class="mt-4 text-sm text-base-content/50">No comments were archived for this video.</p>
         {:else}
           <div class="mt-5 space-y-6">
             {#each commentThreads as comment (comment.commentId)}
@@ -1538,7 +1530,7 @@
       </section>
     {:else if !loadError}
       <div class="mt-10 flex justify-center">
-        <Spinner size="6" />
+        <span class="loading loading-spinner loading-sm"></span>
       </div>
     {/if}
   </section>
@@ -1557,8 +1549,8 @@
       </div>
     {/if}
 
-    <div class="mb-5 flex items-center justify-between gap-3 rounded-xl border border-slate-800/80 bg-slate-900/40 px-4 py-3">
-      <span class="text-sm font-semibold text-slate-300">Autoplay</span>
+    <div class="mb-5 flex items-center justify-between gap-3 rounded-xl border border-base-300/80 bg-base-200/40 px-4 py-3">
+      <span class="text-sm font-semibold text-base-content/80">Autoplay</span>
       <button
         type="button"
         role="switch"
@@ -1568,8 +1560,8 @@
         class={[
           'relative h-6 w-11 rounded-full border transition',
           autoplayEnabled
-            ? 'border-blue-500/50 bg-blue-500/80'
-            : 'border-slate-700 bg-slate-950/80 hover:border-slate-600'
+            ? 'border-primary/50 bg-primary/80'
+            : 'border-base-content/20 bg-base-200/80 hover:border-base-content/30'
         ]}
       >
         <span
@@ -1581,7 +1573,7 @@
       </button>
     </div>
 
-    <h2 class="text-sm font-bold uppercase tracking-[0.08em] text-slate-500">Up next</h2>
+    <h2 class="text-sm font-bold uppercase tracking-[0.08em] text-base-content/50">Up next</h2>
     <ul class="mt-4 space-y-4">
       {#each upNext as card (card.mediaGuid)}
         <li>
@@ -1609,18 +1601,18 @@
               {/if}
             </span>
             <span class="min-w-0">
-              <span class="line-clamp-2 text-sm font-semibold leading-snug text-slate-200 group-hover:text-white">
+              <span class="line-clamp-2 text-sm font-semibold leading-snug text-base-content/90 group-hover:text-base-content">
                 {card.title}
               </span>
-              <span class="mt-1 block truncate text-xs text-slate-500">{card.account.accountName}</span>
+              <span class="mt-1 block truncate text-xs text-base-content/50">{card.account.accountName}</span>
               {#if upNextMeta(card)}
-                <span class="mt-0.5 block truncate text-xs text-slate-600">{upNextMeta(card)}</span>
+                <span class="mt-0.5 block truncate text-xs text-base-content/40">{upNextMeta(card)}</span>
               {/if}
             </span>
           </a>
         </li>
       {:else}
-        <li class="text-sm text-slate-600">Nothing else on the server yet.</li>
+        <li class="text-sm text-base-content/40">Nothing else on the server yet.</li>
       {/each}
     </ul>
   </aside>

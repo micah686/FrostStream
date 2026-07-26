@@ -5,29 +5,25 @@ namespace Scheduler.Triggers;
 
 internal static class TaskTypeRegistry
 {
-    public const string OrphanMetadataCleanup = "orphan_metadata_cleanup";
-    public const string ChannelUpdateCheck = "channel_update_check";
+    public const string ChannelScanRefresh = "channel_scan_refresh";
     public const string ChannelAssetRefresh = "channel_asset_refresh";
-    public const string ChannelMediaList = "channel_media_list";
-    public const string StaleDatabaseCleanup = "stale_database_cleanup";
-    public const string WatchedItemAutoDelete = "watched_item_auto_delete";
+    public const string ChannelScanFull = "channel_scan_full";
+    public const string DatabaseStaleMediaCleanup = "database_stale_media_cleanup";
     public const string DatabaseMaintenance = "database_maintenance";
+    public const string DatabaseMaintenanceReindex = "database_maintenance_reindex";
     public const string SearchReindex = "search_reindex";
-    public const string FilesystemRescan = "filesystem_rescan";
     public const string ProcessedMessageCleanup = "processed_message_cleanup";
     public const string Backup = "backup";
 
     private static readonly IReadOnlyDictionary<string, Type> JobTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
     {
-        [OrphanMetadataCleanup] = typeof(OrphanMetadataCleanupTriggerJob),
-        [ChannelUpdateCheck] = typeof(ChannelUpdateCheckJob),
+        [ChannelScanRefresh] = typeof(ChannelScanRefreshJob),
         [ChannelAssetRefresh] = typeof(ChannelAssetRefreshJob),
-        [ChannelMediaList] = typeof(ChannelMediaListJob),
-        [StaleDatabaseCleanup] = typeof(StaleDatabaseCleanupJob),
-        [WatchedItemAutoDelete] = typeof(WatchedItemAutoDeleteJob),
+        [ChannelScanFull] = typeof(ChannelScanFullJob),
+        [DatabaseStaleMediaCleanup] = typeof(DatabaseStaleMediaCleanupJob),
         [DatabaseMaintenance] = typeof(DatabaseMaintenanceJob),
+        [DatabaseMaintenanceReindex] = typeof(DatabaseMaintenanceReindexJob),
         [SearchReindex] = typeof(SearchReindexJob),
-        [FilesystemRescan] = typeof(FilesystemRescanJob),
         [ProcessedMessageCleanup] = typeof(ProcessedMessageCleanupJob),
         [Backup] = typeof(BackupJob)
     };

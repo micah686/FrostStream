@@ -1,13 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Spinner } from 'flowbite-svelte';
   import {
-    CameraPhotoOutline,
-    ChevronRightOutline,
-    ClockOutline,
-    GlobeOutline,
-    PlaySolid
-  } from 'flowbite-svelte-icons';
+    Camera,
+    ChevronRight,
+    Clock,
+    Globe,
+    Play
+  } from '@lucide/svelte';
   import { accentFor, formatBytes, formatDuration, formatRelativeDate, initialsFor } from '$lib/media';
   import { getGlobalStatistics, type StatisticsOverview } from '$lib/api/statistics';
   import { listInProgress } from '$lib/api/watchState';
@@ -111,40 +110,40 @@
 <section aria-labelledby="continue-watching-title">
   <div class="mb-4 flex items-end justify-between gap-4">
     <div>
-      <h2 id="continue-watching-title" class="text-xl font-bold tracking-tight text-slate-100">
+      <h2 id="continue-watching-title" class="text-xl font-bold tracking-tight text-base-content">
         Continue watching
       </h2>
-      <p class="mt-1 text-sm text-slate-500">Pick up where you left off across devices</p>
+      <p class="mt-1 text-sm text-base-content/50">Pick up where you left off across devices</p>
     </div>
     <div class="hidden items-center gap-2 sm:flex">
       <a
         href={libraryTabHref('History')}
-        class="rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:bg-slate-800 hover:text-white"
+        class="rounded-lg border border-base-300 bg-base-200/60 px-3 py-1.5 text-xs font-semibold text-base-content/80 transition hover:bg-base-300 hover:text-base-content"
       >
         History
       </a>
       <a
         href={libraryTabHref('Liked')}
-        class="rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:bg-slate-800 hover:text-white"
+        class="rounded-lg border border-base-300 bg-base-200/60 px-3 py-1.5 text-xs font-semibold text-base-content/80 transition hover:bg-base-300 hover:text-base-content"
       >
         Liked
       </a>
-      <a href="/library" class="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-slate-500 transition hover:text-blue-400">
+      <a href="/library" class="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-base-content/50 transition hover:text-primary">
         See all
-        <ChevronRightOutline class="h-3 w-3" />
+        <ChevronRight class="h-3 w-3" />
       </a>
     </div>
   </div>
 
   {#if continueLoading}
     <div class="flex justify-center py-12">
-      <Spinner size="8" />
+      <span class="loading loading-spinner loading-md"></span>
     </div>
   {:else if continueCards.length === 0}
-    <div class="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-10 text-center">
-      <ClockOutline class="mx-auto h-10 w-10 text-slate-700" />
-      <p class="mt-4 text-sm font-semibold text-slate-300">Nothing in progress</p>
-      <p class="mt-1 text-sm text-slate-500">Start a video from your library and it will show up here.</p>
+    <div class="rounded-2xl border border-base-300/80 bg-base-200/40 p-10 text-center">
+      <Clock class="mx-auto h-10 w-10 text-base-content/30" />
+      <p class="mt-4 text-sm font-semibold text-base-content/80">Nothing in progress</p>
+      <p class="mt-1 text-sm text-base-content/50">Start a video from your library and it will show up here.</p>
     </div>
   {:else}
     <div class="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
@@ -178,17 +177,17 @@
               </span>
             {/if}
             <span class="absolute inset-x-0 bottom-0 h-1 bg-black/35">
-              <span class="block h-full bg-blue-500" style={`width: ${item.progressPercent}%`}></span>
+              <span class="block h-full bg-primary" style={`width: ${item.progressPercent}%`}></span>
             </span>
             <span
-              class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-white/95 text-slate-950 opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
+              class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-white/95 text-slate-900 opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
             >
-              <PlaySolid class="ml-0.5 h-5 w-5" />
+              <Play class="ml-0.5 h-5 w-5" />
             </span>
           </a>
           <div class="mt-3 min-w-0 px-1">
-            <h3 class="truncate text-sm font-semibold text-slate-200">{item.title}</h3>
-            <p class="mt-1 truncate text-xs text-slate-500">
+            <h3 class="truncate text-sm font-semibold text-base-content/90">{item.title}</h3>
+            <p class="mt-1 truncate text-xs text-base-content/50">
               {[
                 item.creator,
                 formatDuration(item.positionSeconds) ? `at ${formatDuration(item.positionSeconds)}` : null,
@@ -205,19 +204,19 @@
 </section>
 
 <section class="mt-10 grid gap-4 md:grid-cols-3" aria-label="Library overview">
-  <div class="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-5">
-    <CameraPhotoOutline class="h-5 w-5 text-blue-400" />
-    <p class="mt-4 text-2xl font-bold text-white">{overview?.inventory.totalMedia.toLocaleString() ?? '-'}</p>
-    <p class="mt-1 text-xs text-slate-500">Videos in your library</p>
+  <div class="rounded-2xl border border-base-300/80 bg-base-200/40 p-5">
+    <Camera class="h-5 w-5 text-primary" />
+    <p class="mt-4 text-2xl font-bold text-base-content">{overview?.inventory.totalMedia.toLocaleString() ?? '-'}</p>
+    <p class="mt-1 text-xs text-base-content/50">Videos in your library</p>
   </div>
-  <div class="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-5">
-    <GlobeOutline class="h-5 w-5 text-violet-400" />
-    <p class="mt-4 text-2xl font-bold text-white">{overview?.inventory.totalChannels.toLocaleString() ?? '-'}</p>
-    <p class="mt-1 text-xs text-slate-500">Channels followed</p>
+  <div class="rounded-2xl border border-base-300/80 bg-base-200/40 p-5">
+    <Globe class="h-5 w-5 text-secondary" />
+    <p class="mt-4 text-2xl font-bold text-base-content">{overview?.inventory.totalChannels.toLocaleString() ?? '-'}</p>
+    <p class="mt-1 text-xs text-base-content/50">Channels followed</p>
   </div>
-  <div class="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-5">
-    <ClockOutline class="h-5 w-5 text-emerald-400" />
-    <p class="mt-4 text-2xl font-bold text-white">{overview ? formatBytes(overview.inventory.totalBytes) : '-'}</p>
-    <p class="mt-1 text-xs text-slate-500">Ready to watch offline</p>
+  <div class="rounded-2xl border border-base-300/80 bg-base-200/40 p-5">
+    <Clock class="h-5 w-5 text-success" />
+    <p class="mt-4 text-2xl font-bold text-base-content">{overview ? formatBytes(overview.inventory.totalBytes) : '-'}</p>
+    <p class="mt-1 text-xs text-base-content/50">Ready to watch offline</p>
   </div>
 </section>

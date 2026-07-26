@@ -13,6 +13,4 @@ public static class ScheduleSubjects
     public const string MarkSuccess = "fs.schedules.marksuccess";
     public const string MarkFailure = "fs.schedules.markfailure";
     public const string Changed = "fs.schedules.changed";
-
-    public const string OrphanMetadataCleanupRequest = "fs.cleanup.metadata.orphans.request";
 }

@@ -1,7 +1,9 @@
 using DataBridge;
+using DataBridge.Messaging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Shared.Messaging;
 
 namespace DataBridge.Search;
 
@@ -18,6 +20,7 @@ public sealed class MetadataRebuildCoordinator(
     ITypesenseIndexService indexService,
     CaptionDocumentHydrator captionDocumentHydrator,
     IHostApplicationLifetime applicationLifetime,
+    INotificationDispatcher notificationDispatcher,
     ILogger<MetadataRebuildCoordinator> logger) : IMetadataRebuildCoordinator
 {
     private const int BatchSize = 500;
@@ -84,6 +87,11 @@ public sealed class MetadataRebuildCoordinator(
         catch (Exception ex)
         {
             logger.LogError(ex, "Typesense metadata rebuild failed.");
+            await notificationDispatcher.NotifyAdminEventAsync(
+                NotificationEventKeys.IndexRebuildFailed,
+                "FrostStream search index rebuild failed",
+                $"Typesense metadata rebuild failed: {ex.Message}",
+                cancellationToken: ct);
         }
     }
 

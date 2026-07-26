@@ -1,13 +1,12 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { goto } from '$app/navigation';
-  import { Button, Input, Label, Spinner, Textarea } from 'flowbite-svelte';
   import {
-    ArrowLeftOutline,
-    CheckCircleOutline,
-    ExclamationCircleOutline,
-    PlusOutline
-  } from 'flowbite-svelte-icons';
+    ArrowLeft,
+    CircleAlert,
+    CircleCheck,
+    Plus
+  } from '@lucide/svelte';
   import {
     createOptionPreset,
     updateOptionPreset,
@@ -79,48 +78,26 @@
 <form onsubmit={save} class="space-y-5">
   <div class="grid gap-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
     <div>
-      <Label for="preset-key" class="mb-2 text-sm font-medium text-slate-300">Key</Label>
-      <Input
-        id="preset-key"
-        required
-        pattern={'[a-z0-9-]{2,100}'}
-        minlength={2}
-        maxlength={100}
-        disabled={isUpdate}
-        bind:value={key}
-        placeholder="archive-1080p"
-        class="border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500! disabled:opacity-60"
-      />
-      <p class="mt-1.5 text-xs text-slate-600">Lowercase letters, numbers, and hyphens.</p>
+      <label class="label mb-2 text-sm" for="preset-key">Key</label>
+      <input class="input w-full text-sm" id="preset-key" required
+         pattern={'[a-z0-9-]{2,100}'} minlength={2} maxlength={100} disabled={isUpdate} bind:value={key} placeholder="archive-1080p" />
+      <p class="mt-1.5 text-xs text-base-content/40">Lowercase letters, numbers, and hyphens.</p>
     </div>
 
     <div>
-      <Label for="preset-name" class="mb-2 text-sm font-medium text-slate-300">Name</Label>
-      <Input
-        id="preset-name"
-        required
-        maxlength={255}
-        bind:value={name}
-        placeholder="Archive 1080p"
-        class="border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!"
-      />
+      <label class="label mb-2 text-sm" for="preset-name">Name</label>
+      <input class="input w-full text-sm" id="preset-name" required
+         maxlength={255} bind:value={name} placeholder="Archive 1080p" />
     </div>
   </div>
 
   <div>
-    <Label for="preset-description" class="mb-2 text-sm font-medium text-slate-300">Description</Label>
-    <Textarea
-      id="preset-description"
-      rows={3}
-      maxlength={2000}
-      bind:value={description}
-      placeholder="Best quality up to 1080p with embedded metadata"
-      class="border-slate-800! bg-slate-950/60! text-sm! text-slate-200! placeholder:text-slate-600! focus:border-blue-500! focus:ring-blue-500!"
-    />
+    <label class="label mb-2 text-sm" for="preset-description">Description</label>
+    <textarea class="textarea w-full text-sm" id="preset-description" rows={3} maxlength={2000} bind:value={description} placeholder="Best quality up to 1080p with embedded metadata"></textarea>
   </div>
 
   <div>
-    <h2 class="mb-3 border-t border-slate-800/70 pt-5 text-sm font-semibold text-slate-200">
+    <h2 class="mb-3 border-t border-base-300/70 pt-5 text-sm font-semibold text-base-content/90">
       Download options
     </h2>
     <YtDlpOptionsEditor bind:value={ytDlpOptions} />
@@ -128,37 +105,28 @@
 
   {#if submitError}
     <div
-      class="flex items-start gap-2 rounded-xl border border-red-900/60 bg-red-950/40 p-3 text-sm text-red-300"
+      class="flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
       role="alert"
     >
-      <ExclamationCircleOutline class="mt-0.5 h-4 w-4 shrink-0" />
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{submitError}</span>
     </div>
   {/if}
 
-  <div class="flex flex-col-reverse gap-3 border-t border-slate-800/70 pt-5 sm:flex-row sm:justify-between">
-    <Button
-      href={profileReturnHref}
-      color="dark"
-      class="border-slate-700! bg-transparent! px-4! py-2! text-xs! font-semibold! text-slate-300! hover:bg-slate-800!"
-    >
-      <ArrowLeftOutline class="mr-1.5 h-4 w-4" />
+  <div class="flex flex-col-reverse gap-3 border-t border-base-300/70 pt-5 sm:flex-row sm:justify-between">
+    <a class="btn btn-sm btn-ghost text-xs" href={profileReturnHref}>
+      <ArrowLeft class="mr-1.5 h-4 w-4" />
       Back
-    </Button>
-    <Button
-      type="submit"
-      color="blue"
-      disabled={submitting}
-      class="border-0! bg-blue-500! px-5! py-2! text-xs! font-semibold! hover:bg-blue-400! disabled:opacity-60"
-    >
+    </a>
+    <button class="btn btn-sm btn-primary text-xs" type="submit" disabled={submitting}>
       {#if submitting}
-        <Spinner size="4" class="mr-2" />
+        <span class="loading loading-spinner loading-xs mr-2"></span>
       {:else if isUpdate}
-        <CheckCircleOutline class="mr-1.5 h-4 w-4" />
+        <CircleCheck class="mr-1.5 h-4 w-4" />
       {:else}
-        <PlusOutline class="mr-1.5 h-4 w-4" />
+        <Plus class="mr-1.5 h-4 w-4" />
       {/if}
       {isUpdate ? 'Save changes' : 'Create preset'}
-    </Button>
+    </button>
   </div>
 </form>

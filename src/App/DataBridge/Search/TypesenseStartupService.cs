@@ -1,6 +1,8 @@
+using DataBridge.Messaging;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NodaTime;
+using Shared.Messaging;
 using Typesense;
 
 namespace DataBridge.Search;
@@ -10,6 +12,7 @@ public sealed class TypesenseStartupService(
     ITypesenseIndexService indexService,
     IMetadataRebuildCoordinator rebuildCoordinator,
     IClock clock,
+    INotificationDispatcher notificationDispatcher,
     ILogger<TypesenseStartupService> logger) : IHostedService
 {
     public async Task StartAsync(CancellationToken cancellationToken)
@@ -63,6 +66,16 @@ public sealed class TypesenseStartupService(
             {
                 logger.LogWarning(ex, "Typesense health check failed on attempt {Attempt}; retrying.", attempt);
                 await Task.Delay(TimeSpan.FromSeconds(Math.Min(attempt, 5)), ct);
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                logger.LogError(ex, "Typesense health check failed after {Attempt} attempt(s).", attempt);
+                await notificationDispatcher.NotifyAdminEventAsync(
+                    NotificationEventKeys.SystemIntegrationFailed,
+                    "FrostStream system integration failed: Typesense",
+                    $"Typesense health check failed after {attempt} attempt(s): {ex.Message}",
+                    cancellationToken: ct);
+                throw;
             }
         }
     }

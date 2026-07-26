@@ -1,13 +1,11 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { Spinner } from 'flowbite-svelte';
-
   const PREVIOUS_TRACK_ICON =
-    '<svg class="media-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 5v14m12-13-8 6 8 6V6Z"/></svg>';
+    '<svg class="media-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 5v14m12-13-8 6 8 6V6Z" /></svg>';
   const NEXT_TRACK_ICON =
-    '<svg class="media-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 5v14M6 6l8 6-8 6V6Z"/></svg>';
+    '<svg class="media-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 5v14M6 6l8 6-8 6V6Z" /></svg>';
   const DOWNLOAD_ICON =
-    '<svg class="media-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></svg>';
+    '<svg class="media-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" /></svg>';
 
   let {
     src,
@@ -162,6 +160,6 @@
   </audio-player>
 {:else}
   <div class="grid min-h-14 w-full place-items-center">
-    <Spinner size="6" />
+    <span class="loading loading-spinner loading-sm"></span>
   </div>
 {/if}
