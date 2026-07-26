@@ -69,12 +69,14 @@ public sealed record FanOutEntryRequest(
 
 public sealed record PlaylistSummary(
     PlaylistEntity Playlist,
+    PlaylistSourceMetadataEntity? SourceMetadata,
     int CompletedItems,
     int FailedItems,
     int PendingItems);
 
 public sealed record PlaylistDetail(
     PlaylistEntity Playlist,
+    PlaylistSourceMetadataEntity? SourceMetadata,
     int CompletedItems,
     int FailedItems,
     int PendingItems,

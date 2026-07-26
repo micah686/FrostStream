@@ -30,6 +30,29 @@ public sealed class PlaylistsRepositoryTests
         reused.Playlist.StorageKey.ShouldBe("archive");
         reused.Playlist.State.ShouldBe(PlaylistState.PendingMetadata);
         (await db.Playlists.CountAsync()).ShouldBe(1);
+
+        var sourceMetadata = await db.PlaylistSourceMetadata.SingleAsync();
+        sourceMetadata.PlaylistId.ShouldBe(first.PlaylistId);
+        sourceMetadata.TotalItems.ShouldBe(0);
+        sourceMetadata.Title.ShouldBeNull();
+    }
+
+    [Test]
+    public async Task CreateOrReuse_Keeps_Exactly_One_SourceMetadata_Row_Per_Playlist()
+    {
+        await using var db = DataBridgeTestHelpers.CreateDb();
+        var repo = new PlaylistsRepository(db, new FixedClock(DataBridgeTestHelpers.Now));
+        var request = PlaylistRequested("https://example.test/playlist", requestedBy: "micah", storageKey: "default");
+
+        await repo.CreateOrReuseAsync(request);
+        await repo.CreateOrReuseAsync(request);
+        await repo.CreateOrReuseAsync(PlaylistRequested(
+            "https://example.test/playlist",
+            requestedBy: "other-user",
+            storageKey: "archive"));
+
+        (await db.Playlists.CountAsync()).ShouldBe(1);
+        (await db.PlaylistSourceMetadata.CountAsync()).ShouldBe(1);
     }
 
     [Test]
@@ -64,10 +87,13 @@ public sealed class PlaylistsRepositoryTests
 
         var playlist = await db.Playlists.SingleAsync();
         playlist.State.ShouldBe(PlaylistState.MetadataResolved);
-        playlist.ProviderPlaylistId.ShouldBe("provider-playlist");
-        playlist.Title.ShouldBe("Playlist Title");
-        playlist.TotalItems.ShouldBe(12);
-        playlist.LastScannedAt.ShouldBe(DataBridgeTestHelpers.Now);
+
+        var sourceMetadata = await db.PlaylistSourceMetadata.SingleAsync();
+        sourceMetadata.PlaylistId.ShouldBe(playlistId);
+        sourceMetadata.ProviderPlaylistId.ShouldBe("provider-playlist");
+        sourceMetadata.Title.ShouldBe("Playlist Title");
+        sourceMetadata.TotalItems.ShouldBe(12);
+        sourceMetadata.LastScannedAt.ShouldBe(DataBridgeTestHelpers.Now);
 
         var metadata = await db.PlaylistMetadata.SingleAsync();
         metadata.PlaylistId.ShouldBe(playlistId);
@@ -110,8 +136,10 @@ public sealed class PlaylistsRepositoryTests
 
         var playlist = await db.Playlists.SingleAsync();
         playlist.State.ShouldBe(PlaylistState.PendingMetadata);
-        playlist.TotalItems.ShouldBe(10_000);
-        playlist.LastScannedAt.ShouldBeNull();
+
+        var sourceMetadata = await db.PlaylistSourceMetadata.SingleAsync();
+        sourceMetadata.TotalItems.ShouldBe(10_000);
+        sourceMetadata.LastScannedAt.ShouldBeNull();
     }
 
     [Test]
@@ -275,8 +303,13 @@ public sealed class PlaylistsRepositoryTests
             PlaylistId = playlistId,
             CorrelationId = Guid.NewGuid(),
             State = PlaylistState.MetadataResolved,
-            SourceUrl = "https://example.test/playlist",
-            Title = "Playlist"
+            SourceUrl = "https://example.test/playlist"
+        });
+        db.PlaylistSourceMetadata.Add(new PlaylistSourceMetadataEntity
+        {
+            PlaylistId = playlistId,
+            Title = "Playlist",
+            TotalItems = 3
         });
         db.DownloadJobs.AddRange(
             Job(completedJobId, DownloadJobState.Completed),
@@ -300,8 +333,13 @@ public sealed class PlaylistsRepositoryTests
         summary.CompletedItems.ShouldBe(1);
         summary.FailedItems.ShouldBe(1);
         summary.PendingItems.ShouldBe(1);
+        summary.SourceMetadata.ShouldNotBeNull();
+        summary.SourceMetadata.Title.ShouldBe("Playlist");
+        summary.SourceMetadata.TotalItems.ShouldBe(3);
 
         detail.ShouldNotBeNull();
+        detail.SourceMetadata.ShouldNotBeNull();
+        detail.SourceMetadata.Title.ShouldBe("Playlist");
         detail.CompletedItems.ShouldBe(1);
         detail.FailedItems.ShouldBe(1);
         detail.PendingItems.ShouldBe(1);

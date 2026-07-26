@@ -39,6 +39,7 @@ public sealed class DataBridgeDbContext(DbContextOptions<DataBridgeDbContext> op
     public DbSet<PlaylistEntity> Playlists => Set<PlaylistEntity>();
     public DbSet<PlaylistItemEntity> PlaylistItems => Set<PlaylistItemEntity>();
     public DbSet<PlaylistScanEntryEntity> PlaylistScanEntries => Set<PlaylistScanEntryEntity>();
+    public DbSet<PlaylistSourceMetadataEntity> PlaylistSourceMetadata => Set<PlaylistSourceMetadataEntity>();
     public DbSet<MediaPlaylistMembershipEntity> MediaPlaylistMemberships => Set<MediaPlaylistMembershipEntity>();
     public DbSet<PlaylistMetadataEntity> PlaylistMetadata => Set<PlaylistMetadataEntity>();
     public DbSet<UserPlaylistEntity> UserPlaylists => Set<UserPlaylistEntity>();

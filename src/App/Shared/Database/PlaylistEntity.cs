@@ -29,17 +29,27 @@ public class PlaylistEntity
 
     public bool FetchComments { get; set; }
 
-    public string? ProviderPlaylistId { get; set; }
-
-    public string? Title { get; set; }
-
-    public int TotalItems { get; set; }
-
     public Instant CreatedAt { get; private set; } = SystemClock.Instance.GetCurrentInstant();
 
     public Instant UpdatedAt { get; set; } = SystemClock.Instance.GetCurrentInstant();
 
     public Instant? CompletedAt { get; set; }
+}
+
+/// <summary>
+/// The provider-resolved description of a playlist's source, refreshed on every metadata scan.
+/// One row per <see cref="PlaylistEntity"/>. Distinct from <see cref="PlaylistMetadataEntity"/>,
+/// which is the durable media-library copy that membership rows resolve against.
+/// </summary>
+public class PlaylistSourceMetadataEntity
+{
+    public Guid PlaylistId { get; set; }
+
+    public string? ProviderPlaylistId { get; set; }
+
+    public string? Title { get; set; }
+
+    public int TotalItems { get; set; }
 
     public Instant? LastScannedAt { get; set; }
 }

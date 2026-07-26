@@ -218,6 +218,7 @@ public sealed class PlaylistQueryConsumerService(
     private static PlaylistDto MapDetail(PlaylistDetail detail)
         => MapBase(
             detail.Playlist,
+            detail.SourceMetadata,
             detail.CompletedItems,
             detail.FailedItems,
             detail.PendingItems,
@@ -233,10 +234,11 @@ public sealed class PlaylistQueryConsumerService(
             }).ToArray());
 
     private static PlaylistDto MapSummary(PlaylistSummary summary)
-        => MapBase(summary.Playlist, summary.CompletedItems, summary.FailedItems, summary.PendingItems, items: null);
+        => MapBase(summary.Playlist, summary.SourceMetadata, summary.CompletedItems, summary.FailedItems, summary.PendingItems, items: null);
 
     private static PlaylistDto MapBase(
         PlaylistEntity playlist,
+        PlaylistSourceMetadataEntity? sourceMetadata,
         int completed,
         int failed,
         int pending,
@@ -249,13 +251,13 @@ public sealed class PlaylistQueryConsumerService(
             SourceUrl = playlist.SourceUrl,
             RequestedBy = playlist.RequestedBy,
             StorageKey = playlist.StorageKey,
-            ProviderPlaylistId = playlist.ProviderPlaylistId,
-            Title = playlist.Title,
-            TotalItems = playlist.TotalItems,
+            ProviderPlaylistId = sourceMetadata?.ProviderPlaylistId,
+            Title = sourceMetadata?.Title,
+            TotalItems = sourceMetadata?.TotalItems ?? 0,
             CreatedAt = playlist.CreatedAt,
             UpdatedAt = playlist.UpdatedAt,
             CompletedAt = playlist.CompletedAt,
-            LastScannedAt = playlist.LastScannedAt,
+            LastScannedAt = sourceMetadata?.LastScannedAt,
             CompletedItems = completed,
             FailedItems = failed,
             PendingItems = pending,

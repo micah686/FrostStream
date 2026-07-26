@@ -24,13 +24,9 @@ public sealed class PlaylistConfiguration : IEntityTypeConfiguration<PlaylistEnt
         builder.Property(x => x.YtDlpOptionsJson).HasColumnName("ytdlp_options_json").HasColumnType("jsonb");
         builder.Property(x => x.Priority).HasColumnName("priority").HasDefaultValue(0).IsRequired();
         builder.Property(x => x.FetchComments).HasColumnName("fetch_comments").HasDefaultValue(false).IsRequired();
-        builder.Property(x => x.ProviderPlaylistId).HasColumnName("provider_playlist_id").HasMaxLength(512);
-        builder.Property(x => x.Title).HasColumnName("title").HasMaxLength(2048);
-        builder.Property(x => x.TotalItems).HasColumnName("total_items").IsRequired();
         builder.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone").ValueGeneratedOnAdd().IsRequired();
         builder.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp with time zone").IsRequired();
         builder.Property(x => x.CompletedAt).HasColumnName("completed_at").HasColumnType("timestamp with time zone");
-        builder.Property(x => x.LastScannedAt).HasColumnName("last_scanned_at").HasColumnType("timestamp with time zone");
 
         builder.HasIndex(x => new { x.State, x.UpdatedAt }).HasDatabaseName("ix_playlists_state_updated_at");
         builder.HasIndex(x => x.CorrelationId).HasDatabaseName("ix_playlists_correlation_id");
@@ -121,6 +117,27 @@ public sealed class MediaPlaylistMembershipConfiguration : IEntityTypeConfigurat
             .WithMany()
             .HasForeignKey(x => x.PlaylistId)
             .HasConstraintName("fk_media_playlist_membership_playlist_id")
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public sealed class PlaylistSourceMetadataConfiguration : IEntityTypeConfiguration<PlaylistSourceMetadataEntity>
+{
+    public void Configure(EntityTypeBuilder<PlaylistSourceMetadataEntity> builder)
+    {
+        builder.ToTable("playlist_source_metadata", "jobs");
+        builder.HasKey(x => x.PlaylistId);
+
+        builder.Property(x => x.PlaylistId).HasColumnName("playlist_id").ValueGeneratedNever();
+        builder.Property(x => x.ProviderPlaylistId).HasColumnName("provider_playlist_id").HasMaxLength(512);
+        builder.Property(x => x.Title).HasColumnName("title").HasMaxLength(2048);
+        builder.Property(x => x.TotalItems).HasColumnName("total_items").IsRequired();
+        builder.Property(x => x.LastScannedAt).HasColumnName("last_scanned_at").HasColumnType("timestamp with time zone");
+
+        builder.HasOne<PlaylistEntity>()
+            .WithOne()
+            .HasForeignKey<PlaylistSourceMetadataEntity>(x => x.PlaylistId)
+            .HasConstraintName("fk_playlist_source_metadata_playlist_id")
             .OnDelete(DeleteBehavior.Cascade);
     }
 }
