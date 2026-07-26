@@ -5,12 +5,12 @@ using Shared.Messaging;
 
 namespace Scheduler.ChannelTasks;
 
-public sealed class ChannelMediaLister(INatsMessagePublisher publisher, IClock clock) : IChannelMediaLister
+public sealed class ChannelScanFullScheduler(INatsMessagePublisher publisher, IClock clock) : IChannelScanFullScheduler
 {
-    public Task QueueMediaListAsync(ScheduledJobContext context, CancellationToken cancellationToken)
+    public Task QueueScanFullAsync(ScheduledJobContext context, CancellationToken cancellationToken)
         => publisher.PublishAsync(
-            BackgroundJobSubjects.ChannelMediaListRequest,
-            new ChannelMediaListRequested
+            BackgroundJobSubjects.ChannelScanFullRequest,
+            new ChannelScanFullRequested
             {
                 ScheduleKey = context.ScheduleKey,
                 TaskType = context.TaskType,

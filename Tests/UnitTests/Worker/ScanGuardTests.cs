@@ -157,10 +157,10 @@ public sealed class ScanGuardTests
     public void Channel_Download_Uses_Explicit_Collection_Correlation_Id()
     {
         var correlationId = Guid.NewGuid();
-        var request = new ChannelMediaListRequested
+        var request = new ChannelScanFullRequested
         {
             ScheduleKey = "manual-channel-download",
-            TaskType = "channel_media_list",
+            TaskType = "channel_scan_full",
             DueWindowUtc = NodaTime.Instant.FromUnixTimeSeconds(1),
             IdempotencyKey = "manual-channel-download:42:test",
             OccurredAt = NodaTime.Instant.FromUnixTimeSeconds(1),

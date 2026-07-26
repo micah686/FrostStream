@@ -13,9 +13,9 @@ public sealed class BackgroundJobsTopology : ITopologySource
     public const string SearchReindexConsumer = "databridge-search-reindex";
     public const string DatabaseMaintenanceConsumer = "databridge-database-maintenance";
     public const string DatabaseMaintenanceReindexConsumer = "databridge-database-maintenance-reindex";
-    public const string StaleDatabaseCleanupConsumer = "databridge-stale-database-cleanup";
-    public const string WorkerChannelUpdateCheckConsumer = "worker-channel-update-check";
-    public const string WorkerChannelMediaListConsumer = "worker-channel-media-list";
+    public const string DatabaseStaleMediaCleanupConsumer = "databridge-database-stale-media-cleanup";
+    public const string WorkerChannelScanRefreshConsumer = "worker-channel-scan-refresh";
+    public const string WorkerChannelScanFullConsumer = "worker-channel-scan-full";
     public const string WorkerChannelAssetRefreshConsumer = "worker-channel-asset-refresh";
     public const string MediaProcessorAudioRenditionConsumer = "mediaprocessor-audio-rendition";
     public const string MediaProcessorStreamRenditionConsumer = "mediaprocessor-stream-rendition";
@@ -34,10 +34,10 @@ public sealed class BackgroundJobsTopology : ITopologySource
             // then races the responder's reply on the request inbox.
             Subjects =
             [
-                BackgroundJobSubjects.ChannelUpdateCheckRequest,
+                BackgroundJobSubjects.ChannelScanRefreshRequest,
                 BackgroundJobSubjects.ChannelAssetRefreshRequest,
-                BackgroundJobSubjects.ChannelMediaListRequest,
-                BackgroundJobSubjects.StaleDatabaseCleanupRequest,
+                BackgroundJobSubjects.ChannelScanFullRequest,
+                BackgroundJobSubjects.DatabaseStaleMediaCleanupRequest,
                 BackgroundJobSubjects.ProcessedMessageCleanupRequest,
                 BackgroundJobSubjects.DatabaseMaintenanceRequest,
                 BackgroundJobSubjects.DatabaseMaintenanceReindexRequest,
@@ -59,9 +59,9 @@ public sealed class BackgroundJobsTopology : ITopologySource
         yield return DataBridgeConsumer(SearchReindexConsumer, BackgroundJobSubjects.SearchReindexRequest, TimeSpan.FromMinutes(30), maxDeliver: 3);
         yield return DataBridgeConsumer(DatabaseMaintenanceConsumer, BackgroundJobSubjects.DatabaseMaintenanceRequest, TimeSpan.FromHours(2), maxDeliver: 3);
         yield return DataBridgeConsumer(DatabaseMaintenanceReindexConsumer, BackgroundJobSubjects.DatabaseMaintenanceReindexRequest, TimeSpan.FromHours(24), maxDeliver: 2);
-        yield return DataBridgeConsumer(StaleDatabaseCleanupConsumer, BackgroundJobSubjects.StaleDatabaseCleanupRequest, TimeSpan.FromMinutes(15), maxDeliver: 5);
-        yield return WorkerConsumer(WorkerChannelUpdateCheckConsumer, BackgroundJobSubjects.ChannelUpdateCheckRequest, TimeSpan.FromMinutes(30), maxDeliver: 5);
-        yield return WorkerConsumer(WorkerChannelMediaListConsumer, BackgroundJobSubjects.ChannelMediaListRequest, TimeSpan.FromHours(2), maxDeliver: 3);
+        yield return DataBridgeConsumer(DatabaseStaleMediaCleanupConsumer, BackgroundJobSubjects.DatabaseStaleMediaCleanupRequest, TimeSpan.FromMinutes(15), maxDeliver: 5);
+        yield return WorkerConsumer(WorkerChannelScanRefreshConsumer, BackgroundJobSubjects.ChannelScanRefreshRequest, TimeSpan.FromMinutes(30), maxDeliver: 5);
+        yield return WorkerConsumer(WorkerChannelScanFullConsumer, BackgroundJobSubjects.ChannelScanFullRequest, TimeSpan.FromHours(2), maxDeliver: 3);
         yield return WorkerConsumer(WorkerChannelAssetRefreshConsumer, BackgroundJobSubjects.ChannelAssetRefreshRequest, TimeSpan.FromMinutes(30), maxDeliver: 3);
         // Encodes run arbitrarily long, so MediaProcessor extends the short ack window with
         // in-progress acks every 30s while ffmpeg works; a dead encoder is redelivered quickly.

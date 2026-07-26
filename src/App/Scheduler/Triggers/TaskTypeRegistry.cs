@@ -5,10 +5,10 @@ namespace Scheduler.Triggers;
 
 internal static class TaskTypeRegistry
 {
-    public const string ChannelUpdateCheck = "channel_update_check";
+    public const string ChannelScanRefresh = "channel_scan_refresh";
     public const string ChannelAssetRefresh = "channel_asset_refresh";
-    public const string ChannelMediaList = "channel_media_list";
-    public const string StaleDatabaseCleanup = "stale_database_cleanup";
+    public const string ChannelScanFull = "channel_scan_full";
+    public const string DatabaseStaleMediaCleanup = "database_stale_media_cleanup";
     public const string DatabaseMaintenance = "database_maintenance";
     public const string DatabaseMaintenanceReindex = "database_maintenance_reindex";
     public const string SearchReindex = "search_reindex";
@@ -17,10 +17,10 @@ internal static class TaskTypeRegistry
 
     private static readonly IReadOnlyDictionary<string, Type> JobTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
     {
-        [ChannelUpdateCheck] = typeof(ChannelUpdateCheckJob),
+        [ChannelScanRefresh] = typeof(ChannelScanRefreshJob),
         [ChannelAssetRefresh] = typeof(ChannelAssetRefreshJob),
-        [ChannelMediaList] = typeof(ChannelMediaListJob),
-        [StaleDatabaseCleanup] = typeof(StaleDatabaseCleanupJob),
+        [ChannelScanFull] = typeof(ChannelScanFullJob),
+        [DatabaseStaleMediaCleanup] = typeof(DatabaseStaleMediaCleanupJob),
         [DatabaseMaintenance] = typeof(DatabaseMaintenanceJob),
         [DatabaseMaintenanceReindex] = typeof(DatabaseMaintenanceReindexJob),
         [SearchReindex] = typeof(SearchReindexJob),

@@ -81,7 +81,7 @@
 
   const taskTypeHelp = [
     {
-      type: 'channel_update_check',
+      type: 'channel_scan_refresh',
       summary: 'Checks followed channels for new uploads and queues any newly discovered media.'
     },
     {
@@ -89,11 +89,11 @@
       summary: 'Refreshes channel-level assets such as avatars and banners.'
     },
     {
-      type: 'channel_media_list',
+      type: 'channel_scan_full',
       summary: 'Rebuilds the channel media listing used by the library and creator views.'
     },
     {
-      type: 'stale_database_cleanup',
+      type: 'database_stale_media_cleanup',
       summary: 'Cleans up stale maintenance records and other aged scheduler data.'
     },
     {

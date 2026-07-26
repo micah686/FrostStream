@@ -12,7 +12,7 @@ public abstract record ScheduledBackgroundRequest
     public required Instant OccurredAt { get; init; }
 }
 
-public sealed record ChannelUpdateCheckRequested : ScheduledBackgroundRequest
+public sealed record ChannelScanRefreshRequested : ScheduledBackgroundRequest
 {
     /// <summary>When set, scan only this creator source (manual "scan now"); scheduled sweeps leave it null.</summary>
     public long? TargetSourceId { get; init; }
@@ -27,7 +27,7 @@ public sealed record ChannelAssetRefreshRequested : ScheduledBackgroundRequest
     public bool Force { get; init; }
 }
 
-public sealed record ChannelMediaListRequested : ScheduledBackgroundRequest
+public sealed record ChannelScanFullRequested : ScheduledBackgroundRequest
 {
     /// <summary>Set for a Cleipnir-supervised V2 channel expansion.</summary>
     public Guid? GroupId { get; init; }
@@ -54,7 +54,7 @@ public sealed record ChannelMediaListRequested : ScheduledBackgroundRequest
     public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
 }
 
-public sealed record StaleDatabaseCleanupRequested : ScheduledBackgroundRequest;
+public sealed record DatabaseStaleMediaCleanupRequested : ScheduledBackgroundRequest;
 
 public sealed record ProcessedMessageCleanupRequested : ScheduledBackgroundRequest;
 

@@ -22,8 +22,8 @@ public sealed class CreatorMonitorController(
     ILogger<CreatorMonitorController> logger) : ControllerBase
 {
     private const string ChannelAssetRefreshTaskType = "channel_asset_refresh";
-    private const string ChannelMediaListTaskType = "channel_media_list";
-    private const string ChannelUpdateCheckTaskType = "channel_update_check";
+    private const string ChannelScanFullTaskType = "channel_scan_full";
+    private const string ChannelScanRefreshTaskType = "channel_scan_refresh";
     private const string ManualChannelDownloadScheduleKey = "manual-channel-download";
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);
 
@@ -116,10 +116,10 @@ public sealed class CreatorMonitorController(
             return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to resolve download config set.");
         }
 
-        var message = new ChannelMediaListRequested
+        var message = new ChannelScanFullRequested
         {
             ScheduleKey = ManualChannelDownloadScheduleKey,
-            TaskType = ChannelMediaListTaskType,
+            TaskType = ChannelScanFullTaskType,
             DueWindowUtc = now,
             IdempotencyKey = idempotencyKey,
             OccurredAt = now,
@@ -331,11 +331,11 @@ public sealed class CreatorMonitorController(
             if (isFull.Value)
             {
                 await publisher.PublishAsync(
-                    BackgroundJobSubjects.ChannelMediaListRequest,
-                    new ChannelMediaListRequested
+                    BackgroundJobSubjects.ChannelScanFullRequest,
+                    new ChannelScanFullRequested
                     {
                         ScheduleKey = "manual",
-                        TaskType = ChannelMediaListTaskType,
+                        TaskType = ChannelScanFullTaskType,
                         DueWindowUtc = now,
                         IdempotencyKey = idempotencyKey,
                         OccurredAt = now,
@@ -347,11 +347,11 @@ public sealed class CreatorMonitorController(
             else
             {
                 await publisher.PublishAsync(
-                    BackgroundJobSubjects.ChannelUpdateCheckRequest,
-                    new ChannelUpdateCheckRequested
+                    BackgroundJobSubjects.ChannelScanRefreshRequest,
+                    new ChannelScanRefreshRequested
                     {
                         ScheduleKey = "manual",
-                        TaskType = ChannelUpdateCheckTaskType,
+                        TaskType = ChannelScanRefreshTaskType,
                         DueWindowUtc = now,
                         IdempotencyKey = idempotencyKey,
                         OccurredAt = now,

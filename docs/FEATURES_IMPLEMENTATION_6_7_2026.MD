@@ -82,7 +82,7 @@ Manages DB-backed scheduled tasks that the Scheduler service hydrates into Quart
 | `GET` | `/api/schedules` | List all scheduled tasks. |
 | `DELETE` | `/api/schedules/{key}` | Delete a scheduled task. |
 
-**Registered Task Types:** `channel_update_check`, `channel_media_list`, `channel_asset_refresh`, `database_maintenance`, `database_maintenance_reindex`, `processed_message_cleanup`, `search_reindex`, `stale_database_cleanup`.
+**Registered Task Types:** `channel_scan_refresh`, `channel_scan_full`, `channel_asset_refresh`, `database_maintenance`, `database_maintenance_reindex`, `processed_message_cleanup`, `search_reindex`, `database_stale_media_cleanup`.
 
 ### 2.5 Option Presets (`/api/option-presets`)
 
@@ -185,8 +185,8 @@ Subscribes to 2 durable consumers on the `FROSTSTREAM_BACKGROUND_JOBS` stream:
 
 | Consumer | Trigger | Scan Mode | What It Does |
 |----------|---------|-----------|--------------|
-| `worker-channel-update-check` | `ChannelUpdateCheckRequested` | Incremental | Fetches the most recent `IncrementalPageSize` entries per source (yt-dlp `--playlist-items 1:N`). Upserts discovered media candidates to DataBridge. |
-| `worker-channel-media-list` | `ChannelMediaListRequested` | Full | Full flat scan of every creator source. No item limit. |
+| `worker-channel-scan-refresh` | `ChannelScanRefreshRequested` | Incremental | Fetches the most recent `IncrementalPageSize` entries per source (yt-dlp `--playlist-items 1:N`). Upserts discovered media candidates to DataBridge. |
+| `worker-channel-scan-full` | `ChannelScanFullRequested` | Full | Full flat scan of every creator source. No item limit. |
 
 Both modes:
 1. Mark schedule attempt in DataBridge.
@@ -320,14 +320,14 @@ Uses Quartz.NET with a CrystalQuartz visual dashboard.
 
 | Job Class | Task Type Key | What It Does |
 |-----------|--------------|--------------|
-| `ChannelUpdateCheckJob` | `channel_update_check` | Publishes `ChannelUpdateCheckRequested` to JetStream. Worker performs incremental scan of all enabled creator sources. |
-| `ChannelMediaListJob` | `channel_media_list` | Publishes `ChannelMediaListRequested`. Worker performs full scan. |
+| `ChannelScanRefreshJob` | `channel_scan_refresh` | Publishes `ChannelScanRefreshRequested` to JetStream. Worker performs incremental scan of all enabled creator sources. |
+| `ChannelScanFullJob` | `channel_scan_full` | Publishes `ChannelScanFullRequested`. Worker performs full scan. |
 | `ChannelAssetRefreshJob` | `channel_asset_refresh` | Publishes `ChannelAssetRefreshRequested` (no `TargetSourceId` = all sources). Worker refreshes avatar/banner assets. |
 | `DatabaseMaintenanceJob` | `database_maintenance` | Publishes `DatabaseMaintenanceRequested`. DataBridge runs VACUUM/ANALYZE or equivalent maintenance. |
 | `DatabaseMaintenanceReindexJob` | `database_maintenance_reindex` | Publishes `DatabaseMaintenanceReindexRequested`. DataBridge runs `REINDEX DATABASE CONCURRENTLY` for the current PostgreSQL database. |
 | `ProcessedMessageCleanupJob` | `processed_message_cleanup` | Publishes `ProcessedMessageCleanupRequested`. DataBridge purges old rows from `processed_messages`. |
 | `SearchReindexJob` | `search_reindex` | Publishes `SearchReindexRequested`. DataBridge rebuilds Typesense from Postgres. |
-| `StaleDatabaseCleanupJob` | `stale_database_cleanup` | Publishes `StaleDatabaseCleanupRequested`. DataBridge removes stale/orphaned DB entries. |
+| `DatabaseStaleMediaCleanupJob` | `database_stale_media_cleanup` | Publishes `DatabaseStaleMediaCleanupRequested`. DataBridge removes stale/orphaned DB entries. |
 
 All jobs use `[DisallowConcurrentExecution]`.
 

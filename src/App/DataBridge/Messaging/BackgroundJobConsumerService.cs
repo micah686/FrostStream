@@ -27,7 +27,7 @@ public sealed class BackgroundJobConsumerService(
             Consume<SearchReindexRequested>(BackgroundJobsTopology.SearchReindexConsumer, HandleSearchReindexAsync, stoppingToken),
             Consume<DatabaseMaintenanceRequested>(BackgroundJobsTopology.DatabaseMaintenanceConsumer, HandleDatabaseMaintenanceAsync, stoppingToken),
             Consume<DatabaseMaintenanceReindexRequested>(BackgroundJobsTopology.DatabaseMaintenanceReindexConsumer, HandleDatabaseMaintenanceReindexAsync, stoppingToken),
-            Consume<StaleDatabaseCleanupRequested>(BackgroundJobsTopology.StaleDatabaseCleanupConsumer, HandleStaleDatabaseCleanupAsync, stoppingToken),
+            Consume<DatabaseStaleMediaCleanupRequested>(BackgroundJobsTopology.DatabaseStaleMediaCleanupConsumer, HandleDatabaseStaleMediaCleanupAsync, stoppingToken),
             Consume<ProcessedMessageCleanupRequested>(BackgroundJobsTopology.ProcessedMessageCleanupConsumer, HandleProcessedMessageCleanupAsync, stoppingToken)
         };
 
@@ -141,10 +141,10 @@ public sealed class BackgroundJobConsumerService(
         }
     }
 
-    private async Task HandleStaleDatabaseCleanupAsync(IJsMessageContext<StaleDatabaseCleanupRequested> context)
+    private async Task HandleDatabaseStaleMediaCleanupAsync(IJsMessageContext<DatabaseStaleMediaCleanupRequested> context)
     {
         var message = context.Message;
-        await using var run = await runReporter.BeginAsync("stale_database_cleanup", message);
+        await using var run = await runReporter.BeginAsync("database_stale_media_cleanup", message);
         try
         {
             await MarkAttemptAsync(message);

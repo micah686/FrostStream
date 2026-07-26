@@ -65,19 +65,19 @@ internal static class Program
         builder.Services.AddSingleton<IClock>(SystemClock.Instance);
         builder.Services.AddSingleton<IQuartzJobRegistrar, QuartzJobRegistrar>();
 
-        builder.Services.AddTransient<Jobs.ChannelUpdateCheckJob>();
+        builder.Services.AddTransient<Jobs.ChannelScanRefreshJob>();
         builder.Services.AddTransient<Jobs.ChannelAssetRefreshJob>();
-        builder.Services.AddTransient<Jobs.ChannelMediaListJob>();
-        builder.Services.AddTransient<Jobs.StaleDatabaseCleanupJob>();
+        builder.Services.AddTransient<Jobs.ChannelScanFullJob>();
+        builder.Services.AddTransient<Jobs.DatabaseStaleMediaCleanupJob>();
         builder.Services.AddTransient<Jobs.DatabaseMaintenanceJob>();
         builder.Services.AddTransient<Jobs.DatabaseMaintenanceReindexJob>();
         builder.Services.AddTransient<Jobs.SearchReindexJob>();
         builder.Services.AddTransient<Jobs.ProcessedMessageCleanupJob>();
         builder.Services.AddTransient<Jobs.BackupJob>();
 
-        builder.Services.AddSingleton<IChannelUpdateChecker, ChannelUpdateChecker>();
+        builder.Services.AddSingleton<IChannelScanRefresher, ChannelScanRefresher>();
         builder.Services.AddSingleton<IChannelAssetRefresher, ChannelAssetRefresher>();
-        builder.Services.AddSingleton<IChannelMediaLister, ChannelMediaLister>();
+        builder.Services.AddSingleton<IChannelScanFullScheduler, ChannelScanFullScheduler>();
         builder.Services.AddSingleton<IStaleEntryCleanupScheduler, StaleEntryCleanupScheduler>();
         builder.Services.AddSingleton<IDatabaseMaintenanceScheduler, DatabaseMaintenanceScheduler>();
         builder.Services.AddSingleton<IDatabaseMaintenanceReindexScheduler, DatabaseMaintenanceReindexScheduler>();

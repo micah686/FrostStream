@@ -53,7 +53,7 @@ public sealed class DownloadGroupV2Flow(
         await RunCollectionAsync(request, collection);
     }
 
-    private async Task RunChannelAsync(DownloadGroupRequested group, ChannelMediaListRequested original)
+    private async Task RunChannelAsync(DownloadGroupRequested group, ChannelScanFullRequested original)
     {
         for (var attempt = 1; attempt <= MaxExpansionAttempts; attempt++)
         {
@@ -71,7 +71,7 @@ public sealed class DownloadGroupV2Flow(
                 OccurredAt = clock.GetCurrentInstant()
             };
             await Capture(() => publisher.PublishAsync(
-                BackgroundJobSubjects.ChannelMediaListRequest,
+                BackgroundJobSubjects.ChannelScanFullRequest,
                 command,
                 messageId: command.IdempotencyKey));
 

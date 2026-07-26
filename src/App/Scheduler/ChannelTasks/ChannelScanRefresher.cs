@@ -5,12 +5,12 @@ using Shared.Messaging;
 
 namespace Scheduler.ChannelTasks;
 
-public sealed class ChannelUpdateChecker(INatsMessagePublisher publisher, IClock clock) : IChannelUpdateChecker
+public sealed class ChannelScanRefresher(INatsMessagePublisher publisher, IClock clock) : IChannelScanRefresher
 {
-    public Task QueueUpdateCheckAsync(ScheduledJobContext context, CancellationToken cancellationToken)
+    public Task QueueScanRefreshAsync(ScheduledJobContext context, CancellationToken cancellationToken)
         => publisher.PublishAsync(
-            BackgroundJobSubjects.ChannelUpdateCheckRequest,
-            new ChannelUpdateCheckRequested
+            BackgroundJobSubjects.ChannelScanRefreshRequest,
+            new ChannelScanRefreshRequested
             {
                 ScheduleKey = context.ScheduleKey,
                 TaskType = context.TaskType,
