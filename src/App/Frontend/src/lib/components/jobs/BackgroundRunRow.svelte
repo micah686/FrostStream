@@ -8,7 +8,7 @@
 
   const percent = $derived(percentFor(run));
   const isRunning = $derived(run.status === 'running');
-  const isFailed = $derived(run.status === 'failed');
+  const isQueued = $derived(run.status === 'queued');
 
   function percentFor(r: BackgroundRun): number {
     if (r.status === 'completed') {
@@ -30,6 +30,9 @@
     if (status === 'failed') {
       return 'bg-error/12 text-error ring-error/25';
     }
+    if (status === 'queued') {
+      return 'bg-warning/12 text-warning ring-warning/25';
+    }
     return 'bg-primary/12 text-primary ring-primary/20';
   }
 
@@ -39,6 +42,9 @@
     }
     if (status === 'failed') {
       return 'bg-error';
+    }
+    if (status === 'queued') {
+      return 'bg-warning/60';
     }
     return 'bg-primary';
   }
@@ -50,11 +56,15 @@
     if (status === 'running') {
       return 'border-primary/60 bg-primary/10';
     }
+    if (status === 'queued') {
+      return 'border-warning/45 bg-warning/8';
+    }
     return 'border-base-300/90 bg-base-200/45';
   }
 
+  /** Time on the clock: how long a queued run has been waiting, otherwise how long it has run. */
   function elapsed(r: BackgroundRun): string {
-    const started = Date.parse(r.startedAt);
+    const started = Date.parse(r.status === 'queued' ? (r.queuedAt ?? r.startedAt) : r.startedAt);
     const ended = r.completedAt ? Date.parse(r.completedAt) : now;
     if (Number.isNaN(started) || Number.isNaN(ended) || ended < started) {
       return '-';
@@ -137,7 +147,8 @@
           {/if}
         </div>
         <p class="mt-1 truncate text-xs text-base-content/50">
-          {run.scheduleKey ?? 'started by hand'} · {run.origin} · {elapsed(run)}
+          {run.scheduleKey ?? 'started by hand'} · {isQueued ? 'not picked up yet' : run.origin} ·
+          {isQueued ? `waiting ${elapsed(run)}` : elapsed(run)}
         </p>
         {#if run.message}
           <p class="mt-1 truncate text-[11px] text-base-content/50">{run.message}</p>
@@ -155,13 +166,15 @@
             class={[
               'h-full rounded-full transition-[width]',
               barColor(run.status),
-              isRunning && percent === 0 ? 'animate-pulse' : ''
+              (isRunning && percent === 0) || isQueued ? 'animate-pulse' : ''
             ]}
-            style={`width: ${isRunning && percent === 0 ? 100 : percent}%`}
+            style={`width: ${(isRunning && percent === 0) || isQueued ? 100 : percent}%`}
           ></div>
         </div>
         <p class="mt-1 text-xs text-base-content/50">
-          {#if isRunning && percent === 0}
+          {#if isQueued}
+            waiting to start…
+          {:else if isRunning && percent === 0}
             working…
           {:else}
             {Math.round(percent)}%
@@ -187,12 +200,20 @@
         </span>
         <span class="inline-flex items-center gap-1">
           <span class="shrink-0 text-base-content/40">Service</span>
-          <span class="text-base-content/60">{run.origin}</span>
+          <span class="text-base-content/60">{isQueued ? 'awaiting pickup' : run.origin}</span>
         </span>
-        <span class="inline-flex items-center gap-1">
-          <span class="shrink-0 text-base-content/40">Started</span>
-          <span class="text-base-content/60">{formatLogTime(run.startedAt)}</span>
-        </span>
+        {#if run.queuedAt}
+          <span class="inline-flex items-center gap-1">
+            <span class="shrink-0 text-base-content/40">Queued</span>
+            <span class="text-base-content/60">{formatLogTime(run.queuedAt)}</span>
+          </span>
+        {/if}
+        {#if !isQueued}
+          <span class="inline-flex items-center gap-1">
+            <span class="shrink-0 text-base-content/40">Started</span>
+            <span class="text-base-content/60">{formatLogTime(run.startedAt)}</span>
+          </span>
+        {/if}
         {#if run.completedAt}
           <span class="inline-flex items-center gap-1">
             <span class="shrink-0 text-base-content/40">Finished</span>

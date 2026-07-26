@@ -70,8 +70,17 @@ public sealed class BackgroundRunReporter(
         ScheduledBackgroundRequest request,
         string? detail = null,
         CancellationToken cancellationToken = default)
-        => BeginCoreAsync(taskType, request.ScheduleKey, BackgroundRunTrigger.Scheduled,
-            request.IdempotencyKey, detail, cancellationToken);
+        // Requests raised by an API call carry a sentinel schedule key rather than a real schedule,
+        // so classify by the key instead of assuming everything on this path came from the Scheduler.
+        => BeginCoreAsync(
+            taskType,
+            request.ScheduleKey,
+            BackgroundJobRequestFactory.IsManualScheduleKey(request.ScheduleKey)
+                ? BackgroundRunTrigger.Manual
+                : BackgroundRunTrigger.Scheduled,
+            request.IdempotencyKey,
+            detail,
+            cancellationToken);
 
     public Task<IBackgroundRunScope> BeginScheduledAsync(
         string taskType,
@@ -98,7 +107,12 @@ public sealed class BackgroundRunReporter(
         string? detail,
         CancellationToken cancellationToken)
     {
-        var scope = new Scope(messageBus, clock, logger, Guid.NewGuid());
+        // A scheduled run has already been announced as queued by the Scheduler under an id derived
+        // from the idempotency key; reuse it so this start updates that row instead of adding one.
+        var runId = trigger == BackgroundRunTrigger.Scheduled
+            ? BackgroundRunIds.ForIdempotencyKey(idempotencyKey)
+            : Guid.NewGuid();
+        var scope = new Scope(messageBus, clock, logger, runId);
         await Publish(BackgroundRunSubjects.Started, new BackgroundRunStarted
         {
             RunId = scope.RunId,

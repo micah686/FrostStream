@@ -2,6 +2,7 @@ using BackupService;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Shared.Messaging;
 using Shouldly;
 using TUnit.Core;
 
@@ -140,6 +141,7 @@ public sealed class BackupJobStoreTests
                 catalog,
                 Options.Create(options),
                 new ConfigurationBuilder().Build(),
+                NullBackgroundRunReporter.Instance,
                 NullLogger<BackupCoordinator>.Instance);
 
             await coordinator.PruneScheduledSnapshotsAsync(CancellationToken.None);

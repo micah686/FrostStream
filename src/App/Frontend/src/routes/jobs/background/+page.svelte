@@ -9,6 +9,7 @@
   let jobsState = $state<BackgroundJobsState>({
     runs: [],
     runningCount: 0,
+    queuedCount: 0,
     connected: false,
     loading: true,
     error: null
@@ -20,7 +21,9 @@
     jobsState = value;
   });
 
-  const finishedCount = $derived(jobsState.runs.length - jobsState.runningCount);
+  const finishedCount = $derived(
+    jobsState.runs.length - jobsState.runningCount - jobsState.queuedCount
+  );
 
   onMount(() => {
     jobs.connect();
@@ -67,9 +70,12 @@
     <div>
       <h2 id="background-title" class="text-lg font-semibold tracking-tight text-base-content">Background</h2>
       <p class="mt-1 text-sm text-base-content/50">
-        Scheduled and maintenance tasks running right now
+        Every schedule that has gone off, from the moment it fires until it finishes
         {#if jobsState.runningCount > 0}
           · <span class="font-semibold text-primary">{jobsState.runningCount} running</span>
+        {/if}
+        {#if jobsState.queuedCount > 0}
+          · <span class="font-semibold text-warning">{jobsState.queuedCount} queued</span>
         {/if}
         {#if finishedCount > 0}
           · {finishedCount} recently finished
@@ -116,8 +122,8 @@
       <Clock class="mx-auto h-10 w-10 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No background tasks are running</p>
       <p class="mt-1 text-sm text-base-content/50">
-        Scheduled scans, cleanup, and maintenance tasks appear here while they run. This list is live-only
-        and starts empty after a server restart — see
+        Every scheduled scan, cleanup, and maintenance task lands here the moment it fires, and stays until
+        it finishes. This list is live-only and starts empty after a server restart — see
         <a class="link link-hover text-primary" href="/admin/schedules">Schedules</a> for each task's history.
       </p>
     </div>

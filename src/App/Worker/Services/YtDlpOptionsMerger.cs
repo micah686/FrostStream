@@ -67,7 +67,8 @@ internal static class YtDlpOptionsMerger
                 Exec = [],
                 NoExec = false,
                 FfmpegLocation = null,
-                UsePostprocessor = []
+                UsePostprocessor = [],
+                PostprocessorArgs = []
             },
             Filesystem = options.Filesystem with
             {
@@ -96,7 +97,16 @@ internal static class YtDlpOptionsMerger
             VideoFormat = options.VideoFormat with { ListFormats = false },
             Subtitle = options.Subtitle with { ListSubs = false },
             Thumbnail = options.Thumbnail with { ListThumbnails = false },
-            Network = options.Network with { ListImpersonateTargets = false }
+            Network = options.Network with { ListImpersonateTargets = false },
+            Authentication = options.Authentication with
+            {
+                NetrcCmd = null,
+                Netrc = false
+            },
+            Download = options.Download with
+            {
+                DownloaderArgs = []
+            }
         };
 
         if (logger?.IsEnabled(LogLevel.Debug) is true)

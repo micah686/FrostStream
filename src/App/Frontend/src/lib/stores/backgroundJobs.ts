@@ -12,6 +12,8 @@ const MAX_LOG_LINES = 200;
 export interface BackgroundJobsState {
   runs: BackgroundRun[];
   runningCount: number;
+  /** Schedules that have fired but whose work no service has claimed yet. */
+  queuedCount: number;
   connected: boolean;
   loading: boolean;
   error: string | null;
@@ -24,16 +26,15 @@ export interface BackgroundJobsStore extends Readable<BackgroundJobsState> {
 }
 
 export interface BackgroundJobsStoreDeps {
-  snapshot: () => Promise<{ runs: BackgroundRun[]; runningCount: number }>;
+  snapshot: () => Promise<{ runs: BackgroundRun[] }>;
   openStream: (handlers: EventStreamHandlers, signal: AbortSignal) => Promise<void>;
   backoffMs?: (attempt: number) => number;
 }
 
 const defaultDeps: BackgroundJobsStoreDeps = {
-  snapshot: async () => {
-    const response = await fetchBackgroundRuns();
-    return { runs: response.items, runningCount: response.runningCount };
-  },
+  // Counts are derived from the rows themselves so the snapshot and the live stream can never
+  // disagree about how many tasks are queued or running.
+  snapshot: async () => ({ runs: (await fetchBackgroundRuns()).items }),
   openStream: (handlers, signal) => readEventStream(backgroundRunStreamUrl(), handlers, signal),
   backoffMs: (attempt) => Math.min(1000 * 2 ** attempt, 15000)
 };
@@ -44,20 +45,22 @@ export function createBackgroundJobsStore(deps: BackgroundJobsStoreDeps = defaul
   const store = writable<BackgroundJobsState>({
     runs: [],
     runningCount: 0,
+    queuedCount: 0,
     connected: false,
     loading: true,
     error: null
   });
   let controller: AbortController | null = null;
 
-  const publish = (patch: Partial<Omit<BackgroundJobsState, 'runs' | 'runningCount'>> = {}) =>
+  const publish = (patch: Partial<Omit<BackgroundJobsState, 'runs' | 'runningCount' | 'queuedCount'>> = {}) =>
     store.update((state) => {
       const ordered = sortRuns([...runs.values()]);
       return {
         ...state,
         ...patch,
         runs: ordered,
-        runningCount: ordered.filter((x) => x.status === 'running').length
+        runningCount: ordered.filter((x) => x.status === 'running').length,
+        queuedCount: ordered.filter((x) => x.status === 'queued').length
       };
     });
 
@@ -77,7 +80,9 @@ export function createBackgroundJobsStore(deps: BackgroundJobsStoreDeps = defaul
   }
 
   function applyEvent(event: { event: string; data: string }): void {
-    if (event.event === 'started' || event.event === 'completed') {
+    // 'queued' opens the row when a schedule fires; 'started' arrives with the same runId once a
+    // service claims the work, so it replaces the queued row in place rather than adding one.
+    if (event.event === 'queued' || event.event === 'started' || event.event === 'completed') {
       const run = JSON.parse(event.data) as BackgroundRun;
       runs.set(run.runId, run);
     } else if (event.event === 'progress') {
@@ -143,13 +148,16 @@ export function createBackgroundJobsStore(deps: BackgroundJobsStoreDeps = defaul
   };
 }
 
-/** Running first (longest-running at the top), then finished newest-first. */
+/** Running first, then queued (longest-waiting at the top of each), then finished newest-first. */
 function sortRuns(items: BackgroundRun[]): BackgroundRun[] {
+  const rank = (run: BackgroundRun): number =>
+    run.status === 'running' ? 0 : run.status === 'queued' ? 1 : 2;
+
   return items.sort((a, b) => {
-    if (a.status === 'running' !== (b.status === 'running')) {
-      return a.status === 'running' ? -1 : 1;
+    if (rank(a) !== rank(b)) {
+      return rank(a) - rank(b);
     }
-    if (a.status === 'running') {
+    if (rank(a) < 2) {
       return Date.parse(a.startedAt) - Date.parse(b.startedAt);
     }
     return Date.parse(b.completedAt ?? b.startedAt) - Date.parse(a.completedAt ?? a.startedAt);

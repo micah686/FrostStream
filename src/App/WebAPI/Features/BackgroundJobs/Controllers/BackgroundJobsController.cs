@@ -33,18 +33,21 @@ public sealed class BackgroundJobsController(BackgroundJobHub hub) : ControllerB
 
     [HttpGet]
     [Endpoint(EndpointIds.JobsBackgroundList)]
-    [EndpointSummary("List in-progress and recently finished background tasks")]
-    [EndpointDescription("Returns the scheduled/background task runs this server process has observed: everything currently running, plus a short tail of recently finished runs for context. In-memory and live-only — the list is empty immediately after a server restart even if schedules ran earlier. Each run carries its captured progress log so a client can render detail without opening the stream.")]
+    [EndpointSummary("List queued, in-progress, and recently finished background tasks")]
+    [EndpointDescription("Returns the scheduled/background task runs this server process has observed: schedules that have fired and are waiting for a service to pick them up ('queued'), everything currently running, plus a short tail of recently finished runs for context. In-memory and live-only — the list is empty immediately after a server restart even if schedules ran earlier. Each run carries its captured progress log so a client can render detail without opening the stream.")]
     public ActionResult<BackgroundRunListResponse> List()
     {
         var items = hub.List().Select(Map).ToArray();
-        return Ok(new BackgroundRunListResponse(items, items.Count(x => x.Status == "running")));
+        return Ok(new BackgroundRunListResponse(
+            items,
+            items.Count(x => x.Status == BackgroundRunView.Running),
+            items.Count(x => x.Status == BackgroundRunView.Queued)));
     }
 
     [HttpGet("stream")]
     [Endpoint(EndpointIds.JobsBackgroundStream)]
     [EndpointSummary("Stream background task activity via SSE")]
-    [EndpointDescription("Opens a Server-Sent Events stream carrying 'started', 'progress', and 'completed' events for scheduled/background task runs. Live-only with no replay: clients snapshot via GET /api/jobs/background on connect and then apply stream events. The stream does not auto-close.")]
+    [EndpointDescription("Opens a Server-Sent Events stream carrying 'queued', 'started', 'progress', and 'completed' events for scheduled/background task runs. A 'queued' event fires when a schedule goes off; the matching 'started' event carries the same runId once a service picks the work up. Live-only with no replay: clients snapshot via GET /api/jobs/background on connect and then apply stream events. The stream does not auto-close.")]
     public async Task StreamAsync(CancellationToken cancellationToken)
     {
         var (subscriptionId, reader) = hub.Subscribe();
@@ -114,6 +117,7 @@ public sealed class BackgroundJobsController(BackgroundJobHub hub) : ControllerB
 
     private static (string Name, string Json) Serialize(BackgroundRunStreamEvent evt) => evt switch
     {
+        BackgroundRunStreamEvent.Queued q => ("queued", JsonSerializer.Serialize(Map(q.Value), JsonOptions)),
         BackgroundRunStreamEvent.Started s => ("started", JsonSerializer.Serialize(Map(s.Value), JsonOptions)),
         BackgroundRunStreamEvent.Completed c => ("completed", JsonSerializer.Serialize(Map(c.Value), JsonOptions)),
         BackgroundRunStreamEvent.Progress p => ("progress", JsonSerializer.Serialize(
@@ -135,13 +139,17 @@ public sealed class BackgroundJobsController(BackgroundJobHub hub) : ControllerB
         run.Total,
         run.Percent,
         run.StartedAt,
+        run.QueuedAt,
         run.CompletedAt,
         run.ErrorMessage,
         run.Summary,
         run.Log.Select(x => new BackgroundRunLogDto(x.Message, x.At)).ToArray());
 }
 
-public sealed record BackgroundRunListResponse(IReadOnlyList<BackgroundRunDto> Items, int RunningCount);
+public sealed record BackgroundRunListResponse(
+    IReadOnlyList<BackgroundRunDto> Items,
+    int RunningCount,
+    int QueuedCount);
 
 public sealed record BackgroundRunDto(
     Guid RunId,
@@ -156,6 +164,7 @@ public sealed record BackgroundRunDto(
     int? Total,
     double? Percent,
     Instant StartedAt,
+    Instant? QueuedAt,
     Instant? CompletedAt,
     string? ErrorMessage,
     string? Summary,

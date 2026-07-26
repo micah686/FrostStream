@@ -1,6 +1,7 @@
 import { getJson } from '$lib/api/http';
 
-export type BackgroundRunStatus = 'running' | 'completed' | 'failed';
+/** `queued` means the schedule fired and no service has picked the work up yet. */
+export type BackgroundRunStatus = 'queued' | 'running' | 'completed' | 'failed';
 
 export interface BackgroundRunLogLine {
   message: string;
@@ -22,7 +23,10 @@ export interface BackgroundRun {
   current: number | null;
   total: number | null;
   percent: number | null;
+  /** While queued this is the moment the schedule fired; it becomes the real start on pickup. */
   startedAt: string;
+  /** Set once the scheduler announced the firing, so the wait before pickup stays visible. */
+  queuedAt: string | null;
   completedAt: string | null;
   errorMessage: string | null;
   summary: string | null;
@@ -32,6 +36,7 @@ export interface BackgroundRun {
 export interface BackgroundRunListResponse {
   items: BackgroundRun[];
   runningCount: number;
+  queuedCount: number;
 }
 
 /** Progress frame pushed on the SSE stream; merged into the matching run row. */

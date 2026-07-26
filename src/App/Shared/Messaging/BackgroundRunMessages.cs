@@ -1,3 +1,5 @@
+using System.IO.Hashing;
+using System.Text;
 using NodaTime;
 
 namespace Shared.Messaging;
@@ -10,14 +12,63 @@ namespace Shared.Messaging;
 /// </summary>
 public static class BackgroundRunSubjects
 {
+    /// <summary>
+    /// Published by the Scheduler the moment a schedule fires, before the request reaches whichever
+    /// service executes it. Guarantees every schedule firing shows up on Jobs &gt; Background even if
+    /// the executing service is down or its JetStream consumer is backlogged.
+    /// </summary>
+    public const string Dispatched = "background.run.dispatched";
     public const string Started = "background.run.started";
     public const string Progress = "background.run.progress";
     public const string Completed = "background.run.completed";
 }
 
+/// <summary>
+/// Derives the run identifier shared by the Scheduler's dispatch announcement and the executing
+/// service's start announcement. Both sides only have the request's idempotency key in common, so
+/// the id is a stable hash of it: the executor's "started" event then lands on the same row the
+/// scheduler queued rather than opening a second one.
+/// </summary>
+public static class BackgroundRunIds
+{
+    public static Guid ForIdempotencyKey(string idempotencyKey)
+    {
+        var bytes = Encoding.UTF8.GetBytes(idempotencyKey);
+        Span<byte> hash = stackalloc byte[16];
+        XxHash128.Hash(bytes, hash);
+        return new Guid(hash);
+    }
+}
+
+/// <summary>
+/// Announces that a schedule fired and its request was handed to the bus. The run sits in
+/// <c>queued</c> until the executing service publishes <see cref="BackgroundRunStarted"/> for the
+/// same <see cref="RunId"/>.
+/// </summary>
+public sealed record BackgroundRunDispatched
+{
+    /// <summary>Derived from <see cref="IdempotencyKey"/> so the executor reports against this same run.</summary>
+    public required Guid RunId { get; init; }
+    public required string TaskType { get; init; }
+    public required string ScheduleKey { get; init; }
+    public required BackgroundRunTrigger Trigger { get; init; }
+    public required string IdempotencyKey { get; init; }
+    /// <summary>Always <c>scheduler</c> today; the executing service overwrites it on start.</summary>
+    public required string Origin { get; init; }
+    public string? Detail { get; init; }
+    /// <summary>The occurrence this firing covers, which is what the idempotency key is keyed on.</summary>
+    public required Instant DueWindowUtc { get; init; }
+    public required Instant DispatchedAt { get; init; }
+}
+
 public sealed record BackgroundRunStarted
 {
-    /// <summary>Identifies this one execution. Fresh per run; never reused across retries.</summary>
+    /// <summary>
+    /// Identifies this one execution. Scheduled runs derive it from the idempotency key
+    /// (see <see cref="BackgroundRunIds"/>) so the start lands on the row the Scheduler already
+    /// queued — a JetStream redelivery of the same occurrence therefore reuses the row rather than
+    /// stacking a second one. Manual runs get a fresh id each time.
+    /// </summary>
     public required Guid RunId { get; init; }
     /// <summary>Scheduler task type, e.g. <c>search_reindex</c>.</summary>
     public required string TaskType { get; init; }

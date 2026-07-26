@@ -42,6 +42,8 @@ internal static class Program
         builder.Services.AddSingleton<INatsRequestClient, NatsRequestClient>();
         builder.Services.AddSingleton<IDatabridgeClient, DatabridgeClient>();
 
+        builder.Services.AddSingleton<BackgroundRunDispatchListener>();
+
         builder.Services.AddQuartz(q =>
         {
             q.SchedulerName = "FrostStream Scheduler";
@@ -52,6 +54,8 @@ internal static class Program
             {
                 threadPool.MaxConcurrency = builder.Configuration.GetValue("Quartz:MaxConcurrency", 10);
             });
+            // Every firing announces itself on Jobs > Background before the task publishes its request.
+            q.AddJobListener(sp => sp.GetRequiredService<BackgroundRunDispatchListener>());
         });
         builder.Services.AddQuartzHostedService(options =>
         {
