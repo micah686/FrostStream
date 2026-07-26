@@ -25,6 +25,8 @@ public sealed record ChannelAssetRefreshRequested : ScheduledBackgroundRequest
     /// refresh); the account's stored URL is used instead of a creator source.</summary>
     public long? TargetAccountId { get; init; }
     public bool Force { get; init; }
+    /// <summary>Fetch channel metadata and resolve its account without downloading avatar/banner assets.</summary>
+    public bool MetadataOnly { get; init; }
 }
 
 public sealed record ChannelScanFullRequested : ScheduledBackgroundRequest

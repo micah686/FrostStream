@@ -16,7 +16,7 @@ public interface ICreatorDiscoveryRepository
     Task<CreatorSourceRecord?> UpdateAssetsAsync(UpdateCreatorMonitorAssetsRequestMessage request, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Points a source at the metadata.accounts row it belongs to. Called after an asset refresh
+    /// Points a source at the metadata.accounts row it belongs to. Called after channel metadata
     /// resolves the account, so the association stops depending on (platform, handle) string matching.
     /// </summary>
     Task LinkAccountAsync(long creatorSourceId, long accountId, CancellationToken cancellationToken = default);

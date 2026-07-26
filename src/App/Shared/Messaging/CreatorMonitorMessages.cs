@@ -10,8 +10,8 @@ public sealed record CreatorMonitorDto
     public required CreatorSourceType SourceType { get; init; }
     public required string SourceUrl { get; init; }
 
-    /// <summary>The metadata.accounts row this source belongs to. Null until an asset refresh
-    /// resolves it (and for sources whose account could not be derived at migration time).</summary>
+    /// <summary>The metadata.accounts row this source belongs to. Null until channel metadata
+    /// resolves it (and for sources whose account cannot be derived).</summary>
     public long? AccountId { get; init; }
 
     public required bool ScanEnabled { get; init; }

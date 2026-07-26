@@ -63,6 +63,7 @@ public sealed class CreatorDiscoveryConsumerService(
                 MetadataRefreshWindow = msg.MetadataRefreshWindow,
                 ProviderQueryLimitsJson = msg.ProviderQueryLimits?.ToJson()
             }));
+            await QueueInitialMetadataRefreshAsync(entity.Source.Id, CancellationToken.None);
             await context.RespondAsync(new CreatorMonitorOperationResponseMessage { Success = true, Entity = Map(entity) });
         }
         catch (DbUpdateException ex)
@@ -106,6 +107,8 @@ public sealed class CreatorDiscoveryConsumerService(
                 MetadataRefreshWindow = msg.MetadataRefreshWindow,
                 ProviderQueryLimitsJson = msg.ProviderQueryLimits?.ToJson()
             }));
+            if (entity.Source.AccountId is null)
+                await QueueInitialMetadataRefreshAsync(entity.Source.Id, CancellationToken.None);
             await context.RespondAsync(new CreatorMonitorOperationResponseMessage { Success = true, Entity = Map(entity) });
         }
         catch (Exception ex)
@@ -287,8 +290,7 @@ public sealed class CreatorDiscoveryConsumerService(
                     // then persist the resolved account id so the association is a real foreign key
                     // rather than a (platform, handle) string match repeated on every refresh.
                     if (!string.IsNullOrWhiteSpace(msg.Platform) &&
-                        !string.IsNullOrWhiteSpace(msg.AccountHandle) &&
-                        (!string.IsNullOrWhiteSpace(msg.AvatarStoragePath) || !string.IsNullOrWhiteSpace(msg.BannerStoragePath)))
+                        !string.IsNullOrWhiteSpace(msg.AccountHandle))
                     {
                         var accountId = await metadata.UpsertAccountAssetsAsync(
                             msg.Platform!,
@@ -472,6 +474,27 @@ public sealed class CreatorDiscoveryConsumerService(
                 SourceKind = DownloadSourceKind.Channel
             },
             messageId: messageId.ToString("N"));
+    }
+
+    private Task QueueInitialMetadataRefreshAsync(long sourceId, CancellationToken cancellationToken)
+    {
+        var now = clock.GetCurrentInstant();
+        var idempotencyKey = $"creator-source/{sourceId}/initial-metadata/{Guid.NewGuid():N}";
+        return publisher.PublishAsync(
+            BackgroundJobSubjects.ChannelAssetRefreshRequest,
+            new ChannelAssetRefreshRequested
+            {
+                ScheduleKey = "creator-source-created",
+                TaskType = "channel_asset_refresh",
+                DueWindowUtc = now,
+                IdempotencyKey = idempotencyKey,
+                OccurredAt = now,
+                TargetSourceId = sourceId,
+                Force = true,
+                MetadataOnly = true
+            },
+            messageId: idempotencyKey,
+            cancellationToken: cancellationToken);
     }
 
     private Task<TResult> WithRepo<TResult>(Func<ICreatorDiscoveryRepository, Task<TResult>> action)

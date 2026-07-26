@@ -81,7 +81,7 @@ public sealed class ChannelAssetRefreshConsumerService(
 
             foreach (var source in sources)
             {
-                if (!request.Force &&
+                if (!request.Force && source.AccountId is not null &&
                     source.AssetsLastRefreshedAt is { } last &&
                     last >= freshnessThreshold)
                 {
@@ -95,7 +95,7 @@ public sealed class ChannelAssetRefreshConsumerService(
                 }
 
                 await run.ReportAsync($"Refreshing assets for source {source.Id}…", processed, sources.Count);
-                await RefreshSourceAsync(source, cancellationToken);
+                await RefreshSourceAsync(source, request, cancellationToken);
                 processed++;
                 refreshed++;
                 await run.ReportAsync($"Refreshed source {source.Id}.", processed, sources.Count);
@@ -255,7 +255,10 @@ public sealed class ChannelAssetRefreshConsumerService(
             bannerResult is not null);
     }
 
-    private async Task RefreshSourceAsync(CreatorMonitorDto source, CancellationToken cancellationToken)
+    private async Task RefreshSourceAsync(
+        CreatorMonitorDto source,
+        ChannelAssetRefreshRequested request,
+        CancellationToken cancellationToken)
     {
         VideoInfo? container;
         try
@@ -283,6 +286,12 @@ public sealed class ChannelAssetRefreshConsumerService(
         }
 
         var identity = DeriveIdentity(container);
+        if (request.MetadataOnly)
+        {
+            await PublishSuccessAsync(source, identity, null, null, cancellationToken, markRefreshed: false);
+            return;
+        }
+
         var avatar = SelectThumbnail(container.Thumbnails, AssetKind.Avatar);
         var banner = SelectThumbnail(container.Thumbnails, AssetKind.Banner);
 
@@ -344,7 +353,8 @@ public sealed class ChannelAssetRefreshConsumerService(
         AvatarOrBanner? avatar,
         AvatarOrBanner? banner,
         CancellationToken cancellationToken,
-        string? partialFailure = null)
+        string? partialFailure = null,
+        bool markRefreshed = true)
     {
         var now = clock.GetCurrentInstant();
         var request = new UpdateCreatorMonitorAssetsRequestMessage
@@ -361,7 +371,7 @@ public sealed class ChannelAssetRefreshConsumerService(
             BannerUrl = banner?.Url,
             BannerStoragePath = banner?.Result.StoragePath,
             BannerContentHash = banner?.Result.ContentHash,
-            RefreshedAt = partialFailure is null ? now : null,
+            RefreshedAt = markRefreshed && partialFailure is null ? now : null,
             AttemptedAt = now,
             AttemptCount = partialFailure is null ? 0 : source.AssetsAttemptCount + 1,
             LastError = partialFailure,
