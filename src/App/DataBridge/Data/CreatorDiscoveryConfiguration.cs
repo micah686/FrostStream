@@ -15,16 +15,13 @@ public sealed class CreatorSourceConfiguration : IEntityTypeConfiguration<Creato
         builder.Property(x => x.Platform).HasColumnName("platform").HasMaxLength(50).IsRequired();
         builder.Property(x => x.SourceType).HasColumnName("source_type").HasMaxLength(50).HasConversion<string>().IsRequired();
         builder.Property(x => x.SourceUrl).HasColumnName("source_url").HasMaxLength(4096).IsRequired();
+        builder.Property(x => x.AccountId).HasColumnName("account_id");
         builder.Property(x => x.ScanEnabled).HasColumnName("scan_enabled").IsRequired();
         builder.Property(x => x.IncrementalPageSize).HasColumnName("incremental_page_size").IsRequired();
         builder.Property(x => x.ConsecutiveKnownThreshold).HasColumnName("consecutive_known_threshold").IsRequired();
         builder.Property(x => x.FullRescanIntervalDays).HasColumnName("full_rescan_interval_days").IsRequired();
         builder.Property(x => x.UpdateCheckIntervalHours).HasColumnName("update_check_interval_hours").IsRequired();
         builder.Property(x => x.MetadataRefreshWindow).HasColumnName("metadata_refresh_window").IsRequired();
-        builder.Property(x => x.LastSuccessfulScanAt).HasColumnName("last_successful_scan_at").HasColumnType("timestamp with time zone");
-        builder.Property(x => x.LastFullScanAt).HasColumnName("last_full_scan_at").HasColumnType("timestamp with time zone");
-        builder.Property(x => x.LastSeenHighWatermark).HasColumnName("last_seen_high_watermark").HasMaxLength(512);
-        builder.Property(x => x.NextFullScanStartIndex).HasColumnName("next_full_scan_start_index");
         builder.Property(x => x.ProviderQueryLimitsJson).HasColumnName("provider_query_limits_json").HasColumnType("jsonb");
         builder.Property(x => x.CreatedAt)
             .HasColumnName("created_at")
@@ -33,6 +30,27 @@ public sealed class CreatorSourceConfiguration : IEntityTypeConfiguration<Creato
             .ValueGeneratedOnAdd()
             .IsRequired();
         builder.Property(x => x.LastUpdated).HasColumnName("last_updated").HasColumnType("timestamp with time zone");
+
+        builder.HasIndex(x => x.SourceUrl).HasDatabaseName("uq_creator_sources_source_url").IsUnique();
+        builder.HasIndex(x => x.ScanEnabled).HasDatabaseName("ix_creator_sources_scan_enabled");
+        // metadata.accounts has no EF entity (that schema is written through raw SQL), so
+        // fk_creator_sources_account_id is enforced by the database only — see migration 078.
+        builder.HasIndex(x => x.AccountId).HasDatabaseName("ix_creator_sources_account_id");
+    }
+}
+
+public sealed class CreatorScanStateConfiguration : IEntityTypeConfiguration<CreatorScanStateEntity>
+{
+    public void Configure(EntityTypeBuilder<CreatorScanStateEntity> builder)
+    {
+        builder.ToTable("creator_scan_state", "jobs");
+
+        builder.HasKey(x => x.CreatorSourceId);
+        builder.Property(x => x.CreatorSourceId).HasColumnName("creator_source_id").ValueGeneratedNever();
+        builder.Property(x => x.LastSuccessfulScanAt).HasColumnName("last_successful_scan_at").HasColumnType("timestamp with time zone");
+        builder.Property(x => x.LastFullScanAt).HasColumnName("last_full_scan_at").HasColumnType("timestamp with time zone");
+        builder.Property(x => x.LastSeenHighWatermark).HasColumnName("last_seen_high_watermark").HasMaxLength(512);
+        builder.Property(x => x.NextFullScanStartIndex).HasColumnName("next_full_scan_start_index");
         builder.Property(x => x.AvatarUrl).HasColumnName("avatar_url").HasMaxLength(4096);
         builder.Property(x => x.AvatarContentHash).HasColumnName("avatar_content_hash").HasMaxLength(64);
         builder.Property(x => x.BannerUrl).HasColumnName("banner_url").HasMaxLength(4096);
@@ -42,8 +60,11 @@ public sealed class CreatorSourceConfiguration : IEntityTypeConfiguration<Creato
         builder.Property(x => x.AssetsAttemptCount).HasColumnName("assets_attempt_count").IsRequired();
         builder.Property(x => x.AssetsLastError).HasColumnName("assets_last_error").HasMaxLength(2048);
 
-        builder.HasIndex(x => x.SourceUrl).HasDatabaseName("uq_creator_sources_source_url").IsUnique();
-        builder.HasIndex(x => x.ScanEnabled).HasDatabaseName("ix_creator_sources_scan_enabled");
+        builder.HasOne<CreatorSourceEntity>()
+            .WithOne()
+            .HasForeignKey<CreatorScanStateEntity>(x => x.CreatorSourceId)
+            .HasConstraintName("fk_creator_scan_state_creator_source_id")
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }
 

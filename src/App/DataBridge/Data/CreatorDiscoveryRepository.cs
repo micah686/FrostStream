@@ -8,17 +8,24 @@ namespace DataBridge.Data;
 
 public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock clock) : ICreatorDiscoveryRepository
 {
-    public Task<CreatorSourceEntity?> GetSourceAsync(long id, CancellationToken cancellationToken = default)
-        => db.CreatorSources.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+    public async Task<CreatorSourceRecord?> GetSourceAsync(long id, CancellationToken cancellationToken = default)
+    {
+        var source = await db.CreatorSources.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+        return source is null ? null : new CreatorSourceRecord(source, await ReadScanStateAsync(id, cancellationToken));
+    }
 
-    public async Task<IReadOnlyList<CreatorSourceEntity>> ListSourcesAsync(CancellationToken cancellationToken = default)
-        => await db.CreatorSources.AsNoTracking()
+    public async Task<IReadOnlyList<CreatorSourceRecord>> ListSourcesAsync(CancellationToken cancellationToken = default)
+    {
+        var sources = await db.CreatorSources.AsNoTracking()
             .OrderBy(x => x.Platform)
             .ThenBy(x => x.SourceType)
             .ThenBy(x => x.SourceUrl)
             .ToListAsync(cancellationToken);
 
-    public async Task<IReadOnlyList<CreatorSourceEntity>> ListEnabledSourcesForScanAsync(
+        return await PairWithScanStateAsync(sources, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<CreatorSourceRecord>> ListEnabledSourcesForScanAsync(
         CreatorSourceScanMode scanMode,
         CancellationToken cancellationToken = default)
     {
@@ -29,6 +36,7 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
             .ThenBy(x => x.SourceUrl)
             .ToListAsync(cancellationToken);
 
+        var records = await PairWithScanStateAsync(sources, cancellationToken);
         var now = clock.GetCurrentInstant();
 
         if (scanMode != CreatorSourceScanMode.Full)
@@ -38,44 +46,44 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
             // The half-tick tolerance keeps an interval that matches the tick from drifting (a scan
             // finishing just after a tick would otherwise slip a whole extra tick every cycle).
             var tolerance = Duration.FromMinutes(15);
-            return sources
-                .Where(x => x.LastSuccessfulScanAt is null ||
-                    x.LastSuccessfulScanAt.Value
-                        .Plus(Duration.FromHours(x.UpdateCheckIntervalHours))
+            return records
+                .Where(x => x.ScanState?.LastSuccessfulScanAt is not { } lastScan ||
+                    lastScan
+                        .Plus(Duration.FromHours(x.Source.UpdateCheckIntervalHours))
                         .Minus(tolerance) <= now)
                 .ToList();
         }
 
-        return sources
-            .Where(x => x.NextFullScanStartIndex is not null ||
-                x.LastFullScanAt is null ||
-                x.LastFullScanAt.Value.Plus(Duration.FromDays(x.FullRescanIntervalDays)) <= now)
+        return records
+            .Where(x => x.ScanState?.NextFullScanStartIndex is not null ||
+                x.ScanState?.LastFullScanAt is not { } lastFullScan ||
+                lastFullScan.Plus(Duration.FromDays(x.Source.FullRescanIntervalDays)) <= now)
             .ToList();
     }
 
-    public async Task<CreatorSourceEntity> CreateSourceAsync(CreatorSourceEntity source, CancellationToken cancellationToken = default)
+    public async Task<CreatorSourceRecord> CreateSourceAsync(CreatorSourceEntity source, CancellationToken cancellationToken = default)
     {
         source.SourceUrl = SourceUrlCanonicalizer.Canonicalize(source.SourceUrl);
         db.CreatorSources.Add(source);
         await db.SaveChangesAsync(cancellationToken);
-        return source;
+        return new CreatorSourceRecord(source, await CreateScanStateAsync(source.Id, cancellationToken));
     }
 
-    public async Task<CreatorSourceEntity> CreateOrReuseSourceAsync(CreatorSourceEntity source, CancellationToken cancellationToken = default)
+    public async Task<CreatorSourceRecord> CreateOrReuseSourceAsync(CreatorSourceEntity source, CancellationToken cancellationToken = default)
     {
         // Dedupe is exact string equality on source_url, so both sides must be canonical.
         source.SourceUrl = SourceUrlCanonicalizer.Canonicalize(source.SourceUrl);
         var existing = await db.CreatorSources.FirstOrDefaultAsync(x => x.SourceUrl == source.SourceUrl, cancellationToken);
         if (existing is not null)
         {
-            return existing;
+            return new CreatorSourceRecord(existing, await ReadScanStateAsync(existing.Id, cancellationToken));
         }
 
         db.CreatorSources.Add(source);
         try
         {
             await db.SaveChangesAsync(cancellationToken);
-            return source;
+            return new CreatorSourceRecord(source, await CreateScanStateAsync(source.Id, cancellationToken));
         }
         catch (DbUpdateException)
         {
@@ -83,20 +91,22 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
             existing = await db.CreatorSources.FirstOrDefaultAsync(x => x.SourceUrl == source.SourceUrl, cancellationToken);
             if (existing is not null)
             {
-                return existing;
+                return new CreatorSourceRecord(existing, await ReadScanStateAsync(existing.Id, cancellationToken));
             }
 
             throw;
         }
     }
 
-    public async Task<CreatorSourceEntity?> UpdateSourceAsync(CreatorSourceEntity source, CancellationToken cancellationToken = default)
+    public async Task<CreatorSourceRecord?> UpdateSourceAsync(CreatorSourceEntity source, CancellationToken cancellationToken = default)
     {
         var existing = await db.CreatorSources.FirstOrDefaultAsync(x => x.Id == source.Id, cancellationToken);
         if (existing is null)
         {
             return null;
         }
+
+        var scanState = await GetOrCreateScanStateAsync(source.Id, cancellationToken);
 
         var sourceChanged = !string.Equals(existing.SourceUrl, source.SourceUrl, StringComparison.Ordinal)
             || !string.Equals(existing.Platform, source.Platform, StringComparison.Ordinal)
@@ -114,12 +124,15 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
         existing.ProviderQueryLimitsJson = source.ProviderQueryLimitsJson;
         if (sourceChanged)
         {
-            existing.LastFullScanAt = null;
-            existing.NextFullScanStartIndex = null;
+            // Repointing a source at a different platform/type/URL invalidates both the scan cursor
+            // and the account it was linked to; the next asset refresh re-resolves the account.
+            existing.AccountId = null;
+            scanState.LastFullScanAt = null;
+            scanState.NextFullScanStartIndex = null;
         }
         existing.LastUpdated = clock.GetCurrentInstant();
         await db.SaveChangesAsync(cancellationToken);
-        return existing;
+        return new CreatorSourceRecord(existing, scanState);
     }
 
     public async Task<bool> DeleteSourceAsync(long id, CancellationToken cancellationToken = default)
@@ -236,21 +249,22 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
             }
         }
 
-        source.LastSuccessfulScanAt = now;
+        var scanState = await GetOrCreateScanStateAsync(source.Id, cancellationToken);
+        scanState.LastSuccessfulScanAt = now;
         source.LastUpdated = now;
-        source.LastSeenHighWatermark = request.ScanHighWatermarkExternalMediaId
+        scanState.LastSeenHighWatermark = request.ScanHighWatermarkExternalMediaId
             ?? request.Items.FirstOrDefault()?.ExternalMediaId
-            ?? source.LastSeenHighWatermark;
+            ?? scanState.LastSeenHighWatermark;
         if (request.ScanMode == CreatorSourceScanMode.Full && request.IsScanPageFinalBatch)
         {
             if (request.ScanPageComplete)
             {
-                source.LastFullScanAt = now;
-                source.NextFullScanStartIndex = null;
+                scanState.LastFullScanAt = now;
+                scanState.NextFullScanStartIndex = null;
             }
             else
             {
-                source.NextFullScanStartIndex = request.NextScanPageStartIndex;
+                scanState.NextFullScanStartIndex = request.NextScanPageStartIndex;
             }
         }
 
@@ -308,7 +322,7 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
         return IgnoreKeywordMatcher.Deserialize(json);
     }
 
-    public async Task<CreatorSourceEntity?> UpdateAssetsAsync(
+    public async Task<CreatorSourceRecord?> UpdateAssetsAsync(
         UpdateCreatorMonitorAssetsRequestMessage request,
         CancellationToken cancellationToken = default)
     {
@@ -319,48 +333,110 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
         }
 
         var now = clock.GetCurrentInstant();
+        var scanState = await GetOrCreateScanStateAsync(existing.Id, cancellationToken);
 
-        // The durable avatar/banner blob path now lives in metadata.accounts (the authoritative
-        // table). creator_sources only retains the source URL + content hash for change detection.
+        // The durable avatar/banner blob path lives in metadata.accounts (the authoritative table).
+        // The scan state only records what the last refresh fetched.
         if (!string.IsNullOrWhiteSpace(request.AvatarUrl))
         {
-            existing.AvatarUrl = request.AvatarUrl;
-            existing.AvatarContentHash = request.AvatarContentHash;
+            scanState.AvatarUrl = request.AvatarUrl;
+            scanState.AvatarContentHash = request.AvatarContentHash;
         }
 
         if (!string.IsNullOrWhiteSpace(request.BannerUrl))
         {
-            existing.BannerUrl = request.BannerUrl;
-            existing.BannerContentHash = request.BannerContentHash;
+            scanState.BannerUrl = request.BannerUrl;
+            scanState.BannerContentHash = request.BannerContentHash;
         }
 
         if (request.RefreshedAt is { } refreshedAt)
         {
-            existing.AssetsLastRefreshedAt = refreshedAt;
+            scanState.AssetsLastRefreshedAt = refreshedAt;
         }
 
         if (request.AttemptedAt is { } attemptedAt)
         {
-            existing.AssetsLastAttemptAt = attemptedAt;
+            scanState.AssetsLastAttemptAt = attemptedAt;
         }
 
         if (request.AttemptCount is { } attemptCount)
         {
-            existing.AssetsAttemptCount = attemptCount;
+            scanState.AssetsAttemptCount = attemptCount;
         }
 
         if (request.ClearError)
         {
-            existing.AssetsLastError = null;
+            scanState.AssetsLastError = null;
         }
         else if (request.LastError is not null)
         {
-            existing.AssetsLastError = request.LastError;
+            scanState.AssetsLastError = request.LastError;
         }
 
         existing.LastUpdated = now;
         await db.SaveChangesAsync(cancellationToken);
-        return existing;
+        return new CreatorSourceRecord(existing, scanState);
+    }
+
+    public async Task LinkAccountAsync(long creatorSourceId, long accountId, CancellationToken cancellationToken = default)
+    {
+        var existing = await db.CreatorSources.FirstOrDefaultAsync(x => x.Id == creatorSourceId, cancellationToken);
+        if (existing is null || existing.AccountId == accountId)
+        {
+            return;
+        }
+
+        existing.AccountId = accountId;
+        existing.LastUpdated = clock.GetCurrentInstant();
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    private Task<CreatorScanStateEntity?> ReadScanStateAsync(long creatorSourceId, CancellationToken cancellationToken)
+        => db.CreatorScanStates.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.CreatorSourceId == creatorSourceId, cancellationToken);
+
+    private async Task<IReadOnlyList<CreatorSourceRecord>> PairWithScanStateAsync(
+        IReadOnlyList<CreatorSourceEntity> sources,
+        CancellationToken cancellationToken)
+    {
+        if (sources.Count == 0)
+        {
+            return [];
+        }
+
+        var ids = sources.Select(x => x.Id).ToArray();
+        var states = await db.CreatorScanStates.AsNoTracking()
+            .Where(x => ids.Contains(x.CreatorSourceId))
+            .ToDictionaryAsync(x => x.CreatorSourceId, cancellationToken);
+
+        return sources
+            .Select(x => new CreatorSourceRecord(x, states.GetValueOrDefault(x.Id)))
+            .ToList();
+    }
+
+    private async Task<CreatorScanStateEntity> CreateScanStateAsync(long creatorSourceId, CancellationToken cancellationToken)
+    {
+        var state = new CreatorScanStateEntity { CreatorSourceId = creatorSourceId };
+        db.CreatorScanStates.Add(state);
+        await db.SaveChangesAsync(cancellationToken);
+        return state;
+    }
+
+    /// <summary>
+    /// Returns the tracked scan-state row for a source, adding it when missing. Rows are created
+    /// alongside the source, so the fallback only covers sources that predate this table.
+    /// </summary>
+    private async Task<CreatorScanStateEntity> GetOrCreateScanStateAsync(long creatorSourceId, CancellationToken cancellationToken)
+    {
+        var state = await db.CreatorScanStates.FirstOrDefaultAsync(x => x.CreatorSourceId == creatorSourceId, cancellationToken);
+        if (state is not null)
+        {
+            return state;
+        }
+
+        state = new CreatorScanStateEntity { CreatorSourceId = creatorSourceId };
+        db.CreatorScanStates.Add(state);
+        return state;
     }
 
     private static bool HasMeaningfulChange(DiscoveredMediaEntity existing, DiscoveredMediaCandidate candidate)

@@ -137,6 +137,7 @@ public sealed class CreatorSourceResponse
     public required string Platform { get; init; }
     public required CreatorSourceType SourceType { get; init; }
     public required string SourceUrl { get; init; }
+    public long? AccountId { get; init; }
     public required bool ScanEnabled { get; init; }
     public required int IncrementalPageSize { get; init; }
     public required int ConsecutiveKnownThreshold { get; init; }

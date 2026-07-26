@@ -49,6 +49,7 @@ public sealed class DataBridgeDbContext(DbContextOptions<DataBridgeDbContext> op
     public DbSet<DownloadConfigSetEntity> DownloadConfigSets => Set<DownloadConfigSetEntity>();
     public DbSet<ScheduledTaskEntity> ScheduledTasks => Set<ScheduledTaskEntity>();
     public DbSet<CreatorSourceEntity> CreatorSources => Set<CreatorSourceEntity>();
+    public DbSet<CreatorScanStateEntity> CreatorScanStates => Set<CreatorScanStateEntity>();
     public DbSet<DiscoveredMediaEntity> DiscoveredMedia => Set<DiscoveredMediaEntity>();
     public DbSet<FrostStreamUserEntity> FrostStreamUsers => Set<FrostStreamUserEntity>();
     public DbSet<CookieProfileEntity> CookieProfiles => Set<CookieProfileEntity>();

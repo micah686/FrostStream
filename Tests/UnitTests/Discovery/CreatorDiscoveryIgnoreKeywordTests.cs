@@ -20,7 +20,7 @@ public sealed class CreatorDiscoveryIgnoreKeywordTests
         await using var db = CreateDb();
         await SeedConfigSetAsync(db, new IgnoreKeyword { Pattern = "trailer" });
         var repo = new CreatorDiscoveryRepository(db, SystemClock.Instance);
-        var source = await repo.CreateSourceAsync(CreateSource());
+        var source = (await repo.CreateSourceAsync(CreateSource())).Source;
 
         var result = await repo.UpsertDiscoveredMediaBatchAsync(FullBatch(
             source.Id,
@@ -45,7 +45,7 @@ public sealed class CreatorDiscoveryIgnoreKeywordTests
         await using var db = CreateDb();
         await SeedConfigSetAsync(db, new IgnoreKeyword { Pattern = "trailer" });
         var repo = new CreatorDiscoveryRepository(db, SystemClock.Instance);
-        var source = await repo.CreateSourceAsync(CreateSource());
+        var source = (await repo.CreateSourceAsync(CreateSource())).Source;
 
         // Incremental (background) scans carry no requesting user / config set.
         var result = await repo.UpsertDiscoveredMediaBatchAsync(new UpsertDiscoveredMediaBatchRequestMessage
@@ -68,7 +68,7 @@ public sealed class CreatorDiscoveryIgnoreKeywordTests
         await using var db = CreateDb();
         await SeedConfigSetAsync(db, new IgnoreKeyword { Pattern = "trailer" });
         var repo = new CreatorDiscoveryRepository(db, SystemClock.Instance);
-        var source = await repo.CreateSourceAsync(CreateSource());
+        var source = (await repo.CreateSourceAsync(CreateSource())).Source;
         await repo.UpsertDiscoveredMediaBatchAsync(FullBatch(source.Id, Candidate("v1", "Official Trailer")));
 
         // Even after the keyword is removed, the row stays ignored until force-queued.
@@ -88,7 +88,7 @@ public sealed class CreatorDiscoveryIgnoreKeywordTests
         await using var db = CreateDb();
         await SeedConfigSetAsync(db, new IgnoreKeyword { Pattern = "trailer" });
         var repo = new CreatorDiscoveryRepository(db, SystemClock.Instance);
-        var source = await repo.CreateSourceAsync(CreateSource());
+        var source = (await repo.CreateSourceAsync(CreateSource())).Source;
         await repo.UpsertDiscoveredMediaBatchAsync(FullBatch(source.Id, Candidate("v1", "Official Trailer")));
         var ignored = await db.DiscoveredMedia.SingleAsync();
 
