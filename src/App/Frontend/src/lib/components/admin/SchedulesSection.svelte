@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { Modal, Select } from '$lib/components/ui';
   import {
+    ChevronDown,
     CircleAlert,
     Clock,
     Info,
@@ -353,56 +354,62 @@
         </div>
       </div>
 
-      <div class="grid gap-4 sm:grid-cols-3">
-        <div>
-          <label class="label mb-2 text-sm" for="schedule-timing">Timing</label>
-          <Select id="schedule-timing" items={timingItems} bind:value={formTiming} />
+      <details open class="group rounded-xl border border-base-300/70 bg-base-200/40 p-4">
+        <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
+          <h3 class="text-sm font-semibold text-base-content/90">Timing</h3>
+          <ChevronDown class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
+        </summary>
+        <div class="mt-4 grid gap-4 sm:grid-cols-3">
+          <div>
+            <label class="label mb-2 text-sm" for="schedule-timing">Timing mode</label>
+            <Select id="schedule-timing" items={timingItems} bind:value={formTiming} />
+          </div>
+          {#if formTiming === 'cron'}
+            <div class="sm:col-span-2">
+              <label class="label mb-2 text-sm" for="schedule-cron">Cron expression</label>
+              <input class="input w-full font-mono" id="schedule-cron" bind:value={formCron} placeholder="0 0 3 * * ?" />
+              <p class="mt-1.5 text-xs text-base-content/40">Quartz format: seconds minutes hours day-of-month month day-of-week.</p>
+            </div>
+            <div class="sm:col-span-3 rounded-lg border border-base-300/80 bg-base-100 p-3">
+              <div class="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                <div>
+                  <label class="label mb-1.5 text-xs" for="cron-second">Seconds</label>
+                  <Select id="cron-second" items={secondItems} bind:value={cronSecond} onchange={updateCronExpression} />
+                </div>
+                <div>
+                  <label class="label mb-1.5 text-xs" for="cron-minute">Minutes</label>
+                  <Select id="cron-minute" items={minuteItems} bind:value={cronMinute} onchange={updateCronExpression} />
+                </div>
+                <div>
+                  <label class="label mb-1.5 text-xs" for="cron-hour">Hours</label>
+                  <Select id="cron-hour" items={hourItems} bind:value={cronHour} onchange={updateCronExpression} />
+                </div>
+                <div>
+                  <label class="label mb-1.5 text-xs" for="cron-day-month">Day</label>
+                  <Select id="cron-day-month" items={dayOfMonthItems} bind:value={cronDayOfMonth} onchange={handleCronDayOfMonthChange} />
+                </div>
+                <div>
+                  <label class="label mb-1.5 text-xs" for="cron-month">Month</label>
+                  <Select id="cron-month" items={monthItems} bind:value={cronMonth} onchange={updateCronExpression} />
+                </div>
+                <div>
+                  <label class="label mb-1.5 text-xs" for="cron-day-week">Weekday</label>
+                  <Select id="cron-day-week" items={dayOfWeekItems} bind:value={cronDayOfWeek} onchange={handleCronDayOfWeekChange} />
+                </div>
+              </div>
+              <div class="mt-3 flex flex-wrap items-center justify-between gap-2">
+                <span class="text-xs text-base-content/50">Generated expression</span>
+                <code class="rounded bg-base-200 px-2 py-1 font-mono text-xs text-base-content/70">{cronBuilderExpression}</code>
+              </div>
+            </div>
+          {:else}
+            <div class="sm:col-span-2">
+              <label class="label mb-2 text-sm" for="schedule-interval">Interval (seconds)</label>
+              <input class="input w-full" id="schedule-interval" type="number" min={1} bind:value={formIntervalSeconds} placeholder="3600" />
+            </div>
+          {/if}
         </div>
-        {#if formTiming === 'cron'}
-          <div class="sm:col-span-2">
-            <label class="label mb-2 text-sm" for="schedule-cron">Cron expression</label>
-            <input class="input w-full font-mono" id="schedule-cron" bind:value={formCron} placeholder="0 0 3 * * ?" />
-            <p class="mt-1.5 text-xs text-base-content/40">Quartz format: seconds minutes hours day-of-month month day-of-week.</p>
-          </div>
-          <div class="sm:col-span-3 rounded-lg border border-base-300/80 bg-base-100 p-3">
-            <div class="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
-              <div>
-                <label class="label mb-1.5 text-xs" for="cron-second">Seconds</label>
-                <Select id="cron-second" items={secondItems} bind:value={cronSecond} onchange={updateCronExpression} />
-              </div>
-              <div>
-                <label class="label mb-1.5 text-xs" for="cron-minute">Minutes</label>
-                <Select id="cron-minute" items={minuteItems} bind:value={cronMinute} onchange={updateCronExpression} />
-              </div>
-              <div>
-                <label class="label mb-1.5 text-xs" for="cron-hour">Hours</label>
-                <Select id="cron-hour" items={hourItems} bind:value={cronHour} onchange={updateCronExpression} />
-              </div>
-              <div>
-                <label class="label mb-1.5 text-xs" for="cron-day-month">Day</label>
-                <Select id="cron-day-month" items={dayOfMonthItems} bind:value={cronDayOfMonth} onchange={handleCronDayOfMonthChange} />
-              </div>
-              <div>
-                <label class="label mb-1.5 text-xs" for="cron-month">Month</label>
-                <Select id="cron-month" items={monthItems} bind:value={cronMonth} onchange={updateCronExpression} />
-              </div>
-              <div>
-                <label class="label mb-1.5 text-xs" for="cron-day-week">Weekday</label>
-                <Select id="cron-day-week" items={dayOfWeekItems} bind:value={cronDayOfWeek} onchange={handleCronDayOfWeekChange} />
-              </div>
-            </div>
-            <div class="mt-3 flex flex-wrap items-center justify-between gap-2">
-              <span class="text-xs text-base-content/50">Generated expression</span>
-              <code class="rounded bg-base-200 px-2 py-1 font-mono text-xs text-base-content/70">{cronBuilderExpression}</code>
-            </div>
-          </div>
-        {:else}
-          <div class="sm:col-span-2">
-            <label class="label mb-2 text-sm" for="schedule-interval">Interval (seconds)</label>
-            <input class="input w-full" id="schedule-interval" type="number" min={1} bind:value={formIntervalSeconds} placeholder="3600" />
-          </div>
-        {/if}
-      </div>
+      </details>
 
       <div class="grid gap-4 sm:grid-cols-3">
         <div>
