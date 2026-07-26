@@ -47,7 +47,7 @@ public sealed class DownloadJobsRepository(
     {
         var inserted = await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
-             INSERT INTO downloads.processed_messages (message_id, operation_key, job_id)
+             INSERT INTO jobs.processed_messages (message_id, operation_key, job_id)
              VALUES ({messageId}, {operationKey}, {jobId})
              ON CONFLICT (message_id) DO NOTHING
              """,

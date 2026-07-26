@@ -63,7 +63,7 @@ public sealed class StorageStackFixture(SaveChangesInterceptor? interceptor = nu
             Database = "froststream_storage_tests",
             Username = "postgres",
             Password = "postgres",
-            SearchPath = "storage,downloads,media,maintenance,metadata,auth,public"
+            SearchPath = "storage,downloads,jobs,media,maintenance,metadata,auth,public"
         }.ConnectionString;
 
     public static JsonSerializerOptions JsonOptions { get; } = CreateJsonOptions();

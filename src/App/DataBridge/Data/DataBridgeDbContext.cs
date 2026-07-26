@@ -60,15 +60,15 @@ public sealed class DataBridgeDbContext(DbContextOptions<DataBridgeDbContext> op
         modelBuilder.HasPostgresEnum<S3CompatibleObjectStorageProvider>("storage", "s3_compatible_object_storage_provider");
         modelBuilder.HasPostgresEnum<AzureBlobCredentialMode>("storage", "azure_blob_credential_mode");
         modelBuilder.HasPostgresEnum<GoogleCloudStorageCredentialMode>("storage", "google_cloud_storage_credential_mode");
-        modelBuilder.HasPostgresEnum<DownloadJobState>("downloads", "download_job_state");
-        modelBuilder.HasPostgresEnum<DownloadJobStatus>("downloads", "download_job_status");
-        modelBuilder.HasPostgresEnum<DownloadStage>("downloads", "download_stage");
-        modelBuilder.HasPostgresEnum<DownloadStageStatus>("downloads", "download_stage_status");
-        modelBuilder.HasPostgresEnum<DownloadGroupKind>("downloads", "download_group_kind");
-        modelBuilder.HasPostgresEnum<DownloadGroupStatus>("downloads", "download_group_status");
-        modelBuilder.HasPostgresEnum<DownloadArtifactStatus>("downloads", "download_artifact_status");
-        modelBuilder.HasPostgresEnum<DownloadWorkerLeaseStatus>("downloads", "download_worker_lease_status");
-        modelBuilder.HasPostgresEnum<FailureKind>("downloads", "failure_kind");
+        modelBuilder.HasPostgresEnum<DownloadJobState>("jobs", "download_job_state");
+        modelBuilder.HasPostgresEnum<DownloadJobStatus>("jobs", "download_job_status");
+        modelBuilder.HasPostgresEnum<DownloadStage>("jobs", "download_stage");
+        modelBuilder.HasPostgresEnum<DownloadStageStatus>("jobs", "download_stage_status");
+        modelBuilder.HasPostgresEnum<DownloadGroupKind>("jobs", "download_group_kind");
+        modelBuilder.HasPostgresEnum<DownloadGroupStatus>("jobs", "download_group_status");
+        modelBuilder.HasPostgresEnum<DownloadArtifactStatus>("jobs", "download_artifact_status");
+        modelBuilder.HasPostgresEnum<DownloadWorkerLeaseStatus>("jobs", "download_worker_lease_status");
+        modelBuilder.HasPostgresEnum<FailureKind>("jobs", "failure_kind");
         modelBuilder.HasPostgresEnum<IngestOrigin>("media", "ingest_origin");
         modelBuilder.HasPostgresEnum<AudioRenditionStatus>("media", "audio_rendition_status");
         modelBuilder.HasPostgresEnum<StreamRenditionStatus>("media", "stream_rendition_status");
@@ -77,7 +77,7 @@ public sealed class DataBridgeDbContext(DbContextOptions<DataBridgeDbContext> op
         modelBuilder.HasPostgresEnum<ImportSessionSourceKind>("imports", "import_session_source_kind");
         modelBuilder.HasPostgresEnum<ImportSessionItemStatus>("imports", "import_session_item_status");
         modelBuilder.HasPostgresEnum<ImportSessionItemMetadataState>("imports", "import_session_item_metadata_state");
-        modelBuilder.HasPostgresEnum<PlaylistState>("playlists", "playlist_state");
+        modelBuilder.HasPostgresEnum<PlaylistState>("jobs", "playlist_state");
 
         modelBuilder.Entity<MediaPlaylistMembershipEntity>(builder =>
         {

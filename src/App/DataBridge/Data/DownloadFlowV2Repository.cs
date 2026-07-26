@@ -54,12 +54,12 @@ public sealed class DownloadFlowV2Repository(
         };
         var groupStatus = autoStart ? "running" : "stopped";
         await db.Database.ExecuteSqlInterpolatedAsync($"""
-            INSERT INTO downloads.download_groups
+            INSERT INTO jobs.download_groups
               (group_id, correlation_id, kind, status, source_url, requested_by, storage_key,
                total_jobs, completed_jobs, warning_jobs, failed_jobs, created_at, updated_at)
             VALUES
-              ({request.CorrelationId}, {request.CorrelationId}, CAST({groupKind} AS downloads.download_group_kind),
-               CAST({groupStatus} AS downloads.download_group_status), {request.SourceUrl}, {request.RequestedBy},
+              ({request.CorrelationId}, {request.CorrelationId}, CAST({groupKind} AS jobs.download_group_kind),
+               CAST({groupStatus} AS jobs.download_group_status), {request.SourceUrl}, {request.RequestedBy},
                {request.StorageKey}, 0, 0, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             ON CONFLICT (correlation_id) DO NOTHING
             """, ct);
@@ -1178,7 +1178,7 @@ public sealed class DownloadFlowV2Repository(
             return;
 
         await db.Database.ExecuteSqlInterpolatedAsync($"""
-            INSERT INTO downloads.download_provider_circuits (provider, is_open, reason, opened_at, cleared_at)
+            INSERT INTO jobs.download_provider_circuits (provider, is_open, reason, opened_at, cleared_at)
             VALUES ({provider}, TRUE, {reason}, CURRENT_TIMESTAMP, NULL)
             ON CONFLICT (provider) DO UPDATE
             SET is_open = TRUE, reason = EXCLUDED.reason, opened_at = CURRENT_TIMESTAMP, cleared_at = NULL
@@ -1210,7 +1210,7 @@ public sealed class DownloadFlowV2Repository(
             throw new ArgumentException("Provider is required.", nameof(provider));
 
         await db.Database.ExecuteSqlInterpolatedAsync($"""
-            INSERT INTO downloads.download_provider_circuits
+            INSERT INTO jobs.download_provider_circuits
                 (provider, is_open, reason, opened_at, cleared_at)
             VALUES ({provider}, FALSE, NULL, NULL, CURRENT_TIMESTAMP)
             ON CONFLICT (provider) DO UPDATE
@@ -1222,7 +1222,7 @@ public sealed class DownloadFlowV2Repository(
     {
         var providers = await db.Database.SqlQuery<string>($"""
                 SELECT provider AS "Value"
-                FROM downloads.download_provider_circuits
+                FROM jobs.download_provider_circuits
                 WHERE is_open = TRUE
                 """)
             .ToListAsync(ct);
@@ -1231,7 +1231,7 @@ public sealed class DownloadFlowV2Repository(
 
     private Task<DownloadJobEntity?> LockJobAsync(Guid jobId, CancellationToken ct)
         => db.DownloadJobs
-            .FromSqlInterpolated($"SELECT * FROM downloads.download_jobs WHERE job_id = {jobId} FOR UPDATE")
+            .FromSqlInterpolated($"SELECT * FROM jobs.download_jobs WHERE job_id = {jobId} FOR UPDATE")
             .SingleOrDefaultAsync(ct);
 
     private async Task LinkPlaylistMembershipIfNeededAsync(Guid jobId, Guid mediaGuid, CancellationToken ct)

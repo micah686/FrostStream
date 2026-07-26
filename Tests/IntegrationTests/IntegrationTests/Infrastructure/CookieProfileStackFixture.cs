@@ -61,7 +61,7 @@ public sealed class CookieProfileStackFixture : IAsyncDisposable
             Database = "froststream_cookie_tests",
             Username = "postgres",
             Password = "postgres",
-            SearchPath = "storage,downloads,media,maintenance,metadata,auth,public"
+            SearchPath = "storage,downloads,jobs,media,maintenance,metadata,auth,public"
         }.ConnectionString;
 
     private string NatsUrl => _natsContainer.GetConnectionString();

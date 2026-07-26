@@ -215,7 +215,7 @@ public sealed class MediaDeleteExecutorTests
                 Database = "froststream_media_delete_tests",
                 Username = "postgres",
                 Password = "postgres",
-                SearchPath = "storage,downloads,media,maintenance,metadata,auth,public"
+                SearchPath = "storage,downloads,jobs,media,maintenance,metadata,auth,public"
             }.ConnectionString;
 
         private NpgsqlDataSource DataSource => _dataSource ?? throw new InvalidOperationException("Fixture not initialized.");

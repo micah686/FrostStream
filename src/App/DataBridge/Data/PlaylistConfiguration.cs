@@ -9,12 +9,12 @@ public sealed class PlaylistConfiguration : IEntityTypeConfiguration<PlaylistEnt
 {
     public void Configure(EntityTypeBuilder<PlaylistEntity> builder)
     {
-        builder.ToTable("playlists", "playlists");
+        builder.ToTable("playlists", "jobs");
         builder.HasKey(x => x.PlaylistId);
 
         builder.Property(x => x.PlaylistId).HasColumnName("playlist_id").ValueGeneratedNever();
         builder.Property(x => x.CorrelationId).HasColumnName("correlation_id").IsRequired();
-        builder.Property(x => x.State).HasColumnName("state").HasColumnType("playlists.playlist_state").IsRequired();
+        builder.Property(x => x.State).HasColumnName("state").HasColumnType("jobs.playlist_state").IsRequired();
         builder.Property(x => x.SourceUrl).HasColumnName("source_url").HasMaxLength(4096).IsRequired();
         builder.Property(x => x.RequestedBy).HasColumnName("requested_by").HasMaxLength(255);
         builder.Property(x => x.StorageKey).HasColumnName("storage_key").HasMaxLength(100);
@@ -42,7 +42,7 @@ public sealed class PlaylistItemConfiguration : IEntityTypeConfiguration<Playlis
 {
     public void Configure(EntityTypeBuilder<PlaylistItemEntity> builder)
     {
-        builder.ToTable("playlist_items", "playlists");
+        builder.ToTable("playlist_items", "jobs");
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
@@ -74,7 +74,7 @@ public sealed class PlaylistScanEntryConfiguration : IEntityTypeConfiguration<Pl
 {
     public void Configure(EntityTypeBuilder<PlaylistScanEntryEntity> builder)
     {
-        builder.ToTable("playlist_scan_entries", "playlists");
+        builder.ToTable("playlist_scan_entries", "jobs");
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
