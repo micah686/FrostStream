@@ -59,7 +59,7 @@ public sealed class BackgroundJobConsumerService(
     private async Task HandleSearchReindexAsync(IJsMessageContext<SearchReindexRequested> context)
     {
         var message = context.Message;
-        await using var run = await runReporter.BeginAsync("search_reindex", message);
+        await using var run = await runReporter.BeginAsync(message.TaskType, message);
         try
         {
             await MarkAttemptAsync(message);
@@ -95,7 +95,7 @@ public sealed class BackgroundJobConsumerService(
     private async Task HandleDatabaseMaintenanceAsync(IJsMessageContext<DatabaseMaintenanceRequested> context)
     {
         var message = context.Message;
-        await using var run = await runReporter.BeginAsync("database_maintenance", message);
+        await using var run = await runReporter.BeginAsync(message.TaskType, message);
         try
         {
             await MarkAttemptAsync(message);
@@ -206,7 +206,7 @@ public sealed class BackgroundJobConsumerService(
     private async Task HandleDownloadHistoryCleanupAsync(IJsMessageContext<DownloadHistoryCleanupRequested> context)
     {
         var message = context.Message;
-        await using var run = await runReporter.BeginAsync("download_history_cleanup", message);
+        await using var run = await runReporter.BeginAsync(message.TaskType, message);
         try
         {
             await MarkAttemptAsync(message);

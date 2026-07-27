@@ -71,7 +71,7 @@ public sealed class M049_SeedRemainingBackgroundSweepTasks : Migration
             VALUES
                 (
                     'weekly-search-reindex',
-                    'search_reindex',
+                    'search-reindex',
                     '0 30 5 ? * SUN',
                     'UTC',
                     true,

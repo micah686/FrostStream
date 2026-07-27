@@ -15,7 +15,7 @@ public sealed class M079_SeedDownloadHistoryCleanupTask : Migration
             VALUES
                 (
                     'nightly-download-history-cleanup',
-                    'download_history_cleanup',
+                    'download-history-cleanup',
                     '0 45 3 * * ?',
                     'UTC',
                     true,

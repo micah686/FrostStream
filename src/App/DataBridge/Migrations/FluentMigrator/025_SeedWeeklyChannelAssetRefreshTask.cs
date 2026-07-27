@@ -13,7 +13,7 @@ public sealed class M025_SeedWeeklyChannelAssetRefreshTask : Migration
             VALUES
                 (
                     'weekly-channel-asset-refresh',
-                    'channel_asset_refresh',
+                    'channel-asset-refresh',
                     '0 0 4 ? * SUN',
                     'UTC',
                     true,

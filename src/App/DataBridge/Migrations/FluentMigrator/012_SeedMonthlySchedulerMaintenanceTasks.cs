@@ -13,7 +13,7 @@ public sealed class M012_SeedMonthlySchedulerMaintenanceTasks : Migration
             VALUES
                 (
                     'monthly-db-maintenance',
-                    'database_maintenance',
+                    'db-maintenance',
                     '0 0 3 1 * ?',
                     'UTC',
                     true,
@@ -37,7 +37,7 @@ public sealed class M012_SeedMonthlySchedulerMaintenanceTasks : Migration
             VALUES
                 (
                     'monthly-stale-media-cleanup',
-                    'stale_database_cleanup',
+                    'db-stale-media-cleanup',
                     '0 30 3 1 * ?',
                     'UTC',
                     true,

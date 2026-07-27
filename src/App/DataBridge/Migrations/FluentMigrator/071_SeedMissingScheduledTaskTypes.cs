@@ -21,7 +21,7 @@ public sealed class M071_SeedMissingScheduledTaskTypes : Migration
                     ),
                     (
                         'weekly-channel-asset-refresh',
-                        'channel_asset_refresh',
+                        'channel-asset-refresh',
                         '0 0 4 ? * SUN',
                         'UTC',
                         true,
@@ -47,7 +47,7 @@ public sealed class M071_SeedMissingScheduledTaskTypes : Migration
                     ),
                     (
                         'monthly-stale-media-cleanup',
-                        'stale_database_cleanup',
+                        'db-stale-media-cleanup',
                         '0 30 3 1 * ?',
                         'UTC',
                         true,
@@ -56,7 +56,7 @@ public sealed class M071_SeedMissingScheduledTaskTypes : Migration
                     ),
                     (
                         'monthly-db-maintenance',
-                        'database_maintenance',
+                        'db-maintenance',
                         '0 0 3 1 * ?',
                         'UTC',
                         true,
@@ -65,7 +65,7 @@ public sealed class M071_SeedMissingScheduledTaskTypes : Migration
                     ),
                     (
                         'weekly-search-reindex',
-                        'search_reindex',
+                        'search-reindex',
                         '0 30 5 ? * SUN',
                         'UTC',
                         true,

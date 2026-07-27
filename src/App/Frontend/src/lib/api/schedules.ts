@@ -37,13 +37,13 @@ export type ScheduleUpdateRequest = Omit<ScheduleCreateRequest, 'key'>;
 /** Task types registered in the Scheduler's TaskTypeRegistry; unregistered types are ignored by the scheduler. */
 export const scheduleTaskTypes = [
   'channel_scan_refresh',
-  'channel_asset_refresh',
+  'channel-asset-refresh',
   'channel_scan_full',
-  'database_stale_media_cleanup',
-  'database_maintenance',
+  'db-stale-media-cleanup',
+  'db-maintenance',
   'database_maintenance_reindex',
-  'search_reindex',
-  'download_history_cleanup',
+  'search-reindex',
+  'download-history-cleanup',
   'import_session_cleanup',
   'backup'
 ] as const;

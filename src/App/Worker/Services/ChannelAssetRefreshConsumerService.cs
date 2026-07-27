@@ -53,7 +53,7 @@ public sealed class ChannelAssetRefreshConsumerService(
     private async Task HandleAsync(ChannelAssetRefreshRequested request, CancellationToken cancellationToken)
     {
         await using var run = await runReporter.BeginAsync(
-            "channel_asset_refresh", request, request.Force ? "forced" : null, cancellationToken);
+            request.TaskType, request, request.Force ? "forced" : null, cancellationToken);
         try
         {
             if (request.TargetAccountId is { } accountId)
