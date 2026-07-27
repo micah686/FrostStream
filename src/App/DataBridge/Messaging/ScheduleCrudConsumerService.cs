@@ -192,12 +192,12 @@ public sealed class ScheduleCrudConsumerService(
         });
 
     private static string? Validate(ScheduleCreateRequestMessage msg)
-        => ValidateCore(msg.Key, msg.TaskType, msg.Cron, msg.IntervalSeconds, msg.Timezone);
+        => ValidateCore(msg.Key, msg.TaskType, msg.Cron, msg.IntervalSeconds, msg.Timezone, msg.RetentionDays);
 
     private static string? Validate(ScheduleUpdateRequestMessage msg)
-        => ValidateCore(msg.Key, msg.TaskType, msg.Cron, msg.IntervalSeconds, msg.Timezone);
+        => ValidateCore(msg.Key, msg.TaskType, msg.Cron, msg.IntervalSeconds, msg.Timezone, msg.RetentionDays);
 
-    private static string? ValidateCore(string key, string taskType, string? cron, int? intervalSeconds, string timezone)
+    private static string? ValidateCore(string key, string taskType, string? cron, int? intervalSeconds, string timezone, int retentionDays)
     {
         if (string.IsNullOrWhiteSpace(key))
             return "key is required.";
@@ -209,6 +209,8 @@ public sealed class ScheduleCrudConsumerService(
             return "Exactly one of cron or interval_seconds must be supplied.";
         if (intervalSeconds is <= 0)
             return "interval_seconds must be greater than zero.";
+        if (retentionDays < 0)
+            return "retention_days must not be negative.";
         if (!string.IsNullOrWhiteSpace(cron) && !CronExpression.IsValidExpression(cron))
             return "cron is not a valid Quartz cron expression.";
         if (DateTimeZoneProviders.Tzdb.GetZoneOrNull(timezone) is null)
@@ -234,7 +236,9 @@ public sealed class ScheduleCrudConsumerService(
             IntervalSeconds = msg.IntervalSeconds,
             Timezone = msg.Timezone,
             Enabled = msg.Enabled,
-            CatchupPolicy = msg.CatchupPolicy
+            CatchupPolicy = msg.CatchupPolicy,
+            RetentionDays = msg.RetentionDays,
+            IncludeFailed = msg.IncludeFailed
         };
 
     private static ScheduledTaskEntity ToEntity(ScheduleUpdateRequestMessage msg)
@@ -246,7 +250,9 @@ public sealed class ScheduleCrudConsumerService(
             IntervalSeconds = msg.IntervalSeconds,
             Timezone = msg.Timezone,
             Enabled = msg.Enabled,
-            CatchupPolicy = msg.CatchupPolicy
+            CatchupPolicy = msg.CatchupPolicy,
+            RetentionDays = msg.RetentionDays,
+            IncludeFailed = msg.IncludeFailed
         };
 
     private static ScheduleOperationResponseMessage Success(ScheduledTaskEntity entity)
@@ -265,6 +271,8 @@ public sealed class ScheduleCrudConsumerService(
         Timezone = entity.Timezone,
         Enabled = entity.Enabled,
         CatchupPolicy = entity.CatchupPolicy,
+        RetentionDays = entity.RetentionDays,
+        IncludeFailed = entity.IncludeFailed,
         LastAttemptAt = entity.LastAttemptAt,
         LastSuccessAt = entity.LastSuccessAt,
         LastRunStatus = entity.LastRunStatus,

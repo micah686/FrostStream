@@ -9,7 +9,7 @@ public sealed class DownloadJobConfiguration : IEntityTypeConfiguration<Download
 {
     public void Configure(EntityTypeBuilder<DownloadJobEntity> builder)
     {
-        builder.ToTable("download_jobs", "downloads");
+        builder.ToTable("download_jobs", "jobs");
 
         builder.HasKey(x => x.JobId);
 
@@ -18,12 +18,12 @@ public sealed class DownloadJobConfiguration : IEntityTypeConfiguration<Download
 
         builder.Property(x => x.State)
             .HasColumnName("state")
-            .HasColumnType("downloads.download_job_state")
+            .HasColumnType("jobs.download_job_state")
             .IsRequired();
 
-        builder.Property(x => x.Status).HasColumnName("status").HasColumnType("downloads.download_job_status").IsRequired();
-        builder.Property(x => x.Stage).HasColumnName("stage").HasColumnType("downloads.download_stage").IsRequired();
-        builder.Property(x => x.StageStatus).HasColumnName("stage_status").HasColumnType("downloads.download_stage_status").IsRequired();
+        builder.Property(x => x.Status).HasColumnName("status").HasColumnType("jobs.download_job_status").IsRequired();
+        builder.Property(x => x.Stage).HasColumnName("stage").HasColumnType("jobs.download_stage").IsRequired();
+        builder.Property(x => x.StageStatus).HasColumnName("stage_status").HasColumnType("jobs.download_stage_status").IsRequired();
         builder.Property(x => x.CurrentRunId).HasColumnName("current_run_id");
         builder.Property(x => x.CurrentRunNumber).HasColumnName("current_run_number").IsRequired();
         builder.Property(x => x.CurrentAttempt).HasColumnName("current_attempt").IsRequired();
@@ -63,7 +63,7 @@ public sealed class DownloadJobConfiguration : IEntityTypeConfiguration<Download
 
         builder.Property(x => x.FailureKind)
             .HasColumnName("failure_kind")
-            .HasColumnType("downloads.failure_kind");
+            .HasColumnType("jobs.failure_kind");
 
         builder.Property(x => x.FailureCode).HasColumnName("failure_code").HasMaxLength(255);
         builder.Property(x => x.FailureMessage).HasColumnName("failure_message").HasMaxLength(4096);
@@ -100,12 +100,12 @@ public sealed class DownloadGroupConfiguration : IEntityTypeConfiguration<Downlo
 {
     public void Configure(EntityTypeBuilder<DownloadGroupEntity> builder)
     {
-        builder.ToTable("download_groups", "downloads");
+        builder.ToTable("download_groups", "jobs");
         builder.HasKey(x => x.GroupId);
         builder.Property(x => x.GroupId).HasColumnName("group_id").ValueGeneratedNever();
         builder.Property(x => x.CorrelationId).HasColumnName("correlation_id").IsRequired();
-        builder.Property(x => x.Kind).HasColumnName("kind").HasColumnType("downloads.download_group_kind").IsRequired();
-        builder.Property(x => x.Status).HasColumnName("status").HasColumnType("downloads.download_group_status").IsRequired();
+        builder.Property(x => x.Kind).HasColumnName("kind").HasColumnType("jobs.download_group_kind").IsRequired();
+        builder.Property(x => x.Status).HasColumnName("status").HasColumnType("jobs.download_group_status").IsRequired();
         builder.Property(x => x.SourceUrl).HasColumnName("source_url").HasMaxLength(4096).IsRequired();
         builder.Property(x => x.RequestedBy).HasColumnName("requested_by").HasMaxLength(255);
         builder.Property(x => x.StorageKey).HasColumnName("storage_key").HasMaxLength(100);
@@ -135,15 +135,15 @@ public sealed class DownloadJobRunConfiguration : IEntityTypeConfiguration<Downl
 {
     public void Configure(EntityTypeBuilder<DownloadJobRunEntity> builder)
     {
-        builder.ToTable("download_job_runs", "downloads");
+        builder.ToTable("download_job_runs", "jobs");
         builder.HasKey(x => x.RunId);
         builder.Property(x => x.RunId).HasColumnName("run_id").ValueGeneratedNever();
         builder.Property(x => x.JobId).HasColumnName("job_id").IsRequired();
         builder.Property(x => x.RunNumber).HasColumnName("run_number").IsRequired();
-        builder.Property(x => x.Status).HasColumnName("status").HasColumnType("downloads.download_job_status").IsRequired();
-        builder.Property(x => x.Stage).HasColumnName("stage").HasColumnType("downloads.download_stage").IsRequired();
-        builder.Property(x => x.StageStatus).HasColumnName("stage_status").HasColumnType("downloads.download_stage_status").IsRequired();
-        builder.Property(x => x.FailureKind).HasColumnName("failure_kind").HasColumnType("downloads.failure_kind");
+        builder.Property(x => x.Status).HasColumnName("status").HasColumnType("jobs.download_job_status").IsRequired();
+        builder.Property(x => x.Stage).HasColumnName("stage").HasColumnType("jobs.download_stage").IsRequired();
+        builder.Property(x => x.StageStatus).HasColumnName("stage_status").HasColumnType("jobs.download_stage_status").IsRequired();
+        builder.Property(x => x.FailureKind).HasColumnName("failure_kind").HasColumnType("jobs.failure_kind");
         builder.Property(x => x.FailureCode).HasColumnName("failure_code").HasMaxLength(255);
         builder.Property(x => x.FailureMessage).HasColumnName("failure_message").HasMaxLength(4096);
         builder.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP").ValueGeneratedOnAdd().IsRequired();
@@ -159,18 +159,18 @@ public sealed class DownloadStageAttemptConfiguration : IEntityTypeConfiguration
 {
     public void Configure(EntityTypeBuilder<DownloadStageAttemptEntity> builder)
     {
-        builder.ToTable("download_stage_attempts", "downloads");
+        builder.ToTable("download_stage_attempts", "jobs");
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
         builder.Property(x => x.RunId).HasColumnName("run_id").IsRequired();
         builder.Property(x => x.JobId).HasColumnName("job_id").IsRequired();
-        builder.Property(x => x.Stage).HasColumnName("stage").HasColumnType("downloads.download_stage").IsRequired();
+        builder.Property(x => x.Stage).HasColumnName("stage").HasColumnType("jobs.download_stage").IsRequired();
         builder.Property(x => x.ArtifactKey).HasColumnName("artifact_key").HasMaxLength(512).IsRequired();
         builder.Property(x => x.Attempt).HasColumnName("attempt").IsRequired();
-        builder.Property(x => x.Status).HasColumnName("status").HasColumnType("downloads.download_stage_status").IsRequired();
+        builder.Property(x => x.Status).HasColumnName("status").HasColumnType("jobs.download_stage_status").IsRequired();
         builder.Property(x => x.DispatchId).HasColumnName("dispatch_id").IsRequired();
         builder.Property(x => x.OperationKey).HasColumnName("operation_key").HasMaxLength(512).IsRequired();
-        builder.Property(x => x.FailureKind).HasColumnName("failure_kind").HasColumnType("downloads.failure_kind");
+        builder.Property(x => x.FailureKind).HasColumnName("failure_kind").HasColumnType("jobs.failure_kind");
         builder.Property(x => x.FailureCode).HasColumnName("failure_code").HasMaxLength(255);
         builder.Property(x => x.FailureMessage).HasColumnName("failure_message").HasMaxLength(4096);
         builder.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP").ValueGeneratedOnAdd().IsRequired();
@@ -187,16 +187,16 @@ public sealed class DownloadArtifactConfiguration : IEntityTypeConfiguration<Dow
 {
     public void Configure(EntityTypeBuilder<DownloadArtifactEntity> builder)
     {
-        builder.ToTable("download_artifacts", "downloads");
+        builder.ToTable("download_artifacts", "jobs");
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
         builder.Property(x => x.RunId).HasColumnName("run_id").IsRequired();
         builder.Property(x => x.JobId).HasColumnName("job_id").IsRequired();
-        builder.Property(x => x.Stage).HasColumnName("stage").HasColumnType("downloads.download_stage").IsRequired();
+        builder.Property(x => x.Stage).HasColumnName("stage").HasColumnType("jobs.download_stage").IsRequired();
         builder.Property(x => x.ArtifactKey).HasColumnName("artifact_key").HasMaxLength(512).IsRequired();
         builder.Property(x => x.Kind).HasColumnName("kind").IsRequired();
         builder.Property(x => x.Required).HasColumnName("required").IsRequired();
-        builder.Property(x => x.Status).HasColumnName("status").HasColumnType("downloads.download_artifact_status").IsRequired();
+        builder.Property(x => x.Status).HasColumnName("status").HasColumnType("jobs.download_artifact_status").IsRequired();
         builder.Property(x => x.TempFileRef).HasColumnName("temp_file_ref").HasMaxLength(2048);
         builder.Property(x => x.StorageKey).HasColumnName("storage_key").HasMaxLength(100);
         builder.Property(x => x.StoragePath).HasColumnName("storage_path").HasMaxLength(2048);
@@ -216,16 +216,16 @@ public sealed class DownloadWorkerLeaseConfiguration : IEntityTypeConfiguration<
 {
     public void Configure(EntityTypeBuilder<DownloadWorkerLeaseEntity> builder)
     {
-        builder.ToTable("download_worker_leases", "downloads");
+        builder.ToTable("download_worker_leases", "jobs");
         builder.HasKey(x => x.DispatchId);
         builder.Property(x => x.DispatchId).HasColumnName("dispatch_id").ValueGeneratedNever();
         builder.Property(x => x.RunId).HasColumnName("run_id").IsRequired();
         builder.Property(x => x.JobId).HasColumnName("job_id").IsRequired();
-        builder.Property(x => x.Stage).HasColumnName("stage").HasColumnType("downloads.download_stage").IsRequired();
+        builder.Property(x => x.Stage).HasColumnName("stage").HasColumnType("jobs.download_stage").IsRequired();
         builder.Property(x => x.ArtifactKey).HasColumnName("artifact_key").HasMaxLength(512).IsRequired();
         builder.Property(x => x.Attempt).HasColumnName("attempt").IsRequired();
         builder.Property(x => x.WorkerInstanceId).HasColumnName("worker_instance_id").HasMaxLength(255).IsRequired();
-        builder.Property(x => x.Status).HasColumnName("status").HasColumnType("downloads.download_worker_lease_status").IsRequired();
+        builder.Property(x => x.Status).HasColumnName("status").HasColumnType("jobs.download_worker_lease_status").IsRequired();
         builder.Property(x => x.AcquiredAt).HasColumnName("acquired_at").HasColumnType("timestamp with time zone").IsRequired();
         builder.Property(x => x.LastHeartbeatAt).HasColumnName("last_heartbeat_at").HasColumnType("timestamp with time zone").IsRequired();
         builder.Property(x => x.ExpiresAt).HasColumnName("expires_at").HasColumnType("timestamp with time zone").IsRequired();
@@ -239,12 +239,12 @@ public sealed class DownloadJobWarningConfiguration : IEntityTypeConfiguration<D
 {
     public void Configure(EntityTypeBuilder<DownloadJobWarningEntity> builder)
     {
-        builder.ToTable("download_job_warnings", "downloads");
+        builder.ToTable("download_job_warnings", "jobs");
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
         builder.Property(x => x.RunId).HasColumnName("run_id").IsRequired();
         builder.Property(x => x.JobId).HasColumnName("job_id").IsRequired();
-        builder.Property(x => x.Stage).HasColumnName("stage").HasColumnType("downloads.download_stage").IsRequired();
+        builder.Property(x => x.Stage).HasColumnName("stage").HasColumnType("jobs.download_stage").IsRequired();
         builder.Property(x => x.ArtifactKey).HasColumnName("artifact_key").HasMaxLength(512).IsRequired();
         builder.Property(x => x.WarningCode).HasColumnName("warning_code").HasMaxLength(255).IsRequired();
         builder.Property(x => x.WarningMessage).HasColumnName("warning_message").HasMaxLength(4096).IsRequired();
@@ -258,7 +258,7 @@ public sealed class DownloadJobHistoryConfiguration : IEntityTypeConfiguration<D
 {
     public void Configure(EntityTypeBuilder<DownloadJobHistoryEntity> builder)
     {
-        builder.ToTable("download_job_history", "downloads");
+        builder.ToTable("download_job_history", "jobs");
 
         builder.HasKey(x => x.Id);
 
@@ -291,7 +291,7 @@ public sealed class DownloadJobProgressLogConfiguration : IEntityTypeConfigurati
 {
     public void Configure(EntityTypeBuilder<DownloadJobProgressLogEntity> builder)
     {
-        builder.ToTable("download_job_progress_log", "downloads");
+        builder.ToTable("download_job_progress_log", "jobs");
 
         builder.HasKey(x => x.Id);
 
@@ -322,7 +322,7 @@ public sealed class FailedDownloadJobConfiguration : IEntityTypeConfiguration<Fa
 {
     public void Configure(EntityTypeBuilder<FailedDownloadJobEntity> builder)
     {
-        builder.ToTable("failed_download_jobs", "downloads");
+        builder.ToTable("failed_download_jobs", "jobs");
 
         builder.HasKey(x => x.JobId);
 
@@ -331,12 +331,12 @@ public sealed class FailedDownloadJobConfiguration : IEntityTypeConfiguration<Fa
 
         builder.Property(x => x.FailedState)
             .HasColumnName("failed_state")
-            .HasColumnType("downloads.download_job_state")
+            .HasColumnType("jobs.download_job_state")
             .IsRequired();
 
         builder.Property(x => x.FailureKind)
             .HasColumnName("failure_kind")
-            .HasColumnType("downloads.failure_kind")
+            .HasColumnType("jobs.failure_kind")
             .IsRequired();
 
         builder.Property(x => x.FailureCode).HasColumnName("failure_code").HasMaxLength(255);
@@ -356,7 +356,7 @@ public sealed class ProcessedMessageConfiguration : IEntityTypeConfiguration<Pro
 {
     public void Configure(EntityTypeBuilder<ProcessedMessageEntity> builder)
     {
-        builder.ToTable("processed_messages", "downloads");
+        builder.ToTable("processed_messages", "jobs");
 
         builder.HasKey(x => x.MessageId);
 

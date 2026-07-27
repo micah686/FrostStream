@@ -178,7 +178,7 @@ public sealed class MediaDeleteExecutor
             SELECT EXISTS (
                 SELECT 1
                 FROM media.media_source_versions sv
-                JOIN downloads.download_jobs dj ON dj.job_id = sv.latest_job_id
+                JOIN jobs.download_jobs dj ON dj.job_id = sv.latest_job_id
                 WHERE sv.media_guid = @id
                   AND dj.state::text = ANY(@active_download_job_states)
             );

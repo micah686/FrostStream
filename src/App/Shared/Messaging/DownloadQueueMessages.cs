@@ -174,7 +174,7 @@ public sealed record DownloadQueueJobDto
     public Instant? CompletedAt { get; init; }
 }
 
-/// <summary>One persisted event on a job's timeline, from <c>downloads.download_job_history</c>.</summary>
+/// <summary>One persisted event on a job's timeline, from <c>jobs.download_job_history</c>.</summary>
 public sealed record DownloadQueueHistoryEntryDto
 {
     public long Id { get; init; }

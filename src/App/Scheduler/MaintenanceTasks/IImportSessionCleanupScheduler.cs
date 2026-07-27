@@ -2,7 +2,7 @@ using Scheduler.Scheduling;
 
 namespace Scheduler.MaintenanceTasks;
 
-public interface IProcessedMessageCleanupScheduler
+public interface IImportSessionCleanupScheduler
 {
     Task QueueCleanupAsync(ScheduledJobContext context, CancellationToken cancellationToken);
 }

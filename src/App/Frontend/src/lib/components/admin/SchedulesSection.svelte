@@ -86,7 +86,7 @@
       summary: 'Checks followed channels for new uploads and queues any newly discovered media.'
     },
     {
-      type: 'channel_asset_refresh',
+      type: 'channel-asset-refresh',
       summary: 'Refreshes channel-level assets such as avatars and banners.'
     },
     {
@@ -94,11 +94,11 @@
       summary: 'Rebuilds the channel media listing used by the library and creator views.'
     },
     {
-      type: 'database_stale_media_cleanup',
+      type: 'db-stale-media-cleanup',
       summary: 'Cleans up stale maintenance records and other aged scheduler data.'
     },
     {
-      type: 'database_maintenance',
+      type: 'db-maintenance',
       summary: 'Runs routine database maintenance work such as housekeeping and compaction.'
     },
     {
@@ -106,16 +106,30 @@
       summary: 'Rebuilds all indexes in the PostgreSQL database using concurrent reindexing.'
     },
     {
-      type: 'search_reindex',
+      type: 'search-reindex',
       summary: 'Rebuilds the search index from the authoritative metadata store.'
     },
     {
-      type: 'processed_message_cleanup',
-      summary: 'Removes old processed-message records so the job history stays small.'
+      type: 'download-history-cleanup',
+      summary:
+        'Deletes finished download jobs, along with their runs, artifacts and history, once they are older than the configured retention window. Failed and stopped jobs can optionally be included.'
+    },
+    {
+      type: 'import_session_cleanup',
+      summary:
+        'Deletes finished local-media import sessions, along with their items, mappings and durable flow instances, once they are older than the configured retention window.'
     },
     {
       type: 'backup',
-      summary: 'Runs the configured backup workflow for the current deployment.'
+      summary: 'Runs the configured backup workflow using snapshot mode.'
+    },
+    {
+      type: 'backup-snapshot',
+      summary: 'Runs the configured backup workflow using snapshot mode.'
+    },
+    {
+      type: 'backup-full',
+      summary: 'Runs the configured backup workflow using full mode.'
     }
   ] as const;
 
@@ -141,6 +155,8 @@
   let formTimezone = $state('UTC');
   let formEnabled = $state(true);
   let formCatchupPolicy = $state<ScheduleCatchupPolicy>('Coalesce');
+  let formRetentionDays = $state<number | string>(0);
+  let formIncludeFailed = $state(false);
   let cronSecond = $state('0');
   let cronMinute = $state('0');
   let cronHour = $state('3');
@@ -179,6 +195,8 @@
     formTimezone = schedule.timezone;
     formEnabled = schedule.enabled;
     formCatchupPolicy = schedule.catchupPolicy;
+    formRetentionDays = schedule.retentionDays ?? 0;
+    formIncludeFailed = schedule.includeFailed ?? false;
     syncCronBuilderFromExpression(formCron);
     formError = null;
     formOpen = true;
@@ -190,12 +208,18 @@
 
     const cron = formTiming === 'cron' ? formCron.trim() : '';
     const intervalSeconds = formTiming === 'interval' ? Number(formIntervalSeconds) : null;
+    const cleanupTaskTypes = ['download-history-cleanup', 'import_session_cleanup'];
+    const retentionDays = cleanupTaskTypes.includes(formTaskType) ? Number(formRetentionDays) : 0;
     if (formTiming === 'cron' && !cron) {
       formError = 'Enter a Quartz cron expression.';
       return;
     }
     if (formTiming === 'interval' && (!Number.isInteger(intervalSeconds) || (intervalSeconds ?? 0) < 1)) {
       formError = 'Interval must be a whole number of seconds, 1 or greater.';
+      return;
+    }
+    if (!Number.isInteger(retentionDays) || retentionDays < 0) {
+      formError = 'Retention days must be a whole number, 0 or greater.';
       return;
     }
 
@@ -205,7 +229,9 @@
       intervalSeconds,
       timezone: formTimezone.trim() || 'UTC',
       enabled: formEnabled,
-      catchupPolicy: formCatchupPolicy
+      catchupPolicy: formCatchupPolicy,
+      retentionDays,
+      includeFailed: formTaskType === 'download-history-cleanup' && formIncludeFailed
     };
 
     formSaving = true;
@@ -230,7 +256,9 @@
         intervalSeconds: schedule.intervalSeconds,
         timezone: schedule.timezone,
         enabled: !schedule.enabled,
-        catchupPolicy: schedule.catchupPolicy
+        catchupPolicy: schedule.catchupPolicy,
+        retentionDays: schedule.retentionDays ?? 0,
+        includeFailed: schedule.includeFailed ?? false
       });
       schedules = schedules.map((item) => (item.key === schedule.key ? updated : item));
     } catch (err) {
@@ -410,6 +438,25 @@
           {/if}
         </div>
       </details>
+
+      {#if formTaskType === 'download-history-cleanup' || formTaskType === 'import_session_cleanup'}
+        <div class="rounded-xl border border-base-300/70 bg-base-200/40 p-4">
+          <h3 class="text-sm font-semibold text-base-content/90">Cleanup options</h3>
+          <div class="mt-4 grid gap-4 sm:grid-cols-2">
+            <div>
+              <label class="label mb-2 text-sm" for="schedule-retention-days">Retention days</label>
+              <input class="input w-full" id="schedule-retention-days" type="number" min={0} step={1} bind:value={formRetentionDays} />
+              <p class="mt-1.5 text-xs text-base-content/40">0 keeps the default cleanup behavior.</p>
+            </div>
+            {#if formTaskType === 'download-history-cleanup'}
+              <label class="label flex cursor-pointer items-center gap-3 text-sm sm:items-start sm:pt-8">
+                <input type="checkbox" class="checkbox" bind:checked={formIncludeFailed} />
+                <span>Delete failed and stopped jobs</span>
+              </label>
+            {/if}
+          </div>
+        </div>
+      {/if}
 
       <div class="grid gap-4 sm:grid-cols-3">
         <div>

@@ -42,6 +42,10 @@ public sealed class ScheduledTaskEntity
 
     public ScheduleCatchupPolicy CatchupPolicy { get; set; } = ScheduleCatchupPolicy.Coalesce;
 
+    public int RetentionDays { get; set; }
+
+    public bool IncludeFailed { get; set; }
+
     public Instant? LastAttemptAt { get; set; }
 
     public Instant? LastSuccessAt { get; set; }

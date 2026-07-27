@@ -554,6 +554,7 @@ public sealed class CreatorMonitorController(
             Platform = dto.Platform,
             SourceType = dto.SourceType,
             SourceUrl = dto.SourceUrl,
+            AccountId = dto.AccountId,
             ScanEnabled = dto.ScanEnabled,
             IncrementalPageSize = dto.IncrementalPageSize,
             ConsecutiveKnownThreshold = dto.ConsecutiveKnownThreshold,

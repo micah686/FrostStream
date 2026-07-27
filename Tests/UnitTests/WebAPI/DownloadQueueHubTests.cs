@@ -25,7 +25,11 @@ public sealed class DownloadQueueHubTests
             var jobId = Guid.NewGuid();
             var body = new MemoryStream();
             var controller = new DownloadQueueController(
-                Substitute.For<IMessageBus>(), hub.Hub, Substitute.For<ILogger<DownloadQueueController>>());
+                Substitute.For<IMessageBus>(),
+                Substitute.For<IJetStreamPublisher>(),
+                hub.Hub,
+                SystemClock.Instance,
+                Substitute.For<ILogger<DownloadQueueController>>());
             var httpContext = new DefaultHttpContext();
             httpContext.Response.Body = body;
             controller.ControllerContext = new ControllerContext { HttpContext = httpContext };

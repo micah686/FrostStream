@@ -26,6 +26,18 @@ internal static class DownloadJobStateSql
     public static void AddActiveStatesParameter(NpgsqlCommand command)
         => command.Parameters.Add("active_download_job_states", NpgsqlDbType.Array | NpgsqlDbType.Text).Value = ActiveStates;
 
+    /// <summary>
+    /// Renders an enum member as the snake_case label its PostgreSQL enum type uses, for raw SQL that
+    /// compares against <c>column::text</c> rather than relying on Npgsql enum mappings.
+    /// </summary>
+    public static string ToPostgresLabel<TEnum>(TEnum value)
+        where TEnum : struct, Enum
+        => ToSnakeCase(value.ToString());
+
+    public static string[] ToPostgresLabels<TEnum>(params TEnum[] values)
+        where TEnum : struct, Enum
+        => values.Select(ToPostgresLabel).ToArray();
+
     private static string ToPostgresName(DownloadJobState state)
         => ToSnakeCase(state.ToString());
 

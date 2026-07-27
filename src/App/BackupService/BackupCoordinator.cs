@@ -93,10 +93,18 @@ internal sealed class BackupCoordinator(
         // converge: an admin-triggered backup arrives over HTTP and never touches that consumer.
         var idempotencyKey = record.IdempotencyKey ?? record.JobId.ToString("N");
         var detail = $"{record.Mode} · {record.Name}";
+        var taskType = record.Scheduled
+            ? record.Mode switch
+            {
+                "full" => "backup-full",
+                "snapshot" => "backup-snapshot",
+                _ => "backup"
+            }
+            : "backup";
         await using var run = record.Scheduled
             ? await runReporter.BeginScheduledAsync(
-                "backup", record.ScheduleKey ?? "backup", idempotencyKey, detail, cancellationToken)
-            : await runReporter.BeginManualAsync("backup", idempotencyKey, detail, cancellationToken);
+                taskType, record.ScheduleKey ?? taskType, idempotencyKey, detail, cancellationToken)
+            : await runReporter.BeginManualAsync(taskType, idempotencyKey, detail, cancellationToken);
 
         try
         {

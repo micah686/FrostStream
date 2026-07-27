@@ -9,6 +9,11 @@ public sealed record CreatorMonitorDto
     public required string Platform { get; init; }
     public required CreatorSourceType SourceType { get; init; }
     public required string SourceUrl { get; init; }
+
+    /// <summary>The metadata.accounts row this source belongs to. Null until channel metadata
+    /// resolves it (and for sources whose account cannot be derived).</summary>
+    public long? AccountId { get; init; }
+
     public required bool ScanEnabled { get; init; }
     public required int IncrementalPageSize { get; init; }
     public required int ConsecutiveKnownThreshold { get; init; }

@@ -15,7 +15,7 @@ public sealed class M048_SeedDailyChannelFullRescanTask : Migration
                 ("key", task_type, cron, timezone, enabled, catchup_policy, next_due_at)
             VALUES
                 (
-                    'daily-channel-full-rescan',
+                    'channel-full-rescan',
                     'channel_media_list',
                     '0 30 3 * * ?',
                     'UTC',
@@ -41,6 +41,6 @@ public sealed class M048_SeedDailyChannelFullRescanTask : Migration
 
     public override void Down()
     {
-        Execute.Sql("DELETE FROM scheduling.scheduled_tasks WHERE \"key\" = 'daily-channel-full-rescan';");
+        Execute.Sql("DELETE FROM scheduling.scheduled_tasks WHERE \"key\" = 'channel-full-rescan';");
     }
 }

@@ -6,7 +6,7 @@ using Scheduler.Scheduling;
 namespace Scheduler.Jobs;
 
 [DisallowConcurrentExecution]
-public sealed class ProcessedMessageCleanupJob(IProcessedMessageCleanupScheduler task, IClock clock) : IJob
+public sealed class DownloadHistoryCleanupJob(IDownloadHistoryCleanupScheduler task, IClock clock) : IJob
 {
     public Task Execute(IJobExecutionContext context)
         => task.QueueCleanupAsync(ScheduledJobContextFactory.Create(context, clock), context.CancellationToken);

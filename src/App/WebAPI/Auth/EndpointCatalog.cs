@@ -45,6 +45,7 @@ public static class EndpointIds
     public const string DownloadsQueuePriority = "downloads.queue.priority";
     public const string DownloadsQueueStart = "downloads.queue.start";
     public const string DownloadsQueueStop = "downloads.queue.stop";
+    public const string DownloadsQueueCleanup = "downloads.queue.cleanup";
     public const string DownloadsGroupStart = "downloads.group.start";
     public const string DownloadsGroupStop = "downloads.group.stop";
     public const string DownloadsProviderCircuitClear = "downloads.provider-circuit.clear";
@@ -62,6 +63,7 @@ public static class EndpointIds
     public const string ImportsSessionsCommit = "imports.sessions.commit";
     public const string ImportsSessionsRetry = "imports.sessions.retry";
     public const string ImportsSessionsCancel = "imports.sessions.cancel";
+    public const string ImportsSessionsCleanup = "imports.sessions.cleanup";
     public const string ImportsIncomingBrowse = "imports.incoming.browse";
     public const string WorkersList = "workers.list";
 
@@ -120,6 +122,7 @@ public static class EndpointIds
     // Playlists
     public const string PlaylistsCreate = "playlists.create";
     public const string PlaylistsList = "playlists.list";
+    public const string ProviderPlaylistsLibraryList = "provider-playlists.library.list";
     public const string PlaylistsGet = "playlists.get";
     public const string PlaylistsForceQueueItem = "playlists.force-queue-item";
     public const string UserPlaylistsCreate = "user-playlists.create";
@@ -285,6 +288,7 @@ public static class EndpointCatalog
         new(EndpointIds.DownloadsQueuePriority, Bundles.Downloading),
         new(EndpointIds.DownloadsQueueStart, Bundles.Downloading),
         new(EndpointIds.DownloadsQueueStop, Bundles.Downloading),
+        new(EndpointIds.DownloadsQueueCleanup, Bundles.Downloading),
         new(EndpointIds.DownloadsGroupStart, Bundles.Downloading),
         new(EndpointIds.DownloadsGroupStop, Bundles.Downloading),
         new(EndpointIds.DownloadsProviderCircuitClear, Bundles.Downloading),
@@ -302,6 +306,7 @@ public static class EndpointCatalog
         new(EndpointIds.ImportsSessionsCommit, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsRetry, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsCancel, Bundles.Downloading),
+        new(EndpointIds.ImportsSessionsCleanup, Bundles.Downloading),
         new(EndpointIds.ImportsIncomingBrowse, Bundles.Downloading),
         new(EndpointIds.WorkersList, Bundles.Management),
 
@@ -353,6 +358,7 @@ public static class EndpointCatalog
 
         new(EndpointIds.PlaylistsCreate, Bundles.Playlists),
         new(EndpointIds.PlaylistsList, Bundles.Playlists),
+        new(EndpointIds.ProviderPlaylistsLibraryList, Bundles.Playlists),
         new(EndpointIds.PlaylistsGet, Bundles.Playlists),
         new(EndpointIds.PlaylistsForceQueueItem, Bundles.Playlists),
         new(EndpointIds.UserPlaylistsCreate, Bundles.Playlists),

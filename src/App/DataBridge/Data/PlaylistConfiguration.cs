@@ -9,12 +9,12 @@ public sealed class PlaylistConfiguration : IEntityTypeConfiguration<PlaylistEnt
 {
     public void Configure(EntityTypeBuilder<PlaylistEntity> builder)
     {
-        builder.ToTable("playlists", "playlists");
+        builder.ToTable("playlists", "jobs");
         builder.HasKey(x => x.PlaylistId);
 
         builder.Property(x => x.PlaylistId).HasColumnName("playlist_id").ValueGeneratedNever();
         builder.Property(x => x.CorrelationId).HasColumnName("correlation_id").IsRequired();
-        builder.Property(x => x.State).HasColumnName("state").HasColumnType("playlists.playlist_state").IsRequired();
+        builder.Property(x => x.State).HasColumnName("state").HasColumnType("jobs.playlist_state").IsRequired();
         builder.Property(x => x.SourceUrl).HasColumnName("source_url").HasMaxLength(4096).IsRequired();
         builder.Property(x => x.RequestedBy).HasColumnName("requested_by").HasMaxLength(255);
         builder.Property(x => x.StorageKey).HasColumnName("storage_key").HasMaxLength(100);
@@ -24,13 +24,9 @@ public sealed class PlaylistConfiguration : IEntityTypeConfiguration<PlaylistEnt
         builder.Property(x => x.YtDlpOptionsJson).HasColumnName("ytdlp_options_json").HasColumnType("jsonb");
         builder.Property(x => x.Priority).HasColumnName("priority").HasDefaultValue(0).IsRequired();
         builder.Property(x => x.FetchComments).HasColumnName("fetch_comments").HasDefaultValue(false).IsRequired();
-        builder.Property(x => x.ProviderPlaylistId).HasColumnName("provider_playlist_id").HasMaxLength(512);
-        builder.Property(x => x.Title).HasColumnName("title").HasMaxLength(2048);
-        builder.Property(x => x.TotalItems).HasColumnName("total_items").IsRequired();
         builder.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone").ValueGeneratedOnAdd().IsRequired();
         builder.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp with time zone").IsRequired();
         builder.Property(x => x.CompletedAt).HasColumnName("completed_at").HasColumnType("timestamp with time zone");
-        builder.Property(x => x.LastScannedAt).HasColumnName("last_scanned_at").HasColumnType("timestamp with time zone");
 
         builder.HasIndex(x => new { x.State, x.UpdatedAt }).HasDatabaseName("ix_playlists_state_updated_at");
         builder.HasIndex(x => x.CorrelationId).HasDatabaseName("ix_playlists_correlation_id");
@@ -42,7 +38,7 @@ public sealed class PlaylistItemConfiguration : IEntityTypeConfiguration<Playlis
 {
     public void Configure(EntityTypeBuilder<PlaylistItemEntity> builder)
     {
-        builder.ToTable("playlist_items", "playlists");
+        builder.ToTable("playlist_items", "jobs");
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
@@ -74,7 +70,7 @@ public sealed class PlaylistScanEntryConfiguration : IEntityTypeConfiguration<Pl
 {
     public void Configure(EntityTypeBuilder<PlaylistScanEntryEntity> builder)
     {
-        builder.ToTable("playlist_scan_entries", "playlists");
+        builder.ToTable("playlist_scan_entries", "jobs");
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
@@ -117,10 +113,28 @@ public sealed class MediaPlaylistMembershipConfiguration : IEntityTypeConfigurat
             .HasConstraintName("fk_media_playlist_membership_media_guid")
             .OnDelete(DeleteBehavior.Cascade);
 
+        // This is deliberately not an EF relationship to jobs.playlists. Membership is
+        // user-facing library data and must survive deletion of playlist download history.
+    }
+}
+
+public sealed class PlaylistSourceMetadataConfiguration : IEntityTypeConfiguration<PlaylistSourceMetadataEntity>
+{
+    public void Configure(EntityTypeBuilder<PlaylistSourceMetadataEntity> builder)
+    {
+        builder.ToTable("playlist_source_metadata", "jobs");
+        builder.HasKey(x => x.PlaylistId);
+
+        builder.Property(x => x.PlaylistId).HasColumnName("playlist_id").ValueGeneratedNever();
+        builder.Property(x => x.ProviderPlaylistId).HasColumnName("provider_playlist_id").HasMaxLength(512);
+        builder.Property(x => x.Title).HasColumnName("title").HasMaxLength(2048);
+        builder.Property(x => x.TotalItems).HasColumnName("total_items").IsRequired();
+        builder.Property(x => x.LastScannedAt).HasColumnName("last_scanned_at").HasColumnType("timestamp with time zone");
+
         builder.HasOne<PlaylistEntity>()
-            .WithMany()
-            .HasForeignKey(x => x.PlaylistId)
-            .HasConstraintName("fk_media_playlist_membership_playlist_id")
+            .WithOne()
+            .HasForeignKey<PlaylistSourceMetadataEntity>(x => x.PlaylistId)
+            .HasConstraintName("fk_playlist_source_metadata_playlist_id")
             .OnDelete(DeleteBehavior.Cascade);
     }
 }
@@ -140,11 +154,8 @@ public sealed class PlaylistMetadataConfiguration : IEntityTypeConfiguration<Pla
             .IsUnique()
             .HasDatabaseName("ux_metadata_playlist_metadata_playlist_id");
 
-        builder.HasOne<PlaylistEntity>()
-            .WithMany()
-            .HasForeignKey(x => x.PlaylistId)
-            .HasConstraintName("fk_metadata_playlist_metadata_playlist_id")
-            .OnDelete(DeleteBehavior.Cascade);
+        // This is deliberately not an EF relationship to jobs.playlists. The metadata row is
+        // the durable library copy and must survive deletion of the job/request row.
     }
 }
 

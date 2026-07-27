@@ -9,7 +9,7 @@ namespace DataBridge.Data;
 
 public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataRepository
 {
-    public async Task UpsertAccountAssetsAsync(
+    public async Task<long> UpsertAccountAssetsAsync(
         string platform,
         string accountHandle,
         string accountName,
@@ -40,6 +40,7 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
                     avatar_storage_path = COALESCE(EXCLUDED.avatar_storage_path, accounts.avatar_storage_path),
                     banner_storage_path = COALESCE(EXCLUDED.banner_storage_path, accounts.banner_storage_path),
                     storage_key         = COALESCE(EXCLUDED.storage_key, accounts.storage_key)
+                RETURNING id
                 """, conn);
 
             cmd.Parameters.AddWithValue("@platform", platform);
@@ -49,7 +50,8 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
             cmd.Parameters.AddWithValue("@avatar_path", (object?)avatarStoragePath ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@banner_path", (object?)bannerStoragePath ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@storage_key", (object?)storageKey ?? DBNull.Value);
-            await cmd.ExecuteNonQueryAsync(ct);
+            // The DO UPDATE branch always touches the row, so RETURNING yields the id on both paths.
+            return (long)(await cmd.ExecuteScalarAsync(ct))!;
         }
         finally
         {

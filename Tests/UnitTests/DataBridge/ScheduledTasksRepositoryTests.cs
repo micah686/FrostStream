@@ -55,7 +55,7 @@ public sealed class ScheduledTasksRepositoryTests
         db.ScheduledTasks.Add(new ScheduledTaskEntity
         {
             Key = "cleanup",
-            TaskType = "processed_message_cleanup",
+            TaskType = "download_history_cleanup",
             IntervalSeconds = 60,
             Timezone = "UTC",
             Enabled = true,
@@ -90,7 +90,7 @@ public sealed class ScheduledTasksRepositoryTests
         db.ScheduledTasks.Add(new ScheduledTaskEntity
         {
             Key = "cleanup",
-            TaskType = "processed_message_cleanup",
+            TaskType = "download_history_cleanup",
             IntervalSeconds = 60,
             Timezone = "UTC",
             Enabled = true,
@@ -102,7 +102,7 @@ public sealed class ScheduledTasksRepositoryTests
         var updated = await repo.UpdateAsync(new ScheduledTaskEntity
         {
             Key = "cleanup",
-            TaskType = "processed_message_cleanup",
+            TaskType = "download_history_cleanup",
             IntervalSeconds = 60,
             Timezone = "UTC",
             Enabled = false

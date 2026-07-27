@@ -133,6 +133,20 @@ public sealed class StopDownloadApiRequest
 
 public sealed record StopDownloadApiResponse(DownloadJobStatus Status);
 
+/// <summary>Body for <c>POST /api/downloads/queue/cleanup</c>.</summary>
+public sealed class CleanupDownloadHistoryRequest
+{
+    /// <summary>Only purge work that finished longer ago than this. Defaults to 30 days when omitted; 0 purges everything eligible.</summary>
+    [Range(0, 3650)]
+    public int? RetentionDays { get; init; }
+
+    /// <summary>
+    /// Also purge failed and stopped jobs, and the groups holding them. Those jobs cannot be
+    /// restarted afterwards, because Start rebuilds the original request from their event history.
+    /// </summary>
+    public bool IncludeFailed { get; init; }
+}
+
 /// <summary>Body for <c>GET /api/downloads/queue/{jobId}/media</c>.</summary>
 public sealed record DownloadQueueMediaDto(Guid MediaGuid);
 

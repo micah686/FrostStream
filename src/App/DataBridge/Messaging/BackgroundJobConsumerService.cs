@@ -1,3 +1,4 @@
+using DataBridge.Data;
 using DataBridge.Search;
 using Conduit.NATS;
 using Microsoft.Extensions.Hosting;
@@ -13,6 +14,8 @@ public sealed class BackgroundJobConsumerService(
     IMessageBus messageBus,
     NpgsqlDataSource dataSource,
     IMetadataRebuildCoordinator rebuildCoordinator,
+    IDownloadHistoryPurger historyPurger,
+    IImportSessionPurger importSessionPurger,
     INotificationDispatcher notificationDispatcher,
     IBackgroundRunReporter runReporter,
     IClock clock,
@@ -20,15 +23,21 @@ public sealed class BackgroundJobConsumerService(
 {
     private static readonly StreamName Stream = StreamName.From(BackgroundJobsTopology.StreamNameValue);
 
+    /// <summary>Handlers do not receive the host token, so long-running work reads it from here to stay interruptible on shutdown.</summary>
+    private CancellationToken _stoppingToken = CancellationToken.None;
+
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        _stoppingToken = stoppingToken;
+
         var consumers = new[]
         {
             Consume<SearchReindexRequested>(BackgroundJobsTopology.SearchReindexConsumer, HandleSearchReindexAsync, stoppingToken),
             Consume<DatabaseMaintenanceRequested>(BackgroundJobsTopology.DatabaseMaintenanceConsumer, HandleDatabaseMaintenanceAsync, stoppingToken),
             Consume<DatabaseMaintenanceReindexRequested>(BackgroundJobsTopology.DatabaseMaintenanceReindexConsumer, HandleDatabaseMaintenanceReindexAsync, stoppingToken),
             Consume<DatabaseStaleMediaCleanupRequested>(BackgroundJobsTopology.DatabaseStaleMediaCleanupConsumer, HandleDatabaseStaleMediaCleanupAsync, stoppingToken),
-            Consume<ProcessedMessageCleanupRequested>(BackgroundJobsTopology.ProcessedMessageCleanupConsumer, HandleProcessedMessageCleanupAsync, stoppingToken)
+            Consume<DownloadHistoryCleanupRequested>(BackgroundJobsTopology.DownloadHistoryCleanupConsumer, HandleDownloadHistoryCleanupAsync, stoppingToken),
+            Consume<ImportSessionCleanupRequested>(BackgroundJobsTopology.ImportSessionCleanupConsumer, HandleImportSessionCleanupAsync, stoppingToken)
         };
 
         logger.LogInformation("Subscribed to {Count} background job consumers on stream {Stream}.", consumers.Length, Stream.Value);
@@ -50,7 +59,7 @@ public sealed class BackgroundJobConsumerService(
     private async Task HandleSearchReindexAsync(IJsMessageContext<SearchReindexRequested> context)
     {
         var message = context.Message;
-        await using var run = await runReporter.BeginAsync("search_reindex", message);
+        await using var run = await runReporter.BeginAsync(message.TaskType, message);
         try
         {
             await MarkAttemptAsync(message);
@@ -86,7 +95,7 @@ public sealed class BackgroundJobConsumerService(
     private async Task HandleDatabaseMaintenanceAsync(IJsMessageContext<DatabaseMaintenanceRequested> context)
     {
         var message = context.Message;
-        await using var run = await runReporter.BeginAsync("database_maintenance", message);
+        await using var run = await runReporter.BeginAsync(message.TaskType, message);
         try
         {
             await MarkAttemptAsync(message);
@@ -161,7 +170,7 @@ public sealed class BackgroundJobConsumerService(
                     AND NOT EXISTS (
                         SELECT 1
                         FROM media.media_source_versions sv
-                        JOIN downloads.download_jobs dj ON dj.job_id = sv.latest_job_id
+                        JOIN jobs.download_jobs dj ON dj.job_id = sv.latest_job_id
                         WHERE sv.media_guid = m.media_guid
                         AND dj.state::text = ANY(@active_download_job_states)
                     )
@@ -194,34 +203,53 @@ public sealed class BackgroundJobConsumerService(
         }
     }
 
-    private async Task HandleProcessedMessageCleanupAsync(IJsMessageContext<ProcessedMessageCleanupRequested> context)
+    private async Task HandleDownloadHistoryCleanupAsync(IJsMessageContext<DownloadHistoryCleanupRequested> context)
     {
         var message = context.Message;
-        await using var run = await runReporter.BeginAsync("processed_message_cleanup", message);
+        await using var run = await runReporter.BeginAsync(message.TaskType, message);
         try
         {
             await MarkAttemptAsync(message);
 
-            var cutoff = clock.GetCurrentInstant().Minus(Duration.FromDays(30));
-            await run.ReportAsync($"Deleting processed messages recorded before {cutoff}…");
-            await using var command = dataSource.CreateCommand(
-                "DELETE FROM downloads.processed_messages WHERE processed_at < @cutoff;");
-            command.Parameters.AddWithValue("cutoff", cutoff.ToDateTimeOffset());
-            command.CommandTimeout = 0;
-            var deletedCount = await command.ExecuteNonQueryAsync();
+            var result = await historyPurger.PurgeAsync(
+                message.RetentionDays ?? DownloadHistoryPurger.DefaultRetentionDays,
+                message.IncludeFailed,
+                progress => run.ReportAsync(progress),
+                _stoppingToken);
 
-            run.Succeed($"Deleted {deletedCount} processed message row(s).");
+            run.Succeed(result.Describe());
             await MarkSuccessAsync(message);
-            logger.LogInformation(
-                "Deleted {Count} processed message row(s) older than {Cutoff} for background request {IdempotencyKey}.",
-                deletedCount,
-                cutoff,
-                message.IdempotencyKey);
             await context.AckAsync();
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed handling processed message cleanup request {IdempotencyKey}; nacking", message.IdempotencyKey);
+            logger.LogError(ex, "Failed handling download history cleanup request {IdempotencyKey}; nacking", message.IdempotencyKey);
+            run.Fail(ex.Message);
+            await MarkFailureAsync(message);
+            await context.NackAsync();
+        }
+    }
+
+    private async Task HandleImportSessionCleanupAsync(IJsMessageContext<ImportSessionCleanupRequested> context)
+    {
+        var message = context.Message;
+        await using var run = await runReporter.BeginAsync("import_session_cleanup", message);
+        try
+        {
+            await MarkAttemptAsync(message);
+
+            var result = await importSessionPurger.PurgeAsync(
+                message.RetentionDays ?? ImportSessionPurger.DefaultRetentionDays,
+                progress => run.ReportAsync(progress),
+                _stoppingToken);
+
+            run.Succeed(result.Describe());
+            await MarkSuccessAsync(message);
+            await context.AckAsync();
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed handling import session cleanup request {IdempotencyKey}; nacking", message.IdempotencyKey);
             run.Fail(ex.Message);
             await MarkFailureAsync(message);
             await context.NackAsync();

@@ -46,6 +46,10 @@ public sealed class CreatorSourceEntity
 
     public required string SourceUrl { get; set; }
 
+    /// <summary>The metadata.accounts row this source belongs to, resolved on the first asset refresh.
+    /// Null until then (and for sources whose account could not be derived at migration time).</summary>
+    public long? AccountId { get; set; }
+
     public bool ScanEnabled { get; set; } = true;
 
     public int IncrementalPageSize { get; set; } = 50;
@@ -55,10 +59,26 @@ public sealed class CreatorSourceEntity
     public int FullRescanIntervalDays { get; set; } = 30;
 
     /// <summary>Minimum hours between incremental update-check scans of this source. The global
-    /// channel-update-check schedule ticks frequently; each tick only scans sources due by this interval.</summary>
+    /// channel-scan-refresh schedule ticks frequently; each tick only scans sources due by this interval.</summary>
     public int UpdateCheckIntervalHours { get; set; } = 6;
 
     public int MetadataRefreshWindow { get; set; } = 25;
+
+    public string? ProviderQueryLimitsJson { get; set; }
+
+    public Instant CreatedAt { get; private set; } = SystemClock.Instance.GetCurrentInstant();
+
+    public Instant? LastUpdated { get; set; }
+}
+
+/// <summary>
+/// Per-source background-job bookkeeping: where the discovery scans left off, and what the last asset
+/// refresh fetched. One row per <see cref="CreatorSourceEntity"/>. The durable avatar/banner blob paths
+/// live in metadata.accounts — the URLs and content hashes here only record the last refresh.
+/// </summary>
+public sealed class CreatorScanStateEntity
+{
+    public long CreatorSourceId { get; set; }
 
     public Instant? LastSuccessfulScanAt { get; set; }
 
@@ -67,12 +87,6 @@ public sealed class CreatorSourceEntity
     public string? LastSeenHighWatermark { get; set; }
 
     public int? NextFullScanStartIndex { get; set; }
-
-    public string? ProviderQueryLimitsJson { get; set; }
-
-    public Instant CreatedAt { get; private set; } = SystemClock.Instance.GetCurrentInstant();
-
-    public Instant? LastUpdated { get; set; }
 
     public string? AvatarUrl { get; set; }
 

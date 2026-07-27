@@ -63,6 +63,7 @@ public sealed class CreatorDiscoveryConsumerService(
                 MetadataRefreshWindow = msg.MetadataRefreshWindow,
                 ProviderQueryLimitsJson = msg.ProviderQueryLimits?.ToJson()
             }));
+            await QueueInitialMetadataRefreshAsync(entity.Source.Id, CancellationToken.None);
             await context.RespondAsync(new CreatorMonitorOperationResponseMessage { Success = true, Entity = Map(entity) });
         }
         catch (DbUpdateException ex)
@@ -106,6 +107,8 @@ public sealed class CreatorDiscoveryConsumerService(
                 MetadataRefreshWindow = msg.MetadataRefreshWindow,
                 ProviderQueryLimitsJson = msg.ProviderQueryLimits?.ToJson()
             }));
+            if (entity.Source.AccountId is null)
+                await QueueInitialMetadataRefreshAsync(entity.Source.Id, CancellationToken.None);
             await context.RespondAsync(new CreatorMonitorOperationResponseMessage { Success = true, Entity = Map(entity) });
         }
         catch (Exception ex)
@@ -276,19 +279,20 @@ public sealed class CreatorDiscoveryConsumerService(
         var msg = context.Message;
         try
         {
-            var updated = await scopeFactory.WithScopedAsync<ICreatorDiscoveryRepository, IMetadataRepository, CreatorSourceEntity?>(
+            var updated = await scopeFactory.WithScopedAsync<ICreatorDiscoveryRepository, IMetadataRepository, CreatorSourceRecord?>(
                 async (creators, metadata) =>
                 {
                     var entity = await creators.UpdateAssetsAsync(msg);
                     if (entity is null)
                         return null;
 
-                    // Bridge the durable avatar/banner blobs into metadata.accounts (authoritative).
+                    // Bridge the durable avatar/banner blobs into metadata.accounts (authoritative),
+                    // then persist the resolved account id so the association is a real foreign key
+                    // rather than a (platform, handle) string match repeated on every refresh.
                     if (!string.IsNullOrWhiteSpace(msg.Platform) &&
-                        !string.IsNullOrWhiteSpace(msg.AccountHandle) &&
-                        (!string.IsNullOrWhiteSpace(msg.AvatarStoragePath) || !string.IsNullOrWhiteSpace(msg.BannerStoragePath)))
+                        !string.IsNullOrWhiteSpace(msg.AccountHandle))
                     {
-                        await metadata.UpsertAccountAssetsAsync(
+                        var accountId = await metadata.UpsertAccountAssetsAsync(
                             msg.Platform!,
                             msg.AccountHandle!,
                             string.IsNullOrWhiteSpace(msg.AccountName) ? "unknown" : msg.AccountName!,
@@ -296,6 +300,9 @@ public sealed class CreatorDiscoveryConsumerService(
                             msg.AvatarStoragePath,
                             msg.BannerStoragePath,
                             string.IsNullOrWhiteSpace(msg.StorageKey) ? "default" : msg.StorageKey!);
+
+                        await creators.LinkAccountAsync(entity.Source.Id, accountId);
+                        entity.Source.AccountId = accountId;
                     }
 
                     return entity;
@@ -469,6 +476,27 @@ public sealed class CreatorDiscoveryConsumerService(
             messageId: messageId.ToString("N"));
     }
 
+    private Task QueueInitialMetadataRefreshAsync(long sourceId, CancellationToken cancellationToken)
+    {
+        var now = clock.GetCurrentInstant();
+        var idempotencyKey = $"creator-source/{sourceId}/initial-metadata/{Guid.NewGuid():N}";
+        return publisher.PublishAsync(
+            BackgroundJobSubjects.ChannelAssetRefreshRequest,
+            new ChannelAssetRefreshRequested
+            {
+                ScheduleKey = "creator-source-created",
+                TaskType = "channel_asset_refresh",
+                DueWindowUtc = now,
+                IdempotencyKey = idempotencyKey,
+                OccurredAt = now,
+                TargetSourceId = sourceId,
+                Force = true,
+                MetadataOnly = true
+            },
+            messageId: idempotencyKey,
+            cancellationToken: cancellationToken);
+    }
+
     private Task<TResult> WithRepo<TResult>(Func<ICreatorDiscoveryRepository, Task<TResult>> action)
         => scopeFactory.WithScopedAsync(action);
 
@@ -512,34 +540,40 @@ public sealed class CreatorDiscoveryConsumerService(
     private static CreatorMonitorOperationResponseMessage InternalFailure(string message)
         => new() { Success = false, ErrorCode = "internal", ErrorMessage = message };
 
-    private static CreatorMonitorDto Map(CreatorSourceEntity entity) => new()
+    private static CreatorMonitorDto Map(CreatorSourceRecord record)
     {
-        Id = entity.Id,
-        Platform = entity.Platform,
-        SourceType = entity.SourceType,
-        SourceUrl = entity.SourceUrl,
-        ScanEnabled = entity.ScanEnabled,
-        IncrementalPageSize = entity.IncrementalPageSize,
-        ConsecutiveKnownThreshold = entity.ConsecutiveKnownThreshold,
-        FullRescanIntervalDays = entity.FullRescanIntervalDays,
-        UpdateCheckIntervalHours = entity.UpdateCheckIntervalHours,
-        MetadataRefreshWindow = entity.MetadataRefreshWindow,
-        LastSuccessfulScanAt = entity.LastSuccessfulScanAt,
-        LastFullScanAt = entity.LastFullScanAt,
-        LastSeenHighWatermark = entity.LastSeenHighWatermark,
-        NextFullScanStartIndex = entity.NextFullScanStartIndex,
-        ProviderQueryLimits = CreatorSourceProviderQueryLimits.FromJson(entity.ProviderQueryLimitsJson),
-        CreatedAt = entity.CreatedAt,
-        LastUpdated = entity.LastUpdated,
-        AvatarUrl = entity.AvatarUrl,
-        AvatarContentHash = entity.AvatarContentHash,
-        BannerUrl = entity.BannerUrl,
-        BannerContentHash = entity.BannerContentHash,
-        AssetsLastRefreshedAt = entity.AssetsLastRefreshedAt,
-        AssetsLastAttemptAt = entity.AssetsLastAttemptAt,
-        AssetsAttemptCount = entity.AssetsAttemptCount,
-        AssetsLastError = entity.AssetsLastError
-    };
+        var entity = record.Source;
+        var state = record.ScanState;
+        return new CreatorMonitorDto
+        {
+            Id = entity.Id,
+            Platform = entity.Platform,
+            SourceType = entity.SourceType,
+            SourceUrl = entity.SourceUrl,
+            AccountId = entity.AccountId,
+            ScanEnabled = entity.ScanEnabled,
+            IncrementalPageSize = entity.IncrementalPageSize,
+            ConsecutiveKnownThreshold = entity.ConsecutiveKnownThreshold,
+            FullRescanIntervalDays = entity.FullRescanIntervalDays,
+            UpdateCheckIntervalHours = entity.UpdateCheckIntervalHours,
+            MetadataRefreshWindow = entity.MetadataRefreshWindow,
+            LastSuccessfulScanAt = state?.LastSuccessfulScanAt,
+            LastFullScanAt = state?.LastFullScanAt,
+            LastSeenHighWatermark = state?.LastSeenHighWatermark,
+            NextFullScanStartIndex = state?.NextFullScanStartIndex,
+            ProviderQueryLimits = CreatorSourceProviderQueryLimits.FromJson(entity.ProviderQueryLimitsJson),
+            CreatedAt = entity.CreatedAt,
+            LastUpdated = entity.LastUpdated,
+            AvatarUrl = state?.AvatarUrl,
+            AvatarContentHash = state?.AvatarContentHash,
+            BannerUrl = state?.BannerUrl,
+            BannerContentHash = state?.BannerContentHash,
+            AssetsLastRefreshedAt = state?.AssetsLastRefreshedAt,
+            AssetsLastAttemptAt = state?.AssetsLastAttemptAt,
+            AssetsAttemptCount = state?.AssetsAttemptCount ?? 0,
+            AssetsLastError = state?.AssetsLastError
+        };
+    }
 
     private static Guid DeterministicGuid(string seed)
     {

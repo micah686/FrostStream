@@ -271,7 +271,7 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
                 (SELECT COUNT(*) FROM media.media) AS total_media,
                 (SELECT COUNT(*) FROM metadata.accounts) AS total_channels,
                 (SELECT COUNT(*) FROM discovery.creator_sources) AS total_creator_sources,
-                (SELECT COUNT(*) FROM playlists.playlists) AS total_playlists,
+                (SELECT COUNT(*) FROM jobs.playlists) AS total_playlists,
                 COALESCE((SELECT SUM(job_count) FROM statistics.download_daily_activity WHERE state = 'created'), 0) AS total_downloads,
                 COALESCE((SELECT SUM(bytes) FROM statistics.download_daily_activity WHERE state = 'completed'), 0)::bigint AS total_bytes,
                 COALESCE((SELECT SUM(duration_seconds) FROM classified_media), 0) AS total_duration_seconds
@@ -312,7 +312,7 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
     {
         await using var command = dataSource.CreateCommand("""
             SELECT state::text AS state, COUNT(*) AS count
-            FROM downloads.download_jobs
+            FROM jobs.download_jobs
             GROUP BY state
             ORDER BY count DESC, state
             """);
@@ -434,14 +434,15 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
                 cs.id AS creator_source_id,
                 cs.source_type,
                 cs.source_url,
-                cs.last_successful_scan_at,
-                cs.last_full_scan_at
+                css.last_successful_scan_at,
+                css.last_full_scan_at
             FROM discovery.discovered_media dm
             JOIN metadata.media_metadata mm ON mm.external_media_id = dm.external_media_id
             JOIN discovery.creator_sources cs ON cs.id = dm.creator_source_id AND cs.platform = account_rollup.platform
+            LEFT JOIN jobs.creator_scan_state css ON css.creator_source_id = cs.id
             WHERE mm.account_id = account_rollup.account_id
-            GROUP BY cs.id, cs.source_type, cs.source_url, cs.last_successful_scan_at, cs.last_full_scan_at
-            ORDER BY cs.last_successful_scan_at DESC NULLS LAST, cs.id
+            GROUP BY cs.id, cs.source_type, cs.source_url, css.last_successful_scan_at, css.last_full_scan_at
+            ORDER BY css.last_successful_scan_at DESC NULLS LAST, cs.id
             LIMIT 1
         ) source_link ON true
         {suffix}
@@ -465,8 +466,8 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
                 cs.platform,
                 cs.source_type,
                 cs.source_url,
-                cs.last_successful_scan_at,
-                cs.last_full_scan_at,
+                css.last_successful_scan_at,
+                css.last_full_scan_at,
                 COUNT(dm.id) FILTER (
                     WHERE dm.discovery_status NOT IN ('Ignored', 'Unavailable', 'RemovedFromSource')
                 ) AS available_count,
@@ -477,6 +478,7 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
                 COALESCE(downloaded_rollup.downloaded_duration_seconds, 0) AS downloaded_duration_seconds,
                 COALESCE(downloaded_rollup.total_bytes, 0)::bigint AS total_bytes
             FROM discovery.creator_sources cs
+            LEFT JOIN jobs.creator_scan_state css ON css.creator_source_id = cs.id
             LEFT JOIN discovery.discovered_media dm ON dm.creator_source_id = cs.id
             LEFT JOIN LATERAL (
                 SELECT
@@ -486,7 +488,7 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
                 FROM source_downloaded_media sdm
                 WHERE sdm.creator_source_id = cs.id
             ) downloaded_rollup ON true
-            GROUP BY cs.id, cs.platform, cs.source_type, cs.source_url, cs.last_successful_scan_at, cs.last_full_scan_at
+            GROUP BY cs.id, cs.platform, cs.source_type, cs.source_url, css.last_successful_scan_at, css.last_full_scan_at
                 , downloaded_rollup.downloaded_count, downloaded_rollup.downloaded_duration_seconds, downloaded_rollup.total_bytes
         )
         SELECT
@@ -581,7 +583,7 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
         await using var command = dataSource.CreateCommand("""
             SELECT dj.state::text AS state, COUNT(*) AS count
             FROM discovery.discovered_media dm
-            JOIN downloads.download_jobs dj ON dj.source_url = dm.canonical_url
+            JOIN jobs.download_jobs dj ON dj.source_url = dm.canonical_url
             WHERE dm.creator_source_id = @creator_source_id
             GROUP BY dj.state
             ORDER BY count DESC, state

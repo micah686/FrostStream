@@ -15,7 +15,7 @@ public sealed class M049_SeedRemainingBackgroundSweepTasks : Migration
                 ("key", task_type, cron, timezone, enabled, catchup_policy, next_due_at)
             VALUES
                 (
-                    'channel-update-check',
+                    'channel-scan-refresh',
                     'channel_update_check',
                     '0 0 */6 * * ?',
                     'UTC',
@@ -70,8 +70,8 @@ public sealed class M049_SeedRemainingBackgroundSweepTasks : Migration
                 ("key", task_type, cron, timezone, enabled, catchup_policy, next_due_at)
             VALUES
                 (
-                    'weekly-search-reindex',
-                    'search_reindex',
+                    'search-reindex',
+                    'search-reindex',
                     '0 30 5 ? * SUN',
                     'UTC',
                     true,
@@ -93,19 +93,17 @@ public sealed class M049_SeedRemainingBackgroundSweepTasks : Migration
                 last_updated = now();
             """);
 
-        // Nightly database backup (02:00 UTC). Seeded disabled — mirrors nightly-orphan-cleanup —
-        // because backups are an operator-controlled retention policy; enable through the schedules
-        // API after confirming the BackupService host bind has sufficient capacity.
+        // Nightly database snapshot backup (02:00 UTC).
         Execute.Sql("""
             INSERT INTO scheduling.scheduled_tasks
                 ("key", task_type, cron, timezone, enabled, catchup_policy, next_due_at)
             VALUES
                 (
-                    'nightly-backup',
-                    'backup',
+                    'backup-snapshot',
+                    'backup-snapshot',
                     '0 0 2 * * ?',
                     'UTC',
-                    false,
+                    true,
                     'Coalesce',
                     CASE
                         WHEN now() < date_trunc('day', now()) + interval '2 hours'
@@ -128,7 +126,7 @@ public sealed class M049_SeedRemainingBackgroundSweepTasks : Migration
     {
         Execute.Sql("""
             DELETE FROM scheduling.scheduled_tasks
-            WHERE "key" IN ('channel-update-check', 'weekly-filesystem-rescan', 'weekly-search-reindex', 'nightly-backup');
+            WHERE "key" IN ('channel-scan-refresh', 'weekly-filesystem-rescan', 'search-reindex', 'backup-snapshot');
             """);
     }
 }

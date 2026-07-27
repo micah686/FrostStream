@@ -25,6 +25,8 @@ public sealed record ChannelAssetRefreshRequested : ScheduledBackgroundRequest
     /// refresh); the account's stored URL is used instead of a creator source.</summary>
     public long? TargetAccountId { get; init; }
     public bool Force { get; init; }
+    /// <summary>Fetch channel metadata and resolve its account without downloading avatar/banner assets.</summary>
+    public bool MetadataOnly { get; init; }
 }
 
 public sealed record ChannelScanFullRequested : ScheduledBackgroundRequest
@@ -56,7 +58,32 @@ public sealed record ChannelScanFullRequested : ScheduledBackgroundRequest
 
 public sealed record DatabaseStaleMediaCleanupRequested : ScheduledBackgroundRequest;
 
-public sealed record ProcessedMessageCleanupRequested : ScheduledBackgroundRequest;
+/// <summary>
+/// Purges the download-job history of work that has genuinely finished: the job rows, their runs,
+/// stage attempts, artifacts, leases, warnings, event history and progress log, plus the group rows
+/// they belonged to and the Cleipnir flow instances that drove them.
+/// </summary>
+public sealed record DownloadHistoryCleanupRequested : ScheduledBackgroundRequest
+{
+    /// <summary>Purge only work that finished longer ago than this; 30 days when null.</summary>
+    public int? RetentionDays { get; init; }
+
+    /// <summary>
+    /// Also purge Failed/Stopped jobs and the groups that hold them. Those jobs can no longer be
+    /// restarted afterwards, because Start rebuilds the original request from their event history.
+    /// </summary>
+    public bool IncludeFailed { get; init; }
+}
+
+/// <summary>
+/// Purges terminal local-media import sessions and the durable <see cref="LocalImportItemFlow"/>
+/// instances that drove them.
+/// </summary>
+public sealed record ImportSessionCleanupRequested : ScheduledBackgroundRequest
+{
+    /// <summary>Purge only sessions that completed longer ago than this; 30 days when null.</summary>
+    public int? RetentionDays { get; init; }
+}
 
 public sealed record DatabaseMaintenanceRequested : ScheduledBackgroundRequest;
 

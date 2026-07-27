@@ -1,15 +1,17 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import { Select } from '$lib/components/ui';
+  import { Modal, Select } from '$lib/components/ui';
   import {
     ChevronLeft,
     ChevronRight,
     CircleAlert,
     Download,
     RefreshCw,
-    Server
+    Server,
+    Trash2
   } from '@lucide/svelte';
   import {
+    cleanupHistory,
     clearProviderCircuit,
     setPriority,
     startGroup,
@@ -46,6 +48,14 @@
   let now = $state(Date.now());
   let optionPresetsByKey = $state<Map<string, string>>(new Map());
   let searchTimer: number | undefined;
+
+  let cleanupOpen = $state(false);
+  // Empty while the field is blank; the number input's binding replaces it with a number on input.
+  let cleanupRetentionDays = $state<number | string | null>('');
+  let cleanupIncludeFailed = $state(false);
+  let cleanupBusy = $state(false);
+  let cleanupError = $state<string | null>(null);
+  let cleanupNotice = $state<string | null>(null);
 
   const unsubscribe = queue.subscribe((value) => {
     queueState = value;
@@ -259,6 +269,43 @@
     });
   }
 
+  function openCleanup() {
+    cleanupError = null;
+    cleanupNotice = null;
+    cleanupRetentionDays = '';
+    cleanupIncludeFailed = false;
+    cleanupOpen = true;
+  }
+
+  async function submitCleanup() {
+    // bind:value on a number input yields a number once the field has content, and '' or null
+    // while it is empty — so never assume a string here.
+    let retentionDays: number | undefined;
+    const raw = cleanupRetentionDays;
+    if (raw !== '' && raw !== null && raw !== undefined) {
+      const parsed = Number(raw);
+      if (!Number.isInteger(parsed) || parsed < 0) {
+        cleanupError = 'Retention must be a whole number of days, zero or greater.';
+        return;
+      }
+      retentionDays = parsed;
+    }
+
+    cleanupError = null;
+    cleanupBusy = true;
+    try {
+      await cleanupHistory({ retentionDays, includeFailed: cleanupIncludeFailed });
+      cleanupOpen = false;
+      cleanupNotice = 'Cleanup queued. Watch its progress and deletion counts on Jobs > Background.';
+      // The purge runs in the background, so this refresh only shows whatever finished immediately.
+      await applyQueueParams();
+    } catch (err) {
+      cleanupError = err instanceof Error ? err.message : 'Could not queue the cleanup.';
+    } finally {
+      cleanupBusy = false;
+    }
+  }
+
   async function runAction(jobId: string, action: string, fn: () => Promise<void>) {
     actionError = null;
     actionBusy = { ...actionBusy, [jobId]: action };
@@ -312,12 +359,26 @@
         {/if}
         Refresh
       </button>
+      <button class="btn btn-sm btn-ghost text-xs" onclick={openCleanup}>
+        <Trash2 class="mr-1.5 h-4 w-4" />
+        Clean up
+      </button>
       <a class="btn btn-sm btn-primary text-xs" href="/download">
         <Download class="mr-1.5 h-4 w-4" />
         New
       </a>
     </div>
   </div>
+
+  {#if cleanupNotice}
+    <div
+      class="mt-5 flex flex-wrap items-start gap-x-3 gap-y-1 rounded-xl border border-info/30 bg-info/10 p-4 text-sm text-info"
+      role="status"
+    >
+      <span>{cleanupNotice}</span>
+      <a class="link font-semibold" href="/jobs/background">View background jobs</a>
+    </div>
+  {/if}
 
   <div class="mt-6 grid gap-3 md:grid-cols-4">
     <div class="rounded-xl border border-base-300/80 bg-base-200/40 p-4">
@@ -451,3 +512,73 @@
     </div>
   {/if}
 </div>
+
+<Modal bind:open={cleanupOpen} title="Clean up download history" size="md">
+  <div class="space-y-4 text-sm">
+    <p class="text-base-content/70">
+      Deletes finished download jobs along with their runs, artifacts, warnings, event history and
+      progress log, plus the groups they belonged to. Queued and running work is never touched, and a
+      group is all-or-nothing — nothing is removed from a playlist that has not fully settled.
+    </p>
+
+    <label class="block">
+      <span class="text-xs font-semibold uppercase tracking-[0.08em] text-base-content/50">Retention (days)</span>
+      <input
+        type="number"
+        min="0"
+        step="1"
+        placeholder="30"
+        class="input input-bordered mt-1.5 w-full"
+        bind:value={cleanupRetentionDays}
+        disabled={cleanupBusy}
+      />
+      <span class="mt-1.5 block text-xs text-base-content/50">
+        Only work that finished longer ago than this is removed. Leave empty for the 30-day default, or
+        enter 0 to purge everything eligible.
+      </span>
+    </label>
+
+    <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-base-300/80 bg-base-200/40 p-3">
+      <input
+        type="checkbox"
+        class="checkbox checkbox-sm mt-0.5 checkbox-error"
+        bind:checked={cleanupIncludeFailed}
+        disabled={cleanupBusy}
+      />
+      <span>
+        <span class="font-semibold text-base-content">Also delete failed and stopped jobs</span>
+        <span class="mt-0.5 block text-xs text-base-content/60">
+          They cannot be retried afterwards. Start rebuilds a job from its event history, which this
+          deletes.
+        </span>
+      </span>
+    </label>
+
+    {#if cleanupError}
+      <div class="flex items-start gap-3 rounded-xl border border-error/30 bg-error/10 p-3 text-error" role="alert">
+        <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
+        <span>{cleanupError}</span>
+      </div>
+    {/if}
+  </div>
+
+  {#snippet footer()}
+    <div class="flex justify-end gap-2">
+      <button class="btn btn-sm btn-ghost text-xs" onclick={() => (cleanupOpen = false)} disabled={cleanupBusy}>
+        Cancel
+      </button>
+      <button
+        class={['btn btn-sm text-xs', cleanupIncludeFailed ? 'btn-error' : 'btn-primary']}
+        onclick={submitCleanup}
+        disabled={cleanupBusy}
+      >
+        {#if cleanupBusy}
+          <span class="loading loading-spinner loading-xs mr-1.5"></span>
+        {:else}
+          <Trash2 class="mr-1.5 h-4 w-4" />
+        {/if}
+        {cleanupIncludeFailed ? 'Delete including failed' : 'Clean up'}
+      </button>
+    </div>
+  {/snippet}
+</Modal>

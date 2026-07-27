@@ -13,6 +13,8 @@ public sealed record ScheduledTaskDto
     public required string Timezone { get; init; }
     public required bool Enabled { get; init; }
     public required ScheduleCatchupPolicy CatchupPolicy { get; init; }
+    public int RetentionDays { get; init; }
+    public bool IncludeFailed { get; init; }
     public Instant? LastAttemptAt { get; init; }
     public Instant? LastSuccessAt { get; init; }
     public ScheduleRunStatus? LastRunStatus { get; init; }
@@ -30,6 +32,8 @@ public sealed record ScheduleCreateRequestMessage
     public string Timezone { get; init; } = "UTC";
     public bool Enabled { get; init; }
     public ScheduleCatchupPolicy CatchupPolicy { get; init; } = ScheduleCatchupPolicy.Coalesce;
+    public int RetentionDays { get; init; }
+    public bool IncludeFailed { get; init; }
 }
 
 public sealed record ScheduleUpdateRequestMessage
@@ -41,6 +45,8 @@ public sealed record ScheduleUpdateRequestMessage
     public string Timezone { get; init; } = "UTC";
     public bool Enabled { get; init; }
     public ScheduleCatchupPolicy CatchupPolicy { get; init; } = ScheduleCatchupPolicy.Coalesce;
+    public int RetentionDays { get; init; }
+    public bool IncludeFailed { get; init; }
 }
 
 public sealed record ScheduleGetRequestMessage

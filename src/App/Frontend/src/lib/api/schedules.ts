@@ -11,6 +11,8 @@ export interface ScheduledTask {
   timezone: string;
   enabled: boolean;
   catchupPolicy: ScheduleCatchupPolicy;
+  retentionDays: number;
+  includeFailed: boolean;
   lastAttemptAt: string | null;
   lastSuccessAt: string | null;
   nextDueAt: string | null;
@@ -26,6 +28,8 @@ export interface ScheduleCreateRequest {
   timezone: string;
   enabled: boolean;
   catchupPolicy: ScheduleCatchupPolicy;
+  retentionDays: number;
+  includeFailed: boolean;
 }
 
 export type ScheduleUpdateRequest = Omit<ScheduleCreateRequest, 'key'>;
@@ -33,14 +37,17 @@ export type ScheduleUpdateRequest = Omit<ScheduleCreateRequest, 'key'>;
 /** Task types registered in the Scheduler's TaskTypeRegistry; unregistered types are ignored by the scheduler. */
 export const scheduleTaskTypes = [
   'channel_scan_refresh',
-  'channel_asset_refresh',
+  'channel-asset-refresh',
   'channel_scan_full',
-  'database_stale_media_cleanup',
-  'database_maintenance',
+  'db-stale-media-cleanup',
+  'db-maintenance',
   'database_maintenance_reindex',
-  'search_reindex',
-  'processed_message_cleanup',
-  'backup'
+  'search-reindex',
+  'download-history-cleanup',
+  'import_session_cleanup',
+  'backup',
+  'backup-snapshot',
+  'backup-full'
 ] as const;
 
 const BASE = '/api/global/schedules';

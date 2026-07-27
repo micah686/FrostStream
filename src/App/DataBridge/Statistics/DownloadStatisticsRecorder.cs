@@ -39,7 +39,7 @@ internal static class DownloadStatisticsRecorder
 
     /// <summary>
     /// Records both the global "completed" daily rollup and the per-channel/per-media ledger row for
-    /// a genuinely finalized download. Looks the primary artifact's size up from downloads.download_artifacts
+    /// a genuinely finalized download. Looks the primary artifact's size up from jobs.download_artifacts
     /// (not job.FileSizeBytes, which the V2 flow never populates) and the owning account/duration from
     /// metadata so both survive independent of download_jobs retention.
     /// </summary>

@@ -16,7 +16,7 @@ namespace UnitTests.WebAPI;
 /// </summary>
 public sealed class BackgroundJobHubTests
 {
-    private const string IdempotencyKey = "search_reindex:weekly-search-reindex:2026-07-26T05:30:00Z";
+    private const string IdempotencyKey = "search_reindex:search-reindex:2026-07-26T05:30:00Z";
     private static readonly Instant FiredAt = Instant.FromUtc(2026, 7, 26, 5, 30);
 
     [Test]
@@ -29,7 +29,7 @@ public sealed class BackgroundJobHubTests
         var run = harness.Hub.List().ShouldHaveSingleItem();
         run.Status.ShouldBe(BackgroundRunView.Queued);
         run.TaskType.ShouldBe("search_reindex");
-        run.ScheduleKey.ShouldBe("weekly-search-reindex");
+        run.ScheduleKey.ShouldBe("search-reindex");
         run.Origin.ShouldBe("scheduler");
         run.QueuedAt.ShouldBe(FiredAt);
 
@@ -177,7 +177,7 @@ public sealed class BackgroundJobHubTests
         public Task DispatchAsync(
             string idempotencyKey = IdempotencyKey,
             string taskType = "search_reindex",
-            string scheduleKey = "weekly-search-reindex")
+            string scheduleKey = "search-reindex")
             => _dispatched(Context(new BackgroundRunDispatched
             {
                 RunId = BackgroundRunIds.ForIdempotencyKey(idempotencyKey),
@@ -195,7 +195,7 @@ public sealed class BackgroundJobHubTests
             {
                 RunId = BackgroundRunIds.ForIdempotencyKey(idempotencyKey),
                 TaskType = "search_reindex",
-                ScheduleKey = "weekly-search-reindex",
+                ScheduleKey = "search-reindex",
                 Trigger = BackgroundRunTrigger.Scheduled,
                 IdempotencyKey = idempotencyKey,
                 Origin = origin,

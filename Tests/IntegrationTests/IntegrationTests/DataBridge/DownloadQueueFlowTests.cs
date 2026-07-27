@@ -174,7 +174,7 @@ public sealed class DownloadQueueFlowTests
                 Database = "froststream_download_queue_flow_tests",
                 Username = "postgres",
                 Password = "postgres",
-                SearchPath = "storage,downloads,media,maintenance,metadata,auth,public"
+                SearchPath = "storage,downloads,jobs,media,maintenance,metadata,auth,public"
             }.ConnectionString;
 
         public async Task InitializeAsync()
@@ -291,15 +291,15 @@ public sealed class DownloadQueueFlowTests
                             .MapEnum<S3CompatibleObjectStorageProvider>("s3_compatible_object_storage_provider", "storage")
                             .MapEnum<AzureBlobCredentialMode>("azure_blob_credential_mode", "storage")
                             .MapEnum<GoogleCloudStorageCredentialMode>("google_cloud_storage_credential_mode", "storage")
-                            .MapEnum<DownloadJobState>("download_job_state", "downloads")
-                            .MapEnum<DownloadJobStatus>("download_job_status", "downloads")
-                            .MapEnum<DownloadStage>("download_stage", "downloads")
-                            .MapEnum<DownloadStageStatus>("download_stage_status", "downloads")
-                            .MapEnum<DownloadGroupKind>("download_group_kind", "downloads")
-                            .MapEnum<DownloadGroupStatus>("download_group_status", "downloads")
-                            .MapEnum<DownloadArtifactStatus>("download_artifact_status", "downloads")
-                            .MapEnum<DownloadWorkerLeaseStatus>("download_worker_lease_status", "downloads")
-                            .MapEnum<FailureKind>("failure_kind", "downloads")
+                            .MapEnum<DownloadJobState>("download_job_state", "jobs")
+                            .MapEnum<DownloadJobStatus>("download_job_status", "jobs")
+                            .MapEnum<DownloadStage>("download_stage", "jobs")
+                            .MapEnum<DownloadStageStatus>("download_stage_status", "jobs")
+                            .MapEnum<DownloadGroupKind>("download_group_kind", "jobs")
+                            .MapEnum<DownloadGroupStatus>("download_group_status", "jobs")
+                            .MapEnum<DownloadArtifactStatus>("download_artifact_status", "jobs")
+                            .MapEnum<DownloadWorkerLeaseStatus>("download_worker_lease_status", "jobs")
+                            .MapEnum<FailureKind>("failure_kind", "jobs")
                             .MapEnum<IngestOrigin>("ingest_origin", "media"))
                     .UseSnakeCaseNamingConvention();
             });

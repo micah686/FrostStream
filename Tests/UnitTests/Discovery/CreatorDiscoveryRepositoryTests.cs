@@ -15,7 +15,7 @@ public sealed class CreatorDiscoveryRepositoryTests
     {
         await using var db = CreateDb();
         var repo = new CreatorDiscoveryRepository(db, SystemClock.Instance);
-        var source = await repo.CreateSourceAsync(CreateSource());
+        var source = (await repo.CreateSourceAsync(CreateSource())).Source;
         var scannedAt = SystemClock.Instance.GetCurrentInstant();
 
         var result = await repo.UpsertDiscoveredMediaBatchAsync(new UpsertDiscoveredMediaBatchRequestMessage
@@ -53,12 +53,41 @@ public sealed class CreatorDiscoveryRepositoryTests
         {
             Platform = "youtube",
             SourceType = CreatorSourceType.Streams,
-            SourceUrl = created.SourceUrl
+            SourceUrl = created.Source.SourceUrl
         });
 
-        reused.Id.ShouldBe(created.Id);
-        reused.SourceType.ShouldBe(CreatorSourceType.Videos);
+        reused.Source.Id.ShouldBe(created.Source.Id);
+        reused.Source.SourceType.ShouldBe(CreatorSourceType.Videos);
         (await db.CreatorSources.CountAsync()).ShouldBe(1);
+        (await db.CreatorScanStates.CountAsync()).ShouldBe(1);
+    }
+
+    [Test]
+    public async Task LinkAccount_Persists_Account_Id_And_Is_Cleared_When_The_Source_Is_Repointed()
+    {
+        await using var db = CreateDb();
+        var repo = new CreatorDiscoveryRepository(db, SystemClock.Instance);
+        var source = (await repo.CreateSourceAsync(CreateSource())).Source;
+        source.AccountId.ShouldBeNull();
+
+        await repo.LinkAccountAsync(source.Id, 42);
+        (await repo.GetSourceAsync(source.Id))!.Source.AccountId.ShouldBe(42);
+
+        // Re-linking to the same account is a no-op, not a duplicate write.
+        await repo.LinkAccountAsync(source.Id, 42);
+        (await repo.GetSourceAsync(source.Id))!.Source.AccountId.ShouldBe(42);
+
+        // Repointing the source at a different URL invalidates the derived account.
+        var repointed = await repo.UpdateSourceAsync(new CreatorSourceEntity
+        {
+            Id = source.Id,
+            Platform = source.Platform,
+            SourceType = source.SourceType,
+            SourceUrl = "https://www.youtube.com/@SomeOtherCreator/videos"
+        });
+
+        repointed.ShouldNotBeNull();
+        repointed.Source.AccountId.ShouldBeNull();
     }
 
     [Test]
@@ -66,7 +95,7 @@ public sealed class CreatorDiscoveryRepositoryTests
     {
         await using var db = CreateDb();
         var repo = new CreatorDiscoveryRepository(db, SystemClock.Instance);
-        var source = await repo.CreateSourceAsync(CreateSource());
+        var source = (await repo.CreateSourceAsync(CreateSource())).Source;
         var candidate = Candidate("abc123", "https://www.youtube.com/watch?v=abc123", title: "First media");
         await repo.UpsertDiscoveredMediaBatchAsync(Batch(source.Id, candidate));
 
@@ -83,7 +112,7 @@ public sealed class CreatorDiscoveryRepositoryTests
     {
         await using var db = CreateDb();
         var repo = new CreatorDiscoveryRepository(db, SystemClock.Instance);
-        var source = await repo.CreateSourceAsync(CreateSource());
+        var source = (await repo.CreateSourceAsync(CreateSource())).Source;
         await repo.UpsertDiscoveredMediaBatchAsync(Batch(source.Id, Candidate("abc123", "https://www.youtube.com/watch?v=abc123", title: "Old title")));
 
         var result = await repo.UpsertDiscoveredMediaBatchAsync(Batch(source.Id, Candidate("abc123", "https://www.youtube.com/watch?v=abc123", title: "New title")));
@@ -103,7 +132,7 @@ public sealed class CreatorDiscoveryRepositoryTests
     {
         await using var db = CreateDb();
         var repo = new CreatorDiscoveryRepository(db, SystemClock.Instance);
-        var source = await repo.CreateSourceAsync(CreateSource());
+        var source = (await repo.CreateSourceAsync(CreateSource())).Source;
         var candidate = Candidate("abc123", "https://www.youtube.com/watch?v=abc123", title: "First media");
         await repo.UpsertDiscoveredMediaBatchAsync(Batch(source.Id, candidate));
 
@@ -120,7 +149,7 @@ public sealed class CreatorDiscoveryRepositoryTests
     {
         await using var db = CreateDb();
         var repo = new CreatorDiscoveryRepository(db, SystemClock.Instance);
-        var source = await repo.CreateSourceAsync(CreateSource());
+        var source = (await repo.CreateSourceAsync(CreateSource())).Source;
 
         await repo.UpsertDiscoveredMediaBatchAsync(new UpsertDiscoveredMediaBatchRequestMessage
         {
@@ -136,7 +165,7 @@ public sealed class CreatorDiscoveryRepositoryTests
             ]
         });
 
-        var updated = await db.CreatorSources.SingleAsync();
+        var updated = await db.CreatorScanStates.SingleAsync();
         updated.LastSeenHighWatermark.ShouldBe("first-in-scan");
     }
 
@@ -145,7 +174,7 @@ public sealed class CreatorDiscoveryRepositoryTests
     {
         await using var db = CreateDb();
         var repo = new CreatorDiscoveryRepository(db, SystemClock.Instance);
-        var source = await repo.CreateSourceAsync(CreateSource());
+        var source = (await repo.CreateSourceAsync(CreateSource())).Source;
 
         await repo.UpsertDiscoveredMediaBatchAsync(new UpsertDiscoveredMediaBatchRequestMessage
         {
@@ -164,7 +193,7 @@ public sealed class CreatorDiscoveryRepositoryTests
             ]
         });
 
-        var updated = await db.CreatorSources.SingleAsync();
+        var updated = await db.CreatorScanStates.SingleAsync();
         updated.NextFullScanStartIndex.ShouldBe(5_001);
         updated.LastFullScanAt.ShouldBeNull();
     }
@@ -174,8 +203,8 @@ public sealed class CreatorDiscoveryRepositoryTests
     {
         await using var db = CreateDb();
         var repo = new CreatorDiscoveryRepository(db, SystemClock.Instance);
-        var source = await repo.CreateSourceAsync(CreateSource());
-        source.NextFullScanStartIndex = 5_001;
+        var source = (await repo.CreateSourceAsync(CreateSource())).Source;
+        (await db.CreatorScanStates.SingleAsync()).NextFullScanStartIndex = 5_001;
         await db.SaveChangesAsync();
 
         var scannedAt = SystemClock.Instance.GetCurrentInstant();
@@ -192,7 +221,7 @@ public sealed class CreatorDiscoveryRepositoryTests
             Items = []
         });
 
-        var updated = await db.CreatorSources.SingleAsync();
+        var updated = await db.CreatorScanStates.SingleAsync();
         updated.NextFullScanStartIndex.ShouldBeNull();
         updated.LastFullScanAt.ShouldBe(scannedAt);
     }

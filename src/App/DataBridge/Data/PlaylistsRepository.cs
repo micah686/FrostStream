@@ -71,6 +71,7 @@ public sealed class PlaylistsRepository(
             FetchComments = request.FetchComments
         };
         db.Playlists.Add(entity);
+        db.PlaylistSourceMetadata.Add(new PlaylistSourceMetadataEntity { PlaylistId = entity.PlaylistId });
         await db.SaveChangesAsync(ct);
         return new UpsertResult(entity, WasReused: false);
     }
@@ -84,7 +85,10 @@ public sealed class PlaylistsRepository(
         playlist.State = state;
         playlist.UpdatedAt = clock.GetCurrentInstant();
         if (state == PlaylistState.MetadataResolved)
-            playlist.LastScannedAt = playlist.UpdatedAt;
+        {
+            var sourceMetadata = await GetOrCreateSourceMetadataAsync(playlistId, ct);
+            sourceMetadata.LastScannedAt = playlist.UpdatedAt;
+        }
         await db.SaveChangesAsync(ct);
     }
 
@@ -94,16 +98,32 @@ public sealed class PlaylistsRepository(
         if (playlist is null)
             return;
 
-        playlist.ProviderPlaylistId = evt.ProviderPlaylistId ?? playlist.ProviderPlaylistId;
-        playlist.Title = evt.Title ?? playlist.Title;
-        playlist.TotalItems = Math.Max(playlist.TotalItems, evt.TotalItems);
+        var sourceMetadata = await GetOrCreateSourceMetadataAsync(playlistId, ct);
+        sourceMetadata.ProviderPlaylistId = evt.ProviderPlaylistId ?? sourceMetadata.ProviderPlaylistId;
+        sourceMetadata.Title = evt.Title ?? sourceMetadata.Title;
+        sourceMetadata.TotalItems = Math.Max(sourceMetadata.TotalItems, evt.TotalItems);
         playlist.State = evt.IsComplete ? PlaylistState.MetadataResolved : PlaylistState.PendingMetadata;
         playlist.UpdatedAt = clock.GetCurrentInstant();
         if (evt.IsComplete)
-            playlist.LastScannedAt = playlist.UpdatedAt;
+            sourceMetadata.LastScannedAt = playlist.UpdatedAt;
         await db.SaveChangesAsync(ct);
 
-        await UpsertPlaylistMetadataAsync(playlistId, playlist.Title, ct);
+        await UpsertPlaylistMetadataAsync(playlistId, sourceMetadata.Title, ct);
+    }
+
+    /// <summary>
+    /// Returns the tracked source-metadata row for a playlist, adding it when missing. Rows are created
+    /// alongside the playlist, so the fallback only covers playlists that predate this table.
+    /// </summary>
+    private async Task<PlaylistSourceMetadataEntity> GetOrCreateSourceMetadataAsync(Guid playlistId, CancellationToken ct)
+    {
+        var row = await db.PlaylistSourceMetadata.FirstOrDefaultAsync(x => x.PlaylistId == playlistId, ct);
+        if (row is not null)
+            return row;
+
+        row = new PlaylistSourceMetadataEntity { PlaylistId = playlistId };
+        db.PlaylistSourceMetadata.Add(row);
+        return row;
     }
 
     private async Task UpsertPlaylistMetadataAsync(Guid playlistId, string? title, CancellationToken ct)
@@ -325,6 +345,11 @@ public sealed class PlaylistsRepository(
 
         var ids = playlists.Select(x => x.PlaylistId).ToArray();
 
+        var sourceMetadata = await db.PlaylistSourceMetadata
+            .AsNoTracking()
+            .Where(x => ids.Contains(x.PlaylistId))
+            .ToDictionaryAsync(x => x.PlaylistId, ct);
+
         var counts = await db.PlaylistItems
             .AsNoTracking()
             .Where(item => ids.Contains(item.PlaylistId))
@@ -341,9 +366,42 @@ public sealed class PlaylistsRepository(
         {
             var rows = counts.Where(c => c.PlaylistId == playlist.PlaylistId).ToList();
             var (completed, failed, pending) = ClassifyCounts(rows.Select(r => (r.Status, r.Count)));
-            summaries.Add(new PlaylistSummary(playlist, completed, failed, pending));
+            summaries.Add(new PlaylistSummary(
+                playlist,
+                sourceMetadata.GetValueOrDefault(playlist.PlaylistId),
+                completed,
+                failed,
+                pending));
         }
         return summaries;
+    }
+
+    public async Task<IReadOnlyList<ProviderPlaylistLibraryItem>> ListLibraryAsync(
+        int pageSize,
+        int pageOffset,
+        CancellationToken ct = default)
+    {
+        var size = Math.Clamp(pageSize, 1, 200);
+        var offset = Math.Max(0, pageOffset);
+
+        // This query intentionally touches only playlists.* library tables. It must remain valid
+        // after the corresponding jobs.playlists row has been purged.
+        return await db.PlaylistMetadata
+            .AsNoTracking()
+            .OrderBy(x => x.Title)
+            .ThenBy(x => x.PlaylistId)
+            .Skip(offset)
+            .Take(size)
+            .Select(metadata => new ProviderPlaylistLibraryItem(
+                metadata.PlaylistId,
+                metadata.Title,
+                db.MediaPlaylistMemberships
+                    .Where(membership => membership.PlaylistId == metadata.PlaylistId)
+                    .OrderBy(membership => membership.PlaylistIndex)
+                    .Select(membership => (Guid?)membership.MediaGuid)
+                    .FirstOrDefault(),
+                db.MediaPlaylistMemberships.Count(membership => membership.PlaylistId == metadata.PlaylistId)))
+            .ToListAsync(ct);
     }
 
     public async Task<PlaylistDetail?> GetDetailAsync(Guid playlistId, CancellationToken ct = default)
@@ -351,6 +409,10 @@ public sealed class PlaylistsRepository(
         var playlist = await db.Playlists.AsNoTracking().FirstOrDefaultAsync(x => x.PlaylistId == playlistId, ct);
         if (playlist is null)
             return null;
+
+        var sourceMetadata = await db.PlaylistSourceMetadata
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.PlaylistId == playlistId, ct);
 
         var items = await (
             from item in db.PlaylistItems.AsNoTracking()
@@ -373,7 +435,7 @@ public sealed class PlaylistsRepository(
             .ToListAsync(ct);
 
         var (completed, failed, pending) = ClassifyCounts(items.Select(i => (i.JobStatus, 1)));
-        return new PlaylistDetail(playlist, completed, failed, pending, items);
+        return new PlaylistDetail(playlist, sourceMetadata, completed, failed, pending, items);
     }
 
     private static (int Completed, int Failed, int Pending) ClassifyCounts(IEnumerable<(DownloadJobStatus Status, int Count)> rows)

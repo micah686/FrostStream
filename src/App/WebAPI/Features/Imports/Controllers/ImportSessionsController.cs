@@ -13,9 +13,14 @@ namespace WebAPI.Features.Imports.Controllers;
 [Route("api/global/imports/sessions")]
 public sealed class ImportSessionsController(
     IMessageBus messageBus,
+    IJetStreamPublisher publisher,
     Func<string, IObjectStore> objectStoreFactory,
+    IClock clock,
     ILogger<ImportSessionsController> logger) : ControllerBase
 {
+    /// <summary>Must match Scheduler's TaskTypeRegistry entry so manual and scheduled runs report as the same task.</summary>
+    private const string ImportSessionCleanupTaskType = "import_session_cleanup";
+
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);
     private const long MaxMappingBytes = 10 * 1024 * 1024;
     private static readonly JsonSerializerOptions MappingTemplateJsonOptions = CreateMappingTemplateJsonOptions();
@@ -403,6 +408,56 @@ public sealed class ImportSessionsController(
         return Ok(response);
     }
 
+    [HttpPost("cleanup")]
+    [Endpoint(EndpointIds.ImportsSessionsCleanup)]
+    [EndpointSummary("Purge finished local import session history")]
+    [EndpointDescription("Queues a background purge of terminal local-media import sessions older than the retention period, along with their items, mappings, and the durable LocalImportItemFlow instances that drove them. Terminal sessions are those that completed, completed with failures, were cancelled, or failed scanning.")]
+    public async Task<ActionResult> CleanupHistory(
+        [FromBody] CleanupImportSessionHistoryRequest? request,
+        CancellationToken cancellationToken)
+    {
+        var retentionDays = request?.RetentionDays;
+        if (retentionDays is < 0)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "retentionDays must be zero or greater.",
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+
+        var now = clock.GetCurrentInstant();
+        var idempotencyKey = $"manual-import-session-cleanup:{Guid.NewGuid():N}";
+        try
+        {
+            await publisher.PublishAsync(
+                BackgroundJobSubjects.ImportSessionCleanupRequest,
+                new ImportSessionCleanupRequested
+                {
+                    ScheduleKey = "manual",
+                    TaskType = ImportSessionCleanupTaskType,
+                    DueWindowUtc = now,
+                    IdempotencyKey = idempotencyKey,
+                    OccurredAt = now,
+                    RetentionDays = retentionDays
+                },
+                messageId: idempotencyKey,
+                cancellationToken: cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed enqueueing manual import session cleanup");
+            return BadGateway("Failed to queue cleanup", "Could not reach the messaging bus.");
+        }
+
+        return Accepted(new
+        {
+            queued = true,
+            idempotencyKey,
+            retentionDays
+        });
+    }
+
     [HttpGet("/api/global/imports/incoming/browse")]
     [Endpoint(EndpointIds.ImportsIncomingBrowse)]
     [EndpointSummary("Browse a worker's incoming folder")]
@@ -461,11 +516,24 @@ public sealed class ImportSessionsController(
             Status = StatusCodes.Status502BadGateway
         });
 
+    private ObjectResult BadGateway(string title, string? detail)
+        => StatusCode(StatusCodes.Status502BadGateway, new ProblemDetails
+        {
+            Title = title,
+            Detail = detail,
+            Status = StatusCodes.Status502BadGateway
+        });
+
     public sealed record ImportSessionEnrichBody(IReadOnlyList<Guid>? ItemIds, ImportSessionYtDlpOptions? Options);
 
     public sealed record ImportSessionUpdateOptionsBody(bool? DeleteSourceFiles);
 
     public sealed record ImportSessionMetadataRefreshBody(IReadOnlyList<Guid>? ItemIds);
+
+    public sealed record CleanupImportSessionHistoryRequest
+    {
+        public int? RetentionDays { get; init; }
+    }
 
     public sealed record ImportSessionItemPatchBody
     {

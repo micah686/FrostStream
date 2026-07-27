@@ -21,8 +21,9 @@ public interface IMetadataRepository
     /// avatar/banner blob paths and the storage backend they live on. Null blob paths are
     /// preserved (COALESCE), so a refresh that only produced an avatar won't wipe an existing
     /// banner. metadata.accounts is the authoritative table for these assets.
+    /// Returns the id of the inserted or updated account row.
     /// </summary>
-    Task UpsertAccountAssetsAsync(
+    Task<long> UpsertAccountAssetsAsync(
         string platform,
         string accountHandle,
         string accountName,

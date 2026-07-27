@@ -31,9 +31,15 @@ internal sealed class ScheduledBackupConsumer(
                 AttemptedAt = clock.GetCurrentInstant()
             }, cancellationToken: cancellationToken);
 
+            var mode = message.TaskType.ToLowerInvariant() switch
+            {
+                "backup-full" => "full",
+                "backup-snapshot" or "backup" => "snapshot",
+                _ => throw new InvalidOperationException($"Unsupported scheduled backup task type '{message.TaskType}'.")
+            };
             var name = $"scheduled-{message.ScheduleKey}-{message.DueWindowUtc:yyyyMMddHHmmss}";
             var queued = await coordinator.QueueAsync(
-                name, "snapshot", true, message.IdempotencyKey, cancellationToken, message.ScheduleKey);
+                name, mode, true, message.IdempotencyKey, cancellationToken, message.ScheduleKey);
             var completed = await coordinator.WaitAsync(queued.JobId, cancellationToken);
             if (completed.Status != "completed")
                 throw new InvalidOperationException(completed.ErrorMessage ?? "Scheduled backup failed.");
