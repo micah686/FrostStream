@@ -31,6 +31,13 @@ export interface PlatformPlaylist {
   items: PlatformPlaylistItem[] | null;
 }
 
+export interface ProviderPlaylistLibraryItem {
+  playlistId: string;
+  title: string | null;
+  firstMediaGuid: string | null;
+  itemCount: number;
+}
+
 export interface PlaylistDownloadRequest {
   sourceUrl: string;
   storageKey?: string | null;
@@ -70,6 +77,14 @@ export async function listPlatformPlaylists(
   fetchImpl: typeof fetch = fetch
 ): Promise<PlatformPlaylist[]> {
   return getJson<PlatformPlaylist[]>(`${BASE}?pageSize=${pageSize}&pageOffset=${pageOffset}`, fetchImpl);
+}
+
+export async function listProviderPlaylistLibrary(
+  pageSize = 50,
+  pageOffset = 0,
+  fetchImpl: typeof fetch = fetch
+): Promise<ProviderPlaylistLibraryItem[]> {
+  return getJson<ProviderPlaylistLibraryItem[]>(`${BASE}/library?pageSize=${pageSize}&pageOffset=${pageOffset}`, fetchImpl);
 }
 
 export async function getPlatformPlaylist(

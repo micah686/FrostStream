@@ -15,9 +15,8 @@
   } from '@lucide/svelte';
   import { getUserPlaylist, listUserPlaylists, type UserPlaylist } from '$lib/api/userPlaylists';
   import {
-    getPlatformPlaylist,
-    listPlatformPlaylists,
-    type PlatformPlaylist
+    listProviderPlaylistLibrary,
+    type ProviderPlaylistLibraryItem
   } from '$lib/api/playlists';
   import {
     accentFor,
@@ -88,8 +87,7 @@
   }
 
   interface PlatformPlaylistCard {
-    playlist: PlatformPlaylist;
-    firstGuid: string | null;
+    playlist: ProviderPlaylistLibraryItem;
   }
 
   let sort = $state('added_at:desc');
@@ -254,18 +252,8 @@
     platformPlaylistsLoading = true;
     platformPlaylistsError = null;
     try {
-      const list = await listPlatformPlaylists();
-      const details = await Promise.all(
-        list.map((playlist) => getPlatformPlaylist(playlist.playlistId).catch(() => playlist))
-      );
-      platformPlaylistCards = details.map((playlist) => ({
-        playlist,
-        firstGuid:
-          (playlist.items ?? [])
-            .slice()
-            .sort((a, b) => a.playlistIndex - b.playlistIndex)
-            .find((item) => item.mediaGuid)?.mediaGuid ?? null
-      }));
+      const list = await listProviderPlaylistLibrary();
+      platformPlaylistCards = list.map((playlist) => ({ playlist }));
     } catch (err) {
       platformPlaylistsError = err instanceof Error ? err.message : 'Could not load downloaded playlists.';
     } finally {
@@ -286,8 +274,7 @@
   function platformPlaylistMeta(card: PlatformPlaylistCard): string {
     const playlist = card.playlist;
     return [
-      `${playlist.completedItems} of ${playlist.totalItems} downloaded`,
-      formatRelativeDate(playlist.updatedAt) ? `updated ${formatRelativeDate(playlist.updatedAt)}` : null
+      `${playlist.itemCount} ${playlist.itemCount === 1 ? 'video' : 'videos'}`
     ]
       .filter(Boolean)
       .join(' · ');
@@ -690,17 +677,17 @@
         <div class="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
           {#each platformPlaylistCards as card (card.playlist.playlistId)}
             <article class="group min-w-0">
-              {#if card.firstGuid}
+              {#if card.playlist.firstMediaGuid}
                 <a
-                  href={`/watch/${card.firstGuid}?list=${encodeURIComponent(card.playlist.playlistId)}`}
+                  href={`/watch/${card.playlist.firstMediaGuid}?list=${encodeURIComponent(card.playlist.playlistId)}`}
                   class={`relative block aspect-video w-full overflow-hidden rounded-2xl bg-gradient-to-br ${accentFor(card.playlist.playlistId)} text-left shadow-lg shadow-black/20 transition duration-300 group-hover:-translate-y-1 group-hover:shadow-xl group-hover:shadow-black/30`}
-                  aria-label={`Play playlist ${card.playlist.title ?? card.playlist.sourceUrl}`}
+                  aria-label={`Play playlist ${card.playlist.title ?? 'Untitled provider playlist'}`}
                 >
                   <ListMusic
                     class="absolute left-1/2 top-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 text-white/15"
                   />
                   <img
-                    src={`/api/media/watch/${card.firstGuid}/thumbnail`}
+                    src={`/api/media/watch/${card.playlist.firstMediaGuid}/thumbnail`}
                     alt=""
                     loading="lazy"
                     decoding="async"
@@ -714,7 +701,7 @@
                       <ListMusic class="h-3.5 w-3.5" />
                       Playlist
                     </span>
-                    {card.playlist.completedItems} / {card.playlist.totalItems}
+                    {card.playlist.itemCount} {card.playlist.itemCount === 1 ? 'video' : 'videos'}
                   </span>
                   <span
                     class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-white/95 text-slate-900 opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
@@ -738,7 +725,7 @@
               {/if}
               <div class="mt-3 min-w-0 px-1">
                 <h3 class="line-clamp-2 text-sm font-semibold leading-snug text-base-content/90">
-                  {card.playlist.title ?? card.playlist.sourceUrl}
+                  {card.playlist.title ?? 'Untitled provider playlist'}
                 </h3>
                 <p class="mt-1 truncate text-xs text-base-content/40">{platformPlaylistMeta(card)}</p>
               </div>

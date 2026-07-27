@@ -113,11 +113,8 @@ public sealed class MediaPlaylistMembershipConfiguration : IEntityTypeConfigurat
             .HasConstraintName("fk_media_playlist_membership_media_guid")
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasOne<PlaylistEntity>()
-            .WithMany()
-            .HasForeignKey(x => x.PlaylistId)
-            .HasConstraintName("fk_media_playlist_membership_playlist_id")
-            .OnDelete(DeleteBehavior.Cascade);
+        // This is deliberately not an EF relationship to jobs.playlists. Membership is
+        // user-facing library data and must survive deletion of playlist download history.
     }
 }
 
@@ -157,11 +154,8 @@ public sealed class PlaylistMetadataConfiguration : IEntityTypeConfiguration<Pla
             .IsUnique()
             .HasDatabaseName("ux_metadata_playlist_metadata_playlist_id");
 
-        builder.HasOne<PlaylistEntity>()
-            .WithMany()
-            .HasForeignKey(x => x.PlaylistId)
-            .HasConstraintName("fk_metadata_playlist_metadata_playlist_id")
-            .OnDelete(DeleteBehavior.Cascade);
+        // This is deliberately not an EF relationship to jobs.playlists. The metadata row is
+        // the durable library copy and must survive deletion of the job/request row.
     }
 }
 

@@ -36,6 +36,13 @@ public sealed class PlaylistQueryConsumerService(
             queueGroup: QueueGroup,
             cancellationToken: stoppingToken);
 
+        await SubscribeAsync<ProviderPlaylistLibraryListRequestMessage>(
+            messageBus,
+            PlaylistSubjects.ProviderPlaylistLibraryList,
+            HandleLibraryListAsync,
+            queueGroup: QueueGroup,
+            cancellationToken: stoppingToken);
+
         await SubscribeAsync<PlaylistItemForceQueueRequestMessage>(
             messageBus,
             PlaylistSubjects.PlaylistItemForceQueue,
@@ -186,6 +193,36 @@ public sealed class PlaylistQueryConsumerService(
                 Success = false,
                 ErrorCode = "internal_error",
                 ErrorMessage = "Internal playlist service error."
+            });
+        }
+    }
+
+    private async Task HandleLibraryListAsync(IMessageContext<ProviderPlaylistLibraryListRequestMessage> context)
+    {
+        try
+        {
+            var rows = await WithPlaylists(playlists => playlists.ListLibraryAsync(
+                context.Message.PageSize,
+                context.Message.PageOffset));
+            await context.RespondAsync(new ProviderPlaylistLibraryListResponseMessage
+            {
+                Success = true,
+                Items = rows.Select(row => new ProviderPlaylistLibraryDto
+                {
+                    PlaylistId = row.PlaylistId,
+                    Title = row.Title,
+                    FirstMediaGuid = row.FirstMediaGuid,
+                    ItemCount = row.ItemCount
+                }).ToArray()
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed handling provider playlist library list");
+            await context.RespondAsync(new ProviderPlaylistLibraryListResponseMessage
+            {
+                Success = false,
+                ErrorMessage = "Internal playlist library service error."
             });
         }
     }

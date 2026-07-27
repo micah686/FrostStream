@@ -121,6 +121,7 @@ public static class EndpointIds
     // Playlists
     public const string PlaylistsCreate = "playlists.create";
     public const string PlaylistsList = "playlists.list";
+    public const string ProviderPlaylistsLibraryList = "provider-playlists.library.list";
     public const string PlaylistsGet = "playlists.get";
     public const string PlaylistsForceQueueItem = "playlists.force-queue-item";
     public const string UserPlaylistsCreate = "user-playlists.create";
@@ -355,6 +356,7 @@ public static class EndpointCatalog
 
         new(EndpointIds.PlaylistsCreate, Bundles.Playlists),
         new(EndpointIds.PlaylistsList, Bundles.Playlists),
+        new(EndpointIds.ProviderPlaylistsLibraryList, Bundles.Playlists),
         new(EndpointIds.PlaylistsGet, Bundles.Playlists),
         new(EndpointIds.PlaylistsForceQueueItem, Bundles.Playlists),
         new(EndpointIds.UserPlaylistsCreate, Bundles.Playlists),

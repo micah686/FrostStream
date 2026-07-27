@@ -376,6 +376,34 @@ public sealed class PlaylistsRepository(
         return summaries;
     }
 
+    public async Task<IReadOnlyList<ProviderPlaylistLibraryItem>> ListLibraryAsync(
+        int pageSize,
+        int pageOffset,
+        CancellationToken ct = default)
+    {
+        var size = Math.Clamp(pageSize, 1, 200);
+        var offset = Math.Max(0, pageOffset);
+
+        // This query intentionally touches only playlists.* library tables. It must remain valid
+        // after the corresponding jobs.playlists row has been purged.
+        return await db.PlaylistMetadata
+            .AsNoTracking()
+            .OrderBy(x => x.Title)
+            .ThenBy(x => x.PlaylistId)
+            .Skip(offset)
+            .Take(size)
+            .Select(metadata => new ProviderPlaylistLibraryItem(
+                metadata.PlaylistId,
+                metadata.Title,
+                db.MediaPlaylistMemberships
+                    .Where(membership => membership.PlaylistId == metadata.PlaylistId)
+                    .OrderBy(membership => membership.PlaylistIndex)
+                    .Select(membership => (Guid?)membership.MediaGuid)
+                    .FirstOrDefault(),
+                db.MediaPlaylistMemberships.Count(membership => membership.PlaylistId == metadata.PlaylistId)))
+            .ToListAsync(ct);
+    }
+
     public async Task<PlaylistDetail?> GetDetailAsync(Guid playlistId, CancellationToken ct = default)
     {
         var playlist = await db.Playlists.AsNoTracking().FirstOrDefaultAsync(x => x.PlaylistId == playlistId, ct);

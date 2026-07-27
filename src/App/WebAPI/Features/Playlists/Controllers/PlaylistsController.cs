@@ -170,6 +170,38 @@ public class PlaylistsController(
         return Ok(response.Items ?? Array.Empty<PlaylistDto>());
     }
 
+    /// <summary>Lists provider playlists from durable user-facing library metadata.</summary>
+    [HttpGet("library")]
+    [Endpoint(EndpointIds.ProviderPlaylistsLibraryList)]
+    [EndpointSummary("List provider playlists in the library")]
+    [EndpointDescription("Returns provider playlist titles, media counts, and the first media identifier from the durable playlist library. Download-job lifecycle state is intentionally excluded.")]
+    public async Task<ActionResult<IReadOnlyList<ProviderPlaylistLibraryDto>>> ListLibrary(
+        [FromQuery] int pageSize = 50,
+        [FromQuery] int pageOffset = 0,
+        CancellationToken cancellationToken = default)
+    {
+        ProviderPlaylistLibraryListResponseMessage? response;
+        try
+        {
+            response = await messageBus.RequestAsync<ProviderPlaylistLibraryListRequestMessage, ProviderPlaylistLibraryListResponseMessage>(
+                PlaylistSubjects.ProviderPlaylistLibraryList,
+                new ProviderPlaylistLibraryListRequestMessage { PageSize = pageSize, PageOffset = pageOffset },
+                QueryTimeout,
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed processing provider playlist library list request");
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable.");
+        }
+
+        if (response is null)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable.");
+        if (!response.Success)
+            return StatusCode(StatusCodes.Status500InternalServerError, response.ErrorMessage ?? "Playlist library list failed.");
+        return Ok(response.Items ?? Array.Empty<ProviderPlaylistLibraryDto>());
+    }
+
     /// <summary>
     /// Gets a single playlist by id, including the full item list.
     /// </summary>

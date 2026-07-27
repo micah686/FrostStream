@@ -50,6 +50,8 @@ public interface IPlaylistsRepository
 
     Task<IReadOnlyList<PlaylistSummary>> ListAsync(int pageSize, int pageOffset, CancellationToken ct = default);
 
+    Task<IReadOnlyList<ProviderPlaylistLibraryItem>> ListLibraryAsync(int pageSize, int pageOffset, CancellationToken ct = default);
+
     Task<PlaylistDetail?> GetDetailAsync(Guid playlistId, CancellationToken ct = default);
 }
 
@@ -92,3 +94,9 @@ public sealed record PlaylistDetailItem(
     string? IgnoredKeyword);
 
 public sealed record PlaylistAudioPreference(bool EncodeForPlaylist, string? StorageKey);
+
+public sealed record ProviderPlaylistLibraryItem(
+    Guid PlaylistId,
+    string? Title,
+    Guid? FirstMediaGuid,
+    int ItemCount);

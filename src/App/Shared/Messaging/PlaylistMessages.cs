@@ -240,6 +240,29 @@ public sealed class PlaylistListResponseMessage
     public IReadOnlyList<PlaylistDto>? Items { get; init; }
 }
 
+/// <summary>Reads provider playlists from the durable media-library metadata, not download-job state.</summary>
+public sealed class ProviderPlaylistLibraryListRequestMessage
+{
+    public int PageSize { get; init; } = 50;
+    public int PageOffset { get; init; }
+}
+
+public sealed record ProviderPlaylistLibraryDto
+{
+    public required Guid PlaylistId { get; init; }
+    public string? Title { get; init; }
+    public Guid? FirstMediaGuid { get; init; }
+    public int ItemCount { get; init; }
+    public string? UserNote { get; init; }
+}
+
+public sealed class ProviderPlaylistLibraryListResponseMessage
+{
+    public bool Success { get; init; }
+    public string? ErrorMessage { get; init; }
+    public IReadOnlyList<ProviderPlaylistLibraryDto>? Items { get; init; }
+}
+
 // ── NATS request/reply (non-JetStream) for owner-scoped user playlists ────────
 
 public sealed class UserPlaylistCreateRequestMessage
