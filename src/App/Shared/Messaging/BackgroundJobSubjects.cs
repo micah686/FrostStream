@@ -8,6 +8,7 @@ public static class BackgroundJobSubjects
     public const string DatabaseStaleMediaCleanupRequest = "fs.cleanup.database.stale-media.request";
     public const string ProcessedMessageCleanupRequest = "fs.cleanup.database.processed-messages.request";
     public const string DownloadHistoryCleanupRequest = "fs.cleanup.jobs.download-history.request";
+    public const string ImportSessionCleanupRequest = "fs.cleanup.imports.sessions.request";
     public const string DatabaseMaintenanceRequest = "fs.cleanup.database.maintenance.request";
     public const string DatabaseMaintenanceReindexRequest = "fs.cleanup.database.reindex.request";
     public const string SearchReindexRequest = "fs.index.search.rebuild.request";

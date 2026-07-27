@@ -45,6 +45,7 @@ export const scheduleTaskTypes = [
   'search_reindex',
   'processed_message_cleanup',
   'download_history_cleanup',
+  'import_session_cleanup',
   'backup'
 ] as const;
 

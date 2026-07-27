@@ -74,6 +74,7 @@ internal static class Program
         builder.Services.AddTransient<Jobs.SearchReindexJob>();
         builder.Services.AddTransient<Jobs.ProcessedMessageCleanupJob>();
         builder.Services.AddTransient<Jobs.DownloadHistoryCleanupJob>();
+        builder.Services.AddTransient<Jobs.ImportSessionCleanupJob>();
         builder.Services.AddTransient<Jobs.BackupJob>();
 
         builder.Services.AddSingleton<IChannelScanRefresher, ChannelScanRefresher>();
@@ -85,6 +86,7 @@ internal static class Program
         builder.Services.AddSingleton<ISearchReindexScheduler, SearchReindexScheduler>();
         builder.Services.AddSingleton<IProcessedMessageCleanupScheduler, ProcessedMessageCleanupScheduler>();
         builder.Services.AddSingleton<IDownloadHistoryCleanupScheduler, DownloadHistoryCleanupScheduler>();
+        builder.Services.AddSingleton<IImportSessionCleanupScheduler, ImportSessionCleanupScheduler>();
         builder.Services.AddSingleton<IBackupScheduler, BackupScheduler>();
 
         builder.Services.AddHostedService<ScheduleHydrationService>();

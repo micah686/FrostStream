@@ -15,6 +15,7 @@ public sealed class BackgroundJobConsumerService(
     NpgsqlDataSource dataSource,
     IMetadataRebuildCoordinator rebuildCoordinator,
     IDownloadHistoryPurger historyPurger,
+    IImportSessionPurger importSessionPurger,
     INotificationDispatcher notificationDispatcher,
     IBackgroundRunReporter runReporter,
     IClock clock,
@@ -36,7 +37,8 @@ public sealed class BackgroundJobConsumerService(
             Consume<DatabaseMaintenanceReindexRequested>(BackgroundJobsTopology.DatabaseMaintenanceReindexConsumer, HandleDatabaseMaintenanceReindexAsync, stoppingToken),
             Consume<DatabaseStaleMediaCleanupRequested>(BackgroundJobsTopology.DatabaseStaleMediaCleanupConsumer, HandleDatabaseStaleMediaCleanupAsync, stoppingToken),
             Consume<ProcessedMessageCleanupRequested>(BackgroundJobsTopology.ProcessedMessageCleanupConsumer, HandleProcessedMessageCleanupAsync, stoppingToken),
-            Consume<DownloadHistoryCleanupRequested>(BackgroundJobsTopology.DownloadHistoryCleanupConsumer, HandleDownloadHistoryCleanupAsync, stoppingToken)
+            Consume<DownloadHistoryCleanupRequested>(BackgroundJobsTopology.DownloadHistoryCleanupConsumer, HandleDownloadHistoryCleanupAsync, stoppingToken),
+            Consume<ImportSessionCleanupRequested>(BackgroundJobsTopology.ImportSessionCleanupConsumer, HandleImportSessionCleanupAsync, stoppingToken)
         };
 
         logger.LogInformation("Subscribed to {Count} background job consumers on stream {Stream}.", consumers.Length, Stream.Value);
@@ -257,6 +259,32 @@ public sealed class BackgroundJobConsumerService(
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed handling download history cleanup request {IdempotencyKey}; nacking", message.IdempotencyKey);
+            run.Fail(ex.Message);
+            await MarkFailureAsync(message);
+            await context.NackAsync();
+        }
+    }
+
+    private async Task HandleImportSessionCleanupAsync(IJsMessageContext<ImportSessionCleanupRequested> context)
+    {
+        var message = context.Message;
+        await using var run = await runReporter.BeginAsync("import_session_cleanup", message);
+        try
+        {
+            await MarkAttemptAsync(message);
+
+            var result = await importSessionPurger.PurgeAsync(
+                message.RetentionDays ?? ImportSessionPurger.DefaultRetentionDays,
+                progress => run.ReportAsync(progress),
+                _stoppingToken);
+
+            run.Succeed(result.Describe());
+            await MarkSuccessAsync(message);
+            await context.AckAsync();
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed handling import session cleanup request {IdempotencyKey}; nacking", message.IdempotencyKey);
             run.Fail(ex.Message);
             await MarkFailureAsync(message);
             await context.NackAsync();

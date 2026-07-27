@@ -11,6 +11,7 @@ public sealed class BackgroundJobsTopology : ITopologySource
 
     public const string ProcessedMessageCleanupConsumer = "databridge-processed-message-cleanup";
     public const string DownloadHistoryCleanupConsumer = "databridge-download-history-cleanup";
+    public const string ImportSessionCleanupConsumer = "databridge-import-session-cleanup";
     public const string SearchReindexConsumer = "databridge-search-reindex";
     public const string DatabaseMaintenanceConsumer = "databridge-database-maintenance";
     public const string DatabaseMaintenanceReindexConsumer = "databridge-database-maintenance-reindex";
@@ -41,6 +42,7 @@ public sealed class BackgroundJobsTopology : ITopologySource
                 BackgroundJobSubjects.DatabaseStaleMediaCleanupRequest,
                 BackgroundJobSubjects.ProcessedMessageCleanupRequest,
                 BackgroundJobSubjects.DownloadHistoryCleanupRequest,
+                BackgroundJobSubjects.ImportSessionCleanupRequest,
                 BackgroundJobSubjects.DatabaseMaintenanceRequest,
                 BackgroundJobSubjects.DatabaseMaintenanceReindexRequest,
                 BackgroundJobSubjects.SearchReindexRequest,
@@ -61,6 +63,7 @@ public sealed class BackgroundJobsTopology : ITopologySource
         // A first purge on a long-lived install walks a lot of history and deletes one Cleipnir flow
         // instance per run, so the ack window is generous relative to the other cleanup consumers.
         yield return DataBridgeConsumer(DownloadHistoryCleanupConsumer, BackgroundJobSubjects.DownloadHistoryCleanupRequest, TimeSpan.FromMinutes(30), maxDeliver: 3);
+        yield return DataBridgeConsumer(ImportSessionCleanupConsumer, BackgroundJobSubjects.ImportSessionCleanupRequest, TimeSpan.FromMinutes(30), maxDeliver: 3);
         yield return DataBridgeConsumer(SearchReindexConsumer, BackgroundJobSubjects.SearchReindexRequest, TimeSpan.FromMinutes(30), maxDeliver: 3);
         yield return DataBridgeConsumer(DatabaseMaintenanceConsumer, BackgroundJobSubjects.DatabaseMaintenanceRequest, TimeSpan.FromHours(2), maxDeliver: 3);
         yield return DataBridgeConsumer(DatabaseMaintenanceReindexConsumer, BackgroundJobSubjects.DatabaseMaintenanceReindexRequest, TimeSpan.FromHours(24), maxDeliver: 2);

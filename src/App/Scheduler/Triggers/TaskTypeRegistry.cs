@@ -14,6 +14,7 @@ internal static class TaskTypeRegistry
     public const string SearchReindex = "search_reindex";
     public const string ProcessedMessageCleanup = "processed_message_cleanup";
     public const string DownloadHistoryCleanup = "download_history_cleanup";
+    public const string ImportSessionCleanup = "import_session_cleanup";
     public const string Backup = "backup";
 
     private static readonly IReadOnlyDictionary<string, Type> JobTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
@@ -27,6 +28,7 @@ internal static class TaskTypeRegistry
         [SearchReindex] = typeof(SearchReindexJob),
         [ProcessedMessageCleanup] = typeof(ProcessedMessageCleanupJob),
         [DownloadHistoryCleanup] = typeof(DownloadHistoryCleanupJob),
+        [ImportSessionCleanup] = typeof(ImportSessionCleanupJob),
         [Backup] = typeof(BackupJob)
     };
 

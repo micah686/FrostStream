@@ -17,7 +17,7 @@ public sealed class DownloadFlowStartupState(IClock clock)
 }
 
 /// <summary>
-/// A blocking startup gate. It deletes only legacy/current download flow instances, reconciles
+/// A blocking startup gate. It deletes legacy and non-terminal download flow instances, reconciles
 /// PostgreSQL, and completes before any V2 ingress/worker-result consumer is started.
 /// </summary>
 public sealed class DownloadFlowStartupService(
@@ -48,10 +48,18 @@ public sealed class DownloadFlowStartupService(
                 """, cancellationToken);
         }
 
-        // Delete every known download-flow instance, including one that committed a terminal
-        // status immediately before the process exited. This prevents post-terminal effects from
-        // being replayed by Cleipnir during a later generation.
+        // Delete flow instances for runs that are still in flight or could resume. Terminal runs
+        // are left for DownloadHistoryPurger; deleting them here would make startup cost grow with
+        // the size of history instead of the amount of unfinished work.
+        var nonTerminalRunStatuses = new[]
+        {
+            DownloadJobStatus.Queued,
+            DownloadJobStatus.Running,
+            DownloadJobStatus.Stopping,
+            DownloadJobStatus.Compensating
+        };
         var knownRuns = await db.DownloadJobRuns.AsNoTracking()
+            .Where(r => nonTerminalRunStatuses.Contains(r.Status))
             .Select(x => new { x.JobId, x.RunId })
             .ToListAsync(cancellationToken);
         foreach (var run in knownRuns)
@@ -75,7 +83,7 @@ public sealed class DownloadFlowStartupService(
             .ReconcileForStartupAsync(cancellationToken);
         state.MarkReady();
         logger.LogInformation(
-            "Download V2 startup reconciliation complete: {Legacy} legacy flows, {RunFlows} run flows, and {GroupFlows} group flows deleted; {Queued} queued jobs stopped, {Active} active jobs failed, {Groups} active groups failed, {Leases} leases expired.",
+            "Download V2 startup reconciliation complete: {Legacy} legacy flows, {RunFlows} non-terminal run flows, and {GroupFlows} group flows deleted; {Queued} queued jobs stopped, {Active} active jobs failed, {Groups} active groups failed, {Leases} leases expired.",
             legacyIds.Count, knownRuns.Count, knownGroupIds.Count, result.StoppedQueuedJobs, result.FailedActiveJobs,
             result.FailedActiveGroups, result.ExpiredLeases);
     }

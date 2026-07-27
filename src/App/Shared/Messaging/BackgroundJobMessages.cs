@@ -77,6 +77,16 @@ public sealed record DownloadHistoryCleanupRequested : ScheduledBackgroundReques
     public bool IncludeFailed { get; init; }
 }
 
+/// <summary>
+/// Purges terminal local-media import sessions and the durable <see cref="LocalImportItemFlow"/>
+/// instances that drove them.
+/// </summary>
+public sealed record ImportSessionCleanupRequested : ScheduledBackgroundRequest
+{
+    /// <summary>Purge only sessions that completed longer ago than this; 30 days when null.</summary>
+    public int? RetentionDays { get; init; }
+}
+
 public sealed record DatabaseMaintenanceRequested : ScheduledBackgroundRequest;
 
 public sealed record DatabaseMaintenanceReindexRequested : ScheduledBackgroundRequest;

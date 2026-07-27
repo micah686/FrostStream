@@ -119,6 +119,11 @@
         'Deletes finished download jobs, along with their runs, artifacts and history, once they are older than the configured retention window. Failed and stopped jobs can optionally be included.'
     },
     {
+      type: 'import_session_cleanup',
+      summary:
+        'Deletes finished local-media import sessions, along with their items, mappings and durable flow instances, once they are older than the configured retention window.'
+    },
+    {
       type: 'backup',
       summary: 'Runs the configured backup workflow for the current deployment.'
     }
@@ -199,7 +204,8 @@
 
     const cron = formTiming === 'cron' ? formCron.trim() : '';
     const intervalSeconds = formTiming === 'interval' ? Number(formIntervalSeconds) : null;
-    const retentionDays = formTaskType === 'download_history_cleanup' ? Number(formRetentionDays) : 0;
+    const cleanupTaskTypes = ['download_history_cleanup', 'import_session_cleanup'];
+    const retentionDays = cleanupTaskTypes.includes(formTaskType) ? Number(formRetentionDays) : 0;
     if (formTiming === 'cron' && !cron) {
       formError = 'Enter a Quartz cron expression.';
       return;
@@ -429,7 +435,7 @@
         </div>
       </details>
 
-      {#if formTaskType === 'download_history_cleanup'}
+      {#if formTaskType === 'download_history_cleanup' || formTaskType === 'import_session_cleanup'}
         <div class="rounded-xl border border-base-300/70 bg-base-200/40 p-4">
           <h3 class="text-sm font-semibold text-base-content/90">Cleanup options</h3>
           <div class="mt-4 grid gap-4 sm:grid-cols-2">
@@ -438,10 +444,12 @@
               <input class="input w-full" id="schedule-retention-days" type="number" min={0} step={1} bind:value={formRetentionDays} />
               <p class="mt-1.5 text-xs text-base-content/40">0 keeps the default cleanup behavior.</p>
             </div>
-            <label class="label flex cursor-pointer items-center gap-3 text-sm sm:items-start sm:pt-8">
-              <input type="checkbox" class="checkbox" bind:checked={formIncludeFailed} />
-              <span>Delete failed and stopped jobs</span>
-            </label>
+            {#if formTaskType === 'download_history_cleanup'}
+              <label class="label flex cursor-pointer items-center gap-3 text-sm sm:items-start sm:pt-8">
+                <input type="checkbox" class="checkbox" bind:checked={formIncludeFailed} />
+                <span>Delete failed and stopped jobs</span>
+              </label>
+            {/if}
           </div>
         </div>
       {/if}

@@ -63,6 +63,7 @@ public static class EndpointIds
     public const string ImportsSessionsCommit = "imports.sessions.commit";
     public const string ImportsSessionsRetry = "imports.sessions.retry";
     public const string ImportsSessionsCancel = "imports.sessions.cancel";
+    public const string ImportsSessionsCleanup = "imports.sessions.cleanup";
     public const string ImportsIncomingBrowse = "imports.incoming.browse";
     public const string WorkersList = "workers.list";
 
@@ -305,6 +306,7 @@ public static class EndpointCatalog
         new(EndpointIds.ImportsSessionsCommit, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsRetry, Bundles.Downloading),
         new(EndpointIds.ImportsSessionsCancel, Bundles.Downloading),
+        new(EndpointIds.ImportsSessionsCleanup, Bundles.Downloading),
         new(EndpointIds.ImportsIncomingBrowse, Bundles.Downloading),
         new(EndpointIds.WorkersList, Bundles.Management),
 
