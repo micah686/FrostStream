@@ -9,7 +9,6 @@ public sealed class BackgroundJobsTopology : ITopologySource
     public const string MediaProcessorQueueGroup = "mediaprocessor-bgjobs";
     public const string WorkerQueueGroup = "worker-bgjobs";
 
-    public const string ProcessedMessageCleanupConsumer = "databridge-processed-message-cleanup";
     public const string DownloadHistoryCleanupConsumer = "databridge-download-history-cleanup";
     public const string ImportSessionCleanupConsumer = "databridge-import-session-cleanup";
     public const string SearchReindexConsumer = "databridge-search-reindex";
@@ -40,7 +39,6 @@ public sealed class BackgroundJobsTopology : ITopologySource
                 BackgroundJobSubjects.ChannelAssetRefreshRequest,
                 BackgroundJobSubjects.ChannelScanFullRequest,
                 BackgroundJobSubjects.DatabaseStaleMediaCleanupRequest,
-                BackgroundJobSubjects.ProcessedMessageCleanupRequest,
                 BackgroundJobSubjects.DownloadHistoryCleanupRequest,
                 BackgroundJobSubjects.ImportSessionCleanupRequest,
                 BackgroundJobSubjects.DatabaseMaintenanceRequest,
@@ -59,7 +57,6 @@ public sealed class BackgroundJobsTopology : ITopologySource
 
     public IEnumerable<ConsumerSpec> GetConsumers()
     {
-        yield return DataBridgeConsumer(ProcessedMessageCleanupConsumer, BackgroundJobSubjects.ProcessedMessageCleanupRequest, TimeSpan.FromMinutes(15), maxDeliver: 5);
         // A first purge on a long-lived install walks a lot of history and deletes one Cleipnir flow
         // instance per run, so the ack window is generous relative to the other cleanup consumers.
         yield return DataBridgeConsumer(DownloadHistoryCleanupConsumer, BackgroundJobSubjects.DownloadHistoryCleanupRequest, TimeSpan.FromMinutes(30), maxDeliver: 3);

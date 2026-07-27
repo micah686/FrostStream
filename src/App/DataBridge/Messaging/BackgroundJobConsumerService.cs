@@ -36,7 +36,6 @@ public sealed class BackgroundJobConsumerService(
             Consume<DatabaseMaintenanceRequested>(BackgroundJobsTopology.DatabaseMaintenanceConsumer, HandleDatabaseMaintenanceAsync, stoppingToken),
             Consume<DatabaseMaintenanceReindexRequested>(BackgroundJobsTopology.DatabaseMaintenanceReindexConsumer, HandleDatabaseMaintenanceReindexAsync, stoppingToken),
             Consume<DatabaseStaleMediaCleanupRequested>(BackgroundJobsTopology.DatabaseStaleMediaCleanupConsumer, HandleDatabaseStaleMediaCleanupAsync, stoppingToken),
-            Consume<ProcessedMessageCleanupRequested>(BackgroundJobsTopology.ProcessedMessageCleanupConsumer, HandleProcessedMessageCleanupAsync, stoppingToken),
             Consume<DownloadHistoryCleanupRequested>(BackgroundJobsTopology.DownloadHistoryCleanupConsumer, HandleDownloadHistoryCleanupAsync, stoppingToken),
             Consume<ImportSessionCleanupRequested>(BackgroundJobsTopology.ImportSessionCleanupConsumer, HandleImportSessionCleanupAsync, stoppingToken)
         };
@@ -198,40 +197,6 @@ public sealed class BackgroundJobConsumerService(
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed handling stale database cleanup request {IdempotencyKey}; nacking", message.IdempotencyKey);
-            run.Fail(ex.Message);
-            await MarkFailureAsync(message);
-            await context.NackAsync();
-        }
-    }
-
-    private async Task HandleProcessedMessageCleanupAsync(IJsMessageContext<ProcessedMessageCleanupRequested> context)
-    {
-        var message = context.Message;
-        await using var run = await runReporter.BeginAsync("processed_message_cleanup", message);
-        try
-        {
-            await MarkAttemptAsync(message);
-
-            var cutoff = clock.GetCurrentInstant().Minus(Duration.FromDays(30));
-            await run.ReportAsync($"Deleting processed messages recorded before {cutoff}…");
-            await using var command = dataSource.CreateCommand(
-                "DELETE FROM jobs.processed_messages WHERE processed_at < @cutoff;");
-            command.Parameters.AddWithValue("cutoff", cutoff.ToDateTimeOffset());
-            command.CommandTimeout = 0;
-            var deletedCount = await command.ExecuteNonQueryAsync();
-
-            run.Succeed($"Deleted {deletedCount} processed message row(s).");
-            await MarkSuccessAsync(message);
-            logger.LogInformation(
-                "Deleted {Count} processed message row(s) older than {Cutoff} for background request {IdempotencyKey}.",
-                deletedCount,
-                cutoff,
-                message.IdempotencyKey);
-            await context.AckAsync();
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed handling processed message cleanup request {IdempotencyKey}; nacking", message.IdempotencyKey);
             run.Fail(ex.Message);
             await MarkFailureAsync(message);
             await context.NackAsync();

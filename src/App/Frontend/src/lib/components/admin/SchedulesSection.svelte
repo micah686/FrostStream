@@ -110,10 +110,6 @@
       summary: 'Rebuilds the search index from the authoritative metadata store.'
     },
     {
-      type: 'processed_message_cleanup',
-      summary: 'Removes old processed-message records so the job history stays small.'
-    },
-    {
       type: 'download_history_cleanup',
       summary:
         'Deletes finished download jobs, along with their runs, artifacts and history, once they are older than the configured retention window. Failed and stopped jobs can optionally be included.'

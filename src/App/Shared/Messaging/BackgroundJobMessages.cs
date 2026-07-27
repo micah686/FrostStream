@@ -58,8 +58,6 @@ public sealed record ChannelScanFullRequested : ScheduledBackgroundRequest
 
 public sealed record DatabaseStaleMediaCleanupRequested : ScheduledBackgroundRequest;
 
-public sealed record ProcessedMessageCleanupRequested : ScheduledBackgroundRequest;
-
 /// <summary>
 /// Purges the download-job history of work that has genuinely finished: the job rows, their runs,
 /// stage attempts, artifacts, leases, warnings, event history and progress log, plus the group rows
