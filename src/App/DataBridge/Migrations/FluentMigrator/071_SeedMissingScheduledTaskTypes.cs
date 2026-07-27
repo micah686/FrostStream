@@ -103,11 +103,11 @@ public sealed class M071_SeedMissingScheduledTaskTypes : Migration
                         END
                     ),
                     (
-                        'nightly-backup',
-                        'backup',
+                        'backup-snapshot',
+                        'backup-snapshot',
                         '0 0 2 * * ?',
                         'UTC',
-                        false,
+                        true,
                         'Coalesce',
                         NULL::timestamp with time zone
                     )

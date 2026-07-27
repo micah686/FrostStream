@@ -121,7 +121,15 @@
     },
     {
       type: 'backup',
-      summary: 'Runs the configured backup workflow for the current deployment.'
+      summary: 'Runs the configured backup workflow using snapshot mode.'
+    },
+    {
+      type: 'backup-snapshot',
+      summary: 'Runs the configured backup workflow using snapshot mode.'
+    },
+    {
+      type: 'backup-full',
+      summary: 'Runs the configured backup workflow using full mode.'
     }
   ] as const;
 
