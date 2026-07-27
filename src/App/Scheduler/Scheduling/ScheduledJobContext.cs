@@ -8,7 +8,9 @@ public sealed record ScheduledJobContext(
     string ScheduleKey,
     string TaskType,
     Instant DueWindowUtc,
-    string IdempotencyKey);
+    string IdempotencyKey,
+    int RetentionDays,
+    bool IncludeFailed);
 
 internal static class ScheduledJobContextFactory
 {
@@ -16,6 +18,8 @@ internal static class ScheduledJobContextFactory
     {
         var scheduleKey = context.MergedJobDataMap.GetString(QuartzScheduleFactory.ScheduleKeyData);
         var taskType = context.MergedJobDataMap.GetString(QuartzScheduleFactory.TaskTypeData);
+        var retentionDays = context.MergedJobDataMap.GetInt(QuartzScheduleFactory.RetentionDaysData);
+        var includeFailed = context.MergedJobDataMap.GetBoolean(QuartzScheduleFactory.IncludeFailedData);
 
         if (string.IsNullOrWhiteSpace(scheduleKey) || string.IsNullOrWhiteSpace(taskType))
         {
@@ -27,6 +31,6 @@ internal static class ScheduledJobContextFactory
             : clock.GetCurrentInstant();
         var idempotencyKey = $"{taskType}:{scheduleKey}:{dueWindow:uuuu-MM-ddTHH:mm:ss'Z'}";
 
-        return new ScheduledJobContext(scheduleKey, taskType, dueWindow, idempotencyKey);
+        return new ScheduledJobContext(scheduleKey, taskType, dueWindow, idempotencyKey, retentionDays, includeFailed);
     }
 }

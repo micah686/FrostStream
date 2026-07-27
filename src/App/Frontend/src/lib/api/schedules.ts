@@ -11,6 +11,8 @@ export interface ScheduledTask {
   timezone: string;
   enabled: boolean;
   catchupPolicy: ScheduleCatchupPolicy;
+  retentionDays: number;
+  includeFailed: boolean;
   lastAttemptAt: string | null;
   lastSuccessAt: string | null;
   nextDueAt: string | null;
@@ -26,6 +28,8 @@ export interface ScheduleCreateRequest {
   timezone: string;
   enabled: boolean;
   catchupPolicy: ScheduleCatchupPolicy;
+  retentionDays: number;
+  includeFailed: boolean;
 }
 
 export type ScheduleUpdateRequest = Omit<ScheduleCreateRequest, 'key'>;

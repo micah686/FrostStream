@@ -21,6 +21,11 @@ public abstract class ScheduleRequestBase : IValidatableObject
 
     public ScheduleCatchupPolicy CatchupPolicy { get; init; } = ScheduleCatchupPolicy.Coalesce;
 
+    [Range(0, int.MaxValue)]
+    public int RetentionDays { get; init; }
+
+    public bool IncludeFailed { get; init; }
+
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
         var hasCron = !string.IsNullOrWhiteSpace(Cron);
@@ -73,6 +78,8 @@ public sealed class ScheduledTaskResponse
     public required string Timezone { get; init; }
     public required bool Enabled { get; init; }
     public required ScheduleCatchupPolicy CatchupPolicy { get; init; }
+    public required int RetentionDays { get; init; }
+    public required bool IncludeFailed { get; init; }
     public Instant? LastAttemptAt { get; init; }
     public Instant? LastSuccessAt { get; init; }
     public Instant? NextDueAt { get; init; }

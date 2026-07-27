@@ -17,10 +17,8 @@ public sealed class DownloadHistoryCleanupScheduler(INatsMessagePublisher publis
                 DueWindowUtc = context.DueWindowUtc,
                 IdempotencyKey = context.IdempotencyKey,
                 OccurredAt = clock.GetCurrentInstant(),
-                // Scheduled sweeps take the default retention and never touch failed or stopped jobs:
-                // discarding a job the user could still retry is only ever an explicit human action.
-                RetentionDays = null,
-                IncludeFailed = false
+                RetentionDays = context.RetentionDays,
+                IncludeFailed = context.IncludeFailed
             },
             context.IdempotencyKey,
             cancellationToken: cancellationToken);

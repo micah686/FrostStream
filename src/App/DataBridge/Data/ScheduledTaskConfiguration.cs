@@ -33,6 +33,8 @@ public sealed class ScheduledTaskConfiguration : IEntityTypeConfiguration<Schedu
             .HasMaxLength(32)
             .HasConversion<string>()
             .IsRequired();
+        builder.Property(x => x.RetentionDays).HasColumnName("retention_days").HasDefaultValue(0).IsRequired();
+        builder.Property(x => x.IncludeFailed).HasColumnName("include_failed").HasDefaultValue(false).IsRequired();
         builder.Property(x => x.LastAttemptAt).HasColumnName("last_attempt_at").HasColumnType("timestamp with time zone");
         builder.Property(x => x.LastSuccessAt).HasColumnName("last_success_at").HasColumnType("timestamp with time zone");
         builder.Property(x => x.LastRunStatus)

@@ -32,7 +32,9 @@ public sealed class SchedulesController(IMessageBus messageBus, ILogger<Schedule
                 IntervalSeconds = request.IntervalSeconds,
                 Timezone = request.Timezone,
                 Enabled = request.Enabled,
-                CatchupPolicy = request.CatchupPolicy
+                CatchupPolicy = request.CatchupPolicy,
+                RetentionDays = request.RetentionDays,
+                IncludeFailed = request.IncludeFailed
             },
             cancellationToken);
 
@@ -58,7 +60,9 @@ public sealed class SchedulesController(IMessageBus messageBus, ILogger<Schedule
                 IntervalSeconds = request.IntervalSeconds,
                 Timezone = request.Timezone,
                 Enabled = request.Enabled,
-                CatchupPolicy = request.CatchupPolicy
+                CatchupPolicy = request.CatchupPolicy,
+                RetentionDays = request.RetentionDays,
+                IncludeFailed = request.IncludeFailed
             },
             cancellationToken);
 
@@ -169,6 +173,8 @@ public sealed class SchedulesController(IMessageBus messageBus, ILogger<Schedule
             Timezone = dto.Timezone,
             Enabled = dto.Enabled,
             CatchupPolicy = dto.CatchupPolicy,
+            RetentionDays = dto.RetentionDays,
+            IncludeFailed = dto.IncludeFailed,
             LastAttemptAt = dto.LastAttemptAt,
             LastSuccessAt = dto.LastSuccessAt,
             NextDueAt = dto.NextDueAt,

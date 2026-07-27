@@ -8,6 +8,8 @@ internal static class QuartzScheduleFactory
 {
     public const string ScheduleKeyData = "scheduleKey";
     public const string TaskTypeData = "taskType";
+    public const string RetentionDaysData = "retentionDays";
+    public const string IncludeFailedData = "includeFailed";
 
     public static JobKey JobKeyFor(ScheduledTaskDto task) => JobKeys.ForSchedule(task.Key);
 
@@ -18,6 +20,8 @@ internal static class QuartzScheduleFactory
             .WithIdentity(JobKeyFor(task))
             .UsingJobData(ScheduleKeyData, task.Key)
             .UsingJobData(TaskTypeData, task.TaskType)
+            .UsingJobData(RetentionDaysData, task.RetentionDays)
+            .UsingJobData(IncludeFailedData, task.IncludeFailed)
             .Build();
 
     public static ITrigger BuildTrigger(ScheduledTaskDto task)
@@ -26,7 +30,9 @@ internal static class QuartzScheduleFactory
             .WithIdentity(TriggerKeys.ForSchedule(task.Key))
             .ForJob(JobKeyFor(task))
             .UsingJobData(ScheduleKeyData, task.Key)
-            .UsingJobData(TaskTypeData, task.TaskType);
+            .UsingJobData(TaskTypeData, task.TaskType)
+            .UsingJobData(RetentionDaysData, task.RetentionDays)
+            .UsingJobData(IncludeFailedData, task.IncludeFailed);
 
         if (!string.IsNullOrWhiteSpace(task.Cron))
         {
