@@ -3,6 +3,7 @@ using Conduit.NATS;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using NodaTime;
 using NSubstitute;
 using Shared.Auth;
 using Shared.Messaging;
@@ -253,7 +254,12 @@ public sealed class DownloadQueueControllerTests
     private static DownloadQueueController CreateController(IMessageBus messageBus)
     {
         var hub = new DownloadQueueHub(Substitute.For<IMessageBus>(), Substitute.For<ILogger<DownloadQueueHub>>());
-        var controller = new DownloadQueueController(messageBus, hub, Substitute.For<ILogger<DownloadQueueController>>());
+        var controller = new DownloadQueueController(
+            messageBus,
+            Substitute.For<IJetStreamPublisher>(),
+            hub,
+            SystemClock.Instance,
+            Substitute.For<ILogger<DownloadQueueController>>());
 
         var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(AuthConstants.SubjectClaim, "unit_test_user")], "test"));
         controller.ControllerContext = new ControllerContext

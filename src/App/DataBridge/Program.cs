@@ -162,6 +162,7 @@ class Program
         builder.Services.AddSingleton<ImportSessionRequestReplyService>();
         builder.Services.AddSingleton<WorkerRegistryConsumerService>();
         builder.Services.AddSingleton<LocalImportItemV2Flows>();
+        builder.Services.AddSingleton<IDownloadHistoryPurger, DownloadHistoryPurger>();
 
         builder.Services.AddTypesenseClient(config =>
         {

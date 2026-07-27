@@ -45,6 +45,7 @@ public static class EndpointIds
     public const string DownloadsQueuePriority = "downloads.queue.priority";
     public const string DownloadsQueueStart = "downloads.queue.start";
     public const string DownloadsQueueStop = "downloads.queue.stop";
+    public const string DownloadsQueueCleanup = "downloads.queue.cleanup";
     public const string DownloadsGroupStart = "downloads.group.start";
     public const string DownloadsGroupStop = "downloads.group.stop";
     public const string DownloadsProviderCircuitClear = "downloads.provider-circuit.clear";
@@ -285,6 +286,7 @@ public static class EndpointCatalog
         new(EndpointIds.DownloadsQueuePriority, Bundles.Downloading),
         new(EndpointIds.DownloadsQueueStart, Bundles.Downloading),
         new(EndpointIds.DownloadsQueueStop, Bundles.Downloading),
+        new(EndpointIds.DownloadsQueueCleanup, Bundles.Downloading),
         new(EndpointIds.DownloadsGroupStart, Bundles.Downloading),
         new(EndpointIds.DownloadsGroupStop, Bundles.Downloading),
         new(EndpointIds.DownloadsProviderCircuitClear, Bundles.Downloading),

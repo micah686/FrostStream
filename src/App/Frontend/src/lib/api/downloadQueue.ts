@@ -195,6 +195,21 @@ export async function startGroup(correlationId: string, fetchImpl: typeof fetch 
   await send(`/api/downloads/groups/${correlationId}/start`, 'POST', undefined, fetchImpl);
 }
 
+export interface CleanupHistoryOptions {
+  /** Only purge work finished longer ago than this. Omit for the 30-day default; 0 purges everything eligible. */
+  retentionDays?: number;
+  /** Also purge failed and stopped jobs. They can no longer be retried afterwards. */
+  includeFailed?: boolean;
+}
+
+/** Queues the background purge of finished download history. Progress lands on Jobs > Background. */
+export async function cleanupHistory(
+  options: CleanupHistoryOptions = {},
+  fetchImpl: typeof fetch = fetch
+): Promise<void> {
+  await send(`${BASE}/cleanup`, 'POST', options, fetchImpl);
+}
+
 /** Clears only the persistent provider circuit. Jobs remain Stopped/Failed until Start is pressed. */
 export async function clearProviderCircuit(provider: string, fetchImpl: typeof fetch = fetch): Promise<void> {
   await send(`/api/downloads/providers/${encodeURIComponent(provider)}/circuit/clear`, 'POST', undefined, fetchImpl);

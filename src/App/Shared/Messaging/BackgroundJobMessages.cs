@@ -60,6 +60,23 @@ public sealed record DatabaseStaleMediaCleanupRequested : ScheduledBackgroundReq
 
 public sealed record ProcessedMessageCleanupRequested : ScheduledBackgroundRequest;
 
+/// <summary>
+/// Purges the download-job history of work that has genuinely finished: the job rows, their runs,
+/// stage attempts, artifacts, leases, warnings, event history and progress log, plus the group rows
+/// they belonged to and the Cleipnir flow instances that drove them.
+/// </summary>
+public sealed record DownloadHistoryCleanupRequested : ScheduledBackgroundRequest
+{
+    /// <summary>Purge only work that finished longer ago than this; 30 days when null.</summary>
+    public int? RetentionDays { get; init; }
+
+    /// <summary>
+    /// Also purge Failed/Stopped jobs and the groups that hold them. Those jobs can no longer be
+    /// restarted afterwards, because Start rebuilds the original request from their event history.
+    /// </summary>
+    public bool IncludeFailed { get; init; }
+}
+
 public sealed record DatabaseMaintenanceRequested : ScheduledBackgroundRequest;
 
 public sealed record DatabaseMaintenanceReindexRequested : ScheduledBackgroundRequest;

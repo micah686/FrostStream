@@ -1,3 +1,4 @@
+using DataBridge.Data;
 using DataBridge.Search;
 using Conduit.NATS;
 using Microsoft.Extensions.Hosting;
@@ -13,6 +14,7 @@ public sealed class BackgroundJobConsumerService(
     IMessageBus messageBus,
     NpgsqlDataSource dataSource,
     IMetadataRebuildCoordinator rebuildCoordinator,
+    IDownloadHistoryPurger historyPurger,
     INotificationDispatcher notificationDispatcher,
     IBackgroundRunReporter runReporter,
     IClock clock,
@@ -20,15 +22,21 @@ public sealed class BackgroundJobConsumerService(
 {
     private static readonly StreamName Stream = StreamName.From(BackgroundJobsTopology.StreamNameValue);
 
+    /// <summary>Handlers do not receive the host token, so long-running work reads it from here to stay interruptible on shutdown.</summary>
+    private CancellationToken _stoppingToken = CancellationToken.None;
+
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        _stoppingToken = stoppingToken;
+
         var consumers = new[]
         {
             Consume<SearchReindexRequested>(BackgroundJobsTopology.SearchReindexConsumer, HandleSearchReindexAsync, stoppingToken),
             Consume<DatabaseMaintenanceRequested>(BackgroundJobsTopology.DatabaseMaintenanceConsumer, HandleDatabaseMaintenanceAsync, stoppingToken),
             Consume<DatabaseMaintenanceReindexRequested>(BackgroundJobsTopology.DatabaseMaintenanceReindexConsumer, HandleDatabaseMaintenanceReindexAsync, stoppingToken),
             Consume<DatabaseStaleMediaCleanupRequested>(BackgroundJobsTopology.DatabaseStaleMediaCleanupConsumer, HandleDatabaseStaleMediaCleanupAsync, stoppingToken),
-            Consume<ProcessedMessageCleanupRequested>(BackgroundJobsTopology.ProcessedMessageCleanupConsumer, HandleProcessedMessageCleanupAsync, stoppingToken)
+            Consume<ProcessedMessageCleanupRequested>(BackgroundJobsTopology.ProcessedMessageCleanupConsumer, HandleProcessedMessageCleanupAsync, stoppingToken),
+            Consume<DownloadHistoryCleanupRequested>(BackgroundJobsTopology.DownloadHistoryCleanupConsumer, HandleDownloadHistoryCleanupAsync, stoppingToken)
         };
 
         logger.LogInformation("Subscribed to {Count} background job consumers on stream {Stream}.", consumers.Length, Stream.Value);
@@ -222,6 +230,33 @@ public sealed class BackgroundJobConsumerService(
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed handling processed message cleanup request {IdempotencyKey}; nacking", message.IdempotencyKey);
+            run.Fail(ex.Message);
+            await MarkFailureAsync(message);
+            await context.NackAsync();
+        }
+    }
+
+    private async Task HandleDownloadHistoryCleanupAsync(IJsMessageContext<DownloadHistoryCleanupRequested> context)
+    {
+        var message = context.Message;
+        await using var run = await runReporter.BeginAsync("download_history_cleanup", message);
+        try
+        {
+            await MarkAttemptAsync(message);
+
+            var result = await historyPurger.PurgeAsync(
+                message.RetentionDays ?? DownloadHistoryPurger.DefaultRetentionDays,
+                message.IncludeFailed,
+                progress => run.ReportAsync(progress),
+                _stoppingToken);
+
+            run.Succeed(result.Describe());
+            await MarkSuccessAsync(message);
+            await context.AckAsync();
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed handling download history cleanup request {IdempotencyKey}; nacking", message.IdempotencyKey);
             run.Fail(ex.Message);
             await MarkFailureAsync(message);
             await context.NackAsync();

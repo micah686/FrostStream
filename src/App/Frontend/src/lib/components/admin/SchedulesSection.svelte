@@ -114,6 +114,11 @@
       summary: 'Removes old processed-message records so the job history stays small.'
     },
     {
+      type: 'download_history_cleanup',
+      summary:
+        'Deletes finished download jobs, along with their runs, artifacts and history, once they are older than the retention window. Scheduled runs never touch failed or stopped jobs.'
+    },
+    {
       type: 'backup',
       summary: 'Runs the configured backup workflow for the current deployment.'
     }

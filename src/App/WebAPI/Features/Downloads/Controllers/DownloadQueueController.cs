@@ -23,9 +23,14 @@ namespace WebAPI.Features.Downloads.Controllers;
 [Route("api/downloads/queue")]
 public sealed class DownloadQueueController(
     IMessageBus messageBus,
+    IJetStreamPublisher publisher,
     DownloadQueueHub hub,
+    IClock clock,
     ILogger<DownloadQueueController> logger) : ControllerBase
 {
+    /// <summary>Must match Scheduler's TaskTypeRegistry entry so manual and scheduled runs report as the same task.</summary>
+    private const string DownloadHistoryCleanupTaskType = "download_history_cleanup";
+
     private static readonly TimeSpan QueryTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan AdminRequestTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(20);
@@ -470,6 +475,58 @@ public sealed class DownloadQueueController(
         return response is { Success: true }
             ? Accepted(response)
             : BadGateway("Failed to stop download group", response?.ErrorMessage ?? "No response from DataBridge.");
+    }
+
+    [HttpPost("cleanup")]
+    [Endpoint(EndpointIds.DownloadsQueueCleanup)]
+    [EndpointSummary("Purge finished download job history")]
+    [EndpointDescription("Queues a background purge of download jobs that have genuinely finished, along with their runs, stage attempts, artifacts, warnings, event history, progress log, the group rows they belonged to, and the durable flow instances that drove them. A group is treated as all-or-nothing: no child is purged unless the whole group has settled, so a partially failed playlist is left completely intact. Queued and running work is never touched. By default failed and stopped jobs are preserved because they can still be restarted; set includeFailed to purge those too, which permanently forfeits the ability to retry them. Returns 202 with the queued idempotency key; progress and deletion counts appear on Jobs > Background.")]
+    public async Task<ActionResult> CleanupHistory(
+        [FromBody] CleanupDownloadHistoryRequest? request,
+        CancellationToken cancellationToken)
+    {
+        var retentionDays = request?.RetentionDays;
+        if (retentionDays is < 0)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "retentionDays must be zero or greater.",
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+
+        var now = clock.GetCurrentInstant();
+        var idempotencyKey = $"manual-download-history-cleanup:{Guid.NewGuid():N}";
+        try
+        {
+            await publisher.PublishAsync(
+                BackgroundJobSubjects.DownloadHistoryCleanupRequest,
+                new DownloadHistoryCleanupRequested
+                {
+                    ScheduleKey = "manual",
+                    TaskType = DownloadHistoryCleanupTaskType,
+                    DueWindowUtc = now,
+                    IdempotencyKey = idempotencyKey,
+                    OccurredAt = now,
+                    RetentionDays = retentionDays,
+                    IncludeFailed = request?.IncludeFailed ?? false
+                },
+                messageId: idempotencyKey,
+                cancellationToken: cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed enqueueing manual download history cleanup");
+            return BadGateway("Failed to queue cleanup", "Could not reach the messaging bus.");
+        }
+
+        return Accepted(new
+        {
+            queued = true,
+            idempotencyKey,
+            retentionDays,
+            includeFailed = request?.IncludeFailed ?? false
+        });
     }
 
     [HttpPost("/api/downloads/providers/{provider}/circuit/clear")]
