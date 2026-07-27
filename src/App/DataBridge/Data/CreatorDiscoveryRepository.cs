@@ -41,7 +41,7 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
 
         if (scanMode != CreatorSourceScanMode.Full)
         {
-            // Per-source incremental cadence: the global channel-update-check schedule ticks every
+            // Per-source incremental cadence: the global channel-scan-refresh schedule ticks every
             // 30 minutes, and each tick only scans sources due by their UpdateCheckIntervalHours.
             // The half-tick tolerance keeps an interval that matches the tick from drifting (a scan
             // finishing just after a tick would otherwise slip a whole extra tick every cycle).

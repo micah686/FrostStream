@@ -14,7 +14,7 @@ public sealed class M079_SeedDownloadHistoryCleanupTask : Migration
                 ("key", task_type, cron, timezone, enabled, catchup_policy, next_due_at)
             VALUES
                 (
-                    'nightly-download-history-cleanup',
+                    'download-history-cleanup',
                     'download-history-cleanup',
                     '0 45 3 * * ?',
                     'UTC',
@@ -36,6 +36,6 @@ public sealed class M079_SeedDownloadHistoryCleanupTask : Migration
 
     public override void Down()
     {
-        Execute.Sql("DELETE FROM scheduling.scheduled_tasks WHERE \"key\" = 'nightly-download-history-cleanup';");
+        Execute.Sql("DELETE FROM scheduling.scheduled_tasks WHERE \"key\" = 'download-history-cleanup';");
     }
 }

@@ -2,7 +2,7 @@ using FluentMigrator;
 
 namespace DataBridge.Migrations.FluentMigrator;
 
-[Migration(51, "Retick channel-update-check sweep to every 30 minutes")]
+[Migration(51, "Retick channel-scan-refresh sweep to every 30 minutes")]
 public sealed class M051_RetickChannelUpdateCheckCron : Migration
 {
     public override void Up()
@@ -15,7 +15,7 @@ public sealed class M051_RetickChannelUpdateCheckCron : Migration
             UPDATE scheduling.scheduled_tasks
             SET cron = '0 0/30 * * * ?',
                 last_updated = now()
-            WHERE "key" = 'channel-update-check'
+            WHERE "key" = 'channel-scan-refresh'
               AND cron = '0 0 */6 * * ?';
             """);
     }
@@ -26,7 +26,7 @@ public sealed class M051_RetickChannelUpdateCheckCron : Migration
             UPDATE scheduling.scheduled_tasks
             SET cron = '0 0 */6 * * ?',
                 last_updated = now()
-            WHERE "key" = 'channel-update-check'
+            WHERE "key" = 'channel-scan-refresh'
               AND cron = '0 0/30 * * * ?';
             """);
     }

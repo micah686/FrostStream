@@ -11,7 +11,7 @@ public sealed class M071_SeedMissingScheduledTaskTypes : Migration
             WITH defaults("key", task_type, cron, timezone, enabled, catchup_policy, next_due_at) AS (
                 VALUES
                     (
-                        'channel-update-check',
+                        'channel-scan-refresh',
                         'channel_update_check',
                         '0 0 */6 * * ?',
                         'UTC',
@@ -20,7 +20,7 @@ public sealed class M071_SeedMissingScheduledTaskTypes : Migration
                         date_trunc('day', now()) + (floor(extract(hour from now()) / 6) + 1) * interval '6 hours'
                     ),
                     (
-                        'weekly-channel-asset-refresh',
+                        'channel-asset-refresh',
                         'channel-asset-refresh',
                         '0 0 4 ? * SUN',
                         'UTC',
@@ -33,7 +33,7 @@ public sealed class M071_SeedMissingScheduledTaskTypes : Migration
                         END
                     ),
                     (
-                        'daily-channel-full-rescan',
+                        'channel-full-rescan',
                         'channel_media_list',
                         '0 30 3 * * ?',
                         'UTC',
@@ -46,7 +46,7 @@ public sealed class M071_SeedMissingScheduledTaskTypes : Migration
                         END
                     ),
                     (
-                        'monthly-stale-media-cleanup',
+                        'db-stale-media-cleanup',
                         'db-stale-media-cleanup',
                         '0 30 3 1 * ?',
                         'UTC',
@@ -55,7 +55,7 @@ public sealed class M071_SeedMissingScheduledTaskTypes : Migration
                         date_trunc('month', now()) + interval '1 month 3 hours 30 minutes'
                     ),
                     (
-                        'monthly-db-maintenance',
+                        'db-maintenance',
                         'db-maintenance',
                         '0 0 3 1 * ?',
                         'UTC',
@@ -64,7 +64,7 @@ public sealed class M071_SeedMissingScheduledTaskTypes : Migration
                         date_trunc('month', now()) + interval '1 month 3 hours'
                     ),
                     (
-                        'weekly-search-reindex',
+                        'search-reindex',
                         'search-reindex',
                         '0 30 5 ? * SUN',
                         'UTC',

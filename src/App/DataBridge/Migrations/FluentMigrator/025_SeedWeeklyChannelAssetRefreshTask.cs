@@ -12,7 +12,7 @@ public sealed class M025_SeedWeeklyChannelAssetRefreshTask : Migration
                 ("key", task_type, cron, timezone, enabled, catchup_policy, next_due_at)
             VALUES
                 (
-                    'weekly-channel-asset-refresh',
+                    'channel-asset-refresh',
                     'channel-asset-refresh',
                     '0 0 4 ? * SUN',
                     'UTC',
@@ -38,6 +38,6 @@ public sealed class M025_SeedWeeklyChannelAssetRefreshTask : Migration
 
     public override void Down()
     {
-        Execute.Sql("DELETE FROM scheduling.scheduled_tasks WHERE \"key\" = 'weekly-channel-asset-refresh';");
+        Execute.Sql("DELETE FROM scheduling.scheduled_tasks WHERE \"key\" = 'channel-asset-refresh';");
     }
 }

@@ -15,7 +15,7 @@ public sealed class M049_SeedRemainingBackgroundSweepTasks : Migration
                 ("key", task_type, cron, timezone, enabled, catchup_policy, next_due_at)
             VALUES
                 (
-                    'channel-update-check',
+                    'channel-scan-refresh',
                     'channel_update_check',
                     '0 0 */6 * * ?',
                     'UTC',
@@ -70,7 +70,7 @@ public sealed class M049_SeedRemainingBackgroundSweepTasks : Migration
                 ("key", task_type, cron, timezone, enabled, catchup_policy, next_due_at)
             VALUES
                 (
-                    'weekly-search-reindex',
+                    'search-reindex',
                     'search-reindex',
                     '0 30 5 ? * SUN',
                     'UTC',
@@ -126,7 +126,7 @@ public sealed class M049_SeedRemainingBackgroundSweepTasks : Migration
     {
         Execute.Sql("""
             DELETE FROM scheduling.scheduled_tasks
-            WHERE "key" IN ('channel-update-check', 'weekly-filesystem-rescan', 'weekly-search-reindex', 'backup-snapshot');
+            WHERE "key" IN ('channel-scan-refresh', 'weekly-filesystem-rescan', 'search-reindex', 'backup-snapshot');
             """);
     }
 }

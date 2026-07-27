@@ -14,7 +14,7 @@ public sealed class M082_SeedImportSessionCleanupTask : Migration
                 ("key", task_type, cron, timezone, enabled, catchup_policy, retention_days, include_failed, next_due_at)
             VALUES
                 (
-                    'nightly-import-session-cleanup',
+                    'import-session-cleanup',
                     'import_session_cleanup',
                     '0 0 4 * * ?',
                     'UTC',
@@ -40,6 +40,6 @@ public sealed class M082_SeedImportSessionCleanupTask : Migration
 
     public override void Down()
     {
-        Execute.Sql("DELETE FROM scheduling.scheduled_tasks WHERE \"key\" = 'nightly-import-session-cleanup';");
+        Execute.Sql("DELETE FROM scheduling.scheduled_tasks WHERE \"key\" = 'import-session-cleanup';");
     }
 }
