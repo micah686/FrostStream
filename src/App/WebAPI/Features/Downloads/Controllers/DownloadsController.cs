@@ -4,9 +4,9 @@ using Microsoft.AspNetCore.Mvc;
 using NodaTime;
 using Shared.Auth;
 using Shared.Messaging;
-using Shared.Secrets;
 using WebAPI.Auth;
 using WebAPI.Features.Common;
+using WebAPI.Features.DownloadConfigSets;
 using WebAPI.Features.Downloads.Models;
 using WebAPI.Features.OptionPresets.Controllers;
 using YtDlpSharpLib.Options;
@@ -46,6 +46,7 @@ public class DownloadsController(
             cookieProfileKey: request.CookieProfileKey,
             priority: request.Priority,
             fetchComments: request.FetchComments,
+            configSetKey: request.ConfigSetKey,
             // Only the plain video endpoint can auto-route: /audio's forced MP3 extraction and
             // /preset's PresetKey have no equivalent on PlaylistRequested.
             allowPlaylistAutoRoute: true,
@@ -74,6 +75,7 @@ public class DownloadsController(
             cookieProfileKey: request.CookieProfileKey,
             priority: request.Priority,
             fetchComments: request.FetchComments,
+            configSetKey: request.ConfigSetKey,
             cancellationToken: cancellationToken);
 
     /// <summary>
@@ -100,6 +102,7 @@ public class DownloadsController(
             cookieProfileKey: request.CookieProfileKey,
             priority: request.Priority,
             fetchComments: request.FetchComments,
+            configSetKey: request.ConfigSetKey,
             cancellationToken: cancellationToken);
 
     /// <summary>
@@ -271,8 +274,9 @@ public class DownloadsController(
         YtDlpOptions? ytDlpOptions,
         string? presetKey,
         string? cookieProfileKey,
-        int priority,
+        int? priority,
         bool fetchComments,
+        string? configSetKey,
         CancellationToken cancellationToken,
         bool allowPlaylistAutoRoute = false)
     {
@@ -288,30 +292,28 @@ public class DownloadsController(
 
         var subject = AuthConstants.FindSubject(User);
 
-        // A user-owned cookie profile is resolved server-side to a subject-scoped secret path, so a
-        // caller can only ever reference their own cookies — never a global key or another user's.
-        string? cookieSecretPath = null;
-        if (!string.IsNullOrWhiteSpace(cookieProfileKey))
-        {
-            if (!SecretPaths.IsValidUserScope(subject) || !SecretPaths.IsValidProfileKey(cookieProfileKey))
-            {
-                return BadRequest(new ProblemDetails
-                {
-                    Title = "Invalid cookie profile",
-                    Detail = "cookieProfileKey must match ^[a-z0-9-]{2,100}$ for an authenticated user.",
-                    Status = StatusCodes.Status400BadRequest
-                });
-            }
-
-            cookieSecretPath = SecretPaths.ForUserCookieProfile(subject!, cookieProfileKey);
-        }
+        // Same merge the playlist/creator-monitor endpoints use: an explicit field wins over the
+        // config set's stored value, which wins over the system default. Also resolves the
+        // user-owned cookie profile to a subject-scoped secret path.
+        var (resolved, resolveError) = await DownloadConfigSetResolver.ResolveAsync(
+            messageBus,
+            subject,
+            configSetKey,
+            storageKey,
+            cookieProfileKey,
+            ytDlpOptions,
+            encodeForPlaylistOverride: false,
+            priorityOverride: priority,
+            fetchCommentsOverride: fetchComments,
+            cancellationToken);
+        if (resolveError is not null)
+            return BadRequest(resolveError);
 
         // Playlist-container URLs on the direct path would become a single unmodeled job (no
         // fan-out, no per-entry tracking), so route them into the playlist pipeline instead.
         if (allowPlaylistAutoRoute && PlaylistUrlDetector.IsPlaylistUrl(sourceUrl))
         {
-            return await PublishPlaylistRequestAsync(
-                sourceUrl, storageKey, subject, cookieSecretPath, ytDlpOptions, priority, fetchComments, cancellationToken);
+            return await PublishPlaylistRequestAsync(sourceUrl, subject, resolved!, cancellationToken);
         }
 
         var jobId = Guid.NewGuid();
@@ -330,16 +332,17 @@ public class DownloadsController(
             SourceUrl = sourceUrl,
             // Stamp the validated token subject, never client-supplied text, so "requested by" is trustworthy.
             RequestedBy = subject,
-            StorageKey = string.IsNullOrWhiteSpace(storageKey) ? "default" : storageKey,
+            StorageKey = resolved!.StorageKey,
+            WorkerTag = resolved.WorkerTag,
             Tags = tags,
             ForceDownload = forceDownload,
             MediaKind = mediaKind,
             AudioFormat = audioFormat,
             SourceKind = DownloadSourceKind.Direct,
-            YtDlpOptions = ytDlpOptions,
+            YtDlpOptions = resolved.YtDlpOptions,
             PresetKey = presetKey,
-            CookieSecretPath = cookieSecretPath,
-            Priority = priority,
+            CookieSecretPath = resolved.CookieSecretPath,
+            Priority = resolved.Priority,
             FetchComments = fetchComments
         };
 
@@ -356,7 +359,8 @@ public class DownloadsController(
                 SourceUrl = sourceUrl,
                 RequestedBy = subject,
                 StorageKey = message.StorageKey,
-                Priority = priority,
+                WorkerTag = resolved.WorkerTag,
+                Priority = resolved.Priority,
                 DirectRequest = message
             };
             await publisher.PublishAsync(
@@ -381,20 +385,15 @@ public class DownloadsController(
 
     /// <summary>
     /// Routes a playlist-container URL into the playlist pipeline, mirroring
-    /// <c>PlaylistsController.Submit</c>. The direct request already carries the equivalent
-    /// config (storage, cookies, options, priority, comments); no config set is involved, which
-    /// matches direct-path semantics (no ignore keywords, no playlist audio encoding).
+    /// <c>PlaylistsController.Submit</c>. The direct request's already-resolved config (storage,
+    /// cookies, options, priority, comments, config set, worker tag) carries straight over.
     /// ForceDownload and Tags cannot be represented on <see cref="PlaylistRequested"/> and are
     /// dropped; per-entry force is available later via the playlist force-queue endpoint.
     /// </summary>
     private async Task<ActionResult<DownloadRequestResponse>> PublishPlaylistRequestAsync(
         string sourceUrl,
-        string? storageKey,
         string? subject,
-        string? cookieSecretPath,
-        YtDlpOptions? ytDlpOptions,
-        int priority,
-        bool fetchComments,
+        ResolvedDownloadConfigSet resolved,
         CancellationToken cancellationToken)
     {
         var playlistId = Guid.NewGuid();
@@ -412,13 +411,14 @@ public class DownloadsController(
             Attempt = 1,
             SourceUrl = sourceUrl,
             RequestedBy = subject,
-            StorageKey = string.IsNullOrWhiteSpace(storageKey) ? "default" : storageKey,
-            ConfigSetKey = null,
+            StorageKey = resolved.StorageKey,
+            ConfigSetKey = resolved.ConfigSetKey,
+            WorkerTag = resolved.WorkerTag,
             EncodeForPlaylist = false,
-            CookieSecretPath = cookieSecretPath,
-            YtDlpOptions = ytDlpOptions,
-            Priority = priority,
-            FetchComments = fetchComments
+            CookieSecretPath = resolved.CookieSecretPath,
+            YtDlpOptions = resolved.YtDlpOptions,
+            Priority = resolved.Priority,
+            FetchComments = resolved.FetchComments
         };
 
         try
@@ -434,7 +434,8 @@ public class DownloadsController(
                 SourceUrl = sourceUrl,
                 RequestedBy = subject,
                 StorageKey = message.StorageKey,
-                Priority = priority,
+                WorkerTag = resolved.WorkerTag,
+                Priority = resolved.Priority,
                 CollectionRequest = message
             };
             await publisher.PublishAsync(

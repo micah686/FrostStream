@@ -41,6 +41,7 @@
     { value: '', name: 'None (use per-request settings)' },
     ...configSets.map((set) => ({ value: set.key, name: set.name }))
   ]);
+  const submitConfigSetSelected = $derived(submitConfigSetKey !== '');
 
   onMount(() => {
     void loadPlaylists();
@@ -113,12 +114,16 @@
     submitBusy = true;
     submitError = null;
     try {
-      await queuePlaylistDownload({
-        sourceUrl,
-        storageKey: submitStorageKey.trim() || 'default',
-        configSetKey: submitConfigSetKey || null,
-        fetchComments: submitFetchComments
-      });
+      await queuePlaylistDownload(
+        submitConfigSetSelected
+          ? { sourceUrl, storageKey: null, configSetKey: submitConfigSetKey, fetchComments: false }
+          : {
+              sourceUrl,
+              storageKey: submitStorageKey.trim() || 'default',
+              configSetKey: null,
+              fetchComments: submitFetchComments
+            }
+      );
       submitOpen = false;
       actionNotice = 'Playlist download queued. It will appear in Provider playlists once available.';
       await loadPlaylists();
@@ -239,9 +244,13 @@
 <Modal bind:open={submitOpen} title="Queue playlist download" size="md">
   <form id="playlist-download-form" class="space-y-4" onsubmit={submitPlaylist}>
     <div><label class="label mb-1.5 text-xs" for="playlist-url">Playlist URL</label><input class="input w-full" id="playlist-url" type="url" required bind:value={submitUrl} placeholder="https://www.youtube.com/playlist?list=..." /></div>
-    <div><label class="label mb-1.5 text-xs" for="playlist-storage">Storage target</label><Select id="playlist-storage" items={storageOptions} bind:value={submitStorageKey} /></div>
-    <div><label class="label mb-1.5 text-xs" for="playlist-config-set">Config set</label><Select id="playlist-config-set" items={configSetOptions} bind:value={submitConfigSetKey} /></div>
-    <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={submitFetchComments} /><span>Fetch comments</span></label>
+    <div>
+      <label class="label mb-1.5 text-xs" for="playlist-config-set">Config set</label>
+      <Select id="playlist-config-set" items={configSetOptions} bind:value={submitConfigSetKey} />
+      <p class="mt-1.5 text-xs text-base-content/40">Applies its saved options to every entry. Other options below are disabled while a config set is selected.</p>
+    </div>
+    <div><label class="label mb-1.5 text-xs" for="playlist-storage">Storage target</label><Select id="playlist-storage" items={storageOptions} bind:value={submitStorageKey} disabled={submitConfigSetSelected} /></div>
+    <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={submitFetchComments} disabled={submitConfigSetSelected} /><span>Fetch comments</span></label>
     {#if submitError}<div class="flex items-start gap-2 rounded-lg border border-error/30 bg-error/10 p-3 text-sm text-error" role="alert"><CircleAlert class="mt-0.5 h-4 w-4 shrink-0" /><span>{submitError}</span></div>{/if}
   </form>
   {#snippet footer()}<div class="flex w-full justify-end gap-2"><button class="btn btn-sm btn-ghost text-xs" disabled={submitBusy} onclick={() => (submitOpen = false)}>Cancel</button><button class="btn btn-sm btn-primary text-xs" type="submit" form="playlist-download-form" disabled={submitBusy}>{#if submitBusy}<span class="loading loading-spinner loading-xs mr-1.5"></span>{:else}<Download class="mr-1.5 h-4 w-4" />{/if}Queue download</button></div>{/snippet}

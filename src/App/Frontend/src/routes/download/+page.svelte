@@ -50,6 +50,7 @@
 
   // Video form
   let sourceUrl = $state('');
+  let videoConfigSetKey = $state('');
   let forceDownload = $state(false);
   let tags = $state('');
   let fetchComments = $state(false);
@@ -93,6 +94,13 @@
     { value: '', name: 'None (use per-request settings)' },
     ...configSets.map((set) => ({ value: set.key, name: set.name }))
   ]);
+
+  // When a config set is selected, its stored storage key, cookie profile, yt-dlp options,
+  // priority, and worker tag take over — every other option (besides force download) is disabled
+  // and omitted from the submitted request so it can't silently override the config set's values.
+  const videoConfigSetSelected = $derived(videoConfigSetKey !== '');
+  const playlistConfigSetSelected = $derived(playlistConfigSetKey !== '');
+  const creatorConfigSetSelected = $derived(creatorConfigSetKey !== '');
 
   onMount(() => {
     void loadStorageTargets();
@@ -228,16 +236,29 @@
     submitting = true;
     submitError = null;
 
-    const body = {
-      sourceUrl: sourceUrl.trim(),
-      storageKey: resolvedStorageKey(),
-      forceDownload,
-      tags: parseTags(tags),
-      cookieProfileKey: cookieProfileKey || null,
-      priority,
-      ytDlpOptions: buildYtDlpOptions(),
-      fetchComments
-    };
+    const body = videoConfigSetSelected
+      ? {
+          sourceUrl: sourceUrl.trim(),
+          storageKey: null,
+          forceDownload,
+          tags: null,
+          cookieProfileKey: null,
+          priority: null,
+          ytDlpOptions: null,
+          fetchComments: false,
+          configSetKey: videoConfigSetKey
+        }
+      : {
+          sourceUrl: sourceUrl.trim(),
+          storageKey: resolvedStorageKey(),
+          forceDownload,
+          tags: parseTags(tags),
+          cookieProfileKey: cookieProfileKey || null,
+          priority,
+          ytDlpOptions: buildYtDlpOptions(),
+          fetchComments,
+          configSetKey: null
+        };
 
     try {
       const response = await fetch('/api/downloads/video', {
@@ -278,15 +299,27 @@
 
     const url = playlistUrl.trim();
     try {
-      const result = await queuePlaylistDownload({
-        sourceUrl: url,
-        storageKey: resolvedStorageKey(),
-        configSetKey: playlistConfigSetKey || null,
-        cookieProfileKey: cookieProfileKey || null,
-        encodeForPlaylist: playlistEncode,
-        priority,
-        fetchComments: playlistFetchComments
-      });
+      const result = await queuePlaylistDownload(
+        playlistConfigSetSelected
+          ? {
+              sourceUrl: url,
+              storageKey: null,
+              configSetKey: playlistConfigSetKey,
+              cookieProfileKey: null,
+              encodeForPlaylist: false,
+              priority: null,
+              fetchComments: false
+            }
+          : {
+              sourceUrl: url,
+              storageKey: resolvedStorageKey(),
+              configSetKey: null,
+              cookieProfileKey: cookieProfileKey || null,
+              encodeForPlaylist: playlistEncode,
+              priority,
+              fetchComments: playlistFetchComments
+            }
+      );
       recordQueued('playlist', `playlist ${result.playlistId}`, url);
       playlistUrl = '';
     } catch (err) {
@@ -303,17 +336,31 @@
 
     const url = creatorUrl.trim();
     try {
-      const result = await queueChannelDownload({
-        sourceUrl: url,
-        platform: creatorPlatform.trim() || 'youtube',
-        sourceType: creatorSourceType,
-        storageKey: resolvedStorageKey(),
-        configSetKey: creatorConfigSetKey || null,
-        cookieProfileKey: cookieProfileKey || null,
-        priority,
-        fetchComments: creatorFetchComments,
-        forceDownload: creatorForceDownload
-      });
+      const result = await queueChannelDownload(
+        creatorConfigSetSelected
+          ? {
+              sourceUrl: url,
+              platform: creatorPlatform.trim() || 'youtube',
+              sourceType: creatorSourceType,
+              storageKey: null,
+              configSetKey: creatorConfigSetKey,
+              cookieProfileKey: null,
+              priority: null,
+              fetchComments: false,
+              forceDownload: creatorForceDownload
+            }
+          : {
+              sourceUrl: url,
+              platform: creatorPlatform.trim() || 'youtube',
+              sourceType: creatorSourceType,
+              storageKey: resolvedStorageKey(),
+              configSetKey: null,
+              cookieProfileKey: cookieProfileKey || null,
+              priority,
+              fetchComments: creatorFetchComments,
+              forceDownload: creatorForceDownload
+            }
+      );
       recordQueued('creator', `group ${result.correlationId}`, url);
       creatorUrl = '';
     } catch (err) {
@@ -342,33 +389,33 @@
   <title>Download · FrostStream</title>
 </svelte:head>
 
-{#snippet sharedFields()}
+{#snippet sharedFields(disabled: boolean = false)}
   <div class="grid gap-5 sm:grid-cols-2">
     <div>
       <label class="label mb-2 text-sm" for="storage-key">Storage target</label>
       {#if storageLoadFailed}
-        <input class="input w-full" id="storage-key" bind:value={storageKey} placeholder="default" />
+        <input class="input w-full" id="storage-key" bind:value={storageKey} placeholder="default" {disabled} />
         <p class="mt-1.5 text-xs text-warning">
           Could not load storage targets; enter a storage key manually.
         </p>
       {:else}
-        <Select id="storage-key" items={storageOptions} bind:value={storageKey} />
+        <Select id="storage-key" items={storageOptions} bind:value={storageKey} {disabled} />
       {/if}
     </div>
 
     <div>
       <label class="label mb-2 text-sm" for="cookie-profile">Cookie profile</label>
-      <Select id="cookie-profile" items={[{ value: '', name: 'None' }, ...cookieOptions]} bind:value={cookieProfileKey} />
+      <Select id="cookie-profile" items={[{ value: '', name: 'None' }, ...cookieOptions]} bind:value={cookieProfileKey} {disabled} />
     </div>
   </div>
 {/snippet}
 
-{#snippet prioritySlider()}
+{#snippet prioritySlider(disabled: boolean = false)}
   <div>
     <label class="label mb-2 text-sm" for="priority">
       Priority <span class="font-normal text-base-content/50">({priority})</span>
     </label>
-    <RangeSlider id="priority" min={0} max={100} step={1} bind:value={priority} />
+    <RangeSlider id="priority" min={0} max={100} step={1} bind:value={priority} {disabled} />
     <p class="mt-1.5 text-xs text-base-content/40">Higher runs first while jobs wait for a slot.</p>
   </div>
 {/snippet}
@@ -437,24 +484,32 @@
              bind:value={sourceUrl} placeholder="https://www.youtube.com/watch?v=..." />
         </div>
 
-        {@render sharedFields()}
+        <div>
+          <label class="label mb-2 text-sm" for="video-config-set">Config set</label>
+          <Select id="video-config-set" items={configSetOptions} bind:value={videoConfigSetKey} />
+          <p class="mt-1.5 text-xs text-base-content/40">
+            Applies its saved storage target, cookie profile, yt-dlp options, priority, and worker tag. Every other option below except force download is disabled while a config set is selected.
+          </p>
+        </div>
+
+        {@render sharedFields(videoConfigSetSelected)}
 
         <div class="grid gap-5 sm:grid-cols-2">
           <div>
             <label class="label mb-2 text-sm" for="tags">Worker Tags</label>
-            <input class="input w-full" id="tags" bind:value={tags} placeholder="aws-wkr, local, import, proxmx-wk-003,..." />
+            <input class="input w-full" id="tags" bind:value={tags} placeholder="aws-wkr, local, import, proxmx-wk-003,..." disabled={videoConfigSetSelected} />
             <p class="mt-1.5 text-xs text-base-content/40">Comma separated, optional.</p>
           </div>
 
-          {@render prioritySlider()}
+          {@render prioritySlider(videoConfigSetSelected)}
         </div>
 
         <div class="flex flex-wrap gap-x-8 gap-y-3 border-t border-base-300/70 pt-5">
           <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={forceDownload} /><span>Force download <span class="ml-1 text-xs text-base-content/40">(re-download even if it already exists)</span></span></label>
-          <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={fetchComments} /><span>Fetch comments</span></label>
+          <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={fetchComments} disabled={videoConfigSetSelected} /><span>Fetch comments</span></label>
         </div>
 
-        <div class="rounded-xl border border-base-300/70 bg-base-200/40 p-4">
+        <fieldset class="rounded-xl border border-base-300/70 bg-base-200/40 p-4" disabled={videoConfigSetSelected}>
           <div class="max-w-sm">
             <label class="label mb-2 text-sm" for="option-preset">Option preset</label>
             <Select id="option-preset" items={[
@@ -504,7 +559,7 @@
               {/if}
             </div>
           </div>
-        </div>
+        </fieldset>
 
         {@render submitRow('Queue download')}
       </div>
@@ -524,23 +579,21 @@
           </p>
         </div>
 
-        {@render sharedFields()}
-
-        <div class="grid gap-5 sm:grid-cols-2">
-          <div>
-            <label class="label mb-2 text-sm" for="playlist-config-set">Config set</label>
-            <Select id="playlist-config-set" items={configSetOptions} bind:value={playlistConfigSetKey} />
-            <p class="mt-1.5 text-xs text-base-content/40">
-              Applies its saved yt-dlp options and ignore keywords to every entry.
-            </p>
-          </div>
-
-          {@render prioritySlider()}
+        <div>
+          <label class="label mb-2 text-sm" for="playlist-config-set">Config set</label>
+          <Select id="playlist-config-set" items={configSetOptions} bind:value={playlistConfigSetKey} />
+          <p class="mt-1.5 text-xs text-base-content/40">
+            Applies its saved storage target, cookie profile, yt-dlp options, ignore keywords, priority, and worker tag to every entry. Every other option below is disabled while a config set is selected.
+          </p>
         </div>
 
+        {@render sharedFields(playlistConfigSetSelected)}
+
+        {@render prioritySlider(playlistConfigSetSelected)}
+
         <div class="flex flex-wrap gap-x-8 gap-y-3 border-t border-base-300/70 pt-5">
-          <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={playlistEncode} /><span>Encode for playlist <span class="ml-1 text-xs text-base-content/40">(re-encode for gapless playback)</span></span></label>
-          <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={playlistFetchComments} /><span>Fetch comments</span></label>
+          <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={playlistEncode} disabled={playlistConfigSetSelected} /><span>Encode for playlist <span class="ml-1 text-xs text-base-content/40">(re-encode for gapless playback)</span></span></label>
+          <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={playlistFetchComments} disabled={playlistConfigSetSelected} /><span>Fetch comments</span></label>
         </div>
 
         {@render submitRow('Queue playlist')}
@@ -563,6 +616,14 @@
           </p>
         </div>
 
+        <div>
+          <label class="label mb-2 text-sm" for="creator-config-set">Config set</label>
+          <Select id="creator-config-set" items={configSetOptions} bind:value={creatorConfigSetKey} />
+          <p class="mt-1.5 text-xs text-base-content/40">
+            Applies its saved storage target, cookie profile, yt-dlp options, ignore keywords, priority, and worker tag to every discovered video. Every other option below except force download is disabled while a config set is selected.
+          </p>
+        </div>
+
         <div class="grid gap-5 sm:grid-cols-2">
           <div>
             <label class="label mb-2 text-sm" for="creator-platform">Platform</label>
@@ -574,23 +635,13 @@
           </div>
         </div>
 
-        {@render sharedFields()}
+        {@render sharedFields(creatorConfigSetSelected)}
 
-        <div class="grid gap-5 sm:grid-cols-2">
-          <div>
-            <label class="label mb-2 text-sm" for="creator-config-set">Config set</label>
-            <Select id="creator-config-set" items={configSetOptions} bind:value={creatorConfigSetKey} />
-            <p class="mt-1.5 text-xs text-base-content/40">
-              Applies its saved yt-dlp options and ignore keywords to every discovered video.
-            </p>
-          </div>
-
-          {@render prioritySlider()}
-        </div>
+        {@render prioritySlider(creatorConfigSetSelected)}
 
         <div class="flex flex-wrap gap-x-8 gap-y-3 border-t border-base-300/70 pt-5">
           <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={creatorForceDownload} /><span>Force download <span class="ml-1 text-xs text-base-content/40">(re-download videos already in the library)</span></span></label>
-          <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={creatorFetchComments} /><span>Fetch comments</span></label>
+          <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={creatorFetchComments} disabled={creatorConfigSetSelected} /><span>Fetch comments</span></label>
         </div>
 
         {@render submitRow('Queue channel download')}

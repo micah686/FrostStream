@@ -101,6 +101,7 @@
     { value: '', name: 'None (use per-request settings)' },
     ...configSets.map((set) => ({ value: set.key, name: set.name }))
   ]);
+  const downloadConfigSetSelected = $derived(downloadConfigSetKey !== '');
 
   let expandedIgnoredId = $state<number | null>(null);
   let ignoredItems = $state<IgnoredMedia[]>([]);
@@ -302,15 +303,27 @@
     downloadBusy = true;
     downloadError = null;
     try {
-      const result = await queueChannelDownload({
-        sourceUrl: source.sourceUrl,
-        platform: source.platform,
-        sourceType: source.sourceType,
-        storageKey: downloadStorageKey.trim() || 'default',
-        configSetKey: downloadConfigSetKey || null,
-        fetchComments: downloadFetchComments,
-        forceDownload: downloadForce
-      });
+      const result = await queueChannelDownload(
+        downloadConfigSetSelected
+          ? {
+              sourceUrl: source.sourceUrl,
+              platform: source.platform,
+              sourceType: source.sourceType,
+              storageKey: null,
+              configSetKey: downloadConfigSetKey,
+              fetchComments: false,
+              forceDownload: downloadForce
+            }
+          : {
+              sourceUrl: source.sourceUrl,
+              platform: source.platform,
+              sourceType: source.sourceType,
+              storageKey: downloadStorageKey.trim() || 'default',
+              configSetKey: null,
+              fetchComments: downloadFetchComments,
+              forceDownload: downloadForce
+            }
+      );
       actionNotice = `Full channel download queued for ${displayName(source)} (group ${result.correlationId}).`;
       actionError = null;
       downloadModalOpen = false;
@@ -823,23 +836,23 @@
     </p>
 
     <div>
-      <label class="label mb-1.5 text-xs" for="channel-download-storage">
-        Storage target
-      </label>
-      <Select id="channel-download-storage" items={storageOptions} bind:value={downloadStorageKey} />
-    </div>
-
-    <div>
       <label class="label mb-1.5 text-xs" for="channel-download-config-set">
         Config set
       </label>
       <Select id="channel-download-config-set" items={configSetOptions} bind:value={downloadConfigSetKey} />
       <p class="mt-1.5 text-[11px] text-base-content/40">
-        Applies its saved yt-dlp options and ignore keywords to every discovered video.
+        Applies its saved storage target, yt-dlp options, ignore keywords, priority, and worker tag to every discovered video. Other options below except force re-download are disabled while a config set is selected.
       </p>
     </div>
 
-    <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={downloadFetchComments} /><span>Fetch comments</span></label>
+    <div>
+      <label class="label mb-1.5 text-xs" for="channel-download-storage">
+        Storage target
+      </label>
+      <Select id="channel-download-storage" items={storageOptions} bind:value={downloadStorageKey} disabled={downloadConfigSetSelected} />
+    </div>
+
+    <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={downloadFetchComments} disabled={downloadConfigSetSelected} /><span>Fetch comments</span></label>
 
     <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={downloadForce} /><span>Force re-download videos already in the library</span></label>
 

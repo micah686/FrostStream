@@ -15,7 +15,7 @@ public sealed class DownloadRequest
     public required string SourceUrl { get; init; }
 
     [DefaultValue("default")]
-    public required string StorageKey { get; init; }
+    public string? StorageKey { get; init; }
 
     [DefaultValue(false)]
     public bool ForceDownload { get; init; } = false;
@@ -31,7 +31,7 @@ public sealed class DownloadRequest
     /// <summary>Administrative priority 0–100 (default 0), retained on the job and used by
     /// priority-sorted queue views.</summary>
     [Range(0, 100)]
-    public int Priority { get; init; } = 0;
+    public int? Priority { get; init; }
 
     public SponsorBlockRequest? SponsorBlock { get; init; }
 
@@ -45,6 +45,15 @@ public sealed class DownloadRequest
     /// <summary>When true, yt-dlp fetches comments and they are persisted to the database and indexed in Typesense.</summary>
     [DefaultValue(false)]
     public bool FetchComments { get; init; } = false;
+
+    /// <summary>
+    /// Optional user-owned download config set key. When set, its stored storage key, cookie
+    /// profile, yt-dlp options, priority, and worker tag are used instead of the fields above
+    /// (whichever of those fields is left at its default is filled from the config set).
+    /// </summary>
+    [StringLength(100, MinimumLength = 2)]
+    [RegularExpression("^[a-z0-9-]{2,100}$")]
+    public string? ConfigSetKey { get; init; }
 }
 
 /// <summary>Body for <see cref="DownloadsController.DownloadAudio"/> - simple audio download (always MP3).</summary>
@@ -55,7 +64,7 @@ public sealed class DownloadAudioRequest
     public required string SourceUrl { get; init; }
 
     [DefaultValue("default")]
-    public required string StorageKey { get; init; }
+    public string? StorageKey { get; init; }
 
     [DefaultValue(false)]
     public bool ForceDownload { get; init; } = false;
@@ -71,13 +80,22 @@ public sealed class DownloadAudioRequest
     /// <summary>Administrative priority 0–100 (default 0), retained on the job and used by
     /// priority-sorted queue views.</summary>
     [Range(0, 100)]
-    public int Priority { get; init; } = 0;
+    public int? Priority { get; init; }
 
     public SponsorBlockRequest? SponsorBlock { get; init; }
 
     /// <summary>When true, yt-dlp fetches comments and they are persisted to the database and indexed in Typesense.</summary>
     [DefaultValue(false)]
     public bool FetchComments { get; init; } = false;
+
+    /// <summary>
+    /// Optional user-owned download config set key. When set, its stored storage key, cookie
+    /// profile, yt-dlp options, priority, and worker tag are used instead of the fields above
+    /// (whichever of those fields is left at its default is filled from the config set).
+    /// </summary>
+    [StringLength(100, MinimumLength = 2)]
+    [RegularExpression("^[a-z0-9-]{2,100}$")]
+    public string? ConfigSetKey { get; init; }
 }
 
 /// <summary>Body for <see cref="DownloadsController.DownloadWithPreset"/> - download driven by a stored option preset.</summary>
@@ -88,7 +106,7 @@ public sealed class DownloadPresetRequest
     public required string SourceUrl { get; init; }
 
     [DefaultValue("default")]
-    public required string StorageKey { get; init; }
+    public string? StorageKey { get; init; }
 
     [DefaultValue(false)]
     public bool ForceDownload { get; init; } = false;
@@ -110,11 +128,21 @@ public sealed class DownloadPresetRequest
     /// <summary>Administrative priority 0–100 (default 0), retained on the job and used by
     /// priority-sorted queue views.</summary>
     [Range(0, 100)]
-    public int Priority { get; init; } = 0;
+    public int? Priority { get; init; }
 
     /// <summary>When true, yt-dlp fetches comments and they are persisted to the database and indexed in Typesense.</summary>
     [DefaultValue(false)]
     public bool FetchComments { get; init; } = false;
+
+    /// <summary>
+    /// Optional user-owned download config set key. When set, its stored storage key, cookie
+    /// profile, priority, and worker tag are used instead of the fields above (whichever of those
+    /// fields is left at its default is filled from the config set). The stored yt-dlp preset
+    /// referenced by <see cref="PresetKey"/> still wins for yt-dlp options.
+    /// </summary>
+    [StringLength(100, MinimumLength = 2)]
+    [RegularExpression("^[a-z0-9-]{2,100}$")]
+    public string? ConfigSetKey { get; init; }
 }
 
 /// <summary>Body for <c>PATCH /api/downloads/{jobId}/priority</c>.</summary>
