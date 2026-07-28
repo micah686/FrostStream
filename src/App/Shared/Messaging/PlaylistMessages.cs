@@ -64,6 +64,9 @@ public sealed record PlaylistRequested : IPlaylistFlowMessage
     /// <summary>User-owned reusable download config key used to submit this playlist, if any.</summary>
     public string? ConfigSetKey { get; init; }
 
+    /// <summary>Worker tag resolved from the config set, if any; overrides the storage key's own tag.</summary>
+    public string? WorkerTag { get; init; }
+
     /// <summary>When true, playlist fan-out asks for cached audio renditions for stream mode.</summary>
     public bool EncodeForPlaylist { get; init; }
 

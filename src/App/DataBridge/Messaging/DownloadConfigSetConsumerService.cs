@@ -17,6 +17,7 @@ public sealed class DownloadConfigSetConsumerService(
     ILogger<DownloadConfigSetConsumerService> logger) : SubscriptionBackgroundService
 {
     private const string KeyPattern = "^[a-z0-9-]{2,100}$";
+    private const string WorkerTagPattern = "^[a-z0-9-]{2,50}$";
 
     protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
     {
@@ -137,6 +138,8 @@ public sealed class DownloadConfigSetConsumerService(
             return "name is required.";
         if (msg.Priority is < 0 or > 100)
             return "priority must be between 0 and 100.";
+        if (!string.IsNullOrWhiteSpace(msg.WorkerTag) && !System.Text.RegularExpressions.Regex.IsMatch(msg.WorkerTag, WorkerTagPattern))
+            return "workerTag must match ^[a-z0-9-]{2,50}$.";
         if (!string.IsNullOrWhiteSpace(msg.YtDlpOptionsJson))
         {
             try
@@ -169,6 +172,7 @@ public sealed class DownloadConfigSetConsumerService(
             Description = Normalize(msg.Description),
             StorageKey = Normalize(msg.StorageKey),
             CookieProfileKey = Normalize(msg.CookieProfileKey),
+            WorkerTag = Normalize(msg.WorkerTag),
             YtDlpOptionsJson = Normalize(msg.YtDlpOptionsJson),
             IgnoreKeywordsJson = IgnoreKeywordMatcher.Serialize(msg.IgnoreKeywords),
             Priority = msg.Priority
@@ -184,6 +188,7 @@ public sealed class DownloadConfigSetConsumerService(
             Description = entity.Description,
             StorageKey = entity.StorageKey,
             CookieProfileKey = entity.CookieProfileKey,
+            WorkerTag = entity.WorkerTag,
             YtDlpOptionsJson = entity.YtDlpOptionsJson,
             IgnoreKeywords = IgnoreKeywordMatcher.Deserialize(entity.IgnoreKeywordsJson),
             Priority = entity.Priority,

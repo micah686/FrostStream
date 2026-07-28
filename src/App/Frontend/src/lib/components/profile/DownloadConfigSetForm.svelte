@@ -37,6 +37,7 @@
   let description = $state(untrack(() => initial?.description ?? ''));
   let storageKey = $state(untrack(() => initial?.storageKey ?? 'default'));
   let cookieProfileKey = $state(untrack(() => initial?.cookieProfileKey ?? ''));
+  let workerTag = $state(untrack(() => initial?.workerTag ?? ''));
   let priority = $state(untrack(() => initial?.priority ?? 0));
   let ignoreKeywordsText = $state(untrack(() => formatIgnoreKeywords(initial?.ignoreKeywords ?? [])));
   let selectedOptionPresetKey = $state(untrack(() => (initial?.ytDlpOptions ? '__existing' : '')));
@@ -140,6 +141,7 @@
       description: description.trim() || null,
       storageKey: storageKey.trim() || 'default',
       cookieProfileKey: cookieProfileKey.trim() || null,
+      workerTag: workerTag.trim() || null,
       ytDlpOptions: selectedYtDlpOptions(),
       ignoreKeywords: parseIgnoreKeywords(ignoreKeywordsText),
       priority: normalizedPriority
@@ -231,6 +233,15 @@
       <label class="label mb-2 text-sm" for="cookie-profile-key">Cookie profile key</label>
       <Select id="cookie-profile-key" items={cookieProfileItems} bind:value={cookieProfileKey} class="text-sm" />
     </div>
+  </div>
+
+  <div>
+    <label class="label mb-2 text-sm" for="worker-tag">Worker tag</label>
+    <input class="input w-full text-sm" id="worker-tag"
+       pattern={'[a-z0-9-]{2,50}'} minlength={2} maxlength={50} bind:value={workerTag} placeholder="gpu-encode" />
+    <p class="mt-1.5 text-xs text-base-content/40">
+      Optional. Routes jobs from this config set to workers configured with this tag, overriding the storage target's own tag. Leave blank to use the storage target's default routing.
+    </p>
   </div>
 
   <div>

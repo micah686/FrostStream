@@ -37,6 +37,7 @@ public sealed record ForceQueueDiscoveredMediaRequestMessage
     public required long DiscoveredMediaId { get; init; }
     public required string RequestedBy { get; init; }
     public required string StorageKey { get; init; }
+    public string? WorkerTag { get; init; }
     public string? CookieSecretPath { get; init; }
     public YtDlpOptions? YtDlpOptions { get; init; }
     public bool EncodeForPlaylist { get; init; }

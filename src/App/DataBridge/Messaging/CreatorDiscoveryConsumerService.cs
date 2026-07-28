@@ -399,6 +399,7 @@ public sealed class CreatorDiscoveryConsumerService(
                 SourceUrl = entity.CanonicalUrl,
                 RequestedBy = msg.RequestedBy,
                 StorageKey = msg.StorageKey,
+                WorkerTag = msg.WorkerTag,
                 ForceDownload = true,
                 MediaKind = MediaKind.Video,
                 YtDlpOptions = msg.YtDlpOptions,
@@ -419,6 +420,7 @@ public sealed class CreatorDiscoveryConsumerService(
                 SourceUrl = download.SourceUrl,
                 RequestedBy = download.RequestedBy,
                 StorageKey = download.StorageKey,
+                WorkerTag = download.WorkerTag,
                 Priority = download.Priority,
                 DirectRequest = download
             };
@@ -464,6 +466,7 @@ public sealed class CreatorDiscoveryConsumerService(
                 SourceUrl = candidate.CanonicalUrl,
                 RequestedBy = request.RequestedBy ?? $"schedule:{request.ScheduleKey}",
                 StorageKey = request.StorageKey,
+                WorkerTag = request.WorkerTag,
                 ForceDownload = request.ForceDownload,
                 MediaKind = MediaKind.Video,
                 YtDlpOptions = request.YtDlpOptions,

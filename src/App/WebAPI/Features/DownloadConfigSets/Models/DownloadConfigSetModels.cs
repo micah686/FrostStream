@@ -27,6 +27,11 @@ public class DownloadConfigSetCreateRequest
     [RegularExpression("^[a-z0-9-]{2,100}$")]
     public string? CookieProfileKey { get; init; }
 
+    /// <summary>Optional worker tag; overrides the storage backend's own tag for jobs built from this config set.</summary>
+    [StringLength(50, MinimumLength = 2)]
+    [RegularExpression("^[a-z0-9-]{2,50}$")]
+    public string? WorkerTag { get; init; }
+
     public YtDlpOptions? YtDlpOptions { get; init; }
 
     /// <summary>Title keywords that suppress videos during user-initiated channel/playlist downloads
@@ -47,6 +52,7 @@ public sealed class DownloadConfigSetResponse
     public string? Description { get; init; }
     public string? StorageKey { get; init; }
     public string? CookieProfileKey { get; init; }
+    public string? WorkerTag { get; init; }
     public JsonElement? YtDlpOptions { get; init; }
     public IReadOnlyList<IgnoreKeyword> IgnoreKeywords { get; init; } = [];
     public int Priority { get; init; }

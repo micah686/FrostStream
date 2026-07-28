@@ -130,6 +130,7 @@ public sealed class CreatorMonitorController(
             StorageKey = resolved.StorageKey,
             RequestedBy = subject,
             ConfigSetKey = resolved.ConfigSetKey,
+            WorkerTag = resolved.WorkerTag,
             EncodeForPlaylist = resolved.EncodeForPlaylist,
             CookieSecretPath = resolved.CookieSecretPath,
             YtDlpOptions = resolved.YtDlpOptions,
@@ -151,6 +152,7 @@ public sealed class CreatorMonitorController(
                 SourceUrl = sourceResponse.Entity.SourceUrl,
                 RequestedBy = subject,
                 StorageKey = resolved.StorageKey,
+                WorkerTag = resolved.WorkerTag,
                 Priority = resolved.Priority,
                 ChannelRequest = message
             };
@@ -477,6 +479,7 @@ public sealed class CreatorMonitorController(
                     DiscoveredMediaId = id,
                     RequestedBy = subject,
                     StorageKey = resolved.StorageKey,
+                    WorkerTag = resolved.WorkerTag,
                     CookieSecretPath = resolved.CookieSecretPath,
                     YtDlpOptions = resolved.YtDlpOptions,
                     EncodeForPlaylist = resolved.EncodeForPlaylist,

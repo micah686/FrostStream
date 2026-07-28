@@ -46,6 +46,7 @@ public sealed class PlaylistsRepository(
             existingByUrl.RequestedBy = request.RequestedBy ?? existingByUrl.RequestedBy;
             existingByUrl.StorageKey = request.StorageKey ?? existingByUrl.StorageKey;
             existingByUrl.ConfigSetKey = request.ConfigSetKey;
+            existingByUrl.WorkerTag = request.WorkerTag;
             existingByUrl.EncodeForPlaylist = request.EncodeForPlaylist;
             existingByUrl.CookieSecretPath = request.CookieSecretPath;
             existingByUrl.YtDlpOptionsJson = request.YtDlpOptions is null ? null : System.Text.Json.JsonSerializer.Serialize(request.YtDlpOptions);
@@ -64,6 +65,7 @@ public sealed class PlaylistsRepository(
             RequestedBy = request.RequestedBy,
             StorageKey = request.StorageKey,
             ConfigSetKey = request.ConfigSetKey,
+            WorkerTag = request.WorkerTag,
             EncodeForPlaylist = request.EncodeForPlaylist,
             CookieSecretPath = request.CookieSecretPath,
             YtDlpOptionsJson = request.YtDlpOptions is null ? null : System.Text.Json.JsonSerializer.Serialize(request.YtDlpOptions),

@@ -36,6 +36,7 @@ public sealed class DownloadConfigSetsRepository(DataBridgeDbContext db, IClock 
         existing.Description = entity.Description;
         existing.StorageKey = entity.StorageKey;
         existing.CookieProfileKey = entity.CookieProfileKey;
+        existing.WorkerTag = entity.WorkerTag;
         existing.YtDlpOptionsJson = entity.YtDlpOptionsJson;
         existing.IgnoreKeywordsJson = entity.IgnoreKeywordsJson;
         existing.Priority = entity.Priority;

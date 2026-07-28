@@ -85,6 +85,7 @@ public class PlaylistsController(
             RequestedBy = subject,
             StorageKey = resolved.StorageKey,
             ConfigSetKey = resolved.ConfigSetKey,
+            WorkerTag = resolved.WorkerTag,
             EncodeForPlaylist = resolved.EncodeForPlaylist,
             CookieSecretPath = resolved.CookieSecretPath,
             YtDlpOptions = resolved.YtDlpOptions,
@@ -105,6 +106,7 @@ public class PlaylistsController(
                 SourceUrl = message.SourceUrl,
                 RequestedBy = message.RequestedBy,
                 StorageKey = message.StorageKey,
+                WorkerTag = message.WorkerTag,
                 Priority = message.Priority,
                 CollectionRequest = message
             };

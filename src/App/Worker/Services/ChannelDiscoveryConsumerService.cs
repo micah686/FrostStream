@@ -271,6 +271,7 @@ public sealed class ChannelDiscoveryConsumerService(
                     StorageKey = ChannelStorageKey(request),
                     RequestedBy = ChannelRequestedBy(request),
                     ConfigSetKey = ChannelConfigSetKey(request),
+                    WorkerTag = ChannelWorkerTag(request),
                     EncodeForPlaylist = ChannelEncodeForPlaylist(request),
                     CookieSecretPath = ChannelCookieSecretPath(request),
                     Priority = ChannelPriority(request),
@@ -315,6 +316,7 @@ public sealed class ChannelDiscoveryConsumerService(
                     StorageKey = ChannelStorageKey(request),
                     RequestedBy = ChannelRequestedBy(request),
                     ConfigSetKey = ChannelConfigSetKey(request),
+                    WorkerTag = ChannelWorkerTag(request),
                     EncodeForPlaylist = ChannelEncodeForPlaylist(request),
                     CookieSecretPath = ChannelCookieSecretPath(request),
                     Priority = ChannelPriority(request),
@@ -413,6 +415,9 @@ public sealed class ChannelDiscoveryConsumerService(
 
     private static string? ChannelConfigSetKey(ScheduledBackgroundRequest request)
         => request is ChannelScanFullRequested channelRequest ? channelRequest.ConfigSetKey : null;
+
+    private static string? ChannelWorkerTag(ScheduledBackgroundRequest request)
+        => request is ChannelScanFullRequested channelRequest ? channelRequest.WorkerTag : null;
 
     private static bool ChannelEncodeForPlaylist(ScheduledBackgroundRequest request)
         => request is ChannelScanFullRequested channelRequest && channelRequest.EncodeForPlaylist;

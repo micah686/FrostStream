@@ -185,6 +185,12 @@ public sealed record DownloadRequested : IFlowMessage
     /// </summary>
     public string? StorageKey { get; init; }
 
+    /// <summary>
+    /// Optional worker tag, resolved from a download config set. When set, it overrides the storage
+    /// key's own worker tag for routing this job's stage commands to a tagged worker pool.
+    /// </summary>
+    public string? WorkerTag { get; init; }
+
     /// <summary>Free-form tags to attach to the resulting movie row.</summary>
     public IReadOnlyList<string>? Tags { get; init; }
 

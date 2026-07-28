@@ -25,6 +25,9 @@ public sealed record DownloadConfigSetDto
     public string? Description { get; init; }
     public string? StorageKey { get; init; }
     public string? CookieProfileKey { get; init; }
+
+    /// <summary>Optional worker tag; overrides the storage backend's own tag for jobs built from this config set.</summary>
+    public string? WorkerTag { get; init; }
     public string? YtDlpOptionsJson { get; init; }
     public IReadOnlyList<IgnoreKeyword> IgnoreKeywords { get; init; } = [];
     public int Priority { get; init; }
@@ -40,6 +43,7 @@ public record DownloadConfigSetCreateRequestMessage
     public string? Description { get; init; }
     public string? StorageKey { get; init; }
     public string? CookieProfileKey { get; init; }
+    public string? WorkerTag { get; init; }
     public string? YtDlpOptionsJson { get; init; }
     public IReadOnlyList<IgnoreKeyword> IgnoreKeywords { get; init; } = [];
     public int Priority { get; init; }

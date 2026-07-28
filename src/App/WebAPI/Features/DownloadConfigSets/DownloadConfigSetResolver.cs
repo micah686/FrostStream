@@ -13,7 +13,8 @@ public sealed record ResolvedDownloadConfigSet(
     YtDlpOptions? YtDlpOptions,
     bool EncodeForPlaylist,
     int Priority,
-    bool FetchComments);
+    bool FetchComments,
+    string? WorkerTag);
 
 public static class DownloadConfigSetResolver
 {
@@ -72,7 +73,8 @@ public static class DownloadConfigSetResolver
             YtDlpOptions: ytDlpOptions,
             EncodeForPlaylist: encodeForPlaylistOverride ?? false,
             Priority: priorityOverride ?? config?.Priority ?? 0,
-            FetchComments: fetchCommentsOverride ?? false), null);
+            FetchComments: fetchCommentsOverride ?? false,
+            WorkerTag: Normalize(config?.WorkerTag)), null);
     }
 
     private static YtDlpOptions? Deserialize(string? json)

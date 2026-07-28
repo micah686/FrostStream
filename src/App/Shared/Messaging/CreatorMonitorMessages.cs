@@ -136,6 +136,7 @@ public sealed record UpsertDiscoveredMediaBatchRequestMessage
     public string? StorageKey { get; init; }
     public string? RequestedBy { get; init; }
     public string? ConfigSetKey { get; init; }
+    public string? WorkerTag { get; init; }
     public bool EncodeForPlaylist { get; init; }
     public string? CookieSecretPath { get; init; }
     public int Priority { get; init; }
