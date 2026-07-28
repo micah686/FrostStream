@@ -215,6 +215,8 @@ public static class EndpointIds
     public const string ChannelAudioPodcastToken = "channels.audio.podcast-token";
     public const string ChannelAudioPodcastFeed = "channels.audio.podcast-feed";
     public const string ChannelAudioEnclosure = "channels.audio.enclosure";
+    public const string ChannelAudioEncodedStatusList = "channels.audio.encoded-status.list";
+    public const string ChannelAudioEncodedStatusSet = "channels.audio.encoded-status.set";
 
     // Server-side casting (protocol providers driven by the server via local discovery)
     public const string CastDevicesList = "cast.devices.list";
@@ -454,6 +456,8 @@ public static class EndpointCatalog
         new(EndpointIds.ChannelAudioPodcastToken, Bundles.Media),
         new(EndpointIds.ChannelAudioPodcastFeed, Bundles.Media),
         new(EndpointIds.ChannelAudioEnclosure, Bundles.Media),
+        new(EndpointIds.ChannelAudioEncodedStatusList, Bundles.Media),
+        new(EndpointIds.ChannelAudioEncodedStatusSet, Bundles.Media),
 
         new(EndpointIds.AccessControlCatalog, Bundles.Management),
         new(EndpointIds.AccessControlDirectorySearch, Bundles.Management),

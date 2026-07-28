@@ -227,15 +227,66 @@ public sealed class AudioRenditionRepository(
         if (rendition is null)
             return false;
 
+        var now = clock.GetCurrentInstant();
         rendition.Status = AudioRenditionStatus.Ready;
         rendition.StoragePath = storagePath;
         rendition.ContentHashXxh128 = contentHashXxh128;
         rendition.SizeBytes = sizeBytes;
         rendition.DurationSeconds = durationSeconds;
         rendition.ErrorMessage = null;
-        rendition.UpdatedAt = clock.GetCurrentInstant();
+        rendition.UpdatedAt = now;
+
+        await UpsertEncodingStatusAsync(rendition.MediaGuid, rendition.StorageKey, storagePath, now, cancellationToken);
+
         await db.SaveChangesAsync(cancellationToken);
         return true;
+    }
+
+    // Keeps the durable media.audio_encoding_status fact in sync whenever a rendition completes, so it
+    // reflects reality without anyone having to call the manual set-status API. A prior FailAsync must
+    // never clear an existing encoded=true row here — re-encode failure doesn't undo a past success.
+    private async Task UpsertEncodingStatusAsync(
+        Guid mediaGuid,
+        string storageKey,
+        string storagePath,
+        Instant now,
+        CancellationToken cancellationToken)
+    {
+        var status = await db.MediaEncodingStatuses.FirstOrDefaultAsync(x => x.MediaGuid == mediaGuid, cancellationToken);
+        if (status is null)
+        {
+            var accountId = await ReadAccountIdForMediaAsync(mediaGuid, cancellationToken);
+            if (accountId is null)
+                return;
+
+            db.MediaEncodingStatuses.Add(new MediaEncodingStatusEntity
+            {
+                MediaGuid = mediaGuid,
+                AccountId = accountId.Value,
+                IsEncoded = true,
+                StorageKey = storageKey,
+                StoragePath = storagePath,
+                EncodedAt = now,
+                UpdatedAt = now
+            });
+            return;
+        }
+
+        status.IsEncoded = true;
+        status.StorageKey = storageKey;
+        status.StoragePath = storagePath;
+        status.EncodedAt = now;
+        status.UpdatedAt = now;
+    }
+
+    private async Task<long?> ReadAccountIdForMediaAsync(Guid mediaGuid, CancellationToken cancellationToken)
+    {
+        await using var command = dataSource.CreateCommand("""
+            SELECT account_id FROM metadata.media_metadata WHERE media_guid = @media_guid
+            """);
+        command.Parameters.AddWithValue("@media_guid", mediaGuid);
+        var result = await command.ExecuteScalarAsync(cancellationToken);
+        return result is null or DBNull ? null : (long)result;
     }
 
     public async Task<bool> FailAsync(Guid renditionId, string errorMessage, CancellationToken cancellationToken = default)

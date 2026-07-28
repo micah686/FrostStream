@@ -21,8 +21,10 @@
   import {
     createPodcastFeedLink,
     encodeChannelAudio,
+    getChannelAudioEncodedStatus,
     getChannelAudioStatus,
     renditionProgressStreamUrl,
+    type ChannelAudioEncodedStatusResponse,
     type ChannelAudioStatus,
     type RenditionProgressFrame
   } from '$lib/api/channelAudio';
@@ -99,6 +101,7 @@
   let statisticsError = $state<string | null>(null);
   let statisticsExpanded = $state(false);
   let channelAudio = $state<ChannelAudioStatus | null>(null);
+  let channelAudioEncodedStatus = $state<ChannelAudioEncodedStatusResponse | null>(null);
   let channelAudioLoading = $state(false);
   let channelAudioBusy = $state(false);
   let channelAudioNotice = $state<string | null>(null);
@@ -124,10 +127,14 @@
   );
   const currentAudioItem = $derived(readyAudioItems[audioIndex] ?? null);
   const audioComplete = $derived(
-    channelAudio !== null && channelAudio.totalCount > 0 && channelAudio.readyCount === channelAudio.totalCount
+    channelAudioEncodedStatus !== null &&
+      channelAudioEncodedStatus.totalCount > 0 &&
+      channelAudioEncodedStatus.encodedCount === channelAudioEncodedStatus.totalCount
   );
   const audioProgress = $derived(
-    channelAudio?.totalCount ? Math.round((channelAudio.readyCount / channelAudio.totalCount) * 100) : 0
+    channelAudioEncodedStatus?.totalCount
+      ? Math.round((channelAudioEncodedStatus.encodedCount / channelAudioEncodedStatus.totalCount) * 100)
+      : 0
   );
 
   onDestroy(() => {
@@ -154,6 +161,7 @@
     hasMore = false;
 
     channelAudio = null;
+    channelAudioEncodedStatus = null;
     channelAudioNotice = null;
     selectedStorageKey = '';
     audioPlayerOpen = false;
@@ -168,7 +176,15 @@
     if (!quiet) channelAudioLoading = true;
 
     try {
-      channelAudio = await getChannelAudioStatus(parsedId, selectedStorageKey || undefined);
+      // The ready/total item list (for storage-key filtering, playback, and job-state polling) still
+      // comes from /status. The "N / M encoded" progress figure comes from the durable, indexed
+      // encoded-status count instead of /status's readyCount, which requires a full per-item diff.
+      const [status, encodedStatus] = await Promise.all([
+        getChannelAudioStatus(parsedId, selectedStorageKey || undefined),
+        getChannelAudioEncodedStatus(parsedId, { storageKey: selectedStorageKey || undefined, limit: 1 })
+      ]);
+      channelAudio = status;
+      channelAudioEncodedStatus = encodedStatus;
       scheduleAudioPoll(id);
     } catch (err) {
       if (!quiet) {
@@ -631,10 +647,10 @@
           {/if}
           Copy podcast RSS
         </button>
-        {#if channelAudio && channelAudio.totalCount > 0}
+        {#if channelAudio && channelAudioEncodedStatus && channelAudioEncodedStatus.totalCount > 0}
           <div class="w-full max-w-60" aria-label={`Audio encoding ${audioProgress}% complete`}>
             <div class="flex justify-between gap-3 text-[11px] text-base-content/50">
-              <span>{channelAudio.readyCount.toLocaleString()} / {channelAudio.totalCount.toLocaleString()} encoded</span>
+              <span>{channelAudioEncodedStatus.encodedCount.toLocaleString()} / {channelAudioEncodedStatus.totalCount.toLocaleString()} encoded</span>
               <span>{audioProgress}%</span>
             </div>
             <div class="mt-1 h-1.5 overflow-hidden rounded-full bg-base-300">
