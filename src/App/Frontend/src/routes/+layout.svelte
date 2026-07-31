@@ -258,7 +258,7 @@
 {/snippet}
 
 <header
-  class="fixed inset-x-0 top-0 z-40 flex h-14 items-center border-b border-base-300/70 bg-[var(--color-page)]/95 px-3 backdrop-blur-xl sm:px-5"
+  class="fixed inset-x-0 top-0 z-40 flex h-14 items-center border-b border-base-300/70 bg-base-100/95 px-3 backdrop-blur-xl sm:px-5"
 >
   <button class="btn btn-sm btn-ghost mr-2 h-10 w-10 lg:hidden" aria-label="Open navigation" onclick={() => (drawerOpen = true)}>
     <Menu class="h-5 w-5" />
@@ -391,13 +391,13 @@
 </header>
 
 <aside
-  class="fixed bottom-0 left-0 top-14 z-30 hidden w-[232px] overflow-y-auto border-r border-base-300/70 bg-[var(--color-page)] lg:block"
+  class="fixed bottom-0 left-0 top-14 z-30 hidden w-[232px] overflow-y-auto border-r border-base-300/70 bg-base-100 lg:block"
   aria-label="Primary navigation"
 >
   {@render sidebarContent()}
 </aside>
 
-<Drawer bind:open={drawerOpen} placement="left" class="w-[min(19rem,88vw)] bg-[var(--color-page)]" label="Mobile navigation">
+<Drawer bind:open={drawerOpen} placement="left" class="w-[min(19rem,88vw)] bg-base-100" label="Mobile navigation">
   <div class="flex h-14 shrink-0 items-center justify-between border-b border-base-300/70 px-4">
     <span class="font-bold text-base-content">Navigation</span>
     <button class="btn btn-sm btn-ghost h-9 w-9" aria-label="Close navigation" onclick={closeDrawer}>

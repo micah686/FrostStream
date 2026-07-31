@@ -1,5 +1,7 @@
 @import "tailwindcss";
-@plugin "daisyui";
+@plugin "daisyui" {
+  themes: all;
+}
 
 @plugin "daisyui/theme" {
   name: "froststream";
@@ -7,9 +9,8 @@
   prefersdark: true;
   color-scheme: dark;
 
-  /* Surfaces — base-100 is the panel color, not the page canvas. The page
-     canvas (--color-page below) is darker, because modal-box/dropdown-content
-     default to base-100 and must float above the page rather than match it. */
+  /* base-200 is the app canvas; base-100 is used for persistent chrome and
+     floating surfaces. This same relationship is used by the built-in themes. */
   --color-base-100: #151a26;
   --color-base-200: #10141e;
   --color-base-300: #1e293b;
@@ -88,23 +89,16 @@
 }
 
 :root {
-  /* Page canvas sits below base-100 so panels read as elevated. Not a daisyUI
-     token: it has no component that consumes it. Redeclared per [data-theme]
-     below so light themes don't keep a near-black body. */
-  --color-page: #0d1017;
   font-family: var(--font-sans);
-  background: var(--color-page);
+  color: var(--color-base-content);
+  background: var(--color-base-200);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
 
-[data-theme='froststream-light'] {
-  --color-page: #f8fafc;
-}
-
 html {
   min-width: 320px;
-  background: var(--color-page);
+  background: var(--color-base-200);
 }
 
 body {
@@ -112,9 +106,8 @@ body {
   min-height: 100vh;
   margin: 0;
   overflow-x: hidden;
-  background:
-    radial-gradient(circle at 82% -10%, color-mix(in oklab, var(--color-primary) 8%, transparent), transparent 30rem),
-    var(--color-page);
+  color: var(--color-base-content);
+  background: var(--color-base-200);
 }
 
 button,
@@ -140,11 +133,11 @@ input:focus-visible {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--color-page);
+  background: var(--color-base-200);
 }
 
 ::-webkit-scrollbar-thumb {
-  border: 3px solid var(--color-page);
+  border: 3px solid var(--color-base-200);
   border-radius: 999px;
   background: var(--color-base-300);
 }

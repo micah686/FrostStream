@@ -35,7 +35,7 @@
     tabindex={open ? 0 : -1}
     aria-label="Close {label.toLowerCase()}"
     class={[
-      'absolute inset-0 bg-black/60 transition-opacity duration-200',
+      'absolute inset-0 bg-neutral/60 transition-opacity duration-200',
       open ? 'opacity-100' : 'opacity-0'
     ]}
     onclick={() => (open = false)}
