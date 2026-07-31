@@ -70,7 +70,6 @@
 
   // Creator form
   let creatorUrl = $state('');
-  let creatorPlatform = $state('youtube');
   let creatorSourceType = $state<CreatorSourceType>('Videos');
   let creatorConfigSetKey = $state('');
   let creatorFetchComments = $state(false);
@@ -340,7 +339,6 @@
         creatorConfigSetSelected
           ? {
               sourceUrl: url,
-              platform: creatorPlatform.trim() || 'youtube',
               sourceType: creatorSourceType,
               storageKey: null,
               configSetKey: creatorConfigSetKey,
@@ -351,7 +349,6 @@
             }
           : {
               sourceUrl: url,
-              platform: creatorPlatform.trim() || 'youtube',
               sourceType: creatorSourceType,
               storageKey: resolvedStorageKey(),
               configSetKey: null,
@@ -624,15 +621,9 @@
           </p>
         </div>
 
-        <div class="grid gap-5 sm:grid-cols-2">
-          <div>
-            <label class="label mb-2 text-sm" for="creator-platform">Platform</label>
-            <input class="input w-full" id="creator-platform" required  bind:value={creatorPlatform} placeholder="youtube" />
-          </div>
-          <div>
-            <label class="label mb-2 text-sm" for="creator-source-type">Content type</label>
-            <Select id="creator-source-type" items={sourceTypeOptions} bind:value={creatorSourceType} />
-          </div>
+        <div>
+          <label class="label mb-2 text-sm" for="creator-source-type">Content type</label>
+          <Select id="creator-source-type" items={sourceTypeOptions} bind:value={creatorSourceType} />
         </div>
 
         {@render sharedFields(creatorConfigSetSelected)}
