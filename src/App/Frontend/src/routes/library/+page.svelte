@@ -68,7 +68,7 @@
   }
 
   const pageSize = 24;
-  const tabs = ['Videos', 'Playlists', 'Watch later', 'History', 'Liked'] as const;
+  const tabs = ['Videos', 'Playlists', 'History', 'Liked'] as const;
   type Tab = (typeof tabs)[number];
 
   const sortOptions = [
@@ -112,7 +112,7 @@
   const totalPages = $derived(Math.max(1, Math.ceil(totalCount / pageSize)));
   const tabFromQuery = $derived.by(() => {
     const value = page.url.searchParams.get('tab');
-    return value === 'Videos' || value === 'Playlists' || value === 'Watch later' || value === 'History' || value === 'Liked'
+    return value === 'Videos' || value === 'Playlists' || value === 'History' || value === 'Liked'
       ? value
       : null;
   });

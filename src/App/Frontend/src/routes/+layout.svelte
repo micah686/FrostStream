@@ -11,7 +11,6 @@
   import {
     Bell,
     ClipboardList,
-    Clock,
     Cog,
     Download,
     Heart,
@@ -47,7 +46,6 @@
     { label: 'Library', icon: LayoutList, href: '/library' },
     { label: 'Channels', icon: Users, href: '/library/creators' },
     { label: 'History', icon: History, href: '/library?tab=History' },
-    { label: 'Watch later', icon: Clock },
     { label: 'Liked', icon: Heart, href: '/library?tab=Liked' }
   ];
 
@@ -74,10 +72,21 @@
     drawerOpen = false;
   };
 
-  const isActive = (item: NavItem) =>
-    item.href !== undefined &&
-    (page.url.pathname === item.href ||
-      (item.href !== '/' && item.href !== '/library' && page.url.pathname.startsWith(`${item.href}/`)));
+  const isActive = (item: NavItem) => {
+    if (item.href === undefined) {
+      return false;
+    }
+
+    const target = new URL(item.href, page.url);
+    if (page.url.pathname === target.pathname && page.url.search === target.search) {
+      return true;
+    }
+
+    return target.search === '' &&
+      target.pathname !== '/' &&
+      target.pathname !== '/library' &&
+      page.url.pathname.startsWith(`${target.pathname}/`);
+  };
 
   // Global search
   const SUGGESTION_DEBOUNCE_MS = 250;
@@ -207,7 +216,9 @@
       ]}
       <li>
         {#snippet itemContent()}
-          <Icon class="h-5 w-5 shrink-0 transition group-hover:text-primary" />
+          <Icon
+            class={['h-5 w-5 shrink-0 transition', active ? '' : 'group-hover:text-primary']}
+          />
           <span>{label}</span>
           {#if count}
             <span
