@@ -17,29 +17,39 @@
   <div class="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
     {#each themes as option (option)}
       <label
+        data-theme={option}
         class={[
-          'flex cursor-pointer flex-col items-center gap-2 rounded-xl border p-4 transition',
+          'flex cursor-pointer flex-col gap-2.5 rounded-box border bg-base-100 p-2.5 text-left transition hover:-translate-y-0.5 hover:shadow-md',
           $theme === option
-            ? 'border-primary bg-primary text-primary-content shadow-sm ring-1 ring-primary'
-            : 'border-base-content/25 bg-base-100 hover:border-base-content/45 hover:bg-base-200'
+            ? 'border-primary ring-2 ring-primary ring-offset-2 ring-offset-base-200'
+            : 'border-base-300 hover:border-primary/60'
         ]}
       >
-        <input
-          type="radio"
-          name="theme"
-          class={[
-            'radio radio-sm',
-            $theme === option
-              ? 'border-primary-content bg-primary-content/10 text-primary-content checked:border-primary-content checked:bg-primary-content checked:text-primary'
-              : 'radio-primary'
-          ]}
-          value={option}
-          checked={$theme === option}
-          onchange={() => setTheme(option)}
-        />
-        <span class={$theme === option ? 'text-sm font-semibold text-primary-content' : 'text-sm font-medium text-base-content'}>
-          {themeLabels[option]}
-        </span>
+        <div class="flex w-full items-center justify-between gap-3">
+          <span class="truncate text-xs font-semibold text-base-content">{themeLabels[option]}</span>
+          <input
+            type="radio"
+            name="theme"
+            class="radio radio-primary radio-sm shrink-0"
+            value={option}
+            checked={$theme === option}
+            onchange={() => setTheme(option)}
+          />
+        </div>
+
+        <div class="w-full rounded-box border border-base-300 bg-base-200 p-1.5">
+          <div class="grid grid-cols-4 gap-1.5">
+            <span class="grid h-6 place-items-center rounded-field bg-primary text-xs font-bold text-primary-content" title="Primary">A</span>
+            <span class="grid h-6 place-items-center rounded-field bg-secondary text-xs font-bold text-secondary-content" title="Secondary">A</span>
+            <span class="grid h-6 place-items-center rounded-field bg-accent text-xs font-bold text-accent-content" title="Accent">A</span>
+            <span class="grid h-6 place-items-center rounded-field bg-neutral text-xs font-bold text-neutral-content" title="Neutral">A</span>
+          </div>
+          <div class="mt-1.5 grid grid-cols-3 gap-1.5">
+            <span class="h-2 rounded-full bg-base-300"></span>
+            <span class="h-2 rounded-full bg-base-content"></span>
+            <span class="h-2 rounded-full bg-info"></span>
+          </div>
+        </div>
       </label>
     {/each}
   </div>
