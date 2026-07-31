@@ -708,6 +708,32 @@
       </p>
     </div>
 
+    <section class="rounded-xl border border-base-300/80 bg-base-200/40 p-4" aria-labelledby="creator-scan-schedule-title">
+      <h3 id="creator-scan-schedule-title" class="text-sm font-semibold text-base-content/90">
+        How scheduled scans work
+      </h3>
+      <p class="mt-1.5 text-xs leading-5 text-base-content/60">
+        The <a class="link link-hover text-primary" href="/admin/schedules">Schedules</a> page controls global sweep timers. A sweep wakes discovery, then only enabled creators whose own interval has elapsed participate.
+      </p>
+      <dl class="mt-3 space-y-3 border-t border-base-300/70 pt-3 text-xs leading-5">
+        <div>
+          <dt class="font-semibold text-base-content/90">channel-scan-refresh</dt>
+          <dd class="mt-0.5 text-base-content/60">
+            Checks creators due for an update, then scans only the newest entries using this creator's incremental page size.
+          </dd>
+        </div>
+        <div>
+          <dt class="font-semibold text-base-content/90">channel-full-rescan</dt>
+          <dd class="mt-0.5 text-base-content/60">
+            Selects creators due for a full rescan, then walks each listing in page-sized chunks until the full pass completes.
+          </dd>
+        </div>
+      </dl>
+      <p class="mt-3 text-[11px] leading-4 text-base-content/50">
+        The seeded schedules run refresh sweeps every 30 minutes and full sweeps daily, but their configured cadence is authoritative. The fields below decide when this creator becomes due; it runs on the next applicable sweep.
+      </p>
+    </section>
+
     <div class="grid gap-4 sm:grid-cols-2">
       <div>
         <label class="label mb-1.5 text-xs" for="creator-page-size">
