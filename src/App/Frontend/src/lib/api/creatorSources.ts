@@ -1,20 +1,7 @@
 import { getJson, sendEmpty, sendJson } from '$lib/api/http';
 
-export type CreatorSourceType = 'Videos' | 'Shorts' | 'Streams' | 'Playlist' | 'Clips' | 'Vods';
-
-export const creatorSourceTypes: CreatorSourceType[] = [
-  'Videos',
-  'Shorts',
-  'Streams',
-  'Playlist',
-  'Clips',
-  'Vods'
-];
-
 export interface CreatorSource {
   id: number;
-  platform: string;
-  sourceType: CreatorSourceType;
   sourceUrl: string;
   scanEnabled: boolean;
   incrementalPageSize: number;
@@ -22,7 +9,6 @@ export interface CreatorSource {
   fullRescanIntervalDays: number;
   updateCheckIntervalHours: number;
   metadataRefreshWindow: number;
-  providerQueryLimits: Record<string, unknown> | null;
   lastSuccessfulScanAt: string | null;
   lastFullScanAt: string | null;
   lastSeenHighWatermark: string | null;
@@ -32,8 +18,6 @@ export interface CreatorSource {
 }
 
 export interface CreatorSourceRequest {
-  platform: string;
-  sourceType: CreatorSourceType;
   sourceUrl: string;
   scanEnabled: boolean;
   incrementalPageSize: number;
@@ -41,13 +25,10 @@ export interface CreatorSourceRequest {
   fullRescanIntervalDays: number;
   updateCheckIntervalHours: number;
   metadataRefreshWindow: number;
-  providerQueryLimits?: Record<string, unknown> | null;
 }
 
 export interface ChannelDownloadRequest {
   sourceUrl: string;
-  platform?: string;
-  sourceType?: CreatorSourceType;
   storageKey?: string | null;
   configSetKey?: string | null;
   cookieProfileKey?: string | null;
@@ -61,8 +42,6 @@ export interface ChannelDownloadResponse {
   sourceId: number;
   correlationId: string;
   sourceUrl: string;
-  platform: string;
-  sourceType: CreatorSourceType;
   queued: boolean;
   idempotencyKey: string;
 }

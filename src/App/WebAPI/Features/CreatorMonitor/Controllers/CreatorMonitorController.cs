@@ -30,7 +30,7 @@ public sealed class CreatorMonitorController(
     [HttpPost]
     [Endpoint(EndpointIds.CreatorMonitorCreate)]
     [EndpointSummary("Create a creator discovery source")]
-    [EndpointDescription("Registers a creator or channel source for recurring discovery scans. The platform, source type, URL, scan enablement, incremental paging thresholds, full-rescan interval, and metadata refresh window are validated and persisted by DataBridge.")]
+    [EndpointDescription("Registers a creator or channel source for recurring discovery scans. The URL, scan enablement, incremental paging thresholds, full-rescan interval, and metadata refresh window are validated and persisted by DataBridge.")]
     public async Task<ActionResult<CreatorSourceResponse>> Create(
         [FromBody] CreatorSourceCreateRequest request,
         CancellationToken cancellationToken)
@@ -42,16 +42,13 @@ public sealed class CreatorMonitorController(
             CreatorMonitorSubjects.CreateSource,
             new CreatorMonitorCreateRequestMessage
             {
-                Platform = request.Platform,
-                SourceType = request.SourceType,
                 SourceUrl = SourceUrlCanonicalizer.Canonicalize(request.SourceUrl),
                 ScanEnabled = request.ScanEnabled,
                 IncrementalPageSize = request.IncrementalPageSize,
                 ConsecutiveKnownThreshold = request.ConsecutiveKnownThreshold,
                 FullRescanIntervalDays = request.FullRescanIntervalDays,
                 UpdateCheckIntervalHours = request.UpdateCheckIntervalHours,
-                MetadataRefreshWindow = request.MetadataRefreshWindow,
-                ProviderQueryLimits = request.ProviderQueryLimits
+                MetadataRefreshWindow = request.MetadataRefreshWindow
             },
             cancellationToken);
 
@@ -73,11 +70,8 @@ public sealed class CreatorMonitorController(
             CreatorMonitorSubjects.CreateOrReuseSource,
             new CreatorMonitorCreateOrReuseRequestMessage
             {
-                Platform = request.Platform,
-                SourceType = request.SourceType,
                 SourceUrl = SourceUrlCanonicalizer.Canonicalize(request.SourceUrl),
-                ScanEnabled = true,
-                ProviderQueryLimits = request.ProviderQueryLimits
+                ScanEnabled = true
             },
             cancellationToken);
 
@@ -135,8 +129,7 @@ public sealed class CreatorMonitorController(
             CookieSecretPath = resolved.CookieSecretPath,
             YtDlpOptions = resolved.YtDlpOptions,
             Priority = resolved.Priority,
-            FetchComments = resolved.FetchComments,
-            ProviderQueryLimits = request.ProviderQueryLimits
+            FetchComments = resolved.FetchComments
         };
 
         try
@@ -172,8 +165,6 @@ public sealed class CreatorMonitorController(
             sourceResponse.Entity.Id,
             correlationId,
             sourceResponse.Entity.SourceUrl,
-            sourceResponse.Entity.Platform,
-            sourceResponse.Entity.SourceType,
             Queued: true,
             idempotencyKey));
     }
@@ -181,7 +172,7 @@ public sealed class CreatorMonitorController(
     [HttpPut("{id:long}")]
     [Endpoint(EndpointIds.CreatorMonitorUpdate)]
     [EndpointSummary("Update a creator discovery source")]
-    [EndpointDescription("Replaces the discovery configuration for an existing creator source. The complete platform, source URL, scan controls, paging thresholds, rescan interval, and metadata refresh window are sent to DataBridge for validation and persistence.")]
+    [EndpointDescription("Replaces the discovery configuration for an existing creator source. The source URL, scan controls, paging thresholds, rescan interval, and metadata refresh window are sent to DataBridge for validation and persistence.")]
     public async Task<ActionResult<CreatorSourceResponse>> Update(
         long id,
         [FromBody] CreatorSourceUpdateRequest request,
@@ -195,16 +186,13 @@ public sealed class CreatorMonitorController(
             new CreatorMonitorUpdateRequestMessage
             {
                 Id = id,
-                Platform = request.Platform,
-                SourceType = request.SourceType,
                 SourceUrl = SourceUrlCanonicalizer.Canonicalize(request.SourceUrl),
                 ScanEnabled = request.ScanEnabled,
                 IncrementalPageSize = request.IncrementalPageSize,
                 ConsecutiveKnownThreshold = request.ConsecutiveKnownThreshold,
                 FullRescanIntervalDays = request.FullRescanIntervalDays,
                 UpdateCheckIntervalHours = request.UpdateCheckIntervalHours,
-                MetadataRefreshWindow = request.MetadataRefreshWindow,
-                ProviderQueryLimits = request.ProviderQueryLimits
+                MetadataRefreshWindow = request.MetadataRefreshWindow
             },
             cancellationToken);
 
@@ -554,8 +542,6 @@ public sealed class CreatorMonitorController(
         => new()
         {
             Id = dto.Id,
-            Platform = dto.Platform,
-            SourceType = dto.SourceType,
             SourceUrl = dto.SourceUrl,
             AccountId = dto.AccountId,
             ScanEnabled = dto.ScanEnabled,
@@ -564,7 +550,6 @@ public sealed class CreatorMonitorController(
             FullRescanIntervalDays = dto.FullRescanIntervalDays,
             UpdateCheckIntervalHours = dto.UpdateCheckIntervalHours,
             MetadataRefreshWindow = dto.MetadataRefreshWindow,
-            ProviderQueryLimits = dto.ProviderQueryLimits,
             LastSuccessfulScanAt = dto.LastSuccessfulScanAt,
             LastFullScanAt = dto.LastFullScanAt,
             LastSeenHighWatermark = dto.LastSeenHighWatermark,

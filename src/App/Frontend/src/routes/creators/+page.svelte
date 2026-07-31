@@ -18,7 +18,6 @@
   } from '@lucide/svelte';
   import {
     createCreatorSource,
-    creatorSourceTypes,
     deleteCreatorSource,
     listCreatorSources,
     listIgnoredMedia,
@@ -29,7 +28,6 @@
     type CreatorScanMode,
     type CreatorSource,
     type CreatorSourceRequest,
-    type CreatorSourceType,
     type IgnoredMedia
   } from '$lib/api/creatorSources';
   import { listDownloadConfigSets, type DownloadConfigSet } from '$lib/api/downloadConfigSets';
@@ -40,8 +38,6 @@
     'inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary disabled:opacity-50';
 
   interface SourceForm {
-    platform: string;
-    sourceType: CreatorSourceType;
     sourceUrl: string;
     scanEnabled: boolean;
     incrementalPageSize: number;
@@ -51,12 +47,8 @@
     metadataRefreshWindow: number;
   }
 
-  const sourceTypeOptions = creatorSourceTypes.map((type) => ({ value: type, name: type }));
-
   function emptyForm(): SourceForm {
     return {
-      platform: 'youtube',
-      sourceType: 'Videos',
       sourceUrl: '',
       scanEnabled: true,
       incrementalPageSize: 50,
@@ -110,7 +102,6 @@
 
   const trackedCount = $derived(sources.length);
   const scanningCount = $derived(sources.filter((source) => source.scanEnabled).length);
-  const platformCount = $derived(new Set(sources.map((source) => source.platform.toLowerCase())).size);
   const scannedCount = $derived(sources.filter((source) => source.lastSuccessfulScanAt).length);
 
   onMount(() => {
@@ -130,12 +121,7 @@
   }
 
   function sortSources(items: CreatorSource[]): CreatorSource[] {
-    return [...items].sort(
-      (a, b) =>
-        a.platform.localeCompare(b.platform) ||
-        displayName(a).localeCompare(displayName(b)) ||
-        a.id - b.id
-    );
+    return [...items].sort((a, b) => displayName(a).localeCompare(displayName(b)) || a.id - b.id);
   }
 
   function openCreateForm() {
@@ -148,8 +134,6 @@
   function openEditForm(source: CreatorSource) {
     editingSource = source;
     form = {
-      platform: source.platform,
-      sourceType: source.sourceType,
       sourceUrl: source.sourceUrl,
       scanEnabled: source.scanEnabled,
       incrementalPageSize: source.incrementalPageSize,
@@ -162,25 +146,19 @@
     formOpen = true;
   }
 
-  function buildRequest(source: CreatorSource | null): CreatorSourceRequest {
+  function buildRequest(): CreatorSourceRequest {
     return {
-      platform: form.platform.trim(),
-      sourceType: form.sourceType,
       sourceUrl: form.sourceUrl.trim(),
       scanEnabled: form.scanEnabled,
       incrementalPageSize: Number(form.incrementalPageSize),
       consecutiveKnownThreshold: Number(form.consecutiveKnownThreshold),
       fullRescanIntervalDays: Number(form.fullRescanIntervalDays),
       updateCheckIntervalHours: Number(form.updateCheckIntervalHours),
-      metadataRefreshWindow: Number(form.metadataRefreshWindow),
-      providerQueryLimits: source?.providerQueryLimits ?? null
+      metadataRefreshWindow: Number(form.metadataRefreshWindow)
     };
   }
 
   function validateForm(): string | null {
-    if (!form.platform.trim()) {
-      return 'Platform is required.';
-    }
     if (!form.sourceUrl.trim()) {
       return 'Source URL is required.';
     }
@@ -211,10 +189,10 @@
     formError = null;
     try {
       if (editingSource) {
-        const updated = await updateCreatorSource(editingSource.id, buildRequest(editingSource));
+        const updated = await updateCreatorSource(editingSource.id, buildRequest());
         sources = sortSources(sources.map((item) => (item.id === updated.id ? updated : item)));
       } else {
-        const created = await createCreatorSource(buildRequest(null));
+        const created = await createCreatorSource(buildRequest());
         sources = sortSources([...sources, created]);
       }
       formOpen = false;
@@ -228,16 +206,13 @@
   async function toggleScanning(source: CreatorSource) {
     await runAction(source.id, 'scan', async () => {
       const updated = await updateCreatorSource(source.id, {
-        platform: source.platform,
-        sourceType: source.sourceType,
         sourceUrl: source.sourceUrl,
         scanEnabled: !source.scanEnabled,
         incrementalPageSize: source.incrementalPageSize,
         consecutiveKnownThreshold: source.consecutiveKnownThreshold,
         fullRescanIntervalDays: source.fullRescanIntervalDays,
         updateCheckIntervalHours: source.updateCheckIntervalHours,
-        metadataRefreshWindow: source.metadataRefreshWindow,
-        providerQueryLimits: source.providerQueryLimits
+        metadataRefreshWindow: source.metadataRefreshWindow
       });
       sources = sortSources(sources.map((item) => (item.id === updated.id ? updated : item)));
     });
@@ -307,8 +282,6 @@
         downloadConfigSetSelected
           ? {
               sourceUrl: source.sourceUrl,
-              platform: source.platform,
-              sourceType: source.sourceType,
               storageKey: null,
               configSetKey: downloadConfigSetKey,
               fetchComments: false,
@@ -316,8 +289,6 @@
             }
           : {
               sourceUrl: source.sourceUrl,
-              platform: source.platform,
-              sourceType: source.sourceType,
               storageKey: downloadStorageKey.trim() || 'default',
               configSetKey: null,
               fetchComments: downloadFetchComments,
@@ -444,7 +415,7 @@
     </div>
   </div>
 
-  <div class="mt-6 grid gap-3 md:grid-cols-4">
+  <div class="mt-6 grid gap-3 md:grid-cols-3">
     <div class="rounded-xl border border-base-300/80 bg-base-200/40 p-4">
       <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Tracked</p>
       <p class="mt-2 text-2xl font-bold text-base-content">{trackedCount}</p>
@@ -454,11 +425,6 @@
       <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Scanning</p>
       <p class="mt-2 text-2xl font-bold text-base-content">{scanningCount}</p>
       <p class="mt-1 text-xs text-base-content/50">enabled for discovery</p>
-    </div>
-    <div class="rounded-xl border border-base-300/80 bg-base-200/40 p-4">
-      <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Platforms</p>
-      <p class="mt-2 text-2xl font-bold text-base-content">{platformCount}</p>
-      <p class="mt-1 text-xs text-base-content/50">distinct providers</p>
     </div>
     <div class="rounded-xl border border-base-300/80 bg-base-200/40 p-4">
       <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Scanned</p>
@@ -517,12 +483,6 @@
             <div class="min-w-0">
               <div class="flex flex-wrap items-center gap-2">
                 <h2 class="truncate text-base font-semibold text-base-content">{displayName(source)}</h2>
-                <span class="badge badge-sm badge-ghost rounded-full text-[10px] uppercase tracking-wide">
-                  {source.platform}
-                </span>
-                <span class="badge badge-sm badge-ghost rounded-full text-[10px]">
-                  {source.sourceType}
-                </span>
                 <span
                   class={[
                     'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold ring-1',
@@ -728,20 +688,6 @@
       <p class="mt-1.5 text-[11px] text-base-content/40">
         The channel or listing page that discovery scans will page through for new uploads.
       </p>
-    </div>
-
-    <div class="grid gap-4 sm:grid-cols-2">
-      <div>
-        <label class="label mb-1.5 text-xs" for="creator-platform">Platform</label>
-        <input class="input w-full" id="creator-platform" required
-           bind:value={form.platform} placeholder="youtube" />
-      </div>
-      <div>
-        <label class="label mb-1.5 text-xs" for="creator-source-type">
-          Content type
-        </label>
-        <Select id="creator-source-type" items={sourceTypeOptions} bind:value={form.sourceType} />
-      </div>
     </div>
 
     <div class="grid gap-4 sm:grid-cols-2">

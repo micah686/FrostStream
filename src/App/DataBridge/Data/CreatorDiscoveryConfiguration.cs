@@ -22,7 +22,6 @@ public sealed class CreatorSourceConfiguration : IEntityTypeConfiguration<Creato
         builder.Property(x => x.FullRescanIntervalDays).HasColumnName("full_rescan_interval_days").IsRequired();
         builder.Property(x => x.UpdateCheckIntervalHours).HasColumnName("update_check_interval_hours").IsRequired();
         builder.Property(x => x.MetadataRefreshWindow).HasColumnName("metadata_refresh_window").IsRequired();
-        builder.Property(x => x.ProviderQueryLimitsJson).HasColumnName("provider_query_limits_json").HasColumnType("jsonb");
         builder.Property(x => x.CreatedAt)
             .HasColumnName("created_at")
             .HasColumnType("timestamp with time zone")

@@ -54,7 +54,6 @@ public sealed record ChannelScanFullRequested : ScheduledBackgroundRequest
     public int Priority { get; init; }
     public bool FetchComments { get; init; }
     public YtDlpSharpLib.Options.YtDlpOptions? YtDlpOptions { get; init; }
-    public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
 }
 
 public sealed record DatabaseStaleMediaCleanupRequested : ScheduledBackgroundRequest;

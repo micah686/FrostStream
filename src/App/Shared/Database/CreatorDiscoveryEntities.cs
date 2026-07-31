@@ -40,7 +40,7 @@ public sealed class CreatorSourceEntity
 {
     public long Id { get; set; }
 
-    public required string Platform { get; set; }
+    public string Platform { get; set; } = "unknown";
 
     public CreatorSourceType SourceType { get; set; }
 
@@ -63,8 +63,6 @@ public sealed class CreatorSourceEntity
     public int UpdateCheckIntervalHours { get; set; } = 6;
 
     public int MetadataRefreshWindow { get; set; } = 25;
-
-    public string? ProviderQueryLimitsJson { get; set; }
 
     public Instant CreatedAt { get; private set; } = SystemClock.Instance.GetCurrentInstant();
 

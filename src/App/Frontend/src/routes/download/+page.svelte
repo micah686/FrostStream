@@ -13,7 +13,7 @@
   import { listOptionPresets, type OptionPreset } from '$lib/api/optionPresets';
   import { listDownloadConfigSets, type DownloadConfigSet } from '$lib/api/downloadConfigSets';
   import { queuePlaylistDownload } from '$lib/api/playlists';
-  import { creatorSourceTypes, queueChannelDownload, type CreatorSourceType } from '$lib/api/creatorSources';
+  import { queueChannelDownload } from '$lib/api/creatorSources';
   import RangeSlider from '$lib/components/RangeSlider.svelte';
 
   type TabKey = 'video' | 'playlist' | 'creator';
@@ -44,8 +44,6 @@
     creator: 'Creator'
   };
 
-  const sourceTypeOptions = creatorSourceTypes.map((type) => ({ value: type, name: type }));
-
   let activeTab = $state<TabKey>('video');
 
   // Video form
@@ -70,7 +68,6 @@
 
   // Creator form
   let creatorUrl = $state('');
-  let creatorSourceType = $state<CreatorSourceType>('Videos');
   let creatorConfigSetKey = $state('');
   let creatorFetchComments = $state(false);
   let creatorForceDownload = $state(false);
@@ -339,7 +336,6 @@
         creatorConfigSetSelected
           ? {
               sourceUrl: url,
-              sourceType: creatorSourceType,
               storageKey: null,
               configSetKey: creatorConfigSetKey,
               cookieProfileKey: null,
@@ -349,7 +345,6 @@
             }
           : {
               sourceUrl: url,
-              sourceType: creatorSourceType,
               storageKey: resolvedStorageKey(),
               configSetKey: null,
               cookieProfileKey: cookieProfileKey || null,
@@ -619,11 +614,6 @@
           <p class="mt-1.5 text-xs text-base-content/40">
             Applies its saved storage target, cookie profile, yt-dlp options, ignore keywords, priority, and worker tag to every discovered video. Every other option below except force download is disabled while a config set is selected.
           </p>
-        </div>
-
-        <div>
-          <label class="label mb-2 text-sm" for="creator-source-type">Content type</label>
-          <Select id="creator-source-type" items={sourceTypeOptions} bind:value={creatorSourceType} />
         </div>
 
         {@render sharedFields(creatorConfigSetSelected)}

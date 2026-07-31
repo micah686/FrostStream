@@ -1,7 +1,6 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using NodaTime;
-using Shared.Database;
 using Shared.Messaging;
 using YtDlpSharpLib.Options;
 
@@ -9,12 +8,6 @@ namespace WebAPI.Features.CreatorMonitor.Models;
 
 public abstract class CreatorSourceRequestBase
 {
-    [Required]
-    [StringLength(50, MinimumLength = 1)]
-    public required string Platform { get; init; }
-
-    public CreatorSourceType SourceType { get; init; }
-
     [Required]
     [Url]
     [StringLength(4096, MinimumLength = 1)]
@@ -39,7 +32,6 @@ public abstract class CreatorSourceRequestBase
     [Range(1, 500)]
     public int MetadataRefreshWindow { get; init; } = 25;
 
-    public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
 }
 
 public sealed class CreatorSourceCreateRequest : CreatorSourceRequestBase;
@@ -52,12 +44,6 @@ public sealed class ChannelDownloadRequest
     [Url]
     [StringLength(4096, MinimumLength = 1)]
     public required string SourceUrl { get; init; }
-
-    [DefaultValue("youtube")]
-    [StringLength(50, MinimumLength = 1)]
-    public string Platform { get; init; } = "youtube";
-
-    public CreatorSourceType SourceType { get; init; } = CreatorSourceType.Videos;
 
     [DefaultValue("default")]
     public string? StorageKey { get; init; }
@@ -82,15 +68,12 @@ public sealed class ChannelDownloadRequest
     /// <summary>Re-download videos even when the same source is already present in the library.</summary>
     public bool ForceDownload { get; init; }
 
-    public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
 }
 
 public sealed record ChannelDownloadResponse(
     long SourceId,
     Guid CorrelationId,
     string SourceUrl,
-    string Platform,
-    CreatorSourceType SourceType,
     bool Queued,
     string IdempotencyKey);
 
@@ -134,8 +117,6 @@ public sealed record ForceQueueResponse(long MediaId, Guid JobId, bool Queued);
 public sealed class CreatorSourceResponse
 {
     public required long Id { get; init; }
-    public required string Platform { get; init; }
-    public required CreatorSourceType SourceType { get; init; }
     public required string SourceUrl { get; init; }
     public long? AccountId { get; init; }
     public required bool ScanEnabled { get; init; }
@@ -144,7 +125,6 @@ public sealed class CreatorSourceResponse
     public required int FullRescanIntervalDays { get; init; }
     public required int UpdateCheckIntervalHours { get; init; }
     public required int MetadataRefreshWindow { get; init; }
-    public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
     public Instant? LastSuccessfulScanAt { get; init; }
     public Instant? LastFullScanAt { get; init; }
     public string? LastSeenHighWatermark { get; init; }

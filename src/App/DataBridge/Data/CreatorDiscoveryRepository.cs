@@ -108,12 +108,8 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
 
         var scanState = await GetOrCreateScanStateAsync(source.Id, cancellationToken);
 
-        var sourceChanged = !string.Equals(existing.SourceUrl, source.SourceUrl, StringComparison.Ordinal)
-            || !string.Equals(existing.Platform, source.Platform, StringComparison.Ordinal)
-            || existing.SourceType != source.SourceType;
+        var sourceChanged = !string.Equals(existing.SourceUrl, source.SourceUrl, StringComparison.Ordinal);
 
-        existing.Platform = source.Platform;
-        existing.SourceType = source.SourceType;
         existing.SourceUrl = source.SourceUrl;
         existing.ScanEnabled = source.ScanEnabled;
         existing.IncrementalPageSize = source.IncrementalPageSize;
@@ -121,7 +117,6 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
         existing.FullRescanIntervalDays = source.FullRescanIntervalDays;
         existing.UpdateCheckIntervalHours = source.UpdateCheckIntervalHours;
         existing.MetadataRefreshWindow = source.MetadataRefreshWindow;
-        existing.ProviderQueryLimitsJson = source.ProviderQueryLimitsJson;
         if (sourceChanged)
         {
             // Repointing a source at a different platform/type/URL invalidates both the scan cursor
@@ -174,6 +169,11 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
             if (!seenKeys.Add(key))
             {
                 continue;
+            }
+
+            if (!string.Equals(source.Platform, platform, StringComparison.OrdinalIgnoreCase))
+            {
+                source.Platform = platform;
             }
 
             var existing = await db.DiscoveredMedia.FirstOrDefaultAsync(
@@ -334,6 +334,11 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
 
         var now = clock.GetCurrentInstant();
         var scanState = await GetOrCreateScanStateAsync(existing.Id, cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(request.Platform))
+        {
+            existing.Platform = request.Platform.Trim();
+        }
 
         // The durable avatar/banner blob path lives in metadata.accounts (the authoritative table).
         // The scan state only records what the last refresh fetched.

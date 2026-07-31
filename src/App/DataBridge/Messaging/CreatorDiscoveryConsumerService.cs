@@ -20,7 +20,6 @@ public sealed class CreatorDiscoveryConsumerService(
     ILogger<CreatorDiscoveryConsumerService> logger) : SubscriptionBackgroundService
 {
     private const string QueueGroup = "databridge-creator-discovery";
-    private const int MaxProviderQueryLimit = 5_000;
 
     protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
     {
@@ -44,7 +43,7 @@ public sealed class CreatorDiscoveryConsumerService(
         var msg = context.Message;
         try
         {
-            if (Validate(msg.Platform, msg.SourceUrl, msg.IncrementalPageSize, msg.ConsecutiveKnownThreshold, msg.FullRescanIntervalDays, msg.UpdateCheckIntervalHours, msg.MetadataRefreshWindow, msg.ProviderQueryLimits) is { } validationError)
+            if (Validate(msg.SourceUrl, msg.IncrementalPageSize, msg.ConsecutiveKnownThreshold, msg.FullRescanIntervalDays, msg.UpdateCheckIntervalHours, msg.MetadataRefreshWindow) is { } validationError)
             {
                 await context.RespondAsync(Failure(validationError));
                 return;
@@ -52,16 +51,13 @@ public sealed class CreatorDiscoveryConsumerService(
 
             var entity = await WithRepo(repo => repo.CreateSourceAsync(new CreatorSourceEntity
             {
-                Platform = msg.Platform.Trim(),
-                SourceType = msg.SourceType,
                 SourceUrl = Shared.Downloads.SourceUrlCanonicalizer.Canonicalize(msg.SourceUrl),
                 ScanEnabled = msg.ScanEnabled,
                 IncrementalPageSize = msg.IncrementalPageSize,
                 ConsecutiveKnownThreshold = msg.ConsecutiveKnownThreshold,
                 FullRescanIntervalDays = msg.FullRescanIntervalDays,
                 UpdateCheckIntervalHours = msg.UpdateCheckIntervalHours,
-                MetadataRefreshWindow = msg.MetadataRefreshWindow,
-                ProviderQueryLimitsJson = msg.ProviderQueryLimits?.ToJson()
+                MetadataRefreshWindow = msg.MetadataRefreshWindow
             }));
             await QueueInitialMetadataRefreshAsync(entity.Source.Id, CancellationToken.None);
             await context.RespondAsync(new CreatorMonitorOperationResponseMessage { Success = true, Entity = Map(entity) });
@@ -88,7 +84,7 @@ public sealed class CreatorDiscoveryConsumerService(
         var msg = context.Message;
         try
         {
-            if (Validate(msg.Platform, msg.SourceUrl, msg.IncrementalPageSize, msg.ConsecutiveKnownThreshold, msg.FullRescanIntervalDays, msg.UpdateCheckIntervalHours, msg.MetadataRefreshWindow, msg.ProviderQueryLimits) is { } validationError)
+            if (Validate(msg.SourceUrl, msg.IncrementalPageSize, msg.ConsecutiveKnownThreshold, msg.FullRescanIntervalDays, msg.UpdateCheckIntervalHours, msg.MetadataRefreshWindow) is { } validationError)
             {
                 await context.RespondAsync(Failure(validationError));
                 return;
@@ -96,16 +92,13 @@ public sealed class CreatorDiscoveryConsumerService(
 
             var entity = await WithRepo(repo => repo.CreateOrReuseSourceAsync(new CreatorSourceEntity
             {
-                Platform = msg.Platform.Trim(),
-                SourceType = msg.SourceType,
                 SourceUrl = Shared.Downloads.SourceUrlCanonicalizer.Canonicalize(msg.SourceUrl),
                 ScanEnabled = msg.ScanEnabled,
                 IncrementalPageSize = msg.IncrementalPageSize,
                 ConsecutiveKnownThreshold = msg.ConsecutiveKnownThreshold,
                 FullRescanIntervalDays = msg.FullRescanIntervalDays,
                 UpdateCheckIntervalHours = msg.UpdateCheckIntervalHours,
-                MetadataRefreshWindow = msg.MetadataRefreshWindow,
-                ProviderQueryLimitsJson = msg.ProviderQueryLimits?.ToJson()
+                MetadataRefreshWindow = msg.MetadataRefreshWindow
             }));
             if (entity.Source.AccountId is null)
                 await QueueInitialMetadataRefreshAsync(entity.Source.Id, CancellationToken.None);
@@ -123,7 +116,7 @@ public sealed class CreatorDiscoveryConsumerService(
         var msg = context.Message;
         try
         {
-            if (Validate(msg.Platform, msg.SourceUrl, msg.IncrementalPageSize, msg.ConsecutiveKnownThreshold, msg.FullRescanIntervalDays, msg.UpdateCheckIntervalHours, msg.MetadataRefreshWindow, msg.ProviderQueryLimits) is { } validationError)
+            if (Validate(msg.SourceUrl, msg.IncrementalPageSize, msg.ConsecutiveKnownThreshold, msg.FullRescanIntervalDays, msg.UpdateCheckIntervalHours, msg.MetadataRefreshWindow) is { } validationError)
             {
                 await context.RespondAsync(Failure(validationError));
                 return;
@@ -132,16 +125,13 @@ public sealed class CreatorDiscoveryConsumerService(
             var updated = await WithRepo(repo => repo.UpdateSourceAsync(new CreatorSourceEntity
             {
                 Id = msg.Id,
-                Platform = msg.Platform.Trim(),
-                SourceType = msg.SourceType,
                 SourceUrl = Shared.Downloads.SourceUrlCanonicalizer.Canonicalize(msg.SourceUrl),
                 ScanEnabled = msg.ScanEnabled,
                 IncrementalPageSize = msg.IncrementalPageSize,
                 ConsecutiveKnownThreshold = msg.ConsecutiveKnownThreshold,
                 FullRescanIntervalDays = msg.FullRescanIntervalDays,
                 UpdateCheckIntervalHours = msg.UpdateCheckIntervalHours,
-                MetadataRefreshWindow = msg.MetadataRefreshWindow,
-                ProviderQueryLimitsJson = msg.ProviderQueryLimits?.ToJson()
+                MetadataRefreshWindow = msg.MetadataRefreshWindow
             }));
             if (updated is null)
             {
@@ -504,17 +494,13 @@ public sealed class CreatorDiscoveryConsumerService(
         => scopeFactory.WithScopedAsync(action);
 
     private static string? Validate(
-        string platform,
         string sourceUrl,
         int incrementalPageSize,
         int consecutiveKnownThreshold,
         int fullRescanIntervalDays,
         int updateCheckIntervalHours,
-        int metadataRefreshWindow,
-        CreatorSourceProviderQueryLimits? providerQueryLimits)
+        int metadataRefreshWindow)
     {
-        if (string.IsNullOrWhiteSpace(platform))
-            return "platform is required.";
         if (string.IsNullOrWhiteSpace(sourceUrl))
             return "source_url is required.";
         if (!Uri.TryCreate(sourceUrl, UriKind.Absolute, out _))
@@ -529,8 +515,6 @@ public sealed class CreatorDiscoveryConsumerService(
             return "update_check_interval_hours must be greater than zero.";
         if (metadataRefreshWindow <= 0)
             return "metadata_refresh_window must be greater than zero.";
-        if (providerQueryLimits?.Validate(MaxProviderQueryLimit) is { Count: > 0 } errors)
-            return errors[0];
         return null;
     }
 
@@ -564,7 +548,6 @@ public sealed class CreatorDiscoveryConsumerService(
             LastFullScanAt = state?.LastFullScanAt,
             LastSeenHighWatermark = state?.LastSeenHighWatermark,
             NextFullScanStartIndex = state?.NextFullScanStartIndex,
-            ProviderQueryLimits = CreatorSourceProviderQueryLimits.FromJson(entity.ProviderQueryLimitsJson),
             CreatedAt = entity.CreatedAt,
             LastUpdated = entity.LastUpdated,
             AvatarUrl = state?.AvatarUrl,

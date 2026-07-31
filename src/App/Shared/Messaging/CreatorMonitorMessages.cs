@@ -24,7 +24,6 @@ public sealed record CreatorMonitorDto
     public Instant? LastFullScanAt { get; init; }
     public string? LastSeenHighWatermark { get; init; }
     public int? NextFullScanStartIndex { get; init; }
-    public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
     public required Instant CreatedAt { get; init; }
     public Instant? LastUpdated { get; init; }
     public string? AvatarUrl { get; init; }
@@ -39,8 +38,6 @@ public sealed record CreatorMonitorDto
 
 public sealed record CreatorMonitorCreateRequestMessage
 {
-    public required string Platform { get; init; }
-    public required CreatorSourceType SourceType { get; init; }
     public required string SourceUrl { get; init; }
     public bool ScanEnabled { get; init; } = true;
     public int IncrementalPageSize { get; init; } = 50;
@@ -48,13 +45,10 @@ public sealed record CreatorMonitorCreateRequestMessage
     public int FullRescanIntervalDays { get; init; } = 30;
     public int UpdateCheckIntervalHours { get; init; } = 6;
     public int MetadataRefreshWindow { get; init; } = 25;
-    public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
 }
 
 public sealed record CreatorMonitorCreateOrReuseRequestMessage
 {
-    public required string Platform { get; init; }
-    public required CreatorSourceType SourceType { get; init; }
     public required string SourceUrl { get; init; }
     public bool ScanEnabled { get; init; } = true;
     public int IncrementalPageSize { get; init; } = 50;
@@ -62,14 +56,11 @@ public sealed record CreatorMonitorCreateOrReuseRequestMessage
     public int FullRescanIntervalDays { get; init; } = 30;
     public int UpdateCheckIntervalHours { get; init; } = 6;
     public int MetadataRefreshWindow { get; init; } = 25;
-    public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
 }
 
 public sealed record CreatorMonitorUpdateRequestMessage
 {
     public required long Id { get; init; }
-    public required string Platform { get; init; }
-    public required CreatorSourceType SourceType { get; init; }
     public required string SourceUrl { get; init; }
     public bool ScanEnabled { get; init; } = true;
     public int IncrementalPageSize { get; init; } = 50;
@@ -77,7 +68,6 @@ public sealed record CreatorMonitorUpdateRequestMessage
     public int FullRescanIntervalDays { get; init; } = 30;
     public int UpdateCheckIntervalHours { get; init; } = 6;
     public int MetadataRefreshWindow { get; init; } = 25;
-    public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
 }
 
 public sealed record CreatorMonitorGetRequestMessage
