@@ -3,6 +3,7 @@ import { getJson, sendEmpty, sendJson } from '$lib/api/http';
 export interface CreatorSource {
   id: number;
   sourceUrl: string;
+  configSetKey: string | null;
   scanEnabled: boolean;
   incrementalPageSize: number;
   consecutiveKnownThreshold: number;
@@ -19,6 +20,7 @@ export interface CreatorSource {
 
 export interface CreatorSourceRequest {
   sourceUrl: string;
+  configSetKey: string | null;
   scanEnabled: boolean;
   incrementalPageSize: number;
   consecutiveKnownThreshold: number;

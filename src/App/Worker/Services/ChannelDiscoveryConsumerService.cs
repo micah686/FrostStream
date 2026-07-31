@@ -268,8 +268,8 @@ public sealed class ChannelDiscoveryConsumerService(
                     ScanPageComplete = scanPageComplete,
                     IsScanPageFinalBatch = batchIndex == batches.Length - 1,
                     StorageKey = ChannelStorageKey(request),
-                    RequestedBy = ChannelRequestedBy(request),
-                    ConfigSetKey = ChannelConfigSetKey(request),
+                    RequestedBy = SourceRequestedBy(request, source),
+                    ConfigSetKey = SourceConfigSetKey(request, source),
                     WorkerTag = ChannelWorkerTag(request),
                     EncodeForPlaylist = ChannelEncodeForPlaylist(request),
                     CookieSecretPath = ChannelCookieSecretPath(request),
@@ -277,6 +277,7 @@ public sealed class ChannelDiscoveryConsumerService(
                     FetchComments = ChannelFetchComments(request),
                     QueueAllItems = ChannelQueueAllItems(request),
                     ForceDownload = ChannelForceDownload(request),
+                    ResolveDownloadConfigSet = ShouldResolveSourceConfigSet(request, source),
                     YtDlpOptions = ChannelYtDlpOptions(request),
                     Items = batch
                 },
@@ -313,8 +314,8 @@ public sealed class ChannelDiscoveryConsumerService(
                     ScanPageComplete = scanPageComplete,
                     IsScanPageFinalBatch = true,
                     StorageKey = ChannelStorageKey(request),
-                    RequestedBy = ChannelRequestedBy(request),
-                    ConfigSetKey = ChannelConfigSetKey(request),
+                    RequestedBy = SourceRequestedBy(request, source),
+                    ConfigSetKey = SourceConfigSetKey(request, source),
                     WorkerTag = ChannelWorkerTag(request),
                     EncodeForPlaylist = ChannelEncodeForPlaylist(request),
                     CookieSecretPath = ChannelCookieSecretPath(request),
@@ -322,6 +323,7 @@ public sealed class ChannelDiscoveryConsumerService(
                     FetchComments = ChannelFetchComments(request),
                     QueueAllItems = ChannelQueueAllItems(request),
                     ForceDownload = ChannelForceDownload(request),
+                    ResolveDownloadConfigSet = ShouldResolveSourceConfigSet(request, source),
                     YtDlpOptions = ChannelYtDlpOptions(request),
                     Items = []
                 },
@@ -397,6 +399,22 @@ public sealed class ChannelDiscoveryConsumerService(
 
     private static string? ChannelConfigSetKey(ScheduledBackgroundRequest request)
         => request is ChannelScanFullRequested channelRequest ? channelRequest.ConfigSetKey : null;
+
+    private static string? SourceRequestedBy(ScheduledBackgroundRequest request, CreatorMonitorDto source)
+        => ChannelRequestedBy(request) ?? source.ConfigSetOwnerSubject;
+
+    private static string? SourceConfigSetKey(ScheduledBackgroundRequest request, CreatorMonitorDto source)
+        // A user-initiated full download must use only the config set explicitly selected
+        // for that request. Scheduled scans and "Scan now" inherit the source setting.
+        => string.IsNullOrWhiteSpace(ChannelRequestedBy(request))
+            ? ChannelConfigSetKey(request) ?? source.ConfigSetKey
+            : ChannelConfigSetKey(request);
+
+    private static bool ShouldResolveSourceConfigSet(ScheduledBackgroundRequest request, CreatorMonitorDto source)
+        => string.IsNullOrWhiteSpace(ChannelRequestedBy(request)) &&
+            string.IsNullOrWhiteSpace(ChannelConfigSetKey(request)) &&
+            !string.IsNullOrWhiteSpace(source.ConfigSetOwnerSubject) &&
+            !string.IsNullOrWhiteSpace(source.ConfigSetKey);
 
     private static string? ChannelWorkerTag(ScheduledBackgroundRequest request)
         => request is ChannelScanFullRequested channelRequest ? channelRequest.WorkerTag : null;

@@ -111,6 +111,8 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
         var sourceChanged = !string.Equals(existing.SourceUrl, source.SourceUrl, StringComparison.Ordinal);
 
         existing.SourceUrl = source.SourceUrl;
+        existing.ConfigSetOwnerSubject = source.ConfigSetOwnerSubject;
+        existing.ConfigSetKey = source.ConfigSetKey;
         existing.ScanEnabled = source.ScanEnabled;
         existing.IncrementalPageSize = source.IncrementalPageSize;
         existing.ConsecutiveKnownThreshold = source.ConsecutiveKnownThreshold;

@@ -30,7 +30,7 @@ public sealed class CreatorMonitorController(
     [HttpPost]
     [Endpoint(EndpointIds.CreatorMonitorCreate)]
     [EndpointSummary("Create a creator discovery source")]
-    [EndpointDescription("Registers a creator or channel source for recurring discovery scans. The URL, scan enablement, incremental paging thresholds, full-rescan interval, and metadata refresh window are validated and persisted by DataBridge.")]
+    [EndpointDescription("Registers a creator or channel source for recurring discovery scans. The URL, optional download config set, scan enablement, incremental paging thresholds, full-rescan interval, and metadata refresh window are validated and persisted by DataBridge.")]
     public async Task<ActionResult<CreatorSourceResponse>> Create(
         [FromBody] CreatorSourceCreateRequest request,
         CancellationToken cancellationToken)
@@ -38,11 +38,17 @@ public sealed class CreatorMonitorController(
         if (!YtDlpSourceUrlValidator.TryValidate(request.SourceUrl, out var validationError))
             return BadRequest(validationError);
 
+        var (configSetOwnerSubject, configSetKey, configSetError) = await ResolveCreatorSourceConfigSetAsync(request.ConfigSetKey, cancellationToken);
+        if (configSetError is not null)
+            return BadRequest(configSetError);
+
         var response = await SendAsync(
             CreatorMonitorSubjects.CreateSource,
             new CreatorMonitorCreateRequestMessage
             {
                 SourceUrl = SourceUrlCanonicalizer.Canonicalize(request.SourceUrl),
+                ConfigSetOwnerSubject = configSetOwnerSubject,
+                ConfigSetKey = configSetKey,
                 ScanEnabled = request.ScanEnabled,
                 IncrementalPageSize = request.IncrementalPageSize,
                 ConsecutiveKnownThreshold = request.ConsecutiveKnownThreshold,
@@ -172,7 +178,7 @@ public sealed class CreatorMonitorController(
     [HttpPut("{id:long}")]
     [Endpoint(EndpointIds.CreatorMonitorUpdate)]
     [EndpointSummary("Update a creator discovery source")]
-    [EndpointDescription("Replaces the discovery configuration for an existing creator source. The source URL, scan controls, paging thresholds, rescan interval, and metadata refresh window are sent to DataBridge for validation and persistence.")]
+    [EndpointDescription("Replaces the discovery configuration for an existing creator source. The source URL, optional download config set, scan controls, paging thresholds, rescan interval, and metadata refresh window are sent to DataBridge for validation and persistence.")]
     public async Task<ActionResult<CreatorSourceResponse>> Update(
         long id,
         [FromBody] CreatorSourceUpdateRequest request,
@@ -181,12 +187,18 @@ public sealed class CreatorMonitorController(
         if (!YtDlpSourceUrlValidator.TryValidate(request.SourceUrl, out var validationError))
             return BadRequest(validationError);
 
+        var (configSetOwnerSubject, configSetKey, configSetError) = await ResolveCreatorSourceConfigSetAsync(request.ConfigSetKey, cancellationToken);
+        if (configSetError is not null)
+            return BadRequest(configSetError);
+
         var response = await SendAsync(
             CreatorMonitorSubjects.UpdateSource,
             new CreatorMonitorUpdateRequestMessage
             {
                 Id = id,
                 SourceUrl = SourceUrlCanonicalizer.Canonicalize(request.SourceUrl),
+                ConfigSetOwnerSubject = configSetOwnerSubject,
+                ConfigSetKey = configSetKey,
                 ScanEnabled = request.ScanEnabled,
                 IncrementalPageSize = request.IncrementalPageSize,
                 ConsecutiveKnownThreshold = request.ConsecutiveKnownThreshold,
@@ -543,6 +555,7 @@ public sealed class CreatorMonitorController(
         {
             Id = dto.Id,
             SourceUrl = dto.SourceUrl,
+            ConfigSetKey = dto.ConfigSetKey,
             AccountId = dto.AccountId,
             ScanEnabled = dto.ScanEnabled,
             IncrementalPageSize = dto.IncrementalPageSize,
@@ -557,4 +570,36 @@ public sealed class CreatorMonitorController(
             CreatedAt = dto.CreatedAt,
             LastUpdated = dto.LastUpdated
         };
+
+    private async Task<(string? OwnerSubject, string? ConfigSetKey, string? Error)> ResolveCreatorSourceConfigSetAsync(
+        string? configSetKey,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(configSetKey))
+            return (null, null, null);
+
+        var ownerSubject = AuthConstants.FindSubject(User);
+        try
+        {
+            var (resolved, error) = await DownloadConfigSetResolver.ResolveAsync(
+                messageBus,
+                ownerSubject,
+                configSetKey,
+                storageKeyOverride: null,
+                cookieProfileKeyOverride: null,
+                ytDlpOptionsOverride: null,
+                encodeForPlaylistOverride: null,
+                priorityOverride: null,
+                fetchCommentsOverride: null,
+                cancellationToken: cancellationToken);
+            return error is null
+                ? (ownerSubject, resolved!.ConfigSetKey, null)
+                : (null, null, error);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed resolving creator source config set {ConfigSetKey}.", configSetKey);
+            return (null, null, "Unable to resolve download config set.");
+        }
+    }
 }

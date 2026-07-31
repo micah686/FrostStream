@@ -25,10 +25,25 @@ public sealed class CreatorMonitorControllerTests
         var bus = Substitute.For<IMessageBus>();
         var controller = CreateController(bus: bus);
 
+        bus.RequestAsync<DownloadConfigSetResolveRequestMessage, DownloadConfigSetOperationResponseMessage>(
+                DownloadConfigSetSubjects.Resolve,
+                Arg.Is<DownloadConfigSetResolveRequestMessage>(x => x != null &&
+                    x.OwnerSubject == "unit_test_user" &&
+                    x.Key == "creator-default"),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new DownloadConfigSetOperationResponseMessage
+            {
+                Success = true,
+                Entity = CreateConfigSet("creator-default")
+            });
+
         bus.RequestAsync<CreatorMonitorCreateRequestMessage, CreatorMonitorOperationResponseMessage>(
                 CreatorMonitorSubjects.CreateSource,
                 Arg.Is<CreatorMonitorCreateRequestMessage>(x => x != null &&
                     x.SourceUrl == "https://example.test/@creator" &&
+                    x.ConfigSetOwnerSubject == "unit_test_user" &&
+                    x.ConfigSetKey == "creator-default" &&
                     x.ScanEnabled &&
                     x.IncrementalPageSize == 75 &&
                     x.ConsecutiveKnownThreshold == 15 &&
@@ -45,6 +60,7 @@ public sealed class CreatorMonitorControllerTests
         var result = await controller.Create(new CreatorSourceCreateRequest
         {
             SourceUrl = "https://example.test/@creator",
+            ConfigSetKey = "creator-default",
             ScanEnabled = true,
             IncrementalPageSize = 75,
             ConsecutiveKnownThreshold = 15,
@@ -306,5 +322,15 @@ public sealed class CreatorMonitorControllerTests
         MetadataRefreshWindow = 50,
         CreatedAt = Now,
         LastUpdated = Now
+    };
+
+    private static DownloadConfigSetDto CreateConfigSet(string key) => new()
+    {
+        Id = 1,
+        OwnerSubject = "unit_test_user",
+        Key = key,
+        Name = "Creator default",
+        CreatedAt = Now,
+        UpdatedAt = Now
     };
 }

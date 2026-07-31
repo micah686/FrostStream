@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using DataBridge;
 using DataBridge.Data;
 using Conduit.NATS;
@@ -9,6 +10,8 @@ using Microsoft.Extensions.Logging;
 using NodaTime;
 using Shared.Database;
 using Shared.Messaging;
+using Shared.Secrets;
+using YtDlpSharpLib.Options;
 
 namespace DataBridge.Messaging;
 
@@ -52,6 +55,8 @@ public sealed class CreatorDiscoveryConsumerService(
             var entity = await WithRepo(repo => repo.CreateSourceAsync(new CreatorSourceEntity
             {
                 SourceUrl = Shared.Downloads.SourceUrlCanonicalizer.Canonicalize(msg.SourceUrl),
+                ConfigSetOwnerSubject = msg.ConfigSetOwnerSubject,
+                ConfigSetKey = msg.ConfigSetKey,
                 ScanEnabled = msg.ScanEnabled,
                 IncrementalPageSize = msg.IncrementalPageSize,
                 ConsecutiveKnownThreshold = msg.ConsecutiveKnownThreshold,
@@ -93,6 +98,8 @@ public sealed class CreatorDiscoveryConsumerService(
             var entity = await WithRepo(repo => repo.CreateOrReuseSourceAsync(new CreatorSourceEntity
             {
                 SourceUrl = Shared.Downloads.SourceUrlCanonicalizer.Canonicalize(msg.SourceUrl),
+                ConfigSetOwnerSubject = msg.ConfigSetOwnerSubject,
+                ConfigSetKey = msg.ConfigSetKey,
                 ScanEnabled = msg.ScanEnabled,
                 IncrementalPageSize = msg.IncrementalPageSize,
                 ConsecutiveKnownThreshold = msg.ConsecutiveKnownThreshold,
@@ -126,6 +133,8 @@ public sealed class CreatorDiscoveryConsumerService(
             {
                 Id = msg.Id,
                 SourceUrl = Shared.Downloads.SourceUrlCanonicalizer.Canonicalize(msg.SourceUrl),
+                ConfigSetOwnerSubject = msg.ConfigSetOwnerSubject,
+                ConfigSetKey = msg.ConfigSetKey,
                 ScanEnabled = msg.ScanEnabled,
                 IncrementalPageSize = msg.IncrementalPageSize,
                 ConsecutiveKnownThreshold = msg.ConsecutiveKnownThreshold,
@@ -233,14 +242,15 @@ public sealed class CreatorDiscoveryConsumerService(
         var msg = context.Message;
         try
         {
+            var configured = await ResolveCreatorSourceConfigSetAsync(msg);
             var canEnqueue = await scopeFactory.WithScopedAsync<IDownloadFlowV2Repository, bool>(
                 repo => repo.CanAcceptGroupChildAsync(msg.CorrelationId));
-            var effective = canEnqueue ? msg : msg with { SuppressDownloadEnqueue = true };
+            var effective = canEnqueue ? configured : configured with { SuppressDownloadEnqueue = true };
             var result = await WithRepo(repo => repo.UpsertDiscoveredMediaBatchAsync(effective));
 
             foreach (var candidate in result.EnqueuedItems)
             {
-                await PublishDownloadRequestedAsync(msg, candidate);
+                await PublishDownloadRequestedAsync(effective, candidate);
             }
 
             await context.RespondAsync(new UpsertDiscoveredMediaBatchResponseMessage
@@ -493,6 +503,52 @@ public sealed class CreatorDiscoveryConsumerService(
     private Task<TResult> WithRepo<TResult>(Func<ICreatorDiscoveryRepository, Task<TResult>> action)
         => scopeFactory.WithScopedAsync(action);
 
+    private Task<TResult> WithConfigSets<TResult>(Func<IDownloadConfigSetsRepository, Task<TResult>> action)
+        => scopeFactory.WithScopedAsync(action);
+
+    private async Task<UpsertDiscoveredMediaBatchRequestMessage> ResolveCreatorSourceConfigSetAsync(
+        UpsertDiscoveredMediaBatchRequestMessage request)
+    {
+        if (!request.ResolveDownloadConfigSet)
+            return request;
+
+        if (string.IsNullOrWhiteSpace(request.RequestedBy) || string.IsNullOrWhiteSpace(request.ConfigSetKey))
+            throw new InvalidOperationException("A creator source config set requires an owner and key.");
+
+        var config = await WithConfigSets(repo => repo.GetAsync(request.RequestedBy, request.ConfigSetKey));
+        if (config is null)
+            throw new InvalidOperationException($"Download config set '{request.ConfigSetKey}' is no longer available for creator source {request.CreatorSourceId}.");
+
+        var cookieSecretPath = string.IsNullOrWhiteSpace(config.CookieProfileKey)
+            ? null
+            : SecretPaths.ForUserCookieProfile(request.RequestedBy, config.CookieProfileKey);
+
+        return request with
+        {
+            ResolveDownloadConfigSet = false,
+            StorageKey = config.StorageKey ?? request.StorageKey,
+            WorkerTag = config.WorkerTag ?? request.WorkerTag,
+            CookieSecretPath = cookieSecretPath ?? request.CookieSecretPath,
+            Priority = config.Priority,
+            YtDlpOptions = DeserializeYtDlpOptions(config.YtDlpOptionsJson) ?? request.YtDlpOptions
+        };
+    }
+
+    private static YtDlpOptions? DeserializeYtDlpOptions(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return null;
+
+        try
+        {
+            return JsonSerializer.Deserialize<YtDlpOptions>(json);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     private static string? Validate(
         string sourceUrl,
         int incrementalPageSize,
@@ -537,6 +593,8 @@ public sealed class CreatorDiscoveryConsumerService(
             Platform = entity.Platform,
             SourceType = entity.SourceType,
             SourceUrl = entity.SourceUrl,
+            ConfigSetOwnerSubject = entity.ConfigSetOwnerSubject,
+            ConfigSetKey = entity.ConfigSetKey,
             AccountId = entity.AccountId,
             ScanEnabled = entity.ScanEnabled,
             IncrementalPageSize = entity.IncrementalPageSize,

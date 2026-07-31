@@ -46,6 +46,12 @@ public sealed class CreatorSourceEntity
 
     public required string SourceUrl { get; set; }
 
+    /// <summary>Owner of the optional download config set applied to automatic creator downloads.</summary>
+    public string? ConfigSetOwnerSubject { get; set; }
+
+    /// <summary>Optional download config set applied when discovery creates a download job.</summary>
+    public string? ConfigSetKey { get; set; }
+
     /// <summary>The metadata.accounts row this source belongs to, resolved on the first asset refresh.
     /// Null until then (and for sources whose account could not be derived at migration time).</summary>
     public long? AccountId { get; set; }

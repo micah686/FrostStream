@@ -32,6 +32,10 @@ public abstract class CreatorSourceRequestBase
     [Range(1, 500)]
     public int MetadataRefreshWindow { get; init; } = 25;
 
+    [StringLength(100, MinimumLength = 2)]
+    [RegularExpression("^[a-z0-9-]{2,100}$")]
+    public string? ConfigSetKey { get; init; }
+
 }
 
 public sealed class CreatorSourceCreateRequest : CreatorSourceRequestBase;
@@ -118,6 +122,7 @@ public sealed class CreatorSourceResponse
 {
     public required long Id { get; init; }
     public required string SourceUrl { get; init; }
+    public string? ConfigSetKey { get; init; }
     public long? AccountId { get; init; }
     public required bool ScanEnabled { get; init; }
     public required int IncrementalPageSize { get; init; }

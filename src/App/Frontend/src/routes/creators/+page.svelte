@@ -39,6 +39,7 @@
 
   interface SourceForm {
     sourceUrl: string;
+    configSetKey: string;
     scanEnabled: boolean;
     incrementalPageSize: number;
     consecutiveKnownThreshold: number;
@@ -50,6 +51,7 @@
   function emptyForm(): SourceForm {
     return {
       sourceUrl: '',
+      configSetKey: '',
       scanEnabled: true,
       incrementalPageSize: 50,
       consecutiveKnownThreshold: 25,
@@ -106,6 +108,7 @@
 
   onMount(() => {
     void loadSources();
+    void loadConfigSets();
   });
 
   async function loadSources() {
@@ -135,6 +138,7 @@
     editingSource = source;
     form = {
       sourceUrl: source.sourceUrl,
+      configSetKey: source.configSetKey ?? '',
       scanEnabled: source.scanEnabled,
       incrementalPageSize: source.incrementalPageSize,
       consecutiveKnownThreshold: source.consecutiveKnownThreshold,
@@ -149,6 +153,7 @@
   function buildRequest(): CreatorSourceRequest {
     return {
       sourceUrl: form.sourceUrl.trim(),
+      configSetKey: form.configSetKey || null,
       scanEnabled: form.scanEnabled,
       incrementalPageSize: Number(form.incrementalPageSize),
       consecutiveKnownThreshold: Number(form.consecutiveKnownThreshold),
@@ -207,6 +212,7 @@
     await runAction(source.id, 'scan', async () => {
       const updated = await updateCreatorSource(source.id, {
         sourceUrl: source.sourceUrl,
+        configSetKey: source.configSetKey,
         scanEnabled: !source.scanEnabled,
         incrementalPageSize: source.incrementalPageSize,
         consecutiveKnownThreshold: source.consecutiveKnownThreshold,
@@ -261,10 +267,14 @@
     } catch {
       // Keep the default storage key when the list is unavailable.
     }
+    await loadConfigSets();
+  }
+
+  async function loadConfigSets() {
     try {
       configSets = await listDownloadConfigSets();
     } catch {
-      // Config sets are optional; channel downloads work without them.
+      // Config sets are optional; creator downloads work without them.
     }
   }
 
@@ -687,6 +697,14 @@
          bind:value={form.sourceUrl} placeholder="https://www.youtube.com/@creator/videos" />
       <p class="mt-1.5 text-[11px] text-base-content/40">
         The channel or listing page that discovery scans will page through for new uploads.
+      </p>
+    </div>
+
+    <div>
+      <label class="label mb-1.5 text-xs" for="creator-config-set">Config set</label>
+      <Select id="creator-config-set" items={configSetOptions} bind:value={form.configSetKey} />
+      <p class="mt-1.5 text-[11px] text-base-content/40">
+        Applies this set's storage target, cookie profile, yt-dlp options, priority, and worker tag to future downloads from this creator.
       </p>
     </div>
 

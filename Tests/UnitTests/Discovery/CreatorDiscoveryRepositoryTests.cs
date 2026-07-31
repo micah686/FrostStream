@@ -99,11 +99,15 @@ public sealed class CreatorDiscoveryRepositoryTests
             Id = source.Id,
             Platform = source.Platform,
             SourceType = source.SourceType,
-            SourceUrl = "https://www.youtube.com/@SomeOtherCreator/videos"
+            SourceUrl = "https://www.youtube.com/@SomeOtherCreator/videos",
+            ConfigSetOwnerSubject = "unit_test_user",
+            ConfigSetKey = "creator-default"
         });
 
         repointed.ShouldNotBeNull();
         repointed.Source.AccountId.ShouldBeNull();
+        repointed.Source.ConfigSetOwnerSubject.ShouldBe("unit_test_user");
+        repointed.Source.ConfigSetKey.ShouldBe("creator-default");
     }
 
     [Test]
