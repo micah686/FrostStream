@@ -20,19 +20,26 @@
         class={[
           'flex cursor-pointer flex-col items-center gap-2 rounded-xl border p-4 transition',
           $theme === option
-            ? 'border-primary bg-primary/10'
-            : 'border-base-300/80 bg-base-200/40 hover:bg-base-200/70'
+            ? 'border-primary bg-primary text-primary-content shadow-sm ring-1 ring-primary'
+            : 'border-base-content/25 bg-base-100 hover:border-base-content/45 hover:bg-base-200'
         ]}
       >
         <input
           type="radio"
           name="theme"
-          class="radio radio-primary radio-sm"
+          class={[
+            'radio radio-sm',
+            $theme === option
+              ? 'border-primary-content bg-primary-content/10 text-primary-content checked:border-primary-content checked:bg-primary-content checked:text-primary'
+              : 'radio-primary'
+          ]}
           value={option}
           checked={$theme === option}
           onchange={() => setTheme(option)}
         />
-        <span class="text-sm font-medium text-base-content">{themeLabels[option]}</span>
+        <span class={$theme === option ? 'text-sm font-semibold text-primary-content' : 'text-sm font-medium text-base-content'}>
+          {themeLabels[option]}
+        </span>
       </label>
     {/each}
   </div>

@@ -411,8 +411,8 @@
         class={[
           'inline-flex h-8 shrink-0 items-center rounded-lg border px-3 text-xs font-semibold transition',
           sourceFilter === tab.key
-            ? 'border-primary/60 bg-primary/15 text-primary'
-            : 'border-base-300 bg-base-200/60 text-base-content/60 hover:bg-base-300 hover:text-base-content/90'
+            ? 'border-primary bg-primary text-primary-content shadow-sm'
+            : 'border-base-content/25 bg-base-100 text-base-content/70 hover:border-base-content/40 hover:bg-base-200 hover:text-base-content'
         ]}
         aria-pressed={sourceFilter === tab.key}
       >
@@ -428,10 +428,10 @@
           type="button"
           onclick={() => changeFilter(tab.key)}
           class={[
-            'inline-flex h-9 shrink-0 items-center gap-2 rounded-full px-4 text-xs font-semibold transition',
+            'inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border px-4 text-xs font-semibold transition',
             activeFilter === tab.key
-              ? 'bg-base-content text-base-100'
-              : 'bg-base-300/75 text-base-content/80 hover:bg-base-300'
+              ? 'border-primary bg-primary text-primary-content shadow-sm'
+              : 'border-base-content/25 bg-base-100 text-base-content/80 hover:border-base-content/40 hover:bg-base-200'
           ]}
           aria-current={activeFilter === tab.key ? 'page' : undefined}
         >
@@ -440,7 +440,9 @@
             <span
               class={[
                 'rounded-full px-1.5 py-0.5 text-[10px]',
-                activeFilter === tab.key ? 'bg-base-content/80 text-base-100' : 'bg-base-200/50 text-base-content/50'
+                activeFilter === tab.key
+                  ? 'bg-primary-content/20 text-primary-content'
+                  : 'bg-base-200 text-base-content/60'
               ]}
             >
               {tab.count}

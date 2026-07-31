@@ -443,7 +443,7 @@
     </p>
   </div>
 
-  <div class="mb-5 flex gap-2" role="tablist" aria-label="Download type">
+  <div class="mb-5 flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Download type">
     {#each tabs as tab (tab.key)}
       {@const Icon = tab.icon}
       <button
@@ -452,10 +452,10 @@
         aria-selected={activeTab === tab.key}
         onclick={() => switchTab(tab.key)}
         class={[
-          'inline-flex h-10 items-center gap-2 rounded-full px-5 text-sm font-semibold transition',
+          'inline-flex h-10 shrink-0 items-center gap-2 rounded-lg border px-5 text-sm font-semibold transition',
           activeTab === tab.key
-            ? 'bg-base-content text-base-100'
-            : 'bg-base-300/75 text-base-content/80 hover:bg-base-300'
+            ? 'border-primary bg-primary text-primary-content shadow-sm'
+            : 'border-base-content/25 bg-base-100 text-base-content/80 hover:border-base-content/40 hover:bg-base-200'
         ]}
       >
         <Icon class="h-4 w-4" />

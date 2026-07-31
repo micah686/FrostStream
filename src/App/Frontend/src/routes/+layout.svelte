@@ -202,8 +202,8 @@
       {@const itemClass = [
         'group flex min-h-10 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium transition',
         active
-          ? 'bg-primary/18 text-primary'
-          : 'text-base-content/60 hover:bg-base-300/70 hover:text-base-content'
+          ? 'bg-primary text-primary-content shadow-sm'
+          : 'text-base-content/70 hover:bg-base-200 hover:text-base-content'
       ]}
       <li>
         {#snippet itemContent()}

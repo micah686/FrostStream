@@ -93,8 +93,8 @@
             class={[
               'flex h-10 shrink-0 items-center gap-3 rounded-lg px-4 text-sm font-medium transition xl:w-full',
               active
-                ? 'bg-primary/18 text-primary'
-                : 'text-base-content/60 hover:bg-base-300/70 hover:text-base-content'
+                ? 'bg-primary text-primary-content shadow-sm'
+                : 'text-base-content/70 hover:bg-base-200 hover:text-base-content'
             ]}
             aria-current={active ? 'page' : undefined}
           >

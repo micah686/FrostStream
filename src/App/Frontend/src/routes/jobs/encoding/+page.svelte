@@ -210,8 +210,8 @@
         class={[
           'inline-flex h-8 shrink-0 items-center rounded-lg border px-3 text-xs font-semibold transition',
           kindFilter === tab.key
-            ? 'border-primary/60 bg-primary/15 text-primary'
-            : 'border-base-300 bg-base-200/60 text-base-content/60 hover:bg-base-300 hover:text-base-content/90'
+            ? 'border-primary bg-primary text-primary-content shadow-sm'
+            : 'border-base-content/25 bg-base-100 text-base-content/70 hover:border-base-content/40 hover:bg-base-200 hover:text-base-content'
         ]}
         aria-pressed={kindFilter === tab.key}
       >
@@ -227,10 +227,10 @@
           type="button"
           onclick={() => changeStatusFilter(tab.key)}
           class={[
-            'inline-flex h-9 shrink-0 items-center gap-2 rounded-full px-4 text-xs font-semibold transition',
+            'inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border px-4 text-xs font-semibold transition',
             statusFilter === tab.key
-              ? 'bg-base-content text-base-100'
-              : 'bg-base-300/75 text-base-content/80 hover:bg-base-300'
+              ? 'border-primary bg-primary text-primary-content shadow-sm'
+              : 'border-base-content/25 bg-base-100 text-base-content/80 hover:border-base-content/40 hover:bg-base-200'
           ]}
           aria-current={statusFilter === tab.key ? 'page' : undefined}
         >
