@@ -184,18 +184,80 @@ internal sealed class BackupCoordinator(
         }
     }
 
-    public async Task<RestorePlanDto> BuildRestorePlanAsync(string archivePath, CancellationToken cancellationToken)
+    public async Task<RestorePlanDto> BuildRestorePlanAsync(
+        string archivePath,
+        IReadOnlyDictionary<string, string?>? requestedOptions,
+        CancellationToken cancellationToken)
     {
         var path = store.ResolveArchive(archivePath);
         var verify = await VerifyAsync(path, cancellationToken);
         var mode = ReadMode(path);
-        IReadOnlyList<string> arguments = mode is "full" or "walarchive" or "wal-archive"
-            ? ["restore", "--archive", path, "--force", "--pgdata", "<PGDATA>", "--pg-ctl", "<pg_ctl>", "--target-time", "<YYYY-MM-DD HH:MM:SS+00>"]
-            : ["restore", "--archive", path, "--force"];
+        var options = CreateRestoreOptions(mode, requestedOptions);
+        var arguments = new List<string> { "restore", "--archive", path, "--force" };
+        AddOption(arguments, options, "pgdata");
+        AddOption(arguments, options, "pg-ctl");
+
+        var targetKey = new[] { "target-time", "target-lsn", "target-name" }
+            .FirstOrDefault(key => !string.IsNullOrWhiteSpace(Value(options, key)));
+        if (targetKey is not null)
+        {
+            AddOption(arguments, options, targetKey);
+            AddOption(arguments, options, "archive-dir");
+            AddOption(arguments, options, "tool-command");
+        }
+        else if (IsTrue(Value(options, "recover-latest")))
+        {
+            arguments.Add("--recover-latest");
+            AddOption(arguments, options, "archive-dir");
+            AddOption(arguments, options, "tool-command");
+        }
+
         var command = "docker compose run --rm --entrypoint dotnet backupservice "
                       + "/app/BackupService.dll "
                       + string.Join(' ', arguments.Select(Quote));
-        return new RestorePlanDto(verify.Success, command, verify.ErrorMessage);
+        var explanation = mode switch
+        {
+            "full" => "Stop FrostStream and PostgreSQL before restoring. This rebuilds the PostgreSQL data directory from the physical base backup.\n\nFor point-in-time recovery: make the WAL archive available inside the backupservice container at the path you enter as WAL archive directory. Most people should then enter the date and time they want to restore to, in UTC (for example, 2026-07-31 12:00:00+00 means July 31, 2026 at noon UTC). Choose exactly one recovery target. The generated command adds --archive-dir and the selected target. The archive must contain the WAL generated after this full backup; without it, recovery can only restore the base backup.",
+            "walarchive" or "wal-archive" => "A WAL archive is not a standalone restore source. Restore a matching full backup, make this WAL archive available inside the backupservice container, and enter its mounted directory. Most people should choose the date and time they want to restore to, in UTC. Choose exactly one recovery target. The generated full-restore command will add --archive-dir and that target.",
+            _ => "Stop FrostStream services before restoring. This restores each PostgreSQL database and the OpenBao secrets from the logical snapshot. Media files and rebuildable indexes are not included."
+        };
+        return new RestorePlanDto(verify.Success, explanation, command, options, verify.ErrorMessage);
+    }
+
+    private static IReadOnlyList<RestorePlanOptionDto> CreateRestoreOptions(
+        string mode,
+        IReadOnlyDictionary<string, string?>? requested)
+    {
+        if (mode is not ("full" or "walarchive" or "wal-archive"))
+            return [];
+
+        string Get(string key) => requested?.TryGetValue(key, out var value) == true ? value ?? string.Empty : string.Empty;
+        return
+        [
+            new("pgdata", "PostgreSQL data directory", "The empty data directory that will be rebuilt. Required for a full restore.", "text", Get("pgdata"), "<PGDATA>", true),
+            new("pg-ctl", "pg_ctl path (optional)", "Leave blank to use pg_ctl from PATH.", "text", Get("pg-ctl"), "pg_ctl", false),
+            new("archive-dir", "WAL archive directory", "Path inside the backupservice container containing the archived WAL segments. Required for point-in-time recovery.", "text", Get("archive-dir"), "<WAL_ARCHIVE_DIR>", false),
+            new("target-time", "Restore to a date and time (optional)", "Use this when you want the database restored to how it looked at a particular moment. Enter the time in UTC, for example 2026-07-31 12:00:00+00 means July 31, 2026 at noon UTC. Choose only one recovery target.", "text", Get("target-time"), "2026-07-31 12:00:00+00", false),
+            new("target-lsn", "Recovery target LSN", "A PostgreSQL LSN. Use only one recovery target.", "text", Get("target-lsn"), "0/1", false),
+            new("target-name", "Recovery target name", "A named PostgreSQL recovery target. Use only one recovery target.", "text", Get("target-name"), "target name", false),
+            new("recover-latest", "Recover latest WAL", "Replay all available WAL instead of choosing a time, LSN, or name.", "checkbox", IsTrue(Get("recover-latest")) ? "true" : "false", null, false),
+            new("tool-command", "BackupService command (optional)", "Command used by PostgreSQL to retrieve archived WAL during recovery.", "text", Get("tool-command"), "dotnet /opt/froststream/BackupService.dll", false)
+        ];
+    }
+
+    private static string? Value(IReadOnlyList<RestorePlanOptionDto> options, string key)
+        => options.FirstOrDefault(x => x.Key == key)?.Value;
+
+    private static bool IsTrue(string? value) => string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+
+    private static void AddOption(List<string> arguments, IReadOnlyList<RestorePlanOptionDto> options, string key)
+    {
+        var option = options.FirstOrDefault(x => x.Key == key);
+        if (option is null)
+            return;
+        var value = string.IsNullOrWhiteSpace(option.Value) ? option.Placeholder : option.Value;
+        if (!string.IsNullOrWhiteSpace(value))
+            arguments.AddRange(["--" + key, value]);
     }
 
     public IReadOnlyList<BackupArchiveDto> ListArchives() => catalog.List();

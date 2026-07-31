@@ -54,5 +54,5 @@ public sealed class BackupsController(BackupJobService backups) : ControllerBase
     public async Task<ActionResult<RestorePlanResponse>> RestorePlan(
         [FromBody] RestorePlanRequest request,
         CancellationToken cancellationToken)
-        => Ok(await backups.BuildRestorePlanAsync(request.ArchivePath, cancellationToken));
+        => Ok(await backups.BuildRestorePlanAsync(request.ArchivePath, request.Options, cancellationToken));
 }

@@ -26,8 +26,20 @@ export interface VerifyBackupResult {
 
 export interface RestorePlan {
   preflightOk: boolean;
+  explanation: string;
   restoreCommand: string;
+  options: RestorePlanOption[];
   errorMessage: string | null;
+}
+
+export interface RestorePlanOption {
+  key: string;
+  label: string;
+  description: string;
+  inputType: 'text' | 'checkbox';
+  value: string | null;
+  placeholder: string | null;
+  required: boolean;
 }
 
 const BASE = '/api/global/backups';
@@ -56,8 +68,17 @@ export async function verifyBackup(archivePath: string, fetchImpl: typeof fetch 
   return sendJson<VerifyBackupResult>(`${BASE}/verify`, { archivePath }, fetchImpl);
 }
 
-export async function buildRestorePlan(archivePath: string, fetchImpl: typeof fetch = fetch): Promise<RestorePlan> {
-  return sendJson<RestorePlan>(`${BASE}/restore-plan`, { archivePath }, fetchImpl);
+export async function buildRestorePlan(
+  archivePath: string,
+  options: Record<string, string | null> = {},
+  fetchImpl: typeof fetch = fetch
+): Promise<RestorePlan> {
+  const plan = await sendJson<RestorePlan>(`${BASE}/restore-plan`, { archivePath, options }, fetchImpl);
+  return {
+    ...plan,
+    explanation: plan.explanation ?? '',
+    options: plan.options ?? []
+  };
 }
 
 async function getJson<T>(url: string, fetchImpl: typeof fetch): Promise<T> {
