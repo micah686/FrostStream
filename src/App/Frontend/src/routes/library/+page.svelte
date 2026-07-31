@@ -431,7 +431,9 @@
         {gridSummary()}
       </p>
       {#if activeTab === 'Videos'}
-        <Select items={sortOptions} bind:value={sort} onchange={changeSort} aria-label="Sort library" class="w-48 text-sm" />
+        <div class="w-48 max-w-full">
+          <Select items={sortOptions} bind:value={sort} onchange={changeSort} aria-label="Sort library" class="text-sm" />
+        </div>
       {/if}
     </div>
 

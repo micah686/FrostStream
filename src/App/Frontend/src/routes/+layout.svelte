@@ -9,7 +9,6 @@
   import { searchMedia, type SearchHit } from '$lib/api/search';
   import { accentFor, formatDuration, initialsFor } from '$lib/media';
   import {
-    Bell,
     ClipboardList,
     Cog,
     Download,
@@ -373,16 +372,13 @@
   </div>
 
   <div class="ml-auto flex shrink-0 items-center gap-1.5 pl-3 sm:gap-2">
-    <a class="btn btn-sm btn-primary rounded-full hidden text-xs sm:flex" href="/download">
+    <a class="btn btn-sm btn-outline btn-primary hidden text-xs sm:flex" href="/download">
       <Download class="mr-1.5 h-4 w-4" />
       Download
     </a>
-    <button class="btn btn-sm btn-ghost hidden h-10 w-10 sm:flex" aria-label="Notifications">
-      <Bell class="h-5 w-5" />
-    </button>
     {#if data.user}
       <a class="btn btn-sm btn-ghost h-10 w-10" href="/admin" aria-label="Administration" title="Administration">
-        <ShieldCheck class="h-5 w-5" />
+        <ShieldCheck class="!h-7 !w-7" />
       </a>
       <a
         href="/profile"

@@ -14,10 +14,6 @@
   } from '$lib/api/optionPresets';
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
 
-  let { data } = $props();
-
-  const sessionLabel = $derived(data.singleUser ? 'local profile' : 'FrostStream account');
-
   let optionPresets = $state<OptionPreset[]>([]);
   let optionPresetsLoading = $state(true);
   let optionPresetsError = $state<string | null>(null);
@@ -66,16 +62,17 @@
 </script>
 
 <section class="card border border-base-300 bg-base-100 p-5 sm:p-6">
-  <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
     <div>
       <h2 class="text-base font-bold text-base-content">Option presets</h2>
       <p class="mt-2 max-w-3xl text-sm leading-6 text-base-content/60">
         Named sets of yt-dlp options. Reference one from a preset-based download request to reuse the same options.
       </p>
     </div>
-    <span class="badge badge-sm badge-ghost rounded-full w-fit text-[10px]">
-      {sessionLabel}
-    </span>
+    <a class="btn btn-sm btn-neutral shrink-0" href="/profile/option-presets/new">
+      <Plus class="mr-1.5 h-3.5 w-3.5" />
+      New option preset
+    </a>
   </div>
 
   {#if optionPresetsError}
@@ -153,12 +150,6 @@
     </div>
   {/if}
 
-  <div class="mt-4">
-    <a class="btn btn-sm btn-ghost text-xs" href="/profile/option-presets/new">
-      <Plus class="mr-1.5 h-3.5 w-3.5" />
-      New option preset
-    </a>
-  </div>
 </section>
 
 <ConfirmDeleteModal
