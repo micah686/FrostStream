@@ -1,6 +1,5 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { Stepper } from '$lib/components/ui';
   interface Props { current: number; sessionId?: string; }
   let { current, sessionId }: Props = $props();
   const steps = [
@@ -19,6 +18,16 @@
   }
 </script>
 
-<div class="mb-6 overflow-x-auto rounded-2xl border border-base-300 bg-base-100 p-4">
-  <Stepper {steps} {current} clickable={!!sessionId || current === 1} onStepClick={navigate} class="min-w-[760px]" />
+<div class="mb-6 overflow-x-auto">
+  <ul class="steps steps-horizontal min-w-[760px] w-full">
+    {#each steps as step}
+      <li class:step-primary={step.id <= current} class="step">
+        {#if sessionId || step.id === 1}
+          <button type="button" class="text-xs font-semibold" onclick={() => navigate({ current: step.id })}>{step.label}</button>
+        {:else}
+          <span class="text-xs font-semibold">{step.label}</span>
+        {/if}
+      </li>
+    {/each}
+  </ul>
 </div>

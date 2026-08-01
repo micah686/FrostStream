@@ -69,6 +69,6 @@
         <p class="mt-1 text-xs text-base-content/50">Each file (and its sidecars) is permanently removed from the incoming folder once it has imported successfully. Files that fail to import are kept.</p>
       </div>
     </div>
-    <div class="mt-6 flex justify-between"><a class="rounded-lg px-4 py-2.5 text-sm font-semibold text-base-content/60 hover:text-base-content" href="/admin/import/new/source">Back</a><a href={selectedCount ? `/admin/import/${sessionId}/metadata` : undefined} aria-disabled={!selectedCount} class={`rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-primary-content hover:bg-primary ${selectedCount ? '' : 'pointer-events-none opacity-40'}`}>Next: metadata</a></div>
+    <div class="mt-6 flex justify-between"><a class="btn btn-sm btn-neutral text-xs" href="/admin/import/new/source">Back</a><a href={selectedCount ? `/admin/import/${sessionId}/metadata` : undefined} aria-disabled={!selectedCount} class={`btn btn-sm btn-primary text-xs ${selectedCount ? '' : 'pointer-events-none opacity-40'}`}>Next: metadata</a></div>
   {/if}
 </section>
