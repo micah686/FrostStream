@@ -270,8 +270,12 @@
 <header
   class="fixed inset-x-0 top-0 z-40 flex h-14 items-center border-b border-base-300/70 bg-base-100/95 px-3 backdrop-blur-xl sm:px-5"
 >
-  <button class="btn btn-sm btn-ghost mr-2 h-10 w-10 lg:hidden" aria-label="Open navigation" onclick={() => (drawerOpen = true)}>
-    <Menu class="h-5 w-5" />
+  <button
+    class="btn btn-square btn-sm btn-ghost mr-2 h-10 w-10 lg:hidden"
+    aria-label="Open navigation"
+    onclick={() => (drawerOpen = true)}
+  >
+    <Menu class="h-5 w-5 shrink-0" />
   </button>
 
   <a href="/" class="flex shrink-0 items-center rounded-lg focus-visible:outline-offset-4">
@@ -377,8 +381,13 @@
       Download
     </a>
     {#if data.user}
-      <a class="btn btn-sm btn-ghost h-10 w-10" href="/admin" aria-label="Administration" title="Administration">
-        <ShieldCheck class="!h-7 !w-7" />
+      <a
+        class="btn btn-square btn-sm btn-ghost h-10 w-10"
+        href="/admin"
+        aria-label="Administration"
+        title="Administration"
+      >
+        <ShieldCheck class="h-5 w-5 shrink-0" />
       </a>
       <a
         href="/profile"
@@ -407,8 +416,12 @@
 <Drawer bind:open={drawerOpen} placement="left" class="w-[min(19rem,88vw)] bg-base-100" label="Mobile navigation">
   <div class="flex h-14 shrink-0 items-center justify-between border-b border-base-300/70 px-4">
     <span class="font-bold text-base-content">Navigation</span>
-    <button class="btn btn-sm btn-ghost h-9 w-9" aria-label="Close navigation" onclick={closeDrawer}>
-      <X class="h-5 w-5" />
+    <button
+      class="btn btn-square btn-sm btn-ghost h-9 w-9"
+      aria-label="Close navigation"
+      onclick={closeDrawer}
+    >
+      <X class="h-5 w-5 shrink-0" />
     </button>
   </div>
   <div class="flex-1 overflow-y-auto">
