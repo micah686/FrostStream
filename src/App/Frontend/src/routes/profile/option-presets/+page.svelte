@@ -99,7 +99,7 @@
     <div class="mt-5 space-y-2">
       {#each optionPresets as preset (preset.key)}
         <article
-          class="flex min-h-[3.95rem] flex-col gap-3 rounded-lg border border-base-content/20 bg-base-100 px-3 py-3 transition hover:border-base-content/30 hover:bg-base-300/30 sm:flex-row sm:items-center sm:px-4"
+          class="card flex min-h-[3.95rem] flex-col gap-3 border border-base-300 bg-base-100 p-3 transition hover:border-base-content/30 hover:bg-base-300/30 sm:flex-row sm:items-center sm:px-4"
         >
           <div class="flex min-w-0 items-center gap-3">
             <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-base-300/70 text-primary">
@@ -108,7 +108,7 @@
             <div class="min-w-0">
               <div class="flex min-w-0 flex-wrap items-center gap-2">
                 <h3 class="truncate text-sm font-semibold text-base-content">{preset.name}</h3>
-                <span class="rounded-full bg-base-300 px-2 py-0.5 text-[10px] font-semibold text-base-content/60">
+                <span class="badge badge-sm badge-accent text-[10px] text-accent-content">
                   {preset.key}
                 </span>
               </div>
