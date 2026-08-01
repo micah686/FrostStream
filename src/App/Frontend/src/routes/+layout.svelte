@@ -376,7 +376,7 @@
   </div>
 
   <div class="ml-auto flex shrink-0 items-center gap-1.5 pl-3 sm:gap-2">
-    <a class="btn btn-sm btn-outline btn-primary hidden text-xs sm:flex" href="/download">
+    <a class="btn btn-sm btn-primary hidden text-xs sm:flex" href="/download">
       <Download class="mr-1.5 h-4 w-4" />
       Download
     </a>

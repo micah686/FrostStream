@@ -159,12 +159,7 @@
     aria-haspopup="true"
     aria-expanded={open}
     onclick={toggleOpen}
-    class={[
-      'flex items-center gap-1.5 rounded-lg border px-4 py-2 text-xs font-semibold transition',
-      isSaved
-        ? 'border-primary/50 bg-primary/10 text-primary hover:bg-primary/20'
-        : 'border-base-300 bg-base-200/70 text-base-content/80 hover:bg-base-300'
-    ]}
+    class="btn btn-sm btn-neutral text-xs"
   >
     <Folder class="h-4 w-4" />
     {#if isSaved}

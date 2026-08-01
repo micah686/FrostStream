@@ -92,12 +92,7 @@
     onclick={toggle}
     aria-haspopup="menu"
     aria-expanded={open}
-    class={[
-      'flex items-center gap-1.5 rounded-lg border px-4 py-2 text-xs font-semibold transition',
-      open || protocol
-        ? 'border-primary/30 bg-primary/10 text-primary hover:bg-primary/10'
-        : 'border-base-300 bg-base-200/70 text-base-content/80 hover:bg-base-300'
-    ]}
+    class="btn btn-sm btn-neutral text-xs"
   >
     <Cast class="h-4 w-4" />
     Cast
