@@ -15,6 +15,8 @@ public sealed class CreatorSourceConfiguration : IEntityTypeConfiguration<Creato
         builder.Property(x => x.Platform).HasColumnName("platform").HasMaxLength(50).IsRequired();
         builder.Property(x => x.SourceType).HasColumnName("source_type").HasMaxLength(50).HasConversion<string>().IsRequired();
         builder.Property(x => x.SourceUrl).HasColumnName("source_url").HasMaxLength(4096).IsRequired();
+        builder.Property(x => x.ConfigSetOwnerSubject).HasColumnName("config_set_owner_subject").HasMaxLength(255);
+        builder.Property(x => x.ConfigSetKey).HasColumnName("config_set_key").HasMaxLength(100);
         builder.Property(x => x.AccountId).HasColumnName("account_id");
         builder.Property(x => x.ScanEnabled).HasColumnName("scan_enabled").IsRequired();
         builder.Property(x => x.IncrementalPageSize).HasColumnName("incremental_page_size").IsRequired();
@@ -22,7 +24,6 @@ public sealed class CreatorSourceConfiguration : IEntityTypeConfiguration<Creato
         builder.Property(x => x.FullRescanIntervalDays).HasColumnName("full_rescan_interval_days").IsRequired();
         builder.Property(x => x.UpdateCheckIntervalHours).HasColumnName("update_check_interval_hours").IsRequired();
         builder.Property(x => x.MetadataRefreshWindow).HasColumnName("metadata_refresh_window").IsRequired();
-        builder.Property(x => x.ProviderQueryLimitsJson).HasColumnName("provider_query_limits_json").HasColumnType("jsonb");
         builder.Property(x => x.CreatedAt)
             .HasColumnName("created_at")
             .HasColumnType("timestamp with time zone")

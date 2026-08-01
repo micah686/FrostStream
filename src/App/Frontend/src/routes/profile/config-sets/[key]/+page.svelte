@@ -50,7 +50,7 @@
       <span class="loading loading-spinner loading-md"></span>
     </div>
   {:else if loadError}
-    <div class="rounded-2xl border border-error/30 bg-error/10 p-5 text-sm text-error" role="alert">
+    <div class="alert alert-error text-sm" role="alert">
       <div class="flex items-start gap-3">
         <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
         <span>{loadError}</span>

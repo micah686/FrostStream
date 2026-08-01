@@ -30,6 +30,7 @@ public sealed class DataBridgeDbContext(DbContextOptions<DataBridgeDbContext> op
     public DbSet<MediaContentIdVersionEntity> MediaContentIdVersions => Set<MediaContentIdVersionEntity>();
     public DbSet<AudioRenditionEntity> AudioRenditions => Set<AudioRenditionEntity>();
     public DbSet<StreamRenditionEntity> StreamRenditions => Set<StreamRenditionEntity>();
+    public DbSet<MediaEncodingStatusEntity> MediaEncodingStatuses => Set<MediaEncodingStatusEntity>();
     public DbSet<LocalImportBatchEntity> LocalImportBatches => Set<LocalImportBatchEntity>();
     public DbSet<LocalImportItemEntity> LocalImportItems => Set<LocalImportItemEntity>();
     public DbSet<ImportSessionEntity> ImportSessions => Set<ImportSessionEntity>();

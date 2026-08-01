@@ -25,21 +25,30 @@ public sealed class CreatorMonitorControllerTests
         var bus = Substitute.For<IMessageBus>();
         var controller = CreateController(bus: bus);
 
+        bus.RequestAsync<DownloadConfigSetResolveRequestMessage, DownloadConfigSetOperationResponseMessage>(
+                DownloadConfigSetSubjects.Resolve,
+                Arg.Is<DownloadConfigSetResolveRequestMessage>(x => x != null &&
+                    x.OwnerSubject == "unit_test_user" &&
+                    x.Key == "creator-default"),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new DownloadConfigSetOperationResponseMessage
+            {
+                Success = true,
+                Entity = CreateConfigSet("creator-default")
+            });
+
         bus.RequestAsync<CreatorMonitorCreateRequestMessage, CreatorMonitorOperationResponseMessage>(
                 CreatorMonitorSubjects.CreateSource,
                 Arg.Is<CreatorMonitorCreateRequestMessage>(x => x != null &&
-                    x.Platform == "youtube" &&
-                    x.SourceType == CreatorSourceType.Videos &&
                     x.SourceUrl == "https://example.test/@creator" &&
+                    x.ConfigSetOwnerSubject == "unit_test_user" &&
+                    x.ConfigSetKey == "creator-default" &&
                     x.ScanEnabled &&
                     x.IncrementalPageSize == 75 &&
                     x.ConsecutiveKnownThreshold == 15 &&
                     x.FullRescanIntervalDays == 14 &&
-                    x.MetadataRefreshWindow == 50 &&
-                    x.ProviderQueryLimits != null &&
-                    x.ProviderQueryLimits.GetLimit("youtube", CreatorSourceType.Videos) == 125 &&
-                    x.ProviderQueryLimits.GetLimit("youtube", CreatorSourceType.Streams) == 25 &&
-                    x.ProviderQueryLimits.GetLimit("youtube", CreatorSourceType.Shorts) == 75),
+                    x.MetadataRefreshWindow == 50),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new CreatorMonitorOperationResponseMessage
@@ -50,22 +59,18 @@ public sealed class CreatorMonitorControllerTests
 
         var result = await controller.Create(new CreatorSourceCreateRequest
         {
-            Platform = "youtube",
-            SourceType = CreatorSourceType.Videos,
             SourceUrl = "https://example.test/@creator",
+            ConfigSetKey = "creator-default",
             ScanEnabled = true,
             IncrementalPageSize = 75,
             ConsecutiveKnownThreshold = 15,
             FullRescanIntervalDays = 14,
-            MetadataRefreshWindow = 50,
-            ProviderQueryLimits = YouTubeLimits(videos: 125, streams: 25, shorts: 75)
+            MetadataRefreshWindow = 50
         }, CancellationToken.None);
 
         var payload = result.Result!.ShouldBeOfType<OkObjectResult>().Value
             .ShouldBeOfType<CreatorSourceResponse>();
         payload.Id.ShouldBe(42);
-        payload.Platform.ShouldBe("youtube");
-        payload.ProviderQueryLimits.ShouldNotBeNull();
     }
 
     [Test]
@@ -162,12 +167,8 @@ public sealed class CreatorMonitorControllerTests
         bus.RequestAsync<CreatorMonitorCreateOrReuseRequestMessage, CreatorMonitorOperationResponseMessage>(
                 CreatorMonitorSubjects.CreateOrReuseSource,
                 Arg.Is<CreatorMonitorCreateOrReuseRequestMessage>(x => x != null &&
-                    x.Platform == "youtube" &&
-                    x.SourceType == CreatorSourceType.Videos &&
                     x.SourceUrl == "https://example.test/@creator/videos" &&
-                    x.ScanEnabled &&
-                    x.ProviderQueryLimits != null &&
-                    x.ProviderQueryLimits.GetLimit("youtube", CreatorSourceType.Videos) == 100),
+                    x.ScanEnabled),
                 Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new CreatorMonitorOperationResponseMessage
@@ -180,8 +181,7 @@ public sealed class CreatorMonitorControllerTests
         {
             SourceUrl = "https://example.test/@creator/videos",
             StorageKey = "archive",
-            ForceDownload = true,
-            ProviderQueryLimits = YouTubeLimits(videos: 100, streams: 20, shorts: 40)
+            ForceDownload = true
         }, CancellationToken.None);
 
         var payload = result.Result!.ShouldBeOfType<AcceptedResult>().Value
@@ -207,11 +207,7 @@ public sealed class CreatorMonitorControllerTests
                 g.ChannelRequest.QueueAllItems &&
                 g.ChannelRequest.ForceDownload &&
                 g.ChannelRequest.StorageKey == "archive" &&
-                g.ChannelRequest.RequestedBy == "unit_test_user" &&
-                g.ChannelRequest.ProviderQueryLimits != null &&
-                g.ChannelRequest.ProviderQueryLimits.GetLimit("youtube", CreatorSourceType.Videos) == 100 &&
-                g.ChannelRequest.ProviderQueryLimits.GetLimit("youtube", CreatorSourceType.Streams) == 20 &&
-                g.ChannelRequest.ProviderQueryLimits.GetLimit("youtube", CreatorSourceType.Shorts) == 40),
+                g.ChannelRequest.RequestedBy == "unit_test_user"),
             Arg.Is<string>(x => x != null && x.Length == 32),
             null,
             Arg.Any<CancellationToken>());
@@ -278,8 +274,6 @@ public sealed class CreatorMonitorControllerTests
 
         var result = await controller.Create(new CreatorSourceCreateRequest
         {
-            Platform = "youtube",
-            SourceType = CreatorSourceType.Videos,
             SourceUrl = "http://[fe80::1]/@creator"
         }, CancellationToken.None);
 
@@ -326,22 +320,17 @@ public sealed class CreatorMonitorControllerTests
         FullRescanIntervalDays = 14,
         UpdateCheckIntervalHours = 6,
         MetadataRefreshWindow = 50,
-        ProviderQueryLimits = YouTubeLimits(videos: 125, streams: 25, shorts: 75),
         CreatedAt = Now,
         LastUpdated = Now
     };
 
-    private static CreatorSourceProviderQueryLimits YouTubeLimits(int? videos, int? streams, int? shorts)
-        => new()
-        {
-            Providers =
-            {
-                ["youtube"] = new CreatorSourceTypeQueryLimits
-                {
-                    Videos = videos,
-                    Streams = streams,
-                    Shorts = shorts
-                }
-            }
-        };
+    private static DownloadConfigSetDto CreateConfigSet(string key) => new()
+    {
+        Id = 1,
+        OwnerSubject = "unit_test_user",
+        Key = key,
+        Name = "Creator default",
+        CreatedAt = Now,
+        UpdatedAt = Now
+    };
 }

@@ -478,7 +478,7 @@
 
     {#if submitError}
       <div
-        class="flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
+        class="alert alert-error text-sm"
         role="alert"
       >
         <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
@@ -487,7 +487,7 @@
     {/if}
 
     <div class="flex items-center gap-3 border-t border-base-300/70 pt-5">
-      <button class="btn btn-sm btn-primary text-xs" type="submit" disabled={submitting}>
+      <button class="btn btn-sm btn-neutral text-xs" type="submit" disabled={submitting}>
         {#if submitting}
           <span class="loading loading-spinner loading-xs mr-1.5"></span>
         {:else}
@@ -495,7 +495,7 @@
         {/if}
         Register storage
       </button>
-      <a class="btn btn-sm btn-ghost text-xs" href="/admin">
+      <a class="btn btn-sm btn-neutral text-xs" href="/admin">
         Cancel
       </a>
     </div>

@@ -21,9 +21,22 @@ public sealed record VerifyBackupRequest(string ArchivePath);
 
 public sealed record VerifyBackupResponse(bool Success, string? ErrorMessage);
 
-public sealed record RestorePlanRequest(string ArchivePath);
+public sealed record RestorePlanRequest(
+    string ArchivePath,
+    IReadOnlyDictionary<string, string?>? Options = null);
 
 public sealed record RestorePlanResponse(
     bool PreflightOk,
+    string Explanation,
     string RestoreCommand,
+    IReadOnlyList<RestorePlanOptionResponse> Options,
     string? ErrorMessage);
+
+public sealed record RestorePlanOptionResponse(
+    string Key,
+    string Label,
+    string Description,
+    string InputType,
+    string? Value,
+    string? Placeholder,
+    bool Required);

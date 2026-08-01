@@ -10,6 +10,7 @@
     CircleAlert,
     Copy,
     ExternalLink,
+    Ellipsis,
     Headphones,
     Image,
     LayoutList,
@@ -21,8 +22,10 @@
   import {
     createPodcastFeedLink,
     encodeChannelAudio,
+    getChannelAudioEncodedStatus,
     getChannelAudioStatus,
     renditionProgressStreamUrl,
+    type ChannelAudioEncodedStatusResponse,
     type ChannelAudioStatus,
     type RenditionProgressFrame
   } from '$lib/api/channelAudio';
@@ -99,6 +102,7 @@
   let statisticsError = $state<string | null>(null);
   let statisticsExpanded = $state(false);
   let channelAudio = $state<ChannelAudioStatus | null>(null);
+  let channelAudioEncodedStatus = $state<ChannelAudioEncodedStatusResponse | null>(null);
   let channelAudioLoading = $state(false);
   let channelAudioBusy = $state(false);
   let channelAudioNotice = $state<string | null>(null);
@@ -107,6 +111,9 @@
   let audioIndex = $state(0);
   let podcastBusy = $state(false);
   let podcastFeedUrl = $state<string | null>(null);
+  let actionsMenuOpen = $state(false);
+  let encodeMenuOpen = $state(false);
+  let actionsMenuContainer = $state<HTMLDivElement | null>(null);
   let audioPollTimer: ReturnType<typeof setTimeout> | null = null;
   let renditionStreamController: AbortController | null = null;
   let liveRenditionProgress = $state<Record<string, RenditionProgressFrame>>({});
@@ -124,15 +131,31 @@
   );
   const currentAudioItem = $derived(readyAudioItems[audioIndex] ?? null);
   const audioComplete = $derived(
-    channelAudio !== null && channelAudio.totalCount > 0 && channelAudio.readyCount === channelAudio.totalCount
+    channelAudioEncodedStatus !== null &&
+      channelAudioEncodedStatus.totalCount > 0 &&
+      channelAudioEncodedStatus.encodedCount >= channelAudioEncodedStatus.totalCount
   );
   const audioProgress = $derived(
-    channelAudio?.totalCount ? Math.round((channelAudio.readyCount / channelAudio.totalCount) * 100) : 0
+    channelAudioEncodedStatus?.totalCount
+      ? Math.round((channelAudioEncodedStatus.encodedCount / channelAudioEncodedStatus.totalCount) * 100)
+      : 0
   );
 
   onDestroy(() => {
     if (audioPollTimer) clearTimeout(audioPollTimer);
     closeRenditionStream();
+  });
+
+  $effect(() => {
+    if (!actionsMenuOpen) return;
+    const closeOnOutside = (event: PointerEvent) => {
+      if (actionsMenuContainer && event.target instanceof Node && !actionsMenuContainer.contains(event.target)) {
+        actionsMenuOpen = false;
+        encodeMenuOpen = false;
+      }
+    };
+    document.addEventListener('pointerdown', closeOnOutside);
+    return () => document.removeEventListener('pointerdown', closeOnOutside);
   });
 
   $effect(() => {
@@ -154,6 +177,7 @@
     hasMore = false;
 
     channelAudio = null;
+    channelAudioEncodedStatus = null;
     channelAudioNotice = null;
     selectedStorageKey = '';
     audioPlayerOpen = false;
@@ -168,7 +192,15 @@
     if (!quiet) channelAudioLoading = true;
 
     try {
-      channelAudio = await getChannelAudioStatus(parsedId, selectedStorageKey || undefined);
+      // The ready/total item list (for storage-key filtering, playback, and job-state polling) still
+      // comes from /status. The "N / M encoded" progress figure comes from the durable, indexed
+      // encoded-status count instead of /status's readyCount, which requires a full per-item diff.
+      const [status, encodedStatus] = await Promise.all([
+        getChannelAudioStatus(parsedId, selectedStorageKey || undefined),
+        getChannelAudioEncodedStatus(parsedId, { storageKey: selectedStorageKey || undefined, limit: 1 })
+      ]);
+      channelAudio = status;
+      channelAudioEncodedStatus = encodedStatus;
       scheduleAudioPoll(id);
     } catch (err) {
       if (!quiet) {
@@ -487,7 +519,7 @@
 
 {#if loadError}
   <div
-    class="flex items-center gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
+    class="alert alert-error text-sm"
     role="alert"
   >
     <CircleAlert class="h-4 w-4 shrink-0" />
@@ -521,7 +553,7 @@
 
     <div class="mt-4 flex flex-col gap-5 px-1 sm:mt-5 sm:flex-row sm:items-start sm:gap-6">
       <span
-        class={`relative -mt-14 grid h-28 w-28 shrink-0 place-items-center overflow-hidden rounded-full border-4 border-base-300 bg-gradient-to-br text-3xl font-bold text-white sm:-mt-16 sm:h-36 sm:w-36 sm:text-4xl ${accentFor(account.accountName)} shadow-xl shadow-black/30`}
+        class={`relative -mt-14 grid h-28 w-28 shrink-0 place-items-center overflow-hidden rounded-full border-4 border-base-300 bg-gradient-to-br text-3xl font-bold text-base-content sm:-mt-16 sm:h-36 sm:w-36 sm:text-4xl ${accentFor(account.accountName)} shadow-xl shadow-black/30`}
       >
         {initialsFor(account.accountName)}
         {#if avatarUrl}
@@ -591,6 +623,21 @@
       </div>
 
       <div class="flex shrink-0 flex-col gap-2 sm:items-end">
+        <div class="relative" bind:this={actionsMenuContainer}>
+          <button class="btn btn-sm btn-neutral px-2 text-xs" type="button" aria-label="Channel actions" onclick={() => (actionsMenuOpen = !actionsMenuOpen)}>
+            <Ellipsis class="h-4 w-4" />
+          </button>
+          {#if actionsMenuOpen}
+            <div class="absolute right-0 z-30 mt-2 w-56 rounded-xl border border-base-300 bg-base-100 p-1.5 shadow-xl" role="menu">
+              {#if account.accountUrl}<a class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-base-200" href={account.accountUrl} target="_blank" rel="noopener noreferrer" onclick={() => (actionsMenuOpen = false)}><ExternalLink class="h-4 w-4" />View on {account.platform}</a>{/if}
+              <button class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200" type="button" onclick={(event: MouseEvent) => { actionsMenuOpen = false; refreshAssets(event.shiftKey); }}><Image class="h-4 w-4" />Refresh assets</button>
+              <div class="relative"><button class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200" type="button" onclick={() => (encodeMenuOpen = !encodeMenuOpen)}><span class="flex items-center gap-2"><Music class="h-4 w-4" />Encode audio</span><ChevronRight class="h-4 w-4" /></button>{#if encodeMenuOpen}<div class="absolute right-full top-0 mr-1 w-48 rounded-xl border border-base-300 bg-base-100 p-1.5 shadow-xl"><button class="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200" type="button" onclick={() => { selectedStorageKey = ''; actionsMenuOpen = false; encodeMenuOpen = false; void encodeAudio(); }}>All storage keys</button>{#each channelAudio?.availableStorageKeys ?? [] as key}<button class="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200" type="button" onclick={() => { selectedStorageKey = key; actionsMenuOpen = false; encodeMenuOpen = false; void encodeAudio(); }}>{key}</button>{/each}</div>{/if}</div>
+              <button class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200 disabled:opacity-50" type="button" disabled={!audioComplete} onclick={() => { actionsMenuOpen = false; playAudio(); }}><Headphones class="h-4 w-4" />Play as audio</button>
+              <button class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200 disabled:opacity-50" type="button" disabled={!audioComplete || podcastBusy} onclick={() => { actionsMenuOpen = false; copyPodcastFeed(); }}><Copy class="h-4 w-4" />Copy podcast RSS</button>
+            </div>
+          {/if}
+        </div>
+        <div class="hidden">
         {#if account.accountUrl}
           <a class="btn btn-sm btn-neutral text-xs" href={account.accountUrl} target="_blank" rel="noopener noreferrer">
             <ExternalLink class="mr-1.5 h-3.5 w-3.5" />
@@ -631,10 +678,11 @@
           {/if}
           Copy podcast RSS
         </button>
-        {#if channelAudio && channelAudio.totalCount > 0}
+        </div>
+        {#if channelAudio && channelAudioEncodedStatus && channelAudioEncodedStatus.totalCount > 0}
           <div class="w-full max-w-60" aria-label={`Audio encoding ${audioProgress}% complete`}>
             <div class="flex justify-between gap-3 text-[11px] text-base-content/50">
-              <span>{channelAudio.readyCount.toLocaleString()} / {channelAudio.totalCount.toLocaleString()} encoded</span>
+              <span>{channelAudioEncodedStatus.encodedCount.toLocaleString()} / {channelAudioEncodedStatus.totalCount.toLocaleString()} encoded</span>
               <span>{audioProgress}%</span>
             </div>
             <div class="mt-1 h-1.5 overflow-hidden rounded-full bg-base-300">
@@ -731,7 +779,7 @@
       {#if statisticsError}
         <div
           id="channel-statistics-panel"
-          class="mt-4 flex items-center gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
+          class="alert alert-error mt-4 text-sm"
           role="alert"
         >
           <CircleAlert class="h-4 w-4 shrink-0" />
@@ -836,7 +884,7 @@
 
     {#if mediaError}
       <div
-        class="mt-6 flex items-center gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
+        class="alert alert-error mt-6 text-sm"
         role="alert"
       >
         <CircleAlert class="h-4 w-4 shrink-0" />
@@ -886,7 +934,7 @@
                 </span>
               {/if}
               <span
-                class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-white/95 text-slate-900 opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
+                class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-neutral text-neutral-content opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
               >
                 <Play class="ml-0.5 h-5 w-5" />
               </span>

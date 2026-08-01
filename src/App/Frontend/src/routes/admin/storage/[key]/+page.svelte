@@ -133,7 +133,7 @@
     </div>
   {:else if !storage}
     <div
-      class="mt-6 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
+      class="alert alert-error mt-6 text-sm"
       role="alert"
     >
       <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
@@ -167,7 +167,7 @@
 
     {#if error}
       <div
-        class="mt-5 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
+        class="alert alert-error mt-5 text-sm"
         role="alert"
       >
         <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />

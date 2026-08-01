@@ -146,7 +146,7 @@
   }
 </script>
 
-<section class={embedded ? '' : 'rounded-xl border border-base-300/80 bg-base-200/35'} aria-label={`${targetLabel} note`}>
+<section class={embedded ? '' : 'rounded-xl border border-base-content/30 bg-base-100'} aria-label={`${targetLabel} note`}>
   {#if !embedded}
     <button
       type="button"
@@ -158,7 +158,7 @@
         <Pencil class={['h-4 w-4 shrink-0', hasNote ? 'text-primary' : 'text-base-content/40']} />
         <span class="truncate text-sm font-semibold text-base-content/90">Note</span>
         {#if hasNote}
-          <span class="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">Saved</span>
+          <span class="badge badge-sm badge-primary font-semibold">Saved</span>
         {/if}
       </span>
       {#if open}
@@ -170,7 +170,7 @@
   {/if}
 
   {#if open || embedded}
-    <div class={embedded ? '' : 'border-t border-base-300/70 px-4 py-4'}>
+    <div class={embedded ? '' : 'border-t border-base-content/20 px-4 py-4'}>
       {#if loading}
         <div class="flex justify-center py-4">
           <span class="loading loading-spinner loading-sm"></span>
@@ -179,7 +179,7 @@
         <form class="space-y-3" onsubmit={submit}>
           {#if error}
             <div
-              class="flex items-start gap-2 rounded-lg border border-error/30 bg-error/10 p-3 text-sm text-error"
+              class="alert alert-error text-sm"
               role="alert"
             >
               <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />

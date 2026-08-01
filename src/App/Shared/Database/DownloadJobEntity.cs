@@ -322,6 +322,28 @@ public class AudioRenditionEntity
     public Instant UpdatedAt { get; set; } = SystemClock.Instance.GetCurrentInstant();
 }
 
+/// <summary>
+/// Durable, job-independent "is this media's audio encoded" fact — one row per media item. Kept in
+/// sync automatically when an <see cref="AudioRenditionEntity"/> completes, but also directly
+/// writable, so it stays a stable source of truth even if rendition/job history is ever purged.
+/// </summary>
+public class MediaEncodingStatusEntity
+{
+    public Guid MediaGuid { get; set; }
+
+    public long AccountId { get; set; }
+
+    public bool IsEncoded { get; set; }
+
+    public string? StorageKey { get; set; }
+
+    public string? StoragePath { get; set; }
+
+    public Instant? EncodedAt { get; set; }
+
+    public Instant UpdatedAt { get; set; } = SystemClock.Instance.GetCurrentInstant();
+}
+
 public class StreamRenditionEntity
 {
     public Guid RenditionId { get; set; }

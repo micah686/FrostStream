@@ -38,7 +38,7 @@
       {#if loading}<span class="loading loading-spinner loading-xs ml-auto"></span>{/if}
     </div>
     {#if error}
-      <div class="flex gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error">
+      <div class="alert alert-error text-sm" role="alert">
         <CircleAlert class="h-4 w-4 shrink-0" />{error}
       </div>
     {/if}

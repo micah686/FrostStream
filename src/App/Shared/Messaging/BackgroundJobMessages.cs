@@ -48,12 +48,12 @@ public sealed record ChannelScanFullRequested : ScheduledBackgroundRequest
     public string? StorageKey { get; init; }
     public string? RequestedBy { get; init; }
     public string? ConfigSetKey { get; init; }
+    public string? WorkerTag { get; init; }
     public bool EncodeForPlaylist { get; init; }
     public string? CookieSecretPath { get; init; }
     public int Priority { get; init; }
     public bool FetchComments { get; init; }
     public YtDlpSharpLib.Options.YtDlpOptions? YtDlpOptions { get; init; }
-    public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
 }
 
 public sealed record DatabaseStaleMediaCleanupRequested : ScheduledBackgroundRequest;

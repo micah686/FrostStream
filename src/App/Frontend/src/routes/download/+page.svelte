@@ -13,8 +13,7 @@
   import { listOptionPresets, type OptionPreset } from '$lib/api/optionPresets';
   import { listDownloadConfigSets, type DownloadConfigSet } from '$lib/api/downloadConfigSets';
   import { queuePlaylistDownload } from '$lib/api/playlists';
-  import { creatorSourceTypes, queueChannelDownload, type CreatorSourceType } from '$lib/api/creatorSources';
-  import RangeSlider from '$lib/components/RangeSlider.svelte';
+  import { queueChannelDownload } from '$lib/api/creatorSources';
 
   type TabKey = 'video' | 'playlist' | 'creator';
 
@@ -33,7 +32,7 @@
 
 
   const tabs: { key: TabKey; label: string; icon: typeof Video }[] = [
-    { key: 'video', label: 'Video', icon: Video },
+    { key: 'video', label: 'Single', icon: Video },
     { key: 'playlist', label: 'Playlist', icon: List },
     { key: 'creator', label: 'Creator', icon: Users }
   ];
@@ -44,12 +43,11 @@
     creator: 'Creator'
   };
 
-  const sourceTypeOptions = creatorSourceTypes.map((type) => ({ value: type, name: type }));
-
   let activeTab = $state<TabKey>('video');
 
   // Video form
   let sourceUrl = $state('');
+  let videoConfigSetKey = $state('');
   let forceDownload = $state(false);
   let tags = $state('');
   let fetchComments = $state(false);
@@ -69,8 +67,6 @@
 
   // Creator form
   let creatorUrl = $state('');
-  let creatorPlatform = $state('youtube');
-  let creatorSourceType = $state<CreatorSourceType>('Videos');
   let creatorConfigSetKey = $state('');
   let creatorFetchComments = $state(false);
   let creatorForceDownload = $state(false);
@@ -93,6 +89,13 @@
     { value: '', name: 'None (use per-request settings)' },
     ...configSets.map((set) => ({ value: set.key, name: set.name }))
   ]);
+
+  // When a config set is selected, its stored storage key, cookie profile, yt-dlp options,
+  // priority, and worker tag take over — every other option (besides force download) is disabled
+  // and omitted from the submitted request so it can't silently override the config set's values.
+  const videoConfigSetSelected = $derived(videoConfigSetKey !== '');
+  const playlistConfigSetSelected = $derived(playlistConfigSetKey !== '');
+  const creatorConfigSetSelected = $derived(creatorConfigSetKey !== '');
 
   onMount(() => {
     void loadStorageTargets();
@@ -228,16 +231,29 @@
     submitting = true;
     submitError = null;
 
-    const body = {
-      sourceUrl: sourceUrl.trim(),
-      storageKey: resolvedStorageKey(),
-      forceDownload,
-      tags: parseTags(tags),
-      cookieProfileKey: cookieProfileKey || null,
-      priority,
-      ytDlpOptions: buildYtDlpOptions(),
-      fetchComments
-    };
+    const body = videoConfigSetSelected
+      ? {
+          sourceUrl: sourceUrl.trim(),
+          storageKey: null,
+          forceDownload,
+          tags: null,
+          cookieProfileKey: null,
+          priority: null,
+          ytDlpOptions: null,
+          fetchComments: false,
+          configSetKey: videoConfigSetKey
+        }
+      : {
+          sourceUrl: sourceUrl.trim(),
+          storageKey: resolvedStorageKey(),
+          forceDownload,
+          tags: parseTags(tags),
+          cookieProfileKey: cookieProfileKey || null,
+          priority,
+          ytDlpOptions: buildYtDlpOptions(),
+          fetchComments,
+          configSetKey: null
+        };
 
     try {
       const response = await fetch('/api/downloads/video', {
@@ -278,15 +294,27 @@
 
     const url = playlistUrl.trim();
     try {
-      const result = await queuePlaylistDownload({
-        sourceUrl: url,
-        storageKey: resolvedStorageKey(),
-        configSetKey: playlistConfigSetKey || null,
-        cookieProfileKey: cookieProfileKey || null,
-        encodeForPlaylist: playlistEncode,
-        priority,
-        fetchComments: playlistFetchComments
-      });
+      const result = await queuePlaylistDownload(
+        playlistConfigSetSelected
+          ? {
+              sourceUrl: url,
+              storageKey: null,
+              configSetKey: playlistConfigSetKey,
+              cookieProfileKey: null,
+              encodeForPlaylist: false,
+              priority: null,
+              fetchComments: false
+            }
+          : {
+              sourceUrl: url,
+              storageKey: resolvedStorageKey(),
+              configSetKey: null,
+              cookieProfileKey: cookieProfileKey || null,
+              encodeForPlaylist: playlistEncode,
+              priority,
+              fetchComments: playlistFetchComments
+            }
+      );
       recordQueued('playlist', `playlist ${result.playlistId}`, url);
       playlistUrl = '';
     } catch (err) {
@@ -303,17 +331,27 @@
 
     const url = creatorUrl.trim();
     try {
-      const result = await queueChannelDownload({
-        sourceUrl: url,
-        platform: creatorPlatform.trim() || 'youtube',
-        sourceType: creatorSourceType,
-        storageKey: resolvedStorageKey(),
-        configSetKey: creatorConfigSetKey || null,
-        cookieProfileKey: cookieProfileKey || null,
-        priority,
-        fetchComments: creatorFetchComments,
-        forceDownload: creatorForceDownload
-      });
+      const result = await queueChannelDownload(
+        creatorConfigSetSelected
+          ? {
+              sourceUrl: url,
+              storageKey: null,
+              configSetKey: creatorConfigSetKey,
+              cookieProfileKey: null,
+              priority: null,
+              fetchComments: false,
+              forceDownload: creatorForceDownload
+            }
+          : {
+              sourceUrl: url,
+              storageKey: resolvedStorageKey(),
+              configSetKey: null,
+              cookieProfileKey: cookieProfileKey || null,
+              priority,
+              fetchComments: creatorFetchComments,
+              forceDownload: creatorForceDownload
+            }
+      );
       recordQueued('creator', `group ${result.correlationId}`, url);
       creatorUrl = '';
     } catch (err) {
@@ -342,41 +380,41 @@
   <title>Download · FrostStream</title>
 </svelte:head>
 
-{#snippet sharedFields()}
+{#snippet sharedFields(disabled: boolean = false)}
   <div class="grid gap-5 sm:grid-cols-2">
     <div>
       <label class="label mb-2 text-sm" for="storage-key">Storage target</label>
       {#if storageLoadFailed}
-        <input class="input w-full" id="storage-key" bind:value={storageKey} placeholder="default" />
+        <input class="input w-full" id="storage-key" bind:value={storageKey} placeholder="default" {disabled} />
         <p class="mt-1.5 text-xs text-warning">
           Could not load storage targets; enter a storage key manually.
         </p>
       {:else}
-        <Select id="storage-key" items={storageOptions} bind:value={storageKey} />
+        <Select id="storage-key" items={storageOptions} bind:value={storageKey} {disabled} />
       {/if}
     </div>
 
     <div>
       <label class="label mb-2 text-sm" for="cookie-profile">Cookie profile</label>
-      <Select id="cookie-profile" items={[{ value: '', name: 'None' }, ...cookieOptions]} bind:value={cookieProfileKey} />
+      <Select id="cookie-profile" items={[{ value: '', name: 'None' }, ...cookieOptions]} bind:value={cookieProfileKey} {disabled} />
     </div>
   </div>
 {/snippet}
 
-{#snippet prioritySlider()}
+{#snippet prioritySlider(disabled: boolean = false)}
   <div>
     <label class="label mb-2 text-sm" for="priority">
-      Priority <span class="font-normal text-base-content/50">({priority})</span>
+      Priority <span class="font-normal text-base-content/70">({priority})</span>
     </label>
-    <RangeSlider id="priority" min={0} max={100} step={1} bind:value={priority} />
-    <p class="mt-1.5 text-xs text-base-content/40">Higher runs first while jobs wait for a slot.</p>
+    <input id="priority" type="range" min="0" max="100" step="1" bind:value={priority} {disabled} class="range range-primary w-full disabled:opacity-60" />
+    <p class="mt-1.5 text-xs text-base-content/60">Higher runs first while jobs wait for a slot.</p>
   </div>
 {/snippet}
 
 {#snippet submitRow(label: string)}
   {#if submitError}
     <div
-      class="flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
+      class="alert alert-error text-sm"
       role="alert"
     >
       <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
@@ -399,12 +437,12 @@
 <section class="mx-auto max-w-3xl" aria-labelledby="download-title">
   <div class="mb-6">
     <h1 id="download-title" class="text-2xl font-bold tracking-tight text-base-content">Download</h1>
-    <p class="mt-1 text-sm text-base-content/50">
+    <p class="mt-1 text-sm text-base-content/80">
       Queue a media download on the server. Jobs run in the background; this page only submits them.
     </p>
   </div>
 
-  <div class="mb-5 flex gap-2" role="tablist" aria-label="Download type">
+  <div class="tabs tabs-lift mb-5" role="tablist" aria-label="Download type">
     {#each tabs as tab (tab.key)}
       {@const Icon = tab.icon}
       <button
@@ -413,10 +451,10 @@
         aria-selected={activeTab === tab.key}
         onclick={() => switchTab(tab.key)}
         class={[
-          'inline-flex h-10 items-center gap-2 rounded-full px-5 text-sm font-semibold transition',
+          'tab gap-2 text-sm font-semibold',
           activeTab === tab.key
-            ? 'bg-base-content text-base-100'
-            : 'bg-base-300/75 text-base-content/80 hover:bg-base-300'
+            ? 'tab-active text-primary'
+            : ''
         ]}
       >
         <Icon class="h-4 w-4" />
@@ -437,31 +475,40 @@
              bind:value={sourceUrl} placeholder="https://www.youtube.com/watch?v=..." />
         </div>
 
-        {@render sharedFields()}
+        <div>
+          <label class="label mb-2 text-sm" for="video-config-set">Config set</label>
+          <Select id="video-config-set" items={configSetOptions} bind:value={videoConfigSetKey} />
+          <p class="mt-1.5 text-xs text-base-content/70">
+            Applies its saved storage target, cookie profile, yt-dlp options, priority, and worker tag. Every other option below except force download is disabled while a config set is selected.
+          </p>
+        </div>
+
+        <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={forceDownload} /><span>Force download <span class="ml-1 text-xs text-base-content/70">(re-download even if it already exists)</span></span></label>
+
+        {@render sharedFields(videoConfigSetSelected)}
 
         <div class="grid gap-5 sm:grid-cols-2">
           <div>
             <label class="label mb-2 text-sm" for="tags">Worker Tags</label>
-            <input class="input w-full" id="tags" bind:value={tags} placeholder="aws-wkr, local, import, proxmx-wk-003,..." />
-            <p class="mt-1.5 text-xs text-base-content/40">Comma separated, optional.</p>
+            <input class="input w-full" id="tags" bind:value={tags} placeholder="aws-wkr, local, import, proxmx-wk-003,..." disabled={videoConfigSetSelected} />
+            <p class="mt-1.5 text-xs text-base-content/70">Comma separated, optional.</p>
           </div>
 
-          {@render prioritySlider()}
+          {@render prioritySlider(videoConfigSetSelected)}
         </div>
 
         <div class="flex flex-wrap gap-x-8 gap-y-3 border-t border-base-300/70 pt-5">
-          <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={forceDownload} /><span>Force download <span class="ml-1 text-xs text-base-content/40">(re-download even if it already exists)</span></span></label>
-          <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={fetchComments} /><span>Fetch comments</span></label>
+          <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={fetchComments} disabled={videoConfigSetSelected} /><span>Fetch comments</span></label>
         </div>
 
-        <div class="rounded-xl border border-base-300/70 bg-base-200/40 p-4">
+        <fieldset class="rounded-xl border border-base-300/70 bg-base-200/40 p-4" disabled={videoConfigSetSelected}>
           <div class="max-w-sm">
             <label class="label mb-2 text-sm" for="option-preset">Option preset</label>
             <Select id="option-preset" items={[
  { value: '', name: 'None' },
                 ...optionPresets.map((preset) => ({ value: preset.key, name: preset.name }))
               ]} bind:value={optionPresetKey} />
-            <p class="mt-1.5 text-xs text-base-content/40">
+            <p class="mt-1.5 text-xs text-base-content/70">
               yt-dlp options from the preset are applied to this download. The controls below only override a preset after you change them.
             </p>
           </div>
@@ -469,42 +516,42 @@
           <div class="mt-4 flex flex-wrap gap-x-8 gap-y-3 border-t border-base-300/70 pt-4">
             <div class="flex items-center gap-2">
               <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle" checked={audioOnlyOverride ?? false} onchange={(event) => (audioOnlyOverride = event.currentTarget.checked)} /><span>Audio only</span></label>
-              <span class="text-xs text-base-content/40">{overrideStatus(audioOnlyOverride)}</span>
+              <span class="text-xs text-base-content/70">{overrideStatus(audioOnlyOverride)}</span>
               {#if audioOnlyOverride !== null}
-                <button type="button" aria-label="Use preset audio setting" title="Use preset" onclick={() => (audioOnlyOverride = null)} class="rounded p-1 text-base-content/50 hover:bg-base-300 hover:text-base-content/80">
+                <button type="button" aria-label="Use preset audio setting" title="Use preset" onclick={() => (audioOnlyOverride = null)} class="rounded p-1 text-base-content/70 hover:bg-base-300 hover:text-base-content/80">
                   <X class="h-3.5 w-3.5" />
                 </button>
               {/if}
             </div>
             <div class="flex items-center gap-2">
               <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle" checked={downloadInfoJsonOverride ?? false} onchange={(event) => (downloadInfoJsonOverride = event.currentTarget.checked)} /><span>Download info JSON</span></label>
-              <span class="text-xs text-base-content/40">{overrideStatus(downloadInfoJsonOverride)}</span>
+              <span class="text-xs text-base-content/70">{overrideStatus(downloadInfoJsonOverride)}</span>
               {#if downloadInfoJsonOverride !== null}
-                <button type="button" aria-label="Use preset info JSON setting" title="Use preset" onclick={() => (downloadInfoJsonOverride = null)} class="rounded p-1 text-base-content/50 hover:bg-base-300 hover:text-base-content/80">
+                <button type="button" aria-label="Use preset info JSON setting" title="Use preset" onclick={() => (downloadInfoJsonOverride = null)} class="rounded p-1 text-base-content/70 hover:bg-base-300 hover:text-base-content/80">
                   <X class="h-3.5 w-3.5" />
                 </button>
               {/if}
             </div>
             <div class="flex items-center gap-2">
               <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle" checked={downloadThumbnailOverride ?? false} onchange={(event) => (downloadThumbnailOverride = event.currentTarget.checked)} /><span>Download thumbnail</span></label>
-              <span class="text-xs text-base-content/40">{overrideStatus(downloadThumbnailOverride)}</span>
+              <span class="text-xs text-base-content/70">{overrideStatus(downloadThumbnailOverride)}</span>
               {#if downloadThumbnailOverride !== null}
-                <button type="button" aria-label="Use preset thumbnail setting" title="Use preset" onclick={() => (downloadThumbnailOverride = null)} class="rounded p-1 text-base-content/50 hover:bg-base-300 hover:text-base-content/80">
+                <button type="button" aria-label="Use preset thumbnail setting" title="Use preset" onclick={() => (downloadThumbnailOverride = null)} class="rounded p-1 text-base-content/70 hover:bg-base-300 hover:text-base-content/80">
                   <X class="h-3.5 w-3.5" />
                 </button>
               {/if}
             </div>
             <div class="flex items-center gap-2">
               <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle" checked={downloadSubtitlesOverride ?? false} onchange={(event) => (downloadSubtitlesOverride = event.currentTarget.checked)} /><span>Download subtitles (all)</span></label>
-              <span class="text-xs text-base-content/40">{overrideStatus(downloadSubtitlesOverride)}</span>
+              <span class="text-xs text-base-content/70">{overrideStatus(downloadSubtitlesOverride)}</span>
               {#if downloadSubtitlesOverride !== null}
-                <button type="button" aria-label="Use preset subtitles setting" title="Use preset" onclick={() => (downloadSubtitlesOverride = null)} class="rounded p-1 text-base-content/50 hover:bg-base-300 hover:text-base-content/80">
+                <button type="button" aria-label="Use preset subtitles setting" title="Use preset" onclick={() => (downloadSubtitlesOverride = null)} class="rounded p-1 text-base-content/70 hover:bg-base-300 hover:text-base-content/80">
                   <X class="h-3.5 w-3.5" />
                 </button>
               {/if}
             </div>
           </div>
-        </div>
+        </fieldset>
 
         {@render submitRow('Queue download')}
       </div>
@@ -519,28 +566,30 @@
           <label class="label mb-2 text-sm" for="playlist-url">Playlist URL</label>
           <input class="input w-full" id="playlist-url" type="url" required
              bind:value={playlistUrl} placeholder="https://www.youtube.com/playlist?list=..." />
-          <p class="mt-1.5 text-xs text-base-content/40">
+          <p class="mt-1.5 text-xs text-base-content/70">
             Every entry in the playlist is queued as its own download job, keeping the provider's order.
           </p>
         </div>
 
-        {@render sharedFields()}
+        <p class="text-xs text-base-content/70">Force download is not supported for playlist requests.</p>
 
-        <div class="grid gap-5 sm:grid-cols-2">
-          <div>
-            <label class="label mb-2 text-sm" for="playlist-config-set">Config set</label>
-            <Select id="playlist-config-set" items={configSetOptions} bind:value={playlistConfigSetKey} />
-            <p class="mt-1.5 text-xs text-base-content/40">
-              Applies its saved yt-dlp options and ignore keywords to every entry.
-            </p>
-          </div>
-
-          {@render prioritySlider()}
+        <div>
+          <label class="label mb-2 text-sm" for="playlist-config-set">Config set</label>
+          <Select id="playlist-config-set" items={configSetOptions} bind:value={playlistConfigSetKey} />
+          <p class="mt-1.5 text-xs text-base-content/70">
+            Applies its saved storage target, cookie profile, yt-dlp options, ignore keywords, priority, and worker tag to every entry. Every other option below is disabled while a config set is selected.
+          </p>
         </div>
 
+        <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={creatorForceDownload} /><span>Force download <span class="ml-1 text-xs text-base-content/70">(re-download videos already in the library)</span></span></label>
+
+        {@render sharedFields(playlistConfigSetSelected)}
+
+        {@render prioritySlider(playlistConfigSetSelected)}
+
         <div class="flex flex-wrap gap-x-8 gap-y-3 border-t border-base-300/70 pt-5">
-          <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={playlistEncode} /><span>Encode for playlist <span class="ml-1 text-xs text-base-content/40">(re-encode for gapless playback)</span></span></label>
-          <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={playlistFetchComments} /><span>Fetch comments</span></label>
+          <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={playlistEncode} disabled={playlistConfigSetSelected} /><span>Encode for playlist <span class="ml-1 text-xs text-base-content/70">(re-encode for gapless playback)</span></span></label>
+          <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={playlistFetchComments} disabled={playlistConfigSetSelected} /><span>Fetch comments</span></label>
         </div>
 
         {@render submitRow('Queue playlist')}
@@ -556,41 +605,27 @@
           <label class="label mb-2 text-sm" for="creator-url">Channel URL</label>
           <input class="input w-full" id="creator-url" type="url" required
              bind:value={creatorUrl} placeholder="https://www.youtube.com/@creator/videos" />
-          <p class="mt-1.5 text-xs text-base-content/40">
+          <p class="mt-1.5 text-xs text-base-content/70">
             Downloads the channel's full backlog and registers it as a tracked creator, so new uploads are
             discovered automatically. Manage tracked creators on the
             <a href="/creators" class="font-semibold text-primary hover:underline">Creators</a> page.
           </p>
         </div>
 
-        <div class="grid gap-5 sm:grid-cols-2">
-          <div>
-            <label class="label mb-2 text-sm" for="creator-platform">Platform</label>
-            <input class="input w-full" id="creator-platform" required  bind:value={creatorPlatform} placeholder="youtube" />
-          </div>
-          <div>
-            <label class="label mb-2 text-sm" for="creator-source-type">Content type</label>
-            <Select id="creator-source-type" items={sourceTypeOptions} bind:value={creatorSourceType} />
-          </div>
+        <div>
+          <label class="label mb-2 text-sm" for="creator-config-set">Config set</label>
+          <Select id="creator-config-set" items={configSetOptions} bind:value={creatorConfigSetKey} />
+          <p class="mt-1.5 text-xs text-base-content/70">
+            Applies its saved storage target, cookie profile, yt-dlp options, ignore keywords, priority, and worker tag to every discovered video. Every other option below except force download is disabled while a config set is selected.
+          </p>
         </div>
 
-        {@render sharedFields()}
+        {@render sharedFields(creatorConfigSetSelected)}
 
-        <div class="grid gap-5 sm:grid-cols-2">
-          <div>
-            <label class="label mb-2 text-sm" for="creator-config-set">Config set</label>
-            <Select id="creator-config-set" items={configSetOptions} bind:value={creatorConfigSetKey} />
-            <p class="mt-1.5 text-xs text-base-content/40">
-              Applies its saved yt-dlp options and ignore keywords to every discovered video.
-            </p>
-          </div>
-
-          {@render prioritySlider()}
-        </div>
+        {@render prioritySlider(creatorConfigSetSelected)}
 
         <div class="flex flex-wrap gap-x-8 gap-y-3 border-t border-base-300/70 pt-5">
-          <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={creatorForceDownload} /><span>Force download <span class="ml-1 text-xs text-base-content/40">(re-download videos already in the library)</span></span></label>
-          <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={creatorFetchComments} /><span>Fetch comments</span></label>
+          <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={creatorFetchComments} disabled={creatorConfigSetSelected} /><span>Fetch comments</span></label>
         </div>
 
         {@render submitRow('Queue channel download')}
@@ -600,14 +635,14 @@
 
   {#if queued.length > 0}
     <div class="mt-6 rounded-2xl border border-base-300/80 bg-base-200/40 p-5">
-      <h2 class="text-sm font-bold uppercase tracking-[0.08em] text-base-content/50">Queued this session</h2>
+      <h2 class="text-sm font-bold uppercase tracking-[0.08em] text-base-content/70">Queued this session</h2>
       <ul class="mt-3 space-y-2">
         {#each queued as job (job.id)}
           <li class="flex items-center gap-3 rounded-xl bg-base-200/40 px-4 py-3">
             <CircleCheck class="h-5 w-5 shrink-0 text-success" />
             <div class="min-w-0 flex-1">
               <p class="truncate text-sm text-base-content/90">{job.sourceUrl}</p>
-              <p class="mt-0.5 truncate font-mono text-xs text-base-content/40">{job.id}</p>
+              <p class="mt-0.5 truncate font-mono text-xs text-base-content/60">{job.id}</p>
             </div>
             <span class="badge badge-sm badge-primary rounded-full shrink-0 text-xs">
               {kindLabels[job.kind]}
@@ -615,7 +650,7 @@
             <span class="badge badge-sm badge-ghost rounded-full shrink-0 text-xs">
               {job.storageKey}
             </span>
-            <span class="shrink-0 text-xs text-base-content/40">
+            <span class="shrink-0 text-xs text-base-content/60">
               {job.queuedAt.toLocaleTimeString()}
             </span>
           </li>

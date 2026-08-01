@@ -12,6 +12,7 @@ export interface DownloadConfigSet {
   description: string | null;
   storageKey: string | null;
   cookieProfileKey: string | null;
+  workerTag: string | null;
   ytDlpOptions: Record<string, unknown> | null;
   ignoreKeywords: IgnoreKeyword[];
   priority: number;
@@ -23,6 +24,7 @@ export interface DownloadConfigSetRequest {
   description: string | null;
   storageKey: string | null;
   cookieProfileKey: string | null;
+  workerTag: string | null;
   ytDlpOptions: Record<string, unknown> | null;
   ignoreKeywords: IgnoreKeyword[];
   priority: number;

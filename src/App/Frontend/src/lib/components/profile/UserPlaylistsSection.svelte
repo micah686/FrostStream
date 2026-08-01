@@ -168,7 +168,7 @@
 
     {#if listError}
       <div
-        class="mt-5 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
+        class="alert alert-error mt-5 text-sm"
         role="alert"
       >
         <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
@@ -248,20 +248,22 @@
               </span>
               <a
                 href={editHref(playlist)}
-                class="inline-flex h-10 min-w-10 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-base-content/80 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary"
+                class="btn btn-sm btn-neutral text-xs"
                 title="Edit playlist"
                 aria-label={`Edit playlist ${playlist.name}`}
               >
-                <Pen class="h-4 w-4" />
+                <Pen class="mr-1.5 h-4 w-4" />
+                Edit
               </a>
               <button
                 type="button"
-                class="inline-flex h-10 min-w-10 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-base-content/80 transition hover:border-error/60 hover:bg-error/10 hover:text-error"
+                class="btn btn-sm btn-neutral text-xs"
                 title="Delete playlist"
                 aria-label={`Delete playlist ${playlist.name}`}
                 onclick={() => requestDelete(playlist)}
               >
-                <Trash2 class="h-4 w-4" />
+                <Trash2 class="mr-1.5 h-4 w-4" />
+                Delete
               </button>
             </div>
           </article>
@@ -287,11 +289,11 @@
       </div>
 
       <div class="flex shrink-0 gap-2">
-        <a class="btn btn-sm btn-neutral" href={editHref(selected)}>
+        <a class="btn btn-sm btn-neutral text-xs" href={editHref(selected)}>
           <Pen class="mr-1.5 h-3.5 w-3.5" />
           Edit
         </a>
-        <button class="btn btn-sm btn-ghost text-xs" onclick={() => requestDelete(selected!)}>
+        <button class="btn btn-sm btn-neutral text-xs" onclick={() => requestDelete(selected!)}>
           <Trash2 class="mr-1.5 h-3.5 w-3.5" />
           Delete
         </button>
@@ -300,7 +302,7 @@
 
     {#if detailError}
       <div
-        class="mt-5 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
+        class="alert alert-error mt-5 text-sm"
         role="alert"
       >
         <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />

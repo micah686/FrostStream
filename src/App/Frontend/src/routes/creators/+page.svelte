@@ -18,7 +18,6 @@
   } from '@lucide/svelte';
   import {
     createCreatorSource,
-    creatorSourceTypes,
     deleteCreatorSource,
     listCreatorSources,
     listIgnoredMedia,
@@ -29,20 +28,17 @@
     type CreatorScanMode,
     type CreatorSource,
     type CreatorSourceRequest,
-    type CreatorSourceType,
     type IgnoredMedia
   } from '$lib/api/creatorSources';
   import { listDownloadConfigSets, type DownloadConfigSet } from '$lib/api/downloadConfigSets';
   import { formatRelativeDate } from '$lib/media';
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
 
-  const rowActionClass =
-    'inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary disabled:opacity-50';
+  const rowActionClass = 'btn btn-sm btn-neutral text-xs';
 
   interface SourceForm {
-    platform: string;
-    sourceType: CreatorSourceType;
     sourceUrl: string;
+    configSetKey: string;
     scanEnabled: boolean;
     incrementalPageSize: number;
     consecutiveKnownThreshold: number;
@@ -51,13 +47,10 @@
     metadataRefreshWindow: number;
   }
 
-  const sourceTypeOptions = creatorSourceTypes.map((type) => ({ value: type, name: type }));
-
   function emptyForm(): SourceForm {
     return {
-      platform: 'youtube',
-      sourceType: 'Videos',
       sourceUrl: '',
+      configSetKey: '',
       scanEnabled: true,
       incrementalPageSize: 50,
       consecutiveKnownThreshold: 25,
@@ -101,6 +94,7 @@
     { value: '', name: 'None (use per-request settings)' },
     ...configSets.map((set) => ({ value: set.key, name: set.name }))
   ]);
+  const downloadConfigSetSelected = $derived(downloadConfigSetKey !== '');
 
   let expandedIgnoredId = $state<number | null>(null);
   let ignoredItems = $state<IgnoredMedia[]>([]);
@@ -109,11 +103,11 @@
 
   const trackedCount = $derived(sources.length);
   const scanningCount = $derived(sources.filter((source) => source.scanEnabled).length);
-  const platformCount = $derived(new Set(sources.map((source) => source.platform.toLowerCase())).size);
   const scannedCount = $derived(sources.filter((source) => source.lastSuccessfulScanAt).length);
 
   onMount(() => {
     void loadSources();
+    void loadConfigSets();
   });
 
   async function loadSources() {
@@ -129,12 +123,7 @@
   }
 
   function sortSources(items: CreatorSource[]): CreatorSource[] {
-    return [...items].sort(
-      (a, b) =>
-        a.platform.localeCompare(b.platform) ||
-        displayName(a).localeCompare(displayName(b)) ||
-        a.id - b.id
-    );
+    return [...items].sort((a, b) => displayName(a).localeCompare(displayName(b)) || a.id - b.id);
   }
 
   function openCreateForm() {
@@ -147,9 +136,8 @@
   function openEditForm(source: CreatorSource) {
     editingSource = source;
     form = {
-      platform: source.platform,
-      sourceType: source.sourceType,
       sourceUrl: source.sourceUrl,
+      configSetKey: source.configSetKey ?? '',
       scanEnabled: source.scanEnabled,
       incrementalPageSize: source.incrementalPageSize,
       consecutiveKnownThreshold: source.consecutiveKnownThreshold,
@@ -161,25 +149,20 @@
     formOpen = true;
   }
 
-  function buildRequest(source: CreatorSource | null): CreatorSourceRequest {
+  function buildRequest(): CreatorSourceRequest {
     return {
-      platform: form.platform.trim(),
-      sourceType: form.sourceType,
       sourceUrl: form.sourceUrl.trim(),
+      configSetKey: form.configSetKey || null,
       scanEnabled: form.scanEnabled,
       incrementalPageSize: Number(form.incrementalPageSize),
       consecutiveKnownThreshold: Number(form.consecutiveKnownThreshold),
       fullRescanIntervalDays: Number(form.fullRescanIntervalDays),
       updateCheckIntervalHours: Number(form.updateCheckIntervalHours),
-      metadataRefreshWindow: Number(form.metadataRefreshWindow),
-      providerQueryLimits: source?.providerQueryLimits ?? null
+      metadataRefreshWindow: Number(form.metadataRefreshWindow)
     };
   }
 
   function validateForm(): string | null {
-    if (!form.platform.trim()) {
-      return 'Platform is required.';
-    }
     if (!form.sourceUrl.trim()) {
       return 'Source URL is required.';
     }
@@ -210,10 +193,10 @@
     formError = null;
     try {
       if (editingSource) {
-        const updated = await updateCreatorSource(editingSource.id, buildRequest(editingSource));
+        const updated = await updateCreatorSource(editingSource.id, buildRequest());
         sources = sortSources(sources.map((item) => (item.id === updated.id ? updated : item)));
       } else {
-        const created = await createCreatorSource(buildRequest(null));
+        const created = await createCreatorSource(buildRequest());
         sources = sortSources([...sources, created]);
       }
       formOpen = false;
@@ -227,16 +210,14 @@
   async function toggleScanning(source: CreatorSource) {
     await runAction(source.id, 'scan', async () => {
       const updated = await updateCreatorSource(source.id, {
-        platform: source.platform,
-        sourceType: source.sourceType,
         sourceUrl: source.sourceUrl,
+        configSetKey: source.configSetKey,
         scanEnabled: !source.scanEnabled,
         incrementalPageSize: source.incrementalPageSize,
         consecutiveKnownThreshold: source.consecutiveKnownThreshold,
         fullRescanIntervalDays: source.fullRescanIntervalDays,
         updateCheckIntervalHours: source.updateCheckIntervalHours,
-        metadataRefreshWindow: source.metadataRefreshWindow,
-        providerQueryLimits: source.providerQueryLimits
+        metadataRefreshWindow: source.metadataRefreshWindow
       });
       sources = sortSources(sources.map((item) => (item.id === updated.id ? updated : item)));
     });
@@ -285,10 +266,14 @@
     } catch {
       // Keep the default storage key when the list is unavailable.
     }
+    await loadConfigSets();
+  }
+
+  async function loadConfigSets() {
     try {
       configSets = await listDownloadConfigSets();
     } catch {
-      // Config sets are optional; channel downloads work without them.
+      // Config sets are optional; creator downloads work without them.
     }
   }
 
@@ -302,15 +287,23 @@
     downloadBusy = true;
     downloadError = null;
     try {
-      const result = await queueChannelDownload({
-        sourceUrl: source.sourceUrl,
-        platform: source.platform,
-        sourceType: source.sourceType,
-        storageKey: downloadStorageKey.trim() || 'default',
-        configSetKey: downloadConfigSetKey || null,
-        fetchComments: downloadFetchComments,
-        forceDownload: downloadForce
-      });
+      const result = await queueChannelDownload(
+        downloadConfigSetSelected
+          ? {
+              sourceUrl: source.sourceUrl,
+              storageKey: null,
+              configSetKey: downloadConfigSetKey,
+              fetchComments: false,
+              forceDownload: downloadForce
+            }
+          : {
+              sourceUrl: source.sourceUrl,
+              storageKey: downloadStorageKey.trim() || 'default',
+              configSetKey: null,
+              fetchComments: downloadFetchComments,
+              forceDownload: downloadForce
+            }
+      );
       actionNotice = `Full channel download queued for ${displayName(source)} (group ${result.correlationId}).`;
       actionError = null;
       downloadModalOpen = false;
@@ -431,7 +424,7 @@
     </div>
   </div>
 
-  <div class="mt-6 grid gap-3 md:grid-cols-4">
+  <div class="mt-6 grid gap-3 md:grid-cols-3">
     <div class="rounded-xl border border-base-300/80 bg-base-200/40 p-4">
       <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Tracked</p>
       <p class="mt-2 text-2xl font-bold text-base-content">{trackedCount}</p>
@@ -443,11 +436,6 @@
       <p class="mt-1 text-xs text-base-content/50">enabled for discovery</p>
     </div>
     <div class="rounded-xl border border-base-300/80 bg-base-200/40 p-4">
-      <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Platforms</p>
-      <p class="mt-2 text-2xl font-bold text-base-content">{platformCount}</p>
-      <p class="mt-1 text-xs text-base-content/50">distinct providers</p>
-    </div>
-    <div class="rounded-xl border border-base-300/80 bg-base-200/40 p-4">
       <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Scanned</p>
       <p class="mt-2 text-2xl font-bold text-base-content">{scannedCount}</p>
       <p class="mt-1 text-xs text-base-content/50">completed at least one scan</p>
@@ -456,7 +444,7 @@
 
   {#if loadError || actionError}
     <div
-      class="mt-5 flex items-start gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
+      class="alert alert-error mt-5 text-sm"
       role="alert"
     >
       <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
@@ -504,12 +492,6 @@
             <div class="min-w-0">
               <div class="flex flex-wrap items-center gap-2">
                 <h2 class="truncate text-base font-semibold text-base-content">{displayName(source)}</h2>
-                <span class="badge badge-sm badge-ghost rounded-full text-[10px] uppercase tracking-wide">
-                  {source.platform}
-                </span>
-                <span class="badge badge-sm badge-ghost rounded-full text-[10px]">
-                  {source.sourceType}
-                </span>
                 <span
                   class={[
                     'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold ring-1',
@@ -598,7 +580,7 @@
               </button>
               <button
                 type="button"
-                class="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/90 transition hover:border-error/60 hover:bg-error/10 hover:text-error disabled:opacity-50"
+                class="btn btn-sm btn-error text-xs"
                 disabled={Boolean(busyAction)}
                 onclick={() => requestDelete(source)}
               >
@@ -717,19 +699,39 @@
       </p>
     </div>
 
-    <div class="grid gap-4 sm:grid-cols-2">
-      <div>
-        <label class="label mb-1.5 text-xs" for="creator-platform">Platform</label>
-        <input class="input w-full" id="creator-platform" required
-           bind:value={form.platform} placeholder="youtube" />
-      </div>
-      <div>
-        <label class="label mb-1.5 text-xs" for="creator-source-type">
-          Content type
-        </label>
-        <Select id="creator-source-type" items={sourceTypeOptions} bind:value={form.sourceType} />
-      </div>
+    <div>
+      <label class="label mb-1.5 text-xs" for="creator-config-set">Config set</label>
+      <Select id="creator-config-set" items={configSetOptions} bind:value={form.configSetKey} />
+      <p class="mt-1.5 text-[11px] text-base-content/40">
+        Applies this set's storage target, cookie profile, yt-dlp options, priority, and worker tag to future downloads from this creator.
+      </p>
     </div>
+
+    <section class="rounded-xl border border-base-300/80 bg-base-200/40 p-4" aria-labelledby="creator-scan-schedule-title">
+      <h3 id="creator-scan-schedule-title" class="text-sm font-semibold text-base-content/90">
+        How scheduled scans work
+      </h3>
+      <p class="mt-1.5 text-xs leading-5 text-base-content/60">
+        The <a class="link link-hover text-primary" href="/admin/schedules">Schedules</a> page controls global sweep timers. A sweep wakes discovery, then only enabled creators whose own interval has elapsed participate.
+      </p>
+      <dl class="mt-3 space-y-3 border-t border-base-300/70 pt-3 text-xs leading-5">
+        <div>
+          <dt class="font-semibold text-base-content/90">channel-scan-refresh</dt>
+          <dd class="mt-0.5 text-base-content/60">
+            Checks creators due for an update, then scans only the newest entries using this creator's incremental page size.
+          </dd>
+        </div>
+        <div>
+          <dt class="font-semibold text-base-content/90">channel-full-rescan</dt>
+          <dd class="mt-0.5 text-base-content/60">
+            Selects creators due for a full rescan, then walks each listing in page-sized chunks until the full pass completes.
+          </dd>
+        </div>
+      </dl>
+      <p class="mt-3 text-[11px] leading-4 text-base-content/50">
+        The seeded schedules run refresh sweeps every 30 minutes and full sweeps daily, but their configured cadence is authoritative. The fields below decide when this creator becomes due; it runs on the next applicable sweep.
+      </p>
+    </section>
 
     <div class="grid gap-4 sm:grid-cols-2">
       <div>
@@ -791,7 +793,7 @@
     </div>
 
     {#if formError}
-      <div class="flex items-start gap-2 rounded-lg border border-error/30 bg-error/10 p-3 text-sm text-error" role="alert">
+      <div class="alert alert-error text-sm" role="alert">
         <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
         <span>{formError}</span>
       </div>
@@ -823,29 +825,29 @@
     </p>
 
     <div>
-      <label class="label mb-1.5 text-xs" for="channel-download-storage">
-        Storage target
-      </label>
-      <Select id="channel-download-storage" items={storageOptions} bind:value={downloadStorageKey} />
-    </div>
-
-    <div>
       <label class="label mb-1.5 text-xs" for="channel-download-config-set">
         Config set
       </label>
       <Select id="channel-download-config-set" items={configSetOptions} bind:value={downloadConfigSetKey} />
       <p class="mt-1.5 text-[11px] text-base-content/40">
-        Applies its saved yt-dlp options and ignore keywords to every discovered video.
+        Applies its saved storage target, yt-dlp options, ignore keywords, priority, and worker tag to every discovered video. Other options below except force re-download are disabled while a config set is selected.
       </p>
     </div>
 
-    <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={downloadFetchComments} /><span>Fetch comments</span></label>
+    <div>
+      <label class="label mb-1.5 text-xs" for="channel-download-storage">
+        Storage target
+      </label>
+      <Select id="channel-download-storage" items={storageOptions} bind:value={downloadStorageKey} disabled={downloadConfigSetSelected} />
+    </div>
+
+    <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={downloadFetchComments} disabled={downloadConfigSetSelected} /><span>Fetch comments</span></label>
 
     <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={downloadForce} /><span>Force re-download videos already in the library</span></label>
 
     {#if downloadError}
       <div
-        class="flex items-start gap-2 rounded-lg border border-error/30 bg-error/10 p-3 text-sm text-error"
+        class="alert alert-error text-sm"
         role="alert"
       >
         <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />

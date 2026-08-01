@@ -84,7 +84,7 @@
 
   <div class="mt-6 grid gap-6 xl:grid-cols-[14rem_minmax(0,1fr)]">
     <aside class="xl:pt-1" aria-label="Profile sections">
-      <nav class="flex gap-2 overflow-x-auto pb-1 xl:block xl:space-y-2 xl:overflow-visible xl:pb-0">
+      <nav class="menu flex gap-2 overflow-x-auto pb-1 xl:block xl:space-y-2 xl:overflow-visible xl:pb-0">
         {#each sections as section}
           {@const { label, icon: Icon, href } = section}
           {@const active = isActive(section)}
@@ -93,8 +93,8 @@
             class={[
               'flex h-10 shrink-0 items-center gap-3 rounded-lg px-4 text-sm font-medium transition xl:w-full',
               active
-                ? 'bg-primary/18 text-primary'
-                : 'text-base-content/60 hover:bg-base-300/70 hover:text-base-content'
+                ? 'menu-active bg-primary text-primary-content shadow-sm'
+                : 'text-base-content/70 hover:bg-base-200 hover:text-base-content'
             ]}
             aria-current={active ? 'page' : undefined}
           >

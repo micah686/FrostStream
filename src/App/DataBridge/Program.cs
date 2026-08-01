@@ -139,6 +139,7 @@ class Program
         builder.Services.AddScoped<IMediaCaptionReadService, MediaCaptionReadService>();
         builder.Services.AddScoped<IAccountAssetReadService, AccountAssetReadService>();
         builder.Services.AddScoped<IAudioRenditionRepository, AudioRenditionRepository>();
+        builder.Services.AddScoped<IMediaEncodingStatusRepository, MediaEncodingStatusRepository>();
         builder.Services.AddScoped<IStreamRenditionRepository, StreamRenditionRepository>();
         builder.Services.AddScoped<IRenditionQueueRepository, RenditionQueueRepository>();
         builder.Services.AddScoped<IPlaylistsRepository, PlaylistsRepository>();
@@ -218,6 +219,7 @@ class Program
         builder.Services.AddHostedService<StatisticsQueryConsumerService>();
         builder.Services.AddHostedService<MediaStreamQueryConsumerService>();
         builder.Services.AddHostedService<AudioRenditionConsumerService>();
+        builder.Services.AddHostedService<MediaEncodingStatusConsumerService>();
         builder.Services.AddHostedService<StreamRenditionConsumerService>();
         builder.Services.AddHostedService<RenditionQueueConsumerService>();
         builder.Services.AddHostedService<MediaDeleteConsumerService>();

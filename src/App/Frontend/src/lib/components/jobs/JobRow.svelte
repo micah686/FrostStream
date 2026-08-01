@@ -431,11 +431,12 @@
         <a
           href={`/watch/${mediaGuid}`}
           onclick={stop}
-          class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/70 text-base-content/90 transition hover:border-success/60 hover:bg-success/10 hover:text-success"
+          class="btn btn-sm btn-neutral text-xs"
           title="Watch"
           aria-label="Watch"
         >
           <Play class="h-4 w-4" />
+          Watch
         </a>
       {/if}
       {#if canUpdatePriority(job)}
@@ -460,7 +461,7 @@
       {#if canStart(job.status)}
         <button
           type="button"
-          class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/70 text-base-content/90 transition hover:border-primary/60 hover:bg-base-300 hover:text-base-content disabled:opacity-40"
+          class="btn btn-sm btn-neutral text-xs disabled:opacity-40"
           title="Start a new run"
           aria-label="Start a new run"
           disabled={Boolean(busyAction)}
@@ -474,6 +475,7 @@
           {:else}
             <Play class="h-4 w-4" />
           {/if}
+          New run
         </button>
       {/if}
       {#if job.failureCode === 'provider_circuit_open' || job.failureKind?.toLowerCase() === 'providerblocked'}
@@ -560,11 +562,12 @@
         target="_blank"
         rel="noreferrer"
         onclick={stop}
-        class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/70 text-base-content/90 transition hover:border-base-300 hover:bg-base-300 hover:text-base-content"
+        class="btn btn-sm btn-neutral text-xs"
         title="View source"
         aria-label="View source"
       >
         <ExternalLink class="h-4 w-4" />
+        View source
       </a>
     </div>
   </div>

@@ -9,6 +9,8 @@ public sealed record CreatorMonitorDto
     public required string Platform { get; init; }
     public required CreatorSourceType SourceType { get; init; }
     public required string SourceUrl { get; init; }
+    public string? ConfigSetOwnerSubject { get; init; }
+    public string? ConfigSetKey { get; init; }
 
     /// <summary>The metadata.accounts row this source belongs to. Null until channel metadata
     /// resolves it (and for sources whose account cannot be derived).</summary>
@@ -24,7 +26,6 @@ public sealed record CreatorMonitorDto
     public Instant? LastFullScanAt { get; init; }
     public string? LastSeenHighWatermark { get; init; }
     public int? NextFullScanStartIndex { get; init; }
-    public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
     public required Instant CreatedAt { get; init; }
     public Instant? LastUpdated { get; init; }
     public string? AvatarUrl { get; init; }
@@ -39,45 +40,42 @@ public sealed record CreatorMonitorDto
 
 public sealed record CreatorMonitorCreateRequestMessage
 {
-    public required string Platform { get; init; }
-    public required CreatorSourceType SourceType { get; init; }
     public required string SourceUrl { get; init; }
+    public string? ConfigSetOwnerSubject { get; init; }
+    public string? ConfigSetKey { get; init; }
     public bool ScanEnabled { get; init; } = true;
     public int IncrementalPageSize { get; init; } = 50;
     public int ConsecutiveKnownThreshold { get; init; } = 25;
     public int FullRescanIntervalDays { get; init; } = 30;
     public int UpdateCheckIntervalHours { get; init; } = 6;
     public int MetadataRefreshWindow { get; init; } = 25;
-    public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
 }
 
 public sealed record CreatorMonitorCreateOrReuseRequestMessage
 {
-    public required string Platform { get; init; }
-    public required CreatorSourceType SourceType { get; init; }
     public required string SourceUrl { get; init; }
+    public string? ConfigSetOwnerSubject { get; init; }
+    public string? ConfigSetKey { get; init; }
     public bool ScanEnabled { get; init; } = true;
     public int IncrementalPageSize { get; init; } = 50;
     public int ConsecutiveKnownThreshold { get; init; } = 25;
     public int FullRescanIntervalDays { get; init; } = 30;
     public int UpdateCheckIntervalHours { get; init; } = 6;
     public int MetadataRefreshWindow { get; init; } = 25;
-    public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
 }
 
 public sealed record CreatorMonitorUpdateRequestMessage
 {
     public required long Id { get; init; }
-    public required string Platform { get; init; }
-    public required CreatorSourceType SourceType { get; init; }
     public required string SourceUrl { get; init; }
+    public string? ConfigSetOwnerSubject { get; init; }
+    public string? ConfigSetKey { get; init; }
     public bool ScanEnabled { get; init; } = true;
     public int IncrementalPageSize { get; init; } = 50;
     public int ConsecutiveKnownThreshold { get; init; } = 25;
     public int FullRescanIntervalDays { get; init; } = 30;
     public int UpdateCheckIntervalHours { get; init; } = 6;
     public int MetadataRefreshWindow { get; init; } = 25;
-    public CreatorSourceProviderQueryLimits? ProviderQueryLimits { get; init; }
 }
 
 public sealed record CreatorMonitorGetRequestMessage
@@ -136,12 +134,15 @@ public sealed record UpsertDiscoveredMediaBatchRequestMessage
     public string? StorageKey { get; init; }
     public string? RequestedBy { get; init; }
     public string? ConfigSetKey { get; init; }
+    public string? WorkerTag { get; init; }
     public bool EncodeForPlaylist { get; init; }
     public string? CookieSecretPath { get; init; }
     public int Priority { get; init; }
     public bool FetchComments { get; init; }
     public bool QueueAllItems { get; init; }
     public bool ForceDownload { get; init; }
+    /// <summary>Resolve the creator source's config set immediately before publishing download jobs.</summary>
+    public bool ResolveDownloadConfigSet { get; init; }
     /// <summary>Persists discovery results without producing download jobs after a group stop.</summary>
     public bool SuppressDownloadEnqueue { get; init; }
     public YtDlpSharpLib.Options.YtDlpOptions? YtDlpOptions { get; init; }

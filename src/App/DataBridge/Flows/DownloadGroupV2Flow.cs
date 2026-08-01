@@ -193,6 +193,7 @@ public sealed class DownloadGroupV2Flow(
                 SourceUrl = entry.EntryUrl,
                 RequestedBy = collection.RequestedBy,
                 StorageKey = collection.StorageKey ?? "default",
+                WorkerTag = collection.WorkerTag,
                 YtDlpOptions = collection.YtDlpOptions,
                 CookieSecretPath = collection.CookieSecretPath,
                 Priority = collection.Priority,

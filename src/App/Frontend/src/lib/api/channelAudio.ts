@@ -43,6 +43,32 @@ export interface PodcastFeedLink {
   expiresAt: string;
 }
 
+// Durable, job-independent per-media encoded flag (media.audio_encoding_status), separate from the
+// rendition/job queue counts in ChannelAudioStatus. Use this when checking how much of a channel is
+// encoded — it's a cheap indexed count instead of a full load-and-diff of every item's job state.
+export interface ChannelAudioEncodedItem {
+  mediaGuid: string;
+  title: string;
+  isEncoded: boolean;
+  storageKey: string | null;
+  storagePath: string | null;
+  encodedAt: string | null;
+}
+
+export interface ChannelAudioEncodedStatusResponse {
+  items: ChannelAudioEncodedItem[];
+  nextCursor: string | null;
+  totalCount: number;
+  encodedCount: number;
+}
+
+export interface ChannelAudioEncodedStatusParams {
+  isEncoded?: boolean;
+  storageKey?: string;
+  limit?: number;
+  cursor?: string;
+}
+
 // One live MediaProcessor progress frame from the rendition SSE stream (advisory, live-only).
 export interface RenditionProgressFrame {
   renditionId: string;
@@ -82,4 +108,23 @@ export function encodeChannelAudio(
 
 export function createPodcastFeedLink(accountId: number, fetchImpl: typeof fetch = fetch): Promise<PodcastFeedLink> {
   return sendJson<PodcastFeedLink>(`${base(accountId)}/podcast-token`, 'POST', undefined, fetchImpl);
+}
+
+export function getChannelAudioEncodedStatus(
+  accountId: number,
+  params: ChannelAudioEncodedStatusParams = {},
+  fetchImpl: typeof fetch = fetch
+): Promise<ChannelAudioEncodedStatusResponse> {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '') {
+      query.set(key, String(value));
+    }
+  }
+
+  const suffix = query.toString();
+  return getJson<ChannelAudioEncodedStatusResponse>(
+    `${base(accountId)}/encoded-status${suffix ? `?${suffix}` : ''}`,
+    fetchImpl
+  );
 }

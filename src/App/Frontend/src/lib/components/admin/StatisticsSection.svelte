@@ -2,6 +2,7 @@
   import { onDestroy, onMount } from 'svelte';
   import type { ChartConfiguration } from 'chart.js';
   import { Select } from '$lib/components/ui';
+  import { theme } from '$lib/stores/theme';
   import {
     ChevronLeft,
     ChevronRight,
@@ -31,9 +32,36 @@
   } from '$lib/api/statistics';
 
   type RangePreset = '30d' | '12w' | '12m' | 'custom';
+  type ChartTheme = {
+    primary: string;
+    secondary: string;
+    accent: string;
+    info: string;
+    success: string;
+    warning: string;
+    error: string;
+    neutral: string;
+    base100: string;
+    base200: string;
+    base300: string;
+    baseContent: string;
+  };
 
   const channelPageSize = 12;
-  const chartColors = ['#3b82f6', '#10b981', '#a78bfa', '#f59e0b', '#f43f5e', '#06b6d4', '#8b5cf6'];
+  const emptyChartTheme: ChartTheme = {
+    primary: 'transparent',
+    secondary: 'transparent',
+    accent: 'transparent',
+    info: 'transparent',
+    success: 'transparent',
+    warning: 'transparent',
+    error: 'transparent',
+    neutral: 'transparent',
+    base100: 'transparent',
+    base200: 'transparent',
+    base300: 'transparent',
+    baseContent: 'transparent'
+  };
   const sortOptions = [
     { value: 'downloaded:desc', name: 'Most downloaded' },
     { value: 'available:desc', name: 'Most available' },
@@ -79,6 +107,8 @@
   let channelSuggestionTimer: ReturnType<typeof setTimeout> | null = null;
   let channelSuggestionAbort: AbortController | null = null;
   let channelSuggestionRequestId = 0;
+  let chartTheme = $state<ChartTheme>(emptyChartTheme);
+  let themeRefreshFrame: number | null = null;
 
   const totalChannelPages = $derived(Math.max(1, Math.ceil(totalChannels / channelPageSize)));
   const downloadTotals = $derived(
@@ -100,8 +130,8 @@
       datasets: [
         {
           data: (overview?.mediaTypes ?? []).map((item) => item.count),
-          backgroundColor: chartColors,
-          borderColor: '#111827',
+          backgroundColor: chartPalette(),
+          borderColor: chartTheme.base200,
           borderWidth: 3,
           hoverOffset: 5
         }
@@ -117,8 +147,15 @@
       datasets: [
         {
           data: (overview?.downloadStates ?? []).map((item) => item.count),
-          backgroundColor: ['#10b981', '#3b82f6', '#f43f5e', '#f59e0b', '#64748b', '#a78bfa'],
-          borderColor: '#111827',
+          backgroundColor: [
+            chartTheme.success,
+            chartTheme.primary,
+            chartTheme.error,
+            chartTheme.warning,
+            chartTheme.neutral,
+            chartTheme.secondary
+          ],
+          borderColor: chartTheme.base200,
           borderWidth: 3,
           hoverOffset: 5
         }
@@ -135,9 +172,9 @@
         {
           label: 'Created',
           data: downloads.map((item) => item.created),
-          borderColor: '#60a5fa',
-          backgroundColor: 'rgba(59, 130, 246, 0.12)',
-          pointBackgroundColor: '#60a5fa',
+          borderColor: chartTheme.info,
+          backgroundColor: withOpacity(chartTheme.info, 12),
+          pointBackgroundColor: chartTheme.info,
           pointRadius: downloads.length > 45 ? 0 : 2,
           pointHoverRadius: 5,
           borderWidth: 2,
@@ -147,9 +184,9 @@
         {
           label: 'Completed',
           data: downloads.map((item) => item.completed),
-          borderColor: '#34d399',
-          backgroundColor: 'rgba(16, 185, 129, 0.08)',
-          pointBackgroundColor: '#34d399',
+          borderColor: chartTheme.success,
+          backgroundColor: withOpacity(chartTheme.success, 8),
+          pointBackgroundColor: chartTheme.success,
           pointRadius: downloads.length > 45 ? 0 : 2,
           pointHoverRadius: 5,
           borderWidth: 2,
@@ -159,9 +196,9 @@
         {
           label: 'Failed',
           data: downloads.map((item) => item.failed),
-          borderColor: '#fb7185',
-          backgroundColor: 'rgba(244, 63, 94, 0.05)',
-          pointBackgroundColor: '#fb7185',
+          borderColor: chartTheme.error,
+          backgroundColor: withOpacity(chartTheme.error, 5),
+          pointBackgroundColor: chartTheme.error,
           pointRadius: downloads.length > 45 ? 0 : 2,
           pointHoverRadius: 5,
           borderWidth: 2,
@@ -177,34 +214,52 @@
         legend: {
           position: 'top',
           align: 'end',
-          labels: { color: '#94a3b8', usePointStyle: true, pointStyle: 'circle', boxWidth: 7, boxHeight: 7 }
+          labels: {
+            color: withOpacity(chartTheme.baseContent, 60),
+            usePointStyle: true,
+            pointStyle: 'circle',
+            boxWidth: 7,
+            boxHeight: 7
+          }
         },
         tooltip: {
-          backgroundColor: '#0f172a',
-          borderColor: '#334155',
+          backgroundColor: chartTheme.base100,
+          borderColor: chartTheme.base300,
           borderWidth: 1,
-          titleColor: '#f8fafc',
-          bodyColor: '#cbd5e1',
+          titleColor: chartTheme.baseContent,
+          bodyColor: withOpacity(chartTheme.baseContent, 80),
           padding: 12
         }
       },
       scales: {
         x: {
           grid: { display: false },
-          ticks: { color: '#64748b', maxTicksLimit: 8, maxRotation: 0 }
+          ticks: { color: withOpacity(chartTheme.baseContent, 50), maxTicksLimit: 8, maxRotation: 0 }
         },
         y: {
           beginAtZero: true,
-          grid: { color: 'rgba(51, 65, 85, 0.45)' },
-          ticks: { color: '#64748b', precision: 0 }
+          grid: { color: withOpacity(chartTheme.base300, 45) },
+          ticks: { color: withOpacity(chartTheme.baseContent, 50), precision: 0 }
         }
       }
     }
   }));
 
   onMount(() => {
+    const unsubscribeTheme = theme.subscribe(() => {
+      if (themeRefreshFrame !== null) cancelAnimationFrame(themeRefreshFrame);
+      themeRefreshFrame = requestAnimationFrame(() => {
+        chartTheme = readChartTheme();
+        themeRefreshFrame = null;
+      });
+    });
     setPresetDates('30d');
     void loadAll();
+
+    return () => {
+      unsubscribeTheme();
+      if (themeRefreshFrame !== null) cancelAnimationFrame(themeRefreshFrame);
+    };
   });
 
   onDestroy(() => {
@@ -441,6 +496,44 @@
     return `${Math.round(value)}%`;
   }
 
+  function themeColor(name: string): string {
+    return getComputedStyle(document.documentElement).getPropertyValue(`--color-${name}`).trim();
+  }
+
+  function readChartTheme(): ChartTheme {
+    return {
+      primary: themeColor('primary'),
+      secondary: themeColor('secondary'),
+      accent: themeColor('accent'),
+      info: themeColor('info'),
+      success: themeColor('success'),
+      warning: themeColor('warning'),
+      error: themeColor('error'),
+      neutral: themeColor('neutral'),
+      base100: themeColor('base-100'),
+      base200: themeColor('base-200'),
+      base300: themeColor('base-300'),
+      baseContent: themeColor('base-content')
+    };
+  }
+
+  function withOpacity(color: string, percentage: number): string {
+    if (!color || color === 'transparent') return 'transparent';
+    return `color-mix(in oklab, ${color} ${percentage}%, transparent)`;
+  }
+
+  function chartPalette(): string[] {
+    return [
+      chartTheme.primary,
+      chartTheme.success,
+      chartTheme.secondary,
+      chartTheme.warning,
+      chartTheme.error,
+      chartTheme.accent,
+      chartTheme.info
+    ];
+  }
+
   function bucketLabel(value: string): string {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return 'Unknown';
@@ -458,7 +551,7 @@
         legend: {
           position: 'right',
           labels: {
-            color: '#94a3b8',
+            color: withOpacity(chartTheme.baseContent, 60),
             usePointStyle: true,
             pointStyle: 'circle',
             boxWidth: 7,
@@ -468,11 +561,11 @@
           }
         },
         tooltip: {
-          backgroundColor: '#0f172a',
-          borderColor: '#334155',
+          backgroundColor: chartTheme.base100,
+          borderColor: chartTheme.base300,
           borderWidth: 1,
-          titleColor: '#f8fafc',
-          bodyColor: '#cbd5e1',
+          titleColor: chartTheme.baseContent,
+          bodyColor: withOpacity(chartTheme.baseContent, 80),
           padding: 12,
           callbacks: {
             label: (context) => ` ${context.label}: ${Number(context.raw).toLocaleString()} ${title.toLowerCase()}`
@@ -500,7 +593,7 @@
 
   <div class="p-5 sm:p-7">
     {#if error}
-      <div class="mb-5 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error" role="alert">
+      <div class="alert alert-error mb-5 text-sm" role="alert">
         <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
         <span>{error}</span>
       </div>
@@ -626,7 +719,7 @@
         </div>
 
         {#if downloadsError}
-          <div class="mt-4 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error" role="alert">
+          <div class="alert alert-error mt-4 text-sm" role="alert">
             <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
             <span>{downloadsError}</span>
           </div>
@@ -720,7 +813,7 @@
         </div>
 
         {#if channelsError}
-          <div class="mt-4 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error" role="alert">
+          <div class="alert alert-error mt-4 text-sm" role="alert">
             <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
             <span>{channelsError}</span>
           </div>

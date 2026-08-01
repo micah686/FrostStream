@@ -44,10 +44,8 @@
   }
 
   const cardClass = 'card border border-base-300 bg-base-100 p-5 sm:p-6';
-  const secondaryButton =
-    'inline-flex h-9 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/60 px-3 text-xs font-semibold text-base-content/90 transition hover:border-base-content/30 hover:bg-base-300 disabled:opacity-50';
-  const primaryButton =
-    'inline-flex h-9 items-center justify-center rounded-lg bg-primary px-4 text-xs font-semibold text-primary-content transition hover:bg-primary disabled:opacity-50';
+  const secondaryButton = 'btn btn-sm btn-neutral text-xs';
+  const primaryButton = 'btn btn-sm btn-primary text-xs';
 
   let activeTab = $state<Tab>('policies');
   let policies = $state<AccessPolicy[]>([]);
@@ -481,7 +479,7 @@
   </div>
 
   {#if error}
-    <div class="mt-4 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error" role="alert">{error}</div>
+    <div class="alert alert-error mt-4 text-sm" role="alert">{error}</div>
   {/if}
   {#if notice}
     <div class="mt-4 rounded-xl border border-success/30 bg-success/10 p-3 text-sm text-success" role="status">{notice}</div>
@@ -652,7 +650,7 @@
             <textarea class="textarea w-full mt-1.5 min-h-20" bind:value={editor.description} placeholder="What this policy grants and restricts"></textarea>
           </label>
           <label class="flex items-center gap-2 text-sm text-base-content/80">
-            <input type="checkbox" bind:checked={editor.enabled} class="rounded border-base-content/20 bg-base-200 text-primary" />
+            <input type="checkbox" bind:checked={editor.enabled} class="checkbox checkbox-sm checkbox-primary" />
             Enabled
           </label>
 
@@ -661,7 +659,7 @@
             <div class="mt-2 max-h-64 space-y-1 overflow-y-auto rounded-lg border border-base-300 bg-base-200/35 p-2">
               {#each bundles as bundle (bundle.id)}
                 <label class="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-base-content/80 hover:bg-base-300/50">
-                  <input type="checkbox" value={bundle.id} bind:group={editor.bundleIds} class="rounded border-base-content/20 bg-base-200 text-primary" />
+                  <input type="checkbox" value={bundle.id} bind:group={editor.bundleIds} class="checkbox checkbox-sm checkbox-primary" />
                   <span class="min-w-0 truncate font-mono text-xs">{bundle.id}</span>
                   <span class="ml-auto shrink-0 text-[10px] uppercase text-base-content/40">{bundle.systemOwned ? 'system' : 'user'}</span>
                 </label>
@@ -772,7 +770,7 @@
             </p>
             <div class="mt-2 flex gap-2">
               <select
-                class="select w-full w-28"
+                class="select w-24 shrink-0"
                 bind:value={assignmentType}
                 onchange={() => queueAssignmentSearch()}
               >
@@ -780,6 +778,7 @@
                 <option value="user">User</option>
               </select>
               <input
+                class="input min-w-0 flex-1"
                 bind:value={assignmentQuery}
                 placeholder="Search Authentik users or groups"
                 autocomplete="off"
@@ -795,19 +794,21 @@
               />
             </div>
             {#if directoryLoading || directoryResults.length > 0}
-              <div class="mt-2 max-h-44 overflow-y-auto rounded-lg border border-base-content/20 bg-base-200">
+              <div class="mt-2 max-h-44 w-full min-w-0 overflow-x-hidden overflow-y-auto rounded-lg border border-base-content/20 bg-base-200">
                 {#if directoryLoading}
                   <div class="px-3 py-2 text-xs text-base-content/50">Searching Authentik…</div>
                 {:else}
                   {#each directoryResults as entry (entry.id)}
                   <button
                     type="button"
-                    class="flex w-full items-center gap-2 border-b border-base-300 px-3 py-2 text-left last:border-0 hover:bg-primary/10"
+                    class="flex w-full min-w-0 items-center gap-2 border-b border-base-300 px-3 py-2 text-left last:border-0 hover:bg-primary/10"
                     onclick={() => addAssignment(entry.id, entry.name)}
                   >
-                    <span class="truncate text-sm font-semibold text-base-content">{entry.name}</span>
-                    <span class="truncate text-xs text-base-content/50">{entry.description}</span>
-                    <span class="ml-auto shrink-0 font-mono text-[10px] text-base-content/40">{entry.id}</span>
+                    <div class="min-w-0 flex-1">
+                      <span class="block truncate text-sm font-semibold text-base-content">{entry.name}</span>
+                      <span class="block truncate text-xs text-base-content/50">{entry.description}</span>
+                      <span class="block truncate font-mono text-[10px] text-base-content/40">{entry.id}</span>
+                    </div>
                   </button>
                   {/each}
                 {/if}
@@ -832,7 +833,7 @@
 
       <div class="mt-5 flex justify-end gap-2 border-t border-base-300 pt-4">
         <button class={secondaryButton} type="button" onclick={() => (editor = null)}>Cancel</button>
-        <button class={primaryButton} type="button" disabled={saving || !editor.name.trim()} onclick={() => void savePolicy()}>
+        <button class={secondaryButton} type="button" disabled={saving || !editor.name.trim()} onclick={() => void savePolicy()}>
           {saving ? 'Saving…' : 'Save policy'}
         </button>
       </div>

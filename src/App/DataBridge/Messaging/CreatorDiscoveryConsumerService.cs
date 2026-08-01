@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using DataBridge;
 using DataBridge.Data;
 using Conduit.NATS;
@@ -9,6 +10,8 @@ using Microsoft.Extensions.Logging;
 using NodaTime;
 using Shared.Database;
 using Shared.Messaging;
+using Shared.Secrets;
+using YtDlpSharpLib.Options;
 
 namespace DataBridge.Messaging;
 
@@ -20,7 +23,6 @@ public sealed class CreatorDiscoveryConsumerService(
     ILogger<CreatorDiscoveryConsumerService> logger) : SubscriptionBackgroundService
 {
     private const string QueueGroup = "databridge-creator-discovery";
-    private const int MaxProviderQueryLimit = 5_000;
 
     protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
     {
@@ -44,7 +46,7 @@ public sealed class CreatorDiscoveryConsumerService(
         var msg = context.Message;
         try
         {
-            if (Validate(msg.Platform, msg.SourceUrl, msg.IncrementalPageSize, msg.ConsecutiveKnownThreshold, msg.FullRescanIntervalDays, msg.UpdateCheckIntervalHours, msg.MetadataRefreshWindow, msg.ProviderQueryLimits) is { } validationError)
+            if (Validate(msg.SourceUrl, msg.IncrementalPageSize, msg.ConsecutiveKnownThreshold, msg.FullRescanIntervalDays, msg.UpdateCheckIntervalHours, msg.MetadataRefreshWindow) is { } validationError)
             {
                 await context.RespondAsync(Failure(validationError));
                 return;
@@ -52,16 +54,15 @@ public sealed class CreatorDiscoveryConsumerService(
 
             var entity = await WithRepo(repo => repo.CreateSourceAsync(new CreatorSourceEntity
             {
-                Platform = msg.Platform.Trim(),
-                SourceType = msg.SourceType,
                 SourceUrl = Shared.Downloads.SourceUrlCanonicalizer.Canonicalize(msg.SourceUrl),
+                ConfigSetOwnerSubject = msg.ConfigSetOwnerSubject,
+                ConfigSetKey = msg.ConfigSetKey,
                 ScanEnabled = msg.ScanEnabled,
                 IncrementalPageSize = msg.IncrementalPageSize,
                 ConsecutiveKnownThreshold = msg.ConsecutiveKnownThreshold,
                 FullRescanIntervalDays = msg.FullRescanIntervalDays,
                 UpdateCheckIntervalHours = msg.UpdateCheckIntervalHours,
-                MetadataRefreshWindow = msg.MetadataRefreshWindow,
-                ProviderQueryLimitsJson = msg.ProviderQueryLimits?.ToJson()
+                MetadataRefreshWindow = msg.MetadataRefreshWindow
             }));
             await QueueInitialMetadataRefreshAsync(entity.Source.Id, CancellationToken.None);
             await context.RespondAsync(new CreatorMonitorOperationResponseMessage { Success = true, Entity = Map(entity) });
@@ -88,7 +89,7 @@ public sealed class CreatorDiscoveryConsumerService(
         var msg = context.Message;
         try
         {
-            if (Validate(msg.Platform, msg.SourceUrl, msg.IncrementalPageSize, msg.ConsecutiveKnownThreshold, msg.FullRescanIntervalDays, msg.UpdateCheckIntervalHours, msg.MetadataRefreshWindow, msg.ProviderQueryLimits) is { } validationError)
+            if (Validate(msg.SourceUrl, msg.IncrementalPageSize, msg.ConsecutiveKnownThreshold, msg.FullRescanIntervalDays, msg.UpdateCheckIntervalHours, msg.MetadataRefreshWindow) is { } validationError)
             {
                 await context.RespondAsync(Failure(validationError));
                 return;
@@ -96,16 +97,15 @@ public sealed class CreatorDiscoveryConsumerService(
 
             var entity = await WithRepo(repo => repo.CreateOrReuseSourceAsync(new CreatorSourceEntity
             {
-                Platform = msg.Platform.Trim(),
-                SourceType = msg.SourceType,
                 SourceUrl = Shared.Downloads.SourceUrlCanonicalizer.Canonicalize(msg.SourceUrl),
+                ConfigSetOwnerSubject = msg.ConfigSetOwnerSubject,
+                ConfigSetKey = msg.ConfigSetKey,
                 ScanEnabled = msg.ScanEnabled,
                 IncrementalPageSize = msg.IncrementalPageSize,
                 ConsecutiveKnownThreshold = msg.ConsecutiveKnownThreshold,
                 FullRescanIntervalDays = msg.FullRescanIntervalDays,
                 UpdateCheckIntervalHours = msg.UpdateCheckIntervalHours,
-                MetadataRefreshWindow = msg.MetadataRefreshWindow,
-                ProviderQueryLimitsJson = msg.ProviderQueryLimits?.ToJson()
+                MetadataRefreshWindow = msg.MetadataRefreshWindow
             }));
             if (entity.Source.AccountId is null)
                 await QueueInitialMetadataRefreshAsync(entity.Source.Id, CancellationToken.None);
@@ -123,7 +123,7 @@ public sealed class CreatorDiscoveryConsumerService(
         var msg = context.Message;
         try
         {
-            if (Validate(msg.Platform, msg.SourceUrl, msg.IncrementalPageSize, msg.ConsecutiveKnownThreshold, msg.FullRescanIntervalDays, msg.UpdateCheckIntervalHours, msg.MetadataRefreshWindow, msg.ProviderQueryLimits) is { } validationError)
+            if (Validate(msg.SourceUrl, msg.IncrementalPageSize, msg.ConsecutiveKnownThreshold, msg.FullRescanIntervalDays, msg.UpdateCheckIntervalHours, msg.MetadataRefreshWindow) is { } validationError)
             {
                 await context.RespondAsync(Failure(validationError));
                 return;
@@ -132,16 +132,15 @@ public sealed class CreatorDiscoveryConsumerService(
             var updated = await WithRepo(repo => repo.UpdateSourceAsync(new CreatorSourceEntity
             {
                 Id = msg.Id,
-                Platform = msg.Platform.Trim(),
-                SourceType = msg.SourceType,
                 SourceUrl = Shared.Downloads.SourceUrlCanonicalizer.Canonicalize(msg.SourceUrl),
+                ConfigSetOwnerSubject = msg.ConfigSetOwnerSubject,
+                ConfigSetKey = msg.ConfigSetKey,
                 ScanEnabled = msg.ScanEnabled,
                 IncrementalPageSize = msg.IncrementalPageSize,
                 ConsecutiveKnownThreshold = msg.ConsecutiveKnownThreshold,
                 FullRescanIntervalDays = msg.FullRescanIntervalDays,
                 UpdateCheckIntervalHours = msg.UpdateCheckIntervalHours,
-                MetadataRefreshWindow = msg.MetadataRefreshWindow,
-                ProviderQueryLimitsJson = msg.ProviderQueryLimits?.ToJson()
+                MetadataRefreshWindow = msg.MetadataRefreshWindow
             }));
             if (updated is null)
             {
@@ -243,14 +242,15 @@ public sealed class CreatorDiscoveryConsumerService(
         var msg = context.Message;
         try
         {
+            var configured = await ResolveCreatorSourceConfigSetAsync(msg);
             var canEnqueue = await scopeFactory.WithScopedAsync<IDownloadFlowV2Repository, bool>(
                 repo => repo.CanAcceptGroupChildAsync(msg.CorrelationId));
-            var effective = canEnqueue ? msg : msg with { SuppressDownloadEnqueue = true };
+            var effective = canEnqueue ? configured : configured with { SuppressDownloadEnqueue = true };
             var result = await WithRepo(repo => repo.UpsertDiscoveredMediaBatchAsync(effective));
 
             foreach (var candidate in result.EnqueuedItems)
             {
-                await PublishDownloadRequestedAsync(msg, candidate);
+                await PublishDownloadRequestedAsync(effective, candidate);
             }
 
             await context.RespondAsync(new UpsertDiscoveredMediaBatchResponseMessage
@@ -399,6 +399,7 @@ public sealed class CreatorDiscoveryConsumerService(
                 SourceUrl = entity.CanonicalUrl,
                 RequestedBy = msg.RequestedBy,
                 StorageKey = msg.StorageKey,
+                WorkerTag = msg.WorkerTag,
                 ForceDownload = true,
                 MediaKind = MediaKind.Video,
                 YtDlpOptions = msg.YtDlpOptions,
@@ -419,6 +420,7 @@ public sealed class CreatorDiscoveryConsumerService(
                 SourceUrl = download.SourceUrl,
                 RequestedBy = download.RequestedBy,
                 StorageKey = download.StorageKey,
+                WorkerTag = download.WorkerTag,
                 Priority = download.Priority,
                 DirectRequest = download
             };
@@ -464,6 +466,7 @@ public sealed class CreatorDiscoveryConsumerService(
                 SourceUrl = candidate.CanonicalUrl,
                 RequestedBy = request.RequestedBy ?? $"schedule:{request.ScheduleKey}",
                 StorageKey = request.StorageKey,
+                WorkerTag = request.WorkerTag,
                 ForceDownload = request.ForceDownload,
                 MediaKind = MediaKind.Video,
                 YtDlpOptions = request.YtDlpOptions,
@@ -500,18 +503,60 @@ public sealed class CreatorDiscoveryConsumerService(
     private Task<TResult> WithRepo<TResult>(Func<ICreatorDiscoveryRepository, Task<TResult>> action)
         => scopeFactory.WithScopedAsync(action);
 
+    private Task<TResult> WithConfigSets<TResult>(Func<IDownloadConfigSetsRepository, Task<TResult>> action)
+        => scopeFactory.WithScopedAsync(action);
+
+    private async Task<UpsertDiscoveredMediaBatchRequestMessage> ResolveCreatorSourceConfigSetAsync(
+        UpsertDiscoveredMediaBatchRequestMessage request)
+    {
+        if (!request.ResolveDownloadConfigSet)
+            return request;
+
+        if (string.IsNullOrWhiteSpace(request.RequestedBy) || string.IsNullOrWhiteSpace(request.ConfigSetKey))
+            throw new InvalidOperationException("A creator source config set requires an owner and key.");
+
+        var config = await WithConfigSets(repo => repo.GetAsync(request.RequestedBy, request.ConfigSetKey));
+        if (config is null)
+            throw new InvalidOperationException($"Download config set '{request.ConfigSetKey}' is no longer available for creator source {request.CreatorSourceId}.");
+
+        var cookieSecretPath = string.IsNullOrWhiteSpace(config.CookieProfileKey)
+            ? null
+            : SecretPaths.ForUserCookieProfile(request.RequestedBy, config.CookieProfileKey);
+
+        return request with
+        {
+            ResolveDownloadConfigSet = false,
+            StorageKey = config.StorageKey ?? request.StorageKey,
+            WorkerTag = config.WorkerTag ?? request.WorkerTag,
+            CookieSecretPath = cookieSecretPath ?? request.CookieSecretPath,
+            Priority = config.Priority,
+            YtDlpOptions = DeserializeYtDlpOptions(config.YtDlpOptionsJson) ?? request.YtDlpOptions
+        };
+    }
+
+    private static YtDlpOptions? DeserializeYtDlpOptions(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return null;
+
+        try
+        {
+            return JsonSerializer.Deserialize<YtDlpOptions>(json);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     private static string? Validate(
-        string platform,
         string sourceUrl,
         int incrementalPageSize,
         int consecutiveKnownThreshold,
         int fullRescanIntervalDays,
         int updateCheckIntervalHours,
-        int metadataRefreshWindow,
-        CreatorSourceProviderQueryLimits? providerQueryLimits)
+        int metadataRefreshWindow)
     {
-        if (string.IsNullOrWhiteSpace(platform))
-            return "platform is required.";
         if (string.IsNullOrWhiteSpace(sourceUrl))
             return "source_url is required.";
         if (!Uri.TryCreate(sourceUrl, UriKind.Absolute, out _))
@@ -526,8 +571,6 @@ public sealed class CreatorDiscoveryConsumerService(
             return "update_check_interval_hours must be greater than zero.";
         if (metadataRefreshWindow <= 0)
             return "metadata_refresh_window must be greater than zero.";
-        if (providerQueryLimits?.Validate(MaxProviderQueryLimit) is { Count: > 0 } errors)
-            return errors[0];
         return null;
     }
 
@@ -550,6 +593,8 @@ public sealed class CreatorDiscoveryConsumerService(
             Platform = entity.Platform,
             SourceType = entity.SourceType,
             SourceUrl = entity.SourceUrl,
+            ConfigSetOwnerSubject = entity.ConfigSetOwnerSubject,
+            ConfigSetKey = entity.ConfigSetKey,
             AccountId = entity.AccountId,
             ScanEnabled = entity.ScanEnabled,
             IncrementalPageSize = entity.IncrementalPageSize,
@@ -561,7 +606,6 @@ public sealed class CreatorDiscoveryConsumerService(
             LastFullScanAt = state?.LastFullScanAt,
             LastSeenHighWatermark = state?.LastSeenHighWatermark,
             NextFullScanStartIndex = state?.NextFullScanStartIndex,
-            ProviderQueryLimits = CreatorSourceProviderQueryLimits.FromJson(entity.ProviderQueryLimitsJson),
             CreatedAt = entity.CreatedAt,
             LastUpdated = entity.LastUpdated,
             AvatarUrl = state?.AvatarUrl,

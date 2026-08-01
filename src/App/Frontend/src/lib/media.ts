@@ -1,12 +1,12 @@
 // Shared formatting and placeholder helpers for media cards and the watch page.
 
 export const placeholderAccents = [
-  'from-slate-800 to-blue-950',
-  'from-purple-950 to-violet-700',
-  'from-red-950 to-orange-900',
-  'from-blue-950 to-slate-800',
-  'from-emerald-950 to-teal-800',
-  'from-fuchsia-950 to-pink-800'
+  'from-base-300 to-base-200',
+  'from-primary/20 to-secondary/20',
+  'from-secondary/20 to-accent/20',
+  'from-accent/20 to-primary/20',
+  'from-info/20 to-success/20',
+  'from-warning/20 to-error/20'
 ];
 
 export function hashOf(value: string): number {

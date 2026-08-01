@@ -159,12 +159,7 @@
     aria-haspopup="true"
     aria-expanded={open}
     onclick={toggleOpen}
-    class={[
-      'flex items-center gap-1.5 rounded-lg border px-4 py-2 text-xs font-semibold transition',
-      isSaved
-        ? 'border-primary/50 bg-primary/10 text-primary hover:bg-primary/20'
-        : 'border-base-300 bg-base-200/70 text-base-content/80 hover:bg-base-300'
-    ]}
+    class="btn btn-sm btn-neutral text-xs"
   >
     <Folder class="h-4 w-4" />
     {#if isSaved}
@@ -185,7 +180,7 @@
       </p>
 
       {#if loadError}
-        <div class="flex items-start gap-2 rounded-lg bg-error/10 p-3 text-xs text-error" role="alert">
+        <div class="alert alert-error text-xs" role="alert">
           <CircleAlert class="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>{loadError}</span>
         </div>
@@ -195,7 +190,7 @@
         </div>
       {:else}
         {#if toggleError}
-          <div class="mb-1 flex items-start gap-2 rounded-lg bg-error/10 p-2.5 text-xs text-error" role="alert">
+          <div class="alert alert-error mb-1 text-xs" role="alert">
             <CircleAlert class="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>{toggleError}</span>
           </div>

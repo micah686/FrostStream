@@ -9,9 +9,7 @@
   import { searchMedia, type SearchHit } from '$lib/api/search';
   import { accentFor, formatDuration, initialsFor } from '$lib/media';
   import {
-    Bell,
     ClipboardList,
-    Clock,
     Cog,
     Download,
     Heart,
@@ -46,15 +44,14 @@
   const libraryNavigation: NavItem[] = [
     { label: 'Library', icon: LayoutList, href: '/library' },
     { label: 'Channels', icon: Users, href: '/library/creators' },
+    { label: 'Playlists', icon: ClipboardList, href: '/library?tab=Playlists' },
     { label: 'History', icon: History, href: '/library?tab=History' },
-    { label: 'Watch later', icon: Clock },
     { label: 'Liked', icon: Heart, href: '/library?tab=Liked' }
   ];
 
   const serverNavigation: NavItem[] = [
     { label: 'Download', icon: Download, href: '/download' },
     { label: 'Jobs', icon: Server, href: '/jobs' },
-    { label: 'Playlists', icon: ClipboardList, href: '/playlists' },
     { label: 'Creators', icon: Users, href: '/creators' }
   ];
 
@@ -74,10 +71,21 @@
     drawerOpen = false;
   };
 
-  const isActive = (item: NavItem) =>
-    item.href !== undefined &&
-    (page.url.pathname === item.href ||
-      (item.href !== '/' && item.href !== '/library' && page.url.pathname.startsWith(`${item.href}/`)));
+  const isActive = (item: NavItem) => {
+    if (item.href === undefined) {
+      return false;
+    }
+
+    const target = new URL(item.href, page.url);
+    if (page.url.pathname === target.pathname && page.url.search === target.search) {
+      return true;
+    }
+
+    return target.search === '' &&
+      target.pathname !== '/' &&
+      target.pathname !== '/library' &&
+      page.url.pathname.startsWith(`${target.pathname}/`);
+  };
 
   // Global search
   const SUGGESTION_DEBOUNCE_MS = 250;
@@ -202,12 +210,14 @@
       {@const itemClass = [
         'group flex min-h-10 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium transition',
         active
-          ? 'bg-primary/18 text-primary'
-          : 'text-base-content/60 hover:bg-base-300/70 hover:text-base-content'
+          ? 'bg-primary text-primary-content shadow-sm'
+          : 'text-base-content/70 hover:bg-base-200 hover:text-base-content'
       ]}
       <li>
         {#snippet itemContent()}
-          <Icon class="h-5 w-5 shrink-0 transition group-hover:text-primary" />
+          <Icon
+            class={['h-5 w-5 shrink-0 transition', active ? '' : 'group-hover:text-primary']}
+          />
           <span>{label}</span>
           {#if count}
             <span
@@ -258,10 +268,14 @@
 {/snippet}
 
 <header
-  class="fixed inset-x-0 top-0 z-40 flex h-14 items-center border-b border-base-300/70 bg-[var(--color-page)]/95 px-3 backdrop-blur-xl sm:px-5"
+  class="fixed inset-x-0 top-0 z-40 flex h-14 items-center border-b border-base-300/70 bg-base-100/95 px-3 backdrop-blur-xl sm:px-5"
 >
-  <button class="btn btn-sm btn-ghost mr-2 h-10 w-10 lg:hidden" aria-label="Open navigation" onclick={() => (drawerOpen = true)}>
-    <Menu class="h-5 w-5" />
+  <button
+    class="btn btn-square btn-sm btn-ghost mr-2 h-10 w-10 lg:hidden"
+    aria-label="Open navigation"
+    onclick={() => (drawerOpen = true)}
+  >
+    <Menu class="h-5 w-5 shrink-0" />
   </button>
 
   <a href="/" class="flex shrink-0 items-center rounded-lg focus-visible:outline-offset-4">
@@ -362,22 +376,24 @@
   </div>
 
   <div class="ml-auto flex shrink-0 items-center gap-1.5 pl-3 sm:gap-2">
-    <a class="btn btn-sm btn-primary rounded-full hidden text-xs sm:flex" href="/download">
+    <a class="btn btn-sm btn-primary hidden text-xs sm:flex" href="/download">
       <Download class="mr-1.5 h-4 w-4" />
       Download
     </a>
-    <button class="btn btn-sm btn-ghost hidden h-10 w-10 sm:flex" aria-label="Notifications">
-      <Bell class="h-5 w-5" />
-    </button>
     {#if data.user}
-      <a class="btn btn-sm btn-ghost h-10 w-10" href="/admin" aria-label="Administration" title="Administration">
-        <ShieldCheck class="h-5 w-5" />
+      <a
+        class="btn btn-square btn-sm btn-ghost h-10 w-10"
+        href="/admin"
+        aria-label="Administration"
+        title="Administration"
+      >
+        <ShieldCheck class="h-5 w-5 shrink-0" />
       </a>
       <a
         href="/profile"
         aria-label={`Open profile for ${data.user.name}`}
         title={data.user.name}
-        class="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-fuchsia-500 to-purple-600 text-xs font-bold text-white ring-2 ring-transparent transition hover:ring-secondary/60 focus-visible:outline-offset-4"
+        class="grid h-9 w-9 place-items-center rounded-full bg-primary text-xs font-bold text-primary-content ring-2 ring-transparent transition hover:ring-secondary/60 focus-visible:outline-offset-4"
       >
         {data.user.initials}
       </a>
@@ -391,17 +407,21 @@
 </header>
 
 <aside
-  class="fixed bottom-0 left-0 top-14 z-30 hidden w-[232px] overflow-y-auto border-r border-base-300/70 bg-[var(--color-page)] lg:block"
+  class="fixed bottom-0 left-0 top-14 z-30 hidden w-[232px] overflow-y-auto border-r border-base-300/70 bg-base-100 lg:block"
   aria-label="Primary navigation"
 >
   {@render sidebarContent()}
 </aside>
 
-<Drawer bind:open={drawerOpen} placement="left" class="w-[min(19rem,88vw)] bg-[var(--color-page)]" label="Mobile navigation">
+<Drawer bind:open={drawerOpen} placement="left" class="w-[min(19rem,88vw)] bg-base-100" label="Mobile navigation">
   <div class="flex h-14 shrink-0 items-center justify-between border-b border-base-300/70 px-4">
     <span class="font-bold text-base-content">Navigation</span>
-    <button class="btn btn-sm btn-ghost h-9 w-9" aria-label="Close navigation" onclick={closeDrawer}>
-      <X class="h-5 w-5" />
+    <button
+      class="btn btn-square btn-sm btn-ghost h-9 w-9"
+      aria-label="Close navigation"
+      onclick={closeDrawer}
+    >
+      <X class="h-5 w-5 shrink-0" />
     </button>
   </div>
   <div class="flex-1 overflow-y-auto">

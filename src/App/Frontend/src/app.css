@@ -1,5 +1,7 @@
 @import "tailwindcss";
-@plugin "daisyui";
+@plugin "daisyui" {
+  themes: all;
+}
 
 @plugin "daisyui/theme" {
   name: "froststream";
@@ -7,9 +9,8 @@
   prefersdark: true;
   color-scheme: dark;
 
-  /* Surfaces — base-100 is the panel color, not the page canvas. The page
-     canvas (--color-page below) is darker, because modal-box/dropdown-content
-     default to base-100 and must float above the page rather than match it. */
+  /* base-200 is the app canvas; base-100 is used for persistent chrome and
+     floating surfaces. This same relationship is used by the built-in themes. */
   --color-base-100: #151a26;
   --color-base-200: #10141e;
   --color-base-300: #1e293b;
@@ -44,67 +45,21 @@
   --noise: 0;
 }
 
-@plugin "daisyui/theme" {
-  name: "froststream-light";
-  default: false;
-  prefersdark: false;
-  color-scheme: light;
-
-  --color-base-100: #ffffff;
-  --color-base-200: #f1f5f9;
-  --color-base-300: #e2e8f0;
-  --color-base-content: #0f172a;
-
-  --color-primary: #3b82f6;
-  --color-primary-content: #ffffff;
-  --color-secondary: #8b5cf6;
-  --color-secondary-content: #ffffff;
-  --color-accent: #06b6d4;
-  --color-accent-content: #04212b;
-  --color-neutral: #e2e8f0;
-  --color-neutral-content: #0f172a;
-
-  --color-info: #2563eb;
-  --color-info-content: #ffffff;
-  --color-success: #059669;
-  --color-success-content: #ffffff;
-  --color-warning: #d97706;
-  --color-warning-content: #1c1300;
-  --color-error: #dc2626;
-  --color-error-content: #ffffff;
-
-  --radius-box: 1rem;
-  --radius-field: 0.5rem;
-  --radius-selector: 0.5rem;
-  --size-field: 0.25rem;
-  --size-selector: 0.25rem;
-  --border: 1px;
-  --depth: 0;
-  --noise: 0;
-}
-
 @theme {
   --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 :root {
-  /* Page canvas sits below base-100 so panels read as elevated. Not a daisyUI
-     token: it has no component that consumes it. Redeclared per [data-theme]
-     below so light themes don't keep a near-black body. */
-  --color-page: #0d1017;
   font-family: var(--font-sans);
-  background: var(--color-page);
+  color: var(--color-base-content);
+  background: var(--color-base-200);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
 
-[data-theme='froststream-light'] {
-  --color-page: #f8fafc;
-}
-
 html {
   min-width: 320px;
-  background: var(--color-page);
+  background: var(--color-base-200);
 }
 
 body {
@@ -112,9 +67,8 @@ body {
   min-height: 100vh;
   margin: 0;
   overflow-x: hidden;
-  background:
-    radial-gradient(circle at 82% -10%, color-mix(in oklab, var(--color-primary) 8%, transparent), transparent 30rem),
-    var(--color-page);
+  color: var(--color-base-content);
+  background: var(--color-base-200);
 }
 
 button,
@@ -140,11 +94,11 @@ input:focus-visible {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--color-page);
+  background: var(--color-base-200);
 }
 
 ::-webkit-scrollbar-thumb {
-  border: 3px solid var(--color-page);
+  border: 3px solid var(--color-base-200);
   border-radius: 999px;
   background: var(--color-base-300);
 }

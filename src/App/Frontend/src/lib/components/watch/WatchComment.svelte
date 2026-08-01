@@ -54,7 +54,7 @@
 <article class={['space-y-3', depth > 0 ? 'ml-8 border-l border-base-300/70 pl-4' : '']}>
   <div class="flex gap-3">
     <span
-      class={`relative mt-0.5 grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br ${accentFor(displayName)} text-[10px] font-bold text-white shadow-lg shadow-black/20`}
+      class={`relative mt-0.5 grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br ${accentFor(displayName)} text-[10px] font-bold text-base-content shadow-lg shadow-black/20`}
       aria-hidden="true"
     >
       {initialsFor(displayName)}

@@ -19,6 +19,8 @@ public class PlaylistEntity
 
     public string? ConfigSetKey { get; set; }
 
+    public string? WorkerTag { get; set; }
+
     public bool EncodeForPlaylist { get; set; }
 
     public string? CookieSecretPath { get; set; }

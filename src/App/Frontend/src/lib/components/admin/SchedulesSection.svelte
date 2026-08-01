@@ -339,7 +339,7 @@
       <span>DataBridge is unreachable. Schedule operations route through DataBridge/NATS and cannot complete until it recovers.</span>
     </div>
   {:else if loadError}
-    <div class="mt-4 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error" role="alert">
+    <div class="alert alert-error mt-4 text-sm" role="alert">
       <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{loadError.message}</span>
     </div>
@@ -468,13 +468,13 @@
           <label class="label mb-2 text-sm" for="schedule-catchup">Missed-run policy</label>
           <Select id="schedule-catchup" items={catchupItems} bind:value={formCatchupPolicy} />
         </div>
-        <div class="flex items-end pb-2">
+        <div class="flex items-start pt-[2.25rem]">
           <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle" bind:checked={formEnabled} /><span>Enabled</span></label>
         </div>
       </div>
 
       {#if formError}
-        <div class="flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error" role="alert">
+        <div class="alert alert-error text-sm" role="alert">
           <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
           <span>{formError}</span>
         </div>
@@ -538,12 +538,13 @@
             {/if}
             <button
               type="button"
-              class="inline-flex h-10 min-w-10 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-base-content/80 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary"
+              class="btn btn-sm btn-neutral text-xs"
               title="Edit schedule"
               aria-label={`Edit schedule ${schedule.key}`}
               onclick={() => openEditForm(schedule)}
             >
-              <Pencil class="h-4 w-4" />
+              <Pencil class="mr-1.5 h-4 w-4" />
+              Edit
             </button>
           </div>
         </article>

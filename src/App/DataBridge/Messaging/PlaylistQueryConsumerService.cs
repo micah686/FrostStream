@@ -90,6 +90,7 @@ public sealed class PlaylistQueryConsumerService(
                 SourceUrl = entryUrl,
                 RequestedBy = playlist.RequestedBy,
                 StorageKey = playlist.StorageKey ?? "default",
+                WorkerTag = playlist.WorkerTag,
                 ForceDownload = true,
                 YtDlpOptions = DeserializeYtDlpOptions(playlist.YtDlpOptionsJson),
                 CookieSecretPath = playlist.CookieSecretPath,

@@ -42,7 +42,10 @@ public sealed class DownloadJobV2Flow(
         var jobId = request.JobId;
         var runId = run.RunId;
         var storageKey = request.StorageKey ?? "default";
-        var workerTag = await Capture(() => ResolveWorkerTagAsync(storageKey));
+        // A config-set-specified tag overrides the storage backend's own default routing.
+        var workerTag = !string.IsNullOrWhiteSpace(request.WorkerTag)
+            ? request.WorkerTag
+            : await Capture(() => ResolveWorkerTagAsync(storageKey));
 
         logger.LogInformation(
             "Download V2 run started JobId {JobId} RunId {RunId} Run {RunNumber} CorrelationId {CorrelationId} URL {Url}",

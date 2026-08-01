@@ -37,6 +37,7 @@
   let description = $state(untrack(() => initial?.description ?? ''));
   let storageKey = $state(untrack(() => initial?.storageKey ?? 'default'));
   let cookieProfileKey = $state(untrack(() => initial?.cookieProfileKey ?? ''));
+  let workerTag = $state(untrack(() => initial?.workerTag ?? ''));
   let priority = $state(untrack(() => initial?.priority ?? 0));
   let ignoreKeywordsText = $state(untrack(() => formatIgnoreKeywords(initial?.ignoreKeywords ?? [])));
   let selectedOptionPresetKey = $state(untrack(() => (initial?.ytDlpOptions ? '__existing' : '')));
@@ -140,6 +141,7 @@
       description: description.trim() || null,
       storageKey: storageKey.trim() || 'default',
       cookieProfileKey: cookieProfileKey.trim() || null,
+      workerTag: workerTag.trim() || null,
       ytDlpOptions: selectedYtDlpOptions(),
       ignoreKeywords: parseIgnoreKeywords(ignoreKeywordsText),
       priority: normalizedPriority
@@ -234,6 +236,15 @@
   </div>
 
   <div>
+    <label class="label mb-2 text-sm" for="worker-tag">Worker tag</label>
+    <input class="input w-full text-sm" id="worker-tag"
+       pattern={'[a-z0-9-]{2,50}'} minlength={2} maxlength={50} bind:value={workerTag} placeholder="gpu-encode" />
+    <p class="mt-1.5 text-xs text-base-content/40">
+      Optional. Routes jobs from this config set to workers configured with this tag, overriding the storage target's own tag. Leave blank to use the storage target's default routing.
+    </p>
+  </div>
+
+  <div>
     <label class="label mb-2 text-sm" for="option-preset">Option preset</label>
     {#if optionPresetsLoading}
       <div class="flex items-center gap-2 rounded-lg border border-base-300 bg-base-200/60 px-3 py-2 text-sm text-base-content/50">
@@ -247,7 +258,7 @@
       Pick a saved option preset to apply its yt-dlp options to this config set. Choose none to use server defaults.
     </p>
     {#if optionPresetsError}
-      <div class="alert alert-error mt-3">
+      <div class="alert alert-error mt-3" role="alert">
         {optionPresetsError}
       </div>
     {:else if !optionPresetsLoading && optionPresets.length === 0 && !initial?.ytDlpOptions}
@@ -272,7 +283,7 @@
 
   {#if submitError}
     <div
-      class="flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
+      class="alert alert-error text-sm"
       role="alert"
     >
       <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />

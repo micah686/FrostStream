@@ -146,6 +146,7 @@ public sealed class DownloadConfigSetsController(
             Description = request.Description,
             StorageKey = request.StorageKey,
             CookieProfileKey = request.CookieProfileKey,
+            WorkerTag = request.WorkerTag,
             YtDlpOptionsJson = request.YtDlpOptions is null ? null : JsonSerializer.Serialize(request.YtDlpOptions),
             IgnoreKeywords = request.IgnoreKeywords,
             Priority = request.Priority
@@ -160,6 +161,7 @@ public sealed class DownloadConfigSetsController(
             Description = request.Description,
             StorageKey = request.StorageKey,
             CookieProfileKey = request.CookieProfileKey,
+            WorkerTag = request.WorkerTag,
             YtDlpOptionsJson = request.YtDlpOptions is null ? null : JsonSerializer.Serialize(request.YtDlpOptions),
             IgnoreKeywords = request.IgnoreKeywords,
             Priority = request.Priority
@@ -195,6 +197,7 @@ public sealed class DownloadConfigSetsController(
             Description = dto.Description,
             StorageKey = dto.StorageKey,
             CookieProfileKey = dto.CookieProfileKey,
+            WorkerTag = dto.WorkerTag,
             YtDlpOptions = ParseOptionsJson(dto.YtDlpOptionsJson),
             IgnoreKeywords = dto.IgnoreKeywords,
             Priority = dto.Priority

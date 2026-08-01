@@ -508,6 +508,37 @@ public sealed class AudioRenditionConfiguration : IEntityTypeConfiguration<Audio
     }
 }
 
+public sealed class MediaEncodingStatusConfiguration : IEntityTypeConfiguration<MediaEncodingStatusEntity>
+{
+    public void Configure(EntityTypeBuilder<MediaEncodingStatusEntity> builder)
+    {
+        builder.ToTable("audio_encoding_status", "media");
+
+        builder.HasKey(x => x.MediaGuid);
+
+        builder.Property(x => x.MediaGuid).HasColumnName("media_guid").ValueGeneratedNever();
+        builder.Property(x => x.AccountId).HasColumnName("account_id").IsRequired();
+        builder.Property(x => x.IsEncoded).HasColumnName("is_encoded").IsRequired();
+        builder.Property(x => x.StorageKey).HasColumnName("storage_key").HasMaxLength(100);
+        builder.Property(x => x.StoragePath).HasColumnName("storage_path").HasMaxLength(2048);
+        builder.Property(x => x.EncodedAt).HasColumnName("encoded_at").HasColumnType("timestamp with time zone");
+        builder.Property(x => x.UpdatedAt)
+            .HasColumnName("updated_at")
+            .HasColumnType("timestamp with time zone")
+            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .IsRequired();
+
+        builder.HasIndex(x => new { x.AccountId, x.IsEncoded })
+            .HasDatabaseName("ix_audio_encoding_status_account_encoded");
+
+        builder.HasOne<MediaEntity>()
+            .WithMany()
+            .HasForeignKey(x => x.MediaGuid)
+            .HasConstraintName("fk_audio_encoding_status_media_guid")
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
 public sealed class StreamRenditionConfiguration : IEntityTypeConfiguration<StreamRenditionEntity>
 {
     public void Configure(EntityTypeBuilder<StreamRenditionEntity> builder)

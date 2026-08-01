@@ -28,10 +28,19 @@ public sealed class BackupJobService(IBackupServiceClient client)
         return new VerifyBackupResponse(result.Success, result.ErrorMessage);
     }
 
-    public async Task<RestorePlanResponse> BuildRestorePlanAsync(string archivePath, CancellationToken cancellationToken)
+    public async Task<RestorePlanResponse> BuildRestorePlanAsync(
+        string archivePath,
+        IReadOnlyDictionary<string, string?>? options,
+        CancellationToken cancellationToken)
     {
-        var result = await client.BuildRestorePlanAsync(archivePath, cancellationToken);
-        return new RestorePlanResponse(result.PreflightOk, result.RestoreCommand, result.ErrorMessage);
+        var result = await client.BuildRestorePlanAsync(archivePath, options, cancellationToken);
+        return new RestorePlanResponse(
+            result.PreflightOk,
+            result.Explanation,
+            result.RestoreCommand,
+            result.Options.Select(x => new RestorePlanOptionResponse(
+                x.Key, x.Label, x.Description, x.InputType, x.Value, x.Placeholder, x.Required)).ToArray(),
+            result.ErrorMessage);
     }
 
     private static BackupJobResponse ToResponse(BackupJobDto job)

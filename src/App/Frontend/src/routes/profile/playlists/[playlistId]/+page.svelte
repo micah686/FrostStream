@@ -110,7 +110,7 @@
       <span class="loading loading-spinner loading-md"></span>
     </div>
   {:else if loadError}
-    <div class="rounded-2xl border border-error/30 bg-error/10 p-5 text-sm text-error" role="alert">
+    <div class="alert alert-error text-sm" role="alert">
       <div class="flex items-start gap-3">
         <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
         <span>{loadError}</span>
@@ -127,7 +127,7 @@
         <form class="mt-4 space-y-4" onsubmit={saveDetails}>
           {#if formError}
             <div
-              class="flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
+              class="alert alert-error text-sm"
               role="alert"
             >
               <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
@@ -196,8 +196,8 @@
             <h2 class="text-base font-bold text-base-content">Delete this playlist</h2>
             <p class="mt-1 text-sm text-base-content/60">The videos in it stay on the server.</p>
           </div>
-          <button class="btn btn-sm btn-ghost shrink-0 text-xs" onclick={() => (deleteModalOpen = true)}>
-            <Trash2 class="mr-1.5 h-3.5 w-3.5" />
+          <button class="btn btn-sm btn-neutral shrink-0 text-xs" onclick={() => (deleteModalOpen = true)}>
+            <Trash2 class="mr-1.5 h-4 w-4" />
             Delete playlist
           </button>
         </div>

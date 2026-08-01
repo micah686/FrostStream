@@ -125,7 +125,7 @@
         Platform
       </label>
       <div class="relative">
-        <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-base-content/40" />
+        <Search class="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-base-content/80" />
         <input class="input w-full pl-9 text-sm" id="platform-filter" bind:value={platformFilter} placeholder="youtube, twitch, soundcloud..." />
       </div>
     </div>
@@ -155,7 +155,7 @@
 
   {#if loadError}
     <div
-      class="mt-6 flex items-center gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
+      class="alert alert-error mt-6 text-sm"
       role="alert"
     >
       <CircleAlert class="h-4 w-4 shrink-0" />
@@ -179,7 +179,7 @@
             <a
               href={`/channel/${account.accountId}`}
               aria-label={`Open ${account.accountName}'s channel`}
-              class={`relative grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-2xl bg-gradient-to-br ${accentFor(account.accountName)} text-lg font-bold text-white shadow-lg shadow-black/20`}
+              class={`relative grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-2xl bg-gradient-to-br ${accentFor(account.accountName)} text-lg font-bold text-base-content shadow-lg shadow-black/20`}
             >
               {initialsFor(account.accountName)}
               {#if account.avatarStoragePath}
@@ -223,7 +223,7 @@
           <div class="mt-4 flex flex-wrap items-center gap-2 border-t border-base-300/70 pt-3">
             <a
               href={`/channel/${account.accountId}`}
-              class="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary"
+              class="btn btn-sm btn-neutral text-xs"
             >
               View channel
               <ChevronRight class="h-3.5 w-3.5" />
@@ -233,7 +233,7 @@
                 href={account.accountUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                class="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/80 transition hover:border-base-content/30 hover:bg-base-300"
+                class="btn btn-sm btn-neutral text-xs"
               >
                 Source
                 <ExternalLink class="h-3.5 w-3.5" />

@@ -160,7 +160,7 @@ public sealed class MediaWatchController(
             });
         }
 
-        return await this.ServeBlobAsync(
+        var result = await this.ServeBlobAsync(
             blobStorageProvider,
             logger,
             rendition.StorageKey,
@@ -168,6 +168,30 @@ public sealed class MediaWatchController(
             subject: "audio rendition",
             contentType: AudioRenditionHelpers.ContentType,
             cancellationToken: cancellationToken);
+
+        if (result is NotFoundObjectResult)
+            await MarkNotActuallyEncodedAsync(mediaGuid, cancellationToken);
+
+        return result;
+    }
+
+    // The rendition row says Ready, but the blob it points at is gone (deleted out-of-band, storage
+    // reconfigured, etc.) — self-heal the durable encoded flag rather than leaving it stuck reporting
+    // encoded. This path has no channel/account in scope, so it resolves the account by media guid.
+    private async Task MarkNotActuallyEncodedAsync(Guid mediaGuid, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await messageBus.RequestAsync<SetMediaEncodedStatusByMediaGuidRequest, SetMediaEncodedStatusResponse>(
+                AudioEncodingStatusSubjects.SetByMediaGuid,
+                new SetMediaEncodedStatusByMediaGuidRequest { MediaGuid = mediaGuid, IsEncoded = false },
+                QueryTimeout,
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed resetting audio encoding status after a missing audio rendition blob for {MediaGuid}.", mediaGuid);
+        }
     }
 
     [HttpPost("{mediaGuid:guid}/cast-token")]

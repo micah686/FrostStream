@@ -6,10 +6,12 @@
     CircleCheck,
     CircleX,
     CloudUpload,
+    Copy,
     FileArchive,
     Play,
     RefreshCw,
-    Terminal
+    Terminal,
+    X
   } from '@lucide/svelte';
   import {
     buildRestorePlan,
@@ -38,8 +40,7 @@
   };
 
   const cardClass = 'card border border-base-300 bg-base-100 p-5 sm:p-6';
-  const rowActionClass =
-    'inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary disabled:opacity-50';
+  const rowActionClass = 'btn btn-sm btn-neutral text-xs';
 
   const JOB_POLL_INTERVAL_MS = 4000;
 
@@ -65,6 +66,9 @@
   let verifyResults = $state<Record<string, VerifyBackupResult>>({});
   let planBusyPath = $state<string | null>(null);
   let restorePlans = $state<Record<string, RestorePlan>>({});
+  let activeRestorePath = $state<string | null>(null);
+  let copiedRestoreCommand = $state(false);
+  let restoreOptionRequestId = 0;
 
   const hasActiveJobs = $derived(jobs.some((job) => job.status === 'queued' || job.status === 'running'));
 
@@ -160,27 +164,197 @@
   }
 
   async function showRestorePlan(archive: BackupSummary) {
+    if (activeRestorePath === archive.archivePath) {
+      closeRestorePlan();
+      return;
+    }
+
     if (restorePlans[archive.archivePath]) {
-      const { [archive.archivePath]: _, ...rest } = restorePlans;
-      restorePlans = rest;
+      restorePlans = {
+        ...restorePlans,
+        [archive.archivePath]: withRestorePlanFallback(restorePlans[archive.archivePath], archive.mode)
+      };
+      activeRestorePath = archive.archivePath;
       return;
     }
 
     planBusyPath = archive.archivePath;
     try {
-      restorePlans = { ...restorePlans, [archive.archivePath]: await buildRestorePlan(archive.archivePath) };
+      const plan = await buildRestorePlan(archive.archivePath);
+      restorePlans = { ...restorePlans, [archive.archivePath]: withRestorePlanFallback(plan, archive.mode) };
+      activeRestorePath = archive.archivePath;
     } catch (err) {
       restorePlans = {
         ...restorePlans,
         [archive.archivePath]: {
           preflightOk: false,
+          explanation: '',
           restoreCommand: '',
+          options: [],
           errorMessage: err instanceof Error ? err.message : 'Restore plan request failed.'
         }
       };
     } finally {
       planBusyPath = null;
     }
+  }
+
+  function withRestorePlanFallback(plan: RestorePlan, mode: string): RestorePlan {
+    const normalized = {
+      ...plan,
+      explanation: plan.explanation || 'Stop FrostStream services before restoring. This is a cold/offline operation; restart services and reindex metadata afterward.',
+      options: plan.options ?? []
+    };
+    if (normalized.options.length || !['full', 'wal-archive', 'walarchive'].includes(mode.toLowerCase())) {
+      return normalized;
+    }
+
+    return {
+      ...normalized,
+      explanation: 'Stop FrostStream and PostgreSQL before restoring. A full restore rebuilds the PostgreSQL data directory.\n\nFor point-in-time recovery, make the WAL archive available inside the backupservice container and enter its mounted path. Most people should then enter the date and time they want to restore to, in UTC. For example, 2026-07-31 12:00:00+00 means July 31, 2026 at noon UTC. Choose exactly one recovery target. The generated command adds --archive-dir and the selected target.',
+      options: [
+        {
+          key: 'pgdata',
+          label: 'PostgreSQL data directory',
+          description: 'The empty data directory that will be rebuilt.',
+          inputType: 'text',
+          value: null,
+          placeholder: '<PGDATA>',
+          required: true
+        },
+        {
+          key: 'pg-ctl',
+          label: 'pg_ctl path (optional)',
+          description: 'Leave blank to use pg_ctl from PATH.',
+          inputType: 'text',
+          value: null,
+          placeholder: 'pg_ctl',
+          required: false
+        },
+        {
+          key: 'archive-dir',
+          label: 'WAL archive directory',
+          description: 'Path inside the backupservice container containing the archived WAL segments.',
+          inputType: 'text',
+          value: null,
+          placeholder: '<WAL_ARCHIVE_DIR>',
+          required: false
+        },
+        {
+          key: 'target-time',
+          label: 'Restore to a date and time (optional)',
+          description: 'Use this when you want the database restored to how it looked at a particular moment. Enter the time in UTC. For example, 2026-07-31 12:00:00+00 means July 31, 2026 at noon UTC. Choose only one recovery target.',
+          inputType: 'text',
+          value: null,
+          placeholder: '2026-07-31 12:00:00+00',
+          required: false
+        }
+      ]
+    };
+  }
+
+  async function updateRestoreOption(plan: RestorePlan, key: string, value: string) {
+    if (!activeRestorePath) return;
+    const currentPlan = restorePlans[activeRestorePath] ?? plan;
+    const nextOptions = currentPlan.options.map((option) => ({
+      ...option,
+      value: option.key === key ? value : option.value
+    }));
+    const options = Object.fromEntries(nextOptions.map((option) => [option.key, option.value])) as Record<string, string | null>;
+    const requestId = ++restoreOptionRequestId;
+
+    // Keep the command responsive while the server re-verifies the archive.
+    restorePlans = {
+      ...restorePlans,
+      [activeRestorePath]: {
+        ...currentPlan,
+        options: nextOptions,
+        restoreCommand: updateRestoreCommand(currentPlan.restoreCommand, nextOptions)
+      }
+    };
+
+    planBusyPath = activeRestorePath;
+    try {
+      const refreshedPlan = await buildRestorePlan(activeRestorePath, options);
+      const archiveMode = archives.find((archive) => archive.archivePath === activeRestorePath)?.mode ?? '';
+      if (requestId === restoreOptionRequestId && activeRestorePath) {
+        const refreshedWithFallback = withRestorePlanFallback(refreshedPlan, archiveMode);
+        const optimisticPlan = restorePlans[activeRestorePath];
+        const serverReturnedOptions = refreshedPlan.options?.length > 0;
+        const mergedPlan = serverReturnedOptions
+          ? {
+              ...refreshedWithFallback,
+              options: refreshedWithFallback.options.map((option) =>
+                Object.prototype.hasOwnProperty.call(options, option.key)
+                  ? { ...option, value: options[option.key] }
+                  : option
+              )
+            }
+          : {
+              ...refreshedWithFallback,
+              options: optimisticPlan?.options ?? refreshedWithFallback.options,
+              restoreCommand: optimisticPlan?.restoreCommand ?? refreshedWithFallback.restoreCommand
+            };
+        restorePlans = { ...restorePlans, [activeRestorePath]: mergedPlan };
+      }
+    } catch (err) {
+      if (requestId === restoreOptionRequestId && activeRestorePath) {
+        restorePlans = {
+          ...restorePlans,
+          [activeRestorePath]: {
+            ...(restorePlans[activeRestorePath] ?? currentPlan),
+            errorMessage: err instanceof Error ? err.message : 'Could not update the restore command.'
+          }
+        };
+      }
+    } finally {
+      planBusyPath = null;
+    }
+  }
+
+  function updateRestoreCommand(command: string, options: RestorePlan['options']): string {
+    let updated = command;
+    const valueFor = (key: string) => options.find((option) => option.key === key)?.value?.trim() ?? '';
+    const removeOption = (key: string) => {
+      updated = updated.replace(new RegExp(`\\s+--${key}\\s+(?:"[^"]*"|'[^']*'|\\S+)`, 'g'), '');
+    };
+    const setOption = (key: string, value: string) => {
+      removeOption(key);
+      if (value) updated += ` --${key} ${quoteCommandValue(value)}`;
+    };
+
+    setOption('pgdata', valueFor('pgdata') || '<PGDATA>');
+    setOption('pg-ctl', valueFor('pg-ctl'));
+
+    for (const target of ['target-time', 'target-lsn', 'target-name']) removeOption(target);
+    removeOption('recover-latest');
+    removeOption('archive-dir');
+
+    const target = ['target-time', 'target-lsn', 'target-name'].find((key) => valueFor(key));
+    if (target) {
+      setOption(target, valueFor(target));
+      setOption('archive-dir', valueFor('archive-dir') || '<WAL_ARCHIVE_DIR>');
+    } else if (valueFor('recover-latest') === 'true') {
+      updated += ' --recover-latest';
+      setOption('archive-dir', valueFor('archive-dir') || '<WAL_ARCHIVE_DIR>');
+    }
+
+    return updated;
+  }
+
+  function quoteCommandValue(value: string): string {
+    return /\s/.test(value) ? `"${value.replaceAll('"', '\\"')}"` : value;
+  }
+
+  async function copyRestoreCommand(command: string) {
+    await navigator.clipboard.writeText(command);
+    copiedRestoreCommand = true;
+    window.setTimeout(() => (copiedRestoreCommand = false), 1800);
+  }
+
+  function closeRestorePlan() {
+    activeRestorePath = null;
+    copiedRestoreCommand = false;
   }
 
   function statusBadgeClass(status: BackupJob['status']): string {
@@ -234,7 +408,7 @@
 
   {#if startError}
     <div
-      class="mt-5 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
+      class="alert alert-error mt-5 text-sm"
       role="alert"
     >
       <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
@@ -280,7 +454,7 @@
 
   {#if jobsError}
     <div
-      class="mt-5 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
+      class="alert alert-error mt-5 text-sm"
       role="alert"
     >
       <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
@@ -345,7 +519,7 @@
 
   {#if archivesError}
     <div
-      class="mt-5 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
+      class="alert alert-error mt-5 text-sm"
       role="alert"
     >
       <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
@@ -420,7 +594,7 @@
                 {:else}
                   <Terminal class="h-4 w-4" />
                 {/if}
-                {plan ? 'Hide restore plan' : 'Restore plan'}
+                {activeRestorePath === archive.archivePath ? 'Hide restore plan' : 'Restore plan'}
               </button>
             </div>
           </div>
@@ -445,24 +619,89 @@
             </div>
           {/if}
 
-          {#if plan}
-            <div class="mt-3 rounded-lg border border-base-300 bg-base-200/60 p-3">
-              {#if plan.errorMessage}
-                <p class="text-xs text-error">{plan.errorMessage}</p>
-              {:else}
-                <p class="text-xs text-base-content/60">
-                  {plan.preflightOk
-                    ? 'Preflight checks passed. Stop all FrostStream services, then run:'
-                    : 'Preflight checks failed — resolve the issue before restoring. Planned command:'}
-                </p>
-              {/if}
-              {#if plan.restoreCommand}
-                <pre class="mt-2 overflow-x-auto rounded bg-black/40 p-2.5 font-mono text-xs text-white/80">{plan.restoreCommand}</pre>
-              {/if}
-            </div>
-          {/if}
         </article>
       {/each}
     </div>
   {/if}
 </section>
+
+{#if activeRestorePath && restorePlans[activeRestorePath]}
+  {@const activePlan = restorePlans[activeRestorePath]}
+  {@const activeOptions = (activePlan.options ?? []).filter((option) => option.key !== 'tool-command')}
+  <div class="fixed inset-0 z-50 flex items-start justify-center overflow-x-hidden overflow-y-auto bg-black/50 p-4 sm:p-8" role="dialog" aria-modal="true" aria-labelledby="restore-plan-title">
+    <div class="relative my-4 min-w-0 w-full max-w-3xl rounded-box bg-base-100 p-6 shadow-2xl sm:my-8">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <h2 id="restore-plan-title" class="text-lg font-bold">Restore plan</h2>
+          <p class="mt-1 font-mono text-xs text-base-content/50">{archiveName(activeRestorePath)}</p>
+        </div>
+        <button class="btn btn-sm btn-circle btn-ghost" type="button" aria-label="Close restore plan" onclick={closeRestorePlan}>
+          <X class="h-5 w-5" />
+        </button>
+      </div>
+
+      <details class="mt-5 rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm text-base-content/75">
+        <summary class="cursor-pointer font-semibold text-base-content">Restore guidance</summary>
+        <p class="mt-3 whitespace-pre-line break-words leading-6">{activePlan.explanation}</p>
+      </details>
+
+      {#if activeOptions.length > 0}
+        <div class="mt-5 space-y-4">
+          <div>
+            <h3 class="text-sm font-semibold">Restore options</h3>
+            <p class="mt-1 text-xs text-base-content/55">Fill in the values for this environment. The command updates automatically.</p>
+          </div>
+          {#each activeOptions as option (option.key)}
+            <div class="form-control">
+              {#if option.inputType === 'checkbox'}
+                <label class="label cursor-pointer justify-start gap-3">
+                  <input
+                    class="checkbox checkbox-sm checkbox-primary"
+                    type="checkbox"
+                    checked={option.value === 'true'}
+                    onchange={(event) => void updateRestoreOption(activePlan, option.key, (event.currentTarget as HTMLInputElement).checked ? 'true' : 'false')}
+                  />
+                  <span class="min-w-0 w-full">
+                    <span class="block whitespace-normal break-words text-sm font-semibold">{option.label}</span>
+                    <span class="block whitespace-normal break-words text-xs leading-5 text-base-content/55">{option.description}</span>
+                  </span>
+                </label>
+              {:else}
+                <label class="label" for={'restore-' + option.key}>
+                  <span class="min-w-0 w-full">
+                    <span class="block whitespace-normal break-words text-sm font-semibold">{option.label}{option.required ? ' *' : ''}</span>
+                    <span class="block whitespace-normal break-words text-xs leading-5 text-base-content/55">{option.description}</span>
+                  </span>
+                </label>
+                <input
+                  class="input input-bordered input-sm w-full font-mono"
+                  id={'restore-' + option.key}
+                  value={option.value || ''}
+                  placeholder={option.placeholder || ''}
+                  oninput={(event) => void updateRestoreOption(activePlan, option.key, (event.currentTarget as HTMLInputElement).value)}
+                />
+              {/if}
+            </div>
+          {/each}
+        </div>
+      {/if}
+
+      <div class="mt-5">
+        <div class="flex items-center justify-between gap-3">
+          <h3 class="text-sm font-semibold">Command</h3>
+          <button class="btn btn-sm btn-outline" type="button" disabled={!activePlan.restoreCommand} onclick={() => void copyRestoreCommand(activePlan.restoreCommand)}>
+            <Copy class="mr-1.5 h-4 w-4" />
+            {copiedRestoreCommand ? 'Copied' : 'Copy command'}
+          </button>
+        </div>
+        <p class="mt-2 text-xs text-base-content/60">
+          {activePlan.preflightOk ? 'Preflight checks passed. Stop all FrostStream services before running this offline command.' : 'Preflight checks failed — resolve the issue before restoring.'}
+        </p>
+        {#if activePlan.errorMessage}
+          <p class="mt-2 text-xs text-error">{activePlan.errorMessage}</p>
+        {/if}
+        <pre class="mt-3 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-black/70 p-3 font-mono text-xs leading-5 text-white/85">{activePlan.restoreCommand || 'No command available.'}</pre>
+      </div>
+    </div>
+  </div>
+{/if}

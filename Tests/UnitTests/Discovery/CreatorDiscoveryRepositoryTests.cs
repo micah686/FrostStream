@@ -43,6 +43,22 @@ public sealed class CreatorDiscoveryRepositoryTests
     }
 
     [Test]
+    public async Task UpsertDiscoveredMediaBatch_Updates_Source_Platform_From_YtDlp_Candidate()
+    {
+        await using var db = CreateDb();
+        var repo = new CreatorDiscoveryRepository(db, SystemClock.Instance);
+        var source = (await repo.CreateSourceAsync(new CreatorSourceEntity
+        {
+            Platform = "unknown",
+            SourceUrl = "https://www.youtube.com/@SomeCreator/videos"
+        })).Source;
+
+        await repo.UpsertDiscoveredMediaBatchAsync(Batch(source.Id, Candidate("abc123", "https://www.youtube.com/watch?v=abc123", title: "First media")));
+
+        (await repo.GetSourceAsync(source.Id))!.Source.Platform.ShouldBe("YouTube");
+    }
+
+    [Test]
     public async Task CreateOrReuseSource_Reuses_Existing_Source_By_Url()
     {
         await using var db = CreateDb();
@@ -83,11 +99,15 @@ public sealed class CreatorDiscoveryRepositoryTests
             Id = source.Id,
             Platform = source.Platform,
             SourceType = source.SourceType,
-            SourceUrl = "https://www.youtube.com/@SomeOtherCreator/videos"
+            SourceUrl = "https://www.youtube.com/@SomeOtherCreator/videos",
+            ConfigSetOwnerSubject = "unit_test_user",
+            ConfigSetKey = "creator-default"
         });
 
         repointed.ShouldNotBeNull();
         repointed.Source.AccountId.ShouldBeNull();
+        repointed.Source.ConfigSetOwnerSubject.ShouldBe("unit_test_user");
+        repointed.Source.ConfigSetKey.ShouldBe("creator-default");
     }
 
     [Test]

@@ -74,7 +74,7 @@ app.MapPost("/internal/backups/restore-plan", async (
 {
     try
     {
-        return Results.Ok(await coordinator.BuildRestorePlanAsync(request.ArchivePath, cancellationToken));
+        return Results.Ok(await coordinator.BuildRestorePlanAsync(request.ArchivePath, request.Options, cancellationToken));
     }
     catch (ArgumentException ex)
     {
@@ -89,4 +89,6 @@ await app.RunAsync();
 static BackupJobDto ToDto(BackupJobRecord job)
     => new(job.JobId, job.Status, job.ArchivePath, job.ErrorMessage, job.CreatedAt, job.CompletedAt);
 
-internal sealed record ArchiveRequest(string ArchivePath);
+internal sealed record ArchiveRequest(
+    string ArchivePath,
+    IReadOnlyDictionary<string, string?>? Options = null);

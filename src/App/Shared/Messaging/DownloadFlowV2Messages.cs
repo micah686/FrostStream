@@ -126,6 +126,7 @@ public sealed record DownloadGroupRequested
     public required string SourceUrl { get; init; }
     public string? RequestedBy { get; init; }
     public string? StorageKey { get; init; }
+    public string? WorkerTag { get; init; }
     public int Priority { get; init; }
     public DownloadRequested? DirectRequest { get; init; }
     public PlaylistRequested? CollectionRequest { get; init; }

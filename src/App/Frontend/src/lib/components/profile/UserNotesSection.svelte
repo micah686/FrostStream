@@ -176,8 +176,8 @@
 
   <form class="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_12rem_auto]" onsubmit={submitSearch}>
     <div class="relative">
-      <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-base-content/40" />
-      <input class="input w-full pl-9" bind:value={query} placeholder="Search notes" />
+      <Search class="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-base-content/70" />
+      <input class="input w-full pl-9" bind:value={query} aria-label="Search notes" placeholder="Search notes" />
     </div>
     <Select items={targetOptions} bind:value={targetType} />
     <button class="btn btn-sm btn-neutral text-xs" type="submit" disabled={loading}>
@@ -190,7 +190,7 @@
 
   {#if error}
     <div
-      class="mt-5 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
+      class="alert alert-error mt-5 text-sm"
       role="alert"
     >
       <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
@@ -250,7 +250,7 @@
               </button>
               <button
                 type="button"
-                class="inline-flex h-9 min-w-9 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-base-content/80 transition hover:border-error/60 hover:bg-error/10 hover:text-error disabled:opacity-50"
+                class="btn btn-sm btn-neutral text-xs"
                 title="Delete note"
                 aria-label={`Delete note for ${note.targetTitle ?? note.targetId}`}
                 disabled={deletingKey === key}
@@ -260,10 +260,11 @@
                 }}
               >
                 {#if deletingKey === key}
-                  <span class="loading loading-spinner loading-xs"></span>
+                  <span class="loading loading-spinner loading-xs mr-1.5"></span>
                 {:else}
-                  <Trash2 class="h-4 w-4" />
+                  <Trash2 class="mr-1.5 h-4 w-4" />
                 {/if}
+                Delete
               </button>
             </div>
           </div>

@@ -18,10 +18,6 @@
 
   type IconComponent = typeof SlidersHorizontal;
 
-  let { data } = $props();
-
-  const sessionLabel = $derived(data.singleUser ? 'local profile' : 'FrostStream account');
-
   let configSets = $state<DownloadConfigSet[]>([]);
   let configSetsLoading = $state(true);
   let configSetsError = $state<string | null>(null);
@@ -76,21 +72,22 @@
 <UnderDevelopmentBanner />
 
 <section class="card border border-base-300 bg-base-100 p-5 sm:p-6">
-  <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
     <div>
       <h2 class="text-base font-bold text-base-content">Config sets</h2>
       <p class="mt-2 max-w-3xl text-sm leading-6 text-base-content/60">
         Named presets for download and transcode options. Pick one when starting a new download, or set a default.
       </p>
     </div>
-    <span class="badge badge-sm badge-ghost rounded-full w-fit text-[10px]">
-      {sessionLabel}
-    </span>
+    <a class="btn btn-sm btn-neutral shrink-0" href="/profile/config-sets/new">
+      <Plus class="mr-1.5 h-3.5 w-3.5" />
+      New config set
+    </a>
   </div>
 
   {#if configSetsError}
     <div
-      class="mt-5 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
+      class="alert alert-error mt-5 text-sm"
       role="alert"
     >
       <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
@@ -135,15 +132,15 @@
           <div class="flex shrink-0 gap-2 sm:ml-auto">
             <a
               href={`/profile/config-sets/${encodeURIComponent(config.key)}`}
-              class="inline-flex h-10 min-w-24 items-center justify-center gap-2 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary"
-              aria-label={`View config set ${config.name}`}
+              class="btn btn-sm btn-neutral text-xs"
+              aria-label={`Edit config set ${config.name}`}
             >
-              <Eye class="h-4 w-4" />
-              View
+              <Eye class="mr-1.5 h-4 w-4" />
+              Edit
             </a>
             <button
               type="button"
-              class="inline-flex h-10 min-w-10 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-base-content/80 transition hover:border-error/60 hover:bg-error/10 hover:text-error disabled:opacity-50"
+              class="btn btn-sm btn-neutral text-xs"
               title="Delete config set"
               aria-label={`Delete config set ${config.name}`}
               disabled={deletingKey === config.key}
@@ -153,10 +150,11 @@
               }}
             >
               {#if deletingKey === config.key}
-                <span class="loading loading-spinner loading-xs"></span>
+                <span class="loading loading-spinner loading-xs mr-1.5"></span>
               {:else}
-                <Trash2 class="h-4 w-4" />
+                <Trash2 class="mr-1.5 h-4 w-4" />
               {/if}
+              Delete
             </button>
           </div>
         </article>
@@ -164,12 +162,6 @@
     </div>
   {/if}
 
-  <div class="mt-4">
-    <a class="btn btn-sm btn-ghost text-xs" href="/profile/config-sets/new">
-      <Plus class="mr-1.5 h-3.5 w-3.5" />
-      New config set
-    </a>
-  </div>
 </section>
 
 <ConfirmDeleteModal

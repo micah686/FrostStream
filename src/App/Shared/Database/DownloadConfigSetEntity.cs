@@ -18,6 +18,13 @@ public sealed class DownloadConfigSetEntity
 
     public string? CookieProfileKey { get; set; }
 
+    /// <summary>
+    /// Optional worker tag constraining which worker instances may run jobs built from this
+    /// config set. When set, it overrides the storage backend's own worker tag (<see cref="StorageConfigEntity.WorkerTag"/>)
+    /// for every job dispatched using this config set.
+    /// </summary>
+    public string? WorkerTag { get; set; }
+
     public string? YtDlpOptionsJson { get; set; }
 
     /// <summary>

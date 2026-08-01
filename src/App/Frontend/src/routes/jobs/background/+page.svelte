@@ -83,16 +83,9 @@
       </p>
     </div>
     <div class="flex items-center gap-2">
-      <span
-        class={[
-          'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1',
-          jobsState.connected
-            ? 'bg-success/12 text-success ring-success/20'
-            : 'bg-base-300/60 text-base-content/60 ring-base-content/15'
-        ]}
-      >
-        <span class={['h-1.5 w-1.5 rounded-full', jobsState.connected ? 'bg-success' : 'bg-base-content/40']}></span>
-        {jobsState.connected ? 'Live' : 'Disconnected'}
+      <span class={jobsState.connected ? 'badge badge-success bg-success text-success-content gap-1.5' : 'badge badge-error bg-error text-error-content gap-1.5'}>
+        <span class={jobsState.connected ? 'status status-success' : 'status status-error'}></span>
+        {jobsState.connected ? 'SSE Live' : 'SSE Offline'}
       </span>
       <button
         type="button"
@@ -107,7 +100,7 @@
   </div>
 
   {#if jobsState.error}
-    <p class="mt-4 rounded-lg border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">
+    <p class="alert alert-error mt-4 text-sm" role="alert">
       {jobsState.error}
     </p>
   {/if}

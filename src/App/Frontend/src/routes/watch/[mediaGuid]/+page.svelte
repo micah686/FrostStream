@@ -976,7 +976,7 @@
   <section class="min-w-0" aria-label="Video player">
     {#if loadError}
       <div
-        class="flex aspect-video items-center justify-center gap-2 rounded-2xl border border-error/30 bg-error/10 p-6 text-sm text-error"
+        class="alert alert-error flex aspect-video items-center justify-center p-6 text-sm"
         role="alert"
       >
         <CircleAlert class="h-5 w-5 shrink-0" />
@@ -1026,7 +1026,7 @@
           <a
             href={`/channel/${detail.account.accountId}`}
             aria-label={`Open ${detail.account.accountName}'s channel`}
-            class={`relative grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br ${accentFor(detail.account.accountName)} text-xs font-bold text-white`}
+            class={`relative grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br ${accentFor(detail.account.accountName)} text-xs font-bold text-base-content`}
           >
             {initialsFor(detail.account.accountName)}
             <img
@@ -1063,12 +1063,7 @@
             aria-pressed={liked}
             aria-label={liked ? 'Remove from favorites' : 'Add to favorites'}
             title={liked ? 'Remove from favorites' : 'Add to favorites'}
-            class={[
-              'grid h-9 w-9 place-items-center rounded-lg border transition disabled:opacity-60',
-              liked
-                ? 'border-rose-500/50 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20'
-                : 'border-base-300 bg-base-200/70 text-base-content/60 hover:bg-base-300 hover:text-base-content/90'
-            ]}
+            class="btn btn-sm btn-neutral px-2 text-xs disabled:opacity-60"
           >
             <Heart class="h-4 w-4" fill={liked ? 'currentColor' : 'none'} />
           </button>
@@ -1078,12 +1073,7 @@
             disabled={!watchStateLoaded || watchedBusy}
             aria-pressed={watched}
             title={watched ? 'Mark as unwatched' : 'Mark as watched'}
-            class={[
-              'flex items-center gap-1.5 rounded-lg border px-4 py-2 text-xs font-semibold transition disabled:opacity-60',
-              watched
-                ? 'border-primary/50 bg-primary/10 text-primary hover:bg-primary/20'
-                : 'border-base-300 bg-base-200/70 text-base-content/80 hover:bg-base-300'
-            ]}
+            class="btn btn-sm btn-neutral text-xs disabled:opacity-60"
           >
             <CircleCheck class="h-4 w-4" />
             {#if watched}
@@ -1109,19 +1099,14 @@
                 aria-haspopup="menu"
                 aria-expanded={storageMenuOpen}
                 disabled={versionsLoading}
-                class={[
-                  'flex items-center gap-1.5 rounded-lg border px-4 py-2 text-xs font-semibold transition disabled:cursor-wait disabled:opacity-60',
-                  storageMenuOpen
-                    ? 'border-primary/30 bg-primary/10 text-primary hover:bg-primary/10'
-                    : 'border-base-300 bg-base-200/70 text-base-content/80 hover:bg-base-300'
-                ]}
+                class="btn btn-sm btn-neutral text-xs disabled:cursor-wait disabled:opacity-60"
               >
                 {#if versionsLoading}
                   <span class="loading loading-spinner loading-xs"></span>
                   Storage
                 {:else}
                   Storage
-                  <span class="max-w-24 truncate text-base-content/50">{selectedStorageLabel}</span>
+                  <span class="badge badge-ghost badge-sm max-w-24 truncate">{selectedStorageLabel}</span>
                   <ChevronDown class="h-3.5 w-3.5" />
                 {/if}
               </button>
@@ -1164,19 +1149,14 @@
               aria-haspopup="menu"
               aria-expanded={versionMenuOpen}
               disabled={versionsLoading}
-              class={[
-                'flex items-center gap-1.5 rounded-lg border px-4 py-2 text-xs font-semibold transition disabled:cursor-wait disabled:opacity-60',
-                versionMenuOpen
-                  ? 'border-primary/30 bg-primary/10 text-primary hover:bg-primary/10'
-                  : 'border-base-300 bg-base-200/70 text-base-content/80 hover:bg-base-300'
-              ]}
+              class="btn btn-sm btn-neutral text-xs disabled:cursor-wait disabled:opacity-60"
             >
               {#if versionsLoading}
                 <span class="loading loading-spinner loading-xs"></span>
                 Versions
               {:else}
                 Version
-                <span class="max-w-24 truncate text-base-content/50">{selectedVersionLabel}</span>
+                <span class="badge badge-ghost badge-sm max-w-24 truncate">{selectedVersionLabel}</span>
                 <ChevronDown class="h-3.5 w-3.5" />
               {/if}
             </button>
@@ -1222,10 +1202,7 @@
               aria-haspopup="menu"
               aria-expanded={moreMenuOpen}
               onclick={() => (moreMenuOpen = !moreMenuOpen)}
-              class={[
-                'grid h-9 w-9 place-items-center rounded-lg border border-base-300 text-base-content/60 transition hover:bg-base-300',
-                moreMenuOpen ? 'bg-base-300' : 'bg-base-200/70'
-              ]}
+              class="btn btn-sm btn-neutral px-2 text-xs"
             >
               <Ellipsis class="h-4 w-4" />
             </button>

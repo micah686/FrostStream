@@ -42,16 +42,19 @@ public sealed class BackupServiceClient(HttpClient httpClient) : IBackupServiceC
                ?? new VerifyBackupDto(false, "Backup service returned an empty verification response.");
     }
 
-    public async Task<RestorePlanDto> BuildRestorePlanAsync(string archivePath, CancellationToken cancellationToken = default)
+    public async Task<RestorePlanDto> BuildRestorePlanAsync(
+        string archivePath,
+        IReadOnlyDictionary<string, string?>? options = null,
+        CancellationToken cancellationToken = default)
     {
         using var response = await httpClient.PostAsJsonAsync(
             "/internal/backups/restore-plan",
-            new ArchiveRequest(archivePath),
+            new ArchiveRequest(archivePath, options),
             cancellationToken);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<RestorePlanDto>(cancellationToken)
                ?? throw new InvalidOperationException("Backup service returned an empty restore-plan response.");
     }
 
-    private sealed record ArchiveRequest(string ArchivePath);
+    private sealed record ArchiveRequest(string ArchivePath, IReadOnlyDictionary<string, string?>? Options = null);
 }

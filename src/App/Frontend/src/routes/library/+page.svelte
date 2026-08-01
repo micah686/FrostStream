@@ -68,7 +68,7 @@
   }
 
   const pageSize = 24;
-  const tabs = ['Videos', 'Playlists', 'Watch later', 'History', 'Liked'] as const;
+  const tabs = ['Videos', 'Playlists', 'History', 'Liked'] as const;
   type Tab = (typeof tabs)[number];
 
   const sortOptions = [
@@ -112,7 +112,7 @@
   const totalPages = $derived(Math.max(1, Math.ceil(totalCount / pageSize)));
   const tabFromQuery = $derived.by(() => {
     const value = page.url.searchParams.get('tab');
-    return value === 'Videos' || value === 'Playlists' || value === 'Watch later' || value === 'History' || value === 'Liked'
+    return value === 'Videos' || value === 'Playlists' || value === 'History' || value === 'Liked'
       ? value
       : null;
   });
@@ -372,10 +372,6 @@
       <h1 id="library-title" class="text-2xl font-bold tracking-tight text-base-content">Library</h1>
       <p class="mt-1 text-sm text-base-content/50">Your playlists, saved videos, and files on this server.</p>
     </div>
-    <a class="btn btn-sm btn-neutral text-xs" href="/profile/playlists">
-      <Plus class="mr-1.5 h-4 w-4" />
-      New playlist
-    </a>
   </div>
 
   <div class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Library overview">
@@ -431,13 +427,15 @@
         {gridSummary()}
       </p>
       {#if activeTab === 'Videos'}
-        <Select items={sortOptions} bind:value={sort} onchange={changeSort} aria-label="Sort library" class="w-48 text-sm" />
+        <div class="w-48 max-w-full">
+          <Select items={sortOptions} bind:value={sort} onchange={changeSort} aria-label="Sort library" class="text-sm" />
+        </div>
       {/if}
     </div>
 
     {#if loadError}
       <div
-        class="mt-6 flex items-center gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
+        class="alert alert-error mt-6 text-sm"
         role="alert"
       >
         <CircleAlert class="h-4 w-4 shrink-0" />
@@ -500,7 +498,7 @@
                 </span>
               {/if}
               <span
-                class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-white/95 text-slate-900 opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
+                class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-neutral text-neutral-content opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
               >
                 <Play class="ml-0.5 h-5 w-5" />
               </span>
@@ -509,7 +507,7 @@
               <a
                 href={`/channel/${card.account.accountId}`}
                 aria-label={`Open ${card.account.accountName}'s channel`}
-                class={`relative mt-0.5 grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br ${accentFor(card.mediaGuid)} text-[10px] font-bold text-white`}
+                class={`relative mt-0.5 grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br ${accentFor(card.mediaGuid)} text-[10px] font-bold text-base-content`}
               >
                 {initialsFor(card.account.accountName)}
                 <img
@@ -559,17 +557,15 @@
     <section class="mt-6" aria-labelledby="your-playlists-title">
       <div class="flex flex-wrap items-center justify-between gap-3">
         <h2 id="your-playlists-title" class="text-lg font-bold text-base-content">Your playlists</h2>
-        <a
-          href="/profile/playlists"
-          class="text-xs font-semibold text-base-content/50 transition hover:text-base-content/80"
-        >
-          Manage in profile
+        <a class="btn btn-sm btn-neutral text-xs" href="/profile/playlists">
+          <Plus class="mr-1.5 h-4 w-4" />
+          New playlist
         </a>
       </div>
 
       {#if userPlaylistsError}
         <div
-          class="mt-4 flex items-center gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
+          class="alert alert-error mt-4 text-sm"
           role="alert"
         >
           <CircleAlert class="h-4 w-4 shrink-0" />
@@ -622,7 +618,7 @@
                 </span>
                 {#if card.firstGuid}
                   <span
-                    class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-white/95 text-slate-900 opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
+                    class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-neutral text-neutral-content opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
                   >
                     <Play class="ml-0.5 h-5 w-5" />
                   </span>
@@ -655,7 +651,7 @@
 
       {#if platformPlaylistsError}
         <div
-          class="mt-4 flex items-center gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
+          class="alert alert-error mt-4 text-sm"
           role="alert"
         >
           <CircleAlert class="h-4 w-4 shrink-0" />
@@ -704,7 +700,7 @@
                     {card.playlist.itemCount} {card.playlist.itemCount === 1 ? 'video' : 'videos'}
                   </span>
                   <span
-                    class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-white/95 text-slate-900 opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
+                    class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-neutral text-neutral-content opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
                   >
                     <Play class="ml-0.5 h-5 w-5" />
                   </span>

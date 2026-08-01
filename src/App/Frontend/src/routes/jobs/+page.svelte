@@ -5,7 +5,7 @@
     ChevronLeft,
     ChevronRight,
     CircleAlert,
-    Download,
+    CircleCheck,
     RefreshCw,
     Server,
     Trash2
@@ -335,21 +335,9 @@
     </div>
 
     <div class="flex flex-wrap items-center gap-2">
-      <span
-        class={[
-          'inline-flex h-9 items-center gap-2 rounded-full border px-3 text-xs font-semibold',
-          queueState.connected
-            ? 'border-success/25 bg-success/10 text-success'
-            : 'border-base-content/20 bg-base-200 text-base-content/60'
-        ]}
-      >
-        <span
-          class={[
-            'h-2 w-2 rounded-full',
-            queueState.connected ? 'bg-success shadow-[0_0_10px_rgba(52,211,153,0.8)]' : 'bg-base-300'
-          ]}
-        ></span>
-        {queueState.connected ? 'SSE live' : 'Connecting'}
+      <span class={queueState.connected ? 'badge badge-success bg-success text-success-content gap-1.5' : 'badge badge-error bg-error text-error-content gap-1.5'}>
+        <span class={queueState.connected ? 'status status-success' : 'status status-error'}></span>
+        {queueState.connected ? 'SSE Live' : 'SSE Offline'}
       </span>
       <button class="btn btn-sm btn-neutral text-xs" onclick={refreshQueue} disabled={queueState.loading}>
         {#if queueState.loading}
@@ -359,14 +347,10 @@
         {/if}
         Refresh
       </button>
-      <button class="btn btn-sm btn-ghost text-xs" onclick={openCleanup}>
+      <button class="btn btn-sm btn-neutral text-xs" onclick={openCleanup}>
         <Trash2 class="mr-1.5 h-4 w-4" />
         Clean up
       </button>
-      <a class="btn btn-sm btn-primary text-xs" href="/download">
-        <Download class="mr-1.5 h-4 w-4" />
-        New
-      </a>
     </div>
   </div>
 
@@ -411,8 +395,8 @@
         class={[
           'inline-flex h-8 shrink-0 items-center rounded-lg border px-3 text-xs font-semibold transition',
           sourceFilter === tab.key
-            ? 'border-primary/60 bg-primary/15 text-primary'
-            : 'border-base-300 bg-base-200/60 text-base-content/60 hover:bg-base-300 hover:text-base-content/90'
+            ? 'border-primary bg-primary text-primary-content shadow-sm'
+            : 'border-base-content/25 bg-base-100 text-base-content/70 hover:border-base-content/40 hover:bg-base-200 hover:text-base-content'
         ]}
         aria-pressed={sourceFilter === tab.key}
       >
@@ -428,10 +412,10 @@
           type="button"
           onclick={() => changeFilter(tab.key)}
           class={[
-            'inline-flex h-9 shrink-0 items-center gap-2 rounded-full px-4 text-xs font-semibold transition',
+            'inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border px-4 text-xs font-semibold transition',
             activeFilter === tab.key
-              ? 'bg-base-content text-base-100'
-              : 'bg-base-300/75 text-base-content/80 hover:bg-base-300'
+              ? 'border-primary bg-primary text-primary-content shadow-sm'
+              : 'border-base-content/25 bg-base-100 text-base-content/80 hover:border-base-content/40 hover:bg-base-200'
           ]}
           aria-current={activeFilter === tab.key ? 'page' : undefined}
         >
@@ -440,7 +424,9 @@
             <span
               class={[
                 'rounded-full px-1.5 py-0.5 text-[10px]',
-                activeFilter === tab.key ? 'bg-base-content/80 text-base-100' : 'bg-base-200/50 text-base-content/50'
+                activeFilter === tab.key
+                  ? 'bg-primary-content/20 text-primary-content'
+                  : 'bg-base-200 text-base-content/60'
               ]}
             >
               {tab.count}
@@ -458,7 +444,7 @@
 
   {#if queueState.error || actionError}
     <div
-      class="mt-5 flex items-start gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
+      class="alert alert-error mt-5 text-sm"
       role="alert"
     >
       <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
@@ -555,7 +541,7 @@
     </label>
 
     {#if cleanupError}
-      <div class="flex items-start gap-3 rounded-xl border border-error/30 bg-error/10 p-3 text-error" role="alert">
+      <div class="alert alert-error" role="alert">
         <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
         <span>{cleanupError}</span>
       </div>
