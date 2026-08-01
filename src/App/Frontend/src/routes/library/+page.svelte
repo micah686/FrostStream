@@ -372,10 +372,6 @@
       <h1 id="library-title" class="text-2xl font-bold tracking-tight text-base-content">Library</h1>
       <p class="mt-1 text-sm text-base-content/50">Your playlists, saved videos, and files on this server.</p>
     </div>
-    <a class="btn btn-sm btn-neutral text-xs" href="/profile/playlists">
-      <Plus class="mr-1.5 h-4 w-4" />
-      New playlist
-    </a>
   </div>
 
   <div class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Library overview">
@@ -561,11 +557,9 @@
     <section class="mt-6" aria-labelledby="your-playlists-title">
       <div class="flex flex-wrap items-center justify-between gap-3">
         <h2 id="your-playlists-title" class="text-lg font-bold text-base-content">Your playlists</h2>
-        <a
-          href="/profile/playlists"
-          class="text-xs font-semibold text-base-content/50 transition hover:text-base-content/80"
-        >
-          Manage in profile
+        <a class="btn btn-sm btn-neutral text-xs" href="/profile/playlists">
+          <Plus class="mr-1.5 h-4 w-4" />
+          New playlist
         </a>
       </div>
 

@@ -1,14 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Modal, Select } from '$lib/components/ui';
-  import { CircleAlert, CirclePlus, Download, ListMusic, Play, RefreshCw } from '@lucide/svelte';
-  import {
-    listProviderPlaylistLibrary,
-    queuePlaylistDownload,
-    type ProviderPlaylistLibraryItem
-  } from '$lib/api/playlists';
+  import { CircleAlert, ListMusic, Play, RefreshCw } from '@lucide/svelte';
+  import { listProviderPlaylistLibrary, type ProviderPlaylistLibraryItem } from '$lib/api/playlists';
   import { getUserPlaylist, listUserPlaylists, type UserPlaylist } from '$lib/api/userPlaylists';
-  import { listDownloadConfigSets, type DownloadConfigSet } from '$lib/api/downloadConfigSets';
   import { accentFor } from '$lib/media';
 
   interface UserPlaylistCard {
@@ -24,24 +18,6 @@
   let providerPlaylistCards = $state<ProviderPlaylistCard[]>([]);
   let loading = $state(true);
   let loadError = $state<string | null>(null);
-  let actionNotice = $state<string | null>(null);
-
-  let submitOpen = $state(false);
-  let submitBusy = $state(false);
-  let submitError = $state<string | null>(null);
-  let submitUrl = $state('');
-  let submitStorageKey = $state('default');
-  let submitConfigSetKey = $state('');
-  let submitFetchComments = $state(false);
-  let submitOptionsLoaded = $state(false);
-  let storageOptions = $state<Array<{ value: string; name: string }>>([{ value: 'default', name: 'default' }]);
-  let configSets = $state<DownloadConfigSet[]>([]);
-
-  const configSetOptions = $derived([
-    { value: '', name: 'None (use per-request settings)' },
-    ...configSets.map((set) => ({ value: set.key, name: set.name }))
-  ]);
-  const submitConfigSetSelected = $derived(submitConfigSetKey !== '');
 
   onMount(() => {
     void loadPlaylists();
@@ -65,72 +41,6 @@
       loadError = err instanceof Error ? err.message : 'Could not load playlists.';
     } finally {
       loading = false;
-    }
-  }
-
-  function openSubmitModal() {
-    submitError = null;
-    submitUrl = '';
-    submitOpen = true;
-    if (!submitOptionsLoaded) {
-      submitOptionsLoaded = true;
-      void loadSubmitOptions();
-    }
-  }
-
-  async function loadSubmitOptions() {
-    try {
-      const response = await fetch('/api/storage/list');
-      if (response.ok) {
-        const items = (await response.json()) as { key: string; description?: string | null }[];
-        if (items.length > 0) {
-          storageOptions = items.map((item) => ({
-            value: item.key,
-            name: item.description ? `${item.key} — ${item.description}` : item.key
-          }));
-          if (!storageOptions.some((option) => option.value === submitStorageKey)) {
-            submitStorageKey = storageOptions[0].value;
-          }
-        }
-      }
-    } catch {
-      // Keep the default target when storage listing is unavailable.
-    }
-    try {
-      configSets = await listDownloadConfigSets();
-    } catch {
-      // Config sets are optional.
-    }
-  }
-
-  async function submitPlaylist(event: SubmitEvent) {
-    event.preventDefault();
-    const sourceUrl = submitUrl.trim();
-    if (!sourceUrl) {
-      submitError = 'Playlist URL is required.';
-      return;
-    }
-
-    submitBusy = true;
-    submitError = null;
-    try {
-      await queuePlaylistDownload(
-        submitConfigSetSelected
-          ? { sourceUrl, storageKey: null, configSetKey: submitConfigSetKey, fetchComments: false }
-          : {
-              sourceUrl,
-              storageKey: submitStorageKey.trim() || 'default',
-              configSetKey: null,
-              fetchComments: submitFetchComments
-            }
-      );
-      submitOpen = false;
-      actionNotice = 'Playlist download queued. It will appear in Provider playlists once available.';
-      await loadPlaylists();
-    } catch (err) {
-      submitError = err instanceof Error ? err.message : 'Could not queue the playlist download.';
-    } finally {
-      submitBusy = false;
     }
   }
 
@@ -160,9 +70,6 @@
         {#if loading}<span class="loading loading-spinner loading-xs mr-1.5"></span>{:else}<RefreshCw class="mr-1.5 h-4 w-4" />{/if}
         Refresh
       </button>
-      <button class="btn btn-sm btn-primary text-xs" onclick={openSubmitModal}>
-        <CirclePlus class="mr-1.5 h-4 w-4" /> Download playlist
-      </button>
     </div>
   </div>
 
@@ -170,12 +77,6 @@
     <div class="alert alert-error mt-5 text-sm" role="alert">
       <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{loadError}</span>
-    </div>
-  {/if}
-  {#if actionNotice}
-    <div class="mt-5 flex items-start gap-3 rounded-xl border border-success/30 bg-success/10 p-4 text-sm text-success" role="status">
-      <RefreshCw class="mt-0.5 h-4 w-4 shrink-0" />
-      <span>{actionNotice}</span>
     </div>
   {/if}
 
@@ -216,7 +117,7 @@
       <h2 id="provider-playlists-title" class="text-lg font-bold text-base-content">Provider playlists</h2>
       {#if providerPlaylistCards.length === 0}
         <p class="mt-4 rounded-xl border border-base-300/80 bg-base-200/40 p-8 text-center text-sm text-base-content/50">
-          No provider playlists yet. Queue a playlist download to add one to your library.
+          No provider playlists yet. Download a playlist from the Download page to add one to your library.
         </p>
       {:else}
         <div class="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
@@ -240,18 +141,3 @@
     </section>
   {/if}
 </section>
-
-<Modal bind:open={submitOpen} title="Queue playlist download" size="md">
-  <form id="playlist-download-form" class="space-y-4" onsubmit={submitPlaylist}>
-    <div><label class="label mb-1.5 text-xs" for="playlist-url">Playlist URL</label><input class="input w-full" id="playlist-url" type="url" required bind:value={submitUrl} placeholder="https://www.youtube.com/playlist?list=..." /></div>
-    <div>
-      <label class="label mb-1.5 text-xs" for="playlist-config-set">Config set</label>
-      <Select id="playlist-config-set" items={configSetOptions} bind:value={submitConfigSetKey} />
-      <p class="mt-1.5 text-xs text-base-content/40">Applies its saved options to every entry. Other options below are disabled while a config set is selected.</p>
-    </div>
-    <div><label class="label mb-1.5 text-xs" for="playlist-storage">Storage target</label><Select id="playlist-storage" items={storageOptions} bind:value={submitStorageKey} disabled={submitConfigSetSelected} /></div>
-    <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={submitFetchComments} disabled={submitConfigSetSelected} /><span>Fetch comments</span></label>
-    {#if submitError}<div class="alert alert-error text-sm" role="alert"><CircleAlert class="mt-0.5 h-4 w-4 shrink-0" /><span>{submitError}</span></div>{/if}
-  </form>
-  {#snippet footer()}<div class="flex w-full justify-end gap-2"><button class="btn btn-sm btn-ghost text-xs" disabled={submitBusy} onclick={() => (submitOpen = false)}>Cancel</button><button class="btn btn-sm btn-primary text-xs" type="submit" form="playlist-download-form" disabled={submitBusy}>{#if submitBusy}<span class="loading loading-spinner loading-xs mr-1.5"></span>{:else}<Download class="mr-1.5 h-4 w-4" />{/if}Queue download</button></div>{/snippet}
-</Modal>
