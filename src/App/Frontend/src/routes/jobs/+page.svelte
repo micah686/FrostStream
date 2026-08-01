@@ -5,7 +5,7 @@
     ChevronLeft,
     ChevronRight,
     CircleAlert,
-    Download,
+    CircleCheck,
     RefreshCw,
     Server,
     Trash2
@@ -335,21 +335,9 @@
     </div>
 
     <div class="flex flex-wrap items-center gap-2">
-      <span
-        class={[
-          'inline-flex h-9 items-center gap-2 rounded-full border px-3 text-xs font-semibold',
-          queueState.connected
-            ? 'border-success/25 bg-success/10 text-success'
-            : 'border-base-content/20 bg-base-200 text-base-content/60'
-        ]}
-      >
-        <span
-          class={[
-            'h-2 w-2 rounded-full',
-            queueState.connected ? 'bg-success shadow-[0_0_10px_var(--color-success)]' : 'bg-base-300'
-          ]}
-        ></span>
-        {queueState.connected ? 'SSE live' : 'Connecting'}
+      <span class={queueState.connected ? 'badge badge-success bg-success text-success-content gap-1.5' : 'badge badge-error bg-error text-error-content gap-1.5'}>
+        <span class={queueState.connected ? 'status status-success' : 'status status-error'}></span>
+        {queueState.connected ? 'SSE Live' : 'SSE Offline'}
       </span>
       <button class="btn btn-sm btn-neutral text-xs" onclick={refreshQueue} disabled={queueState.loading}>
         {#if queueState.loading}
@@ -359,14 +347,10 @@
         {/if}
         Refresh
       </button>
-      <button class="btn btn-sm btn-ghost text-xs" onclick={openCleanup}>
+      <button class="btn btn-sm btn-neutral text-xs" onclick={openCleanup}>
         <Trash2 class="mr-1.5 h-4 w-4" />
         Clean up
       </button>
-      <a class="btn btn-sm btn-primary text-xs" href="/download">
-        <Download class="mr-1.5 h-4 w-4" />
-        New
-      </a>
     </div>
   </div>
 
