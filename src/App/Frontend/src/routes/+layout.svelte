@@ -56,8 +56,7 @@
   ];
 
   const accountNavigation: NavItem[] = [
-    { label: 'Profile', icon: User, href: '/profile' },
-    { label: 'Settings', icon: Cog }
+    { label: 'Profile', icon: User, href: '/profile' }
   ];
 
   let drawerOpen = $state(false);
