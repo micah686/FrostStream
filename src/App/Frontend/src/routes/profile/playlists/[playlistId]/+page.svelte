@@ -196,8 +196,8 @@
             <h2 class="text-base font-bold text-base-content">Delete this playlist</h2>
             <p class="mt-1 text-sm text-base-content/60">The videos in it stay on the server.</p>
           </div>
-          <button class="btn btn-sm btn-ghost shrink-0 text-xs" onclick={() => (deleteModalOpen = true)}>
-            <Trash2 class="mr-1.5 h-3.5 w-3.5" />
+          <button class="btn btn-sm btn-neutral shrink-0 text-xs" onclick={() => (deleteModalOpen = true)}>
+            <Trash2 class="mr-1.5 h-4 w-4" />
             Delete playlist
           </button>
         </div>

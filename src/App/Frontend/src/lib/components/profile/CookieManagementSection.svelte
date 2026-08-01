@@ -190,7 +190,7 @@
           class="flex min-h-[3.95rem] flex-col gap-3 rounded-lg border border-base-content/20 bg-base-100 px-3 py-3 transition hover:border-base-content/30 hover:bg-base-300/30 sm:flex-row sm:items-center sm:px-4"
         >
           <div class="flex min-w-0 items-center gap-3">
-            <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-base-300/70 text-warning">
+            <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-base-300/70 text-primary">
               <Cookie class="h-4.5 w-4.5" />
             </span>
             <div class="min-w-0">
@@ -216,7 +216,7 @@
           <div class="flex shrink-0 gap-2 sm:ml-auto">
             <button
               type="button"
-              class="inline-flex h-10 min-w-24 items-center justify-center gap-2 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary"
+              class="btn btn-sm btn-neutral text-xs"
               aria-label={`Replace cookies for ${profile.profileKey}`}
               onclick={() => openReplaceForm(profile)}
             >
@@ -225,12 +225,13 @@
             </button>
             <button
               type="button"
-              class="inline-flex h-10 min-w-10 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-base-content/80 transition hover:border-error/60 hover:bg-error/10 hover:text-error"
+              class="btn btn-sm btn-neutral text-xs"
               title="Delete cookie profile"
               aria-label={`Delete cookie profile ${profile.profileKey}`}
               onclick={() => requestDelete(profile)}
             >
-              <Trash2 class="h-4 w-4" />
+              <Trash2 class="mr-1.5 h-4 w-4" />
+              Delete
             </button>
           </div>
         </article>
@@ -276,7 +277,7 @@
         <div class="mb-2 flex items-center justify-between">
           <label class="label text-sm" for="cookie-content">Cookie content</label>
           <label
-            class="cursor-pointer rounded-lg border border-base-content/20 px-2.5 py-1 text-[11px] font-semibold text-base-content/80 transition hover:border-base-content/30 hover:bg-base-300"
+            class="btn btn-sm btn-neutral text-xs"
           >
             Import cookies.txt
             <input type="file" accept=".txt,text/plain" class="hidden" onchange={importFile} />

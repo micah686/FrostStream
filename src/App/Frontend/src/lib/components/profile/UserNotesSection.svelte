@@ -250,7 +250,7 @@
               </button>
               <button
                 type="button"
-                class="inline-flex h-9 min-w-9 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-base-content/80 transition hover:border-error/60 hover:bg-error/10 hover:text-error disabled:opacity-50"
+                class="btn btn-sm btn-neutral text-xs"
                 title="Delete note"
                 aria-label={`Delete note for ${note.targetTitle ?? note.targetId}`}
                 disabled={deletingKey === key}
@@ -260,10 +260,11 @@
                 }}
               >
                 {#if deletingKey === key}
-                  <span class="loading loading-spinner loading-xs"></span>
+                  <span class="loading loading-spinner loading-xs mr-1.5"></span>
                 {:else}
-                  <Trash2 class="h-4 w-4" />
+                  <Trash2 class="mr-1.5 h-4 w-4" />
                 {/if}
+                Delete
               </button>
             </div>
           </div>
