@@ -44,6 +44,7 @@
   const libraryNavigation: NavItem[] = [
     { label: 'Library', icon: LayoutList, href: '/library' },
     { label: 'Channels', icon: Users, href: '/library/creators' },
+    { label: 'Playlists', icon: ClipboardList, href: '/library?tab=Playlists' },
     { label: 'History', icon: History, href: '/library?tab=History' },
     { label: 'Liked', icon: Heart, href: '/library?tab=Liked' }
   ];
@@ -51,7 +52,6 @@
   const serverNavigation: NavItem[] = [
     { label: 'Download', icon: Download, href: '/download' },
     { label: 'Jobs', icon: Server, href: '/jobs' },
-    { label: 'Playlists', icon: ClipboardList, href: '/playlists' },
     { label: 'Creators', icon: Users, href: '/creators' }
   ];
 
