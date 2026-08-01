@@ -22,7 +22,7 @@
 
   const targetOptions = [
     { value: 'all', name: 'All targets' },
-    { value: 'video', name: 'Videos' },
+    { value: 'video', name: 'Media' },
     { value: 'playlist', name: 'Playlists' },
     { value: 'channel', name: 'Channels' }
   ];
@@ -42,6 +42,7 @@
   let deleteModalOpen = $state(false);
   let pendingDelete = $state<UserNote | null>(null);
   let deletingKey = $state<string | null>(null);
+  let mediaTitles = $state<Record<string, string>>({});
 
   const pageSize = 25;
   const totalPages = $derived(Math.max(1, Math.ceil(totalCount / pageSize)));
@@ -60,7 +61,23 @@
         page: targetPage,
         pageSize
       });
-      notes = result.items;
+      notes = await Promise.all(result.items.map(async (note) => {
+        if (note.targetType !== 'video') {
+          return note;
+        }
+        try {
+          const response = await fetch(`/api/metadata/${encodeURIComponent(note.targetId)}`);
+          if (response.ok) {
+            const metadata = (await response.json()) as { title?: string | null };
+            if (metadata.title) {
+              mediaTitles = { ...mediaTitles, [note.targetId]: metadata.title };
+            }
+          }
+        } catch {
+          // Keep the media GUID as a fallback when metadata is unavailable.
+        }
+        return note;
+      }));
       page = result.page;
       totalCount = result.totalCount;
       hasMore = result.hasMore;
@@ -145,8 +162,12 @@
       case 'playlist':
         return 'Playlist';
       default:
-        return 'Video';
+        return 'Media';
     }
+  }
+
+  function targetTitle(note: UserNote): string {
+    return mediaTitles[note.targetId] ?? note.targetTitle ?? note.targetId;
   }
 
   function displayDate(value: string | null): string | null {
@@ -169,7 +190,7 @@
         Private notes saved against videos, playlists, and channels.
       </p>
     </div>
-    <span class="rounded-full bg-base-300 px-2.5 py-1 text-[10px] font-semibold text-base-content/60">
+    <span class="badge badge-accent text-[10px] font-semibold text-accent-content">
       {totalCount} {totalCount === 1 ? 'note' : 'notes'}
     </span>
   </div>
@@ -180,7 +201,7 @@
       <input class="input w-full pl-9" bind:value={query} aria-label="Search notes" placeholder="Search notes" />
     </div>
     <Select items={targetOptions} bind:value={targetType} />
-    <button class="btn btn-sm btn-neutral text-xs" type="submit" disabled={loading}>
+    <button class="btn btn-sm btn-neutral text-xs lg:self-center" type="submit" disabled={loading}>
       {#if loading}
         <span class="loading loading-spinner loading-xs mr-1.5"></span>
       {/if}
@@ -216,16 +237,15 @@
         <article class="rounded-lg border border-base-content/20 bg-base-100 px-3 py-3 transition hover:border-base-content/30 hover:bg-base-300/30 sm:px-4">
           <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div class="min-w-0">
-              <div class="flex min-w-0 flex-wrap items-center gap-2">
-                <span class="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase text-primary">
-                  {targetLabel(note)}
-                </span>
-                <h3 class="truncate text-sm font-semibold text-base-content">
-                  {note.targetTitle ?? note.targetId}
-                </h3>
+              <div class="flex min-w-0 items-center gap-2">
+                <h3 class="truncate text-sm font-semibold text-base-content">{targetTitle(note)}</h3>
                 {#if displayDate(note.updatedAt ?? note.createdAt)}
-                  <span class="text-xs text-base-content/40">updated {displayDate(note.updatedAt ?? note.createdAt)}</span>
+                  <span class="shrink-0 text-xs text-base-content/40">updated {displayDate(note.updatedAt ?? note.createdAt)}</span>
                 {/if}
+              </div>
+              <div class="mt-1 flex min-w-0 items-center gap-2">
+                <span class="truncate font-mono text-xs text-base-content/50">{note.targetId}</span>
+                <span class="badge badge-sm badge-accent shrink-0 text-[10px] text-accent-content">{targetLabel(note)}</span>
               </div>
               {#if note.targetSubtitle}
                 <p class="mt-1 truncate text-xs text-base-content/50">{note.targetSubtitle}</p>
@@ -235,14 +255,14 @@
             <div class="flex shrink-0 flex-wrap gap-2">
               <a
                 href={targetHref(note)}
-                class="inline-flex h-9 min-w-20 items-center justify-center gap-1.5 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary"
+                class="btn btn-sm btn-neutral text-xs"
               >
                 <Eye class="h-4 w-4" />
                 View
               </a>
               <button
                 type="button"
-                class="inline-flex h-9 min-w-20 items-center justify-center gap-1.5 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary"
+                class="btn btn-sm btn-neutral text-xs"
                 onclick={() => (editing ? (editingKey = null) : startEdit(note))}
               >
                 <Pencil class="h-4 w-4" />
@@ -252,7 +272,7 @@
                 type="button"
                 class="btn btn-sm btn-neutral text-xs"
                 title="Delete note"
-                aria-label={`Delete note for ${note.targetTitle ?? note.targetId}`}
+                aria-label={`Delete note for ${targetTitle(note)}`}
                 disabled={deletingKey === key}
                 onclick={() => {
                   pendingDelete = note;
@@ -301,10 +321,10 @@
     <div class="mt-5 flex items-center justify-between border-t border-base-300/70 pt-4">
       <p class="text-xs text-base-content/40">Page {page} of {totalPages}</p>
       <div class="flex gap-2">
-        <button class="btn btn-sm btn-ghost text-xs" disabled={page <= 1 || loading} onclick={() => loadNotes(page - 1)}>
+        <button class="btn btn-sm btn-neutral text-xs" disabled={page <= 1 || loading} onclick={() => loadNotes(page - 1)}>
           Previous
         </button>
-        <button class="btn btn-sm btn-ghost text-xs" disabled={!hasMore || loading} onclick={() => loadNotes(page + 1)}>
+        <button class="btn btn-sm btn-neutral text-xs" disabled={!hasMore || loading} onclick={() => loadNotes(page + 1)}>
           Next
         </button>
       </div>
@@ -315,7 +335,7 @@
 <ConfirmDeleteModal
   bind:open={deleteModalOpen}
   title="Delete note"
-  message={pendingDelete ? `Delete the note for "${pendingDelete.targetTitle ?? pendingDelete.targetId}"?` : ''}
+  message={pendingDelete ? `Delete the note for "${targetTitle(pendingDelete)}"?` : ''}
   confirmLabel="Delete note"
   onConfirm={confirmDelete}
 />

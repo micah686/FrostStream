@@ -62,7 +62,8 @@ public sealed class AudioRenditionConsumerService(
                         context.Message.AccountId,
                         context.Message.StorageKey,
                         context.Message.CreateIfMissing,
-                        context.Message.RetryFailedAndPending);
+                        context.Message.RetryFailedAndPending,
+                        context.Message.ForceReencode);
             }
 
             if (result is null)

@@ -86,7 +86,7 @@
       <ChevronDown class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
     </summary>
     <div class="mt-4 space-y-4">
-      <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle" bind:checked={opts.audioOnly} /><span>Audio only <span class="ml-1 text-xs text-base-content/40">(skip the video, keep just the sound)</span></span></label>
+      <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle toggle-primary" bind:checked={opts.audioOnly} /><span>Audio only <span class="ml-1 text-xs text-base-content/40">(skip the video, keep just the sound)</span></span></label>
       <div class="grid gap-4 sm:grid-cols-2">
         <div>
           <label class="label mb-2 text-sm" for="opt-audio-format">Audio format</label>
@@ -119,7 +119,7 @@
       </div>
       <TriStateSelect id="opt-embed-subs" label="Embed subtitles in the video" bind:value={opts.embedSubs} />
       <div class="sm:col-span-2">
-        <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle" bind:checked={opts.includeLiveChat} /><span>Include live chat
+        <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle toggle-primary" bind:checked={opts.includeLiveChat} /><span>Include live chat
           <span class="ml-1 text-xs text-base-content/40">
             (keep the live-chat replay; off by default, so it is dropped even when Languages is “all”)
           </span></span></label>
@@ -326,8 +326,8 @@
     </summary>
     <div class="mt-4 space-y-4">
       <div class="flex flex-wrap gap-x-8 gap-y-3">
-        <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle" bind:checked={opts.noCheckCertificates} /><span>Skip certificate checks</span></label>
-        <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle" bind:checked={opts.legacyServerConnect} /><span>Allow legacy server connections</span></label>
+        <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle toggle-primary" bind:checked={opts.noCheckCertificates} /><span>Skip certificate checks</span></label>
+        <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle toggle-primary" bind:checked={opts.legacyServerConnect} /><span>Allow legacy server connections</span></label>
       </div>
       <div class="grid gap-4 sm:grid-cols-2">
         <div>

@@ -1,12 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { goto } from '$app/navigation';
-  import { ArrowLeft, Check, CircleAlert, Trash2 } from '@lucide/svelte';
-  import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
+  import { ArrowLeft, Check, CircleAlert } from '@lucide/svelte';
   import PlaylistItemsManager from '$lib/components/profile/PlaylistItemsManager.svelte';
   import TargetNotePanel from '$lib/components/TargetNotePanel.svelte';
   import {
-    deleteUserPlaylist,
     getUserPlaylist,
     updateUserPlaylist,
     type UserPlaylist
@@ -24,8 +21,6 @@
   let formBusy = $state(false);
   let formError = $state<string | null>(null);
   let formSaved = $state(false);
-
-  let deleteModalOpen = $state(false);
 
   const formValid = $derived(formName.trim().length > 0 && formName.trim().length <= 255);
   const formDirty = $derived(
@@ -77,14 +72,6 @@
     }
   }
 
-  async function confirmDelete() {
-    if (!playlist) {
-      return;
-    }
-    await deleteUserPlaylist(playlist.playlistId);
-    await goto('/profile/playlists');
-  }
-
   function onItemsUpdated(updated: UserPlaylist) {
     playlist = updated;
   }
@@ -120,11 +107,10 @@
       </a>
     </div>
   {:else if playlist}
-    <div class="space-y-5">
-      <section class="card border border-base-300 bg-base-100 p-5 sm:p-6" aria-label="Playlist details">
+    <section class="card border border-base-300 bg-base-100 p-5 sm:p-6" aria-label="Playlist editor">
         <h2 class="text-base font-bold text-base-content">Details</h2>
 
-        <form class="mt-4 space-y-4" onsubmit={saveDetails}>
+        <form id="playlist-details-form" class="mt-4 space-y-4" onsubmit={saveDetails}>
           {#if formError}
             <div
               class="alert alert-error text-sm"
@@ -146,36 +132,24 @@
             <textarea class="textarea w-full" id="playlist-description" bind:value={formDescription} maxlength={2048} rows={3} placeholder="What belongs in this playlist?"></textarea>
           </div>
 
-          <div class="flex flex-wrap items-center gap-3">
-            <button class="btn btn-sm btn-primary text-xs" type="submit" disabled={!formValid || !formDirty || formBusy}>
-              {#if formBusy}
-                <span class="loading loading-spinner loading-xs mr-1.5"></span>
-              {/if}
-              Save changes
-            </button>
-            {#if formSaved && !formDirty}
-              <span class="flex items-center gap-1.5 text-xs font-semibold text-success">
-                <Check class="h-3.5 w-3.5" />
-                Saved
-              </span>
-            {/if}
-          </div>
         </form>
-      </section>
 
-      <TargetNotePanel
+      <div class="mt-5 border-t border-base-300/70 pt-5">
+        <TargetNotePanel
         targetType="playlist"
         targetId={playlist.playlistId}
         targetLabel="Playlist"
+        embedded
         initialNote={playlist.userNote}
         onChange={(note) => {
           if (playlist) {
             playlist = { ...playlist, userNote: note };
           }
         }}
-      />
+        />
+      </div>
 
-      <section class="card border border-base-300 bg-base-100 p-5 sm:p-6" aria-label="Playlist items">
+      <section class="mt-5 border-t border-base-300/70 pt-5" aria-label="Playlist items">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <h2 class="text-base font-bold text-base-content">
             Videos
@@ -190,33 +164,24 @@
         </div>
       </section>
 
-      <section class="rounded-2xl border border-error/30 bg-base-100 p-5 shadow-xl shadow-black/15 sm:p-6" aria-label="Danger zone">
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 class="text-base font-bold text-base-content">Delete this playlist</h2>
-            <p class="mt-1 text-sm text-base-content/60">The videos in it stay on the server.</p>
-          </div>
-          <button class="btn btn-sm btn-neutral shrink-0 text-xs" onclick={() => (deleteModalOpen = true)}>
-            <Trash2 class="mr-1.5 h-4 w-4" />
-            Delete playlist
-          </button>
-        </div>
-      </section>
-
-      <div class="border-t border-base-300/70 pt-5">
-        <a class="btn btn-sm btn-ghost text-xs" href="/profile/playlists">
+      <div class="mt-5 flex flex-col-reverse gap-3 border-t border-base-300/70 pt-5 sm:flex-row sm:justify-between">
+        <a class="btn btn-sm btn-neutral text-xs" href="/profile/playlists">
           <ArrowLeft class="mr-1.5 h-4 w-4" />
           Back
         </a>
+        <div class="flex items-center gap-3">
+          {#if formSaved && !formDirty}
+            <span class="flex items-center gap-1.5 text-xs font-semibold text-success">
+              <Check class="h-3.5 w-3.5" />
+              Saved
+            </span>
+          {/if}
+          <button class="btn btn-sm btn-primary text-xs" type="submit" form="playlist-details-form" disabled={!formValid || !formDirty || formBusy}>
+            {#if formBusy}<span class="loading loading-spinner loading-xs mr-1.5"></span>{/if}
+            Save changes
+          </button>
+        </div>
       </div>
-    </div>
+    </section>
   {/if}
 </section>
-
-<ConfirmDeleteModal
-  bind:open={deleteModalOpen}
-  title="Delete playlist"
-  message={`Delete playlist "${playlist?.name ?? ''}"? The videos in it stay on the server.`}
-  confirmLabel="Delete playlist"
-  onConfirm={confirmDelete}
-/>

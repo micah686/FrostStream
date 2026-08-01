@@ -1,11 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { ArrowLeft, CircleAlert, Trash2 } from '@lucide/svelte';
-  import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
+  import { ArrowLeft, CircleAlert } from '@lucide/svelte';
   import {
-    deleteStorage,
     displayLocalPath,
     getStorage,
     storageMethodLabel,
@@ -21,8 +18,6 @@
   let storage = $state<StorageConfig | null>(null);
   let loading = $state(true);
   let error = $state<string | null>(null);
-  let deleting = $state(false);
-  let deleteModalOpen = $state(false);
 
   onMount(async () => {
     try {
@@ -33,23 +28,6 @@
       loading = false;
     }
   });
-
-  async function removeStorage() {
-    if (!storage) {
-      return;
-    }
-    deleting = true;
-    error = null;
-    try {
-      await deleteStorage(storage.key);
-      deleteModalOpen = false;
-      await goto('/admin');
-    } catch (err) {
-      error = err instanceof Error ? err.message : 'Could not delete the storage target.';
-    } finally {
-      deleting = false;
-    }
-  }
 
   function formatInstant(value: string | null): string {
     return value ? new Date(value).toLocaleString() : '—';
@@ -119,14 +97,6 @@
 </svelte:head>
 
 <section class="mx-auto min-h-[calc(100vh-7rem)] max-w-4xl" aria-labelledby="storage-detail-title">
-  <a
-    href="/admin"
-    class="inline-flex items-center gap-1.5 text-xs font-semibold text-base-content/60 transition hover:text-base-content/90"
-  >
-    <ArrowLeft class="h-3.5 w-3.5" />
-    Back to administration
-  </a>
-
   {#if loading}
     <div class="mt-16 flex justify-center">
       <span class="loading loading-spinner loading-md"></span>
@@ -146,23 +116,13 @@
           <h1 id="storage-detail-title" class="truncate text-2xl font-bold tracking-tight text-base-content">
             {storage.key}
           </h1>
-          <span class="rounded-full bg-base-300 px-2.5 py-0.5 text-[10px] font-semibold text-base-content/60">
+          <span class="badge badge-primary badge-sm text-[10px] font-semibold">
             {storageMethodLabel(storage)}
           </span>
         </div>
         <p class="mt-2 text-sm text-base-content/60">{storage.description || 'No description'}</p>
       </div>
 
-      {#if storage.key !== 'default'}
-        <button class="btn btn-sm btn-neutral shrink-0 text-xs" disabled={deleting} onclick={() => (deleteModalOpen = true)}>
-          {#if deleting}
-            <span class="loading loading-spinner loading-xs mr-1.5"></span>
-          {:else}
-            <Trash2 class="mr-1.5 h-4 w-4" />
-          {/if}
-          Delete
-        </button>
-      {/if}
     </div>
 
     {#if error}
@@ -177,16 +137,16 @@
 
     <section
       class="mt-6 card border border-base-300 bg-base-100 p-5 sm:p-6"
-      aria-label="Storage settings"
+      aria-label="Storage view"
     >
-      <h2 class="text-base font-bold text-base-content">Settings</h2>
+      <h2 class="text-base font-bold text-base-content">View</h2>
       <p class="mt-2 text-sm text-base-content/60">
         Credentials are stored in the secret store and are not shown here.
       </p>
 
       <dl class="mt-5 grid gap-3 sm:grid-cols-2">
         {#each settings as entry (entry.label)}
-          <div class="rounded-xl border border-base-300/80 bg-base-200/40 p-4">
+          <div class="card border border-base-300 bg-base-100 p-4">
             <dt class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">{entry.label}</dt>
             <dd class={['mt-1 break-all text-sm text-base-content/80', entry.mono && 'font-mono']}>{entry.value}</dd>
           </div>
@@ -194,27 +154,26 @@
       </dl>
     </section>
 
-    <section class="mt-5 grid gap-3 sm:grid-cols-3" aria-label="Storage metadata">
-      <div class="rounded-xl border border-base-300/80 bg-base-200/40 p-4">
+    <section class="mt-5 grid gap-4 sm:grid-cols-3" aria-label="Storage metadata">
+      <div class="card border border-base-300 bg-base-100 p-4">
         <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Created</p>
         <p class="mt-1 text-sm text-base-content/80">{formatInstant(storage.createdAt)}</p>
       </div>
-      <div class="rounded-xl border border-base-300/80 bg-base-200/40 p-4">
+      <div class="card border border-base-300 bg-base-100 p-4">
         <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Last updated</p>
         <p class="mt-1 text-sm text-base-content/80">{formatInstant(storage.lastUpdated)}</p>
       </div>
-      <div class="rounded-xl border border-base-300/80 bg-base-200/40 p-4">
+      <div class="card border border-base-300 bg-base-100 p-4">
         <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Worker tag</p>
         <p class="mt-1 text-sm text-base-content/80">{storage.workerTag ?? 'Any worker'}</p>
       </div>
     </section>
+    <div class="mt-5 border-t border-base-300/70 pt-5">
+      <a class="btn btn-sm btn-neutral text-xs" href="/admin/storage">
+        <ArrowLeft class="mr-1.5 h-4 w-4" />
+        Back
+      </a>
+    </div>
   {/if}
 
-  <ConfirmDeleteModal
-    bind:open={deleteModalOpen}
-    title="Delete storage target"
-    message={storage ? `Delete storage target "${storage.key}"? Media already stored there will no longer be reachable through this key.` : ''}
-    confirmLabel="Delete storage"
-    onConfirm={removeStorage}
-  />
 </section>

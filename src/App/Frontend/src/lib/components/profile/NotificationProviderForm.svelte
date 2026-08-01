@@ -7,6 +7,10 @@
     Bell,
     CircleAlert,
     CircleCheck,
+    ChevronDown,
+    ChevronUp,
+    Eye,
+    EyeOff,
     FlaskConical,
     Plus,
     Send
@@ -73,6 +77,7 @@
   let configValues = $state<Record<string, string | boolean>>({});
   let secretValues = $state<Record<string, string>>({});
   let preservedSecretRefs = $state<Record<string, string>>({});
+  let visibleSecrets = $state<Record<string, boolean>>({});
   let savingProvider = $state(false);
   let submitError = $state<string | null>(null);
 
@@ -81,6 +86,7 @@
   let testingProvider = $state(false);
   let testError = $state<string | null>(null);
   let testStatus = $state<string | null>(null);
+  let testDeliveryOpen = $state(false);
 
   const activeDefinition = $derived(providerDefinition(providerKind));
   const activeService = $derived(activeDefinition.services?.find((service) => service.value === serviceProvider) ?? null);
@@ -462,6 +468,10 @@
     secretValues = { ...secretValues, [fieldKey]: value };
   }
 
+  function toggleSecret(fieldKey: string) {
+    visibleSecrets = { ...visibleSecrets, [fieldKey]: !visibleSecrets[fieldKey] };
+  }
+
   function updateCheckboxValue(fieldKey: string, value: boolean) {
     configValues = { ...configValues, [fieldKey]: value };
   }
@@ -476,6 +486,7 @@
     configValues = defaultConfigValues(definition.fields ?? definition.services?.[0]?.fields ?? []);
     secretValues = {};
     preservedSecretRefs = {};
+    visibleSecrets = {};
   }
 
   function hydrateConfig(kind: string, config: Record<string, unknown> | null | undefined) {
@@ -509,6 +520,7 @@
     configValues = nextValues;
     secretValues = {};
     preservedSecretRefs = nextRefs;
+    visibleSecrets = {};
   }
 
   function buildNotifyConfig(key: string): { notifyConfig: Record<string, unknown>; secrets: Record<string, string> } {
@@ -623,6 +635,14 @@
 </script>
 
 <form onsubmit={saveProvider} class="space-y-5">
+  <div class="flex items-center justify-between border-b border-base-300/70 pb-5">
+    <div>
+      <p class="text-sm font-semibold text-base-content">Enabled</p>
+      <p class="mt-0.5 text-xs text-base-content/50">Allow this provider to receive selected notification events.</p>
+    </div>
+    <input type="checkbox" class="toggle toggle-primary" bind:checked={providerEnabled} />
+  </div>
+
   <div class="grid gap-4 md:grid-cols-2">
     <div>
       <label class="label mb-2 text-sm" for="notification-provider-key">Provider key</label>
@@ -632,7 +652,7 @@
     </div>
     <div>
       <label class="label mb-2 text-sm" for="notification-provider-kind">Provider kind</label>
-      <Select id="notification-provider-kind" items={providerKindItems} bind:value={providerKind} onchange={onProviderKindChange} class="text-sm" />
+      <Select id="notification-provider-kind" items={providerKindItems} bind:value={providerKind} onchange={onProviderKindChange} disabled={isUpdate} class="text-sm" />
     </div>
   </div>
 
@@ -647,6 +667,37 @@
     </div>
   </div>
 
+  {#if isUpdate && initial}
+    <details bind:open={testDeliveryOpen} class="collapse mx-1 border border-base-300 bg-base-100">
+      <summary class="collapse-title relative min-h-0 cursor-pointer py-3 text-sm font-bold text-base-content">
+        <span class="flex items-center gap-2"><FlaskConical class="h-4 w-4 text-primary" />Test delivery</span>
+        {#if testDeliveryOpen}<ChevronUp class="absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-base-content/60" />{:else}<ChevronDown class="absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-base-content/60" />{/if}
+      </summary>
+      <div class="collapse-content px-4 pb-4">
+        {#if testError}
+          <div class="alert alert-error text-sm" role="alert"><CircleAlert class="h-4 w-4 shrink-0" /><span>{testError}</span></div>
+        {/if}
+        {#if testStatus}
+          <div class="alert alert-success mt-3 text-sm" role="status"><CircleCheck class="h-4 w-4 shrink-0" /><span>{testStatus}</span></div>
+        {/if}
+        <div class="grid gap-4 md:grid-cols-2">
+          <div>
+            <label class="label mb-2 text-sm" for="notification-test-subject">Subject</label>
+            <input class="input w-full" id="notification-test-subject" bind:value={testSubject} />
+          </div>
+          <div>
+            <label class="label mb-2 text-sm" for="notification-test-body">Body</label>
+            <textarea class="textarea w-full text-sm" id="notification-test-body" rows={3} bind:value={testBody}></textarea>
+          </div>
+        </div>
+        <button class="btn btn-sm btn-primary mt-4 text-xs" type="button" disabled={testingProvider} onclick={sendTest}>
+          {#if testingProvider}<span class="loading loading-spinner loading-xs mr-1.5"></span>{:else}<Send class="mr-1.5 h-4 w-4" />{/if}
+          Send test
+        </button>
+      </div>
+    </details>
+  {/if}
+
   <div class="border-t border-base-300/70 pt-5">
     <div class="flex items-center gap-2">
       <Bell class="h-4 w-4 text-primary" />
@@ -657,7 +708,7 @@
     </p>
 
     <div class="mt-4 grid gap-4 lg:grid-cols-2">
-      <section class="rounded-xl border border-base-300/80 bg-base-200/20 p-4" aria-labelledby="user-notification-sources">
+      <section class="card border border-base-300 bg-base-100 p-4" aria-labelledby="user-notification-sources">
         <h4 id="user-notification-sources" class="text-xs font-bold uppercase tracking-wide text-base-content/60">
           User events
         </h4>
@@ -679,7 +730,7 @@
         </div>
       </section>
 
-      <section class="rounded-xl border border-base-300/80 bg-base-200/20 p-4" aria-labelledby="admin-notification-sources">
+      <section class="card border border-base-300 bg-base-100 p-4" aria-labelledby="admin-notification-sources">
         <h4 id="admin-notification-sources" class="text-xs font-bold uppercase tracking-wide text-base-content/60">
           Admin operational events
         </h4>
@@ -729,13 +780,20 @@
             <label class="label mb-2 text-sm" for={`notification-field-${field.key}`}>
               {field.label}
             </label>
-            <textarea class="textarea w-full text-sm" id={`notification-field-${field.key}`} rows={field.secret ? 4 : 5} value={field.secret ? (secretValues[field.key] ?? '') : String(configValues[field.key] ?? '')} oninput={(event) => {
-                if (field.secret) {
-                  updateSecretValue(field.key, inputValue(event));
-                } else {
-                  updateConfigValue(field.key, inputValue(event));
-                }
-              }} placeholder={field.secret && preservedSecretRefs[field.key] ? 'Stored secret is already configured' : field.placeholder}></textarea>
+            <div class="relative">
+              <textarea class="textarea w-full text-sm" id={`notification-field-${field.key}`} rows={field.secret ? 4 : 5} style={field.secret && !visibleSecrets[field.key] ? '-webkit-text-security: disc;' : undefined} value={field.secret ? (secretValues[field.key] ?? '') : String(configValues[field.key] ?? '')} oninput={(event) => {
+                  if (field.secret) {
+                    updateSecretValue(field.key, inputValue(event));
+                  } else {
+                    updateConfigValue(field.key, inputValue(event));
+                  }
+                }} placeholder={field.secret && preservedSecretRefs[field.key] ? 'Stored secret is already configured' : field.placeholder}></textarea>
+              {#if field.secret}
+                <button type="button" class="btn btn-ghost btn-xs absolute right-2 top-2" aria-label={visibleSecrets[field.key] ? `Hide ${field.label}` : `Show ${field.label}`} onclick={() => toggleSecret(field.key)}>
+                  {#if visibleSecrets[field.key]}<EyeOff class="h-4 w-4" />{:else}<Eye class="h-4 w-4" />{/if}
+                </button>
+              {/if}
+            </div>
             {#if field.secret}
               <p class="mt-1.5 text-xs text-base-content/40">
                 {preservedSecretRefs[field.key]
@@ -749,13 +807,20 @@
             <label class="label mb-2 text-sm" for={`notification-field-${field.key}`}>
               {field.label}
             </label>
-            <input class="input w-full" id={`notification-field-${field.key}`} type={fieldInputType(field)} value={field.secret ? (secretValues[field.key] ?? '') : String(configValues[field.key] ?? '')} placeholder={field.secret && preservedSecretRefs[field.key] ? 'Stored secret is already configured' : field.placeholder} oninput={(event) => {
-                if (field.secret) {
-                  updateSecretValue(field.key, inputValue(event));
-                } else {
-                  updateConfigValue(field.key, inputValue(event));
-                }
-              }} />
+            <div class="relative">
+              <input class="input w-full pr-10" id={`notification-field-${field.key}`} type={field.secret ? (visibleSecrets[field.key] ? 'text' : 'password') : fieldInputType(field)} value={field.secret ? (secretValues[field.key] ?? '') : String(configValues[field.key] ?? '')} placeholder={field.secret && preservedSecretRefs[field.key] ? 'Stored secret is already configured' : field.placeholder} oninput={(event) => {
+                  if (field.secret) {
+                    updateSecretValue(field.key, inputValue(event));
+                  } else {
+                    updateConfigValue(field.key, inputValue(event));
+                  }
+                }} />
+              {#if field.secret}
+                <button type="button" class="btn btn-ghost btn-xs absolute right-1 top-1/2 -translate-y-1/2" aria-label={visibleSecrets[field.key] ? `Hide ${field.label}` : `Show ${field.label}`} onclick={() => toggleSecret(field.key)}>
+                  {#if visibleSecrets[field.key]}<EyeOff class="h-4 w-4" />{:else}<Eye class="h-4 w-4" />{/if}
+                </button>
+              {/if}
+            </div>
             {#if field.secret}
               <p class="mt-1.5 text-xs text-base-content/40">
                 {preservedSecretRefs[field.key]
@@ -780,13 +845,11 @@
   {/if}
 
   <div class="flex flex-col-reverse gap-3 border-t border-base-300/70 pt-5 sm:flex-row sm:items-center sm:justify-between">
-    <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={providerEnabled} /><span>Enabled</span></label>
-    <div class="flex flex-col-reverse gap-3 sm:flex-row">
-      <a class="btn btn-sm btn-ghost text-xs" href="/profile/notifications">
-        <ArrowLeft class="mr-1.5 h-4 w-4" />
-        Back
-      </a>
-      <button class="btn btn-sm btn-primary text-xs" type="submit" disabled={savingProvider}>
+    <a class="btn btn-sm btn-neutral text-xs" href="/profile/notifications">
+      <ArrowLeft class="mr-1.5 h-4 w-4" />
+      Back
+    </a>
+    <button class="btn btn-sm btn-primary text-xs" type="submit" disabled={savingProvider}>
         {#if savingProvider}
           <span class="loading loading-spinner loading-xs mr-2"></span>
         {:else if isUpdate}
@@ -795,54 +858,6 @@
           <Plus class="mr-1.5 h-4 w-4" />
         {/if}
         {isUpdate ? 'Save changes' : 'Create provider'}
-      </button>
-    </div>
+    </button>
   </div>
 </form>
-
-{#if isUpdate && initial}
-  <section class="mt-5 rounded-xl border border-base-300/80 bg-base-200/20 p-4" aria-labelledby="notification-test-title">
-    <h3 id="notification-test-title" class="flex items-center gap-2 text-sm font-bold text-base-content">
-      <FlaskConical class="h-4 w-4 text-primary" />
-      Test delivery
-    </h3>
-
-    {#if testError}
-      <div
-        class="alert alert-error mt-4 text-sm"
-        role="alert"
-      >
-        <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
-        <span>{testError}</span>
-      </div>
-    {/if}
-
-    {#if testStatus}
-      <div
-        class="mt-4 flex items-start gap-2 rounded-xl border border-success/30 bg-success/10 p-3 text-sm text-success"
-        role="status"
-      >
-        <CircleCheck class="mt-0.5 h-4 w-4 shrink-0" />
-        <span>{testStatus}</span>
-      </div>
-    {/if}
-
-    <div class="mt-4">
-      <label class="label mb-2 text-sm" for="notification-test-subject">Subject</label>
-      <input class="input w-full" id="notification-test-subject" bind:value={testSubject} />
-    </div>
-    <div class="mt-4">
-      <label class="label mb-2 text-sm" for="notification-test-body">Body</label>
-      <textarea class="textarea w-full text-sm" id="notification-test-body" rows={5} bind:value={testBody}></textarea>
-    </div>
-
-    <button class="btn btn-sm btn-primary mt-4 text-xs" type="button" disabled={testingProvider} onclick={sendTest}>
-      {#if testingProvider}
-        <span class="loading loading-spinner loading-xs mr-1.5"></span>
-      {:else}
-        <Send class="mr-1.5 h-4 w-4" />
-      {/if}
-      Send test
-    </button>
-  </section>
-{/if}

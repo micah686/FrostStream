@@ -196,11 +196,11 @@
               {/if}
               Save note
             </button>
-            <button class="btn btn-sm btn-ghost text-xs" type="button" disabled={saving || deleting || (!hasNote && !draft.trim())} onclick={remove}>
+            <button class="btn btn-sm btn-neutral text-xs text-error" type="button" disabled={saving || deleting || !hasNote} onclick={remove}>
               {#if deleting}
-                <span class="loading loading-spinner loading-xs mr-1.5"></span>
+                <span class="loading loading-spinner loading-xs mr-1.5 text-error"></span>
               {:else}
-                <Trash2 class="mr-1.5 h-3.5 w-3.5" />
+                <Trash2 class="mr-1.5 h-3.5 w-3.5 text-error" />
               {/if}
               Delete
             </button>

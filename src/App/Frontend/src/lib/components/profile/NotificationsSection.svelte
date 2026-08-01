@@ -20,9 +20,6 @@
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
 
   const cardClass = 'card border border-base-300 bg-base-100 p-5 sm:p-6';
-  const rowActionClass =
-    'inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary disabled:opacity-50';
-
   let preferences = $state<NotificationPreferences | null>(null);
   let preferencesLoading = $state(true);
   let preferencesError = $state<string | null>(null);
@@ -149,17 +146,17 @@
     </div>
   {/if}
 
-  <div class="mt-5 flex items-center justify-between gap-4 rounded-xl border border-base-300/80 bg-base-200/20 p-4">
-    <div class="min-w-0">
-      <p class="text-sm font-semibold text-base-content">Enable notifications</p>
+  <div class="mt-5 flex items-center justify-between gap-4 rounded-xl border border-base-300 bg-base-100 p-4 text-left shadow-sm">
+    <div class="min-w-0 flex-1">
+      <p class="text-sm font-semibold text-base-content">Turn on notifications</p>
       <p class="mt-0.5 text-xs text-base-content/50">
         When off, no events are delivered through any provider below, regardless of their individual enabled state.
       </p>
     </div>
     {#if preferencesLoading}
-      <span class="loading loading-spinner loading-sm"></span>
+      <span class="ml-auto flex shrink-0 items-center justify-end"><span class="loading loading-spinner loading-sm"></span></span>
     {:else}
-      <input type="checkbox" class="toggle" checked={preferences?.enabled ?? false} disabled={savingPreferences || !preferences} onchange={() => void toggleEnabled()} />
+      <span class="ml-auto flex shrink-0 items-center justify-end"><input type="checkbox" class="toggle toggle-primary" checked={preferences?.enabled ?? false} disabled={savingPreferences || !preferences} onchange={() => void toggleEnabled()} /></span>
     {/if}
   </div>
 
@@ -201,7 +198,7 @@
     <div class="mt-4 space-y-2">
       {#each providers as provider (provider.providerKey)}
         <article
-          class="flex min-h-[4rem] flex-col gap-3 rounded-lg border border-base-content/20 bg-base-100 px-3 py-3 transition hover:border-base-content/30 hover:bg-base-300/30 sm:flex-row sm:items-center"
+          class="card flex min-h-[4rem] flex-col gap-3 border border-base-300 bg-base-100 p-3 transition hover:border-base-content/30 hover:bg-base-300/30 sm:flex-row sm:items-center"
         >
           <div class="flex min-w-0 flex-1 items-center gap-3">
             <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-base-300/70 text-primary">
@@ -214,7 +211,7 @@
             <div class="min-w-0">
               <div class="flex min-w-0 flex-wrap items-center gap-2">
                 <h4 class="truncate text-sm font-semibold text-base-content">{providerLabel(provider)}</h4>
-                <span class="badge badge-sm badge-ghost rounded-full text-[10px]">
+                <span class="badge badge-sm badge-accent text-[10px] text-accent-content">
                   {provider.providerKey}
                 </span>
               </div>
@@ -225,7 +222,7 @@
           <div class="flex shrink-0 gap-2 sm:ml-auto">
             <a
               href={`/profile/notification-providers/${encodeURIComponent(provider.providerKey)}`}
-              class={rowActionClass}
+              class="btn btn-sm btn-neutral text-xs"
               aria-label={`Edit notification provider ${provider.providerKey}`}
             >
               <Pencil class="h-4 w-4" />
@@ -233,7 +230,7 @@
             </a>
             <button
               type="button"
-              class="inline-flex h-9 min-w-9 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/70 px-2.5 text-base-content/80 transition hover:border-error/60 hover:bg-error/10 hover:text-error disabled:opacity-50"
+              class="btn btn-sm btn-neutral text-xs"
               title="Delete provider"
               aria-label={`Delete notification provider ${provider.providerKey}`}
               disabled={deletingProviderKey === provider.providerKey}
@@ -242,8 +239,9 @@
               {#if deletingProviderKey === provider.providerKey}
                 <span class="loading loading-spinner loading-xs"></span>
               {:else}
-                <Trash2 class="h-4 w-4" />
+                <Trash2 class="mr-1.5 h-4 w-4" />
               {/if}
+              Delete
             </button>
           </div>
         </article>

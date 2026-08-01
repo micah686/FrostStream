@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { CircleAlert } from '@lucide/svelte';
-  import UnderDevelopmentBanner from '$lib/components/admin/UnderDevelopmentBanner.svelte';
   import DownloadConfigSetForm from '$lib/components/profile/DownloadConfigSetForm.svelte';
   import { getDownloadConfigSet, type DownloadConfigSet } from '$lib/api/downloadConfigSets';
 
@@ -31,8 +30,6 @@
 <svelte:head>
   <title>{config?.name ?? 'Config set'} · FrostStream</title>
 </svelte:head>
-
-<UnderDevelopmentBanner />
 
 <section class="mx-auto max-w-4xl" aria-labelledby="config-set-title">
   <div class="mb-6">

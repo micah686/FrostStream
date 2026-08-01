@@ -18,7 +18,6 @@
   import { listOptionPresets, type OptionPreset } from '$lib/api/optionPresets';
   import { listStorage } from '$lib/api/storage';
   import { listCookieProfiles } from '$lib/api/cookies';
-  import RangeSlider from '$lib/components/RangeSlider.svelte';
 
   interface Props {
     mode: 'create' | 'update';
@@ -272,7 +271,7 @@
     <label class="label mb-2 text-sm" for="priority">
       Priority <span class="font-normal text-base-content/50">({priority})</span>
     </label>
-    <RangeSlider id="priority" min={0} max={100} step={1} bind:value={priority} />
+    <input id="priority" type="range" min="0" max="100" step="1" bind:value={priority} class="range range-primary w-full" />
   </div>
 
   <div>
@@ -292,7 +291,7 @@
   {/if}
 
   <div class="flex flex-col-reverse gap-3 border-t border-base-300/70 pt-5 sm:flex-row sm:justify-between">
-    <a class="btn btn-sm btn-ghost text-xs" href="/profile/config-sets">
+    <a class="btn btn-sm btn-neutral text-xs" href="/profile/config-sets">
       <ArrowLeft class="mr-1.5 h-4 w-4" />
       Back
     </a>

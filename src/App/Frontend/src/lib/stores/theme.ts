@@ -81,6 +81,8 @@ export const themeLabels: Record<Theme, string> = {
 };
 
 const themeKey = 'froststream:theme';
+const customCssKey = 'froststream:custom-css';
+const customCssEnabledKey = 'froststream:custom-css-enabled';
 const defaultTheme: Theme = 'froststream';
 
 function isTheme(value: string | null): value is Theme {
@@ -94,6 +96,32 @@ function readStored(): Theme {
 }
 
 export const theme = writable<Theme>(readStored());
+export const customCss = writable<string>(browser ? localStorage.getItem(customCssKey) ?? '' : '');
+export const customCssEnabled = writable<boolean>(browser ? localStorage.getItem(customCssEnabledKey) === 'true' : false);
+
+let appliedCustomCss = '';
+let customCssIsEnabled = false;
+
+function runtimeCustomCss(value: string): string {
+  const pluginPattern = /@plugin\s+["']daisyui\/theme["']\s*\{([\s\S]*?)\}/g;
+  return value.replace(pluginPattern, (_match, body: string) => {
+    const declarations = body.match(/(?:--[\w-]+|color-scheme)\s*:\s*[^;]+;/g) ?? [];
+    return `:root {\n  ${declarations.join('\n  ')}\n}`;
+  });
+}
+
+function applyCustomCss(): void {
+  if (!browser) return;
+  let style = document.getElementById('froststream-custom-css') as HTMLStyleElement | null;
+  if (!style) {
+    style = document.createElement('style');
+    style.id = 'froststream-custom-css';
+    document.head.appendChild(style);
+  }
+  style.textContent = customCssIsEnabled ? runtimeCustomCss(appliedCustomCss) : '';
+  localStorage.setItem(customCssKey, appliedCustomCss);
+  localStorage.setItem(customCssEnabledKey, String(customCssIsEnabled));
+}
 
 // Applies the current theme to the document and persists changes. Called once
 // from the root layout's onMount; the subscription lives for the app's session,
@@ -105,8 +133,25 @@ export function initTheme(): void {
       localStorage.setItem(themeKey, value);
     }
   });
+  customCss.subscribe((value) => {
+    appliedCustomCss = value;
+    applyCustomCss();
+  });
+  customCssEnabled.subscribe((value) => {
+    customCssIsEnabled = value;
+    applyCustomCss();
+  });
 }
 
 export function setTheme(value: Theme): void {
   theme.set(value);
+  customCssEnabled.set(false);
+}
+
+export function setCustomCss(value: string): void {
+  customCss.set(value);
+}
+
+export function setCustomCssEnabled(value: boolean): void {
+  customCssEnabled.set(value);
 }

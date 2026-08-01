@@ -3,7 +3,6 @@
   import { logout } from '$lib/api/http';
   import {
     Bell,
-    Cog,
     Cookie,
     FileSearch,
     ListMusic,
@@ -75,10 +74,6 @@
           Sign out
         </button>
       {/if}
-      <button class="btn btn-sm btn-neutral text-xs">
-        <Cog class="mr-1.5 h-4 w-4" />
-        Edit profile
-      </button>
     </div>
   </div>
 

@@ -113,6 +113,7 @@
   let podcastFeedUrl = $state<string | null>(null);
   let actionsMenuOpen = $state(false);
   let encodeMenuOpen = $state(false);
+  let forceEncodeMenuOpen = $state(false);
   let actionsMenuContainer = $state<HTMLDivElement | null>(null);
   let audioPollTimer: ReturnType<typeof setTimeout> | null = null;
   let renditionStreamController: AbortController | null = null;
@@ -152,6 +153,7 @@
       if (actionsMenuContainer && event.target instanceof Node && !actionsMenuContainer.contains(event.target)) {
         actionsMenuOpen = false;
         encodeMenuOpen = false;
+        forceEncodeMenuOpen = false;
       }
     };
     document.addEventListener('pointerdown', closeOnOutside);
@@ -285,16 +287,18 @@
     return parts.join(' · ');
   }
 
-  async function encodeAudio() {
+  async function encodeAudio(force = false) {
     if (!account || channelAudioBusy) return;
     channelAudioBusy = true;
     channelAudioNotice = null;
     try {
-      channelAudio = await encodeChannelAudio(account.accountId, selectedStorageKey || undefined);
+      channelAudio = await encodeChannelAudio(account.accountId, selectedStorageKey || undefined, force);
       const scope = selectedStorageKey ? ` on storage key "${selectedStorageKey}"` : '';
       channelAudioNotice = channelAudio.totalCount === 0
         ? `This channel has no archived media to encode${scope}.`
-        : `Queued Opus audio for ${channelAudio.totalCount.toLocaleString()} archived items${scope}.`;
+        : force
+          ? `Forced Opus audio re-encoding for ${channelAudio.totalCount.toLocaleString()} archived items${scope}.`
+          : `Queued Opus audio for ${channelAudio.totalCount.toLocaleString()} archived items${scope}.`;
       scheduleAudioPoll(String(account.accountId));
     } catch (err) {
       channelAudioNotice = err instanceof Error ? err.message : 'Could not queue channel audio encoding.';
@@ -631,7 +635,8 @@
             <div class="absolute right-0 z-30 mt-2 w-56 rounded-xl border border-base-300 bg-base-100 p-1.5 shadow-xl" role="menu">
               {#if account.accountUrl}<a class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-base-200" href={account.accountUrl} target="_blank" rel="noopener noreferrer" onclick={() => (actionsMenuOpen = false)}><ExternalLink class="h-4 w-4" />View on {account.platform}</a>{/if}
               <button class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200" type="button" onclick={(event: MouseEvent) => { actionsMenuOpen = false; refreshAssets(event.shiftKey); }}><Image class="h-4 w-4" />Refresh assets</button>
-              <div class="relative"><button class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200" type="button" onclick={() => (encodeMenuOpen = !encodeMenuOpen)}><span class="flex items-center gap-2"><Music class="h-4 w-4" />Encode audio</span><ChevronRight class="h-4 w-4" /></button>{#if encodeMenuOpen}<div class="absolute right-full top-0 mr-1 w-48 rounded-xl border border-base-300 bg-base-100 p-1.5 shadow-xl"><button class="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200" type="button" onclick={() => { selectedStorageKey = ''; actionsMenuOpen = false; encodeMenuOpen = false; void encodeAudio(); }}>All storage keys</button>{#each channelAudio?.availableStorageKeys ?? [] as key}<button class="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200" type="button" onclick={() => { selectedStorageKey = key; actionsMenuOpen = false; encodeMenuOpen = false; void encodeAudio(); }}>{key}</button>{/each}</div>{/if}</div>
+              <div class="relative"><button class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200" type="button" onclick={() => { encodeMenuOpen = !encodeMenuOpen; forceEncodeMenuOpen = false; }}><span class="flex items-center gap-2"><Music class="h-4 w-4" />Encode audio</span><ChevronRight class="h-4 w-4" /></button>{#if encodeMenuOpen}<div class="absolute right-full top-0 mr-1 w-48 rounded-xl border border-base-300 bg-base-100 p-1.5 shadow-xl"><button class="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200" type="button" onclick={() => { selectedStorageKey = ''; actionsMenuOpen = false; encodeMenuOpen = false; void encodeAudio(); }}>All storage keys</button>{#each channelAudio?.availableStorageKeys ?? [] as key}<button class="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200" type="button" onclick={() => { selectedStorageKey = key; actionsMenuOpen = false; encodeMenuOpen = false; void encodeAudio(); }}>{key}</button>{/each}</div>{/if}</div>
+              <div class="relative"><button class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:bg-warning hover:text-warning-content" type="button" title="Re-encode media even when it is marked encoded" onclick={() => { forceEncodeMenuOpen = !forceEncodeMenuOpen; encodeMenuOpen = false; }}><span class="flex items-center gap-2"><Music class="h-4 w-4" />Force encode audio</span><ChevronRight class="h-4 w-4" /></button>{#if forceEncodeMenuOpen}<div class="absolute right-full top-0 mr-1 w-48 rounded-xl border border-base-300 bg-base-100 p-1.5 shadow-xl"><button class="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-warning hover:text-warning-content" type="button" onclick={() => { selectedStorageKey = ''; actionsMenuOpen = false; forceEncodeMenuOpen = false; void encodeAudio(true); }}>All storage keys</button>{#each channelAudio?.availableStorageKeys ?? [] as key}<button class="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-warning hover:text-warning-content" type="button" onclick={() => { selectedStorageKey = key; actionsMenuOpen = false; forceEncodeMenuOpen = false; void encodeAudio(true); }}>{key}</button>{/each}</div>{/if}</div>
               <button class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200 disabled:opacity-50" type="button" disabled={!audioComplete} onclick={() => { actionsMenuOpen = false; playAudio(); }}><Headphones class="h-4 w-4" />Play as audio</button>
               <button class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200 disabled:opacity-50" type="button" disabled={!audioComplete || podcastBusy} onclick={() => { actionsMenuOpen = false; copyPodcastFeed(); }}><Copy class="h-4 w-4" />Copy podcast RSS</button>
             </div>
@@ -652,7 +657,7 @@
           {/if}
           Refresh assets
         </button>
-        <button class="btn btn-sm btn-neutral text-xs" disabled={channelAudioBusy || channelAudioLoading} onclick={encodeAudio}>
+        <button class="btn btn-sm btn-neutral text-xs" disabled={channelAudioBusy || channelAudioLoading} onclick={() => void encodeAudio()}>
           {#if channelAudioBusy}
             <span class="loading loading-spinner loading-xs mr-1.5"></span>
           {:else}
