@@ -248,7 +248,7 @@
 
   {#if loadError}
     <div
-      class="mt-6 flex items-center gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
+      class="alert alert-error mt-6 text-sm"
       role="alert"
     >
       <CircleAlert class="h-4 w-4 shrink-0" />
@@ -312,14 +312,14 @@
               </span>
             {/if}
             <span
-              class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-white/95 text-slate-900 opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
+              class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-neutral text-neutral-content opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
             >
               <Play class="ml-0.5 h-5 w-5" />
             </span>
           </a>
           <div class="mt-3 flex min-w-0 gap-3 px-1">
             <span
-              class={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br ${accentFor(hit.media.mediaGuid)} text-[10px] font-bold text-white`}
+              class={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br ${accentFor(hit.media.mediaGuid)} text-[10px] font-bold text-base-content`}
             >
               {initialsFor(hit.media.account.accountName)}
             </span>

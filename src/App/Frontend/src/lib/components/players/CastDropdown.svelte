@@ -107,7 +107,7 @@
   {#if open}
     <div class="absolute right-0 z-30 mt-2 w-96 rounded-xl border border-base-300 bg-base-200/95 p-3 shadow-2xl shadow-black/50 backdrop-blur">
       {#if error}
-        <p class="mb-2 rounded-lg border border-error/30 bg-error/10 px-3 py-2 text-xs text-error">{error}</p>
+        <p class="alert alert-error mb-2 text-xs" role="alert">{error}</p>
       {/if}
 
       <div class="mb-2 rounded-lg border border-warning/60 bg-warning/10 px-3 py-2 text-xs text-warning">

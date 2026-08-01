@@ -384,7 +384,7 @@
         href="/profile"
         aria-label={`Open profile for ${data.user.name}`}
         title={data.user.name}
-        class="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-fuchsia-500 to-purple-600 text-xs font-bold text-white ring-2 ring-transparent transition hover:ring-secondary/60 focus-visible:outline-offset-4"
+        class="grid h-9 w-9 place-items-center rounded-full bg-primary text-xs font-bold text-primary-content ring-2 ring-transparent transition hover:ring-secondary/60 focus-visible:outline-offset-4"
       >
         {data.user.initials}
       </a>

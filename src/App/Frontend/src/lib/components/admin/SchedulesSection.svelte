@@ -339,7 +339,7 @@
       <span>DataBridge is unreachable. Schedule operations route through DataBridge/NATS and cannot complete until it recovers.</span>
     </div>
   {:else if loadError}
-    <div class="mt-4 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error" role="alert">
+    <div class="alert alert-error mt-4 text-sm" role="alert">
       <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{loadError.message}</span>
     </div>
@@ -474,7 +474,7 @@
       </div>
 
       {#if formError}
-        <div class="flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error" role="alert">
+        <div class="alert alert-error text-sm" role="alert">
           <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
           <span>{formError}</span>
         </div>

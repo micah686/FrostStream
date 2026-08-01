@@ -439,7 +439,7 @@
 
     {#if loadError}
       <div
-        class="mt-6 flex items-center gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
+        class="alert alert-error mt-6 text-sm"
         role="alert"
       >
         <CircleAlert class="h-4 w-4 shrink-0" />
@@ -502,7 +502,7 @@
                 </span>
               {/if}
               <span
-                class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-white/95 text-slate-900 opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
+                class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-neutral text-neutral-content opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
               >
                 <Play class="ml-0.5 h-5 w-5" />
               </span>
@@ -511,7 +511,7 @@
               <a
                 href={`/channel/${card.account.accountId}`}
                 aria-label={`Open ${card.account.accountName}'s channel`}
-                class={`relative mt-0.5 grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br ${accentFor(card.mediaGuid)} text-[10px] font-bold text-white`}
+                class={`relative mt-0.5 grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br ${accentFor(card.mediaGuid)} text-[10px] font-bold text-base-content`}
               >
                 {initialsFor(card.account.accountName)}
                 <img
@@ -571,7 +571,7 @@
 
       {#if userPlaylistsError}
         <div
-          class="mt-4 flex items-center gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
+          class="alert alert-error mt-4 text-sm"
           role="alert"
         >
           <CircleAlert class="h-4 w-4 shrink-0" />
@@ -624,7 +624,7 @@
                 </span>
                 {#if card.firstGuid}
                   <span
-                    class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-white/95 text-slate-900 opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
+                    class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-neutral text-neutral-content opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
                   >
                     <Play class="ml-0.5 h-5 w-5" />
                   </span>
@@ -657,7 +657,7 @@
 
       {#if platformPlaylistsError}
         <div
-          class="mt-4 flex items-center gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
+          class="alert alert-error mt-4 text-sm"
           role="alert"
         >
           <CircleAlert class="h-4 w-4 shrink-0" />
@@ -706,7 +706,7 @@
                     {card.playlist.itemCount} {card.playlist.itemCount === 1 ? 'video' : 'videos'}
                   </span>
                   <span
-                    class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-white/95 text-slate-900 opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
+                    class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-neutral text-neutral-content opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
                   >
                     <Play class="ml-0.5 h-5 w-5" />
                   </span>

@@ -186,7 +186,7 @@
         <span
           class={[
             'h-2 w-2 rounded-full',
-            queueState.connected ? 'bg-success shadow-[0_0_10px_rgba(52,211,153,0.8)]' : 'bg-base-300'
+            queueState.connected ? 'bg-success shadow-[0_0_10px_var(--color-success)]' : 'bg-base-300'
           ]}
         ></span>
         {queueState.connected ? 'SSE live' : 'Connecting'}
@@ -248,7 +248,7 @@
 
   {#if queueState.error || actionError}
     <div
-      class="mt-5 flex items-start gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
+      class="alert alert-error mt-5 text-sm"
       role="alert"
     >
       <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />

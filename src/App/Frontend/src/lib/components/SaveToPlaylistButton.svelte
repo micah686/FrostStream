@@ -185,7 +185,7 @@
       </p>
 
       {#if loadError}
-        <div class="flex items-start gap-2 rounded-lg bg-error/10 p-3 text-xs text-error" role="alert">
+        <div class="alert alert-error text-xs" role="alert">
           <CircleAlert class="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>{loadError}</span>
         </div>
@@ -195,7 +195,7 @@
         </div>
       {:else}
         {#if toggleError}
-          <div class="mb-1 flex items-start gap-2 rounded-lg bg-error/10 p-2.5 text-xs text-error" role="alert">
+          <div class="alert alert-error mb-1 text-xs" role="alert">
             <CircleAlert class="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>{toggleError}</span>
           </div>

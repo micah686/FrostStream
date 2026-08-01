@@ -48,7 +48,7 @@
     border: 2px solid var(--color-base-100);
     border-radius: 9999px;
     background: var(--color-primary);
-    box-shadow: 0 1px 3px rgb(0 0 0 / 40%);
+    box-shadow: 0 1px 3px color-mix(in oklab, var(--color-neutral) 40%, transparent);
   }
 
   .range-trail::-moz-range-thumb {
@@ -57,6 +57,6 @@
     border: 2px solid var(--color-base-100);
     border-radius: 9999px;
     background: var(--color-primary);
-    box-shadow: 0 1px 3px rgb(0 0 0 / 40%);
+    box-shadow: 0 1px 3px color-mix(in oklab, var(--color-neutral) 40%, transparent);
   }
 </style>

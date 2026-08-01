@@ -976,7 +976,7 @@
   <section class="min-w-0" aria-label="Video player">
     {#if loadError}
       <div
-        class="flex aspect-video items-center justify-center gap-2 rounded-2xl border border-error/30 bg-error/10 p-6 text-sm text-error"
+        class="alert alert-error flex aspect-video items-center justify-center p-6 text-sm"
         role="alert"
       >
         <CircleAlert class="h-5 w-5 shrink-0" />
@@ -1026,7 +1026,7 @@
           <a
             href={`/channel/${detail.account.accountId}`}
             aria-label={`Open ${detail.account.accountName}'s channel`}
-            class={`relative grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br ${accentFor(detail.account.accountName)} text-xs font-bold text-white`}
+            class={`relative grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br ${accentFor(detail.account.accountName)} text-xs font-bold text-base-content`}
           >
             {initialsFor(detail.account.accountName)}
             <img

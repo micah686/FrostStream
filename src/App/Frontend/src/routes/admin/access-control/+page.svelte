@@ -481,7 +481,7 @@
   </div>
 
   {#if error}
-    <div class="mt-4 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error" role="alert">{error}</div>
+    <div class="alert alert-error mt-4 text-sm" role="alert">{error}</div>
   {/if}
   {#if notice}
     <div class="mt-4 rounded-xl border border-success/30 bg-success/10 p-3 text-sm text-success" role="status">{notice}</div>

@@ -336,7 +336,7 @@
       ]}
     >
       {#if error}
-        <p class="mb-3 rounded-lg border border-error/30 bg-error/10 px-3 py-2 text-xs text-error">{error}</p>
+        <p class="alert alert-error mb-3 text-xs" role="alert">{error}</p>
       {/if}
 
       {#if session}
@@ -404,7 +404,7 @@
           <button
             type="button"
             onclick={disconnect}
-            class="w-full rounded-lg border border-error/30 bg-error/10 px-3 py-2 text-xs font-semibold text-error transition hover:bg-error/10"
+            class="btn btn-error btn-sm w-full text-xs"
           >
             Stop casting
           </button>

@@ -155,7 +155,7 @@
 
   {#if loadError}
     <div
-      class="mt-6 flex items-center gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
+      class="alert alert-error mt-6 text-sm"
       role="alert"
     >
       <CircleAlert class="h-4 w-4 shrink-0" />
@@ -179,7 +179,7 @@
             <a
               href={`/channel/${account.accountId}`}
               aria-label={`Open ${account.accountName}'s channel`}
-              class={`relative grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-2xl bg-gradient-to-br ${accentFor(account.accountName)} text-lg font-bold text-white shadow-lg shadow-black/20`}
+              class={`relative grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-2xl bg-gradient-to-br ${accentFor(account.accountName)} text-lg font-bold text-base-content shadow-lg shadow-black/20`}
             >
               {initialsFor(account.accountName)}
               {#if account.avatarStoragePath}

@@ -300,13 +300,13 @@
   {/if}
 
   {#if loadError}
-    <div class="mt-4 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error" role="alert">
+    <div class="alert alert-error mt-4 text-sm" role="alert">
       <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{displayError(loadError, 'Could not load bundle management data.')}</span>
     </div>
   {/if}
   {#if mutationError}
-    <div class="mt-4 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error" role="alert">
+    <div class="alert alert-error mt-4 text-sm" role="alert">
       <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{displayError(mutationError, 'Bundle operation failed.')}</span>
     </div>
@@ -582,7 +582,7 @@
     </div>
 
     {#if pickerError}
-      <div class="flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error" role="alert">
+      <div class="alert alert-error text-sm" role="alert">
         <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
         <span>{displayError(pickerError, 'Could not save the bundle.')}</span>
       </div>

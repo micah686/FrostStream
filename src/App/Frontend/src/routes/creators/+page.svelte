@@ -445,7 +445,7 @@
 
   {#if loadError || actionError}
     <div
-      class="mt-5 flex items-start gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
+      class="alert alert-error mt-5 text-sm"
       role="alert"
     >
       <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
@@ -794,7 +794,7 @@
     </div>
 
     {#if formError}
-      <div class="flex items-start gap-2 rounded-lg border border-error/30 bg-error/10 p-3 text-sm text-error" role="alert">
+      <div class="alert alert-error text-sm" role="alert">
         <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
         <span>{formError}</span>
       </div>
@@ -848,7 +848,7 @@
 
     {#if downloadError}
       <div
-        class="flex items-start gap-2 rounded-lg border border-error/30 bg-error/10 p-3 text-sm text-error"
+        class="alert alert-error text-sm"
         role="alert"
       >
         <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />

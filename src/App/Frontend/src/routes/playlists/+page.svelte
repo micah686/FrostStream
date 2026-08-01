@@ -167,7 +167,7 @@
   </div>
 
   {#if loadError}
-    <div class="mt-5 flex items-start gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error" role="alert">
+    <div class="alert alert-error mt-5 text-sm" role="alert">
       <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{loadError}</span>
     </div>
@@ -203,7 +203,7 @@
                   <span class="flex items-center gap-1.5"><ListMusic class="h-3.5 w-3.5" /> Playlist</span>
                   {card.playlist.itemCount} {card.playlist.itemCount === 1 ? 'video' : 'videos'}
                 </span>
-                {#if card.firstGuid}<span class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-white/95 text-slate-900 opacity-0 shadow-xl transition group-hover:scale-100 group-hover:opacity-100"><Play class="ml-0.5 h-5 w-5" /></span>{/if}
+                {#if card.firstGuid}<span class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-neutral text-neutral-content opacity-0 shadow-xl transition group-hover:scale-100 group-hover:opacity-100"><Play class="ml-0.5 h-5 w-5" /></span>{/if}
               </a>
               <h3 class="mt-3 line-clamp-2 px-1 text-sm font-semibold leading-snug text-base-content/90">{card.playlist.name}</h3>
             </article>
@@ -227,7 +227,7 @@
                   <ListMusic class="absolute left-1/2 top-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 text-white/15" />
                   <img src={`/api/media/watch/${card.playlist.firstMediaGuid}/thumbnail`} alt="" loading="lazy" decoding="async" class="absolute inset-0 h-full w-full object-cover" onerror={hideBrokenImage} />
                   <span class="absolute bottom-0 left-0 right-0 flex items-center justify-between bg-black/60 px-3 py-1.5 text-[11px] font-semibold text-white/90 backdrop-blur-sm"><span class="flex items-center gap-1.5"><ListMusic class="h-3.5 w-3.5" /> Playlist</span>{card.playlist.itemCount} {card.playlist.itemCount === 1 ? 'video' : 'videos'}</span>
-                  <span class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-white/95 text-slate-900 opacity-0 shadow-xl transition group-hover:scale-100 group-hover:opacity-100"><Play class="ml-0.5 h-5 w-5" /></span>
+                  <span class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-neutral text-neutral-content opacity-0 shadow-xl transition group-hover:scale-100 group-hover:opacity-100"><Play class="ml-0.5 h-5 w-5" /></span>
                 </a>
               {:else}
                 <div class={`relative block aspect-video w-full overflow-hidden rounded-2xl bg-gradient-to-br ${accentFor(card.playlist.playlistId)} opacity-70`}><ListMusic class="absolute left-1/2 top-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 text-white/20" /></div>
@@ -251,7 +251,7 @@
     </div>
     <div><label class="label mb-1.5 text-xs" for="playlist-storage">Storage target</label><Select id="playlist-storage" items={storageOptions} bind:value={submitStorageKey} disabled={submitConfigSetSelected} /></div>
     <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={submitFetchComments} disabled={submitConfigSetSelected} /><span>Fetch comments</span></label>
-    {#if submitError}<div class="flex items-start gap-2 rounded-lg border border-error/30 bg-error/10 p-3 text-sm text-error" role="alert"><CircleAlert class="mt-0.5 h-4 w-4 shrink-0" /><span>{submitError}</span></div>{/if}
+    {#if submitError}<div class="alert alert-error text-sm" role="alert"><CircleAlert class="mt-0.5 h-4 w-4 shrink-0" /><span>{submitError}</span></div>{/if}
   </form>
   {#snippet footer()}<div class="flex w-full justify-end gap-2"><button class="btn btn-sm btn-ghost text-xs" disabled={submitBusy} onclick={() => (submitOpen = false)}>Cancel</button><button class="btn btn-sm btn-primary text-xs" type="submit" form="playlist-download-form" disabled={submitBusy}>{#if submitBusy}<span class="loading loading-spinner loading-xs mr-1.5"></span>{:else}<Download class="mr-1.5 h-4 w-4" />{/if}Queue download</button></div>{/snippet}
 </Modal>

@@ -258,7 +258,7 @@
       Pick a saved option preset to apply its yt-dlp options to this config set. Choose none to use server defaults.
     </p>
     {#if optionPresetsError}
-      <div class="alert alert-error mt-3">
+      <div class="alert alert-error mt-3" role="alert">
         {optionPresetsError}
       </div>
     {:else if !optionPresetsLoading && optionPresets.length === 0 && !initial?.ytDlpOptions}
@@ -283,7 +283,7 @@
 
   {#if submitError}
     <div
-      class="flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 p-3 text-sm text-error"
+      class="alert alert-error text-sm"
       role="alert"
     >
       <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />

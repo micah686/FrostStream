@@ -107,7 +107,7 @@
   </div>
 
   {#if jobsState.error}
-    <p class="mt-4 rounded-lg border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">
+    <p class="alert alert-error mt-4 text-sm" role="alert">
       {jobsState.error}
     </p>
   {/if}

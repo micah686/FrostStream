@@ -503,7 +503,7 @@
 
 {#if loadError}
   <div
-    class="flex items-center gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
+    class="alert alert-error text-sm"
     role="alert"
   >
     <CircleAlert class="h-4 w-4 shrink-0" />
@@ -537,7 +537,7 @@
 
     <div class="mt-4 flex flex-col gap-5 px-1 sm:mt-5 sm:flex-row sm:items-start sm:gap-6">
       <span
-        class={`relative -mt-14 grid h-28 w-28 shrink-0 place-items-center overflow-hidden rounded-full border-4 border-base-300 bg-gradient-to-br text-3xl font-bold text-white sm:-mt-16 sm:h-36 sm:w-36 sm:text-4xl ${accentFor(account.accountName)} shadow-xl shadow-black/30`}
+        class={`relative -mt-14 grid h-28 w-28 shrink-0 place-items-center overflow-hidden rounded-full border-4 border-base-300 bg-gradient-to-br text-3xl font-bold text-base-content sm:-mt-16 sm:h-36 sm:w-36 sm:text-4xl ${accentFor(account.accountName)} shadow-xl shadow-black/30`}
       >
         {initialsFor(account.accountName)}
         {#if avatarUrl}
@@ -747,7 +747,7 @@
       {#if statisticsError}
         <div
           id="channel-statistics-panel"
-          class="mt-4 flex items-center gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
+          class="alert alert-error mt-4 text-sm"
           role="alert"
         >
           <CircleAlert class="h-4 w-4 shrink-0" />
@@ -852,7 +852,7 @@
 
     {#if mediaError}
       <div
-        class="mt-6 flex items-center gap-3 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error"
+        class="alert alert-error mt-6 text-sm"
         role="alert"
       >
         <CircleAlert class="h-4 w-4 shrink-0" />
@@ -902,7 +902,7 @@
                 </span>
               {/if}
               <span
-                class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-white/95 text-slate-900 opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
+                class="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-neutral text-neutral-content opacity-0 shadow-xl transition duration-200 group-hover:scale-100 group-hover:opacity-100"
               >
                 <Play class="ml-0.5 h-5 w-5" />
               </span>
