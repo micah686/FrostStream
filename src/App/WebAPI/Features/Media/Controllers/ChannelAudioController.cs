@@ -35,18 +35,18 @@ public sealed class ChannelAudioController(
     public async Task<IActionResult> GetStatus(long accountId, [FromQuery] string? storageKey, CancellationToken cancellationToken)
     {
         var (error, channel) = await channelAudio.ResolveAsync(
-            accountId, storageKey, createIfMissing: false, retryFailedAndPending: false, cancellationToken);
+            accountId, storageKey, createIfMissing: false, retryFailedAndPending: false, forceReencode: false, cancellationToken);
         return error ?? Ok(channel);
     }
 
     [HttpPost("encode")]
     [Endpoint(EndpointIds.ChannelAudioEncode)]
     [EndpointSummary("Encode a channel as Opus audio")]
-    [EndpointDescription("Creates any missing Opus audio rendition records for archived items in the channel, retries failed renditions, and publishes idempotent MediaProcessor jobs for everything still waiting to be encoded.")]
-    public async Task<IActionResult> Encode(long accountId, [FromQuery] string? storageKey, CancellationToken cancellationToken)
+    [EndpointDescription("Creates any missing Opus audio rendition records for archived items in the channel, retries failed renditions, and publishes idempotent MediaProcessor jobs for everything still waiting to be encoded. Set force=true to re-encode ready media too, including media already marked encoded in the database.")]
+    public async Task<IActionResult> Encode(long accountId, [FromQuery] string? storageKey, [FromQuery] bool force, CancellationToken cancellationToken)
     {
         var (error, channel) = await channelAudio.ResolveAsync(
-            accountId, storageKey, createIfMissing: true, retryFailedAndPending: true, cancellationToken);
+            accountId, storageKey, createIfMissing: true, retryFailedAndPending: true, forceReencode: force, cancellationToken);
         return error ?? Accepted(channel);
     }
 
@@ -155,7 +155,7 @@ public sealed class ChannelAudioController(
     public async Task<IActionResult> CreatePodcastToken(long accountId, CancellationToken cancellationToken)
     {
         var (error, _) = await channelAudio.ResolveAsync(
-            accountId, storageKey: null, createIfMissing: true, retryFailedAndPending: false, cancellationToken);
+            accountId, storageKey: null, createIfMissing: true, retryFailedAndPending: false, forceReencode: false, cancellationToken);
         if (error is not null)
             return error;
 
@@ -176,7 +176,7 @@ public sealed class ChannelAudioController(
     public async Task<IActionResult> GetPodcast(long accountId, CancellationToken cancellationToken)
     {
         var (error, channel) = await channelAudio.ResolveAsync(
-            accountId, storageKey: null, createIfMissing: true, retryFailedAndPending: false, cancellationToken);
+            accountId, storageKey: null, createIfMissing: true, retryFailedAndPending: false, forceReencode: false, cancellationToken);
         if (error is not null)
             return error;
 
@@ -202,7 +202,7 @@ public sealed class ChannelAudioController(
         CancellationToken cancellationToken)
     {
         var (error, channel) = await channelAudio.ResolveAsync(
-            accountId, storageKey: null, createIfMissing: false, retryFailedAndPending: false, cancellationToken);
+            accountId, storageKey: null, createIfMissing: false, retryFailedAndPending: false, forceReencode: false, cancellationToken);
         if (error is not null)
             return error;
 

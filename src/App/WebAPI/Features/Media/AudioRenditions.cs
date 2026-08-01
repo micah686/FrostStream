@@ -78,6 +78,7 @@ public sealed class ChannelAudioResolver(IMessageBus messageBus, ILogger<Channel
         string? storageKey,
         bool createIfMissing,
         bool retryFailedAndPending,
+        bool forceReencode,
         CancellationToken cancellationToken)
     {
         try
@@ -89,7 +90,8 @@ public sealed class ChannelAudioResolver(IMessageBus messageBus, ILogger<Channel
                     AccountId = accountId,
                     StorageKey = string.IsNullOrWhiteSpace(storageKey) ? null : storageKey.Trim(),
                     CreateIfMissing = createIfMissing,
-                    RetryFailedAndPending = retryFailedAndPending
+                    RetryFailedAndPending = retryFailedAndPending,
+                    ForceReencode = forceReencode
                 },
                 QueryTimeout,
                 cancellationToken);

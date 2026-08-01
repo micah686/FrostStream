@@ -87,8 +87,13 @@ export const renditionProgressStreamUrl = (): string => '/api/media/renditions/p
 
 const base = (accountId: number) => `/api/media/channels/${encodeURIComponent(accountId)}/audio`;
 
-const withStorageKey = (path: string, storageKey?: string) =>
-  storageKey ? `${path}?storageKey=${encodeURIComponent(storageKey)}` : path;
+const withStorageKey = (path: string, storageKey?: string, force = false) => {
+  const query = new URLSearchParams();
+  if (storageKey) query.set('storageKey', storageKey);
+  if (force) query.set('force', 'true');
+  const suffix = query.toString();
+  return suffix ? `${path}?${suffix}` : path;
+};
 
 export function getChannelAudioStatus(
   accountId: number,
@@ -101,9 +106,10 @@ export function getChannelAudioStatus(
 export function encodeChannelAudio(
   accountId: number,
   storageKey?: string,
+  force = false,
   fetchImpl: typeof fetch = fetch
 ): Promise<ChannelAudioStatus> {
-  return sendJson<ChannelAudioStatus>(withStorageKey(`${base(accountId)}/encode`, storageKey), 'POST', undefined, fetchImpl);
+  return sendJson<ChannelAudioStatus>(withStorageKey(`${base(accountId)}/encode`, storageKey, force), 'POST', undefined, fetchImpl);
 }
 
 export function createPodcastFeedLink(accountId: number, fetchImpl: typeof fetch = fetch): Promise<PodcastFeedLink> {

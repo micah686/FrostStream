@@ -26,6 +26,8 @@ public sealed record ChannelAudioResolveRequest
     public string? StorageKey { get; init; }
     public bool CreateIfMissing { get; init; }
     public bool RetryFailedAndPending { get; init; }
+    /// <summary>Queues ready renditions again, regardless of their durable encoded status.</summary>
+    public bool ForceReencode { get; init; }
 }
 
 public sealed record ChannelAudioResolveResponse

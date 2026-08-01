@@ -17,6 +17,7 @@ public sealed class AudioRenditionRepository(
         string? storageKey,
         bool createIfMissing,
         bool retryFailedAndPending,
+        bool forceReencode,
         CancellationToken cancellationToken = default)
     {
         var account = await ReadChannelAccountAsync(accountId, cancellationToken);
@@ -77,6 +78,16 @@ public sealed class AudioRenditionRepository(
                 }
                 else if (retryFailedAndPending && rendition.Status == AudioRenditionStatus.Pending)
                 {
+                    queue.Add(rendition);
+                }
+                // A force request intentionally re-encodes ready output even when its durable
+                // encoded-status row says it is good. Do not disturb a live encode: its job has
+                // already been claimed and will complete (or fail) normally.
+                else if (forceReencode && rendition.Status == AudioRenditionStatus.Ready)
+                {
+                    rendition.Status = AudioRenditionStatus.Pending;
+                    rendition.ErrorMessage = null;
+                    rendition.UpdatedAt = clock.GetCurrentInstant();
                     queue.Add(rendition);
                 }
             }

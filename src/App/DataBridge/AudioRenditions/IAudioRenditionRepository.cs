@@ -9,6 +9,7 @@ public interface IAudioRenditionRepository
         string? storageKey,
         bool createIfMissing,
         bool retryFailedAndPending,
+        bool forceReencode,
         CancellationToken cancellationToken = default);
 
     Task<AudioRenditionDto?> ResolveAsync(
