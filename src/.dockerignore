@@ -6,8 +6,8 @@
 **/build/
 **/*.user
 HelperTestingApps/
-Modules/YtDlpSharpLib/Tests/
-Modules/YtDlpSharpLib/ConsoleDownloader/
-Modules/Conduit.NATS/Tests/
+Libs/YtDlpSharpLib/Tests/
+Libs/YtDlpSharpLib/ConsoleDownloader/
+Libs/Conduit.NATS/Tests/
 App/AppHost/
 App/Frontend/static/.gitkeep

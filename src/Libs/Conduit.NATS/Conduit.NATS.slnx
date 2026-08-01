@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="Conduit.NATS/Conduit.NATS.csproj" />
+  <Folder Name="/Tests/">
+    <Project Path="Tests/Conduit.NATS.UnitTests/Conduit.NATS.UnitTests.csproj" />
+    <Project Path="Tests/Conduit.NATS.IntegrationTests/Conduit.NATS.IntegrationTests.csproj" />
+  </Folder>
+</Solution>

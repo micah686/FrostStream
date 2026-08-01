@@ -27,8 +27,8 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\..\Modules\Conduit.NATS\Conduit.NATS\Conduit.NATS.csproj" />
-      <ProjectReference Include="..\..\Modules\YtDlpSharpLib\YtDlpSharpLib\YtDlpSharpLib.csproj" />
+      <ProjectReference Include="..\..\Libs\Conduit.NATS\Conduit.NATS\Conduit.NATS.csproj" />
+      <ProjectReference Include="..\..\Libs\YtDlpSharpLib\YtDlpSharpLib\YtDlpSharpLib.csproj" />
     </ItemGroup>
 
 </Project>
