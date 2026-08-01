@@ -14,7 +14,6 @@
     type DownloadConfigSet
   } from '$lib/api/downloadConfigSets';
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
-  import UnderDevelopmentBanner from '$lib/components/admin/UnderDevelopmentBanner.svelte';
 
   type IconComponent = typeof SlidersHorizontal;
 
@@ -68,8 +67,6 @@
     return config.ytDlpOptions ? SlidersHorizontal : Archive;
   }
 </script>
-
-<UnderDevelopmentBanner />
 
 <section class="card border border-base-300 bg-base-100 p-5 sm:p-6">
   <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

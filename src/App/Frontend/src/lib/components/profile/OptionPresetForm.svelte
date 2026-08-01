@@ -114,7 +114,7 @@
   {/if}
 
   <div class="flex flex-col-reverse gap-3 border-t border-base-300/70 pt-5 sm:flex-row sm:justify-between">
-    <a class="btn btn-sm btn-ghost text-xs" href={profileReturnHref}>
+    <a class="btn btn-sm btn-neutral text-xs" href={profileReturnHref}>
       <ArrowLeft class="mr-1.5 h-4 w-4" />
       Back
     </a>
