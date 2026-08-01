@@ -40,8 +40,7 @@
   };
 
   const cardClass = 'card border border-base-300 bg-base-100 p-5 sm:p-6';
-  const rowActionClass =
-    'inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary disabled:opacity-50';
+  const rowActionClass = 'btn btn-sm btn-neutral text-xs';
 
   const JOB_POLL_INTERVAL_MS = 4000;
 
@@ -330,17 +329,14 @@
     for (const target of ['target-time', 'target-lsn', 'target-name']) removeOption(target);
     removeOption('recover-latest');
     removeOption('archive-dir');
-    removeOption('tool-command');
 
     const target = ['target-time', 'target-lsn', 'target-name'].find((key) => valueFor(key));
     if (target) {
       setOption(target, valueFor(target));
       setOption('archive-dir', valueFor('archive-dir') || '<WAL_ARCHIVE_DIR>');
-      setOption('tool-command', valueFor('tool-command'));
     } else if (valueFor('recover-latest') === 'true') {
       updated += ' --recover-latest';
       setOption('archive-dir', valueFor('archive-dir') || '<WAL_ARCHIVE_DIR>');
-      setOption('tool-command', valueFor('tool-command'));
     }
 
     return updated;
@@ -631,7 +627,7 @@
 
 {#if activeRestorePath && restorePlans[activeRestorePath]}
   {@const activePlan = restorePlans[activeRestorePath]}
-  {@const activeOptions = activePlan.options ?? []}
+  {@const activeOptions = (activePlan.options ?? []).filter((option) => option.key !== 'tool-command')}
   <div class="fixed inset-0 z-50 flex items-start justify-center overflow-x-hidden overflow-y-auto bg-black/50 p-4 sm:p-8" role="dialog" aria-modal="true" aria-labelledby="restore-plan-title">
     <div class="relative my-4 min-w-0 w-full max-w-3xl rounded-box bg-base-100 p-6 shadow-2xl sm:my-8">
       <div class="flex items-start justify-between gap-4">
@@ -644,9 +640,10 @@
         </button>
       </div>
 
-      <div class="mt-5 whitespace-pre-line break-words rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm leading-6 text-base-content/75">
-        {activePlan.explanation}
-      </div>
+      <details class="mt-5 rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm text-base-content/75">
+        <summary class="cursor-pointer font-semibold text-base-content">Restore guidance</summary>
+        <p class="mt-3 whitespace-pre-line break-words leading-6">{activePlan.explanation}</p>
+      </details>
 
       {#if activeOptions.length > 0}
         <div class="mt-5 space-y-4">

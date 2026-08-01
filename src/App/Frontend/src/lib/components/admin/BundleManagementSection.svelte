@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Modal } from '$lib/components/ui';
+  import { Modal, Select } from '$lib/components/ui';
   import {
     Boxes,
     Check,
@@ -400,16 +400,16 @@
                 <div class="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    class="inline-flex h-9 min-w-9 items-center justify-center gap-2 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary"
+                    class="btn btn-sm btn-neutral text-xs"
                     onclick={() => openEditModal(selectedBundle)}
                   >
-                    <Pencil class="h-4 w-4" />
+                    <Pencil class="mr-1.5 h-4 w-4" />
                     Edit endpoints
                   </button>
                   <button
                     type="button"
-                    class="inline-flex h-9 min-w-9 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-base-content/80 transition hover:border-error/60 hover:bg-error/10 hover:text-error disabled:cursor-not-allowed disabled:opacity-45"
-                    title="Delete runtime bundle"
+                    class="btn btn-sm btn-neutral text-xs"
+                    title="Delete bundle"
                     aria-label={`Delete bundle ${selectedBundle.id}`}
                     disabled={deletingBundleId === selectedBundle.id}
                     onclick={() => {
@@ -418,10 +418,11 @@
                     }}
                   >
                     {#if deletingBundleId === selectedBundle.id}
-                      <span class="loading loading-spinner loading-xs"></span>
+                      <span class="loading loading-spinner loading-xs mr-1.5"></span>
                     {:else}
-                      <Trash2 class="h-4 w-4" />
+                      <Trash2 class="mr-1.5 h-4 w-4" />
                     {/if}
+                    Delete bundle
                   </button>
                 </div>
               {/if}
@@ -560,16 +561,15 @@
     {#if pickerMode === 'create'}
       <div>
         <label class="label mb-2 text-sm" for="bundle-clone-source">Start from a system bundle</label>
-        <select
+        <Select
           id="bundle-clone-source"
+          items={[
+            { value: '', name: 'Start empty' },
+            ...cloneSources.map((bundle) => ({ value: bundle.id, name: `${bundle.id} · ${bundle.endpointCount} endpoints` }))
+          ]}
           bind:value={pickerCloneFrom}
-          class="w-full rounded-lg border border-base-300 bg-base-200/60 px-3 py-2.5 text-sm text-base-content/90 outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-        >
-          <option value="">Start empty</option>
-          {#each cloneSources as bundle (bundle.id)}
-            <option value={bundle.id}>{bundle.id} · {bundle.endpointCount} endpoints</option>
-          {/each}
-        </select>
+          class="text-sm"
+        />
         <p class="mt-1.5 text-xs text-base-content/50">
           The baseline is copied when the bundle is created. Add extra endpoints here; edit the new bundle afterward to remove copied endpoints.
         </p>
@@ -609,7 +609,7 @@
                 <label class="flex cursor-pointer items-center gap-3 px-3 py-2 transition hover:bg-base-300/35">
                   <input
                     type="checkbox"
-                    class="h-4 w-4 rounded border-base-content/20 bg-base-200 text-primary focus:ring-primary"
+                    class="checkbox checkbox-sm checkbox-primary"
                     checked={cloneBaselineEndpoints().includes(endpoint.id) || pickerEndpoints.includes(endpoint.id)}
                     disabled={cloneBaselineEndpoints().includes(endpoint.id)}
                     onchange={() => toggleEndpoint(endpoint.id)}

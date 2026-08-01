@@ -468,7 +468,7 @@
           <label class="label mb-2 text-sm" for="schedule-catchup">Missed-run policy</label>
           <Select id="schedule-catchup" items={catchupItems} bind:value={formCatchupPolicy} />
         </div>
-        <div class="flex items-end pb-2">
+        <div class="flex items-start pt-[2.25rem]">
           <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle" bind:checked={formEnabled} /><span>Enabled</span></label>
         </div>
       </div>
@@ -538,12 +538,13 @@
             {/if}
             <button
               type="button"
-              class="inline-flex h-10 min-w-10 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-base-content/80 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary"
+              class="btn btn-sm btn-neutral text-xs"
               title="Edit schedule"
               aria-label={`Edit schedule ${schedule.key}`}
               onclick={() => openEditForm(schedule)}
             >
-              <Pencil class="h-4 w-4" />
+              <Pencil class="mr-1.5 h-4 w-4" />
+              Edit
             </button>
           </div>
         </article>
