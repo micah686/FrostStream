@@ -45,45 +45,6 @@
   --noise: 0;
 }
 
-@plugin "daisyui/theme" {
-  name: "froststream-light";
-  default: false;
-  prefersdark: false;
-  color-scheme: light;
-
-  --color-base-100: #ffffff;
-  --color-base-200: #f1f5f9;
-  --color-base-300: #e2e8f0;
-  --color-base-content: #0f172a;
-
-  --color-primary: #3b82f6;
-  --color-primary-content: #ffffff;
-  --color-secondary: #8b5cf6;
-  --color-secondary-content: #ffffff;
-  --color-accent: #06b6d4;
-  --color-accent-content: #04212b;
-  --color-neutral: #e2e8f0;
-  --color-neutral-content: #0f172a;
-
-  --color-info: #2563eb;
-  --color-info-content: #ffffff;
-  --color-success: #059669;
-  --color-success-content: #ffffff;
-  --color-warning: #d97706;
-  --color-warning-content: #1c1300;
-  --color-error: #dc2626;
-  --color-error-content: #ffffff;
-
-  --radius-box: 1rem;
-  --radius-field: 0.5rem;
-  --radius-selector: 0.5rem;
-  --size-field: 0.25rem;
-  --size-selector: 0.25rem;
-  --border: 1px;
-  --depth: 0;
-  --noise: 0;
-}
-
 @theme {
   --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
