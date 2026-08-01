@@ -84,6 +84,12 @@
       return;
     }
 
+    const normalizedKey = formKey.trim();
+    if (!formIsUpdate && profiles.some((profile) => profile.profileKey.toLowerCase() === normalizedKey.toLowerCase())) {
+      formError = `A cookie profile with key "${normalizedKey}" already exists.`;
+      return;
+    }
+
     formBusy = true;
     formError = null;
     formMessage = null;
@@ -258,7 +264,7 @@
 
       <div class="grid gap-5 sm:grid-cols-2">
         <div>
-          <label class="label mb-2 text-sm" for="cookie-profile-key">Profile key</label>
+          <label class="label mb-2 text-sm" for="cookie-profile-key">Key</label>
           <input class="input w-full" id="cookie-profile-key" required
              pattern={'[a-z0-9-]{2,100}'} minlength={2} maxlength={100} disabled={formIsUpdate} bind:value={formKey} placeholder="youtube-main" />
           <p class="mt-1.5 text-xs text-base-content/40">Lowercase letters, numbers, and hyphens.</p>
