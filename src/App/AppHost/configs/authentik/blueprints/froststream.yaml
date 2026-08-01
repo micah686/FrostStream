@@ -428,6 +428,16 @@ entries:
           url: ^https://localhost:[0-9]+/$
           redirect_uri_type: logout
 
+  # Authentik normally keeps its browser session alive when an OIDC application
+  # initiates logout. Add the User Logout stage to the provider invalidation
+  # flow so FrostStream sign-out performs full single logout instead.
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      stage: !Find [authentik_stages_user_logout.userlogoutstage, [name, default-invalidation-logout]]
+    attrs:
+      order: 100
+
   - model: authentik_core.application
     identifiers:
       slug: froststream

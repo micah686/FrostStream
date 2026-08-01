@@ -57,7 +57,11 @@ export async function logout(): Promise<void> {
   }
 
   csrfToken = null;
-  window.location.assign('/');
+  const contentType = response.headers.get('content-type') ?? '';
+  const result = contentType.includes('application/json')
+    ? (await response.json()) as { providerLogoutUrl?: string }
+    : null;
+  window.location.assign(result?.providerLogoutUrl || window.location.href);
 }
 
 export async function getJson<T>(url: string, fetchImpl: typeof fetch = fetch): Promise<T> {
