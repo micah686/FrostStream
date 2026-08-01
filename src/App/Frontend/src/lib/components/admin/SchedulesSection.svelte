@@ -1,17 +1,16 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Modal, Select } from '$lib/components/ui';
+  import { Select } from '$lib/components/ui';
   import {
     ChevronDown,
     CircleAlert,
     Clock,
-    Info,
+    ArrowLeft,
     Pencil,
     RefreshCw,
     Server,
     X
   } from '@lucide/svelte';
-  import UnderDevelopmentBanner from '$lib/components/admin/UnderDevelopmentBanner.svelte';
   import { ApiRequestError } from '$lib/api/http';
   import {
     listSchedules,
@@ -21,6 +20,9 @@
     type ScheduleCatchupPolicy,
     type ScheduledTask
   } from '$lib/api/schedules';
+
+  let { editKey = null } = $props<{ editKey?: string | null }>();
+  const editOnly = $derived(editKey !== null);
 
   const cardClass = 'card border border-base-300 bg-base-100 p-5 sm:p-6';
 
@@ -164,7 +166,6 @@
   let cronMonth = $state('*');
   let cronDayOfWeek = $state('?');
 
-  let taskTypeHelpOpen = $state(false);
   const cronBuilderExpression = $derived(`${cronSecond} ${cronMinute} ${cronHour} ${cronDayOfMonth} ${cronMonth} ${cronDayOfWeek}`);
 
   const bridgeUnavailable = $derived(loadError instanceof ApiRequestError && loadError.status === 503);
@@ -178,6 +179,14 @@
     loadError = null;
     try {
       schedules = (await listSchedules()).sort((a, b) => a.key.localeCompare(b.key));
+      if (editKey !== null) {
+        const schedule = schedules.find((item) => item.key === editKey);
+        if (schedule) {
+          openEditForm(schedule);
+        } else {
+          loadError = new Error(`Schedule "${editKey}" was not found.`);
+        }
+      }
     } catch (err) {
       loadError = err instanceof Error ? err : new Error('Could not load schedules.');
     } finally {
@@ -237,8 +246,12 @@
     formSaving = true;
     try {
       await updateSchedule(editingKey ?? formKey, request);
-      formOpen = false;
-      await load();
+      if (editOnly) {
+        window.location.assign('/admin/schedules');
+      } else {
+        formOpen = false;
+        await load();
+      }
     } catch (err) {
       formError = err instanceof Error ? err.message : 'Could not save the schedule.';
     } finally {
@@ -307,27 +320,31 @@
     }
     updateCronExpression();
   }
-</script>
 
-<UnderDevelopmentBanner />
+  function closeForm() {
+    if (editOnly) {
+      window.location.assign('/admin/schedules');
+    } else {
+      formOpen = false;
+    }
+  }
+</script>
 
 <section class={cardClass} aria-labelledby="schedules-title">
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div class="min-w-0">
       <div class="flex items-center gap-2">
         <Clock class="h-5 w-5 text-primary" />
-        <h2 id="schedules-title" class="text-base font-bold text-base-content">Schedules</h2>
+        <h2 id="schedules-title" class="text-base font-bold text-base-content">{editOnly ? `Edit schedule "${editKey}"` : 'Schedules'}</h2>
       </div>
-      <p class="mt-2 text-sm text-base-content/60">
-        Recurring background tasks — metadata cleanup, channel checks, backups, and other maintenance jobs.
-      </p>
+      <p class="mt-2 text-sm text-base-content/60">{editOnly ? 'Update the timing and behavior of this recurring background task.' : 'Recurring background tasks — metadata cleanup, channel checks, backups, and other maintenance jobs.'}</p>
     </div>
-    <div class="flex shrink-0 gap-2">
+    {#if !editOnly}<div class="flex shrink-0 gap-2">
       <button class="btn btn-sm btn-neutral" disabled={loading} onclick={() => void load()}>
         <RefreshCw class="mr-1.5 h-3.5 w-3.5" />
         Refresh
       </button>
-    </div>
+    </div>{/if}
   </div>
 
   {#if bridgeUnavailable}
@@ -353,7 +370,7 @@
           type="button"
           class="grid h-8 w-8 place-items-center rounded-lg text-base-content/60 hover:bg-base-300 hover:text-base-content"
           aria-label="Close form"
-          onclick={() => (formOpen = false)}
+              onclick={closeForm}
         >
           <X class="h-4 w-4" />
         </button>
@@ -363,23 +380,13 @@
         <div>
           <label class="label mb-2 text-sm" for="schedule-key">Key</label>
           <input class="input w-full" id="schedule-key" required
-             pattern={'[a-z0-9-]{2,100}'} minlength={2} maxlength={100} disabled bind:value={formKey} />
+             pattern={'[a-z0-9\\-]{2,100}'} minlength={2} maxlength={100} disabled bind:value={formKey} />
         </div>
-        <div>
-          <div class="mb-2 flex items-center gap-1.5">
-            <label class="label text-sm" for="schedule-task-type">Task type</label>
-            <button
-              type="button"
-              class="inline-flex h-5 w-5 items-center justify-center rounded-full text-base-content/50 transition hover:text-base-content/90"
-              aria-label="Explain task types"
-              title="Explain task types"
-              onclick={() => (taskTypeHelpOpen = true)}
-            >
-              <Info class="h-4 w-4" />
-            </button>
+          <div>
+            <label class="label mb-2 text-sm" for="schedule-task-type">Task type</label>
+            <Select id="schedule-task-type" items={taskTypeItems} bind:value={formTaskType} disabled />
+            <p class="mt-2 min-h-[3rem] text-xs leading-relaxed text-base-content/60">{taskTypeSummary(formTaskType)}</p>
           </div>
-          <Select id="schedule-task-type" items={taskTypeItems} bind:value={formTaskType} disabled />
-        </div>
       </div>
 
       <details open class="group rounded-xl border border-base-300/70 bg-base-200/40 p-4">
@@ -469,7 +476,7 @@
           <Select id="schedule-catchup" items={catchupItems} bind:value={formCatchupPolicy} />
         </div>
         <div class="flex items-start pt-[2.25rem]">
-          <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle" bind:checked={formEnabled} /><span>Enabled</span></label>
+          <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle toggle-primary" bind:checked={formEnabled} /><span>Enabled</span></label>
         </div>
       </div>
 
@@ -480,8 +487,11 @@
         </div>
       {/if}
 
-      <div class="flex justify-end gap-2">
-        <button class="btn btn-sm btn-neutral" onclick={() => (formOpen = false)}>Cancel</button>
+      <div class="flex flex-col-reverse gap-3 border-t border-base-300/70 pt-5 sm:flex-row sm:items-center sm:justify-between">
+        <a class="btn btn-sm btn-neutral text-xs" href="/admin/schedules">
+          <ArrowLeft class="mr-1.5 h-4 w-4" />
+          Back
+        </a>
         <button class="btn btn-sm btn-primary" type="submit" disabled={formSaving}>
           {#if formSaving}
             <span class="loading loading-spinner loading-xs mr-1.5"></span>
@@ -492,15 +502,15 @@
     </form>
   {/if}
 
-  {#if loading}
+  {#if !editOnly && loading}
     <div class="mt-10 flex justify-center"><span class="loading loading-spinner loading-md"></span></div>
-  {:else if schedules.length === 0}
+  {:else if !editOnly && schedules.length === 0}
     <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
       <Clock class="mx-auto h-9 w-9 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No schedules yet</p>
       <p class="mt-1 text-sm text-base-content/50">Run migrations to seed the registered scheduler task types.</p>
     </div>
-  {:else}
+  {:else if !editOnly}
     <div class="mt-5 space-y-2">
       {#each schedules as schedule (schedule.key)}
         <article
@@ -512,12 +522,12 @@
             </span>
             <div class="min-w-0">
               <div class="flex min-w-0 flex-wrap items-center gap-2">
-                <h3 class="truncate text-sm font-semibold text-base-content">{schedule.key}</h3>
-                <span class="rounded-full bg-base-300 px-2 py-0.5 font-mono text-[10px] font-semibold text-base-content/60">
+                <span class="badge badge-sm badge-accent font-mono text-[10px] text-accent-content">{schedule.key}</span>
+                <span class="font-mono text-xs text-base-content/60">
                   {schedule.taskType}
                 </span>
                 {#if !schedule.enabled}
-                  <span class="rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-semibold text-warning">disabled</span>
+                  <span class="badge badge-sm badge-warning text-[10px] font-semibold">disabled</span>
                 {/if}
               </div>
               <p class="mt-1 text-xs leading-relaxed text-base-content/60">{taskTypeSummary(schedule.taskType)}</p>
@@ -534,37 +544,20 @@
             {#if mutation === `toggle:${schedule.key}`}
               <span class="loading loading-spinner loading-sm"></span>
             {:else}
-              <input type="checkbox" class="toggle" checked={schedule.enabled} disabled={mutation !== null} aria-label={`${schedule.enabled ? 'Disable' : 'Enable'} schedule ${schedule.key}`} onchange={() => void toggleEnabled(schedule)} />
+              <input type="checkbox" class="toggle toggle-primary" checked={schedule.enabled} disabled={mutation !== null} aria-label={`${schedule.enabled ? 'Disable' : 'Enable'} schedule ${schedule.key}`} onchange={() => void toggleEnabled(schedule)} />
             {/if}
-            <button
-              type="button"
+            <a
               class="btn btn-sm btn-neutral text-xs"
               title="Edit schedule"
               aria-label={`Edit schedule ${schedule.key}`}
-              onclick={() => openEditForm(schedule)}
+              href={`/admin/schedules/${encodeURIComponent(schedule.key)}`}
             >
               <Pencil class="mr-1.5 h-4 w-4" />
               Edit
-            </button>
+            </a>
           </div>
         </article>
       {/each}
     </div>
   {/if}
 </section>
-
-<Modal bind:open={taskTypeHelpOpen} title="Task type help" size="lg">
-  <div class="space-y-4">
-    <p class="text-sm text-base-content/80">
-      Each schedule runs one registered background job. The task type determines what the scheduler queues when the schedule fires.
-    </p>
-    <div class="space-y-3">
-      {#each taskTypeHelp as item}
-        <div class="rounded-xl border border-base-300/80 bg-base-200/30 p-3">
-          <p class="font-mono text-xs font-semibold text-primary">{item.type}</p>
-          <p class="mt-1 text-sm text-base-content/80">{item.summary}</p>
-        </div>
-      {/each}
-    </div>
-  </div>
-</Modal>
