@@ -424,21 +424,21 @@
     </div>
   </div>
 
-  <div class="mt-6 grid gap-3 md:grid-cols-3">
-    <div class="rounded-xl border border-base-300/80 bg-base-200/40 p-4">
-      <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Tracked</p>
-      <p class="mt-2 text-2xl font-bold text-base-content">{trackedCount}</p>
-      <p class="mt-1 text-xs text-base-content/50">creator sources</p>
+  <div class="stats stats-vertical mt-6 w-full gap-3 bg-transparent md:stats-horizontal">
+    <div class="stat rounded-box border border-base-300 bg-base-100 shadow-sm">
+      <div class="stat-title">Tracked</div>
+      <div class="stat-value text-primary">{trackedCount}</div>
+      <div class="stat-desc">creator sources</div>
     </div>
-    <div class="rounded-xl border border-base-300/80 bg-base-200/40 p-4">
-      <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Scanning</p>
-      <p class="mt-2 text-2xl font-bold text-base-content">{scanningCount}</p>
-      <p class="mt-1 text-xs text-base-content/50">enabled for discovery</p>
+    <div class="stat rounded-box border border-base-300 bg-base-100 shadow-sm">
+      <div class="stat-title">Scanning</div>
+      <div class="stat-value text-secondary">{scanningCount}</div>
+      <div class="stat-desc">enabled for discovery</div>
     </div>
-    <div class="rounded-xl border border-base-300/80 bg-base-200/40 p-4">
-      <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Scanned</p>
-      <p class="mt-2 text-2xl font-bold text-base-content">{scannedCount}</p>
-      <p class="mt-1 text-xs text-base-content/50">completed at least one scan</p>
+    <div class="stat rounded-box border border-base-300 bg-base-100 shadow-sm">
+      <div class="stat-title">Scanned</div>
+      <div class="stat-value text-accent">{scannedCount}</div>
+      <div class="stat-desc">completed at least one scan</div>
     </div>
   </div>
 
@@ -484,20 +484,21 @@
         {@const busyAction = busy[source.id]}
         <li
           class={[
-            'rounded-2xl border p-5',
-            source.scanEnabled ? 'border-base-300/90 bg-base-200/45' : 'border-base-300/60 bg-base-200/25'
+            'card border border-base-300 bg-base-100 shadow-sm',
+            source.scanEnabled ? 'ring-1 ring-success/20' : 'opacity-90'
           ]}
         >
+          <div class="card-body p-5">
           <div class="flex flex-wrap items-start justify-between gap-4">
             <div class="min-w-0">
               <div class="flex flex-wrap items-center gap-2">
                 <h2 class="truncate text-base font-semibold text-base-content">{displayName(source)}</h2>
                 <span
                   class={[
-                    'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold ring-1',
+                    'badge badge-sm gap-1.5 text-[10px] font-bold',
                     source.scanEnabled
-                      ? 'bg-success/12 text-success ring-success/20'
-                      : 'bg-base-200/12 text-base-content/60 ring-base-300/20'
+                      ? 'badge-success text-success-content'
+                      : 'badge-ghost text-base-content/60'
                   ]}
                 >
                   {source.scanEnabled ? 'SCANNING' : 'PAUSED'}
@@ -592,24 +593,24 @@
 
           <dl class="mt-4 grid gap-x-6 gap-y-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
             <div>
-              <dt class="font-bold uppercase tracking-[0.08em] text-base-content/40">Last scan</dt>
-              <dd class="mt-0.5 text-base-content/80">{formatScan(source.lastSuccessfulScanAt)}</dd>
+              <dt class="font-bold uppercase tracking-[0.08em] text-base-content/70">Last scan</dt>
+              <dd class="mt-0.5 text-base-content">{formatScan(source.lastSuccessfulScanAt)}</dd>
             </div>
             <div>
-              <dt class="font-bold uppercase tracking-[0.08em] text-base-content/40">Last full scan</dt>
-              <dd class="mt-0.5 text-base-content/80">{formatScan(source.lastFullScanAt)}</dd>
+              <dt class="font-bold uppercase tracking-[0.08em] text-base-content/70">Last full scan</dt>
+              <dd class="mt-0.5 text-base-content">{formatScan(source.lastFullScanAt)}</dd>
             </div>
             <div>
-              <dt class="font-bold uppercase tracking-[0.08em] text-base-content/40">Update check</dt>
-              <dd class="mt-0.5 text-base-content/80">every {source.updateCheckIntervalHours} h</dd>
+              <dt class="font-bold uppercase tracking-[0.08em] text-base-content/70">Update check</dt>
+              <dd class="mt-0.5 text-base-content">every {source.updateCheckIntervalHours} h</dd>
             </div>
             <div>
-              <dt class="font-bold uppercase tracking-[0.08em] text-base-content/40">Full rescan</dt>
-              <dd class="mt-0.5 text-base-content/80">every {source.fullRescanIntervalDays} days</dd>
+              <dt class="font-bold uppercase tracking-[0.08em] text-base-content/70">Full rescan</dt>
+              <dd class="mt-0.5 text-base-content">every {source.fullRescanIntervalDays} days</dd>
             </div>
             <div>
-              <dt class="font-bold uppercase tracking-[0.08em] text-base-content/40">Scan paging</dt>
-              <dd class="mt-0.5 text-base-content/80">
+              <dt class="font-bold uppercase tracking-[0.08em] text-base-content/70">Scan paging</dt>
+              <dd class="mt-0.5 text-base-content">
                 {source.incrementalPageSize} per page · stop after {source.consecutiveKnownThreshold} known
               </dd>
             </div>
@@ -618,7 +619,7 @@
           <div class="mt-4 border-t border-base-300/70 pt-3">
             <button
               type="button"
-              class="inline-flex items-center gap-1.5 text-xs font-semibold text-base-content/50 transition hover:text-primary"
+              class="inline-flex items-center gap-1.5 text-xs font-semibold text-base-content transition hover:text-primary"
               onclick={() => toggleIgnored(source)}
             >
               <EyeOff class="h-3.5 w-3.5" />
@@ -679,6 +680,7 @@
                 {/if}
               </div>
             {/if}
+          </div>
           </div>
         </li>
       {/each}
