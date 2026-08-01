@@ -128,7 +128,7 @@
           <div class="flex shrink-0 gap-2 sm:ml-auto">
             <a
               href={`/admin/storage/${encodeURIComponent(storage.key)}`}
-              class="inline-flex h-10 min-w-24 items-center justify-center gap-2 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary"
+              class="btn btn-sm btn-neutral text-xs"
               aria-label={`View settings for storage target ${storage.key}`}
             >
               <Eye class="h-4 w-4" />
@@ -137,7 +137,7 @@
             {#if storage.key !== 'default'}
               <button
                 type="button"
-                class="inline-flex h-10 min-w-10 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-base-content/80 transition hover:border-error/60 hover:bg-error/10 hover:text-error disabled:opacity-50"
+                class="btn btn-sm btn-neutral text-xs"
                 title="Delete storage target"
                 aria-label={`Delete storage target ${storage.key}`}
                 disabled={deletingKey === storage.key}
@@ -151,6 +151,7 @@
                 {:else}
                   <Trash2 class="h-4 w-4" />
                 {/if}
+                Delete
               </button>
             {/if}
           </div>

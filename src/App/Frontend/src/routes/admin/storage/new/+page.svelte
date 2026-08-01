@@ -487,7 +487,7 @@
     {/if}
 
     <div class="flex items-center gap-3 border-t border-base-300/70 pt-5">
-      <button class="btn btn-sm btn-primary text-xs" type="submit" disabled={submitting}>
+      <button class="btn btn-sm btn-neutral text-xs" type="submit" disabled={submitting}>
         {#if submitting}
           <span class="loading loading-spinner loading-xs mr-1.5"></span>
         {:else}
@@ -495,7 +495,7 @@
         {/if}
         Register storage
       </button>
-      <a class="btn btn-sm btn-ghost text-xs" href="/admin">
+      <a class="btn btn-sm btn-neutral text-xs" href="/admin">
         Cancel
       </a>
     </div>
