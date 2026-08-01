@@ -187,7 +187,7 @@ External ports are overridable via `PORT_*` variables in the generated Aspire de
 
 ```bash
 dotnet test --project Tests/UnitTests/UnitTests.csproj
-dotnet test --project src/Modules/Conduit.NATS/Tests/Conduit.NATS.UnitTests/Conduit.NATS.UnitTests.csproj
+dotnet test --project src/Libs/Conduit.NATS/Tests/Conduit.NATS.UnitTests/Conduit.NATS.UnitTests.csproj
 ```
 
 ---
@@ -207,7 +207,7 @@ dotnet test --project src/Modules/Conduit.NATS/Tests/Conduit.NATS.UnitTests/Cond
 │   │   ├── Shared/                   # shared contracts & options
 │   │   └── docker-compose-artifacts/ # generated compose deployment
 │   ├── Containers/                   # container resource definitions/config
-│   └── Modules/                      # reusable libraries (Conduit.NATS, …)
+│   └── Libs/                         # reusable libraries (Conduit.NATS, …)
 ├── Tests/                            # unit tests
 ├── docs/                             # design notes & feature inventory
 └── data/                             # default dev storage root (gitignored)

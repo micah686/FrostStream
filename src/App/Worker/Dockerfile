@@ -10,15 +10,15 @@ WORKDIR /src
 
 COPY App/Shared/Shared.csproj App/Shared/
 COPY App/ServiceDefaults/ServiceDefaults.csproj App/ServiceDefaults/
-COPY Modules/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj Modules/Conduit.NATS/Conduit.NATS/
-COPY Modules/YtDlpSharpLib/YtDlpSharpLib/YtDlpSharpLib.csproj Modules/YtDlpSharpLib/YtDlpSharpLib/
+COPY Libs/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj Libs/Conduit.NATS/Conduit.NATS/
+COPY Libs/YtDlpSharpLib/YtDlpSharpLib/YtDlpSharpLib.csproj Libs/YtDlpSharpLib/YtDlpSharpLib/
 COPY App/Worker/Worker.csproj App/Worker/
 RUN dotnet restore App/Worker/Worker.csproj
 
 COPY App/Shared/ App/Shared/
 COPY App/ServiceDefaults/ App/ServiceDefaults/
-COPY Modules/Conduit.NATS/Conduit.NATS/ Modules/Conduit.NATS/Conduit.NATS/
-COPY Modules/YtDlpSharpLib/YtDlpSharpLib/ Modules/YtDlpSharpLib/YtDlpSharpLib/
+COPY Libs/Conduit.NATS/Conduit.NATS/ Libs/Conduit.NATS/Conduit.NATS/
+COPY Libs/YtDlpSharpLib/YtDlpSharpLib/ Libs/YtDlpSharpLib/YtDlpSharpLib/
 COPY App/Worker/ App/Worker/
 RUN dotnet publish App/Worker/Worker.csproj -c Release -o /app --no-restore
 

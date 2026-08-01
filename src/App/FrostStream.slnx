@@ -2,11 +2,11 @@
   <Folder Name="/HelperTesterApps/">
     <Project Path="../HelperTestingApps/VideoServeLocalTest/VideoServeLocalTest.csproj" />
   </Folder>
-  <Folder Name="/Modules/Conduit.NATS/">
-    <Project Path="../Modules/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj" />
+  <Folder Name="/Libs/Conduit.NATS/">
+    <Project Path="../Libs/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj" />
   </Folder>
-  <Folder Name="/Modules/YtDlpSharpLib/">
-    <Project Path="../Modules/YtDlpSharpLib/YtDlpSharpLib/YtDlpSharpLib.csproj" />
+  <Folder Name="/Libs/YtDlpSharpLib/">
+    <Project Path="../Libs/YtDlpSharpLib/YtDlpSharpLib/YtDlpSharpLib.csproj" />
   </Folder>
   <Folder Name="/Core/">
     <Project Path="BackupService/BackupService.csproj" />
