@@ -112,7 +112,7 @@
             <div class="min-w-0">
               <div class="flex min-w-0 flex-wrap items-center gap-2">
                 <h3 class="truncate text-sm font-semibold text-base-content">{storage.key}</h3>
-                <span class="rounded-full bg-base-300 px-2 py-0.5 text-[10px] font-semibold text-base-content/60">
+                <span class="badge badge-primary badge-sm text-[10px] font-semibold">
                   {storageMethodLabel(storage)}
                 </span>
               </div>
@@ -129,10 +129,10 @@
             <a
               href={`/admin/storage/${encodeURIComponent(storage.key)}`}
               class="btn btn-sm btn-neutral text-xs"
-              aria-label={`View settings for storage target ${storage.key}`}
+              aria-label={`View storage target ${storage.key}`}
             >
               <Eye class="h-4 w-4" />
-              Settings
+              View
             </a>
             {#if storage.key !== 'default'}
               <button
@@ -161,7 +161,7 @@
   {/if}
 
   <div class="mt-4">
-    <a class="btn btn-sm btn-ghost text-xs" href="/admin/storage/new">
+    <a class="btn btn-sm btn-neutral text-xs" href="/admin/storage/new">
       <Plus class="mr-1.5 h-3.5 w-3.5" />
       Register storage
     </a>

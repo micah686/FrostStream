@@ -243,51 +243,43 @@
 </svelte:head>
 
 <section class="mx-auto min-h-[calc(100vh-7rem)] max-w-4xl" aria-labelledby="register-storage-title">
-  <a
-    href="/admin"
-    class="inline-flex items-center gap-1.5 text-xs font-semibold text-base-content/60 transition hover:text-base-content/90"
-  >
-    <ArrowLeft class="h-3.5 w-3.5" />
-    Back to administration
-  </a>
-
-  <h1 id="register-storage-title" class="mt-4 text-2xl font-bold tracking-tight text-base-content">Register storage</h1>
+  <h1 id="register-storage-title" class="text-2xl font-bold tracking-tight text-base-content">Register storage</h1>
   <p class="mt-2 text-sm text-base-content/60">
     Add a storage target FrostStream can index or write to. Credentials are stored in the secret store and never shown
     again.
   </p>
-
-  <fieldset class="mt-6">
-    <legend class="mb-3 text-sm font-medium text-base-content/80">Storage type</legend>
-    <div class="grid gap-2 sm:grid-cols-3 lg:grid-cols-5" role="radiogroup" aria-label="Storage type">
-      {#each targetOptions as option (option.type)}
-        {@const { icon: Icon } = option}
-        {@const active = targetType === option.type}
-        <button
-          type="button"
-          role="radio"
-          aria-checked={active}
-          class={[
-            'flex flex-col items-start gap-2 rounded-xl border p-3 text-left transition',
-            active
-              ? 'border-primary/60 bg-primary/10 text-primary'
-              : 'border-base-content/20 bg-base-200/40 text-base-content/80 hover:border-base-content/30 hover:bg-base-300/40'
-          ]}
-          onclick={() => (targetType = option.type)}
-        >
-          <Icon class={['h-5 w-5', active ? 'text-primary' : 'text-base-content/50']} />
-          <span class="text-sm font-semibold">{option.label}</span>
-          <span class="text-xs leading-5 text-base-content/50">{option.summary}</span>
-        </button>
-      {/each}
-    </div>
-  </fieldset>
 
   <form
     onsubmit={save}
     class="mt-6 space-y-5 card border border-base-300 bg-base-100 p-5 sm:p-6"
   >
     <h2 class="text-base font-bold text-base-content">{activeOption.label} storage</h2>
+
+    <fieldset>
+      <legend class="mb-3 text-sm font-medium text-base-content/80">Storage type</legend>
+      <div class="grid gap-2 sm:grid-cols-3 lg:grid-cols-5" role="radiogroup" aria-label="Storage type">
+        {#each targetOptions as option (option.type)}
+          {@const { icon: Icon } = option}
+          {@const active = targetType === option.type}
+          <button
+            type="button"
+            role="radio"
+            aria-checked={active}
+            class={[
+              'flex flex-col items-start gap-2 rounded-xl border p-3 text-left transition',
+              active
+                ? 'border-primary/60 bg-primary/10 text-primary'
+                : 'border-base-content/20 bg-base-200/40 text-base-content/80 hover:border-base-content/30 hover:bg-base-300/40'
+            ]}
+            onclick={() => (targetType = option.type)}
+          >
+            <Icon class={['h-5 w-5', active ? 'text-primary' : 'text-base-content/50']} />
+            <span class="text-sm font-semibold">{option.label}</span>
+            <span class="text-xs leading-5 text-base-content/50">{option.summary}</span>
+          </button>
+        {/each}
+      </div>
+    </fieldset>
 
     <div class="grid gap-5 md:grid-cols-2">
       <div>
@@ -486,18 +478,19 @@
       </div>
     {/if}
 
-    <div class="flex items-center gap-3 border-t border-base-300/70 pt-5">
-      <button class="btn btn-sm btn-neutral text-xs" type="submit" disabled={submitting}>
+    <div class="flex flex-col-reverse gap-3 border-t border-base-300/70 pt-5 sm:flex-row sm:items-center sm:justify-between">
+      <a class="btn btn-sm btn-neutral text-xs" href="/admin/storage">
+        <ArrowLeft class="mr-1.5 h-4 w-4" />
+        Back
+      </a>
+      <button class="btn btn-sm btn-primary text-xs" type="submit" disabled={submitting}>
         {#if submitting}
           <span class="loading loading-spinner loading-xs mr-1.5"></span>
         {:else}
           <Plus class="mr-1.5 h-4 w-4" />
         {/if}
-        Register storage
+        Save changes
       </button>
-      <a class="btn btn-sm btn-neutral text-xs" href="/admin">
-        Cancel
-      </a>
     </div>
   </form>
 </section>
