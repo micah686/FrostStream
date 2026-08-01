@@ -97,14 +97,14 @@
     {#if tab === 'designer'}
       <div class="mt-5 space-y-5">
         <div class="grid gap-4 sm:grid-cols-2">
-          <label class="label flex-col items-start gap-1 text-xs">Theme name<input class="input input-sm w-full" value={themeName} disabled /></label>
-          <label class="label flex-col items-start gap-1 text-xs">Copy from theme<select class="select select-sm w-full" onchange={copyFromTheme}>
+          <label class="label flex-col items-start gap-1 text-sm">Theme name<input class="input w-full text-sm" value={themeName} disabled /></label>
+          <label class="label flex-col items-start gap-1 text-sm">Copy from theme<select class="select w-full text-sm" onchange={copyFromTheme}>
             <option value="">Choose a theme…</option>
             {#each themes as source (source)}<option value={source}>{themeLabels[source]}</option>{/each}
           </select></label>
           <div class="flex items-center gap-4 sm:col-span-2">
-            <label class="label flex-row items-center gap-2 text-xs">Default<input type="checkbox" class="toggle toggle-primary toggle-sm" bind:checked={themeDefault} /></label>
-            <label class="label flex-row items-center gap-2 text-xs">Prefers dark<input type="checkbox" class="toggle toggle-primary toggle-sm" bind:checked={prefersDark} /></label>
+            <label class="label flex-row items-center gap-2 text-sm">Default<input type="checkbox" class="toggle toggle-primary" bind:checked={themeDefault} /></label>
+            <label class="label flex-row items-center gap-2 text-sm">Prefers dark<input type="checkbox" class="toggle toggle-primary" bind:checked={prefersDark} /></label>
           </div>
         </div>
         <div>
@@ -114,7 +114,7 @@
               <label class="flex items-center gap-2 text-xs font-semibold text-base-content/80">
                 <span class="h-5 w-5 shrink-0 rounded border border-base-300" style={`background-color: ${designer[field.key]}`}></span>
                 <span class="min-w-28">{field.label}</span>
-                <input class="input input-sm min-w-0 flex-1 font-mono text-xs" value={designer[field.key]} oninput={(event) => updateValue(field.key, event)} />
+                <input class="input min-w-0 flex-1 font-mono text-sm" value={designer[field.key]} oninput={(event) => updateValue(field.key, event)} />
               </label>
             {/each}
           </div>
@@ -123,7 +123,7 @@
           <h2 class="mb-3 text-sm font-semibold text-base-content">Theme values</h2>
           <div class="grid gap-3 sm:grid-cols-2">
             {#each valueFields as field (field.key)}
-              <label class="label flex-col items-start gap-1 text-xs">{field.label}<input class="input input-sm w-full font-mono text-xs" value={designer[field.key]} oninput={(event) => updateValue(field.key, event)} /></label>
+              <label class="label flex-col items-start gap-1 text-sm">{field.label}<input class="input w-full font-mono text-sm" value={designer[field.key]} oninput={(event) => updateValue(field.key, event)} /></label>
             {/each}
           </div>
         </div>
@@ -131,7 +131,7 @@
     {:else}
       <div class="mt-5">
         <label class="label mb-2 text-sm" for="custom-css">CSS</label>
-        <textarea id="custom-css" class="textarea min-h-96 w-full font-mono text-xs" bind:value={rawCss} placeholder={`:root {\n  --color-primary: #…;\n}`}></textarea>
+        <textarea id="custom-css" class="textarea min-h-96 w-full font-mono text-sm" bind:value={rawCss} placeholder={`:root {\n  --color-primary: #…;\n}`}></textarea>
         <p class="mt-2 text-xs text-base-content/50">Paste exact CSS here. It is applied to this browser only.</p>
       </div>
     {/if}
