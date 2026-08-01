@@ -3,17 +3,14 @@
   import {
     CircleAlert,
     Cookie,
-    ArrowLeft,
     Pen,
     Plus,
     Trash2
   } from '@lucide/svelte';
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
   import {
-    COOKIE_PROFILE_KEY_PATTERN,
     deleteCookieProfile,
     listCookieProfiles,
-    upsertCookieProfile,
     type CookieProfile
   } from '$lib/api/cookies';
 
@@ -21,20 +18,6 @@
   let profiles = $state<CookieProfile[]>([]);
   let loading = $state(true);
   let listError = $state<string | null>(null);
-
-  // Upsert form
-  let formOpen = $state(false);
-  let formIsUpdate = $state(false);
-  let formKey = $state('');
-  let formDisplayName = $state('');
-  let formSite = $state('');
-  let formContent = $state('');
-  let formBusy = $state(false);
-  let formError = $state<string | null>(null);
-  let formMessage = $state<string | null>(null);
-
-  const formKeyValid = $derived(COOKIE_PROFILE_KEY_PATTERN.test(formKey.trim()));
-  const formValid = $derived(formKeyValid && formContent.trim().length > 0);
 
   // Delete
   let deleteTarget = $state<CookieProfile | null>(null);
@@ -56,62 +39,6 @@
     }
   }
 
-  function openCreateForm() {
-    formIsUpdate = false;
-    formKey = '';
-    formDisplayName = '';
-    formSite = '';
-    formContent = '';
-    formError = null;
-    formMessage = null;
-    formOpen = true;
-  }
-
-  function openReplaceForm(profile: CookieProfile) {
-    formIsUpdate = true;
-    formKey = profile.profileKey;
-    formDisplayName = profile.displayName ?? '';
-    formSite = profile.site ?? '';
-    formContent = '';
-    formError = null;
-    formMessage = null;
-    formOpen = true;
-  }
-
-  async function save(event: SubmitEvent) {
-    event.preventDefault();
-    if (!formValid) {
-      return;
-    }
-
-    const normalizedKey = formKey.trim();
-    if (!formIsUpdate && profiles.some((profile) => profile.profileKey.toLowerCase() === normalizedKey.toLowerCase())) {
-      formError = `A cookie profile with key "${normalizedKey}" already exists.`;
-      return;
-    }
-
-    formBusy = true;
-    formError = null;
-    formMessage = null;
-    try {
-      const saved = await upsertCookieProfile(formKey.trim(), {
-        content: formContent,
-        site: formSite.trim() || null,
-        displayName: formDisplayName.trim() || null
-      });
-      profiles = [...profiles.filter((item) => item.profileKey !== saved.profileKey), saved].sort((a, b) =>
-        a.profileKey.localeCompare(b.profileKey)
-      );
-      formMessage = `Cookie profile "${saved.profileKey}" saved. The cookie content is stored securely and cannot be viewed again.`;
-      formOpen = false;
-      formContent = '';
-    } catch (err) {
-      formError = err instanceof Error ? err.message : 'Could not save the cookie profile.';
-    } finally {
-      formBusy = false;
-    }
-  }
-
   function requestDelete(profile: CookieProfile) {
     deleteTarget = profile;
     deleteModalOpen = true;
@@ -125,16 +52,6 @@
     await deleteCookieProfile(key);
     profiles = profiles.filter((item) => item.profileKey !== key);
     deleteTarget = null;
-  }
-
-  async function importFile(event: Event) {
-    const input = event.currentTarget as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) {
-      return;
-    }
-    formContent = await file.text();
-    input.value = '';
   }
 
   function formatDate(value: string | null): string {
@@ -156,12 +73,10 @@
         deleted.
       </p>
     </div>
-    {#if !formOpen}
-      <button class="btn btn-sm btn-neutral" onclick={openCreateForm}>
-        <Plus class="mr-1.5 h-3.5 w-3.5" />
-        New cookie profile
-      </button>
-    {/if}
+    <a class="btn btn-sm btn-neutral" href="/profile/cookie-management/new">
+      <Plus class="mr-1.5 h-3.5 w-3.5" />
+      New cookie profile
+    </a>
   </div>
 
   {#if listError}
@@ -174,17 +89,11 @@
     </div>
   {/if}
 
-  {#if formMessage}
-    <div class="mt-5 rounded-xl border border-success/30 bg-success/10 p-3 text-sm text-success" role="status">
-      {formMessage}
-    </div>
-  {/if}
-
   {#if loading}
     <div class="mt-10 flex justify-center">
       <span class="loading loading-spinner loading-md"></span>
     </div>
-  {:else if profiles.length === 0 && !formOpen}
+  {:else if profiles.length === 0}
     <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
       <Cookie class="mx-auto h-9 w-9 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No cookie profiles yet</p>
@@ -221,15 +130,14 @@
           </div>
 
           <div class="flex shrink-0 gap-2 sm:ml-auto">
-            <button
-              type="button"
+            <a
+              href={`/profile/cookie-management/${encodeURIComponent(profile.profileKey)}`}
               class="btn btn-sm btn-neutral text-xs"
               aria-label={`Replace cookies for ${profile.profileKey}`}
-              onclick={() => openReplaceForm(profile)}
             >
               <Pen class="h-4 w-4" />
               Replace
-            </button>
+            </a>
             <button
               type="button"
               class="btn btn-sm btn-neutral text-xs"
@@ -246,72 +154,6 @@
     </div>
   {/if}
 
-  {#if formOpen}
-    <form onsubmit={save} class="mt-5 space-y-5 rounded-xl border border-base-300/80 bg-base-200/30 p-4 sm:p-5">
-      <h3 class="text-sm font-bold text-base-content">
-        {formIsUpdate ? `Replace cookies for "${formKey}"` : 'New cookie profile'}
-      </h3>
-
-      {#if formError}
-        <div
-          class="alert alert-error text-sm"
-          role="alert"
-        >
-          <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
-          <span>{formError}</span>
-        </div>
-      {/if}
-
-      <div class="grid gap-5 sm:grid-cols-2">
-        <div>
-          <label class="label mb-2 text-sm" for="cookie-profile-key">Key</label>
-          <input class="input w-full" id="cookie-profile-key" required
-             pattern={'[a-z0-9-]{2,100}'} minlength={2} maxlength={100} disabled={formIsUpdate} bind:value={formKey} placeholder="youtube-main" />
-          <p class="mt-1.5 text-xs text-base-content/40">Lowercase letters, numbers, and hyphens.</p>
-        </div>
-        <div>
-          <label class="label mb-2 text-sm" for="cookie-display-name">Display name (optional)</label>
-          <input class="input w-full" id="cookie-display-name" maxlength={255} bind:value={formDisplayName} placeholder="YouTube main account" />
-        </div>
-      </div>
-
-      <div>
-        <label class="label mb-2 text-sm" for="cookie-site">Site (optional)</label>
-        <input class="input w-full" id="cookie-site" maxlength={255} bind:value={formSite} placeholder="youtube.com" />
-      </div>
-
-      <div>
-        <div class="mb-2 flex items-center justify-between">
-          <label class="label text-sm" for="cookie-content">Cookie content</label>
-          <label
-            class="btn btn-sm btn-neutral text-xs"
-          >
-            Import cookies.txt
-            <input type="file" accept=".txt,text/plain" class="hidden" onchange={importFile} />
-          </label>
-        </div>
-        <textarea class="textarea w-full font-mono text-xs" id="cookie-content" required
-           rows={8} bind:value={formContent} placeholder={'# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t...'}></textarea>
-        <p class="mt-1.5 text-xs text-base-content/40">
-          Paste the Netscape-format export (e.g. from a "Get cookies.txt" browser extension). It is stored write-only
-          and never shown again.
-        </p>
-      </div>
-
-      <div class="flex flex-wrap justify-between gap-2">
-        <button type="button" class="btn btn-sm btn-neutral" disabled={formBusy} onclick={() => (formOpen = false)}>
-          <ArrowLeft class="mr-1.5 h-4 w-4" />
-          Back
-        </button>
-        <button class="btn btn-sm btn-primary text-xs" type="submit" disabled={formBusy || !formValid}>
-          {#if formBusy}
-            <span class="loading loading-spinner loading-xs mr-1.5"></span>
-          {/if}
-          {formIsUpdate ? 'Replace cookies' : 'Create cookie profile'}
-        </button>
-      </div>
-    </form>
-  {/if}
 </section>
 
 <ConfirmDeleteModal

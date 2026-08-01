@@ -27,9 +27,6 @@
 
   let { playlist, onUpdated }: Props = $props();
 
-  const rowActionClass =
-    'inline-flex h-8 w-8 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/70 text-base-content/80 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary disabled:pointer-events-none disabled:opacity-40';
-
   let mediaCards = $state<Record<string, MediaSummary | null>>({});
   let busyItemGuid = $state<string | null>(null);
   let itemActionError = $state<string | null>(null);
@@ -180,7 +177,7 @@
           {:else}
             <button
               type="button"
-              class={rowActionClass}
+              class="btn btn-sm btn-neutral text-xs"
               title="Move up"
               aria-label="Move up"
               disabled={index === 0 || busyItemGuid !== null}
@@ -190,7 +187,7 @@
             </button>
             <button
               type="button"
-              class={rowActionClass}
+              class="btn btn-sm btn-neutral text-xs"
               title="Move down"
               aria-label="Move down"
               disabled={index === (playlist.items?.length ?? 0) - 1 || busyItemGuid !== null}
@@ -200,7 +197,7 @@
             </button>
             <button
               type="button"
-              class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/70 text-base-content/80 transition hover:border-error/60 hover:bg-error/10 hover:text-error disabled:pointer-events-none disabled:opacity-40"
+              class="btn btn-sm btn-neutral text-xs"
               title="Remove from playlist"
               aria-label="Remove from playlist"
               disabled={busyItemGuid !== null}

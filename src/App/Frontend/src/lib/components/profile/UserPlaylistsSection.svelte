@@ -12,7 +12,6 @@
   import PlaylistItemsManager from '$lib/components/profile/PlaylistItemsManager.svelte';
   import { formatRelativeDate } from '$lib/media';
   import {
-    createUserPlaylist,
     deleteUserPlaylist,
     getUserPlaylist,
     listUserPlaylists,
@@ -23,15 +22,6 @@
   let playlists = $state<UserPlaylist[]>([]);
   let loading = $state(true);
   let listError = $state<string | null>(null);
-
-  // Create form
-  let formOpen = $state(false);
-  let formName = $state('');
-  let formDescription = $state('');
-  let formBusy = $state(false);
-  let formError = $state<string | null>(null);
-
-  const formValid = $derived(formName.trim().length > 0 && formName.trim().length <= 255);
 
   // Delete
   let deleteTarget = $state<UserPlaylist | null>(null);
@@ -55,35 +45,6 @@
       listError = err instanceof Error ? err.message : 'Could not load your playlists.';
     } finally {
       loading = false;
-    }
-  }
-
-  function openCreateForm() {
-    formName = '';
-    formDescription = '';
-    formError = null;
-    formOpen = true;
-  }
-
-  async function saveForm(event: SubmitEvent) {
-    event.preventDefault();
-    if (!formValid) {
-      return;
-    }
-
-    formBusy = true;
-    formError = null;
-    try {
-      const created = await createUserPlaylist({
-        name: formName.trim(),
-        description: formDescription.trim() || null
-      });
-      playlists = [created, ...playlists];
-      formOpen = false;
-    } catch (err) {
-      formError = err instanceof Error ? err.message : 'Could not save the playlist.';
-    } finally {
-      formBusy = false;
     }
   }
 
@@ -160,10 +121,10 @@
           Your private playlists on this server. They reference archived media and are visible only to you.
         </p>
       </div>
-      <button class="btn btn-sm btn-neutral" onclick={openCreateForm}>
+      <a class="btn btn-sm btn-neutral text-xs" href="/profile/playlists/new">
         <Plus class="mr-1.5 h-3.5 w-3.5" />
         New playlist
-      </button>
+      </a>
     </div>
 
     {#if listError}
@@ -174,39 +135,6 @@
         <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
         <span>{listError}</span>
       </div>
-    {/if}
-
-    {#if formOpen}
-      <form
-        class="mt-5 space-y-4 rounded-xl border border-base-300/80 bg-base-200/30 p-4"
-        onsubmit={saveForm}
-      >
-        <h3 class="text-sm font-semibold text-base-content/90">New playlist</h3>
-        {#if formError}
-          <p class="text-sm text-error" role="alert">{formError}</p>
-        {/if}
-        <div>
-          <label class="label mb-1.5 text-xs" for="playlist-name">Name</label>
-          <input class="input w-full" id="playlist-name" bind:value={formName} maxlength={255} placeholder="Watch later, favourites…" />
-        </div>
-        <div>
-          <label class="label mb-1.5 text-xs" for="playlist-description">
-            Description (optional)
-          </label>
-          <textarea class="textarea w-full" id="playlist-description" bind:value={formDescription} maxlength={2048} rows={2} placeholder="What belongs in this playlist?"></textarea>
-        </div>
-        <div class="flex flex-wrap gap-2">
-          <button class="btn btn-sm btn-primary text-xs" type="submit" disabled={!formValid || formBusy}>
-            {#if formBusy}
-              <span class="loading loading-spinner loading-xs mr-1.5"></span>
-            {/if}
-            Create playlist
-          </button>
-          <button class="btn btn-sm btn-neutral" disabled={formBusy} onclick={() => (formOpen = false)}>
-            Cancel
-          </button>
-        </div>
-      </form>
     {/if}
 
     {#if loading}
@@ -243,9 +171,6 @@
             </button>
 
             <div class="flex shrink-0 items-center gap-2 sm:ml-auto">
-              <span class="rounded-full bg-base-300 px-2 py-0.5 text-[10px] font-semibold text-base-content/60">
-                {playlistMeta(playlist)}
-              </span>
               <a
                 href={editHref(playlist)}
                 class="btn btn-sm btn-neutral text-xs"
