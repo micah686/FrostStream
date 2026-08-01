@@ -10,6 +10,7 @@
     CircleAlert,
     Copy,
     ExternalLink,
+    Ellipsis,
     Headphones,
     Image,
     LayoutList,
@@ -110,6 +111,9 @@
   let audioIndex = $state(0);
   let podcastBusy = $state(false);
   let podcastFeedUrl = $state<string | null>(null);
+  let actionsMenuOpen = $state(false);
+  let encodeMenuOpen = $state(false);
+  let actionsMenuContainer = $state<HTMLDivElement | null>(null);
   let audioPollTimer: ReturnType<typeof setTimeout> | null = null;
   let renditionStreamController: AbortController | null = null;
   let liveRenditionProgress = $state<Record<string, RenditionProgressFrame>>({});
@@ -129,7 +133,7 @@
   const audioComplete = $derived(
     channelAudioEncodedStatus !== null &&
       channelAudioEncodedStatus.totalCount > 0 &&
-      channelAudioEncodedStatus.encodedCount === channelAudioEncodedStatus.totalCount
+      channelAudioEncodedStatus.encodedCount >= channelAudioEncodedStatus.totalCount
   );
   const audioProgress = $derived(
     channelAudioEncodedStatus?.totalCount
@@ -140,6 +144,18 @@
   onDestroy(() => {
     if (audioPollTimer) clearTimeout(audioPollTimer);
     closeRenditionStream();
+  });
+
+  $effect(() => {
+    if (!actionsMenuOpen) return;
+    const closeOnOutside = (event: PointerEvent) => {
+      if (actionsMenuContainer && event.target instanceof Node && !actionsMenuContainer.contains(event.target)) {
+        actionsMenuOpen = false;
+        encodeMenuOpen = false;
+      }
+    };
+    document.addEventListener('pointerdown', closeOnOutside);
+    return () => document.removeEventListener('pointerdown', closeOnOutside);
   });
 
   $effect(() => {
@@ -607,6 +623,21 @@
       </div>
 
       <div class="flex shrink-0 flex-col gap-2 sm:items-end">
+        <div class="relative" bind:this={actionsMenuContainer}>
+          <button class="btn btn-sm btn-neutral px-2 text-xs" type="button" aria-label="Channel actions" onclick={() => (actionsMenuOpen = !actionsMenuOpen)}>
+            <Ellipsis class="h-4 w-4" />
+          </button>
+          {#if actionsMenuOpen}
+            <div class="absolute right-0 z-30 mt-2 w-56 rounded-xl border border-base-300 bg-base-100 p-1.5 shadow-xl" role="menu">
+              {#if account.accountUrl}<a class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-base-200" href={account.accountUrl} target="_blank" rel="noopener noreferrer" onclick={() => (actionsMenuOpen = false)}><ExternalLink class="h-4 w-4" />View on {account.platform}</a>{/if}
+              <button class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200" type="button" onclick={(event: MouseEvent) => { actionsMenuOpen = false; refreshAssets(event.shiftKey); }}><Image class="h-4 w-4" />Refresh assets</button>
+              <div class="relative"><button class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200" type="button" onclick={() => (encodeMenuOpen = !encodeMenuOpen)}><span class="flex items-center gap-2"><Music class="h-4 w-4" />Encode audio</span><ChevronRight class="h-4 w-4" /></button>{#if encodeMenuOpen}<div class="absolute right-full top-0 mr-1 w-48 rounded-xl border border-base-300 bg-base-100 p-1.5 shadow-xl"><button class="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200" type="button" onclick={() => { selectedStorageKey = ''; actionsMenuOpen = false; encodeMenuOpen = false; void encodeAudio(); }}>All storage keys</button>{#each channelAudio?.availableStorageKeys ?? [] as key}<button class="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200" type="button" onclick={() => { selectedStorageKey = key; actionsMenuOpen = false; encodeMenuOpen = false; void encodeAudio(); }}>{key}</button>{/each}</div>{/if}</div>
+              <button class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200 disabled:opacity-50" type="button" disabled={!audioComplete} onclick={() => { actionsMenuOpen = false; playAudio(); }}><Headphones class="h-4 w-4" />Play as audio</button>
+              <button class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200 disabled:opacity-50" type="button" disabled={!audioComplete || podcastBusy} onclick={() => { actionsMenuOpen = false; copyPodcastFeed(); }}><Copy class="h-4 w-4" />Copy podcast RSS</button>
+            </div>
+          {/if}
+        </div>
+        <div class="hidden">
         {#if account.accountUrl}
           <a class="btn btn-sm btn-neutral text-xs" href={account.accountUrl} target="_blank" rel="noopener noreferrer">
             <ExternalLink class="mr-1.5 h-3.5 w-3.5" />
@@ -647,6 +678,7 @@
           {/if}
           Copy podcast RSS
         </button>
+        </div>
         {#if channelAudio && channelAudioEncodedStatus && channelAudioEncodedStatus.totalCount > 0}
           <div class="w-full max-w-60" aria-label={`Audio encoding ${audioProgress}% complete`}>
             <div class="flex justify-between gap-3 text-[11px] text-base-content/50">
