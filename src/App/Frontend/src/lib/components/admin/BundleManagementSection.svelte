@@ -26,7 +26,10 @@
     type CatalogEntry
   } from '$lib/api/bundles';
 
-  let { onManagePolicies }: { onManagePolicies?: () => void } = $props();
+let {
+  onManagePolicies,
+  mode = 'management'
+}: { onManagePolicies?: () => void; mode?: 'management' | 'create' } = $props();
 
   interface CatalogGroup {
     bundle: string;
@@ -266,6 +269,123 @@
   }
 </script>
 
+{#snippet pickerContent()}
+  <div class="space-y-4">
+    <div>
+      {#if pickerMode === 'create'}
+        <label class="input w-full font-mono">
+          <span class="label">user.</span>
+          <input
+            id="bundle-picker-id"
+            type="text"
+            bind:value={pickerBundleSuffix}
+            placeholder="example"
+            autocomplete="off"
+            aria-label="Bundle id after the user. prefix"
+          />
+        </label>
+        <p class="mt-1.5 text-xs text-base-content/50">Runtime bundle ids always start with the fixed user. prefix.</p>
+      {:else}
+        <label class="label mb-2 text-sm" for="bundle-picker-id">Bundle id</label>
+        <input class="input w-full" id="bundle-picker-id" bind:value={pickerBundleId} readonly />
+      {/if}
+    </div>
+
+    {#if pickerMode === 'create'}
+      <div>
+        <label class="label mb-2 text-sm" for="bundle-clone-source">Start from a system bundle</label>
+        <Select
+          id="bundle-clone-source"
+          items={[
+            { value: '', name: 'Start empty' },
+            ...cloneSources.map((bundle) => ({ value: bundle.id, name: `${bundle.id} · ${bundle.endpointCount} endpoints` }))
+          ]}
+          bind:value={pickerCloneFrom}
+          class="text-sm"
+        />
+        <p class="mt-1.5 text-xs text-base-content/50">
+          The baseline is copied when the bundle is created. Add extra endpoints here; edit the new bundle afterward to remove copied endpoints.
+        </p>
+      </div>
+    {/if}
+
+    <div>
+      <label class="label mb-2 text-sm" for="endpoint-search">Endpoints</label>
+      <input class="input w-full" id="endpoint-search" bind:value={pickerSearch} placeholder="Search endpoint or seeded bundle" />
+    </div>
+
+    {#if pickerError}
+      <div class="alert alert-error text-sm" role="alert">
+        <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
+        <span>{displayError(pickerError, 'Could not save the bundle.')}</span>
+      </div>
+    {/if}
+
+    <div class="max-h-[26rem] space-y-3 overflow-y-auto rounded-xl border border-base-300 bg-base-200/20 p-3">
+      {#if catalog.length === 0}
+        <div class="rounded-lg border border-base-300 bg-base-200/35 px-3 py-3 text-sm text-base-content/50">
+          No catalog endpoints are available.
+        </div>
+      {:else if filteredCatalog().length === 0}
+        <div class="rounded-lg border border-base-300 bg-base-200/35 px-3 py-3 text-sm text-base-content/50">
+          No endpoints match the search.
+        </div>
+      {:else}
+        {#each catalogGroups(filteredCatalog()) as group (group.bundle)}
+          <div class="rounded-lg border border-base-300 bg-base-100">
+            <div class="flex items-center justify-between gap-3 border-b border-base-300 px-3 py-2">
+              <span class="text-xs font-semibold uppercase text-base-content/50">{group.bundle}</span>
+              <span class="text-xs text-base-content/40">{group.entries.length}</span>
+            </div>
+            <div class="divide-y divide-base-300/70">
+              {#each group.entries as endpoint (endpoint.id)}
+                <label class="flex cursor-pointer items-center gap-3 px-3 py-2 transition hover:bg-base-300/35">
+                  <input
+                    type="checkbox"
+                    class="checkbox checkbox-sm checkbox-primary"
+                    checked={cloneBaselineEndpoints().includes(endpoint.id) || pickerEndpoints.includes(endpoint.id)}
+                    disabled={cloneBaselineEndpoints().includes(endpoint.id)}
+                    onchange={() => toggleEndpoint(endpoint.id)}
+                  />
+                  <span class="min-w-0 truncate font-mono text-xs text-base-content/80">{endpoint.id}</span>
+                  {#if cloneBaselineEndpoints().includes(endpoint.id)}
+                    <span class="ml-auto shrink-0 text-[10px] font-semibold uppercase text-primary">baseline</span>
+                  {/if}
+                </label>
+              {/each}
+            </div>
+          </div>
+        {/each}
+      {/if}
+    </div>
+
+    <div class="flex flex-wrap items-center gap-2 text-xs text-base-content/50">
+      <Check class="h-3.5 w-3.5 text-success" />
+      {selectedEndpointCount()} endpoint{selectedEndpointCount() === 1 ? '' : 's'} selected
+    </div>
+  </div>
+{/snippet}
+
+{#if mode === 'create'}
+  <section class={cardClass} aria-labelledby="create-runtime-bundle-title">
+    <div>
+      <h1 id="create-runtime-bundle-title" class="text-xl font-bold text-base-content">Create runtime bundle</h1>
+      <p class="mt-2 text-sm text-base-content/60">Define the bundle ID and choose the endpoints it should contain.</p>
+    </div>
+    <div class="mt-6">
+      {@render pickerContent()}
+    </div>
+    <div class="mt-6 flex w-full flex-wrap items-center justify-between gap-2">
+      <a class="btn btn-sm btn-neutral text-xs" href="/admin/access-control">Back</a>
+      <button class="btn btn-sm btn-primary" disabled={pickerSaving} onclick={submitPicker}>
+        {#if pickerSaving}
+          <span class="loading loading-spinner loading-xs mr-1.5"></span>
+        {/if}
+        Create bundle
+      </button>
+    </div>
+  </section>
+{:else}
 <section class={cardClass} aria-labelledby="bundle-management-title">
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div class="min-w-0">
@@ -282,10 +402,10 @@
         <RefreshCw class="mr-1.5 h-3.5 w-3.5" />
         Refresh
       </button>
-      <button class="btn btn-sm btn-primary" onclick={openCreateModal}>
+      <a class="btn btn-sm btn-primary" href="/admin/access-control/bundles/new">
         <Plus class="mr-1.5 h-3.5 w-3.5" />
         Create runtime bundle
-      </button>
+      </a>
     </div>
   </div>
 
@@ -533,124 +653,32 @@
   {/if}
 </section>
 
-<Modal bind:open={pickerOpen} title={pickerMode === 'create' ? 'Create runtime bundle' : 'Edit endpoint membership'} size="xl">
-  <div class="space-y-4">
-    <div>
-      <label class="label mb-2 text-sm" for="bundle-picker-id">Bundle id</label>
-      {#if pickerMode === 'create'}
-        <div class="flex overflow-hidden rounded-lg border border-base-300 bg-base-200/60 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary">
-          <span class="flex items-center border-r border-base-300 bg-base-200/80 px-3 font-mono text-sm text-base-content/50 select-none" aria-hidden="true">
-            user.
-          </span>
-          <input
-            id="bundle-picker-id"
-            type="text"
-            bind:value={pickerBundleSuffix}
-            placeholder="example"
-            autocomplete="off"
-            aria-label="Bundle id (after the user. prefix)"
-            class="w-full min-w-0 border-0 bg-transparent px-3 py-2.5 text-sm text-base-content/90 placeholder:text-base-content/40 focus:ring-0 focus:outline-none"
-          />
-        </div>
-        <p class="mt-1.5 text-xs text-base-content/50">Runtime bundle ids always start with the fixed user. prefix.</p>
-      {:else}
-        <input class="input w-full" id="bundle-picker-id" bind:value={pickerBundleId} readonly />
-      {/if}
-    </div>
+{/if}
 
-    {#if pickerMode === 'create'}
-      <div>
-        <label class="label mb-2 text-sm" for="bundle-clone-source">Start from a system bundle</label>
-        <Select
-          id="bundle-clone-source"
-          items={[
-            { value: '', name: 'Start empty' },
-            ...cloneSources.map((bundle) => ({ value: bundle.id, name: `${bundle.id} · ${bundle.endpointCount} endpoints` }))
-          ]}
-          bind:value={pickerCloneFrom}
-          class="text-sm"
-        />
-        <p class="mt-1.5 text-xs text-base-content/50">
-          The baseline is copied when the bundle is created. Add extra endpoints here; edit the new bundle afterward to remove copied endpoints.
-        </p>
+{#if mode === 'management'}
+  <Modal bind:open={pickerOpen} title={pickerMode === 'create' ? 'Create runtime bundle' : 'Edit endpoint membership'} size="xl">
+    {@render pickerContent()}
+
+    {#snippet footer()}
+      <div class="flex w-full flex-wrap justify-end gap-2">
+        <button class="btn btn-sm btn-ghost text-xs" disabled={pickerSaving} onclick={() => (pickerOpen = false)}>
+          Cancel
+        </button>
+        <button class="btn btn-sm btn-primary" disabled={pickerSaving} onclick={submitPicker}>
+          {#if pickerSaving}
+            <span class="loading loading-spinner loading-xs mr-1.5"></span>
+          {/if}
+          {pickerMode === 'create' ? 'Create bundle' : 'Save endpoints'}
+        </button>
       </div>
-    {/if}
+    {/snippet}
+  </Modal>
 
-    <div>
-      <label class="label mb-2 text-sm" for="endpoint-search">Endpoints</label>
-      <input class="input w-full" id="endpoint-search" bind:value={pickerSearch} placeholder="Search endpoint or seeded bundle" />
-    </div>
-
-    {#if pickerError}
-      <div class="alert alert-error text-sm" role="alert">
-        <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
-        <span>{displayError(pickerError, 'Could not save the bundle.')}</span>
-      </div>
-    {/if}
-
-    <div class="max-h-[26rem] space-y-3 overflow-y-auto rounded-xl border border-base-300 bg-base-200/20 p-3">
-      {#if catalog.length === 0}
-        <div class="rounded-lg border border-base-300 bg-base-200/35 px-3 py-3 text-sm text-base-content/50">
-          No catalog endpoints are available.
-        </div>
-      {:else if filteredCatalog().length === 0}
-        <div class="rounded-lg border border-base-300 bg-base-200/35 px-3 py-3 text-sm text-base-content/50">
-          No endpoints match the search.
-        </div>
-      {:else}
-        {#each catalogGroups(filteredCatalog()) as group (group.bundle)}
-          <div class="rounded-lg border border-base-300 bg-base-100">
-            <div class="flex items-center justify-between gap-3 border-b border-base-300 px-3 py-2">
-              <span class="text-xs font-semibold uppercase text-base-content/50">{group.bundle}</span>
-              <span class="text-xs text-base-content/40">{group.entries.length}</span>
-            </div>
-            <div class="divide-y divide-base-300/70">
-              {#each group.entries as endpoint (endpoint.id)}
-                <label class="flex cursor-pointer items-center gap-3 px-3 py-2 transition hover:bg-base-300/35">
-                  <input
-                    type="checkbox"
-                    class="checkbox checkbox-sm checkbox-primary"
-                    checked={cloneBaselineEndpoints().includes(endpoint.id) || pickerEndpoints.includes(endpoint.id)}
-                    disabled={cloneBaselineEndpoints().includes(endpoint.id)}
-                    onchange={() => toggleEndpoint(endpoint.id)}
-                  />
-                  <span class="min-w-0 truncate font-mono text-xs text-base-content/80">{endpoint.id}</span>
-                  {#if cloneBaselineEndpoints().includes(endpoint.id)}
-                    <span class="ml-auto shrink-0 text-[10px] font-semibold uppercase text-primary">baseline</span>
-                  {/if}
-                </label>
-              {/each}
-            </div>
-          </div>
-        {/each}
-      {/if}
-    </div>
-
-    <div class="flex flex-wrap items-center gap-2 text-xs text-base-content/50">
-      <Check class="h-3.5 w-3.5 text-success" />
-      {selectedEndpointCount()} endpoint{selectedEndpointCount() === 1 ? '' : 's'} selected
-    </div>
-  </div>
-
-  {#snippet footer()}
-    <div class="flex w-full flex-wrap justify-end gap-2">
-      <button class="btn btn-sm btn-ghost text-xs" disabled={pickerSaving} onclick={() => (pickerOpen = false)}>
-        Cancel
-      </button>
-      <button class="btn btn-sm btn-primary" disabled={pickerSaving} onclick={submitPicker}>
-        {#if pickerSaving}
-          <span class="loading loading-spinner loading-xs mr-1.5"></span>
-        {/if}
-        {pickerMode === 'create' ? 'Create bundle' : 'Save endpoints'}
-      </button>
-    </div>
-  {/snippet}
-</Modal>
-
-<ConfirmDeleteModal
-  bind:open={deleteModalOpen}
-  title="Delete runtime bundle"
-  message={deleteTarget ? `Delete runtime bundle "${deleteTarget.id}"? Its endpoint membership and direct exceptions will be removed.` : ''}
-  confirmLabel="Delete bundle"
-  onConfirm={deleteSelectedRuntimeBundle}
-/>
+  <ConfirmDeleteModal
+    bind:open={deleteModalOpen}
+    title="Delete runtime bundle"
+    message={deleteTarget ? `Delete runtime bundle "${deleteTarget.id}"? Its endpoint membership and direct exceptions will be removed.` : ''}
+    confirmLabel="Delete bundle"
+    onConfirm={deleteSelectedRuntimeBundle}
+  />
+{/if}
