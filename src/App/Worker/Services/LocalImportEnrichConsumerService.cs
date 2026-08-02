@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using NodaTime;
 using Shared.Imports;
 using Shared.Messaging;
+using Shared.Secrets;
 using YtDlpSharpLib;
 using YtDlpSharpLib.Downloads;
 using YtDlpSharpLib.Options;
@@ -22,6 +23,7 @@ public sealed class LocalImportEnrichConsumerService(
     IJetStreamPublisher publisher,
     ITopologyManager topologyManager,
     IYtDlpClient ytDlp,
+    ISecretStore secretStore,
     PotOptionsApplier potOptionsApplier,
     IClock clock,
     IOptions<WorkerOptions> workerOptions,
@@ -99,7 +101,13 @@ public sealed class LocalImportEnrichConsumerService(
         var stem = Path.GetFileNameWithoutExtension(sourcePath);
         var infoJsonPath = Path.Combine(outputDirectory, $"{stem}.info.json");
         var userOptions = BuildOptions(cmd.Options);
-        var options = potOptionsApplier.Apply(YtDlpOptionsMerger.Merge(userOptions, GetFfmpegLocation(), cookieFilePath: null, logger))
+        var cookieScratch = Path.Combine(Path.GetTempPath(), "froststream", "import-cookies", cmd.ItemId.ToString("N"));
+        await using var cookies = await CookieMaterializer.CreateFromPathAsync(
+            secretStore,
+            cmd.Options.CookieSecretPath,
+            cookieScratch,
+            logger);
+        var options = potOptionsApplier.Apply(YtDlpOptionsMerger.Merge(userOptions, GetFfmpegLocation(), cookies.FilePath, logger))
                       ?? userOptions;
 
         await ytDlp.DownloadMetadataAsync(

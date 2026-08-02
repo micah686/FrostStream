@@ -5,6 +5,7 @@ using NodaTime.Serialization.SystemTextJson;
 using System.Text.Json;
 using Shared.Auth;
 using Shared.Messaging;
+using Shared.Secrets;
 using WebAPI.Auth;
 
 namespace WebAPI.Features.Imports.Controllers;
@@ -307,13 +308,23 @@ public sealed class ImportSessionsController(
         [FromBody] ImportSessionEnrichBody? body,
         CancellationToken cancellationToken)
     {
+        var options = body?.Options ?? new ImportSessionYtDlpOptions();
+        string? cookieSecretPath = null;
+        if (!string.IsNullOrWhiteSpace(options.CookieProfileKey))
+        {
+            var subject = AuthConstants.FindSubject(User);
+            if (string.IsNullOrWhiteSpace(subject) || !SecretPaths.IsValidProfileKey(options.CookieProfileKey))
+                return BadRequest(new ProblemDetails { Title = "The selected cookie profile is invalid." });
+            cookieSecretPath = SecretPaths.ForUserCookieProfile(subject, options.CookieProfileKey);
+        }
+
         var response = await SendAsync<ImportSessionEnrichRequest, ImportSessionEnrichResponse>(
             ImportSessionSubjects.Enrich,
             new ImportSessionEnrichRequest
             {
                 SessionId = sessionId,
                 ItemIds = body?.ItemIds,
-                Options = body?.Options ?? new ImportSessionYtDlpOptions()
+                Options = options with { CookieSecretPath = cookieSecretPath }
             },
             cancellationToken);
 

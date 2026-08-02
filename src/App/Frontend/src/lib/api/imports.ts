@@ -83,6 +83,7 @@ export interface ImportSessionRetryFailedResponse extends ImportSessionActionRes
 export interface ImportSessionItemPatchResponse extends ImportSessionActionResponse { item?: ImportSessionItem | null; }
 
 export interface ImportYtDlpOptions {
+  cookieProfileKey?: string;
   proxyUrl?: string;
   username?: string;
   password?: string;
