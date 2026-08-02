@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import { Modal, Select } from '$lib/components/ui';
   import {
@@ -65,7 +66,6 @@ let {
   const cloneSources = $derived(systemBundles.filter((bundle) => bundle.id !== 'all'));
   let systemGroupOpen = $state(true);
   let runtimeGroupOpen = $state(true);
-  let selectedEndpointSection = $state('all');
   const openFgaUnavailable = $derived(isStatus(loadError, 503) || isStatus(mutationError, 503) || isStatus(pickerError, 503));
 
   onMount(() => {
@@ -153,18 +153,22 @@ let {
   }
 
   function endpointGroups(bundle: BundleView): CatalogGroup[] {
-    const endpointSet = new Set(bundle.endpoints);
-    const known = catalog.filter((entry) => endpointSet.has(entry.id));
-    const groups = catalogGroups(known);
-    const knownIds = new Set(known.map((entry) => entry.id));
-    const unknown = bundle.endpoints.filter((id) => !knownIds.has(id)).map((id) => ({ id, bundle: 'Uncataloged' }));
-    return unknown.length > 0 ? [...groups, { bundle: 'Uncataloged', entries: unknown }] : groups;
-  }
+    const catalogById = new Map(catalog.map((entry) => [entry.id, entry]));
+    const groups = new Map<string, CatalogEntry[]>();
 
-  function endpointSectionEntries(bundle: BundleView): CatalogEntry[] {
-    const groups = endpointGroups(bundle);
-    if (selectedEndpointSection === 'all') return groups.flatMap((group) => group.entries);
-    return groups.find((group) => group.bundle === selectedEndpointSection)?.entries ?? groups.flatMap((group) => group.entries);
+    for (const endpointId of bundle.endpoints) {
+      const groupName = endpointId.split('.')[0] || 'Uncategorized';
+      const entries = groups.get(groupName) ?? [];
+      entries.push(catalogById.get(endpointId) ?? { id: endpointId, bundle: groupName });
+      groups.set(groupName, entries);
+    }
+
+    return [...groups.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([groupName, entries]) => ({
+        bundle: groupName,
+        entries: entries.sort((a, b) => a.id.localeCompare(b.id))
+      }));
   }
 
   function filteredCatalog(): CatalogEntry[] {
@@ -237,6 +241,9 @@ let {
       }
       await reloadBundles(bundleId);
       pickerOpen = false;
+      if (mode === 'create') {
+        await goto('/admin/access-control?tab=bundles');
+      }
     } catch (err) {
       pickerError = err instanceof Error ? err : new Error('Could not save the bundle.');
       if (err instanceof ApiRequestError && err.status === 404) {
@@ -376,7 +383,7 @@ let {
       {@render pickerContent()}
     </div>
     <div class="mt-6 flex w-full flex-wrap items-center justify-between gap-2">
-      <a class="btn btn-sm btn-neutral text-xs" href="/admin/access-control">Back</a>
+      <a class="btn btn-sm btn-neutral text-xs" href="/admin/access-control?tab=bundles">Back</a>
       <button class="btn btn-sm btn-primary" disabled={pickerSaving} onclick={submitPicker}>
         {#if pickerSaving}
           <span class="loading loading-spinner loading-xs mr-1.5"></span>
@@ -549,51 +556,6 @@ let {
             </div>
           </section>
 
-          <section class="rounded-xl border border-base-300 bg-base-200/20 p-4" aria-labelledby="bundle-endpoints-title">
-            <h3 id="bundle-endpoints-title" class="text-sm font-bold text-base-content">Endpoint membership</h3>
-            {#if selectedBundle.endpoints.length === 0}
-              <div class="mt-3 rounded-lg border border-base-300 bg-base-200/35 px-3 py-3 text-sm text-base-content/50">
-                No endpoints assigned.
-              </div>
-            {:else}
-              <div class="mt-3">
-                <div class="flex gap-1 overflow-x-auto border-b border-base-300" role="tablist" aria-label="Endpoint sections">
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={selectedEndpointSection === 'all'}
-                    class={[
-                      'shrink-0 border-b-2 px-3 py-2 text-xs font-semibold transition',
-                      selectedEndpointSection === 'all' ? 'border-primary text-primary' : 'border-transparent text-base-content/50 hover:text-base-content/90'
-                    ]}
-                    onclick={() => (selectedEndpointSection = 'all')}
-                  >
-                    All endpoints ({selectedBundle.endpoints.length})
-                  </button>
-                  {#each endpointGroups(selectedBundle) as group (group.bundle)}
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={selectedEndpointSection === group.bundle}
-                      class={[
-                        'shrink-0 border-b-2 px-3 py-2 text-xs font-semibold transition',
-                        selectedEndpointSection === group.bundle ? 'border-primary text-primary' : 'border-transparent text-base-content/50 hover:text-base-content/90'
-                      ]}
-                      onclick={() => (selectedEndpointSection = group.bundle)}
-                    >
-                      {group.bundle} ({group.entries.length})
-                    </button>
-                  {/each}
-                </div>
-                <div class="divide-y divide-base-300/70 overflow-hidden rounded-b-lg border border-t-0 border-base-300 bg-base-100">
-                  {#each endpointSectionEntries(selectedBundle) as endpoint (endpoint.id)}
-                    <div class="px-3 py-2 font-mono text-xs text-base-content/80">{endpoint.id}</div>
-                  {/each}
-                </div>
-              </div>
-            {/if}
-          </section>
-
           <section class="rounded-xl border border-base-300 bg-base-200/20 p-4" aria-labelledby="bundle-policies-title">
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -643,6 +605,31 @@ let {
                       {policy.syncStatus}
                     </span>
                   </div>
+                {/each}
+              </div>
+            {/if}
+          </section>
+
+          <section class="rounded-xl border border-base-300 bg-base-200/20 p-4" aria-labelledby="bundle-endpoints-title">
+            <h3 id="bundle-endpoints-title" class="text-sm font-bold text-base-content">Endpoint membership</h3>
+            {#if selectedBundle.endpoints.length === 0}
+              <div class="mt-3 rounded-lg border border-base-300 bg-base-200/35 px-3 py-3 text-sm text-base-content/50">
+                No endpoints assigned.
+              </div>
+            {:else}
+              <div class="mt-3 space-y-2">
+                {#each endpointGroups(selectedBundle) as group (group.bundle)}
+                  <details open class="rounded-lg border border-base-300 bg-base-100">
+                    <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">
+                      <span>{group.bundle}</span>
+                      <span class="shrink-0 text-xs font-normal text-base-content/40">{group.entries.length} endpoint{group.entries.length === 1 ? '' : 's'}</span>
+                    </summary>
+                    <div class="divide-y divide-base-300/70 border-t border-base-300">
+                      {#each group.entries as endpoint (endpoint.id)}
+                        <div class="px-3 py-2 font-mono text-xs text-base-content/80">{endpoint.id}</div>
+                      {/each}
+                    </div>
+                  </details>
                 {/each}
               </div>
             {/if}

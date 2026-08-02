@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { page } from '$app/state';
   import { onMount } from 'svelte';
   import BundleManagementSection from '$lib/components/admin/BundleManagementSection.svelte';
   import { ApiRequestError } from '$lib/api/http';
@@ -47,7 +48,7 @@
   const secondaryButton = 'btn btn-sm btn-neutral text-xs';
   const primaryButton = 'btn btn-sm btn-primary text-xs';
 
-  let activeTab = $state<Tab>('policies');
+  let activeTab = $state<Tab>(page.url.searchParams.get('tab') === 'bundles' ? 'bundles' : 'policies');
   let policies = $state<AccessPolicy[]>([]);
   let bundles = $state<BundleView[]>([]);
   let catalog = $state<CatalogEntry[]>([]);
