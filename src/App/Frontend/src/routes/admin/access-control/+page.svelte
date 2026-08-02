@@ -85,13 +85,6 @@
   let effectiveSearchTimer: ReturnType<typeof setTimeout> | undefined;
 
   const selectedPolicy = $derived(policies.find((policy) => policy.policyId === selectedPolicyId) ?? policies[0] ?? null);
-  const policyBundleReferences = $derived(
-    bundles.map((bundle) => ({
-      bundle,
-      policies: policies.filter((policy) => policy.bundleIds.includes(bundle.id))
-    }))
-  );
-
   onMount(() => {
     void loadAll();
   });
@@ -841,40 +834,7 @@
     </section>
   {/if}
 {:else if activeTab === 'bundles'}
-  <section class={cardClass}>
-    <h3 class="text-sm font-bold text-base-content">Policy membership by bundle</h3>
-    <p class="mt-1 text-xs text-base-content/50">
-      Policies are the normal assignment path. Direct exceptions are shown separately for bootstrap and compatibility needs.
-    </p>
-    {#if loading}
-      <div class="mt-6 flex justify-center"><span class="loading loading-spinner loading-md"></span></div>
-    {:else}
-      <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {#each policyBundleReferences as reference (reference.bundle.id)}
-          <div class="rounded-xl border border-base-300 bg-base-200/25 p-3">
-            <div class="flex items-center justify-between gap-2">
-              <span class="truncate font-mono text-xs font-semibold text-base-content/90">{reference.bundle.id}</span>
-              <span class="text-[10px] uppercase text-base-content/40">{reference.bundle.systemOwned ? 'system' : 'user'}</span>
-            </div>
-            <div class="mt-2 text-xs text-base-content/50">
-              {reference.bundle.endpointCount} endpoints · {reference.bundle.policyCount} policies
-            </div>
-            <div class="mt-2 flex flex-wrap gap-1.5">
-              {#each reference.policies as policy (policy.policyId)}
-                <button type="button" class="rounded bg-primary/10 px-2 py-1 text-[11px] text-primary" onclick={() => {
-                  selectedPolicyId = policy.policyId;
-                  activeTab = 'policies';
-                }}>{policy.name}</button>
-              {:else}
-                <span class="text-xs text-base-content/30">No policy references</span>
-              {/each}
-            </div>
-          </div>
-        {/each}
-      </div>
-    {/if}
-  </section>
-  <BundleManagementSection onManagePolicies={() => (activeTab = 'policies')} />
+  <BundleManagementSection policies={policies} onManagePolicies={() => (activeTab = 'policies')} />
 {:else}
   <section class={cardClass} aria-labelledby="effective-access-title">
     <h3 id="effective-access-title" class="text-sm font-bold text-base-content">Effective access inspector</h3>

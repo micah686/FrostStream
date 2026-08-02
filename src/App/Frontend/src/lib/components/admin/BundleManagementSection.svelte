@@ -11,10 +11,12 @@
     RefreshCw,
     Server,
     Trash2,
-    Users
+    Users,
+    X
   } from '@lucide/svelte';
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
   import { ApiRequestError } from '$lib/api/http';
+  import type { AccessPolicy } from '$lib/api/accessControl';
   import {
     createRuntimeBundle,
     deleteRuntimeBundle,
@@ -28,8 +30,14 @@
 let {
   onManagePolicies,
   mode = 'management',
-  bundleId = ''
-}: { onManagePolicies?: () => void; mode?: 'management' | 'create' | 'edit'; bundleId?: string } = $props();
+  bundleId = '',
+  policies = []
+}: {
+  onManagePolicies?: () => void;
+  mode?: 'management' | 'create' | 'edit';
+  bundleId?: string;
+  policies?: AccessPolicy[];
+} = $props();
 
   interface CatalogGroup {
     bundle: string;
@@ -54,15 +62,41 @@ let {
   let pickerEndpoints = $state<string[]>([]);
   let pickerSaving = $state(false);
   let pickerError = $state<Error | null>(null);
+  let policySearch = $state('');
+  let policyDropdownOpen = $state(false);
 
   let deleteModalOpen = $state(false);
   let deleteTarget = $state<BundleView | null>(null);
   let deletingBundleId = $state<string | null>(null);
 
-  const selectedBundle = $derived(bundles.find((bundle) => bundle.id === selectedBundleId) ?? bundles[0] ?? null);
   const systemBundles = $derived(bundles.filter((bundle) => bundle.systemOwned));
   const runtimeBundles = $derived(bundles.filter((bundle) => !bundle.systemOwned));
   const cloneSources = $derived(systemBundles.filter((bundle) => bundle.id !== 'all'));
+  const policyNames = $derived([...new Set(policies.map((policy) => policy.name.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)));
+  const filteredPolicyNames = $derived(
+    policyNames.filter((policyName) => policyName.toLowerCase().includes(policySearch.trim().toLowerCase()))
+  );
+  const matchingPolicyBundleIds = $derived.by(() => {
+    const query = policySearch.trim().toLowerCase();
+    if (!query) return null;
+    return new Set(
+      policies
+        .filter((policy) => policy.name.toLowerCase().includes(query))
+        .flatMap((policy) => policy.bundleIds)
+    );
+  });
+  const visibleSystemBundles = $derived(
+    matchingPolicyBundleIds ? systemBundles.filter((bundle) => matchingPolicyBundleIds?.has(bundle.id)) : systemBundles
+  );
+  const visibleRuntimeBundles = $derived(
+    matchingPolicyBundleIds ? runtimeBundles.filter((bundle) => matchingPolicyBundleIds?.has(bundle.id)) : runtimeBundles
+  );
+  const selectedBundle = $derived(
+    [...visibleSystemBundles, ...visibleRuntimeBundles].find((bundle) => bundle.id === selectedBundleId)
+      ?? visibleSystemBundles[0]
+      ?? visibleRuntimeBundles[0]
+      ?? null
+  );
   let systemGroupOpen = $state(true);
   let runtimeGroupOpen = $state(true);
   const openFgaUnavailable = $derived(isStatus(loadError, 503) || isStatus(mutationError, 503) || isStatus(pickerError, 503));
@@ -511,9 +545,50 @@ let {
         {/snippet}
 
         <div class="card border border-base-300 bg-base-100 p-2 sm:p-3">
+          <div class={['dropdown mb-3 w-full', policyDropdownOpen && 'dropdown-open']}>
+            <label class="input input-sm w-full gap-1">
+              <span class="label">Policy</span>
+              <input
+                bind:value={policySearch}
+                placeholder="Search policy name"
+                onfocus={() => (policyDropdownOpen = true)}
+                oninput={() => (policyDropdownOpen = true)}
+                onblur={() => setTimeout(() => (policyDropdownOpen = false), 150)}
+              />
+              {#if policySearch}
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-xs btn-circle shrink-0"
+                  aria-label="Clear policy search"
+                  onclick={() => { policySearch = ''; policyDropdownOpen = false; }}
+                >
+                  <X class="h-3.5 w-3.5" />
+                </button>
+              {/if}
+            </label>
+            {#if policyDropdownOpen}
+              <ul class="dropdown-content menu z-20 mt-1 max-h-60 w-full flex-nowrap overflow-y-auto rounded-box border border-base-300 bg-base-100 p-1 shadow-lg">
+                {#if policySearch.trim()}
+                  <li>
+                    <button type="button" onclick={() => { policySearch = ''; policyDropdownOpen = false; }}>All policies</button>
+                  </li>
+                {/if}
+                {#each filteredPolicyNames as policyName (policyName)}
+                  <li>
+                    <button type="button" onclick={() => { policySearch = policyName; policyDropdownOpen = false; }}>
+                      {policyName}
+                    </button>
+                  </li>
+                {:else}
+                  <li class="pointer-events-none"><span class="text-xs text-base-content/50">No matching policies</span></li>
+                {/each}
+              </ul>
+            {/if}
+          </div>
+
           <div class="max-h-[42rem] space-y-2 overflow-y-auto">
-            {@render bundleGroup('System bundles', systemBundles, systemGroupOpen, (nextOpen) => (systemGroupOpen = nextOpen))}
-            {@render bundleGroup('Runtime bundles', runtimeBundles, runtimeGroupOpen, (nextOpen) => (runtimeGroupOpen = nextOpen))}
+            {@render bundleGroup('System bundles', visibleSystemBundles, systemGroupOpen, (nextOpen) => (systemGroupOpen = nextOpen))}
+            {@render bundleGroup('Runtime bundles', visibleRuntimeBundles, runtimeGroupOpen, (nextOpen) => (runtimeGroupOpen = nextOpen))}
           </div>
         </div>
       </aside>
@@ -574,12 +649,7 @@ let {
                 </p>
               </div>
               {#if onManagePolicies}
-                <button
-                  type="button"
-                  onclick={onManagePolicies}
-                >
-                  Manage policies
-                </button>
+                <button class="btn btn-sm btn-neutral text-xs" type="button" onclick={onManagePolicies}>Manage policies</button>
               {/if}
             </div>
 
@@ -592,23 +662,21 @@ let {
                 {#each selectedBundle.memberPolicies as policy (policy.policyId)}
                   <div class="card border border-base-300 bg-base-100 p-3">
                     <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-                    <div class="flex min-w-0 items-center gap-2">
-                      <span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-base-300/70 text-primary">
-                        <Users class="h-4 w-4" />
-                      </span>
-                      <div class="min-w-0">
-                        <div class="flex flex-wrap items-center gap-2">
-                          <span class="truncate text-sm font-semibold text-base-content">{policy.name}</span>
-                          <span class={['badge badge-sm font-bold', policy.enabled ? 'badge-accent' : 'badge-warning']}>
-                            {policy.enabled ? 'Enabled' : 'Disabled'}
-                          </span>
+                      <div class="flex min-w-0 items-center gap-2">
+                        <span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-base-300/70 text-primary">
+                          <Users class="h-4 w-4" />
+                        </span>
+                        <div class="min-w-0">
+                          <div class="flex flex-wrap items-center gap-2">
+                            <span class="truncate text-sm font-semibold text-base-content">{policy.name}</span>
+                            <span class={['badge badge-sm font-bold', policy.enabled ? 'badge-accent' : 'badge-warning']}>
+                              {policy.enabled ? 'Enabled' : 'Disabled'}
+                            </span>
+                          </div>
+                          <div class="mt-1 font-mono text-xs text-base-content/50">{policy.policyId}</div>
                         </div>
-                        <div class="mt-1 font-mono text-xs text-base-content/50">{policy.policyId}</div>
                       </div>
-                    </div>
-                    <span class="badge badge-sm badge-secondary shrink-0 font-bold sm:ml-auto">
-                      {policy.syncStatus}
-                    </span>
+                      <span class="badge badge-sm badge-secondary shrink-0 font-bold sm:ml-auto">{policy.syncStatus}</span>
                     </div>
                   </div>
                 {/each}
