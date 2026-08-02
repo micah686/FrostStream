@@ -87,6 +87,7 @@
   let effectiveType = $state<GranteeType>('user');
   let effectiveId = $state('');
   let effectivePrincipalQuery = $state('');
+  let effectivePrincipalDropdownOpen = $state(false);
   let effectiveDirectoryResults = $state<DirectoryEntry[]>([]);
   let effectiveDirectoryLoading = $state(false);
   let effectiveEndpoint = $state('');
@@ -421,6 +422,7 @@
     effectiveId = entry?.id ?? effectivePrincipalQuery.trim();
     if (entry) effectivePrincipalQuery = entry.name;
     effectiveDirectoryResults = [];
+    effectivePrincipalDropdownOpen = false;
     effectiveResult = null;
     effectiveCheck = null;
   }
@@ -1045,49 +1047,56 @@
           <option value="group">Group</option>
         </select>
       </label>
-      <label class="text-xs font-semibold text-base-content/60">
+      <div class="text-xs font-semibold text-base-content/60">
         Find user or group
-        <input
-          class="input w-full mt-1.5"
-          bind:value={effectivePrincipalQuery}
-          placeholder="Search users or groups"
-          oninput={() => {
-            if (effectiveId) effectiveId = '';
-            queueEffectivePrincipalSearch();
-          }}
-          onkeydown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault();
-              const entry = effectiveDirectoryResults[0];
-              if (entry) selectEffectivePrincipal(entry);
-              else selectEffectivePrincipal();
-            }
-          }}
-        />
-      </label>
+        <div class={['dropdown mt-1.5 w-full', effectivePrincipalDropdownOpen && 'dropdown-open']}>
+          <input
+            class="input w-full"
+            bind:value={effectivePrincipalQuery}
+            placeholder="Search users or groups"
+            autocomplete="off"
+            role="combobox"
+            aria-expanded={effectivePrincipalDropdownOpen}
+            aria-controls="effective-principal-options"
+            onfocus={() => (effectivePrincipalDropdownOpen = true)}
+            onblur={() => setTimeout(() => (effectivePrincipalDropdownOpen = false), 150)}
+            oninput={() => {
+              if (effectiveId) effectiveId = '';
+              effectivePrincipalDropdownOpen = true;
+              queueEffectivePrincipalSearch();
+            }}
+            onkeydown={(event) => {
+              if (event.key === 'Escape') effectivePrincipalDropdownOpen = false;
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                const entry = effectiveDirectoryResults[0];
+                if (entry) selectEffectivePrincipal(entry);
+                else selectEffectivePrincipal();
+              }
+            }}
+          />
+          {#if effectivePrincipalDropdownOpen && (effectiveDirectoryLoading || effectiveDirectoryResults.length > 0)}
+            <ul id="effective-principal-options" class="dropdown-content menu z-20 mt-1 max-h-48 w-full flex-nowrap overflow-y-auto rounded-lg border border-base-300 bg-base-100 p-1 shadow-xl" role="listbox">
+              {#if effectiveDirectoryLoading}
+                <li><span class="text-xs text-base-content/50">Searching Authentik…</span></li>
+              {:else}
+                {#each effectiveDirectoryResults as entry (`${entry.type}:${entry.id}`)}
+                  <li>
+                    <button type="button" class="flex w-full items-center gap-2 text-left" onclick={() => selectEffectivePrincipal(entry)}>
+                      <span class="truncate text-sm font-semibold text-base-content">{entry.name}</span>
+                      <span class="truncate text-xs text-base-content/50">{entry.description}</span>
+                      <span class="ml-auto shrink-0 font-mono text-[10px] text-base-content/40">{entry.id}</span>
+                    </button>
+                  </li>
+                {/each}
+              {/if}
+            </ul>
+          {/if}
+        </div>
+      </div>
     </div>
 
-    {#if effectiveDirectoryLoading || effectiveDirectoryResults.length > 0}
-      <div class="mt-2 max-h-48 overflow-y-auto rounded-lg border border-base-content/20 bg-base-200">
-        {#if effectiveDirectoryLoading}
-          <div class="px-3 py-2 text-xs text-base-content/50">Searching Authentik…</div>
-        {:else}
-          {#each effectiveDirectoryResults as entry (`${entry.type}:${entry.id}`)}
-            <button
-              type="button"
-              class="flex w-full items-center gap-2 border-b border-base-300 px-3 py-2 text-left last:border-0 hover:bg-primary/10"
-              onclick={() => selectEffectivePrincipal(entry)}
-            >
-              <span class="truncate text-sm font-semibold text-base-content">{entry.name}</span>
-              <span class="truncate text-xs text-base-content/50">{entry.description}</span>
-              <span class="ml-auto shrink-0 font-mono text-[10px] text-base-content/40">{entry.id}</span>
-            </button>
-          {/each}
-        {/if}
-      </div>
-    {/if}
-
-    <div class="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-base-300 bg-base-200/25 px-3 py-3">
+    <div class="card mt-3 flex flex-wrap items-center justify-between gap-3 border border-base-300 bg-base-100 p-4">
       <div class="min-w-0">
         <div class="text-[10px] font-bold uppercase text-base-content/40">Selected principal</div>
         <div class="mt-1 truncate font-mono text-xs text-base-content/80">{effectiveId || 'None selected'}</div>
@@ -1113,6 +1122,7 @@
               aria-expanded={endpointDropdownOpen}
               aria-controls="effective-endpoint-options"
               onfocus={() => (endpointDropdownOpen = true)}
+              onblur={() => setTimeout(() => (endpointDropdownOpen = false), 150)}
               oninput={() => (endpointDropdownOpen = true)}
               onkeydown={(event) => {
                 if (event.key === 'Escape') endpointDropdownOpen = false;
