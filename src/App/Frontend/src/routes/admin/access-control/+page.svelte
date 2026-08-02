@@ -90,6 +90,7 @@
   let effectiveDirectoryResults = $state<DirectoryEntry[]>([]);
   let effectiveDirectoryLoading = $state(false);
   let effectiveEndpoint = $state('');
+  let endpointDropdownOpen = $state(false);
   let effectiveMediaGuid = $state('');
   let effectiveResult = $state<EffectiveAccess | null>(null);
   let effectiveCheck = $state<EffectiveAccessCheck | null>(null);
@@ -434,6 +435,7 @@
     error = null;
     try {
       effectiveResult = await getEffectiveAccess(effectiveType, effectiveId.trim());
+      void resolveExistingMedia(effectiveResult.deniedMediaGuids);
     } catch (err) {
       error = messageFor(err, 'Could not evaluate effective access.');
     } finally {
@@ -1099,11 +1101,39 @@
       <h4 class="text-xs font-bold uppercase tracking-wide text-base-content/50">Check a resource</h4>
       <p class="mt-1 text-xs text-base-content/40">Check an endpoint, a media item, or both and inspect every authorization-axis reason.</p>
       <div class="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-        <label class="text-xs font-semibold text-base-content/60">
+        <div class="text-xs font-semibold text-base-content/60">
           Endpoint (optional)
-          <input class="input w-full mt-1.5 font-mono text-xs" bind:value={effectiveEndpoint} list="endpoint-catalog" placeholder="media.stream" />
-          <datalist id="endpoint-catalog">{#each catalog as endpoint}<option value={endpoint.id}></option>{/each}</datalist>
-        </label>
+          <div class={['dropdown mt-1.5 w-full', endpointDropdownOpen && 'dropdown-open']}>
+            <input
+              class="input w-full font-mono text-xs"
+              bind:value={effectiveEndpoint}
+              placeholder="media.stream"
+              autocomplete="off"
+              role="combobox"
+              aria-expanded={endpointDropdownOpen}
+              aria-controls="effective-endpoint-options"
+              onfocus={() => (endpointDropdownOpen = true)}
+              oninput={() => (endpointDropdownOpen = true)}
+              onkeydown={(event) => {
+                if (event.key === 'Escape') endpointDropdownOpen = false;
+                if (event.key === 'Enter' && endpointDropdownOpen) endpointDropdownOpen = false;
+              }}
+            />
+            {#if endpointDropdownOpen}
+              <ul id="effective-endpoint-options" class="dropdown-content menu z-20 mt-1 max-h-60 w-full flex-nowrap overflow-y-auto rounded-lg border border-base-300 bg-base-100 p-1 shadow-xl" role="listbox">
+                {#each catalog.filter((endpoint) => !effectiveEndpoint.trim() || endpoint.id.toLowerCase().includes(effectiveEndpoint.trim().toLowerCase())) as endpoint (endpoint.id)}
+                  <li>
+                    <button type="button" class="block w-full truncate text-left font-mono text-xs" onclick={() => { effectiveEndpoint = endpoint.id; endpointDropdownOpen = false; }}>
+                      {endpoint.id}
+                    </button>
+                  </li>
+                {:else}
+                  <li><span class="text-xs text-base-content/50">No matching endpoints.</span></li>
+                {/each}
+              </ul>
+            {/if}
+          </div>
+        </div>
         <label class="text-xs font-semibold text-base-content/60">
           Media GUID (optional)
           <input class="input w-full mt-1.5 font-mono text-xs" bind:value={effectiveMediaGuid} placeholder="00000000-0000-0000-0000-000000000000" />
@@ -1131,89 +1161,130 @@
         </div>
       </div>
 
-      <div class="mt-5 grid gap-4 lg:grid-cols-3">
-        <div class="rounded-xl border border-base-300 bg-base-200/20 p-4">
-          <h4 class="text-xs font-bold uppercase text-base-content/50">Groups</h4>
-          <div class="mt-3 flex flex-wrap gap-2">
-            {#each effectiveResult.groups as group}<span class="rounded bg-base-300 px-2 py-1 text-xs text-base-content/80">{group}</span>{:else}<span class="text-sm text-base-content/40">None</span>{/each}
-          </div>
-        </div>
-        <div class="rounded-xl border border-base-300 bg-base-200/20 p-4">
-          <h4 class="text-xs font-bold uppercase text-base-content/50">Direct exceptions</h4>
-          <div class="mt-3 space-y-1">
-            {#each effectiveResult.directBundleIds as id}<div class="font-mono text-xs text-base-content/80">{id}</div>{:else}<span class="text-sm text-base-content/40">None</span>{/each}
-          </div>
-        </div>
-        <div class="rounded-xl border border-base-300 bg-base-200/20 p-4">
-          <h4 class="text-xs font-bold uppercase text-base-content/50">Via policies</h4>
-          <div class="mt-3 space-y-1">
-            {#each effectiveResult.policyBundleIds as id}<div class="font-mono text-xs text-primary">{id}</div>{:else}<span class="text-sm text-base-content/40">None</span>{/each}
-          </div>
-        </div>
-      </div>
-
-      <div class="mt-4 rounded-xl border border-base-300 bg-base-200/20 p-4">
-        <h4 class="text-xs font-bold uppercase text-base-content/50">Effective endpoints</h4>
-        <div class="mt-3 grid max-h-72 gap-1.5 overflow-y-auto sm:grid-cols-2 xl:grid-cols-3">
-          {#each effectiveResult.endpointIds as endpointId}
-            <div class="truncate rounded bg-base-200/70 px-2.5 py-1.5 font-mono text-xs text-success" title={endpointId}>{endpointId}</div>
-          {:else}
-            <span class="text-sm text-base-content/40">No endpoint invocation grants.</span>
-          {/each}
-        </div>
-      </div>
-
-      <div class="mt-4 rounded-xl border border-base-300 bg-base-200/20 p-4">
-        <h4 class="text-xs font-bold uppercase text-base-content/50">Source policies</h4>
-        <div class="mt-3 grid gap-2 lg:grid-cols-2">
-          {#each effectiveResult.sourcePolicies as policy}
-            <div class="rounded-lg border border-base-300 bg-base-200/30 px-3 py-2">
-              <div class="flex flex-wrap items-center justify-between gap-2">
-                <span class="text-xs font-semibold text-primary">{policy.name}</span>
-                <span class="text-[10px] font-bold uppercase text-base-content/50">{policy.syncStatus}</span>
-              </div>
-              <p class="mt-1 text-[11px] text-base-content/50">
-                {policy.contributesEndpoints ? 'Endpoint grants' : 'No synchronized endpoint grants'}
-                · {policy.contributesDenies ? 'Media denies' : 'No media denies'}
-              </p>
+      <div class="mt-5 space-y-2">
+        <details class="collapse rounded-lg border border-base-300 bg-base-100">
+          <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">Groups</summary>
+          <div class="collapse-content px-0 pb-0">
+            <div class="divide-y divide-base-300/70 border-t border-base-300/80">
+              {#each effectiveResult.groups as group}
+                <div class="px-3 py-2 text-xs text-base-content/80">{group}</div>
+              {:else}
+                <div class="px-3 py-3 text-sm text-base-content/40">None</div>
+              {/each}
             </div>
-          {:else}
-            <span class="text-sm text-base-content/40">No policy assignment contributes to this principal.</span>
-          {/each}
-        </div>
-      </div>
+          </div>
+        </details>
 
-      <div class="mt-4 grid gap-4 lg:grid-cols-3">
-        <div class="rounded-xl border border-base-300 bg-base-200/20 p-4">
-          <h4 class="text-xs font-bold uppercase text-base-content/50">Denied media GUIDs</h4>
-          <div class="mt-3 space-y-1">
-            {#each effectiveResult.deniedMediaGuids as mediaGuid}
-              <div class="truncate font-mono text-xs text-error" title={mediaGuid}>{mediaGuid}</div>
-            {:else}
-              <span class="text-sm text-base-content/40">None</span>
-            {/each}
+        <details class="collapse rounded-lg border border-base-300 bg-base-100">
+          <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">Direct exceptions</summary>
+          <div class="collapse-content px-0 pb-0">
+            <div class="divide-y divide-base-300/70 border-t border-base-300/80">
+              {#each effectiveResult.directBundleIds as id}
+                <div class="px-3 py-2 font-mono text-xs text-base-content/80">{id}</div>
+              {:else}
+                <div class="px-3 py-3 text-sm text-base-content/40">None</div>
+              {/each}
+            </div>
           </div>
-        </div>
-        <div class="rounded-xl border border-base-300 bg-base-200/20 p-4">
-          <h4 class="text-xs font-bold uppercase text-base-content/50">Denied providers</h4>
-          <div class="mt-3 flex flex-wrap gap-2">
-            {#each effectiveResult.deniedProviders as provider}
-              <span class="rounded bg-error/10 px-2 py-1 text-xs text-error">{provider}</span>
-            {:else}
-              <span class="text-sm text-base-content/40">None</span>
-            {/each}
+        </details>
+
+        <details class="collapse rounded-lg border border-base-300 bg-base-100">
+          <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">Via policies</summary>
+          <div class="collapse-content px-0 pb-0">
+            <div class="divide-y divide-base-300/70 border-t border-base-300/80">
+              {#each effectiveResult.policyBundleIds as id}
+                <div class="px-3 py-2 font-mono text-xs text-base-content">{id}</div>
+              {:else}
+                <div class="px-3 py-3 text-sm text-base-content/40">None</div>
+              {/each}
+            </div>
           </div>
-        </div>
-        <div class="rounded-xl border border-base-300 bg-base-200/20 p-4">
-          <h4 class="text-xs font-bold uppercase text-base-content/50">Denied age tiers</h4>
-          <div class="mt-3 flex flex-wrap gap-2">
-            {#each effectiveResult.deniedAgeThresholds as threshold}
-              <span class="rounded bg-error/10 px-2 py-1 text-xs text-error">{threshold}+</span>
-            {:else}
-              <span class="text-sm text-base-content/40">None</span>
-            {/each}
+        </details>
+
+        <details class="collapse rounded-lg border border-base-300 bg-base-100">
+          <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">Effective endpoints</summary>
+          <div class="collapse-content px-0 pb-0">
+            <div class="max-h-72 divide-y divide-base-300/70 overflow-y-auto border-t border-base-300/80">
+              {#each effectiveResult.endpointIds as endpointId}
+                <div class="truncate px-3 py-2 font-mono text-xs text-base-content" title={endpointId}>{endpointId}</div>
+              {:else}
+                <div class="px-3 py-3 text-sm text-base-content/40">No endpoint invocation grants.</div>
+              {/each}
+            </div>
           </div>
-        </div>
+        </details>
+
+        <details class="collapse rounded-lg border border-base-300 bg-base-100">
+          <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">Source policies</summary>
+          <div class="collapse-content px-0 pb-0">
+            <div class="divide-y divide-base-300/70 border-t border-base-300/80">
+              {#each effectiveResult.sourcePolicies as policy}
+                <div class="px-3 py-2">
+                  <span class="block truncate text-xs font-semibold text-base-content" title={policy.name}>{policy.name}</span>
+                </div>
+              {:else}
+                <div class="px-3 py-3 text-sm text-base-content/40">No policy assignment contributes to this principal.</div>
+              {/each}
+            </div>
+          </div>
+        </details>
+
+        <details class="collapse rounded-lg border border-base-300 bg-base-100">
+          <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">Denied media GUIDs</summary>
+          <div class="collapse-content px-0 pb-0">
+            {#if effectiveResult.deniedMediaGuids.length === 0}
+              <div class="border-t border-base-300/80 px-3 py-3 text-sm text-base-content/40">None</div>
+            {:else}
+              <div class="overflow-x-auto border-t border-base-300/80">
+                <table class="w-full table-fixed text-left text-xs">
+                  <thead class="bg-base-200 text-base-content">
+                    <tr>
+                      <th class="w-1/2 px-3 py-2 font-semibold">Title</th>
+                      <th class="w-1/2 px-3 py-2 font-semibold">GUID</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-base-300/80">
+                    {#each effectiveResult.deniedMediaGuids as mediaGuid}
+                      {@const summary = mediaSummaries[mediaGuid]}
+                      <tr>
+                        <td class="max-w-0 px-3 py-2">
+                          <div class="truncate text-base-content" title={summary?.title || 'Media item'}>{summary?.title || 'Media item'}</div>
+                        </td>
+                        <td class="break-all px-3 py-2 font-mono text-base-content">{mediaGuid}</td>
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
+              </div>
+            {/if}
+          </div>
+        </details>
+
+        <details class="collapse rounded-lg border border-base-300 bg-base-100">
+          <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">Denied providers</summary>
+          <div class="collapse-content px-0 pb-0">
+            <div class="divide-y divide-base-300/70 border-t border-base-300/80">
+              {#each effectiveResult.deniedProviders as provider}
+                <div class="px-3 py-2 text-xs text-base-content">{provider}</div>
+              {:else}
+                <div class="px-3 py-3 text-sm text-base-content/40">None</div>
+              {/each}
+            </div>
+          </div>
+        </details>
+
+        <details class="collapse rounded-lg border border-base-300 bg-base-100">
+          <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">Denied age tiers</summary>
+          <div class="collapse-content px-0 pb-0">
+            <div class="divide-y divide-base-300/70 border-t border-base-300/80">
+              {#each effectiveResult.deniedAgeThresholds as threshold}
+                <div class="px-3 py-2 text-xs text-base-content">{threshold}+</div>
+              {:else}
+                <div class="px-3 py-3 text-sm text-base-content/40">None</div>
+              {/each}
+            </div>
+          </div>
+        </details>
       </div>
 
     </section>
