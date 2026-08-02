@@ -503,7 +503,7 @@ let {
             type="button"
             class={[
               'block w-full px-3 py-2 text-left transition',
-              selectedBundle?.id === bundle.id ? 'bg-primary/10' : 'hover:bg-base-300/45'
+              selectedBundle?.id === bundle.id ? 'bg-base-200' : 'hover:bg-base-200'
             ]}
             onclick={() => (selectedBundleId = bundle.id)}
           >
@@ -522,11 +522,11 @@ let {
 
         {#snippet bundleGroup(label: string, items: BundleView[], open: boolean, toggle: (nextOpen: boolean) => void)}
           <details
-            class="collapse rounded-lg border border-base-300 bg-base-200/20"
+            class="collapse rounded-lg border border-base-300 bg-base-100"
             {open}
             ontoggle={(event) => toggle((event.currentTarget as HTMLDetailsElement).open)}
           >
-            <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-xs font-semibold uppercase text-base-content/50 [&::-webkit-details-marker]:hidden">
+            <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center justify-between gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold uppercase text-base-content [&::-webkit-details-marker]:hidden">
               <span>{label}</span>
               <span class="shrink-0 text-xs font-normal normal-case text-base-content/40">{items.length}</span>
             </summary>

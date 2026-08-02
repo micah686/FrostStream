@@ -135,6 +135,8 @@
       selectedPolicyId = policies.some((policy) => policy.policyId === preferredPolicyId)
         ? preferredPolicyId
         : (policies[0]?.policyId ?? '');
+      const nextSelectedPolicy = policies.find((policy) => policy.policyId === selectedPolicyId);
+      if (nextSelectedPolicy) void resolveExistingMedia(nextSelectedPolicy.mediaGuids);
     } catch (err) {
       error = messageFor(err, 'Could not load access-control data.');
     } finally {
@@ -596,11 +598,12 @@
               type="button"
               class={[
                 'block w-full border-b border-base-300 px-4 py-3 text-left transition last:border-b-0',
-                selectedPolicy?.policyId === policy.policyId ? 'bg-primary/10' : 'hover:bg-base-300/45'
+                selectedPolicy?.policyId === policy.policyId ? 'bg-base-200' : 'hover:bg-base-200'
               ]}
               onclick={() => {
                 selectedPolicyId = policy.policyId;
                 editor = null;
+                void resolveExistingMedia(policy.mediaGuids);
               }}
             >
               <div class="min-w-0 text-sm font-semibold text-base-content">{policy.name}</div>
@@ -659,8 +662,8 @@
             </div>
 
             <div class="mt-5 space-y-2">
-              <details class="collapse rounded-lg border border-base-300 bg-base-200/20">
-                <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-info px-3 py-2 text-xs font-semibold text-info-content [&::-webkit-details-marker]:hidden">
+              <details class="collapse rounded-lg border border-base-300 bg-base-100">
+                <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">
                   <span>Endpoint bundles</span>
                 </summary>
                 <div class="collapse-content px-0 pb-0">
@@ -674,8 +677,8 @@
                 </div>
               </details>
 
-              <details class="collapse rounded-lg border border-base-300 bg-base-200/20">
-                <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-info px-3 py-2 text-xs font-semibold text-info-content [&::-webkit-details-marker]:hidden">
+              <details class="collapse rounded-lg border border-base-300 bg-base-100">
+                <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">
                   <span>Policy assignments</span>
                 </summary>
                 <div class="collapse-content px-0 pb-0">
@@ -684,7 +687,7 @@
                   {:else}
                     <div class="overflow-x-auto border-t border-base-300/80">
                       <table class="w-full min-w-[30rem] text-left text-xs">
-                        <thead class="bg-base-200/80 text-base-content/50">
+                        <thead class="bg-base-200 text-base-content">
                           <tr>
                             <th class="px-3 py-2 font-semibold">User/Group</th>
                             <th class="px-3 py-2 font-semibold">Name</th>
@@ -706,8 +709,8 @@
                 </div>
               </details>
 
-              <details class="collapse rounded-lg border border-base-300 bg-base-200/20">
-                <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-info px-3 py-2 text-xs font-semibold text-info-content [&::-webkit-details-marker]:hidden">
+              <details class="collapse rounded-lg border border-base-300 bg-base-100">
+                <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">
                   <span>Denied media GUIDs</span>
                 </summary>
                 <div class="collapse-content px-0 pb-0">
@@ -716,7 +719,7 @@
                   {:else}
                     <div class="overflow-x-auto border-t border-base-300/80">
                       <table class="w-full table-fixed text-left text-xs">
-                        <thead class="bg-base-200/80 text-base-content/50">
+                        <thead class="bg-base-200 text-base-content">
                           <tr>
                             <th class="w-1/2 px-3 py-2 font-semibold">Title</th>
                             <th class="w-1/2 px-3 py-2 font-semibold">GUID</th>
@@ -739,8 +742,8 @@
                 </div>
               </details>
 
-              <details class="collapse rounded-lg border border-base-300 bg-base-200/20">
-                <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-info px-3 py-2 text-xs font-semibold text-info-content [&::-webkit-details-marker]:hidden">
+              <details class="collapse rounded-lg border border-base-300 bg-base-100">
+                <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">
                   <span>Denied providers</span>
                 </summary>
                 <div class="collapse-content px-0 pb-0">
@@ -754,8 +757,8 @@
                 </div>
               </details>
 
-              <details class="collapse rounded-lg border border-base-300 bg-base-200/20">
-                <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-info px-3 py-2 text-xs font-semibold text-info-content [&::-webkit-details-marker]:hidden">
+              <details class="collapse rounded-lg border border-base-300 bg-base-100">
+                <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">
                   <span>Denied ages</span>
                 </summary>
                 <div class="collapse-content px-0 pb-0">
@@ -1236,7 +1239,7 @@
 
       <div class="mt-4 overflow-x-auto rounded-lg border border-base-300">
         <table class="w-full min-w-[46rem] text-left text-xs">
-          <thead class="bg-base-200/80 text-base-content/50">
+          <thead class="bg-base-200 text-base-content">
             <tr><th class="px-3 py-2">Axis</th><th class="px-3 py-2">Resource</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">Reason / provenance</th></tr>
           </thead>
           <tbody class="divide-y divide-base-300">
