@@ -25,7 +25,6 @@
     type RestorePlan,
     type VerifyBackupResult
   } from '$lib/api/backups';
-  import UnderDevelopmentBanner from '$lib/components/admin/UnderDevelopmentBanner.svelte';
 
   const backupModeOptions: { value: BackupMode; name: string }[] = [
     { value: 'snapshot', name: 'Snapshot — quick logical pg_dump (default)' },
@@ -360,13 +359,15 @@
   function statusBadgeClass(status: BackupJob['status']): string {
     switch (status) {
       case 'completed':
-        return 'bg-success/15 text-success';
+        return 'badge-success text-success-content';
       case 'failed':
-        return 'bg-error/15 text-error';
+        return 'badge-error text-error-content';
       case 'running':
-        return 'bg-primary/15 text-primary';
+        return 'badge-primary text-primary-content';
+      case 'queued':
+        return 'badge-info text-info-content';
       default:
-        return 'bg-base-300 text-base-content/60';
+        return 'badge-neutral';
     }
   }
 
@@ -396,8 +397,6 @@
   }
 </script>
 
-<UnderDevelopmentBanner />
-
 <!-- Run backup -->
 <section class={cardClass} aria-labelledby="backups-run-title">
   <h2 id="backups-run-title" class="text-base font-bold text-base-content">Backups</h2>
@@ -421,11 +420,11 @@
       <label class="label mb-2 text-sm" for="backup-name">Backup name (optional)</label>
       <input class="input w-full" id="backup-name" maxlength={100} bind:value={backupName} placeholder="pre-upgrade" />
     </div>
-    <div class="min-w-0 flex-1 sm:max-w-xs">
+    <div class="min-w-0 flex-1 sm:max-w-sm">
       <label class="label mb-2 text-sm" for="backup-mode">Mode</label>
       <Select id="backup-mode" bind:value={backupMode} items={backupModeOptions} />
     </div>
-    <button class="btn btn-sm btn-primary text-xs" type="submit" disabled={startBusy}>
+    <button class="btn btn-sm btn-primary text-xs sm:-translate-y-1" type="submit" disabled={startBusy}>
       {#if startBusy}
         <span class="loading loading-spinner loading-xs mr-1.5"></span>
       {:else}
@@ -480,7 +479,7 @@
             {#if job.status === 'queued' || job.status === 'running'}
               <span class="loading loading-spinner loading-xs"></span>
             {/if}
-            <span class="badge badge-sm badge-ghost rounded-full text-[10px] uppercase {statusBadgeClass(job.status)}">
+            <span class="badge badge-sm rounded-full text-[10px] uppercase {statusBadgeClass(job.status)}">
               {job.status}
             </span>
             <span class="text-xs text-base-content/60">Started {formatDate(job.createdAt)}</span>
@@ -553,14 +552,14 @@
                   <h3 class="truncate text-sm font-semibold text-base-content" title={archive.archivePath}>
                     {archiveName(archive.archivePath)}
                   </h3>
-                  <span class="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                  <span class="badge badge-sm badge-accent text-[10px] font-semibold text-accent-content">
                     {formatMode(archive.mode)}
                   </span>
-                  <span class="rounded-full bg-base-300 px-2 py-0.5 text-[10px] font-semibold text-base-content/60">
+                  <span class="badge badge-sm badge-neutral text-[10px] font-semibold">
                     schema v{archive.schemaVersion}
                   </span>
                   {#if !archive.mediaIncluded}
-                    <span class="rounded-full bg-base-300 px-2 py-0.5 text-[10px] font-semibold text-base-content/60">
+                    <span class="badge badge-sm badge-neutral text-[10px] font-semibold">
                       media excluded
                     </span>
                   {/if}
@@ -604,8 +603,8 @@
               class={[
                 'mt-3 flex items-start gap-2 rounded-lg border p-3 text-xs',
                 verifyResult.success
-                  ? 'border-success/30 bg-success/10 text-success'
-                  : 'border-error/30 bg-error/10 text-error'
+                  ? 'border-info/30 bg-info/10 text-info-content'
+                  : 'border-error/30 bg-error/10 text-error-content'
               ]}
               role="status"
             >
