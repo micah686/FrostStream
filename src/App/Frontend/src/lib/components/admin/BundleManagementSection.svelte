@@ -5,8 +5,6 @@
   import {
     Boxes,
     Check,
-    ChevronDown,
-    ChevronUp,
     CircleAlert,
     Pencil,
     Plus,
@@ -29,8 +27,9 @@
 
 let {
   onManagePolicies,
-  mode = 'management'
-}: { onManagePolicies?: () => void; mode?: 'management' | 'create' } = $props();
+  mode = 'management',
+  bundleId = ''
+}: { onManagePolicies?: () => void; mode?: 'management' | 'create' | 'edit'; bundleId?: string } = $props();
 
   interface CatalogGroup {
     bundle: string;
@@ -87,6 +86,19 @@ let {
       const [nextCatalog, nextBundles] = await Promise.all([listCatalog(), listBundles()]);
       catalog = sortCatalog(nextCatalog);
       applyBundles(nextBundles);
+      if (mode === 'edit') {
+        const bundle = nextBundles.find((item) => item.id === bundleId);
+        if (bundle) {
+          pickerMode = 'edit';
+          pickerBundleId = bundle.id;
+          pickerCloneFrom = '';
+          pickerSearch = '';
+          pickerEndpoints = [...bundle.endpoints].sort();
+          pickerError = null;
+        } else {
+          pickerError = new Error('Runtime bundle not found.');
+        }
+      }
     } catch (err) {
       loadError = err instanceof Error ? err : new Error('Could not load bundle management data.');
     } finally {
@@ -135,9 +147,7 @@ let {
   }
 
   function ownershipClass(bundle: BundleView): string {
-    return bundle.systemOwned
-      ? 'border-primary/25 bg-primary/10 text-primary'
-      : 'border-success/25 bg-success/10 text-success';
+    return bundle.systemOwned ? 'badge-neutral' : 'badge-accent';
   }
 
   function catalogGroups(entries: CatalogEntry[] = catalog): CatalogGroup[] {
@@ -200,16 +210,6 @@ let {
     pickerCloneFrom = '';
     pickerSearch = '';
     pickerEndpoints = [];
-    pickerError = null;
-    pickerOpen = true;
-  }
-
-  function openEditModal(bundle: BundleView) {
-    if (bundle.systemOwned) return;
-    pickerMode = 'edit';
-    pickerBundleId = bundle.id;
-    pickerSearch = '';
-    pickerEndpoints = [...bundle.endpoints];
     pickerError = null;
     pickerOpen = true;
   }
@@ -293,12 +293,19 @@ let {
         </label>
         <p class="mt-1.5 text-xs text-base-content/50">Runtime bundle ids always start with the fixed user. prefix.</p>
       {:else}
-        <label class="label mb-2 text-sm" for="bundle-picker-id">Bundle id</label>
-        <input class="input w-full" id="bundle-picker-id" bind:value={pickerBundleId} readonly />
+        <label class="input w-full font-mono">
+          <span class="label">user.</span>
+          <input
+            id="bundle-picker-id"
+            value={pickerBundleId.replace(/^user\./, '')}
+            disabled
+            aria-label="Runtime bundle ID"
+          />
+        </label>
       {/if}
     </div>
 
-    {#if pickerMode === 'create'}
+    {#if pickerMode === 'create' || pickerMode === 'edit'}
       <div>
         <label class="label mb-2 text-sm" for="bundle-clone-source">Start from a system bundle</label>
         <Select
@@ -308,10 +315,13 @@ let {
             ...cloneSources.map((bundle) => ({ value: bundle.id, name: `${bundle.id} · ${bundle.endpointCount} endpoints` }))
           ]}
           bind:value={pickerCloneFrom}
+          disabled={pickerMode === 'edit'}
           class="text-sm"
         />
         <p class="mt-1.5 text-xs text-base-content/50">
-          The baseline is copied when the bundle is created. Add extra endpoints here; edit the new bundle afterward to remove copied endpoints.
+          {pickerMode === 'create'
+            ? 'The baseline is copied when the bundle is created. Add extra endpoints here; edit the new bundle afterward to remove copied endpoints.'
+            : 'System bundle baselines can only be selected when creating a runtime bundle.'}
         </p>
       </div>
     {/if}
@@ -373,11 +383,15 @@ let {
   </div>
 {/snippet}
 
-{#if mode === 'create'}
-  <section class={cardClass} aria-labelledby="create-runtime-bundle-title">
+{#if mode !== 'management'}
+  <section class={cardClass} aria-labelledby="runtime-bundle-form-title">
     <div>
-      <h1 id="create-runtime-bundle-title" class="text-xl font-bold text-base-content">Create runtime bundle</h1>
-      <p class="mt-2 text-sm text-base-content/60">Define the bundle ID and choose the endpoints it should contain.</p>
+      <h1 id="runtime-bundle-form-title" class="text-xl font-bold text-base-content">
+        {mode === 'create' ? 'Create runtime bundle' : 'Edit endpoint membership'}
+      </h1>
+      <p class="mt-2 text-sm text-base-content/60">
+        {mode === 'create' ? 'Define the bundle ID and choose the endpoints it should contain.' : 'Update the endpoints assigned to this runtime bundle.'}
+      </p>
     </div>
     <div class="mt-6">
       {@render pickerContent()}
@@ -388,7 +402,7 @@ let {
         {#if pickerSaving}
           <span class="loading loading-spinner loading-xs mr-1.5"></span>
         {/if}
-        Create bundle
+        {mode === 'create' ? 'Create bundle' : 'Save endpoints'}
       </button>
     </div>
   </section>
@@ -449,19 +463,19 @@ let {
     </div>
   {:else}
     <div class="mt-5 grid gap-5 2xl:grid-cols-[21rem_minmax(0,1fr)]">
-      <aside class="min-w-0 rounded-xl border border-base-300 bg-base-200/20" aria-label="Bundles">
+      <aside class="min-w-0" aria-label="Bundles">
         {#snippet bundleRow(bundle: BundleView)}
           <button
             type="button"
             class={[
-              'block w-full px-3 py-3 text-left transition',
+              'block w-full px-3 py-2 text-left transition',
               selectedBundle?.id === bundle.id ? 'bg-primary/10' : 'hover:bg-base-300/45'
             ]}
             onclick={() => (selectedBundleId = bundle.id)}
           >
             <div class="flex min-w-0 items-center justify-between gap-2">
               <span class="truncate font-mono text-sm font-semibold text-base-content">{bundle.id}</span>
-              <span class={['shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold', ownershipClass(bundle)]}>
+              <span class={['badge badge-sm shrink-0 font-bold', ownershipClass(bundle)]}>
                 {ownershipLabel(bundle)}
               </span>
             </div>
@@ -472,50 +486,46 @@ let {
           </button>
         {/snippet}
 
-        {#snippet bundleGroup(label: string, items: BundleView[], open: boolean, toggle: () => void)}
-          <button
-            type="button"
-            class="flex w-full items-center justify-between gap-2 border-b border-base-300 px-3 py-2 text-left transition hover:bg-base-300/35"
-            aria-expanded={open}
-            onclick={toggle}
+        {#snippet bundleGroup(label: string, items: BundleView[], open: boolean, toggle: (nextOpen: boolean) => void)}
+          <details
+            class="collapse rounded-lg border border-base-300 bg-base-200/20"
+            {open}
+            ontoggle={(event) => toggle((event.currentTarget as HTMLDetailsElement).open)}
           >
-            <span class="text-xs font-semibold uppercase text-base-content/50">{label}</span>
-            <span class="flex shrink-0 items-center gap-1.5 text-xs text-base-content/40">
-              {items.length}
-              {#if open}
-                <ChevronUp class="h-3 w-3" />
+            <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-xs font-semibold uppercase text-base-content/50 [&::-webkit-details-marker]:hidden">
+              <span>{label}</span>
+              <span class="shrink-0 text-xs font-normal normal-case text-base-content/40">{items.length}</span>
+            </summary>
+            <div class="collapse-content px-0 pb-0">
+              {#if items.length === 0}
+                <div class="border-t border-base-300/80 px-3 py-2 text-xs text-base-content/40">No bundles.</div>
               {:else}
-                <ChevronDown class="h-3 w-3" />
+                <div class="divide-y divide-base-300/80 border-t border-base-300/80">
+                  {#each items as bundle (bundle.id)}
+                    {@render bundleRow(bundle)}
+                  {/each}
+                </div>
               {/if}
-            </span>
-          </button>
-          {#if open}
-            {#if items.length === 0}
-              <div class="border-b border-base-300/80 px-3 py-3 text-xs text-base-content/40">No bundles.</div>
-            {:else}
-              <div class="divide-y divide-base-300/80 border-b border-base-300/80">
-                {#each items as bundle (bundle.id)}
-                  {@render bundleRow(bundle)}
-                {/each}
-              </div>
-            {/if}
-          {/if}
+            </div>
+          </details>
         {/snippet}
 
-        <div class="max-h-[42rem] overflow-y-auto">
-          {@render bundleGroup('System bundles', systemBundles, systemGroupOpen, () => (systemGroupOpen = !systemGroupOpen))}
-          {@render bundleGroup('Runtime bundles', runtimeBundles, runtimeGroupOpen, () => (runtimeGroupOpen = !runtimeGroupOpen))}
+        <div class="card border border-base-300 bg-base-100 p-2 sm:p-3">
+          <div class="max-h-[42rem] space-y-2 overflow-y-auto">
+            {@render bundleGroup('System bundles', systemBundles, systemGroupOpen, (nextOpen) => (systemGroupOpen = nextOpen))}
+            {@render bundleGroup('Runtime bundles', runtimeBundles, runtimeGroupOpen, (nextOpen) => (runtimeGroupOpen = nextOpen))}
+          </div>
         </div>
       </aside>
 
       {#if selectedBundle}
         <div class="min-w-0 space-y-5">
-          <section class="rounded-xl border border-base-300 bg-base-200/20 p-4">
+          <section class="card border border-base-300 bg-base-100 p-5 sm:p-6">
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div class="min-w-0">
                 <div class="flex min-w-0 flex-wrap items-center gap-2">
                   <h3 class="truncate font-mono text-base font-bold text-base-content">{selectedBundle.id}</h3>
-                  <span class={['rounded-full border px-2 py-0.5 text-[10px] font-bold', ownershipClass(selectedBundle)]}>
+                  <span class={['badge badge-sm font-bold', ownershipClass(selectedBundle)]}>
                     {ownershipLabel(selectedBundle)}
                   </span>
                 </div>
@@ -525,14 +535,13 @@ let {
               </div>
               {#if !selectedBundle.systemOwned}
                 <div class="flex flex-wrap gap-2">
-                  <button
-                    type="button"
+                  <a
+                    href={`/admin/access-control/bundles/${encodeURIComponent(selectedBundle.id)}/edit`}
                     class="btn btn-sm btn-neutral text-xs"
-                    onclick={() => openEditModal(selectedBundle)}
                   >
                     <Pencil class="mr-1.5 h-4 w-4" />
                     Edit endpoints
-                  </button>
+                  </a>
                   <button
                     type="button"
                     class="btn btn-sm btn-neutral text-xs"
@@ -556,7 +565,7 @@ let {
             </div>
           </section>
 
-          <section class="rounded-xl border border-base-300 bg-base-200/20 p-4" aria-labelledby="bundle-policies-title">
+          <section class="card border border-base-300 bg-base-100 p-5 sm:p-6" aria-labelledby="bundle-policies-title">
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h3 id="bundle-policies-title" class="text-sm font-bold text-base-content">Policy membership</h3>
@@ -579,9 +588,10 @@ let {
                 No policies reference this bundle.
               </div>
             {:else}
-              <div class="mt-4 divide-y divide-base-300 overflow-hidden rounded-lg border border-base-300">
+              <div class="mt-4 space-y-3">
                 {#each selectedBundle.memberPolicies as policy (policy.policyId)}
-                  <div class="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center">
+                  <div class="card border border-base-300 bg-base-100 p-3">
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
                     <div class="flex min-w-0 items-center gap-2">
                       <span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-base-300/70 text-primary">
                         <Users class="h-4 w-4" />
@@ -589,28 +599,24 @@ let {
                       <div class="min-w-0">
                         <div class="flex flex-wrap items-center gap-2">
                           <span class="truncate text-sm font-semibold text-base-content">{policy.name}</span>
-                          <span class={[
-                            'rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase',
-                            policy.enabled
-                              ? 'border-success/25 bg-success/10 text-success'
-                              : 'border-base-content/20 bg-base-300/60 text-base-content/60'
-                          ]}>
+                          <span class={['badge badge-sm font-bold', policy.enabled ? 'badge-accent' : 'badge-warning']}>
                             {policy.enabled ? 'Enabled' : 'Disabled'}
                           </span>
                         </div>
                         <div class="mt-1 font-mono text-xs text-base-content/50">{policy.policyId}</div>
                       </div>
                     </div>
-                    <span class="shrink-0 rounded-full border border-base-content/20 bg-base-200/40 px-2.5 py-1 text-[10px] font-bold uppercase text-base-content/60 sm:ml-auto">
+                    <span class="badge badge-sm badge-secondary shrink-0 font-bold sm:ml-auto">
                       {policy.syncStatus}
                     </span>
+                    </div>
                   </div>
                 {/each}
               </div>
             {/if}
           </section>
 
-          <section class="rounded-xl border border-base-300 bg-base-200/20 p-4" aria-labelledby="bundle-endpoints-title">
+          <section class="card border border-base-300 bg-base-100 p-5 sm:p-6" aria-labelledby="bundle-endpoints-title">
             <h3 id="bundle-endpoints-title" class="text-sm font-bold text-base-content">Endpoint membership</h3>
             {#if selectedBundle.endpoints.length === 0}
               <div class="mt-3 rounded-lg border border-base-300 bg-base-200/35 px-3 py-3 text-sm text-base-content/50">
@@ -620,7 +626,7 @@ let {
               <div class="mt-3 space-y-2">
                 {#each endpointGroups(selectedBundle) as group (group.bundle)}
                   <details open class="rounded-lg border border-base-300 bg-base-100">
-                    <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">
+                    <summary class="flex cursor-pointer list-none items-center justify-between gap-3 rounded-t-lg bg-base-200 px-3 py-2.5 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">
                       <span>{group.bundle}</span>
                       <span class="shrink-0 text-xs font-normal text-base-content/40">{group.entries.length} endpoint{group.entries.length === 1 ? '' : 's'}</span>
                     </summary>
