@@ -2,7 +2,9 @@
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
-  import { ArrowLeft, Trash2, X } from '@lucide/svelte';
+  import { ArrowLeft, Copy, Edit, Trash2, X } from '@lucide/svelte';
+  import { Modal } from '$lib/components/ui';
+  import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
   import BundleManagementSection from '$lib/components/admin/BundleManagementSection.svelte';
   import { ApiRequestError } from '$lib/api/http';
   import {
@@ -64,6 +66,12 @@
   let saving = $state(false);
   let error = $state<string | null>(null);
   let notice = $state<string | null>(null);
+  let duplicateModalOpen = $state(false);
+  let duplicateSource = $state<AccessPolicy | null>(null);
+  let duplicateName = $state('');
+  let duplicating = $state(false);
+  let deleteModalOpen = $state(false);
+  let deleteTarget = $state<AccessPolicy | null>(null);
 
   let assignmentType = $state<GranteeType>('group');
   let assignmentQuery = $state('');
@@ -226,32 +234,46 @@
     }
   }
 
-  async function removePolicy(policy: AccessPolicy) {
-    if (!confirm(`Delete “${policy.name}”? This removes its assignments, bundle access, and media scopes.`)) return;
-    error = null;
+  function openDeleteModal(policy: AccessPolicy) {
+    deleteTarget = policy;
+    deleteModalOpen = true;
+  }
+
+  async function removePolicy() {
+    const policy = deleteTarget;
+    if (!policy) return;
     try {
       await deleteAccessPolicy(policy.policyId);
       notice = `Deleted “${policy.name}”.`;
       editor = null;
+      deleteModalOpen = false;
       await loadAll();
     } catch (err) {
-      error = messageFor(err, 'Could not delete the policy.');
+      throw new Error(messageFor(err, 'Could not delete the policy.'));
     }
   }
 
-  async function duplicatePolicy(policy: AccessPolicy) {
-    const name = prompt('Name for the disabled copy:', `${policy.name}-copy`)
-      ?.trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9-]/g, '');
-    if (!name) return;
+  function openDuplicateModal(policy: AccessPolicy) {
+    duplicateSource = policy;
+    duplicateName = `${policy.name}-copy`.toLowerCase().replace(/[^a-z0-9-]/g, '');
+    duplicateModalOpen = true;
+  }
+
+  async function duplicatePolicy() {
+    const policy = duplicateSource;
+    const name = duplicateName.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+    if (!policy || !name) return;
+    duplicating = true;
     error = null;
     try {
       const copy = await duplicateAccessPolicy(policy.policyId, name);
       notice = `Created disabled policy “${copy.name}”.`;
+      duplicateModalOpen = false;
       await loadAll(copy.policyId);
     } catch (err) {
       error = messageFor(err, 'Could not duplicate the policy.');
+    } finally {
+      duplicating = false;
     }
   }
 
@@ -507,6 +529,46 @@
 </section>
 {/if}
 
+<Modal bind:open={duplicateModalOpen} title="Duplicate policy" size="md">
+  <div class="space-y-4">
+    <p class="text-sm text-base-content/70">
+      Create a disabled copy of <span class="font-semibold text-base-content">{duplicateSource?.name}</span>.
+    </p>
+    <div>
+      <label class="label text-sm" for="duplicate-policy-name">New policy name</label>
+      <input
+        id="duplicate-policy-name"
+        class="input w-full"
+        type="text"
+        bind:value={duplicateName}
+        placeholder="policy-copy"
+        autocomplete="off"
+      />
+      <p class="mt-1.5 text-xs text-base-content/50">Use lowercase letters, numbers, and hyphens.</p>
+    </div>
+  </div>
+
+  {#snippet footer()}
+    <div class="flex w-full justify-end gap-2">
+      <button class="btn btn-sm btn-ghost text-xs" type="button" disabled={duplicating} onclick={() => (duplicateModalOpen = false)}>
+        Cancel
+      </button>
+      <button class="btn btn-sm btn-neutral text-xs" type="button" disabled={duplicating || !duplicateName.trim()} onclick={() => void duplicatePolicy()}>
+        {#if duplicating}<span class="loading loading-spinner loading-xs mr-1.5"></span>{/if}
+        Duplicate
+      </button>
+    </div>
+  {/snippet}
+</Modal>
+
+<ConfirmDeleteModal
+  bind:open={deleteModalOpen}
+  title="Delete access policy"
+  message={`Delete “${deleteTarget?.name ?? ''}”? This removes its assignments, bundle access, and media scopes.`}
+  confirmLabel="Delete policy"
+  onConfirm={removePolicy}
+/>
+
 {#if activeTab === 'policies'}
   {#if !isPolicyEditorView}
   <section class={cardClass}>
@@ -559,34 +621,39 @@
 
         {#if selectedPolicy}
           <div class="min-w-0 space-y-4">
-            <div class="rounded-xl border border-base-300 bg-base-200/25 p-4">
+            <div class="card border border-base-300 bg-base-100 p-5 sm:p-6">
               <div class="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <div class="flex flex-wrap items-center gap-2">
-                    <h3 class="text-lg font-bold text-base-content">{selectedPolicy.name}</h3>
-                    <span class={['badge badge-sm', syncClass(selectedPolicy)]}>
-                      {selectedPolicy.syncStatus}
-                    </span>
-                    {#if !selectedPolicy.enabled}
-                      <span class="badge badge-sm badge-warning">Disabled</span>
-                    {/if}
-                  </div>
+                <div class="min-w-0">
+                  <h3 class="text-lg font-bold text-base-content">{selectedPolicy.name}</h3>
                   <p class="mt-2 text-sm text-base-content/60">{selectedPolicy.description || 'No description.'}</p>
                   {#if selectedPolicy.syncError}
                     <p class="mt-2 text-xs text-error">{selectedPolicy.syncError}</p>
                   {/if}
                 </div>
-                <div class="flex flex-wrap gap-2">
-                  <a class={secondaryButton} href={`/admin/access-control/policies/${encodeURIComponent(selectedPolicy.policyId)}/edit`}>Edit</a>
-                  <button class={secondaryButton} type="button" onclick={() => void duplicatePolicy(selectedPolicy)}>Duplicate</button>
-                  <button class={secondaryButton} type="button" onclick={() => void togglePolicy(selectedPolicy)}>
-                    {selectedPolicy.enabled ? 'Disable' : 'Enable'}
+                <div class="flex flex-wrap items-center gap-2">
+                  <input
+                    type="checkbox"
+                    class="toggle toggle-primary"
+                    checked={selectedPolicy.enabled}
+                    aria-label={selectedPolicy.enabled ? 'Disable policy' : 'Enable policy'}
+                    onchange={() => void togglePolicy(selectedPolicy)}
+                  />
+                  <a class="btn btn-sm btn-neutral text-xs" href={`/admin/access-control/policies/${encodeURIComponent(selectedPolicy.policyId)}/edit`}>
+                    <Edit class="mr-1.5 h-4 w-4" />
+                    Edit
+                  </a>
+                  <button class="btn btn-sm btn-neutral text-xs" type="button" onclick={() => openDuplicateModal(selectedPolicy)}>
+                    <Copy class="mr-1.5 h-4 w-4" />
+                    Duplicate
                   </button>
                   <button
-                    class="inline-flex h-9 items-center rounded-lg border border-error/30 px-3 text-xs font-semibold text-error hover:bg-error/10"
+                    class="btn btn-sm btn-neutral text-xs text-error hover:text-error"
                     type="button"
-                    onclick={() => void removePolicy(selectedPolicy)}
-                  >Delete</button>
+                    onclick={() => openDeleteModal(selectedPolicy)}
+                  >
+                    <Trash2 class="mr-1.5 h-4 w-4" />
+                    Delete
+                  </button>
                 </div>
               </div>
             </div>
