@@ -8,6 +8,8 @@
     CloudUpload,
     Database,
     Globe,
+    Eye,
+    EyeOff,
     Layers,
     Plus
   } from '@lucide/svelte';
@@ -119,6 +121,8 @@
   let gcsCredentialsJsonText = $state('');
   let gcsCredentialsFilePath = $state('');
   let gcsProjectId = $state('');
+
+  let visibleSecrets = $state<Record<string, boolean>>({});
 
   let submitting = $state(false);
   let submitError = $state<string | null>(null);
@@ -236,6 +240,14 @@
     return parsed as Record<string, unknown>;
   }
 
+  function secretVisible(id: string): boolean {
+    return visibleSecrets[id] ?? false;
+  }
+
+  function toggleSecret(id: string): void {
+    visibleSecrets[id] = !secretVisible(id);
+  }
+
 </script>
 
 <svelte:head>
@@ -285,7 +297,7 @@
       <div>
         <label class="label mb-2 text-sm" for="storage-key">Key</label>
         <input class="input w-full" id="storage-key" required
-           pattern={'[a-z0-9-]{2,100}'} minlength={2} maxlength={100} bind:value={key} placeholder="media-cold" />
+           pattern={'[a-z0-9\\-]{2,100}'} minlength={2} maxlength={100} bind:value={key} placeholder="media-cold" />
         <p class="mt-1.5 text-xs text-base-content/40">Lowercase letters, numbers, and hyphens. Referenced by config sets.</p>
       </div>
 
@@ -340,13 +352,25 @@
       {#if networkAuthMode === 'password'}
         <div>
           <label class="label mb-2 text-sm" for="network-password">Password</label>
-          <input class="input w-full" id="network-password" type="password" required  bind:value={networkPassword} />
+          <div class="relative">
+            <input class="input w-full pr-10" id="network-password" type={secretVisible('network-password') ? 'text' : 'password'} required bind:value={networkPassword} />
+            <button type="button" class="absolute right-2 top-1/2 -translate-y-1/2 text-base-content/50 hover:text-base-content" onclick={() => toggleSecret('network-password')} aria-label={secretVisible('network-password') ? 'Hide password' : 'Show password'}>
+              {#if secretVisible('network-password')}<EyeOff class="h-4 w-4" />{:else}<Eye class="h-4 w-4" />{/if}
+            </button>
+          </div>
+          <p class="mt-1.5 text-xs text-base-content/40">Stored securely in the secret store and never shown again.</p>
         </div>
       {:else if networkAuthMode === 'privateKey'}
         <div>
           <label class="label mb-2 text-sm" for="network-private-key">Private key</label>
-          <textarea class="textarea w-full font-mono" id="network-private-key" rows={6} required
+          <div class="relative">
+            <textarea class={['textarea w-full pr-10 font-mono', !secretVisible('network-private-key') && 'text-transparent caret-transparent select-none']} id="network-private-key" rows={6} required
              bind:value={networkPrivateKey} placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea>
+            <button type="button" class="absolute right-2 top-3 text-base-content/50 hover:text-base-content" onclick={() => toggleSecret('network-private-key')} aria-label={secretVisible('network-private-key') ? 'Hide private key' : 'Show private key'}>
+              {#if secretVisible('network-private-key')}<EyeOff class="h-4 w-4" />{:else}<Eye class="h-4 w-4" />{/if}
+            </button>
+          </div>
+          <p class="mt-1.5 text-xs text-base-content/40">Stored securely in the secret store and never shown again.</p>
         </div>
       {/if}
     {:else if targetType === 's3'}
@@ -380,7 +404,13 @@
         </div>
         <div>
           <label class="label mb-2 text-sm" for="s3-secret-key">Secret access key</label>
-          <input class="input w-full" id="s3-secret-key" type="password" required  bind:value={s3SecretKey} />
+          <div class="relative">
+            <input class="input w-full pr-10" id="s3-secret-key" type={secretVisible('s3-secret-key') ? 'text' : 'password'} required bind:value={s3SecretKey} />
+            <button type="button" class="absolute right-2 top-1/2 -translate-y-1/2 text-base-content/50 hover:text-base-content" onclick={() => toggleSecret('s3-secret-key')} aria-label={secretVisible('s3-secret-key') ? 'Hide secret access key' : 'Show secret access key'}>
+              {#if secretVisible('s3-secret-key')}<EyeOff class="h-4 w-4" />{:else}<Eye class="h-4 w-4" />{/if}
+            </button>
+          </div>
+          <p class="mt-1.5 text-xs text-base-content/40">Stored securely in the secret store and never shown again.</p>
         </div>
       </div>
 
@@ -388,7 +418,13 @@
         <label class="label mb-2 text-sm" for="s3-session-token">
           Session token <span class="font-normal text-base-content/50">(optional)</span>
         </label>
-        <input class="input w-full" id="s3-session-token" type="password" bind:value={s3SessionToken} />
+        <div class="relative">
+          <input class="input w-full pr-10" id="s3-session-token" type={secretVisible('s3-session-token') ? 'text' : 'password'} bind:value={s3SessionToken} />
+          <button type="button" class="absolute right-2 top-1/2 -translate-y-1/2 text-base-content/50 hover:text-base-content" onclick={() => toggleSecret('s3-session-token')} aria-label={secretVisible('s3-session-token') ? 'Hide session token' : 'Show session token'}>
+            {#if secretVisible('s3-session-token')}<EyeOff class="h-4 w-4" />{:else}<Eye class="h-4 w-4" />{/if}
+          </button>
+        </div>
+        <p class="mt-1.5 text-xs text-base-content/40">Stored securely in the secret store and never shown again.</p>
       </div>
 
       <div class="flex flex-wrap gap-x-8 gap-y-3 border-t border-base-300/70 pt-5">
@@ -417,20 +453,38 @@
           </div>
           <div>
             <label class="label mb-2 text-sm" for="azure-account-key">Account key</label>
-            <input class="input w-full" id="azure-account-key" type="password" required  bind:value={azureAccountKey} />
+            <div class="relative">
+              <input class="input w-full pr-10" id="azure-account-key" type={secretVisible('azure-account-key') ? 'text' : 'password'} required bind:value={azureAccountKey} />
+              <button type="button" class="absolute right-2 top-1/2 -translate-y-1/2 text-base-content/50 hover:text-base-content" onclick={() => toggleSecret('azure-account-key')} aria-label={secretVisible('azure-account-key') ? 'Hide account key' : 'Show account key'}>
+                {#if secretVisible('azure-account-key')}<EyeOff class="h-4 w-4" />{:else}<Eye class="h-4 w-4" />{/if}
+              </button>
+            </div>
+            <p class="mt-1.5 text-xs text-base-content/40">Stored securely in the secret store and never shown again.</p>
           </div>
         </div>
       {:else if azureCredentialMode === 'ConnectionString'}
         <div>
           <label class="label mb-2 text-sm" for="azure-connection-string">Connection string</label>
-          <input class="input w-full" id="azure-connection-string" type="password" required
+          <div class="relative">
+            <input class="input w-full pr-10" id="azure-connection-string" type={secretVisible('azure-connection-string') ? 'text' : 'password'} required
              bind:value={azureConnectionString} placeholder="DefaultEndpointsProtocol=https;AccountName=..." />
+            <button type="button" class="absolute right-2 top-1/2 -translate-y-1/2 text-base-content/50 hover:text-base-content" onclick={() => toggleSecret('azure-connection-string')} aria-label={secretVisible('azure-connection-string') ? 'Hide connection string' : 'Show connection string'}>
+              {#if secretVisible('azure-connection-string')}<EyeOff class="h-4 w-4" />{:else}<Eye class="h-4 w-4" />{/if}
+            </button>
+          </div>
+          <p class="mt-1.5 text-xs text-base-content/40">Stored securely in the secret store and never shown again.</p>
         </div>
       {:else if azureCredentialMode === 'SasUrl'}
         <div>
           <label class="label mb-2 text-sm" for="azure-sas-url">SAS URL</label>
-          <input class="input w-full" id="azure-sas-url" type="password" required
+          <div class="relative">
+            <input class="input w-full pr-10" id="azure-sas-url" type={secretVisible('azure-sas-url') ? 'text' : 'password'} required
              bind:value={azureSasUrl} placeholder="https://account.blob.core.windows.net/container?sv=..." />
+            <button type="button" class="absolute right-2 top-1/2 -translate-y-1/2 text-base-content/50 hover:text-base-content" onclick={() => toggleSecret('azure-sas-url')} aria-label={secretVisible('azure-sas-url') ? 'Hide SAS URL' : 'Show SAS URL'}>
+              {#if secretVisible('azure-sas-url')}<EyeOff class="h-4 w-4" />{:else}<Eye class="h-4 w-4" />{/if}
+            </button>
+          </div>
+          <p class="mt-1.5 text-xs text-base-content/40">Stored securely in the secret store and never shown again.</p>
         </div>
       {/if}
     {:else if targetType === 'gcs'}
@@ -455,8 +509,14 @@
       {#if gcsCredentialMode === 'CredentialsJson'}
         <div>
           <label class="label mb-2 text-sm" for="gcs-credentials-json">Service account JSON</label>
-          <textarea class="textarea w-full font-mono" id="gcs-credentials-json" rows={8} required
+          <div class="relative">
+            <textarea class={['textarea w-full pr-10 font-mono', !secretVisible('gcs-credentials-json') && 'text-transparent caret-transparent select-none']} id="gcs-credentials-json" rows={8} required
              bind:value={gcsCredentialsJsonText} placeholder={'{\n  "type": "service_account",\n  ...\n}'}></textarea>
+            <button type="button" class="absolute right-2 top-3 text-base-content/50 hover:text-base-content" onclick={() => toggleSecret('gcs-credentials-json')} aria-label={secretVisible('gcs-credentials-json') ? 'Hide service account JSON' : 'Show service account JSON'}>
+              {#if secretVisible('gcs-credentials-json')}<EyeOff class="h-4 w-4" />{:else}<Eye class="h-4 w-4" />{/if}
+            </button>
+          </div>
+          <p class="mt-1.5 text-xs text-base-content/40">Stored securely in the secret store and never shown again.</p>
         </div>
       {:else if gcsCredentialMode === 'CredentialsFilePath'}
         <div>

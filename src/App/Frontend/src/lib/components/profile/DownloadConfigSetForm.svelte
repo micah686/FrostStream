@@ -202,7 +202,7 @@
     <div>
       <label class="label mb-2 text-sm" for="config-key">Key</label>
       <input class="input w-full text-sm" id="config-key" required
-         pattern={'[a-z0-9-]{2,100}'} minlength={2} maxlength={100} disabled={isUpdate} bind:value={key} placeholder="mobile-friendly" />
+         pattern={'[a-z0-9\\-]{2,100}'} minlength={2} maxlength={100} disabled={isUpdate} bind:value={key} placeholder="mobile-friendly" />
       <p class="mt-1.5 text-xs text-base-content/40">Lowercase letters, numbers, and hyphens.</p>
     </div>
 
@@ -237,7 +237,7 @@
   <div>
     <label class="label mb-2 text-sm" for="worker-tag">Worker tag</label>
     <input class="input w-full text-sm" id="worker-tag"
-       pattern={'[a-z0-9-]{2,50}'} minlength={2} maxlength={50} bind:value={workerTag} placeholder="gpu-encode" />
+       pattern={'[a-z0-9\\-]{2,50}'} minlength={2} maxlength={50} bind:value={workerTag} placeholder="gpu-encode" />
     <p class="mt-1.5 text-xs text-base-content/40">
       Optional. Routes jobs from this config set to workers configured with this tag, overriding the storage target's own tag. Leave blank to use the storage target's default routing.
     </p>

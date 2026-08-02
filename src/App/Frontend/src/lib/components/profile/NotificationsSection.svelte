@@ -6,48 +6,28 @@
     CircleAlert,
     Pencil,
     Plus,
-    RefreshCw,
     Trash2
   } from '@lucide/svelte';
   import {
     deleteNotificationProvider,
-    getNotificationPreferences,
     listNotificationProviders,
-    updateNotificationPreferences,
-    type NotificationPreferences,
+    updateNotificationProviderEnabled,
     type NotificationProvider
   } from '$lib/api/notifications';
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
 
   const cardClass = 'card border border-base-300 bg-base-100 p-5 sm:p-6';
-  let preferences = $state<NotificationPreferences | null>(null);
-  let preferencesLoading = $state(true);
-  let preferencesError = $state<string | null>(null);
-  let savingPreferences = $state(false);
-
   let providers = $state<NotificationProvider[]>([]);
   let providersLoading = $state(true);
   let providersError = $state<string | null>(null);
   let deletingProviderKey = $state<string | null>(null);
+  let updatingProviderKey = $state<string | null>(null);
   let deleteModalOpen = $state(false);
   let providerPendingDelete = $state<NotificationProvider | null>(null);
 
   onMount(() => {
-    void loadPreferences();
     void loadProviders();
   });
-
-  async function loadPreferences() {
-    preferencesLoading = true;
-    preferencesError = null;
-    try {
-      preferences = await getNotificationPreferences();
-    } catch (err) {
-      preferencesError = err instanceof Error ? err.message : 'Could not load notification preferences.';
-    } finally {
-      preferencesLoading = false;
-    }
-  }
 
   async function loadProviders() {
     providersLoading = true;
@@ -61,20 +41,15 @@
     }
   }
 
-  async function toggleEnabled() {
-    if (!preferences) {
-      return;
-    }
-
-    const nextEnabled = !preferences.enabled;
-    savingPreferences = true;
-    preferencesError = null;
+  async function toggleProvider(provider: NotificationProvider) {
+    updatingProviderKey = provider.providerKey;
     try {
-      preferences = await updateNotificationPreferences({ ...preferences, enabled: nextEnabled });
+      const updated = await updateNotificationProviderEnabled(provider, !provider.enabled);
+      providers = providers.map((item) => item.providerKey === updated.providerKey ? updated : item);
     } catch (err) {
-      preferencesError = err instanceof Error ? err.message : 'Could not update notification preferences.';
+      providersError = err instanceof Error ? err.message : 'Could not update the notification provider.';
     } finally {
-      savingPreferences = false;
+      updatingProviderKey = null;
     }
   }
 
@@ -119,8 +94,7 @@
     return [
       provider.providerKind,
       provider.defaultTo ? `to ${provider.defaultTo}` : null,
-      eventSummary,
-      provider.enabled ? 'enabled' : 'disabled'
+      eventSummary
     ].filter(Boolean).join(' · ');
   }
 </script>
@@ -130,48 +104,18 @@
     <div>
       <h2 id="notifications-title" class="text-base font-bold text-base-content">Notifications</h2>
       <p class="mt-2 max-w-3xl text-sm leading-6 text-base-content/60">
-        Turn notifications on or off, and manage the providers used to deliver them. Passwords, tokens, and keys are
+        Manage the providers used to deliver notifications. Passwords, tokens, and keys are
         stored as write-only secrets automatically and removed when a provider is deleted.
       </p>
     </div>
-  </div>
-
-  {#if preferencesError}
-    <div
-      class="alert alert-error mt-5 text-sm"
-      role="alert"
-    >
-      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
-      <span>{preferencesError}</span>
-    </div>
-  {/if}
-
-  <div class="mt-5 flex items-center justify-between gap-4 rounded-xl border border-base-300 bg-base-100 p-4 text-left shadow-sm">
-    <div class="min-w-0 flex-1">
-      <p class="text-sm font-semibold text-base-content">Turn on notifications</p>
-      <p class="mt-0.5 text-xs text-base-content/50">
-        When off, no events are delivered through any provider below, regardless of their individual enabled state.
-      </p>
-    </div>
-    {#if preferencesLoading}
-      <span class="ml-auto flex shrink-0 items-center justify-end"><span class="loading loading-spinner loading-sm"></span></span>
-    {:else}
-      <span class="ml-auto flex shrink-0 items-center justify-end"><input type="checkbox" class="toggle toggle-primary" checked={preferences?.enabled ?? false} disabled={savingPreferences || !preferences} onchange={() => void toggleEnabled()} /></span>
-    {/if}
+    <a class="btn btn-sm btn-neutral shrink-0" href="/profile/notification-providers/new">
+      <Plus class="mr-1.5 h-3.5 w-3.5" />
+      New provider
+    </a>
   </div>
 
   <div class="mt-6 flex items-center justify-between gap-3">
     <h3 class="text-sm font-bold text-base-content">Providers</h3>
-    <div class="flex shrink-0 gap-2">
-      <button class="btn btn-sm btn-neutral" disabled={providersLoading} onclick={() => void loadProviders()}>
-        <RefreshCw class="mr-1.5 h-3.5 w-3.5" />
-        Refresh
-      </button>
-      <a class="btn btn-sm btn-neutral" href="/profile/notification-providers/new">
-        <Plus class="mr-1.5 h-3.5 w-3.5" />
-        New provider
-      </a>
-    </div>
   </div>
 
   {#if providersError}
@@ -214,12 +158,25 @@
                 <span class="badge badge-sm badge-accent text-[10px] text-accent-content">
                   {provider.providerKey}
                 </span>
+                {#if !provider.enabled}
+                  <span class="badge badge-sm badge-warning text-[10px] text-warning-content">Disabled</span>
+                {/if}
               </div>
               <p class="mt-0.5 truncate text-xs text-base-content/60">{providerSummary(provider)}</p>
             </div>
           </div>
 
           <div class="flex shrink-0 gap-2 sm:ml-auto">
+            <label class="flex items-center gap-2 px-2 text-xs text-base-content/70" title={provider.enabled ? 'Disable provider' : 'Enable provider'}>
+              <span class="sr-only">{provider.enabled ? 'Disable' : 'Enable'} {providerLabel(provider)}</span>
+              <input
+                type="checkbox"
+                class="toggle toggle-primary toggle-sm"
+                checked={provider.enabled}
+                disabled={updatingProviderKey === provider.providerKey}
+                onchange={() => void toggleProvider(provider)}
+              />
+            </label>
             <a
               href={`/profile/notification-providers/${encodeURIComponent(provider.providerKey)}`}
               class="btn btn-sm btn-neutral text-xs"

@@ -159,6 +159,14 @@ export async function upsertNotificationProvider(
   return sendJson<NotificationProvider>(`${BASE}/providers/${encodeURIComponent(providerKey)}`, 'PUT', request, fetchImpl);
 }
 
+export async function updateNotificationProviderEnabled(
+  provider: NotificationProvider,
+  enabled: boolean,
+  fetchImpl: typeof fetch = fetch
+): Promise<NotificationProvider> {
+  return upsertNotificationProvider(provider.providerKey, { ...provider, enabled }, fetchImpl);
+}
+
 export async function deleteNotificationProvider(
   providerKey: string,
   fetchImpl: typeof fetch = fetch

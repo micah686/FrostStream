@@ -65,7 +65,7 @@
     <div class="grid gap-5 sm:grid-cols-2">
       <div>
         <label class="label mb-2 text-sm" for="cookie-profile-key">Key</label>
-        <input class="input w-full" id="cookie-profile-key" required pattern={'[a-z0-9-]{2,100}'} minlength={2} maxlength={100} bind:value={profileKey} placeholder="youtube-main" />
+        <input class="input w-full" id="cookie-profile-key" required pattern={'[a-z0-9\\-]{2,100}'} minlength={2} maxlength={100} bind:value={profileKey} placeholder="youtube-main" />
         <p class="mt-1.5 text-xs text-base-content/40">Lowercase letters, numbers, and hyphens.</p>
       </div>
       <div>

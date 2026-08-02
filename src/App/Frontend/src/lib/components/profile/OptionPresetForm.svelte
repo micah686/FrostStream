@@ -80,7 +80,7 @@
     <div>
       <label class="label mb-2 text-sm" for="preset-key">Key</label>
       <input class="input w-full text-sm" id="preset-key" required
-         pattern={'[a-z0-9-]{2,100}'} minlength={2} maxlength={100} disabled={isUpdate} bind:value={key} placeholder="archive-1080p" />
+         pattern={'[a-z0-9\\-]{2,100}'} minlength={2} maxlength={100} disabled={isUpdate} bind:value={key} placeholder="archive-1080p" />
       <p class="mt-1.5 text-xs text-base-content/40">Lowercase letters, numbers, and hyphens.</p>
     </div>
 
