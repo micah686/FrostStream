@@ -448,9 +448,9 @@
   }
 
   function syncClass(policy: AccessPolicy): string {
-    if (policy.syncStatus === 'Synced') return 'border-success/30 bg-success/10 text-success';
-    if (policy.syncStatus === 'Failed') return 'border-error/30 bg-error/10 text-error';
-    return 'border-warning/30 bg-warning/10 text-warning';
+    if (policy.syncStatus === 'Synced') return 'badge-accent';
+    if (policy.syncStatus === 'Failed') return 'badge-error';
+    return 'badge-warning';
   }
 
   function messageFor(value: unknown, fallback: string): string {
@@ -541,19 +541,17 @@
                 editor = null;
               }}
             >
-              <div class="flex items-start justify-between gap-2">
-                <span class="truncate text-sm font-semibold text-base-content">{policy.name}</span>
-                <div class="flex shrink-0 flex-col items-end gap-1">
-                  <span class={['rounded-full border px-2 py-0.5 text-[10px] font-bold', syncClass(policy)]}>
-                    {policy.syncStatus}
-                  </span>
-                  {#if !policy.enabled}
-                    <span class="rounded-full border border-base-content/20 bg-base-300 px-2 py-0.5 text-[10px] font-bold text-base-content/60">Disabled</span>
-                  {/if}
-                </div>
-              </div>
-              <div class="mt-1 text-xs text-base-content/50">
-                {policy.assignments.length} principals · {policy.bundleIds.length} bundles · {policy.enabled ? 'Enabled' : 'Disabled'}
+              <div class="min-w-0 text-sm font-semibold text-base-content">{policy.name}</div>
+              <div class="mt-1 flex flex-wrap items-center gap-1.5">
+                <span class="text-xs text-base-content/50">
+                  {policy.assignments.length} principals · {policy.bundleIds.length} bundles
+                </span>
+                <span class={['badge badge-sm', syncClass(policy)]}>
+                  {policy.syncStatus}
+                </span>
+                {#if !policy.enabled}
+                  <span class="badge badge-sm badge-warning">Disabled</span>
+                {/if}
               </div>
             </button>
           {/each}
@@ -566,11 +564,11 @@
                 <div>
                   <div class="flex flex-wrap items-center gap-2">
                     <h3 class="text-lg font-bold text-base-content">{selectedPolicy.name}</h3>
-                    <span class={['rounded-full border px-2 py-0.5 text-[10px] font-bold', syncClass(selectedPolicy)]}>
+                    <span class={['badge badge-sm', syncClass(selectedPolicy)]}>
                       {selectedPolicy.syncStatus}
                     </span>
                     {#if !selectedPolicy.enabled}
-                      <span class="rounded-full border border-base-content/20 bg-base-300 px-2 py-0.5 text-[10px] font-bold text-base-content/60">Disabled</span>
+                      <span class="badge badge-sm badge-warning">Disabled</span>
                     {/if}
                   </div>
                   <p class="mt-2 text-sm text-base-content/60">{selectedPolicy.description || 'No description.'}</p>
