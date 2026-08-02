@@ -658,55 +658,116 @@
               </div>
             </div>
 
-            <div class="grid gap-4 lg:grid-cols-2">
-              <div class="rounded-xl border border-base-300 bg-base-200/20 p-4">
-                <h4 class="text-xs font-bold uppercase tracking-wide text-base-content/50">Endpoint bundles</h4>
-                <div class="mt-3 flex flex-wrap gap-2">
-                  {#each selectedPolicy.bundleIds as bundleId}
-                    <span class="rounded-lg border border-primary/25 bg-primary/10 px-2.5 py-1 font-mono text-xs text-primary">{bundleId}</span>
-                  {:else}
-                    <span class="text-sm text-base-content/40">No endpoint bundles.</span>
-                  {/each}
+            <div class="mt-5 space-y-2">
+              <details class="collapse rounded-lg border border-base-300 bg-base-200/20">
+                <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-info px-3 py-2 text-xs font-semibold text-info-content [&::-webkit-details-marker]:hidden">
+                  <span>Endpoint bundles</span>
+                </summary>
+                <div class="collapse-content px-0 pb-0">
+                  <div class="divide-y divide-base-300/70 border-t border-base-300/80">
+                    {#each selectedPolicy.bundleIds as bundleId}
+                      <div class="px-3 py-2 font-mono text-xs text-base-content/80">{bundleId}</div>
+                    {:else}
+                      <div class="px-3 py-3 text-sm text-base-content/40">No endpoint bundles.</div>
+                    {/each}
+                  </div>
                 </div>
-              </div>
-              <div class="rounded-xl border border-base-300 bg-base-200/20 p-4">
-                <h4 class="text-xs font-bold uppercase tracking-wide text-base-content/50">Policy assignments</h4>
-                <div class="mt-3 space-y-2">
-                  {#each selectedPolicy.assignments as assignment}
-                    <div class="flex min-w-0 items-center gap-2 text-sm">
-                      <span class="rounded bg-base-300 px-2 py-0.5 text-[10px] font-bold uppercase text-base-content/60">{assignment.type}</span>
-                      <span class="truncate text-base-content/90">{assignment.displayName || assignment.id}</span>
-                      {#if assignment.displayName}<span class="truncate font-mono text-[10px] text-base-content/40">{assignment.id}</span>{/if}
+              </details>
+
+              <details class="collapse rounded-lg border border-base-300 bg-base-200/20">
+                <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-info px-3 py-2 text-xs font-semibold text-info-content [&::-webkit-details-marker]:hidden">
+                  <span>Policy assignments</span>
+                </summary>
+                <div class="collapse-content px-0 pb-0">
+                  {#if selectedPolicy.assignments.length === 0}
+                    <div class="border-t border-base-300/80 px-3 py-3 text-sm text-base-content/40">No assignments.</div>
+                  {:else}
+                    <div class="overflow-x-auto border-t border-base-300/80">
+                      <table class="w-full min-w-[30rem] text-left text-xs">
+                        <thead class="bg-base-200/80 text-base-content/50">
+                          <tr>
+                            <th class="px-3 py-2 font-semibold">User/Group</th>
+                            <th class="px-3 py-2 font-semibold">Name</th>
+                            <th class="px-3 py-2 font-semibold">ID</th>
+                          </tr>
+                        </thead>
+                        <tbody class="divide-y divide-base-300/80">
+                          {#each selectedPolicy.assignments as assignment}
+                            <tr>
+                              <td class="px-3 py-2 font-semibold text-base-content/60">{assignment.type === 'user' ? 'User' : 'Group'}</td>
+                              <td class="px-3 py-2 text-base-content/90">{assignment.displayName || '—'}</td>
+                              <td class="break-all px-3 py-2 font-mono text-base-content/60">{assignment.id}</td>
+                            </tr>
+                          {/each}
+                        </tbody>
+                      </table>
                     </div>
-                  {:else}
-                    <span class="text-sm text-base-content/40">No assignments.</span>
-                  {/each}
-                </div>
-              </div>
-              <div class="rounded-xl border border-base-300 bg-base-200/20 p-4">
-                <h4 class="text-xs font-bold uppercase tracking-wide text-base-content/50">Denied media GUIDs</h4>
-                <div class="mt-3 space-y-1">
-                  {#each selectedPolicy.mediaGuids as guid}
-                    <div class="break-all font-mono text-xs text-base-content/80">{guid}</div>
-                  {:else}
-                    <span class="text-sm text-base-content/40">No media GUID denies.</span>
-                  {/each}
-                </div>
-              </div>
-              <div class="rounded-xl border border-base-300 bg-base-200/20 p-4">
-                <h4 class="text-xs font-bold uppercase tracking-wide text-base-content/50">Denied providers and ages</h4>
-                <div class="mt-3 flex flex-wrap gap-2">
-                  {#each selectedPolicy.providers as provider}
-                    <span class="rounded-lg border border-secondary/25 bg-secondary/10 px-2.5 py-1 text-xs text-secondary">{provider}</span>
-                  {/each}
-                  {#each selectedPolicy.ageThresholds as age}
-                    <span class="rounded-lg border border-warning/25 bg-warning/10 px-2.5 py-1 text-xs text-warning">Deny age {age}+</span>
-                  {/each}
-                  {#if selectedPolicy.providers.length === 0 && selectedPolicy.ageThresholds.length === 0}
-                    <span class="text-sm text-base-content/40">No provider or age denies.</span>
                   {/if}
                 </div>
-              </div>
+              </details>
+
+              <details class="collapse rounded-lg border border-base-300 bg-base-200/20">
+                <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-info px-3 py-2 text-xs font-semibold text-info-content [&::-webkit-details-marker]:hidden">
+                  <span>Denied media GUIDs</span>
+                </summary>
+                <div class="collapse-content px-0 pb-0">
+                  {#if selectedPolicy.mediaGuids.length === 0}
+                    <div class="border-t border-base-300/80 px-3 py-3 text-sm text-base-content/40">No media GUID denies.</div>
+                  {:else}
+                    <div class="overflow-x-auto border-t border-base-300/80">
+                      <table class="w-full table-fixed text-left text-xs">
+                        <thead class="bg-base-200/80 text-base-content/50">
+                          <tr>
+                            <th class="w-1/2 px-3 py-2 font-semibold">Title</th>
+                            <th class="w-1/2 px-3 py-2 font-semibold">GUID</th>
+                          </tr>
+                        </thead>
+                        <tbody class="divide-y divide-base-300/80">
+                          {#each selectedPolicy.mediaGuids as guid}
+                            {@const summary = mediaSummaries[guid]}
+                            <tr>
+                              <td class="max-w-0 px-3 py-2">
+                                <div class="truncate text-base-content/90" title={summary?.title || 'Media item'}>{summary?.title || 'Media item'}</div>
+                              </td>
+                              <td class="break-all px-3 py-2 font-mono text-base-content/60">{guid}</td>
+                            </tr>
+                          {/each}
+                        </tbody>
+                      </table>
+                    </div>
+                  {/if}
+                </div>
+              </details>
+
+              <details class="collapse rounded-lg border border-base-300 bg-base-200/20">
+                <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-info px-3 py-2 text-xs font-semibold text-info-content [&::-webkit-details-marker]:hidden">
+                  <span>Denied providers</span>
+                </summary>
+                <div class="collapse-content px-0 pb-0">
+                  <div class="divide-y divide-base-300/70 border-t border-base-300/80">
+                    {#each selectedPolicy.providers as provider}
+                      <div class="px-3 py-2 text-xs text-base-content/80">{provider}</div>
+                    {:else}
+                      <div class="px-3 py-3 text-sm text-base-content/40">No provider denies.</div>
+                    {/each}
+                  </div>
+                </div>
+              </details>
+
+              <details class="collapse rounded-lg border border-base-300 bg-base-200/20">
+                <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-info px-3 py-2 text-xs font-semibold text-info-content [&::-webkit-details-marker]:hidden">
+                  <span>Denied ages</span>
+                </summary>
+                <div class="collapse-content px-0 pb-0">
+                  <div class="divide-y divide-base-300/70 border-t border-base-300/80">
+                    {#each selectedPolicy.ageThresholds as age}
+                      <div class="px-3 py-2 text-xs text-base-content/80">Deny age {age}+</div>
+                    {:else}
+                      <div class="px-3 py-3 text-sm text-base-content/40">No age denies.</div>
+                    {/each}
+                  </div>
+                </div>
+              </details>
             </div>
           </div>
         {/if}
