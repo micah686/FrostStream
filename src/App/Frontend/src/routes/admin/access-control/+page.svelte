@@ -1,6 +1,8 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
+  import { ArrowLeft, Trash2, X } from '@lucide/svelte';
   import BundleManagementSection from '$lib/components/admin/BundleManagementSection.svelte';
   import { ApiRequestError } from '$lib/api/http';
   import {
@@ -48,6 +50,9 @@
   const secondaryButton = 'btn btn-sm btn-neutral text-xs';
   const primaryButton = 'btn btn-sm btn-primary text-xs';
 
+  const policyEditorView = $derived(page.url.searchParams.get('view'));
+  const isPolicyEditorView = $derived(policyEditorView === 'new-policy' || policyEditorView === 'edit-policy');
+  const isEditingPolicy = $derived(policyEditorView === 'edit-policy');
   let activeTab = $state<Tab>(page.url.searchParams.get('tab') === 'bundles' ? 'bundles' : 'policies');
   let policies = $state<AccessPolicy[]>([]);
   let bundles = $state<BundleView[]>([]);
@@ -87,6 +92,22 @@
   const selectedPolicy = $derived(policies.find((policy) => policy.policyId === selectedPolicyId) ?? policies[0] ?? null);
   onMount(() => {
     void loadAll();
+  });
+
+  $effect(() => {
+    if (!isPolicyEditorView) {
+      if (editor) editor = null;
+      return;
+    }
+    if (isPolicyEditorView && !editor && !saving) {
+      if (isEditingPolicy) {
+        const policyId = page.url.searchParams.get('policyId');
+        const policy = policies.find((item) => item.policyId === policyId);
+        if (policy) beginEdit(policy);
+      } else {
+        beginCreate();
+      }
+    }
   });
 
   async function loadAll(preferredPolicyId = selectedPolicyId) {
@@ -197,6 +218,7 @@
         ? `Saved “${saved.name}”.`
         : `Saved “${saved.name}”; OpenFGA synchronization will retry automatically.`;
       await loadAll(saved.policyId);
+      if (isPolicyEditorView) await goto('/admin/access-control');
     } catch (err) {
       error = messageFor(err, 'Could not save the policy.');
     } finally {
@@ -218,7 +240,10 @@
   }
 
   async function duplicatePolicy(policy: AccessPolicy) {
-    const name = prompt('Name for the disabled copy:', `${policy.name} copy`)?.trim();
+    const name = prompt('Name for the disabled copy:', `${policy.name}-copy`)
+      ?.trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, '');
     if (!name) return;
     error = null;
     try {
@@ -437,9 +462,10 @@
 </script>
 
 <svelte:head>
-  <title>Access control · FrostStream</title>
+  <title>{isEditingPolicy ? 'Edit policy · FrostStream' : isPolicyEditorView ? 'Create policy · FrostStream' : 'Access control · FrostStream'}</title>
 </svelte:head>
 
+{#if !isPolicyEditorView}
 <section class={cardClass} aria-labelledby="access-control-title">
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
@@ -465,7 +491,7 @@
             ? 'border-primary text-primary'
             : 'border-transparent text-base-content/50 hover:text-base-content/90'
         ]}
-        onclick={() => (activeTab = id)}
+        onclick={() => { activeTab = id; notice = null; }}
       >
         {label}
       </button>
@@ -476,11 +502,13 @@
     <div class="alert alert-error mt-4 text-sm" role="alert">{error}</div>
   {/if}
   {#if notice}
-    <div class="mt-4 rounded-xl border border-success/30 bg-success/10 p-3 text-sm text-success" role="status">{notice}</div>
+    <div class="alert alert-success mt-4 text-sm" role="status">{notice}</div>
   {/if}
 </section>
+{/if}
 
 {#if activeTab === 'policies'}
+  {#if !isPolicyEditorView}
   <section class={cardClass}>
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
@@ -489,7 +517,7 @@
           Media denies apply from the database immediately; OpenFGA synchronization status governs endpoint-bundle grants.
         </p>
       </div>
-      <button class={primaryButton} type="button" onclick={beginCreate}>New policy</button>
+      <a class={primaryButton} href="/admin/access-control/policies/new">New policy</a>
     </div>
 
     {#if loading}
@@ -551,7 +579,7 @@
                   {/if}
                 </div>
                 <div class="flex flex-wrap gap-2">
-                  <button class={secondaryButton} type="button" onclick={() => beginEdit(selectedPolicy)}>Edit</button>
+                  <a class={secondaryButton} href={`/admin/access-control/policies/${encodeURIComponent(selectedPolicy.policyId)}/edit`}>Edit</a>
                   <button class={secondaryButton} type="button" onclick={() => void duplicatePolicy(selectedPolicy)}>Duplicate</button>
                   <button class={secondaryButton} type="button" onclick={() => void togglePolicy(selectedPolicy)}>
                     {selectedPolicy.enabled ? 'Disable' : 'Enable'}
@@ -620,26 +648,40 @@
       </div>
     {/if}
   </section>
+  {/if}
 
   {#if editor}
     <section class={cardClass} aria-labelledby="policy-editor-title">
       <div class="flex items-center justify-between gap-3">
         <div>
-          <h3 id="policy-editor-title" class="text-sm font-bold text-base-content">{editor.policyId ? 'Edit policy' : 'Create policy'}</h3>
+          <h3 id="policy-editor-title" class="text-sm font-bold text-base-content">{isEditingPolicy ? 'Edit policy' : 'Create policy'}</h3>
           <p class="mt-1 text-xs text-base-content/50">
             Bundles grant endpoint access. Media GUIDs, providers, and age tiers deny playback; everything else stays watchable.
           </p>
         </div>
-        <button class={secondaryButton} type="button" onclick={() => (editor = null)}>Cancel</button>
       </div>
 
-      <div class="mt-5 grid gap-5 xl:grid-cols-2">
-        <div class="space-y-4">
-          <label class="block text-xs font-semibold text-base-content/60">
+      <div class="mt-5 grid min-w-0 gap-5 xl:grid-cols-2">
+        <div class="min-w-0 space-y-4">
+          <label class="block text-xs text-base-content/60">
             Name
-            <input class="input w-full mt-1.5" bind:value={editor.name} placeholder="Family viewing" />
+            <input
+              class="input mt-1.5 w-full"
+              bind:value={editor.name}
+              placeholder="family-viewing"
+              maxlength="100"
+              autocomplete="off"
+              autocapitalize="none"
+              spellcheck="false"
+              disabled={isEditingPolicy}
+              oninput={(event) => {
+                if (!editor) return;
+                editor.name = (event.currentTarget as HTMLInputElement).value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+              }}
+            />
+            <span class="mt-1 block text-xs text-base-content/40">Use lowercase letters, numbers, and dashes only.</span>
           </label>
-          <label class="block text-xs font-semibold text-base-content/60">
+          <label class="block text-xs text-base-content/60">
             Description
             <textarea class="textarea w-full mt-1.5 min-h-20" bind:value={editor.description} placeholder="What this policy grants and restricts"></textarea>
           </label>
@@ -648,27 +690,29 @@
             Enabled
           </label>
 
-          <fieldset>
+          <fieldset class="min-w-0 [min-inline-size:0]">
             <legend class="text-xs font-semibold text-base-content/60">Endpoint bundles</legend>
-            <div class="mt-2 max-h-64 space-y-1 overflow-y-auto rounded-lg border border-base-300 bg-base-200/35 p-2">
+            <ul class="mt-2 max-h-64 divide-y divide-base-300 overflow-y-auto rounded-lg border border-base-300 bg-base-100">
               {#each bundles as bundle (bundle.id)}
-                <label class="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-base-content/80 hover:bg-base-300/50">
+                <li>
+                <label class="flex items-center gap-2 px-3 py-2 text-sm text-base-content/80 hover:bg-base-200">
                   <input type="checkbox" value={bundle.id} bind:group={editor.bundleIds} class="checkbox checkbox-sm checkbox-primary" />
                   <span class="min-w-0 truncate font-mono text-xs">{bundle.id}</span>
                   <span class="ml-auto shrink-0 text-[10px] uppercase text-base-content/40">{bundle.systemOwned ? 'system' : 'user'}</span>
                 </label>
+                </li>
               {/each}
-            </div>
+            </ul>
           </fieldset>
         </div>
 
-        <div class="space-y-4">
-          <fieldset>
+        <div class="min-w-0 space-y-4">
+          <fieldset class="min-w-0 [min-inline-size:0]">
             <legend class="text-xs font-semibold text-base-content/60">Denied media</legend>
             <p class="mt-1 text-xs text-base-content/40">Resolve a media GUID before adding it so the policy targets a known item.</p>
             <div class="mt-2 flex gap-2">
               <input
-                class="input w-full font-mono text-xs"
+                class="input w-full max-w-xs font-mono text-xs"
                 bind:value={mediaGuidInput}
                 placeholder="00000000-0000-0000-0000-000000000000"
                 onkeydown={(event) => {
@@ -685,25 +729,28 @@
             {#if mediaGuidError}
               <p class="mt-2 text-xs text-error">{mediaGuidError}</p>
             {/if}
-            <div class="mt-3 space-y-2">
+            <div class="mt-3 w-full min-w-0 max-w-full space-y-2 overflow-y-auto rounded-lg border border-base-300 bg-base-100 p-2">
               {#each editor.mediaGuids as mediaGuid (mediaGuid)}
                 {@const summary = mediaSummaries[mediaGuid]}
-                <div class="flex items-start gap-3 rounded-lg border border-base-300 bg-base-200/35 px-3 py-2">
-                  <div class="min-w-0">
-                    <div class="truncate text-xs font-semibold text-base-content/90">{summary?.title || 'Media item'}</div>
-                    <div class="mt-1 break-all font-mono text-[10px] text-base-content/50">{mediaGuid}</div>
+                <div class="flex w-full min-w-0 max-w-full items-start gap-3 overflow-hidden rounded-lg border border-base-300 bg-base-200/35 px-3 py-2">
+                  <div class="min-w-0 flex-1 overflow-hidden">
+                    <div class="block w-full min-w-0 truncate text-xs font-semibold text-base-content/90">{summary?.title || 'Media item'}</div>
+                    <div class="mt-1 block w-full min-w-0 truncate font-mono text-[10px] text-base-content/50">{mediaGuid}</div>
                     {#if summary}
-                      <div class="mt-1 text-[10px] text-base-content/40">
+                      <div class="mt-1 truncate text-[10px] text-base-content/40">
                         {summary.providers.join(', ') || 'No provider'} · {summary.ageLimit == null ? 'Unrated' : `${summary.ageLimit}+`}
                       </div>
                     {/if}
                   </div>
                   <button
                     type="button"
-                    class="ml-auto shrink-0 text-xs font-semibold text-error hover:text-error"
+                    class="btn btn-sm btn-neutral ml-auto shrink-0 text-xs"
                     aria-label={`Remove media ${mediaGuid}`}
                     onclick={() => removeMediaGuid(mediaGuid)}
-                  >Remove</button>
+                  >
+                    <Trash2 class="mr-1.5 h-4 w-4" />
+                    Delete
+                  </button>
                 </div>
               {:else}
                 <div class="rounded-lg border border-dashed border-base-300 px-3 py-3 text-xs text-base-content/40">No media GUID denies.</div>
@@ -715,6 +762,7 @@
             <legend class="text-xs font-semibold text-base-content/60">Denied providers</legend>
             <div class="relative mt-2">
               <input
+                class="input w-full"
                 bind:value={providerInput}
                 placeholder="Search providers"
                 autocomplete="off"
@@ -742,17 +790,20 @@
               {#each editor.providers as provider (provider)}
                 <button
                   type="button"
-                  class="rounded-lg border border-secondary/25 bg-secondary/10 px-2.5 py-1 text-xs text-secondary hover:border-error/40 hover:text-error"
+                  class="badge badge-accent gap-1 text-xs"
                   title="Remove provider"
                   onclick={() => removeProvider(provider)}
-                >{provider} ×</button>
+                >
+                  {provider}
+                  <X class="h-3 w-3" />
+                </button>
               {:else}
                 <span class="text-xs text-base-content/40">No provider denies.</span>
               {/each}
             </div>
           </fieldset>
 
-          <label class="block text-xs font-semibold text-base-content/60">
+          <label class="block text-xs text-base-content/60">
             Deny at age or above
             <input class="input w-full mt-1.5" bind:value={editor.ageThresholds} placeholder="13, 16, 18" />
           </label>
@@ -788,14 +839,15 @@
               />
             </div>
             {#if directoryLoading || directoryResults.length > 0}
-              <div class="mt-2 max-h-44 w-full min-w-0 overflow-x-hidden overflow-y-auto rounded-lg border border-base-content/20 bg-base-200">
+              <ul class="mt-2 max-h-44 w-full min-w-0 divide-y divide-base-300 overflow-x-hidden overflow-y-auto rounded-lg border border-base-300 bg-base-100">
                 {#if directoryLoading}
-                  <div class="px-3 py-2 text-xs text-base-content/50">Searching Authentik…</div>
+                  <li class="px-3 py-2 text-xs text-base-content/50">Searching Authentik…</li>
                 {:else}
                   {#each directoryResults as entry (entry.id)}
+                  <li>
                   <button
                     type="button"
-                    class="flex w-full min-w-0 items-center gap-2 border-b border-base-300 px-3 py-2 text-left last:border-0 hover:bg-primary/10"
+                    class="flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left hover:bg-base-200"
                     onclick={() => addAssignment(entry.id, entry.name)}
                   >
                     <div class="min-w-0 flex-1">
@@ -804,20 +856,22 @@
                       <span class="block truncate font-mono text-[10px] text-base-content/40">{entry.id}</span>
                     </div>
                   </button>
+                  </li>
                   {/each}
                 {/if}
-              </div>
+              </ul>
             {/if}
             <div class="mt-3 flex flex-wrap gap-2">
               {#each editor.assignments as assignment (`${assignment.type}:${assignment.id}`)}
                 <button
                   type="button"
-                  class="rounded-lg border border-base-content/20 bg-base-200 px-2.5 py-1 text-left text-xs text-base-content/80 hover:border-error hover:text-error"
+                  class="badge badge-accent h-auto gap-1 py-1 text-left text-xs"
                   title="Remove assignment"
                   onclick={() => removeAssignment(assignment)}
                 >
-                  <span class="mr-1 text-[10px] font-bold uppercase text-base-content/50">{assignment.type}</span>
-                  {assignment.displayName || assignment.id} ×
+                  <span class="text-[10px] font-bold uppercase">{assignment.type}</span>
+                  <span class="max-w-48 truncate">{assignment.displayName || assignment.id}</span>
+                  <X class="h-3 w-3 shrink-0" />
                 </button>
               {/each}
             </div>
@@ -825,9 +879,9 @@
         </div>
       </div>
 
-      <div class="mt-5 flex justify-end gap-2 border-t border-base-300 pt-4">
-        <button class={secondaryButton} type="button" onclick={() => (editor = null)}>Cancel</button>
-        <button class={secondaryButton} type="button" disabled={saving || !editor.name.trim()} onclick={() => void savePolicy()}>
+      <div class="mt-5 flex items-center justify-between gap-2 border-t border-base-300 pt-4">
+        <a class={secondaryButton} href="/admin/access-control"><ArrowLeft class="mr-1.5 h-4 w-4" />Back</a>
+        <button class={primaryButton} type="button" disabled={saving || !editor.name.trim()} onclick={() => void savePolicy()}>
           {saving ? 'Saving…' : 'Save policy'}
         </button>
       </div>
