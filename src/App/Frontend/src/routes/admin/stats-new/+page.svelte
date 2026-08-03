@@ -55,6 +55,10 @@
   let mostDownloaded = $state<ChannelStatisticsSummary[]>([]);
   let longestDuration = $state<ChannelStatisticsSummary[]>([]);
   let largestOnDisk = $state<ChannelStatisticsSummary[]>([]);
+  let allChannels = $state<ChannelStatisticsSummary[]>([]);
+  let coverageDetails = $state<ChannelStatisticsDetail[]>([]);
+  let coverageLoading = $state(false);
+  let coverageError = $state<string | null>(null);
   let selectedChannel = $state<ChannelStatisticsDetail | null>(null);
   let channelResults = $state<ChannelSuggestion[]>([]);
   let channelQuery = $state('');
@@ -123,6 +127,17 @@
     (item) => item.totalBytes,
     formatBytes
   ));
+  const platformTypesChart = $derived.by(() => polarValueChart(
+    platformTotals().map((item) => displayLabel(item.label)),
+    platformTotals().map((item) => item.value),
+    (value) => `${value.toLocaleString()} media`
+  ));
+  const coverageChart = $derived.by(() => polarValueChart(
+    ['Available', 'Unavailable', 'Ignored', 'Removed'],
+    coverageTotals(),
+    (value) => `${value.toLocaleString()} media`,
+    [chartTheme.success, chartTheme.warning, chartTheme.neutral, chartTheme.error]
+  ));
 
   const channelAvailabilityChart = $derived.by((): ChartConfiguration => {
     const detail = selectedChannel;
@@ -174,12 +189,13 @@
       const now = new Date();
       const retainedFrom = new Date(now);
       retainedFrom.setDate(retainedFrom.getDate() - 730);
-      const [overviewResult, activityResult, downloadedResult, durationResult, bytesResult] = await Promise.allSettled([
+      const [overviewResult, activityResult, downloadedResult, durationResult, bytesResult, allChannelsResult] = await Promise.allSettled([
         getGlobalStatistics(),
         getDownloadStatistics({ from: retainedFrom, to: now, bucket: 'day' }),
         listChannelStatistics({ page: 1, pageSize: 10, sortBy: 'downloaded', sortOrder: 'desc' }),
         listChannelStatistics({ page: 1, pageSize: 10, sortBy: 'duration', sortOrder: 'desc' }),
-        listChannelStatistics({ page: 1, pageSize: 10, sortBy: 'bytes', sortOrder: 'desc' })
+        listChannelStatistics({ page: 1, pageSize: 10, sortBy: 'bytes', sortOrder: 'desc' }),
+        loadAllChannelSummaries()
       ]);
       if (overviewResult.status === 'rejected') throw overviewResult.reason;
       overview = overviewResult.value;
@@ -187,11 +203,62 @@
       if (downloadedResult.status === 'fulfilled') mostDownloaded = downloadedResult.value.items;
       if (durationResult.status === 'fulfilled') longestDuration = durationResult.value.items;
       if (bytesResult.status === 'fulfilled') largestOnDisk = bytesResult.value.items;
+      if (allChannelsResult.status === 'fulfilled') {
+        allChannels = allChannelsResult.value;
+        await loadCoverageDetails(allChannels);
+      }
       await loadCustomActivity();
     } catch (err) {
       error = err instanceof Error ? err.message : 'Could not load StatsNew.';
     } finally {
       loading = false;
+    }
+  }
+
+  async function loadAllChannelSummaries(): Promise<ChannelStatisticsSummary[]> {
+    const items: ChannelStatisticsSummary[] = [];
+    let page = 1;
+    let hasMore = true;
+    while (hasMore) {
+      const response = await listChannelStatistics({
+        page,
+        pageSize: 100,
+        sortBy: 'available',
+        sortOrder: 'desc'
+      });
+      items.push(...response.items);
+      hasMore = response.hasMore;
+      page += 1;
+    }
+    return items;
+  }
+
+  async function loadCoverageDetails(channels: ChannelStatisticsSummary[]) {
+    coverageLoading = true;
+    coverageError = null;
+    try {
+      const details: ChannelStatisticsDetail[] = [];
+      for (let index = 0; index < channels.length; index += 8) {
+        const batch = channels.slice(index, index + 8);
+        const results = await Promise.allSettled(batch.map(async (channel) => {
+          if (channel.creatorSourceId !== null) return getChannelStatistics(channel.creatorSourceId);
+          if (channel.accountId !== null) return getChannelStatisticsByAccount(channel.accountId);
+          return null;
+        }));
+        details.push(...results
+          .filter((result): result is PromiseFulfilledResult<ChannelStatisticsDetail | null> => result.status === 'fulfilled')
+          .map((result) => result.value)
+          .filter((detail): detail is ChannelStatisticsDetail => detail !== null));
+      }
+      if (details.length === 0 && channels.length > 0) {
+        throw new Error('Could not load coverage statistics for any channel.');
+      }
+      coverageDetails = details;
+    } catch (err) {
+      coverageDetails = [];
+      coverageError = err instanceof Error ? err.message : 'Could not load coverage statistics.';
+    } finally {
+      coverageLoading = false;
     }
   }
 
@@ -368,14 +435,23 @@
     value: (item: ChannelStatisticsSummary) => number,
     format: (value: number) => string
   ): ChartConfiguration {
+    return polarValueChart(items.map(channelName), items.map(value), format);
+  }
+
+  function polarValueChart(
+    labels: string[],
+    values: number[],
+    format: (value: number) => string,
+    colors = categoricalPalette(chartTheme, labels.length).map((color) => withAlpha(color, 68))
+  ): ChartConfiguration {
     const plugins = legendOptions();
     return {
       type: 'polarArea',
       data: {
-        labels: items.map(channelName),
+        labels,
         datasets: [{
-          data: items.map(value),
-          backgroundColor: categoricalPalette(chartTheme, items.length).map((color) => withAlpha(color, 68)),
+          data: values,
+          backgroundColor: colors,
           borderColor: chartTheme.base100,
           borderWidth: 2
         }]
@@ -401,6 +477,31 @@
         }
       }
     };
+  }
+
+  function platformTotals(): { label: string; value: number }[] {
+    const totals = new Map<string, number>();
+    for (const channel of allChannels) {
+      totals.set(channel.platform, (totals.get(channel.platform) ?? 0) + channel.availableCount);
+    }
+    return [...totals.entries()]
+      .map(([label, value]) => ({ label, value }))
+      .sort((left, right) => right.value - left.value)
+      .slice(0, 10);
+  }
+
+  function coverageTotals(): number[] {
+    let available = 0;
+    let unavailable = 0;
+    let ignored = 0;
+    let removed = 0;
+    for (const detail of coverageDetails) {
+      available += detail.summary.availableCount;
+      unavailable += detail.unavailableCount;
+      ignored += detail.ignoredCount;
+      removed += detail.removedCount;
+    }
+    return [available, unavailable, ignored, removed];
   }
 
   function pieChart(labels: string[], data: number[], colors: string[]): ChartConfiguration {
@@ -663,6 +764,28 @@
       <section class="card border border-base-300 bg-base-100 p-5">
         <h2 class="text-sm font-bold text-base-content">Top 10 · Largest on disk</h2>
         <div class="mt-4"><StatisticsChart config={largestOnDiskChart} ariaLabel="Polar area chart of channels using the most disk space" height="19rem" /></div>
+      </section>
+      <section class="card border border-base-300 bg-base-100 p-5">
+        <h2 class="text-sm font-bold text-base-content">Top 10 · Platform types</h2>
+        <p class="mt-1 text-xs text-base-content/50">Platforms grouped by available media</p>
+        {#if platformTotals().length > 0}
+          <div class="mt-4"><StatisticsChart config={platformTypesChart} ariaLabel="Polar area chart of the top platform types by available media" height="19rem" /></div>
+        {:else}
+          <p class="mt-8 text-center text-sm text-base-content/50">No platform data.</p>
+        {/if}
+      </section>
+      <section class="card border border-base-300 bg-base-100 p-5">
+        <h2 class="text-sm font-bold text-base-content">Coverage</h2>
+        <p class="mt-1 text-xs text-base-content/50">Available and excluded media across the library</p>
+        {#if coverageError}
+          <div class="alert alert-error mt-4 text-sm" role="alert">{coverageError}</div>
+        {:else if coverageLoading}
+          <div class="mt-6 flex min-h-64 items-center justify-center"><span class="loading loading-spinner loading-sm"></span></div>
+        {:else if coverageDetails.length > 0}
+          <div class="mt-4"><StatisticsChart config={coverageChart} ariaLabel="Polar area chart of available, unavailable, ignored, and removed media" height="19rem" /></div>
+        {:else}
+          <p class="mt-8 text-center text-sm text-base-content/50">No coverage data.</p>
+        {/if}
       </section>
     </div>
 
