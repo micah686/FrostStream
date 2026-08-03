@@ -166,6 +166,8 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
             {
                 Value = value,
                 Label = value,
+                CreatorSourceId = GetNullableInt64(reader, "creator_source_id"),
+                AccountId = GetNullableInt64(reader, "account_id"),
                 AccountName = accountName,
                 AccountHandle = accountHandle,
                 Platform = platform,
@@ -196,6 +198,42 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
         var statusCounts = await GetChannelStatusCountsAsync(creatorSourceId, ct);
         var mediaTypes = await GetChannelMediaTypesAsync(creatorSourceId, ct);
         var downloadStates = await GetChannelDownloadStatesAsync(creatorSourceId, ct);
+
+        return new ChannelStatisticsDetailDto
+        {
+            Summary = summary,
+            IgnoredCount = statusCounts.GetValueOrDefault("Ignored"),
+            UnavailableCount = statusCounts.GetValueOrDefault("Unavailable") +
+                statusCounts.GetValueOrDefault("PossiblyUnavailable"),
+            RemovedCount = statusCounts.GetValueOrDefault("RemovedFromSource"),
+            MediaTypes = mediaTypes,
+            RecentDownloadStates = downloadStates
+        };
+    }
+
+    // Channel search and the channel table are keyed on accounts, and most accounts have no creator
+    // source behind them (ad-hoc downloads are never discovered through one), so the detail view has
+    // to be resolvable by account too. Discovery-derived counts stay zero when nothing links back.
+    public async Task<ChannelStatisticsDetailDto?> GetChannelByAccountAsync(long accountId, CancellationToken ct = default)
+    {
+        var summarySql = AccountSummarySql("WHERE account_rollup.account_id = @account_id");
+        ChannelStatisticsSummaryDto? summary = null;
+        await using (var command = dataSource.CreateCommand(summarySql))
+        {
+            command.Parameters.AddWithValue("@account_id", accountId);
+            await using var reader = await command.ExecuteReaderAsync(ct);
+            if (await reader.ReadAsync(ct))
+            {
+                summary = ReadChannelSummary(reader);
+            }
+        }
+
+        if (summary is null)
+            return null;
+
+        var statusCounts = await GetAccountStatusCountsAsync(accountId, ct);
+        var mediaTypes = await GetAccountMediaTypesAsync(accountId, ct);
+        var downloadStates = await GetAccountDownloadStatesAsync(accountId, ct);
 
         return new ChannelStatisticsDetailDto
         {
@@ -589,6 +627,62 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
             ORDER BY count DESC, state
             """);
         command.Parameters.AddWithValue("@creator_source_id", creatorSourceId);
+
+        return await ReadDownloadStatesAsync(command, ct);
+    }
+
+    private async Task<IReadOnlyDictionary<string, long>> GetAccountStatusCountsAsync(long accountId, CancellationToken ct)
+    {
+        await using var command = dataSource.CreateCommand("""
+            SELECT dm.discovery_status, COUNT(DISTINCT dm.id) AS count
+            FROM discovery.discovered_media dm
+            JOIN metadata.media_metadata mm ON mm.external_media_id = dm.external_media_id
+            JOIN metadata.accounts a ON a.id = mm.account_id AND a.platform = dm.platform
+            WHERE mm.account_id = @account_id
+            GROUP BY dm.discovery_status
+            """);
+        command.Parameters.AddWithValue("@account_id", accountId);
+
+        var values = new Dictionary<string, long>(StringComparer.Ordinal);
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            values[GetString(reader, "discovery_status")] = GetInt64(reader, "count");
+        }
+
+        return values;
+    }
+
+    private async Task<IReadOnlyList<MediaTypeStatisticsDto>> GetAccountMediaTypesAsync(long accountId, CancellationToken ct)
+    {
+        await using var command = dataSource.CreateCommand($"""
+            {ClassifiedMediaCte}
+            SELECT
+                cm.media_type,
+                COUNT(*) AS count,
+                COALESCE(SUM(cm.duration_seconds), 0) AS duration_seconds,
+                COALESCE(SUM(cm.size_bytes), 0)::bigint AS bytes
+            FROM classified_media cm
+            WHERE cm.account_id = @account_id
+            GROUP BY cm.media_type
+            ORDER BY count DESC, cm.media_type
+            """);
+        command.Parameters.AddWithValue("@account_id", accountId);
+
+        return await ReadMediaTypesAsync(command, ct);
+    }
+
+    private async Task<IReadOnlyList<DownloadStateStatisticsDto>> GetAccountDownloadStatesAsync(long accountId, CancellationToken ct)
+    {
+        await using var command = dataSource.CreateCommand("""
+            SELECT dj.state::text AS state, COUNT(*) AS count
+            FROM metadata.media_metadata mm
+            JOIN jobs.download_jobs dj ON dj.source_url = mm.webpage_url
+            WHERE mm.account_id = @account_id AND mm.webpage_url IS NOT NULL
+            GROUP BY dj.state
+            ORDER BY count DESC, state
+            """);
+        command.Parameters.AddWithValue("@account_id", accountId);
 
         return await ReadDownloadStatesAsync(command, ct);
     }

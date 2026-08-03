@@ -80,6 +80,8 @@ export interface ChannelStatisticsListResponse {
 export interface ChannelSuggestion {
   value: string;
   label: string;
+  creatorSourceId: number | null;
+  accountId: number | null;
   accountName: string | null;
   accountHandle: string | null;
   platform: string;
@@ -135,6 +137,13 @@ export async function getChannelStatistics(
   fetchImpl: typeof fetch = fetch
 ): Promise<ChannelStatisticsDetail> {
   return getJson<ChannelStatisticsDetail>(`${BASE}/channels/${encodeURIComponent(creatorSourceId)}`, fetchImpl);
+}
+
+export async function getChannelStatisticsByAccount(
+  accountId: number,
+  fetchImpl: typeof fetch = fetch
+): Promise<ChannelStatisticsDetail> {
+  return getJson<ChannelStatisticsDetail>(`${BASE}/channels/by-account/${encodeURIComponent(accountId)}`, fetchImpl);
 }
 
 export async function suggestChannelStatistics(

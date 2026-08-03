@@ -121,13 +121,28 @@ public sealed class StatisticsQueryConsumerService(
     {
         try
         {
-            var channel = await WithQuery(query => query.GetChannelAsync(context.Message.CreatorSourceId));
+            var accountId = context.Message.AccountId;
+            var creatorSourceId = context.Message.CreatorSourceId;
+            if (accountId is null && creatorSourceId is null)
+            {
+                await context.RespondAsync(Failure<StatisticsChannelGetResponseMessage>(
+                    "validation",
+                    "Either an account id or a creator source id is required."));
+                return;
+            }
+
+            var channel = accountId is { } account
+                ? await WithQuery(query => query.GetChannelByAccountAsync(account))
+                : await WithQuery(query => query.GetChannelAsync(creatorSourceId!.Value));
+
             await context.RespondAsync(channel is null
                 ? new StatisticsChannelGetResponseMessage
                 {
                     Success = false,
                     ErrorCode = "not_found",
-                    ErrorMessage = $"Creator source '{context.Message.CreatorSourceId}' was not found."
+                    ErrorMessage = accountId is { } missingAccount
+                        ? $"Channel account '{missingAccount}' was not found."
+                        : $"Creator source '{creatorSourceId}' was not found."
                 }
                 : new StatisticsChannelGetResponseMessage
                 {
@@ -137,7 +152,11 @@ public sealed class StatisticsQueryConsumerService(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed handling channel statistics query for {CreatorSourceId}.", context.Message.CreatorSourceId);
+            logger.LogError(
+                ex,
+                "Failed handling channel statistics query for account {AccountId} / creator source {CreatorSourceId}.",
+                context.Message.AccountId,
+                context.Message.CreatorSourceId);
             await context.RespondAsync(Failure<StatisticsChannelGetResponseMessage>("internal_error", "Internal statistics service error."));
         }
     }

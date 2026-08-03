@@ -126,6 +126,29 @@ public sealed class StatisticsController(
         return Ok(response.Channel);
     }
 
+    [HttpGet("channels/by-account/{accountId:long}")]
+    [Endpoint(EndpointIds.StatisticsChannelsGetByAccount)]
+    [EndpointSummary("Get channel statistics detail by account")]
+    [EndpointDescription("Returns detailed statistics for one channel account, including downloaded coverage, media type breakdowns, and download job state counts. Use this for channels that have no creator source behind them, such as ad-hoc downloads.")]
+    public async Task<ActionResult<ChannelStatisticsDetailDto>> GetChannelByAccount(
+        long accountId,
+        CancellationToken cancellationToken)
+    {
+        var response = await SendRequestAsync<StatisticsChannelGetRequestMessage, StatisticsChannelGetResponseMessage>(
+            StatisticsSubjects.ChannelGet,
+            new StatisticsChannelGetRequestMessage { AccountId = accountId },
+            cancellationToken);
+
+        if (response is null)
+            return ServiceUnavailable();
+        if (!response.Success)
+            return StatisticsError(response.ErrorCode, response.ErrorMessage);
+        if (response.Channel is null)
+            return StatusCode(StatusCodes.Status502BadGateway, "DataBridge returned an invalid channel statistics response.");
+
+        return Ok(response.Channel);
+    }
+
     [HttpGet("download-history")]
     [Endpoint(EndpointIds.StatisticsDownloadHistory)]
     [EndpointSummary("Get download history statistics")]

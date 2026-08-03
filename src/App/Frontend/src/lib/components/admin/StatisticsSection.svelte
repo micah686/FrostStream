@@ -18,6 +18,7 @@
   } from '@lucide/svelte';
   import { formatBytes, formatDuration, formatRelativeDate } from '$lib/media';
   import StatisticsChart from './StatisticsChart.svelte';
+  import { categoricalPalette, readChartTheme, stateColors, withAlpha, type ChartTheme } from '$lib/charts/theme';
   import {
     getDownloadStatistics,
     getGlobalStatistics,
@@ -32,36 +33,7 @@
   } from '$lib/api/statistics';
 
   type RangePreset = '30d' | '12w' | '12m' | 'custom';
-  type ChartTheme = {
-    primary: string;
-    secondary: string;
-    accent: string;
-    info: string;
-    success: string;
-    warning: string;
-    error: string;
-    neutral: string;
-    base100: string;
-    base200: string;
-    base300: string;
-    baseContent: string;
-  };
-
   const channelPageSize = 12;
-  const emptyChartTheme: ChartTheme = {
-    primary: 'transparent',
-    secondary: 'transparent',
-    accent: 'transparent',
-    info: 'transparent',
-    success: 'transparent',
-    warning: 'transparent',
-    error: 'transparent',
-    neutral: 'transparent',
-    base100: 'transparent',
-    base200: 'transparent',
-    base300: 'transparent',
-    baseContent: 'transparent'
-  };
   const sortOptions = [
     { value: 'downloaded:desc', name: 'Most downloaded' },
     { value: 'available:desc', name: 'Most available' },
@@ -107,7 +79,7 @@
   let channelSuggestionTimer: ReturnType<typeof setTimeout> | null = null;
   let channelSuggestionAbort: AbortController | null = null;
   let channelSuggestionRequestId = 0;
-  let chartTheme = $state<ChartTheme>(emptyChartTheme);
+  let chartTheme = $state<ChartTheme>(readChartTheme());
   let themeRefreshFrame: number | null = null;
 
   const totalChannelPages = $derived(Math.max(1, Math.ceil(totalChannels / channelPageSize)));
@@ -130,7 +102,7 @@
       datasets: [
         {
           data: (overview?.mediaTypes ?? []).map((item) => item.count),
-          backgroundColor: chartPalette(),
+          backgroundColor: categoricalPalette(chartTheme, overview?.mediaTypes.length ?? 0),
           borderColor: chartTheme.base200,
           borderWidth: 3,
           hoverOffset: 5
@@ -147,14 +119,7 @@
       datasets: [
         {
           data: (overview?.downloadStates ?? []).map((item) => item.count),
-          backgroundColor: [
-            chartTheme.success,
-            chartTheme.primary,
-            chartTheme.error,
-            chartTheme.warning,
-            chartTheme.neutral,
-            chartTheme.secondary
-          ],
+          backgroundColor: stateColors((overview?.downloadStates ?? []).map((item) => item.state), chartTheme),
           borderColor: chartTheme.base200,
           borderWidth: 3,
           hoverOffset: 5
@@ -173,7 +138,7 @@
           label: 'Created',
           data: downloads.map((item) => item.created),
           borderColor: chartTheme.info,
-          backgroundColor: withOpacity(chartTheme.info, 12),
+          backgroundColor: withAlpha(chartTheme.info, 12),
           pointBackgroundColor: chartTheme.info,
           pointRadius: downloads.length > 45 ? 0 : 2,
           pointHoverRadius: 5,
@@ -185,7 +150,7 @@
           label: 'Completed',
           data: downloads.map((item) => item.completed),
           borderColor: chartTheme.success,
-          backgroundColor: withOpacity(chartTheme.success, 8),
+          backgroundColor: withAlpha(chartTheme.success, 8),
           pointBackgroundColor: chartTheme.success,
           pointRadius: downloads.length > 45 ? 0 : 2,
           pointHoverRadius: 5,
@@ -197,7 +162,7 @@
           label: 'Failed',
           data: downloads.map((item) => item.failed),
           borderColor: chartTheme.error,
-          backgroundColor: withOpacity(chartTheme.error, 5),
+          backgroundColor: withAlpha(chartTheme.error, 5),
           pointBackgroundColor: chartTheme.error,
           pointRadius: downloads.length > 45 ? 0 : 2,
           pointHoverRadius: 5,
@@ -215,7 +180,7 @@
           position: 'top',
           align: 'end',
           labels: {
-            color: withOpacity(chartTheme.baseContent, 60),
+            color: withAlpha(chartTheme.baseContent, 60),
             usePointStyle: true,
             pointStyle: 'circle',
             boxWidth: 7,
@@ -227,19 +192,19 @@
           borderColor: chartTheme.base300,
           borderWidth: 1,
           titleColor: chartTheme.baseContent,
-          bodyColor: withOpacity(chartTheme.baseContent, 80),
+          bodyColor: withAlpha(chartTheme.baseContent, 80),
           padding: 12
         }
       },
       scales: {
         x: {
           grid: { display: false },
-          ticks: { color: withOpacity(chartTheme.baseContent, 50), maxTicksLimit: 8, maxRotation: 0 }
+          ticks: { color: withAlpha(chartTheme.baseContent, 50), maxTicksLimit: 8, maxRotation: 0 }
         },
         y: {
           beginAtZero: true,
-          grid: { color: withOpacity(chartTheme.base300, 45) },
-          ticks: { color: withOpacity(chartTheme.baseContent, 50), precision: 0 }
+          grid: { color: withAlpha(chartTheme.base300, 45) },
+          ticks: { color: withAlpha(chartTheme.baseContent, 50), precision: 0 }
         }
       }
     }
@@ -496,44 +461,6 @@
     return `${Math.round(value)}%`;
   }
 
-  function themeColor(name: string): string {
-    return getComputedStyle(document.documentElement).getPropertyValue(`--color-${name}`).trim();
-  }
-
-  function readChartTheme(): ChartTheme {
-    return {
-      primary: themeColor('primary'),
-      secondary: themeColor('secondary'),
-      accent: themeColor('accent'),
-      info: themeColor('info'),
-      success: themeColor('success'),
-      warning: themeColor('warning'),
-      error: themeColor('error'),
-      neutral: themeColor('neutral'),
-      base100: themeColor('base-100'),
-      base200: themeColor('base-200'),
-      base300: themeColor('base-300'),
-      baseContent: themeColor('base-content')
-    };
-  }
-
-  function withOpacity(color: string, percentage: number): string {
-    if (!color || color === 'transparent') return 'transparent';
-    return `color-mix(in oklab, ${color} ${percentage}%, transparent)`;
-  }
-
-  function chartPalette(): string[] {
-    return [
-      chartTheme.primary,
-      chartTheme.success,
-      chartTheme.secondary,
-      chartTheme.warning,
-      chartTheme.error,
-      chartTheme.accent,
-      chartTheme.info
-    ];
-  }
-
   function bucketLabel(value: string): string {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return 'Unknown';
@@ -551,7 +478,7 @@
         legend: {
           position: 'right',
           labels: {
-            color: withOpacity(chartTheme.baseContent, 60),
+            color: withAlpha(chartTheme.baseContent, 60),
             usePointStyle: true,
             pointStyle: 'circle',
             boxWidth: 7,
@@ -565,7 +492,7 @@
           borderColor: chartTheme.base300,
           borderWidth: 1,
           titleColor: chartTheme.baseContent,
-          bodyColor: withOpacity(chartTheme.baseContent, 80),
+          bodyColor: withAlpha(chartTheme.baseContent, 80),
           padding: 12,
           callbacks: {
             label: (context) => ` ${context.label}: ${Number(context.raw).toLocaleString()} ${title.toLowerCase()}`

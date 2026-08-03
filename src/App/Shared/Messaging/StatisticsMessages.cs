@@ -60,9 +60,13 @@ public sealed record StatisticsChannelSuggestionsResponseMessage
     public IReadOnlyList<ChannelSuggestionDto> Items { get; init; } = [];
 }
 
+// Channel detail can be keyed either on a creator source (subscription-driven channels) or on the
+// account the media belongs to (ad-hoc downloads that were never discovered through a source).
+// Exactly one of the two is expected; AccountId wins when both are supplied.
 public sealed record StatisticsChannelGetRequestMessage
 {
-    public long CreatorSourceId { get; init; }
+    public long? CreatorSourceId { get; init; }
+    public long? AccountId { get; init; }
 }
 
 public sealed record StatisticsChannelGetResponseMessage
@@ -155,6 +159,8 @@ public sealed record ChannelSuggestionDto
 {
     public required string Value { get; init; }
     public required string Label { get; init; }
+    public long? CreatorSourceId { get; init; }
+    public long? AccountId { get; init; }
     public string? AccountName { get; init; }
     public string? AccountHandle { get; init; }
     public required string Platform { get; init; }

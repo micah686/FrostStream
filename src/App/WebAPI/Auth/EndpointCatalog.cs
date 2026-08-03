@@ -102,6 +102,7 @@ public static class EndpointIds
     public const string StatisticsChannelsList = "statistics.channels.list";
     public const string StatisticsChannelSuggestions = "statistics.channels.suggestions";
     public const string StatisticsChannelsGet = "statistics.channels.get";
+    public const string StatisticsChannelsGetByAccount = "statistics.channels.get-by-account";
     public const string StatisticsDownloadHistory = "statistics.download-history";
     public const string UserNotesUpsert = "user-notes.upsert";
     public const string UserNotesGet = "user-notes.get";
@@ -344,6 +345,7 @@ public static class EndpointCatalog
         new(EndpointIds.StatisticsChannelsList, Bundles.Metadata),
         new(EndpointIds.StatisticsChannelSuggestions, Bundles.Metadata),
         new(EndpointIds.StatisticsChannelsGet, Bundles.Metadata),
+        new(EndpointIds.StatisticsChannelsGetByAccount, Bundles.Metadata),
         new(EndpointIds.StatisticsDownloadHistory, Bundles.Metadata),
         new(EndpointIds.UserNotesUpsert, Bundles.Metadata),
         new(EndpointIds.UserNotesGet, Bundles.Metadata),
