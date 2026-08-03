@@ -209,7 +209,7 @@
       }
       await loadCustomActivity();
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Could not load StatsNew.';
+      error = err instanceof Error ? err.message : 'Could not load statistics.';
     } finally {
       loading = false;
     }
@@ -626,13 +626,13 @@
 </script>
 
 <svelte:head>
-  <title>StatsNew · FrostStream</title>
+  <title>Statistics · FrostStream</title>
 </svelte:head>
 
-<section class="card border border-base-300 bg-base-100 p-5 sm:p-6" aria-labelledby="stats-new-title">
+<section class="card border border-base-300 bg-base-100 p-5 sm:p-6" aria-labelledby="statistics-title">
   <div class="flex flex-wrap items-start justify-between gap-4">
     <div>
-      <h1 id="stats-new-title" class="text-xl font-bold text-base-content">StatsNew</h1>
+      <h1 id="statistics-title" class="text-xl font-bold text-base-content">Statistics</h1>
       <p class="mt-2 max-w-3xl text-sm text-base-content/60">
         A complete view of library inventory, download activity, channel leaders, and individual channel coverage.
       </p>
@@ -806,7 +806,7 @@
             autocomplete="off"
             role="combobox"
             aria-expanded={channelSearchOpen}
-            aria-controls="stats-new-channel-results"
+            aria-controls="statistics-channel-results"
             onfocus={() => { if (channelResults.length > 0) channelSearchOpen = true; }}
             onblur={() => setTimeout(() => (channelSearchOpen = false), 150)}
             onkeydown={handleChannelSearchKeydown}
@@ -821,7 +821,7 @@
           {/if}
         </label>
         {#if channelSearchOpen}
-          <ul id="stats-new-channel-results" class="dropdown-content menu z-30 mt-1 max-h-72 w-full flex-nowrap overflow-y-auto rounded-lg border border-base-300 bg-base-100 p-1 shadow-xl">
+          <ul id="statistics-channel-results" class="dropdown-content menu z-30 mt-1 max-h-72 w-full flex-nowrap overflow-y-auto rounded-lg border border-base-300 bg-base-100 p-1 shadow-xl">
             {#each channelResults as suggestion (suggestion.value)}
               <li>
                 <button type="button" class="flex w-full items-center justify-between gap-3 text-left" onmousedown={(event) => event.preventDefault()} onclick={() => void chooseChannel(suggestion)}>
