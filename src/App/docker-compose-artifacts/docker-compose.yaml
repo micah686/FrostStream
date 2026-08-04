@@ -57,7 +57,11 @@ services:
     networks:
       - "aspire"
   postgres:
-    image: "docker.io/library/postgres:18.3"
+    image: "localhost/froststream-postgres:latest"
+    pull_policy: "build"
+    build:
+      context: "../.."
+      dockerfile: "App/PostgresServer/Dockerfile"
     command:
       - "-c"
       - "config_file=/etc/postgresql/postgresql.conf"
@@ -71,7 +75,11 @@ services:
     volumes:
       - type: "volume"
         target: "/var/lib/postgresql"
-        source: "apphost-feed4158f1-postgres-data"
+        source: "froststream-postgres-data"
+        read_only: false
+      - type: "volume"
+        target: "/var/run/postgresql"
+        source: "froststream-postgres-socket"
         read_only: false
       - type: "bind"
         target: "/etc/postgresql/postgresql.conf"
@@ -82,8 +90,15 @@ services:
         source: "../AppHost/configs/postgres/pg_hba.conf"
         read_only: true
       - type: "bind"
-        target: "/wal-archive"
-        source: "${FROSTSTREAM_BACKUP_ROOT:-./backups}/wal"
+        target: "/etc/pgbackrest/pgbackrest.conf"
+        source: "../AppHost/configs/pgbackrest/pgbackrest.conf"
+        read_only: true
+      - type: "bind"
+        target: "/backups"
+        source: "${FROSTSTREAM_BACKUP_ROOT:-./backups}"
+    depends_on:
+      backup-init:
+        condition: "service_completed_successfully"
     networks:
       - "aspire"
     healthcheck:
@@ -94,6 +109,19 @@ services:
       timeout: "5s"
       retries: 10
       start_period: "20s"
+  backup-init:
+    image: "docker.io/library/postgres:18.3"
+    command:
+      - "-c"
+      - "mkdir -p /backups/pgbackrest /backups/openbao /backups/jobs && chown -R 999:999 /backups && echo 'backup-init: done'"
+    entrypoint:
+      - "/bin/bash"
+    volumes:
+      - type: "bind"
+        target: "/backups"
+        source: "${FROSTSTREAM_BACKUP_ROOT:-./backups}"
+    networks:
+      - "aspire"
   dbgate:
     image: "docker.io/dbgate/dbgate:6.1.4"
     environment:
@@ -331,7 +359,8 @@ services:
       FROSTSTREAMDB_JDBCCONNECTIONSTRING: "jdbc:postgresql://postgres:5432/froststreamdb"
       FROSTSTREAMDB_DATABASENAME: "froststreamdb"
       Backup__Directory: "/backups"
-      Backup__ArchiveDir: "/backups/wal"
+      Backup__Stanza: "froststream"
+      Backup__PgDataPath: "/var/lib/postgresql/18/docker"
       Backup__PostgresHost: "postgres"
       Backup__PostgresPort: "5432"
       Backup__PostgresUser: "${POSTGRES_USER}"
@@ -339,22 +368,28 @@ services:
       Backup__OpenBaoAddress: "http://openbao:8200"
       Backup__OpenBaoToken: "${OPENBAO_TOKEN}"
       Backup__OpenBaoKvMount: "secret"
-      Backup__ScheduledRetentionCount: "14"
-      POSTGRES_HOST: "postgres"
-      POSTGRES_PORT: "5432"
-      POSTGRES_USER: "${POSTGRES_USER}"
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
-      POSTGRES_ARCHIVE_DIR: "/backups/wal"
-      OPENBAO_ADDR: "http://openbao:8200"
-      OPENBAO_TOKEN: "${OPENBAO_TOKEN}"
-      OPENBAO_KV_MOUNT: "secret"
+      Backup__RestoreUiToken: "${BACKUP_RESTORE_UI_TOKEN}"
       Backup__HostRoot: "${FROSTSTREAM_BACKUP_ROOT}"
+    ports:
+      - "25900:8081"
     expose:
       - "8080"
     volumes:
+      - type: "volume"
+        target: "/var/lib/postgresql"
+        source: "froststream-postgres-data"
+        read_only: false
+      - type: "volume"
+        target: "/var/run/postgresql"
+        source: "froststream-postgres-socket"
+        read_only: false
       - type: "bind"
         target: "/backups"
         source: "${FROSTSTREAM_BACKUP_ROOT:-./backups}"
+      - type: "bind"
+        target: "/etc/pgbackrest/pgbackrest.conf"
+        source: "../AppHost/configs/pgbackrest/pgbackrest.conf"
+        read_only: true
     depends_on:
       nats:
         condition: "service_started"
@@ -465,6 +500,7 @@ services:
       OpenFga__AutoProvision: "true"
       OpenFga__BootstrapOwnerSubjects: ""
       Cast__AdvertisedBaseUrl: "${CAST_ADVERTISED_BASE_URL}"
+      MediaProcessor__ApiKey: "${MEDIA_PROCESSOR_API_KEY}"
       BackupService__BaseUrl: "http://backupservice:8080"
       Auth__Authority: "http://authentik:9000/application/o/froststream/"
       OpenFga__Endpoint: "http://openfga:8080"
@@ -534,6 +570,34 @@ services:
         condition: "service_healthy"
     networks:
       - "aspire"
+  mediaprocessor:
+    image: "localhost/froststream-mediaprocessor:latest"
+    pull_policy: "build"
+    build:
+      context: "../.."
+      dockerfile: "App/MediaProcessor/Dockerfile"
+    environment:
+      OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "in_memory"
+      ConnectionStrings__nats: "nats://nats:${NATS_PASSWORD}@nats:4222"
+      NATS_HOST: "nats"
+      NATS_PORT: "4222"
+      NATS_USERNAME: "nats"
+      NATS_PASSWORD: "${NATS_PASSWORD}"
+      NATS_URI: "nats://nats:${NATS_PASSWORD}@nats:4222"
+      MediaProcessor__WebApiBaseUrl: "http://webapi:8080"
+      MediaProcessor__ApiKey: "${MEDIA_PROCESSOR_API_KEY}"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://aspire-docker-demo-dashboard:18889"
+      OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+      OTEL_SERVICE_NAME: "mediaprocessor"
+    depends_on:
+      nats:
+        condition: "service_started"
+      databridge:
+        condition: "service_started"
+      webapi:
+        condition: "service_started"
+    networks:
+      - "aspire"
   scheduler:
     image: "localhost/froststream-scheduler:latest"
     pull_policy: "build"
@@ -550,6 +614,7 @@ services:
       NATS_USERNAME: "nats"
       NATS_PASSWORD: "${NATS_PASSWORD}"
       NATS_URI: "nats://nats:${NATS_PASSWORD}@nats:4222"
+      BackupService__BaseUrl: "http://backupservice:8080"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://aspire-docker-demo-dashboard:18889"
       OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
       OTEL_SERVICE_NAME: "scheduler"
@@ -559,6 +624,8 @@ services:
       nats:
         condition: "service_started"
       databridge:
+        condition: "service_started"
+      backupservice:
         condition: "service_started"
     networks:
       - "aspire"
@@ -589,7 +656,9 @@ networks:
   aspire:
     driver: "bridge"
 volumes:
-  apphost-feed4158f1-postgres-data:
+  froststream-postgres-data:
+    driver: "local"
+  froststream-postgres-socket:
     driver: "local"
   openbao-data:
     driver: "local"

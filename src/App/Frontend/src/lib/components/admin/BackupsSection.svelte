@@ -4,38 +4,32 @@
   import {
     CircleAlert,
     CircleCheck,
-    CircleX,
     CloudUpload,
-    Copy,
     FileArchive,
+    LifeBuoy,
     Play,
     RefreshCw,
-    Terminal,
-    X
+    ShieldCheck
   } from '@lucide/svelte';
   import {
-    buildRestorePlan,
     listBackupJobs,
     listBackups,
     startBackup,
     verifyBackup,
+    type BackupInfo,
     type BackupJob,
-    type BackupMode,
-    type BackupSummary,
-    type RestorePlan,
-    type VerifyBackupResult
+    type BackupRepository,
+    type BackupType
   } from '$lib/api/backups';
 
-  const backupModeOptions: { value: BackupMode; name: string }[] = [
-    { value: 'snapshot', name: 'Snapshot — quick logical pg_dump (default)' },
-    { value: 'full', name: 'Full — physical pg_basebackup (PITR base)' },
-    { value: 'wal-archive', name: 'WAL archive — initialize continuous archiving' }
+  const backupTypeOptions: { value: BackupType; name: string }[] = [
+    { value: 'full', name: 'Full — complete cluster backup' },
+    { value: 'diff', name: 'Differential — changes since the last full' }
   ];
 
-  const backupModeHints: Record<BackupMode, string> = {
-    snapshot: 'Per-database logical dump plus OpenBao secrets. Best for routine restores.',
-    full: 'Physical cluster base backup. Pair with WAL archiving for point-in-time recovery.',
-    'wal-archive': 'Initializes the continuous WAL archive store and prints the server settings to apply.'
+  const backupTypeHints: Record<BackupType, string> = {
+    full: 'Complete pgBackRest cluster backup plus an OpenBao secrets export. The weekly schedule takes one every Sunday.',
+    diff: 'Only what changed since the last full backup — fast and small. Requires at least one full backup. The daily schedule takes one every night.'
   };
 
   const cardClass = 'card border border-base-300 bg-base-100 p-5 sm:p-6';
@@ -45,7 +39,7 @@
 
   // Run backup
   let backupName = $state('');
-  let backupMode = $state<BackupMode>('snapshot');
+  let backupType = $state<BackupType>('full');
   let startBusy = $state(false);
   let startError = $state<string | null>(null);
 
@@ -55,25 +49,24 @@
   let jobsError = $state<string | null>(null);
   let pollTimer: ReturnType<typeof setInterval> | null = null;
 
-  // Archives
-  let archives = $state<BackupSummary[]>([]);
-  let archivesLoading = $state(true);
-  let archivesError = $state<string | null>(null);
+  // Repository
+  let repository = $state<BackupRepository | null>(null);
+  let repositoryLoading = $state(true);
+  let repositoryError = $state<string | null>(null);
 
-  // Per-archive verify / restore plan
-  let verifyBusyPath = $state<string | null>(null);
-  let verifyResults = $state<Record<string, VerifyBackupResult>>({});
-  let planBusyPath = $state<string | null>(null);
-  let restorePlans = $state<Record<string, RestorePlan>>({});
-  let activeRestorePath = $state<string | null>(null);
-  let copiedRestoreCommand = $state(false);
-  let restoreOptionRequestId = 0;
+  // Verify actions
+  let quickVerifyBusy = $state(false);
+  let deepVerifyBusyLabel = $state<string | null>(null);
+  let verifyError = $state<string | null>(null);
+
+  let restoreUiUrl = $state('');
 
   const hasActiveJobs = $derived(jobs.some((job) => job.status === 'queued' || job.status === 'running'));
 
   onMount(() => {
+    restoreUiUrl = `http://${window.location.hostname}:25900/`;
     void loadJobs(true);
-    void loadArchives();
+    void loadRepository();
   });
 
   onDestroy(() => stopPolling());
@@ -105,8 +98,8 @@
       } else {
         stopPolling();
         if (previousActive) {
-          // A job just finished; the archive list may have a new entry.
-          void loadArchives();
+          // A job just finished; the repository may have a new backup or verify result.
+          void loadRepository();
         }
       }
     } catch (err) {
@@ -117,15 +110,15 @@
     }
   }
 
-  async function loadArchives() {
-    archivesLoading = true;
-    archivesError = null;
+  async function loadRepository() {
+    repositoryLoading = true;
+    repositoryError = null;
     try {
-      archives = await listBackups();
+      repository = await listBackups();
     } catch (err) {
-      archivesError = err instanceof Error ? err.message : 'Could not load backup archives.';
+      repositoryError = err instanceof Error ? err.message : 'Could not load the backup repository.';
     } finally {
-      archivesLoading = false;
+      repositoryLoading = false;
     }
   }
 
@@ -134,10 +127,9 @@
     startBusy = true;
     startError = null;
     try {
-      const job = await startBackup(backupName, backupMode);
+      const job = await startBackup(backupName, backupType);
       backupName = '';
-      jobs = [job, ...jobs.filter((item) => item.jobId !== job.jobId)];
-      startPolling();
+      mergeJob(job);
     } catch (err) {
       startError = err instanceof Error ? err.message : 'Could not start the backup.';
     } finally {
@@ -145,215 +137,33 @@
     }
   }
 
-  async function verify(archive: BackupSummary) {
-    verifyBusyPath = archive.archivePath;
+  async function runQuickVerify() {
+    quickVerifyBusy = true;
+    verifyError = null;
     try {
-      verifyResults = { ...verifyResults, [archive.archivePath]: await verifyBackup(archive.archivePath) };
+      mergeJob(await verifyBackup(null, false));
     } catch (err) {
-      verifyResults = {
-        ...verifyResults,
-        [archive.archivePath]: {
-          success: false,
-          errorMessage: err instanceof Error ? err.message : 'Verification request failed.'
-        }
-      };
+      verifyError = err instanceof Error ? err.message : 'Could not start the verification.';
     } finally {
-      verifyBusyPath = null;
+      quickVerifyBusy = false;
     }
   }
 
-  async function showRestorePlan(archive: BackupSummary) {
-    if (activeRestorePath === archive.archivePath) {
-      closeRestorePlan();
-      return;
-    }
-
-    if (restorePlans[archive.archivePath]) {
-      restorePlans = {
-        ...restorePlans,
-        [archive.archivePath]: withRestorePlanFallback(restorePlans[archive.archivePath], archive.mode)
-      };
-      activeRestorePath = archive.archivePath;
-      return;
-    }
-
-    planBusyPath = archive.archivePath;
+  async function runDeepVerify(backup: BackupInfo) {
+    deepVerifyBusyLabel = backup.label;
+    verifyError = null;
     try {
-      const plan = await buildRestorePlan(archive.archivePath);
-      restorePlans = { ...restorePlans, [archive.archivePath]: withRestorePlanFallback(plan, archive.mode) };
-      activeRestorePath = archive.archivePath;
+      mergeJob(await verifyBackup(backup.label, true));
     } catch (err) {
-      restorePlans = {
-        ...restorePlans,
-        [archive.archivePath]: {
-          preflightOk: false,
-          explanation: '',
-          restoreCommand: '',
-          options: [],
-          errorMessage: err instanceof Error ? err.message : 'Restore plan request failed.'
-        }
-      };
+      verifyError = err instanceof Error ? err.message : 'Could not start the deep verification.';
     } finally {
-      planBusyPath = null;
+      deepVerifyBusyLabel = null;
     }
   }
 
-  function withRestorePlanFallback(plan: RestorePlan, mode: string): RestorePlan {
-    const normalized = {
-      ...plan,
-      explanation: plan.explanation || 'Stop FrostStream services before restoring. This is a cold/offline operation; restart services and reindex metadata afterward.',
-      options: plan.options ?? []
-    };
-    if (normalized.options.length || !['full', 'wal-archive', 'walarchive'].includes(mode.toLowerCase())) {
-      return normalized;
-    }
-
-    return {
-      ...normalized,
-      explanation: 'Stop FrostStream and PostgreSQL before restoring. A full restore rebuilds the PostgreSQL data directory.\n\nFor point-in-time recovery, make the WAL archive available inside the backupservice container and enter its mounted path. Most people should then enter the date and time they want to restore to, in UTC. For example, 2026-07-31 12:00:00+00 means July 31, 2026 at noon UTC. Choose exactly one recovery target. The generated command adds --archive-dir and the selected target.',
-      options: [
-        {
-          key: 'pgdata',
-          label: 'PostgreSQL data directory',
-          description: 'The empty data directory that will be rebuilt.',
-          inputType: 'text',
-          value: null,
-          placeholder: '<PGDATA>',
-          required: true
-        },
-        {
-          key: 'pg-ctl',
-          label: 'pg_ctl path (optional)',
-          description: 'Leave blank to use pg_ctl from PATH.',
-          inputType: 'text',
-          value: null,
-          placeholder: 'pg_ctl',
-          required: false
-        },
-        {
-          key: 'archive-dir',
-          label: 'WAL archive directory',
-          description: 'Path inside the backupservice container containing the archived WAL segments.',
-          inputType: 'text',
-          value: null,
-          placeholder: '<WAL_ARCHIVE_DIR>',
-          required: false
-        },
-        {
-          key: 'target-time',
-          label: 'Restore to a date and time (optional)',
-          description: 'Use this when you want the database restored to how it looked at a particular moment. Enter the time in UTC. For example, 2026-07-31 12:00:00+00 means July 31, 2026 at noon UTC. Choose only one recovery target.',
-          inputType: 'text',
-          value: null,
-          placeholder: '2026-07-31 12:00:00+00',
-          required: false
-        }
-      ]
-    };
-  }
-
-  async function updateRestoreOption(plan: RestorePlan, key: string, value: string) {
-    if (!activeRestorePath) return;
-    const currentPlan = restorePlans[activeRestorePath] ?? plan;
-    const nextOptions = currentPlan.options.map((option) => ({
-      ...option,
-      value: option.key === key ? value : option.value
-    }));
-    const options = Object.fromEntries(nextOptions.map((option) => [option.key, option.value])) as Record<string, string | null>;
-    const requestId = ++restoreOptionRequestId;
-
-    // Keep the command responsive while the server re-verifies the archive.
-    restorePlans = {
-      ...restorePlans,
-      [activeRestorePath]: {
-        ...currentPlan,
-        options: nextOptions,
-        restoreCommand: updateRestoreCommand(currentPlan.restoreCommand, nextOptions)
-      }
-    };
-
-    planBusyPath = activeRestorePath;
-    try {
-      const refreshedPlan = await buildRestorePlan(activeRestorePath, options);
-      const archiveMode = archives.find((archive) => archive.archivePath === activeRestorePath)?.mode ?? '';
-      if (requestId === restoreOptionRequestId && activeRestorePath) {
-        const refreshedWithFallback = withRestorePlanFallback(refreshedPlan, archiveMode);
-        const optimisticPlan = restorePlans[activeRestorePath];
-        const serverReturnedOptions = refreshedPlan.options?.length > 0;
-        const mergedPlan = serverReturnedOptions
-          ? {
-              ...refreshedWithFallback,
-              options: refreshedWithFallback.options.map((option) =>
-                Object.prototype.hasOwnProperty.call(options, option.key)
-                  ? { ...option, value: options[option.key] }
-                  : option
-              )
-            }
-          : {
-              ...refreshedWithFallback,
-              options: optimisticPlan?.options ?? refreshedWithFallback.options,
-              restoreCommand: optimisticPlan?.restoreCommand ?? refreshedWithFallback.restoreCommand
-            };
-        restorePlans = { ...restorePlans, [activeRestorePath]: mergedPlan };
-      }
-    } catch (err) {
-      if (requestId === restoreOptionRequestId && activeRestorePath) {
-        restorePlans = {
-          ...restorePlans,
-          [activeRestorePath]: {
-            ...(restorePlans[activeRestorePath] ?? currentPlan),
-            errorMessage: err instanceof Error ? err.message : 'Could not update the restore command.'
-          }
-        };
-      }
-    } finally {
-      planBusyPath = null;
-    }
-  }
-
-  function updateRestoreCommand(command: string, options: RestorePlan['options']): string {
-    let updated = command;
-    const valueFor = (key: string) => options.find((option) => option.key === key)?.value?.trim() ?? '';
-    const removeOption = (key: string) => {
-      updated = updated.replace(new RegExp(`\\s+--${key}\\s+(?:"[^"]*"|'[^']*'|\\S+)`, 'g'), '');
-    };
-    const setOption = (key: string, value: string) => {
-      removeOption(key);
-      if (value) updated += ` --${key} ${quoteCommandValue(value)}`;
-    };
-
-    setOption('pgdata', valueFor('pgdata') || '<PGDATA>');
-    setOption('pg-ctl', valueFor('pg-ctl'));
-
-    for (const target of ['target-time', 'target-lsn', 'target-name']) removeOption(target);
-    removeOption('recover-latest');
-    removeOption('archive-dir');
-
-    const target = ['target-time', 'target-lsn', 'target-name'].find((key) => valueFor(key));
-    if (target) {
-      setOption(target, valueFor(target));
-      setOption('archive-dir', valueFor('archive-dir') || '<WAL_ARCHIVE_DIR>');
-    } else if (valueFor('recover-latest') === 'true') {
-      updated += ' --recover-latest';
-      setOption('archive-dir', valueFor('archive-dir') || '<WAL_ARCHIVE_DIR>');
-    }
-
-    return updated;
-  }
-
-  function quoteCommandValue(value: string): string {
-    return /\s/.test(value) ? `"${value.replaceAll('"', '\\"')}"` : value;
-  }
-
-  async function copyRestoreCommand(command: string) {
-    await navigator.clipboard.writeText(command);
-    copiedRestoreCommand = true;
-    window.setTimeout(() => (copiedRestoreCommand = false), 1800);
-  }
-
-  function closeRestorePlan() {
-    activeRestorePath = null;
-    copiedRestoreCommand = false;
+  function mergeJob(job: BackupJob) {
+    jobs = [job, ...jobs.filter((item) => item.jobId !== job.jobId)];
+    startPolling();
   }
 
   function statusBadgeClass(status: BackupJob['status']): string {
@@ -371,6 +181,21 @@
     }
   }
 
+  function describeKind(job: BackupJob): string {
+    switch (job.kind) {
+      case 'backup':
+        return job.type === 'diff' ? 'diff backup' : 'full backup';
+      case 'verify-quick':
+        return 'quick verify';
+      case 'verify-deep':
+        return 'deep verify';
+      case 'restore':
+        return 'restore';
+      default:
+        return job.kind;
+    }
+  }
+
   function formatDate(value: string | null): string {
     if (!value) {
       return 'unknown';
@@ -379,21 +204,14 @@
     return Number.isNaN(date.getTime()) ? 'unknown' : date.toLocaleString();
   }
 
-  function archiveName(path: string): string {
-    const segments = path.split(/[\\/]/);
-    return segments[segments.length - 1] || path;
-  }
-
-  function formatMode(mode: string): string {
-    switch (mode?.toLowerCase()) {
-      case 'full':
-        return 'full';
-      case 'walarchive':
-      case 'wal-archive':
-        return 'wal-archive';
-      default:
-        return 'snapshot';
+  function formatSize(bytes: number | null): string {
+    if (bytes === null || bytes === undefined) {
+      return '—';
     }
+    if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GiB`;
+    if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MiB`;
+    if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
+    return `${bytes} B`;
   }
 </script>
 
@@ -401,15 +219,12 @@
 <section class={cardClass} aria-labelledby="backups-run-title">
   <h2 id="backups-run-title" class="text-base font-bold text-base-content">Backups</h2>
   <p class="mt-2 max-w-3xl text-sm leading-6 text-base-content/60">
-    Core-data backups cover the FrostStream, Authentik, and OpenFGA databases plus OpenBao secrets. Media files and
-    rebuildable search or queue state are excluded.
+    pgBackRest backups cover the FrostStream, Authentik, and OpenFGA databases plus OpenBao secrets, with continuous
+    WAL archiving for point-in-time recovery. Media files and rebuildable search or queue state are excluded.
   </p>
 
   {#if startError}
-    <div
-      class="alert alert-error mt-5 text-sm"
-      role="alert"
-    >
+    <div class="alert alert-error mt-5 text-sm" role="alert">
       <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{startError}</span>
     </div>
@@ -421,8 +236,8 @@
       <input class="input w-full" id="backup-name" maxlength={100} bind:value={backupName} placeholder="pre-upgrade" />
     </div>
     <div class="min-w-0 flex-1 sm:max-w-sm">
-      <label class="label mb-2 text-sm" for="backup-mode">Mode</label>
-      <Select id="backup-mode" bind:value={backupMode} items={backupModeOptions} />
+      <label class="label mb-2 text-sm" for="backup-type">Type</label>
+      <Select id="backup-type" bind:value={backupType} items={backupTypeOptions} />
     </div>
     <button class="btn btn-sm btn-primary text-xs sm:-translate-y-1" type="submit" disabled={startBusy}>
       {#if startBusy}
@@ -433,7 +248,7 @@
       Run backup now
     </button>
   </form>
-  <p class="mt-2 text-xs text-base-content/50">{backupModeHints[backupMode]}</p>
+  <p class="mt-2 text-xs text-base-content/50">{backupTypeHints[backupType]}</p>
 </section>
 
 <!-- Jobs -->
@@ -442,7 +257,7 @@
     <div>
       <h2 id="backups-jobs-title" class="text-base font-bold text-base-content">Backup jobs</h2>
       <p class="mt-2 text-sm text-base-content/60">
-        Jobs started by the current server process. This list resets when the server restarts.
+        Backup, verification, and restore jobs recorded by the backup service.
       </p>
     </div>
     <button class="btn btn-sm btn-neutral" disabled={jobsLoading} onclick={() => void loadJobs(true)}>
@@ -452,10 +267,7 @@
   </div>
 
   {#if jobsError}
-    <div
-      class="alert alert-error mt-5 text-sm"
-      role="alert"
-    >
+    <div class="alert alert-error mt-5 text-sm" role="alert">
       <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{jobsError}</span>
     </div>
@@ -469,7 +281,7 @@
     <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
       <CloudUpload class="mx-auto h-9 w-9 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No backup jobs yet</p>
-      <p class="mt-1 text-sm text-base-content/50">Run a backup to see its progress here.</p>
+      <p class="mt-1 text-sm text-base-content/50">Run a backup or verification to see its progress here.</p>
     </div>
   {:else}
     <div class="mt-5 space-y-2">
@@ -482,14 +294,20 @@
             <span class="badge badge-sm rounded-full text-[10px] uppercase {statusBadgeClass(job.status)}">
               {job.status}
             </span>
+            <span class="badge badge-sm badge-accent text-[10px] font-semibold text-accent-content">
+              {describeKind(job)}
+            </span>
+            {#if job.name}
+              <span class="truncate text-xs font-semibold text-base-content/80">{job.name}</span>
+            {/if}
             <span class="text-xs text-base-content/60">Started {formatDate(job.createdAt)}</span>
             {#if job.completedAt}
               <span class="text-xs text-base-content/50">· finished {formatDate(job.completedAt)}</span>
             {/if}
             <span class="ml-auto font-mono text-[10px] text-base-content/40">{job.jobId}</span>
           </div>
-          {#if job.archivePath}
-            <p class="mt-2 truncate font-mono text-xs text-base-content/60" title={job.archivePath}>{job.archivePath}</p>
+          {#if job.label}
+            <p class="mt-2 truncate font-mono text-xs text-base-content/60" title={job.label}>{job.label}</p>
           {/if}
           {#if job.errorMessage}
             <p class="mt-2 text-xs text-error">{job.errorMessage}</p>
@@ -500,47 +318,85 @@
   {/if}
 </section>
 
-<!-- Archives -->
-<section class={cardClass} aria-labelledby="backups-archives-title">
+<!-- Repository -->
+<section class={cardClass} aria-labelledby="backups-repo-title">
   <div class="flex items-start justify-between gap-2">
     <div>
-      <h2 id="backups-archives-title" class="text-base font-bold text-base-content">Backup archives</h2>
+      <h2 id="backups-repo-title" class="text-base font-bold text-base-content">Backup repository</h2>
       <p class="mt-2 text-sm text-base-content/60">
-        Archives found in the server's backup directory. Verify an archive before relying on it, or build the offline
-        restore command.
+        Backups in the pgBackRest repository. Quick verify checks every checksum in the repository; deep verify
+        test-restores one backup and checks the data inside it.
       </p>
     </div>
-    <button class="btn btn-sm btn-neutral" disabled={archivesLoading} onclick={() => void loadArchives()}>
-      <RefreshCw class="mr-1.5 h-3.5 w-3.5" />
-      Refresh
-    </button>
+    <div class="flex shrink-0 gap-2">
+      <button class="btn btn-sm btn-neutral" disabled={quickVerifyBusy} onclick={() => void runQuickVerify()}>
+        {#if quickVerifyBusy}
+          <span class="loading loading-spinner loading-xs mr-1.5"></span>
+        {:else}
+          <ShieldCheck class="mr-1.5 h-3.5 w-3.5" />
+        {/if}
+        Quick verify
+      </button>
+      <button class="btn btn-sm btn-neutral" disabled={repositoryLoading} onclick={() => void loadRepository()}>
+        <RefreshCw class="mr-1.5 h-3.5 w-3.5" />
+        Refresh
+      </button>
+    </div>
   </div>
 
-  {#if archivesError}
-    <div
-      class="alert alert-error mt-5 text-sm"
-      role="alert"
-    >
+  {#if repositoryError}
+    <div class="alert alert-error mt-5 text-sm" role="alert">
       <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
-      <span>{archivesError}</span>
+      <span>{repositoryError}</span>
+    </div>
+  {/if}
+  {#if verifyError}
+    <div class="alert alert-error mt-5 text-sm" role="alert">
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
+      <span>{verifyError}</span>
     </div>
   {/if}
 
-  {#if archivesLoading}
+  {#if repository}
+    <div
+      class={[
+        'mt-5 flex items-start gap-2 rounded-lg border p-3 text-xs',
+        repository.repositoryOk
+          ? 'border-info/30 bg-info/10 text-info-content'
+          : 'border-error/30 bg-error/10 text-error-content'
+      ]}
+      role="status"
+    >
+      {#if repository.repositoryOk}
+        <CircleCheck class="mt-0.5 h-4 w-4 shrink-0" />
+        <span>
+          Repository healthy.
+          {#if repository.pitrWindow.earliest}
+            Point-in-time recovery covers {formatDate(repository.pitrWindow.earliest)} → now.
+          {:else}
+            Point-in-time recovery becomes available after the first full backup.
+          {/if}
+        </span>
+      {:else}
+        <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
+        <span>{repository.statusMessage || 'The backup repository is not healthy.'}</span>
+      {/if}
+    </div>
+  {/if}
+
+  {#if repositoryLoading}
     <div class="mt-10 flex justify-center">
       <span class="loading loading-spinner loading-md"></span>
     </div>
-  {:else if archives.length === 0}
+  {:else if !repository || repository.backups.length === 0}
     <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
       <FileArchive class="mx-auto h-9 w-9 text-base-content/30" />
-      <p class="mt-4 text-sm font-semibold text-base-content/80">No backup archives found</p>
-      <p class="mt-1 text-sm text-base-content/50">Completed backups appear here once written to the backup directory.</p>
+      <p class="mt-4 text-sm font-semibold text-base-content/80">No backups yet</p>
+      <p class="mt-1 text-sm text-base-content/50">Completed backups appear here once written to the repository.</p>
     </div>
   {:else}
     <div class="mt-5 space-y-2">
-      {#each archives as archive (archive.archivePath)}
-        {@const verifyResult = verifyResults[archive.archivePath]}
-        {@const plan = restorePlans[archive.archivePath]}
+      {#each [...repository.backups].reverse() as backup (backup.label)}
         <article class="rounded-lg border border-base-content/20 bg-base-100 px-3 py-3 transition hover:border-base-content/30 sm:px-4">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div class="flex min-w-0 items-center gap-3">
@@ -549,22 +405,31 @@
               </span>
               <div class="min-w-0">
                 <div class="flex min-w-0 flex-wrap items-center gap-2">
-                  <h3 class="truncate text-sm font-semibold text-base-content" title={archive.archivePath}>
-                    {archiveName(archive.archivePath)}
+                  <h3 class="truncate font-mono text-sm font-semibold text-base-content" title={backup.label}>
+                    {backup.label}
                   </h3>
                   <span class="badge badge-sm badge-accent text-[10px] font-semibold text-accent-content">
-                    {formatMode(archive.mode)}
+                    {backup.type}
                   </span>
-                  <span class="badge badge-sm badge-neutral text-[10px] font-semibold">
-                    schema v{archive.schemaVersion}
-                  </span>
-                  {#if !archive.mediaIncluded}
-                    <span class="badge badge-sm badge-neutral text-[10px] font-semibold">
-                      media excluded
+                  {#if backup.name}
+                    <span class="badge badge-sm badge-neutral text-[10px] font-semibold">{backup.name}</span>
+                  {/if}
+                  {#if backup.hasError}
+                    <span class="badge badge-sm badge-error text-[10px] font-semibold text-error-content">error</span>
+                  {/if}
+                  {#if !backup.openBaoExportPresent}
+                    <span class="badge badge-sm badge-warning text-[10px] font-semibold text-warning-content">
+                      no secrets export
                     </span>
                   {/if}
                 </div>
-                <p class="mt-0.5 truncate text-xs text-base-content/60">Created {formatDate(archive.createdAt)}</p>
+                <p class="mt-0.5 truncate text-xs text-base-content/60">
+                  Completed {formatDate(backup.completedAt)} · {formatSize(backup.databaseSize)} database ·
+                  {formatSize(backup.repositorySize)} in repo
+                  {#if backup.walStart}
+                    · WAL {backup.walStart}…{backup.walStop}
+                  {/if}
+                </p>
               </div>
             </div>
 
@@ -572,135 +437,41 @@
               <button
                 type="button"
                 class={rowActionClass}
-                disabled={verifyBusyPath === archive.archivePath}
-                onclick={() => void verify(archive)}
+                disabled={deepVerifyBusyLabel === backup.label}
+                onclick={() => void runDeepVerify(backup)}
               >
-                {#if verifyBusyPath === archive.archivePath}
+                {#if deepVerifyBusyLabel === backup.label}
                   <span class="loading loading-spinner loading-xs"></span>
                 {:else}
-                  <CircleCheck class="h-4 w-4" />
+                  <ShieldCheck class="h-4 w-4" />
                 {/if}
-                Verify
-              </button>
-              <button
-                type="button"
-                class={rowActionClass}
-                disabled={planBusyPath === archive.archivePath}
-                onclick={() => void showRestorePlan(archive)}
-              >
-                {#if planBusyPath === archive.archivePath}
-                  <span class="loading loading-spinner loading-xs"></span>
-                {:else}
-                  <Terminal class="h-4 w-4" />
-                {/if}
-                {activeRestorePath === archive.archivePath ? 'Hide restore plan' : 'Restore plan'}
+                Deep verify
               </button>
             </div>
           </div>
-
-          {#if verifyResult}
-            <div
-              class={[
-                'mt-3 flex items-start gap-2 rounded-lg border p-3 text-xs',
-                verifyResult.success
-                  ? 'border-info/30 bg-info/10 text-info-content'
-                  : 'border-error/30 bg-error/10 text-error-content'
-              ]}
-              role="status"
-            >
-              {#if verifyResult.success}
-                <CircleCheck class="mt-0.5 h-4 w-4 shrink-0" />
-                <span>Backup verified: checksums and manifest are intact.</span>
-              {:else}
-                <CircleX class="mt-0.5 h-4 w-4 shrink-0" />
-                <span>{verifyResult.errorMessage || 'Verification failed.'}</span>
-              {/if}
-            </div>
-          {/if}
-
         </article>
       {/each}
     </div>
   {/if}
 </section>
 
-{#if activeRestorePath && restorePlans[activeRestorePath]}
-  {@const activePlan = restorePlans[activeRestorePath]}
-  {@const activeOptions = (activePlan.options ?? []).filter((option) => option.key !== 'tool-command')}
-  <div class="fixed inset-0 z-50 flex items-start justify-center overflow-x-hidden overflow-y-auto bg-black/50 p-4 sm:p-8" role="dialog" aria-modal="true" aria-labelledby="restore-plan-title">
-    <div class="relative my-4 min-w-0 w-full max-w-3xl rounded-box bg-base-100 p-6 shadow-2xl sm:my-8">
-      <div class="flex items-start justify-between gap-4">
-        <div>
-          <h2 id="restore-plan-title" class="text-lg font-bold">Restore plan</h2>
-          <p class="mt-1 font-mono text-xs text-base-content/50">{archiveName(activeRestorePath)}</p>
-        </div>
-        <button class="btn btn-sm btn-circle btn-ghost" type="button" aria-label="Close restore plan" onclick={closeRestorePlan}>
-          <X class="h-5 w-5" />
-        </button>
-      </div>
-
-      <details class="mt-5 rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm text-base-content/75">
-        <summary class="cursor-pointer font-semibold text-base-content">Restore guidance</summary>
-        <p class="mt-3 whitespace-pre-line break-words leading-6">{activePlan.explanation}</p>
-      </details>
-
-      {#if activeOptions.length > 0}
-        <div class="mt-5 space-y-4">
-          <div>
-            <h3 class="text-sm font-semibold">Restore options</h3>
-            <p class="mt-1 text-xs text-base-content/55">Fill in the values for this environment. The command updates automatically.</p>
-          </div>
-          {#each activeOptions as option (option.key)}
-            <div class="form-control">
-              {#if option.inputType === 'checkbox'}
-                <label class="label cursor-pointer justify-start gap-3">
-                  <input
-                    class="checkbox checkbox-sm checkbox-primary"
-                    type="checkbox"
-                    checked={option.value === 'true'}
-                    onchange={(event) => void updateRestoreOption(activePlan, option.key, (event.currentTarget as HTMLInputElement).checked ? 'true' : 'false')}
-                  />
-                  <span class="min-w-0 w-full">
-                    <span class="block whitespace-normal break-words text-sm font-semibold">{option.label}</span>
-                    <span class="block whitespace-normal break-words text-xs leading-5 text-base-content/55">{option.description}</span>
-                  </span>
-                </label>
-              {:else}
-                <label class="label" for={'restore-' + option.key}>
-                  <span class="min-w-0 w-full">
-                    <span class="block whitespace-normal break-words text-sm font-semibold">{option.label}{option.required ? ' *' : ''}</span>
-                    <span class="block whitespace-normal break-words text-xs leading-5 text-base-content/55">{option.description}</span>
-                  </span>
-                </label>
-                <input
-                  class="input input-bordered input-sm w-full font-mono"
-                  id={'restore-' + option.key}
-                  value={option.value || ''}
-                  placeholder={option.placeholder || ''}
-                  oninput={(event) => void updateRestoreOption(activePlan, option.key, (event.currentTarget as HTMLInputElement).value)}
-                />
-              {/if}
-            </div>
-          {/each}
-        </div>
-      {/if}
-
-      <div class="mt-5">
-        <div class="flex items-center justify-between gap-3">
-          <h3 class="text-sm font-semibold">Command</h3>
-          <button class="btn btn-sm btn-outline" type="button" disabled={!activePlan.restoreCommand} onclick={() => void copyRestoreCommand(activePlan.restoreCommand)}>
-            <Copy class="mr-1.5 h-4 w-4" />
-            {copiedRestoreCommand ? 'Copied' : 'Copy command'}
-          </button>
-        </div>
-        <p class="mt-2 text-xs text-base-content/60">
-          {activePlan.preflightOk ? 'Preflight checks passed. Stop all FrostStream services before running this offline command.' : 'Preflight checks failed — resolve the issue before restoring.'}
-        </p>
-        {#if activePlan.errorMessage}
-          <p class="mt-2 text-xs text-error">{activePlan.errorMessage}</p>
-        {/if}
-        <pre class="mt-3 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-black/70 p-3 font-mono text-xs leading-5 text-white/85">{activePlan.restoreCommand || 'No command available.'}</pre>
-      </div>
+<!-- Restore -->
+<section class={cardClass} aria-labelledby="backups-restore-title">
+  <div class="flex items-start gap-3">
+    <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-base-300/70 text-primary">
+      <LifeBuoy class="h-4.5 w-4.5" />
+    </span>
+    <div>
+      <h2 id="backups-restore-title" class="text-base font-bold text-base-content">Restore</h2>
+      <p class="mt-2 max-w-3xl text-sm leading-6 text-base-content/60">
+        Restores run from the standalone restore console, which works while the rest of FrostStream (including sign-in)
+        is down. Stop the <code class="font-mono text-xs">postgres</code> container first, then open the console and
+        follow the guided steps — it supports restoring a specific backup or point-in-time recovery to any moment in
+        the window shown above. The console is protected by the deployment's restore token.
+      </p>
+      <a class="btn btn-sm btn-neutral mt-4 text-xs" href={restoreUiUrl} target="_blank" rel="noreferrer noopener">
+        Open the restore console
+      </a>
     </div>
   </div>
-{/if}
+</section>

@@ -45,9 +45,8 @@ export const scheduleTaskTypes = [
   'search-reindex',
   'download-history-cleanup',
   'import_session_cleanup',
-  'backup',
-  'backup-snapshot',
-  'backup-full'
+  'backup-full',
+  'backup-diff'
 ] as const;
 
 const BASE = '/api/global/schedules';

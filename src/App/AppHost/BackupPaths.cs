@@ -1,8 +1,8 @@
 namespace AppHost;
 
 /// <summary>
-/// Shared filesystem locations for backups, so the Postgres container's WAL archive mount and the
-/// BackupService env handed to WebAPI/DataBridge always agree.
+/// Shared filesystem locations for backups, so the Postgres container's pgBackRest repository
+/// mount and the BackupService env always agree.
 /// </summary>
 internal static class BackupPaths
 {
@@ -11,6 +11,11 @@ internal static class BackupPaths
             ? Path.Combine(sharedStorageRoot, "core-backups")
             : Environment.GetEnvironmentVariable("FROSTSTREAM_BACKUP_ROOT")!;
 
-    public static string WalArchiveDirectory(string sharedStorageRoot)
-        => Path.Combine(BackupRoot(sharedStorageRoot), "wal");
+    /// <summary>pgBackRest repository (repo1-path maps here inside the containers).</summary>
+    public static string PgBackRestRepoDirectory(string sharedStorageRoot)
+        => Path.Combine(BackupRoot(sharedStorageRoot), "pgbackrest");
+
+    /// <summary>Per-backup OpenBao KV exports, keyed by pgBackRest backup label.</summary>
+    public static string OpenBaoExportDirectory(string sharedStorageRoot)
+        => Path.Combine(BackupRoot(sharedStorageRoot), "openbao");
 }

@@ -7,9 +7,9 @@ public sealed class BackupJobService(IBackupServiceClient client)
 {
     public async Task<BackupJobResponse> StartBackupAsync(
         string? name,
-        string? mode,
+        string? type,
         CancellationToken cancellationToken)
-        => ToResponse(await client.CreateAsync(name, mode, cancellationToken));
+        => ToResponse(await client.CreateAsync(new CreateBackupJobRequest(name, type), cancellationToken));
 
     public async Task<IReadOnlyList<BackupJobResponse>> ListJobsAsync(CancellationToken cancellationToken)
         => (await client.ListJobsAsync(cancellationToken)).Select(ToResponse).ToArray();
@@ -17,32 +17,28 @@ public sealed class BackupJobService(IBackupServiceClient client)
     public async Task<BackupJobResponse?> GetJobAsync(Guid jobId, CancellationToken cancellationToken)
         => await client.GetJobAsync(jobId, cancellationToken) is { } job ? ToResponse(job) : null;
 
-    public async Task<IReadOnlyList<BackupSummaryResponse>> ListBackupsAsync(CancellationToken cancellationToken)
-        => (await client.ListArchivesAsync(cancellationToken))
-            .Select(x => new BackupSummaryResponse(x.ArchivePath, x.CreatedAt, x.MediaIncluded, x.SchemaVersion, x.Mode))
-            .ToArray();
-
-    public async Task<VerifyBackupResponse> VerifyAsync(string archivePath, CancellationToken cancellationToken)
+    public async Task<BackupRepositoryResponse> ListBackupsAsync(CancellationToken cancellationToken)
     {
-        var result = await client.VerifyAsync(archivePath, cancellationToken);
-        return new VerifyBackupResponse(result.Success, result.ErrorMessage);
+        var repository = await client.ListBackupsAsync(cancellationToken);
+        return new BackupRepositoryResponse(
+            repository.RepositoryOk,
+            repository.StatusMessage,
+            repository.Backups
+                .Select(x => new BackupSummaryResponse(
+                    x.Label, x.Type, x.Name, x.StartedAt, x.CompletedAt, x.DatabaseSize, x.RepositorySize,
+                    x.WalStart, x.WalStop, x.HasError, x.OpenBaoExportPresent))
+                .ToArray(),
+            new PitrWindowResponse(repository.PitrWindow.Earliest, repository.PitrWindow.LatestApprox));
     }
 
-    public async Task<RestorePlanResponse> BuildRestorePlanAsync(
-        string archivePath,
-        IReadOnlyDictionary<string, string?>? options,
+    public async Task<BackupJobResponse> VerifyAsync(
+        string? label,
+        bool deep,
         CancellationToken cancellationToken)
-    {
-        var result = await client.BuildRestorePlanAsync(archivePath, options, cancellationToken);
-        return new RestorePlanResponse(
-            result.PreflightOk,
-            result.Explanation,
-            result.RestoreCommand,
-            result.Options.Select(x => new RestorePlanOptionResponse(
-                x.Key, x.Label, x.Description, x.InputType, x.Value, x.Placeholder, x.Required)).ToArray(),
-            result.ErrorMessage);
-    }
+        => ToResponse(await client.VerifyAsync(new Shared.Backups.VerifyBackupRequest(label, deep), cancellationToken));
 
     private static BackupJobResponse ToResponse(BackupJobDto job)
-        => new(job.JobId, job.Status, job.ArchivePath, job.ErrorMessage, job.CreatedAt, job.CompletedAt);
+        => new(
+            job.JobId, job.Kind, job.Type, job.Status, job.Name, job.Label,
+            job.ErrorMessage, job.CreatedAt, job.CompletedAt, job.Progress);
 }

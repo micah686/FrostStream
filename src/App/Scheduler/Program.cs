@@ -39,6 +39,10 @@ internal static class Program
         });
         builder.Services.AddNatsTopologySource<BackgroundJobsTopology>();
         builder.Services.AddSingleton<INatsMessagePublisher, NatsMessagePublisher>();
+        // Scheduled backups are dispatched to BackupService over REST rather than JetStream;
+        // resilience + service discovery come from AddServiceDefaults.
+        builder.Services.AddHttpClient<Shared.Backups.IBackupServiceClient, Shared.Backups.BackupServiceClient>(client =>
+            client.BaseAddress = new Uri(builder.Configuration["BackupService:BaseUrl"] ?? "http://backupservice"));
         builder.Services.AddSingleton<INatsRequestClient, NatsRequestClient>();
         builder.Services.AddSingleton<IDatabridgeClient, DatabridgeClient>();
 

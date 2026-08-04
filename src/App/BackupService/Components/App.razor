@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>FrostStream Restore</title>
+    <base href="/"/>
+    <style>
+        :root { color-scheme: dark; }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; min-height: 100vh; background: #10151c; color: #dbe2ea;
+            font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5;
+        }
+        main { max-width: 860px; margin: 0 auto; padding: 2rem 1rem 4rem; }
+        h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
+        h2 { font-size: 1.05rem; margin: 0 0 .75rem; }
+        .subtitle { color: #8b98a8; margin: 0 0 1.5rem; font-size: .9rem; }
+        .card {
+            background: #171e28; border: 1px solid #26303d; border-radius: 10px;
+            padding: 1.25rem 1.5rem; margin-bottom: 1rem;
+        }
+        .steps { display: flex; gap: .5rem; margin: 0 0 1.5rem; padding: 0; list-style: none; flex-wrap: wrap; }
+        .steps li {
+            font-size: .8rem; padding: .25rem .75rem; border-radius: 999px;
+            border: 1px solid #26303d; color: #8b98a8;
+        }
+        .steps li.active { border-color: #4f8ef7; color: #cfe0fb; background: #1a2636; }
+        .steps li.done { border-color: #2f7d4f; color: #9fd8b4; }
+        .check { display: flex; align-items: baseline; gap: .6rem; padding: .35rem 0; }
+        .check .dot { font-weight: 700; }
+        .ok { color: #58c98a; }
+        .bad { color: #ef6a6a; }
+        .warn { color: #e5b567; }
+        .muted { color: #8b98a8; font-size: .85rem; }
+        .error { color: #ef6a6a; }
+        button {
+            background: #2b6cd4; color: #fff; border: 0; border-radius: 8px;
+            padding: .5rem 1.1rem; font-size: .9rem; cursor: pointer;
+        }
+        button:disabled { background: #2a3542; color: #71808f; cursor: not-allowed; }
+        button.secondary { background: #232d3a; color: #c6d0db; }
+        button.danger { background: #b23f3f; }
+        input[type=text], input[type=password], input[type=datetime-local] {
+            background: #0e131a; color: #dbe2ea; border: 1px solid #2b3644; border-radius: 8px;
+            padding: .5rem .7rem; font-size: .9rem; width: 100%;
+        }
+        label { display: block; margin: .6rem 0 .25rem; font-size: .85rem; color: #a8b4c2; }
+        table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+        th, td { text-align: left; padding: .4rem .6rem; border-bottom: 1px solid #222c38; }
+        th { color: #8b98a8; font-weight: 600; }
+        tr.selectable { cursor: pointer; }
+        tr.selected { background: #1a2636; }
+        .badge {
+            display: inline-block; font-size: .7rem; padding: .1rem .5rem; border-radius: 999px;
+            border: 1px solid #2b3644; color: #a8b4c2;
+        }
+        .badge.full { border-color: #4f8ef7; color: #cfe0fb; }
+        .badge.diff { border-color: #b98add; color: #e3d2f5; }
+        pre.log {
+            background: #0b0f15; border: 1px solid #222c38; border-radius: 8px; padding: .75rem 1rem;
+            font-size: .78rem; max-height: 22rem; overflow: auto; white-space: pre-wrap; word-break: break-word;
+        }
+        .row { display: flex; gap: .75rem; margin-top: 1rem; }
+        ol.checklist { padding-left: 1.25rem; }
+        ol.checklist li { margin: .4rem 0; }
+    </style>
+    <HeadOutlet/>
+</head>
+<body>
+<main>
+    <Routes/>
+</main>
+<script src="_framework/blazor.web.js"></script>
+</body>
+</html>

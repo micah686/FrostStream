@@ -1,49 +1,53 @@
 namespace Shared.Backups;
 
-public sealed record CreateBackupJobRequest(string? Name, string? Mode, bool Scheduled = false, string? IdempotencyKey = null);
+public sealed record CreateBackupJobRequest(
+    string? Name,
+    string? Type,
+    bool Scheduled = false,
+    string? ScheduleKey = null,
+    string? IdempotencyKey = null);
+
+public sealed record VerifyBackupRequest(string? Label = null, bool Deep = false);
 
 public sealed record BackupJobDto(
     Guid JobId,
+    string Kind,
+    string? Type,
     string Status,
-    string? ArchivePath,
+    string? Name,
+    string? Label,
     string? ErrorMessage,
     DateTimeOffset CreatedAt,
-    DateTimeOffset? CompletedAt);
+    DateTimeOffset? CompletedAt,
+    IReadOnlyList<string> Progress);
 
-public sealed record BackupArchiveDto(
-    string ArchivePath,
-    DateTimeOffset? CreatedAt,
-    bool MediaIncluded,
-    int SchemaVersion,
-    string Mode);
-
-public sealed record VerifyBackupDto(bool Success, string? ErrorMessage);
-
-public sealed record RestorePlanOptionDto(
-    string Key,
+/// <summary>One backup in the pgBackRest repository (from `pgbackrest info`).</summary>
+public sealed record BackupInfoDto(
     string Label,
-    string Description,
-    string InputType,
-    string? Value,
-    string? Placeholder,
-    bool Required);
+    string Type,
+    string? Name,
+    DateTimeOffset? StartedAt,
+    DateTimeOffset? CompletedAt,
+    long? DatabaseSize,
+    long? RepositorySize,
+    string? WalStart,
+    string? WalStop,
+    bool HasError,
+    bool OpenBaoExportPresent);
 
-public sealed record RestorePlanDto(
-    bool PreflightOk,
-    string Explanation,
-    string RestoreCommand,
-    IReadOnlyList<RestorePlanOptionDto> Options,
-    string? ErrorMessage);
+public sealed record PitrWindowDto(DateTimeOffset? Earliest, DateTimeOffset? LatestApprox);
+
+public sealed record BackupRepositoryDto(
+    bool RepositoryOk,
+    string? StatusMessage,
+    IReadOnlyList<BackupInfoDto> Backups,
+    PitrWindowDto PitrWindow);
 
 public interface IBackupServiceClient
 {
-    Task<BackupJobDto> CreateAsync(string? name, string? mode, CancellationToken cancellationToken = default);
+    Task<BackupJobDto> CreateAsync(CreateBackupJobRequest request, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<BackupJobDto>> ListJobsAsync(CancellationToken cancellationToken = default);
     Task<BackupJobDto?> GetJobAsync(Guid jobId, CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<BackupArchiveDto>> ListArchivesAsync(CancellationToken cancellationToken = default);
-    Task<VerifyBackupDto> VerifyAsync(string archivePath, CancellationToken cancellationToken = default);
-    Task<RestorePlanDto> BuildRestorePlanAsync(
-        string archivePath,
-        IReadOnlyDictionary<string, string?>? options = null,
-        CancellationToken cancellationToken = default);
+    Task<BackupRepositoryDto> ListBackupsAsync(CancellationToken cancellationToken = default);
+    Task<BackupJobDto> VerifyAsync(VerifyBackupRequest request, CancellationToken cancellationToken = default);
 }

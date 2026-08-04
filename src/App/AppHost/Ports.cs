@@ -27,6 +27,9 @@ public static class Ports
     public static int DbGate => External("PORT_DBGATE", 25600);
     public static int NatsUi => External("PORT_NATS_UI", 25700);
     public static int OpenFgaStudio => External("PORT_OPENFGA_STUDIO", 25800);
+    // Host-published so the break-glass restore wizard stays reachable when the rest of the
+    // stack (frontend, Authentik) is down. The service's internal API stays on 24050.
+    public static int BackupRestoreUi => External("PORT_BACKUP_RESTORE_UI", 25900);
 
     // ~~~~~ Internal (240xy) ~~~~~
     public const int Typesense = 24010;

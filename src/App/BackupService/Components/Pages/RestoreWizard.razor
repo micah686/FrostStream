@@ -1,0 +1,444 @@
+@page "/"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@implements IDisposable
+@using BackupService.PgBackRest
+@using Shared.Backups
+@inject BackupCoordinator Coordinator
+@inject BackupJobStore JobStore
+@inject BackupRepositoryReader RepositoryReader
+@inject PostgresStateProbe StateProbe
+@inject OpenBaoPairing OpenBao
+@inject BackupServiceOptions Options
+
+<h1>FrostStream restore</h1>
+<p class="subtitle">
+    Guided PostgreSQL restore from the pgBackRest repository (stanza <code>@Options.Stanza</code>).
+    Everything except this backup service should be stopped while restoring.
+</p>
+
+<ul class="steps">
+    @foreach (var (step, title) in StepTitles)
+    {
+        <li class="@(step == _step ? "active" : step < _step ? "done" : "")">@((int)step + 1). @title</li>
+    }
+</ul>
+
+@if (_step == Step.Prerequisites)
+{
+    <div class="card">
+        <h2>Prerequisites</h2>
+        @if (_state is null || _repository is null)
+        {
+            <p class="muted">Checking…</p>
+        }
+        else
+        {
+            <div class="check">
+                <span class="dot @(!_state.ServerRunning ? "ok" : "bad")">@(!_state.ServerRunning ? "✔" : "✘")</span>
+                <span>
+                    PostgreSQL is stopped.
+                    @if (_state.ServerRunning)
+                    {
+                        <span class="muted">Stop the <code>postgres</code> container, then re-check.</span>
+                    }
+                </span>
+            </div>
+            @if (_state.StalePidFile)
+            {
+                <div class="check">
+                    <span class="dot warn">!</span>
+                    <span>
+                        A stale <code>postmaster.pid</code> is left in the data directory (crashed or
+                        force-removed container). pgBackRest refuses to restore over it.
+                        <button class="secondary" @onclick="RemoveStalePidAsync">Remove stale pid file</button>
+                    </span>
+                </div>
+            }
+            <div class="check">
+                <span class="dot @(_repository.RepositoryOk ? "ok" : "bad")">@(_repository.RepositoryOk ? "✔" : "✘")</span>
+                <span>
+                    Backup repository is healthy.
+                    @if (!_repository.RepositoryOk)
+                    {
+                        <span class="muted">@_repository.StatusMessage</span>
+                    }
+                </span>
+            </div>
+            <div class="check">
+                <span class="dot @(_repository.Backups.Count > 0 ? "ok" : "bad")">@(_repository.Backups.Count > 0 ? "✔" : "✘")</span>
+                <span>At least one backup exists (@_repository.Backups.Count found).</span>
+            </div>
+            <div class="check">
+                <span class="dot @(_pgDataWritable ? "ok" : "bad")">@(_pgDataWritable ? "✔" : "✘")</span>
+                <span>Data directory volume is writable (@Options.PgDataPath).</span>
+            </div>
+        }
+        @if (_prereqError is not null)
+        {
+            <p class="error">@_prereqError</p>
+        }
+        <div class="row">
+            <button class="secondary" @onclick="RefreshPrerequisitesAsync">Re-check</button>
+            <button disabled="@(!PrerequisitesMet)" @onclick="() => GoTo(Step.Select)">Continue</button>
+        </div>
+    </div>
+}
+else if (_step == Step.Select)
+{
+    <div class="card">
+        <h2>Choose what to restore</h2>
+        <table>
+            <thead>
+            <tr><th></th><th>Backup</th><th>Type</th><th>Name</th><th>Completed (UTC)</th><th>Size</th></tr>
+            </thead>
+            <tbody>
+            <tr class="selectable @(_selectedLabel is null && !_usePitr ? "selected" : "")" @onclick="() => SelectLatest()">
+                <td><input type="radio" checked="@(_selectedLabel is null && !_usePitr)"/></td>
+                <td colspan="5">Latest — most recent backup plus all archived WAL (recommended after data loss)</td>
+            </tr>
+            @foreach (var backup in Enumerable.Reverse(_repository?.Backups ?? []))
+            {
+                <tr class="selectable @(_selectedLabel == backup.Label ? "selected" : "")" @onclick="() => SelectBackup(backup.Label)">
+                    <td><input type="radio" checked="@(_selectedLabel == backup.Label)"/></td>
+                    <td><code>@backup.Label</code></td>
+                    <td><span class="badge @backup.Type">@backup.Type</span></td>
+                    <td>@(backup.Name ?? "—")</td>
+                    <td>@(backup.CompletedAt?.ToString("yyyy-MM-dd HH:mm:ss") ?? "—")</td>
+                    <td>@FormatSize(backup.DatabaseSize)</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+
+        <label style="margin-top:1rem;">
+            <input type="checkbox" checked="@_usePitr" @onchange="TogglePitr"/>
+            Point-in-time recovery — replay WAL up to a specific moment
+        </label>
+        @if (_usePitr)
+        {
+            <label for="pitr">Target time (UTC)</label>
+            <input id="pitr" type="datetime-local" step="1" @bind="_pitrLocal"
+                   min="@(_repository?.PitrWindow.Earliest?.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ss"))"
+                   max="@DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss")"/>
+            <p class="muted">
+                Recoverable window: @(_repository?.PitrWindow.Earliest?.ToString("yyyy-MM-dd HH:mm:ss") ?? "?")
+                → now. The target must lie after the end of a full backup and before the last archived WAL.
+            </p>
+        }
+        <div class="row">
+            <button class="secondary" @onclick="() => GoTo(Step.Prerequisites)">Back</button>
+            <button disabled="@(!SelectionValid)" @onclick="() => GoTo(Step.Confirm)">Continue</button>
+        </div>
+    </div>
+}
+else if (_step == Step.Confirm)
+{
+    <div class="card">
+        <h2>Confirm the restore</h2>
+        <p>This <strong>overwrites the PostgreSQL cluster</strong> at <code>@Options.PgDataPath</code> with:</p>
+        <ul>
+            @if (_usePitr && PitrTarget is { } target)
+            {
+                <li>Point-in-time recovery to <strong>@target.ToString("yyyy-MM-dd HH:mm:ss") UTC</strong></li>
+            }
+            else if (_selectedLabel is null)
+            {
+                <li>The latest backup plus all archived WAL</li>
+            }
+            else
+            {
+                <li>Backup <strong>@_selectedLabel</strong> (recovered to the end of that backup's WAL)</li>
+            }
+        </ul>
+        <p class="muted">
+            The restore is a delta: unchanged files are kept, everything else is replaced. Current data
+            that is not part of the selected target is lost.
+        </p>
+        <label for="confirm">Type the stanza name (<code>@Options.Stanza</code>) to confirm</label>
+        <input id="confirm" type="text" autocomplete="off" @bind="_confirmText" @bind:event="oninput"/>
+        <div class="row">
+            <button class="secondary" @onclick="() => GoTo(Step.Select)">Back</button>
+            <button class="danger" disabled="@(_confirmText.Trim() != Options.Stanza)" @onclick="StartRestoreAsync">
+                Restore now
+            </button>
+        </div>
+    </div>
+}
+else if (_step == Step.Execute)
+{
+    <div class="card">
+        <h2>Restoring…</h2>
+        <p class="muted">Job @_restoreJobId — @(_restoreStatus ?? "starting"). This page can be reloaded; the restore keeps running server-side.</p>
+        <pre class="log">@string.Join('\n', _restoreProgress)</pre>
+        @if (_restoreStatus == "failed")
+        {
+            <p class="error">@_restoreError</p>
+            <div class="row">
+                <button class="secondary" @onclick="() => GoTo(Step.Prerequisites)">Start over</button>
+            </div>
+        }
+    </div>
+}
+else if (_step == Step.Done)
+{
+    <div class="card">
+        <h2>Restore finished</h2>
+        <ol class="checklist">
+            <li>Start the <code>postgres</code> container. It will replay WAL to the selected target and promote itself; watch its logs until it reports <em>database system is ready to accept connections</em>.</li>
+            <li>Start the remaining FrostStream services (or <code>docker compose up -d</code> / <code>aspire run</code>).</li>
+            <li>
+                Restore OpenBao's storage snapshot from the same backup (needs OpenBao running and
+                unsealed). This replaces everything in the vault — secrets, auth backends, and the
+                token store — with its state at backup time; use this first.
+                <div class="row">
+                    <button class="secondary" disabled="@(_openBaoLabel is null || _openBaoSnapshotBusy)" @onclick="RestoreOpenBaoSnapshotAsync">
+                        @(_openBaoSnapshotBusy ? "Restoring…" : $"Restore OpenBao snapshot {_openBaoLabel ?? "(none found)"}")
+                    </button>
+                </div>
+                @if (_openBaoSnapshotMessage is not null)
+                {
+                    <p class="@(_openBaoSnapshotSucceeded ? "muted" : "error")">@_openBaoSnapshotMessage</p>
+                }
+            </li>
+            <li>
+                Fallback: restore just the OpenBao KV secrets export from the same backup — only needed
+                if the snapshot restore above can't be used:
+                <div class="row">
+                    <button class="secondary" disabled="@(_openBaoLabel is null || _openBaoBusy)" @onclick="RestoreOpenBaoAsync">
+                        @(_openBaoBusy ? "Restoring…" : $"Restore OpenBao export {_openBaoLabel ?? "(none found)"}")
+                    </button>
+                </div>
+                @if (_openBaoMessage is not null)
+                {
+                    <p class="@(_openBaoSucceeded ? "muted" : "error")">@_openBaoMessage</p>
+                }
+            </li>
+            <li>Take a fresh <strong>full backup</strong> from the admin UI — PITR before this restore point is no longer meaningful on the new timeline.</li>
+        </ol>
+    </div>
+}
+
+@code {
+    private enum Step { Prerequisites = 0, Select = 1, Confirm = 2, Execute = 3, Done = 4 }
+
+    private static readonly (Step, string)[] StepTitles =
+    [
+        (Step.Prerequisites, "Prerequisites"),
+        (Step.Select, "Select"),
+        (Step.Confirm, "Confirm"),
+        (Step.Execute, "Restore"),
+        (Step.Done, "Finish")
+    ];
+
+    private Step _step = Step.Prerequisites;
+    private PostgresState? _state;
+    private BackupRepositoryDto? _repository;
+    private bool _pgDataWritable;
+    private string? _prereqError;
+
+    private string? _selectedLabel;
+    private bool _usePitr;
+    private DateTime? _pitrLocal;
+
+    private string _confirmText = "";
+
+    private Guid _restoreJobId;
+    private string? _restoreStatus;
+    private string? _restoreError;
+    private IReadOnlyList<string> _restoreProgress = [];
+
+    private string? _openBaoLabel;
+    private bool _openBaoBusy;
+    private bool _openBaoSucceeded;
+    private string? _openBaoMessage;
+
+    private bool _openBaoSnapshotBusy;
+    private bool _openBaoSnapshotSucceeded;
+    private string? _openBaoSnapshotMessage;
+
+    private Timer? _timer;
+
+    private bool PrerequisitesMet
+        => _state is { ServerRunning: false, StalePidFile: false }
+           && _repository is { RepositoryOk: true, Backups.Count: > 0 }
+           && _pgDataWritable;
+
+    private DateTimeOffset? PitrTarget
+        => _pitrLocal is { } local ? new DateTimeOffset(DateTime.SpecifyKind(local, DateTimeKind.Utc)) : null;
+
+    private bool SelectionValid => !_usePitr || PitrTarget is not null;
+
+    protected override async Task OnInitializedAsync()
+        => await RefreshPrerequisitesAsync();
+
+    private async Task RefreshPrerequisitesAsync()
+    {
+        _prereqError = null;
+        try
+        {
+            _state = await StateProbe.ProbeAsync(CancellationToken.None);
+            _repository = await RepositoryReader.ReadAsync(CancellationToken.None);
+            _pgDataWritable = ProbeWritable();
+        }
+        catch (Exception ex)
+        {
+            _prereqError = ex.Message;
+        }
+    }
+
+    private bool ProbeWritable()
+    {
+        // The restored cluster lands in PgDataPath; probe it (or its closest existing ancestor,
+        // for a data volume that has never held a cluster).
+        var directory = Options.PgDataPath;
+        while (!Directory.Exists(directory))
+        {
+            directory = Path.GetDirectoryName(directory);
+            if (string.IsNullOrEmpty(directory))
+                return false;
+        }
+        try
+        {
+            var probe = Path.Combine(directory, $".restore-probe-{Guid.NewGuid():N}");
+            File.WriteAllText(probe, "ok");
+            File.Delete(probe);
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    private async Task RemoveStalePidAsync()
+    {
+        var state = await StateProbe.ProbeAsync(CancellationToken.None);
+        if (state is { ServerRunning: false, StalePidFile: true })
+            File.Delete(Path.Combine(Options.PgDataPath, "postmaster.pid"));
+        await RefreshPrerequisitesAsync();
+    }
+
+    private void SelectLatest()
+    {
+        _selectedLabel = null;
+    }
+
+    private void SelectBackup(string label)
+    {
+        _selectedLabel = label;
+        _usePitr = false;
+    }
+
+    private void TogglePitr(ChangeEventArgs e)
+    {
+        _usePitr = e.Value is true or "true";
+        if (_usePitr)
+            _selectedLabel = null;
+    }
+
+    private void GoTo(Step step)
+    {
+        _step = step;
+        if (step != Step.Confirm)
+            _confirmText = "";
+    }
+
+    private async Task StartRestoreAsync()
+    {
+        // Remember which OpenBao export pairs with what we are restoring, for the finish step.
+        _openBaoLabel = _selectedLabel
+                        ?? _repository?.Backups.LastOrDefault(b => b.OpenBaoExportPresent)?.Label;
+
+        var job = await Coordinator.QueueRestoreAsync(
+            _selectedLabel,
+            _usePitr ? PitrTarget : null,
+            CancellationToken.None);
+        _restoreJobId = job.JobId;
+        _restoreStatus = job.Status;
+        _restoreError = null;
+        _step = Step.Execute;
+
+        _timer?.Dispose();
+        _timer = new Timer(_ => _ = InvokeAsync(PollRestoreAsync), null,
+            TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    private Task PollRestoreAsync()
+    {
+        var job = JobStore.Get(_restoreJobId);
+        if (job is null)
+            return Task.CompletedTask;
+        _restoreProgress = Coordinator.GetProgress(_restoreJobId);
+        _restoreStatus = job.Status;
+        _restoreError = job.ErrorMessage;
+        if (job.Status is "completed" or "failed")
+        {
+            _timer?.Dispose();
+            _timer = null;
+            if (job.Status == "completed")
+                _step = Step.Done;
+        }
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private async Task RestoreOpenBaoSnapshotAsync()
+    {
+        if (_openBaoLabel is null)
+            return;
+        _openBaoSnapshotBusy = true;
+        _openBaoSnapshotMessage = null;
+        try
+        {
+            await OpenBao.RestoreSnapshotAsync(_openBaoLabel, CancellationToken.None);
+            _openBaoSnapshotSucceeded = true;
+            _openBaoSnapshotMessage = "OpenBao storage snapshot restored.";
+        }
+        catch (Exception ex)
+        {
+            _openBaoSnapshotSucceeded = false;
+            _openBaoSnapshotMessage = $"OpenBao snapshot restore failed (is OpenBao running and unsealed yet?): {ex.Message}";
+        }
+        finally
+        {
+            _openBaoSnapshotBusy = false;
+        }
+    }
+
+    private async Task RestoreOpenBaoAsync()
+    {
+        if (_openBaoLabel is null)
+            return;
+        _openBaoBusy = true;
+        _openBaoMessage = null;
+        try
+        {
+            await OpenBao.RestoreAsync(_openBaoLabel, CancellationToken.None);
+            _openBaoSucceeded = true;
+            _openBaoMessage = "OpenBao secrets restored.";
+        }
+        catch (Exception ex)
+        {
+            _openBaoSucceeded = false;
+            _openBaoMessage = $"OpenBao restore failed (is OpenBao running yet?): {ex.Message}";
+        }
+        finally
+        {
+            _openBaoBusy = false;
+        }
+    }
+
+    private static string FormatSize(long? bytes)
+        => bytes is not { } value
+            ? "—"
+            : value switch
+            {
+                >= 1L << 30 => $"{value / (double)(1L << 30):0.#} GiB",
+                >= 1L << 20 => $"{value / (double)(1L << 20):0.#} MiB",
+                >= 1L << 10 => $"{value / (double)(1L << 10):0.#} KiB",
+                _ => $"{value} B"
+            };
+
+    public void Dispose() => _timer?.Dispose();
+}
