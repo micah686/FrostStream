@@ -1,55 +1,56 @@
 export type BackupJobStatus = 'queued' | 'running' | 'completed' | 'failed';
 
-export type BackupMode = 'snapshot' | 'full' | 'wal-archive';
+export type BackupType = 'full' | 'diff';
+
+export type BackupJobKind = 'backup' | 'verify-quick' | 'verify-deep' | 'restore';
 
 export interface BackupJob {
   jobId: string;
+  kind: BackupJobKind;
+  type: BackupType | null;
   status: BackupJobStatus;
-  archivePath: string | null;
+  name: string | null;
+  label: string | null;
   errorMessage: string | null;
   createdAt: string;
   completedAt: string | null;
+  progress: string[];
 }
 
-export interface BackupSummary {
-  archivePath: string;
-  createdAt: string | null;
-  mediaIncluded: boolean;
-  schemaVersion: number;
-  mode: string;
-}
-
-export interface VerifyBackupResult {
-  success: boolean;
-  errorMessage: string | null;
-}
-
-export interface RestorePlan {
-  preflightOk: boolean;
-  explanation: string;
-  restoreCommand: string;
-  options: RestorePlanOption[];
-  errorMessage: string | null;
-}
-
-export interface RestorePlanOption {
-  key: string;
+export interface BackupInfo {
   label: string;
-  description: string;
-  inputType: 'text' | 'checkbox';
-  value: string | null;
-  placeholder: string | null;
-  required: boolean;
+  type: BackupType;
+  name: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  databaseSize: number | null;
+  repositorySize: number | null;
+  walStart: string | null;
+  walStop: string | null;
+  hasError: boolean;
+  openBaoExportPresent: boolean;
+}
+
+export interface PitrWindow {
+  earliest: string | null;
+  latestApprox: string | null;
+}
+
+export interface BackupRepository {
+  repositoryOk: boolean;
+  statusMessage: string | null;
+  backups: BackupInfo[];
+  pitrWindow: PitrWindow;
 }
 
 const BASE = '/api/global/backups';
 
 export async function startBackup(
   name?: string,
-  mode: BackupMode = 'snapshot',
+  type: BackupType = 'full',
   fetchImpl: typeof fetch = fetch
 ): Promise<BackupJob> {
-  return sendJson<BackupJob>(BASE, { name: name?.trim() || null, mode }, fetchImpl);
+  return sendJson<BackupJob>(BASE, { name: name?.trim() || null, type }, fetchImpl);
 }
 
 export async function listBackupJobs(fetchImpl: typeof fetch = fetch): Promise<BackupJob[]> {
@@ -60,25 +61,17 @@ export async function getBackupJob(jobId: string, fetchImpl: typeof fetch = fetc
   return getJson<BackupJob>(`${BASE}/jobs/${encodeURIComponent(jobId)}`, fetchImpl);
 }
 
-export async function listBackups(fetchImpl: typeof fetch = fetch): Promise<BackupSummary[]> {
-  return getJson<BackupSummary[]>(BASE, fetchImpl);
+export async function listBackups(fetchImpl: typeof fetch = fetch): Promise<BackupRepository> {
+  return getJson<BackupRepository>(BASE, fetchImpl);
 }
 
-export async function verifyBackup(archivePath: string, fetchImpl: typeof fetch = fetch): Promise<VerifyBackupResult> {
-  return sendJson<VerifyBackupResult>(`${BASE}/verify`, { archivePath }, fetchImpl);
-}
-
-export async function buildRestorePlan(
-  archivePath: string,
-  options: Record<string, string | null> = {},
+/** Queues a verification job. Quick verify checks the whole repository; deep verify test-restores one backup. */
+export async function verifyBackup(
+  label: string | null,
+  deep: boolean,
   fetchImpl: typeof fetch = fetch
-): Promise<RestorePlan> {
-  const plan = await sendJson<RestorePlan>(`${BASE}/restore-plan`, { archivePath, options }, fetchImpl);
-  return {
-    ...plan,
-    explanation: plan.explanation ?? '',
-    options: plan.options ?? []
-  };
+): Promise<BackupJob> {
+  return sendJson<BackupJob>(`${BASE}/verify`, { label, deep }, fetchImpl);
 }
 
 async function getJson<T>(url: string, fetchImpl: typeof fetch): Promise<T> {

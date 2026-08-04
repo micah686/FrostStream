@@ -33,7 +33,7 @@ public static class StartServices
         var webapi = WireWebApi(builder, hardening, sharedStorageRoot, nats, databridge, openBaoResources, openBaoToken, authentik, openFga, backupService, webApiEndpointName, mediaProcessorApiKey);
         WireWorker(builder, hardening, sharedStorageRoot, nats, openBaoResources, openBaoToken);
         WireMediaProcessor(builder, nats, databridge, webapi, webApiEndpointName, mediaProcessorApiKey);
-        WireScheduler(builder, nats, databridge);
+        WireScheduler(builder, nats, databridge, backupService);
         //WireAuthTester(builder, hardening, webapi, authentik, webApiEndpointName);
         WireFrontend(builder, webapi, webApiEndpointName);
     }
@@ -288,11 +288,15 @@ public static class StartServices
     private static void WireScheduler(
         IDistributedApplicationBuilder builder,
         IResourceBuilder<NatsServerResource> nats,
-        IResourceBuilder<ProjectResource> databridge)
+        IResourceBuilder<ProjectResource> databridge,
+        IResourceBuilder<ContainerResource> backupService)
     {
         var scheduler = builder.AddProject<Projects.Scheduler>("scheduler")
             .WithReference(nats).WaitFor(nats)
             .WaitFor(databridge)
+            // Scheduled backups dispatch over REST directly to BackupService.
+            .WithEnvironment("BackupService__BaseUrl", backupService.GetEndpoint("http"))
+            .WaitFor(backupService)
             .WithHttpEndpoint(port: Ports.Scheduler, name: "http")
             .WithUrlForEndpoint("http", url =>
             {

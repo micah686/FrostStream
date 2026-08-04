@@ -20,9 +20,6 @@ public sealed class BackgroundJobsTopology : ITopologySource
     public const string WorkerChannelAssetRefreshConsumer = "worker-channel-asset-refresh";
     public const string MediaProcessorAudioRenditionConsumer = "mediaprocessor-audio-rendition";
     public const string MediaProcessorStreamRenditionConsumer = "mediaprocessor-stream-rendition";
-    // The durable value is intentionally retained from the former DataBridge owner so queued
-    // schedule messages survive upgrades; BackupService is now the only process that consumes it.
-    public const string BackupServiceBackupConsumer = "databridge-backup";
 
     public IEnumerable<StreamSpec> GetStreams()
     {
@@ -45,8 +42,7 @@ public sealed class BackgroundJobsTopology : ITopologySource
                 BackgroundJobSubjects.DatabaseMaintenanceReindexRequest,
                 BackgroundJobSubjects.SearchReindexRequest,
                 BackgroundJobSubjects.AudioRenditionEncodeRequest,
-                BackgroundJobSubjects.StreamRenditionEncodeRequest,
-                BackgroundJobSubjects.BackupRequest
+                BackgroundJobSubjects.StreamRenditionEncodeRequest
             ],
             MaxAge = TimeSpan.FromDays(7),
             RetentionPolicy = StreamRetention.WorkQueue,
@@ -72,7 +68,9 @@ public sealed class BackgroundJobsTopology : ITopologySource
         // in-progress acks every 30s while ffmpeg works; a dead encoder is redelivered quickly.
         yield return MediaProcessorConsumer(MediaProcessorAudioRenditionConsumer, BackgroundJobSubjects.AudioRenditionEncodeRequest, TimeSpan.FromMinutes(2), maxDeliver: 3);
         yield return MediaProcessorConsumer(MediaProcessorStreamRenditionConsumer, BackgroundJobSubjects.StreamRenditionEncodeRequest, TimeSpan.FromMinutes(2), maxDeliver: 2);
-        yield return DataBridgeConsumer(BackupServiceBackupConsumer, BackgroundJobSubjects.BackupRequest, TimeSpan.FromHours(2), maxDeliver: 2);
+        // Scheduled backups moved to REST dispatch (Scheduler → BackupService HTTP). On live NATS
+        // stores the old durable must be removed before this topology applies:
+        //   nats consumer rm FROSTSTREAM_BACKGROUND databridge-backup
     }
 
     public IEnumerable<ObjectStoreSpec> GetObjectStores()

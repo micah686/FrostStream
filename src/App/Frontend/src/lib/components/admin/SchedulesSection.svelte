@@ -122,16 +122,12 @@
         'Deletes finished local-media import sessions, along with their items, mappings and durable flow instances, once they are older than the configured retention window.'
     },
     {
-      type: 'backup',
-      summary: 'Runs the configured backup workflow using snapshot mode.'
-    },
-    {
-      type: 'backup-snapshot',
-      summary: 'Runs the configured backup workflow using snapshot mode.'
-    },
-    {
       type: 'backup-full',
-      summary: 'Runs the configured backup workflow using full mode.'
+      summary: 'Takes a full pgBackRest cluster backup plus an OpenBao secrets export.'
+    },
+    {
+      type: 'backup-diff',
+      summary: 'Takes a differential pgBackRest backup of everything changed since the last full backup.'
     }
   ] as const;
 

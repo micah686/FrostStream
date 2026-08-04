@@ -261,7 +261,6 @@ public static class EndpointIds
     public const string BackupsJobsGet = "backups.jobs.get";
     public const string BackupsList = "backups.list";
     public const string BackupsVerify = "backups.verify";
-    public const string BackupsRestorePlan = "backups.restore-plan";
 }
 
 public sealed record EndpointDefinition(string Id, string Bundle);
@@ -487,7 +486,6 @@ public static class EndpointCatalog
         new(EndpointIds.BackupsJobsGet, Bundles.Management),
         new(EndpointIds.BackupsList, Bundles.Management),
         new(EndpointIds.BackupsVerify, Bundles.Management),
-        new(EndpointIds.BackupsRestorePlan, Bundles.Management),
     ];
 
     public static readonly IReadOnlySet<string> Ids =

@@ -16,19 +16,25 @@ COPY Libs/YtDlpSharpLib/YtDlpSharpLib/ Libs/YtDlpSharpLib/YtDlpSharpLib/
 COPY App/BackupService/ App/BackupService/
 RUN dotnet publish App/BackupService/BackupService.csproj -c Release -o /app --no-restore
 
-# Using the matching PostgreSQL image guarantees pg_dump/pg_restore/pg_basebackup are compatible
-# with the server. Copy the ASP.NET runtime into that Debian image rather than relying on the
-# distribution's potentially older postgresql-client package.
+# Base on the matching PostgreSQL image so pgbackrest, pg_ctl, psql, and pg_isready are
+# version-matched with the server (deep verify starts a throwaway postgres from the restored
+# files). Copy the ASP.NET runtime into that Debian image rather than relying on the
+# distribution's potentially older packages.
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS dotnet-runtime
 FROM docker.io/library/postgres:18.3
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y --no-install-recommends curl pgbackrest \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /var/log/pgbackrest \
+    && chown postgres:postgres /var/log/pgbackrest
 COPY --from=dotnet-runtime /usr/share/dotnet /usr/share/dotnet
 COPY --from=build /app /app
 ENV PATH="/usr/share/dotnet:${PATH}" \
-    ASPNETCORE_URLS=http://0.0.0.0:8080 \
-    Backup__ToolCommand="dotnet /app/BackupService.dll"
+    ASPNETCORE_URLS="http://0.0.0.0:8080;http://0.0.0.0:8081"
 WORKDIR /app
-EXPOSE 8080
+EXPOSE 8080 8081
+# Run as the postgres uid (999, identical in the postgres server image) so everything
+# pgBackRest writes — the repo under /backups and restored cluster files in the shared data
+# volume — is natively owned by the user the postgres container runs as.
+USER postgres
 ENTRYPOINT ["dotnet", "BackupService.dll"]

@@ -81,7 +81,8 @@ Notes:
   CSRF, and opaque browser sessions; encrypted session tickets live in the DataBridge-provisioned
   NATS KV bucket and Data Protection keys live in the `froststream-data-protection-keys` volume.
 
-- Core backups and PostgreSQL WAL are written beneath the host path in `FROSTSTREAM_BACKUP_ROOT`
+- Core backups live in a pgBackRest repository (full + differential backups with continuous WAL
+  archiving for point-in-time recovery) beneath the host path in `FROSTSTREAM_BACKUP_ROOT`
   (`./backups` by default). Media remains in the named volume `froststream-data`.
 
 - OpenBao now uses persistent integrated storage. A new Compose deployment must be initialized and
@@ -163,7 +164,7 @@ Notes:
 | **DataBridge**     | Owns PostgreSQL Database (EF Core + FluentMigrator)                                       |
 | **Scheduler**      | Quartz.NET recurring jobs (creator scans, scheduled backups) with a web UI                |
 | **Frontend**       | SvelteKit app (BFF pattern — tokens never reach the browser)                              |
-| **BackupService**  | Runs and verifies core backups; also exposes backup/restore CLI commands                  |
+| **BackupService**  | pgBackRest backups/verification plus a standalone token-gated restore wizard              |
 | **MediaProcessor** | Stub — reserved for future transcoding work                                               |
 
 **Infrastructure containers:** NATS (JetStream), PostgreSQL, Typesense, OpenBao, bgutil pot-provider, and in multi-user mode Authentik + OpenFGA. Dev tooling: DbGate (DB browser), nats-ui, OpenFGA Studio.
@@ -174,7 +175,7 @@ All host ports live in one registry ([`src/App/AppHost/Ports.cs`](src/App/AppHos
 
 | Range                | Meaning                                                                            | Ports                                                                                                                                                                                      |
 | -------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **25xy0** (external) | Host-published; browser/host-facing                                                | frontend `25000` · authentik `25100` · webapi `25200` (https `25210`) · scheduler `25300` · openbao `25400` · postgres `25500` · dbgate `25600` · nats-ui `25700` · openfga-studio `25800` |
+| **25xy0** (external) | Host-published; browser/host-facing                                                | frontend `25000` · authentik `25100` · webapi `25200` (https `25210`) · scheduler `25300` · openbao `25400` · postgres `25500` · dbgate `25600` · nats-ui `25700` · openfga-studio `25800` · restore-console `25900` |
 | **240xy** (internal) | Container-to-container only; bound on localhost in dev, never published by compose | typesense `24010` · pot-provider `24020` · openfga `24030` · nats `24040`–`24042` · backupservice `24050`                                                                                 |
 
 External ports are overridable via `PORT_*` variables in the generated Aspire dev env.
@@ -203,7 +204,7 @@ dotnet test --project src/Libs/Conduit.NATS/Tests/Conduit.NATS.UnitTests/Conduit
 │   │   ├── DataBridge/               # persistence, sagas, migrations
 │   │   ├── Scheduler/                # Quartz jobs
 │   │   ├── Frontend/                 # SvelteKit app
-│   │   ├── BackupService/            # backup API plus Postgres/OpenBao backup/restore engine
+│   │   ├── BackupService/            # pgBackRest engine + OpenBao export + restore wizard
 │   │   ├── Shared/                   # shared contracts & options
 │   │   └── docker-compose-artifacts/ # generated compose deployment
 │   ├── Containers/                   # container resource definitions/config

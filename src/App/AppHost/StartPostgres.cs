@@ -40,37 +40,52 @@ public static class StartPostgres
             publishValueAsDefault: false,
             secret: true);
 
-        // Shared WAL archive store: written by the server's archive_command (mounted at
-        // /wal-archive) and read by BackupService for wal-archive verification / PITR restore.
-        // Made world-writable so the container's postgres user can write regardless of the
-        // rootless-podman uid mapping.
-        var walArchiveDir = BackupPaths.WalArchiveDirectory(sharedStorageRoot);
-        Directory.CreateDirectory(walArchiveDir);
-        if (!OperatingSystem.IsWindows())
+        // Shared backup root: the pgBackRest repository written by the server's archive_command
+        // (archive-push) and by BackupService backups, plus the per-backup OpenBao KV exports.
+        // Made world-writable so the containers' postgres user (uid 999) can write regardless of
+        // the rootless-podman uid mapping.
+        var backupRoot = BackupPaths.BackupRoot(sharedStorageRoot);
+        foreach (var dir in new[]
+                 {
+                     backupRoot,
+                     BackupPaths.PgBackRestRepoDirectory(sharedStorageRoot),
+                     BackupPaths.OpenBaoExportDirectory(sharedStorageRoot),
+                 })
         {
-            File.SetUnixFileMode(
-                walArchiveDir,
-                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
-                | UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute
-                | UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute);
+            Directory.CreateDirectory(dir);
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(
+                    dir,
+                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
+                    | UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute
+                    | UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute);
+            }
         }
 
         var postgresConf = Path.Combine(builder.AppHostDirectory, "configs", "postgres", "postgresql.conf");
         var postgresHba = Path.Combine(builder.AppHostDirectory, "configs", "postgres", "pg_hba.conf");
+        var pgBackRestConf = Path.Combine(builder.AppHostDirectory, "configs", "pgbackrest", "pgbackrest.conf");
+        var imageContext = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", ".."));
 
         // WithDbGate requires CommunityToolkit.Aspire.Hosting.DbGate and
         // CommunityToolkit.Aspire.Hosting.PostgreSQL.Extensions at the same version.
         var server = builder.AddPostgres("postgres", user, password)
             .WithHostPort(Ports.Postgres)
-            .WithDataVolume()
+            // stock postgres + pgbackrest, so archive_command can push WAL into the shared repo.
+            .WithDockerfile(imageContext, "App/PostgresServer/Dockerfile")
+            // Explicitly named so the backupservice container can mount the same volume for
+            // pgBackRest backup/restore. (Pre-rework installs used an auto-generated name;
+            // `podman volume rename` the old volume or start from a fresh database.)
+            .WithDataVolume("froststream-postgres-data")
+            // Unix-socket volume shared with backupservice: pgBackRest's "local" mode connects
+            // to PostgreSQL over the socket.
+            .WithVolume("froststream-postgres-socket", "/var/run/postgresql")
             .WithPortableBindMount(postgresConf, "../AppHost/configs/postgres/postgresql.conf", "/etc/postgresql/postgresql.conf", isReadOnly: true)
             .WithPortableBindMount(postgresHba, "../AppHost/configs/postgres/pg_hba.conf", "/etc/postgresql/pg_hba.conf", isReadOnly: true)
+            .WithPortableBindMount(pgBackRestConf, "../AppHost/configs/pgbackrest/pgbackrest.conf", "/etc/pgbackrest/pgbackrest.conf", isReadOnly: true)
+            .WithPortableBindMount(backupRoot, "${FROSTSTREAM_BACKUP_ROOT:-./backups}", "/backups")
             .WithArgs("-c", "config_file=/etc/postgresql/postgresql.conf");
-
-        server.WithPortableBindMount(
-            walArchiveDir,
-            "${FROSTSTREAM_BACKUP_ROOT:-./backups}/wal",
-            "/wal-archive");
 
         // The toolkit's DbGate resource never makes it into the compose publish, and its "dbgate"
         // name would collide with the explicit publish-only container below — so run mode only.
@@ -96,8 +111,17 @@ public static class StartPostgres
 
             // pg_isready only checks TCP; this healthcheck also verifies the auth flow works,
             // so dependents using service_healthy don't start before postgres can serve queries.
+            // Image/Build mirror WithLocalComposeBuild in StartServices: the compose deployment
+            // builds the pgbackrest-enabled server image from the repo checkout.
             server.PublishAsDockerComposeService((_, svc) =>
             {
+                svc.Image = "localhost/froststream-postgres:latest";
+                svc.PullPolicy = "build";
+                svc.Build = new Aspire.Hosting.Docker.Resources.ServiceNodes.Build
+                {
+                    Context = "../..",
+                    Dockerfile = "App/PostgresServer/Dockerfile"
+                };
                 svc.Healthcheck = new()
                 {
                     Test = ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d postgres"],
@@ -107,6 +131,22 @@ public static class StartPostgres
                     StartPeriod = "20s",
                 };
             });
+
+            // The compose bind-mounted ./backups directory is created root-owned on first start,
+            // but archive_command (postgres container) and BackupService both write to it as
+            // uid 999. One-shot ownership fix; postgres gates on its completion. Run mode covers
+            // this with the host-side chmod above instead.
+            var backupInit = builder
+                .AddContainer("backup-init", "docker.io/library/postgres", "18.3")
+                .WithEntrypoint("/bin/bash")
+                .WithArgs("-c", "mkdir -p /backups/pgbackrest /backups/openbao /backups/jobs && chown -R 999:999 /backups && echo 'backup-init: done'")
+                .WithPortableBindMount(
+                    backupRoot,
+                    "${FROSTSTREAM_BACKUP_ROOT:-./backups}",
+                    "/backups");
+            server
+                .WaitForCompletion(backupInit)
+                .WithComposeDependencyCondition("backup-init", "service_completed_successfully");
 
             // WithDbGate (run mode, above) is excluded from the compose publish by the community
             // toolkit, so publish a plain dbgate container with the same connection wiring.

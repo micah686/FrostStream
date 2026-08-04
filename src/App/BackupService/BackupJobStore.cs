@@ -10,15 +10,11 @@ internal sealed class BackupJobStore(BackupServiceOptions options)
     private readonly ConcurrentDictionary<Guid, BackupJobRecord> _jobs = new();
 
     public string Root => Path.GetFullPath(options.Directory);
-    public string Archives => Path.Combine(Root, "archives");
     public string Jobs => Path.Combine(Root, "jobs");
-    public string Staging => Path.Combine(Root, ".staging");
 
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
-        Directory.CreateDirectory(Archives);
         Directory.CreateDirectory(Jobs);
-        Directory.CreateDirectory(Staging);
 
         var probe = Path.Combine(Root, $".write-probe-{Guid.NewGuid():N}");
         await File.WriteAllTextAsync(probe, "ok", cancellationToken);
@@ -73,17 +69,6 @@ internal sealed class BackupJobStore(BackupServiceOptions options)
         {
             _gate.Release();
         }
-    }
-
-    public string ResolveArchive(string archivePath)
-    {
-        var candidate = Path.IsPathRooted(archivePath)
-            ? Path.GetFullPath(archivePath)
-            : Path.GetFullPath(Path.Combine(Archives, archivePath));
-        var prefix = Archives.EndsWith(Path.DirectorySeparatorChar) ? Archives : Archives + Path.DirectorySeparatorChar;
-        if (!candidate.StartsWith(prefix, StringComparison.Ordinal) || !Directory.Exists(candidate))
-            throw new ArgumentException("Archive does not exist beneath the configured backup root.", nameof(archivePath));
-        return candidate;
     }
 
     private async Task SaveFileAsync(BackupJobRecord record, CancellationToken cancellationToken)
