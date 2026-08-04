@@ -2,6 +2,7 @@ using Conduit.NATS;
 using Microsoft.AspNetCore.Mvc;
 using Shared.Auth;
 using Shared.Messaging;
+using System.Text.RegularExpressions;
 using WebAPI.Auth;
 
 namespace WebAPI.Features.Management.Controllers;
@@ -173,6 +174,7 @@ public sealed class AccessControlController(
         [FromBody] AccessPolicyWriteRequest request,
         CancellationToken cancellationToken)
     {
+        if (!IsValidPolicyName(request.Name)) return BadRequest("Policy names must use lowercase letters, numbers, and dashes only.");
         var validation = await ValidateBundlesAsync(request.BundleIds, cancellationToken);
         if (validation is not null) return validation;
 
@@ -196,6 +198,7 @@ public sealed class AccessControlController(
         [FromBody] AccessPolicyWriteRequest request,
         CancellationToken cancellationToken)
     {
+        if (!IsValidPolicyName(request.Name)) return BadRequest("Policy names must use lowercase letters, numbers, and dashes only.");
         var existing = await GetPolicyInternalAsync(policyId, cancellationToken);
         if (existing.Response is not null) return existing.Response;
         var validation = await ValidateBundlesAsync(request.BundleIds, cancellationToken);
@@ -215,6 +218,9 @@ public sealed class AccessControlController(
                 : Ok(saved.Result);
     }
 
+    private static bool IsValidPolicyName(string? name) =>
+        !string.IsNullOrWhiteSpace(name) && Regex.IsMatch(name, "^[a-z0-9-]{1,100}$", RegexOptions.CultureInvariant);
+
     [HttpPost("policies/{policyId:guid}/duplicate")]
     [Endpoint(EndpointIds.AccessControlPoliciesDuplicate)]
     [EndpointSummary("Duplicate a unified access policy")]
@@ -226,7 +232,7 @@ public sealed class AccessControlController(
     {
         var existing = await GetPolicyInternalAsync(policyId, cancellationToken);
         if (existing.Response is not null) return existing.Response;
-        if (string.IsNullOrWhiteSpace(request.Name)) return BadRequest("A name is required.");
+        if (!IsValidPolicyName(request.Name)) return BadRequest("Policy names must use lowercase letters, numbers, and dashes only.");
         var now = NodaTime.SystemClock.Instance.GetCurrentInstant();
         var copy = existing.Policy! with
         {

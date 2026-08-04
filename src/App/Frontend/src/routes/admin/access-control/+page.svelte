@@ -1,5 +1,10 @@
 <script lang="ts">
+  import { page } from '$app/state';
+  import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
+  import { ArrowLeft, Copy, Edit, Trash2, X } from '@lucide/svelte';
+  import { Modal } from '$lib/components/ui';
+  import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
   import BundleManagementSection from '$lib/components/admin/BundleManagementSection.svelte';
   import { ApiRequestError } from '$lib/api/http';
   import {
@@ -47,7 +52,10 @@
   const secondaryButton = 'btn btn-sm btn-neutral text-xs';
   const primaryButton = 'btn btn-sm btn-primary text-xs';
 
-  let activeTab = $state<Tab>('policies');
+  const policyEditorView = $derived(page.url.searchParams.get('view'));
+  const isPolicyEditorView = $derived(policyEditorView === 'new-policy' || policyEditorView === 'edit-policy');
+  const isEditingPolicy = $derived(policyEditorView === 'edit-policy');
+  let activeTab = $state<Tab>(page.url.searchParams.get('tab') === 'bundles' ? 'bundles' : 'policies');
   let policies = $state<AccessPolicy[]>([]);
   let bundles = $state<BundleView[]>([]);
   let catalog = $state<CatalogEntry[]>([]);
@@ -58,6 +66,12 @@
   let saving = $state(false);
   let error = $state<string | null>(null);
   let notice = $state<string | null>(null);
+  let duplicateModalOpen = $state(false);
+  let duplicateSource = $state<AccessPolicy | null>(null);
+  let duplicateName = $state('');
+  let duplicating = $state(false);
+  let deleteModalOpen = $state(false);
+  let deleteTarget = $state<AccessPolicy | null>(null);
 
   let assignmentType = $state<GranteeType>('group');
   let assignmentQuery = $state('');
@@ -73,9 +87,11 @@
   let effectiveType = $state<GranteeType>('user');
   let effectiveId = $state('');
   let effectivePrincipalQuery = $state('');
+  let effectivePrincipalDropdownOpen = $state(false);
   let effectiveDirectoryResults = $state<DirectoryEntry[]>([]);
   let effectiveDirectoryLoading = $state(false);
   let effectiveEndpoint = $state('');
+  let endpointDropdownOpen = $state(false);
   let effectiveMediaGuid = $state('');
   let effectiveResult = $state<EffectiveAccess | null>(null);
   let effectiveCheck = $state<EffectiveAccessCheck | null>(null);
@@ -84,15 +100,24 @@
   let effectiveSearchTimer: ReturnType<typeof setTimeout> | undefined;
 
   const selectedPolicy = $derived(policies.find((policy) => policy.policyId === selectedPolicyId) ?? policies[0] ?? null);
-  const policyBundleReferences = $derived(
-    bundles.map((bundle) => ({
-      bundle,
-      policies: policies.filter((policy) => policy.bundleIds.includes(bundle.id))
-    }))
-  );
-
   onMount(() => {
     void loadAll();
+  });
+
+  $effect(() => {
+    if (!isPolicyEditorView) {
+      if (editor) editor = null;
+      return;
+    }
+    if (isPolicyEditorView && !editor && !saving) {
+      if (isEditingPolicy) {
+        const policyId = page.url.searchParams.get('policyId');
+        const policy = policies.find((item) => item.policyId === policyId);
+        if (policy) beginEdit(policy);
+      } else {
+        beginCreate();
+      }
+    }
   });
 
   async function loadAll(preferredPolicyId = selectedPolicyId) {
@@ -112,6 +137,8 @@
       selectedPolicyId = policies.some((policy) => policy.policyId === preferredPolicyId)
         ? preferredPolicyId
         : (policies[0]?.policyId ?? '');
+      const nextSelectedPolicy = policies.find((policy) => policy.policyId === selectedPolicyId);
+      if (nextSelectedPolicy) void resolveExistingMedia(nextSelectedPolicy.mediaGuids);
     } catch (err) {
       error = messageFor(err, 'Could not load access-control data.');
     } finally {
@@ -203,6 +230,7 @@
         ? `Saved “${saved.name}”.`
         : `Saved “${saved.name}”; OpenFGA synchronization will retry automatically.`;
       await loadAll(saved.policyId);
+      if (isPolicyEditorView) await goto('/admin/access-control');
     } catch (err) {
       error = messageFor(err, 'Could not save the policy.');
     } finally {
@@ -210,29 +238,46 @@
     }
   }
 
-  async function removePolicy(policy: AccessPolicy) {
-    if (!confirm(`Delete “${policy.name}”? This removes its assignments, bundle access, and media scopes.`)) return;
-    error = null;
+  function openDeleteModal(policy: AccessPolicy) {
+    deleteTarget = policy;
+    deleteModalOpen = true;
+  }
+
+  async function removePolicy() {
+    const policy = deleteTarget;
+    if (!policy) return;
     try {
       await deleteAccessPolicy(policy.policyId);
       notice = `Deleted “${policy.name}”.`;
       editor = null;
+      deleteModalOpen = false;
       await loadAll();
     } catch (err) {
-      error = messageFor(err, 'Could not delete the policy.');
+      throw new Error(messageFor(err, 'Could not delete the policy.'));
     }
   }
 
-  async function duplicatePolicy(policy: AccessPolicy) {
-    const name = prompt('Name for the disabled copy:', `${policy.name} copy`)?.trim();
-    if (!name) return;
+  function openDuplicateModal(policy: AccessPolicy) {
+    duplicateSource = policy;
+    duplicateName = `${policy.name}-copy`.toLowerCase().replace(/[^a-z0-9-]/g, '');
+    duplicateModalOpen = true;
+  }
+
+  async function duplicatePolicy() {
+    const policy = duplicateSource;
+    const name = duplicateName.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+    if (!policy || !name) return;
+    duplicating = true;
     error = null;
     try {
       const copy = await duplicateAccessPolicy(policy.policyId, name);
       notice = `Created disabled policy “${copy.name}”.`;
+      duplicateModalOpen = false;
       await loadAll(copy.policyId);
     } catch (err) {
       error = messageFor(err, 'Could not duplicate the policy.');
+    } finally {
+      duplicating = false;
     }
   }
 
@@ -377,6 +422,7 @@
     effectiveId = entry?.id ?? effectivePrincipalQuery.trim();
     if (entry) effectivePrincipalQuery = entry.name;
     effectiveDirectoryResults = [];
+    effectivePrincipalDropdownOpen = false;
     effectiveResult = null;
     effectiveCheck = null;
   }
@@ -391,6 +437,7 @@
     error = null;
     try {
       effectiveResult = await getEffectiveAccess(effectiveType, effectiveId.trim());
+      void resolveExistingMedia(effectiveResult.deniedMediaGuids);
     } catch (err) {
       error = messageFor(err, 'Could not evaluate effective access.');
     } finally {
@@ -429,9 +476,9 @@
   }
 
   function syncClass(policy: AccessPolicy): string {
-    if (policy.syncStatus === 'Synced') return 'border-success/30 bg-success/10 text-success';
-    if (policy.syncStatus === 'Failed') return 'border-error/30 bg-error/10 text-error';
-    return 'border-warning/30 bg-warning/10 text-warning';
+    if (policy.syncStatus === 'Synced') return 'badge-accent';
+    if (policy.syncStatus === 'Failed') return 'badge-error';
+    return 'badge-warning';
   }
 
   function messageFor(value: unknown, fallback: string): string {
@@ -443,9 +490,10 @@
 </script>
 
 <svelte:head>
-  <title>Access control · FrostStream</title>
+  <title>{isEditingPolicy ? 'Edit policy · FrostStream' : isPolicyEditorView ? 'Create policy · FrostStream' : 'Access control · FrostStream'}</title>
 </svelte:head>
 
+{#if !isPolicyEditorView}
 <section class={cardClass} aria-labelledby="access-control-title">
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
@@ -471,7 +519,7 @@
             ? 'border-primary text-primary'
             : 'border-transparent text-base-content/50 hover:text-base-content/90'
         ]}
-        onclick={() => (activeTab = id)}
+        onclick={() => { activeTab = id; notice = null; }}
       >
         {label}
       </button>
@@ -482,11 +530,53 @@
     <div class="alert alert-error mt-4 text-sm" role="alert">{error}</div>
   {/if}
   {#if notice}
-    <div class="mt-4 rounded-xl border border-success/30 bg-success/10 p-3 text-sm text-success" role="status">{notice}</div>
+    <div class="alert alert-success mt-4 text-sm" role="status">{notice}</div>
   {/if}
 </section>
+{/if}
+
+<Modal bind:open={duplicateModalOpen} title="Duplicate policy" size="md">
+  <div class="space-y-4">
+    <p class="text-sm text-base-content/70">
+      Create a disabled copy of <span class="font-semibold text-base-content">{duplicateSource?.name}</span>.
+    </p>
+    <div>
+      <label class="label text-sm" for="duplicate-policy-name">New policy name</label>
+      <input
+        id="duplicate-policy-name"
+        class="input w-full"
+        type="text"
+        bind:value={duplicateName}
+        placeholder="policy-copy"
+        autocomplete="off"
+      />
+      <p class="mt-1.5 text-xs text-base-content/50">Use lowercase letters, numbers, and hyphens.</p>
+    </div>
+  </div>
+
+  {#snippet footer()}
+    <div class="flex w-full justify-end gap-2">
+      <button class="btn btn-sm btn-ghost text-xs" type="button" disabled={duplicating} onclick={() => (duplicateModalOpen = false)}>
+        Cancel
+      </button>
+      <button class="btn btn-sm btn-neutral text-xs" type="button" disabled={duplicating || !duplicateName.trim()} onclick={() => void duplicatePolicy()}>
+        {#if duplicating}<span class="loading loading-spinner loading-xs mr-1.5"></span>{/if}
+        Duplicate
+      </button>
+    </div>
+  {/snippet}
+</Modal>
+
+<ConfirmDeleteModal
+  bind:open={deleteModalOpen}
+  title="Delete access policy"
+  message={`Delete “${deleteTarget?.name ?? ''}”? This removes its assignments, bundle access, and media scopes.`}
+  confirmLabel="Delete policy"
+  onConfirm={removePolicy}
+/>
 
 {#if activeTab === 'policies'}
+  {#if !isPolicyEditorView}
   <section class={cardClass}>
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
@@ -495,7 +585,7 @@
           Media denies apply from the database immediately; OpenFGA synchronization status governs endpoint-bundle grants.
         </p>
       </div>
-      <button class={primaryButton} type="button" onclick={beginCreate}>New policy</button>
+      <a class={primaryButton} href="/admin/access-control/policies/new">New policy</a>
     </div>
 
     {#if loading}
@@ -512,26 +602,25 @@
               type="button"
               class={[
                 'block w-full border-b border-base-300 px-4 py-3 text-left transition last:border-b-0',
-                selectedPolicy?.policyId === policy.policyId ? 'bg-primary/10' : 'hover:bg-base-300/45'
+                selectedPolicy?.policyId === policy.policyId ? 'bg-base-200' : 'hover:bg-base-200'
               ]}
               onclick={() => {
                 selectedPolicyId = policy.policyId;
                 editor = null;
+                void resolveExistingMedia(policy.mediaGuids);
               }}
             >
-              <div class="flex items-start justify-between gap-2">
-                <span class="truncate text-sm font-semibold text-base-content">{policy.name}</span>
-                <div class="flex shrink-0 flex-col items-end gap-1">
-                  <span class={['rounded-full border px-2 py-0.5 text-[10px] font-bold', syncClass(policy)]}>
-                    {policy.syncStatus}
-                  </span>
-                  {#if !policy.enabled}
-                    <span class="rounded-full border border-base-content/20 bg-base-300 px-2 py-0.5 text-[10px] font-bold text-base-content/60">Disabled</span>
-                  {/if}
-                </div>
-              </div>
-              <div class="mt-1 text-xs text-base-content/50">
-                {policy.assignments.length} principals · {policy.bundleIds.length} bundles · {policy.enabled ? 'Enabled' : 'Disabled'}
+              <div class="min-w-0 text-sm font-semibold text-base-content">{policy.name}</div>
+              <div class="mt-1 flex flex-wrap items-center gap-1.5">
+                <span class="text-xs text-base-content/50">
+                  {policy.assignments.length} principals · {policy.bundleIds.length} bundles
+                </span>
+                <span class={['badge badge-sm', syncClass(policy)]}>
+                  {policy.syncStatus}
+                </span>
+                {#if !policy.enabled}
+                  <span class="badge badge-sm badge-warning">Disabled</span>
+                {/if}
               </div>
             </button>
           {/each}
@@ -539,113 +628,193 @@
 
         {#if selectedPolicy}
           <div class="min-w-0 space-y-4">
-            <div class="rounded-xl border border-base-300 bg-base-200/25 p-4">
+            <div class="card border border-base-300 bg-base-100 p-5 sm:p-6">
               <div class="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <div class="flex flex-wrap items-center gap-2">
-                    <h3 class="text-lg font-bold text-base-content">{selectedPolicy.name}</h3>
-                    <span class={['rounded-full border px-2 py-0.5 text-[10px] font-bold', syncClass(selectedPolicy)]}>
-                      {selectedPolicy.syncStatus}
-                    </span>
-                    {#if !selectedPolicy.enabled}
-                      <span class="rounded-full border border-base-content/20 bg-base-300 px-2 py-0.5 text-[10px] font-bold text-base-content/60">Disabled</span>
-                    {/if}
-                  </div>
+                <div class="min-w-0">
+                  <h3 class="text-lg font-bold text-base-content">{selectedPolicy.name}</h3>
                   <p class="mt-2 text-sm text-base-content/60">{selectedPolicy.description || 'No description.'}</p>
                   {#if selectedPolicy.syncError}
                     <p class="mt-2 text-xs text-error">{selectedPolicy.syncError}</p>
                   {/if}
                 </div>
-                <div class="flex flex-wrap gap-2">
-                  <button class={secondaryButton} type="button" onclick={() => beginEdit(selectedPolicy)}>Edit</button>
-                  <button class={secondaryButton} type="button" onclick={() => void duplicatePolicy(selectedPolicy)}>Duplicate</button>
-                  <button class={secondaryButton} type="button" onclick={() => void togglePolicy(selectedPolicy)}>
-                    {selectedPolicy.enabled ? 'Disable' : 'Enable'}
+                <div class="flex flex-wrap items-center gap-2">
+                  <input
+                    type="checkbox"
+                    class="toggle toggle-primary"
+                    checked={selectedPolicy.enabled}
+                    aria-label={selectedPolicy.enabled ? 'Disable policy' : 'Enable policy'}
+                    onchange={() => void togglePolicy(selectedPolicy)}
+                  />
+                  <a class="btn btn-sm btn-neutral text-xs" href={`/admin/access-control/policies/${encodeURIComponent(selectedPolicy.policyId)}/edit`}>
+                    <Edit class="mr-1.5 h-4 w-4" />
+                    Edit
+                  </a>
+                  <button class="btn btn-sm btn-neutral text-xs" type="button" onclick={() => openDuplicateModal(selectedPolicy)}>
+                    <Copy class="mr-1.5 h-4 w-4" />
+                    Duplicate
                   </button>
                   <button
-                    class="inline-flex h-9 items-center rounded-lg border border-error/30 px-3 text-xs font-semibold text-error hover:bg-error/10"
+                    class="btn btn-sm btn-neutral text-xs text-error hover:text-error"
                     type="button"
-                    onclick={() => void removePolicy(selectedPolicy)}
-                  >Delete</button>
+                    onclick={() => openDeleteModal(selectedPolicy)}
+                  >
+                    <Trash2 class="mr-1.5 h-4 w-4" />
+                    Delete
+                  </button>
                 </div>
               </div>
             </div>
 
-            <div class="grid gap-4 lg:grid-cols-2">
-              <div class="rounded-xl border border-base-300 bg-base-200/20 p-4">
-                <h4 class="text-xs font-bold uppercase tracking-wide text-base-content/50">Endpoint bundles</h4>
-                <div class="mt-3 flex flex-wrap gap-2">
-                  {#each selectedPolicy.bundleIds as bundleId}
-                    <span class="rounded-lg border border-primary/25 bg-primary/10 px-2.5 py-1 font-mono text-xs text-primary">{bundleId}</span>
-                  {:else}
-                    <span class="text-sm text-base-content/40">No endpoint bundles.</span>
-                  {/each}
+            <div class="mt-5 space-y-2">
+              <details class="collapse rounded-lg border border-base-300 bg-base-100">
+                <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">
+                  <span>Endpoint bundles</span>
+                </summary>
+                <div class="collapse-content px-0 pb-0">
+                  <div class="divide-y divide-base-300/70 border-t border-base-300/80">
+                    {#each selectedPolicy.bundleIds as bundleId}
+                      <div class="px-3 py-2 font-mono text-xs text-base-content/80">{bundleId}</div>
+                    {:else}
+                      <div class="px-3 py-3 text-sm text-base-content/40">No endpoint bundles.</div>
+                    {/each}
+                  </div>
                 </div>
-              </div>
-              <div class="rounded-xl border border-base-300 bg-base-200/20 p-4">
-                <h4 class="text-xs font-bold uppercase tracking-wide text-base-content/50">Policy assignments</h4>
-                <div class="mt-3 space-y-2">
-                  {#each selectedPolicy.assignments as assignment}
-                    <div class="flex min-w-0 items-center gap-2 text-sm">
-                      <span class="rounded bg-base-300 px-2 py-0.5 text-[10px] font-bold uppercase text-base-content/60">{assignment.type}</span>
-                      <span class="truncate text-base-content/90">{assignment.displayName || assignment.id}</span>
-                      {#if assignment.displayName}<span class="truncate font-mono text-[10px] text-base-content/40">{assignment.id}</span>{/if}
+              </details>
+
+              <details class="collapse rounded-lg border border-base-300 bg-base-100">
+                <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">
+                  <span>Policy assignments</span>
+                </summary>
+                <div class="collapse-content px-0 pb-0">
+                  {#if selectedPolicy.assignments.length === 0}
+                    <div class="border-t border-base-300/80 px-3 py-3 text-sm text-base-content/40">No assignments.</div>
+                  {:else}
+                    <div class="overflow-x-auto border-t border-base-300/80">
+                      <table class="w-full min-w-[30rem] text-left text-xs">
+                        <thead class="bg-base-200 text-base-content">
+                          <tr>
+                            <th class="px-3 py-2 font-semibold">User/Group</th>
+                            <th class="px-3 py-2 font-semibold">Name</th>
+                            <th class="px-3 py-2 font-semibold">ID</th>
+                          </tr>
+                        </thead>
+                        <tbody class="divide-y divide-base-300/80">
+                          {#each selectedPolicy.assignments as assignment}
+                            <tr>
+                              <td class="px-3 py-2 font-semibold text-base-content/60">{assignment.type === 'user' ? 'User' : 'Group'}</td>
+                              <td class="px-3 py-2 text-base-content/90">{assignment.displayName || '—'}</td>
+                              <td class="break-all px-3 py-2 font-mono text-base-content/60">{assignment.id}</td>
+                            </tr>
+                          {/each}
+                        </tbody>
+                      </table>
                     </div>
-                  {:else}
-                    <span class="text-sm text-base-content/40">No assignments.</span>
-                  {/each}
-                </div>
-              </div>
-              <div class="rounded-xl border border-base-300 bg-base-200/20 p-4">
-                <h4 class="text-xs font-bold uppercase tracking-wide text-base-content/50">Denied media GUIDs</h4>
-                <div class="mt-3 space-y-1">
-                  {#each selectedPolicy.mediaGuids as guid}
-                    <div class="break-all font-mono text-xs text-base-content/80">{guid}</div>
-                  {:else}
-                    <span class="text-sm text-base-content/40">No media GUID denies.</span>
-                  {/each}
-                </div>
-              </div>
-              <div class="rounded-xl border border-base-300 bg-base-200/20 p-4">
-                <h4 class="text-xs font-bold uppercase tracking-wide text-base-content/50">Denied providers and ages</h4>
-                <div class="mt-3 flex flex-wrap gap-2">
-                  {#each selectedPolicy.providers as provider}
-                    <span class="rounded-lg border border-secondary/25 bg-secondary/10 px-2.5 py-1 text-xs text-secondary">{provider}</span>
-                  {/each}
-                  {#each selectedPolicy.ageThresholds as age}
-                    <span class="rounded-lg border border-warning/25 bg-warning/10 px-2.5 py-1 text-xs text-warning">Deny age {age}+</span>
-                  {/each}
-                  {#if selectedPolicy.providers.length === 0 && selectedPolicy.ageThresholds.length === 0}
-                    <span class="text-sm text-base-content/40">No provider or age denies.</span>
                   {/if}
                 </div>
-              </div>
+              </details>
+
+              <details class="collapse rounded-lg border border-base-300 bg-base-100">
+                <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">
+                  <span>Denied media GUIDs</span>
+                </summary>
+                <div class="collapse-content px-0 pb-0">
+                  {#if selectedPolicy.mediaGuids.length === 0}
+                    <div class="border-t border-base-300/80 px-3 py-3 text-sm text-base-content/40">No media GUID denies.</div>
+                  {:else}
+                    <div class="overflow-x-auto border-t border-base-300/80">
+                      <table class="w-full table-fixed text-left text-xs">
+                        <thead class="bg-base-200 text-base-content">
+                          <tr>
+                            <th class="w-1/2 px-3 py-2 font-semibold">Title</th>
+                            <th class="w-1/2 px-3 py-2 font-semibold">GUID</th>
+                          </tr>
+                        </thead>
+                        <tbody class="divide-y divide-base-300/80">
+                          {#each selectedPolicy.mediaGuids as guid}
+                            {@const summary = mediaSummaries[guid]}
+                            <tr>
+                              <td class="max-w-0 px-3 py-2">
+                                <div class="truncate text-base-content/90" title={summary?.title || 'Media item'}>{summary?.title || 'Media item'}</div>
+                              </td>
+                              <td class="break-all px-3 py-2 font-mono text-base-content/60">{guid}</td>
+                            </tr>
+                          {/each}
+                        </tbody>
+                      </table>
+                    </div>
+                  {/if}
+                </div>
+              </details>
+
+              <details class="collapse rounded-lg border border-base-300 bg-base-100">
+                <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">
+                  <span>Denied providers</span>
+                </summary>
+                <div class="collapse-content px-0 pb-0">
+                  <div class="divide-y divide-base-300/70 border-t border-base-300/80">
+                    {#each selectedPolicy.providers as provider}
+                      <div class="px-3 py-2 text-xs text-base-content/80">{provider}</div>
+                    {:else}
+                      <div class="px-3 py-3 text-sm text-base-content/40">No provider denies.</div>
+                    {/each}
+                  </div>
+                </div>
+              </details>
+
+              <details class="collapse rounded-lg border border-base-300 bg-base-100">
+                <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">
+                  <span>Denied ages</span>
+                </summary>
+                <div class="collapse-content px-0 pb-0">
+                  <div class="divide-y divide-base-300/70 border-t border-base-300/80">
+                    {#each selectedPolicy.ageThresholds as age}
+                      <div class="px-3 py-2 text-xs text-base-content/80">Deny age {age}+</div>
+                    {:else}
+                      <div class="px-3 py-3 text-sm text-base-content/40">No age denies.</div>
+                    {/each}
+                  </div>
+                </div>
+              </details>
             </div>
           </div>
         {/if}
       </div>
     {/if}
   </section>
+  {/if}
 
   {#if editor}
     <section class={cardClass} aria-labelledby="policy-editor-title">
       <div class="flex items-center justify-between gap-3">
         <div>
-          <h3 id="policy-editor-title" class="text-sm font-bold text-base-content">{editor.policyId ? 'Edit policy' : 'Create policy'}</h3>
+          <h3 id="policy-editor-title" class="text-sm font-bold text-base-content">{isEditingPolicy ? 'Edit policy' : 'Create policy'}</h3>
           <p class="mt-1 text-xs text-base-content/50">
             Bundles grant endpoint access. Media GUIDs, providers, and age tiers deny playback; everything else stays watchable.
           </p>
         </div>
-        <button class={secondaryButton} type="button" onclick={() => (editor = null)}>Cancel</button>
       </div>
 
-      <div class="mt-5 grid gap-5 xl:grid-cols-2">
-        <div class="space-y-4">
-          <label class="block text-xs font-semibold text-base-content/60">
+      <div class="mt-5 grid min-w-0 gap-5 xl:grid-cols-2">
+        <div class="min-w-0 space-y-4">
+          <label class="block text-xs text-base-content/60">
             Name
-            <input class="input w-full mt-1.5" bind:value={editor.name} placeholder="Family viewing" />
+            <input
+              class="input mt-1.5 w-full"
+              bind:value={editor.name}
+              placeholder="family-viewing"
+              maxlength="100"
+              autocomplete="off"
+              autocapitalize="none"
+              spellcheck="false"
+              disabled={isEditingPolicy}
+              oninput={(event) => {
+                if (!editor) return;
+                editor.name = (event.currentTarget as HTMLInputElement).value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+              }}
+            />
+            <span class="mt-1 block text-xs text-base-content/40">Use lowercase letters, numbers, and dashes only.</span>
           </label>
-          <label class="block text-xs font-semibold text-base-content/60">
+          <label class="block text-xs text-base-content/60">
             Description
             <textarea class="textarea w-full mt-1.5 min-h-20" bind:value={editor.description} placeholder="What this policy grants and restricts"></textarea>
           </label>
@@ -654,27 +823,29 @@
             Enabled
           </label>
 
-          <fieldset>
+          <fieldset class="min-w-0 [min-inline-size:0]">
             <legend class="text-xs font-semibold text-base-content/60">Endpoint bundles</legend>
-            <div class="mt-2 max-h-64 space-y-1 overflow-y-auto rounded-lg border border-base-300 bg-base-200/35 p-2">
+            <ul class="mt-2 max-h-64 divide-y divide-base-300 overflow-y-auto rounded-lg border border-base-300 bg-base-100">
               {#each bundles as bundle (bundle.id)}
-                <label class="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-base-content/80 hover:bg-base-300/50">
+                <li>
+                <label class="flex items-center gap-2 px-3 py-2 text-sm text-base-content/80 hover:bg-base-200">
                   <input type="checkbox" value={bundle.id} bind:group={editor.bundleIds} class="checkbox checkbox-sm checkbox-primary" />
                   <span class="min-w-0 truncate font-mono text-xs">{bundle.id}</span>
                   <span class="ml-auto shrink-0 text-[10px] uppercase text-base-content/40">{bundle.systemOwned ? 'system' : 'user'}</span>
                 </label>
+                </li>
               {/each}
-            </div>
+            </ul>
           </fieldset>
         </div>
 
-        <div class="space-y-4">
-          <fieldset>
+        <div class="min-w-0 space-y-4">
+          <fieldset class="min-w-0 [min-inline-size:0]">
             <legend class="text-xs font-semibold text-base-content/60">Denied media</legend>
             <p class="mt-1 text-xs text-base-content/40">Resolve a media GUID before adding it so the policy targets a known item.</p>
             <div class="mt-2 flex gap-2">
               <input
-                class="input w-full font-mono text-xs"
+                class="input w-full max-w-xs font-mono text-xs"
                 bind:value={mediaGuidInput}
                 placeholder="00000000-0000-0000-0000-000000000000"
                 onkeydown={(event) => {
@@ -691,25 +862,28 @@
             {#if mediaGuidError}
               <p class="mt-2 text-xs text-error">{mediaGuidError}</p>
             {/if}
-            <div class="mt-3 space-y-2">
+            <div class="mt-3 w-full min-w-0 max-w-full space-y-2 overflow-y-auto rounded-lg border border-base-300 bg-base-100 p-2">
               {#each editor.mediaGuids as mediaGuid (mediaGuid)}
                 {@const summary = mediaSummaries[mediaGuid]}
-                <div class="flex items-start gap-3 rounded-lg border border-base-300 bg-base-200/35 px-3 py-2">
-                  <div class="min-w-0">
-                    <div class="truncate text-xs font-semibold text-base-content/90">{summary?.title || 'Media item'}</div>
-                    <div class="mt-1 break-all font-mono text-[10px] text-base-content/50">{mediaGuid}</div>
+                <div class="flex w-full min-w-0 max-w-full items-start gap-3 overflow-hidden rounded-lg border border-base-300 bg-base-200/35 px-3 py-2">
+                  <div class="min-w-0 flex-1 overflow-hidden">
+                    <div class="block w-full min-w-0 truncate text-xs font-semibold text-base-content/90">{summary?.title || 'Media item'}</div>
+                    <div class="mt-1 block w-full min-w-0 truncate font-mono text-[10px] text-base-content/50">{mediaGuid}</div>
                     {#if summary}
-                      <div class="mt-1 text-[10px] text-base-content/40">
+                      <div class="mt-1 truncate text-[10px] text-base-content/40">
                         {summary.providers.join(', ') || 'No provider'} · {summary.ageLimit == null ? 'Unrated' : `${summary.ageLimit}+`}
                       </div>
                     {/if}
                   </div>
                   <button
                     type="button"
-                    class="ml-auto shrink-0 text-xs font-semibold text-error hover:text-error"
+                    class="btn btn-sm btn-neutral ml-auto shrink-0 text-xs"
                     aria-label={`Remove media ${mediaGuid}`}
                     onclick={() => removeMediaGuid(mediaGuid)}
-                  >Remove</button>
+                  >
+                    <Trash2 class="mr-1.5 h-4 w-4" />
+                    Delete
+                  </button>
                 </div>
               {:else}
                 <div class="rounded-lg border border-dashed border-base-300 px-3 py-3 text-xs text-base-content/40">No media GUID denies.</div>
@@ -721,6 +895,7 @@
             <legend class="text-xs font-semibold text-base-content/60">Denied providers</legend>
             <div class="relative mt-2">
               <input
+                class="input w-full"
                 bind:value={providerInput}
                 placeholder="Search providers"
                 autocomplete="off"
@@ -748,17 +923,20 @@
               {#each editor.providers as provider (provider)}
                 <button
                   type="button"
-                  class="rounded-lg border border-secondary/25 bg-secondary/10 px-2.5 py-1 text-xs text-secondary hover:border-error/40 hover:text-error"
+                  class="badge badge-accent gap-1 text-xs"
                   title="Remove provider"
                   onclick={() => removeProvider(provider)}
-                >{provider} ×</button>
+                >
+                  {provider}
+                  <X class="h-3 w-3" />
+                </button>
               {:else}
                 <span class="text-xs text-base-content/40">No provider denies.</span>
               {/each}
             </div>
           </fieldset>
 
-          <label class="block text-xs font-semibold text-base-content/60">
+          <label class="block text-xs text-base-content/60">
             Deny at age or above
             <input class="input w-full mt-1.5" bind:value={editor.ageThresholds} placeholder="13, 16, 18" />
           </label>
@@ -794,14 +972,15 @@
               />
             </div>
             {#if directoryLoading || directoryResults.length > 0}
-              <div class="mt-2 max-h-44 w-full min-w-0 overflow-x-hidden overflow-y-auto rounded-lg border border-base-content/20 bg-base-200">
+              <ul class="mt-2 max-h-44 w-full min-w-0 divide-y divide-base-300 overflow-x-hidden overflow-y-auto rounded-lg border border-base-300 bg-base-100">
                 {#if directoryLoading}
-                  <div class="px-3 py-2 text-xs text-base-content/50">Searching Authentik…</div>
+                  <li class="px-3 py-2 text-xs text-base-content/50">Searching Authentik…</li>
                 {:else}
                   {#each directoryResults as entry (entry.id)}
+                  <li>
                   <button
                     type="button"
-                    class="flex w-full min-w-0 items-center gap-2 border-b border-base-300 px-3 py-2 text-left last:border-0 hover:bg-primary/10"
+                    class="flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left hover:bg-base-200"
                     onclick={() => addAssignment(entry.id, entry.name)}
                   >
                     <div class="min-w-0 flex-1">
@@ -810,20 +989,22 @@
                       <span class="block truncate font-mono text-[10px] text-base-content/40">{entry.id}</span>
                     </div>
                   </button>
+                  </li>
                   {/each}
                 {/if}
-              </div>
+              </ul>
             {/if}
             <div class="mt-3 flex flex-wrap gap-2">
               {#each editor.assignments as assignment (`${assignment.type}:${assignment.id}`)}
                 <button
                   type="button"
-                  class="rounded-lg border border-base-content/20 bg-base-200 px-2.5 py-1 text-left text-xs text-base-content/80 hover:border-error hover:text-error"
+                  class="badge badge-accent h-auto gap-1 py-1 text-left text-xs"
                   title="Remove assignment"
                   onclick={() => removeAssignment(assignment)}
                 >
-                  <span class="mr-1 text-[10px] font-bold uppercase text-base-content/50">{assignment.type}</span>
-                  {assignment.displayName || assignment.id} ×
+                  <span class="text-[10px] font-bold uppercase">{assignment.type}</span>
+                  <span class="max-w-48 truncate">{assignment.displayName || assignment.id}</span>
+                  <X class="h-3 w-3 shrink-0" />
                 </button>
               {/each}
             </div>
@@ -831,49 +1012,16 @@
         </div>
       </div>
 
-      <div class="mt-5 flex justify-end gap-2 border-t border-base-300 pt-4">
-        <button class={secondaryButton} type="button" onclick={() => (editor = null)}>Cancel</button>
-        <button class={secondaryButton} type="button" disabled={saving || !editor.name.trim()} onclick={() => void savePolicy()}>
+      <div class="mt-5 flex items-center justify-between gap-2 border-t border-base-300 pt-4">
+        <a class={secondaryButton} href="/admin/access-control"><ArrowLeft class="mr-1.5 h-4 w-4" />Back</a>
+        <button class={primaryButton} type="button" disabled={saving || !editor.name.trim()} onclick={() => void savePolicy()}>
           {saving ? 'Saving…' : 'Save policy'}
         </button>
       </div>
     </section>
   {/if}
 {:else if activeTab === 'bundles'}
-  <section class={cardClass}>
-    <h3 class="text-sm font-bold text-base-content">Policy membership by bundle</h3>
-    <p class="mt-1 text-xs text-base-content/50">
-      Policies are the normal assignment path. Direct exceptions are shown separately for bootstrap and compatibility needs.
-    </p>
-    {#if loading}
-      <div class="mt-6 flex justify-center"><span class="loading loading-spinner loading-md"></span></div>
-    {:else}
-      <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {#each policyBundleReferences as reference (reference.bundle.id)}
-          <div class="rounded-xl border border-base-300 bg-base-200/25 p-3">
-            <div class="flex items-center justify-between gap-2">
-              <span class="truncate font-mono text-xs font-semibold text-base-content/90">{reference.bundle.id}</span>
-              <span class="text-[10px] uppercase text-base-content/40">{reference.bundle.systemOwned ? 'system' : 'user'}</span>
-            </div>
-            <div class="mt-2 text-xs text-base-content/50">
-              {reference.bundle.endpointCount} endpoints · {reference.bundle.policyCount} policies
-            </div>
-            <div class="mt-2 flex flex-wrap gap-1.5">
-              {#each reference.policies as policy (policy.policyId)}
-                <button type="button" class="rounded bg-primary/10 px-2 py-1 text-[11px] text-primary" onclick={() => {
-                  selectedPolicyId = policy.policyId;
-                  activeTab = 'policies';
-                }}>{policy.name}</button>
-              {:else}
-                <span class="text-xs text-base-content/30">No policy references</span>
-              {/each}
-            </div>
-          </div>
-        {/each}
-      </div>
-    {/if}
-  </section>
-  <BundleManagementSection onManagePolicies={() => (activeTab = 'policies')} />
+  <BundleManagementSection policies={policies} onManagePolicies={() => (activeTab = 'policies')} />
 {:else}
   <section class={cardClass} aria-labelledby="effective-access-title">
     <h3 id="effective-access-title" class="text-sm font-bold text-base-content">Effective access inspector</h3>
@@ -899,49 +1047,56 @@
           <option value="group">Group</option>
         </select>
       </label>
-      <label class="text-xs font-semibold text-base-content/60">
+      <div class="text-xs font-semibold text-base-content/60">
         Find user or group
-        <input
-          class="input w-full mt-1.5"
-          bind:value={effectivePrincipalQuery}
-          placeholder="Search users or groups"
-          oninput={() => {
-            if (effectiveId) effectiveId = '';
-            queueEffectivePrincipalSearch();
-          }}
-          onkeydown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault();
-              const entry = effectiveDirectoryResults[0];
-              if (entry) selectEffectivePrincipal(entry);
-              else selectEffectivePrincipal();
-            }
-          }}
-        />
-      </label>
+        <div class={['dropdown mt-1.5 w-full', effectivePrincipalDropdownOpen && 'dropdown-open']}>
+          <input
+            class="input w-full"
+            bind:value={effectivePrincipalQuery}
+            placeholder="Search users or groups"
+            autocomplete="off"
+            role="combobox"
+            aria-expanded={effectivePrincipalDropdownOpen}
+            aria-controls="effective-principal-options"
+            onfocus={() => (effectivePrincipalDropdownOpen = true)}
+            onblur={() => setTimeout(() => (effectivePrincipalDropdownOpen = false), 150)}
+            oninput={() => {
+              if (effectiveId) effectiveId = '';
+              effectivePrincipalDropdownOpen = true;
+              queueEffectivePrincipalSearch();
+            }}
+            onkeydown={(event) => {
+              if (event.key === 'Escape') effectivePrincipalDropdownOpen = false;
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                const entry = effectiveDirectoryResults[0];
+                if (entry) selectEffectivePrincipal(entry);
+                else selectEffectivePrincipal();
+              }
+            }}
+          />
+          {#if effectivePrincipalDropdownOpen && (effectiveDirectoryLoading || effectiveDirectoryResults.length > 0)}
+            <ul id="effective-principal-options" class="dropdown-content menu z-20 mt-1 max-h-48 w-full flex-nowrap overflow-y-auto rounded-lg border border-base-300 bg-base-100 p-1 shadow-xl" role="listbox">
+              {#if effectiveDirectoryLoading}
+                <li><span class="text-xs text-base-content/50">Searching Authentik…</span></li>
+              {:else}
+                {#each effectiveDirectoryResults as entry (`${entry.type}:${entry.id}`)}
+                  <li>
+                    <button type="button" class="flex w-full items-center gap-2 text-left" onclick={() => selectEffectivePrincipal(entry)}>
+                      <span class="truncate text-sm font-semibold text-base-content">{entry.name}</span>
+                      <span class="truncate text-xs text-base-content/50">{entry.description}</span>
+                      <span class="ml-auto shrink-0 font-mono text-[10px] text-base-content/40">{entry.id}</span>
+                    </button>
+                  </li>
+                {/each}
+              {/if}
+            </ul>
+          {/if}
+        </div>
+      </div>
     </div>
 
-    {#if effectiveDirectoryLoading || effectiveDirectoryResults.length > 0}
-      <div class="mt-2 max-h-48 overflow-y-auto rounded-lg border border-base-content/20 bg-base-200">
-        {#if effectiveDirectoryLoading}
-          <div class="px-3 py-2 text-xs text-base-content/50">Searching Authentik…</div>
-        {:else}
-          {#each effectiveDirectoryResults as entry (`${entry.type}:${entry.id}`)}
-            <button
-              type="button"
-              class="flex w-full items-center gap-2 border-b border-base-300 px-3 py-2 text-left last:border-0 hover:bg-primary/10"
-              onclick={() => selectEffectivePrincipal(entry)}
-            >
-              <span class="truncate text-sm font-semibold text-base-content">{entry.name}</span>
-              <span class="truncate text-xs text-base-content/50">{entry.description}</span>
-              <span class="ml-auto shrink-0 font-mono text-[10px] text-base-content/40">{entry.id}</span>
-            </button>
-          {/each}
-        {/if}
-      </div>
-    {/if}
-
-    <div class="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-base-300 bg-base-200/25 px-3 py-3">
+    <div class="card mt-3 flex flex-wrap items-center justify-between gap-3 border border-base-300 bg-base-100 p-4">
       <div class="min-w-0">
         <div class="text-[10px] font-bold uppercase text-base-content/40">Selected principal</div>
         <div class="mt-1 truncate font-mono text-xs text-base-content/80">{effectiveId || 'None selected'}</div>
@@ -955,11 +1110,40 @@
       <h4 class="text-xs font-bold uppercase tracking-wide text-base-content/50">Check a resource</h4>
       <p class="mt-1 text-xs text-base-content/40">Check an endpoint, a media item, or both and inspect every authorization-axis reason.</p>
       <div class="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-        <label class="text-xs font-semibold text-base-content/60">
+        <div class="text-xs font-semibold text-base-content/60">
           Endpoint (optional)
-          <input class="input w-full mt-1.5 font-mono text-xs" bind:value={effectiveEndpoint} list="endpoint-catalog" placeholder="media.stream" />
-          <datalist id="endpoint-catalog">{#each catalog as endpoint}<option value={endpoint.id}></option>{/each}</datalist>
-        </label>
+          <div class={['dropdown mt-1.5 w-full', endpointDropdownOpen && 'dropdown-open']}>
+            <input
+              class="input w-full font-mono text-xs"
+              bind:value={effectiveEndpoint}
+              placeholder="media.stream"
+              autocomplete="off"
+              role="combobox"
+              aria-expanded={endpointDropdownOpen}
+              aria-controls="effective-endpoint-options"
+              onfocus={() => (endpointDropdownOpen = true)}
+              onblur={() => setTimeout(() => (endpointDropdownOpen = false), 150)}
+              oninput={() => (endpointDropdownOpen = true)}
+              onkeydown={(event) => {
+                if (event.key === 'Escape') endpointDropdownOpen = false;
+                if (event.key === 'Enter' && endpointDropdownOpen) endpointDropdownOpen = false;
+              }}
+            />
+            {#if endpointDropdownOpen}
+              <ul id="effective-endpoint-options" class="dropdown-content menu z-20 mt-1 max-h-60 w-full flex-nowrap overflow-y-auto rounded-lg border border-base-300 bg-base-100 p-1 shadow-xl" role="listbox">
+                {#each catalog.filter((endpoint) => !effectiveEndpoint.trim() || endpoint.id.toLowerCase().includes(effectiveEndpoint.trim().toLowerCase())) as endpoint (endpoint.id)}
+                  <li>
+                    <button type="button" class="block w-full truncate text-left font-mono text-xs" onclick={() => { effectiveEndpoint = endpoint.id; endpointDropdownOpen = false; }}>
+                      {endpoint.id}
+                    </button>
+                  </li>
+                {:else}
+                  <li><span class="text-xs text-base-content/50">No matching endpoints.</span></li>
+                {/each}
+              </ul>
+            {/if}
+          </div>
+        </div>
         <label class="text-xs font-semibold text-base-content/60">
           Media GUID (optional)
           <input class="input w-full mt-1.5 font-mono text-xs" bind:value={effectiveMediaGuid} placeholder="00000000-0000-0000-0000-000000000000" />
@@ -987,89 +1171,130 @@
         </div>
       </div>
 
-      <div class="mt-5 grid gap-4 lg:grid-cols-3">
-        <div class="rounded-xl border border-base-300 bg-base-200/20 p-4">
-          <h4 class="text-xs font-bold uppercase text-base-content/50">Groups</h4>
-          <div class="mt-3 flex flex-wrap gap-2">
-            {#each effectiveResult.groups as group}<span class="rounded bg-base-300 px-2 py-1 text-xs text-base-content/80">{group}</span>{:else}<span class="text-sm text-base-content/40">None</span>{/each}
-          </div>
-        </div>
-        <div class="rounded-xl border border-base-300 bg-base-200/20 p-4">
-          <h4 class="text-xs font-bold uppercase text-base-content/50">Direct exceptions</h4>
-          <div class="mt-3 space-y-1">
-            {#each effectiveResult.directBundleIds as id}<div class="font-mono text-xs text-base-content/80">{id}</div>{:else}<span class="text-sm text-base-content/40">None</span>{/each}
-          </div>
-        </div>
-        <div class="rounded-xl border border-base-300 bg-base-200/20 p-4">
-          <h4 class="text-xs font-bold uppercase text-base-content/50">Via policies</h4>
-          <div class="mt-3 space-y-1">
-            {#each effectiveResult.policyBundleIds as id}<div class="font-mono text-xs text-primary">{id}</div>{:else}<span class="text-sm text-base-content/40">None</span>{/each}
-          </div>
-        </div>
-      </div>
-
-      <div class="mt-4 rounded-xl border border-base-300 bg-base-200/20 p-4">
-        <h4 class="text-xs font-bold uppercase text-base-content/50">Effective endpoints</h4>
-        <div class="mt-3 grid max-h-72 gap-1.5 overflow-y-auto sm:grid-cols-2 xl:grid-cols-3">
-          {#each effectiveResult.endpointIds as endpointId}
-            <div class="truncate rounded bg-base-200/70 px-2.5 py-1.5 font-mono text-xs text-success" title={endpointId}>{endpointId}</div>
-          {:else}
-            <span class="text-sm text-base-content/40">No endpoint invocation grants.</span>
-          {/each}
-        </div>
-      </div>
-
-      <div class="mt-4 rounded-xl border border-base-300 bg-base-200/20 p-4">
-        <h4 class="text-xs font-bold uppercase text-base-content/50">Source policies</h4>
-        <div class="mt-3 grid gap-2 lg:grid-cols-2">
-          {#each effectiveResult.sourcePolicies as policy}
-            <div class="rounded-lg border border-base-300 bg-base-200/30 px-3 py-2">
-              <div class="flex flex-wrap items-center justify-between gap-2">
-                <span class="text-xs font-semibold text-primary">{policy.name}</span>
-                <span class="text-[10px] font-bold uppercase text-base-content/50">{policy.syncStatus}</span>
-              </div>
-              <p class="mt-1 text-[11px] text-base-content/50">
-                {policy.contributesEndpoints ? 'Endpoint grants' : 'No synchronized endpoint grants'}
-                · {policy.contributesDenies ? 'Media denies' : 'No media denies'}
-              </p>
+      <div class="mt-5 space-y-2">
+        <details class="collapse rounded-lg border border-base-300 bg-base-100">
+          <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">Groups</summary>
+          <div class="collapse-content px-0 pb-0">
+            <div class="divide-y divide-base-300/70 border-t border-base-300/80">
+              {#each effectiveResult.groups as group}
+                <div class="px-3 py-2 text-xs text-base-content/80">{group}</div>
+              {:else}
+                <div class="px-3 py-3 text-sm text-base-content/40">None</div>
+              {/each}
             </div>
-          {:else}
-            <span class="text-sm text-base-content/40">No policy assignment contributes to this principal.</span>
-          {/each}
-        </div>
-      </div>
+          </div>
+        </details>
 
-      <div class="mt-4 grid gap-4 lg:grid-cols-3">
-        <div class="rounded-xl border border-base-300 bg-base-200/20 p-4">
-          <h4 class="text-xs font-bold uppercase text-base-content/50">Denied media GUIDs</h4>
-          <div class="mt-3 space-y-1">
-            {#each effectiveResult.deniedMediaGuids as mediaGuid}
-              <div class="truncate font-mono text-xs text-error" title={mediaGuid}>{mediaGuid}</div>
-            {:else}
-              <span class="text-sm text-base-content/40">None</span>
-            {/each}
+        <details class="collapse rounded-lg border border-base-300 bg-base-100">
+          <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">Direct exceptions</summary>
+          <div class="collapse-content px-0 pb-0">
+            <div class="divide-y divide-base-300/70 border-t border-base-300/80">
+              {#each effectiveResult.directBundleIds as id}
+                <div class="px-3 py-2 font-mono text-xs text-base-content/80">{id}</div>
+              {:else}
+                <div class="px-3 py-3 text-sm text-base-content/40">None</div>
+              {/each}
+            </div>
           </div>
-        </div>
-        <div class="rounded-xl border border-base-300 bg-base-200/20 p-4">
-          <h4 class="text-xs font-bold uppercase text-base-content/50">Denied providers</h4>
-          <div class="mt-3 flex flex-wrap gap-2">
-            {#each effectiveResult.deniedProviders as provider}
-              <span class="rounded bg-error/10 px-2 py-1 text-xs text-error">{provider}</span>
-            {:else}
-              <span class="text-sm text-base-content/40">None</span>
-            {/each}
+        </details>
+
+        <details class="collapse rounded-lg border border-base-300 bg-base-100">
+          <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">Via policies</summary>
+          <div class="collapse-content px-0 pb-0">
+            <div class="divide-y divide-base-300/70 border-t border-base-300/80">
+              {#each effectiveResult.policyBundleIds as id}
+                <div class="px-3 py-2 font-mono text-xs text-base-content">{id}</div>
+              {:else}
+                <div class="px-3 py-3 text-sm text-base-content/40">None</div>
+              {/each}
+            </div>
           </div>
-        </div>
-        <div class="rounded-xl border border-base-300 bg-base-200/20 p-4">
-          <h4 class="text-xs font-bold uppercase text-base-content/50">Denied age tiers</h4>
-          <div class="mt-3 flex flex-wrap gap-2">
-            {#each effectiveResult.deniedAgeThresholds as threshold}
-              <span class="rounded bg-error/10 px-2 py-1 text-xs text-error">{threshold}+</span>
-            {:else}
-              <span class="text-sm text-base-content/40">None</span>
-            {/each}
+        </details>
+
+        <details class="collapse rounded-lg border border-base-300 bg-base-100">
+          <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">Effective endpoints</summary>
+          <div class="collapse-content px-0 pb-0">
+            <div class="max-h-72 divide-y divide-base-300/70 overflow-y-auto border-t border-base-300/80">
+              {#each effectiveResult.endpointIds as endpointId}
+                <div class="truncate px-3 py-2 font-mono text-xs text-base-content" title={endpointId}>{endpointId}</div>
+              {:else}
+                <div class="px-3 py-3 text-sm text-base-content/40">No endpoint invocation grants.</div>
+              {/each}
+            </div>
           </div>
-        </div>
+        </details>
+
+        <details class="collapse rounded-lg border border-base-300 bg-base-100">
+          <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">Source policies</summary>
+          <div class="collapse-content px-0 pb-0">
+            <div class="divide-y divide-base-300/70 border-t border-base-300/80">
+              {#each effectiveResult.sourcePolicies as policy}
+                <div class="px-3 py-2">
+                  <span class="block truncate text-xs font-semibold text-base-content" title={policy.name}>{policy.name}</span>
+                </div>
+              {:else}
+                <div class="px-3 py-3 text-sm text-base-content/40">No policy assignment contributes to this principal.</div>
+              {/each}
+            </div>
+          </div>
+        </details>
+
+        <details class="collapse rounded-lg border border-base-300 bg-base-100">
+          <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">Denied media GUIDs</summary>
+          <div class="collapse-content px-0 pb-0">
+            {#if effectiveResult.deniedMediaGuids.length === 0}
+              <div class="border-t border-base-300/80 px-3 py-3 text-sm text-base-content/40">None</div>
+            {:else}
+              <div class="overflow-x-auto border-t border-base-300/80">
+                <table class="w-full table-fixed text-left text-xs">
+                  <thead class="bg-base-200 text-base-content">
+                    <tr>
+                      <th class="w-1/2 px-3 py-2 font-semibold">Title</th>
+                      <th class="w-1/2 px-3 py-2 font-semibold">GUID</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-base-300/80">
+                    {#each effectiveResult.deniedMediaGuids as mediaGuid}
+                      {@const summary = mediaSummaries[mediaGuid]}
+                      <tr>
+                        <td class="max-w-0 px-3 py-2">
+                          <div class="truncate text-base-content" title={summary?.title || 'Media item'}>{summary?.title || 'Media item'}</div>
+                        </td>
+                        <td class="break-all px-3 py-2 font-mono text-base-content">{mediaGuid}</td>
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
+              </div>
+            {/if}
+          </div>
+        </details>
+
+        <details class="collapse rounded-lg border border-base-300 bg-base-100">
+          <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">Denied providers</summary>
+          <div class="collapse-content px-0 pb-0">
+            <div class="divide-y divide-base-300/70 border-t border-base-300/80">
+              {#each effectiveResult.deniedProviders as provider}
+                <div class="px-3 py-2 text-xs text-base-content">{provider}</div>
+              {:else}
+                <div class="px-3 py-3 text-sm text-base-content/40">None</div>
+              {/each}
+            </div>
+          </div>
+        </details>
+
+        <details class="collapse rounded-lg border border-base-300 bg-base-100">
+          <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">Denied age tiers</summary>
+          <div class="collapse-content px-0 pb-0">
+            <div class="divide-y divide-base-300/70 border-t border-base-300/80">
+              {#each effectiveResult.deniedAgeThresholds as threshold}
+                <div class="px-3 py-2 text-xs text-base-content">{threshold}+</div>
+              {:else}
+                <div class="px-3 py-3 text-sm text-base-content/40">None</div>
+              {/each}
+            </div>
+          </div>
+        </details>
       </div>
 
     </section>
@@ -1095,7 +1320,7 @@
 
       <div class="mt-4 overflow-x-auto rounded-lg border border-base-300">
         <table class="w-full min-w-[46rem] text-left text-xs">
-          <thead class="bg-base-200/80 text-base-content/50">
+          <thead class="bg-base-200 text-base-content">
             <tr><th class="px-3 py-2">Axis</th><th class="px-3 py-2">Resource</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">Reason / provenance</th></tr>
           </thead>
           <tbody class="divide-y divide-base-300">

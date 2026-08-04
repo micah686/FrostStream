@@ -249,6 +249,10 @@ public sealed record ImportSessionMetadataRefreshResponse : ImportSessionOperati
 
 public sealed record ImportSessionYtDlpOptions
 {
+    /// <summary>Selected user cookie profile key; resolved to a secret path by WebAPI.</summary>
+    public string? CookieProfileKey { get; init; }
+    /// <summary>Resolved user cookie secret path for the worker; never supplied directly by the browser.</summary>
+    public string? CookieSecretPath { get; init; }
     public string? ProxyUrl { get; init; }
     public string? Username { get; init; }
     public string? Password { get; init; }

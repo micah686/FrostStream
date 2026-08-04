@@ -1,21 +1,22 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import { Modal, Select } from '$lib/components/ui';
   import {
     Boxes,
     Check,
-    ChevronDown,
-    ChevronUp,
     CircleAlert,
     Pencil,
     Plus,
     RefreshCw,
     Server,
     Trash2,
-    Users
+    Users,
+    X
   } from '@lucide/svelte';
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
   import { ApiRequestError } from '$lib/api/http';
+  import type { AccessPolicy } from '$lib/api/accessControl';
   import {
     createRuntimeBundle,
     deleteRuntimeBundle,
@@ -26,7 +27,17 @@
     type CatalogEntry
   } from '$lib/api/bundles';
 
-  let { onManagePolicies }: { onManagePolicies?: () => void } = $props();
+let {
+  onManagePolicies,
+  mode = 'management',
+  bundleId = '',
+  policies = []
+}: {
+  onManagePolicies?: () => void;
+  mode?: 'management' | 'create' | 'edit';
+  bundleId?: string;
+  policies?: AccessPolicy[];
+} = $props();
 
   interface CatalogGroup {
     bundle: string;
@@ -51,18 +62,43 @@
   let pickerEndpoints = $state<string[]>([]);
   let pickerSaving = $state(false);
   let pickerError = $state<Error | null>(null);
+  let policySearch = $state('');
+  let policyDropdownOpen = $state(false);
 
   let deleteModalOpen = $state(false);
   let deleteTarget = $state<BundleView | null>(null);
   let deletingBundleId = $state<string | null>(null);
 
-  const selectedBundle = $derived(bundles.find((bundle) => bundle.id === selectedBundleId) ?? bundles[0] ?? null);
   const systemBundles = $derived(bundles.filter((bundle) => bundle.systemOwned));
   const runtimeBundles = $derived(bundles.filter((bundle) => !bundle.systemOwned));
   const cloneSources = $derived(systemBundles.filter((bundle) => bundle.id !== 'all'));
+  const policyNames = $derived([...new Set(policies.map((policy) => policy.name.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)));
+  const filteredPolicyNames = $derived(
+    policyNames.filter((policyName) => policyName.toLowerCase().includes(policySearch.trim().toLowerCase()))
+  );
+  const matchingPolicyBundleIds = $derived.by(() => {
+    const query = policySearch.trim().toLowerCase();
+    if (!query) return null;
+    return new Set(
+      policies
+        .filter((policy) => policy.name.toLowerCase().includes(query))
+        .flatMap((policy) => policy.bundleIds)
+    );
+  });
+  const visibleSystemBundles = $derived(
+    matchingPolicyBundleIds ? systemBundles.filter((bundle) => matchingPolicyBundleIds?.has(bundle.id)) : systemBundles
+  );
+  const visibleRuntimeBundles = $derived(
+    matchingPolicyBundleIds ? runtimeBundles.filter((bundle) => matchingPolicyBundleIds?.has(bundle.id)) : runtimeBundles
+  );
+  const selectedBundle = $derived(
+    [...visibleSystemBundles, ...visibleRuntimeBundles].find((bundle) => bundle.id === selectedBundleId)
+      ?? visibleSystemBundles[0]
+      ?? visibleRuntimeBundles[0]
+      ?? null
+  );
   let systemGroupOpen = $state(true);
   let runtimeGroupOpen = $state(true);
-  let selectedEndpointSection = $state('all');
   const openFgaUnavailable = $derived(isStatus(loadError, 503) || isStatus(mutationError, 503) || isStatus(pickerError, 503));
 
   onMount(() => {
@@ -84,6 +120,19 @@
       const [nextCatalog, nextBundles] = await Promise.all([listCatalog(), listBundles()]);
       catalog = sortCatalog(nextCatalog);
       applyBundles(nextBundles);
+      if (mode === 'edit') {
+        const bundle = nextBundles.find((item) => item.id === bundleId);
+        if (bundle) {
+          pickerMode = 'edit';
+          pickerBundleId = bundle.id;
+          pickerCloneFrom = '';
+          pickerSearch = '';
+          pickerEndpoints = [...bundle.endpoints].sort();
+          pickerError = null;
+        } else {
+          pickerError = new Error('Runtime bundle not found.');
+        }
+      }
     } catch (err) {
       loadError = err instanceof Error ? err : new Error('Could not load bundle management data.');
     } finally {
@@ -132,9 +181,7 @@
   }
 
   function ownershipClass(bundle: BundleView): string {
-    return bundle.systemOwned
-      ? 'border-primary/25 bg-primary/10 text-primary'
-      : 'border-success/25 bg-success/10 text-success';
+    return bundle.systemOwned ? 'badge-neutral' : 'badge-accent';
   }
 
   function catalogGroups(entries: CatalogEntry[] = catalog): CatalogGroup[] {
@@ -150,18 +197,22 @@
   }
 
   function endpointGroups(bundle: BundleView): CatalogGroup[] {
-    const endpointSet = new Set(bundle.endpoints);
-    const known = catalog.filter((entry) => endpointSet.has(entry.id));
-    const groups = catalogGroups(known);
-    const knownIds = new Set(known.map((entry) => entry.id));
-    const unknown = bundle.endpoints.filter((id) => !knownIds.has(id)).map((id) => ({ id, bundle: 'Uncataloged' }));
-    return unknown.length > 0 ? [...groups, { bundle: 'Uncataloged', entries: unknown }] : groups;
-  }
+    const catalogById = new Map(catalog.map((entry) => [entry.id, entry]));
+    const groups = new Map<string, CatalogEntry[]>();
 
-  function endpointSectionEntries(bundle: BundleView): CatalogEntry[] {
-    const groups = endpointGroups(bundle);
-    if (selectedEndpointSection === 'all') return groups.flatMap((group) => group.entries);
-    return groups.find((group) => group.bundle === selectedEndpointSection)?.entries ?? groups.flatMap((group) => group.entries);
+    for (const endpointId of bundle.endpoints) {
+      const groupName = endpointId.split('.')[0] || 'Uncategorized';
+      const entries = groups.get(groupName) ?? [];
+      entries.push(catalogById.get(endpointId) ?? { id: endpointId, bundle: groupName });
+      groups.set(groupName, entries);
+    }
+
+    return [...groups.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([groupName, entries]) => ({
+        bundle: groupName,
+        entries: entries.sort((a, b) => a.id.localeCompare(b.id))
+      }));
   }
 
   function filteredCatalog(): CatalogEntry[] {
@@ -197,16 +248,6 @@
     pickerOpen = true;
   }
 
-  function openEditModal(bundle: BundleView) {
-    if (bundle.systemOwned) return;
-    pickerMode = 'edit';
-    pickerBundleId = bundle.id;
-    pickerSearch = '';
-    pickerEndpoints = [...bundle.endpoints];
-    pickerError = null;
-    pickerOpen = true;
-  }
-
   async function submitPicker() {
     const bundleId = pickerMode === 'create' ? `user.${pickerBundleSuffix.trim()}` : pickerBundleId.trim();
     if (pickerMode === 'create' && !pickerBundleSuffix.trim()) {
@@ -234,6 +275,9 @@
       }
       await reloadBundles(bundleId);
       pickerOpen = false;
+      if (mode === 'create') {
+        await goto('/admin/access-control?tab=bundles');
+      }
     } catch (err) {
       pickerError = err instanceof Error ? err : new Error('Could not save the bundle.');
       if (err instanceof ApiRequestError && err.status === 404) {
@@ -266,299 +310,36 @@
   }
 </script>
 
-<section class={cardClass} aria-labelledby="bundle-management-title">
-  <div class="flex flex-wrap items-start justify-between gap-3">
-    <div class="min-w-0">
-      <div class="flex items-center gap-2">
-        <Boxes class="h-5 w-5 text-primary" />
-        <h2 id="bundle-management-title" class="text-base font-bold text-base-content">Bundle management</h2>
-      </div>
-      <p class="mt-2 text-sm text-base-content/60">
-        Define which endpoints belong to each bundle. Assign users and groups from Policies.
-      </p>
-    </div>
-    <div class="flex flex-wrap gap-2">
-      <button class="btn btn-sm btn-neutral" disabled={loading} onclick={() => void loadAll()}>
-        <RefreshCw class="mr-1.5 h-3.5 w-3.5" />
-        Refresh
-      </button>
-      <button class="btn btn-sm btn-primary" onclick={openCreateModal}>
-        <Plus class="mr-1.5 h-3.5 w-3.5" />
-        Create runtime bundle
-      </button>
-    </div>
-  </div>
-
-  {#if openFgaUnavailable}
-    <div
-      class="mt-4 flex items-start gap-2 rounded-xl border border-warning/60 bg-warning/10 p-3 text-sm text-warning"
-      role="alert"
-    >
-      <Server class="mt-0.5 h-4 w-4 shrink-0" />
-      <span>OpenFGA is unavailable. Bundle authorization changes cannot complete until it recovers.</span>
-    </div>
-  {/if}
-
-  {#if loadError}
-    <div class="alert alert-error mt-4 text-sm" role="alert">
-      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
-      <span>{displayError(loadError, 'Could not load bundle management data.')}</span>
-    </div>
-  {/if}
-  {#if mutationError}
-    <div class="alert alert-error mt-4 text-sm" role="alert">
-      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
-      <span>{displayError(mutationError, 'Bundle operation failed.')}</span>
-    </div>
-  {/if}
-
-  {#if loading}
-    <div class="mt-10 flex justify-center"><span class="loading loading-spinner loading-md"></span></div>
-  {:else if bundles.length === 0}
-    <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
-      <Boxes class="mx-auto h-9 w-9 text-base-content/30" />
-      <p class="mt-4 text-sm font-semibold text-base-content/80">No bundles</p>
-      <p class="mt-1 text-sm text-base-content/50">Create a runtime bundle after the catalog is available.</p>
-    </div>
-  {:else}
-    <div class="mt-5 grid gap-5 2xl:grid-cols-[21rem_minmax(0,1fr)]">
-      <aside class="min-w-0 rounded-xl border border-base-300 bg-base-200/20" aria-label="Bundles">
-        {#snippet bundleRow(bundle: BundleView)}
-          <button
-            type="button"
-            class={[
-              'block w-full px-3 py-3 text-left transition',
-              selectedBundle?.id === bundle.id ? 'bg-primary/10' : 'hover:bg-base-300/45'
-            ]}
-            onclick={() => (selectedBundleId = bundle.id)}
-          >
-            <div class="flex min-w-0 items-center justify-between gap-2">
-              <span class="truncate font-mono text-sm font-semibold text-base-content">{bundle.id}</span>
-              <span class={['shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold', ownershipClass(bundle)]}>
-                {ownershipLabel(bundle)}
-              </span>
-            </div>
-            <div class="mt-1 flex flex-wrap gap-2 text-xs text-base-content/50">
-              <span>{bundle.endpointCount} endpoint{bundle.endpointCount === 1 ? '' : 's'}</span>
-              <span>{bundle.policyCount} {bundle.policyCount === 1 ? 'policy' : 'policies'}</span>
-            </div>
-          </button>
-        {/snippet}
-
-        {#snippet bundleGroup(label: string, items: BundleView[], open: boolean, toggle: () => void)}
-          <button
-            type="button"
-            class="flex w-full items-center justify-between gap-2 border-b border-base-300 px-3 py-2 text-left transition hover:bg-base-300/35"
-            aria-expanded={open}
-            onclick={toggle}
-          >
-            <span class="text-xs font-semibold uppercase text-base-content/50">{label}</span>
-            <span class="flex shrink-0 items-center gap-1.5 text-xs text-base-content/40">
-              {items.length}
-              {#if open}
-                <ChevronUp class="h-3 w-3" />
-              {:else}
-                <ChevronDown class="h-3 w-3" />
-              {/if}
-            </span>
-          </button>
-          {#if open}
-            {#if items.length === 0}
-              <div class="border-b border-base-300/80 px-3 py-3 text-xs text-base-content/40">No bundles.</div>
-            {:else}
-              <div class="divide-y divide-base-300/80 border-b border-base-300/80">
-                {#each items as bundle (bundle.id)}
-                  {@render bundleRow(bundle)}
-                {/each}
-              </div>
-            {/if}
-          {/if}
-        {/snippet}
-
-        <div class="max-h-[42rem] overflow-y-auto">
-          {@render bundleGroup('System bundles', systemBundles, systemGroupOpen, () => (systemGroupOpen = !systemGroupOpen))}
-          {@render bundleGroup('Runtime bundles', runtimeBundles, runtimeGroupOpen, () => (runtimeGroupOpen = !runtimeGroupOpen))}
-        </div>
-      </aside>
-
-      {#if selectedBundle}
-        <div class="min-w-0 space-y-5">
-          <section class="rounded-xl border border-base-300 bg-base-200/20 p-4">
-            <div class="flex flex-wrap items-start justify-between gap-3">
-              <div class="min-w-0">
-                <div class="flex min-w-0 flex-wrap items-center gap-2">
-                  <h3 class="truncate font-mono text-base font-bold text-base-content">{selectedBundle.id}</h3>
-                  <span class={['rounded-full border px-2 py-0.5 text-[10px] font-bold', ownershipClass(selectedBundle)]}>
-                    {ownershipLabel(selectedBundle)}
-                  </span>
-                </div>
-                <p class="mt-1 text-xs text-base-content/50">
-                  {selectedBundle.endpointCount} endpoints · {selectedBundle.policyCount} {selectedBundle.policyCount === 1 ? 'policy' : 'policies'}
-                </p>
-              </div>
-              {#if !selectedBundle.systemOwned}
-                <div class="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-neutral text-xs"
-                    onclick={() => openEditModal(selectedBundle)}
-                  >
-                    <Pencil class="mr-1.5 h-4 w-4" />
-                    Edit endpoints
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-neutral text-xs"
-                    title="Delete bundle"
-                    aria-label={`Delete bundle ${selectedBundle.id}`}
-                    disabled={deletingBundleId === selectedBundle.id}
-                    onclick={() => {
-                      deleteTarget = selectedBundle;
-                      deleteModalOpen = true;
-                    }}
-                  >
-                    {#if deletingBundleId === selectedBundle.id}
-                      <span class="loading loading-spinner loading-xs mr-1.5"></span>
-                    {:else}
-                      <Trash2 class="mr-1.5 h-4 w-4" />
-                    {/if}
-                    Delete bundle
-                  </button>
-                </div>
-              {/if}
-            </div>
-          </section>
-
-          <section class="rounded-xl border border-base-300 bg-base-200/20 p-4" aria-labelledby="bundle-endpoints-title">
-            <h3 id="bundle-endpoints-title" class="text-sm font-bold text-base-content">Endpoint membership</h3>
-            {#if selectedBundle.endpoints.length === 0}
-              <div class="mt-3 rounded-lg border border-base-300 bg-base-200/35 px-3 py-3 text-sm text-base-content/50">
-                No endpoints assigned.
-              </div>
-            {:else}
-              <div class="mt-3">
-                <div class="flex gap-1 overflow-x-auto border-b border-base-300" role="tablist" aria-label="Endpoint sections">
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={selectedEndpointSection === 'all'}
-                    class={[
-                      'shrink-0 border-b-2 px-3 py-2 text-xs font-semibold transition',
-                      selectedEndpointSection === 'all' ? 'border-primary text-primary' : 'border-transparent text-base-content/50 hover:text-base-content/90'
-                    ]}
-                    onclick={() => (selectedEndpointSection = 'all')}
-                  >
-                    All endpoints ({selectedBundle.endpoints.length})
-                  </button>
-                  {#each endpointGroups(selectedBundle) as group (group.bundle)}
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={selectedEndpointSection === group.bundle}
-                      class={[
-                        'shrink-0 border-b-2 px-3 py-2 text-xs font-semibold transition',
-                        selectedEndpointSection === group.bundle ? 'border-primary text-primary' : 'border-transparent text-base-content/50 hover:text-base-content/90'
-                      ]}
-                      onclick={() => (selectedEndpointSection = group.bundle)}
-                    >
-                      {group.bundle} ({group.entries.length})
-                    </button>
-                  {/each}
-                </div>
-                <div class="divide-y divide-base-300/70 overflow-hidden rounded-b-lg border border-t-0 border-base-300 bg-base-100">
-                  {#each endpointSectionEntries(selectedBundle) as endpoint (endpoint.id)}
-                    <div class="px-3 py-2 font-mono text-xs text-base-content/80">{endpoint.id}</div>
-                  {/each}
-                </div>
-              </div>
-            {/if}
-          </section>
-
-          <section class="rounded-xl border border-base-300 bg-base-200/20 p-4" aria-labelledby="bundle-policies-title">
-            <div class="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h3 id="bundle-policies-title" class="text-sm font-bold text-base-content">Policy membership</h3>
-                <p class="mt-1 max-w-2xl text-xs text-base-content/50">
-                  Policies are the only way to assign this bundle to users or groups. Remove the bundle from every policy before deleting it.
-                </p>
-              </div>
-              {#if onManagePolicies}
-                <button
-                  type="button"
-                  onclick={onManagePolicies}
-                >
-                  Manage policies
-                </button>
-              {/if}
-            </div>
-
-            {#if selectedBundle.memberPolicies.length === 0}
-              <div class="mt-4 rounded-lg border border-base-300 bg-base-200/35 px-3 py-3 text-sm text-base-content/50">
-                No policies reference this bundle.
-              </div>
-            {:else}
-              <div class="mt-4 divide-y divide-base-300 overflow-hidden rounded-lg border border-base-300">
-                {#each selectedBundle.memberPolicies as policy (policy.policyId)}
-                  <div class="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center">
-                    <div class="flex min-w-0 items-center gap-2">
-                      <span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-base-300/70 text-primary">
-                        <Users class="h-4 w-4" />
-                      </span>
-                      <div class="min-w-0">
-                        <div class="flex flex-wrap items-center gap-2">
-                          <span class="truncate text-sm font-semibold text-base-content">{policy.name}</span>
-                          <span class={[
-                            'rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase',
-                            policy.enabled
-                              ? 'border-success/25 bg-success/10 text-success'
-                              : 'border-base-content/20 bg-base-300/60 text-base-content/60'
-                          ]}>
-                            {policy.enabled ? 'Enabled' : 'Disabled'}
-                          </span>
-                        </div>
-                        <div class="mt-1 font-mono text-xs text-base-content/50">{policy.policyId}</div>
-                      </div>
-                    </div>
-                    <span class="shrink-0 rounded-full border border-base-content/20 bg-base-200/40 px-2.5 py-1 text-[10px] font-bold uppercase text-base-content/60 sm:ml-auto">
-                      {policy.syncStatus}
-                    </span>
-                  </div>
-                {/each}
-              </div>
-            {/if}
-          </section>
-        </div>
-      {/if}
-    </div>
-  {/if}
-</section>
-
-<Modal bind:open={pickerOpen} title={pickerMode === 'create' ? 'Create runtime bundle' : 'Edit endpoint membership'} size="xl">
+{#snippet pickerContent()}
   <div class="space-y-4">
     <div>
-      <label class="label mb-2 text-sm" for="bundle-picker-id">Bundle id</label>
       {#if pickerMode === 'create'}
-        <div class="flex overflow-hidden rounded-lg border border-base-300 bg-base-200/60 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary">
-          <span class="flex items-center border-r border-base-300 bg-base-200/80 px-3 font-mono text-sm text-base-content/50 select-none" aria-hidden="true">
-            user.
-          </span>
+        <label class="input w-full font-mono">
+          <span class="label">user.</span>
           <input
             id="bundle-picker-id"
             type="text"
             bind:value={pickerBundleSuffix}
             placeholder="example"
             autocomplete="off"
-            aria-label="Bundle id (after the user. prefix)"
-            class="w-full min-w-0 border-0 bg-transparent px-3 py-2.5 text-sm text-base-content/90 placeholder:text-base-content/40 focus:ring-0 focus:outline-none"
+            aria-label="Bundle id after the user. prefix"
           />
-        </div>
+        </label>
         <p class="mt-1.5 text-xs text-base-content/50">Runtime bundle ids always start with the fixed user. prefix.</p>
       {:else}
-        <input class="input w-full" id="bundle-picker-id" bind:value={pickerBundleId} readonly />
+        <label class="input w-full font-mono">
+          <span class="label">user.</span>
+          <input
+            id="bundle-picker-id"
+            value={pickerBundleId.replace(/^user\./, '')}
+            disabled
+            aria-label="Runtime bundle ID"
+          />
+        </label>
       {/if}
     </div>
 
-    {#if pickerMode === 'create'}
+    {#if pickerMode === 'create' || pickerMode === 'edit'}
       <div>
         <label class="label mb-2 text-sm" for="bundle-clone-source">Start from a system bundle</label>
         <Select
@@ -568,10 +349,13 @@
             ...cloneSources.map((bundle) => ({ value: bundle.id, name: `${bundle.id} · ${bundle.endpointCount} endpoints` }))
           ]}
           bind:value={pickerCloneFrom}
+          disabled={pickerMode === 'edit'}
           class="text-sm"
         />
         <p class="mt-1.5 text-xs text-base-content/50">
-          The baseline is copied when the bundle is created. Add extra endpoints here; edit the new bundle afterward to remove copied endpoints.
+          {pickerMode === 'create'
+            ? 'The baseline is copied when the bundle is created. Add extra endpoints here; edit the new bundle afterward to remove copied endpoints.'
+            : 'System bundle baselines can only be selected when creating a runtime bundle.'}
         </p>
       </div>
     {/if}
@@ -631,26 +415,331 @@
       {selectedEndpointCount()} endpoint{selectedEndpointCount() === 1 ? '' : 's'} selected
     </div>
   </div>
+{/snippet}
 
-  {#snippet footer()}
-    <div class="flex w-full flex-wrap justify-end gap-2">
-      <button class="btn btn-sm btn-ghost text-xs" disabled={pickerSaving} onclick={() => (pickerOpen = false)}>
-        Cancel
-      </button>
+{#if mode !== 'management'}
+  <section class={cardClass} aria-labelledby="runtime-bundle-form-title">
+    <div>
+      <h1 id="runtime-bundle-form-title" class="text-xl font-bold text-base-content">
+        {mode === 'create' ? 'Create runtime bundle' : 'Edit endpoint membership'}
+      </h1>
+      <p class="mt-2 text-sm text-base-content/60">
+        {mode === 'create' ? 'Define the bundle ID and choose the endpoints it should contain.' : 'Update the endpoints assigned to this runtime bundle.'}
+      </p>
+    </div>
+    <div class="mt-6">
+      {@render pickerContent()}
+    </div>
+    <div class="mt-6 flex w-full flex-wrap items-center justify-between gap-2">
+      <a class="btn btn-sm btn-neutral text-xs" href="/admin/access-control?tab=bundles">Back</a>
       <button class="btn btn-sm btn-primary" disabled={pickerSaving} onclick={submitPicker}>
         {#if pickerSaving}
           <span class="loading loading-spinner loading-xs mr-1.5"></span>
         {/if}
-        {pickerMode === 'create' ? 'Create bundle' : 'Save endpoints'}
+        {mode === 'create' ? 'Create bundle' : 'Save endpoints'}
       </button>
     </div>
-  {/snippet}
-</Modal>
+  </section>
+{:else}
+<section class={cardClass} aria-labelledby="bundle-management-title">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div class="min-w-0">
+      <div class="flex items-center gap-2">
+        <Boxes class="h-5 w-5 text-primary" />
+        <h2 id="bundle-management-title" class="text-base font-bold text-base-content">Bundle management</h2>
+      </div>
+      <p class="mt-2 text-sm text-base-content/60">
+        Define which endpoints belong to each bundle. Assign users and groups from Policies.
+      </p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <button class="btn btn-sm btn-neutral" disabled={loading} onclick={() => void loadAll()}>
+        <RefreshCw class="mr-1.5 h-3.5 w-3.5" />
+        Refresh
+      </button>
+      <a class="btn btn-sm btn-primary" href="/admin/access-control/bundles/new">
+        <Plus class="mr-1.5 h-3.5 w-3.5" />
+        Create runtime bundle
+      </a>
+    </div>
+  </div>
 
-<ConfirmDeleteModal
-  bind:open={deleteModalOpen}
-  title="Delete runtime bundle"
-  message={deleteTarget ? `Delete runtime bundle "${deleteTarget.id}"? Its endpoint membership and direct exceptions will be removed.` : ''}
-  confirmLabel="Delete bundle"
-  onConfirm={deleteSelectedRuntimeBundle}
-/>
+  {#if openFgaUnavailable}
+    <div
+      class="mt-4 flex items-start gap-2 rounded-xl border border-warning/60 bg-warning/10 p-3 text-sm text-warning"
+      role="alert"
+    >
+      <Server class="mt-0.5 h-4 w-4 shrink-0" />
+      <span>OpenFGA is unavailable. Bundle authorization changes cannot complete until it recovers.</span>
+    </div>
+  {/if}
+
+  {#if loadError}
+    <div class="alert alert-error mt-4 text-sm" role="alert">
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
+      <span>{displayError(loadError, 'Could not load bundle management data.')}</span>
+    </div>
+  {/if}
+  {#if mutationError}
+    <div class="alert alert-error mt-4 text-sm" role="alert">
+      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
+      <span>{displayError(mutationError, 'Bundle operation failed.')}</span>
+    </div>
+  {/if}
+
+  {#if loading}
+    <div class="mt-10 flex justify-center"><span class="loading loading-spinner loading-md"></span></div>
+  {:else if bundles.length === 0}
+    <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
+      <Boxes class="mx-auto h-9 w-9 text-base-content/30" />
+      <p class="mt-4 text-sm font-semibold text-base-content/80">No bundles</p>
+      <p class="mt-1 text-sm text-base-content/50">Create a runtime bundle after the catalog is available.</p>
+    </div>
+  {:else}
+    <div class="mt-5 grid gap-5 2xl:grid-cols-[21rem_minmax(0,1fr)]">
+      <aside class="min-w-0" aria-label="Bundles">
+        {#snippet bundleRow(bundle: BundleView)}
+          <button
+            type="button"
+            class={[
+              'block w-full px-3 py-2 text-left transition',
+              selectedBundle?.id === bundle.id ? 'bg-base-200' : 'hover:bg-base-200'
+            ]}
+            onclick={() => (selectedBundleId = bundle.id)}
+          >
+            <div class="flex min-w-0 items-center justify-between gap-2">
+              <span class="truncate font-mono text-sm font-semibold text-base-content">{bundle.id}</span>
+              <span class={['badge badge-sm shrink-0 font-bold', ownershipClass(bundle)]}>
+                {ownershipLabel(bundle)}
+              </span>
+            </div>
+            <div class="mt-1 flex flex-wrap gap-2 text-xs text-base-content/50">
+              <span>{bundle.endpointCount} endpoint{bundle.endpointCount === 1 ? '' : 's'}</span>
+              <span>{bundle.policyCount} {bundle.policyCount === 1 ? 'policy' : 'policies'}</span>
+            </div>
+          </button>
+        {/snippet}
+
+        {#snippet bundleGroup(label: string, items: BundleView[], open: boolean, toggle: (nextOpen: boolean) => void)}
+          <details
+            class="collapse rounded-lg border border-base-300 bg-base-100"
+            {open}
+            ontoggle={(event) => toggle((event.currentTarget as HTMLDetailsElement).open)}
+          >
+            <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center justify-between gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold uppercase text-base-content [&::-webkit-details-marker]:hidden">
+              <span>{label}</span>
+              <span class="shrink-0 text-xs font-normal normal-case text-base-content/40">{items.length}</span>
+            </summary>
+            <div class="collapse-content px-0 pb-0">
+              {#if items.length === 0}
+                <div class="border-t border-base-300/80 px-3 py-2 text-xs text-base-content/40">No bundles.</div>
+              {:else}
+                <div class="divide-y divide-base-300/80 border-t border-base-300/80">
+                  {#each items as bundle (bundle.id)}
+                    {@render bundleRow(bundle)}
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          </details>
+        {/snippet}
+
+        <div class="card border border-base-300 bg-base-100 p-2 sm:p-3">
+          <div class={['dropdown mb-3 w-full', policyDropdownOpen && 'dropdown-open']}>
+            <label class="input input-sm w-full gap-1">
+              <span class="label">Policy</span>
+              <input
+                bind:value={policySearch}
+                placeholder="Search policy name"
+                onfocus={() => (policyDropdownOpen = true)}
+                oninput={() => (policyDropdownOpen = true)}
+                onblur={() => setTimeout(() => (policyDropdownOpen = false), 150)}
+              />
+              {#if policySearch}
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-xs btn-circle shrink-0"
+                  aria-label="Clear policy search"
+                  onclick={() => { policySearch = ''; policyDropdownOpen = false; }}
+                >
+                  <X class="h-3.5 w-3.5" />
+                </button>
+              {/if}
+            </label>
+            {#if policyDropdownOpen}
+              <ul class="dropdown-content menu z-20 mt-1 max-h-60 w-full flex-nowrap overflow-y-auto rounded-box border border-base-300 bg-base-100 p-1 shadow-lg">
+                {#if policySearch.trim()}
+                  <li>
+                    <button type="button" onclick={() => { policySearch = ''; policyDropdownOpen = false; }}>All policies</button>
+                  </li>
+                {/if}
+                {#each filteredPolicyNames as policyName (policyName)}
+                  <li>
+                    <button type="button" onclick={() => { policySearch = policyName; policyDropdownOpen = false; }}>
+                      {policyName}
+                    </button>
+                  </li>
+                {:else}
+                  <li class="pointer-events-none"><span class="text-xs text-base-content/50">No matching policies</span></li>
+                {/each}
+              </ul>
+            {/if}
+          </div>
+
+          <div class="max-h-[42rem] space-y-2 overflow-y-auto">
+            {@render bundleGroup('System bundles', visibleSystemBundles, systemGroupOpen, (nextOpen) => (systemGroupOpen = nextOpen))}
+            {@render bundleGroup('Runtime bundles', visibleRuntimeBundles, runtimeGroupOpen, (nextOpen) => (runtimeGroupOpen = nextOpen))}
+          </div>
+        </div>
+      </aside>
+
+      {#if selectedBundle}
+        <div class="min-w-0 space-y-5">
+          <section class="card border border-base-300 bg-base-100 p-5 sm:p-6">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="flex min-w-0 flex-wrap items-center gap-2">
+                  <h3 class="truncate font-mono text-base font-bold text-base-content">{selectedBundle.id}</h3>
+                  <span class={['badge badge-sm font-bold', ownershipClass(selectedBundle)]}>
+                    {ownershipLabel(selectedBundle)}
+                  </span>
+                </div>
+                <p class="mt-1 text-xs text-base-content/50">
+                  {selectedBundle.endpointCount} endpoints · {selectedBundle.policyCount} {selectedBundle.policyCount === 1 ? 'policy' : 'policies'}
+                </p>
+              </div>
+              {#if !selectedBundle.systemOwned}
+                <div class="flex flex-wrap gap-2">
+                  <a
+                    href={`/admin/access-control/bundles/${encodeURIComponent(selectedBundle.id)}/edit`}
+                    class="btn btn-sm btn-neutral text-xs"
+                  >
+                    <Pencil class="mr-1.5 h-4 w-4" />
+                    Edit endpoints
+                  </a>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-neutral text-xs"
+                    title="Delete bundle"
+                    aria-label={`Delete bundle ${selectedBundle.id}`}
+                    disabled={deletingBundleId === selectedBundle.id}
+                    onclick={() => {
+                      deleteTarget = selectedBundle;
+                      deleteModalOpen = true;
+                    }}
+                  >
+                    {#if deletingBundleId === selectedBundle.id}
+                      <span class="loading loading-spinner loading-xs mr-1.5"></span>
+                    {:else}
+                      <Trash2 class="mr-1.5 h-4 w-4" />
+                    {/if}
+                    Delete bundle
+                  </button>
+                </div>
+              {/if}
+            </div>
+          </section>
+
+          <section class="card border border-base-300 bg-base-100 p-5 sm:p-6" aria-labelledby="bundle-policies-title">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 id="bundle-policies-title" class="text-sm font-bold text-base-content">Policy membership</h3>
+                <p class="mt-1 max-w-2xl text-xs text-base-content/50">
+                  Policies are the only way to assign this bundle to users or groups. Remove the bundle from every policy before deleting it.
+                </p>
+              </div>
+              {#if onManagePolicies}
+                <button class="btn btn-sm btn-neutral text-xs" type="button" onclick={onManagePolicies}>Manage policies</button>
+              {/if}
+            </div>
+
+            {#if selectedBundle.memberPolicies.length === 0}
+              <div class="mt-4 rounded-lg border border-base-300 bg-base-200/35 px-3 py-3 text-sm text-base-content/50">
+                No policies reference this bundle.
+              </div>
+            {:else}
+              <div class="mt-4 space-y-3">
+                {#each selectedBundle.memberPolicies as policy (policy.policyId)}
+                  <div class="card border border-base-300 bg-base-100 p-3">
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+                      <div class="flex min-w-0 items-center gap-2">
+                        <span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-base-300/70 text-primary">
+                          <Users class="h-4 w-4" />
+                        </span>
+                        <div class="min-w-0">
+                          <div class="flex flex-wrap items-center gap-2">
+                            <span class="truncate text-sm font-semibold text-base-content">{policy.name}</span>
+                            <span class={['badge badge-sm font-bold', policy.enabled ? 'badge-accent' : 'badge-warning']}>
+                              {policy.enabled ? 'Enabled' : 'Disabled'}
+                            </span>
+                          </div>
+                          <div class="mt-1 font-mono text-xs text-base-content/50">{policy.policyId}</div>
+                        </div>
+                      </div>
+                      <span class="badge badge-sm badge-secondary shrink-0 font-bold sm:ml-auto">{policy.syncStatus}</span>
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </section>
+
+          <section class="card border border-base-300 bg-base-100 p-5 sm:p-6" aria-labelledby="bundle-endpoints-title">
+            <h3 id="bundle-endpoints-title" class="text-sm font-bold text-base-content">Endpoint membership</h3>
+            {#if selectedBundle.endpoints.length === 0}
+              <div class="mt-3 rounded-lg border border-base-300 bg-base-200/35 px-3 py-3 text-sm text-base-content/50">
+                No endpoints assigned.
+              </div>
+            {:else}
+              <div class="mt-3 space-y-2">
+                {#each endpointGroups(selectedBundle) as group (group.bundle)}
+                  <details open class="rounded-lg border border-base-300 bg-base-100">
+                    <summary class="flex cursor-pointer list-none items-center justify-between gap-3 rounded-t-lg bg-base-200 px-3 py-2.5 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">
+                      <span>{group.bundle}</span>
+                      <span class="shrink-0 text-xs font-normal text-base-content/40">{group.entries.length} endpoint{group.entries.length === 1 ? '' : 's'}</span>
+                    </summary>
+                    <div class="divide-y divide-base-300/70 border-t border-base-300">
+                      {#each group.entries as endpoint (endpoint.id)}
+                        <div class="px-3 py-2 font-mono text-xs text-base-content/80">{endpoint.id}</div>
+                      {/each}
+                    </div>
+                  </details>
+                {/each}
+              </div>
+            {/if}
+          </section>
+        </div>
+      {/if}
+    </div>
+  {/if}
+</section>
+
+{/if}
+
+{#if mode === 'management'}
+  <Modal bind:open={pickerOpen} title={pickerMode === 'create' ? 'Create runtime bundle' : 'Edit endpoint membership'} size="xl">
+    {@render pickerContent()}
+
+    {#snippet footer()}
+      <div class="flex w-full flex-wrap justify-end gap-2">
+        <button class="btn btn-sm btn-ghost text-xs" disabled={pickerSaving} onclick={() => (pickerOpen = false)}>
+          Cancel
+        </button>
+        <button class="btn btn-sm btn-primary" disabled={pickerSaving} onclick={submitPicker}>
+          {#if pickerSaving}
+            <span class="loading loading-spinner loading-xs mr-1.5"></span>
+          {/if}
+          {pickerMode === 'create' ? 'Create bundle' : 'Save endpoints'}
+        </button>
+      </div>
+    {/snippet}
+  </Modal>
+
+  <ConfirmDeleteModal
+    bind:open={deleteModalOpen}
+    title="Delete runtime bundle"
+    message={deleteTarget ? `Delete runtime bundle "${deleteTarget.id}"? Its endpoint membership and direct exceptions will be removed.` : ''}
+    confirmLabel="Delete bundle"
+    onConfirm={deleteSelectedRuntimeBundle}
+  />
+{/if}

@@ -23,7 +23,7 @@
 
   const allSections: AdminSection[] = [
     { label: 'Storage', icon: Database, href: '/admin/storage' },
-    { label: 'Statistics', icon: ChartColumn, href: '/admin/statistics' },
+    { label: 'Statistics', icon: ChartColumn, href: '/admin/stats' },
     { label: 'Metadata', icon: Tag, href: '/admin/metadata' },
     { label: 'Import', icon: FileInput, href: '/admin/import' },
     { label: 'Workers', icon: Server, href: '/admin/workers' },

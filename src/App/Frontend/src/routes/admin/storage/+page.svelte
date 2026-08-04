@@ -73,10 +73,18 @@
   class="card border border-base-300 bg-base-100 p-5 sm:p-6"
   aria-labelledby="storage-title"
 >
-  <h2 id="storage-title" class="text-base font-bold text-base-content">Storage targets</h2>
-  <p class="mt-2 text-sm text-base-content/60">
-    Filesystems, network shares, and object stores FrostStream can index or write to.
-  </p>
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div>
+      <h2 id="storage-title" class="text-base font-bold text-base-content">Storage targets</h2>
+      <p class="mt-2 text-sm text-base-content/60">
+        Filesystems, network shares, and object stores FrostStream can index or write to.
+      </p>
+    </div>
+    <a class="btn btn-sm btn-neutral shrink-0 text-xs" href="/admin/storage/new">
+      <Plus class="mr-1.5 h-3.5 w-3.5" />
+      Register storage
+    </a>
+  </div>
 
   {#if storageError}
     <div
@@ -112,7 +120,7 @@
             <div class="min-w-0">
               <div class="flex min-w-0 flex-wrap items-center gap-2">
                 <h3 class="truncate text-sm font-semibold text-base-content">{storage.key}</h3>
-                <span class="badge badge-primary badge-sm text-[10px] font-semibold">
+                <span class="badge badge-accent badge-sm text-[10px] font-semibold">
                   {storageMethodLabel(storage)}
                 </span>
               </div>
@@ -159,13 +167,6 @@
       {/each}
     </div>
   {/if}
-
-  <div class="mt-4">
-    <a class="btn btn-sm btn-neutral text-xs" href="/admin/storage/new">
-      <Plus class="mr-1.5 h-3.5 w-3.5" />
-      Register storage
-    </a>
-  </div>
 </section>
 
 <ConfirmDeleteModal

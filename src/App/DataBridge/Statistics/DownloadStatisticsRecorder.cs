@@ -53,34 +53,36 @@ internal static class DownloadStatisticsRecorder
                 .Select(x => x.SizeBytes)
                 .FirstOrDefaultAsync(ct) ?? 0;
 
-            var owner = await db.Database.SqlQuery<MediaOwnerRow>($"""
-                SELECT a.platform AS Platform, mm.account_id AS AccountId, COALESCE(mm.duration, 0) AS DurationSeconds
+            // SqlQuery only supports scalar element types, so the duration comes back on its own and
+            // the ledger row resolves its owning account inline — a missing metadata row then simply
+            // inserts nothing instead of costing us the daily rollup too.
+            var durationSeconds = await db.Database.SqlQuery<double>($"""
+                SELECT COALESCE(mm.duration, 0) AS "Value"
                 FROM metadata.media_metadata mm
-                JOIN metadata.accounts a ON a.id = mm.account_id
                 WHERE mm.media_guid = {mediaGuid}
                 """).FirstOrDefaultAsync(ct);
 
-            await RecordDailyActivityAsync(db, logger, "completed", completedAt, bytes, owner?.DurationSeconds ?? 0, ct);
+            await RecordDailyActivityAsync(db, logger, "completed", completedAt, bytes, durationSeconds, ct);
 
-            if (owner is null)
-                return;
-
-            await db.Database.ExecuteSqlInterpolatedAsync($"""
+            var ledgerRows = await db.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO statistics.channel_media_downloads
                     (media_guid, account_id, platform, bytes, duration_seconds, completed_at)
-                VALUES ({mediaGuid}, {owner.AccountId}, {owner.Platform}, {bytes}, {owner.DurationSeconds}, {completedAt})
+                SELECT mm.media_guid, mm.account_id, a.platform, {bytes}, COALESCE(mm.duration, 0), {completedAt}
+                FROM metadata.media_metadata mm
+                JOIN metadata.accounts a ON a.id = mm.account_id
+                WHERE mm.media_guid = {mediaGuid}
                 """, ct);
+
+            if (ledgerRows == 0)
+            {
+                logger?.LogWarning(
+                    "No owning account found for MediaGuid {MediaGuid}; channel download statistics were not recorded.",
+                    mediaGuid);
+            }
         }
         catch (Exception ex)
         {
             logger?.LogWarning(ex, "Failed recording completion statistics for MediaGuid {MediaGuid}.", mediaGuid);
         }
-    }
-
-    private sealed class MediaOwnerRow
-    {
-        public required string Platform { get; init; }
-        public long AccountId { get; init; }
-        public double DurationSeconds { get; init; }
     }
 }

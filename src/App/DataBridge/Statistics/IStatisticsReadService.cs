@@ -21,6 +21,8 @@ public interface IStatisticsReadService
 
     Task<ChannelStatisticsDetailDto?> GetChannelAsync(long creatorSourceId, CancellationToken ct = default);
 
+    Task<ChannelStatisticsDetailDto?> GetChannelByAccountAsync(long accountId, CancellationToken ct = default);
+
     Task<IReadOnlyList<DownloadHistoryBucketDto>> GetDownloadHistoryAsync(
         StatisticsDownloadHistoryRequestMessage request,
         CancellationToken ct = default);

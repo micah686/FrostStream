@@ -647,7 +647,7 @@
     <div>
       <label class="label mb-2 text-sm" for="notification-provider-key">Provider key</label>
       <input class="input w-full" id="notification-provider-key" required
-         pattern={'[a-z0-9-]{2,100}'} minlength={2} maxlength={100} disabled={isUpdate} bind:value={providerKey} placeholder="alerts" />
+         pattern={'[a-z0-9\\-]{2,100}'} minlength={2} maxlength={100} disabled={isUpdate} bind:value={providerKey} placeholder="alerts" />
       <p class="mt-1.5 text-xs text-base-content/40">Lowercase letters, numbers, and hyphens.</p>
     </div>
     <div>
