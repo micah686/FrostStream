@@ -95,6 +95,13 @@ internal class DeepVerifyRunner(
 
     private async Task<string> QueryAsync(string database, string sql, CancellationToken cancellationToken)
     {
+        // The restored data directory carries its own baked-in pg_hba.conf (the one initdb wrote,
+        // not the custom one the live container mounts externally via hba_file=), which requires a
+        // password for local connections. It's the same cluster, so the live superuser password
+        // still applies.
+        var environment = string.IsNullOrEmpty(options.PostgresPassword)
+            ? null
+            : new Dictionary<string, string> { ["PGPASSWORD"] = options.PostgresPassword };
         var result = await ProcessRunner.RunAsync(
             "psql",
             [
@@ -104,6 +111,7 @@ internal class DeepVerifyRunner(
                 "-tA",
                 "-c", sql
             ],
+            environment: environment,
             cancellationToken: cancellationToken);
         return result.StandardOutput;
     }

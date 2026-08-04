@@ -40,8 +40,15 @@ builder.Services.AddSingleton<IBackgroundRunReporter>(sp => new BackgroundRunRep
 
 // Outbound only (run reporting); commands arrive over REST, so no topology provisioning and no
 // consumers. NATS being down must never prevent startup — standalone restore mode runs with the
-// entire stack stopped.
-builder.AddNats("nats");
+// entire stack stopped. EnableTopologyProvisioning defaults to true and, with no ITopologySource
+// registered, would still block host startup waiting to connect and then crash the whole process
+// (Kestrel included) once TotalStartupTimeout elapses; both must be off. BackgroundRunReporter
+// already swallows publish failures at call time, so no startup check is needed at all.
+builder.AddNats("nats", options =>
+{
+    options.EnableTopologyProvisioning = false;
+    options.ValidateConnectionOnStart = false;
+});
 
 // The break-glass restore wizard: cookie-gated Blazor Server on the second Kestrel port.
 // Cookie encryption keys live under the backup root: the default ($HOME/.aspnet) would land
@@ -140,6 +147,7 @@ app.MapPost("/restore-ui/auth", async (HttpContext context, BackupServiceOptions
     return Results.Redirect("/");
 }).DisableAntiforgery();
 
+app.MapStaticAssets();
 app.MapRazorComponents<BackupService.Components.App>()
     .AddInteractiveServerRenderMode();
 

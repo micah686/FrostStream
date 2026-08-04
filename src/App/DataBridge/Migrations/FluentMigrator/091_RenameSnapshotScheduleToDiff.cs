@@ -7,8 +7,8 @@ namespace DataBridge.Migrations.FluentMigrator;
 /// differential backup while the weekly full stays. Renames the existing row (preserving its
 /// next_due_at) and upserts both schedules for fresh installs.
 /// </summary>
-[Migration(86, "Rename backup-snapshot schedule to backup-diff")]
-public sealed class M086_RenameSnapshotScheduleToDiff : Migration
+[Migration(91, "Rename backup-snapshot schedule to backup-diff")]
+public sealed class M091_RenameSnapshotScheduleToDiff : Migration
 {
     public override void Up()
     {
