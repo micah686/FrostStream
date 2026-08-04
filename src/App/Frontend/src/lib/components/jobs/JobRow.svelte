@@ -62,7 +62,6 @@
   const job = $derived(row.job);
   const provider = $derived(providerFor(job.sourceUrl));
   const percent = $derived(percentFor(row));
-  const showProgressDetails = $derived(isActive(job.status));
   let previousStatus = $state<string | undefined>(undefined);
 
   $effect(() => {
@@ -147,16 +146,14 @@
     return p > 0 && p < 1 ? '<1%' : `${Math.round(p)}%`;
   }
 
-  function formatByteProgress(progress: ProgressFrame | undefined, j: DownloadQueueJob): string {
-    const downloaded = progress?.downloadedBytes;
-    const total = progress?.totalBytes ?? j.fileSizeBytes;
-    if (downloaded !== null && downloaded !== undefined && total !== null && total !== undefined) {
-      return `${formatOptionalBytes(downloaded)} / ${formatOptionalBytes(total)}`;
+  function downloadedBytesFor(r: QueueRow): number | null | undefined {
+    const downloaded = r.progress?.downloadedBytes;
+    if (downloaded !== null && downloaded !== undefined) {
+      return downloaded;
     }
-    if (total !== null && total !== undefined) {
-      return `0 B / ${formatOptionalBytes(total)}`;
-    }
-    return '-';
+    // Progress frames are live-only, so a finished job reloaded from the API has none; its
+    // downloaded total is by definition the whole file. Mirrors percentFor's isDone fallback.
+    return isDone(r.job.status) ? (r.progress?.totalBytes ?? r.job.fileSizeBytes) : undefined;
   }
 
   function formatSpeed(speed: string | null | undefined): string {
@@ -235,22 +232,6 @@
       return 'bg-base-300/50 text-base-content/80 ring-base-content/30';
     }
     return 'bg-primary/12 text-primary ring-primary/20';
-  }
-
-  function barColor(status: string): string {
-    if (normalizeStatus(status) === 'completedwithwarnings') {
-      return 'bg-warning';
-    }
-    if (isDone(status)) {
-      return 'bg-success';
-    }
-    if (isFailed(status)) {
-      return 'bg-error';
-    }
-    if (isStopped(status)) {
-      return 'bg-base-200';
-    }
-    return 'bg-primary';
   }
 
   function rowTone(status: string): string {
@@ -350,7 +331,7 @@
 
 <article class={['rounded-xl border p-4 shadow-lg shadow-black/10 transition', rowTone(job.status)]}>
   <div
-    class="grid cursor-pointer gap-3 md:grid-cols-[minmax(0,1fr)_18rem_minmax(8.5rem,auto)] md:items-center"
+    class="grid cursor-pointer gap-3 md:grid-cols-[minmax(0,1fr)_5rem_minmax(8.5rem,auto)] md:items-center"
     role="button"
     tabindex="0"
     aria-expanded={expanded}
@@ -407,23 +388,17 @@
       </div>
     </div>
 
-    <div class="flex items-center gap-3">
-      <div class="min-w-0 flex-1">
-        <div class="h-1.5 w-full overflow-hidden rounded-full bg-base-300">
-          <div class={['h-full rounded-full', barColor(job.status)]} style={`width: ${percent}%`}></div>
-        </div>
-        {#if showProgressDetails}
-          <p class="mt-1 text-xs text-base-content/50">
-            {formatPercent(row)} · {formatSpeed(row.progress?.speed)} · {formatElapsed(job)}
-          </p>
-        {/if}
+    <div class="flex items-center justify-center">
+      <div
+        class="radial-progress text-primary"
+        style={`--value:${percent}; --size:3.5rem;`}
+        role="progressbar"
+        aria-valuenow={Math.round(percent)}
+        aria-valuemin="0"
+        aria-valuemax="100"
+      >
+        <span class="text-[11px] font-semibold text-base-content">{formatPercent(row)}</span>
       </div>
-      {#if showProgressDetails}
-        <div class="w-20 shrink-0 text-right">
-          <p class="text-xs font-medium text-base-content/80">eta {formatEta(row.progress?.etaSeconds)}</p>
-          <p class="mt-0.5 text-[11px] text-base-content/50">{formatByteProgress(row.progress, job)}</p>
-        </div>
-      {/if}
     </div>
 
     <div class="flex flex-wrap items-center justify-end gap-1.5">
@@ -616,6 +591,29 @@
         <span class="inline-flex items-center gap-1">
           <span class="shrink-0 text-base-content/40">Priority</span>
           <span class="text-base-content/60">{job.priority}</span>
+        </span>
+      </div>
+
+      <div class="mt-1.5 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-base-content/50">
+        <span class="inline-flex items-center gap-1">
+          <span class="shrink-0 text-base-content/40">Speed</span>
+          <span class="text-base-content/60">{formatSpeed(row.progress?.speed)}</span>
+        </span>
+        <span class="inline-flex items-center gap-1">
+          <span class="shrink-0 text-base-content/40">ETA</span>
+          <span class="text-base-content/60">{formatEta(row.progress?.etaSeconds)}</span>
+        </span>
+        <span class="inline-flex items-center gap-1">
+          <span class="shrink-0 text-base-content/40">Elapsed</span>
+          <span class="text-base-content/60">{formatElapsed(job)}</span>
+        </span>
+        <span class="inline-flex items-center gap-1">
+          <span class="shrink-0 text-base-content/40">Downloaded</span>
+          <span class="text-base-content/60">{formatOptionalBytes(downloadedBytesFor(row))}</span>
+        </span>
+        <span class="inline-flex items-center gap-1">
+          <span class="shrink-0 text-base-content/40">Total size</span>
+          <span class="text-base-content/60">{formatOptionalBytes(row.progress?.totalBytes ?? job.fileSizeBytes)}</span>
         </span>
       </div>
 
