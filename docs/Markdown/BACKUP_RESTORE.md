@@ -1,11 +1,12 @@
 # Core Backup And Restore
 
 FrostStream core backups are **pgBackRest** backups of the PostgreSQL cluster (the
-`froststreamdb`, `authentikdb`, and `openfgadb` databases), paired with an **OpenBao KV v2
-secrets export** per backup. Continuous WAL archiving makes point-in-time recovery (PITR)
-possible to any moment after the oldest full backup. Media files, local import source files,
-Typesense data, NATS runtime state, and worker caches are intentionally excluded — they are
-rebuildable or live elsewhere.
+`froststreamdb`, `authentikdb`, and `openfgadb` databases), paired with an **OpenBao Raft
+snapshot** (its actual storage — everything in the vault, not just one mount) plus a **KV v2
+secrets export** as a human-readable fallback, per backup. Continuous WAL archiving makes
+point-in-time recovery (PITR) possible to any moment after the oldest full backup. Media files,
+local import source files, Typesense data, NATS runtime state, and worker caches are
+intentionally excluded — they are rebuildable or live elsewhere.
 
 ## Architecture
 
@@ -44,13 +45,35 @@ repository-host mode and nothing needs PostgreSQL tools on the host:
 | `diff` | `backup --type=diff` | Changes since the last full | `backup-diff`, daily 02:00 UTC |
 
 Every backup also gets `--annotation=name=<name>` (the name entered in the admin UI, or a
-generated `scheduled-…` name) and a same-moment OpenBao KV export at
-`/backups/openbao/<label>.json` with a `.sha256` sidecar.
+generated `scheduled-…` name) and a same-moment OpenBao backup at `/backups/openbao/<label>.*`,
+each file paired with a `.sha256` sidecar.
 
 Scheduled backups are dispatched by the Scheduler **over REST** directly to BackupService
 (`BackupService__BaseUrl`); the Scheduler polls the job to completion, records the schedule
 marks, and raises the `BackupFailed` admin notification on failure. The Jobs → Background run
 row is reported by BackupService itself, so manual and scheduled backups look identical there.
+
+## OpenBao Backup
+
+Each pgBackRest backup pairs with two OpenBao artifacts, written over OpenBao's HTTP API (no
+extra container access needed — this works the same in Aspire run mode and in compose/production):
+
+- **`<label>.raft-snapshot`** — an online snapshot of OpenBao's actual storage (`GET
+  /v1/sys/storage/raft/snapshot`), the same mechanism `bao operator raft snapshot save` uses.
+  OpenBao's storage backend is Raft/BoltDB (`storage "raft"` in `openbao.hcl`, backed by the
+  `openbao-data` volume); this is the *only* safe way to back it up consistently while it's live
+  — a raw copy of that volume risks catching a BoltDB file mid-write. Restoring it (via
+  `snapshot-force`, since a normal restore-forward safety check would otherwise reject
+  intentionally rolling back to older data) replaces **everything** in the vault — secrets, auth
+  backends, policies, the token store — with its state at backup time. This is the authoritative
+  backup and the recommended restore path.
+- **`<label>.json`** — the pre-existing logical KV v2 export (recursive read of the configured
+  `secret/` mount over the API). Kept as a human-readable fallback in case the snapshot restore
+  can't be used for some reason; restoring it only replays individual KV values, not the rest of
+  the vault's state.
+
+Both need OpenBao already unsealed and reachable at backup time (export) or restore time. The
+restore console's finish step offers both, snapshot first.
 
 ## Admin Surface
 
@@ -89,8 +112,9 @@ The wizard walks through:
 3. **Confirm** — type the stanza name (`froststream`).
 4. **Restore** — `pgbackrest restore --delta` into the shared data volume, with live output.
 5. **Finish** — start the postgres container (it replays WAL to the target and promotes), start
-   the rest of the stack, optionally restore the paired OpenBao export from the wizard, and take
-   a fresh full backup (the old timeline's later WAL is no longer meaningful).
+   the rest of the stack, optionally restore OpenBao's paired backup from the wizard (Raft
+   snapshot first, KV-only export as a fallback — see "OpenBao Backup" above), and take a fresh
+   full backup (the old timeline's later WAL is no longer meaningful).
 
 Typical compose flow:
 

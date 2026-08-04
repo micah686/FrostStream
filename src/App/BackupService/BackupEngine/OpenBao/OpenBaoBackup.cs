@@ -100,7 +100,13 @@ internal sealed class OpenBaoBackup
         }
     }
 
-    private static HttpClient NewClient(OpenBaoOptions options)
+    private static HttpClient NewClient(OpenBaoOptions options) => OpenBaoHttp.NewClient(options);
+}
+
+/// <summary>Shared HTTP client setup for talking to OpenBao's (Vault-compatible) API.</summary>
+internal static class OpenBaoHttp
+{
+    public static HttpClient NewClient(OpenBaoOptions options)
     {
         if (string.IsNullOrWhiteSpace(options.Token))
             throw new InvalidOperationException("OpenBao token is required for backup/restore.");

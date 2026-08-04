@@ -188,7 +188,22 @@ else if (_step == Step.Done)
             <li>Start the <code>postgres</code> container. It will replay WAL to the selected target and promote itself; watch its logs until it reports <em>database system is ready to accept connections</em>.</li>
             <li>Start the remaining FrostStream services (or <code>docker compose up -d</code> / <code>aspire run</code>).</li>
             <li>
-                Restore the OpenBao secrets that were exported with the backup (needs OpenBao running):
+                Restore OpenBao's storage snapshot from the same backup (needs OpenBao running and
+                unsealed). This replaces everything in the vault — secrets, auth backends, and the
+                token store — with its state at backup time; use this first.
+                <div class="row">
+                    <button class="secondary" disabled="@(_openBaoLabel is null || _openBaoSnapshotBusy)" @onclick="RestoreOpenBaoSnapshotAsync">
+                        @(_openBaoSnapshotBusy ? "Restoring…" : $"Restore OpenBao snapshot {_openBaoLabel ?? "(none found)"}")
+                    </button>
+                </div>
+                @if (_openBaoSnapshotMessage is not null)
+                {
+                    <p class="@(_openBaoSnapshotSucceeded ? "muted" : "error")">@_openBaoSnapshotMessage</p>
+                }
+            </li>
+            <li>
+                Fallback: restore just the OpenBao KV secrets export from the same backup — only needed
+                if the snapshot restore above can't be used:
                 <div class="row">
                     <button class="secondary" disabled="@(_openBaoLabel is null || _openBaoBusy)" @onclick="RestoreOpenBaoAsync">
                         @(_openBaoBusy ? "Restoring…" : $"Restore OpenBao export {_openBaoLabel ?? "(none found)"}")
@@ -237,6 +252,10 @@ else if (_step == Step.Done)
     private bool _openBaoBusy;
     private bool _openBaoSucceeded;
     private string? _openBaoMessage;
+
+    private bool _openBaoSnapshotBusy;
+    private bool _openBaoSnapshotSucceeded;
+    private string? _openBaoSnapshotMessage;
 
     private Timer? _timer;
 
@@ -362,6 +381,29 @@ else if (_step == Step.Done)
         }
         StateHasChanged();
         return Task.CompletedTask;
+    }
+
+    private async Task RestoreOpenBaoSnapshotAsync()
+    {
+        if (_openBaoLabel is null)
+            return;
+        _openBaoSnapshotBusy = true;
+        _openBaoSnapshotMessage = null;
+        try
+        {
+            await OpenBao.RestoreSnapshotAsync(_openBaoLabel, CancellationToken.None);
+            _openBaoSnapshotSucceeded = true;
+            _openBaoSnapshotMessage = "OpenBao storage snapshot restored.";
+        }
+        catch (Exception ex)
+        {
+            _openBaoSnapshotSucceeded = false;
+            _openBaoSnapshotMessage = $"OpenBao snapshot restore failed (is OpenBao running and unsealed yet?): {ex.Message}";
+        }
+        finally
+        {
+            _openBaoSnapshotBusy = false;
+        }
     }
 
     private async Task RestoreOpenBaoAsync()

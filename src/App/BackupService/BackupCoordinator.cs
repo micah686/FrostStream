@@ -190,8 +190,8 @@ internal sealed class BackupCoordinator(
             var label = await runner.BackupAsync(record.Type!, record.Name!, progress, cancellationToken);
             progress.Report($"Backup complete: {label}.");
 
-            await run.ReportAsync("Exporting OpenBao secrets…");
-            progress.Report("Exporting OpenBao secrets…");
+            await run.ReportAsync("Backing up OpenBao (storage snapshot + secrets export)…");
+            progress.Report("Backing up OpenBao (storage snapshot + secrets export)…");
             await openBaoPairing.ExportForBackupAsync(label, cancellationToken);
 
             // pgBackRest expired old backups after this one; drop their paired exports too.
