@@ -20,6 +20,7 @@ public sealed class BackgroundJobsTopology : ITopologySource
     public const string WorkerChannelAssetRefreshConsumer = "worker-channel-asset-refresh";
     public const string MediaProcessorAudioRenditionConsumer = "mediaprocessor-audio-rendition";
     public const string MediaProcessorStreamRenditionConsumer = "mediaprocessor-stream-rendition";
+    public const string MediaProcessorThumbnailGenerationConsumer = "mediaprocessor-thumbnail-generation";
 
     public IEnumerable<StreamSpec> GetStreams()
     {
@@ -42,7 +43,8 @@ public sealed class BackgroundJobsTopology : ITopologySource
                 BackgroundJobSubjects.DatabaseMaintenanceReindexRequest,
                 BackgroundJobSubjects.SearchReindexRequest,
                 BackgroundJobSubjects.AudioRenditionEncodeRequest,
-                BackgroundJobSubjects.StreamRenditionEncodeRequest
+                BackgroundJobSubjects.StreamRenditionEncodeRequest,
+                BackgroundJobSubjects.MediaThumbnailGenerationRequest
             ],
             MaxAge = TimeSpan.FromDays(7),
             RetentionPolicy = StreamRetention.WorkQueue,
@@ -68,6 +70,7 @@ public sealed class BackgroundJobsTopology : ITopologySource
         // in-progress acks every 30s while ffmpeg works; a dead encoder is redelivered quickly.
         yield return MediaProcessorConsumer(MediaProcessorAudioRenditionConsumer, BackgroundJobSubjects.AudioRenditionEncodeRequest, TimeSpan.FromMinutes(2), maxDeliver: 3);
         yield return MediaProcessorConsumer(MediaProcessorStreamRenditionConsumer, BackgroundJobSubjects.StreamRenditionEncodeRequest, TimeSpan.FromMinutes(2), maxDeliver: 2);
+        yield return MediaProcessorConsumer(MediaProcessorThumbnailGenerationConsumer, BackgroundJobSubjects.MediaThumbnailGenerationRequest, TimeSpan.FromMinutes(2), maxDeliver: 3);
         // Scheduled backups moved to REST dispatch (Scheduler → BackupService HTTP). On live NATS
         // stores the old durable must be removed before this topology applies:
         //   nats consumer rm FROSTSTREAM_BACKGROUND databridge-backup

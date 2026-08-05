@@ -60,7 +60,9 @@ public sealed class MetadataListConsumerService(
                 MediaCollectionSchema.CollectionName,
                 parameters);
 
-            var items = await ToCardsAsync(result.Hits.Select(x => x.Document).ToArray(), request.OwnerSubject);
+            var documents = await RefreshMissingThumbnailPathsAsync(
+                result.Hits.Select(x => x.Document).ToArray());
+            var items = await ToCardsAsync(documents, request.OwnerSubject);
             await context.RespondAsync(new MetadataListResponseMessage
             {
                 Success = true,
@@ -81,6 +83,34 @@ public sealed class MetadataListConsumerService(
                 Page = page
             });
         }
+    }
+
+    private async Task<IReadOnlyList<MediaDocument>> RefreshMissingThumbnailPathsAsync(
+        IReadOnlyList<MediaDocument> documents)
+    {
+        var missingThumbnailIds = documents
+            .Where(x => string.IsNullOrWhiteSpace(x.ThumbnailStoragePath))
+            .Select(x => Guid.ParseExact(x.Id, "N"))
+            .ToArray();
+        if (missingThumbnailIds.Length == 0)
+            return documents;
+
+        var currentDocuments = await scopeFactory.WithScopedAsync<IMediaDocumentQuery, IReadOnlyList<MediaDocument>>(
+            query => query.GetMediaByGuidsAsync(missingThumbnailIds));
+        var currentById = currentDocuments.ToDictionary(x => x.Id, StringComparer.OrdinalIgnoreCase);
+
+        return documents
+            .Select(document =>
+            {
+                if (!currentById.TryGetValue(document.Id, out var current)
+                    || string.IsNullOrWhiteSpace(current.ThumbnailStoragePath))
+                {
+                    return document;
+                }
+
+                return document with { ThumbnailStoragePath = current.ThumbnailStoragePath };
+            })
+            .ToArray();
     }
 
     private async Task<IReadOnlyList<MetadataCardDto>> ToCardsAsync(

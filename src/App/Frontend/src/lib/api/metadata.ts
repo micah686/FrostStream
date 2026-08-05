@@ -55,6 +55,13 @@ export async function refreshAccountAssets(
   await sendEmpty(`/api/metadata/accounts/${accountId}/refresh-assets?force=${force}`, 'POST', fetchImpl);
 }
 
+export async function generateMissingAccountThumbnails(
+  accountId: number,
+  fetchImpl: typeof fetch = fetch
+): Promise<void> {
+  await sendEmpty(`/api/metadata/accounts/${accountId}/generate-missing-thumbnails`, 'POST', fetchImpl);
+}
+
 export async function getMetadataVersions(
   mediaGuid: string,
   fetchImpl: typeof fetch = fetch

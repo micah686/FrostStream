@@ -18,6 +18,7 @@ public sealed class MetadataController(
     ILogger<MetadataController> logger) : ControllerBase
 {
     private const string ChannelAssetRefreshTaskType = "channel_asset_refresh";
+    private const string MediaThumbnailGenerationTaskType = "media_thumbnail_generation";
     private static readonly TimeSpan QueryTimeout = TimeSpan.FromSeconds(10);
 
     [HttpGet]
@@ -376,6 +377,55 @@ public sealed class MetadataController(
         }
 
         return Accepted(new { queued = true, accountId, force });
+    }
+
+    [HttpPost("accounts/{accountId:long}/generate-missing-thumbnails")]
+    [Endpoint(EndpointIds.MetadataAccountsGenerateThumbnails)]
+    [EndpointSummary("Generate missing media thumbnails for a channel")]
+    [EndpointDescription("Queues MediaProcessor to extract a representative JPEG frame from every media file in the account that does not already have a thumbnail. Existing thumbnails are never replaced.")]
+    public async Task<IActionResult> GenerateMissingThumbnails(
+        long accountId,
+        CancellationToken cancellationToken = default)
+    {
+        var response = await SendRequestAsync<MetadataAccountGetRequestMessage, MetadataAccountGetResponseMessage>(
+            MetadataSubjects.AccountsGet,
+            new MetadataAccountGetRequestMessage { AccountId = accountId, OwnerSubject = ResolveSubject() },
+            cancellationToken);
+
+        if (response is null)
+            return ServiceUnavailable();
+        if (!response.Success)
+            return MetadataError(response.ErrorCode, response.ErrorMessage);
+        if (response.Item is null)
+            return StatusCode(StatusCodes.Status502BadGateway, "DataBridge returned an invalid account response.");
+
+        var now = clock.GetCurrentInstant();
+        var idempotencyKey = $"manual-thumbnails:{accountId}:{Guid.NewGuid():N}";
+        var message = new GenerateMissingMediaThumbnailsRequested
+        {
+            ScheduleKey = "manual",
+            TaskType = MediaThumbnailGenerationTaskType,
+            DueWindowUtc = now,
+            IdempotencyKey = idempotencyKey,
+            OccurredAt = now,
+            AccountId = accountId
+        };
+
+        try
+        {
+            await publisher.PublishAsync(
+                BackgroundJobSubjects.MediaThumbnailGenerationRequest,
+                message,
+                messageId: idempotencyKey,
+                cancellationToken: cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed enqueueing thumbnail generation for account {AccountId}.", accountId);
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to enqueue thumbnail generation.");
+        }
+
+        return Accepted(new { queued = true, accountId });
     }
 
     [HttpGet("accounts/{accountId:long}/media")]

@@ -13,12 +13,13 @@
     Ellipsis,
     Headphones,
     Image,
+    ImagePlus,
     LayoutList,
     Music,
     Play
   } from '@lucide/svelte';
   import { accentFor, formatBytes, formatCount, formatDuration, formatRelativeDate, formatViews, initialsFor } from '$lib/media';
-  import { refreshAccountAssets } from '$lib/api/metadata';
+  import { generateMissingAccountThumbnails, refreshAccountAssets } from '$lib/api/metadata';
   import {
     createPodcastFeedLink,
     encodeChannelAudio,
@@ -96,6 +97,7 @@
   let mediaLoading = $state(true);
   let mediaError = $state<string | null>(null);
   let assetRefreshBusy = $state(false);
+  let thumbnailGenerationBusy = $state(false);
   let assetRefreshNotice = $state<string | null>(null);
   let statistics = $state<ChannelStatisticsDetail | null>(null);
   let statisticsLoading = $state(false);
@@ -466,6 +468,22 @@
     }
   }
 
+  async function generateUnknownThumbnails() {
+    if (!account || thumbnailGenerationBusy) {
+      return;
+    }
+    thumbnailGenerationBusy = true;
+    assetRefreshNotice = null;
+    try {
+      await generateMissingAccountThumbnails(account.accountId);
+      assetRefreshNotice = 'Missing thumbnail generation queued — follow progress under Jobs > Background.';
+    } catch (err) {
+      assetRefreshNotice = err instanceof Error ? err.message : 'Could not queue thumbnail generation.';
+    } finally {
+      thumbnailGenerationBusy = false;
+    }
+  }
+
   function joinedDate(iso: string | null | undefined): string | null {
     if (!iso) {
       return null;
@@ -635,6 +653,7 @@
             <div class="absolute right-0 z-30 mt-2 w-56 rounded-xl border border-base-300 bg-base-100 p-1.5 shadow-xl" role="menu">
               {#if account.accountUrl}<a class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-base-200" href={account.accountUrl} target="_blank" rel="noopener noreferrer" onclick={() => (actionsMenuOpen = false)}><ExternalLink class="h-4 w-4" />View on {account.platform}</a>{/if}
               <button class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200" type="button" onclick={(event: MouseEvent) => { actionsMenuOpen = false; refreshAssets(event.shiftKey); }}><Image class="h-4 w-4" />Refresh assets</button>
+              <button class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200 disabled:opacity-50" type="button" disabled={thumbnailGenerationBusy} onclick={() => { actionsMenuOpen = false; void generateUnknownThumbnails(); }}><ImagePlus class="h-4 w-4" />Generate Unknown Thumbnails</button>
               <div class="relative"><button class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200" type="button" onclick={() => { encodeMenuOpen = !encodeMenuOpen; forceEncodeMenuOpen = false; }}><span class="flex items-center gap-2"><Music class="h-4 w-4" />Encode audio</span><ChevronRight class="h-4 w-4" /></button>{#if encodeMenuOpen}<div class="absolute right-full top-0 mr-1 w-48 rounded-xl border border-base-300 bg-base-100 p-1.5 shadow-xl"><button class="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200" type="button" onclick={() => { selectedStorageKey = ''; actionsMenuOpen = false; encodeMenuOpen = false; void encodeAudio(); }}>All storage keys</button>{#each channelAudio?.availableStorageKeys ?? [] as key}<button class="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200" type="button" onclick={() => { selectedStorageKey = key; actionsMenuOpen = false; encodeMenuOpen = false; void encodeAudio(); }}>{key}</button>{/each}</div>{/if}</div>
               <div class="relative"><button class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:bg-warning hover:text-warning-content" type="button" title="Re-encode media even when it is marked encoded" onclick={() => { forceEncodeMenuOpen = !forceEncodeMenuOpen; encodeMenuOpen = false; }}><span class="flex items-center gap-2"><Music class="h-4 w-4" />Force encode audio</span><ChevronRight class="h-4 w-4" /></button>{#if forceEncodeMenuOpen}<div class="absolute right-full top-0 mr-1 w-48 rounded-xl border border-base-300 bg-base-100 p-1.5 shadow-xl"><button class="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-warning hover:text-warning-content" type="button" onclick={() => { selectedStorageKey = ''; actionsMenuOpen = false; forceEncodeMenuOpen = false; void encodeAudio(true); }}>All storage keys</button>{#each channelAudio?.availableStorageKeys ?? [] as key}<button class="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-warning hover:text-warning-content" type="button" onclick={() => { selectedStorageKey = key; actionsMenuOpen = false; forceEncodeMenuOpen = false; void encodeAudio(true); }}>{key}</button>{/each}</div>{/if}</div>
               <button class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200 disabled:opacity-50" type="button" disabled={!audioComplete} onclick={() => { actionsMenuOpen = false; playAudio(); }}><Headphones class="h-4 w-4" />Play as audio</button>
