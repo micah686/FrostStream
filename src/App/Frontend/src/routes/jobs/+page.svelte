@@ -335,10 +335,9 @@
     </div>
 
     <div class="flex flex-wrap items-center gap-2">
-      <span class={queueState.connected ? 'badge badge-success bg-success text-success-content gap-1.5' : 'badge badge-error bg-error text-error-content gap-1.5'}>
-        <span class={queueState.connected ? 'status status-success' : 'status status-error'}></span>
-        {queueState.connected ? 'SSE Live' : 'SSE Offline'}
-      </span>
+      {#if queueState.connected}
+        <span class="badge badge-success text-success-content">SSE Live</span>
+      {/if}
       <button class="btn btn-sm btn-neutral text-xs" onclick={refreshQueue} disabled={queueState.loading}>
         {#if queueState.loading}
           <span class="loading loading-spinner loading-xs mr-1.5"></span>
@@ -364,26 +363,26 @@
     </div>
   {/if}
 
-  <div class="mt-6 grid gap-3 md:grid-cols-4">
-    <div class="rounded-xl border border-base-300/80 bg-base-200/40 p-4">
-      <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Tracked</p>
-      <p class="mt-2 text-2xl font-bold text-base-content">{queueState.totalCount}</p>
-      <p class="mt-1 text-xs text-base-content/50">{queueState.rows.length} loaded</p>
+  <div class="stats stats-vertical mt-6 w-full border border-base-300/80 bg-base-200/40 shadow md:stats-horizontal">
+    <div class="stat">
+      <div class="stat-title">Tracked</div>
+      <div class="stat-value text-2xl">{queueState.totalCount}</div>
+      <div class="stat-desc">{queueState.rows.length} loaded</div>
     </div>
-    <div class="rounded-xl border border-base-300/80 bg-base-200/40 p-4">
-      <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Running</p>
-      <p class="mt-2 text-2xl font-bold text-base-content">{activeCount}</p>
-      <p class="mt-1 text-xs text-base-content/50">active workflow states</p>
+    <div class="stat">
+      <div class="stat-title">Running</div>
+      <div class="stat-value text-2xl">{activeCount}</div>
+      <div class="stat-desc">active workflow states</div>
     </div>
-    <div class="rounded-xl border border-base-300/80 bg-base-200/40 p-4">
-      <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Waiting</p>
-      <p class="mt-2 text-2xl font-bold text-base-content">{queuedCount}</p>
-      <p class="mt-1 text-xs text-base-content/50">not yet dispatched</p>
+    <div class="stat">
+      <div class="stat-title">Waiting</div>
+      <div class="stat-value text-2xl">{queuedCount}</div>
+      <div class="stat-desc">not yet dispatched</div>
     </div>
-    <div class="rounded-xl border border-base-300/80 bg-base-200/40 p-4">
-      <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Size</p>
-      <p class="mt-2 text-2xl font-bold text-base-content">{formatOptionalBytes(totalBytes)}</p>
-      <p class="mt-1 text-xs text-base-content/50">known total bytes</p>
+    <div class="stat">
+      <div class="stat-title">Size</div>
+      <div class="stat-value text-2xl">{formatOptionalBytes(totalBytes)}</div>
+      <div class="stat-desc">known total bytes</div>
     </div>
   </div>
 
@@ -392,12 +391,7 @@
       <button
         type="button"
         onclick={() => changeSourceFilter(tab.key)}
-        class={[
-          'inline-flex h-8 shrink-0 items-center rounded-lg border px-3 text-xs font-semibold transition',
-          sourceFilter === tab.key
-            ? 'border-primary bg-primary text-primary-content shadow-sm'
-            : 'border-base-content/25 bg-base-100 text-base-content/70 hover:border-base-content/40 hover:bg-base-200 hover:text-base-content'
-        ]}
+        class={['btn btn-sm shrink-0 text-xs', sourceFilter === tab.key ? 'btn-primary' : 'btn-neutral']}
         aria-pressed={sourceFilter === tab.key}
       >
         {tab.label}
@@ -411,12 +405,7 @@
         <button
           type="button"
           onclick={() => changeFilter(tab.key)}
-          class={[
-            'inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border px-4 text-xs font-semibold transition',
-            activeFilter === tab.key
-              ? 'border-primary bg-primary text-primary-content shadow-sm'
-              : 'border-base-content/25 bg-base-100 text-base-content/80 hover:border-base-content/40 hover:bg-base-200'
-          ]}
+          class={['btn btn-sm shrink-0 gap-2 text-xs', activeFilter === tab.key ? 'btn-primary' : 'btn-neutral']}
           aria-current={activeFilter === tab.key ? 'page' : undefined}
         >
           {tab.label}

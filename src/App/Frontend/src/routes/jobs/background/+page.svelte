@@ -83,13 +83,12 @@
       </p>
     </div>
     <div class="flex items-center gap-2">
-      <span class={jobsState.connected ? 'badge badge-success bg-success text-success-content gap-1.5' : 'badge badge-error bg-error text-error-content gap-1.5'}>
-        <span class={jobsState.connected ? 'status status-success' : 'status status-error'}></span>
-        {jobsState.connected ? 'SSE Live' : 'SSE Offline'}
-      </span>
+      {#if jobsState.connected}
+        <span class="badge badge-success text-success-content">SSE Live</span>
+      {/if}
       <button
         type="button"
-        class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary disabled:opacity-40"
+        class="btn btn-sm btn-neutral text-xs disabled:opacity-40"
         disabled={refreshing}
         onclick={refresh}
       >

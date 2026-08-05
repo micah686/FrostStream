@@ -147,6 +147,9 @@
   }
 
   function downloadedBytesFor(r: QueueRow): number | null | undefined {
+    if (!hasCurrentRunMetrics(r)) {
+      return undefined;
+    }
     const downloaded = r.progress?.downloadedBytes;
     if (downloaded !== null && downloaded !== undefined) {
       return downloaded;
@@ -160,7 +163,15 @@
     return speed?.trim() || '-';
   }
 
-  function formatElapsed(j: DownloadQueueJob): string {
+  function hasCurrentRunMetrics(r: QueueRow): boolean {
+    return !isStopped(r.job.status) && (r.progress !== undefined || isDone(r.job.status));
+  }
+
+  function formatElapsed(r: QueueRow): string {
+    if (!hasCurrentRunMetrics(r)) {
+      return '-';
+    }
+    const j = r.job;
     const started = Date.parse(j.createdAt);
     const ended = terminalEndedAt(j);
     if (Number.isNaN(started) || Number.isNaN(ended) || ended < started) {
@@ -216,22 +227,13 @@
   }
 
   function statusTone(status: string): string {
-    if (normalizeStatus(status) === 'completedwithwarnings') {
-      return 'bg-warning/12 text-warning ring-warning/25';
-    }
     if (isDone(status)) {
-      return 'bg-success/12 text-success ring-success/20';
+      return 'badge-success text-success-content';
     }
-    if (isFailed(status)) {
-      return 'bg-error/12 text-error ring-error/25';
+    if (isFailed(status) || isStopped(status)) {
+      return 'badge-error text-error-content';
     }
-    if (isStopped(status)) {
-      return 'bg-base-200/12 text-base-content/80 ring-base-300/20';
-    }
-    if (isQueued(status)) {
-      return 'bg-base-300/50 text-base-content/80 ring-base-content/30';
-    }
-    return 'bg-primary/12 text-primary ring-primary/20';
+    return 'badge-primary text-primary-content';
   }
 
   function rowTone(status: string): string {
@@ -244,16 +246,12 @@
     return 'border-base-300/90 bg-base-200/45';
   }
 
-  function sourceInitial(p: string): string {
-    return p.slice(0, 1).toUpperCase();
-  }
-
   function originBadge(sourceKind: string): { label: string; tone: string } | null {
     switch (sourceKind.toLowerCase()) {
       case 'playlist':
-        return { label: 'PLAYLIST', tone: 'bg-secondary/12 text-secondary ring-secondary/25' };
+        return { label: 'PLAYLIST', tone: 'badge-accent text-accent-content' };
       case 'channel':
-        return { label: 'CHANNEL', tone: 'bg-accent/12 text-accent ring-accent/25' };
+        return { label: 'CHANNEL', tone: 'badge-accent text-accent-content' };
       default:
         return null;
     }
@@ -329,7 +327,7 @@
   }
 </script>
 
-<article class={['rounded-xl border p-4 shadow-lg shadow-black/10 transition', rowTone(job.status)]}>
+<article class={['card border p-4 shadow-lg shadow-black/10 transition', rowTone(job.status)]}>
   <div
     class="grid cursor-pointer gap-3 md:grid-cols-[minmax(0,1fr)_5rem_minmax(8.5rem,auto)] md:items-center"
     role="button"
@@ -344,24 +342,18 @@
     }}
   >
     <div class="flex min-w-0 items-start gap-3">
-      <span
-        class="mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-base-300 text-sm font-bold text-primary ring-1 ring-base-content/20"
-        aria-hidden="true"
-      >
-        {sourceInitial(provider)}
-      </span>
       <div class="min-w-0">
         <div class="flex min-w-0 items-center gap-2">
           <ChevronDown class={['h-3.5 w-3.5 shrink-0 text-base-content/40 transition-transform', expanded ? 'rotate-180' : '']} />
           <h2 class="min-w-0 truncate text-sm font-semibold text-base-content">
             {displayTitle(job.sourceUrl)}
           </h2>
-          <span class={['shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ring-1', statusTone(job.status)]}>
+          <span class={['badge badge-sm shrink-0 text-[10px] font-bold', statusTone(job.status)]}>
             {displayStatus(row)}
           </span>
           {#if originBadge(job.sourceKind)}
             {@const origin = originBadge(job.sourceKind)!}
-            <span class={['shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ring-1', origin.tone]}>
+            <span class={['badge badge-sm shrink-0 text-[10px] font-bold', origin.tone]}>
               {origin.label}
             </span>
           {/if}
@@ -476,7 +468,7 @@
       {#if canStop(job.status)}
         <button
           type="button"
-          class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/70 text-base-content/90 transition hover:border-error/60 hover:bg-error/10 hover:text-error disabled:opacity-40"
+          class="btn btn-sm btn-neutral text-xs disabled:opacity-40"
           title="Stop job"
           aria-label="Stop job"
           disabled={Boolean(busyAction)}
@@ -490,6 +482,7 @@
           {:else}
             <Square class="h-4 w-4" />
           {/if}
+          Stop
         </button>
       {/if}
       {#if isCollectionJob(job) && canStart(job.status)}
@@ -515,7 +508,7 @@
       {#if isCollectionJob(job) && canStop(job.status)}
         <button
           type="button"
-          class="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-base-content/20 bg-base-200/70 px-2 text-[11px] font-semibold text-base-content/90 transition hover:border-error/60 hover:bg-error/10 hover:text-error disabled:opacity-40"
+          class="btn btn-sm btn-neutral text-xs disabled:opacity-40"
           title="Stop every queued or running job in this group"
           aria-label="Stop group"
           disabled={Boolean(busyAction)}
@@ -529,7 +522,7 @@
           {:else}
             <Square class="h-3.5 w-3.5" />
           {/if}
-          Group
+          Stop group
         </button>
       {/if}
       <a
@@ -597,15 +590,15 @@
       <div class="mt-1.5 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-base-content/50">
         <span class="inline-flex items-center gap-1">
           <span class="shrink-0 text-base-content/40">Speed</span>
-          <span class="text-base-content/60">{formatSpeed(row.progress?.speed)}</span>
+          <span class="text-base-content/60">{hasCurrentRunMetrics(row) ? formatSpeed(row.progress?.speed) : '-'}</span>
         </span>
         <span class="inline-flex items-center gap-1">
           <span class="shrink-0 text-base-content/40">ETA</span>
-          <span class="text-base-content/60">{formatEta(row.progress?.etaSeconds)}</span>
+          <span class="text-base-content/60">{hasCurrentRunMetrics(row) ? formatEta(row.progress?.etaSeconds) : '-'}</span>
         </span>
         <span class="inline-flex items-center gap-1">
           <span class="shrink-0 text-base-content/40">Elapsed</span>
-          <span class="text-base-content/60">{formatElapsed(job)}</span>
+          <span class="text-base-content/60">{formatElapsed(row)}</span>
         </span>
         <span class="inline-flex items-center gap-1">
           <span class="shrink-0 text-base-content/40">Downloaded</span>
@@ -613,7 +606,7 @@
         </span>
         <span class="inline-flex items-center gap-1">
           <span class="shrink-0 text-base-content/40">Total size</span>
-          <span class="text-base-content/60">{formatOptionalBytes(row.progress?.totalBytes ?? job.fileSizeBytes)}</span>
+          <span class="text-base-content/60">{hasCurrentRunMetrics(row) ? formatOptionalBytes(row.progress?.totalBytes ?? job.fileSizeBytes) : '-'}</span>
         </span>
       </div>
 

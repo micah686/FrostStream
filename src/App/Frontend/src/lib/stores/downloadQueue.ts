@@ -85,10 +85,15 @@ export function createDownloadQueueStore(deps: DownloadQueueStoreDeps = defaultD
   }
 
   function seed(jobs: DownloadQueueJob[]): void {
-    const previousProgress = new Map([...rows.values()].map((row) => [row.job.jobId, row.progress]));
+    const previousRows = new Map([...rows.values()].map((row) => [row.job.jobId, row]));
     rows.clear();
     for (const job of jobs) {
-      rows.set(job.jobId, { job, progress: previousProgress.get(job.jobId) });
+      const previous = previousRows.get(job.jobId);
+      const sameRun = previous?.job.runId === job.runId && previous?.job.runNumber === job.runNumber;
+      rows.set(job.jobId, {
+        job,
+        progress: sameRun && normalizeStatus(job.status) !== 'stopped' ? previous?.progress : undefined
+      });
     }
   }
 
@@ -107,8 +112,10 @@ export function createDownloadQueueStore(deps: DownloadQueueStoreDeps = defaultD
           void refresh();
           return;
         }
+        const runChanged = frame.runId !== row.job.runId || frame.runNumber !== row.job.runNumber;
         rows.set(frame.jobId, {
           ...row,
+          progress: runChanged || normalizeStatus(frame.status) === 'stopped' ? undefined : row.progress,
           job: {
             ...row.job,
             status: frame.status,

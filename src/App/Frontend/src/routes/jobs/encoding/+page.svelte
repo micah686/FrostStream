@@ -175,10 +175,9 @@
     </div>
 
     <div class="flex flex-wrap items-center gap-2">
-      <span class={queueState.connected ? 'badge badge-success bg-success text-success-content gap-1.5' : 'badge badge-error bg-error text-error-content gap-1.5'}>
-        <span class={queueState.connected ? 'status status-success' : 'status status-error'}></span>
-        {queueState.connected ? 'SSE Live' : 'SSE Offline'}
-      </span>
+      {#if queueState.connected}
+        <span class="badge badge-success text-success-content">SSE Live</span>
+      {/if}
       <button class="btn btn-sm btn-neutral text-xs" onclick={refreshQueue} disabled={queueState.loading}>
         {#if queueState.loading}
           <span class="loading loading-spinner loading-xs mr-1.5"></span>
@@ -195,12 +194,7 @@
       <button
         type="button"
         onclick={() => changeKindFilter(tab.key)}
-        class={[
-          'inline-flex h-8 shrink-0 items-center rounded-lg border px-3 text-xs font-semibold transition',
-          kindFilter === tab.key
-            ? 'border-primary bg-primary text-primary-content shadow-sm'
-            : 'border-base-content/25 bg-base-100 text-base-content/70 hover:border-base-content/40 hover:bg-base-200 hover:text-base-content'
-        ]}
+        class={['btn btn-sm shrink-0 text-xs', kindFilter === tab.key ? 'btn-primary' : 'btn-neutral']}
         aria-pressed={kindFilter === tab.key}
       >
         {tab.label}
@@ -214,12 +208,7 @@
         <button
           type="button"
           onclick={() => changeStatusFilter(tab.key)}
-          class={[
-            'inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border px-4 text-xs font-semibold transition',
-            statusFilter === tab.key
-              ? 'border-primary bg-primary text-primary-content shadow-sm'
-              : 'border-base-content/25 bg-base-100 text-base-content/80 hover:border-base-content/40 hover:bg-base-200'
-          ]}
+          class={['btn btn-sm shrink-0 gap-2 text-xs', statusFilter === tab.key ? 'btn-primary' : 'btn-neutral']}
           aria-current={statusFilter === tab.key ? 'page' : undefined}
         >
           {tab.label}
