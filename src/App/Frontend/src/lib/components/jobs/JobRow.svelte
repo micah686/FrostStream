@@ -327,7 +327,7 @@
   }
 </script>
 
-<article class={['card border p-4 shadow-lg shadow-black/10 transition', rowTone(job.status)]}>
+<article class={['card border p-4 transition', rowTone(job.status)]}>
   <div
     class="grid cursor-pointer gap-3 md:grid-cols-[minmax(0,1fr)_5rem_minmax(8.5rem,auto)] md:items-center"
     role="button"
@@ -610,7 +610,7 @@
         </span>
       </div>
 
-      <div class="mt-3 max-h-48 overflow-y-auto rounded-lg border border-base-300/80 bg-base-200/60 p-3 font-mono text-xs">
+      <div class="mt-3 max-h-48 overflow-y-auto rounded-lg border border-base-300 bg-base-200 p-3 font-mono text-xs text-base-content">
         {#if job.failureMessage}
           <p class="flex items-start gap-1.5 whitespace-pre-wrap break-words text-error">
             <CircleAlert class="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -618,23 +618,23 @@
           </p>
         {/if}
         {#if history === 'loading'}
-          <p class="text-base-content/40">Loading history…</p>
+          <p class="text-base-content">Loading history…</p>
         {:else if history === 'error'}
           <p class="text-error">Could not load job history.</p>
         {:else if history === undefined}
-          <p class="text-base-content/40">-</p>
+          <p class="text-base-content">-</p>
         {:else if history.length === 0}
-          <p class="text-base-content/40">No recorded events.</p>
+          <p class="text-base-content">No recorded events.</p>
         {:else}
           {#each history as entry (entry.id)}
-            <p class="whitespace-pre-wrap break-words text-base-content/60">
-              <span class="text-base-content/40">[{formatLogTime(entry.recordedAt)}]</span>
+            <p class="whitespace-pre-wrap break-words text-base-content">
+              <span class="text-base-content">[{formatLogTime(entry.recordedAt)}]</span>
               {entry.eventName === 'ProgressLine' ? entry.payloadJson : entry.eventName}
             </p>
           {/each}
         {/if}
         {#each liveMessages as entry (entry.at)}
-          <p class="whitespace-pre-wrap break-words text-base-content/50">{entry.text}</p>
+          <p class="whitespace-pre-wrap break-words text-base-content">{entry.text}</p>
         {/each}
       </div>
     </div>

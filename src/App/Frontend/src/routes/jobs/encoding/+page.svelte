@@ -5,7 +5,10 @@
     ChevronLeft,
     ChevronRight,
     CircleAlert,
+    Play,
     RefreshCw,
+    RotateCw,
+    Square,
     Video
   } from '@lucide/svelte';
   import { createEncodingQueueStore, type EncodingQueueState } from '$lib/stores/encodingQueue';
@@ -138,17 +141,20 @@
     await applyQueueParams();
   }
 
-  function statusClass(status: RenditionStatus): string {
+  function statusBadgeClass(status: RenditionStatus): string {
     switch (status) {
       case 'Ready':
-        return 'border-success/30 bg-success/10 text-success';
+        return 'badge-success text-success-content';
       case 'Failed':
-        return 'border-error/30 bg-error/10 text-error';
-      case 'Processing':
-        return 'border-primary/30 bg-primary/10 text-primary';
+        return 'badge-error text-error-content';
       default:
-        return 'border-base-content/20 bg-base-200 text-base-content/60';
+        return 'badge-primary text-primary-content';
     }
+  }
+
+  function progressPercent(row: EncodingQueueState['rows'][number]): number {
+    if (row.item.status === 'Ready') return 100;
+    return Math.min(100, Math.max(0, row.progress?.percent ?? 0));
   }
 
   function progressLine(frame: NonNullable<EncodingQueueState['rows'][number]['progress']>): string {
@@ -176,7 +182,7 @@
 
     <div class="flex flex-wrap items-center gap-2">
       {#if queueState.connected}
-        <span class="badge badge-success text-success-content">SSE Live</span>
+        <span class="badge badge-success h-8 px-3 text-xs font-semibold text-success-content">SSE Live</span>
       {/if}
       <button class="btn btn-sm btn-neutral text-xs" onclick={refreshQueue} disabled={queueState.loading}>
         {#if queueState.loading}
@@ -246,54 +252,76 @@
   {:else}
     <div class="mt-5 space-y-2">
       {#each queueState.rows as row (row.item.renditionId)}
-        <div class="rounded-xl border border-base-300/80 bg-base-200/40 p-4">
-          <div class="flex flex-wrap items-start justify-between gap-3">
+        {@const percent = progressPercent(row)}
+        <article class="card border border-base-300/90 bg-base-200/45 p-4 transition">
+          <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_5rem_minmax(8.5rem,auto)] md:items-center">
             <div class="min-w-0">
-              <div class="flex items-center gap-2">
-                <span class="rounded-md bg-base-300/80 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.06em] text-base-content/60">
-                  {row.item.kind === 'Stream' ? 'HLS' : 'Opus'}
-                </span>
-                <a
-                  href={`/watch/${row.item.mediaGuid}`}
-                  class="truncate text-sm font-semibold text-base-content hover:text-primary"
-                  title={row.item.title}
-                >
+              <div class="flex min-w-0 items-center gap-2">
+                {#if row.item.kind === 'Stream'}
+                  <span class="badge badge-sm shrink-0 badge-accent text-[10px] font-bold text-accent-content">HLS</span>
+                {/if}
+                <h2 class="min-w-0 truncate text-sm font-semibold text-base-content" title={row.item.title}>
                   {row.item.title}
-                </a>
+                </h2>
+                <span class={['badge badge-sm shrink-0 text-[10px] font-bold', statusBadgeClass(row.item.status)]}>
+                  {row.item.status}
+                </span>
               </div>
               <p class="mt-1 truncate text-xs text-base-content/50">
                 {row.item.storageKey}
                 {#if row.item.storagePath} · {row.item.storagePath}{/if}
               </p>
+              {#if row.progress}
+                <p class="mt-1 truncate text-[11px] text-base-content/50">{progressLine(row.progress)}</p>
+              {/if}
+              {#if row.item.status === 'Failed' && row.item.errorMessage}
+                <p class="mt-2 line-clamp-1 text-xs text-error">{row.item.errorMessage}</p>
+              {/if}
+              <p class="mt-2 text-[11px] text-base-content/40">
+                {row.item.sizeBytes ? formatBytes(row.item.sizeBytes) : '—'}
+                {#if row.item.durationSeconds}· {formatDuration(row.item.durationSeconds)}{/if}
+                · updated {formatRelativeDate(row.item.updatedAt)}
+              </p>
             </div>
-            <span class={['shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold', statusClass(row.item.status)]}>
-              {row.item.status}
-            </span>
+
+            <div class="flex items-center justify-center">
+              <div
+                class="radial-progress text-primary"
+                style={`--value:${percent}; --size:3.5rem;`}
+                role="progressbar"
+                aria-valuenow={Math.round(percent)}
+                aria-valuemin="0"
+                aria-valuemax="100"
+              >
+                <span class="text-[11px] font-semibold text-base-content">{Math.round(percent)}%</span>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-end gap-1.5">
+              <a
+                href={`/watch/${row.item.mediaGuid}`}
+                class="btn btn-sm btn-neutral text-xs"
+                title="Watch"
+                aria-label="Watch"
+              >
+                <Play class="h-4 w-4" />
+                Watch
+              </a>
+              {#if row.item.status === 'Processing' || row.item.status === 'Pending'}
+                <button type="button" class="btn btn-sm btn-neutral text-xs" title="Stop encode" aria-label="Stop encode">
+                  <Square class="h-4 w-4" />
+                  Stop
+                </button>
+              {/if}
+              {#if row.item.status === 'Failed'}
+                <button type="button" class="btn btn-sm btn-neutral text-xs" title="Retry encode" aria-label="Retry encode">
+                  <RotateCw class="h-4 w-4" />
+                  Retry
+                </button>
+              {/if}
+            </div>
           </div>
-
-          {#if row.progress}
-            <div class="mt-3">
-              <div class="flex justify-between gap-3 text-[11px] text-base-content/50">
-                <span>{progressLine(row.progress)}</span>
-                {#if row.progress.percent !== null}<span>{Math.round(row.progress.percent)}%</span>{/if}
-              </div>
-              <div class="mt-1 h-1.5 overflow-hidden rounded-full bg-base-300">
-                <div
-                  class="h-full rounded-full bg-primary transition-all"
-                  style={`width: ${row.progress.percent ?? 0}%`}
-                ></div>
-              </div>
-            </div>
-          {:else if row.item.status === 'Failed' && row.item.errorMessage}
-            <p class="mt-2 text-xs text-error">{row.item.errorMessage}</p>
-          {/if}
-
-          <p class="mt-2 text-[11px] text-base-content/40">
-            {row.item.sizeBytes ? formatBytes(row.item.sizeBytes) : '—'}
-            {#if row.item.durationSeconds}· {formatDuration(row.item.durationSeconds)}{/if}
-            · updated {formatRelativeDate(row.item.updatedAt)}
-          </p>
-        </div>
+        </article>
       {/each}
     </div>
 

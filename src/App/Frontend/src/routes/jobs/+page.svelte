@@ -20,7 +20,7 @@
     stopJob
   } from '$lib/api/downloadQueue';
   import { createDownloadQueueStore, type DownloadQueueState, type QueueRow } from '$lib/stores/downloadQueue';
-  import { formatOptionalBytes, isActive, isDone, isFailed, isQueued, isStopped } from '$lib/jobs/jobState';
+  import { isActive, isDone, isFailed, isQueued, isStopped } from '$lib/jobs/jobState';
   import { listOptionPresets } from '$lib/api/optionPresets';
   import JobRow from '$lib/components/jobs/JobRow.svelte';
 
@@ -90,10 +90,6 @@
 
   const activeCount = $derived(queueState.rows.filter((row) => isActive(row.job.status)).length);
   const queuedCount = $derived(queueState.rows.filter((row) => isQueued(row.job.status)).length);
-  const totalBytes = $derived(
-    queueState.rows.reduce((sum, row) => sum + (row.progress?.totalBytes ?? row.job.fileSizeBytes ?? 0), 0)
-  );
-
   onMount(() => {
     queue.connect();
     listOptionPresets()
@@ -336,7 +332,7 @@
 
     <div class="flex flex-wrap items-center gap-2">
       {#if queueState.connected}
-        <span class="badge badge-success text-success-content">SSE Live</span>
+        <span class="badge badge-success h-8 px-3 text-xs font-semibold text-success-content">SSE Live</span>
       {/if}
       <button class="btn btn-sm btn-neutral text-xs" onclick={refreshQueue} disabled={queueState.loading}>
         {#if queueState.loading}
@@ -363,26 +359,21 @@
     </div>
   {/if}
 
-  <div class="stats stats-vertical mt-6 w-full border border-base-300/80 bg-base-200/40 shadow md:stats-horizontal">
-    <div class="stat">
+  <div class="mt-6 grid gap-3 md:grid-cols-3">
+    <div class="stat rounded-xl border border-base-300/80 bg-base-200/40 shadow">
       <div class="stat-title">Tracked</div>
       <div class="stat-value text-2xl">{queueState.totalCount}</div>
       <div class="stat-desc">{queueState.rows.length} loaded</div>
     </div>
-    <div class="stat">
+    <div class="stat rounded-xl border border-base-300/80 bg-base-200/40 shadow">
       <div class="stat-title">Running</div>
       <div class="stat-value text-2xl">{activeCount}</div>
       <div class="stat-desc">active workflow states</div>
     </div>
-    <div class="stat">
+    <div class="stat rounded-xl border border-base-300/80 bg-base-200/40 shadow">
       <div class="stat-title">Waiting</div>
       <div class="stat-value text-2xl">{queuedCount}</div>
       <div class="stat-desc">not yet dispatched</div>
-    </div>
-    <div class="stat">
-      <div class="stat-title">Size</div>
-      <div class="stat-value text-2xl">{formatOptionalBytes(totalBytes)}</div>
-      <div class="stat-desc">known total bytes</div>
     </div>
   </div>
 
