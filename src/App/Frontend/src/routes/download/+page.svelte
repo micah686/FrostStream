@@ -442,7 +442,7 @@
     </p>
   </div>
 
-  <div class="tabs tabs-lift mb-5" role="tablist" aria-label="Download type">
+  <div class="tabs tabs-border mb-5" role="tablist" aria-label="Download type">
     {#each tabs as tab (tab.key)}
       {@const Icon = tab.icon}
       <button
