@@ -54,10 +54,6 @@ export function listCastSessions(): Promise<CastSession[]> {
   return getJson<CastSession[]>('/api/cast/sessions');
 }
 
-export function getCastSession(deviceId: string): Promise<CastSession> {
-  return getJson<CastSession>(`/api/cast/sessions/${encodeURIComponent(deviceId)}`);
-}
-
 export async function startCastSession(
   deviceId: string,
   body: StartCastSessionBody

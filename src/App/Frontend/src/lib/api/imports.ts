@@ -245,10 +245,6 @@ export function retryFailedImportSession(sessionId: string, fetchImpl: typeof fe
   return requestJson(`${SESSIONS_BASE}/${encodeURIComponent(sessionId)}/retry-failed`, { method: 'POST' }, fetchImpl);
 }
 
-export function cancelImportSession(sessionId: string, fetchImpl: typeof fetch = fetch): Promise<ImportSessionActionResponse> {
-  return requestJson(`${SESSIONS_BASE}/${encodeURIComponent(sessionId)}/cancel`, { method: 'POST' }, fetchImpl);
-}
-
 export function browseImportIncoming(path?: string, workerTag?: string, fetchImpl: typeof fetch = fetch): Promise<BrowseIncomingResponse> {
   const query = new URLSearchParams();
   if (path) query.set('path', path);

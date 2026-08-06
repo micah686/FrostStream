@@ -31,11 +31,6 @@ public static class EndpointIds
 {
     // Downloads
     public const string DownloadsCreate = "downloads.create";
-    public const string DownloadsAudio = "downloads.audio";
-    public const string DownloadsPreset = "downloads.preset";
-    public const string DownloadsUpdatePriority = "downloads.update-priority";
-    public const string DownloadsStart = "downloads.start";
-    public const string DownloadsStop = "downloads.stop";
     public const string DownloadsQueueList = "downloads.queue.list";
     public const string DownloadsQueueGet = "downloads.queue.get";
     public const string DownloadsQueueHistory = "downloads.queue.history";
@@ -84,7 +79,6 @@ public static class EndpointIds
 
     // Metadata (read)
     public const string MetadataList = "metadata.list";
-    public const string MetadataSearch = "metadata.search";
     public const string MetadataGet = "metadata.get";
     public const string MetadataRandom = "metadata.random";
     public const string MetadataTechnical = "metadata.technical";
@@ -188,7 +182,6 @@ public static class EndpointIds
     public const string CreatorMonitorScanNow = "creator-monitor.scan-now";
     public const string CreatorMonitorDelete = "creator-monitor.delete";
     public const string CreatorMonitorListIgnoredMedia = "creator-monitor.list-ignored-media";
-    public const string CreatorMonitorForceQueueMedia = "creator-monitor.force-queue-media";
 
     // Media
     public const string MediaStream = "media.stream";
@@ -211,7 +204,6 @@ public static class EndpointIds
     public const string MediaLike = "media.like";
     public const string MediaUnlike = "media.unlike";
     public const string MediaLikesList = "media.likes.list";
-    public const string PlaylistAudioStream = "playlists.audio-stream";
     public const string ChannelAudioStatus = "channels.audio.status";
     public const string ChannelAudioEncode = "channels.audio.encode";
     public const string ChannelAudioPodcastToken = "channels.audio.podcast-token";
@@ -249,7 +241,6 @@ public static class EndpointIds
     public const string AccessControlPoliciesUpdate = "access-control.policies.update";
     public const string AccessControlPoliciesDelete = "access-control.policies.delete";
     public const string AccessControlPoliciesDuplicate = "access-control.policies.duplicate";
-    public const string AccessControlPoliciesImpact = "access-control.policies.impact";
     public const string AccessControlProvidersList = "access-control.providers.list";
     public const string AccessControlMediaSummary = "access-control.media.summary";
     public const string AccessControlEffective = "access-control.effective";
@@ -277,11 +268,6 @@ public static class EndpointCatalog
     public static readonly IReadOnlyList<EndpointDefinition> Endpoints =
     [
         new(EndpointIds.DownloadsCreate, Bundles.Downloading),
-        new(EndpointIds.DownloadsAudio, Bundles.Downloading),
-        new(EndpointIds.DownloadsPreset, Bundles.Downloading),
-        new(EndpointIds.DownloadsUpdatePriority, Bundles.Downloading),
-        new(EndpointIds.DownloadsStart, Bundles.Downloading),
-        new(EndpointIds.DownloadsStop, Bundles.Downloading),
         new(EndpointIds.DownloadsQueueList, Bundles.Downloading),
         new(EndpointIds.DownloadsQueueGet, Bundles.Downloading),
         new(EndpointIds.DownloadsQueueHistory, Bundles.Downloading),
@@ -328,7 +314,6 @@ public static class EndpointCatalog
         new(EndpointIds.StorageGet, Bundles.Storage),
 
         new(EndpointIds.MetadataList, Bundles.Metadata),
-        new(EndpointIds.MetadataSearch, Bundles.Metadata),
         new(EndpointIds.MetadataGet, Bundles.Metadata),
         new(EndpointIds.MetadataRandom, Bundles.Metadata),
         new(EndpointIds.MetadataTechnical, Bundles.Metadata),
@@ -420,7 +405,6 @@ public static class EndpointCatalog
         new(EndpointIds.CreatorMonitorScanNow, Bundles.CreatorMonitor),
         new(EndpointIds.CreatorMonitorDelete, Bundles.CreatorMonitor),
         new(EndpointIds.CreatorMonitorListIgnoredMedia, Bundles.CreatorMonitor),
-        new(EndpointIds.CreatorMonitorForceQueueMedia, Bundles.CreatorMonitor),
 
         new(EndpointIds.MediaStream, Bundles.Media),
         new(EndpointIds.MediaThumbnail, Bundles.Media),
@@ -453,7 +437,6 @@ public static class EndpointCatalog
         new(EndpointIds.CastSessionsVolume, Bundles.Media),
         new(EndpointIds.CastSessionsDisconnect, Bundles.Media),
         new(EndpointIds.CastSessionsEvents, Bundles.Media),
-        new(EndpointIds.PlaylistAudioStream, Bundles.Playlists),
         new(EndpointIds.ChannelAudioStatus, Bundles.Media),
         new(EndpointIds.ChannelAudioEncode, Bundles.Media),
         new(EndpointIds.ChannelAudioPodcastToken, Bundles.Media),
@@ -476,7 +459,6 @@ public static class EndpointCatalog
         new(EndpointIds.AccessControlPoliciesUpdate, Bundles.Management),
         new(EndpointIds.AccessControlPoliciesDelete, Bundles.Management),
         new(EndpointIds.AccessControlPoliciesDuplicate, Bundles.Management),
-        new(EndpointIds.AccessControlPoliciesImpact, Bundles.Management),
         new(EndpointIds.AccessControlProvidersList, Bundles.Management),
         new(EndpointIds.AccessControlMediaSummary, Bundles.Management),
         new(EndpointIds.AccessControlEffective, Bundles.Management),

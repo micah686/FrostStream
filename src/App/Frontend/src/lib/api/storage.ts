@@ -135,16 +135,8 @@ export async function createLocalStorage(request: Keyed<LocalStorageRequest>, fe
   return sendJson(`${BASE}/local/create`, 'POST', request, fetchImpl);
 }
 
-export async function updateLocalStorage(key: string, request: LocalStorageRequest, fetchImpl: typeof fetch = fetch) {
-  return sendJson(`${BASE}/local/update/${encodeURIComponent(key)}`, 'PUT', request, fetchImpl);
-}
-
 export async function createNetworkStorage(request: Keyed<NetworkStorageRequest>, fetchImpl: typeof fetch = fetch) {
   return sendJson(`${BASE}/network/create`, 'POST', request, fetchImpl);
-}
-
-export async function updateNetworkStorage(key: string, request: NetworkStorageRequest, fetchImpl: typeof fetch = fetch) {
-  return sendJson(`${BASE}/network/update/${encodeURIComponent(key)}`, 'PUT', request, fetchImpl);
 }
 
 export async function createS3CompatibleStorage(
@@ -154,24 +146,8 @@ export async function createS3CompatibleStorage(
   return sendJson(`${BASE}/object/s3-compatible/create`, 'POST', request, fetchImpl);
 }
 
-export async function updateS3CompatibleStorage(
-  key: string,
-  request: S3CompatibleStorageRequest,
-  fetchImpl: typeof fetch = fetch
-) {
-  return sendJson(`${BASE}/object/s3-compatible/update/${encodeURIComponent(key)}`, 'PUT', request, fetchImpl);
-}
-
 export async function createAzureBlobStorage(request: Keyed<AzureBlobStorageRequest>, fetchImpl: typeof fetch = fetch) {
   return sendJson(`${BASE}/object/azure-blob/create`, 'POST', request, fetchImpl);
-}
-
-export async function updateAzureBlobStorage(
-  key: string,
-  request: AzureBlobStorageRequest,
-  fetchImpl: typeof fetch = fetch
-) {
-  return sendJson(`${BASE}/object/azure-blob/update/${encodeURIComponent(key)}`, 'PUT', request, fetchImpl);
 }
 
 export async function createGoogleCloudStorage(
@@ -179,14 +155,6 @@ export async function createGoogleCloudStorage(
   fetchImpl: typeof fetch = fetch
 ) {
   return sendJson(`${BASE}/object/google-cloud-storage/create`, 'POST', request, fetchImpl);
-}
-
-export async function updateGoogleCloudStorage(
-  key: string,
-  request: GoogleCloudStorageRequest,
-  fetchImpl: typeof fetch = fetch
-) {
-  return sendJson(`${BASE}/object/google-cloud-storage/update/${encodeURIComponent(key)}`, 'PUT', request, fetchImpl);
 }
 
 export function storageMethodLabel(storage: StorageConfig): string {

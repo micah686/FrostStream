@@ -183,14 +183,3 @@ export async function checkEffectiveAccess(
   return sendJson<EffectiveAccessCheck>(`${BASE}/effective/check`, 'POST', request, fetchImpl);
 }
 
-export async function getMyEffectiveAccess(
-  endpointId?: string,
-  mediaGuid?: string,
-  fetchImpl: typeof fetch = fetch
-): Promise<EffectiveAccess> {
-  const query = new URLSearchParams();
-  if (endpointId?.trim()) query.set('endpointId', endpointId.trim());
-  if (mediaGuid?.trim()) query.set('mediaGuid', mediaGuid.trim());
-  const suffix = query.size > 0 ? `?${query}` : '';
-  return getJson<EffectiveAccess>(`${BASE}/effective/me${suffix}`, fetchImpl);
-}

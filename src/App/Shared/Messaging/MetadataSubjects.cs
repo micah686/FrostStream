@@ -9,7 +9,6 @@ public static class MetadataSubjects
     public const string Versions = "metadata.versions";
     public const string CommentsList = "metadata.comments.list";
     public const string CaptionsList = "metadata.captions.list";
-    public const string Search = "metadata.search";
     public const string AccountsList = "metadata.accounts.list";
     public const string AccountsGet = "metadata.accounts.get";
     public const string AccountsUpdateAssets = "metadata.accounts.update-assets";

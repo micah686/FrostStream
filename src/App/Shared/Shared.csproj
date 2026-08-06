@@ -21,6 +21,8 @@
       <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
       <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.10" />
       <PackageReference Include="NodaTime" Version="3.3.3" />
+      <!-- Version pin, not a code dependency. FluentStorage.FTP/SFTP depend on Polly 8.4.0, which
+           asks for Polly.Core 8.4.0; this lifts it to 8.7.0. No source file here uses Polly. -->
       <PackageReference Include="Polly.Core" Version="8.7.0" />
       <PackageReference Include="System.IO.Hashing" Version="10.0.10" />
       <PackageReference Include="VaultSharp" Version="1.17.5.1" />

@@ -15,12 +15,6 @@ export interface AccountSummary {
   userNote?: string | null;
 }
 
-export interface AccountDetail extends AccountSummary {
-  accountCreationDate?: string | null;
-  description?: string | null;
-  bannerStoragePath?: string | null;
-}
-
 export interface AccountListResponse {
   items: AccountSummary[];
   nextCursor: string | null;
@@ -45,6 +39,3 @@ export async function listAccounts(
   return getJson<AccountListResponse>(`${BASE}${suffix}`, fetchImpl);
 }
 
-export async function getAccount(accountId: number, fetchImpl: typeof fetch = fetch): Promise<AccountDetail> {
-  return getJson<AccountDetail>(`${BASE}/${encodeURIComponent(accountId)}`, fetchImpl);
-}

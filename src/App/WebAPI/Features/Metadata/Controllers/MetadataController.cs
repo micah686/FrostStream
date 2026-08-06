@@ -68,55 +68,6 @@ public sealed class MetadataController(
             response.HasMore));
     }
 
-    [Obsolete("remove this endpoint later")]
-    [HttpGet("search")]
-    [Endpoint(EndpointIds.MetadataSearch)]
-    [EndpointSummary("Search archived media metadata")]
-    [EndpointDescription("Performs full-text search across indexed media metadata using the required q parameter. Results support pagination, platform and taxonomy filters, optional explicit sorting, and return total-count and continuation information; blank search queries return 400.")]
-    public async Task<ActionResult<PagedMetadataResponse<MetadataCardDto>>> Search(
-        [FromQuery(Name = "q")] string q,
-        [FromQuery] int pageSize = 24,
-        [FromQuery] int page = 1,
-        [FromQuery] string? platform = null,
-        [FromQuery] string? tag = null,
-        [FromQuery] string? category = null,
-        [FromQuery] string? genre = null,
-        [FromQuery] string? sortBy = null,
-        [FromQuery] string sortOrder = "desc",
-        CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrWhiteSpace(q))
-            return BadRequest("Query parameter 'q' is required.");
-
-        var response = await SendRequestAsync<MetadataSearchRequestMessage, MetadataSearchResponseMessage>(
-            MetadataSubjects.Search,
-            new MetadataSearchRequestMessage
-            {
-                Query = q,
-                PageSize = pageSize,
-                Page = page,
-                Platform = platform,
-                Tag = tag,
-                Category = category,
-                Genre = genre,
-                SortBy = sortBy,
-                SortOrder = sortOrder,
-                OwnerSubject = ResolveSubject()
-            },
-            cancellationToken);
-
-        if (response is null)
-            return ServiceUnavailable();
-        if (!response.Success)
-            return MetadataError(response.ErrorCode, response.ErrorMessage);
-
-        return Ok(new PagedMetadataResponse<MetadataCardDto>(
-            response.Items,
-            response.Page,
-            response.TotalCount,
-            response.HasMore));
-    }
-
     [HttpGet("random")]
     [Endpoint(EndpointIds.MetadataRandom)]
     [EndpointSummary("Pick a random archived media item")]

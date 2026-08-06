@@ -71,14 +71,6 @@ export async function queuePlaylistDownload(
   return (await response.json()) as PlaylistDownloadResponse;
 }
 
-export async function listPlatformPlaylists(
-  pageSize = 50,
-  pageOffset = 0,
-  fetchImpl: typeof fetch = fetch
-): Promise<PlatformPlaylist[]> {
-  return getJson<PlatformPlaylist[]>(`${BASE}?pageSize=${pageSize}&pageOffset=${pageOffset}`, fetchImpl);
-}
-
 export async function listProviderPlaylistLibrary(
   pageSize = 50,
   pageOffset = 0,
@@ -92,18 +84,6 @@ export async function getPlatformPlaylist(
   fetchImpl: typeof fetch = fetch
 ): Promise<PlatformPlaylist> {
   return getJson<PlatformPlaylist>(`${BASE}/${encodeURIComponent(playlistId)}`, fetchImpl);
-}
-
-export async function forceQueuePlaylistItem(
-  playlistId: string,
-  jobId: string,
-  fetchImpl: typeof fetch = fetch
-): Promise<void> {
-  const url = `${BASE}/${encodeURIComponent(playlistId)}/items/${encodeURIComponent(jobId)}/force-queue`;
-  const response = await fetchImpl(url, { method: 'POST', credentials: 'same-origin' });
-  if (!response.ok) {
-    throw new Error(await describeError(response, `POST ${url} failed with status ${response.status}.`));
-  }
 }
 
 async function getJson<T>(url: string, fetchImpl: typeof fetch): Promise<T> {

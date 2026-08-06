@@ -69,13 +69,6 @@ export async function getMetadataVersions(
   return getJson<MetadataVersionsResponse>(`/api/metadata/${encodeURIComponent(mediaGuid)}/versions`, fetchImpl);
 }
 
-export async function getMetadataVersionCount(
-  mediaGuid: string,
-  fetchImpl: typeof fetch = fetch
-): Promise<number> {
-  return getJson<number>(`/api/metadata/${encodeURIComponent(mediaGuid)}/versions?countOnly=true`, fetchImpl);
-}
-
 async function getJson<T>(url: string, fetchImpl: typeof fetch): Promise<T> {
   const response = await fetchImpl(url, { credentials: 'same-origin' });
   if (!response.ok) {

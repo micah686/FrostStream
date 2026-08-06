@@ -184,11 +184,9 @@ class Program
         builder.Services.AddHostedService<CookieProfileConsumerService>();
         builder.Services.AddHostedService<TypesenseSyncConsumerService>();
         builder.Services.AddHostedService<MetadataListConsumerService>();
-        builder.Services.AddHostedService<MetadataSearchConsumerService>();
         builder.Services.AddHostedService<MetadataCommentsConsumerService>();
         builder.Services.AddHostedService<MetadataCaptionsConsumerService>();
         builder.Services.AddHostedService<UnifiedSearchConsumerService>();
-        builder.Services.AddHostedService<MetadataRebuildConsumerService>();
 
         builder.Services.AddHostedService<StorageCrudConsumerService>();
         builder.Services.AddHostedService<OptionPresetCrudConsumerService>();

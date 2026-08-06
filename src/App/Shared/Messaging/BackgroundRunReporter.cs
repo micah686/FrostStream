@@ -210,33 +210,3 @@ public sealed class BackgroundRunReporter(
         }
     }
 }
-
-/// <summary>No-op reporter for tests and hosts without a message bus.</summary>
-public sealed class NullBackgroundRunReporter : IBackgroundRunReporter
-{
-    public static readonly NullBackgroundRunReporter Instance = new();
-
-    public Task<IBackgroundRunScope> BeginAsync(
-        string taskType, ScheduledBackgroundRequest request, string? detail = null,
-        CancellationToken cancellationToken = default)
-        => Task.FromResult<IBackgroundRunScope>(new Scope());
-
-    public Task<IBackgroundRunScope> BeginScheduledAsync(
-        string taskType, string scheduleKey, string idempotencyKey, string? detail = null,
-        CancellationToken cancellationToken = default)
-        => Task.FromResult<IBackgroundRunScope>(new Scope());
-
-    public Task<IBackgroundRunScope> BeginManualAsync(
-        string taskType, string idempotencyKey, string? detail = null,
-        CancellationToken cancellationToken = default)
-        => Task.FromResult<IBackgroundRunScope>(new Scope());
-
-    private sealed class Scope : IBackgroundRunScope
-    {
-        public Guid RunId { get; } = Guid.Empty;
-        public Task ReportAsync(string message, int? current = null, int? total = null, double? percent = null) => Task.CompletedTask;
-        public void Succeed(string? summary = null) { }
-        public void Fail(string errorMessage) { }
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
-    }
-}

@@ -239,31 +239,6 @@ public sealed record MetadataListResponseMessage
     public bool HasMore { get; init; }
 }
 
-public sealed record MetadataSearchRequestMessage
-{
-    public required string Query { get; init; }
-    public int PageSize { get; init; } = 24;
-    public int Page { get; init; } = 1;
-    public string? Platform { get; init; }
-    public string? Tag { get; init; }
-    public string? Category { get; init; }
-    public string? Genre { get; init; }
-    public string? SortBy { get; init; }
-    public string SortOrder { get; init; } = "desc";
-    public string? OwnerSubject { get; init; }
-}
-
-public sealed record MetadataSearchResponseMessage
-{
-    public bool Success { get; init; }
-    public string? ErrorCode { get; init; }
-    public string? ErrorMessage { get; init; }
-    public IReadOnlyList<MetadataCardDto> Items { get; init; } = [];
-    public int Page { get; init; }
-    public int TotalCount { get; init; }
-    public bool HasMore { get; init; }
-}
-
 public sealed record MetadataGetRequestMessage
 {
     public required Guid MediaGuid { get; init; }

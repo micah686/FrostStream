@@ -64,10 +64,6 @@ export async function listCreatorSources(fetchImpl: typeof fetch = fetch): Promi
   return getJson<CreatorSource[]>(BASE, fetchImpl);
 }
 
-export async function getCreatorSource(id: number, fetchImpl: typeof fetch = fetch): Promise<CreatorSource> {
-  return getJson<CreatorSource>(`${BASE}/${id}`, fetchImpl);
-}
-
 export async function createCreatorSource(
   request: CreatorSourceRequest,
   fetchImpl: typeof fetch = fetch

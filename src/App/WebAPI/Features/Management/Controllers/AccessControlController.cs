@@ -255,40 +255,6 @@ public sealed class AccessControlController(
                 : CreatedAtAction(nameof(GetPolicy), new { policyId = saved.Result.PolicyId }, saved.Result);
     }
 
-    [HttpGet("policies/{policyId:guid}/impact")]
-    [Endpoint(EndpointIds.AccessControlPoliciesImpact)]
-    [EndpointSummary("Preview the impact of an access policy")]
-    [EndpointDescription("Resolves a policy's assigned principals and reports counts for endpoint bundles, effective endpoints, denied media, denied providers, and inclusive age tiers.")]
-    public async Task<IActionResult> GetPolicyImpact(Guid policyId, CancellationToken cancellationToken)
-    {
-        var existing = await GetPolicyInternalAsync(policyId, cancellationToken);
-        if (existing.Response is not null) return existing.Response;
-
-        var policy = (await WithDisplayNamesAsync([existing.Policy!], cancellationToken))[0];
-        var bundleResult = await bundles.ListBundlesAsync(cancellationToken);
-        if (bundleResult.Status != BundleOpStatus.Ok)
-            return MapBundleError(new BundleOpResult(bundleResult.Status, bundleResult.Error));
-
-        var selectedBundleIds = policy.BundleIds.ToHashSet(StringComparer.Ordinal);
-        var endpointCount = bundleResult.Value!
-            .Where(bundle => selectedBundleIds.Contains(bundle.Id))
-            .SelectMany(bundle => bundle.Endpoints)
-            .Distinct(StringComparer.Ordinal)
-            .Count();
-
-        return Ok(new AccessPolicyImpactResponse
-        {
-            PolicyId = policy.PolicyId,
-            Assignments = policy.Assignments,
-            PrincipalCount = policy.Assignments.Count,
-            BundleCount = policy.BundleIds.Count,
-            EndpointCount = endpointCount,
-            DeniedMediaCount = policy.MediaGuids.Count,
-            DeniedProviderCount = policy.Providers.Count,
-            AgeTierCount = policy.AgeThresholds.Count
-        });
-    }
-
     [HttpDelete("policies/{policyId:guid}")]
     [Endpoint(EndpointIds.AccessControlPoliciesDelete)]
     [EndpointSummary("Delete a unified access policy")]
@@ -875,18 +841,6 @@ public sealed record AccessPolicyWriteRequest
 public sealed record AccessPolicyDuplicateRequest
 {
     public required string Name { get; init; }
-}
-
-public sealed record AccessPolicyImpactResponse
-{
-    public required Guid PolicyId { get; init; }
-    public IReadOnlyList<AccessPolicyAssignmentDto> Assignments { get; init; } = [];
-    public int PrincipalCount { get; init; }
-    public int BundleCount { get; init; }
-    public int EndpointCount { get; init; }
-    public int DeniedMediaCount { get; init; }
-    public int DeniedProviderCount { get; init; }
-    public int AgeTierCount { get; init; }
 }
 
 public sealed record EffectiveAccessResponse

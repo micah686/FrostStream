@@ -57,10 +57,6 @@ export async function listBackupJobs(fetchImpl: typeof fetch = fetch): Promise<B
   return getJson<BackupJob[]>(`${BASE}/jobs`, fetchImpl);
 }
 
-export async function getBackupJob(jobId: string, fetchImpl: typeof fetch = fetch): Promise<BackupJob> {
-  return getJson<BackupJob>(`${BASE}/jobs/${encodeURIComponent(jobId)}`, fetchImpl);
-}
-
 export async function listBackups(fetchImpl: typeof fetch = fetch): Promise<BackupRepository> {
   return getJson<BackupRepository>(BASE, fetchImpl);
 }

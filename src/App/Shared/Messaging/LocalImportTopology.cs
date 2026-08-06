@@ -19,7 +19,6 @@ public sealed class LocalImportTopology : ITopologySource
     public const string WorkerProbeImportSessionItemsConsumer = "worker-probe-import-session-items";
     public const string WorkerEnrichImportSessionItemConsumer = "worker-enrich-import-session-item";
     public const string ImportSessionItemsProbedConsumer = "databridge-import-session-items-probed";
-    public const string ImportSessionItemsProbeFailedConsumer = "databridge-import-session-items-probe-failed";
     public const string ImportSessionItemEnrichedConsumer = "databridge-import-session-item-enriched";
     public const string ImportSessionItemEnrichFailedConsumer = "databridge-import-session-item-enrich-failed";
 
@@ -46,7 +45,6 @@ public sealed class LocalImportTopology : ITopologySource
         yield return WorkerConsumer(WorkerProbeImportSessionItemsConsumer, LocalImportSubjects.ProbeImportSessionItemsCommand);
         yield return WorkerConsumer(WorkerEnrichImportSessionItemConsumer, LocalImportSubjects.EnrichImportSessionItemCommand);
         yield return DataBridgeConsumer(ImportSessionItemsProbedConsumer, LocalImportSubjects.ImportSessionItemsProbed);
-        yield return DataBridgeConsumer(ImportSessionItemsProbeFailedConsumer, LocalImportSubjects.ImportSessionItemsProbeFailed);
         yield return DataBridgeConsumer(ImportSessionItemEnrichedConsumer, LocalImportSubjects.ImportSessionItemEnriched);
         yield return DataBridgeConsumer(ImportSessionItemEnrichFailedConsumer, LocalImportSubjects.ImportSessionItemEnrichFailed);
     }

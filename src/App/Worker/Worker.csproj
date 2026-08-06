@@ -8,10 +8,17 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <!-- Version pins, not code dependencies. Worker never uses the Azure.Storage or
+           Google.Cloud namespaces; the SDKs arrive via Shared -> FluentStorage.Azure.Blobs
+           (Azure.Storage.Blobs 12.20.0) and FluentStorage.GCP (Google.Cloud.Storage.V1 4.10.0),
+           and these references lift both to a current build in Worker's output. -->
       <PackageReference Include="Azure.Storage.Blobs" Version="12.29.1" />
-      <PackageReference Include="FluentStorage" Version="8.0.12" />
       <PackageReference Include="Google.Cloud.Storage.V1" Version="4.15.0" />
+      <PackageReference Include="FluentStorage" Version="8.0.12" />
       <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
+      <!-- Version pin, not a code dependency. Polly.Extensions/Polly.RateLimiting (via
+           ServiceDefaults) ask for Polly.Core 8.4.2 and FluentStorage.FTP/SFTP for 8.4.0; this
+           lifts the graph to 8.7.0. No source file here uses Polly. -->
       <PackageReference Include="Polly.Core" Version="8.7.0" />
       <PackageReference Include="System.IO.Hashing" Version="10.0.10" />
     </ItemGroup>
