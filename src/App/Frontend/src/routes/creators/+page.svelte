@@ -427,17 +427,17 @@
   <div class="stats stats-vertical mt-6 w-full gap-3 bg-transparent md:stats-horizontal">
     <div class="stat rounded-box border border-base-300 bg-base-100 shadow-sm">
       <div class="stat-title">Tracked</div>
-      <div class="stat-value text-primary">{trackedCount}</div>
+      <div class="stat-value text-base-content">{trackedCount}</div>
       <div class="stat-desc">creator sources</div>
     </div>
     <div class="stat rounded-box border border-base-300 bg-base-100 shadow-sm">
       <div class="stat-title">Scanning</div>
-      <div class="stat-value text-secondary">{scanningCount}</div>
+      <div class="stat-value text-base-content">{scanningCount}</div>
       <div class="stat-desc">enabled for discovery</div>
     </div>
     <div class="stat rounded-box border border-base-300 bg-base-100 shadow-sm">
       <div class="stat-title">Scanned</div>
-      <div class="stat-value text-accent">{scannedCount}</div>
+      <div class="stat-value text-base-content">{scannedCount}</div>
       <div class="stat-desc">completed at least one scan</div>
     </div>
   </div>
@@ -581,7 +581,7 @@
               </button>
               <button
                 type="button"
-                class="btn btn-sm btn-error text-xs"
+                class={rowActionClass}
                 disabled={Boolean(busyAction)}
                 onclick={() => requestDelete(source)}
               >
