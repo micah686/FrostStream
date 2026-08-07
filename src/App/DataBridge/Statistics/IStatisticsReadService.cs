@@ -26,4 +26,6 @@ public interface IStatisticsReadService
     Task<IReadOnlyList<DownloadHistoryBucketDto>> GetDownloadHistoryAsync(
         StatisticsDownloadHistoryRequestMessage request,
         CancellationToken ct = default);
+
+    Task<CoverageSummaryDto> GetCoverageSummaryAsync(CancellationToken ct = default);
 }

@@ -21,6 +21,7 @@
   import {
     getChannelStatistics,
     getChannelStatisticsByAccount,
+    getCoverageSummary,
     getDownloadStatistics,
     getGlobalStatistics,
     listChannelStatistics,
@@ -28,10 +29,16 @@
     type ChannelStatisticsDetail,
     type ChannelSuggestion,
     type ChannelStatisticsSummary,
+    type CoverageSummary,
     type DownloadHistoryBucket,
     type StatisticsBucket,
     type StatisticsOverview
   } from '$lib/api/statistics';
+
+  // "All download activity" widens its bucket as the requested span grows so the point count stays
+  // bounded no matter how many years of history exist — see pickBucketForSpan. The lookback itself is
+  // just how far back the default view reaches; bump it if a 5-year window ever feels too short.
+  const ALL_ACTIVITY_LOOKBACK_DAYS = 365 * 5;
 
   type RangePreset = '30d' | '60d' | '90d' | '12m' | 'custom';
   type Interval = StatisticsBucket | 'year';
@@ -51,12 +58,12 @@
 
   let overview = $state<StatisticsOverview | null>(null);
   let allActivity = $state<DownloadHistoryBucket[]>([]);
+  let allActivityBucket = $state<StatisticsBucket>('day');
   let customActivity = $state<DownloadHistoryBucket[]>([]);
   let mostDownloaded = $state<ChannelStatisticsSummary[]>([]);
   let longestDuration = $state<ChannelStatisticsSummary[]>([]);
   let largestOnDisk = $state<ChannelStatisticsSummary[]>([]);
-  let allChannels = $state<ChannelStatisticsSummary[]>([]);
-  let coverageDetails = $state<ChannelStatisticsDetail[]>([]);
+  let coverageSummary = $state<CoverageSummary | null>(null);
   let coverageLoading = $state(false);
   let coverageError = $state<string | null>(null);
   let selectedChannel = $state<ChannelStatisticsDetail | null>(null);
@@ -110,7 +117,7 @@
     options: doughnutOptions()
   }));
 
-  const allActivityChart = $derived.by(() => activityChart(allActivity, 'day'));
+  const allActivityChart = $derived.by(() => activityChart(allActivity, allActivityBucket));
   const customActivityChart = $derived.by(() => activityChart(customActivity, interval));
   // The history query always returns a full, gap-filled series, so a non-empty bucket list says
   // nothing about whether the range actually contains activity — the totals have to be checked.
@@ -210,14 +217,15 @@
     try {
       const now = new Date();
       const retainedFrom = new Date(now);
-      retainedFrom.setDate(retainedFrom.getDate() - 730);
-      const [overviewResult, activityResult, downloadedResult, durationResult, bytesResult, allChannelsResult] = await Promise.allSettled([
+      retainedFrom.setDate(retainedFrom.getDate() - ALL_ACTIVITY_LOOKBACK_DAYS);
+      allActivityBucket = pickBucketForSpan(ALL_ACTIVITY_LOOKBACK_DAYS);
+      const [overviewResult, activityResult, downloadedResult, durationResult, bytesResult] = await Promise.allSettled([
         getGlobalStatistics(),
-        getDownloadStatistics({ from: retainedFrom, to: now, bucket: 'day' }),
+        getDownloadStatistics({ from: retainedFrom, to: now, bucket: allActivityBucket }),
         listChannelStatistics({ page: 1, pageSize: 10, sortBy: 'downloaded', sortOrder: 'desc' }),
         listChannelStatistics({ page: 1, pageSize: 10, sortBy: 'duration', sortOrder: 'desc' }),
         listChannelStatistics({ page: 1, pageSize: 10, sortBy: 'bytes', sortOrder: 'desc' }),
-        loadAllChannelSummaries()
+        loadCoverageSummary()
       ]);
       if (overviewResult.status === 'rejected') throw overviewResult.reason;
       overview = overviewResult.value;
@@ -225,10 +233,6 @@
       if (downloadedResult.status === 'fulfilled') mostDownloaded = downloadedResult.value.items;
       if (durationResult.status === 'fulfilled') longestDuration = durationResult.value.items;
       if (bytesResult.status === 'fulfilled') largestOnDisk = bytesResult.value.items;
-      if (allChannelsResult.status === 'fulfilled') {
-        allChannels = allChannelsResult.value;
-        await loadCoverageDetails(allChannels);
-      }
       await loadCustomActivity();
     } catch (err) {
       error = err instanceof Error ? err.message : 'Could not load statistics.';
@@ -237,47 +241,24 @@
     }
   }
 
-  async function loadAllChannelSummaries(): Promise<ChannelStatisticsSummary[]> {
-    const items: ChannelStatisticsSummary[] = [];
-    let page = 1;
-    let hasMore = true;
-    while (hasMore) {
-      const response = await listChannelStatistics({
-        page,
-        pageSize: 100,
-        sortBy: 'available',
-        sortOrder: 'desc'
-      });
-      items.push(...response.items);
-      hasMore = response.hasMore;
-      page += 1;
-    }
-    return items;
+  // Bucket widens as the requested span grows so the chart never renders more than a few hundred
+  // points, however many years of retained activity exist.
+  function pickBucketForSpan(days: number): StatisticsBucket {
+    if (days <= 120) return 'day';
+    if (days <= 730) return 'week';
+    return 'month';
   }
 
-  async function loadCoverageDetails(channels: ChannelStatisticsSummary[]) {
+  // Coverage totals used to come from paging through every channel and fetching each one's detail
+  // stats just to sum four numbers — that grew linearly with channel count. This is now one grouped
+  // aggregate call, bounded regardless of how many channels or how much media exist.
+  async function loadCoverageSummary() {
     coverageLoading = true;
     coverageError = null;
     try {
-      const details: ChannelStatisticsDetail[] = [];
-      for (let index = 0; index < channels.length; index += 8) {
-        const batch = channels.slice(index, index + 8);
-        const results = await Promise.allSettled(batch.map(async (channel) => {
-          if (channel.creatorSourceId !== null) return getChannelStatistics(channel.creatorSourceId);
-          if (channel.accountId !== null) return getChannelStatisticsByAccount(channel.accountId);
-          return null;
-        }));
-        details.push(...results
-          .filter((result): result is PromiseFulfilledResult<ChannelStatisticsDetail | null> => result.status === 'fulfilled')
-          .map((result) => result.value)
-          .filter((detail): detail is ChannelStatisticsDetail => detail !== null));
-      }
-      if (details.length === 0 && channels.length > 0) {
-        throw new Error('Could not load coverage statistics for any channel.');
-      }
-      coverageDetails = details;
+      coverageSummary = await getCoverageSummary();
     } catch (err) {
-      coverageDetails = [];
+      coverageSummary = null;
       coverageError = err instanceof Error ? err.message : 'Could not load coverage statistics.';
     } finally {
       coverageLoading = false;
@@ -509,28 +490,18 @@
   }
 
   function platformTotals(): { label: string; value: number }[] {
-    const totals = new Map<string, number>();
-    for (const channel of allChannels) {
-      totals.set(channel.platform, (totals.get(channel.platform) ?? 0) + channel.availableCount);
-    }
-    return [...totals.entries()]
-      .map(([label, value]) => ({ label, value }))
-      .sort((left, right) => right.value - left.value)
-      .slice(0, 10);
+    // Backend already returns the top 10 platforms by available count, sorted.
+    return (coverageSummary?.platforms ?? []).map((item) => ({ label: item.platform, value: item.availableCount }));
   }
 
   function coverageTotals(): number[] {
-    let available = 0;
-    let unavailable = 0;
-    let ignored = 0;
-    let removed = 0;
-    for (const detail of coverageDetails) {
-      available += detail.summary.availableCount;
-      unavailable += detail.unavailableCount;
-      ignored += detail.ignoredCount;
-      removed += detail.removedCount;
-    }
-    return [available, unavailable, ignored, removed];
+    if (!coverageSummary) return [0, 0, 0, 0];
+    return [
+      coverageSummary.availableCount,
+      coverageSummary.unavailableCount,
+      coverageSummary.ignoredCount,
+      coverageSummary.removedCount
+    ];
   }
 
   // Availability/coverage buckets are a fixed list rather than a GROUP BY, so categories the library
@@ -758,7 +729,7 @@
 
     <section class="card mt-5 border border-base-300 bg-base-100 p-5">
       <h2 class="text-sm font-bold text-base-content">All download activity</h2>
-      <p class="mt-1 text-xs text-base-content/50">All retained daily download-state activity</p>
+      <p class="mt-1 text-xs text-base-content/50">Retained download-state activity, grouped by {allActivityBucket} to keep the chart readable over years of history</p>
       {#if hasAllActivity}
         <div class="mt-4"><StatisticsChart config={allActivityChart} ariaLabel="Line chart showing all retained download activity" height="22rem" /></div>
       {:else}
