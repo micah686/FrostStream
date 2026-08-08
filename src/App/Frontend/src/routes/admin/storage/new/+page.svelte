@@ -296,7 +296,7 @@
 
   <form
     onsubmit={save}
-    class="mt-6 space-y-5 card border border-base-300 bg-base-100 p-5 sm:p-6"
+    class="mt-6 space-y-5 card border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6"
   >
     <h2 class="text-base font-bold text-base-content">{activeOption.label} storage</h2>
 
@@ -311,7 +311,7 @@
             role="radio"
             aria-checked={active}
             class={[
-              'flex flex-col items-start gap-2 rounded-xl border p-3 text-left transition',
+              'flex flex-col items-start gap-2 rounded-box border p-3 text-left transition',
               active
                 ? 'border-primary/60 bg-primary/10 text-primary'
                 : 'border-base-content/20 bg-base-200/40 text-base-content/80 hover:border-base-content/30 hover:bg-base-300/40'

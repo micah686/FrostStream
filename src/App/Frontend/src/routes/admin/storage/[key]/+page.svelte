@@ -136,7 +136,7 @@
     {/if}
 
     <section
-      class="mt-6 card border border-base-300 bg-base-100 p-5 sm:p-6"
+      class="mt-6 card border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6"
       aria-label="Storage view"
     >
       <h2 class="text-base font-bold text-base-content">View</h2>
@@ -146,7 +146,7 @@
 
       <dl class="mt-5 grid gap-3 sm:grid-cols-2">
         {#each settings as entry (entry.label)}
-          <div class="card border border-base-300 bg-base-100 p-4">
+          <div class="card border-[length:var(--border)] border-base-300 bg-base-100 p-4">
             <dt class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">{entry.label}</dt>
             <dd class={['mt-1 break-all text-sm text-base-content/80', entry.mono && 'font-mono']}>{entry.value}</dd>
           </div>
@@ -155,15 +155,15 @@
     </section>
 
     <section class="mt-5 grid gap-4 sm:grid-cols-3" aria-label="Storage metadata">
-      <div class="card border border-base-300 bg-base-100 p-4">
+      <div class="card border-[length:var(--border)] border-base-300 bg-base-100 p-4">
         <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Created</p>
         <p class="mt-1 text-sm text-base-content/80">{formatInstant(storage.createdAt)}</p>
       </div>
-      <div class="card border border-base-300 bg-base-100 p-4">
+      <div class="card border-[length:var(--border)] border-base-300 bg-base-100 p-4">
         <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Last updated</p>
         <p class="mt-1 text-sm text-base-content/80">{formatInstant(storage.lastUpdated)}</p>
       </div>
-      <div class="card border border-base-300 bg-base-100 p-4">
+      <div class="card border-[length:var(--border)] border-base-300 bg-base-100 p-4">
         <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Worker tag</p>
         <p class="mt-1 text-sm text-base-content/80">{storage.workerTag ?? 'Any worker'}</p>
       </div>

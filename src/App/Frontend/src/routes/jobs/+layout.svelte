@@ -39,16 +39,16 @@
 
   <div class="mt-6 grid gap-6 xl:grid-cols-[14rem_minmax(0,1fr)]">
     <aside class="xl:pt-1" aria-label="Jobs sections">
-      <nav class="flex gap-2 overflow-x-auto pb-1 xl:block xl:space-y-2 xl:overflow-visible xl:pb-0">
+      <nav class="menu flex gap-2 overflow-x-auto p-0 pb-1 [--menu-active-bg:var(--color-primary)] [--menu-active-fg:var(--color-primary-content)] xl:block xl:space-y-2 xl:overflow-visible xl:pb-0">
         {#each sections as section}
           {@const { label, icon: Icon, href } = section}
           {@const active = isActive(section)}
           <a
             {href}
             class={[
-              'flex h-10 shrink-0 items-center gap-3 rounded-lg px-4 text-sm font-medium transition xl:w-full',
+              'flex h-10 shrink-0 items-center gap-3 rounded-field px-4 text-sm font-medium transition xl:w-full',
               active
-                ? 'bg-primary text-primary-content shadow-sm'
+                ? 'menu-active bg-primary text-primary-content'
                 : 'text-base-content/70 hover:bg-base-200 hover:text-base-content'
             ]}
             aria-current={active ? 'page' : undefined}

@@ -668,7 +668,7 @@
   </div>
 
   {#if isUpdate && initial}
-    <details bind:open={testDeliveryOpen} class="collapse mx-1 border border-base-300 bg-base-100">
+    <details bind:open={testDeliveryOpen} class="collapse mx-1 border-[length:var(--border)] border-base-300 bg-base-100">
       <summary class="collapse-title relative min-h-0 cursor-pointer py-3 text-sm font-bold text-base-content">
         <span class="flex items-center gap-2"><FlaskConical class="h-4 w-4 text-primary" />Test delivery</span>
         {#if testDeliveryOpen}<ChevronUp class="absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-base-content/60" />{:else}<ChevronDown class="absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-base-content/60" />{/if}
@@ -708,7 +708,7 @@
     </p>
 
     <div class="mt-4 grid gap-4 lg:grid-cols-2">
-      <section class="card border border-base-300 bg-base-100 p-4" aria-labelledby="user-notification-sources">
+      <section class="card border-[length:var(--border)] border-base-300 bg-base-100 p-4" aria-labelledby="user-notification-sources">
         <h4 id="user-notification-sources" class="text-xs font-bold uppercase tracking-wide text-base-content/60">
           User events
         </h4>
@@ -730,7 +730,7 @@
         </div>
       </section>
 
-      <section class="card border border-base-300 bg-base-100 p-4" aria-labelledby="admin-notification-sources">
+      <section class="card border-[length:var(--border)] border-base-300 bg-base-100 p-4" aria-labelledby="admin-notification-sources">
         <h4 id="admin-notification-sources" class="text-xs font-bold uppercase tracking-wide text-base-content/60">
           Admin operational events
         </h4>

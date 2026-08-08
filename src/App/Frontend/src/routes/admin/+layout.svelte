@@ -61,9 +61,9 @@
           <a
             {href}
             class={[
-              'flex h-10 shrink-0 items-center gap-3 rounded-lg px-4 text-sm font-medium transition xl:w-full',
+              'flex h-10 shrink-0 items-center gap-3 rounded-field px-4 text-sm font-medium transition xl:w-full',
               active
-                ? 'menu-active bg-primary text-primary-content shadow-sm'
+                ? 'menu-active bg-primary text-primary-content'
                 : 'text-base-content/70 hover:bg-base-200 hover:text-base-content'
             ]}
             aria-current={active ? 'page' : undefined}

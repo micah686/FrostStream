@@ -118,17 +118,17 @@
     <div class="hidden items-center gap-2 sm:flex">
       <a
         href={libraryTabHref('History')}
-        class="rounded-lg border border-base-300 bg-base-200/60 px-3 py-1.5 text-xs font-semibold text-base-content/80 transition hover:bg-base-300 hover:text-base-content"
+        class="rounded-field border-[length:var(--border)] border-base-300 bg-base-200/60 px-3 py-1.5 text-xs font-semibold text-base-content/80 transition hover:bg-base-300 hover:text-base-content"
       >
         History
       </a>
       <a
         href={libraryTabHref('Liked')}
-        class="rounded-lg border border-base-300 bg-base-200/60 px-3 py-1.5 text-xs font-semibold text-base-content/80 transition hover:bg-base-300 hover:text-base-content"
+        class="rounded-field border-[length:var(--border)] border-base-300 bg-base-200/60 px-3 py-1.5 text-xs font-semibold text-base-content/80 transition hover:bg-base-300 hover:text-base-content"
       >
         Liked
       </a>
-      <a href="/library" class="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-base-content/50 transition hover:text-primary">
+      <a href="/library" class="flex items-center gap-1 rounded-field px-2 py-1 text-xs font-semibold text-base-content/50 transition hover:text-primary">
         See all
         <ChevronRight class="h-3 w-3" />
       </a>
@@ -140,7 +140,7 @@
       <span class="loading loading-spinner loading-md"></span>
     </div>
   {:else if continueCards.length === 0}
-    <div class="rounded-2xl border border-base-300/80 bg-base-200/40 p-10 text-center">
+    <div class="rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-10 text-center">
       <Clock class="mx-auto h-10 w-10 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">Nothing in progress</p>
       <p class="mt-1 text-sm text-base-content/50">Start a video from your library and it will show up here.</p>
@@ -151,7 +151,7 @@
         <article class="group min-w-0">
           <a
             href={resumeHref(item)}
-            class={`relative block aspect-video w-full overflow-hidden rounded-2xl bg-gradient-to-br ${accentFor(item.mediaGuid)} text-left shadow-lg shadow-black/20 transition duration-300 group-hover:-translate-y-1 group-hover:shadow-xl group-hover:shadow-black/30`}
+            class={`relative block aspect-video w-full overflow-hidden rounded-box bg-gradient-to-br ${accentFor(item.mediaGuid)} text-left shadow-lg shadow-black/20 transition duration-300 group-hover:-translate-y-1 group-hover:shadow-xl group-hover:shadow-black/30`}
             aria-label={`Resume ${item.title}`}
           >
             <span
@@ -204,17 +204,17 @@
 </section>
 
 <section class="mt-10 grid gap-4 md:grid-cols-3" aria-label="Library overview">
-  <div class="rounded-2xl border border-base-300/80 bg-base-200/40 p-5">
+  <div class="rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-5">
     <Camera class="h-5 w-5 text-primary" />
     <p class="mt-4 text-2xl font-bold text-base-content">{overview?.inventory.totalMedia.toLocaleString() ?? '-'}</p>
     <p class="mt-1 text-xs text-base-content/50">Videos in your library</p>
   </div>
-  <div class="rounded-2xl border border-base-300/80 bg-base-200/40 p-5">
+  <div class="rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-5">
     <Globe class="h-5 w-5 text-secondary" />
     <p class="mt-4 text-2xl font-bold text-base-content">{overview?.inventory.totalChannels.toLocaleString() ?? '-'}</p>
     <p class="mt-1 text-xs text-base-content/50">Channels followed</p>
   </div>
-  <div class="rounded-2xl border border-base-300/80 bg-base-200/40 p-5">
+  <div class="rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-5">
     <Clock class="h-5 w-5 text-success" />
     <p class="mt-4 text-2xl font-bold text-base-content">{overview ? formatBytes(overview.inventory.totalBytes) : '-'}</p>
     <p class="mt-1 text-xs text-base-content/50">Ready to watch offline</p>

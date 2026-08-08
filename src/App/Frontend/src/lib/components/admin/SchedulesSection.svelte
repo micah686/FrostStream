@@ -24,7 +24,7 @@
   let { editKey = null } = $props<{ editKey?: string | null }>();
   const editOnly = $derived(editKey !== null);
 
-  const cardClass = 'card border border-base-300 bg-base-100 p-5 sm:p-6';
+  const cardClass = 'card border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6';
 
   const taskTypeItems = scheduleTaskTypes.map((taskType) => ({ value: taskType, name: taskType }));
   const timingItems = [
@@ -345,7 +345,7 @@
 
   {#if bridgeUnavailable}
     <div
-      class="mt-4 flex items-start gap-2 rounded-xl border border-warning/60 bg-warning/10 p-3 text-sm text-warning"
+      class="mt-4 flex items-start gap-2 rounded-box border-[length:var(--border)] border-warning/60 bg-warning/10 p-3 text-sm text-warning"
       role="alert"
     >
       <Server class="mt-0.5 h-4 w-4 shrink-0" />
@@ -359,12 +359,12 @@
   {/if}
 
   {#if formOpen}
-    <form class="mt-5 space-y-4 rounded-xl border border-base-300/80 bg-base-200/25 p-4" onsubmit={saveForm}>
+    <form class="mt-5 space-y-4 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/25 p-4" onsubmit={saveForm}>
       <div class="flex items-center justify-between gap-3">
         <h3 class="text-sm font-bold text-base-content">Edit schedule "{editingKey}"</h3>
         <button
           type="button"
-          class="grid h-8 w-8 place-items-center rounded-lg text-base-content/60 hover:bg-base-300 hover:text-base-content"
+          class="grid h-8 w-8 place-items-center rounded-field text-base-content/60 hover:bg-base-300 hover:text-base-content"
           aria-label="Close form"
               onclick={closeForm}
         >
@@ -385,7 +385,7 @@
           </div>
       </div>
 
-      <details open class="group rounded-xl border border-base-300/70 bg-base-200/40 p-4">
+      <details open class="group rounded-box border-[length:var(--border)] border-base-300/70 bg-base-200/40 p-4">
         <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
           <h3 class="text-sm font-semibold text-base-content/90">Timing</h3>
           <ChevronDown class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
@@ -401,7 +401,7 @@
               <input class="input w-full font-mono" id="schedule-cron" bind:value={formCron} placeholder="0 0 3 * * ?" />
               <p class="mt-1.5 text-xs text-base-content/40">Quartz format: seconds minutes hours day-of-month month day-of-week.</p>
             </div>
-            <div class="sm:col-span-3 rounded-lg border border-base-300/80 bg-base-100 p-3">
+            <div class="sm:col-span-3 rounded-field border-[length:var(--border)] border-base-300/80 bg-base-100 p-3">
               <div class="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
                 <div>
                   <label class="label mb-1.5 text-xs" for="cron-second">Seconds</label>
@@ -443,7 +443,7 @@
       </details>
 
       {#if formTaskType === 'download-history-cleanup' || formTaskType === 'import_session_cleanup'}
-        <div class="rounded-xl border border-base-300/70 bg-base-200/40 p-4">
+        <div class="rounded-box border-[length:var(--border)] border-base-300/70 bg-base-200/40 p-4">
           <h3 class="text-sm font-semibold text-base-content/90">Cleanup options</h3>
           <div class="mt-4 grid gap-4 sm:grid-cols-2">
             <div>
@@ -501,7 +501,7 @@
   {#if !editOnly && loading}
     <div class="mt-10 flex justify-center"><span class="loading loading-spinner loading-md"></span></div>
   {:else if !editOnly && schedules.length === 0}
-    <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
+    <div class="mt-5 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/30 p-8 text-center">
       <Clock class="mx-auto h-9 w-9 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No schedules yet</p>
       <p class="mt-1 text-sm text-base-content/50">Run migrations to seed the registered scheduler task types.</p>
@@ -510,10 +510,10 @@
     <div class="mt-5 space-y-2">
       {#each schedules as schedule (schedule.key)}
         <article
-          class="flex flex-col gap-3 rounded-lg border border-base-content/20 bg-base-100 px-3 py-3 transition hover:border-base-content/30 hover:bg-base-300/30 sm:px-4 lg:flex-row lg:items-center"
+          class="flex flex-col gap-3 rounded-field border-[length:var(--border)] border-base-content/20 bg-base-100 px-3 py-3 transition hover:border-base-content/30 hover:bg-base-300/30 sm:px-4 lg:flex-row lg:items-center"
         >
           <div class="flex min-w-0 flex-1 items-center gap-3">
-            <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-base-300/70 text-primary">
+            <span class="grid h-9 w-9 shrink-0 place-items-center rounded-field bg-base-300/70 text-primary">
               <Clock class="h-4.5 w-4.5" />
             </span>
             <div class="min-w-0">

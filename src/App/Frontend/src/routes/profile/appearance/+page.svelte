@@ -37,7 +37,7 @@ import { customCssEnabled, theme, themes, themeLabels, setCustomCssEnabled, setT
           />
         </div>
 
-        <div class="w-full rounded-box border border-base-300 bg-base-200 p-1.5">
+        <div class="w-full rounded-box border-[length:var(--border)] border-base-300 bg-base-200 p-1.5">
           <div class="grid grid-cols-4 gap-1.5">
             <span class="grid h-6 place-items-center rounded-field bg-primary text-xs font-bold text-primary-content" title="Primary">A</span>
             <span class="grid h-6 place-items-center rounded-field bg-secondary text-xs font-bold text-secondary-content" title="Secondary">A</span>
@@ -71,7 +71,7 @@ import { customCssEnabled, theme, themes, themeLabels, setCustomCssEnabled, setT
           <input type="radio" name="theme" class="radio radio-primary radio-sm" checked={$customCssEnabled} onchange={() => setCustomCssEnabled(true)} aria-label="Use Custom CSS" />
         </div>
       </div>
-      <div class="w-full rounded-box border border-base-300 bg-base-200 p-1.5">
+      <div class="w-full rounded-box border-[length:var(--border)] border-base-300 bg-base-200 p-1.5">
         <div class="grid grid-cols-4 gap-1.5">
           <span class="grid h-6 place-items-center rounded-field bg-primary text-xs font-bold text-primary-content" title="Primary">A</span>
           <span class="grid h-6 place-items-center rounded-field bg-secondary text-xs font-bold text-secondary-content" title="Secondary">A</span>

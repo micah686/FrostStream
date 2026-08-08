@@ -57,7 +57,7 @@
       </a>
     </div>
   {:else if preset}
-    <div class="card border border-base-300 bg-base-100 p-5 sm:p-6">
+    <div class="card border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6">
       <OptionPresetForm mode="update" initial={preset} />
     </div>
   {/if}

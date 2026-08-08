@@ -1,7 +1,7 @@
 <script lang="ts">
   import { FileInput } from '@lucide/svelte';
 
-  const card = 'card border border-base-300 bg-base-100 p-5 sm:p-6';
+  const card = 'card border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6';
 </script>
 
 <section class={card}>

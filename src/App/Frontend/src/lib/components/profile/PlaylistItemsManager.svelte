@@ -102,7 +102,7 @@
 </script>
 
 {#if !playlist.items || playlist.items.length === 0}
-  <div class="rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
+  <div class="rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/30 p-8 text-center">
     <ListMusic class="mx-auto h-9 w-9 text-base-content/30" />
     <p class="mt-4 text-sm font-semibold text-base-content/80">This playlist is empty</p>
     <p class="mt-1 text-sm text-base-content/50">Add videos to it from the watch page.</p>
@@ -122,13 +122,13 @@
     {#each playlist.items as item, index (item.mediaGuid)}
       {@const media = mediaCards[item.mediaGuid]}
       <li
-        class="flex items-center gap-3 rounded-lg border border-base-content/20 bg-base-100 px-3 py-2.5 transition hover:border-base-content/30 hover:bg-base-300/30 sm:px-4"
+        class="flex items-center gap-3 rounded-field border-[length:var(--border)] border-base-content/20 bg-base-100 px-3 py-2.5 transition hover:border-base-content/30 hover:bg-base-300/30 sm:px-4"
       >
         <span class="w-6 shrink-0 text-center font-mono text-xs text-base-content/40">{index + 1}</span>
 
         <a
           href={`/watch/${item.mediaGuid}`}
-          class={`relative block aspect-video w-24 shrink-0 overflow-hidden rounded-lg bg-gradient-to-br ${accentFor(item.mediaGuid)} shadow shadow-black/20`}
+          class={`relative block aspect-video w-24 shrink-0 overflow-hidden rounded-field bg-gradient-to-br ${accentFor(item.mediaGuid)} shadow shadow-black/20`}
           aria-label={media ? `Watch ${media.title}` : 'Watch'}
         >
           {#if media}

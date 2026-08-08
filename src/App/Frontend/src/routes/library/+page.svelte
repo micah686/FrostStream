@@ -375,26 +375,26 @@
   </div>
 
   <div class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Library overview">
-    <div class="rounded-2xl border border-base-300/80 bg-base-200/40 p-5">
+    <div class="rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-5">
       <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Videos</p>
       <p class="mt-3 text-3xl font-bold text-base-content">{overview?.inventory.totalMedia ?? totalCount}</p>
       <p class="mt-1 text-xs text-base-content/50">
         {overview ? `across ${overview.inventory.totalChannels} channels` : 'in your library'}
       </p>
     </div>
-    <div class="rounded-2xl border border-base-300/80 bg-base-200/40 p-5">
+    <div class="rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-5">
       <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Downloaded</p>
       <p class="mt-3 text-3xl font-bold text-base-content">{overview?.inventory.totalDownloads ?? '—'}</p>
       <p class="mt-1 text-xs text-base-content/50">
         {overview ? `${formatBytes(overview.inventory.totalBytes)} on disk` : 'download jobs'}
       </p>
     </div>
-    <div class="rounded-2xl border border-base-300/80 bg-base-200/40 p-5">
+    <div class="rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-5">
       <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Playlists</p>
       <p class="mt-3 text-3xl font-bold text-base-content">{overview?.inventory.totalPlaylists ?? '—'}</p>
       <p class="mt-1 text-xs text-base-content/50">on this server</p>
     </div>
-    <div class="rounded-2xl border border-base-300/80 bg-base-200/40 p-5">
+    <div class="rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-5">
       <p class="text-[10px] font-bold uppercase tracking-[0.08em] text-base-content/40">Watched</p>
       <p class="mt-3 text-3xl font-bold text-base-content">{overview?.watchProgress.watchedCount ?? '—'}</p>
       <p class="mt-1 text-xs text-base-content/50">
@@ -451,7 +451,7 @@
         <span class="loading loading-spinner loading-md"></span>
       </div>
     {:else if items.length === 0}
-      <div class="mt-10 rounded-2xl border border-base-300/80 bg-base-200/40 p-10 text-center">
+      <div class="mt-10 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-10 text-center">
         <LayoutList class="mx-auto h-10 w-10 text-base-content/30" />
         <p class="mt-4 text-sm font-semibold text-base-content/80">{emptyTitle()}</p>
         <p class="mt-1 text-sm text-base-content/50">{emptyDescription()}</p>
@@ -467,7 +467,7 @@
           <article class="group min-w-0">
             <a
               href={cardHref(card)}
-              class={`relative block aspect-video w-full overflow-hidden rounded-2xl bg-gradient-to-br ${accentFor(card.mediaGuid)} text-left shadow-lg shadow-black/20 transition duration-300 group-hover:-translate-y-1 group-hover:shadow-xl group-hover:shadow-black/30`}
+              class={`relative block aspect-video w-full overflow-hidden rounded-box bg-gradient-to-br ${accentFor(card.mediaGuid)} text-left shadow-lg shadow-black/20 transition duration-300 group-hover:-translate-y-1 group-hover:shadow-xl group-hover:shadow-black/30`}
               aria-label={`Play ${card.title}`}
             >
               <span
@@ -486,7 +486,7 @@
                 />
               {/if}
               <span
-                class="absolute left-3 top-3 rounded-md bg-black/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/80"
+                class="absolute left-3 top-3 rounded-field bg-black/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/80"
               >
                 {card.account.platform}
               </span>
@@ -576,7 +576,7 @@
           <span class="loading loading-spinner loading-md"></span>
         </div>
       {:else if userPlaylistCards.length === 0}
-        <div class="mt-4 rounded-2xl border border-base-300/80 bg-base-200/40 p-10 text-center">
+        <div class="mt-4 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-10 text-center">
           <ListMusic class="mx-auto h-10 w-10 text-base-content/30" />
           <p class="mt-4 text-sm font-semibold text-base-content/80">No playlists yet</p>
           <p class="mt-1 text-sm text-base-content/50">
@@ -591,7 +591,7 @@
                 href={card.firstGuid
                   ? `/watch/${card.firstGuid}?ulist=${encodeURIComponent(card.playlist.playlistId)}`
                   : `/profile/playlists/${encodeURIComponent(card.playlist.playlistId)}`}
-                class={`relative block aspect-video w-full overflow-hidden rounded-2xl bg-gradient-to-br ${accentFor(card.playlist.playlistId)} text-left shadow-lg shadow-black/20 transition duration-300 group-hover:-translate-y-1 group-hover:shadow-xl group-hover:shadow-black/30`}
+                class={`relative block aspect-video w-full overflow-hidden rounded-box bg-gradient-to-br ${accentFor(card.playlist.playlistId)} text-left shadow-lg shadow-black/20 transition duration-300 group-hover:-translate-y-1 group-hover:shadow-xl group-hover:shadow-black/30`}
                 aria-label={card.firstGuid ? `Play playlist ${card.playlist.name}` : `Edit playlist ${card.playlist.name}`}
               >
                 <ListMusic
@@ -662,7 +662,7 @@
           <span class="loading loading-spinner loading-md"></span>
         </div>
       {:else if platformPlaylistCards.length === 0}
-        <div class="mt-4 rounded-2xl border border-base-300/80 bg-base-200/40 p-10 text-center">
+        <div class="mt-4 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-10 text-center">
           <ListMusic class="mx-auto h-10 w-10 text-base-content/30" />
           <p class="mt-4 text-sm font-semibold text-base-content/80">No downloaded playlists</p>
           <p class="mt-1 text-sm text-base-content/50">
@@ -676,7 +676,7 @@
               {#if card.playlist.firstMediaGuid}
                 <a
                   href={`/watch/${card.playlist.firstMediaGuid}?list=${encodeURIComponent(card.playlist.playlistId)}`}
-                  class={`relative block aspect-video w-full overflow-hidden rounded-2xl bg-gradient-to-br ${accentFor(card.playlist.playlistId)} text-left shadow-lg shadow-black/20 transition duration-300 group-hover:-translate-y-1 group-hover:shadow-xl group-hover:shadow-black/30`}
+                  class={`relative block aspect-video w-full overflow-hidden rounded-box bg-gradient-to-br ${accentFor(card.playlist.playlistId)} text-left shadow-lg shadow-black/20 transition duration-300 group-hover:-translate-y-1 group-hover:shadow-xl group-hover:shadow-black/30`}
                   aria-label={`Play playlist ${card.playlist.title ?? 'Untitled provider playlist'}`}
                 >
                   <ListMusic
@@ -707,7 +707,7 @@
                 </a>
               {:else}
                 <div
-                  class="relative block aspect-video w-full overflow-hidden rounded-2xl bg-base-200/60 opacity-70"
+                  class="relative block aspect-video w-full overflow-hidden rounded-box bg-base-200/60 opacity-70"
                 >
                   <ListMusic
                     class="absolute left-1/2 top-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 text-white/10"
@@ -731,7 +731,7 @@
       {/if}
     </section>
   {:else}
-    <div class="mt-10 rounded-2xl border border-base-300/80 bg-base-200/40 p-10 text-center">
+    <div class="mt-10 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-10 text-center">
       <p class="text-sm font-semibold text-base-content/80">{activeTab} is not wired up yet</p>
       <p class="mt-1 text-sm text-base-content/50">This section will arrive with a later iteration.</p>
     </div>

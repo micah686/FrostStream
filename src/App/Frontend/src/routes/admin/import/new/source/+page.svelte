@@ -10,7 +10,7 @@
   import { listStorage } from '$lib/api/storage';
   import { listWorkers, type WorkerInfo } from '$lib/api/workers';
 
-  const card = 'card border border-base-300 bg-base-100 p-5 sm:p-6';
+  const card = 'card border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6';
   let storageKey = $state(''); let workerTag = $state(''); let subPath = $state('');
   let storageKeys = $state<string[]>([]); let workers = $state<WorkerInfo[]>([]); let pickerOpen = $state(false); let busy = $state(false); let error = $state<string | null>(null);
   const storageItems = $derived(storageKeys.map((key) => ({ value: key, name: key })));

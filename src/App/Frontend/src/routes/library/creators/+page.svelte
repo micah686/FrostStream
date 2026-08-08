@@ -119,7 +119,7 @@
     </button>
   </div>
 
-  <form class="mt-6 flex flex-col gap-3 rounded-2xl border border-base-300/80 bg-base-200/35 p-4 sm:flex-row sm:items-end" onsubmit={submitFilters}>
+  <form class="mt-6 flex flex-col gap-3 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/35 p-4 sm:flex-row sm:items-end" onsubmit={submitFilters}>
     <div class="min-w-0 flex-1">
       <label for="platform-filter" class="mb-1.5 block text-xs font-semibold text-base-content/60">
         Platform
@@ -166,7 +166,7 @@
       <span class="loading loading-spinner loading-md"></span>
     </div>
   {:else if accounts.length === 0}
-    <div class="mt-8 rounded-2xl border border-base-300/80 bg-base-200/40 p-10 text-center">
+    <div class="mt-8 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-10 text-center">
       <Users class="mx-auto h-10 w-10 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No creators found</p>
       <p class="mt-1 text-sm text-base-content/50">Archived media accounts will appear here once metadata is indexed.</p>
@@ -174,12 +174,12 @@
   {:else}
     <div class="mt-5 grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
       {#each accounts as account (account.accountId)}
-        <article class="group rounded-2xl border border-base-300/80 bg-base-200/40 p-4 transition hover:border-base-content/20 hover:bg-base-200/65">
+        <article class="group rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-4 transition hover:border-base-content/20 hover:bg-base-200/65">
           <div class="flex gap-4">
             <a
               href={`/channel/${account.accountId}`}
               aria-label={`Open ${account.accountName}'s channel`}
-              class={`relative grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-2xl bg-gradient-to-br ${accentFor(account.accountName)} text-lg font-bold text-base-content shadow-lg shadow-black/20`}
+              class={`relative grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-box bg-gradient-to-br ${accentFor(account.accountName)} text-lg font-bold text-base-content shadow-lg shadow-black/20`}
             >
               {initialsFor(account.accountName)}
               {#if account.avatarStoragePath}
@@ -207,7 +207,7 @@
                   </h2>
                   <p class="mt-0.5 truncate text-xs text-base-content/50">@{account.accountHandle}</p>
                 </div>
-                <span class="rounded-md bg-base-300/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-base-content/60">
+                <span class="rounded-field bg-base-300/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-base-content/60">
                   {account.platform}
                 </span>
               </div>

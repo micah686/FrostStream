@@ -425,17 +425,17 @@
   </div>
 
   <div class="stats stats-vertical mt-6 w-full gap-3 bg-transparent md:stats-horizontal">
-    <div class="stat rounded-box border border-base-300 bg-base-100 shadow-sm">
+    <div class="stat rounded-box border-[length:var(--border)] border-base-300 bg-base-100 shadow-sm">
       <div class="stat-title">Tracked</div>
       <div class="stat-value text-base-content">{trackedCount}</div>
       <div class="stat-desc">creator sources</div>
     </div>
-    <div class="stat rounded-box border border-base-300 bg-base-100 shadow-sm">
+    <div class="stat rounded-box border-[length:var(--border)] border-base-300 bg-base-100 shadow-sm">
       <div class="stat-title">Scanning</div>
       <div class="stat-value text-base-content">{scanningCount}</div>
       <div class="stat-desc">enabled for discovery</div>
     </div>
-    <div class="stat rounded-box border border-base-300 bg-base-100 shadow-sm">
+    <div class="stat rounded-box border-[length:var(--border)] border-base-300 bg-base-100 shadow-sm">
       <div class="stat-title">Scanned</div>
       <div class="stat-value text-base-content">{scannedCount}</div>
       <div class="stat-desc">completed at least one scan</div>
@@ -454,7 +454,7 @@
 
   {#if actionNotice}
     <div
-      class="mt-5 flex items-start gap-3 rounded-xl border border-success/30 bg-success/10 p-4 text-sm text-success"
+      class="mt-5 flex items-start gap-3 rounded-box border-[length:var(--border)] border-success/30 bg-success/10 p-4 text-sm text-success"
       role="status"
     >
       <RefreshCw class="mt-0.5 h-4 w-4 shrink-0" />
@@ -467,7 +467,7 @@
       <span class="loading loading-spinner loading-md"></span>
     </div>
   {:else if sources.length === 0}
-    <div class="mt-8 rounded-xl border border-base-300/80 bg-base-200/40 p-10 text-center">
+    <div class="mt-8 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-10 text-center">
       <Users class="mx-auto h-10 w-10 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No creators tracked yet</p>
       <p class="mt-1 text-sm text-base-content/50">
@@ -484,7 +484,7 @@
         {@const busyAction = busy[source.id]}
         <li
           class={[
-            'card border border-base-300 bg-base-100 shadow-sm',
+            'card border-[length:var(--border)] border-base-300 bg-base-100 shadow-sm',
             source.scanEnabled ? 'ring-1 ring-success/20' : 'opacity-90'
           ]}
         >
@@ -642,7 +642,7 @@
                   <ul class="space-y-2">
                     {#each ignoredItems as item (item.id)}
                       <li
-                        class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-base-300/70 bg-base-200/40 px-3 py-2"
+                        class="flex flex-wrap items-center justify-between gap-2 rounded-field border-[length:var(--border)] border-base-300/70 bg-base-200/40 px-3 py-2"
                       >
                         <div class="min-w-0">
                           <a
@@ -709,7 +709,7 @@
       </p>
     </div>
 
-    <section class="rounded-xl border border-base-300/80 bg-base-200/40 p-4" aria-labelledby="creator-scan-schedule-title">
+    <section class="rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-4" aria-labelledby="creator-scan-schedule-title">
       <h3 id="creator-scan-schedule-title" class="text-sm font-semibold text-base-content/90">
         How scheduled scans work
       </h3>
@@ -784,7 +784,7 @@
       </div>
     </div>
 
-    <div class="flex items-center justify-between rounded-xl border border-base-300/80 bg-base-200/40 px-4 py-3">
+    <div class="flex items-center justify-between rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 px-4 py-3">
       <div>
         <p class="text-sm font-semibold text-base-content/90">Automatic scanning</p>
         <p class="mt-0.5 text-xs text-base-content/50">

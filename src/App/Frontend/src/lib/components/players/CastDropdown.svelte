@@ -100,12 +100,12 @@
   </button>
 
   {#if open}
-    <div class="absolute right-0 z-30 mt-2 w-96 rounded-xl border border-base-300 bg-base-200/95 p-3 shadow-2xl shadow-black/50 backdrop-blur">
+    <div class="absolute right-0 z-30 mt-2 w-96 rounded-box border-[length:var(--border)] border-base-300 bg-base-200/95 p-3 shadow-2xl shadow-black/50 backdrop-blur">
       {#if error}
         <p class="alert alert-error mb-2 text-xs" role="alert">{error}</p>
       {/if}
 
-      <div class="mb-2 rounded-lg border border-warning/60 bg-warning/10 px-3 py-2 text-xs text-warning">
+      <div class="mb-2 rounded-field border-[length:var(--border)] border-warning/60 bg-warning/10 px-3 py-2 text-xs text-warning">
         <p class="font-semibold uppercase tracking-wide text-warning">Under development</p>
         <p class="mt-1 leading-5 text-warning">
           Cast (Browser) and Cast (Server) are still in progress.
@@ -118,7 +118,7 @@
             type="button"
             onclick={castBrowser}
             disabled={busy || !canUseBrowserCast()}
-            class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-base-content/90 transition hover:bg-base-300/70 disabled:opacity-50"
+            class="flex w-full items-center justify-between rounded-field px-3 py-2 text-left text-sm text-base-content/90 transition hover:bg-base-300/70 disabled:opacity-50"
             title={canUseBrowserCast() ? 'Cast from this browser' : 'Browser casting requires HTTPS or localhost'}
           >
             <span>
@@ -131,7 +131,7 @@
             type="button"
             onclick={() => (protocol = 'chromecast')}
             disabled={busy}
-            class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-base-content/90 transition hover:bg-base-300/70 disabled:opacity-50"
+            class="flex w-full items-center justify-between rounded-field px-3 py-2 text-left text-sm text-base-content/90 transition hover:bg-base-300/70 disabled:opacity-50"
           >
             <span>
               <span class="block font-medium">Cast (Server)</span>
@@ -143,7 +143,7 @@
             type="button"
             onclick={() => (protocol = 'fcast')}
             disabled={busy}
-            class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-base-content/90 transition hover:bg-base-300/70 disabled:opacity-50"
+            class="flex w-full items-center justify-between rounded-field px-3 py-2 text-left text-sm text-base-content/90 transition hover:bg-base-300/70 disabled:opacity-50"
           >
             <span>
               <span class="block font-medium">FCast</span>
@@ -156,7 +156,7 @@
           <button
             type="button"
             onclick={() => (protocol = null)}
-            class="rounded-md px-2 py-1 text-xs font-semibold text-base-content/60 transition hover:bg-base-300 hover:text-base-content/90"
+            class="rounded-field px-2 py-1 text-xs font-semibold text-base-content/60 transition hover:bg-base-300 hover:text-base-content/90"
           >
             Back
           </button>
@@ -166,7 +166,7 @@
           <button
             type="button"
             onclick={close}
-            class="rounded-md px-2 py-1 text-xs font-semibold text-base-content/60 transition hover:bg-base-300 hover:text-base-content/90"
+            class="rounded-field px-2 py-1 text-xs font-semibold text-base-content/60 transition hover:bg-base-300 hover:text-base-content/90"
           >
             Close
           </button>

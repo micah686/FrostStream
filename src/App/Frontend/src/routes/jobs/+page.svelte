@@ -351,7 +351,7 @@
 
   {#if cleanupNotice}
     <div
-      class="mt-5 flex flex-wrap items-start gap-x-3 gap-y-1 rounded-xl border border-info/30 bg-info/10 p-4 text-sm text-info"
+      class="mt-5 flex flex-wrap items-start gap-x-3 gap-y-1 rounded-box border-[length:var(--border)] border-info/30 bg-info/10 p-4 text-sm text-info"
       role="status"
     >
       <span>{cleanupNotice}</span>
@@ -360,17 +360,17 @@
   {/if}
 
   <div class="mt-6 grid gap-3 md:grid-cols-3">
-    <div class="stat rounded-xl border border-base-300/80 bg-base-200/40 shadow">
+    <div class="stat rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 shadow">
       <div class="stat-title">Tracked</div>
       <div class="stat-value text-2xl">{queueState.totalCount}</div>
       <div class="stat-desc">{queueState.rows.length} loaded</div>
     </div>
-    <div class="stat rounded-xl border border-base-300/80 bg-base-200/40 shadow">
+    <div class="stat rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 shadow">
       <div class="stat-title">Running</div>
       <div class="stat-value text-2xl">{activeCount}</div>
       <div class="stat-desc">active workflow states</div>
     </div>
-    <div class="stat rounded-xl border border-base-300/80 bg-base-200/40 shadow">
+    <div class="stat rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 shadow">
       <div class="stat-title">Waiting</div>
       <div class="stat-value text-2xl">{queuedCount}</div>
       <div class="stat-desc">not yet dispatched</div>
@@ -417,8 +417,8 @@
     </div>
 
     <div class="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
-      <Select items={pageSizeOptions} bind:value={pageSize} onchange={changePageSize} aria-label="Jobs per page" class="h-10 w-full text-sm sm:w-40" />
-      <input class="input w-full h-10 text-sm lg:w-80" type="search" bind:value={query} oninput={scheduleSearch} aria-label="Search jobs" placeholder="Search source, job id, storage..." />
+      <Select items={pageSizeOptions} bind:value={pageSize} onchange={changePageSize} aria-label="Jobs per page" class="w-full text-sm sm:w-40" />
+      <input class="input w-full text-sm lg:w-80" type="search" bind:value={query} oninput={scheduleSearch} aria-label="Search jobs" placeholder="Search source, job id, storage..." />
     </div>
   </div>
 
@@ -437,7 +437,7 @@
       <span class="loading loading-spinner loading-md"></span>
     </div>
   {:else if queueState.rows.length === 0}
-    <div class="mt-8 rounded-xl border border-base-300/80 bg-base-200/40 p-10 text-center">
+    <div class="mt-8 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-10 text-center">
       <Server class="mx-auto h-10 w-10 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No jobs match this view</p>
       <p class="mt-1 text-sm text-base-content/50">Queue a download or change the filters.</p>
@@ -504,7 +504,7 @@
       </span>
     </label>
 
-    <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-base-300/80 bg-base-200/40 p-3">
+    <label class="flex cursor-pointer items-start gap-3 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-3">
       <input
         type="checkbox"
         class="checkbox checkbox-sm mt-0.5 checkbox-error"

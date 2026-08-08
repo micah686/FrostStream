@@ -188,7 +188,7 @@
 
   <form class="mt-6 space-y-6" onsubmit={runSearch}>
     <!-- Creator & taxonomy -->
-    <fieldset class="rounded-2xl border border-base-300/80 bg-base-200/40 p-5">
+    <fieldset class="rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-5">
       <legend class="px-2 text-xs font-semibold uppercase tracking-wide text-base-content/50">Creator & tags</legend>
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div>
@@ -223,7 +223,7 @@
     </fieldset>
 
     <!-- Technical -->
-    <fieldset class="rounded-2xl border border-base-300/80 bg-base-200/40 p-5">
+    <fieldset class="rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-5">
       <legend class="px-2 text-xs font-semibold uppercase tracking-wide text-base-content/50">Technical</legend>
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div>
@@ -246,7 +246,7 @@
     </fieldset>
 
     <!-- Ranges -->
-    <fieldset class="rounded-2xl border border-base-300/80 bg-base-200/40 p-5">
+    <fieldset class="rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-5">
       <legend class="px-2 text-xs font-semibold uppercase tracking-wide text-base-content/50">Dates & ranges</legend>
       <div class="grid gap-4 sm:grid-cols-2">
         <div>
@@ -285,7 +285,7 @@
     </fieldset>
 
     <!-- Free text & scope -->
-    <fieldset class="rounded-2xl border border-base-300/80 bg-base-200/40 p-5">
+    <fieldset class="rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-5">
       <legend class="px-2 text-xs font-semibold uppercase tracking-wide text-base-content/50">Keywords & scope</legend>
       <div class="grid gap-4 sm:grid-cols-3">
         <div class="sm:col-span-2">
@@ -300,7 +300,7 @@
     </fieldset>
 
     <!-- Preview + actions -->
-    <div class="rounded-2xl border border-base-300/80 bg-base-200/50 p-4">
+    <div class="rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/50 p-4">
       <p class="text-xs font-medium text-base-content/50">Query preview</p>
       <div class="mt-2 flex flex-wrap items-center justify-between gap-4">
         <code class="min-w-0 break-all font-mono text-sm text-base-content">
@@ -321,7 +321,7 @@
   </form>
 
   <!-- Prefix key reference -->
-  <div class="mt-8 rounded-2xl border border-base-300/80 bg-base-200/40 p-5">
+  <div class="mt-8 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-5">
     <h2 class="text-sm font-bold text-base-content">Available prefix keys</h2>
     <p class="mt-1 text-sm text-base-content/50">
       Type any of these directly in the search bar, or click an example to add it to the free-text box.

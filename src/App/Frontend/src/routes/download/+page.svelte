@@ -456,7 +456,7 @@
   {#if activeTab === 'video'}
     <form
       onsubmit={queueVideoDownload}
-      class="rounded-2xl border border-base-300/80 bg-base-200/40 p-6 shadow-2xl shadow-black/20 sm:p-8"
+      class="rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-6 shadow-2xl shadow-black/20 sm:p-8"
     >
       <div class="space-y-5">
         <div>
@@ -491,7 +491,7 @@
           <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle toggle-primary" bind:checked={fetchComments} disabled={videoConfigSetSelected} /><span>Fetch comments</span></label>
         </div>
 
-        <fieldset class="rounded-xl border border-base-300/70 bg-base-200/40 p-4" disabled={videoConfigSetSelected}>
+        <fieldset class="rounded-box border-[length:var(--border)] border-base-300/70 bg-base-200/40 p-4" disabled={videoConfigSetSelected}>
           <div class="max-w-sm">
             <label class="label mb-2 text-sm" for="option-preset">Option preset</label>
             <Select id="option-preset" items={[
@@ -529,7 +529,7 @@
   {:else if activeTab === 'playlist'}
     <form
       onsubmit={queuePlaylist}
-      class="rounded-2xl border border-base-300/80 bg-base-200/40 p-6 shadow-2xl shadow-black/20 sm:p-8"
+      class="rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-6 shadow-2xl shadow-black/20 sm:p-8"
     >
       <div class="space-y-5">
         <div>
@@ -568,7 +568,7 @@
   {:else}
     <form
       onsubmit={queueCreator}
-      class="rounded-2xl border border-base-300/80 bg-base-200/40 p-6 shadow-2xl shadow-black/20 sm:p-8"
+      class="rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-6 shadow-2xl shadow-black/20 sm:p-8"
     >
       <div class="space-y-5">
         <div>
@@ -604,7 +604,7 @@
   {/if}
 
   {#if queued.length > 0}
-    <div class="mt-6 rounded-2xl border border-base-300/80 bg-base-200/40 p-5">
+    <div class="mt-6 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-5">
       <h2 class="text-sm font-bold uppercase tracking-[0.08em] text-base-content/70">Queued this session</h2>
       <ul class="mt-3 space-y-2">
         {#each queued as job (job.id)}

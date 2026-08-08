@@ -115,12 +115,12 @@
   {/if}
 
   {#if jobsState.loading && jobsState.runs.length === 0}
-    <div class="mt-6 rounded-xl border border-base-300/80 bg-base-200/40 p-10 text-center">
+    <div class="mt-6 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-10 text-center">
       <span class="loading loading-spinner loading-md text-base-content/40"></span>
       <p class="mt-4 text-sm text-base-content/50">Loading background tasks…</p>
     </div>
   {:else if jobsState.runs.length === 0}
-    <div class="mt-6 rounded-xl border border-base-300/80 bg-base-200/40 p-10 text-center">
+    <div class="mt-6 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-10 text-center">
       <Clock class="mx-auto h-10 w-10 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No background tasks are running</p>
       <p class="mt-1 text-sm text-base-content/50">

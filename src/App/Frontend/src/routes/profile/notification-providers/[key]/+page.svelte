@@ -57,7 +57,7 @@
       </a>
     </div>
   {:else if provider}
-    <div class="card border border-base-300 bg-base-100 p-5 sm:p-6">
+    <div class="card border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6">
       <NotificationProviderForm mode="update" initial={provider} />
     </div>
   {/if}

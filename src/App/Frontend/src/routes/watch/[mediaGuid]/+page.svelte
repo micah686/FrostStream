@@ -983,14 +983,14 @@
         <span>{loadError}</span>
       </div>
     {:else}
-      <div class="aspect-video overflow-hidden rounded-2xl bg-black shadow-2xl shadow-black/30">
+      <div class="aspect-video overflow-hidden rounded-box bg-black shadow-2xl shadow-black/30">
         {#if !watchStateLoaded || streamChecking}
           <div class="grid h-full w-full place-items-center">
             <span class="loading loading-spinner loading-md"></span>
           </div>
         {:else if streamError}
           <div class="flex h-full items-center justify-center p-6">
-            <div class="max-w-xl rounded-2xl border border-warning/30 bg-warning/10 p-5 text-center text-warning">
+            <div class="max-w-xl rounded-box border-[length:var(--border)] border-warning/30 bg-warning/10 p-5 text-center text-warning">
               <CircleAlert class="mx-auto h-8 w-8 text-warning" />
               <h2 class="mt-3 text-base font-bold text-warning">Playback file unavailable</h2>
               <p class="mt-2 text-sm leading-6 text-warning">{streamError}</p>
@@ -1113,7 +1113,7 @@
 
               {#if storageMenuOpen}
                 <div
-                  class="absolute right-0 z-30 mt-2 w-64 rounded-xl border border-base-300 bg-base-200/95 p-2 shadow-2xl shadow-black/50 backdrop-blur"
+                  class="absolute right-0 z-30 mt-2 w-64 rounded-box border-[length:var(--border)] border-base-300 bg-base-200/95 p-2 shadow-2xl shadow-black/50 backdrop-blur"
                   role="menu"
                   aria-label="Select storage backend"
                 >
@@ -1125,7 +1125,7 @@
                         aria-checked={selectedStorage === option.value}
                         onclick={() => selectStorage(option.value)}
                         class={[
-                          'flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition',
+                          'flex w-full items-center justify-between gap-3 rounded-field px-3 py-2 text-left text-sm transition',
                           selectedStorage === option.value
                             ? 'bg-primary/15 text-primary'
                             : 'text-base-content/90 hover:bg-base-300/70'
@@ -1163,7 +1163,7 @@
 
             {#if versionMenuOpen}
               <div
-                class="absolute right-0 z-30 mt-2 w-64 rounded-xl border border-base-300 bg-base-200/95 p-2 shadow-2xl shadow-black/50 backdrop-blur"
+                class="absolute right-0 z-30 mt-2 w-64 rounded-box border-[length:var(--border)] border-base-300 bg-base-200/95 p-2 shadow-2xl shadow-black/50 backdrop-blur"
                 role="menu"
                 aria-label="Select media version"
               >
@@ -1178,7 +1178,7 @@
                         versionMenuOpen = false;
                       }}
                       class={[
-                        'flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition',
+                        'flex w-full items-center justify-between gap-3 rounded-field px-3 py-2 text-left text-sm transition',
                         selectedVersion === option.value
                           ? 'bg-primary/15 text-primary'
                           : 'text-base-content/90 hover:bg-base-300/70'
@@ -1209,7 +1209,7 @@
 
             {#if moreMenuOpen}
               <div
-                class="absolute right-0 top-full z-40 mt-2 w-80 rounded-xl border border-base-content/20 bg-base-100 p-1.5 shadow-2xl shadow-black/50"
+                class="absolute right-0 top-full z-40 mt-2 w-80 rounded-box border-[length:var(--border)] border-base-content/20 bg-base-100 p-1.5 shadow-2xl shadow-black/50"
                 role="menu"
                 aria-label="More actions"
               >
@@ -1217,7 +1217,7 @@
                   role="menuitem"
                   href={`/search?similar=${mediaGuid}`}
                   onclick={() => (moreMenuOpen = false)}
-                  class="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-base-content/90 transition hover:bg-base-300/70"
+                  class="flex items-center gap-2.5 rounded-field px-3 py-2 text-sm font-medium text-base-content/90 transition hover:bg-base-300/70"
                 >
                   <Search class="h-4 w-4 text-base-content/50" />
                   Find similar
@@ -1226,7 +1226,7 @@
                   type="button"
                   role="menuitem"
                   onclick={() => (noteMenuOpen = !noteMenuOpen)}
-                  class="flex w-full items-center justify-between gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium text-base-content/90 transition hover:bg-base-300/70"
+                  class="flex w-full items-center justify-between gap-2.5 rounded-field px-3 py-2 text-left text-sm font-medium text-base-content/90 transition hover:bg-base-300/70"
                 >
                   <span class="flex items-center gap-2.5">
                     <Pencil class={['h-4 w-4', detail.userNote ? 'text-primary' : 'text-base-content/50']} />
@@ -1239,7 +1239,7 @@
                   {/if}
                 </button>
                 {#if noteMenuOpen}
-                  <div class="mt-1 rounded-lg border border-base-content/20 bg-base-200/45 p-3">
+                  <div class="mt-1 rounded-field border-[length:var(--border)] border-base-content/20 bg-base-200/45 p-3">
                     <TargetNotePanel
                       targetType="video"
                       targetId={mediaGuid}
@@ -1261,7 +1261,7 @@
         </div>
       </div>
 
-      <div class="mt-4 rounded-2xl border border-base-300/80 bg-base-200/40 p-5">
+      <div class="mt-4 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-5">
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-semibold text-base-content/80">
           {#if formatViews(detail.viewCount)}<span>{formatViews(detail.viewCount)}</span>{/if}
           {#if formatRelativeDate(detail.releaseDate)}<span class="text-base-content/50">·</span><span>{formatRelativeDate(detail.releaseDate)}</span>{/if}
@@ -1307,7 +1307,7 @@
         {/if}
       </div>
 
-      <section class="mt-4 rounded-2xl border border-base-300/80 bg-base-200/40" aria-label="Media metadata">
+      <section class="mt-4 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40" aria-label="Media metadata">
         <div class="flex gap-1 border-b border-base-300/80 p-2" role="tablist" aria-label="Metadata sections">
           <button
             type="button"
@@ -1315,7 +1315,7 @@
             aria-selected={metaTab === 'details'}
             onclick={() => (metaTab = 'details')}
             class={[
-              'rounded-lg px-4 py-2 text-xs font-semibold transition',
+              'rounded-field px-4 py-2 text-xs font-semibold transition',
               metaTab === 'details'
                 ? 'bg-primary/15 text-primary'
                 : 'text-base-content/50 hover:bg-base-300/70 hover:text-base-content/80'
@@ -1329,7 +1329,7 @@
             aria-selected={metaTab === 'technical'}
             onclick={openTechnicalTab}
             class={[
-              'rounded-lg px-4 py-2 text-xs font-semibold transition',
+              'rounded-field px-4 py-2 text-xs font-semibold transition',
               metaTab === 'technical'
                 ? 'bg-primary/15 text-primary'
                 : 'text-base-content/50 hover:bg-base-300/70 hover:text-base-content/80'
@@ -1441,7 +1441,7 @@
                   <h3 class="text-xs font-bold uppercase tracking-[0.08em] text-base-content/50">Streams</h3>
                   <ul class="mt-2 space-y-2">
                     {#each technical.streams as stream}
-                      <li class="rounded-xl border border-base-300/80 bg-base-200/40 px-4 py-3">
+                      <li class="rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 px-4 py-3">
                         <p class="flex flex-wrap items-center gap-2 text-xs">
                           <span class="rounded-full bg-base-300 px-2 py-0.5 font-semibold uppercase tracking-wide text-base-content/80">
                             {stream.streamType}
@@ -1526,7 +1526,7 @@
       </div>
     {/if}
 
-    <div class="mb-5 flex items-center justify-between gap-3 rounded-xl border border-base-300/80 bg-base-200/40 px-4 py-3">
+    <div class="mb-5 flex items-center justify-between gap-3 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 px-4 py-3">
       <span class="text-sm font-semibold text-base-content/80">Autoplay</span>
       <input
         type="checkbox"
@@ -1541,9 +1541,9 @@
     <ul class="mt-4 space-y-4">
       {#each upNext as card (card.mediaGuid)}
         <li>
-          <a href={`/watch/${card.mediaGuid}`} class="group flex gap-3 rounded-xl focus-visible:outline-offset-4">
+          <a href={`/watch/${card.mediaGuid}`} class="group flex gap-3 rounded-box focus-visible:outline-offset-4">
             <span
-              class={`relative block aspect-video w-40 shrink-0 overflow-hidden rounded-xl bg-gradient-to-br ${accentFor(card.mediaGuid)} shadow-lg shadow-black/20`}
+              class={`relative block aspect-video w-40 shrink-0 overflow-hidden rounded-box bg-gradient-to-br ${accentFor(card.mediaGuid)} shadow-lg shadow-black/20`}
             >
               <span class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-xl font-black text-white/15">
                 {initialsFor(card.account.accountName)}

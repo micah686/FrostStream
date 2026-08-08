@@ -16,7 +16,7 @@
   } from '$lib/api/notifications';
   import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
 
-  const cardClass = 'card border border-base-300 bg-base-100 p-5 sm:p-6';
+  const cardClass = 'card border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6';
   let providers = $state<NotificationProvider[]>([]);
   let providersLoading = $state(true);
   let providersError = $state<string | null>(null);
@@ -133,7 +133,7 @@
       <span class="loading loading-spinner loading-md"></span>
     </div>
   {:else if providers.length === 0}
-    <div class="mt-4 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
+    <div class="mt-4 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/30 p-8 text-center">
       <Bell class="mx-auto h-9 w-9 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No notification providers yet</p>
       <p class="mt-1 text-sm text-base-content/50">Create one to enable delivery through a channel like email or Slack.</p>
@@ -142,10 +142,10 @@
     <div class="mt-4 space-y-2">
       {#each providers as provider (provider.providerKey)}
         <article
-          class="card flex min-h-[4rem] flex-col gap-3 border border-base-300 bg-base-100 p-3 transition hover:border-base-content/30 hover:bg-base-300/30 sm:flex-row sm:items-center"
+          class="card flex min-h-[4rem] flex-col gap-3 border-[length:var(--border)] border-base-300 bg-base-100 p-3 transition hover:border-base-content/30 hover:bg-base-300/30 sm:flex-row sm:items-center"
         >
           <div class="flex min-w-0 flex-1 items-center gap-3">
-            <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-base-300/70 text-primary">
+            <span class="grid h-9 w-9 shrink-0 place-items-center rounded-field bg-base-300/70 text-primary">
               {#if provider.enabled}
                 <BellRing class="h-4.5 w-4.5" />
               {:else}

@@ -56,7 +56,7 @@
     setting. Only the values you change are stored in the preset.
   </p>
 
-  <details open class="group rounded-xl border border-base-300/70 bg-base-200/40 p-4">
+  <details open class="group rounded-box border-[length:var(--border)] border-base-300/70 bg-base-200/40 p-4">
     <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
       <h3 class="text-sm font-semibold text-base-content/90">Video quality & format</h3>
       <ChevronDown class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
@@ -80,7 +80,7 @@
     </div>
   </details>
 
-  <details class="group rounded-xl border border-base-300/70 bg-base-200/40 p-4">
+  <details class="group rounded-box border-[length:var(--border)] border-base-300/70 bg-base-200/40 p-4">
     <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
       <h3 class="text-sm font-semibold text-base-content/90">Audio</h3>
       <ChevronDown class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
@@ -100,7 +100,7 @@
     </div>
   </details>
 
-  <details class="group rounded-xl border border-base-300/70 bg-base-200/40 p-4">
+  <details class="group rounded-box border-[length:var(--border)] border-base-300/70 bg-base-200/40 p-4">
     <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
       <h3 class="text-sm font-semibold text-base-content/90">Subtitles</h3>
       <ChevronDown class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
@@ -127,7 +127,7 @@
     </div>
   </details>
 
-  <details class="group rounded-xl border border-base-300/70 bg-base-200/40 p-4">
+  <details class="group rounded-box border-[length:var(--border)] border-base-300/70 bg-base-200/40 p-4">
     <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
       <h3 class="text-sm font-semibold text-base-content/90">Thumbnails & metadata</h3>
       <ChevronDown class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
@@ -143,7 +143,7 @@
     </div>
   </details>
 
-  <details class="group rounded-xl border border-base-300/70 bg-base-200/40 p-4">
+  <details class="group rounded-box border-[length:var(--border)] border-base-300/70 bg-base-200/40 p-4">
     <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
       <h3 class="text-sm font-semibold text-base-content/90">Comments & live streams</h3>
       <ChevronDown class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
@@ -159,7 +159,7 @@
     </div>
   </details>
 
-  <details class="group rounded-xl border border-base-300/70 bg-base-200/40 p-4">
+  <details class="group rounded-box border-[length:var(--border)] border-base-300/70 bg-base-200/40 p-4">
     <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
       <div>
         <h3 class="text-sm font-semibold text-base-content/90">SponsorBlock</h3>
@@ -210,7 +210,7 @@
     </div>
   </details>
 
-  <details class="group rounded-xl border border-base-300/70 bg-base-200/40 p-4">
+  <details class="group rounded-box border-[length:var(--border)] border-base-300/70 bg-base-200/40 p-4">
     <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
       <h3 class="text-sm font-semibold text-base-content/90">Download behavior & limits</h3>
       <ChevronDown class="h-4 w-4 shrink-0 text-base-content/50 transition-transform group-open:rotate-180" />
@@ -280,7 +280,7 @@
     </div>
   </details>
 
-  <details class="group rounded-xl border border-base-300/70 bg-base-200/40 p-4">
+  <details class="group rounded-box border-[length:var(--border)] border-base-300/70 bg-base-200/40 p-4">
     <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
       <div>
         <h3 class="text-sm font-semibold text-base-content/90">Network & authentication</h3>
@@ -316,7 +316,7 @@
     </div>
   </details>
 
-  <details class="group rounded-xl border border-base-300/70 bg-base-200/40 p-4">
+  <details class="group rounded-box border-[length:var(--border)] border-base-300/70 bg-base-200/40 p-4">
     <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
       <div>
         <h3 class="text-sm font-semibold text-base-content/90">Workarounds</h3>

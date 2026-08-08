@@ -649,7 +649,7 @@
   <title>Statistics · FrostStream</title>
 </svelte:head>
 
-<section class="card border border-base-300 bg-base-100 p-5 sm:p-6" aria-labelledby="statistics-title">
+<section class="card border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6" aria-labelledby="statistics-title">
   <div class="flex flex-wrap items-start justify-between gap-4">
     <div>
       <h1 id="statistics-title" class="text-xl font-bold text-base-content">Statistics</h1>
@@ -674,31 +674,31 @@
     <div class="flex min-h-72 items-center justify-center"><span class="loading loading-spinner loading-md"></span></div>
   {:else}
     <div class="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-      <article class="card border border-base-300 bg-base-100 p-4">
+      <article class="card border-[length:var(--border)] border-base-300 bg-base-100 p-4">
         <div class="flex items-start justify-between gap-3">
           <div><p class="text-xs text-base-content/50">Library media</p><p class="mt-2 text-2xl font-bold text-base-content">{overview?.inventory.totalMedia.toLocaleString() ?? '—'}</p></div>
           <ChartNoAxesCombined class="h-5 w-5 text-primary" />
         </div>
       </article>
-      <article class="card border border-base-300 bg-base-100 p-4">
+      <article class="card border-[length:var(--border)] border-base-300 bg-base-100 p-4">
         <div class="flex items-start justify-between gap-3">
           <div><p class="text-xs text-base-content/50">Total channels</p><p class="mt-2 text-2xl font-bold text-base-content">{overview?.inventory.totalChannels.toLocaleString() ?? '—'}</p></div>
           <Tv class="h-5 w-5 text-info" />
         </div>
       </article>
-      <article class="card border border-base-300 bg-base-100 p-4">
+      <article class="card border-[length:var(--border)] border-base-300 bg-base-100 p-4">
         <div class="flex items-start justify-between gap-3">
           <div><p class="text-xs text-base-content/50">Total downloaded</p><p class="mt-2 text-2xl font-bold text-base-content">{overview?.inventory.totalDownloads.toLocaleString() ?? '—'}</p></div>
           <Download class="h-5 w-5 text-success" />
         </div>
       </article>
-      <article class="card border border-base-300 bg-base-100 p-4">
+      <article class="card border-[length:var(--border)] border-base-300 bg-base-100 p-4">
         <div class="flex items-start justify-between gap-3">
           <div><p class="text-xs text-base-content/50">Total size</p><p class="mt-2 text-2xl font-bold text-base-content">{overview ? formatBytes(overview.inventory.totalBytes) : '—'}</p></div>
           <HardDrive class="h-5 w-5 text-warning" />
         </div>
       </article>
-      <article class="card border border-base-300 bg-base-100 p-4">
+      <article class="card border-[length:var(--border)] border-base-300 bg-base-100 p-4">
         <div class="flex items-start justify-between gap-3">
           <div><p class="text-xs text-base-content/50">Total duration</p><p class="mt-2 text-lg font-bold leading-snug text-base-content">{formatLongDuration(overview?.inventory.totalDurationSeconds)}</p></div>
           <Clock3 class="h-5 w-5 text-accent" />
@@ -707,7 +707,7 @@
     </div>
 
     <div class="mt-5 grid gap-5 xl:grid-cols-2">
-      <section class="card border border-base-300 bg-base-100 p-5">
+      <section class="card border-[length:var(--border)] border-base-300 bg-base-100 p-5">
         <h2 class="text-sm font-bold text-base-content">Media mix</h2>
         <p class="mt-1 text-xs text-base-content/50">Library media grouped by type</p>
         {#if (overview?.mediaTypes.length ?? 0) > 0}
@@ -716,7 +716,7 @@
           <p class="mt-8 text-center text-sm text-base-content/50">No media type data.</p>
         {/if}
       </section>
-      <section class="card border border-base-300 bg-base-100 p-5">
+      <section class="card border-[length:var(--border)] border-base-300 bg-base-100 p-5">
         <h2 class="text-sm font-bold text-base-content">Download health</h2>
         <p class="mt-1 text-xs text-base-content/50">Download jobs grouped by their current state</p>
         {#if (overview?.downloadStates.length ?? 0) > 0}
@@ -727,7 +727,7 @@
       </section>
     </div>
 
-    <section class="card mt-5 border border-base-300 bg-base-100 p-5">
+    <section class="card mt-5 border-[length:var(--border)] border-base-300 bg-base-100 p-5">
       <h2 class="text-sm font-bold text-base-content">All download activity</h2>
       <p class="mt-1 text-xs text-base-content/50">Retained download-state activity, grouped by {allActivityBucket} to keep the chart readable over years of history</p>
       {#if hasAllActivity}
@@ -737,7 +737,7 @@
       {/if}
     </section>
 
-    <section class="card mt-5 border border-base-300 bg-base-100 p-5">
+    <section class="card mt-5 border-[length:var(--border)] border-base-300 bg-base-100 p-5">
       <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div>
           <h2 class="text-sm font-bold text-base-content">Custom download activity</h2>
@@ -755,7 +755,7 @@
         </div>
       </div>
       {#if rangePreset === 'custom'}
-        <div class="mt-4 flex flex-wrap items-end gap-3 rounded-xl border border-base-300 bg-base-100 p-3">
+        <div class="mt-4 flex flex-wrap items-end gap-3 rounded-box border-[length:var(--border)] border-base-300 bg-base-100 p-3">
           <label><span class="mb-1 block text-xs text-base-content/50">From</span><input class="input input-sm" type="date" bind:value={dateFrom} max={dateTo || undefined} /></label>
           <label><span class="mb-1 block text-xs text-base-content/50">To</span><input class="input input-sm" type="date" bind:value={dateTo} min={dateFrom || undefined} /></label>
           <button class="btn btn-sm btn-primary text-xs" onclick={loadCustomActivity}>Apply range</button>
@@ -773,7 +773,7 @@
     </section>
 
     <div class="mt-5 grid gap-5 xl:grid-cols-3">
-      <section class="card border border-base-300 bg-base-100 p-5">
+      <section class="card border-[length:var(--border)] border-base-300 bg-base-100 p-5">
         <h2 class="text-sm font-bold text-base-content">Top 10 · Most downloaded</h2>
         {#if mostDownloadedRanked.length > 0}
           <div class="mt-4"><StatisticsChart config={mostDownloadedChart} ariaLabel="Polar area chart of channels with the most downloads" height="19rem" /></div>
@@ -781,7 +781,7 @@
           <p class="mt-8 text-center text-sm text-base-content/50">No downloads yet.</p>
         {/if}
       </section>
-      <section class="card border border-base-300 bg-base-100 p-5">
+      <section class="card border-[length:var(--border)] border-base-300 bg-base-100 p-5">
         <h2 class="text-sm font-bold text-base-content">Top 10 · Longest duration</h2>
         {#if longestDurationRanked.length > 0}
           <div class="mt-4"><StatisticsChart config={longestDurationChart} ariaLabel="Polar area chart of channels with the longest downloaded duration" height="19rem" /></div>
@@ -789,7 +789,7 @@
           <p class="mt-8 text-center text-sm text-base-content/50">No downloaded duration yet.</p>
         {/if}
       </section>
-      <section class="card border border-base-300 bg-base-100 p-5">
+      <section class="card border-[length:var(--border)] border-base-300 bg-base-100 p-5">
         <h2 class="text-sm font-bold text-base-content">Top 10 · Largest on disk</h2>
         {#if largestOnDiskRanked.length > 0}
           <div class="mt-4"><StatisticsChart config={largestOnDiskChart} ariaLabel="Polar area chart of channels using the most disk space" height="19rem" /></div>
@@ -797,7 +797,7 @@
           <p class="mt-8 text-center text-sm text-base-content/50">No disk usage yet.</p>
         {/if}
       </section>
-      <section class="card border border-base-300 bg-base-100 p-5">
+      <section class="card border-[length:var(--border)] border-base-300 bg-base-100 p-5">
         <h2 class="text-sm font-bold text-base-content">Top 10 · Platform types</h2>
         <p class="mt-1 text-xs text-base-content/50">Platforms grouped by available media</p>
         {#if platformRanked.length > 0}
@@ -806,7 +806,7 @@
           <p class="mt-8 text-center text-sm text-base-content/50">No platform data.</p>
         {/if}
       </section>
-      <section class="card border border-base-300 bg-base-100 p-5">
+      <section class="card border-[length:var(--border)] border-base-300 bg-base-100 p-5">
         <h2 class="text-sm font-bold text-base-content">Coverage</h2>
         <p class="mt-1 text-xs text-base-content/50">Available and excluded media across the library</p>
         {#if coverageError}
@@ -821,7 +821,7 @@
       </section>
     </div>
 
-    <section class="card mt-5 border border-base-300 bg-base-100 p-5">
+    <section class="card mt-5 border-[length:var(--border)] border-base-300 bg-base-100 p-5">
       <div>
         <h2 class="text-sm font-bold text-base-content">Channel statistics</h2>
         <p class="mt-1 text-xs text-base-content/50">Search for a channel to inspect its inventory and recent download health.</p>
@@ -853,7 +853,7 @@
           {/if}
         </label>
         {#if channelSearchOpen}
-          <ul id="statistics-channel-results" class="dropdown-content menu z-30 mt-1 max-h-72 w-full flex-nowrap overflow-y-auto rounded-lg border border-base-300 bg-base-100 p-1 shadow-xl">
+          <ul id="statistics-channel-results" class="dropdown-content menu z-30 mt-1 max-h-72 w-full flex-nowrap overflow-y-auto rounded-field border-[length:var(--border)] border-base-300 bg-base-100 p-1 shadow-xl">
             {#each channelResults as suggestion (suggestion.value)}
               <li>
                 <button type="button" class="flex w-full items-center justify-between gap-3 text-left" onmousedown={(event) => event.preventDefault()} onclick={() => void chooseChannel(suggestion)}>
@@ -876,7 +876,7 @@
       {:else if channelLoading}
         <div class="mt-6 flex min-h-48 items-center justify-center"><span class="loading loading-spinner loading-sm"></span></div>
       {:else if selectedChannel}
-        <div class="mt-5 flex min-w-0 items-center gap-4 rounded-xl border border-base-300 bg-base-100 p-4">
+        <div class="mt-5 flex min-w-0 items-center gap-4 rounded-box border-[length:var(--border)] border-base-300 bg-base-100 p-4">
           {#if selectedChannel.summary.accountId && selectedChannel.summary.avatarStoragePath}
             <img class="h-16 w-16 shrink-0 rounded-full object-cover" src={`/api/media/watch/accounts/${selectedChannel.summary.accountId}/avatar`} alt={`${channelName(selectedChannel.summary)} avatar`} />
           {:else}
@@ -890,14 +890,14 @@
         </div>
 
         <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <article class="card border border-base-300 bg-base-100 p-4"><p class="text-xs text-base-content/50">Total downloaded</p><p class="mt-2 text-2xl font-bold text-base-content">{selectedChannel.summary.downloadedCount.toLocaleString()}</p></article>
-          <article class="card border border-base-300 bg-base-100 p-4"><p class="text-xs text-base-content/50">Total size</p><p class="mt-2 text-2xl font-bold text-base-content">{formatBytes(selectedChannel.summary.totalBytes)}</p></article>
-          <article class="card border border-base-300 bg-base-100 p-4"><p class="text-xs text-base-content/50">Downloaded duration</p><p class="mt-2 text-lg font-bold text-base-content">{formatLongDuration(selectedChannel.summary.downloadedDurationSeconds)}</p></article>
-          <article class="card border border-base-300 bg-base-100 p-4"><p class="text-xs text-base-content/50">Coverage</p><p class="mt-2 text-2xl font-bold text-base-content">{Math.round(selectedChannel.summary.downloadedPercent)}%</p><p class="mt-1 text-xs text-base-content/40">{selectedChannel.summary.downloadedCount.toLocaleString()} / {selectedChannel.summary.availableCount.toLocaleString()}</p></article>
+          <article class="card border-[length:var(--border)] border-base-300 bg-base-100 p-4"><p class="text-xs text-base-content/50">Total downloaded</p><p class="mt-2 text-2xl font-bold text-base-content">{selectedChannel.summary.downloadedCount.toLocaleString()}</p></article>
+          <article class="card border-[length:var(--border)] border-base-300 bg-base-100 p-4"><p class="text-xs text-base-content/50">Total size</p><p class="mt-2 text-2xl font-bold text-base-content">{formatBytes(selectedChannel.summary.totalBytes)}</p></article>
+          <article class="card border-[length:var(--border)] border-base-300 bg-base-100 p-4"><p class="text-xs text-base-content/50">Downloaded duration</p><p class="mt-2 text-lg font-bold text-base-content">{formatLongDuration(selectedChannel.summary.downloadedDurationSeconds)}</p></article>
+          <article class="card border-[length:var(--border)] border-base-300 bg-base-100 p-4"><p class="text-xs text-base-content/50">Coverage</p><p class="mt-2 text-2xl font-bold text-base-content">{Math.round(selectedChannel.summary.downloadedPercent)}%</p><p class="mt-1 text-xs text-base-content/40">{selectedChannel.summary.downloadedCount.toLocaleString()} / {selectedChannel.summary.availableCount.toLocaleString()}</p></article>
         </div>
 
         <div class="mt-4 grid gap-5 xl:grid-cols-3">
-          <section class="card border border-base-300 bg-base-100 p-5">
+          <section class="card border-[length:var(--border)] border-base-300 bg-base-100 p-5">
             <h3 class="text-sm font-bold text-base-content">Availability</h3>
             {#if channelAvailabilitySlices.labels.length > 0}
               <div class="mt-4"><StatisticsChart config={channelAvailabilityChart} ariaLabel="Pie chart showing channel media by availability" height="18rem" /></div>
@@ -905,7 +905,7 @@
               <p class="mt-8 text-center text-sm text-base-content/50">No availability data.</p>
             {/if}
           </section>
-          <section class="card border border-base-300 bg-base-100 p-5">
+          <section class="card border-[length:var(--border)] border-base-300 bg-base-100 p-5">
             <h3 class="text-sm font-bold text-base-content">Recent download states</h3>
             {#if (selectedChannel.recentDownloadStates.length ?? 0) > 0}
               <div class="mt-4"><StatisticsChart config={channelDownloadStatesChart} ariaLabel="Pie chart showing recent channel download states" height="18rem" /></div>
@@ -913,7 +913,7 @@
               <p class="mt-8 text-center text-sm text-base-content/50">No download state data.</p>
             {/if}
           </section>
-          <section class="card border border-base-300 bg-base-100 p-5">
+          <section class="card border-[length:var(--border)] border-base-300 bg-base-100 p-5">
             <h3 class="text-sm font-bold text-base-content">Media types</h3>
             {#if (selectedChannel.mediaTypes.length ?? 0) > 0}
               <div class="mt-4"><StatisticsChart config={channelMediaTypesChart} ariaLabel="Pie chart showing channel media types" height="18rem" /></div>

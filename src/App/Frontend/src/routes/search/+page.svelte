@@ -259,7 +259,7 @@
       <span class="loading loading-spinner loading-md"></span>
     </div>
   {:else if similarGuid && hits.length === 0}
-    <div class="mt-10 rounded-2xl border border-base-300/80 bg-base-200/40 p-10 text-center">
+    <div class="mt-10 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-10 text-center">
       <Search class="mx-auto h-10 w-10 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No similar videos found</p>
       <p class="mt-1 text-sm text-base-content/50">
@@ -267,7 +267,7 @@
       </p>
     </div>
   {:else if query && hits.length === 0}
-    <div class="mt-10 rounded-2xl border border-base-300/80 bg-base-200/40 p-10 text-center">
+    <div class="mt-10 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-10 text-center">
       <Search class="mx-auto h-10 w-10 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No results for "{query}"</p>
       <p class="mt-1 text-sm text-base-content/50">
@@ -283,7 +283,7 @@
         <article class="group min-w-0">
           <a
             href={`/watch/${hit.media.mediaGuid}`}
-            class={`relative block aspect-video w-full overflow-hidden rounded-2xl bg-gradient-to-br ${accentFor(hit.media.mediaGuid)} text-left shadow-lg shadow-black/20 transition duration-300 group-hover:-translate-y-1 group-hover:shadow-xl group-hover:shadow-black/30`}
+            class={`relative block aspect-video w-full overflow-hidden rounded-box bg-gradient-to-br ${accentFor(hit.media.mediaGuid)} text-left shadow-lg shadow-black/20 transition duration-300 group-hover:-translate-y-1 group-hover:shadow-xl group-hover:shadow-black/30`}
             aria-label={`Play ${hit.media.title}`}
           >
             <span class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-3xl font-black text-white/15">
@@ -300,7 +300,7 @@
               />
             {/if}
             <span
-              class="absolute left-3 top-3 rounded-md bg-black/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/80"
+              class="absolute left-3 top-3 rounded-field bg-black/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/80"
             >
               {hit.media.account.platform}
             </span>

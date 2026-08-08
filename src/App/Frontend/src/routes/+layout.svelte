@@ -202,14 +202,14 @@
 <svelte:window onkeydown={onGlobalKeydown} />
 
 {#snippet navigationGroup(items: NavItem[])}
-  <ul class="space-y-1">
+  <ul class="menu w-full gap-1 p-0 [--menu-active-bg:var(--color-primary)] [--menu-active-fg:var(--color-primary-content)]">
     {#each items as item}
       {@const { label, icon: Icon, href, count } = item}
       {@const active = isActive(item)}
       {@const itemClass = [
-        'group flex min-h-10 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium transition',
+        'group flex min-h-10 w-full items-center gap-3 px-3 text-left text-sm font-medium transition',
         active
-          ? 'bg-primary text-primary-content shadow-sm'
+          ? 'menu-active'
           : 'text-base-content/70 hover:bg-base-200 hover:text-base-content'
       ]}
       <li>
@@ -270,14 +270,14 @@
   class="fixed inset-x-0 top-0 z-40 flex h-14 items-center border-b border-base-300/70 bg-base-100/95 px-3 backdrop-blur-xl sm:px-5"
 >
   <button
-    class="btn btn-square btn-sm btn-ghost mr-2 h-10 w-10 lg:hidden"
+    class="btn btn-square btn-sm btn-ghost mr-2 lg:hidden"
     aria-label="Open navigation"
     onclick={() => (drawerOpen = true)}
   >
     <Menu class="h-5 w-5 shrink-0" />
   </button>
 
-  <a href="/" class="flex shrink-0 items-center rounded-lg focus-visible:outline-offset-4">
+  <a href="/" class="flex shrink-0 items-center rounded-field focus-visible:outline-offset-4">
     <img
       src="/froststream-banner.svg"
       alt="FrostStream"
@@ -291,9 +291,9 @@
       <Search
         class="pointer-events-none absolute left-4 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-base-content/50"
       />
-      <input class="input h-10 w-full rounded-2xl pl-11 pr-11 text-sm sm:pr-20" id="global-search" type="search" autocomplete="off" aria-label="Search your library" placeholder="Search your library, channels, comments..." bind:value={searchQuery} oninput={onSearchInput} onkeydown={onSearchKeydown} />
+      <input class="input w-full pl-11 pr-11 text-sm sm:pr-20" id="global-search" type="search" autocomplete="off" aria-label="Search your library" placeholder="Search your library, channels, comments..." bind:value={searchQuery} oninput={onSearchInput} onkeydown={onSearchKeydown} />
       <kbd
-        class="pointer-events-none absolute right-11 top-1/2 hidden -translate-y-1/2 rounded-md border border-base-content/20 bg-base-300/80 px-2 py-0.5 text-[10px] text-base-content/50 sm:block"
+        class="pointer-events-none absolute right-11 top-1/2 hidden -translate-y-1/2 rounded-field border-[length:var(--border)] border-base-content/20 bg-base-300/80 px-2 py-0.5 text-[10px] text-base-content/50 sm:block"
       >
         /
       </kbd>
@@ -302,7 +302,7 @@
         aria-label="Advanced search"
         title="Advanced search"
         onclick={closeSuggestions}
-        class="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-lg text-base-content/50 transition hover:bg-base-300/80 hover:text-base-content/80"
+        class="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-field text-base-content/50 transition hover:bg-base-300/80 hover:text-base-content/80"
       >
         <Cog class="h-4 w-4" />
       </a>
@@ -310,7 +310,7 @@
 
     {#if suggestionsOpen}
       <div
-        class="absolute inset-x-0 top-full z-50 mt-2 overflow-hidden rounded-2xl border border-base-300 bg-base-200 shadow-2xl shadow-black/40"
+        class="absolute inset-x-0 top-full z-50 mt-2 overflow-hidden rounded-box border-[length:var(--border)] border-base-300 bg-base-200 shadow-2xl shadow-black/40"
         role="listbox"
         aria-label="Search suggestions"
       >
@@ -330,7 +330,7 @@
                   onclick={closeSuggestions}
                 >
                   <span
-                    class={`relative grid h-9 w-16 shrink-0 place-items-center overflow-hidden rounded-md bg-gradient-to-br ${accentFor(hit.media.mediaGuid)}`}
+                    class={`relative grid h-9 w-16 shrink-0 place-items-center overflow-hidden rounded-field bg-gradient-to-br ${accentFor(hit.media.mediaGuid)}`}
                   >
                     <span class="text-[10px] font-black text-white/30">
                       {initialsFor(hit.media.account.accountName)}
@@ -392,12 +392,12 @@
         href="/profile"
         aria-label={`Open profile for ${data.user.name}`}
         title={data.user.name}
-        class="grid h-9 w-9 place-items-center rounded-full bg-primary text-xs font-bold text-primary-content ring-2 ring-transparent transition hover:ring-secondary/60 focus-visible:outline-offset-4"
+        class="btn btn-square btn-sm btn-primary text-xs font-bold"
       >
         {data.user.initials}
       </a>
     {:else}
-      <a class="btn btn-sm btn-primary rounded-full text-xs" href="/auth/login">
+      <a class="btn btn-sm btn-primary text-xs" href="/auth/login">
         <LogIn class="mr-1.5 h-4 w-4" />
         Login
       </a>
@@ -416,7 +416,7 @@
   <div class="flex h-14 shrink-0 items-center justify-between border-b border-base-300/70 px-4">
     <span class="font-bold text-base-content">Navigation</span>
     <button
-      class="btn btn-square btn-sm btn-ghost h-9 w-9"
+      class="btn btn-square btn-sm btn-ghost"
       aria-label="Close navigation"
       onclick={closeDrawer}
     >
