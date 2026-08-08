@@ -18,6 +18,7 @@ public sealed class MetadataController(
     ILogger<MetadataController> logger) : ControllerBase
 {
     private const string ChannelAssetRefreshTaskType = "channel_asset_refresh";
+    private const string MediaThumbnailGenerationTaskType = "media_thumbnail_generation";
     private static readonly TimeSpan QueryTimeout = TimeSpan.FromSeconds(10);
 
     [HttpGet]
@@ -51,55 +52,6 @@ public sealed class MetadataController(
                 Category = category,
                 Genre = genre,
                 CaptionLanguage = captionLanguage,
-                OwnerSubject = ResolveSubject()
-            },
-            cancellationToken);
-
-        if (response is null)
-            return ServiceUnavailable();
-        if (!response.Success)
-            return MetadataError(response.ErrorCode, response.ErrorMessage);
-
-        return Ok(new PagedMetadataResponse<MetadataCardDto>(
-            response.Items,
-            response.Page,
-            response.TotalCount,
-            response.HasMore));
-    }
-
-    [Obsolete("remove this endpoint later")]
-    [HttpGet("search")]
-    [Endpoint(EndpointIds.MetadataSearch)]
-    [EndpointSummary("Search archived media metadata")]
-    [EndpointDescription("Performs full-text search across indexed media metadata using the required q parameter. Results support pagination, platform and taxonomy filters, optional explicit sorting, and return total-count and continuation information; blank search queries return 400.")]
-    public async Task<ActionResult<PagedMetadataResponse<MetadataCardDto>>> Search(
-        [FromQuery(Name = "q")] string q,
-        [FromQuery] int pageSize = 24,
-        [FromQuery] int page = 1,
-        [FromQuery] string? platform = null,
-        [FromQuery] string? tag = null,
-        [FromQuery] string? category = null,
-        [FromQuery] string? genre = null,
-        [FromQuery] string? sortBy = null,
-        [FromQuery] string sortOrder = "desc",
-        CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrWhiteSpace(q))
-            return BadRequest("Query parameter 'q' is required.");
-
-        var response = await SendRequestAsync<MetadataSearchRequestMessage, MetadataSearchResponseMessage>(
-            MetadataSubjects.Search,
-            new MetadataSearchRequestMessage
-            {
-                Query = q,
-                PageSize = pageSize,
-                Page = page,
-                Platform = platform,
-                Tag = tag,
-                Category = category,
-                Genre = genre,
-                SortBy = sortBy,
-                SortOrder = sortOrder,
                 OwnerSubject = ResolveSubject()
             },
             cancellationToken);
@@ -376,6 +328,55 @@ public sealed class MetadataController(
         }
 
         return Accepted(new { queued = true, accountId, force });
+    }
+
+    [HttpPost("accounts/{accountId:long}/generate-missing-thumbnails")]
+    [Endpoint(EndpointIds.MetadataAccountsGenerateThumbnails)]
+    [EndpointSummary("Generate missing media thumbnails for a channel")]
+    [EndpointDescription("Queues MediaProcessor to extract a representative JPEG frame from every media file in the account that does not already have a thumbnail. Existing thumbnails are never replaced.")]
+    public async Task<IActionResult> GenerateMissingThumbnails(
+        long accountId,
+        CancellationToken cancellationToken = default)
+    {
+        var response = await SendRequestAsync<MetadataAccountGetRequestMessage, MetadataAccountGetResponseMessage>(
+            MetadataSubjects.AccountsGet,
+            new MetadataAccountGetRequestMessage { AccountId = accountId, OwnerSubject = ResolveSubject() },
+            cancellationToken);
+
+        if (response is null)
+            return ServiceUnavailable();
+        if (!response.Success)
+            return MetadataError(response.ErrorCode, response.ErrorMessage);
+        if (response.Item is null)
+            return StatusCode(StatusCodes.Status502BadGateway, "DataBridge returned an invalid account response.");
+
+        var now = clock.GetCurrentInstant();
+        var idempotencyKey = $"manual-thumbnails:{accountId}:{Guid.NewGuid():N}";
+        var message = new GenerateMissingMediaThumbnailsRequested
+        {
+            ScheduleKey = "manual",
+            TaskType = MediaThumbnailGenerationTaskType,
+            DueWindowUtc = now,
+            IdempotencyKey = idempotencyKey,
+            OccurredAt = now,
+            AccountId = accountId
+        };
+
+        try
+        {
+            await publisher.PublishAsync(
+                BackgroundJobSubjects.MediaThumbnailGenerationRequest,
+                message,
+                messageId: idempotencyKey,
+                cancellationToken: cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed enqueueing thumbnail generation for account {AccountId}.", accountId);
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Unable to enqueue thumbnail generation.");
+        }
+
+        return Accepted(new { queued = true, accountId });
     }
 
     [HttpGet("accounts/{accountId:long}/media")]

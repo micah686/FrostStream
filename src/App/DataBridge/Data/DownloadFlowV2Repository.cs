@@ -133,7 +133,10 @@ public sealed class DownloadFlowV2Repository(
 
         await db.SaveChangesAsync(ct);
         if (existingJob is null)
+        {
             await DownloadStatisticsRecorder.RecordDailyActivityAsync(db, logger, "created", now, 0, 0, ct);
+            await DownloadStatisticsRecorder.RecordChannelDailyStatesAsync(db, logger, job.SourceUrl, "created", now, ct);
+        }
         await NotifyAsync(job, previous, ct);
         await RefreshGroupAggregateAsync(job.CorrelationId, ct);
 
@@ -283,7 +286,10 @@ public sealed class DownloadFlowV2Repository(
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         if (immediate)
+        {
             await DownloadStatisticsRecorder.RecordDailyActivityAsync(db, logger, "cancelled", job.UpdatedAt, 0, 0, ct);
+            await DownloadStatisticsRecorder.RecordChannelDailyStatesAsync(db, logger, job.SourceUrl, "cancelled", job.UpdatedAt, ct);
+        }
         await NotifyAsync(job, previous, ct);
         if (immediate)
             await RefreshGroupAggregateAsync(job.CorrelationId, ct);
@@ -486,6 +492,7 @@ public sealed class DownloadFlowV2Repository(
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         await DownloadStatisticsRecorder.RecordDailyActivityAsync(db, logger, "failed_permanent", now, 0, 0, ct);
+        await DownloadStatisticsRecorder.RecordChannelDailyStatesAsync(db, logger, job.SourceUrl, "failed_permanent", now, ct);
         await NotifyAsync(job, previous, ct);
         await RefreshGroupAggregateAsync(job.CorrelationId, ct);
         return true;
@@ -519,6 +526,7 @@ public sealed class DownloadFlowV2Repository(
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         await DownloadStatisticsRecorder.RecordDailyActivityAsync(db, logger, "completed", now, 0, 0, ct);
+        await DownloadStatisticsRecorder.RecordChannelDailyStatesAsync(db, logger, job.SourceUrl, "completed", now, ct);
         await NotifyAsync(job, previous, ct);
         await RefreshGroupAggregateAsync(job.CorrelationId, ct);
         return true;
@@ -585,6 +593,7 @@ public sealed class DownloadFlowV2Repository(
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         await DownloadStatisticsRecorder.RecordCompletionStatisticsAsync(db, logger, mediaGuid, execution.RunId, now, ct);
+        await DownloadStatisticsRecorder.RecordChannelDailyStatesAsync(db, logger, job.SourceUrl, "completed", now, ct);
         await NotifyAsync(job, previous, ct);
         await RefreshGroupAggregateAsync(job.CorrelationId, ct);
         return true;
@@ -622,6 +631,7 @@ public sealed class DownloadFlowV2Repository(
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         await DownloadStatisticsRecorder.RecordDailyActivityAsync(db, logger, "cancelled", now, 0, 0, ct);
+        await DownloadStatisticsRecorder.RecordChannelDailyStatesAsync(db, logger, job.SourceUrl, "cancelled", now, ct);
         await NotifyAsync(job, previous, ct);
         await RefreshGroupAggregateAsync(job.CorrelationId, ct);
         return true;
@@ -674,6 +684,7 @@ public sealed class DownloadFlowV2Repository(
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         await DownloadStatisticsRecorder.RecordDailyActivityAsync(db, logger, "already_downloaded", now, 0, 0, ct);
+        await DownloadStatisticsRecorder.RecordChannelDailyStatesAsync(db, logger, job.SourceUrl, "already_downloaded", now, ct);
         await NotifyAsync(job, previous, ct);
         await RefreshGroupAggregateAsync(job.CorrelationId, ct);
         return true;

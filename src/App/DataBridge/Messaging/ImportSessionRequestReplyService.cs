@@ -275,18 +275,6 @@ public sealed class ImportSessionRequestReplyService(
         }
     }
 
-    public async Task HandleItemsProbeFailedAsync(ImportSessionItemsProbeFailed message)
-    {
-        using var scope = scopeFactory.CreateScope();
-        var repo = scope.ServiceProvider.GetRequiredService<IImportSessionRepository>();
-        var session = await repo.ApplyProbeFailuresAsync(message.SessionId, message.Failures);
-        if (session is not null)
-        {
-            await PublishStateChangedAsync(session);
-            await ScheduleProbeBatchAsync(session);
-        }
-    }
-
     private async Task HandleItemPatchAsync(IMessageContext<ImportSessionItemPatchRequest> context)
     {
         try

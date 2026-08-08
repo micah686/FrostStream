@@ -1,4 +1,3 @@
-using Conduit.NATS;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using Shared.Messaging;
@@ -16,15 +15,12 @@ namespace WebAPI.Features.Media.Controllers;
 [ApiController]
 [Route("api/media/stream")]
 public sealed class MediaStreamController(
-    IMessageBus messageBus,
     IStoreProvider blobStorageProvider,
     MediaAccessChecker accessChecker,
     AudioRenditionResolver audioRenditions,
     StreamRenditionResolver streamRenditions,
     ILogger<MediaStreamController> logger) : ControllerBase
 {
-    private static readonly TimeSpan QueryTimeout = TimeSpan.FromSeconds(10);
-
     private const string AudioKind = "audio";
     private const string VideoKind = "video";
 
@@ -226,74 +222,6 @@ public sealed class MediaStreamController(
             cancellationToken: cancellationToken);
     }
 
-    [HttpGet("playlists/{playlistId:guid}/audio.m3u8")]
-    [EnableCors(MediaCors.Policy)]
-    [Endpoint(EndpointIds.PlaylistAudioStream)]
-    [EndpointSummary("Get an audio-only playlist stream")]
-    [EndpointDescription("Returns an M3U8 playlist for the ready opus audio renditions in a downloaded playlist and queues missing audio renditions through MediaProcessor.")]
-    public async Task<IActionResult> GetPlaylistAudio(
-        Guid playlistId,
-        CancellationToken cancellationToken = default)
-    {
-        PlaylistGetResponseMessage? playlistResponse;
-        try
-        {
-            playlistResponse = await messageBus.RequestAsync<PlaylistGetRequestMessage, PlaylistGetResponseMessage>(
-                PlaylistSubjects.PlaylistGet,
-                new PlaylistGetRequestMessage { PlaylistId = playlistId },
-                QueryTimeout,
-                cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed resolving playlist audio stream for {PlaylistId}.", playlistId);
-            return StatusCode(StatusCodes.Status503ServiceUnavailable, "DataBridge is unreachable.");
-        }
-
-        if (playlistResponse?.Success != true || playlistResponse.Playlist is null)
-        {
-            return NotFound(playlistResponse?.ErrorMessage ?? "Playlist was not found.");
-        }
-
-        var readyManifests = new List<(AudioRenditionDto Rendition, string Manifest)>();
-        foreach (var item in playlistResponse.Playlist.Items?.Where(x => x.MediaGuid is not null).OrderBy(x => x.PlaylistIndex)
-                     ?? Enumerable.Empty<PlaylistItemDto>())
-        {
-            // Skip items the caller is not allowed to watch rather than failing the whole playlist.
-            if (await accessChecker.CheckWatchAccessAsync(User, item.MediaGuid!.Value, cancellationToken) is not null)
-            {
-                continue;
-            }
-
-            var (_, rendition) = await audioRenditions.ResolveAsync(
-                item.MediaGuid!.Value,
-                storageKey: null,
-                sourceVersion: null,
-                createIfMissing: true,
-                cancellationToken);
-
-            if (rendition?.Status == AudioRenditionStatus.Ready)
-            {
-                var manifest = await MediaBlobServing.ReadBlobTextAsync(
-                    blobStorageProvider,
-                    rendition.StorageKey,
-                    AudioRenditionHelpers.HlsManifestStoragePath(rendition),
-                    cancellationToken);
-                if (manifest is not null)
-                {
-                    readyManifests.Add((rendition, manifest));
-                }
-            }
-        }
-
-        if (readyManifests.Count == 0)
-        {
-            return Accepted(new { playlistId, Status = "preparing" });
-        }
-
-        return Content(BuildCombinedPlaylistM3u8(readyManifests), "application/vnd.apple.mpegurl");
-    }
-
     private async Task<IActionResult> ServeAudioManifestAsync(AudioRenditionDto rendition, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(rendition.StoragePath))
@@ -339,64 +267,6 @@ public sealed class MediaStreamController(
 
         return string.Join('\n', lines).TrimEnd('\n') + "\n";
     }
-
-    private string BuildCombinedPlaylistM3u8(IEnumerable<(AudioRenditionDto Rendition, string Manifest)> manifests)
-    {
-        var bodyLines = new List<string>();
-        var targetDuration = 10;
-
-        foreach (var (rendition, manifest) in manifests)
-        {
-            foreach (var rawLine in manifest.Split('\n'))
-            {
-                var line = rawLine.TrimEnd('\r');
-                if (line.StartsWith("#EXT-X-TARGETDURATION:", StringComparison.Ordinal) &&
-                    int.TryParse(line["#EXT-X-TARGETDURATION:".Length..], out var parsedTarget))
-                {
-                    targetDuration = Math.Max(targetDuration, parsedTarget);
-                    continue;
-                }
-
-                if (line.Length == 0 ||
-                    line is "#EXTM3U" or "#EXT-X-ENDLIST" ||
-                    line.StartsWith("#EXT-X-VERSION:", StringComparison.Ordinal) ||
-                    line.StartsWith("#EXT-X-PLAYLIST-TYPE:", StringComparison.Ordinal) ||
-                    line.StartsWith("#EXT-X-MEDIA-SEQUENCE:", StringComparison.Ordinal) ||
-                    line.StartsWith("#EXT-X-INDEPENDENT-SEGMENTS", StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                if (line.StartsWith("#EXT-X-MAP:", StringComparison.Ordinal))
-                {
-                    bodyLines.Add(RewriteMapUri(rendition, line));
-                }
-                else if (line.StartsWith('#'))
-                {
-                    bodyLines.Add(line);
-                }
-                else
-                {
-                    bodyLines.Add(BuildSegmentUrl(rendition, line));
-                }
-            }
-        }
-
-        var lines = new List<string>
-        {
-            "#EXTM3U",
-            "#EXT-X-VERSION:7",
-            "#EXT-X-PLAYLIST-TYPE:VOD",
-            $"#EXT-X-TARGETDURATION:{targetDuration}"
-        };
-
-        lines.AddRange(bodyLines);
-        lines.Add("#EXT-X-ENDLIST");
-        return string.Join('\n', lines) + "\n";
-    }
-
-    private string RewriteMapUri(AudioRenditionDto rendition, string line)
-        => RewriteQuotedUri(line, uri => BuildSegmentUrl(rendition, uri));
 
     private static string RewriteQuotedUri(string line, Func<string, string> rewrite)
     {

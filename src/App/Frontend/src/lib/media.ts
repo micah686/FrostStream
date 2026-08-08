@@ -1,6 +1,6 @@
 // Shared formatting and placeholder helpers for media cards and the watch page.
 
-export const placeholderAccents = [
+const placeholderAccents = [
   'from-base-300 to-base-200',
   'from-primary/20 to-secondary/20',
   'from-secondary/20 to-accent/20',
@@ -9,7 +9,7 @@ export const placeholderAccents = [
   'from-warning/20 to-error/20'
 ];
 
-export function hashOf(value: string): number {
+function hashOf(value: string): number {
   let hash = 0;
   for (let i = 0; i < value.length; i += 1) {
     hash = (hash * 31 + value.charCodeAt(i)) | 0;

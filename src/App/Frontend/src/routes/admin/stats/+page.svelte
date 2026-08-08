@@ -21,6 +21,7 @@
   import {
     getChannelStatistics,
     getChannelStatisticsByAccount,
+    getCoverageSummary,
     getDownloadStatistics,
     getGlobalStatistics,
     listChannelStatistics,
@@ -28,10 +29,16 @@
     type ChannelStatisticsDetail,
     type ChannelSuggestion,
     type ChannelStatisticsSummary,
+    type CoverageSummary,
     type DownloadHistoryBucket,
     type StatisticsBucket,
     type StatisticsOverview
   } from '$lib/api/statistics';
+
+  // "All download activity" widens its bucket as the requested span grows so the point count stays
+  // bounded no matter how many years of history exist — see pickBucketForSpan. The lookback itself is
+  // just how far back the default view reaches; bump it if a 5-year window ever feels too short.
+  const ALL_ACTIVITY_LOOKBACK_DAYS = 365 * 5;
 
   type RangePreset = '30d' | '60d' | '90d' | '12m' | 'custom';
   type Interval = StatisticsBucket | 'year';
@@ -51,12 +58,12 @@
 
   let overview = $state<StatisticsOverview | null>(null);
   let allActivity = $state<DownloadHistoryBucket[]>([]);
+  let allActivityBucket = $state<StatisticsBucket>('day');
   let customActivity = $state<DownloadHistoryBucket[]>([]);
   let mostDownloaded = $state<ChannelStatisticsSummary[]>([]);
   let longestDuration = $state<ChannelStatisticsSummary[]>([]);
   let largestOnDisk = $state<ChannelStatisticsSummary[]>([]);
-  let allChannels = $state<ChannelStatisticsSummary[]>([]);
-  let coverageDetails = $state<ChannelStatisticsDetail[]>([]);
+  let coverageSummary = $state<CoverageSummary | null>(null);
   let coverageLoading = $state(false);
   let coverageError = $state<string | null>(null);
   let selectedChannel = $state<ChannelStatisticsDetail | null>(null);
@@ -110,45 +117,67 @@
     options: doughnutOptions()
   }));
 
-  const allActivityChart = $derived.by(() => activityChart(allActivity, 'day'));
+  const allActivityChart = $derived.by(() => activityChart(allActivity, allActivityBucket));
   const customActivityChart = $derived.by(() => activityChart(customActivity, interval));
+  // The history query always returns a full, gap-filled series, so a non-empty bucket list says
+  // nothing about whether the range actually contains activity — the totals have to be checked.
+  const hasAllActivity = $derived(hasActivity(allActivity));
+  const hasCustomActivity = $derived(hasActivity(customActivity));
+  // Channels that scored zero on a given metric are dropped rather than drawn as empty slices.
+  const mostDownloadedRanked = $derived(mostDownloaded.filter((item) => item.downloadedCount > 0));
+  const longestDurationRanked = $derived(longestDuration.filter((item) => item.downloadedDurationSeconds > 0));
+  const largestOnDiskRanked = $derived(largestOnDisk.filter((item) => item.totalBytes > 0));
+  const platformRanked = $derived(platformTotals().filter((item) => item.value > 0));
+
   const mostDownloadedChart = $derived.by(() => polarChart(
-    mostDownloaded,
+    mostDownloadedRanked,
     (item) => item.downloadedCount,
     (value) => `${value.toLocaleString()} ${value === 1 ? 'download' : 'downloads'}`
   ));
   const longestDurationChart = $derived.by(() => polarChart(
-    longestDuration,
+    longestDurationRanked,
     (item) => item.downloadedDurationSeconds,
     formatLongDuration
   ));
   const largestOnDiskChart = $derived.by(() => polarChart(
-    largestOnDisk,
+    largestOnDiskRanked,
     (item) => item.totalBytes,
     formatBytes
   ));
   const platformTypesChart = $derived.by(() => polarValueChart(
-    platformTotals().map((item) => displayLabel(item.label)),
-    platformTotals().map((item) => item.value),
+    platformRanked.map((item) => displayLabel(item.label)),
+    platformRanked.map((item) => item.value),
     (value) => `${value.toLocaleString()} media`
   ));
-  const coverageChart = $derived.by(() => polarValueChart(
+  const coverageSlices = $derived.by(() => nonEmptySlices(
     ['Available', 'Unavailable', 'Ignored', 'Removed'],
     coverageTotals(),
-    (value) => `${value.toLocaleString()} media`,
     [chartTheme.success, chartTheme.warning, chartTheme.neutral, chartTheme.error]
   ));
+  const coverageChart = $derived.by(() => polarValueChart(
+    coverageSlices.labels,
+    coverageSlices.values,
+    (value) => `${value.toLocaleString()} media`,
+    coverageSlices.colors
+  ));
 
-  const channelAvailabilityChart = $derived.by((): ChartConfiguration => {
-    const detail = selectedChannel;
-    return pieChart(
-      ['Available', 'Unavailable', 'Ignored', 'Removed'],
-      detail
-        ? [detail.summary.availableCount, detail.unavailableCount, detail.ignoredCount, detail.removedCount]
-        : [],
-      [chartTheme.success, chartTheme.warning, chartTheme.neutral, chartTheme.error]
-    );
-  });
+  const channelAvailabilitySlices = $derived.by(() => nonEmptySlices(
+    ['Available', 'Unavailable', 'Ignored', 'Removed'],
+    selectedChannel
+      ? [
+          selectedChannel.summary.availableCount,
+          selectedChannel.unavailableCount,
+          selectedChannel.ignoredCount,
+          selectedChannel.removedCount
+        ]
+      : [],
+    [chartTheme.success, chartTheme.warning, chartTheme.neutral, chartTheme.error]
+  ));
+  const channelAvailabilityChart = $derived.by((): ChartConfiguration => pieChart(
+    channelAvailabilitySlices.labels,
+    channelAvailabilitySlices.values,
+    channelAvailabilitySlices.colors
+  ));
 
   const channelDownloadStatesChart = $derived.by((): ChartConfiguration => pieChart(
     (selectedChannel?.recentDownloadStates ?? []).map((item) => displayLabel(item.state)),
@@ -188,14 +217,15 @@
     try {
       const now = new Date();
       const retainedFrom = new Date(now);
-      retainedFrom.setDate(retainedFrom.getDate() - 730);
-      const [overviewResult, activityResult, downloadedResult, durationResult, bytesResult, allChannelsResult] = await Promise.allSettled([
+      retainedFrom.setDate(retainedFrom.getDate() - ALL_ACTIVITY_LOOKBACK_DAYS);
+      allActivityBucket = pickBucketForSpan(ALL_ACTIVITY_LOOKBACK_DAYS);
+      const [overviewResult, activityResult, downloadedResult, durationResult, bytesResult] = await Promise.allSettled([
         getGlobalStatistics(),
-        getDownloadStatistics({ from: retainedFrom, to: now, bucket: 'day' }),
+        getDownloadStatistics({ from: retainedFrom, to: now, bucket: allActivityBucket }),
         listChannelStatistics({ page: 1, pageSize: 10, sortBy: 'downloaded', sortOrder: 'desc' }),
         listChannelStatistics({ page: 1, pageSize: 10, sortBy: 'duration', sortOrder: 'desc' }),
         listChannelStatistics({ page: 1, pageSize: 10, sortBy: 'bytes', sortOrder: 'desc' }),
-        loadAllChannelSummaries()
+        loadCoverageSummary()
       ]);
       if (overviewResult.status === 'rejected') throw overviewResult.reason;
       overview = overviewResult.value;
@@ -203,10 +233,6 @@
       if (downloadedResult.status === 'fulfilled') mostDownloaded = downloadedResult.value.items;
       if (durationResult.status === 'fulfilled') longestDuration = durationResult.value.items;
       if (bytesResult.status === 'fulfilled') largestOnDisk = bytesResult.value.items;
-      if (allChannelsResult.status === 'fulfilled') {
-        allChannels = allChannelsResult.value;
-        await loadCoverageDetails(allChannels);
-      }
       await loadCustomActivity();
     } catch (err) {
       error = err instanceof Error ? err.message : 'Could not load statistics.';
@@ -215,47 +241,24 @@
     }
   }
 
-  async function loadAllChannelSummaries(): Promise<ChannelStatisticsSummary[]> {
-    const items: ChannelStatisticsSummary[] = [];
-    let page = 1;
-    let hasMore = true;
-    while (hasMore) {
-      const response = await listChannelStatistics({
-        page,
-        pageSize: 100,
-        sortBy: 'available',
-        sortOrder: 'desc'
-      });
-      items.push(...response.items);
-      hasMore = response.hasMore;
-      page += 1;
-    }
-    return items;
+  // Bucket widens as the requested span grows so the chart never renders more than a few hundred
+  // points, however many years of retained activity exist.
+  function pickBucketForSpan(days: number): StatisticsBucket {
+    if (days <= 120) return 'day';
+    if (days <= 730) return 'week';
+    return 'month';
   }
 
-  async function loadCoverageDetails(channels: ChannelStatisticsSummary[]) {
+  // Coverage totals used to come from paging through every channel and fetching each one's detail
+  // stats just to sum four numbers — that grew linearly with channel count. This is now one grouped
+  // aggregate call, bounded regardless of how many channels or how much media exist.
+  async function loadCoverageSummary() {
     coverageLoading = true;
     coverageError = null;
     try {
-      const details: ChannelStatisticsDetail[] = [];
-      for (let index = 0; index < channels.length; index += 8) {
-        const batch = channels.slice(index, index + 8);
-        const results = await Promise.allSettled(batch.map(async (channel) => {
-          if (channel.creatorSourceId !== null) return getChannelStatistics(channel.creatorSourceId);
-          if (channel.accountId !== null) return getChannelStatisticsByAccount(channel.accountId);
-          return null;
-        }));
-        details.push(...results
-          .filter((result): result is PromiseFulfilledResult<ChannelStatisticsDetail | null> => result.status === 'fulfilled')
-          .map((result) => result.value)
-          .filter((detail): detail is ChannelStatisticsDetail => detail !== null));
-      }
-      if (details.length === 0 && channels.length > 0) {
-        throw new Error('Could not load coverage statistics for any channel.');
-      }
-      coverageDetails = details;
+      coverageSummary = await getCoverageSummary();
     } catch (err) {
-      coverageDetails = [];
+      coverageSummary = null;
       coverageError = err instanceof Error ? err.message : 'Could not load coverage statistics.';
     } finally {
       coverageLoading = false;
@@ -309,10 +312,10 @@
   function aggregateYears(items: DownloadHistoryBucket[]): DownloadHistoryBucket[] {
     const years = new Map<number, DownloadHistoryBucket>();
     for (const item of items) {
-      const year = new Date(item.bucketStart).getFullYear();
+      const year = new Date(item.bucketStart).getUTCFullYear();
       const current = years.get(year) ?? {
-        bucketStart: new Date(year, 0, 1).toISOString(),
-        bucketEnd: new Date(year + 1, 0, 1).toISOString(),
+        bucketStart: new Date(Date.UTC(year, 0, 1)).toISOString(),
+        bucketEnd: new Date(Date.UTC(year + 1, 0, 1)).toISOString(),
         created: 0,
         completed: 0,
         failed: 0,
@@ -402,13 +405,15 @@
   }
 
   function activityChart(items: DownloadHistoryBucket[], chartInterval: Interval): ChartConfiguration {
+    // Every state is a fixed series rather than something the query groups by, so states the range
+    // has no activity for would otherwise sit in the legend as a flat line along zero.
     const datasets = [
       { label: 'Completed', key: 'completed' as const, color: chartTheme.success },
       { label: 'Failed', key: 'failed' as const, color: chartTheme.error },
       { label: 'Cancelled', key: 'cancelled' as const, color: chartTheme.warning },
       { label: 'Ignored', key: 'ignored' as const, color: chartTheme.neutral },
       { label: 'Created', key: 'created' as const, color: chartTheme.info }
-    ];
+    ].filter((dataset) => items.some((item) => item[dataset.key] > 0));
     return {
       type: 'line',
       data: {
@@ -428,6 +433,11 @@
       },
       options: cartesianOptions()
     };
+  }
+
+  function hasActivity(items: DownloadHistoryBucket[]): boolean {
+    return items.some((item) =>
+      item.created > 0 || item.completed > 0 || item.failed > 0 || item.cancelled > 0 || item.ignored > 0);
   }
 
   function polarChart(
@@ -480,28 +490,36 @@
   }
 
   function platformTotals(): { label: string; value: number }[] {
-    const totals = new Map<string, number>();
-    for (const channel of allChannels) {
-      totals.set(channel.platform, (totals.get(channel.platform) ?? 0) + channel.availableCount);
-    }
-    return [...totals.entries()]
-      .map(([label, value]) => ({ label, value }))
-      .sort((left, right) => right.value - left.value)
-      .slice(0, 10);
+    // Backend already returns the top 10 platforms by available count, sorted.
+    return (coverageSummary?.platforms ?? []).map((item) => ({ label: item.platform, value: item.availableCount }));
   }
 
   function coverageTotals(): number[] {
-    let available = 0;
-    let unavailable = 0;
-    let ignored = 0;
-    let removed = 0;
-    for (const detail of coverageDetails) {
-      available += detail.summary.availableCount;
-      unavailable += detail.unavailableCount;
-      ignored += detail.ignoredCount;
-      removed += detail.removedCount;
-    }
-    return [available, unavailable, ignored, removed];
+    if (!coverageSummary) return [0, 0, 0, 0];
+    return [
+      coverageSummary.availableCount,
+      coverageSummary.unavailableCount,
+      coverageSummary.ignoredCount,
+      coverageSummary.removedCount
+    ];
+  }
+
+  // Availability/coverage buckets are a fixed list rather than a GROUP BY, so categories the library
+  // has none of would otherwise render as legend entries with no slice behind them. Drop the empties
+  // and keep the colour assignment pinned to the original category, not to the surviving index.
+  function nonEmptySlices(
+    labels: string[],
+    values: number[],
+    colors: string[]
+  ): { labels: string[]; values: number[]; colors: string[] } {
+    const kept = labels
+      .map((label, index) => ({ label, value: values[index] ?? 0, color: colors[index] }))
+      .filter((slice) => slice.value > 0);
+    return {
+      labels: kept.map((slice) => slice.label),
+      values: kept.map((slice) => slice.value),
+      colors: kept.map((slice) => slice.color)
+    };
   }
 
   function pieChart(labels: string[], data: number[], colors: string[]): ChartConfiguration {
@@ -587,12 +605,14 @@
     return channel.accountName ?? channel.accountHandle ?? channel.sourceUrl ?? 'Unknown channel';
   }
 
+  // Buckets are whole UTC days server-side, so they have to be labelled in UTC as well — formatting
+  // them locally shifts every bucket onto the neighbouring day for anyone west of Greenwich.
   function bucketLabel(value: string, chartInterval: Interval): string {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return 'Unknown';
-    if (chartInterval === 'year') return String(date.getFullYear());
-    if (chartInterval === 'month') return date.toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
-    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    if (chartInterval === 'year') return String(date.getUTCFullYear());
+    if (chartInterval === 'month') return date.toLocaleDateString(undefined, { month: 'short', year: '2-digit', timeZone: 'UTC' });
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
   }
 
   function dateInput(value: Date): string {
@@ -709,8 +729,8 @@
 
     <section class="card mt-5 border border-base-300 bg-base-100 p-5">
       <h2 class="text-sm font-bold text-base-content">All download activity</h2>
-      <p class="mt-1 text-xs text-base-content/50">All retained daily download-state activity</p>
-      {#if allActivity.length > 0}
+      <p class="mt-1 text-xs text-base-content/50">Retained download-state activity, grouped by {allActivityBucket} to keep the chart readable over years of history</p>
+      {#if hasAllActivity}
         <div class="mt-4"><StatisticsChart config={allActivityChart} ariaLabel="Line chart showing all retained download activity" height="22rem" /></div>
       {:else}
         <p class="mt-8 text-center text-sm text-base-content/50">No retained download activity.</p>
@@ -745,7 +765,7 @@
         <div class="alert alert-error mt-4 text-sm" role="alert">{activityError}</div>
       {:else if activityLoading}
         <div class="mt-6 flex min-h-64 items-center justify-center"><span class="loading loading-spinner loading-sm"></span></div>
-      {:else if customActivity.length > 0}
+      {:else if hasCustomActivity}
         <div class="mt-4"><StatisticsChart config={customActivityChart} ariaLabel="Line chart showing custom download activity" height="22rem" /></div>
       {:else}
         <p class="mt-8 text-center text-sm text-base-content/50">No download activity in this range.</p>
@@ -755,20 +775,32 @@
     <div class="mt-5 grid gap-5 xl:grid-cols-3">
       <section class="card border border-base-300 bg-base-100 p-5">
         <h2 class="text-sm font-bold text-base-content">Top 10 · Most downloaded</h2>
-        <div class="mt-4"><StatisticsChart config={mostDownloadedChart} ariaLabel="Polar area chart of channels with the most downloads" height="19rem" /></div>
+        {#if mostDownloadedRanked.length > 0}
+          <div class="mt-4"><StatisticsChart config={mostDownloadedChart} ariaLabel="Polar area chart of channels with the most downloads" height="19rem" /></div>
+        {:else}
+          <p class="mt-8 text-center text-sm text-base-content/50">No downloads yet.</p>
+        {/if}
       </section>
       <section class="card border border-base-300 bg-base-100 p-5">
         <h2 class="text-sm font-bold text-base-content">Top 10 · Longest duration</h2>
-        <div class="mt-4"><StatisticsChart config={longestDurationChart} ariaLabel="Polar area chart of channels with the longest downloaded duration" height="19rem" /></div>
+        {#if longestDurationRanked.length > 0}
+          <div class="mt-4"><StatisticsChart config={longestDurationChart} ariaLabel="Polar area chart of channels with the longest downloaded duration" height="19rem" /></div>
+        {:else}
+          <p class="mt-8 text-center text-sm text-base-content/50">No downloaded duration yet.</p>
+        {/if}
       </section>
       <section class="card border border-base-300 bg-base-100 p-5">
         <h2 class="text-sm font-bold text-base-content">Top 10 · Largest on disk</h2>
-        <div class="mt-4"><StatisticsChart config={largestOnDiskChart} ariaLabel="Polar area chart of channels using the most disk space" height="19rem" /></div>
+        {#if largestOnDiskRanked.length > 0}
+          <div class="mt-4"><StatisticsChart config={largestOnDiskChart} ariaLabel="Polar area chart of channels using the most disk space" height="19rem" /></div>
+        {:else}
+          <p class="mt-8 text-center text-sm text-base-content/50">No disk usage yet.</p>
+        {/if}
       </section>
       <section class="card border border-base-300 bg-base-100 p-5">
         <h2 class="text-sm font-bold text-base-content">Top 10 · Platform types</h2>
         <p class="mt-1 text-xs text-base-content/50">Platforms grouped by available media</p>
-        {#if platformTotals().length > 0}
+        {#if platformRanked.length > 0}
           <div class="mt-4"><StatisticsChart config={platformTypesChart} ariaLabel="Polar area chart of the top platform types by available media" height="19rem" /></div>
         {:else}
           <p class="mt-8 text-center text-sm text-base-content/50">No platform data.</p>
@@ -781,8 +813,8 @@
           <div class="alert alert-error mt-4 text-sm" role="alert">{coverageError}</div>
         {:else if coverageLoading}
           <div class="mt-6 flex min-h-64 items-center justify-center"><span class="loading loading-spinner loading-sm"></span></div>
-        {:else if coverageDetails.length > 0}
-          <div class="mt-4"><StatisticsChart config={coverageChart} ariaLabel="Polar area chart of available, unavailable, ignored, and removed media" height="19rem" /></div>
+        {:else if coverageSlices.labels.length > 0}
+          <div class="mt-4"><StatisticsChart config={coverageChart} ariaLabel="Polar area chart of media coverage by availability" height="19rem" /></div>
         {:else}
           <p class="mt-8 text-center text-sm text-base-content/50">No coverage data.</p>
         {/if}
@@ -867,15 +899,27 @@
         <div class="mt-4 grid gap-5 xl:grid-cols-3">
           <section class="card border border-base-300 bg-base-100 p-5">
             <h3 class="text-sm font-bold text-base-content">Availability</h3>
-            <div class="mt-4"><StatisticsChart config={channelAvailabilityChart} ariaLabel="Pie chart showing available, unavailable, ignored, and removed channel media" height="18rem" /></div>
+            {#if channelAvailabilitySlices.labels.length > 0}
+              <div class="mt-4"><StatisticsChart config={channelAvailabilityChart} ariaLabel="Pie chart showing channel media by availability" height="18rem" /></div>
+            {:else}
+              <p class="mt-8 text-center text-sm text-base-content/50">No availability data.</p>
+            {/if}
           </section>
           <section class="card border border-base-300 bg-base-100 p-5">
             <h3 class="text-sm font-bold text-base-content">Recent download states</h3>
-            <div class="mt-4"><StatisticsChart config={channelDownloadStatesChart} ariaLabel="Pie chart showing recent channel download states" height="18rem" /></div>
+            {#if (selectedChannel.recentDownloadStates.length ?? 0) > 0}
+              <div class="mt-4"><StatisticsChart config={channelDownloadStatesChart} ariaLabel="Pie chart showing recent channel download states" height="18rem" /></div>
+            {:else}
+              <p class="mt-8 text-center text-sm text-base-content/50">No download state data.</p>
+            {/if}
           </section>
           <section class="card border border-base-300 bg-base-100 p-5">
             <h3 class="text-sm font-bold text-base-content">Media types</h3>
-            <div class="mt-4"><StatisticsChart config={channelMediaTypesChart} ariaLabel="Pie chart showing channel media types" height="18rem" /></div>
+            {#if (selectedChannel.mediaTypes.length ?? 0) > 0}
+              <div class="mt-4"><StatisticsChart config={channelMediaTypesChart} ariaLabel="Pie chart showing channel media types" height="18rem" /></div>
+            {:else}
+              <p class="mt-8 text-center text-sm text-base-content/50">No media type data.</p>
+            {/if}
           </section>
         </div>
       {/if}

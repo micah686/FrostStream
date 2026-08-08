@@ -257,7 +257,13 @@ public static class ProgressLineParser
             return ReadOnlySpan<char>.Empty;
         }
 
-        var slice = source[start..];
+        // yt-dlp right-justifies each value to a fixed field width (e.g. speed/size to 10
+        // characters, eta to 8: FileDownloader.format_speed/format_eta in yt-dlp's own source),
+        // so real progress lines have variable leading padding here, not a single separator
+        // space. Skipping straight to IndexOf(' ') without trimming this first returns an empty
+        // token whenever the formatted value is shorter than its field width, which is the
+        // common case — leaving totalBytes/speed/eta null even though the line has real data.
+        var slice = source[start..].TrimStart(' ');
         var end = slice.IndexOf(' ');
         return end < 0 ? slice : slice[..end];
     }

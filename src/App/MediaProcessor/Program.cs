@@ -2,6 +2,7 @@
 using MediaProcessor.Audio;
 using MediaProcessor.Ffmpeg;
 using MediaProcessor.Storage;
+using MediaProcessor.Thumbnails;
 using MediaProcessor.Video;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -37,9 +38,15 @@ class Program
             .Bind(builder.Configuration.GetSection(MediaProcessorOptions.SectionName));
         builder.Services.AddHttpClient<MediaProcessorStorageClient>();
         builder.Services.AddSingleton<IClock>(SystemClock.Instance);
+        builder.Services.AddSingleton<IBackgroundRunReporter>(sp => new BackgroundRunReporter(
+            sp.GetRequiredService<IMessageBus>(),
+            sp.GetRequiredService<IClock>(),
+            "media-processor",
+            sp.GetService<Microsoft.Extensions.Logging.ILogger<BackgroundRunReporter>>()));
         builder.Services.AddSingleton<FfmpegRunner>();
         builder.Services.AddHostedService<AudioRenditionProcessorService>();
         builder.Services.AddHostedService<StreamRenditionProcessorService>();
+        builder.Services.AddHostedService<MediaThumbnailGenerationService>();
 
         // Force ConsoleLifetime so Ctrl+C / SIGTERM triggers StopAsync on hosted services
         builder.Services.AddSingleton<IHostLifetime, ConsoleLifetime>();

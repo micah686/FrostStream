@@ -136,6 +136,7 @@ class Program
         builder.Services.AddScoped<IStatisticsReadService, StatisticsReadService>();
         builder.Services.AddScoped<IMediaStreamReadService, MediaStreamReadService>();
         builder.Services.AddScoped<IMediaThumbnailReadService, MediaThumbnailReadService>();
+        builder.Services.AddScoped<IMediaThumbnailGenerationService, MediaThumbnailGenerationService>();
         builder.Services.AddScoped<IMediaCaptionReadService, MediaCaptionReadService>();
         builder.Services.AddScoped<IAccountAssetReadService, AccountAssetReadService>();
         builder.Services.AddScoped<IAudioRenditionRepository, AudioRenditionRepository>();
@@ -183,11 +184,9 @@ class Program
         builder.Services.AddHostedService<CookieProfileConsumerService>();
         builder.Services.AddHostedService<TypesenseSyncConsumerService>();
         builder.Services.AddHostedService<MetadataListConsumerService>();
-        builder.Services.AddHostedService<MetadataSearchConsumerService>();
         builder.Services.AddHostedService<MetadataCommentsConsumerService>();
         builder.Services.AddHostedService<MetadataCaptionsConsumerService>();
         builder.Services.AddHostedService<UnifiedSearchConsumerService>();
-        builder.Services.AddHostedService<MetadataRebuildConsumerService>();
 
         builder.Services.AddHostedService<StorageCrudConsumerService>();
         builder.Services.AddHostedService<OptionPresetCrudConsumerService>();
@@ -218,6 +217,7 @@ class Program
         builder.Services.AddHostedService<MetadataQueryConsumerService>();
         builder.Services.AddHostedService<StatisticsQueryConsumerService>();
         builder.Services.AddHostedService<MediaStreamQueryConsumerService>();
+        builder.Services.AddHostedService<MediaThumbnailGenerationConsumerService>();
         builder.Services.AddHostedService<AudioRenditionConsumerService>();
         builder.Services.AddHostedService<MediaEncodingStatusConsumerService>();
         builder.Services.AddHostedService<StreamRenditionConsumerService>();

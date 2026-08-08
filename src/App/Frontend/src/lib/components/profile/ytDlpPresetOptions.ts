@@ -322,10 +322,6 @@ export function stateFromOptions(options: Record<string, unknown>): PresetOption
   };
 }
 
-export function emptyState(): PresetOptionsState {
-  return stateFromOptions({});
-}
-
 /** Removes values that are indistinguishable from "unset" after a round-trip
  *  through the C# model: null, false, '', empty arrays, and empty objects.
  *  Numbers (including 0) always survive. */

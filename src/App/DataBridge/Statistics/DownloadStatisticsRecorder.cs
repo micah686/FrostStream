@@ -38,6 +38,58 @@ internal static class DownloadStatisticsRecorder
     }
 
     /// <summary>
+    /// Best-effort per-channel echo of <see cref="RecordDailyActivityAsync"/>: resolves the owning
+    /// creator source (via discovery.discovered_media, present before a download even starts) and
+    /// account (via metadata.media_metadata, present once metadata has been fetched) at the moment a
+    /// job reaches a state, so the channel-detail "recent download states" card survives
+    /// download_jobs retention instead of depending on a job row DownloadHistoryPurger deletes after
+    /// ~30 days. A source URL that matches neither (ad-hoc downloads that failed before metadata was
+    /// fetched) simply records nothing — there is no channel to attribute it to yet.
+    /// </summary>
+    public static async Task RecordChannelDailyStatesAsync(
+        DataBridgeDbContext db, ILogger? logger, string? sourceUrl, string state, Instant occurredAt, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(sourceUrl))
+            return;
+
+        var day = occurredAt.InUtc().Date;
+
+        try
+        {
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO statistics.creator_source_daily_states (day, creator_source_id, state, job_count)
+                SELECT {day}, dm.creator_source_id, {state}, 1
+                FROM discovery.discovered_media dm
+                WHERE dm.canonical_url = {sourceUrl}
+                LIMIT 1
+                ON CONFLICT (day, creator_source_id, state) DO UPDATE SET
+                    job_count = statistics.creator_source_daily_states.job_count + 1
+                """, ct);
+        }
+        catch (Exception ex)
+        {
+            logger?.LogWarning(ex, "Failed recording creator-source daily download state for state {State}.", state);
+        }
+
+        try
+        {
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO statistics.account_daily_states (day, account_id, state, job_count)
+                SELECT {day}, mm.account_id, {state}, 1
+                FROM metadata.media_metadata mm
+                WHERE mm.webpage_url = {sourceUrl}
+                LIMIT 1
+                ON CONFLICT (day, account_id, state) DO UPDATE SET
+                    job_count = statistics.account_daily_states.job_count + 1
+                """, ct);
+        }
+        catch (Exception ex)
+        {
+            logger?.LogWarning(ex, "Failed recording account daily download state for state {State}.", state);
+        }
+    }
+
+    /// <summary>
     /// Records both the global "completed" daily rollup and the per-channel/per-media ledger row for
     /// a genuinely finalized download. Looks the primary artifact's size up from jobs.download_artifacts
     /// (not job.FileSizeBytes, which the V2 flow never populates) and the owning account/duration from

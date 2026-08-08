@@ -8,7 +8,6 @@ using WebAPI.Auth;
 using WebAPI.Features.Common;
 using WebAPI.Features.DownloadConfigSets;
 using WebAPI.Features.Downloads.Models;
-using WebAPI.Features.OptionPresets.Controllers;
 using YtDlpSharpLib.Options;
 
 namespace WebAPI.Features.Downloads.Controllers;
@@ -21,11 +20,10 @@ public class DownloadsController(
     IClock clock,
     ILogger<DownloadsController> logger) : ControllerBase
 {
-    private static readonly TimeSpan AdminRequestTimeout = TimeSpan.FromSeconds(10);
     /// <summary>
-    /// Submits a video download. Callers may supply yt-dlp options directly (merged with the
-    /// optional SponsorBlock section); use <see cref="DownloadWithPreset"/> for stored yt-dlp
-    /// option presets.
+    /// Submits a video download. Callers supply yt-dlp options directly (merged with the optional
+    /// SponsorBlock section); audio-only capture is expressed through those options rather than a
+    /// dedicated endpoint.
     /// </summary>
     [HttpPost("video")]
     [Endpoint(EndpointIds.DownloadsCreate)]
@@ -39,246 +37,24 @@ public class DownloadsController(
             storageKey: request.StorageKey,
             forceDownload: request.ForceDownload,
             tags: request.Tags,
-            mediaKind: MediaKind.Video,
-            audioFormat: null,
             ytDlpOptions: CombineOptions(request.YtDlpOptions, request.SponsorBlock),
-            presetKey: null,
-            cookieProfileKey: request.CookieProfileKey,
-            priority: request.Priority,
-            fetchComments: request.FetchComments,
-            configSetKey: request.ConfigSetKey,
-            // Only the plain video endpoint can auto-route: /audio's forced MP3 extraction and
-            // /preset's PresetKey have no equivalent on PlaylistRequested.
-            allowPlaylistAutoRoute: true,
-            cancellationToken: cancellationToken);
-
-    /// <summary>
-    /// Submits a simple audio-only download. The Worker forces
-    /// <c>--extract-audio --audio-format mp3</c>; no other options are configurable.
-    /// </summary>
-    [HttpPost("audio")]
-    [Endpoint(EndpointIds.DownloadsAudio)]
-    [EndpointSummary("Queue an MP3 audio download")]
-    [EndpointDescription("Creates an audio-only download job that extracts and converts the source to MP3. The request is published asynchronously to the download stream, uses the default storage target when no storage key is supplied, and returns job and correlation identifiers before processing begins.")]
-    public Task<ActionResult<DownloadRequestResponse>> DownloadAudio(
-        [FromBody] DownloadAudioRequest request,
-        CancellationToken cancellationToken)
-        => PublishRequestAsync(
-            sourceUrl: request.SourceUrl,
-            storageKey: request.StorageKey,
-            forceDownload: request.ForceDownload,
-            tags: request.Tags,
-            mediaKind: MediaKind.Audio,
-            audioFormat: AudioConversionFormat.Mp3,
-            ytDlpOptions: BuildYtDlpOptions(request.SponsorBlock),
-            presetKey: null,
             cookieProfileKey: request.CookieProfileKey,
             priority: request.Priority,
             fetchComments: request.FetchComments,
             configSetKey: request.ConfigSetKey,
             cancellationToken: cancellationToken);
-
-    /// <summary>
-    /// Submits a download whose yt-dlp options come from a stored preset (managed
-    /// via <see cref="OptionPresetsController"/>). Preset content drives every
-    /// yt-dlp flag — including audio extraction if the preset configures it.
-    /// </summary>
-    [HttpPost("preset")]
-    [Endpoint(EndpointIds.DownloadsPreset)]
-    [EndpointSummary("Queue a download using an option preset")]
-    [EndpointDescription("Creates a download job whose yt-dlp behavior is loaded from the named stored option preset by the downstream worker flow. The endpoint publishes the request asynchronously, supports the same storage, requester, tags, cookie, and force-download fields as a standard download, and returns tracking identifiers immediately.")]
-    public Task<ActionResult<DownloadRequestResponse>> DownloadWithPreset(
-        [FromBody] DownloadPresetRequest request,
-        CancellationToken cancellationToken)
-        => PublishRequestAsync(
-            sourceUrl: request.SourceUrl,
-            storageKey: request.StorageKey,
-            forceDownload: request.ForceDownload,
-            tags: request.Tags,
-            mediaKind: MediaKind.Video,
-            audioFormat: null,
-            ytDlpOptions: null,
-            presetKey: request.PresetKey,
-            cookieProfileKey: request.CookieProfileKey,
-            priority: request.Priority,
-            fetchComments: request.FetchComments,
-            configSetKey: request.ConfigSetKey,
-            cancellationToken: cancellationToken);
-
-    /// <summary>
-    /// Updates the stored administrative priority of a download job. This does not start,
-    /// resume, or interrupt an immutable V2 run.
-    /// </summary>
-    [HttpPatch("{jobId:guid}/priority")]
-    [Endpoint(EndpointIds.DownloadsUpdatePriority)]
-    [EndpointSummary("Update a download job's priority")]
-    [EndpointDescription("Changes the stored administrative priority (0–100) used by priority-sorted queue views. This operation never starts, resumes, or interrupts a V2 run.")]
-    public async Task<ActionResult> UpdatePriority(
-        [FromRoute] Guid jobId,
-        [FromBody] UpdatePriorityRequest request,
-        CancellationToken cancellationToken)
-    {
-        UpdateDownloadPriorityResponse? response;
-        try
-        {
-            response = await messageBus.RequestAsync<UpdateDownloadPriorityRequest, UpdateDownloadPriorityResponse>(
-                DownloadSubjects.UpdatePriorityRequest,
-                new UpdateDownloadPriorityRequest { JobId = jobId, Priority = request.Priority },
-                AdminRequestTimeout,
-                cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed requesting priority update for JobId {JobId}", jobId);
-            return StatusCode(StatusCodes.Status502BadGateway, new ProblemDetails
-            {
-                Title = "Failed to update priority",
-                Detail = "Could not reach the messaging bus.",
-                Status = StatusCodes.Status502BadGateway
-            });
-        }
-
-        if (response is null || !response.Success)
-        {
-            var error = response?.Error ?? "No response from DataBridge.";
-            if (error == "Job not found.")
-                return NotFound(new ProblemDetails { Title = "Job not found.", Status = StatusCodes.Status404NotFound });
-            return BadRequest(new ProblemDetails { Title = error, Status = StatusCodes.Status400BadRequest });
-        }
-
-        return NoContent();
-    }
-
-    /// <summary>
-    /// Stops a queued or active job. Starting it later always creates a fresh RunId.
-    /// </summary>
-    [HttpPost("{jobId:guid}/stop")]
-    [Endpoint(EndpointIds.DownloadsStop)]
-    [EndpointSummary("Stop a download job")]
-    [EndpointDescription("Stops a queued or active run. Partial artifacts are compensated before the job settles as Stopped.")]
-    public async Task<ActionResult> Stop(
-        [FromRoute] Guid jobId,
-        [FromBody] StopDownloadApiRequest? request,
-        CancellationToken cancellationToken)
-    {
-        StopDownloadResponse? response;
-        try
-        {
-            response = await messageBus.RequestAsync<StopDownloadRequest, StopDownloadResponse>(
-                DownloadSubjects.StopDownloadRequest,
-                new StopDownloadRequest
-                {
-                    JobId = jobId,
-                    RequestedBy = AuthConstants.FindSubject(User),
-                    Reason = request?.Reason
-                },
-                AdminRequestTimeout,
-                cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed requesting stop for JobId {JobId}", jobId);
-            return StatusCode(StatusCodes.Status502BadGateway, new ProblemDetails
-            {
-                Title = "Failed to stop download",
-                Detail = "Could not reach the messaging bus.",
-                Status = StatusCodes.Status502BadGateway
-            });
-        }
-
-        if (response is null)
-        {
-            return StatusCode(StatusCodes.Status502BadGateway, new ProblemDetails
-            {
-                Title = "Failed to stop download",
-                Detail = "No response from DataBridge.",
-                Status = StatusCodes.Status502BadGateway
-            });
-        }
-
-        if (response.Success)
-            return Accepted(new StopDownloadApiResponse(response.Status ?? DownloadJobStatus.Stopping));
-
-        if (response.ErrorCode == "not_found")
-            return NotFound(new ProblemDetails { Title = "Job not found.", Status = StatusCodes.Status404NotFound });
-
-        return Conflict(new ProblemDetails
-        {
-            Title = response.ErrorMessage ?? "Download cannot be stopped.",
-            Status = StatusCodes.Status409Conflict
-        });
-    }
-
-    /// <summary>
-    /// Starts a Stopped or Failed job as a completely fresh run.
-    /// </summary>
-    [HttpPost("{jobId:guid}/start")]
-    [Endpoint(EndpointIds.DownloadsStart)]
-    [EndpointSummary("Start a download job")]
-    [EndpointDescription("Starts a Stopped or Failed job from metadata with a new RunId and reset stage attempts.")]
-    public async Task<ActionResult> Start(
-        [FromRoute] Guid jobId,
-        CancellationToken cancellationToken)
-    {
-        StartDownloadResponse? response;
-        try
-        {
-            response = await messageBus.RequestAsync<StartDownloadRequest, StartDownloadResponse>(
-                DownloadSubjects.StartDownloadRequest,
-                new StartDownloadRequest
-                {
-                    JobId = jobId,
-                    RequestedBy = AuthConstants.FindSubject(User)
-                },
-                AdminRequestTimeout,
-                cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed requesting start for JobId {JobId}", jobId);
-            return StatusCode(StatusCodes.Status502BadGateway, new ProblemDetails
-            {
-                Title = "Failed to start download",
-                Detail = "Could not reach the messaging bus.",
-                Status = StatusCodes.Status502BadGateway
-            });
-        }
-
-        if (response is null)
-        {
-            return StatusCode(StatusCodes.Status502BadGateway, new ProblemDetails
-            {
-                Title = "Failed to start download",
-                Detail = "No response from DataBridge.",
-                Status = StatusCodes.Status502BadGateway
-            });
-        }
-
-        if (response.Success)
-            return Accepted(new { Status = "running", JobId = response.JobId, RunId = response.RunId });
-
-        return Conflict(new ProblemDetails
-        {
-            Title = response.ErrorMessage ?? "Download cannot be started.",
-            Status = StatusCodes.Status409Conflict
-        });
-    }
 
     private async Task<ActionResult<DownloadRequestResponse>> PublishRequestAsync(
         string sourceUrl,
         string? storageKey,
         bool forceDownload,
         IReadOnlyList<string>? tags,
-        MediaKind mediaKind,
-        AudioConversionFormat? audioFormat,
         YtDlpOptions? ytDlpOptions,
-        string? presetKey,
         string? cookieProfileKey,
         int? priority,
         bool fetchComments,
         string? configSetKey,
-        CancellationToken cancellationToken,
-        bool allowPlaylistAutoRoute = false)
+        CancellationToken cancellationToken)
     {
         if (!YtDlpSourceUrlValidator.TryValidate(sourceUrl, out var validationError))
         {
@@ -311,7 +87,7 @@ public class DownloadsController(
 
         // Playlist-container URLs on the direct path would become a single unmodeled job (no
         // fan-out, no per-entry tracking), so route them into the playlist pipeline instead.
-        if (allowPlaylistAutoRoute && PlaylistUrlDetector.IsPlaylistUrl(sourceUrl))
+        if (PlaylistUrlDetector.IsPlaylistUrl(sourceUrl))
         {
             return await PublishPlaylistRequestAsync(sourceUrl, subject, resolved!, cancellationToken);
         }
@@ -336,11 +112,11 @@ public class DownloadsController(
             WorkerTag = resolved.WorkerTag,
             Tags = tags,
             ForceDownload = forceDownload,
-            MediaKind = mediaKind,
-            AudioFormat = audioFormat,
+            MediaKind = MediaKind.Video,
+            AudioFormat = null,
             SourceKind = DownloadSourceKind.Direct,
             YtDlpOptions = resolved.YtDlpOptions,
-            PresetKey = presetKey,
+            PresetKey = null,
             CookieSecretPath = resolved.CookieSecretPath,
             Priority = resolved.Priority,
             FetchComments = fetchComments

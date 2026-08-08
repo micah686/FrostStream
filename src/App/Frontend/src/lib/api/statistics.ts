@@ -114,6 +114,19 @@ export interface DownloadStatisticsOptions {
   bucket?: StatisticsBucket;
 }
 
+export interface PlatformCoverage {
+  platform: string;
+  availableCount: number;
+}
+
+export interface CoverageSummary {
+  availableCount: number;
+  unavailableCount: number;
+  ignoredCount: number;
+  removedCount: number;
+  platforms: PlatformCoverage[];
+}
+
 export async function getGlobalStatistics(fetchImpl: typeof fetch = fetch): Promise<StatisticsOverview> {
   return getJson<StatisticsOverview>(`${BASE}/overview`, fetchImpl);
 }
@@ -165,6 +178,10 @@ export async function getDownloadStatistics(
     bucket: options.bucket ?? 'day'
   });
   return getJson<DownloadHistoryBucket[]>(`${BASE}/download-history?${query}`, fetchImpl);
+}
+
+export async function getCoverageSummary(fetchImpl: typeof fetch = fetch): Promise<CoverageSummary> {
+  return getJson<CoverageSummary>(`${BASE}/coverage`, fetchImpl);
 }
 
 function serializeDate(value: string | Date): string {

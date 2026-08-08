@@ -180,7 +180,7 @@
     </div>
     <a
       href="/search"
-      class="text-sm font-medium text-base-content/60 transition hover:text-base-content/90 hover:underline"
+      class="btn btn-sm btn-neutral text-xs"
     >
       ← Back to search
     </a>
@@ -303,7 +303,7 @@
     <div class="rounded-2xl border border-base-300/80 bg-base-200/50 p-4">
       <p class="text-xs font-medium text-base-content/50">Query preview</p>
       <div class="mt-2 flex flex-wrap items-center justify-between gap-4">
-        <code class="min-w-0 break-all font-mono text-sm text-primary">
+        <code class="min-w-0 break-all font-mono text-sm text-base-content">
           {builtQuery || 'Nothing selected yet'}
         </code>
         <div class="flex shrink-0 gap-2">

@@ -6,7 +6,6 @@ public static class DownloadSubjects
     public const string GroupRequested = "download.v2.request.group";
     public const string DownloadRequested = "download.v2.request.job";
 
-    public const string ExpandGroupCommand = "download.v2.command.group.expand";
     public const string FetchMetadataCommand = "download.v2.command.metadata.fetch";
     public const string DownloadVideoCommand = "download.v2.command.media.acquire";
 

@@ -19,7 +19,7 @@ export class EventStreamError extends Error {
   }
 }
 
-export function createSseParser() {
+function createSseParser() {
   let buffer = '';
 
   return {

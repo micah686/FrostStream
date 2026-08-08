@@ -9,6 +9,7 @@ public static class StatisticsSubjects
     public const string ChannelSuggestions = "statistics.channels.suggestions";
     public const string ChannelGet = "statistics.channels.get";
     public const string DownloadHistory = "statistics.download-history";
+    public const string CoverageSummary = "statistics.coverage-summary";
 
     public const string QueueGroup = "databridge-statistics";
 }
@@ -188,4 +189,32 @@ public sealed record DownloadHistoryBucketDto
     public long Ignored { get; init; }
     public long BytesCompleted { get; init; }
     public double DurationCompletedSeconds { get; init; }
+}
+
+public sealed record StatisticsCoverageSummaryRequestMessage;
+
+public sealed record StatisticsCoverageSummaryResponseMessage
+{
+    public bool Success { get; init; }
+    public string? ErrorCode { get; init; }
+    public string? ErrorMessage { get; init; }
+    public CoverageSummaryDto? Summary { get; init; }
+}
+
+// Library-wide discovery status breakdown, computed with a couple of grouped aggregates over
+// discovery.discovered_media rather than by summing per-channel detail calls across every channel —
+// the row count returned here is bounded by status/platform cardinality, not by channel or media count.
+public sealed record CoverageSummaryDto
+{
+    public long AvailableCount { get; init; }
+    public long UnavailableCount { get; init; }
+    public long IgnoredCount { get; init; }
+    public long RemovedCount { get; init; }
+    public IReadOnlyList<PlatformCoverageDto> Platforms { get; init; } = [];
+}
+
+public sealed record PlatformCoverageDto
+{
+    public required string Platform { get; init; }
+    public long AvailableCount { get; init; }
 }

@@ -83,12 +83,12 @@ public sealed class WebApiHttpTests
     }
 
     [Test]
-    public async Task Post_Download_Audio_Publishes_Message_Through_Http_Surface()
+    public async Task Post_Download_Video_Publishes_Message_Through_Http_Surface()
     {
         using var factory = new TestWebApiFactory();
         using var client = factory.CreateClient();
 
-        var response = await client.PostAsJsonAsync("/api/downloads/audio", new
+        var response = await client.PostAsJsonAsync("/api/downloads/video", new
         {
             sourceUrl = "https://example.test/audio",
             storageKey = "",
@@ -114,8 +114,10 @@ public sealed class WebApiHttpTests
         // Single-user mode resolves the subject to the synthetic owner, so the cookie profile lands
         // under that owner's user-scoped path — never a global key.
         job.CookieSecretPath.ShouldBe($"cookies/users/{AuthConstants.SingleUserSubject}/member-cookie");
-        job.MediaKind.ShouldBe(MediaKind.Audio);
-        job.AudioFormat.ShouldBe(AudioConversionFormat.Mp3);
+        // The dedicated /audio endpoint is gone; audio-only capture is expressed through yt-dlp
+        // options, so the direct path always publishes a Video job with no forced audio format.
+        job.MediaKind.ShouldBe(MediaKind.Video);
+        job.AudioFormat.ShouldBeNull();
         job.OccurredAt.ShouldBe(TestWebApiFactory.Now);
     }
 

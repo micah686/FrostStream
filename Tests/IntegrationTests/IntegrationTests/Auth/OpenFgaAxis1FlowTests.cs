@@ -102,7 +102,7 @@ public class OpenFgaAxis1FlowTests
         await Fixture.TupleWriter.SyncUserGroupsAsync(subject, [group]);
 
         (await Fixture.CanInvokeAsync(subject, EndpointIds.DownloadsCreate)).ShouldBeTrue();
-        (await Fixture.CanInvokeAsync(subject, EndpointIds.DownloadsAudio)).ShouldBeTrue();
+        (await Fixture.CanInvokeAsync(subject, EndpointIds.DownloadsQueueList)).ShouldBeTrue();
         // Not in the downloading bundle -> denied.
         (await Fixture.CanInvokeAsync(subject, EndpointIds.StorageList)).ShouldBeFalse();
     }

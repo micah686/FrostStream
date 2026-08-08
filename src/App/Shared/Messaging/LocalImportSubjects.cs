@@ -9,7 +9,6 @@ public static class LocalImportSubjects
     public const string ScanLocalImportSourceCommand = "import.cmd.scan-source";
     public const string ProbeImportSessionItemsCommand = "import.cmd.probe-items";
     public const string ImportSessionItemsProbed = "import.evt.items-probed";
-    public const string ImportSessionItemsProbeFailed = "import.evt.items-probe-failed";
 
     public const string DeleteLocalImportSourceCommand = "import.cmd.delete-source";
     public const string EnrichImportSessionItemCommand = "import.cmd.enrich-item";

@@ -1,4 +1,4 @@
-import { getJson, sendEmpty, sendJson } from './http';
+import { getJson, sendJson } from './http';
 
 export type ScheduleCatchupPolicy = 'Coalesce' | 'Skip';
 
@@ -55,27 +55,12 @@ export async function listSchedules(fetchImpl: typeof fetch = fetch): Promise<Sc
   return getJson<ScheduledTask[]>(BASE, fetchImpl);
 }
 
-export async function getSchedule(key: string, fetchImpl: typeof fetch = fetch): Promise<ScheduledTask> {
-  return getJson<ScheduledTask>(`${BASE}/${encodeURIComponent(key)}`, fetchImpl);
-}
-
-export async function createSchedule(
-  request: ScheduleCreateRequest,
-  fetchImpl: typeof fetch = fetch
-): Promise<ScheduledTask> {
-  return sendJson<ScheduledTask>(BASE, 'POST', request, fetchImpl);
-}
-
 export async function updateSchedule(
   key: string,
   request: ScheduleUpdateRequest,
   fetchImpl: typeof fetch = fetch
 ): Promise<ScheduledTask> {
   return sendJson<ScheduledTask>(`${BASE}/${encodeURIComponent(key)}`, 'PUT', request, fetchImpl);
-}
-
-export async function deleteSchedule(key: string, fetchImpl: typeof fetch = fetch): Promise<void> {
-  return sendEmpty(`${BASE}/${encodeURIComponent(key)}`, 'DELETE', fetchImpl);
 }
 
 export function scheduleTimingSummary(schedule: ScheduledTask): string {

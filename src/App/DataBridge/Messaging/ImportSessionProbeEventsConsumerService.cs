@@ -17,7 +17,6 @@ public sealed class ImportSessionProbeEventsConsumerService(
         var consumers = new[]
         {
             Consume<ImportSessionItemsProbed>(LocalImportTopology.ImportSessionItemsProbedConsumer, HandleProbedAsync, stoppingToken),
-            Consume<ImportSessionItemsProbeFailed>(LocalImportTopology.ImportSessionItemsProbeFailedConsumer, HandleProbeFailedAsync, stoppingToken),
             Consume<ImportSessionItemEnriched>(LocalImportTopology.ImportSessionItemEnrichedConsumer, HandleEnrichedAsync, stoppingToken),
             Consume<ImportSessionItemEnrichFailed>(LocalImportTopology.ImportSessionItemEnrichFailedConsumer, HandleEnrichFailedAsync, stoppingToken)
         };
@@ -52,9 +51,6 @@ public sealed class ImportSessionProbeEventsConsumerService(
 
     private Task HandleProbedAsync(ImportSessionItemsProbed message)
         => sessionService.HandleItemsProbedAsync(message);
-
-    private Task HandleProbeFailedAsync(ImportSessionItemsProbeFailed message)
-        => sessionService.HandleItemsProbeFailedAsync(message);
 
     private Task HandleEnrichedAsync(ImportSessionItemEnriched message)
         => sessionService.HandleItemEnrichedAsync(message);

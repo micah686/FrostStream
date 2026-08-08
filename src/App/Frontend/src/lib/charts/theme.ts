@@ -93,7 +93,7 @@ export function categoricalPalette(theme: ChartTheme, count = 12): string[] {
   return colors.slice(0, count);
 }
 
-export function stateColor(state: string, theme: ChartTheme): string {
+function stateColor(state: string, theme: ChartTheme): string {
   const value = state.toLowerCase();
   if (value.includes('complete') || value.includes('already')) return theme.success;
   if (value.includes('fail') || value.includes('dead')) return theme.error;

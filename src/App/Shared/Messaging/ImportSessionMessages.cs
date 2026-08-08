@@ -500,20 +500,6 @@ public sealed record ImportSessionItemsProbed : IFlowMessage
     public IReadOnlyList<ImportSessionProbeFailure> Failures { get; init; } = [];
 }
 
-public sealed record ImportSessionItemsProbeFailed : IFlowMessage
-{
-    public required Guid JobId { get; init; }
-    public required Guid CorrelationId { get; init; }
-    public Guid? CausationId { get; init; }
-    public required Guid MessageId { get; init; }
-    public required string OperationKey { get; init; }
-    public required Instant OccurredAt { get; init; }
-    public required int Attempt { get; init; }
-
-    public required Guid SessionId { get; init; }
-    public IReadOnlyList<ImportSessionProbeFailure> Failures { get; init; } = [];
-}
-
 public sealed record ImportSessionProbeResult
 {
     public required Guid ItemId { get; init; }

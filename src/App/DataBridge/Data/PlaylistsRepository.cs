@@ -251,8 +251,12 @@ public sealed class PlaylistsRepository(
         {
             var occurredAt = clock.GetCurrentInstant();
             await DownloadStatisticsRecorder.RecordDailyActivityAsync(db, null, "created", occurredAt, 0, 0, ct);
+            await DownloadStatisticsRecorder.RecordChannelDailyStatesAsync(db, null, request.EntryUrl, "created", occurredAt, ct);
             if (request.InitialState == DownloadJobState.Ignored)
+            {
                 await DownloadStatisticsRecorder.RecordDailyActivityAsync(db, null, "ignored", occurredAt, 0, 0, ct);
+                await DownloadStatisticsRecorder.RecordChannelDailyStatesAsync(db, null, request.EntryUrl, "ignored", occurredAt, ct);
+            }
         }
     }
 

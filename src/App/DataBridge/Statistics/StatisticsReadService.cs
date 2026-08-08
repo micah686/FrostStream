@@ -252,17 +252,26 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
         CancellationToken ct = default)
     {
         var step = NormalizeBucketStep(request.Bucket);
+        // download_daily_activity is keyed on a UTC `date`, so the buckets have to be built in whole
+        // UTC days too. Bucketing on the raw timestamps instead truncated the trailing partial bucket
+        // down to `@to::date`, which is exclusive — so activity recorded on the request's own end day
+        // (i.e. everything downloaded today) fell outside every bucket and the charts read empty.
         await using var command = dataSource.CreateCommand("""
-            WITH buckets AS (
+            WITH bounds AS (
                 SELECT
-                    bucket_start,
-                    LEAST(bucket_start + @step::interval, @to) AS bucket_end
-                FROM generate_series(@from, @to, @step::interval) AS bucket_start
-                WHERE bucket_start < @to
+                    (@from AT TIME ZONE 'UTC')::date AS from_day,
+                    (@to AT TIME ZONE 'UTC')::date AS to_day
+            ),
+            buckets AS (
+                SELECT
+                    series::date AS bucket_start,
+                    LEAST((series + @step::interval)::date, bounds.to_day + 1) AS bucket_end
+                FROM bounds,
+                     generate_series(bounds.from_day::timestamp, bounds.to_day::timestamp, @step::interval) AS series
             )
             SELECT
-                b.bucket_start,
-                b.bucket_end,
+                (b.bucket_start::timestamp AT TIME ZONE 'UTC') AS bucket_start,
+                (b.bucket_end::timestamp AT TIME ZONE 'UTC') AS bucket_end,
                 COALESCE(SUM(a.job_count) FILTER (WHERE a.state = 'created'), 0) AS created,
                 COALESCE(SUM(a.job_count) FILTER (WHERE a.state = 'completed'), 0) AS completed,
                 COALESCE(SUM(a.job_count) FILTER (WHERE a.state IN ('failed_transient', 'failed_permanent', 'dead_lettered')), 0) AS failed,
@@ -272,7 +281,7 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
                 COALESCE(SUM(a.duration_seconds) FILTER (WHERE a.state = 'completed'), 0) AS duration_completed_seconds
             FROM buckets b
             LEFT JOIN statistics.download_daily_activity a
-                ON a.day >= b.bucket_start::date AND a.day < b.bucket_end::date
+                ON a.day >= b.bucket_start AND a.day < b.bucket_end
             GROUP BY b.bucket_start, b.bucket_end
             ORDER BY b.bucket_start
             """);
@@ -299,6 +308,67 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
         }
 
         return buckets;
+    }
+
+    // Replaces the old admin-stats pattern of paging through every channel and fetching each one's
+    // detail just to sum four numbers — that grew linearly with channel count. discovery_status lives
+    // once per discovered item regardless of how many channels/accounts it's viewed through, so a
+    // couple of grouped aggregates give the same totals in two queries whose row count never grows
+    // past the (small, fixed) number of statuses/platforms.
+    private const string ExcludedDiscoveryStatuses = "('Ignored', 'PossiblyUnavailable', 'Unavailable', 'RemovedFromSource')";
+
+    public async Task<CoverageSummaryDto> GetCoverageSummaryAsync(CancellationToken ct = default)
+    {
+        long available = 0, unavailable = 0, ignored = 0, removed = 0;
+        await using (var command = dataSource.CreateCommand($"""
+            SELECT
+                COUNT(*) FILTER (WHERE discovery_status NOT IN {ExcludedDiscoveryStatuses}) AS available_count,
+                COUNT(*) FILTER (WHERE discovery_status IN ('Unavailable', 'PossiblyUnavailable')) AS unavailable_count,
+                COUNT(*) FILTER (WHERE discovery_status = 'Ignored') AS ignored_count,
+                COUNT(*) FILTER (WHERE discovery_status = 'RemovedFromSource') AS removed_count
+            FROM discovery.discovered_media
+            """))
+        {
+            await using var reader = await command.ExecuteReaderAsync(ct);
+            if (await reader.ReadAsync(ct))
+            {
+                available = GetInt64(reader, "available_count");
+                unavailable = GetInt64(reader, "unavailable_count");
+                ignored = GetInt64(reader, "ignored_count");
+                removed = GetInt64(reader, "removed_count");
+            }
+        }
+
+        var platforms = new List<PlatformCoverageDto>();
+        await using (var command = dataSource.CreateCommand($"""
+            SELECT
+                platform,
+                COUNT(*) FILTER (WHERE discovery_status NOT IN {ExcludedDiscoveryStatuses}) AS available_count
+            FROM discovery.discovered_media
+            GROUP BY platform
+            ORDER BY available_count DESC, platform
+            LIMIT 10
+            """))
+        {
+            await using var reader = await command.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+            {
+                platforms.Add(new PlatformCoverageDto
+                {
+                    Platform = GetString(reader, "platform"),
+                    AvailableCount = GetInt64(reader, "available_count")
+                });
+            }
+        }
+
+        return new CoverageSummaryDto
+        {
+            AvailableCount = available,
+            UnavailableCount = unavailable,
+            IgnoredCount = ignored,
+            RemovedCount = removed,
+            Platforms = platforms
+        };
     }
 
     private async Task<InventoryStatisticsDto> GetInventoryAsync(CancellationToken ct)
@@ -616,14 +686,17 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
         return await ReadMediaTypesAsync(command, ct);
     }
 
+    // jobs.download_jobs is not durable (DownloadHistoryPurger deletes terminal rows after ~30 days,
+    // nightly), so this reads from statistics.creator_source_daily_states instead — a durable ledger
+    // recorded at the moment each job reaches a state, the same pattern download_daily_activity uses
+    // for the global view. See DownloadStatisticsRecorder.RecordChannelDailyStatesAsync.
     private async Task<IReadOnlyList<DownloadStateStatisticsDto>> GetChannelDownloadStatesAsync(long creatorSourceId, CancellationToken ct)
     {
         await using var command = dataSource.CreateCommand("""
-            SELECT dj.state::text AS state, COUNT(*) AS count
-            FROM discovery.discovered_media dm
-            JOIN jobs.download_jobs dj ON dj.source_url = dm.canonical_url
-            WHERE dm.creator_source_id = @creator_source_id
-            GROUP BY dj.state
+            SELECT state, SUM(job_count) AS count
+            FROM statistics.creator_source_daily_states
+            WHERE creator_source_id = @creator_source_id
+            GROUP BY state
             ORDER BY count DESC, state
             """);
         command.Parameters.AddWithValue("@creator_source_id", creatorSourceId);
@@ -672,14 +745,15 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
         return await ReadMediaTypesAsync(command, ct);
     }
 
+    // Same durability concern as GetChannelDownloadStatesAsync above, keyed by account instead — reads
+    // statistics.account_daily_states rather than joining the ephemeral jobs.download_jobs table.
     private async Task<IReadOnlyList<DownloadStateStatisticsDto>> GetAccountDownloadStatesAsync(long accountId, CancellationToken ct)
     {
         await using var command = dataSource.CreateCommand("""
-            SELECT dj.state::text AS state, COUNT(*) AS count
-            FROM metadata.media_metadata mm
-            JOIN jobs.download_jobs dj ON dj.source_url = mm.webpage_url
-            WHERE mm.account_id = @account_id AND mm.webpage_url IS NOT NULL
-            GROUP BY dj.state
+            SELECT state, SUM(job_count) AS count
+            FROM statistics.account_daily_states
+            WHERE account_id = @account_id
+            GROUP BY state
             ORDER BY count DESC, state
             """);
         command.Parameters.AddWithValue("@account_id", accountId);

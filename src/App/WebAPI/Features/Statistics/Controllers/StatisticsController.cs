@@ -15,7 +15,17 @@ public sealed class StatisticsController(
     ILogger<StatisticsController> logger) : ControllerBase
 {
     private static readonly TimeSpan QueryTimeout = TimeSpan.FromSeconds(10);
-    private static readonly Duration MaxDailyHistoryRange = Duration.FromDays(366 * 2);
+    // Caps the response by bucket count rather than by a fixed calendar range, so a coarser bucket
+    // (week/month) naturally covers more years without ever returning more rows than a day-granularity
+    // request over the old 2-year limit would have. ~800 buckets covers ~2.2 years daily, ~15 years
+    // weekly, or ~66 years monthly.
+    private const int MaxHistoryBuckets = 800;
+    private static readonly IReadOnlyDictionary<string, double> BucketDays = new Dictionary<string, double>
+    {
+        ["day"] = 1,
+        ["week"] = 7,
+        ["month"] = 30
+    };
 
     [HttpGet("overview")]
     [Endpoint(EndpointIds.StatisticsOverview)]
@@ -170,8 +180,10 @@ public sealed class StatisticsController(
         var toInstant = Instant.FromDateTimeOffset(to);
         if (fromInstant >= toInstant)
             return BadRequest("Query parameter 'from' must be earlier than 'to'.");
-        if (normalizedBucket == "day" && toInstant - fromInstant > MaxDailyHistoryRange)
-            return BadRequest("Daily download history is limited to a two-year range.");
+
+        var approxBucketCount = (toInstant - fromInstant).TotalDays / BucketDays[normalizedBucket];
+        if (approxBucketCount > MaxHistoryBuckets)
+            return BadRequest($"That range returns too many {normalizedBucket} buckets; choose a coarser bucket or a shorter range.");
 
         var response = await SendRequestAsync<StatisticsDownloadHistoryRequestMessage, StatisticsDownloadHistoryResponseMessage>(
             StatisticsSubjects.DownloadHistory,
@@ -189,6 +201,27 @@ public sealed class StatisticsController(
             return StatisticsError(response.ErrorCode, response.ErrorMessage);
 
         return Ok(response.Buckets);
+    }
+
+    [HttpGet("coverage")]
+    [Endpoint(EndpointIds.StatisticsCoverageSummary)]
+    [EndpointSummary("Get library coverage summary")]
+    [EndpointDescription("Returns library-wide discovery status totals (available, unavailable, ignored, removed) and a top-platform breakdown, computed from a couple of grouped aggregates rather than by summing per-channel detail across every channel.")]
+    public async Task<ActionResult<CoverageSummaryDto>> GetCoverageSummary(CancellationToken cancellationToken)
+    {
+        var response = await SendRequestAsync<StatisticsCoverageSummaryRequestMessage, StatisticsCoverageSummaryResponseMessage>(
+            StatisticsSubjects.CoverageSummary,
+            new StatisticsCoverageSummaryRequestMessage(),
+            cancellationToken);
+
+        if (response is null)
+            return ServiceUnavailable();
+        if (!response.Success)
+            return StatisticsError(response.ErrorCode, response.ErrorMessage);
+        if (response.Summary is null)
+            return StatusCode(StatusCodes.Status502BadGateway, "DataBridge returned an invalid coverage summary response.");
+
+        return Ok(response.Summary);
     }
 
     private async Task<TResponse?> SendRequestAsync<TRequest, TResponse>(

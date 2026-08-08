@@ -133,7 +133,6 @@ export interface DownloadQueueHistoryEntry {
 const BASE = '/api/downloads/queue';
 
 export const queueStreamUrl = (): string => `${BASE}/stream`;
-export const jobProgressUrl = (jobId: string): string => `${BASE}/${jobId}/progress`;
 
 export async function fetchJobHistory(
   jobId: string,

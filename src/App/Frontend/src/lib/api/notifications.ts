@@ -1,4 +1,4 @@
-import { getJson, sendEmpty, sendJson } from '$lib/api/http';
+import { getJson, sendJson } from '$lib/api/http';
 
 export interface NotificationPreferences {
   version: number;
@@ -39,8 +39,6 @@ export interface NotificationTestRequest {
 }
 
 export const NOTIFICATION_PROVIDER_KEY_PATTERN = /^[a-z0-9-]{2,100}$/;
-export const NOTIFICATION_SECRET_NAME_PATTERN = /^[A-Za-z0-9_.-]{1,100}$/;
-
 export const NOTIFICATION_PROVIDER_KINDS = [
   'email',
   'sms',
@@ -127,19 +125,6 @@ export const NOTIFICATION_EVENT_OPTIONS: {
 
 const BASE = '/api/user/notifications';
 
-export async function getNotificationPreferences(
-  fetchImpl: typeof fetch = fetch
-): Promise<NotificationPreferences> {
-  return getJson<NotificationPreferences>(`${BASE}/preferences`, fetchImpl);
-}
-
-export async function updateNotificationPreferences(
-  request: NotificationPreferences,
-  fetchImpl: typeof fetch = fetch
-): Promise<NotificationPreferences> {
-  return sendJson<NotificationPreferences>(`${BASE}/preferences`, 'PUT', request, fetchImpl);
-}
-
 export async function listNotificationProviders(fetchImpl: typeof fetch = fetch): Promise<NotificationProvider[]> {
   return getJson<NotificationProvider[]>(`${BASE}/providers`, fetchImpl);
 }
@@ -180,18 +165,6 @@ export async function upsertNotificationProviderSecrets(
   fetchImpl: typeof fetch = fetch
 ): Promise<void> {
   return sendJson<void>(`${BASE}/providers/${encodeURIComponent(providerKey)}/secrets`, 'PUT', request, fetchImpl);
-}
-
-export async function deleteNotificationProviderSecret(
-  providerKey: string,
-  secretName: string,
-  fetchImpl: typeof fetch = fetch
-): Promise<void> {
-  return sendEmpty(
-    `${BASE}/providers/${encodeURIComponent(providerKey)}/secrets/${encodeURIComponent(secretName)}`,
-    'DELETE',
-    fetchImpl
-  );
 }
 
 export async function sendTestNotification(

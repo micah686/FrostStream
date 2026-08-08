@@ -48,6 +48,13 @@ public sealed class StatisticsQueryConsumerService(
             queueGroup: StatisticsSubjects.QueueGroup,
             cancellationToken: stoppingToken);
 
+        await SubscribeAsync<StatisticsCoverageSummaryRequestMessage>(
+            messageBus,
+            StatisticsSubjects.CoverageSummary,
+            HandleCoverageSummaryAsync,
+            queueGroup: StatisticsSubjects.QueueGroup,
+            cancellationToken: stoppingToken);
+
         logger.LogInformation("Subscribed to statistics query subjects.");
     }
 
@@ -188,6 +195,24 @@ public sealed class StatisticsQueryConsumerService(
         }
     }
 
+    private async Task HandleCoverageSummaryAsync(IMessageContext<StatisticsCoverageSummaryRequestMessage> context)
+    {
+        try
+        {
+            var summary = await WithQuery(query => query.GetCoverageSummaryAsync());
+            await context.RespondAsync(new StatisticsCoverageSummaryResponseMessage
+            {
+                Success = true,
+                Summary = summary
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed handling statistics coverage summary query.");
+            await context.RespondAsync(Failure<StatisticsCoverageSummaryResponseMessage>("internal_error", "Internal statistics service error."));
+        }
+    }
+
     private async Task<T> WithQuery<T>(Func<IStatisticsReadService, Task<T>> action)
     {
         using var scope = scopeFactory.CreateScope();
@@ -209,6 +234,8 @@ public sealed class StatisticsQueryConsumerService(
                 (new StatisticsChannelGetResponseMessage { Success = false, ErrorCode = errorCode, ErrorMessage = errorMessage } as T)!,
             var t when t == typeof(StatisticsDownloadHistoryResponseMessage) =>
                 (new StatisticsDownloadHistoryResponseMessage { Success = false, ErrorCode = errorCode, ErrorMessage = errorMessage } as T)!,
+            var t when t == typeof(StatisticsCoverageSummaryResponseMessage) =>
+                (new StatisticsCoverageSummaryResponseMessage { Success = false, ErrorCode = errorCode, ErrorMessage = errorMessage } as T)!,
             _ => throw new InvalidOperationException($"Unsupported response type {typeof(T).Name}.")
         };
 }

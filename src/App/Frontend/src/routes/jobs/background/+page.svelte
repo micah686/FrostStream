@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import { Clock, RefreshCw } from '@lucide/svelte';
+  import { ChevronLeft, ChevronRight, Clock, RefreshCw } from '@lucide/svelte';
   import BackgroundRunRow from '$lib/components/jobs/BackgroundRunRow.svelte';
   import { createBackgroundJobsStore, type BackgroundJobsState } from '$lib/stores/backgroundJobs';
 
@@ -16,6 +16,8 @@
   });
   let now = $state(Date.now());
   let refreshing = $state(false);
+  let page = $state(1);
+  const pageSize = 50;
 
   const unsubscribe = jobs.subscribe((value) => {
     jobsState = value;
@@ -24,6 +26,14 @@
   const finishedCount = $derived(
     jobsState.runs.length - jobsState.runningCount - jobsState.queuedCount
   );
+  const totalPages = $derived(Math.max(1, Math.ceil(jobsState.runs.length / pageSize)));
+  const visibleRuns = $derived(jobsState.runs.slice((page - 1) * pageSize, page * pageSize));
+
+  $effect(() => {
+    if (page > totalPages) {
+      page = totalPages;
+    }
+  });
 
   onMount(() => {
     jobs.connect();
@@ -83,13 +93,12 @@
       </p>
     </div>
     <div class="flex items-center gap-2">
-      <span class={jobsState.connected ? 'badge badge-success bg-success text-success-content gap-1.5' : 'badge badge-error bg-error text-error-content gap-1.5'}>
-        <span class={jobsState.connected ? 'status status-success' : 'status status-error'}></span>
-        {jobsState.connected ? 'SSE Live' : 'SSE Offline'}
-      </span>
+      {#if jobsState.connected}
+        <span class="badge badge-success h-8 px-3 text-xs font-semibold text-success-content">SSE Live</span>
+      {/if}
       <button
         type="button"
-        class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-base-content/20 bg-base-200/70 px-3 text-xs font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary disabled:opacity-40"
+        class="btn btn-sm btn-neutral text-xs disabled:opacity-40"
         disabled={refreshing}
         onclick={refresh}
       >
@@ -122,9 +131,26 @@
     </div>
   {:else}
     <div class="mt-6 flex flex-col gap-3">
-      {#each jobsState.runs as run (run.runId)}
+      {#each visibleRuns as run (run.runId)}
         <BackgroundRunRow {run} {now} />
       {/each}
+    </div>
+
+    <div class="mt-6 flex flex-col gap-3 border-t border-base-300/70 pt-5 sm:flex-row sm:items-center sm:justify-between">
+      <p class="text-xs text-base-content/40">
+        Showing {Math.min((page - 1) * pageSize + 1, jobsState.runs.length)}-{Math.min(page * pageSize, jobsState.runs.length)}
+        of {jobsState.runs.length}
+      </p>
+      <div class="flex gap-2">
+        <button class="btn btn-sm btn-neutral text-xs" disabled={page <= 1} onclick={() => (page = Math.max(1, page - 1))}>
+          <ChevronLeft class="mr-1 h-3.5 w-3.5" />
+          Previous
+        </button>
+        <button class="btn btn-sm btn-neutral text-xs" disabled={page >= totalPages} onclick={() => (page = Math.min(totalPages, page + 1))}>
+          Next
+          <ChevronRight class="ml-1 h-3.5 w-3.5" />
+        </button>
+      </div>
     </div>
   {/if}
 </div>

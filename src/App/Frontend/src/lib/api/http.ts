@@ -24,7 +24,7 @@ export function installApiFetch(): void {
     apiFetch(input, init, nativeFetch!)) as typeof window.fetch;
 }
 
-export async function apiFetch(
+async function apiFetch(
   input: RequestInfo | URL,
   init: RequestInit = {},
   transport: typeof fetch = nativeFetch ?? fetch
