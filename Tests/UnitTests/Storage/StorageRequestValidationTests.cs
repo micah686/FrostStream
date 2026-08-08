@@ -75,7 +75,7 @@ public class StorageRequestValidationTests
     }
 
     [Test]
-    public void Mounted_Network_Share_Requires_Absolute_Mount_Path()
+    public void Direct_Network_Share_Requires_Protocol_Specific_Root()
     {
         var missing = StorageTestHelpers.ValidateObject(new NetworkStorageUpsertRequest
         {
@@ -83,16 +83,25 @@ public class StorageRequestValidationTests
             Protocol = Shared.Storage.NetworkStorageProtocol.Nfs,
             Host = "fileserver"
         });
-        missing.Select(x => x.ErrorMessage).ShouldContain("mountPath is required for Nfs storage.");
+        missing.Select(x => x.ErrorMessage).ShouldContain("exportPath is required for Nfs storage when mountPath is not provided.");
 
         var relative = StorageTestHelpers.ValidateObject(new NetworkStorageUpsertRequest
         {
             Key = "network-a",
             Protocol = Shared.Storage.NetworkStorageProtocol.Smb,
             Host = "fileserver",
+            ShareName = "media",
             MountPath = "relative/share"
         });
         relative.Select(x => x.ErrorMessage).ShouldContain("mountPath must be an absolute filesystem path.");
+
+        var smbMissing = StorageTestHelpers.ValidateObject(new NetworkStorageUpsertRequest
+        {
+            Key = "network-a",
+            Protocol = Shared.Storage.NetworkStorageProtocol.Smb,
+            Host = "fileserver"
+        });
+        smbMissing.Select(x => x.ErrorMessage).ShouldContain("shareName is required for Smb storage when mountPath is not provided.");
     }
 
     [Test]

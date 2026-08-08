@@ -132,7 +132,7 @@
 </script>
 
 <section
-  class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-xl shadow-black/20"
+  class="overflow-hidden rounded-box border-[length:var(--border)] border-base-300 bg-base-100 shadow-xl shadow-black/20"
   aria-label="Playlist"
 >
   <header class="border-b border-base-300 px-4 py-3">
@@ -184,7 +184,7 @@
                 {/if}
               </span>
               <span
-                class={`relative block aspect-video w-20 shrink-0 overflow-hidden rounded-md bg-gradient-to-br ${accentFor(entry.mediaGuid)}`}
+                class={`relative block aspect-video w-20 shrink-0 overflow-hidden rounded-field bg-gradient-to-br ${accentFor(entry.mediaGuid)}`}
               >
                 <img
                   src={thumbnailUrl(entry.mediaGuid)}
@@ -219,7 +219,7 @@
               <span class="grid w-5 shrink-0 place-items-center font-mono text-[11px] text-base-content/40">
                 {index + 1}
               </span>
-              <span class="relative block aspect-video w-20 shrink-0 overflow-hidden rounded-md bg-base-300/70"></span>
+              <span class="relative block aspect-video w-20 shrink-0 overflow-hidden rounded-field bg-base-300/70"></span>
               <span class="min-w-0">
                 <span class="line-clamp-2 text-xs font-semibold leading-snug text-base-content/60">{entry.title}</span>
                 {#if entry.subtitle}

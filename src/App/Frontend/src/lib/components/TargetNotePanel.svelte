@@ -146,7 +146,7 @@
   }
 </script>
 
-<section class={embedded ? '' : 'rounded-xl border border-base-content/30 bg-base-100'} aria-label={`${targetLabel} note`}>
+<section class={embedded ? '' : 'rounded-box border-[length:var(--border)] border-base-content/30 bg-base-100'} aria-label={`${targetLabel} note`}>
   {#if !embedded}
     <button
       type="button"

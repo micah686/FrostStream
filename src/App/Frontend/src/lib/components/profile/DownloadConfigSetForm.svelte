@@ -246,7 +246,7 @@
   <div>
     <label class="label mb-2 text-sm" for="option-preset">Option preset</label>
     {#if optionPresetsLoading}
-      <div class="flex items-center gap-2 rounded-lg border border-base-300 bg-base-200/60 px-3 py-2 text-sm text-base-content/50">
+      <div class="flex items-center gap-2 rounded-field border-[length:var(--border)] border-base-300 bg-base-200/60 px-3 py-2 text-sm text-base-content/50">
         <span class="loading loading-spinner loading-xs"></span>
         Loading option presets...
       </div>

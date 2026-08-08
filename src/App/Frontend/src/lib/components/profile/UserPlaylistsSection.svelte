@@ -110,7 +110,7 @@
 </script>
 
 <section
-  class="card border border-base-300 bg-base-100 p-5 sm:p-6"
+  class="card border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6"
   aria-labelledby="user-playlists-title"
 >
   {#if !selected}
@@ -142,7 +142,7 @@
         <span class="loading loading-spinner loading-md"></span>
       </div>
     {:else if playlists.length === 0}
-      <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
+      <div class="mt-5 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/30 p-8 text-center">
         <ListMusic class="mx-auto h-9 w-9 text-base-content/30" />
         <p class="mt-4 text-sm font-semibold text-base-content/80">No playlists yet</p>
         <p class="mt-1 text-sm text-base-content/50">Create one to group archived videos however you like.</p>
@@ -151,7 +151,7 @@
       <div class="mt-5 space-y-2">
         {#each playlists as playlist (playlist.playlistId)}
           <article
-            class="flex min-h-[3.95rem] flex-col gap-3 rounded-lg border border-base-content/20 bg-base-100 px-3 py-3 transition hover:border-base-content/30 hover:bg-base-300/30 sm:flex-row sm:items-center sm:px-4"
+            class="flex min-h-[3.95rem] flex-col gap-3 rounded-field border-[length:var(--border)] border-base-content/20 bg-base-100 px-3 py-3 transition hover:border-base-content/30 hover:bg-base-300/30 sm:flex-row sm:items-center sm:px-4"
           >
             <button
               type="button"
@@ -159,7 +159,7 @@
               onclick={() => openDetail(playlist)}
               aria-label={`Open playlist ${playlist.name}`}
             >
-              <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-base-300/70 text-primary">
+              <span class="grid h-9 w-9 shrink-0 place-items-center rounded-field bg-base-300/70 text-primary">
                 <ListMusic class="h-4.5 w-4.5" />
               </span>
               <span class="min-w-0">

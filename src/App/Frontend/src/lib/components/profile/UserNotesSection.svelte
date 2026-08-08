@@ -182,7 +182,7 @@
   }
 </script>
 
-<section class="card border border-base-300 bg-base-100 p-5 sm:p-6">
+<section class="card border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6">
   <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
     <div>
       <h2 class="text-base font-bold text-base-content">Notes</h2>
@@ -224,7 +224,7 @@
       <span class="loading loading-spinner loading-md"></span>
     </div>
   {:else if notes.length === 0}
-    <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
+    <div class="mt-5 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/30 p-8 text-center">
       <FileSearch class="mx-auto h-9 w-9 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No notes found</p>
       <p class="mt-1 text-sm text-base-content/50">Notes you add from videos, playlists, or channels appear here.</p>
@@ -234,7 +234,7 @@
       {#each notes as note (noteKey(note))}
         {@const key = noteKey(note)}
         {@const editing = editingKey === key}
-        <article class="rounded-lg border border-base-content/20 bg-base-100 px-3 py-3 transition hover:border-base-content/30 hover:bg-base-300/30 sm:px-4">
+        <article class="rounded-field border-[length:var(--border)] border-base-content/20 bg-base-100 px-3 py-3 transition hover:border-base-content/30 hover:bg-base-300/30 sm:px-4">
           <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div class="min-w-0">
               <div class="flex min-w-0 items-center gap-2">

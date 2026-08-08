@@ -3,6 +3,8 @@ using FluentStorage.SFTP;
 using FluentStorage.Storage;
 using Shouldly;
 using Shared.Storage;
+using StorageExtensions.Nfs;
+using StorageExtensions.Smb;
 using TUnit.Core;
 
 namespace UnitTests.Storage;
@@ -78,6 +80,39 @@ public class FluentStoreFactoryTests
             }));
 
         exception.Message.ShouldContain("not mounted");
+    }
+
+    [Test]
+    public void CreateStorage_Uses_Direct_Nfs_Smb_And_Cifs_Stores()
+    {
+        using var nfs = Create(StorageMethod.Network, new StreamingNetworkStorageParameters
+        {
+            Protocol = NetworkStorageProtocol.Nfs,
+            Host = "nfs.example.test",
+            ExportPath = "/exports/media",
+            NfsUserId = 1000,
+            NfsGroupId = 1000,
+            BasePath = "/library"
+        });
+        using var smb = Create(StorageMethod.Network, new StreamingNetworkStorageParameters
+        {
+            Protocol = NetworkStorageProtocol.Smb,
+            Host = "smb.example.test",
+            ShareName = "media",
+            Domain = "WORKGROUP",
+            Username = "user",
+            Password = "password"
+        });
+        using var cifs = Create(StorageMethod.Network, new StreamingNetworkStorageParameters
+        {
+            Protocol = NetworkStorageProtocol.Cifs,
+            Host = "legacy.example.test",
+            ShareName = "archive"
+        });
+
+        nfs.ShouldBeOfType<NfsStore>();
+        smb.ShouldBeOfType<SmbStore>();
+        cifs.ShouldBeOfType<SmbStore>();
     }
 
     [Test]

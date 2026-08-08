@@ -8,6 +8,7 @@ WORKDIR /src
 
 # Project files first so the restore layer caches until dependencies change.
 COPY App/Shared/Shared.csproj App/Shared/
+COPY App/StorageExtensions/StorageExtensions.csproj App/StorageExtensions/
 COPY App/ServiceDefaults/ServiceDefaults.csproj App/ServiceDefaults/
 COPY Libs/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj Libs/Conduit.NATS/Conduit.NATS/
 COPY Libs/YtDlpSharpLib/YtDlpSharpLib/YtDlpSharpLib.csproj Libs/YtDlpSharpLib/YtDlpSharpLib/
@@ -15,6 +16,7 @@ COPY App/WebAPI/WebAPI.csproj App/WebAPI/
 RUN dotnet restore App/WebAPI/WebAPI.csproj
 
 COPY App/Shared/ App/Shared/
+COPY App/StorageExtensions/ App/StorageExtensions/
 COPY App/ServiceDefaults/ App/ServiceDefaults/
 COPY Libs/Conduit.NATS/Conduit.NATS/ Libs/Conduit.NATS/Conduit.NATS/
 COPY Libs/YtDlpSharpLib/YtDlpSharpLib/ Libs/YtDlpSharpLib/YtDlpSharpLib/

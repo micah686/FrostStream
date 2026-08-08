@@ -74,6 +74,16 @@ public class NetworkStorageUpdateRequest : StorageUpdateRequestBase<StreamingNet
     public string? PublicKey { get; init; }
     public string? BasePath { get; init; }
 
+    public string? ShareName { get; init; }
+    public string? Domain { get; init; }
+    public string? ExportPath { get; init; }
+
+    [Range(0, int.MaxValue)]
+    public int? NfsUserId { get; init; }
+
+    [Range(0, int.MaxValue)]
+    public int? NfsGroupId { get; init; }
+
     public string? MountPath { get; init; }
 
     public override StreamingNetworkStorageParameters ToParameters()
@@ -87,6 +97,11 @@ public class NetworkStorageUpdateRequest : StorageUpdateRequestBase<StreamingNet
             PrivateKey = PrivateKey,
             PublicKey = PublicKey,
             BasePath = BasePath,
+            ShareName = ShareName,
+            Domain = Domain,
+            ExportPath = ExportPath,
+            NfsUserId = NfsUserId,
+            NfsGroupId = NfsGroupId,
             MountPath = MountPath
         };
 }
@@ -233,6 +248,11 @@ public sealed class NetworkStorageConfigResponse : StorageConfigResponseBase
     public int? Port { get; init; }
     public string? Username { get; init; }
     public string? BasePath { get; init; }
+    public string? ShareName { get; init; }
+    public string? Domain { get; init; }
+    public string? ExportPath { get; init; }
+    public int? NfsUserId { get; init; }
+    public int? NfsGroupId { get; init; }
     public string? MountPath { get; init; }
 }
 

@@ -49,7 +49,7 @@
     disabled={castBusy}
     title={castError ?? 'Cast to a device'}
     class={[
-      'flex items-center gap-1.5 rounded-lg border px-4 py-2 text-xs font-semibold transition disabled:opacity-60',
+      'flex items-center gap-1.5 rounded-field border px-4 py-2 text-xs font-semibold transition disabled:opacity-60',
       castError
         ? 'border-error/30 bg-error/10 text-error hover:bg-error/10'
         : 'border-base-300 bg-base-200/70 text-base-content/80 hover:bg-base-300'

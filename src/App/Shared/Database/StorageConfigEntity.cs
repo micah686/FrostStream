@@ -66,6 +66,11 @@ public class StorageConfigEntity
                     Port = Network.Port,
                     Username = Network.Username,
                     BasePath = Network.BasePath,
+                    ShareName = Network.ShareName,
+                    Domain = Network.Domain,
+                    ExportPath = Network.ExportPath,
+                    NfsUserId = Network.NfsUserId,
+                    NfsGroupId = Network.NfsGroupId,
                     MountPath = Network.MountPath
                 },
                 StorageMethod.ObjectStorage when ObjectS3Compatible is not null => new S3CompatibleObjectStorageStored
@@ -124,6 +129,11 @@ public class StorageConfigEntity
                     Port = network.Port,
                     Username = network.Username,
                     BasePath = network.BasePath,
+                    ShareName = network.ShareName,
+                    Domain = network.Domain,
+                    ExportPath = network.ExportPath,
+                    NfsUserId = network.NfsUserId,
+                    NfsGroupId = network.NfsGroupId,
                     MountPath = network.MountPath
                 };
                 break;
@@ -202,6 +212,16 @@ public sealed class StorageNetworkConfigEntity
     public string? Username { get; set; }
 
     public string? BasePath { get; set; }
+
+    public string? ShareName { get; set; }
+
+    public string? Domain { get; set; }
+
+    public string? ExportPath { get; set; }
+
+    public int? NfsUserId { get; set; }
+
+    public int? NfsGroupId { get; set; }
 
     public string? MountPath { get; set; }
 

@@ -88,7 +88,7 @@
     <p class="mt-2 text-sm text-base-content/60">Custom CSS is stored in this browser’s local storage. Changing devices or clearing browser storage will clear it.</p>
   </div>
 
-  <div class="card border border-base-300 bg-base-100 p-5 sm:p-6">
+  <div class="card border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6">
     <div class="tabs tabs-lift mb-5" role="tablist" aria-label="Custom CSS editor tabs">
       <button type="button" class={['tab gap-2 text-sm font-semibold', tab === 'designer' ? 'tab-active text-primary' : '']} role="tab" aria-selected={tab === 'designer'} onclick={() => (tab = 'designer')}>Designer</button>
       <button type="button" class={['tab gap-2 text-sm font-semibold', tab === 'css' ? 'tab-active text-primary' : '']} role="tab" aria-selected={tab === 'css'} onclick={() => (tab = 'css')}>CSS</button>
@@ -112,7 +112,7 @@
           <div class="grid gap-3 sm:grid-cols-2">
             {#each colorFields as field (field.key)}
               <label class="flex items-center gap-2 text-xs font-semibold text-base-content/80">
-                <span class="h-5 w-5 shrink-0 rounded border border-base-300" style={`background-color: ${designer[field.key]}`}></span>
+                <span class="h-5 w-5 shrink-0 rounded border-[length:var(--border)] border-base-300" style={`background-color: ${designer[field.key]}`}></span>
                 <span class="min-w-28">{field.label}</span>
                 <input class="input min-w-0 flex-1 font-mono text-sm" value={designer[field.key]} oninput={(event) => updateValue(field.key, event)} />
               </label>

@@ -44,7 +44,7 @@ let {
     entries: CatalogEntry[];
   }
 
-  const cardClass = 'card border border-base-300 bg-base-100 p-5 sm:p-6';
+  const cardClass = 'card border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6';
 
   let bundles = $state<BundleView[]>([]);
   let catalog = $state<CatalogEntry[]>([]);
@@ -372,18 +372,18 @@ let {
       </div>
     {/if}
 
-    <div class="max-h-[26rem] space-y-3 overflow-y-auto rounded-xl border border-base-300 bg-base-200/20 p-3">
+    <div class="max-h-[26rem] space-y-3 overflow-y-auto rounded-box border-[length:var(--border)] border-base-300 bg-base-200/20 p-3">
       {#if catalog.length === 0}
-        <div class="rounded-lg border border-base-300 bg-base-200/35 px-3 py-3 text-sm text-base-content/50">
+        <div class="rounded-field border-[length:var(--border)] border-base-300 bg-base-200/35 px-3 py-3 text-sm text-base-content/50">
           No catalog endpoints are available.
         </div>
       {:else if filteredCatalog().length === 0}
-        <div class="rounded-lg border border-base-300 bg-base-200/35 px-3 py-3 text-sm text-base-content/50">
+        <div class="rounded-field border-[length:var(--border)] border-base-300 bg-base-200/35 px-3 py-3 text-sm text-base-content/50">
           No endpoints match the search.
         </div>
       {:else}
         {#each catalogGroups(filteredCatalog()) as group (group.bundle)}
-          <div class="rounded-lg border border-base-300 bg-base-100">
+          <div class="rounded-field border-[length:var(--border)] border-base-300 bg-base-100">
             <div class="flex items-center justify-between gap-3 border-b border-base-300 px-3 py-2">
               <span class="text-xs font-semibold uppercase text-base-content/50">{group.bundle}</span>
               <span class="text-xs text-base-content/40">{group.entries.length}</span>
@@ -466,7 +466,7 @@ let {
 
   {#if openFgaUnavailable}
     <div
-      class="mt-4 flex items-start gap-2 rounded-xl border border-warning/60 bg-warning/10 p-3 text-sm text-warning"
+      class="mt-4 flex items-start gap-2 rounded-box border-[length:var(--border)] border-warning/60 bg-warning/10 p-3 text-sm text-warning"
       role="alert"
     >
       <Server class="mt-0.5 h-4 w-4 shrink-0" />
@@ -490,7 +490,7 @@ let {
   {#if loading}
     <div class="mt-10 flex justify-center"><span class="loading loading-spinner loading-md"></span></div>
   {:else if bundles.length === 0}
-    <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
+    <div class="mt-5 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/30 p-8 text-center">
       <Boxes class="mx-auto h-9 w-9 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No bundles</p>
       <p class="mt-1 text-sm text-base-content/50">Create a runtime bundle after the catalog is available.</p>
@@ -522,7 +522,7 @@ let {
 
         {#snippet bundleGroup(label: string, items: BundleView[], open: boolean, toggle: (nextOpen: boolean) => void)}
           <details
-            class="collapse rounded-lg border border-base-300 bg-base-100"
+            class="collapse rounded-field border-[length:var(--border)] border-base-300 bg-base-100"
             {open}
             ontoggle={(event) => toggle((event.currentTarget as HTMLDetailsElement).open)}
           >
@@ -544,7 +544,7 @@ let {
           </details>
         {/snippet}
 
-        <div class="card border border-base-300 bg-base-100 p-2 sm:p-3">
+        <div class="card border-[length:var(--border)] border-base-300 bg-base-100 p-2 sm:p-3">
           <div class={['dropdown mb-3 w-full', policyDropdownOpen && 'dropdown-open']}>
             <label class="input input-sm w-full gap-1">
               <span class="label">Policy</span>
@@ -567,7 +567,7 @@ let {
               {/if}
             </label>
             {#if policyDropdownOpen}
-              <ul class="dropdown-content menu z-20 mt-1 max-h-60 w-full flex-nowrap overflow-y-auto rounded-box border border-base-300 bg-base-100 p-1 shadow-lg">
+              <ul class="dropdown-content menu z-20 mt-1 max-h-60 w-full flex-nowrap overflow-y-auto rounded-box border-[length:var(--border)] border-base-300 bg-base-100 p-1 shadow-lg">
                 {#if policySearch.trim()}
                   <li>
                     <button type="button" onclick={() => { policySearch = ''; policyDropdownOpen = false; }}>All policies</button>
@@ -595,7 +595,7 @@ let {
 
       {#if selectedBundle}
         <div class="min-w-0 space-y-5">
-          <section class="card border border-base-300 bg-base-100 p-5 sm:p-6">
+          <section class="card border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6">
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div class="min-w-0">
                 <div class="flex min-w-0 flex-wrap items-center gap-2">
@@ -640,7 +640,7 @@ let {
             </div>
           </section>
 
-          <section class="card border border-base-300 bg-base-100 p-5 sm:p-6" aria-labelledby="bundle-policies-title">
+          <section class="card border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6" aria-labelledby="bundle-policies-title">
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h3 id="bundle-policies-title" class="text-sm font-bold text-base-content">Policy membership</h3>
@@ -654,16 +654,16 @@ let {
             </div>
 
             {#if selectedBundle.memberPolicies.length === 0}
-              <div class="mt-4 rounded-lg border border-base-300 bg-base-200/35 px-3 py-3 text-sm text-base-content/50">
+              <div class="mt-4 rounded-field border-[length:var(--border)] border-base-300 bg-base-200/35 px-3 py-3 text-sm text-base-content/50">
                 No policies reference this bundle.
               </div>
             {:else}
               <div class="mt-4 space-y-3">
                 {#each selectedBundle.memberPolicies as policy (policy.policyId)}
-                  <div class="card border border-base-300 bg-base-100 p-3">
+                  <div class="card border-[length:var(--border)] border-base-300 bg-base-100 p-3">
                     <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
                       <div class="flex min-w-0 items-center gap-2">
-                        <span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-base-300/70 text-primary">
+                        <span class="grid h-8 w-8 shrink-0 place-items-center rounded-field bg-base-300/70 text-primary">
                           <Users class="h-4 w-4" />
                         </span>
                         <div class="min-w-0">
@@ -684,16 +684,16 @@ let {
             {/if}
           </section>
 
-          <section class="card border border-base-300 bg-base-100 p-5 sm:p-6" aria-labelledby="bundle-endpoints-title">
+          <section class="card border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6" aria-labelledby="bundle-endpoints-title">
             <h3 id="bundle-endpoints-title" class="text-sm font-bold text-base-content">Endpoint membership</h3>
             {#if selectedBundle.endpoints.length === 0}
-              <div class="mt-3 rounded-lg border border-base-300 bg-base-200/35 px-3 py-3 text-sm text-base-content/50">
+              <div class="mt-3 rounded-field border-[length:var(--border)] border-base-300 bg-base-200/35 px-3 py-3 text-sm text-base-content/50">
                 No endpoints assigned.
               </div>
             {:else}
               <div class="mt-3 space-y-2">
                 {#each endpointGroups(selectedBundle) as group (group.bundle)}
-                  <details open class="rounded-lg border border-base-300 bg-base-100">
+                  <details open class="rounded-field border-[length:var(--border)] border-base-300 bg-base-100">
                     <summary class="flex cursor-pointer list-none items-center justify-between gap-3 rounded-t-lg bg-base-200 px-3 py-2.5 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">
                       <span>{group.bundle}</span>
                       <span class="shrink-0 text-xs font-normal text-base-content/40">{group.entries.length} endpoint{group.entries.length === 1 ? '' : 's'}</span>

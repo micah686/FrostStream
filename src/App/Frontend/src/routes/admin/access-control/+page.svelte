@@ -48,7 +48,7 @@
     assignments: AccessPolicyAssignment[];
   }
 
-  const cardClass = 'card border border-base-300 bg-base-100 p-5 sm:p-6';
+  const cardClass = 'card border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6';
   const secondaryButton = 'btn btn-sm btn-neutral text-xs';
   const primaryButton = 'btn btn-sm btn-primary text-xs';
 
@@ -591,12 +591,12 @@
     {#if loading}
       <div class="mt-10 flex justify-center"><span class="loading loading-spinner loading-md"></span></div>
     {:else if policies.length === 0}
-      <div class="mt-5 rounded-xl border border-dashed border-base-content/20 p-8 text-center text-sm text-base-content/50">
+      <div class="mt-5 rounded-box border-[length:var(--border)] border-dashed border-base-content/20 p-8 text-center text-sm text-base-content/50">
         No access policies yet. Create one to combine endpoint grants and media denies.
       </div>
     {:else}
       <div class="mt-5 grid gap-5 2xl:grid-cols-[21rem_minmax(0,1fr)]">
-        <aside class="max-h-[46rem] overflow-y-auto rounded-xl border border-base-300">
+        <aside class="max-h-[46rem] overflow-y-auto rounded-box border-[length:var(--border)] border-base-300">
           {#each policies as policy (policy.policyId)}
             <button
               type="button"
@@ -628,7 +628,7 @@
 
         {#if selectedPolicy}
           <div class="min-w-0 space-y-4">
-            <div class="card border border-base-300 bg-base-100 p-5 sm:p-6">
+            <div class="card border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6">
               <div class="flex flex-wrap items-start justify-between gap-3">
                 <div class="min-w-0">
                   <h3 class="text-lg font-bold text-base-content">{selectedPolicy.name}</h3>
@@ -666,7 +666,7 @@
             </div>
 
             <div class="mt-5 space-y-2">
-              <details class="collapse rounded-lg border border-base-300 bg-base-100">
+              <details class="collapse rounded-field border-[length:var(--border)] border-base-300 bg-base-100">
                 <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">
                   <span>Endpoint bundles</span>
                 </summary>
@@ -681,7 +681,7 @@
                 </div>
               </details>
 
-              <details class="collapse rounded-lg border border-base-300 bg-base-100">
+              <details class="collapse rounded-field border-[length:var(--border)] border-base-300 bg-base-100">
                 <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">
                   <span>Policy assignments</span>
                 </summary>
@@ -713,7 +713,7 @@
                 </div>
               </details>
 
-              <details class="collapse rounded-lg border border-base-300 bg-base-100">
+              <details class="collapse rounded-field border-[length:var(--border)] border-base-300 bg-base-100">
                 <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">
                   <span>Denied media GUIDs</span>
                 </summary>
@@ -746,7 +746,7 @@
                 </div>
               </details>
 
-              <details class="collapse rounded-lg border border-base-300 bg-base-100">
+              <details class="collapse rounded-field border-[length:var(--border)] border-base-300 bg-base-100">
                 <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">
                   <span>Denied providers</span>
                 </summary>
@@ -761,7 +761,7 @@
                 </div>
               </details>
 
-              <details class="collapse rounded-lg border border-base-300 bg-base-100">
+              <details class="collapse rounded-field border-[length:var(--border)] border-base-300 bg-base-100">
                 <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">
                   <span>Denied ages</span>
                 </summary>
@@ -825,7 +825,7 @@
 
           <fieldset class="min-w-0 [min-inline-size:0]">
             <legend class="text-xs font-semibold text-base-content/60">Endpoint bundles</legend>
-            <ul class="mt-2 max-h-64 divide-y divide-base-300 overflow-y-auto rounded-lg border border-base-300 bg-base-100">
+            <ul class="mt-2 max-h-64 divide-y divide-base-300 overflow-y-auto rounded-field border-[length:var(--border)] border-base-300 bg-base-100">
               {#each bundles as bundle (bundle.id)}
                 <li>
                 <label class="flex items-center gap-2 px-3 py-2 text-sm text-base-content/80 hover:bg-base-200">
@@ -862,10 +862,10 @@
             {#if mediaGuidError}
               <p class="mt-2 text-xs text-error">{mediaGuidError}</p>
             {/if}
-            <div class="mt-3 w-full min-w-0 max-w-full space-y-2 overflow-y-auto rounded-lg border border-base-300 bg-base-100 p-2">
+            <div class="mt-3 w-full min-w-0 max-w-full space-y-2 overflow-y-auto rounded-field border-[length:var(--border)] border-base-300 bg-base-100 p-2">
               {#each editor.mediaGuids as mediaGuid (mediaGuid)}
                 {@const summary = mediaSummaries[mediaGuid]}
-                <div class="flex w-full min-w-0 max-w-full items-start gap-3 overflow-hidden rounded-lg border border-base-300 bg-base-200/35 px-3 py-2">
+                <div class="flex w-full min-w-0 max-w-full items-start gap-3 overflow-hidden rounded-field border-[length:var(--border)] border-base-300 bg-base-200/35 px-3 py-2">
                   <div class="min-w-0 flex-1 overflow-hidden">
                     <div class="block w-full min-w-0 truncate text-xs font-semibold text-base-content/90">{summary?.title || 'Media item'}</div>
                     <div class="mt-1 block w-full min-w-0 truncate font-mono text-[10px] text-base-content/50">{mediaGuid}</div>
@@ -886,7 +886,7 @@
                   </button>
                 </div>
               {:else}
-                <div class="rounded-lg border border-dashed border-base-300 px-3 py-3 text-xs text-base-content/40">No media GUID denies.</div>
+                <div class="rounded-field border-[length:var(--border)] border-dashed border-base-300 px-3 py-3 text-xs text-base-content/40">No media GUID denies.</div>
               {/each}
             </div>
           </fieldset>
@@ -908,7 +908,7 @@
                 }}
               />
               {#if providerInput.trim().length > 0 && matchingProviders().length > 0}
-                <div class="absolute z-10 mt-1 max-h-44 w-full overflow-y-auto rounded-lg border border-base-content/20 bg-base-200 shadow-xl shadow-black/30">
+                <div class="absolute z-10 mt-1 max-h-44 w-full overflow-y-auto rounded-field border-[length:var(--border)] border-base-content/20 bg-base-200 shadow-xl shadow-black/30">
                   {#each matchingProviders() as provider (provider)}
                     <button
                       type="button"
@@ -972,7 +972,7 @@
               />
             </div>
             {#if directoryLoading || directoryResults.length > 0}
-              <ul class="mt-2 max-h-44 w-full min-w-0 divide-y divide-base-300 overflow-x-hidden overflow-y-auto rounded-lg border border-base-300 bg-base-100">
+              <ul class="mt-2 max-h-44 w-full min-w-0 divide-y divide-base-300 overflow-x-hidden overflow-y-auto rounded-field border-[length:var(--border)] border-base-300 bg-base-100">
                 {#if directoryLoading}
                   <li class="px-3 py-2 text-xs text-base-content/50">Searching Authentik…</li>
                 {:else}
@@ -1076,7 +1076,7 @@
             }}
           />
           {#if effectivePrincipalDropdownOpen && (effectiveDirectoryLoading || effectiveDirectoryResults.length > 0)}
-            <ul id="effective-principal-options" class="dropdown-content menu z-20 mt-1 max-h-48 w-full flex-nowrap overflow-y-auto rounded-lg border border-base-300 bg-base-100 p-1 shadow-xl" role="listbox">
+            <ul id="effective-principal-options" class="dropdown-content menu z-20 mt-1 max-h-48 w-full flex-nowrap overflow-y-auto rounded-field border-[length:var(--border)] border-base-300 bg-base-100 p-1 shadow-xl" role="listbox">
               {#if effectiveDirectoryLoading}
                 <li><span class="text-xs text-base-content/50">Searching Authentik…</span></li>
               {:else}
@@ -1096,7 +1096,7 @@
       </div>
     </div>
 
-    <div class="card mt-3 flex flex-wrap items-center justify-between gap-3 border border-base-300 bg-base-100 p-4">
+    <div class="card mt-3 flex flex-wrap items-center justify-between gap-3 border-[length:var(--border)] border-base-300 bg-base-100 p-4">
       <div class="min-w-0">
         <div class="text-[10px] font-bold uppercase text-base-content/40">Selected principal</div>
         <div class="mt-1 truncate font-mono text-xs text-base-content/80">{effectiveId || 'None selected'}</div>
@@ -1130,7 +1130,7 @@
               }}
             />
             {#if endpointDropdownOpen}
-              <ul id="effective-endpoint-options" class="dropdown-content menu z-20 mt-1 max-h-60 w-full flex-nowrap overflow-y-auto rounded-lg border border-base-300 bg-base-100 p-1 shadow-xl" role="listbox">
+              <ul id="effective-endpoint-options" class="dropdown-content menu z-20 mt-1 max-h-60 w-full flex-nowrap overflow-y-auto rounded-field border-[length:var(--border)] border-base-300 bg-base-100 p-1 shadow-xl" role="listbox">
                 {#each catalog.filter((endpoint) => !effectiveEndpoint.trim() || endpoint.id.toLowerCase().includes(effectiveEndpoint.trim().toLowerCase())) as endpoint (endpoint.id)}
                   <li>
                     <button type="button" class="block w-full truncate text-left font-mono text-xs" onclick={() => { effectiveEndpoint = endpoint.id; endpointDropdownOpen = false; }}>
@@ -1172,7 +1172,7 @@
       </div>
 
       <div class="mt-5 space-y-2">
-        <details class="collapse rounded-lg border border-base-300 bg-base-100">
+        <details class="collapse rounded-field border-[length:var(--border)] border-base-300 bg-base-100">
           <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">Groups</summary>
           <div class="collapse-content px-0 pb-0">
             <div class="divide-y divide-base-300/70 border-t border-base-300/80">
@@ -1185,7 +1185,7 @@
           </div>
         </details>
 
-        <details class="collapse rounded-lg border border-base-300 bg-base-100">
+        <details class="collapse rounded-field border-[length:var(--border)] border-base-300 bg-base-100">
           <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">Direct exceptions</summary>
           <div class="collapse-content px-0 pb-0">
             <div class="divide-y divide-base-300/70 border-t border-base-300/80">
@@ -1198,7 +1198,7 @@
           </div>
         </details>
 
-        <details class="collapse rounded-lg border border-base-300 bg-base-100">
+        <details class="collapse rounded-field border-[length:var(--border)] border-base-300 bg-base-100">
           <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">Via policies</summary>
           <div class="collapse-content px-0 pb-0">
             <div class="divide-y divide-base-300/70 border-t border-base-300/80">
@@ -1211,7 +1211,7 @@
           </div>
         </details>
 
-        <details class="collapse rounded-lg border border-base-300 bg-base-100">
+        <details class="collapse rounded-field border-[length:var(--border)] border-base-300 bg-base-100">
           <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">Effective endpoints</summary>
           <div class="collapse-content px-0 pb-0">
             <div class="max-h-72 divide-y divide-base-300/70 overflow-y-auto border-t border-base-300/80">
@@ -1224,7 +1224,7 @@
           </div>
         </details>
 
-        <details class="collapse rounded-lg border border-base-300 bg-base-100">
+        <details class="collapse rounded-field border-[length:var(--border)] border-base-300 bg-base-100">
           <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">Source policies</summary>
           <div class="collapse-content px-0 pb-0">
             <div class="divide-y divide-base-300/70 border-t border-base-300/80">
@@ -1239,7 +1239,7 @@
           </div>
         </details>
 
-        <details class="collapse rounded-lg border border-base-300 bg-base-100">
+        <details class="collapse rounded-field border-[length:var(--border)] border-base-300 bg-base-100">
           <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">Denied media GUIDs</summary>
           <div class="collapse-content px-0 pb-0">
             {#if effectiveResult.deniedMediaGuids.length === 0}
@@ -1270,7 +1270,7 @@
           </div>
         </details>
 
-        <details class="collapse rounded-lg border border-base-300 bg-base-100">
+        <details class="collapse rounded-field border-[length:var(--border)] border-base-300 bg-base-100">
           <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">Denied providers</summary>
           <div class="collapse-content px-0 pb-0">
             <div class="divide-y divide-base-300/70 border-t border-base-300/80">
@@ -1283,7 +1283,7 @@
           </div>
         </details>
 
-        <details class="collapse rounded-lg border border-base-300 bg-base-100">
+        <details class="collapse rounded-field border-[length:var(--border)] border-base-300 bg-base-100">
           <summary class="collapse-title flex min-h-0 cursor-pointer list-none items-center gap-2 rounded-t-lg bg-base-300 px-3 py-2 text-xs font-semibold text-base-content [&::-webkit-details-marker]:hidden">Denied age tiers</summary>
           <div class="collapse-content px-0 pb-0">
             <div class="divide-y divide-base-300/70 border-t border-base-300/80">
@@ -1318,7 +1318,7 @@
         ]}>{effectiveCheck.isAllowed ? 'Allowed' : 'Denied'}</span>
       </div>
 
-      <div class="mt-4 overflow-x-auto rounded-lg border border-base-300">
+      <div class="mt-4 overflow-x-auto rounded-field border-[length:var(--border)] border-base-300">
         <table class="w-full min-w-[46rem] text-left text-xs">
           <thead class="bg-base-200 text-base-content">
             <tr><th class="px-3 py-2">Axis</th><th class="px-3 py-2">Resource</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">Reason / provenance</th></tr>

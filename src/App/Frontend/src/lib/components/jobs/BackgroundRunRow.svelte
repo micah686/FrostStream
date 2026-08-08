@@ -198,7 +198,7 @@
         {/if}
       </div>
 
-      <div class="mt-3 max-h-48 overflow-y-auto rounded-lg border border-base-300 bg-base-200 p-3 font-mono text-xs text-base-content">
+      <div class="mt-3 max-h-48 overflow-y-auto rounded-field border-[length:var(--border)] border-base-300 bg-base-200 p-3 font-mono text-xs text-base-content">
         {#if run.errorMessage}
           <p class="flex items-start gap-1.5 whitespace-pre-wrap break-words text-error">
             <CircleAlert class="mt-0.5 h-3.5 w-3.5 shrink-0" />

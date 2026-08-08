@@ -171,7 +171,7 @@
 
   {#if open}
     <div
-      class="absolute right-0 top-full z-40 mt-2 w-72 rounded-xl border border-base-content/20 bg-base-100 p-2 shadow-2xl shadow-black/50"
+      class="absolute right-0 top-full z-40 mt-2 w-72 rounded-box border-[length:var(--border)] border-base-content/20 bg-base-100 p-2 shadow-2xl shadow-black/50"
       role="dialog"
       aria-label="Save to playlist"
     >
@@ -208,7 +208,7 @@
                   aria-checked={membership[playlist.playlistId] === true}
                   disabled={busyPlaylistId !== null}
                   onclick={() => toggleMembership(playlist)}
-                  class="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition hover:bg-base-300/70 disabled:opacity-60"
+                  class="flex w-full items-center gap-2.5 rounded-field px-2 py-2 text-left transition hover:bg-base-300/70 disabled:opacity-60"
                 >
                   <span
                     class={[
@@ -247,13 +247,13 @@
                 maxlength={255}
                 placeholder="Playlist name"
                 autofocus
-                class="w-full rounded-lg border border-base-300 bg-base-200/60 px-3 py-2 text-sm text-base-content/90 placeholder:text-base-content/40 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                class="w-full rounded-field border-[length:var(--border)] border-base-300 bg-base-200/60 px-3 py-2 text-sm text-base-content/90 placeholder:text-base-content/40 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               />
               <div class="flex gap-2">
                 <button
                   type="submit"
                   disabled={createName.trim().length === 0 || createBusy}
-                  class="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-content transition hover:bg-primary disabled:opacity-50"
+                  class="flex flex-1 items-center justify-center gap-1.5 rounded-field bg-primary px-3 py-1.5 text-xs font-semibold text-primary-content transition hover:bg-primary disabled:opacity-50"
                 >
                   {#if createBusy}
                     <span class="loading loading-spinner loading-xs"></span>
@@ -264,7 +264,7 @@
                   type="button"
                   disabled={createBusy}
                   onclick={() => (createOpen = false)}
-                  class="rounded-lg border border-base-content/20 px-3 py-1.5 text-xs font-semibold text-base-content/80 transition hover:bg-base-300"
+                  class="rounded-field border-[length:var(--border)] border-base-content/20 px-3 py-1.5 text-xs font-semibold text-base-content/80 transition hover:bg-base-300"
                 >
                   Cancel
                 </button>
@@ -274,7 +274,7 @@
             <button
               type="button"
               onclick={() => (createOpen = true)}
-              class="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left text-sm font-semibold text-base-content/80 transition hover:bg-base-300/70"
+              class="flex w-full items-center gap-2.5 rounded-field px-2 py-2 text-left text-sm font-semibold text-base-content/80 transition hover:bg-base-300/70"
             >
               <Plus class="h-4 w-4" />
               New playlist

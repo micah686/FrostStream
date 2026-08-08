@@ -316,7 +316,7 @@
       onclick={toggleOpen}
       title="Cast via the server (no browser Cast SDK needed)"
       class={[
-        'flex items-center gap-1.5 rounded-lg border px-4 py-2 text-xs font-semibold transition',
+        'flex items-center gap-1.5 rounded-field border px-4 py-2 text-xs font-semibold transition',
         session
           ? 'border-primary/30 bg-primary/10 text-primary hover:bg-primary/10'
           : 'border-base-300 bg-base-200/70 text-base-content/80 hover:bg-base-300'
@@ -331,8 +331,8 @@
     <div
       class={[
         embedded
-          ? 'w-full rounded-xl border border-base-300 bg-base-200/95 p-4 shadow-2xl shadow-black/50 backdrop-blur'
-          : 'absolute right-0 z-30 mt-2 w-80 rounded-xl border border-base-300 bg-base-200/95 p-4 shadow-2xl shadow-black/50 backdrop-blur'
+          ? 'w-full rounded-box border-[length:var(--border)] border-base-300 bg-base-200/95 p-4 shadow-2xl shadow-black/50 backdrop-blur'
+          : 'absolute right-0 z-30 mt-2 w-80 rounded-box border-[length:var(--border)] border-base-300 bg-base-200/95 p-4 shadow-2xl shadow-black/50 backdrop-blur'
       ]}
     >
       {#if error}
@@ -417,7 +417,7 @@
             type="button"
             onclick={() => loadDevices(true)}
             disabled={devicesLoading}
-            class="rounded-md p-1 text-base-content/60 transition hover:bg-base-300 hover:text-base-content/90 disabled:opacity-50"
+            class="rounded-field p-1 text-base-content/60 transition hover:bg-base-300 hover:text-base-content/90 disabled:opacity-50"
             title="Scan again (takes a few seconds)"
           >
             <RefreshCw class={['h-4 w-4', devicesLoading && 'animate-spin']} />
@@ -425,7 +425,7 @@
         </div>
 
         {#if preparingAudio}
-          <p class="mb-3 rounded-lg border border-base-content/20 bg-base-200/70 px-3 py-2 text-xs text-base-content/80">
+          <p class="mb-3 rounded-field border-[length:var(--border)] border-base-content/20 bg-base-200/70 px-3 py-2 text-xs text-base-content/80">
             The audio version is being prepared — try again in a moment.
           </p>
         {/if}
@@ -444,7 +444,7 @@
                   type="button"
                   onclick={() => startCast(device)}
                   disabled={busy}
-                  class="w-full rounded-lg px-3 py-2 text-left text-sm text-base-content/90 transition hover:bg-base-300 disabled:opacity-50"
+                  class="w-full rounded-field px-3 py-2 text-left text-sm text-base-content/90 transition hover:bg-base-300 disabled:opacity-50"
                 >
                   <span class="block truncate font-medium">{device.name}</span>
                   <span class="block truncate text-[11px] text-base-content/50">
@@ -470,7 +470,7 @@
               <span class="shrink-0">Subtitles</span>
               <select
                 bind:value={subtitleChoice}
-                class="w-full rounded-md border border-base-content/20 bg-base-200 px-2 py-1 text-xs text-base-content/90"
+                class="w-full rounded-field border-[length:var(--border)] border-base-content/20 bg-base-200 px-2 py-1 text-xs text-base-content/90"
               >
                 <option value="">Off</option>
                 {#each captionLanguages as caption (caption.languageCode + caption.captionType)}

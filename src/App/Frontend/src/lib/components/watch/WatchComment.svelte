@@ -80,7 +80,7 @@
 
       <p class="flex flex-wrap items-center gap-2 text-xs">
         {#if comment.isUploader}
-          <span class="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/20 px-3 py-1 font-semibold text-primary shadow-sm shadow-primary/30">
+          <span class="inline-flex items-center gap-1.5 rounded-full border-[length:var(--border)] border-primary/40 bg-primary/20 px-3 py-1 font-semibold text-primary shadow-sm shadow-primary/30">
             <span>{displayName}</span>
             <BadgeCheck class="h-3.5 w-3.5 shrink-0 text-primary" />
           </span>

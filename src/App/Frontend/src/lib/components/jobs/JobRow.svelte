@@ -409,7 +409,7 @@
       {#if canUpdatePriority(job)}
         <button
           type="button"
-          class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-base-content/20 bg-base-200/70 text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary disabled:opacity-40"
+          class="inline-flex h-9 w-9 items-center justify-center rounded-field border-[length:var(--border)] border-base-content/20 bg-base-200/70 text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary disabled:opacity-40"
           title="Set priority"
           aria-label="Set priority"
           disabled={Boolean(busyAction)}
@@ -448,7 +448,7 @@
       {#if job.failureCode === 'provider_circuit_open' || job.failureKind?.toLowerCase() === 'providerblocked'}
         <button
           type="button"
-          class="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-warning/35 bg-warning/10 px-2 text-[11px] font-semibold text-warning transition hover:border-warning/70 hover:bg-warning/20 disabled:opacity-40"
+          class="inline-flex h-9 items-center justify-center gap-1.5 rounded-field border-[length:var(--border)] border-warning/35 bg-warning/10 px-2 text-[11px] font-semibold text-warning transition hover:border-warning/70 hover:bg-warning/20 disabled:opacity-40"
           title="Clear the provider block; this job will still require Start"
           aria-label="Clear provider block"
           disabled={Boolean(busyAction)}
@@ -488,7 +488,7 @@
       {#if isCollectionJob(job) && canStart(job.status)}
         <button
           type="button"
-          class="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-base-content/20 bg-base-200/70 px-2 text-[11px] font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary disabled:opacity-40"
+          class="inline-flex h-9 items-center justify-center gap-1.5 rounded-field border-[length:var(--border)] border-base-content/20 bg-base-200/70 px-2 text-[11px] font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary disabled:opacity-40"
           title="Start every failed or stopped job in this group"
           aria-label="Start group"
           disabled={Boolean(busyAction)}
@@ -610,7 +610,7 @@
         </span>
       </div>
 
-      <div class="mt-3 max-h-48 overflow-y-auto rounded-lg border border-base-300 bg-base-200 p-3 font-mono text-xs text-base-content">
+      <div class="mt-3 max-h-48 overflow-y-auto rounded-field border-[length:var(--border)] border-base-300 bg-base-200 p-3 font-mono text-xs text-base-content">
         {#if job.failureMessage}
           <p class="flex items-start gap-1.5 whitespace-pre-wrap break-words text-error">
             <CircleAlert class="mt-0.5 h-3.5 w-3.5 shrink-0" />

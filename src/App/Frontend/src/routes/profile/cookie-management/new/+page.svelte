@@ -54,7 +54,7 @@
     </p>
   </div>
 
-  <form onsubmit={save} class="card space-y-5 border border-base-300 bg-base-100 p-5 sm:p-6">
+  <form onsubmit={save} class="card space-y-5 border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6">
     {#if error}
       <div class="alert alert-error text-sm" role="alert">
         <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />

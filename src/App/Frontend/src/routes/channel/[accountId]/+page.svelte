@@ -554,7 +554,7 @@
 {:else}
   <section aria-labelledby="channel-title">
     <div
-      class={`relative h-36 w-full overflow-hidden rounded-2xl bg-gradient-to-br sm:h-48 ${accentFor(account.accountName)} shadow-lg shadow-black/20`}
+      class={`relative h-36 w-full overflow-hidden rounded-box bg-gradient-to-br sm:h-48 ${accentFor(account.accountName)} shadow-lg shadow-black/20`}
     >
       {#if bannerUrl}
         <img
@@ -598,7 +598,7 @@
             <span class="text-lg text-primary" title="Verified">✓</span>
           {/if}
           <span
-            class="rounded-md bg-base-300/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-base-content/60"
+            class="rounded-field bg-base-300/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-base-content/60"
           >
             {account.platform}
           </span>
@@ -650,14 +650,14 @@
             <Ellipsis class="h-4 w-4" />
           </button>
           {#if actionsMenuOpen}
-            <div class="absolute right-0 z-30 mt-2 w-56 rounded-xl border border-base-300 bg-base-100 p-1.5 shadow-xl" role="menu">
-              {#if account.accountUrl}<a class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-base-200" href={account.accountUrl} target="_blank" rel="noopener noreferrer" onclick={() => (actionsMenuOpen = false)}><ExternalLink class="h-4 w-4" />View on {account.platform}</a>{/if}
-              <button class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200" type="button" onclick={(event: MouseEvent) => { actionsMenuOpen = false; refreshAssets(event.shiftKey); }}><Image class="h-4 w-4" />Refresh assets</button>
-              <button class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200 disabled:opacity-50" type="button" disabled={thumbnailGenerationBusy} onclick={() => { actionsMenuOpen = false; void generateUnknownThumbnails(); }}><ImagePlus class="h-4 w-4" />Generate Unknown Thumbnails</button>
-              <div class="relative"><button class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200" type="button" onclick={() => { encodeMenuOpen = !encodeMenuOpen; forceEncodeMenuOpen = false; }}><span class="flex items-center gap-2"><Music class="h-4 w-4" />Encode audio</span><ChevronRight class="h-4 w-4" /></button>{#if encodeMenuOpen}<div class="absolute right-full top-0 mr-1 w-48 rounded-xl border border-base-300 bg-base-100 p-1.5 shadow-xl"><button class="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200" type="button" onclick={() => { selectedStorageKey = ''; actionsMenuOpen = false; encodeMenuOpen = false; void encodeAudio(); }}>All storage keys</button>{#each channelAudio?.availableStorageKeys ?? [] as key}<button class="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200" type="button" onclick={() => { selectedStorageKey = key; actionsMenuOpen = false; encodeMenuOpen = false; void encodeAudio(); }}>{key}</button>{/each}</div>{/if}</div>
-              <div class="relative"><button class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:bg-warning hover:text-warning-content" type="button" title="Re-encode media even when it is marked encoded" onclick={() => { forceEncodeMenuOpen = !forceEncodeMenuOpen; encodeMenuOpen = false; }}><span class="flex items-center gap-2"><Music class="h-4 w-4" />Force encode audio</span><ChevronRight class="h-4 w-4" /></button>{#if forceEncodeMenuOpen}<div class="absolute right-full top-0 mr-1 w-48 rounded-xl border border-base-300 bg-base-100 p-1.5 shadow-xl"><button class="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-warning hover:text-warning-content" type="button" onclick={() => { selectedStorageKey = ''; actionsMenuOpen = false; forceEncodeMenuOpen = false; void encodeAudio(true); }}>All storage keys</button>{#each channelAudio?.availableStorageKeys ?? [] as key}<button class="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-warning hover:text-warning-content" type="button" onclick={() => { selectedStorageKey = key; actionsMenuOpen = false; forceEncodeMenuOpen = false; void encodeAudio(true); }}>{key}</button>{/each}</div>{/if}</div>
-              <button class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200 disabled:opacity-50" type="button" disabled={!audioComplete} onclick={() => { actionsMenuOpen = false; playAudio(); }}><Headphones class="h-4 w-4" />Play as audio</button>
-              <button class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-base-200 disabled:opacity-50" type="button" disabled={!audioComplete || podcastBusy} onclick={() => { actionsMenuOpen = false; copyPodcastFeed(); }}><Copy class="h-4 w-4" />Copy podcast RSS</button>
+            <div class="absolute right-0 z-30 mt-2 w-56 rounded-box border-[length:var(--border)] border-base-300 bg-base-100 p-1.5 shadow-xl" role="menu">
+              {#if account.accountUrl}<a class="flex items-center gap-2 rounded-field px-3 py-2 text-sm hover:bg-base-200" href={account.accountUrl} target="_blank" rel="noopener noreferrer" onclick={() => (actionsMenuOpen = false)}><ExternalLink class="h-4 w-4" />View on {account.platform}</a>{/if}
+              <button class="flex w-full items-center gap-2 rounded-field px-3 py-2 text-left text-sm hover:bg-base-200" type="button" onclick={(event: MouseEvent) => { actionsMenuOpen = false; refreshAssets(event.shiftKey); }}><Image class="h-4 w-4" />Refresh assets</button>
+              <button class="flex w-full items-center gap-2 rounded-field px-3 py-2 text-left text-sm hover:bg-base-200 disabled:opacity-50" type="button" disabled={thumbnailGenerationBusy} onclick={() => { actionsMenuOpen = false; void generateUnknownThumbnails(); }}><ImagePlus class="h-4 w-4" />Generate Unknown Thumbnails</button>
+              <div class="relative"><button class="flex w-full items-center justify-between rounded-field px-3 py-2 text-left text-sm hover:bg-base-200" type="button" onclick={() => { encodeMenuOpen = !encodeMenuOpen; forceEncodeMenuOpen = false; }}><span class="flex items-center gap-2"><Music class="h-4 w-4" />Encode audio</span><ChevronRight class="h-4 w-4" /></button>{#if encodeMenuOpen}<div class="absolute right-full top-0 mr-1 w-48 rounded-box border-[length:var(--border)] border-base-300 bg-base-100 p-1.5 shadow-xl"><button class="w-full rounded-field px-3 py-2 text-left text-sm hover:bg-base-200" type="button" onclick={() => { selectedStorageKey = ''; actionsMenuOpen = false; encodeMenuOpen = false; void encodeAudio(); }}>All storage keys</button>{#each channelAudio?.availableStorageKeys ?? [] as key}<button class="w-full rounded-field px-3 py-2 text-left text-sm hover:bg-base-200" type="button" onclick={() => { selectedStorageKey = key; actionsMenuOpen = false; encodeMenuOpen = false; void encodeAudio(); }}>{key}</button>{/each}</div>{/if}</div>
+              <div class="relative"><button class="flex w-full items-center justify-between rounded-field px-3 py-2 text-left text-sm hover:bg-warning hover:text-warning-content" type="button" title="Re-encode media even when it is marked encoded" onclick={() => { forceEncodeMenuOpen = !forceEncodeMenuOpen; encodeMenuOpen = false; }}><span class="flex items-center gap-2"><Music class="h-4 w-4" />Force encode audio</span><ChevronRight class="h-4 w-4" /></button>{#if forceEncodeMenuOpen}<div class="absolute right-full top-0 mr-1 w-48 rounded-box border-[length:var(--border)] border-base-300 bg-base-100 p-1.5 shadow-xl"><button class="w-full rounded-field px-3 py-2 text-left text-sm hover:bg-warning hover:text-warning-content" type="button" onclick={() => { selectedStorageKey = ''; actionsMenuOpen = false; forceEncodeMenuOpen = false; void encodeAudio(true); }}>All storage keys</button>{#each channelAudio?.availableStorageKeys ?? [] as key}<button class="w-full rounded-field px-3 py-2 text-left text-sm hover:bg-warning hover:text-warning-content" type="button" onclick={() => { selectedStorageKey = key; actionsMenuOpen = false; forceEncodeMenuOpen = false; void encodeAudio(true); }}>{key}</button>{/each}</div>{/if}</div>
+              <button class="flex w-full items-center gap-2 rounded-field px-3 py-2 text-left text-sm hover:bg-base-200 disabled:opacity-50" type="button" disabled={!audioComplete} onclick={() => { actionsMenuOpen = false; playAudio(); }}><Headphones class="h-4 w-4" />Play as audio</button>
+              <button class="flex w-full items-center gap-2 rounded-field px-3 py-2 text-left text-sm hover:bg-base-200 disabled:opacity-50" type="button" disabled={!audioComplete || podcastBusy} onclick={() => { actionsMenuOpen = false; copyPodcastFeed(); }}><Copy class="h-4 w-4" />Copy podcast RSS</button>
             </div>
           {/if}
         </div>
@@ -810,7 +810,7 @@
           <span>{statisticsError}</span>
         </div>
       {:else if statistics}
-        <section id="channel-statistics-panel" class="mt-4 rounded-2xl border border-base-300/80 bg-base-200/35 p-5" aria-labelledby="channel-statistics-title">
+        <section id="channel-statistics-panel" class="mt-4 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/35 p-5" aria-labelledby="channel-statistics-title">
         <div class="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 id="channel-statistics-title" class="text-base font-bold text-base-content">Channel statistics</h2>
@@ -822,22 +822,22 @@
         </div>
 
         <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <article class="rounded-xl border border-base-300/80 bg-base-200/30 p-4">
+          <article class="rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/30 p-4">
             <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50">Downloaded</p>
             <p class="mt-3 text-3xl font-bold text-base-content">{statistics.summary.downloadedCount.toLocaleString()}</p>
             <p class="mt-1 text-xs text-base-content/50">{formatDuration(statistics.summary.downloadedDurationSeconds) ?? 'no duration'} archived</p>
           </article>
-          <article class="rounded-xl border border-base-300/80 bg-base-200/30 p-4">
+          <article class="rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/30 p-4">
             <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50">Available</p>
             <p class="mt-3 text-3xl font-bold text-base-content">{statistics.summary.availableCount.toLocaleString()}</p>
             <p class="mt-1 text-xs text-base-content/50">{formatDuration(statistics.summary.totalDurationSeconds) ?? 'no duration'} discovered</p>
           </article>
-          <article class="rounded-xl border border-base-300/80 bg-base-200/30 p-4">
+          <article class="rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/30 p-4">
             <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50">Storage</p>
             <p class="mt-3 text-3xl font-bold text-base-content">{formatBytes(statistics.summary.totalBytes)}</p>
             <p class="mt-1 text-xs text-base-content/50">downloaded bytes</p>
           </article>
-          <article class="rounded-xl border border-base-300/80 bg-base-200/30 p-4">
+          <article class="rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/30 p-4">
             <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50">Last scan</p>
             <p class="mt-3 text-3xl font-bold text-base-content">{formatRelativeDate(statistics.summary.lastSuccessfulScanAt) ?? '-'}</p>
             <p class="mt-1 text-xs text-base-content/50">successful discovery scan</p>
@@ -845,7 +845,7 @@
         </div>
 
         <div class="mt-5 grid gap-5 xl:grid-cols-3">
-          <section class="rounded-xl border border-base-300/80 bg-base-200/25 p-4" aria-labelledby="channel-status-title">
+          <section class="rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/25 p-4" aria-labelledby="channel-status-title">
             <h3 id="channel-status-title" class="text-sm font-bold text-base-content/90">Discovery status</h3>
             <div class="mt-4 grid gap-2">
               {#each [
@@ -868,7 +868,7 @@
             </div>
           </section>
 
-          <section class="rounded-xl border border-base-300/80 bg-base-200/25 p-4" aria-labelledby="channel-media-types-title">
+          <section class="rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/25 p-4" aria-labelledby="channel-media-types-title">
             <h3 id="channel-media-types-title" class="text-sm font-bold text-base-content/90">Media types</h3>
             <div class="mt-4 space-y-3">
               {#each statistics.mediaTypes as item (item.type)}
@@ -888,11 +888,11 @@
             </div>
           </section>
 
-          <section class="rounded-xl border border-base-300/80 bg-base-200/25 p-4" aria-labelledby="channel-download-states-title">
+          <section class="rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/25 p-4" aria-labelledby="channel-download-states-title">
             <h3 id="channel-download-states-title" class="text-sm font-bold text-base-content/90">Recent download states</h3>
             <div class="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
               {#each statistics.recentDownloadStates as state (state.state)}
-                <div class="rounded-lg border border-base-300/70 bg-base-200/45 p-3">
+                <div class="rounded-field border-[length:var(--border)] border-base-300/70 bg-base-200/45 p-3">
                   <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50">{state.state}</p>
                   <p class="mt-2 text-xl font-bold text-base-content">{state.count.toLocaleString()}</p>
                 </div>
@@ -919,7 +919,7 @@
         <span class="loading loading-spinner loading-md"></span>
       </div>
     {:else if items.length === 0}
-      <div class="mt-10 rounded-2xl border border-base-300/80 bg-base-200/40 p-10 text-center">
+      <div class="mt-10 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-10 text-center">
         <LayoutList class="mx-auto h-10 w-10 text-base-content/30" />
         <p class="mt-4 text-sm font-semibold text-base-content/80">No videos archived yet</p>
         <p class="mt-1 text-sm text-base-content/50">
@@ -932,7 +932,7 @@
           <article class="group min-w-0">
             <a
               href={`/watch/${card.mediaGuid}`}
-              class={`relative block aspect-video w-full overflow-hidden rounded-2xl bg-gradient-to-br ${accentFor(card.mediaGuid)} text-left shadow-lg shadow-black/20 transition duration-300 group-hover:-translate-y-1 group-hover:shadow-xl group-hover:shadow-black/30`}
+              class={`relative block aspect-video w-full overflow-hidden rounded-box bg-gradient-to-br ${accentFor(card.mediaGuid)} text-left shadow-lg shadow-black/20 transition duration-300 group-hover:-translate-y-1 group-hover:shadow-xl group-hover:shadow-black/30`}
               aria-label={`Play ${card.title}`}
             >
               <span

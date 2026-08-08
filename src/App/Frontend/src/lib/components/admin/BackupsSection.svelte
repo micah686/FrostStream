@@ -32,7 +32,7 @@
     diff: 'Only what changed since the last full backup — fast and small. Requires at least one full backup. The daily schedule takes one every night.'
   };
 
-  const cardClass = 'card border border-base-300 bg-base-100 p-5 sm:p-6';
+  const cardClass = 'card border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6';
   const rowActionClass = 'btn btn-sm btn-neutral text-xs';
 
   const JOB_POLL_INTERVAL_MS = 4000;
@@ -278,7 +278,7 @@
       <span class="loading loading-spinner loading-md"></span>
     </div>
   {:else if jobs.length === 0}
-    <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
+    <div class="mt-5 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/30 p-8 text-center">
       <CloudUpload class="mx-auto h-9 w-9 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No backup jobs yet</p>
       <p class="mt-1 text-sm text-base-content/50">Run a backup or verification to see its progress here.</p>
@@ -286,7 +286,7 @@
   {:else}
     <div class="mt-5 space-y-2">
       {#each jobs as job (job.jobId)}
-        <article class="rounded-lg border border-base-content/20 bg-base-100 px-3 py-3 sm:px-4">
+        <article class="rounded-field border-[length:var(--border)] border-base-content/20 bg-base-100 px-3 py-3 sm:px-4">
           <div class="flex flex-wrap items-center gap-2">
             {#if job.status === 'queued' || job.status === 'running'}
               <span class="loading loading-spinner loading-xs"></span>
@@ -360,7 +360,7 @@
   {#if repository}
     <div
       class={[
-        'mt-5 flex items-start gap-2 rounded-lg border p-3 text-xs',
+        'mt-5 flex items-start gap-2 rounded-field border p-3 text-xs',
         repository.repositoryOk
           ? 'border-info/30 bg-info/10 text-info-content'
           : 'border-error/30 bg-error/10 text-error-content'
@@ -389,7 +389,7 @@
       <span class="loading loading-spinner loading-md"></span>
     </div>
   {:else if !repository || repository.backups.length === 0}
-    <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
+    <div class="mt-5 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/30 p-8 text-center">
       <FileArchive class="mx-auto h-9 w-9 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No backups yet</p>
       <p class="mt-1 text-sm text-base-content/50">Completed backups appear here once written to the repository.</p>
@@ -397,10 +397,10 @@
   {:else}
     <div class="mt-5 space-y-2">
       {#each [...repository.backups].reverse() as backup (backup.label)}
-        <article class="rounded-lg border border-base-content/20 bg-base-100 px-3 py-3 transition hover:border-base-content/30 sm:px-4">
+        <article class="rounded-field border-[length:var(--border)] border-base-content/20 bg-base-100 px-3 py-3 transition hover:border-base-content/30 sm:px-4">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div class="flex min-w-0 items-center gap-3">
-              <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-base-300/70 text-primary">
+              <span class="grid h-9 w-9 shrink-0 place-items-center rounded-field bg-base-300/70 text-primary">
                 <FileArchive class="h-4.5 w-4.5" />
               </span>
               <div class="min-w-0">
@@ -458,7 +458,7 @@
 <!-- Restore -->
 <section class={cardClass} aria-labelledby="backups-restore-title">
   <div class="flex items-start gap-3">
-    <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-base-300/70 text-primary">
+    <span class="grid h-9 w-9 shrink-0 place-items-center rounded-field bg-base-300/70 text-primary">
       <LifeBuoy class="h-4.5 w-4.5" />
     </span>
     <div>

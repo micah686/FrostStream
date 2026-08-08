@@ -10,7 +10,7 @@
     triggerReindex
   } from '$lib/api/metadata';
 
-  const cardClass = 'card border border-base-300 bg-base-100 p-5 sm:p-6';
+  const cardClass = 'card border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6';
 
   // Search reindex
   let reindexBusy = $state(false);
@@ -141,7 +141,7 @@
     </div>
   {/if}
   {#if reindexMessage}
-    <div class="mt-4 flex items-start gap-2 rounded-xl border border-success/30 bg-success/10 p-3 text-sm text-success">
+    <div class="mt-4 flex items-start gap-2 rounded-box border-[length:var(--border)] border-success/30 bg-success/10 p-3 text-sm text-success">
       <CircleCheck class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{reindexMessage}</span>
     </div>
@@ -176,7 +176,7 @@
     </div>
   {/if}
   {#if databaseReindexMessage}
-    <div class="mt-4 flex items-start gap-2 rounded-xl border border-success/30 bg-success/10 p-3 text-sm text-success" role="status">
+    <div class="mt-4 flex items-start gap-2 rounded-box border-[length:var(--border)] border-success/30 bg-success/10 p-3 text-sm text-success" role="status">
       <CircleCheck class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{databaseReindexMessage}</span>
     </div>
@@ -195,7 +195,7 @@
 </section>
 
 <!-- Delete media -->
-<section class="rounded-2xl border border-error/30 bg-base-100 p-5 shadow-xl shadow-black/15 sm:p-6" aria-labelledby="metadata-delete-title">
+<section class="rounded-box border-[length:var(--border)] border-error/30 bg-base-100 p-5 shadow-xl shadow-black/15 sm:p-6" aria-labelledby="metadata-delete-title">
   <h2 id="metadata-delete-title" class="text-base font-bold text-base-content">Delete media</h2>
   <p class="mt-2 text-sm text-base-content/60">
     Permanently delete a media item by its GUID, from every storage target or just one.
@@ -211,7 +211,7 @@
     </div>
   {/if}
   {#if deleteMessage}
-    <div class="mt-4 flex items-start gap-2 rounded-xl border border-success/30 bg-success/10 p-3 text-sm text-success">
+    <div class="mt-4 flex items-start gap-2 rounded-box border-[length:var(--border)] border-success/30 bg-success/10 p-3 text-sm text-success">
       <CircleCheck class="mt-0.5 h-4 w-4 shrink-0" />
       <span>{deleteMessage}</span>
     </div>

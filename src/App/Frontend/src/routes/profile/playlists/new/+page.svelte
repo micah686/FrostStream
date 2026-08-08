@@ -35,7 +35,7 @@
     <p class="mt-2 text-sm text-base-content/60">Create a private playlist for archived media on this server.</p>
   </div>
 
-  <form class="card space-y-4 border border-base-300 bg-base-100 p-5 sm:p-6" onsubmit={save}>
+  <form class="card space-y-4 border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6" onsubmit={save}>
     {#if error}
       <div class="alert alert-error text-sm" role="alert"><CircleAlert class="mt-0.5 h-4 w-4 shrink-0" /><span>{error}</span></div>
     {/if}

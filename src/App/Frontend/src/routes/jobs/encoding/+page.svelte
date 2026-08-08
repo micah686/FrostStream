@@ -223,9 +223,9 @@
     </div>
 
     <div class="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
-      <Select items={pageSizeOptions} bind:value={pageSize} onchange={changePageSize} aria-label="Jobs per page" class="h-10 w-full text-sm sm:w-40" />
-      <input class="input w-full h-10 text-sm sm:w-48" type="search" bind:value={storageKey} oninput={scheduleSearch} aria-label="Filter by storage key" placeholder="Storage key..." />
-      <input class="input w-full h-10 text-sm lg:w-80" type="search" bind:value={query} oninput={scheduleSearch} aria-label="Search encoding jobs" placeholder="Search title or media guid..." />
+      <Select items={pageSizeOptions} bind:value={pageSize} onchange={changePageSize} aria-label="Jobs per page" class="w-full text-sm sm:w-40" />
+      <input class="input w-full text-sm sm:w-48" type="search" bind:value={storageKey} oninput={scheduleSearch} aria-label="Filter by storage key" placeholder="Storage key..." />
+      <input class="input w-full text-sm lg:w-80" type="search" bind:value={query} oninput={scheduleSearch} aria-label="Search encoding jobs" placeholder="Search title or media guid..." />
     </div>
   </div>
 
@@ -244,7 +244,7 @@
       <span class="loading loading-spinner loading-md"></span>
     </div>
   {:else if queueState.rows.length === 0}
-    <div class="mt-8 rounded-xl border border-base-300/80 bg-base-200/40 p-10 text-center">
+    <div class="mt-8 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-10 text-center">
       <Video class="mx-auto h-10 w-10 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No encoding jobs match this view</p>
       <p class="mt-1 text-sm text-base-content/50">Encode a channel or watch/cast an item to queue one.</p>
@@ -253,7 +253,7 @@
     <div class="mt-5 space-y-2">
       {#each queueState.rows as row (row.item.renditionId)}
         {@const percent = progressPercent(row)}
-        <article class="card border border-base-300/90 bg-base-200/45 p-4 transition">
+        <article class="card border-[length:var(--border)] border-base-300/90 bg-base-200/45 p-4 transition">
           <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_5rem_minmax(8.5rem,auto)] md:items-center">
             <div class="min-w-0">
               <div class="flex min-w-0 items-center gap-2">

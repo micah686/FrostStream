@@ -8,6 +8,7 @@ using FluentStorage;
 using FluentStorage.FTP.Storage;
 using FluentStorage.Storage;
 using Renci.SshNet;
+using StorageExtensions.Smb;
 
 namespace Shared.Storage;
 
@@ -51,11 +52,47 @@ public static class FluentStoreFactory
             NetworkStorageProtocol.Ftp => WithBasePath(CreateFtpStore(parameters, useTls: false), parameters.BasePath),
             NetworkStorageProtocol.Ftps => WithBasePath(CreateFtpStore(parameters, useTls: true), parameters.BasePath),
             NetworkStorageProtocol.Sftp => WithBasePath(CreateSftpStore(parameters), parameters.BasePath),
-            NetworkStorageProtocol.Nfs or NetworkStorageProtocol.Smb or NetworkStorageProtocol.Cifs =>
-                CreateMountedNetworkStore(parameters),
+            NetworkStorageProtocol.Nfs => CreateNfsStore(parameters),
+            NetworkStorageProtocol.Smb => CreateSmbStore(parameters, SmbDialect.Smb2),
+            NetworkStorageProtocol.Cifs => CreateSmbStore(parameters, SmbDialect.Cifs),
             _ => throw new ArgumentOutOfRangeException(
                 nameof(parameters.Protocol), parameters.Protocol, "Unsupported network storage protocol")
         };
+    }
+
+    private static IStore CreateNfsStore(StreamingNetworkStorageParameters parameters)
+    {
+        if (string.IsNullOrWhiteSpace(parameters.ExportPath))
+        {
+            return CreateMountedNetworkStore(parameters);
+        }
+
+        return NfsStorage.FromExport(
+            parameters.Host,
+            parameters.ExportPath,
+            parameters.NfsUserId ?? 65534,
+            parameters.NfsGroupId ?? 65534,
+            parameters.BasePath);
+    }
+
+    private static IStore CreateSmbStore(StreamingNetworkStorageParameters parameters, SmbDialect dialect)
+    {
+        if (string.IsNullOrWhiteSpace(parameters.ShareName))
+        {
+            return CreateMountedNetworkStore(parameters);
+        }
+
+        return SmbStorage.FromOptions(new SmbOptions
+        {
+            Host = parameters.Host,
+            Share = parameters.ShareName,
+            Port = parameters.Port,
+            Domain = parameters.Domain ?? string.Empty,
+            Username = parameters.Username ?? string.Empty,
+            Password = parameters.Password ?? string.Empty,
+            Dialect = dialect,
+            BasePath = parameters.BasePath
+        });
     }
 
     private static IStore CreateFtpStore(StreamingNetworkStorageParameters parameters, bool useTls)
@@ -97,7 +134,7 @@ public static class FluentStoreFactory
         if (string.IsNullOrWhiteSpace(parameters.MountPath))
         {
             throw new InvalidOperationException(
-                $"{parameters.Protocol} storage requires an absolute mountPath. Mount the network share on every FrostStream node before using it.");
+                $"{parameters.Protocol} storage requires direct share/export settings or an absolute legacy mountPath.");
         }
 
         if (!Path.IsPathFullyQualified(parameters.MountPath))

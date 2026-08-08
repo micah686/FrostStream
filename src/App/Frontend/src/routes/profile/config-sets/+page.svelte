@@ -68,7 +68,7 @@
   }
 </script>
 
-<section class="card border border-base-300 bg-base-100 p-5 sm:p-6">
+<section class="card border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6">
   <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
     <div>
       <h2 class="text-base font-bold text-base-content">Config sets</h2>
@@ -97,7 +97,7 @@
       <span class="loading loading-spinner loading-md"></span>
     </div>
   {:else if configSets.length === 0}
-    <div class="mt-5 rounded-xl border border-base-300/80 bg-base-200/30 p-8 text-center">
+    <div class="mt-5 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/30 p-8 text-center">
       <SlidersHorizontal class="mx-auto h-9 w-9 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No config sets yet</p>
       <p class="mt-1 text-sm text-base-content/50">Create one to reuse download and playlist settings.</p>
@@ -107,10 +107,10 @@
       {#each configSets as config (config.key)}
         {@const Icon = configIcon(config)}
         <article
-          class="card flex min-h-[3.95rem] flex-col gap-3 border border-base-300 bg-base-100 p-3 transition hover:border-base-content/30 hover:bg-base-300/30 sm:flex-row sm:items-center sm:px-4"
+          class="card flex min-h-[3.95rem] flex-col gap-3 border-[length:var(--border)] border-base-300 bg-base-100 p-3 transition hover:border-base-content/30 hover:bg-base-300/30 sm:flex-row sm:items-center sm:px-4"
         >
           <div class="flex min-w-0 items-center gap-3">
-            <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-base-300/70 text-primary">
+            <span class="grid h-9 w-9 shrink-0 place-items-center rounded-field bg-base-300/70 text-primary">
               <Icon class="h-4.5 w-4.5" />
             </span>
             <div class="min-w-0">

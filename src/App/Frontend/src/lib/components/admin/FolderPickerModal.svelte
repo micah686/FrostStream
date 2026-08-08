@@ -32,7 +32,7 @@
 
 <Modal bind:open title="Choose incoming folder" size="md">
   <div class="space-y-3">
-    <div class="flex items-center gap-2 rounded-lg border border-base-300 bg-base-200/60 px-3 py-2.5">
+    <div class="flex items-center gap-2 rounded-field border-[length:var(--border)] border-base-300 bg-base-200/60 px-3 py-2.5">
       <Folder class="h-4 w-4 text-base-content/50" />
       <span class="truncate font-mono text-sm text-base-content/90">incoming/{currentPath}</span>
       {#if loading}<span class="loading loading-spinner loading-xs ml-auto"></span>{/if}
@@ -42,7 +42,7 @@
         <CircleAlert class="h-4 w-4 shrink-0" />{error}
       </div>
     {/if}
-    <div class="max-h-72 overflow-y-auto rounded-xl border border-base-300 bg-base-200/40">
+    <div class="max-h-72 overflow-y-auto rounded-box border-[length:var(--border)] border-base-300 bg-base-200/40">
       {#if currentPath}
         <button type="button" class="flex w-full items-center gap-2 border-b border-base-300 px-4 py-3 text-left text-sm text-base-content/60 hover:bg-base-200" onclick={() => navigate(currentPath.split('/').slice(0, -1).join('/'))}>
           <ArrowLeft class="h-4 w-4" /> Up one level

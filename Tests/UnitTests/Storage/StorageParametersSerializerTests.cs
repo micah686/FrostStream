@@ -44,14 +44,17 @@ public class StorageParametersSerializerTests
     }
 
     [Test]
-    public void Serialize_And_Deserialize_Mounted_Network_RoundTrips()
+    public void Serialize_And_Deserialize_Direct_Network_RoundTrips()
     {
         var parameters = new StreamingNetworkStorageParameters
         {
             Protocol = NetworkStorageProtocol.Cifs,
             Host = "fileserver",
             BasePath = "/media",
-            MountPath = "/mnt/media"
+            ShareName = "archive",
+            Domain = "WORKGROUP",
+            Username = "micah",
+            Password = "pw"
         };
 
         var json = StorageParametersSerializer.Serialize(StorageMethod.Network, parameters);

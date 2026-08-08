@@ -107,7 +107,7 @@
       </a>
     </div>
   {:else if playlist}
-    <section class="card border border-base-300 bg-base-100 p-5 sm:p-6" aria-label="Playlist editor">
+    <section class="card border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6" aria-label="Playlist editor">
         <h2 class="text-base font-bold text-base-content">Details</h2>
 
         <form id="playlist-details-form" class="mt-4 space-y-4" onsubmit={saveDetails}>
