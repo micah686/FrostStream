@@ -2,6 +2,7 @@
   <Folder Name="/HelperTesterApps/">
     <Project Path="../HelperTestingApps/VideoServeLocalTest/VideoServeLocalTest.csproj" />
   </Folder>
+  <Folder Name="/Libs/" />
   <Folder Name="/Libs/Conduit.NATS/">
     <Project Path="../Libs/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj" />
   </Folder>
@@ -14,6 +15,7 @@
     <Project Path="MediaProcessor/MediaProcessor.csproj" />
     <Project Path="Scheduler/Scheduler.csproj" />
     <Project Path="Shared/Shared.csproj" />
+    <Project Path="StorageExtensions/StorageExtensions.csproj" />
     <Project Path="WebAPI/WebAPI.csproj" />
     <Project Path="Worker/Worker.csproj" />
   </Folder>
