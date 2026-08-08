@@ -1,5 +1,6 @@
 using SMBLibrary;
 using StorageExtensions.Internal;
+using System.Runtime.ExceptionServices;
 
 namespace StorageExtensions.Smb;
 
@@ -65,6 +66,27 @@ internal sealed class SmbFileStream(
         }
     }
 
+    public override void Flush()
+    {
+        ObjectDisposedException.ThrowIf(_closed, this);
+        if (!CanWrite)
+        {
+            return;
+        }
+
+        connection.ExecuteOnOpenHandle(session =>
+        {
+            FlushHandle(session).EnsureSuccess("flush");
+            return 0;
+        });
+    }
+
+    private NTStatus FlushHandle(SmbSession session)
+        => session.Tree is SMBLibrary.Client.SMB1FileStore smb1Tree &&
+           session.Client is SMBLibrary.Client.SMB1Client smb1Client
+            ? Smb1FlushFileBuffers.Flush(smb1Client, smb1Tree, handle)
+            : session.Tree.FlushFileBuffers(handle);
+
     protected override void Dispose(bool disposing)
     {
         if (disposing && !_closed)
@@ -74,20 +96,36 @@ internal sealed class SmbFileStream(
             {
                 connection.ExecuteOnOpenHandle(session =>
                 {
+                    Exception? flushFailure = null;
                     if (CanWrite)
                     {
                         try
                         {
-                            session.Tree.FlushFileBuffers(handle).EnsureSuccess("flush");
+                            FlushHandle(session).EnsureSuccess("flush");
                         }
-                        catch (NotImplementedException)
+                        catch (Exception ex)
                         {
-                            // SMBLibrary has no SMB1 flush. Closing the handle below commits
-                            // the data on that dialect, so there is nothing else to do.
+                            // Closing must still be attempted so a failed flush does not leak
+                            // the server handle for the lifetime of the connection.
+                            flushFailure = ex;
                         }
                     }
 
-                    return session.Tree.CloseFile(handle);
+                    try
+                    {
+                        session.Tree.CloseFile(handle).EnsureSuccess("close");
+                    }
+                    catch (Exception closeFailure) when (flushFailure is not null)
+                    {
+                        throw new AggregateException("SMB flush and close both failed.", flushFailure, closeFailure);
+                    }
+
+                    if (flushFailure is not null)
+                    {
+                        ExceptionDispatchInfo.Capture(flushFailure).Throw();
+                    }
+
+                    return 0;
                 });
             }
             catch (IOException) when (!CanWrite)
