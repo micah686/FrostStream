@@ -29,6 +29,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\StorageExtensions\StorageExtensions.csproj" />
       <ProjectReference Include="..\..\Libs\Conduit.NATS\Conduit.NATS\Conduit.NATS.csproj" />
       <ProjectReference Include="..\..\Libs\YtDlpSharpLib\YtDlpSharpLib\YtDlpSharpLib.csproj" />
     </ItemGroup>

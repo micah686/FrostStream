@@ -67,6 +67,11 @@ public static class StorageSecretSplitter
             Port = input.Port,
             Username = input.Username,
             BasePath = input.BasePath,
+            ShareName = input.ShareName,
+            Domain = input.Domain,
+            ExportPath = input.ExportPath,
+            NfsUserId = input.NfsUserId,
+            NfsGroupId = input.NfsGroupId,
             MountPath = input.MountPath
         };
         return (secrets, stored);
@@ -163,6 +168,11 @@ public static class StorageSecretSplitter
             Port = stored.Port,
             Username = stored.Username,
             BasePath = stored.BasePath,
+            ShareName = stored.ShareName,
+            Domain = stored.Domain,
+            ExportPath = stored.ExportPath,
+            NfsUserId = stored.NfsUserId,
+            NfsGroupId = stored.NfsGroupId,
             MountPath = stored.MountPath,
             Password = TryGet(secrets, NetworkPassword),
             PrivateKey = TryGet(secrets, NetworkPrivateKey),

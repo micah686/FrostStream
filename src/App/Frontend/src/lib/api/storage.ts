@@ -20,6 +20,12 @@ export interface NetworkStorageStored {
   port: number | null;
   username: string | null;
   basePath: string | null;
+  shareName: string | null;
+  domain: string | null;
+  exportPath: string | null;
+  nfsUserId: number | null;
+  nfsGroupId: number | null;
+  mountPath: string | null;
 }
 
 export interface S3CompatibleStorageStored {
@@ -76,6 +82,11 @@ export interface NetworkStorageRequest {
   privateKey: string | null;
   publicKey: string | null;
   basePath: string | null;
+  shareName: string | null;
+  domain: string | null;
+  exportPath: string | null;
+  nfsUserId: number | null;
+  nfsGroupId: number | null;
 }
 
 export interface S3CompatibleStorageRequest {
@@ -190,8 +201,10 @@ export function storageSummary(storage: StorageConfig): string {
     return displayLocalPath(storage.local.path);
   }
   if (storage.network) {
-    const { protocol, host, port, basePath } = storage.network;
-    return `${protocol.toLowerCase()}://${host}${port ? `:${port}` : ''}${basePath ?? ''}`;
+    const { protocol, host, port, basePath, shareName, exportPath } = storage.network;
+    const root = protocol === 'Nfs' ? exportPath : protocol === 'Smb' || protocol === 'Cifs' ? shareName : null;
+    const rootPath = root ? `/${root.replace(/^\/+/, '')}` : '';
+    return `${protocol.toLowerCase()}://${host}${port ? `:${port}` : ''}${rootPath}${basePath ?? ''}`;
   }
   if (storage.objectS3Compatible) {
     const { bucketName, region, endpoint } = storage.objectS3Compatible;

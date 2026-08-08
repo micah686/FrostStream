@@ -57,6 +57,23 @@ public sealed class StreamingNetworkStorageParameters : StorageParametersBase
     public string? PublicKey { get; init; }
     public string? BasePath { get; init; }
 
+    /// <summary>SMB/CIFS share name, without a leading server path.</summary>
+    public string? ShareName { get; init; }
+
+    /// <summary>Optional SMB authentication domain or workgroup.</summary>
+    public string? Domain { get; init; }
+
+    /// <summary>NFS export path as advertised by the server.</summary>
+    public string? ExportPath { get; init; }
+
+    /// <summary>POSIX user id presented through NFSv3 AUTH_UNIX.</summary>
+    [Range(0, int.MaxValue)]
+    public int? NfsUserId { get; init; }
+
+    /// <summary>POSIX primary group id presented through NFSv3 AUTH_UNIX.</summary>
+    [Range(0, int.MaxValue)]
+    public int? NfsGroupId { get; init; }
+
     /// <summary>
     /// Absolute path where an NFS, SMB, or CIFS share has been mounted by the host or orchestrator.
     /// This remains network storage even though FluentStorage accesses the mounted filesystem via DiskStore.
@@ -90,25 +107,57 @@ public sealed class StreamingNetworkStorageParameters : StorageParametersBase
                 [nameof(Password), nameof(PrivateKey)]);
         }
 
-        var isMountedShare = Protocol is NetworkStorageProtocol.Nfs or NetworkStorageProtocol.Smb or NetworkStorageProtocol.Cifs;
-        if (isMountedShare && string.IsNullOrWhiteSpace(MountPath))
+        var isSmb = Protocol is NetworkStorageProtocol.Smb or NetworkStorageProtocol.Cifs;
+        var isNfs = Protocol == NetworkStorageProtocol.Nfs;
+        var isDirectShare = isSmb || isNfs;
+
+        if (isSmb && string.IsNullOrWhiteSpace(ShareName) && string.IsNullOrWhiteSpace(MountPath))
         {
             yield return new ValidationResult(
-                $"mountPath is required for {Protocol} storage.",
-                [nameof(MountPath)]);
+                $"shareName is required for {Protocol} storage when mountPath is not provided.",
+                [nameof(ShareName), nameof(MountPath)]);
         }
-        else if (isMountedShare && !Path.IsPathFullyQualified(MountPath!))
+
+        if (isNfs && string.IsNullOrWhiteSpace(ExportPath) && string.IsNullOrWhiteSpace(MountPath))
+        {
+            yield return new ValidationResult(
+                "exportPath is required for Nfs storage when mountPath is not provided.",
+                [nameof(ExportPath), nameof(MountPath)]);
+        }
+
+        if (!string.IsNullOrWhiteSpace(MountPath) && !Path.IsPathFullyQualified(MountPath))
         {
             yield return new ValidationResult(
                 "mountPath must be an absolute filesystem path.",
                 [nameof(MountPath)]);
         }
 
-        if (!isMountedShare && !string.IsNullOrWhiteSpace(MountPath))
+        if (!isDirectShare && !string.IsNullOrWhiteSpace(MountPath))
         {
             yield return new ValidationResult(
                 "mountPath is only valid for NFS, SMB, or CIFS storage.",
                 [nameof(MountPath)]);
+        }
+
+        if (!isSmb && (!string.IsNullOrWhiteSpace(ShareName) || !string.IsNullOrWhiteSpace(Domain)))
+        {
+            yield return new ValidationResult(
+                "shareName and domain are only valid for SMB or CIFS storage.",
+                [nameof(ShareName), nameof(Domain), nameof(Protocol)]);
+        }
+
+        if (!isNfs && (!string.IsNullOrWhiteSpace(ExportPath) || NfsUserId is not null || NfsGroupId is not null))
+        {
+            yield return new ValidationResult(
+                "exportPath, nfsUserId, and nfsGroupId are only valid for NFS storage.",
+                [nameof(ExportPath), nameof(NfsUserId), nameof(NfsGroupId), nameof(Protocol)]);
+        }
+
+        if (isNfs && (hasUsername || hasPassword || hasPrivateKey))
+        {
+            yield return new ValidationResult(
+                "NFSv3 uses AUTH_UNIX user and group IDs instead of username/password authentication.",
+                [nameof(Username), nameof(Password), nameof(PrivateKey), nameof(NfsUserId), nameof(NfsGroupId)]);
         }
 
         if (hasPrivateKey && Protocol != NetworkStorageProtocol.Sftp)

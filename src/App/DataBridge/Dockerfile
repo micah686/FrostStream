@@ -7,6 +7,7 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 COPY App/Shared/Shared.csproj App/Shared/
+COPY App/StorageExtensions/StorageExtensions.csproj App/StorageExtensions/
 COPY App/ServiceDefaults/ServiceDefaults.csproj App/ServiceDefaults/
 COPY Libs/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj Libs/Conduit.NATS/Conduit.NATS/
 COPY Libs/YtDlpSharpLib/YtDlpSharpLib/YtDlpSharpLib.csproj Libs/YtDlpSharpLib/YtDlpSharpLib/
@@ -14,6 +15,7 @@ COPY App/DataBridge/DataBridge.csproj App/DataBridge/
 RUN dotnet restore App/DataBridge/DataBridge.csproj
 
 COPY App/Shared/ App/Shared/
+COPY App/StorageExtensions/ App/StorageExtensions/
 COPY App/ServiceDefaults/ App/ServiceDefaults/
 COPY Libs/Conduit.NATS/Conduit.NATS/ Libs/Conduit.NATS/Conduit.NATS/
 COPY Libs/YtDlpSharpLib/YtDlpSharpLib/ Libs/YtDlpSharpLib/YtDlpSharpLib/

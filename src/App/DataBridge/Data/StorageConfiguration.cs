@@ -88,6 +88,11 @@ public sealed class StorageNetworkConfiguration : IEntityTypeConfiguration<Stora
         builder.Property(x => x.Port).HasColumnName("port");
         builder.Property(x => x.Username).HasColumnName("username").HasMaxLength(255);
         builder.Property(x => x.BasePath).HasColumnName("base_path").HasMaxLength(2048);
+        builder.Property(x => x.ShareName).HasColumnName("share_name").HasMaxLength(255);
+        builder.Property(x => x.Domain).HasColumnName("domain").HasMaxLength(255);
+        builder.Property(x => x.ExportPath).HasColumnName("export_path").HasMaxLength(2048);
+        builder.Property(x => x.NfsUserId).HasColumnName("nfs_user_id");
+        builder.Property(x => x.NfsGroupId).HasColumnName("nfs_group_id");
         builder.Property(x => x.MountPath).HasColumnName("mount_path").HasMaxLength(2048);
         builder.HasOne(x => x.StorageConfig)
             .WithOne(x => x.Network)

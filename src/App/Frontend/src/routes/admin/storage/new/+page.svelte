@@ -59,6 +59,8 @@
     { value: 'privateKey', name: 'Username and private key' }
   ];
 
+  const passwordNetworkAuthOptions = networkAuthOptions.filter((option) => option.value !== 'privateKey');
+
   const s3ProviderOptions = [
     { value: 'AwsS3', name: 'AWS S3' },
     { value: 'MinIo', name: 'MinIO' },
@@ -95,6 +97,11 @@
   let networkPassword = $state('');
   let networkPrivateKey = $state('');
   let networkBasePath = $state('');
+  let networkShareName = $state('');
+  let networkDomain = $state('');
+  let networkExportPath = $state('');
+  let networkNfsUserId = $state('65534');
+  let networkNfsGroupId = $state('65534');
 
   // S3-compatible object storage
   let s3Provider = $state<S3CompatibleObjectStorageProvider>('AwsS3');
@@ -130,6 +137,17 @@
   const activeOption = $derived(targetOptions.find((option) => option.type === targetType) ?? targetOptions[0]);
   const s3RegionRequired = $derived(s3Provider !== 'MinIo');
   const s3EndpointRequired = $derived(s3Provider === 'MinIo');
+  const isNfs = $derived(networkProtocol === 'Nfs');
+  const isSmb = $derived(networkProtocol === 'Smb' || networkProtocol === 'Cifs');
+  const activeNetworkAuthOptions = $derived(networkProtocol === 'Sftp' ? networkAuthOptions : passwordNetworkAuthOptions);
+
+  $effect(() => {
+    if (networkProtocol === 'Nfs') {
+      networkAuthMode = 'anonymous';
+    } else if (networkProtocol !== 'Sftp' && networkAuthMode === 'privateKey') {
+      networkAuthMode = 'password';
+    }
+  });
 
   async function save(event: SubmitEvent) {
     event.preventDefault();
@@ -165,17 +183,24 @@
         if (port !== null && (!Number.isInteger(port) || port < 1 || port > 65535)) {
           throw new Error('Port must be a whole number from 1 to 65535.');
         }
+        const nfsUserId = isNfs ? parsePosixId(networkNfsUserId, 'NFS user ID') : null;
+        const nfsGroupId = isNfs ? parsePosixId(networkNfsGroupId, 'NFS group ID') : null;
         await createNetworkStorage({
           key: trimmedKey,
           description: trimmedDescription,
           protocol: networkProtocol,
           host: networkHost.trim(),
-          port,
-          username: networkAuthMode === 'anonymous' ? null : networkUsername.trim() || null,
-          password: networkAuthMode === 'password' ? networkPassword || null : null,
-          privateKey: networkAuthMode === 'privateKey' ? networkPrivateKey || null : null,
+          port: isNfs ? null : port,
+          username: isNfs || networkAuthMode === 'anonymous' ? null : networkUsername.trim() || null,
+          password: !isNfs && networkAuthMode === 'password' ? networkPassword || null : null,
+          privateKey: !isNfs && networkAuthMode === 'privateKey' ? networkPrivateKey || null : null,
           publicKey: null,
-          basePath: networkBasePath.trim() || null
+          basePath: networkBasePath.trim() || null,
+          shareName: isSmb ? networkShareName.trim() || null : null,
+          domain: isSmb ? networkDomain.trim() || null : null,
+          exportPath: isNfs ? networkExportPath.trim() || null : null,
+          nfsUserId,
+          nfsGroupId
         });
         break;
       }
@@ -225,6 +250,14 @@
         });
         break;
     }
+  }
+
+  function parsePosixId(value: string, label: string): number {
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed) || parsed < 0 || parsed > 2147483647) {
+      throw new Error(`${label} must be a non-negative whole number.`);
+    }
+    return parsed;
   }
 
   function parseCredentialsJson(value: string): Record<string, unknown> {
@@ -325,21 +358,53 @@
           <label class="label mb-2 text-sm" for="network-host">Host</label>
           <input class="input w-full" id="network-host" required  bind:value={networkHost} placeholder="nas.local" />
         </div>
-        <div>
+        {#if !isNfs}<div>
           <label class="label mb-2 text-sm" for="network-port">Port</label>
           <input class="input w-full" id="network-port" type="number" min={1} max={65535} bind:value={networkPort} placeholder="default" />
-        </div>
+        </div>{/if}
       </div>
+
+      {#if isSmb}
+        <div class="grid gap-5 sm:grid-cols-2">
+          <div>
+            <label class="label mb-2 text-sm" for="network-share">Share name</label>
+            <input class="input w-full" id="network-share" required bind:value={networkShareName} placeholder="media" />
+            <p class="mt-1.5 text-xs text-base-content/40">The share name only, without the server prefix.</p>
+          </div>
+          <div>
+            <label class="label mb-2 text-sm" for="network-domain">Domain / workgroup <span class="font-normal text-base-content/50">(optional)</span></label>
+            <input class="input w-full" id="network-domain" bind:value={networkDomain} placeholder="WORKGROUP" />
+          </div>
+        </div>
+      {:else if isNfs}
+        <div>
+          <label class="label mb-2 text-sm" for="network-export">Export path</label>
+          <input class="input w-full" id="network-export" required bind:value={networkExportPath} placeholder="/volume1/media" />
+          <p class="mt-1.5 text-xs text-base-content/40">NFSv3 export path advertised by the server. The export must allow unprivileged source ports (the Linux <code>insecure</code> export option).</p>
+        </div>
+        <div class="grid gap-5 sm:grid-cols-2">
+          <div>
+            <label class="label mb-2 text-sm" for="network-nfs-uid">User ID (UID)</label>
+            <input class="input w-full" id="network-nfs-uid" type="number" min={0} required bind:value={networkNfsUserId} />
+          </div>
+          <div>
+            <label class="label mb-2 text-sm" for="network-nfs-gid">Group ID (GID)</label>
+            <input class="input w-full" id="network-nfs-gid" type="number" min={0} required bind:value={networkNfsGroupId} />
+          </div>
+          <p class="sm:col-span-2 -mt-3 text-xs text-base-content/40">NFSv3 uses AUTH_UNIX IDs. They must match ownership and permissions on the export.</p>
+        </div>
+      {/if}
 
       <div>
-        <label class="label mb-2 text-sm" for="network-base-path">Base path</label>
-        <input class="input w-full" id="network-base-path" bind:value={networkBasePath} placeholder="/volume1/media" />
+        <label class="label mb-2 text-sm" for="network-base-path">Base path <span class="font-normal text-base-content/50">(optional)</span></label>
+        <input class="input w-full" id="network-base-path" bind:value={networkBasePath} placeholder={isNfs || isSmb ? '/library' : '/volume1/media'} />
+        {#if isNfs || isSmb}<p class="mt-1.5 text-xs text-base-content/40">Folder inside the configured export or share.</p>{/if}
       </div>
 
-      <div class="grid gap-5 sm:grid-cols-2">
+      {#if !isNfs}<div class="grid gap-5 sm:grid-cols-2">
         <div>
           <label class="label mb-2 text-sm" for="network-auth">Authentication</label>
-          <Select id="network-auth" items={networkAuthOptions} bind:value={networkAuthMode} />
+          <Select id="network-auth" items={activeNetworkAuthOptions} bind:value={networkAuthMode} />
         </div>
         {#if networkAuthMode !== 'anonymous'}
           <div>
@@ -347,9 +412,9 @@
             <input class="input w-full" id="network-username" required  bind:value={networkUsername} />
           </div>
         {/if}
-      </div>
+      </div>{/if}
 
-      {#if networkAuthMode === 'password'}
+      {#if !isNfs && networkAuthMode === 'password'}
         <div>
           <label class="label mb-2 text-sm" for="network-password">Password</label>
           <div class="relative">
@@ -360,7 +425,7 @@
           </div>
           <p class="mt-1.5 text-xs text-base-content/40">Stored securely in the secret store and never shown again.</p>
         </div>
-      {:else if networkAuthMode === 'privateKey'}
+      {:else if !isNfs && networkAuthMode === 'privateKey'}
         <div>
           <label class="label mb-2 text-sm" for="network-private-key">Private key</label>
           <div class="relative">

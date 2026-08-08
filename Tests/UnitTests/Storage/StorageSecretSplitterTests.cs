@@ -33,8 +33,10 @@ public class StorageSecretSplitterTests
             {
                 Protocol = NetworkStorageProtocol.Nfs,
                 Host = "nas.example.test",
-                BasePath = "/exports/media",
-                MountPath = "/mnt/media"
+                ExportPath = "/exports/media",
+                BasePath = "/library",
+                NfsUserId = 1000,
+                NfsGroupId = 100
             }] = [],
             [new S3CompatibleObjectStorageParameters
             {

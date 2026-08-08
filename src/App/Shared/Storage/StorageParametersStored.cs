@@ -32,6 +32,16 @@ public sealed class StreamingNetworkStorageStored : StorageParametersStoredBase
 
     public string? BasePath { get; init; }
 
+    public string? ShareName { get; init; }
+
+    public string? Domain { get; init; }
+
+    public string? ExportPath { get; init; }
+
+    public int? NfsUserId { get; init; }
+
+    public int? NfsGroupId { get; init; }
+
     public string? MountPath { get; init; }
 }
 
