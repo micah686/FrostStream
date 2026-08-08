@@ -381,7 +381,7 @@
     </a>
     {#if data.user}
       <a
-        class="btn btn-square btn-sm btn-primary h-10 w-10"
+        class="btn btn-square btn-sm btn-primary"
         href="/admin"
         aria-label="Administration"
         title="Administration"

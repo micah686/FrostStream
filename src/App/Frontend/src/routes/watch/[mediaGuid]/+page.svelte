@@ -1528,26 +1528,13 @@
 
     <div class="mb-5 flex items-center justify-between gap-3 rounded-xl border border-base-300/80 bg-base-200/40 px-4 py-3">
       <span class="text-sm font-semibold text-base-content/80">Autoplay</span>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={autoplayEnabled}
+      <input
+        type="checkbox"
+        class="toggle toggle-primary"
+        bind:checked={autoplayEnabled}
+        aria-label="Autoplay"
         title="Autoplay - play the next video when this one ends"
-        onclick={() => (autoplayEnabled = !autoplayEnabled)}
-        class={[
-          'relative h-6 w-11 rounded-full border transition',
-          autoplayEnabled
-            ? 'border-primary/50 bg-primary/80'
-            : 'border-base-content/20 bg-base-200/80 hover:border-base-content/30'
-        ]}
-      >
-        <span
-          class={[
-            'absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-white shadow-sm transition',
-            autoplayEnabled ? 'left-6' : 'left-1'
-          ]}
-        ></span>
-      </button>
+      />
     </div>
 
     <h2 class="text-sm font-bold uppercase tracking-[0.08em] text-base-content/50">Up next</h2>

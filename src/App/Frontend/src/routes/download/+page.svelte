@@ -7,8 +7,7 @@
     Download,
     List,
     Users,
-    Video,
-    X
+    Video
   } from '@lucide/svelte';
   import { listOptionPresets, type OptionPreset } from '$lib/api/optionPresets';
   import { listDownloadConfigSets, type DownloadConfigSet } from '$lib/api/downloadConfigSets';
@@ -23,11 +22,8 @@
   }
 
   interface QueuedJob {
-    kind: TabKey;
     id: string;
     sourceUrl: string;
-    storageKey: string;
-    queuedAt: Date;
   }
 
 
@@ -36,12 +32,6 @@
     { key: 'playlist', label: 'Playlist', icon: List },
     { key: 'creator', label: 'Creator', icon: Users }
   ];
-
-  const kindLabels: Record<TabKey, string> = {
-    video: 'Video',
-    playlist: 'Playlist',
-    creator: 'Creator'
-  };
 
   let activeTab = $state<TabKey>('video');
 
@@ -222,8 +212,8 @@
     return storageKey.trim() || 'default';
   }
 
-  function recordQueued(kind: TabKey, id: string, url: string) {
-    queued = [{ kind, id, sourceUrl: url, storageKey: resolvedStorageKey(), queuedAt: new Date() }, ...queued];
+  function recordQueued(id: string, url: string) {
+    queued = [{ id, sourceUrl: url }, ...queued];
   }
 
   async function queueVideoDownload(event: SubmitEvent) {
@@ -275,9 +265,9 @@
       // Playlist-container URLs are auto-routed server-side into the playlist pipeline
       // and return a playlistId instead of a jobId.
       if (result.kind === 'playlist' && result.playlistId) {
-        recordQueued('playlist', `playlist ${result.playlistId}`, body.sourceUrl);
+        recordQueued(result.playlistId, body.sourceUrl);
       } else {
-        recordQueued('video', `job ${result.jobId}`, body.sourceUrl);
+        recordQueued(result.jobId ?? 'unknown', body.sourceUrl);
       }
       sourceUrl = '';
     } catch (err) {
@@ -315,7 +305,7 @@
               fetchComments: playlistFetchComments
             }
       );
-      recordQueued('playlist', `playlist ${result.playlistId}`, url);
+      recordQueued(result.playlistId, url);
       playlistUrl = '';
     } catch (err) {
       submitError = err instanceof Error ? err.message : 'The playlist request failed.';
@@ -352,7 +342,7 @@
               forceDownload: creatorForceDownload
             }
       );
-      recordQueued('creator', `group ${result.correlationId}`, url);
+      recordQueued(result.correlationId, url);
       creatorUrl = '';
     } catch (err) {
       submitError = err instanceof Error ? err.message : 'The channel download request failed.';
@@ -483,7 +473,7 @@
           </p>
         </div>
 
-        <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={forceDownload} /><span>Force download <span class="ml-1 text-xs text-base-content/70">(re-download even if it already exists)</span></span></label>
+        <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle toggle-primary" bind:checked={forceDownload} /><span>Force download <span class="ml-1 text-xs text-base-content/70">(re-download even if it already exists)</span></span></label>
 
         {@render sharedFields(videoConfigSetSelected)}
 
@@ -498,7 +488,7 @@
         </div>
 
         <div class="flex flex-wrap gap-x-8 gap-y-3 border-t border-base-300/70 pt-5">
-          <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={fetchComments} disabled={videoConfigSetSelected} /><span>Fetch comments</span></label>
+          <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle toggle-primary" bind:checked={fetchComments} disabled={videoConfigSetSelected} /><span>Fetch comments</span></label>
         </div>
 
         <fieldset class="rounded-xl border border-base-300/70 bg-base-200/40 p-4" disabled={videoConfigSetSelected}>
@@ -515,40 +505,20 @@
 
           <div class="mt-4 flex flex-wrap gap-x-8 gap-y-3 border-t border-base-300/70 pt-4">
             <div class="flex items-center gap-2">
-              <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle" checked={audioOnlyOverride ?? false} onchange={(event) => (audioOnlyOverride = event.currentTarget.checked)} /><span>Audio only</span></label>
+              <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle toggle-primary" checked={audioOnlyOverride ?? false} onchange={(event) => (audioOnlyOverride = event.currentTarget.checked)} /><span>Audio only</span></label>
               <span class="text-xs text-base-content/70">{overrideStatus(audioOnlyOverride)}</span>
-              {#if audioOnlyOverride !== null}
-                <button type="button" aria-label="Use preset audio setting" title="Use preset" onclick={() => (audioOnlyOverride = null)} class="rounded p-1 text-base-content/70 hover:bg-base-300 hover:text-base-content/80">
-                  <X class="h-3.5 w-3.5" />
-                </button>
-              {/if}
             </div>
             <div class="flex items-center gap-2">
-              <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle" checked={downloadInfoJsonOverride ?? false} onchange={(event) => (downloadInfoJsonOverride = event.currentTarget.checked)} /><span>Download info JSON</span></label>
+              <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle toggle-primary" checked={downloadInfoJsonOverride ?? false} onchange={(event) => (downloadInfoJsonOverride = event.currentTarget.checked)} /><span>Download info JSON</span></label>
               <span class="text-xs text-base-content/70">{overrideStatus(downloadInfoJsonOverride)}</span>
-              {#if downloadInfoJsonOverride !== null}
-                <button type="button" aria-label="Use preset info JSON setting" title="Use preset" onclick={() => (downloadInfoJsonOverride = null)} class="rounded p-1 text-base-content/70 hover:bg-base-300 hover:text-base-content/80">
-                  <X class="h-3.5 w-3.5" />
-                </button>
-              {/if}
             </div>
             <div class="flex items-center gap-2">
-              <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle" checked={downloadThumbnailOverride ?? false} onchange={(event) => (downloadThumbnailOverride = event.currentTarget.checked)} /><span>Download thumbnail</span></label>
+              <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle toggle-primary" checked={downloadThumbnailOverride ?? false} onchange={(event) => (downloadThumbnailOverride = event.currentTarget.checked)} /><span>Download thumbnail</span></label>
               <span class="text-xs text-base-content/70">{overrideStatus(downloadThumbnailOverride)}</span>
-              {#if downloadThumbnailOverride !== null}
-                <button type="button" aria-label="Use preset thumbnail setting" title="Use preset" onclick={() => (downloadThumbnailOverride = null)} class="rounded p-1 text-base-content/70 hover:bg-base-300 hover:text-base-content/80">
-                  <X class="h-3.5 w-3.5" />
-                </button>
-              {/if}
             </div>
             <div class="flex items-center gap-2">
-              <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle" checked={downloadSubtitlesOverride ?? false} onchange={(event) => (downloadSubtitlesOverride = event.currentTarget.checked)} /><span>Download subtitles (all)</span></label>
+              <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle toggle-primary" checked={downloadSubtitlesOverride ?? false} onchange={(event) => (downloadSubtitlesOverride = event.currentTarget.checked)} /><span>Download subtitles (all)</span></label>
               <span class="text-xs text-base-content/70">{overrideStatus(downloadSubtitlesOverride)}</span>
-              {#if downloadSubtitlesOverride !== null}
-                <button type="button" aria-label="Use preset subtitles setting" title="Use preset" onclick={() => (downloadSubtitlesOverride = null)} class="rounded p-1 text-base-content/70 hover:bg-base-300 hover:text-base-content/80">
-                  <X class="h-3.5 w-3.5" />
-                </button>
-              {/if}
             </div>
           </div>
         </fieldset>
@@ -581,15 +551,15 @@
           </p>
         </div>
 
-        <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={creatorForceDownload} /><span>Force download <span class="ml-1 text-xs text-base-content/70">(re-download videos already in the library)</span></span></label>
+        <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle toggle-primary" bind:checked={creatorForceDownload} /><span>Force download <span class="ml-1 text-xs text-base-content/70">(re-download videos already in the library)</span></span></label>
 
         {@render sharedFields(playlistConfigSetSelected)}
 
         {@render prioritySlider(playlistConfigSetSelected)}
 
         <div class="flex flex-wrap gap-x-8 gap-y-3 border-t border-base-300/70 pt-5">
-          <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={playlistEncode} disabled={playlistConfigSetSelected} /><span>Encode for playlist <span class="ml-1 text-xs text-base-content/70">(re-encode for gapless playback)</span></span></label>
-          <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={playlistFetchComments} disabled={playlistConfigSetSelected} /><span>Fetch comments</span></label>
+          <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle toggle-primary" bind:checked={playlistEncode} disabled={playlistConfigSetSelected} /><span>Encode for playlist <span class="ml-1 text-xs text-base-content/70">(re-encode for gapless playback)</span></span></label>
+          <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle toggle-primary" bind:checked={playlistFetchComments} disabled={playlistConfigSetSelected} /><span>Fetch comments</span></label>
         </div>
 
         {@render submitRow('Queue playlist')}
@@ -625,7 +595,7 @@
         {@render prioritySlider(creatorConfigSetSelected)}
 
         <div class="flex flex-wrap gap-x-8 gap-y-3 border-t border-base-300/70 pt-5">
-          <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="checkbox" bind:checked={creatorFetchComments} disabled={creatorConfigSetSelected} /><span>Fetch comments</span></label>
+          <label class="label inline-flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" class="toggle toggle-primary" bind:checked={creatorFetchComments} disabled={creatorConfigSetSelected} /><span>Fetch comments</span></label>
         </div>
 
         {@render submitRow('Queue channel download')}
@@ -638,21 +608,12 @@
       <h2 class="text-sm font-bold uppercase tracking-[0.08em] text-base-content/70">Queued this session</h2>
       <ul class="mt-3 space-y-2">
         {#each queued as job (job.id)}
-          <li class="flex items-center gap-3 rounded-xl bg-base-200/40 px-4 py-3">
-            <CircleCheck class="h-5 w-5 shrink-0 text-success" />
-            <div class="min-w-0 flex-1">
-              <p class="truncate text-sm text-base-content/90">{job.sourceUrl}</p>
-              <p class="mt-0.5 truncate font-mono text-xs text-base-content/60">{job.id}</p>
+          <li class="alert bg-info text-info-content">
+            <CircleCheck class="h-5 w-5 shrink-0" />
+            <div class="min-w-0">
+              <h3 class="break-all text-sm font-semibold">{job.sourceUrl}</h3>
+              <p class="mt-0.5 break-all font-mono text-xs">JobID: {job.id}</p>
             </div>
-            <span class="badge badge-sm badge-primary rounded-full shrink-0 text-xs">
-              {kindLabels[job.kind]}
-            </span>
-            <span class="badge badge-sm badge-ghost rounded-full shrink-0 text-xs">
-              {job.storageKey}
-            </span>
-            <span class="shrink-0 text-xs text-base-content/60">
-              {job.queuedAt.toLocaleTimeString()}
-            </span>
           </li>
         {/each}
       </ul>
