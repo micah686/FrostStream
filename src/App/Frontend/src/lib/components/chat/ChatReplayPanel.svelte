@@ -9,11 +9,15 @@
   let {
     mediaGuid,
     positionSeconds,
+    heightPx,
     onSeek
   }: {
     mediaGuid: string;
     /** Current playback position; drives message reveal and seek detection. */
     positionSeconds: number;
+    /** Measured height (in px) so the panel's bottom lines up with the video column's action row.
+     * Falls back to a fixed viewport-relative height until the parent has measured it. */
+    heightPx?: number | null;
     onSeek?: (offsetSeconds: number) => void;
   } = $props();
 
@@ -22,6 +26,9 @@
   /** False while the viewer is reading scrollback; suppresses auto-scroll until they return. */
   let following = $state(true);
   let controller = $state<ChatPlaybackController | null>(null);
+  /** True for the scroll event our own scrollToIndex call produces, so it isn't mistaken for the
+   * viewer manually scrolling away (which would otherwise turn `following` off immediately). */
+  let ignoreNextScroll = false;
 
   const messages = $derived<ChatMessage[]>(controller?.visible ?? []);
 
@@ -46,10 +53,29 @@
     if (!following || count === 0 || !virtualizer) {
       return;
     }
-    virtualizer.scrollToIndex(count - 1, { align: 'end' });
+    scrollToLatest();
   });
 
+  function scrollToLatest() {
+    if (!virtualizer || messages.length === 0) {
+      return;
+    }
+    // scrollToIndex sets scrollTop directly, which fires a native 'scroll' event just like a
+    // user drag would; without this flag handleScroll reads that as the viewer scrolling away
+    // and immediately turns following back off, so the panel never auto-advances past the
+    // first message.
+    ignoreNextScroll = true;
+    virtualizer.scrollToIndex(messages.length - 1, { align: 'end' });
+    requestAnimationFrame(() => {
+      ignoreNextScroll = false;
+    });
+  }
+
   function handleScroll() {
+    if (ignoreNextScroll) {
+      ignoreNextScroll = false;
+      return;
+    }
     if (!virtualizer || !scrollElement) {
       return;
     }
@@ -60,9 +86,7 @@
 
   function resumeFollowing() {
     following = true;
-    if (virtualizer && messages.length > 0) {
-      virtualizer.scrollToIndex(messages.length - 1, { align: 'end' });
-    }
+    scrollToLatest();
   }
 
   function seekTo(offsetMs: number) {
@@ -72,7 +96,10 @@
   onDestroy(() => controller?.dispose());
 </script>
 
-<div class="flex h-[32rem] flex-col overflow-hidden rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 xl:h-[calc(100vh-16rem)]">
+<div
+  class={['flex flex-col overflow-hidden rounded-box border-[length:var(--border)] border-base-300/80 bg-base-300', heightPx === null || heightPx === undefined ? 'h-[32rem] xl:h-[calc(100vh-16rem)]' : '']}
+  style={heightPx ? `height: ${heightPx}px;` : undefined}
+>
   <div class="flex items-center gap-2 border-b-[length:var(--border)] border-base-300/80 px-4 py-2.5">
     <MessageSquare class="h-4 w-4 opacity-70" />
     <h2 class="text-sm font-semibold">Live chat replay</h2>

@@ -135,6 +135,39 @@ export function argbToCss(color: number | null, alpha?: number): string | null {
   return `rgba(${r}, ${g}, ${b}, ${a.toFixed(3)})`;
 }
 
+/** A membership author badge, resolved from its YouTube tooltip text (e.g. "Member (1 year)"). */
+export interface MembershipBadge {
+  months: number;
+  /** Matches the colour YouTube uses for the loyalty badge at this milestone. */
+  color: string;
+}
+
+/** Ascending milestone thresholds (in months) and the loyalty-badge colour YouTube pairs with each. */
+const MEMBERSHIP_TIERS: { minMonths: number; color: string }[] = [
+  { minMonths: 48, color: '#38bdf8' }, // 4+ years: diamond blue
+  { minMonths: 36, color: '#eab308' }, // 3 years: yellow / gold
+  { minMonths: 24, color: '#cd7f32' }, // 2 years: orange / bronze
+  { minMonths: 12, color: '#ef4444' }, // 1 year: red
+  { minMonths: 6, color: '#ec4899' }, // 6 months: pink
+  { minMonths: 2, color: '#a855f7' }, // 2 months: purple
+  { minMonths: 1, color: '#3b82f6' }, // 1 month: blue
+  { minMonths: 0, color: '#22c55e' } // new member (under 1 month): green
+];
+
+/** Parses a YouTube author-badge tooltip and returns its membership milestone, or null if the
+ * badge isn't a membership badge (e.g. "Moderator", "Verified"). */
+export function parseMembershipBadge(tooltip: string): MembershipBadge | null {
+  const lower = tooltip.toLowerCase();
+  if (!lower.includes('member')) {
+    return null;
+  }
+  const years = Number(lower.match(/(\d+)\s*year/)?.[1] ?? 0);
+  const months = Number(lower.match(/(\d+)\s*month/)?.[1] ?? 0);
+  const totalMonths = years * 12 + months;
+  const tier = MEMBERSHIP_TIERS.find((t) => totalMonths >= t.minMonths)!;
+  return { months: totalMonths, color: tier.color };
+}
+
 /** Formats a video offset as H:MM:SS / M:SS, matching the player's timestamp style. */
 export function formatOffset(offsetMs: number): string {
   const total = Math.max(0, Math.floor(offsetMs / 1000));

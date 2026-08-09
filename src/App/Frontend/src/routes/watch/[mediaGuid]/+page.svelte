@@ -203,6 +203,30 @@
   // Sidebar tab; chat is the default for live archives that have an ingested replay.
   let sidebarTab = $state<'chat' | 'upNext'>('upNext');
   const chatAvailable = $derived(detail?.hasLiveChat === true);
+  // The chat/up-next sidebar sits beside the video column; its bottom shouldn't drop past the
+  // action-button row (Mark watched / Cast / Save / Version), so its height is measured from
+  // that row rather than guessed with a fixed viewport-relative height.
+  let videoColumnEl = $state<HTMLElement | undefined>();
+  let controlsRowEl = $state<HTMLDivElement | undefined>();
+  let sidebarHeightPx = $state<number | null>(null);
+
+  $effect(() => {
+    if (!videoColumnEl || !controlsRowEl) {
+      return;
+    }
+    const measure = () => {
+      if (!videoColumnEl || !controlsRowEl) {
+        return;
+      }
+      const height = controlsRowEl.getBoundingClientRect().bottom - videoColumnEl.getBoundingClientRect().top;
+      sidebarHeightPx = height > 0 ? height : null;
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(videoColumnEl);
+    observer.observe(controlsRowEl);
+    return () => observer.disconnect();
+  });
   // Chat leads for live archives, matching how viewers watch them; the choice is per-video, so
   // it resets when the detail for a new media item arrives.
   $effect(() => {
@@ -983,7 +1007,7 @@
 </svelte:head>
 
 <div class="grid gap-8 xl:grid-cols-[minmax(0,1fr)_360px]">
-  <section class="min-w-0" aria-label="Video player">
+  <section class="min-w-0" aria-label="Video player" bind:this={videoColumnEl}>
     {#if loadError}
       <div
         class="alert alert-error flex aspect-video items-center justify-center p-6 text-sm"
@@ -1065,7 +1089,7 @@
           </div>
         </div>
 
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2" bind:this={controlsRowEl}>
           <button
             type="button"
             onclick={toggleLike}
@@ -1524,12 +1548,12 @@
 
   <aside aria-label={chatAvailable ? 'Chat and up next' : 'Up next'}>
     {#if chatAvailable}
-      <div role="tablist" class="tabs tabs-box mb-5 grid grid-cols-2">
+      <div role="tablist" class="mb-5 grid grid-cols-2 gap-2">
         <button
           type="button"
           role="tab"
           aria-selected={sidebarTab === 'chat'}
-          class={['tab', sidebarTab === 'chat' && 'tab-active']}
+          class={['btn btn-sm text-xs', sidebarTab === 'chat' ? 'btn-primary' : 'btn-neutral']}
           onclick={() => (sidebarTab = 'chat')}
         >
           Chat
@@ -1538,7 +1562,7 @@
           type="button"
           role="tab"
           aria-selected={sidebarTab === 'upNext'}
-          class={['tab', sidebarTab === 'upNext' && 'tab-active']}
+          class={['btn btn-sm text-xs', sidebarTab === 'upNext' ? 'btn-primary' : 'btn-neutral']}
           onclick={() => (sidebarTab = 'upNext')}
         >
           Up next
@@ -1549,6 +1573,7 @@
         <ChatReplayPanel
           {mediaGuid}
           positionSeconds={livePosition}
+          heightPx={sidebarHeightPx}
           onSeek={(seconds) => player?.seekTo(seconds)}
         />
       {/if}

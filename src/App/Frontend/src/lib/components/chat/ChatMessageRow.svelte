@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { argbToCss, formatOffset, type ChatMessage } from '$lib/api/liveChat';
+  import { CircleStar } from '@lucide/svelte';
+  import { argbToCss, formatOffset, parseMembershipBadge, type ChatMessage } from '$lib/api/liveChat';
   import ChatFragments from './ChatFragments.svelte';
 
   let {
@@ -62,9 +63,20 @@
       <div class="min-w-0">
         {#if message.badges.length > 0}
           {#each message.badges as badge (badge)}
-            <span class="badge badge-ghost badge-xs mr-1 align-middle" title={badge}>
-              {badge.slice(0, 1)}
-            </span>
+            {@const membership = parseMembershipBadge(badge)}
+            {#if membership}
+              <span
+                class="mr-1 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full align-middle text-black"
+                style={`background-color: ${membership.color};`}
+                title={badge}
+              >
+                <CircleStar class="h-3.5 w-3.5" />
+              </span>
+            {:else}
+              <span class="badge badge-ghost badge-xs mr-1 align-middle" title={badge}>
+                {badge.slice(0, 1)}
+              </span>
+            {/if}
           {/each}
         {/if}
         <span class="mr-1 font-semibold opacity-80">{message.authorName}</span>
