@@ -21,14 +21,26 @@
     onSeek?: (offsetSeconds: number) => void;
   } = $props();
 
+  /** Distance from the bottom, in px, still counted as "at the bottom". */
+  const FOLLOW_THRESHOLD_PX = 40;
+  /** How long after a scroll gesture its scroll events are still attributed to the viewer. */
+  const GESTURE_WINDOW_MS = 400;
+  /** A jump larger than this means the video was seeked rather than played through. */
+  const SEEK_THRESHOLD_SECONDS = 2;
+
   let virtualizer = $state<VirtualizerHandle | undefined>();
   let scrollElement = $state<HTMLDivElement | undefined>();
   /** False while the viewer is reading scrollback; suppresses auto-scroll until they return. */
   let following = $state(true);
   let controller = $state<ChatPlaybackController | null>(null);
-  /** True for the scroll event our own scrollToIndex call produces, so it isn't mistaken for the
-   * viewer manually scrolling away (which would otherwise turn `following` off immediately). */
-  let ignoreNextScroll = false;
+  // Whether a scroll event came from the viewer cannot be read off the event itself: virtua's
+  // scrollToIndex is async and iterative (it scrolls, awaits measurement of unmeasured rows, then
+  // scrolls again), so following the playhead emits its own scroll events across several frames.
+  // Tracking the input gestures instead is what separates "the viewer scrolled back" from "we
+  // advanced the list".
+  let lastGestureAt = 0;
+  let pointerDown = false;
+  let lastPositionSeconds = 0;
 
   const messages = $derived<ChatMessage[]>(controller?.visible ?? []);
 
@@ -44,7 +56,14 @@
   });
 
   $effect(() => {
-    controller?.tick(Math.max(0, positionSeconds) * 1000);
+    const position = Math.max(0, positionSeconds);
+    // Seeking is an explicit "take me to this moment", so it resumes following even if the
+    // viewer had scrolled back to read history before jumping.
+    if (Math.abs(position - lastPositionSeconds) > SEEK_THRESHOLD_SECONDS) {
+      following = true;
+    }
+    lastPositionSeconds = position;
+    controller?.tick(position * 1000);
   });
 
   // Keep the newest message in view while following.
@@ -53,40 +72,48 @@
     if (!following || count === 0 || !virtualizer) {
       return;
     }
-    scrollToLatest();
+    virtualizer.scrollToIndex(count - 1, { align: 'end' });
   });
 
-  function scrollToLatest() {
-    if (!virtualizer || messages.length === 0) {
-      return;
+  function distanceFromBottom(): number {
+    if (!scrollElement) {
+      return 0;
     }
-    // scrollToIndex sets scrollTop directly, which fires a native 'scroll' event just like a
-    // user drag would; without this flag handleScroll reads that as the viewer scrolling away
-    // and immediately turns following back off, so the panel never auto-advances past the
-    // first message.
-    ignoreNextScroll = true;
-    virtualizer.scrollToIndex(messages.length - 1, { align: 'end' });
-    requestAnimationFrame(() => {
-      ignoreNextScroll = false;
-    });
+    return scrollElement.scrollHeight - scrollElement.scrollTop - scrollElement.clientHeight;
+  }
+
+  /** True while scroll events can still be attributed to a gesture the viewer is making. */
+  function viewerIsScrolling(): boolean {
+    return pointerDown || Date.now() - lastGestureAt < GESTURE_WINDOW_MS;
+  }
+
+  function noteGesture() {
+    lastGestureAt = Date.now();
+  }
+
+  function handleKeyDown(event: KeyboardEvent) {
+    if (
+      ['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)
+    ) {
+      noteGesture();
+    }
   }
 
   function handleScroll() {
-    if (ignoreNextScroll) {
-      ignoreNextScroll = false;
-      return;
+    if (distanceFromBottom() < FOLLOW_THRESHOLD_PX) {
+      // Back at the bottom — resume following regardless of who scrolled us here.
+      following = true;
+    } else if (viewerIsScrolling()) {
+      // Only the viewer's own gesture parks the list in the scrollback.
+      following = false;
     }
-    if (!virtualizer || !scrollElement) {
-      return;
-    }
-    const distanceFromBottom =
-      virtualizer.getScrollSize() - virtualizer.getScrollOffset() - virtualizer.getViewportSize();
-    following = distanceFromBottom < 40;
   }
 
   function resumeFollowing() {
     following = true;
-    scrollToLatest();
+    if (virtualizer && messages.length > 0) {
+      virtualizer.scrollToIndex(messages.length - 1, { align: 'end' });
+    }
   }
 
   function seekTo(offsetMs: number) {
@@ -115,7 +142,23 @@
   {/if}
 
   <div class="relative min-h-0 flex-1">
-    <div bind:this={scrollElement} class="h-full overflow-y-auto" onscroll={handleScroll}>
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <div
+      bind:this={scrollElement}
+      role="log"
+      aria-label="Live chat messages"
+      class="h-full overflow-y-auto"
+      onscroll={handleScroll}
+      onwheel={noteGesture}
+      ontouchmove={noteGesture}
+      onpointerdown={() => {
+        pointerDown = true;
+        noteGesture();
+      }}
+      onpointerup={() => (pointerDown = false)}
+      onpointercancel={() => (pointerDown = false)}
+      onkeydown={handleKeyDown}
+    >
       {#if messages.length === 0}
         <p class="px-4 py-6 text-center text-sm opacity-60">
           {controller?.loading ? 'Loading chat…' : 'No chat messages at this point in the video.'}
