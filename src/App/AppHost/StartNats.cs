@@ -20,13 +20,34 @@ public static class StartNats
             .WithPortableBindMount(websocketCertPath, "../AppHost/configs/nats/certs/ws-cert.pem", "/etc/nats/certs/ws-cert.pem", isReadOnly: true)
             .WithPortableBindMount(websocketKeyPath, "../AppHost/configs/nats/certs/ws-key.pem", "/etc/nats/certs/ws-key.pem", isReadOnly: true)
             .WithArgs("-c", "/etc/nats/nats.conf")
-            .WithEndpoint(port: Ports.NatsClient, targetPort: 4222, name: "client")
-            .WithHttpEndpoint(port: Ports.NatsMonitor, targetPort: 8222, name: "monitor")
-            .WithEndpoint(port: Ports.NatsWebSocket, targetPort: 9222, name: "ws");
+            // Proxyless endpoints pin the host port and avoid Aspire's inner-loop proxy. On
+            // Windows + Docker Desktop the proxy path allocates random ephemeral host ports
+            // (32768+) which frequently collide with the Windows NAT / Docker port proxy.
+            .WithEndpoint("tcp", endpoint =>
+            {
+                endpoint.Port = Ports.NatsClient;
+                endpoint.TargetPort = 4222;
+                // Docker Desktop publishes proxyless ports on IPv4 loopback. NATS.Net 3's
+                // initial connection does not fall back from localhost's ::1 result to IPv4,
+                // so advertise the address family that Docker is actually listening on.
+                endpoint.TargetHost = "127.0.0.1";
+                endpoint.IsProxied = false;
+            }, createIfNotExists: false)
+            .WithHttpEndpoint(port: Ports.NatsMonitor, targetPort: 8222, name: "monitor", isProxied: false)
+            .WithEndpoint(port: Ports.NatsWebSocket, targetPort: 9222, name: "ws", isProxied: false);
 
-#if DEBUG
-        AddNatsUI(builder, nats);
-#endif
+        // The built-in AddNats health check opens a NATS connection from the AppHost process.
+        // With proxyless endpoints that connection string resolves to the container-network
+        // address on Windows, so the check fails even though the server is ready. Replace it
+        // with an HTTP check against the monitoring endpoint.
+        nats.Resource.Annotations.Remove(
+            nats.Resource.Annotations
+                .OfType<Aspire.Hosting.ApplicationModel.HealthCheckAnnotation>()
+                .Single(a => a.Key == "nats_check"));
+        nats.WithHttpHealthCheck("/healthz", endpointName: "monitor");
+
+        if (Helpers.DevelopmentToolsEnabled)
+            AddNatsUI(builder, nats);
         
         return nats; //return the nats instance for for others to use as reference
     }

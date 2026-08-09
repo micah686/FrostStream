@@ -34,6 +34,8 @@ public static class StartOpenFga
             .WaitForCompletion(migrate)
             .WaitFor(postgres.OpenFgaDb);
         
+        if (Helpers.DevelopmentToolsEnabled)
+        {
         var studio = builder
             .AddContainer("openfga-studio", "ghcr.io/prakashm88/openfga-studio", Environment.GetEnvironmentVariable("OPENFGA_STUDIO_IMAGE_TAG") ?? "latest")
             .WithHttpEndpoint(port: Ports.OpenFgaStudio, targetPort: 3000, name: "http")
@@ -45,6 +47,7 @@ public static class StartOpenFga
             .WithEnvironment("OPENFGA_ENDPOINT", "http://openfga:8080")
 
             .WaitFor(server);
+        }
 
         if (hardening.EnableFgaAuthenticatedEndpoints)
         {

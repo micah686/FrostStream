@@ -1,4 +1,15 @@
 services:
+  aspire-docker-demo-dashboard:
+    container_name: froststream-aspire-docker-demo-dashboard
+    image: "mcr.microsoft.com/dotnet/nightly/aspire-dashboard:latest"
+    ports:
+      - "18888"
+    expose:
+      - "18889"
+      - "18890"
+    networks:
+      - "aspire"
+    restart: "always"
   nats:
     container_name: froststream-nats
     image: "docker.io/library/nats:2.14"
@@ -26,6 +37,26 @@ services:
         target: "/etc/nats/certs/ws-key.pem"
         source: "../AppHost/configs/nats/certs/ws-key.pem"
         read_only: true
+    networks:
+      - "aspire"
+  nats-ui:
+    container_name: froststream-nats-ui
+    image: "klinux/nats-ui:0.4.0"
+    environment:
+      PORT: "8080"
+      BASE_URL: "http://localhost:25700"
+      NATS_URL: "nats://nats:${NATS_PASSWORD}@nats:4222"
+      ADMIN_USER: "${NATS_UI_ADMIN_USER}"
+      ADMIN_PASS: "${NATS_UI_ADMIN_PASS}"
+      JWT_SECRET: "${NATS_UI_JWT_SECRET}"
+      ConnectionStrings__nats: "nats://nats:${NATS_PASSWORD}@nats:4222"
+      NATS_HOST: "nats"
+      NATS_PORT: "4222"
+      NATS_USERNAME: "nats"
+      NATS_PASSWORD: "${NATS_PASSWORD}"
+      NATS_URI: "nats://nats:${NATS_PASSWORD}@nats:4222"
+    ports:
+      - "25700:8080"
     networks:
       - "aspire"
   postgres:
@@ -94,6 +125,24 @@ services:
       - type: "bind"
         target: "/backups"
         source: "${FROSTSTREAM_BACKUP_ROOT:-./backups}"
+    networks:
+      - "aspire"
+  dbgate:
+    container_name: froststream-dbgate
+    image: "docker.io/dbgate/dbgate:6.1.4"
+    environment:
+      CONNECTIONS: "con1"
+      LABEL_con1: "postgres"
+      SERVER_con1: "postgres"
+      USER_con1: "${POSTGRES_USER}"
+      PASSWORD_con1: "${POSTGRES_PASSWORD}"
+      PORT_con1: "5432"
+      ENGINE_con1: "postgres@dbgate-plugin-postgres"
+    ports:
+      - "25600:3000"
+    depends_on:
+      postgres:
+        condition: "service_started"
     networks:
       - "aspire"
   postgres-init:
@@ -302,6 +351,19 @@ services:
       openfga-migrate:
         condition: "service_completed_successfully"
       postgres:
+        condition: "service_started"
+    networks:
+      - "aspire"
+  openfga-studio:
+    container_name: froststream-openfga-studio
+    image: "ghcr.io/prakashm88/openfga-studio:latest"
+    environment:
+      DISABLE_LOCAL_OPENFGA: "true"
+      OPENFGA_ENDPOINT: "http://openfga:8080"
+    ports:
+      - "25800:3000"
+    depends_on:
+      openfga:
         condition: "service_started"
     networks:
       - "aspire"

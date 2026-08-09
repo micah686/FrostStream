@@ -69,6 +69,9 @@ src/App/Frontend/build/
 src/App/Frontend/.vite/
 src/App/Frontend/*.tsbuildinfo
 
+#Ignore data protection keys
+.dataprotection/
+
 # CMake
 cmake-build-*/
 

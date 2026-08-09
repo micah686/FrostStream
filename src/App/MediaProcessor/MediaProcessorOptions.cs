@@ -6,8 +6,6 @@ public sealed class MediaProcessorOptions
 
     public string WebApiBaseUrl { get; init; } = "http://localhost:25200";
 
-    public string? ApiKey { get; init; }
-
     public string FfmpegPath { get; init; } = "ffmpeg";
 
     public string FfprobePath { get; init; } = "ffprobe";

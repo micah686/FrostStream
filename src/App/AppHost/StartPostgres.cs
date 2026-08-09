@@ -89,7 +89,7 @@ public static class StartPostgres
 
         // The toolkit's DbGate resource never makes it into the compose publish, and its "dbgate"
         // name would collide with the explicit publish-only container below — so run mode only.
-        if (builder.ExecutionContext.IsRunMode)
+        if (builder.ExecutionContext.IsRunMode && Helpers.DevelopmentToolsEnabled)
         {
             server.WithDbGate(dbGate => dbGate.WithHostPort(Ports.DbGate));
         }
@@ -150,7 +150,9 @@ public static class StartPostgres
 
             // WithDbGate (run mode, above) is excluded from the compose publish by the community
             // toolkit, so publish a plain dbgate container with the same connection wiring.
-            builder
+            if (Helpers.DevelopmentToolsEnabled)
+            {
+                builder
                 .AddContainer("dbgate", "docker.io/dbgate/dbgate", "6.1.4")
                 .WithHttpEndpoint(port: Ports.DbGate, targetPort: 3000, name: "http")
                 .WithExternalHttpEndpoints()
@@ -162,6 +164,7 @@ public static class StartPostgres
                 .WithEnvironment("PORT_con1", "5432")
                 .WithEnvironment("ENGINE_con1", "postgres@dbgate-plugin-postgres")
                 .WaitFor(server);
+            }
 
             // ReplaceLineEndings: raw string literals on Windows have CRLF; bash rejects \r.
             var seedScript = """

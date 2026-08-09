@@ -128,6 +128,9 @@ public static class Helpers
         return Environment.GetEnvironmentVariable(variable) ?? "VALUE_NOT_SET";
     }
 
+    internal static bool DevelopmentToolsEnabled
+        => AppHostHardening.IsTruthy(Environment.GetEnvironmentVariable("FROSTSTREAM_DEV_TOOLS"));
+
     public static bool IsSingleUserMode => AppHostHardening.IsTruthy(Environment.GetEnvironmentVariable("SINGLE_USER_MODE"));
 
 }

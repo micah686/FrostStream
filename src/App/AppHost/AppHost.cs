@@ -20,7 +20,9 @@ builder.AddDockerComposeEnvironment("aspire-docker-demo")
 // aspire-development.env is the source of truth for all configurable environment
 // variables (mode flags, image tags, secrets, tunables). Values in the file override
 // variables inherited from the shell.
-var devEnvFile = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "aspire-development.env"));
+var devEnvFile = Path.GetFullPath(
+    Environment.GetEnvironmentVariable("FROSTSTREAM_ENV_FILE") ??
+    Path.Combine(builder.AppHostDirectory, "aspire-development.env"));
 if (File.Exists(devEnvFile))
 {
     Env.Load(devEnvFile);

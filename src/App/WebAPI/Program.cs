@@ -61,11 +61,6 @@ public class Program
             {
                 options.ForwardDefaultSelector = context =>
                 {
-                    if (context.Request.Headers.ContainsKey(MediaProcessorAuthenticationDefaults.ApiKeyHeader))
-                    {
-                        return MediaProcessorAuthenticationDefaults.Scheme;
-                    }
-
                     if (context.Request.Query.ContainsKey(CastTokenDefaults.QueryParameter))
                     {
                         return CastTokenDefaults.Scheme;
@@ -92,9 +87,6 @@ public class Program
                         : BffAuthenticationDefaults.CookieScheme;
                 };
             })
-            .AddScheme<AuthenticationSchemeOptions, MediaProcessorAuthenticationHandler>(
-                MediaProcessorAuthenticationDefaults.Scheme,
-                _ => { })
             .AddScheme<AuthenticationSchemeOptions, CastTokenAuthenticationHandler>(
                 CastTokenDefaults.Scheme,
                 _ => { })
@@ -102,7 +94,6 @@ public class Program
                 PodcastTokenDefaults.Scheme,
                 _ => { });
 
-        builder.Services.Configure<MediaProcessorAuthOptions>(builder.Configuration.GetSection("MediaProcessor"));
         builder.Services.Configure<CastTokenOptions>(builder.Configuration.GetSection(CastTokenOptions.SectionName));
         builder.Services.Configure<PodcastTokenOptions>(builder.Configuration.GetSection(PodcastTokenOptions.SectionName));
         builder.Services.AddSingleton<CastTokenService>();
