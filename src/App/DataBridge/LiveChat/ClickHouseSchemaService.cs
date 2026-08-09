@@ -30,7 +30,7 @@ public sealed partial class ClickHouseSchemaService(
             // Live chat is optional, so a broken ClickHouse must not take DataBridge down with
             // it — WebAPI waits on DataBridge, so throwing here would 502 the whole site. Chat
             // ingest and queries will fail loudly until it recovers; everything else runs.
-            logger.LogError(ex,
+            logger.LogWarning(ex,
                 "ClickHouse schema setup failed. Live chat replay will be unavailable until ClickHouse " +
                 "is reachable and DataBridge is restarted; the rest of FrostStream is unaffected.");
         }
