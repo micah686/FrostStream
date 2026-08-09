@@ -142,6 +142,12 @@ export interface MembershipBadge {
   color: string;
 }
 
+/**
+ * The new-member (under 1 month) badge colour. Membership announcement cards are tinted with it
+ * too, so a "welcome" card reads as the same event as the green badge it grants.
+ */
+export const NEW_MEMBER_COLOR = '#22c55e';
+
 /** Ascending milestone thresholds (in months) and the loyalty-badge colour YouTube pairs with each. */
 const MEMBERSHIP_TIERS: { minMonths: number; color: string }[] = [
   { minMonths: 48, color: '#38bdf8' }, // 4+ years: diamond blue
@@ -151,7 +157,7 @@ const MEMBERSHIP_TIERS: { minMonths: number; color: string }[] = [
   { minMonths: 6, color: '#ec4899' }, // 6 months: pink
   { minMonths: 2, color: '#a855f7' }, // 2 months: purple
   { minMonths: 1, color: '#3b82f6' }, // 1 month: blue
-  { minMonths: 0, color: '#22c55e' } // new member (under 1 month): green
+  { minMonths: 0, color: NEW_MEMBER_COLOR } // new member (under 1 month): green
 ];
 
 /** Parses a YouTube author-badge tooltip and returns its membership milestone, or null if the

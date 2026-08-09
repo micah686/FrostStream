@@ -1,6 +1,12 @@
 <script lang="ts">
   import { CircleStar } from '@lucide/svelte';
-  import { argbToCss, formatOffset, parseMembershipBadge, type ChatMessage } from '$lib/api/liveChat';
+  import {
+    argbToCss,
+    formatOffset,
+    parseMembershipBadge,
+    NEW_MEMBER_COLOR,
+    type ChatMessage
+  } from '$lib/api/liveChat';
   import ChatFragments from './ChatFragments.svelte';
 
   let {
@@ -38,8 +44,8 @@
       {/if}
     </div>
   {:else if isMembership}
-    <div class="rounded-box bg-success/15 px-3 py-2">
-      <span class="font-semibold text-success">{message.authorName}</span>
+    <div class="rounded-box px-3 py-2 text-black" style={`background-color: ${NEW_MEMBER_COLOR};`}>
+      <span class="font-semibold text-black">{message.authorName}</span>
       {#if message.fragments.length > 0}
         <span class="ml-1"><ChatFragments fragments={message.fragments} /></span>
       {/if}
