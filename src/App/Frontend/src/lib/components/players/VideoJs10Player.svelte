@@ -68,10 +68,38 @@
   onMount(() => {
     void initializePlayer();
     return () => {
+      stopProgressLoop();
       captionTracksChanged?.();
       void destroyAssRenderer();
     };
   });
+
+  // `timeupdate` only fires ~4 times a second, so consumers that render against the playhead (the
+  // live chat replay) would advance in ~250ms clumps. While playing, report every frame instead.
+  let progressFrame: number | null = null;
+
+  function startProgressLoop() {
+    if (progressFrame !== null) {
+      return;
+    }
+    const step = () => {
+      const video = videoElement;
+      if (!video || video.paused || video.ended) {
+        progressFrame = null;
+        return;
+      }
+      onProgress?.(video.currentTime, videoDuration(video));
+      progressFrame = requestAnimationFrame(step);
+    };
+    progressFrame = requestAnimationFrame(step);
+  }
+
+  function stopProgressLoop() {
+    if (progressFrame !== null) {
+      cancelAnimationFrame(progressFrame);
+      progressFrame = null;
+    }
+  }
 
   async function initializePlayer() {
     await Promise.all([import('@videojs/html/video/player'), import('@videojs/html/video/skin')]);
@@ -263,8 +291,16 @@
         class="h-full w-full"
         onloadedmetadata={applyStartTime}
         ontimeupdate={reportProgress}
-        onpause={reportProgress}
-        onended={() => onEnded?.()}
+        onplaying={startProgressLoop}
+        onseeked={reportProgress}
+        onpause={(event) => {
+          stopProgressLoop();
+          reportProgress(event);
+        }}
+        onended={() => {
+          stopProgressLoop();
+          onEnded?.();
+        }}
       >
         {#each tracks as track (track.src)}
           <track

@@ -66,13 +66,17 @@
     controller?.tick(position * 1000);
   });
 
-  // Keep the newest message in view while following.
+  // Keep the newest message in view while following. This runs on every reveal (once per frame on
+  // a busy chat), so it pins scrollTop directly rather than going through scrollToIndex: that call
+  // is async and iterative — it scrolls, awaits measurement of unmeasured rows, then scrolls again
+  // — so at this cadence each call would still be settling when the next one started, and the view
+  // would visibly trail the playhead. Assigning scrollTop is synchronous and self-correcting.
   $effect(() => {
     const count = messages.length;
-    if (!following || count === 0 || !virtualizer) {
+    if (!following || count === 0 || !scrollElement) {
       return;
     }
-    virtualizer.scrollToIndex(count - 1, { align: 'end' });
+    scrollElement.scrollTop = scrollElement.scrollHeight;
   });
 
   function distanceFromBottom(): number {

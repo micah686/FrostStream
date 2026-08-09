@@ -1,13 +1,26 @@
 import { fetchChatWindow, type ChatMessage } from '$lib/api/liveChat';
 
-/** Messages fetched ahead of the playhead before another range request is issued. */
+/** Buffer lead below which a top-up is issued. */
 const PREFETCH_LEAD_MS = 30_000;
+/** Buffer lead the prefetcher tops up to once it starts. Hysteresis against PREFETCH_LEAD_MS. */
+const TARGET_LEAD_MS = 60_000;
 /** Length of each forward prefetch window. */
 const PREFETCH_SPAN_MS = 120_000;
+/**
+ * Rows per window request. Matches LiveChatOptions.MaxWindowRows, the server-side clamp — asking
+ * for less just means more round trips, and on a busy chat the row cap, not the time span, is what
+ * limits how much video each request covers (1000 rows is only ~10s of a 100 msg/s stream).
+ */
+const WINDOW_ROW_LIMIT = 1_000;
+/** Back-to-back top-ups allowed per prefetch cycle, so a busy chat reaches TARGET_LEAD_MS without
+ * waiting a whole tick between requests. */
+const MAX_PREFETCH_CHAIN = 4;
 /** A jump larger than this is treated as a seek rather than normal playback drift. */
 const SEEK_THRESHOLD_MS = 2_000;
-/** Messages kept behind the playhead; older ones are dropped so long sessions stay bounded. */
-const MAX_VISIBLE = 400;
+/** Messages kept behind the playhead; older ones are dropped so long sessions stay bounded.
+ * Only the on-screen rows are in the DOM (the list is virtualized), so this is really a scrollback
+ * depth: at 100 msg/s a smaller cap would discard messages seconds after they appear. */
+const MAX_VISIBLE = 1_000;
 
 /**
  * Keeps a chat replay in sync with video playback. Owns the buffer and the fetch policy; the
@@ -28,6 +41,8 @@ export class ChatPlaybackController {
   #lastPositionMs = 0;
   #inFlight: AbortController | null = null;
   #pendingSeekMs: number | null = null;
+  /** Guards the whole top-up chain, which spans several awaits with no request in flight between. */
+  #prefetching = false;
   #disposed = false;
 
   visible = $state<ChatMessage[]>([]);
@@ -79,7 +94,7 @@ export class ChatPlaybackController {
     try {
       const messages = await fetchChatWindow(
         this.#mediaGuid,
-        { around: positionMs, before: 50, after: 300 },
+        { around: positionMs, before: 100, after: 400 },
         signal
       );
       if (signal.aborted || this.#disposed) {
@@ -127,20 +142,52 @@ export class ChatPlaybackController {
     this.visible = next.length > MAX_VISIBLE ? next.slice(next.length - MAX_VISIBLE) : next;
   }
 
-  /** Extends the buffer forward from the last known offset. */
+  /**
+   * Extends the buffer forward until it leads the playhead by {@link TARGET_LEAD_MS}.
+   *
+   * A single request can only return {@link WINDOW_ROW_LIMIT} rows, which on a busy chat is a few
+   * seconds of video — one request per tick would leave the buffer permanently grazing the
+   * playhead and the replay stalling between windows. Chaining the top-ups fills the lead in one
+   * cycle instead.
+   */
   async #prefetch(): Promise<void> {
-    if (this.#inFlight || this.#pendingSeekMs !== null || this.#disposed) {
+    if (this.#prefetching || this.#inFlight || this.#pendingSeekMs !== null || this.#disposed) {
       return;
     }
 
+    this.#prefetching = true;
+    try {
+      for (let i = 0; i < MAX_PREFETCH_CHAIN; i++) {
+        if (this.#disposed || this.#pendingSeekMs !== null) {
+          break;
+        }
+        if (this.#bufferedToMs - this.#lastPositionMs >= TARGET_LEAD_MS) {
+          break;
+        }
+        if (!(await this.#fetchForward())) {
+          break;
+        }
+      }
+    } finally {
+      this.#prefetching = false;
+      this.loading = this.#inFlight !== null;
+    }
+  }
+
+  /** One forward window request. Returns false when the top-up chain should stop. */
+  async #fetchForward(): Promise<boolean> {
     const from = this.#bufferedToMs + 1;
     const to = from + PREFETCH_SPAN_MS;
     const signal = this.#beginRequest();
 
     try {
-      const messages = await fetchChatWindow(this.#mediaGuid, { from, to, limit: 500 }, signal);
+      const messages = await fetchChatWindow(
+        this.#mediaGuid,
+        { from, to, limit: WINDOW_ROW_LIMIT },
+        signal
+      );
       if (signal.aborted || this.#disposed) {
-        return;
+        return false;
       }
 
       if (messages.length > 0) {
@@ -149,15 +196,18 @@ export class ChatPlaybackController {
         this.#cursor = 0;
         this.#bufferedToMs = messages[messages.length - 1].videoOffsetMs;
       } else {
-        // No messages in this span — advance the watermark so we don't re-request it.
+        // No messages in this span — advance the watermark so we don't re-request it. This also
+        // ends the chain, since the lead now jumps a whole span ahead of the playhead.
         this.#bufferedToMs = to;
       }
       this.#reveal(this.#lastPositionMs);
       this.error = null;
+      return true;
     } catch (err) {
       if (!signal.aborted && !this.#disposed) {
         this.error = describeError(err);
       }
+      return false;
     } finally {
       this.#endRequest(signal);
     }
@@ -174,7 +224,9 @@ export class ChatPlaybackController {
   #endRequest(signal: AbortSignal): void {
     if (this.#inFlight?.signal === signal) {
       this.#inFlight = null;
-      this.loading = false;
+      // Mid-chain the next request follows immediately; holding the flag stops the spinner
+      // strobing once per top-up.
+      this.loading = this.#prefetching;
     }
   }
 }
