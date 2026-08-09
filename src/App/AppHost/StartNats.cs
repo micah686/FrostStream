@@ -32,6 +32,16 @@ public static class StartNats
             .WithHttpEndpoint(port: Ports.NatsMonitor, targetPort: 8222, name: "monitor", isProxied: false)
             .WithEndpoint(port: Ports.NatsWebSocket, targetPort: 9222, name: "ws", isProxied: false);
 
+        // The built-in AddNats health check opens a NATS connection from the AppHost process.
+        // With proxyless endpoints that connection string resolves to the container-network
+        // address on Windows, so the check fails even though the server is ready. Replace it
+        // with an HTTP check against the monitoring endpoint.
+        nats.Resource.Annotations.Remove(
+            nats.Resource.Annotations
+                .OfType<Aspire.Hosting.ApplicationModel.HealthCheckAnnotation>()
+                .Single(a => a.Key == "nats_check"));
+        nats.WithHttpHealthCheck("/healthz", endpointName: "monitor");
+
 #if DEBUG
         AddNatsUI(builder, nats);
 #endif
