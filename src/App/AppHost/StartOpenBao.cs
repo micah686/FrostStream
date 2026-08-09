@@ -72,8 +72,14 @@ public static class StartOpenBao
 
         var script = """
             set -eu
-            until bao status >/dev/null 2>&1 || [ "$?" = "2" ]; do sleep 1; done
-            if [ ! -f /bootstrap/init.env ]; then
+            until bao operator init -status >/dev/null 2>&1 || [ "$?" -eq 2 ]; do sleep 1; done
+            if bao operator init -status >/dev/null 2>&1; then
+              if [ ! -f /bootstrap/init.env ]; then
+                echo 'openbao-bootstrap: vault is initialized but /bootstrap/init.env is missing; cannot unseal' >&2
+                exit 1
+              fi
+              echo 'openbao-bootstrap: using existing initialization'
+            else
               echo 'openbao-bootstrap: initializing development storage'
               output="$(bao operator init -key-shares=1 -key-threshold=1)"
               unseal_key="$(printf '%s\n' "$output" | sed -n 's/^Unseal Key 1: //p')"
