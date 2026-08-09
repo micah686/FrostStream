@@ -46,9 +46,8 @@ public static class StartNats
                 .Single(a => a.Key == "nats_check"));
         nats.WithHttpHealthCheck("/healthz", endpointName: "monitor");
 
-#if DEBUG
-        AddNatsUI(builder, nats);
-#endif
+        if (Helpers.DevelopmentToolsEnabled)
+            AddNatsUI(builder, nats);
         
         return nats; //return the nats instance for for others to use as reference
     }
