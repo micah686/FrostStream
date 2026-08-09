@@ -102,6 +102,7 @@ public sealed class AssetCacheWriter(
             {
                 AssetKind.Avatar => "avatars",
                 AssetKind.Banner => "banners",
+                AssetKind.Emote => "emotes",
                 _ => "other"
             };
 

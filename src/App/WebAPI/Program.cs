@@ -13,6 +13,7 @@ using NodaTime.Serialization.SystemTextJson;
 using Scalar.AspNetCore;
 using Shared.Auth;
 using Shared.Backups;
+using Shared.LiveChat;
 using Shared.Secrets;
 using Shared.Storage;
 using System.Text.Json.Serialization;
@@ -94,6 +95,7 @@ public class Program
                 PodcastTokenDefaults.Scheme,
                 _ => { });
 
+        builder.Services.Configure<LiveChatOptions>(builder.Configuration.GetSection(LiveChatOptions.SectionName));
         builder.Services.Configure<CastTokenOptions>(builder.Configuration.GetSection(CastTokenOptions.SectionName));
         builder.Services.Configure<PodcastTokenOptions>(builder.Configuration.GetSection(PodcastTokenOptions.SectionName));
         builder.Services.AddSingleton<CastTokenService>();

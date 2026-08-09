@@ -20,12 +20,13 @@ public static class StartServices
         AuthentikResources authentik,
         OpenFgaResources openFga,
         IResourceBuilder<ContainerResource> potProvider,
-        IResourceBuilder<ContainerResource> backupService)
+        IResourceBuilder<ContainerResource> backupService,
+        ClickHouseResources clickHouse)
     {
         var openBao = openBaoResources.Server;
         var webApiEndpointName = hardening.EnableHttps ? "https" : "http";
-        var databridge = WireDataBridge(builder, hardening, sharedStorageRoot, nats, postgres, openBaoResources, openBaoToken, typesense, typesenseApiKey, potProvider);
-        var webapi = WireWebApi(builder, hardening, sharedStorageRoot, nats, databridge, openBaoResources, openBaoToken, authentik, openFga, backupService, webApiEndpointName);
+        var databridge = WireDataBridge(builder, hardening, sharedStorageRoot, nats, postgres, openBaoResources, openBaoToken, typesense, typesenseApiKey, potProvider, clickHouse);
+        var webapi = WireWebApi(builder, hardening, sharedStorageRoot, nats, databridge, openBaoResources, openBaoToken, authentik, openFga, backupService, webApiEndpointName, clickHouse);
         WireWorker(builder, hardening, sharedStorageRoot, nats, openBaoResources, openBaoToken);
         WireMediaProcessor(builder, nats, databridge, webapi, webApiEndpointName);
         WireScheduler(builder, nats, databridge, backupService);
@@ -43,7 +44,8 @@ public static class StartServices
         IResourceBuilder<ParameterResource> openBaoToken,
         IResourceBuilder<ContainerResource> typesense,
         IResourceBuilder<ParameterResource> typesenseApiKey,
-        IResourceBuilder<ContainerResource> potProvider)
+        IResourceBuilder<ContainerResource> potProvider,
+        ClickHouseResources clickHouse)
     {
         var openBao = openBaoResources.Server;
         var databridge = builder.AddProject<Projects.DataBridge>("databridge")
@@ -72,6 +74,17 @@ public static class StartServices
                 .WithVolume("froststream-data", ContainerStorageRoot))
             .WithLocalComposeBuild("localhost/froststream-databridge:latest", "App/DataBridge/Dockerfile");
 
+        if (clickHouse is { Server: { } clickHouseServer, HttpEndpoint: { } clickHouseEndpoint, Password: { } clickHousePassword })
+        {
+            databridge = databridge
+                .WithEnvironment("LiveChat__Enabled", "true")
+                .WithEnvironment("LiveChat__Url", clickHouseEndpoint)
+                .WithEnvironment("LiveChat__Database", StartClickHouse.Database)
+                .WithEnvironment("LiveChat__User", StartClickHouse.User)
+                .WithEnvironment("LiveChat__Password", clickHousePassword)
+                .WaitFor(clickHouseServer);
+        }
+
         return databridge.WithComposeDependencyCondition("openbao", "service_healthy");
     }
 
@@ -86,7 +99,8 @@ public static class StartServices
         AuthentikResources authentik,
         OpenFgaResources openFga,
         IResourceBuilder<ContainerResource> backupService,
-        string webApiEndpointName)
+        string webApiEndpointName,
+        ClickHouseResources clickHouse)
     {
         var openBao = openBaoResources.Server;
         // LAN-reachable base URL that cast devices use to fetch media; deployment-specific, so
@@ -150,6 +164,8 @@ public static class StartServices
             .WithEnvironment("OpenFga__AutoProvision", Environment.GetEnvironmentVariable("OPENFGA_AUTO_PROVISION") ?? "true")
             .WithEnvironment("OpenFga__BootstrapOwnerSubjects", Environment.GetEnvironmentVariable("OPENFGA_BOOTSTRAP_OWNER_SUB") ?? "")
             .WithEnvironment("Cast__AdvertisedBaseUrl", castAdvertisedBaseUrl)
+            // WebAPI only needs the flag: chat queries proxy to DataBridge over NATS.
+            .WithEnvironment("LiveChat__Enabled", clickHouse.Server is not null ? "true" : "false")
             .WithEnvironment("BackupService__BaseUrl", backupService.GetEndpoint("http"))
             .WaitForOpenBao(openBaoResources)
             .WaitFor(backupService)

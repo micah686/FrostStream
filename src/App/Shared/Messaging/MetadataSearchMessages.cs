@@ -100,6 +100,10 @@ public sealed record MetadataDetailDto
     public long? CommentCount { get; init; }
     public int? AgeLimit { get; init; }
     public bool WasLive { get; init; }
+
+    /// <summary>Whether a live-chat replay has been ingested for this media (optional feature).</summary>
+    public bool HasLiveChat { get; init; }
+
     public string? Availability { get; init; }
     public string? Location { get; init; }
     public string? WebpageUrl { get; init; }

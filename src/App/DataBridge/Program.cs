@@ -6,6 +6,7 @@ using DataBridge.AudioRenditions;
 using DataBridge.Renditions;
 using DataBridge.StreamRenditions;
 using DataBridge.Flows;
+using DataBridge.LiveChat;
 using DataBridge.MediaStream;
 using DataBridge.Metadata;
 using DataBridge.Messaging;
@@ -22,6 +23,7 @@ using NATS.Client.Core;
 using NodaTime;
 using Npgsql;
 using Shared.Database;
+using Shared.LiveChat;
 using Shared.Messaging;
 using Shared.Pot;
 using Shared.Secrets;
@@ -154,6 +156,21 @@ class Program
         builder.Services.AddSingleton<AccessPolicyExecutor>();
         builder.Services.Configure<MediaAccessOptions>(
             builder.Configuration.GetSection(MediaAccessOptions.SectionName));
+        builder.Services.Configure<LiveChatOptions>(
+            builder.Configuration.GetSection(LiveChatOptions.SectionName));
+        // Optional live-chat replay store. Nothing ClickHouse-related is registered when the
+        // feature is disabled — the flag gates the whole dependency, not individual calls.
+        if (builder.Configuration.GetSection(LiveChatOptions.SectionName).GetValue<bool>("Enabled"))
+        {
+            builder.Services.AddSingleton<ClickHouseAccess>();
+            builder.Services.AddScoped<LiveChatIngestService>();
+            // Schema first: IHostedService instances start in registration order, and the
+            // consumers below must never race the DDL.
+            builder.Services.AddHostedService<ClickHouseSchemaService>();
+            builder.Services.AddHostedService<LiveChatIngestConsumerService>();
+            builder.Services.AddHostedService<LiveChatBackfillConsumerService>();
+            builder.Services.AddHostedService<LiveChatQueryConsumerService>();
+        }
         builder.Services.AddSingleton<DownloadFlowStartupState>();
         builder.Services.AddSingleton<INotificationDispatcher, NotificationDispatcher>();
         builder.Services.AddSingleton<IBackgroundRunReporter>(sp => new BackgroundRunReporter(

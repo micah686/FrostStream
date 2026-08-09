@@ -33,7 +33,8 @@ public enum DownloadStage
     RichMetadataWrite = 10,
     Finalize = 11,
     Cleanup = 12,
-    Compensation = 13
+    Compensation = 13,
+    LiveChatUpload = 14
 }
 
 /// <summary>The execution state of a stage, separate from the job lifecycle.</summary>

@@ -10,8 +10,10 @@ using DataBridge.Messaging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using NodaTime;
 using Shared.Database;
+using Shared.LiveChat;
 using Shared.Messaging;
 using Shared.Metadata;
 using Shared.Storage;
@@ -31,6 +33,7 @@ public sealed class DownloadJobV2Flow(
     IServiceScopeFactory scopeFactory,
     IClock clock,
     INotificationDispatcher notificationDispatcher,
+    IOptions<LiveChatOptions> liveChatOptions,
     ILogger<DownloadJobV2Flow> logger) : Flow<DownloadRunRequest>
 {
     internal const int MaxStageAttempts = 3;
@@ -294,6 +297,71 @@ public sealed class DownloadJobV2Flow(
             });
         }
 
+        // The live chat replay + emote map sidecars are archived unconditionally: chat ingestion
+        // (ClickHouse) is optional and can be enabled later, at which point the backfill job
+        // rebuilds chat history from these blobs.
+        string? liveChatStoragePath = null;
+        string? liveChatEmoteMapStoragePath = null;
+        if (downloaded.LiveChat is { } chatSidecar)
+        {
+            var chat = await RunUploadAsync(run, request, workerTag, DownloadStage.LiveChatUpload, "live-chat",
+                UploadArtifactKind.LiveChat, required: false, chatSidecar.TempFileRef, null, storageKey,
+                SidecarPath(primary.Upload.StoragePath, chatSidecar.FileName), chatSidecar.ContentHashXxh128);
+            if (chat.Stopped || await Capture(() => V2(r => r.IsStopRequestedAsync(jobId, runId))))
+            {
+                await CompensateAsync(
+                    run, request, workerTag, downloaded, reservation, metadata,
+                    FailureKind.Stopped, "user_stopped", "User stopped the run.");
+                return;
+            }
+            if (chat.Fatal)
+            {
+                await CompensateAsync(
+                    run, request, workerTag, downloaded, reservation, metadata,
+                    chat.FailureKind ?? FailureKind.Interrupted,
+                    chat.FailureCode ?? "live_chat_upload_failed",
+                    chat.FailureMessage);
+                return;
+            }
+            if (chat.Succeeded)
+            {
+                liveChatStoragePath = chat.Upload!.StoragePath;
+                await Capture(() => V2(r => r.UpsertArtifactAsync(ToArtifact(run, DownloadStage.LiveChatUpload,
+                    "live-chat", UploadArtifactKind.LiveChat, required: false, chat.Upload!))));
+            }
+
+            if (liveChatStoragePath is not null && downloaded.LiveChatEmoteMap is { } emoteMapSidecar)
+            {
+                var emoteMap = await RunUploadAsync(run, request, workerTag, DownloadStage.LiveChatUpload,
+                    "live-chat-emotes", UploadArtifactKind.LiveChatEmoteMap, required: false,
+                    emoteMapSidecar.TempFileRef, null, storageKey,
+                    SidecarPath(primary.Upload.StoragePath, emoteMapSidecar.FileName),
+                    emoteMapSidecar.ContentHashXxh128);
+                if (emoteMap.Stopped || await Capture(() => V2(r => r.IsStopRequestedAsync(jobId, runId))))
+                {
+                    await CompensateAsync(
+                        run, request, workerTag, downloaded, reservation, metadata,
+                        FailureKind.Stopped, "user_stopped", "User stopped the run.");
+                    return;
+                }
+                if (emoteMap.Fatal)
+                {
+                    await CompensateAsync(
+                        run, request, workerTag, downloaded, reservation, metadata,
+                        emoteMap.FailureKind ?? FailureKind.Interrupted,
+                        emoteMap.FailureCode ?? "live_chat_emote_map_upload_failed",
+                        emoteMap.FailureMessage);
+                    return;
+                }
+                if (emoteMap.Succeeded)
+                {
+                    liveChatEmoteMapStoragePath = emoteMap.Upload!.StoragePath;
+                    await Capture(() => V2(r => r.UpsertArtifactAsync(ToArtifact(run, DownloadStage.LiveChatUpload,
+                        "live-chat-emotes", UploadArtifactKind.LiveChatEmoteMap, required: false, emoteMap.Upload!))));
+                }
+            }
+        }
+
         var richMetadata = await RunRichMetadataWriteAsync(
             run, reservation, storageKey, infoStoragePath, thumbnailPath, captionRows, metadata.Engagement);
         if (!richMetadata.Succeeded)
@@ -328,6 +396,9 @@ public sealed class DownloadJobV2Flow(
 
         await Capture(() => QueueAudioRenditionAsync(
             request, reservation.MediaGuid, reservation.VersionNum, storageKey));
+        await Capture(() => QueueLiveChatIngestAsync(
+            request, reservation.MediaGuid, reservation.VersionNum, storageKey,
+            liveChatStoragePath, liveChatEmoteMapStoragePath));
         await Capture(() => notificationDispatcher.NotifyDownloadEventAsync(
             jobId,
             NotificationEventKeys.DownloadCompleted,
@@ -335,6 +406,42 @@ public sealed class DownloadJobV2Flow(
             $"Download completed for {request.SourceUrl}"));
 
         logger.LogInformation("Download V2 run completed JobId {JobId} RunId {RunId}", jobId, runId);
+    }
+
+    /// <summary>
+    /// Queues the uploaded chat sidecar for ClickHouse ingestion. Best-effort like the audio
+    /// rendition follow-up: the sidecar blobs are durable, so a missed publish is recoverable
+    /// via the backfill job. No-op when live chat is disabled or no chat sidecar was uploaded.
+    /// </summary>
+    private async Task QueueLiveChatIngestAsync(
+        DownloadRequested request,
+        Guid mediaGuid,
+        int? versionNum,
+        string storageKey,
+        string? chatBlobPath,
+        string? emoteMapBlobPath)
+    {
+        if (chatBlobPath is null || !liveChatOptions.Value.Enabled)
+            return;
+        try
+        {
+            await bus.PublishAsync(BackgroundJobSubjects.LiveChatIngestRequest,
+                new LiveChatIngestRequested
+                {
+                    MediaGuid = mediaGuid,
+                    VersionNum = versionNum,
+                    StorageKey = storageKey,
+                    ChatBlobPath = chatBlobPath,
+                    EmoteMapBlobPath = emoteMapBlobPath
+                }, mediaGuid.ToString("N"));
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "Download completed but live chat ingestion could not be queued for JobId {JobId} MediaGuid {MediaGuid}.",
+                request.JobId,
+                mediaGuid);
+        }
     }
 
     private async Task<MetadataFetched?> RunMetadataAsync(
@@ -837,6 +944,8 @@ public sealed class DownloadJobV2Flow(
         if (downloaded.InfoJsonTempFileRef is { } info) files.Add(("info-json", info));
         if (downloaded.Thumbnail is { } thumb) files.Add(("thumbnail", thumb.TempFileRef));
         files.AddRange(downloaded.Captions.Select((x, i) => ($"caption:{i}", x.TempFileRef)));
+        if (downloaded.LiveChat is { } liveChat) files.Add(("live-chat", liveChat.TempFileRef));
+        if (downloaded.LiveChatEmoteMap is { } liveChatEmotes) files.Add(("live-chat-emotes", liveChatEmotes.TempFileRef));
         foreach (var file in files.DistinctBy(x => x.Path, StringComparer.Ordinal))
             succeeded &= await RunTempCleanupAsync(run, request, workerTag, file.Key, file.Path);
         return succeeded;

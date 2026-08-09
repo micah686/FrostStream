@@ -46,6 +46,7 @@ public sealed class DownloadCommandsConsumerService(
     IOptions<WorkerOptions> workerOptions,
     PotOptionsApplier potOptionsApplier,
     IReturnYouTubeDislikeClient returnYouTubeDislikeClient,
+    LiveChatSidecarProcessor liveChatSidecarProcessor,
     ILogger<DownloadCommandsConsumerService> logger) : BackgroundService
 {
     private const string MediaFileBase = "media";
@@ -391,6 +392,10 @@ public sealed class DownloadCommandsConsumerService(
 
             var infoJson = await ResolveInfoJsonSidecarAsync(tempDirectory);
             var (thumbnail, captions) = await ResolveAssetSidecarsAsync(tempDirectory, tempFileRef);
+            var liveChat = await liveChatSidecarProcessor.ProcessAsync(
+                tempDirectory, MediaFileBase, cmd.JobId, operationCts.Token);
+            if (liveChat is { Warnings.Count: > 0 })
+                acquisitionWarnings.AddRange(liveChat.Warnings);
 
             logger.LogInformation(
                 "Download completed for JobId {JobId} Attempt {Attempt} File {TempFileRef} SizeBytes {FileSizeBytes} ContentHash {ContentHashXxh128} InfoJson {InfoJsonFileName} Thumbnail {ThumbnailFileName} Captions {CaptionCount}",
@@ -423,6 +428,8 @@ public sealed class DownloadCommandsConsumerService(
                 InfoJsonContentHashXxh128 = infoJson?.ContentHash,
                 Thumbnail = thumbnail,
                 Captions = captions,
+                LiveChat = liveChat?.Chat,
+                LiveChatEmoteMap = liveChat?.EmoteMap,
                 Warnings = acquisitionWarnings
             });
             await context.AckAsync();

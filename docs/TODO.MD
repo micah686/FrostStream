@@ -94,7 +94,6 @@
 ## TODO
 
 upload metadata
-live_chat (complex, need to integrate with clickhousedb)
 
 ## TubeArchivst Options
 

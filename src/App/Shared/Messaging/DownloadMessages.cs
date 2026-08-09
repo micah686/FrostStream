@@ -473,6 +473,20 @@ public sealed record DownloadCompleted : IFlowMessage
     public IReadOnlyList<SidecarFileRef> Captions { get; init; } = [];
 
     /// <summary>
+    /// The yt-dlp <c>.live_chat.json</c> sidecar (present when the caller's <c>SubLangs</c>
+    /// included <c>live_chat</c> and the media was a live stream). Always uploaded co-located
+    /// with the video so chat can be ingested later even if live-chat replay is disabled now.
+    /// </summary>
+    public SidecarFileRef? LiveChat { get; init; }
+
+    /// <summary>
+    /// The Worker-generated <c>.live_chat.emotes.json</c> sidecar mapping custom emote ids to
+    /// the content-addressed blob paths the Worker archived their images at. Null when the chat
+    /// sidecar was absent or contained no custom emotes.
+    /// </summary>
+    public SidecarFileRef? LiveChatEmoteMap { get; init; }
+
+    /// <summary>
     /// Non-fatal problems observed while acquiring the media. The coordinator persists each one
     /// and allows the run to finish as <c>CompletedWithWarnings</c>.
     /// </summary>
@@ -533,7 +547,11 @@ public enum UploadArtifactKind
     /// unbounded, so they travel via storage instead of inline NATS payloads; DataBridge loads
     /// this sidecar back during the rich-metadata write.
     /// </summary>
-    Comments = 5
+    Comments = 5,
+    /// <summary>The yt-dlp <c>.live_chat.json</c> replay sidecar, co-located with the primary.</summary>
+    LiveChat = 6,
+    /// <summary>The Worker-generated <c>.live_chat.emotes.json</c> emote-id → blob-path map.</summary>
+    LiveChatEmoteMap = 7
 }
 
 /// <summary>

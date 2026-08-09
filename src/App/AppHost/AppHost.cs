@@ -66,8 +66,9 @@ var authentik = StartAuthentik.Start(builder, postgres, hardening);
 var openFga   = StartOpenFga.Start(builder, postgres, hardening);
 var potProvider = StartPotProvider.Start(builder);
 var backupService = StartBackupService.Start(builder, sharedStorageRoot, nats, postgres, openBaoResources, openBaoToken);
+var clickHouse = StartClickHouse.Start(builder);
 
-StartServices.Wire(builder, hardening, sharedStorageRoot, nats, postgres, openBaoResources, openBaoToken, typesense, typesenseApiKey, authentik, openFga, potProvider, backupService);
+StartServices.Wire(builder, hardening, sharedStorageRoot, nats, postgres, openBaoResources, openBaoToken, typesense, typesenseApiKey, authentik, openFga, potProvider, backupService, clickHouse);
 
 builder.Build().Run();
 

@@ -18,6 +18,7 @@
   import CastDropdown from '$lib/components/players/CastDropdown.svelte';
   import SaveToPlaylistButton from '$lib/components/SaveToPlaylistButton.svelte';
   import PlaylistPanel from '$lib/components/PlaylistPanel.svelte';
+  import ChatReplayPanel from '$lib/components/chat/ChatReplayPanel.svelte';
   import TargetNotePanel from '$lib/components/TargetNotePanel.svelte';
   import WatchComment from '$lib/components/watch/WatchComment.svelte';
   import {
@@ -72,6 +73,7 @@
     commentCount?: number | null;
     ageLimit?: number | null;
     wasLive: boolean;
+    hasLiveChat?: boolean;
     availability?: string | null;
     location?: string | null;
     webpageUrl?: string | null;
@@ -198,6 +200,14 @@
   let lastSentPosition = -1;
   // Live local playback position for the server cast menu's "start from current position".
   let livePosition = $state(0);
+  // Sidebar tab; chat is the default for live archives that have an ingested replay.
+  let sidebarTab = $state<'chat' | 'upNext'>('upNext');
+  const chatAvailable = $derived(detail?.hasLiveChat === true);
+  // Chat leads for live archives, matching how viewers watch them; the choice is per-video, so
+  // it resets when the detail for a new media item arrives.
+  $effect(() => {
+    sidebarTab = chatAvailable ? 'chat' : 'upNext';
+  });
   let moreMenuOpen = $state(false);
   let noteMenuOpen = $state(false);
   let moreMenuContainer = $state<HTMLDivElement | null>(null);
@@ -1512,7 +1522,39 @@
     {/if}
   </section>
 
-  <aside aria-label="Up next">
+  <aside aria-label={chatAvailable ? 'Chat and up next' : 'Up next'}>
+    {#if chatAvailable}
+      <div role="tablist" class="tabs tabs-box mb-5 grid grid-cols-2">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={sidebarTab === 'chat'}
+          class={['tab', sidebarTab === 'chat' && 'tab-active']}
+          onclick={() => (sidebarTab = 'chat')}
+        >
+          Chat
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={sidebarTab === 'upNext'}
+          class={['tab', sidebarTab === 'upNext' && 'tab-active']}
+          onclick={() => (sidebarTab = 'upNext')}
+        >
+          Up next
+        </button>
+      </div>
+
+      {#if sidebarTab === 'chat'}
+        <ChatReplayPanel
+          {mediaGuid}
+          positionSeconds={livePosition}
+          onSeek={(seconds) => player?.seekTo(seconds)}
+        />
+      {/if}
+    {/if}
+
+    {#if !chatAvailable || sidebarTab === 'upNext'}
     {#if userListId || platformListId}
       <div class="mb-6">
         {#key `${userListId ?? platformListId}`}
@@ -1579,5 +1621,6 @@
         <li class="text-sm text-base-content/40">Nothing else on the server yet.</li>
       {/each}
     </ul>
+    {/if}
   </aside>
 </div>

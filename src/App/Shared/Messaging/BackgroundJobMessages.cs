@@ -12,6 +12,20 @@ public abstract record ScheduledBackgroundRequest
     public required Instant OccurredAt { get; init; }
 }
 
+/// <summary>
+/// Sweeps archived live streams for <c>live_chat.json</c> sidecars that have not been ingested
+/// into ClickHouse and queues an ingest for each. This is how enabling live chat replay on an
+/// existing library hydrates its history — the sidecars are archived regardless of the flag.
+/// </summary>
+public sealed record LiveChatBackfillRequested : ScheduledBackgroundRequest
+{
+    /// <summary>When set, backfill only this media item instead of sweeping the library.</summary>
+    public Guid? TargetMediaGuid { get; init; }
+
+    /// <summary>Re-ingest media that already have a chat marker row.</summary>
+    public bool Force { get; init; }
+}
+
 public sealed record ChannelScanRefreshRequested : ScheduledBackgroundRequest
 {
     /// <summary>When set, scan only this creator source (manual "scan now"); scheduled sweeps leave it null.</summary>
