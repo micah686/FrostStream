@@ -18,6 +18,7 @@ publish_variant() {
   local old_dev_tools="${FROSTSTREAM_DEV_TOOLS-}"
   export FROSTSTREAM_ENV_FILE="$temp_env"
   export FROSTSTREAM_DEV_TOOLS="$dev"
+  rm -f "$output_path/.env"
   (cd "$script_dir" && aspire publish --apphost "$apphost_project" -o "$output_path" --non-interactive --nologo)
   if [[ -n "$old_env_file" ]]; then export FROSTSTREAM_ENV_FILE="$old_env_file"; else unset FROSTSTREAM_ENV_FILE; fi
   if [[ -n "$old_dev_tools" ]]; then export FROSTSTREAM_DEV_TOOLS="$old_dev_tools"; else unset FROSTSTREAM_DEV_TOOLS; fi

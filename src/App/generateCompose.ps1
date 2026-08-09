@@ -26,6 +26,7 @@ function Publish-ComposeVariant([bool]$Development, [string]$ComposeName, [strin
         $env:FROSTSTREAM_DEV_TOOLS = if ($Development) { 'true' } else { 'false' }
         Push-Location $PSScriptRoot
         try {
+            Remove-Item -LiteralPath (Join-Path $OutputPath '.env') -Force -ErrorAction SilentlyContinue
             & aspire publish --apphost $appHostProject -o $OutputPath --non-interactive --nologo
             if ($LASTEXITCODE -ne 0) { throw "aspire publish failed with exit code $LASTEXITCODE" }
         } finally { Pop-Location }
