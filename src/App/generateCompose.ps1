@@ -65,5 +65,27 @@ function Publish-ComposeVariant([bool]$Development, [string]$ComposeName, [strin
     }
 }
 
+function New-ExampleEnv {
+    $sourceValues = @{}
+    foreach ($line in Get-Content -LiteralPath $sourceEnv) {
+        if ($line -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$') {
+            $sourceValues[$Matches[1]] = $Matches[2]
+        }
+    }
+
+    $artifactEnv = Join-Path $OutputPath '.env'
+    $exampleEnv = Join-Path $OutputPath 'example.env'
+    $exampleLines = foreach ($line in Get-Content -LiteralPath $artifactEnv) {
+        if (($line -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=') -and $sourceValues.ContainsKey($Matches[1])) {
+            "$($Matches[1])=$($sourceValues[$Matches[1]])"
+        }
+        else {
+            $line
+        }
+    }
+    Set-Content -LiteralPath $exampleEnv -Value $exampleLines
+}
+
 Publish-ComposeVariant $true 'docker-compose-dev.yaml' '.env-dev'
 Publish-ComposeVariant $false 'docker-compose.yaml' '.env'
+New-ExampleEnv

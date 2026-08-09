@@ -43,4 +43,23 @@ publish_variant() {
 
 publish_variant true docker-compose-dev.yaml .env-dev
 publish_variant false docker-compose.yaml .env
-rm -f "$output_path/docker-compose.yaml.tmp" "$output_path/.env"
+
+awk '
+  FILENAME == ARGV[1] {
+    if ($0 ~ /^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*=/) {
+      key=$0; sub(/^[[:space:]]*/, "", key); sub(/=.*/, "", key)
+      value=$0; sub(/^[^=]*=/, "", value)
+      source_values[key]=value
+    }
+    next
+  }
+  {
+    if ($0 ~ /^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*=/) {
+      key=$0; sub(/^[[:space:]]*/, "", key); sub(/=.*/, "", key)
+      if (key in source_values) { print key "=" source_values[key]; next }
+    }
+    print
+  }
+' "$source_env" "$output_path/.env" > "$output_path/example.env"
+
+rm -f "$output_path/docker-compose.yaml.tmp"
