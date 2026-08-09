@@ -27,6 +27,10 @@ public static class StartNats
             {
                 endpoint.Port = Ports.NatsClient;
                 endpoint.TargetPort = 4222;
+                // Docker Desktop publishes proxyless ports on IPv4 loopback. NATS.Net 3's
+                // initial connection does not fall back from localhost's ::1 result to IPv4,
+                // so advertise the address family that Docker is actually listening on.
+                endpoint.TargetHost = "127.0.0.1";
                 endpoint.IsProxied = false;
             }, createIfNotExists: false)
             .WithHttpEndpoint(port: Ports.NatsMonitor, targetPort: 8222, name: "monitor", isProxied: false)
