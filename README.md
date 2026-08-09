@@ -15,7 +15,7 @@ The application is entirely designed to be accessed by REST, so clients can be m
 
 ---
 
-#### AI Notice
+#### AI Notice  
 This application has been vibe coded, though it has been guided to follow an architectural design/structure. Once more of the core features have been implemented,
 the plan is to rework some of the logic to hand-edited code. (I would not be able to develop an application of this size myself if not for AI).
 ---
@@ -30,6 +30,25 @@ the plan is to rework some of the logic to hand-edited code. (I would not be abl
 - Node.js 20+ and [pnpm](https://pnpm.io/) (frontend)
 
 ### Run for development (Aspire)
+
+
+### Debugging with Visual Studio
+Visual Studio 2026/.NET 10 can break on async exceptions that leave user code and are caught by framework code.
+  Cleipnir’s durable-suspension design matches that pattern exactly, so the debugger can be technically accurate by breaking/pausing exectuion but
+  not helpful when trying to debug/run the application.
+
+For each developer, configure this once for the solution:
+
+  1. Debug → Windows → Exception Settings
+  2. Under Common Language Runtime Exceptions, add:
+      - Cleipnir.ResilientFunctions.Domain.Exceptions.Commands.SuspendInvocationException
+      - Cleipnir.ResilientFunctions.Domain.Exceptions.Commands.PostponeInvocationException
+      - optionally Cleipnir.ResilientFunctions.Domain.Exceptions.InvocationSuspendedException
+  3. Ensure Break when thrown is unchecked.
+  4. Right-click the exception row, enable the Additional Actions column if needed, then choose Continue When Unhandled
+     in User Code.
+
+This should help Visual Studio to not pause during the normal flow.
 
 Everything — services, containers, config — is orchestrated by the AppHost:
 
