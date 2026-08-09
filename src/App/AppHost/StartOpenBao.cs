@@ -58,18 +58,6 @@ public static class StartOpenBao
             };
         });
 
-        if (!builder.ExecutionContext.IsRunMode)
-            return new OpenBaoResources(server, dataInit, null);
-
-        var bootstrapDirectory = Path.Combine(sharedStorageRoot, "openbao-bootstrap");
-        Directory.CreateDirectory(bootstrapDirectory);
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(
-                bootstrapDirectory,
-                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        }
-
         var script = """
             set -eu
             until bao operator init -status >/dev/null 2>&1 || [ "$?" -eq 2 ]; do sleep 1; done
@@ -108,7 +96,7 @@ public static class StartOpenBao
             .WithArgs("-c", script)
             .WithEnvironment("BAO_ADDR", server.GetEndpoint("http"))
             .WithEnvironment("OPENBAO_APP_TOKEN", token)
-            .WithBindMount(bootstrapDirectory, "/bootstrap")
+            .WithVolume("openbao-bootstrap", "/bootstrap")
             .WaitFor(server);
 
         return new OpenBaoResources(server, dataInit, bootstrap);
