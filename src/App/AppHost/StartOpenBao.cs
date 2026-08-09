@@ -26,6 +26,8 @@ public static class StartOpenBao
         string sharedStorageRoot)
     {
         var config = Path.Combine(builder.AppHostDirectory, "configs", "openbao", "openbao.hcl");
+        var bootstrapStoragePath = Path.Combine(sharedStorageRoot, "openbao-bootstrap");
+        Directory.CreateDirectory(bootstrapStoragePath);
 
         var dataInit = builder
             .AddContainer("openbao-data-init", "docker.io/library/busybox", "1.37")
@@ -96,7 +98,10 @@ public static class StartOpenBao
             .WithArgs("-c", script)
             .WithEnvironment("BAO_ADDR", server.GetEndpoint("http"))
             .WithEnvironment("OPENBAO_APP_TOKEN", token)
-            .WithVolume("openbao-bootstrap", "/bootstrap")
+            // Keep the generated unseal key beside the persistent OpenBao data. A named
+            // volume here can be recreated independently of openbao-data, leaving an
+            // initialized vault with no way for this helper to unseal it.
+            .WithBindMount(bootstrapStoragePath, "/bootstrap")
             .WaitFor(server);
 
         return new OpenBaoResources(server, dataInit, bootstrap);
