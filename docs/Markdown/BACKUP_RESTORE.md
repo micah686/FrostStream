@@ -195,9 +195,21 @@ exit
 ```
 
 Then run `docker compose up -d`. On every later OpenBao restart, run
-`docker compose exec openbao bao operator unseal` before dependent services become healthy. Aspire
-development automates one-share initialization and unseal using owner-readable files under
-`<storage-root>/openbao-bootstrap`; this convenience workflow is not emitted into Compose.
+`docker compose exec openbao bao operator unseal` before dependent services become healthy.
+
+The manual procedure above applies when you initialize the vault yourself. Both `aspire run` and the
+Compose export otherwise ship an `openbao-bootstrap` helper that performs a one-share
+initialization and unseal automatically. It keeps the generated unseal key and root token in
+`.bootstrap/init.env` **inside the `openbao-data` volume**, so the key can never be discarded
+independently of the storage it unlocks — and so the same behavior works under rootless Podman and
+Docker Desktop on both Linux and Windows without any host path. Read them back with:
+
+```sh
+docker compose exec openbao cat /openbao/data/.bootstrap/init.env
+```
+
+A single unseal share is a development convenience, not a production posture; for production,
+initialize with multiple shares as described above and configure an external auto-unseal provider.
 
 The application token retains the current root-level behavior for compatibility. Replacing it with
 least-privilege policies/AppRole and configuring an external auto-unseal provider are separate

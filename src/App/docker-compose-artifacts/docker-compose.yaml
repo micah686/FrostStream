@@ -168,7 +168,7 @@ services:
     image: "openbao/openbao:2.5.5"
     command:
       - "-c"
-      - "set -eu\nuntil bao operator init -status >/dev/null 2>&1 || [ \"$?\" -eq 2 ]; do sleep 1; done\nif bao operator init -status >/dev/null 2>&1; then\n  if [ ! -f /bootstrap/init.env ]; then\n    echo 'openbao-bootstrap: vault is initialized but /bootstrap/init.env is missing; cannot unseal' >&2\n    exit 1\n  fi\n  echo 'openbao-bootstrap: using existing initialization'\nelse\n  echo 'openbao-bootstrap: initializing development storage'\n  output=\"$(bao operator init -key-shares=1 -key-threshold=1)\"\n  unseal_key=\"$(printf '%s\\n' \"$$output\" | sed -n 's/^Unseal Key 1: //p')\"\n  root_token=\"$(printf '%s\\n' \"$$output\" | sed -n 's/^Initial Root Token: //p')\"\n  umask 077\n  printf 'UNSEAL_KEY=%s\\nROOT_TOKEN=%s\\n' \"$$unseal_key\" \"$$root_token\" > /bootstrap/init.env\nfi\n. /bootstrap/init.env\nif bao status >/dev/null 2>&1; then\n  echo 'openbao-bootstrap: already unsealed'\nelse\n  bao operator unseal \"$$UNSEAL_KEY\" >/dev/null\nfi\nif ! BAO_TOKEN=\"$$OPENBAO_APP_TOKEN\" bao token lookup >/dev/null 2>&1; then\n  BAO_TOKEN=\"$$ROOT_TOKEN\" bao token create -id=\"$$OPENBAO_APP_TOKEN\" -policy=root -no-default-policy >/dev/null\nfi\nif ! BAO_TOKEN=\"$$ROOT_TOKEN\" bao secrets list -format=json | grep -q '\"secret/\"'; then\n  BAO_TOKEN=\"$$ROOT_TOKEN\" bao secrets enable -path=secret kv-v2 >/dev/null\nfi\necho 'openbao-bootstrap: ready'"
+      - "set -eu\nuntil bao operator init -status >/dev/null 2>&1 || [ \"$?\" -eq 2 ]; do sleep 1; done\nif bao operator init -status >/dev/null 2>&1; then\n  if [ ! -f /openbao/data/.bootstrap/init.env ]; then\n    echo 'openbao-bootstrap: vault is initialized but .bootstrap/init.env is missing; cannot unseal' >&2\n    exit 1\n  fi\n  echo 'openbao-bootstrap: using existing initialization'\nelse\n  echo 'openbao-bootstrap: initializing development storage'\n  output=\"$(bao operator init -key-shares=1 -key-threshold=1)\"\n  unseal_key=\"$(printf '%s\\n' \"$$output\" | sed -n 's/^Unseal Key 1: //p')\"\n  root_token=\"$(printf '%s\\n' \"$$output\" | sed -n 's/^Initial Root Token: //p')\"\n  mkdir -p /openbao/data/.bootstrap\n  umask 077\n  printf 'UNSEAL_KEY=%s\\nROOT_TOKEN=%s\\n' \"$$unseal_key\" \"$$root_token\" > /openbao/data/.bootstrap/init.env\nfi\n. /openbao/data/.bootstrap/init.env\nif bao status >/dev/null 2>&1; then\n  echo 'openbao-bootstrap: already unsealed'\nelse\n  bao operator unseal \"$$UNSEAL_KEY\" >/dev/null\nfi\nif ! BAO_TOKEN=\"$$OPENBAO_APP_TOKEN\" bao token lookup >/dev/null 2>&1; then\n  BAO_TOKEN=\"$$ROOT_TOKEN\" bao token create -id=\"$$OPENBAO_APP_TOKEN\" -policy=root -no-default-policy >/dev/null\nfi\nif ! BAO_TOKEN=\"$$ROOT_TOKEN\" bao secrets list -format=json | grep -q '\"secret/\"'; then\n  BAO_TOKEN=\"$$ROOT_TOKEN\" bao secrets enable -path=secret kv-v2 >/dev/null\nfi\necho 'openbao-bootstrap: ready'"
     entrypoint:
       - "/bin/sh"
     environment:
@@ -176,8 +176,8 @@ services:
       OPENBAO_APP_TOKEN: "${OPENBAO_TOKEN}"
     volumes:
       - type: "volume"
-        target: "/bootstrap"
-        source: "openbao-bootstrap"
+        target: "/openbao/data"
+        source: "openbao-data"
         read_only: false
     depends_on:
       openbao:
@@ -385,6 +385,22 @@ services:
       timeout: "5s"
       retries: 12
       start_period: "20s"
+  clickhouse:
+    container_name: froststream-clickhouse
+    image: "clickhouse/clickhouse-server:25.8"
+    environment:
+      CLICKHOUSE_DB: "froststream"
+      CLICKHOUSE_USER: "froststream"
+      CLICKHOUSE_PASSWORD: "${CLICKHOUSE_PASSWORD}"
+    expose:
+      - "8123"
+    volumes:
+      - type: "volume"
+        target: "/var/lib/clickhouse"
+        source: "clickhouse-data"
+        read_only: false
+    networks:
+      - "aspire"
   databridge:
     container_name: froststream-databridge
     image: "localhost/froststream-databridge:latest"
@@ -416,6 +432,11 @@ services:
       SINGLE_USER_MODE: "false"
       PotBroker__Enabled: "true"
       PotBroker__ProviderUrl: "http://pot-provider:4416"
+      LiveChat__Enabled: "true"
+      LiveChat__Url: "http://clickhouse:8123"
+      LiveChat__Database: "froststream"
+      LiveChat__User: "froststream"
+      LiveChat__Password: "${CLICKHOUSE_PASSWORD}"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://aspire-docker-demo-dashboard:18889"
       OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
       OTEL_SERVICE_NAME: "databridge"
@@ -436,6 +457,8 @@ services:
       typesense:
         condition: "service_started"
       pot-provider:
+        condition: "service_started"
+      clickhouse:
         condition: "service_started"
     networks:
       - "aspire"
@@ -478,6 +501,7 @@ services:
       OpenFga__AutoProvision: "true"
       OpenFga__BootstrapOwnerSubjects: ""
       Cast__AdvertisedBaseUrl: "${CAST_ADVERTISED_BASE_URL}"
+      LiveChat__Enabled: "true"
       BackupService__BaseUrl: "http://backupservice:8080"
       Auth__Authority: "http://authentik:9000/application/o/froststream/"
       OpenFga__Endpoint: "http://openfga:8080"
@@ -599,8 +623,6 @@ services:
       OTEL_SERVICE_NAME: "scheduler"
     ports:
       - "25300:8080"
-    expose:
-      - "8080"
     depends_on:
       nats:
         condition: "service_started"
@@ -644,9 +666,9 @@ volumes:
     driver: "local"
   openbao-data:
     driver: "local"
-  openbao-bootstrap:
-    driver: "local"
   typesense-data:
+    driver: "local"
+  clickhouse-data:
     driver: "local"
   froststream-data:
     driver: "local"
