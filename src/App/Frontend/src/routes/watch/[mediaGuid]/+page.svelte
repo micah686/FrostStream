@@ -256,6 +256,20 @@
     }
   }
 
+  async function toggleFocusMode() {
+    if (focusMode) {
+      if (fullscreenTransitioning) return;
+      fullscreenTransitioning = true;
+      try {
+        await resetFullscreenState();
+      } finally {
+        fullscreenTransitioning = false;
+      }
+      return;
+    }
+    await enterFocusMode();
+  }
+
   async function exitFocusModeForPlayerFullscreen() {
     if (!focusMode || fullscreenTransitioning) return;
     fullscreenTransitioning = true;
@@ -377,9 +391,9 @@
       } else if (key === 's') {
         event.preventDefault();
         toggleShuffle();
-      } else if (key === 'c' && chatAvailable && !focusMode) {
+      } else if (key === 't' && chatAvailable) {
         event.preventDefault();
-        void enterFocusMode();
+        void toggleFocusMode();
       }
     };
 
@@ -1119,7 +1133,7 @@
               focusActive={focusMode}
               onToggleRepeat={toggleRepeat}
               onToggleShuffle={toggleShuffle}
-              onToggleFocus={enterFocusMode}
+              onToggleFocus={toggleFocusMode}
               onFocusToFullscreen={exitFocusModeForPlayerFullscreen}
               onProgress={handlePlaybackProgress}
               onEnded={handlePlaybackEnded}

@@ -80,6 +80,7 @@
   let assRendererTrackUrl: string | null = null;
   let captionTracksChanged: (() => void) | null = null;
   let fullscreenClickCleanup: (() => void) | null = null;
+  let completingFocusFullscreenHandoff = false;
 
   onMount(() => {
     void initializePlayer();
@@ -223,10 +224,10 @@
     if (!controls || focusButton || !focusAvailable) return;
 
     const focusControl = createPlaybackModeButton(
-      'Focus mode',
-      'Focus mode - show only video and live chat',
+      'Theater Mode',
+      'Theater Mode - show only video and live chat',
       FOCUS_ICON,
-      'C',
+      'T',
       () => onToggleFocus?.()
     );
     const pipButton = controls.querySelector('media-pip-button');
@@ -249,20 +250,28 @@
     if (!root || fullscreenClickCleanup) return;
 
     const onClick = async (event: Event) => {
-      if (!focusActive) return;
+      if (!focusActive || completingFocusFullscreenHandoff) return;
       const fullscreenControl = event.composedPath().find(
         (node): node is Element => node instanceof Element && node.matches('media-fullscreen-button')
       );
       if (!fullscreenControl) return;
 
       // Video.js would otherwise attempt to fullscreen its skin while the focus container owns
-      // fullscreen. Take ownership through the parent first, then deliberately enter player
-      // fullscreen after that container has been released.
+      // fullscreen. Release focus first, then replay this click through Video.js so its internal
+      // fullscreen state stays aligned with the browser (including its normal exit behavior).
       event.preventDefault();
       event.stopImmediatePropagation();
       await onFocusToFullscreen?.();
       await tick();
-      await skinElement?.requestFullscreen();
+      completingFocusFullscreenHandoff = true;
+      const videoJsControl = fullscreenControl as HTMLElement & {
+        activate?: (state: unknown) => void;
+        mediaState?: { value: unknown };
+      };
+      videoJsControl.activate?.(videoJsControl.mediaState?.value);
+      queueMicrotask(() => {
+        completingFocusFullscreenHandoff = false;
+      });
     };
     root.addEventListener('click', onClick, true);
     fullscreenClickCleanup = () => root.removeEventListener('click', onClick, true);
@@ -298,6 +307,7 @@
   $effect(() => {
     updatePlaybackModeButton(repeatButton, repeatEnabled);
     updatePlaybackModeButton(shuffleButton, shuffleEnabled);
+    updatePlaybackModeButton(focusButton, focusActive);
   });
 
   $effect(() => {
