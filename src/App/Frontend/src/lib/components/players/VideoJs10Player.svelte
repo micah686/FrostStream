@@ -192,14 +192,12 @@
 
     const repeatControl = createPlaybackModeButton(
       'Repeat',
-      'Repeat - keep replaying this video',
       REPEAT_ICON,
       'R',
       () => onToggleRepeat?.()
     );
     const shuffleControl = createPlaybackModeButton(
       'Shuffle',
-      'Shuffle - autoplay picks a random video instead of the next one',
       SHUFFLE_ICON,
       'S',
       () => onToggleShuffle?.()
@@ -225,7 +223,6 @@
 
     const focusControl = createPlaybackModeButton(
       'Theater Mode',
-      'Theater Mode - show only video and live chat',
       FOCUS_ICON,
       'T',
       () => onToggleFocus?.()
@@ -279,17 +276,17 @@
 
   function createPlaybackModeButton(
     label: string,
-    title: string,
     icon: string,
     shortcut: string,
     onClick: () => void
   ): { button: HTMLButtonElement; tooltip: HTMLElement } {
-    const tooltipId = `${label.toLowerCase()}-tooltip`;
+    // `commandfor` resolves an element id. Labels such as "Theater Mode" need a token-safe id
+    // (unlike the single-word Repeat/Shuffle labels) for Video.js's native hover popup to open.
+    const tooltipId = `${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-tooltip`;
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'media-button media-button--subtle media-button--icon';
     button.setAttribute('aria-label', label);
-    button.title = title;
     button.setAttribute('commandfor', tooltipId);
     button.innerHTML = icon;
     button.addEventListener('click', onClick);
