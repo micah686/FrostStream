@@ -1,4 +1,5 @@
 import { fetchChatWindow, type ChatMessage } from '$lib/api/liveChat';
+import { ApiRequestError } from '$lib/api/http';
 
 /** Buffer lead below which a top-up is issued. */
 const PREFETCH_LEAD_MS = 30_000;
@@ -44,6 +45,8 @@ export class ChatPlaybackController {
   /** Guards the whole top-up chain, which spans several awaits with no request in flight between. */
   #prefetching = false;
   #disposed = false;
+  /** A 404 means this deployment cannot serve this replay; never retry it on every video frame. */
+  #unavailable = false;
 
   visible = $state<ChatMessage[]>([]);
   loading = $state(false);
@@ -55,7 +58,7 @@ export class ChatPlaybackController {
 
   /** Feeds the current playback position; safe to call at the player's ~4 Hz progress rate. */
   tick(positionMs: number): void {
-    if (this.#disposed) {
+    if (this.#disposed || this.#unavailable) {
       return;
     }
 
@@ -83,7 +86,7 @@ export class ChatPlaybackController {
 
   /** Refills the buffer around a position, dropping whatever is in flight. */
   async seek(positionMs: number): Promise<void> {
-    if (this.#disposed) {
+    if (this.#disposed || this.#unavailable) {
       return;
     }
 
@@ -112,6 +115,7 @@ export class ChatPlaybackController {
       this.error = null;
     } catch (err) {
       if (!signal.aborted && !this.#disposed) {
+        this.#unavailable = err instanceof ApiRequestError && err.status === 404;
         this.error = describeError(err);
       }
     } finally {
@@ -151,7 +155,7 @@ export class ChatPlaybackController {
    * cycle instead.
    */
   async #prefetch(): Promise<void> {
-    if (this.#prefetching || this.#inFlight || this.#pendingSeekMs !== null || this.#disposed) {
+    if (this.#prefetching || this.#inFlight || this.#pendingSeekMs !== null || this.#disposed || this.#unavailable) {
       return;
     }
 
@@ -205,6 +209,7 @@ export class ChatPlaybackController {
       return true;
     } catch (err) {
       if (!signal.aborted && !this.#disposed) {
+        this.#unavailable = err instanceof ApiRequestError && err.status === 404;
         this.error = describeError(err);
       }
       return false;

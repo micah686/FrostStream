@@ -27,7 +27,7 @@ public static class StartServices
         var webApiEndpointName = hardening.EnableHttps ? "https" : "http";
         var databridge = WireDataBridge(builder, hardening, sharedStorageRoot, nats, postgres, openBaoResources, openBaoToken, typesense, typesenseApiKey, potProvider, clickHouse);
         var webapi = WireWebApi(builder, hardening, sharedStorageRoot, nats, databridge, openBaoResources, openBaoToken, authentik, openFga, backupService, webApiEndpointName, clickHouse);
-        WireWorker(builder, hardening, sharedStorageRoot, nats, openBaoResources, openBaoToken);
+        WireWorker(builder, hardening, sharedStorageRoot, nats, openBaoResources, openBaoToken, clickHouse);
         WireMediaProcessor(builder, nats, databridge, webapi, webApiEndpointName);
         WireScheduler(builder, nats, databridge, backupService);
         //WireAuthTester(builder, hardening, webapi, authentik, webApiEndpointName);
@@ -241,7 +241,8 @@ public static class StartServices
         string sharedStorageRoot,
         IResourceBuilder<NatsServerResource> nats,
         OpenBaoResources openBaoResources,
-        IResourceBuilder<ParameterResource> openBaoToken)
+        IResourceBuilder<ParameterResource> openBaoToken,
+        ClickHouseResources clickHouse)
     {
         var openBao = openBaoResources.Server;
         builder.AddProject<Projects.Worker>("worker")
@@ -250,6 +251,7 @@ public static class StartServices
             .WithEnvironment("OpenBao__Token", openBaoToken)
             .WithEnvironment(ctx => ctx.EnvironmentVariables["FROSTSTREAM_STORAGE_ROOT"] =
                 ctx.ExecutionContext.IsRunMode ? sharedStorageRoot : ContainerStorageRoot)
+            .WithEnvironment("LiveChat__Enabled", clickHouse.Server is not null ? "true" : "false")
             // Start the loopback HTTP→NATS POT shim and inject the bgutil extractor-args. The Worker
             // reaches a provider via the pot-brokers queue group over NATS, not a direct container URL.
             .WithEnvironment("PotProvider__Enabled", "true")

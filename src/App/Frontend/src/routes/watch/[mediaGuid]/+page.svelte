@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { tick } from 'svelte';
   import { goto } from '$app/navigation';
   import { browser } from '$app/environment';
   import {
@@ -203,6 +204,9 @@
   // Sidebar tab; chat is the default for live archives that have an ingested replay.
   let sidebarTab = $state<'chat' | 'upNext'>('upNext');
   const chatAvailable = $derived(detail?.hasLiveChat === true);
+  let focusMode = $state(false);
+  let focusContainer = $state<HTMLElement | undefined>();
+  let fullscreenTransitioning = false;
   // The chat/up-next sidebar sits beside the video column; its bottom shouldn't drop past the
   // action-button row (Mark watched / Cast / Save / Version), so its height is measured from
   // that row rather than guessed with a fixed viewport-relative height.
@@ -231,6 +235,67 @@
   // it resets when the detail for a new media item arrives.
   $effect(() => {
     sidebarTab = chatAvailable ? 'chat' : 'upNext';
+    if (!chatAvailable) focusMode = false;
+  });
+
+  async function enterFocusMode() {
+    if (!chatAvailable || focusMode || fullscreenTransitioning) return;
+    fullscreenTransitioning = true;
+    try {
+      await resetFullscreenState();
+      focusMode = true;
+      sidebarTab = 'chat';
+      await tick();
+      try {
+        await focusContainer?.requestFullscreen();
+      } catch {
+        // The layout still works as a viewport overlay when fullscreen is unavailable or denied.
+      }
+    } finally {
+      fullscreenTransitioning = false;
+    }
+  }
+
+  async function exitFocusModeForPlayerFullscreen() {
+    if (!focusMode || fullscreenTransitioning) return;
+    fullscreenTransitioning = true;
+    try {
+      await resetFullscreenState();
+    } finally {
+      fullscreenTransitioning = false;
+    }
+  }
+
+  /**
+   * Fully releases whichever element currently owns browser fullscreen. Waiting for the actual
+   * event (rather than only the API promise) avoids handing off while Video.js is still restoring
+   * its skin, which can otherwise leave the next owner black or incorrectly styled.
+   */
+  async function resetFullscreenState() {
+    if (document.fullscreenElement) {
+      await new Promise<void>((resolve) => {
+        const onFullscreenChange = () => {
+          if (document.fullscreenElement) return;
+          document.removeEventListener('fullscreenchange', onFullscreenChange);
+          resolve();
+        };
+        document.addEventListener('fullscreenchange', onFullscreenChange);
+        void document.exitFullscreen().catch(() => {
+          document.removeEventListener('fullscreenchange', onFullscreenChange);
+          resolve();
+        });
+      });
+    }
+    focusMode = false;
+    await tick();
+  }
+
+  $effect(() => {
+    const onFullscreenChange = () => {
+      if (focusMode && document.fullscreenElement !== focusContainer) focusMode = false;
+    };
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
   });
   let moreMenuOpen = $state(false);
   let noteMenuOpen = $state(false);
@@ -312,6 +377,9 @@
       } else if (key === 's') {
         event.preventDefault();
         toggleShuffle();
+      } else if (key === 'c' && chatAvailable && !focusMode) {
+        event.preventDefault();
+        void enterFocusMode();
       }
     };
 
@@ -1006,8 +1074,13 @@
   <title>{detail ? `${detail.title} · FrostStream` : 'Watch · FrostStream'}</title>
 </svelte:head>
 
-<div class="grid gap-8 xl:grid-cols-[minmax(0,1fr)_360px]">
-  <section class="min-w-0" aria-label="Video player" bind:this={videoColumnEl}>
+<div
+  class={focusMode
+    ? 'fixed inset-0 z-50 grid min-h-0 grid-cols-1 grid-rows-[minmax(0,1fr)] gap-4 overflow-hidden bg-base-100 p-3 lg:grid-cols-[minmax(0,1fr)_minmax(24rem,32rem)] lg:p-5'
+    : 'grid gap-8 xl:grid-cols-[minmax(0,1fr)_360px]'}
+  bind:this={focusContainer}
+>
+  <section class={focusMode ? 'min-h-0 min-w-0' : 'min-w-0'} aria-label="Video player" bind:this={videoColumnEl}>
     {#if loadError}
       <div
         class="alert alert-error flex aspect-video items-center justify-center p-6 text-sm"
@@ -1017,7 +1090,7 @@
         <span>{loadError}</span>
       </div>
     {:else}
-      <div class="aspect-video overflow-hidden rounded-box bg-black shadow-2xl shadow-black/30">
+      <div class={focusMode ? 'h-full min-h-0 overflow-hidden rounded-box bg-black shadow-2xl shadow-black/30' : 'aspect-video overflow-hidden rounded-box bg-black shadow-2xl shadow-black/30'}>
         {#if !watchStateLoaded || streamChecking}
           <div class="grid h-full w-full place-items-center">
             <span class="loading loading-spinner loading-md"></span>
@@ -1042,8 +1115,12 @@
               autoplay={autoplayEnabled}
               {repeatEnabled}
               {shuffleEnabled}
+              focusAvailable={chatAvailable}
+              focusActive={focusMode}
               onToggleRepeat={toggleRepeat}
               onToggleShuffle={toggleShuffle}
+              onToggleFocus={enterFocusMode}
+              onFocusToFullscreen={exitFocusModeForPlayerFullscreen}
               onProgress={handlePlaybackProgress}
               onEnded={handlePlaybackEnded}
             />
@@ -1052,6 +1129,7 @@
       </div>
     {/if}
 
+    {#if !focusMode}
     {#if detail}
       <h1 class="mt-4 text-xl font-bold tracking-tight text-base-content sm:text-2xl">{detail.title}</h1>
 
@@ -1544,9 +1622,19 @@
         <span class="loading loading-spinner loading-sm"></span>
       </div>
     {/if}
+    {/if}
   </section>
 
-  <aside aria-label={chatAvailable ? 'Chat and up next' : 'Up next'}>
+  <aside class={focusMode ? 'min-h-0' : ''} aria-label={chatAvailable ? 'Chat and up next' : 'Up next'}>
+    {#if focusMode}
+      <ChatReplayPanel
+        {mediaGuid}
+        positionSeconds={livePosition}
+        heightPx={null}
+        fillHeight
+        onSeek={(seconds) => player?.seekTo(seconds)}
+      />
+    {:else}
     {#if chatAvailable}
       <div role="tablist" class="mb-5 grid grid-cols-2 gap-2">
         <button
@@ -1646,6 +1734,7 @@
         <li class="text-sm text-base-content/40">Nothing else on the server yet.</li>
       {/each}
     </ul>
+    {/if}
     {/if}
   </aside>
 </div>

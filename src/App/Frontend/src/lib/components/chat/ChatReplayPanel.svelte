@@ -10,6 +10,7 @@
     mediaGuid,
     positionSeconds,
     heightPx,
+    fillHeight = false,
     onSeek
   }: {
     mediaGuid: string;
@@ -18,6 +19,8 @@
     /** Measured height (in px) so the panel's bottom lines up with the video column's action row.
      * Falls back to a fixed viewport-relative height until the parent has measured it. */
     heightPx?: number | null;
+    /** Use the full height supplied by a parent focus layout. */
+    fillHeight?: boolean;
     onSeek?: (offsetSeconds: number) => void;
   } = $props();
 
@@ -128,7 +131,7 @@
 </script>
 
 <div
-  class={['flex flex-col overflow-hidden rounded-box border-[length:var(--border)] border-base-300/80 bg-base-300', heightPx === null || heightPx === undefined ? 'h-[32rem] xl:h-[calc(100vh-16rem)]' : '']}
+  class={['flex flex-col overflow-hidden rounded-box border-[length:var(--border)] border-base-300/80 bg-base-300', fillHeight ? 'h-full min-h-0' : heightPx === null || heightPx === undefined ? 'h-[32rem] xl:h-[calc(100vh-16rem)]' : '']}
   style={heightPx ? `height: ${heightPx}px;` : undefined}
 >
   <div class="flex items-center gap-2 border-b-[length:var(--border)] border-base-300/80 px-4 py-2.5">
