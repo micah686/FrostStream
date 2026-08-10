@@ -1360,7 +1360,8 @@ public sealed class DownloadFlowV2Repository(
                 DownloadStage.WaitingForWorker => DownloadJobState.DownloadQueued,
                 DownloadStage.MediaAcquire => DownloadJobState.DownloadPending,
                 DownloadStage.PrimaryMediaUpload or DownloadStage.MetaSidecarUpload or DownloadStage.InfoJsonUpload
-                    or DownloadStage.ThumbnailUpload or DownloadStage.CaptionUpload => DownloadJobState.UploadPending,
+                    or DownloadStage.ThumbnailUpload or DownloadStage.CaptionUpload
+                    or DownloadStage.LiveChatUpload => DownloadJobState.UploadPending,
                 DownloadStage.Finalize => DownloadJobState.CommitPending,
                 _ => stageStatus == DownloadStageStatus.Succeeded ? DownloadJobState.Uploaded : DownloadJobState.Queued
             }

@@ -190,6 +190,9 @@ public static class EndpointIds
     public const string MediaCaption = "media.caption";
     public const string MediaCaptions = "media.captions";
     public const string MediaAccountAsset = "media.account-asset";
+    public const string MediaChat = "media.chat";
+    public const string MediaChatEmote = "media.chat-emote";
+    public const string MediaChatBackfill = "media.chat-backfill";
     public const string MediaCastToken = "media.cast-token";
     public const string MediaHlsManifest = "media.hls-manifest";
     public const string MediaHlsSegment = "media.hls-segment";
@@ -413,6 +416,9 @@ public static class EndpointCatalog
         new(EndpointIds.MediaCaption, Bundles.Media),
         new(EndpointIds.MediaCaptions, Bundles.Media),
         new(EndpointIds.MediaAccountAsset, Bundles.Media),
+        new(EndpointIds.MediaChat, Bundles.Media),
+        new(EndpointIds.MediaChatEmote, Bundles.Media),
+        new(EndpointIds.MediaChatBackfill, Bundles.MetadataAdmin),
         new(EndpointIds.MediaCastToken, Bundles.Media),
         new(EndpointIds.MediaHlsManifest, Bundles.Media),
         new(EndpointIds.MediaHlsSegment, Bundles.Media),

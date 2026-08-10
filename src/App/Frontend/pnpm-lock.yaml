@@ -20,6 +20,9 @@ importers:
       jassub:
         specifier: 2.4.1
         version: 2.4.1
+      virtua:
+        specifier: ^0.50.1
+        version: 0.50.1(svelte@5.56.3)
     devDependencies:
       '@sveltejs/adapter-static':
         specifier: ^3.0.10
@@ -752,6 +755,32 @@ packages:
   undici-types@7.24.6:
     resolution: {integrity: sha512-WRNW+sJgj5OBN4/0JpHFqtqzhpbnV0GuB+OozA9gCL7a993SmU+1JBZCzLNxYsbMfIeDL+lTsphD5jN5N+n0zg==}
 
+  virtua@0.50.1:
+    resolution: {integrity: sha512-rNue/Cv/0Z14Yg9Pj6Xx9QaQPKhmlNWkx7Y7SytRnhojxvZ0z3GhCWr4QH2+tJm5mYL2vm4GudZPPt0i1PLzSA==}
+    peerDependencies:
+      '@angular/common': '>=20.0.0'
+      '@angular/core': '>=20.0.0'
+      react: '>=16.14.0'
+      react-dom: '>=16.14.0'
+      solid-js: '>=1.0'
+      svelte: '>=5.0'
+      vue: '>=3.2'
+    peerDependenciesMeta:
+      '@angular/common':
+        optional: true
+      '@angular/core':
+        optional: true
+      react:
+        optional: true
+      react-dom:
+        optional: true
+      solid-js:
+        optional: true
+      svelte:
+        optional: true
+      vue:
+        optional: true
+
   vite@8.0.16:
     resolution: {integrity: sha512-h9bXPmJichP5fLmVQo3PyaGSDE2n3aPuomeAlVRm0JLmt4rY6zmPKd59HYI4LNW8oTK7tlTsuC7l/m7awx9Jcw==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -1427,6 +1456,10 @@ snapshots:
   typescript@6.0.3: {}
 
   undici-types@7.24.6: {}
+
+  virtua@0.50.1(svelte@5.56.3):
+    optionalDependencies:
+      svelte: 5.56.3
 
   vite@8.0.16(@types/node@25.9.2)(jiti@2.7.0):
     dependencies:

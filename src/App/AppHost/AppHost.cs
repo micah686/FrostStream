@@ -59,15 +59,16 @@ var typesenseApiKey = builder.AddParameter(
 
 var nats      = StartNats.Start(builder);
 var postgres  = StartPostgres.Start(builder, hardening, sharedStorageRoot);
-var openBaoResources = StartOpenBao.Start(builder, openBaoToken, sharedStorageRoot);
+var openBaoResources = StartOpenBao.Start(builder, openBaoToken);
 var openBao   = openBaoResources.Server;
 var typesense = StartTypesense.Start(builder, typesenseApiKey);
 var authentik = StartAuthentik.Start(builder, postgres, hardening);
 var openFga   = StartOpenFga.Start(builder, postgres, hardening);
 var potProvider = StartPotProvider.Start(builder);
 var backupService = StartBackupService.Start(builder, sharedStorageRoot, nats, postgres, openBaoResources, openBaoToken);
+var clickHouse = StartClickHouse.Start(builder);
 
-StartServices.Wire(builder, hardening, sharedStorageRoot, nats, postgres, openBaoResources, openBaoToken, typesense, typesenseApiKey, authentik, openFga, potProvider, backupService);
+StartServices.Wire(builder, hardening, sharedStorageRoot, nats, postgres, openBaoResources, openBaoToken, typesense, typesenseApiKey, authentik, openFga, potProvider, backupService, clickHouse);
 
 builder.Build().Run();
 

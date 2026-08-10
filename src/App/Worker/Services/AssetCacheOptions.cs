@@ -23,5 +23,6 @@ public sealed class AssetCacheOptions
 public enum AssetKind
 {
     Avatar = 0,
-    Banner = 1
+    Banner = 1,
+    Emote = 2
 }

@@ -18,6 +18,8 @@
     '<svg class="media-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m16 10 3-3m0 0-3-3m3 3H5v3m3 4-3 3m0 0 3 3m-3-3h14v-3" /></svg>';
   const SHUFFLE_ICON =
     '<svg class="media-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.484 9.166 15 7h5m0 0-3-3m3 3-3 3M4 17h4l1.577-2.253M4 7h4l7 10h5m0 0-3 3m3-3-3-3" /></svg>';
+  const FOCUS_ICON =
+    '<svg class="media-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10"/><rect width="20" height="14" x="2" y="3" rx="2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>';
 
   let {
     src,
@@ -28,8 +30,12 @@
     autoplay = false,
     repeatEnabled = false,
     shuffleEnabled = false,
+    focusAvailable = false,
+    focusActive = false,
     onToggleRepeat = undefined,
     onToggleShuffle = undefined,
+    onToggleFocus = undefined,
+    onFocusToFullscreen = undefined,
     onProgress = undefined,
     onEnded = undefined
   }: {
@@ -46,10 +52,17 @@
     repeatEnabled?: boolean;
     /** Current state of the watch page's shuffle mode. */
     shuffleEnabled?: boolean;
+    /** Shows the media-and-chat focus control when this archive has a chat replay. */
+    focusAvailable?: boolean;
+    /** Whether the watch page is currently in media-and-chat focus mode. */
+    focusActive?: boolean;
     /** Toggles the watch page's repeat mode. */
     onToggleRepeat?: () => void;
     /** Toggles the watch page's shuffle mode. */
     onToggleShuffle?: () => void;
+    onToggleFocus?: () => void;
+    /** Releases a parent-owned focus fullscreen before this player claims normal fullscreen. */
+    onFocusToFullscreen?: () => Promise<void>;
     onProgress?: (positionSeconds: number, durationSeconds: number | null) => void;
     onEnded?: () => void;
   } = $props();
@@ -61,23 +74,58 @@
   let videoElement = $state<HTMLVideoElement | null>(null);
   let repeatButton: HTMLButtonElement | null = null;
   let shuffleButton: HTMLButtonElement | null = null;
+  let focusButton: HTMLButtonElement | null = null;
+  let fullscreenButton: HTMLElement | null = null;
   let assRenderer: JASSUB | null = null;
   let assRendererTrackUrl: string | null = null;
   let captionTracksChanged: (() => void) | null = null;
+  let fullscreenClickCleanup: (() => void) | null = null;
+  let completingFocusFullscreenHandoff = false;
 
   onMount(() => {
     void initializePlayer();
     return () => {
+      stopProgressLoop();
       captionTracksChanged?.();
+      fullscreenClickCleanup?.();
       void destroyAssRenderer();
     };
   });
+
+  // `timeupdate` only fires ~4 times a second, so consumers that render against the playhead (the
+  // live chat replay) would advance in ~250ms clumps. While playing, report every frame instead.
+  let progressFrame: number | null = null;
+
+  function startProgressLoop() {
+    if (progressFrame !== null) {
+      return;
+    }
+    const step = () => {
+      const video = videoElement;
+      if (!video || video.paused || video.ended) {
+        progressFrame = null;
+        return;
+      }
+      onProgress?.(video.currentTime, videoDuration(video));
+      progressFrame = requestAnimationFrame(step);
+    };
+    progressFrame = requestAnimationFrame(step);
+  }
+
+  function stopProgressLoop() {
+    if (progressFrame !== null) {
+      cancelAnimationFrame(progressFrame);
+      progressFrame = null;
+    }
+  }
 
   async function initializePlayer() {
     await Promise.all([import('@videojs/html/video/player'), import('@videojs/html/video/skin')]);
     ready = true;
     await tick();
     addPlaybackModeControls();
+    addFocusModeControl();
+    interceptFocusFullscreenHandoff();
     bindCaptionMenu();
   }
 
@@ -144,14 +192,12 @@
 
     const repeatControl = createPlaybackModeButton(
       'Repeat',
-      'Repeat - keep replaying this video',
       REPEAT_ICON,
       'R',
       () => onToggleRepeat?.()
     );
     const shuffleControl = createPlaybackModeButton(
       'Shuffle',
-      'Shuffle - autoplay picks a random video instead of the next one',
       SHUFFLE_ICON,
       'S',
       () => onToggleShuffle?.()
@@ -169,19 +215,78 @@
     shuffleButton = shuffleControl.button;
   }
 
+  function addFocusModeControl() {
+    // PiP and fullscreen live in the trailing control group. Keeping focus there makes it the
+    // second-to-last control: immediately after PiP and immediately before fullscreen.
+    const controls = skinElement?.shadowRoot?.querySelector('.media-button-group:last-child');
+    if (!controls || focusButton || !focusAvailable) return;
+
+    const focusControl = createPlaybackModeButton(
+      'Theater Mode',
+      FOCUS_ICON,
+      'T',
+      () => onToggleFocus?.()
+    );
+    const pipButton = controls.querySelector('media-pip-button');
+    fullscreenButton = controls.querySelector('media-fullscreen-button');
+    if (pipButton) {
+      pipButton.insertAdjacentElement('afterend', focusControl.button);
+      focusControl.button.insertAdjacentElement('afterend', focusControl.tooltip);
+    } else if (fullscreenButton) {
+      fullscreenButton.insertAdjacentElement('beforebegin', focusControl.button);
+      focusControl.button.insertAdjacentElement('afterend', focusControl.tooltip);
+    } else {
+      controls.append(focusControl.button, focusControl.tooltip);
+    }
+    focusControl.tooltip.setAttribute('aria-hidden', 'true');
+    focusButton = focusControl.button;
+  }
+
+  function interceptFocusFullscreenHandoff() {
+    const root = skinElement?.shadowRoot;
+    if (!root || fullscreenClickCleanup) return;
+
+    const onClick = async (event: Event) => {
+      if (!focusActive || completingFocusFullscreenHandoff) return;
+      const fullscreenControl = event.composedPath().find(
+        (node): node is Element => node instanceof Element && node.matches('media-fullscreen-button')
+      );
+      if (!fullscreenControl) return;
+
+      // Video.js would otherwise attempt to fullscreen its skin while the focus container owns
+      // fullscreen. Release focus first, then replay this click through Video.js so its internal
+      // fullscreen state stays aligned with the browser (including its normal exit behavior).
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      await onFocusToFullscreen?.();
+      await tick();
+      completingFocusFullscreenHandoff = true;
+      const videoJsControl = fullscreenControl as HTMLElement & {
+        activate?: (state: unknown) => void;
+        mediaState?: { value: unknown };
+      };
+      videoJsControl.activate?.(videoJsControl.mediaState?.value);
+      queueMicrotask(() => {
+        completingFocusFullscreenHandoff = false;
+      });
+    };
+    root.addEventListener('click', onClick, true);
+    fullscreenClickCleanup = () => root.removeEventListener('click', onClick, true);
+  }
+
   function createPlaybackModeButton(
     label: string,
-    title: string,
     icon: string,
     shortcut: string,
     onClick: () => void
   ): { button: HTMLButtonElement; tooltip: HTMLElement } {
-    const tooltipId = `${label.toLowerCase()}-tooltip`;
+    // `commandfor` resolves an element id. Labels such as "Theater Mode" need a token-safe id
+    // (unlike the single-word Repeat/Shuffle labels) for Video.js's native hover popup to open.
+    const tooltipId = `${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-tooltip`;
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'media-button media-button--subtle media-button--icon';
     button.setAttribute('aria-label', label);
-    button.title = title;
     button.setAttribute('commandfor', tooltipId);
     button.innerHTML = icon;
     button.addEventListener('click', onClick);
@@ -199,6 +304,11 @@
   $effect(() => {
     updatePlaybackModeButton(repeatButton, repeatEnabled);
     updatePlaybackModeButton(shuffleButton, shuffleEnabled);
+    updatePlaybackModeButton(focusButton, focusActive);
+  });
+
+  $effect(() => {
+    if (ready) addFocusModeControl();
   });
 
   function updatePlaybackModeButton(button: HTMLButtonElement | null, active: boolean) {
@@ -263,8 +373,16 @@
         class="h-full w-full"
         onloadedmetadata={applyStartTime}
         ontimeupdate={reportProgress}
-        onpause={reportProgress}
-        onended={() => onEnded?.()}
+        onplaying={startProgressLoop}
+        onseeked={reportProgress}
+        onpause={(event) => {
+          stopProgressLoop();
+          reportProgress(event);
+        }}
+        onended={() => {
+          stopProgressLoop();
+          onEnded?.();
+        }}
       >
         {#each tracks as track (track.src)}
           <track

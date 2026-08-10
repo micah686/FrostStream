@@ -91,6 +91,8 @@ public sealed class MetadataReadService(NpgsqlDataSource dataSource) : IMetadata
                          ORDER BY c.two_digit_language_code, c.caption_type::text
                      ) caption_rows),
                     '[]'::json)::text AS caption_languages_json,
+                EXISTS (SELECT 1 FROM metadata.media_live_chat lc
+                        WHERE lc.media_guid = mm.media_guid) AS has_live_chat,
                 s.series_name,
                 s.season_count,
                 s.season_number,
@@ -156,6 +158,7 @@ public sealed class MetadataReadService(NpgsqlDataSource dataSource) : IMetadata
             CommentCount = GetNullableInt64(reader, "comment_count"),
             AgeLimit = GetNullableInt32(reader, "age_limit"),
             WasLive = GetBoolean(reader, "was_live"),
+            HasLiveChat = GetBoolean(reader, "has_live_chat"),
             Availability = GetNullableString(reader, "availability"),
             Location = GetNullableString(reader, "location"),
             WebpageUrl = GetNullableString(reader, "webpage_url"),

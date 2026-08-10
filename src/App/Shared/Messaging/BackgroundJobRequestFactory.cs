@@ -7,6 +7,7 @@ public static class BackgroundJobRequestFactory
     public const string ManualScheduleKey = "manual";
     public const string ManualSearchReindexTaskType = "manual_search_reindex";
     public const string ManualDatabaseMaintenanceReindexTaskType = "manual_database_maintenance_reindex";
+    public const string ManualLiveChatBackfillTaskType = "manual_live_chat_backfill";
 
     /// <summary>
     /// True for the sentinel keys API endpoints stamp on a request they raise by hand (<c>manual</c>,
@@ -49,6 +50,31 @@ public static class BackgroundJobRequestFactory
             DueWindowUtc = dueWindowUtc,
             IdempotencyKey = idempotencyKey,
             OccurredAt = occurredAt
+        };
+    }
+
+    public static LiveChatBackfillRequested CreateLiveChatBackfill(
+        string scheduleKey,
+        string taskType,
+        Instant dueWindowUtc,
+        Instant occurredAt,
+        Guid? targetMediaGuid = null,
+        bool force = false)
+    {
+        // Targeted runs carry the media GUID in the key so re-running one video is not swallowed
+        // as a duplicate of the library-wide sweep in the same window.
+        var idempotencyKey = targetMediaGuid is { } guid
+            ? $"{BuildIdempotencyKey(taskType, scheduleKey, dueWindowUtc)}:{guid:N}"
+            : BuildIdempotencyKey(taskType, scheduleKey, dueWindowUtc);
+        return new LiveChatBackfillRequested
+        {
+            ScheduleKey = scheduleKey,
+            TaskType = taskType,
+            DueWindowUtc = dueWindowUtc,
+            IdempotencyKey = idempotencyKey,
+            OccurredAt = occurredAt,
+            TargetMediaGuid = targetMediaGuid,
+            Force = force
         };
     }
 

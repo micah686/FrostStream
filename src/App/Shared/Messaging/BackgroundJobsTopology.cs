@@ -19,6 +19,8 @@ public sealed class BackgroundJobsTopology : ITopologySource
     public const string WorkerChannelScanFullConsumer = "worker-channel-scan-full";
     public const string WorkerChannelAssetRefreshConsumer = "worker-channel-asset-refresh";
     public const string MediaProcessorAudioRenditionConsumer = "mediaprocessor-audio-rendition";
+    public const string LiveChatIngestConsumer = "databridge-livechat-ingest";
+    public const string LiveChatBackfillConsumer = "databridge-livechat-backfill";
     public const string MediaProcessorStreamRenditionConsumer = "mediaprocessor-stream-rendition";
     public const string MediaProcessorThumbnailGenerationConsumer = "mediaprocessor-thumbnail-generation";
 
@@ -43,6 +45,8 @@ public sealed class BackgroundJobsTopology : ITopologySource
                 BackgroundJobSubjects.DatabaseMaintenanceReindexRequest,
                 BackgroundJobSubjects.SearchReindexRequest,
                 BackgroundJobSubjects.AudioRenditionEncodeRequest,
+                BackgroundJobSubjects.LiveChatIngestRequest,
+                BackgroundJobSubjects.LiveChatBackfillRequest,
                 BackgroundJobSubjects.StreamRenditionEncodeRequest,
                 BackgroundJobSubjects.MediaThumbnailGenerationRequest
             ],
@@ -63,6 +67,12 @@ public sealed class BackgroundJobsTopology : ITopologySource
         yield return DataBridgeConsumer(DatabaseMaintenanceConsumer, BackgroundJobSubjects.DatabaseMaintenanceRequest, TimeSpan.FromHours(2), maxDeliver: 3);
         yield return DataBridgeConsumer(DatabaseMaintenanceReindexConsumer, BackgroundJobSubjects.DatabaseMaintenanceReindexRequest, TimeSpan.FromHours(24), maxDeliver: 2);
         yield return DataBridgeConsumer(DatabaseStaleMediaCleanupConsumer, BackgroundJobSubjects.DatabaseStaleMediaCleanupRequest, TimeSpan.FromMinutes(15), maxDeliver: 5);
+        // Chat ingests stream millions of rows into ClickHouse in one message; the window is
+        // generous and the handler is idempotent (delete-first), so redelivery is safe.
+        yield return DataBridgeConsumer(LiveChatIngestConsumer, BackgroundJobSubjects.LiveChatIngestRequest, TimeSpan.FromMinutes(30), maxDeliver: 3);
+        // The backfill sweep probes storage for every live archive without a chat marker, so it
+        // can run long on a large library; it only enqueues ingests, it does not perform them.
+        yield return DataBridgeConsumer(LiveChatBackfillConsumer, BackgroundJobSubjects.LiveChatBackfillRequest, TimeSpan.FromHours(2), maxDeliver: 2);
         yield return WorkerConsumer(WorkerChannelScanRefreshConsumer, BackgroundJobSubjects.ChannelScanRefreshRequest, TimeSpan.FromMinutes(30), maxDeliver: 5);
         yield return WorkerConsumer(WorkerChannelScanFullConsumer, BackgroundJobSubjects.ChannelScanFullRequest, TimeSpan.FromHours(2), maxDeliver: 3);
         yield return WorkerConsumer(WorkerChannelAssetRefreshConsumer, BackgroundJobSubjects.ChannelAssetRefreshRequest, TimeSpan.FromMinutes(30), maxDeliver: 3);

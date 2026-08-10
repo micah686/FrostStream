@@ -204,8 +204,13 @@ public sealed class MediaDeleteExecutorTests
 
         public Instant Now { get; } = Instant.FromUtc(2026, 6, 1, 0, 0);
 
+        // Empty container: DeleteLiveChatAsync resolves LiveChatIngestService optionally and no-ops
+        // when it isn't registered, matching a deployment with live chat replay disabled.
+        private static readonly IServiceScopeFactory EmptyScopeFactory =
+            new ServiceCollection().BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
+
         public MediaDeleteExecutor CreateExecutor(IMessageBus messageBus, ITypesenseIndexService searchIndex)
-            => new(DataSource, messageBus, searchIndex, NullLogger<MediaDeleteExecutor>.Instance);
+            => new(DataSource, messageBus, searchIndex, EmptyScopeFactory, NullLogger<MediaDeleteExecutor>.Instance);
 
         private string ConnectionString =>
             new NpgsqlConnectionStringBuilder

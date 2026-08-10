@@ -144,6 +144,7 @@ Notes:
 
 - **Browser playback**: Playback media via the web (desktop or mobile)
 - **Server-side casting**: cast to remote devices. FCast and browser-based Chromecast should work for now, dedicated Chromecasting will come later
+- **Live chat replay** (optional): archived YouTube live chat replayed in sync with the video, including Super Chats, membership messages, and custom channel emotes. See [Live chat replay](#live-chat-replay)
 - **Playlists, notes, notifications, statistics** — the usual library comforts
 
 ### 🔐 Auth & Operations
@@ -186,7 +187,7 @@ Notes:
 | **BackupService**  | pgBackRest backups/verification plus a standalone token-gated restore wizard              |
 | **MediaProcessor** | Stub — reserved for future transcoding work                                               |
 
-**Infrastructure containers:** NATS (JetStream), PostgreSQL, Typesense, OpenBao, bgutil pot-provider, and in multi-user mode Authentik + OpenFGA. Dev tooling: DbGate (DB browser), nats-ui, OpenFGA Studio.
+**Infrastructure containers:** NATS (JetStream), PostgreSQL, Typesense, OpenBao, bgutil pot-provider, in multi-user mode Authentik + OpenFGA, and with `LIVE_CHAT_ENABLED` ClickHouse (live-chat replay storage). Dev tooling: DbGate (DB browser), nats-ui, OpenFGA Studio.
 
 ### Port scheme
 
@@ -195,9 +196,36 @@ All host ports live in one registry ([`src/App/AppHost/Ports.cs`](src/App/AppHos
 | Range                | Meaning                                                                            | Ports                                                                                                                                                                                      |
 | -------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **25xy0** (external) | Host-published; browser/host-facing                                                | frontend `25000` · authentik `25100` · webapi `25200` (https `25210`) · scheduler `25300` · openbao `25400` · postgres `25500` · dbgate `25600` · nats-ui `25700` · openfga-studio `25800` · restore-console `25900` |
-| **240xy** (internal) | Container-to-container only; bound on localhost in dev, never published by compose | typesense `24010` · pot-provider `24020` · openfga `24030` · nats `24040`–`24042` · backupservice `24050`                                                                                 |
+| **240xy** (internal) | Container-to-container only; bound on localhost in dev, never published by compose | typesense `24010` · pot-provider `24020` · openfga `24030` · nats `24040`–`24042` · backupservice `24050` · clickhouse `24060`                                                            |
 
 External ports are overridable via `PORT_*` variables in the generated Aspire dev env.
+
+### Live chat replay
+
+Live chat replay is **opt-in**: it adds a ClickHouse container, which most deployments do not need. Chat volumes are large enough (a long stream can produce well over a million messages) that PostgreSQL is the wrong store for them.
+
+Turn it on in `src/App/AppHost/aspire-development.env`:
+
+```bash
+LIVE_CHAT_ENABLED="true"
+CLICKHOUSE_PASSWORD="…"   # required to be strong when FROSTSTREAM_PRODUCTION=true
+```
+
+Then restart `aspire run`, or regenerate the compose artifacts and `docker compose up -d`.
+
+How it fits together:
+
+- **Capture** — yt-dlp writes `live_chat.json` when a download profile enables the *Include live chat* option. The Worker archives that sidecar next to the video **whether or not this feature is enabled**, and downloads every custom emote it references into content-addressed blob storage, so replays keep working after the source CDN URLs rot.
+- **Ingest** — DataBridge streams the sidecar into ClickHouse in batches. Identical messages (the thousands of "welcome" lines a stream collects) are stored once and referenced by hash. Re-ingesting a video replaces its rows, so retries are safe.
+- **Serve** — the watch page's sidebar gains a *Chat* tab that reveals messages in step with playback, refetches around the playhead on seek, and lets you click a timestamp to jump.
+
+Because sidecars are archived regardless, enabling ClickHouse later can recover history for everything already in the library:
+
+```bash
+curl -X POST 'http://localhost:25200/api/media/watch/chat/backfill'
+```
+
+That queues a sweep of archived live streams with no ingested chat. Add `?mediaGuid=<guid>` for a single video, or `?force=true` to re-ingest ones that already have chat.
 
 ---
 

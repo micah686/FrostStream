@@ -22,12 +22,9 @@ public static class StartOpenBao
 
     public static OpenBaoResources Start(
         IDistributedApplicationBuilder builder,
-        IResourceBuilder<ParameterResource> token,
-        string sharedStorageRoot)
+        IResourceBuilder<ParameterResource> token)
     {
         var config = Path.Combine(builder.AppHostDirectory, "configs", "openbao", "openbao.hcl");
-        var bootstrapStoragePath = Path.Combine(sharedStorageRoot, "openbao-bootstrap");
-        Directory.CreateDirectory(bootstrapStoragePath);
 
         var dataInit = builder
             .AddContainer("openbao-data-init", "docker.io/library/busybox", "1.37")
@@ -64,8 +61,8 @@ public static class StartOpenBao
             set -eu
             until bao operator init -status >/dev/null 2>&1 || [ "$?" -eq 2 ]; do sleep 1; done
             if bao operator init -status >/dev/null 2>&1; then
-              if [ ! -f /bootstrap/init.env ]; then
-                echo 'openbao-bootstrap: vault is initialized but /bootstrap/init.env is missing; cannot unseal' >&2
+              if [ ! -f /openbao/data/.bootstrap/init.env ]; then
+                echo 'openbao-bootstrap: vault is initialized but .bootstrap/init.env is missing; cannot unseal' >&2
                 exit 1
               fi
               echo 'openbao-bootstrap: using existing initialization'
@@ -74,10 +71,11 @@ public static class StartOpenBao
               output="$(bao operator init -key-shares=1 -key-threshold=1)"
               unseal_key="$(printf '%s\n' "$output" | sed -n 's/^Unseal Key 1: //p')"
               root_token="$(printf '%s\n' "$output" | sed -n 's/^Initial Root Token: //p')"
+              mkdir -p /openbao/data/.bootstrap
               umask 077
-              printf 'UNSEAL_KEY=%s\nROOT_TOKEN=%s\n' "$unseal_key" "$root_token" > /bootstrap/init.env
+              printf 'UNSEAL_KEY=%s\nROOT_TOKEN=%s\n' "$unseal_key" "$root_token" > /openbao/data/.bootstrap/init.env
             fi
-            . /bootstrap/init.env
+            . /openbao/data/.bootstrap/init.env
             if bao status >/dev/null 2>&1; then
               echo 'openbao-bootstrap: already unsealed'
             else
@@ -98,10 +96,13 @@ public static class StartOpenBao
             .WithArgs("-c", script)
             .WithEnvironment("BAO_ADDR", server.GetEndpoint("http"))
             .WithEnvironment("OPENBAO_APP_TOKEN", token)
-            // Keep the generated unseal key beside the persistent OpenBao data. A named
-            // volume here can be recreated independently of openbao-data, leaving an
-            // initialized vault with no way for this helper to unseal it.
-            .WithBindMount(bootstrapStoragePath, "/bootstrap")
+            // The unseal key lives *inside* the vault's own data volume (.bootstrap/init.env), so
+            // the key and the storage it unlocks can never be recreated independently — losing one
+            // without the other would leave an initialized vault nobody can unseal. Using the
+            // volume rather than a host bind mount also keeps this working identically under
+            // rootless Podman and Docker Desktop on both Linux and Windows, and keeps host paths
+            // out of the Compose export.
+            .WithVolume(DataVolumeName, "/openbao/data")
             .WaitFor(server);
 
         return new OpenBaoResources(server, dataInit, bootstrap);

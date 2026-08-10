@@ -12,6 +12,8 @@ public static class BackgroundJobSubjects
     public const string DatabaseMaintenanceReindexRequest = "fs.cleanup.database.reindex.request";
     public const string SearchReindexRequest = "fs.index.search.rebuild.request";
     public const string AudioRenditionEncodeRequest = "fs.media.audio-rendition.encode.request";
+    public const string LiveChatIngestRequest = "fs.livechat.ingest.request";
+    public const string LiveChatBackfillRequest = "fs.livechat.backfill.request";
     public const string StreamRenditionEncodeRequest = "fs.media.stream-rendition.encode.request";
     public const string MediaThumbnailGenerationRequest = "fs.media.thumbnail-generation.request";
 }

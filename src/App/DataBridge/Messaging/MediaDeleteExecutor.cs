@@ -1,5 +1,7 @@
+using DataBridge.LiveChat;
 using DataBridge.Search;
 using Conduit.NATS;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using Shared.Messaging;
@@ -25,17 +27,20 @@ public sealed class MediaDeleteExecutor
     private readonly NpgsqlDataSource _dataSource;
     private readonly IMessageBus _messageBus;
     private readonly ITypesenseIndexService _searchIndex;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<MediaDeleteExecutor> _logger;
 
     public MediaDeleteExecutor(
         NpgsqlDataSource dataSource,
         IMessageBus messageBus,
         ITypesenseIndexService searchIndex,
+        IServiceScopeFactory scopeFactory,
         ILogger<MediaDeleteExecutor> logger)
     {
         _dataSource = dataSource;
         _messageBus = messageBus;
         _searchIndex = searchIndex;
+        _scopeFactory = scopeFactory;
         _logger = logger;
     }
 
@@ -115,6 +120,7 @@ public sealed class MediaDeleteExecutor
 
         await DeleteMediaRowAsync(mediaGuid, cancellationToken);
         await DeleteFromSearchIndexAsync(mediaGuid, cancellationToken);
+        await DeleteLiveChatAsync(mediaGuid, cancellationToken);
 
         _logger.LogInformation(
             "Deleted media {MediaGuid} entirely ({FilesDeleted} files).",
@@ -327,6 +333,36 @@ public sealed class MediaDeleteExecutor
         await _searchIndex.DeleteMediaByGuidAsync(id, cancellationToken);
         await _searchIndex.DeleteCommentsByMediaGuidAsync(id, cancellationToken);
         await _searchIndex.DeleteCaptionsByMediaGuidAsync(id, cancellationToken);
+    }
+
+    /// <summary>
+    /// Best-effort removal of the media's chat replay (ClickHouse rows + Postgres marker).
+    /// Resolves the ingest service lazily — it is only registered when live chat is enabled —
+    /// and never fails the delete: orphaned chat rows are invisible without their media.
+    /// </summary>
+    private async Task DeleteLiveChatAsync(Guid mediaGuid, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            if (scope.ServiceProvider.GetService<LiveChatIngestService>() is { } liveChat)
+            {
+                await liveChat.DeleteForMediaAsync(mediaGuid, cancellationToken);
+                return;
+            }
+
+            // Feature disabled: still clear the Postgres marker so HasLiveChat stays truthful.
+            await using var command = _dataSource.CreateCommand(
+                "DELETE FROM metadata.media_live_chat WHERE media_guid = @id;");
+            command.Parameters.AddWithValue("id", mediaGuid);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Could not remove the live chat replay for deleted media {MediaGuid}; continuing.",
+                mediaGuid);
+        }
     }
 
     private static MediaDeleteResponse Failure(string errorCode, string errorMessage, int filesDeleted = 0)

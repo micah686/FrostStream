@@ -58,11 +58,14 @@
   let history = $state<DownloadQueueHistoryEntry[] | 'loading' | 'error' | undefined>(undefined);
   let mediaGuid = $state<string | null | undefined>(undefined);
   let liveMessages = $state<{ text: string; at: number }[]>([]);
+  let logEl = $state<HTMLDivElement | undefined>();
+  let followLog = $state(true);
 
   const job = $derived(row.job);
   const provider = $derived(providerFor(job.sourceUrl));
   const percent = $derived(percentFor(row));
   let previousStatus = $state<string | undefined>(undefined);
+  let previousRunKey = $state<string | undefined>(undefined);
 
   $effect(() => {
     if (isDone(job.status) && mediaGuid === undefined) {
@@ -85,6 +88,37 @@
       void refreshHistory(job.jobId);
     }
   });
+
+  // A new run reuses the same job row, so the log has to be reset explicitly or it would
+  // keep showing the previous run's history and live lines mixed in with the new ones.
+  $effect(() => {
+    const runKey = `${job.runId ?? ''}:${job.runNumber}`;
+    if (previousRunKey !== undefined && runKey !== previousRunKey) {
+      liveMessages = [];
+      followLog = true;
+      history = expanded ? 'loading' : undefined;
+      if (expanded) {
+        void refreshHistory(job.jobId);
+      }
+    }
+    previousRunKey = runKey;
+  });
+
+  $effect(() => {
+    void history;
+    void liveMessages;
+    if (followLog && logEl) {
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+  });
+
+  function handleLogScroll(): void {
+    if (!logEl) {
+      return;
+    }
+    const distanceFromBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight;
+    followLog = distanceFromBottom < 24;
+  }
 
   async function loadMediaGuid(jobId: string): Promise<void> {
     try {
@@ -610,7 +644,11 @@
         </span>
       </div>
 
-      <div class="mt-3 max-h-48 overflow-y-auto rounded-field border-[length:var(--border)] border-base-300 bg-base-200 p-3 font-mono text-xs text-base-content">
+      <div
+        bind:this={logEl}
+        onscroll={handleLogScroll}
+        class="mt-3 max-h-48 overflow-y-auto rounded-field border-[length:var(--border)] border-base-300 bg-base-200 p-3 font-mono text-xs text-base-content"
+      >
         {#if job.failureMessage}
           <p class="flex items-start gap-1.5 whitespace-pre-wrap break-words text-error">
             <CircleAlert class="mt-0.5 h-3.5 w-3.5 shrink-0" />

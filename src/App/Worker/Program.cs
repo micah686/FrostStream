@@ -132,6 +132,7 @@ class Program
         builder.Services.AddOptions<AssetCacheOptions>()
             .Bind(builder.Configuration.GetSection(AssetCacheOptions.SectionName));
         builder.Services.AddSingleton<AssetCacheWriter>();
+        builder.Services.AddSingleton<LiveChatSidecarProcessor>();
         builder.Services.AddHttpClient("asset-cache", (sp, client) =>
         {
             var assetOptions = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AssetCacheOptions>>().Value;

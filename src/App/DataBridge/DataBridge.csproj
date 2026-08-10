@@ -15,6 +15,10 @@
     </ItemGroup>
 
     <ItemGroup>
+      <EmbeddedResource Include="LiveChat\Schema\*.sql" />
+    </ItemGroup>
+
+    <ItemGroup>
       <Content Include="appsettings.json">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       </Content>
@@ -24,6 +28,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <PackageReference Include="ClickHouse.Driver" Version="1.3.0" />
       <PackageReference Include="Cleipnir.Flows" Version="4.2.5" />
       <PackageReference Include="Cleipnir.Flows.PostgresSql" Version="4.2.5" />
       <PackageReference Include="FluentMigrator" Version="8.0.1" />

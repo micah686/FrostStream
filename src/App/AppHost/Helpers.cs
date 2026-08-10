@@ -133,4 +133,7 @@ public static class Helpers
 
     public static bool IsSingleUserMode => AppHostHardening.IsTruthy(Environment.GetEnvironmentVariable("SINGLE_USER_MODE"));
 
+    internal static bool LiveChatEnabled
+        => AppHostHardening.IsTruthy(Environment.GetEnvironmentVariable("LIVE_CHAT_ENABLED"));
+
 }
