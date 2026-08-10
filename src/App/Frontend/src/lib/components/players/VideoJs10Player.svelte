@@ -217,7 +217,9 @@
   }
 
   function addFocusModeControl() {
-    const controls = skinElement?.shadowRoot?.querySelector('.media-button-group');
+    // PiP and fullscreen live in the trailing control group. Keeping focus there makes it the
+    // second-to-last control: immediately after PiP and immediately before fullscreen.
+    const controls = skinElement?.shadowRoot?.querySelector('.media-button-group:last-child');
     if (!controls || focusButton || !focusAvailable) return;
 
     const focusControl = createPlaybackModeButton(
@@ -296,7 +298,6 @@
   $effect(() => {
     updatePlaybackModeButton(repeatButton, repeatEnabled);
     updatePlaybackModeButton(shuffleButton, shuffleEnabled);
-    updatePlaybackModeButton(focusButton, focusActive);
   });
 
   $effect(() => {
