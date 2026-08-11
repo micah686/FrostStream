@@ -107,6 +107,8 @@ Notes:
 - OpenBao now uses persistent integrated storage. A new Compose deployment must be initialized and
   unsealed before the remaining services can start; follow
   [`docs/Markdown/BACKUP_RESTORE.md`](docs/Markdown/BACKUP_RESTORE.md#first-compose-start-openbao).
+  Its recovery material is stored in the ignored `./openbao-bootstrap/init.env` host directory by
+  default; back up that file separately and securely.
 
 - The artifacts are **generated** — never hand-edit the yaml. Regenerate after AppHost changes:
   

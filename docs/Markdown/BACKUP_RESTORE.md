@@ -199,14 +199,37 @@ Then run `docker compose up -d`. On every later OpenBao restart, run
 
 The manual procedure above applies when you initialize the vault yourself. Both `aspire run` and the
 Compose export otherwise ship an `openbao-bootstrap` helper that performs a one-share
-initialization and unseal automatically. It keeps the generated unseal key and root token in
-`.bootstrap/init.env` **inside the `openbao-data` volume**, so the key can never be discarded
-independently of the storage it unlocks — and so the same behavior works under rootless Podman and
-Docker Desktop on both Linux and Windows without any host path. Read them back with:
+initialization and unseal automatically. It writes the generated unseal key and root token to the
+host-mounted `openbao-bootstrap/init.env` file instead of the `openbao-data` volume. That makes the
+recovery material independently backupable; it is also highly sensitive and must never be committed
+or included in ordinary unencrypted backups.
+
+For Compose, the default directory is beside `docker-compose.yaml`. Create it before the first
+start and restrict it to the account that runs Compose. Linux/rootless Podman users should use mode
+`0700`; on Windows/Docker Desktop, keep it in a user-owned NTFS directory with restrictive ACLs.
+Override the location with `FROSTSTREAM_OPENBAO_BOOTSTRAP_ROOT` (a path usable by the container
+runtime) when needed. Back up the resulting file to encrypted, off-host storage:
 
 ```sh
-docker compose exec openbao cat /openbao/data/.bootstrap/init.env
+mkdir -p openbao-bootstrap
+chmod 700 openbao-bootstrap
+docker compose up -d openbao openbao-bootstrap
+cp openbao-bootstrap/init.env /secure-backup-location/openbao-init.env
 ```
+
+In PowerShell on Windows, create the directory before `docker compose up`; retain access only for
+the account that runs Docker Desktop:
+
+```powershell
+New-Item -ItemType Directory -Force .\openbao-bootstrap
+icacls .\openbao-bootstrap /inheritance:r /grant:r "${env:USERNAME}:(OI)(CI)F"
+Copy-Item .\openbao-bootstrap\init.env <encrypted-backup-location>
+```
+
+The helper automatically migrates a pre-existing `.bootstrap/init.env` out of `openbao-data` on its
+first run and removes the volume-resident copy only after the host file has been written. If an
+initialized vault has neither file, it stops with a recovery error rather than reinitializing the
+vault. Restore `init.env` from its secure backup, then start `openbao-bootstrap` again.
 
 A single unseal share is a development convenience, not a production posture; for production,
 initialize with multiple shares as described above and configure an external auto-unseal provider.
