@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { CircleStar } from '@lucide/svelte';
+  import { UserStar } from '@lucide/svelte';
   import {
     argbToCss,
     formatOffset,
@@ -71,12 +71,8 @@
           {#each message.badges as badge (badge)}
             {@const membership = parseMembershipBadge(badge)}
             {#if membership}
-              <span
-                class="mr-1 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full align-middle text-black"
-                style={`background-color: ${membership.color};`}
-                title={badge}
-              >
-                <CircleStar class="h-3.5 w-3.5" />
+              <span class="mr-1 inline-flex h-3.5 w-3.5 shrink-0 align-middle" title={badge}>
+                <UserStar class="h-3.5 w-3.5" style={`color: ${membership.color};`} />
               </span>
             {:else}
               <span class="badge badge-ghost badge-xs mr-1 align-middle" title={badge}>
