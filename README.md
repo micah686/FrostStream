@@ -11,6 +11,7 @@ The application is entirely designed to be accessed by REST, so clients can be m
 
 > [!WARNING]  
 > This application is under heavy development right now. Data loss may occur, and features/capabilities may change
+> Please do not use it as a single source for media, as data structures may change until features stabilize.
 
 ---
 
@@ -69,6 +70,9 @@ When using Aspire, you also need these prerequesites:
 - [.NET 10 ASP.NET Core](https://dotnet.microsoft.com/)
 - [Aspire CLI](https://learn.microsoft.com/dotnet/aspire/) (optional — `dotnet run` on the AppHost works too)
 
+> [!WARNING]  
+> The application will need several minutes on the first run to apply the necessary migrations/create the database tables.
+> This will take the longest as it applies the authentik migrations, as well as the migrations to postgres
 
 ---  
 
