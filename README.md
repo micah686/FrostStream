@@ -14,10 +14,11 @@ The application is entirely designed to be accessed by REST, so clients can be m
 
 ---
 
-### AI Notice 
+### AI Notice
 This application has been vibe coded, though it has been guided to follow an architectural design/structure.  
 Once more of the core features have been implemented,the plan is to rework some of the logic to hand-edited code.  
-(I would not be able to develop an application of this size myself if not for AI).  
+(I would not be able to develop an application of this size by myself otherwise).   
+
 ---
 
 ## Features
@@ -61,7 +62,7 @@ Once more of the core features have been implemented,the plan is to rework some 
 - Docker or Podman (infrastructure containers)
 
 When using Aspire, you also need these prerequesites:
-- Node.js 20+ and [pnpm](https://pnpm.io/) (frontend)
+- Node.js 20+
 - [pnpm](https://pnpm.io/)
 - [.NET 10 SDK](https://dotnet.microsoft.com/)
 - [.NET 10 Runtime](https://dotnet.microsoft.com/)
@@ -213,6 +214,7 @@ curl -X POST 'http://localhost:25200/api/media/watch/chat/backfill'
 ```
 
 That queues a sweep of archived live streams with no ingested chat. Add `?mediaGuid=<guid>` for a single video, or `?force=true` to re-ingest ones that already have chat.
+
 ---
 
 ## Repository Layout
