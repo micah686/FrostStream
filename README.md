@@ -15,6 +15,8 @@ The application is entirely designed to be accessed by REST, so clients can be m
 
 ---
 
+![image info](./screenshots/home.png)
+
 ### AI Notice
 This application has been vibe coded, though it has been guided to follow an architectural design/structure.  
 Once more of the core features have been implemented,the plan is to rework some of the logic to hand-edited code.  
