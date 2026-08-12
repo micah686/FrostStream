@@ -2,7 +2,6 @@ namespace AppHost;
 
 public sealed record OpenBaoResources(
     IResourceBuilder<ContainerResource> Server,
-    IResourceBuilder<ContainerResource> DataInit,
     IResourceBuilder<ContainerResource>? DevelopmentBootstrap);
 
 public static class OpenBaoResourceExtensions
@@ -17,23 +16,18 @@ public static class OpenBaoResourceExtensions
 public static class StartOpenBao
 {
     private const string DataVolumeName = "openbao-data";
-    // The official OpenBao image runs the server as uid 100, gid 1000.
-    private const string OpenBaoUserAndGroup = "100:1000";
+    // /openbao/file is a path the official image owns and fixes up before it drops privileges.
+    // Mounting the Raft volume there lets the image handle first-use volume ownership itself.
+    private const string DataDirectory = "/openbao/file";
+    private const string BootstrapDirectory = "/bootstrap";
 
     public static OpenBaoResources Start(
         IDistributedApplicationBuilder builder,
+        string sharedStorageRoot,
         IResourceBuilder<ParameterResource> token)
     {
         var config = Path.Combine(builder.AppHostDirectory, "configs", "openbao", "openbao.hcl");
-
-        var dataInit = builder
-            .AddContainer("openbao-data-init", "docker.io/library/busybox", "1.37")
-            .WithEntrypoint("/bin/sh")
-            // Keep the volume non-empty after initialization. Rootless Podman can otherwise
-            // initialize the still-empty mountpoint again for the OpenBao image, replacing the
-            // ownership set here with root:root before OpenBao drops to uid 100/gid 1000.
-            .WithArgs("-c", $"mkdir -p /openbao/data && touch /openbao/data/.volume-initialized && chown -R {OpenBaoUserAndGroup} /openbao/data && chmod -R u+rwX,g+rwX /openbao/data")
-            .WithVolume(DataVolumeName, "/openbao/data");
+        var bootstrapRoot = OpenBaoBootstrapPaths.HostRoot(sharedStorageRoot);
 
         var server = builder
             .AddContainer("openbao", "openbao/openbao", "2.5.5")
@@ -41,9 +35,8 @@ public static class StartOpenBao
             .WithExternalHttpEndpoints()
             .WithEnvironment("OPENBAO_APP_TOKEN", token)
             .WithArgs("server", "-config=/openbao/openbao.hcl")
-            .WithVolume(DataVolumeName, "/openbao/data")
-            .WithPortableBindMount(config, "../AppHost/configs/openbao/openbao.hcl", "/openbao/openbao.hcl", isReadOnly: true)
-            .WaitForCompletion(dataInit);
+            .WithVolume(DataVolumeName, DataDirectory)
+            .WithPortableBindMount(config, "../AppHost/configs/openbao/openbao.hcl", "/openbao/openbao.hcl", isReadOnly: true);
 
         server.PublishAsDockerComposeService((_, service) =>
         {
@@ -59,11 +52,36 @@ public static class StartOpenBao
 
         var script = """
             set -eu
+
+            bootstrap_file="/bootstrap/init.env"
+            legacy_bootstrap_file="/openbao/file/.bootstrap/init.env"
+
+            write_bootstrap_file() {
+              temp_file="${bootstrap_file}.tmp"
+              umask 077
+              printf 'UNSEAL_KEY=%s\nROOT_TOKEN=%s\n' "$1" "$2" > "$temp_file"
+              mv "$temp_file" "$bootstrap_file"
+            }
+
             until bao operator init -status >/dev/null 2>&1 || [ "$?" -eq 2 ]; do sleep 1; done
             if bao operator init -status >/dev/null 2>&1; then
-              if [ ! -f /openbao/data/.bootstrap/init.env ]; then
-                echo 'openbao-bootstrap: vault is initialized but .bootstrap/init.env is missing; cannot unseal' >&2
-                exit 1
+              if [ ! -f "$bootstrap_file" ]; then
+                if [ -f "$legacy_bootstrap_file" ]; then
+                  echo 'openbao-bootstrap: migrating recovery material from the data volume'
+                  temp_file="${bootstrap_file}.tmp"
+                  umask 077
+                  cat "$legacy_bootstrap_file" > "$temp_file"
+                  mv "$temp_file" "$bootstrap_file"
+                  rm -f "$legacy_bootstrap_file"
+                  rmdir /openbao/file/.bootstrap 2>/dev/null || true
+                else
+                  echo 'openbao-bootstrap: vault is initialized but /bootstrap/init.env is missing; restore it from backup before starting dependent services' >&2
+                  exit 1
+                fi
+              elif [ -f "$legacy_bootstrap_file" ]; then
+                echo 'openbao-bootstrap: removing legacy recovery material from the data volume'
+                rm -f "$legacy_bootstrap_file"
+                rmdir /openbao/file/.bootstrap 2>/dev/null || true
               fi
               echo 'openbao-bootstrap: using existing initialization'
             else
@@ -71,11 +89,9 @@ public static class StartOpenBao
               output="$(bao operator init -key-shares=1 -key-threshold=1)"
               unseal_key="$(printf '%s\n' "$output" | sed -n 's/^Unseal Key 1: //p')"
               root_token="$(printf '%s\n' "$output" | sed -n 's/^Initial Root Token: //p')"
-              mkdir -p /openbao/data/.bootstrap
-              umask 077
-              printf 'UNSEAL_KEY=%s\nROOT_TOKEN=%s\n' "$unseal_key" "$root_token" > /openbao/data/.bootstrap/init.env
+              write_bootstrap_file "$unseal_key" "$root_token"
             fi
-            . /openbao/data/.bootstrap/init.env
+            . "$bootstrap_file"
             if bao status >/dev/null 2>&1; then
               echo 'openbao-bootstrap: already unsealed'
             else
@@ -96,15 +112,16 @@ public static class StartOpenBao
             .WithArgs("-c", script)
             .WithEnvironment("BAO_ADDR", server.GetEndpoint("http"))
             .WithEnvironment("OPENBAO_APP_TOKEN", token)
-            // The unseal key lives *inside* the vault's own data volume (.bootstrap/init.env), so
-            // the key and the storage it unlocks can never be recreated independently — losing one
-            // without the other would leave an initialized vault nobody can unseal. Using the
-            // volume rather than a host bind mount also keeps this working identically under
-            // rootless Podman and Docker Desktop on both Linux and Windows, and keeps host paths
-            // out of the Compose export.
-            .WithVolume(DataVolumeName, "/openbao/data")
+            // The recovery material belongs on a host bind mount so it can be backed up separately
+            // from the Raft volume. During the migration release this container also sees the data
+            // volume only to move a pre-existing .bootstrap/init.env out of it and delete the copy.
+            .WithPortableBindMount(
+                bootstrapRoot,
+                "${FROSTSTREAM_OPENBAO_BOOTSTRAP_ROOT:-./openbao-bootstrap}",
+                BootstrapDirectory)
+            .WithVolume(DataVolumeName, DataDirectory)
             .WaitFor(server);
 
-        return new OpenBaoResources(server, dataInit, bootstrap);
+        return new OpenBaoResources(server, bootstrap);
     }
 }

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { CircleStar } from '@lucide/svelte';
+  import { BadgeCheck, CheckCheck, Shield, UserStar } from '@lucide/svelte';
   import {
     argbToCss,
     formatOffset,
@@ -20,11 +20,24 @@
   const isPaid = $derived(message.type === 'superchat' || message.type === 'sticker');
   const isMembership = $derived(message.type === 'membership');
   const isSystem = $derived(message.type === 'system');
+  const isOwner = $derived(message.badges.some(isOwnerBadge));
   const headerStyle = $derived(buildStyle(argbToCss(message.headerColor)));
   const bodyStyle = $derived(buildStyle(argbToCss(message.bodyColor)));
 
   function buildStyle(color: string | null): string | undefined {
     return color ? `background-color: ${color};` : undefined;
+  }
+
+  function isOwnerBadge(badge: string): boolean {
+    return badge.trim().toLowerCase() === 'owner';
+  }
+
+  function isVerifiedBadge(badge: string): boolean {
+    return badge.trim().toLowerCase() === 'verified';
+  }
+
+  function isModeratorBadge(badge: string): boolean {
+    return badge.trim().toLowerCase() === 'moderator';
   }
 </script>
 
@@ -71,13 +84,25 @@
           {#each message.badges as badge (badge)}
             {@const membership = parseMembershipBadge(badge)}
             {#if membership}
+              <span class="mr-1 inline-flex h-3.5 w-3.5 shrink-0 align-middle" title={badge}>
+                <UserStar class="h-3.5 w-3.5" style={`color: ${membership.color};`} />
+              </span>
+            {:else if isVerifiedBadge(badge)}
               <span
-                class="mr-1 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full align-middle text-black"
-                style={`background-color: ${membership.color};`}
+                class="mr-1 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full align-middle bg-accent text-accent-content"
                 title={badge}
               >
-                <CircleStar class="h-3.5 w-3.5" />
+                <CheckCheck class="h-2.5 w-2.5" />
               </span>
+            {:else if isModeratorBadge(badge)}
+              <span
+                class="mr-1 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full align-middle bg-secondary text-secondary-content"
+                title={badge}
+              >
+                <Shield class="h-2.5 w-2.5" />
+              </span>
+            {:else if isOwnerBadge(badge)}
+              <!-- The owner marker is rendered around the author name below. -->
             {:else}
               <span class="badge badge-ghost badge-xs mr-1 align-middle" title={badge}>
                 {badge.slice(0, 1)}
@@ -85,7 +110,12 @@
             {/if}
           {/each}
         {/if}
-        <span class="mr-1 font-semibold opacity-80">{message.authorName}</span>
+        <span
+          class={isOwner
+            ? 'badge badge-primary badge-sm mr-1 align-middle font-semibold text-primary-content'
+            : 'mr-1 font-semibold opacity-80'}
+          title={isOwner ? 'Owner' : undefined}
+        >{#if isOwner}<BadgeCheck class="h-3.5 w-3.5" />{/if}{message.authorName}</span>
         <ChatFragments fragments={message.fragments} />
       </div>
     </div>

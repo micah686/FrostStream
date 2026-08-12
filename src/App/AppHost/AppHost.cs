@@ -59,7 +59,7 @@ var typesenseApiKey = builder.AddParameter(
 
 var nats      = StartNats.Start(builder);
 var postgres  = StartPostgres.Start(builder, hardening, sharedStorageRoot);
-var openBaoResources = StartOpenBao.Start(builder, openBaoToken);
+var openBaoResources = StartOpenBao.Start(builder, sharedStorageRoot, openBaoToken);
 var openBao   = openBaoResources.Server;
 var typesense = StartTypesense.Start(builder, typesenseApiKey);
 var authentik = StartAuthentik.Start(builder, postgres, hardening);

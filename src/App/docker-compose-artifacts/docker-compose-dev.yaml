@@ -164,21 +164,6 @@ services:
         condition: "service_healthy"
     networks:
       - "aspire"
-  openbao-data-init:
-    container_name: froststream-openbao-data-init
-    image: "docker.io/library/busybox:1.37"
-    command:
-      - "-c"
-      - "mkdir -p /openbao/data && touch /openbao/data/.volume-initialized && chown -R 100:1000 /openbao/data && chmod -R u+rwX,g+rwX /openbao/data"
-    entrypoint:
-      - "/bin/sh"
-    volumes:
-      - type: "volume"
-        target: "/openbao/data"
-        source: "openbao-data"
-        read_only: false
-    networks:
-      - "aspire"
   openbao:
     container_name: froststream-openbao
     image: "openbao/openbao:2.5.5"
@@ -191,16 +176,13 @@ services:
       - "25400:8200"
     volumes:
       - type: "volume"
-        target: "/openbao/data"
+        target: "/openbao/file"
         source: "openbao-data"
         read_only: false
       - type: "bind"
         target: "/openbao/openbao.hcl"
         source: "../AppHost/configs/openbao/openbao.hcl"
         read_only: true
-    depends_on:
-      openbao-data-init:
-        condition: "service_completed_successfully"
     networks:
       - "aspire"
     healthcheck:
@@ -217,7 +199,7 @@ services:
     image: "openbao/openbao:2.5.5"
     command:
       - "-c"
-      - "set -eu\nuntil bao operator init -status >/dev/null 2>&1 || [ \"$?\" -eq 2 ]; do sleep 1; done\nif bao operator init -status >/dev/null 2>&1; then\n  if [ ! -f /openbao/data/.bootstrap/init.env ]; then\n    echo 'openbao-bootstrap: vault is initialized but .bootstrap/init.env is missing; cannot unseal' >&2\n    exit 1\n  fi\n  echo 'openbao-bootstrap: using existing initialization'\nelse\n  echo 'openbao-bootstrap: initializing development storage'\n  output=\"$(bao operator init -key-shares=1 -key-threshold=1)\"\n  unseal_key=\"$(printf '%s\\n' \"$$output\" | sed -n 's/^Unseal Key 1: //p')\"\n  root_token=\"$(printf '%s\\n' \"$$output\" | sed -n 's/^Initial Root Token: //p')\"\n  mkdir -p /openbao/data/.bootstrap\n  umask 077\n  printf 'UNSEAL_KEY=%s\\nROOT_TOKEN=%s\\n' \"$$unseal_key\" \"$$root_token\" > /openbao/data/.bootstrap/init.env\nfi\n. /openbao/data/.bootstrap/init.env\nif bao status >/dev/null 2>&1; then\n  echo 'openbao-bootstrap: already unsealed'\nelse\n  bao operator unseal \"$$UNSEAL_KEY\" >/dev/null\nfi\nif ! BAO_TOKEN=\"$$OPENBAO_APP_TOKEN\" bao token lookup >/dev/null 2>&1; then\n  BAO_TOKEN=\"$$ROOT_TOKEN\" bao token create -id=\"$$OPENBAO_APP_TOKEN\" -policy=root -no-default-policy >/dev/null\nfi\nif ! BAO_TOKEN=\"$$ROOT_TOKEN\" bao secrets list -format=json | grep -q '\"secret/\"'; then\n  BAO_TOKEN=\"$$ROOT_TOKEN\" bao secrets enable -path=secret kv-v2 >/dev/null\nfi\necho 'openbao-bootstrap: ready'"
+      - "set -eu\n\nbootstrap_file=\"/bootstrap/init.env\"\nlegacy_bootstrap_file=\"/openbao/file/.bootstrap/init.env\"\n\nwrite_bootstrap_file() {\n  temp_file=\"$${bootstrap_file}.tmp\"\n  umask 077\n  printf 'UNSEAL_KEY=%s\\nROOT_TOKEN=%s\\n' \"$1\" \"$2\" > \"$$temp_file\"\n  mv \"$$temp_file\" \"$$bootstrap_file\"\n}\n\nuntil bao operator init -status >/dev/null 2>&1 || [ \"$?\" -eq 2 ]; do sleep 1; done\nif bao operator init -status >/dev/null 2>&1; then\n  if [ ! -f \"$$bootstrap_file\" ]; then\n    if [ -f \"$$legacy_bootstrap_file\" ]; then\n      echo 'openbao-bootstrap: migrating recovery material from the data volume'\n      temp_file=\"$${bootstrap_file}.tmp\"\n      umask 077\n      cat \"$$legacy_bootstrap_file\" > \"$$temp_file\"\n      mv \"$$temp_file\" \"$$bootstrap_file\"\n      rm -f \"$$legacy_bootstrap_file\"\n      rmdir /openbao/file/.bootstrap 2>/dev/null || true\n    else\n      echo 'openbao-bootstrap: vault is initialized but /bootstrap/init.env is missing; restore it from backup before starting dependent services' >&2\n      exit 1\n    fi\n  elif [ -f \"$$legacy_bootstrap_file\" ]; then\n    echo 'openbao-bootstrap: removing legacy recovery material from the data volume'\n    rm -f \"$$legacy_bootstrap_file\"\n    rmdir /openbao/file/.bootstrap 2>/dev/null || true\n  fi\n  echo 'openbao-bootstrap: using existing initialization'\nelse\n  echo 'openbao-bootstrap: initializing development storage'\n  output=\"$(bao operator init -key-shares=1 -key-threshold=1)\"\n  unseal_key=\"$(printf '%s\\n' \"$$output\" | sed -n 's/^Unseal Key 1: //p')\"\n  root_token=\"$(printf '%s\\n' \"$$output\" | sed -n 's/^Initial Root Token: //p')\"\n  write_bootstrap_file \"$$unseal_key\" \"$$root_token\"\nfi\n. \"$$bootstrap_file\"\nif bao status >/dev/null 2>&1; then\n  echo 'openbao-bootstrap: already unsealed'\nelse\n  bao operator unseal \"$$UNSEAL_KEY\" >/dev/null\nfi\nif ! BAO_TOKEN=\"$$OPENBAO_APP_TOKEN\" bao token lookup >/dev/null 2>&1; then\n  BAO_TOKEN=\"$$ROOT_TOKEN\" bao token create -id=\"$$OPENBAO_APP_TOKEN\" -policy=root -no-default-policy >/dev/null\nfi\nif ! BAO_TOKEN=\"$$ROOT_TOKEN\" bao secrets list -format=json | grep -q '\"secret/\"'; then\n  BAO_TOKEN=\"$$ROOT_TOKEN\" bao secrets enable -path=secret kv-v2 >/dev/null\nfi\necho 'openbao-bootstrap: ready'"
     entrypoint:
       - "/bin/sh"
     environment:
@@ -225,9 +207,12 @@ services:
       OPENBAO_APP_TOKEN: "${OPENBAO_TOKEN}"
     volumes:
       - type: "volume"
-        target: "/openbao/data"
+        target: "/openbao/file"
         source: "openbao-data"
         read_only: false
+      - type: "bind"
+        target: "/bootstrap"
+        source: "${FROSTSTREAM_OPENBAO_BOOTSTRAP_ROOT:-./openbao-bootstrap}"
     depends_on:
       openbao:
         condition: "service_started"

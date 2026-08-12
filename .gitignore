@@ -60,6 +60,9 @@ src/.idea/**
 *.vtt
 /data/
 
+# OpenBao recovery material (unseal key and initial root token)
+src/App/docker-compose-artifacts/openbao-bootstrap/
+
 src/VideoServeLocalTest/data/*
 
 # SvelteKit frontend output
