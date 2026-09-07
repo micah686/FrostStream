@@ -8,13 +8,13 @@
 
     <ItemGroup>
         <PackageReference Include="FCastSenderSDKDotnet" Version="0.0.7" />
-        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.10" />
-        <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.10" />
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.11" />
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.11" />
         <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
         <PackageReference Include="Microsoft.OpenApi" Version="2.7.5" />
         <PackageReference Include="NodaTime.Serialization.SystemTextJson" Version="1.4.0" />
-        <PackageReference Include="Quartz" Version="3.18.2" />
-        <PackageReference Include="Scalar.AspNetCore" Version="2.16.16" />
+        <PackageReference Include="Quartz" Version="4.0.0" />
+        <PackageReference Include="Scalar.AspNetCore" Version="2.17.2" />
         <PackageReference Include="Sharpcaster" Version="3.0.0" />
     </ItemGroup>
 

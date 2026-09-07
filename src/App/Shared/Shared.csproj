@@ -7,27 +7,27 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="FluentStorage" Version="8.0.12" />
-      <PackageReference Include="FluentStorage.AWS" Version="8.0.10" />
-      <PackageReference Include="FluentStorage.Azure.Blobs" Version="8.0.10" />
-      <PackageReference Include="FluentStorage.FTP" Version="8.0.11" />
-      <PackageReference Include="FluentStorage.GCP" Version="8.0.10" />
+      <PackageReference Include="FluentStorage" Version="8.0.20" />
+      <PackageReference Include="FluentStorage.AWS" Version="8.0.20" />
+      <PackageReference Include="FluentStorage.Azure.Blobs" Version="8.0.17" />
+      <PackageReference Include="FluentStorage.FTP" Version="8.0.15" />
+      <PackageReference Include="FluentStorage.GCP" Version="8.0.14" />
       <PackageReference Include="FluentStorage.Minio" Version="8.0.10" />
-      <PackageReference Include="FluentStorage.SFTP" Version="8.0.11" />
+      <PackageReference Include="FluentStorage.SFTP" Version="8.0.16" />
       <!-- FluentStorage.SFTP 8.0.11 references vulnerable SSH.NET 2025.1.0. Pin the
            fixed release until FluentStorage updates its transitive dependency. -->
       <PackageReference Include="SSH.NET" Version="2026.0.0" />
-      <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.10" />
-      <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.10" />
-      <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
-      <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.10" />
-      <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
-      <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.10" />
+      <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.11" />
+      <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.11" />
+      <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.11" />
+      <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.11" />
+      <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
+      <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.11" />
       <PackageReference Include="NodaTime" Version="3.3.3" />
       <!-- Version pin, not a code dependency. FluentStorage.FTP/SFTP depend on Polly 8.4.0, which
            asks for Polly.Core 8.4.0; this lifts it to 8.7.0. No source file here uses Polly. -->
       <PackageReference Include="Polly.Core" Version="8.7.0" />
-      <PackageReference Include="System.IO.Hashing" Version="10.0.10" />
+      <PackageReference Include="System.IO.Hashing" Version="10.0.11" />
       <PackageReference Include="VaultSharp" Version="1.17.5.1" />
     </ItemGroup>
 

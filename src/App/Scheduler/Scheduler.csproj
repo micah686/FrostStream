@@ -9,7 +9,7 @@
 
     <ItemGroup>
       <PackageReference Include="CrystalQuartz.AspNetCore" Version="7.3.0" />
-      <PackageReference Include="Quartz.Extensions.Hosting" Version="3.18.2" />
+      <PackageReference Include="Quartz.Extensions.Hosting" Version="3.20.1" />
     </ItemGroup>
 
     <ItemGroup>
