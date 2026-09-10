@@ -6,6 +6,7 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
+COPY Directory.Packages.props ./
 # Project files first so the restore layer caches until dependencies change.
 COPY App/Shared/Shared.csproj App/Shared/
 COPY App/StorageExtensions/StorageExtensions.csproj App/StorageExtensions/

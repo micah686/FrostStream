@@ -1,0 +1,85 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.5.3" />
+    <PackageVersion Include="Aspire.Hosting.Docker" Version="13.5.3" />
+    <PackageVersion Include="Aspire.Hosting.JavaScript" Version="13.5.3" />
+    <PackageVersion Include="Aspire.Hosting.Nats" Version="13.5.3" />
+    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.5.3" />
+    <PackageVersion Include="Azure.Storage.Blobs" Version="12.29.2" />
+    <PackageVersion Include="Cleipnir.Flows" Version="4.2.5" />
+    <PackageVersion Include="Cleipnir.Flows.PostgresSql" Version="4.2.5" />
+    <PackageVersion Include="ClickHouse.Driver" Version="1.4.0" />
+    <PackageVersion Include="CommunityToolkit.Aspire.Hosting.DbGate" Version="13.5.0" />
+    <PackageVersion Include="CommunityToolkit.Aspire.Hosting.PostgreSQL.Extensions" Version="13.5.0" />
+    <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+    <PackageVersion Include="CrystalQuartz.AspNetCore" Version="7.3.0" />
+    <PackageVersion Include="DotNetEnv" Version="3.2.0" />
+    <PackageVersion Include="EFCore.NamingConventions" Version="10.0.1" />
+    <PackageVersion Include="FCastSenderSDKDotnet" Version="0.0.7" />
+    <PackageVersion Include="FluentMigrator" Version="8.0.1" />
+    <PackageVersion Include="FluentMigrator.Runner.Core" Version="8.0.1" />
+    <PackageVersion Include="FluentMigrator.Runner.Postgres" Version="8.0.1" />
+    <PackageVersion Include="FluentStorage" Version="8.0.20" />
+    <PackageVersion Include="FluentStorage.AWS" Version="8.0.20" />
+    <PackageVersion Include="FluentStorage.Azure.Blobs" Version="8.0.17" />
+    <PackageVersion Include="FluentStorage.FTP" Version="8.0.15" />
+    <PackageVersion Include="FluentStorage.GCP" Version="8.0.14" />
+    <PackageVersion Include="FluentStorage.Minio" Version="8.0.10" />
+    <PackageVersion Include="FluentStorage.SFTP" Version="8.0.16" />
+    <PackageVersion Include="Google.Cloud.Storage.V1" Version="4.15.0" />
+    <PackageVersion Include="LTRData.DiscUtils.Nfs" Version="1.0.88" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.9.0" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.9.0" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageVersion Include="Microsoft.OpenApi" Version="2.9.0" />
+    <PackageVersion Include="Microsoft.Testing.Extensions.Retry" Version="2.4.0" />
+    <PackageVersion Include="NATS.Net" Version="3.2.0" />
+    <PackageVersion Include="NodaTime" Version="3.3.3" />
+    <PackageVersion Include="NodaTime.Serialization.SystemTextJson" Version="1.4.0" />
+    <PackageVersion Include="Npgsql.DependencyInjection" Version="10.0.3" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime" Version="10.0.3" />
+    <PackageVersion Include="NSubstitute" Version="6.2.0" />
+    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.18.0" />
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.18.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.18.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.18.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.18.0" />
+    <PackageVersion Include="Polly.Core" Version="8.7.0" />
+    <PackageVersion Include="Quartz" Version="4.0.0" />
+    <PackageVersion Include="Quartz.Extensions.Hosting" Version="3.20.1" />
+    <PackageVersion Include="RecurPixel.Notify.Sdk" Version="0.3.0" />
+    <PackageVersion Include="Scalar.AspNetCore" Version="2.17.2" />
+    <PackageVersion Include="Sharpcaster" Version="3.0.0" />
+    <PackageVersion Include="Shouldly" Version="4.3.0" />
+    <PackageVersion Include="SMBLibrary" Version="1.5.7.1" />
+    <PackageVersion Include="SSH.NET" Version="2026.0.0" />
+    <PackageVersion Include="System.IO.Hashing" Version="10.0.11" />
+    <PackageVersion Include="Testcontainers.Nats" Version="4.15.0" />
+    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.15.0" />
+    <PackageVersion Include="TUnit" Version="1.66.16" />
+    <PackageVersion Include="Typesense" Version="8.5.0" />
+    <PackageVersion Include="VaultSharp" Version="1.17.5.1" />
+    <PackageVersion Include="Vogen" Version="8.0.7" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+</Project>

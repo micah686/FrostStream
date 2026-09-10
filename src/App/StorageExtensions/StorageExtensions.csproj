@@ -8,12 +8,12 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="FluentStorage" Version="8.0.12" />
+      <PackageReference Include="FluentStorage" />
       <!-- NFSv3 client. LTRData's fork is the maintained DiscUtils line and the only one
            shipping a net10.0 target; it pulls in LTRData.DiscUtils.Core transitively. -->
-      <PackageReference Include="LTRData.DiscUtils.Nfs" Version="1.0.88" />
+      <PackageReference Include="LTRData.DiscUtils.Nfs" />
       <!-- SMB1 (CIFS) / SMB2 / SMB3 client. netstandard2.0, no OS mount required. -->
-      <PackageReference Include="SMBLibrary" Version="1.5.7.1" />
+      <PackageReference Include="SMBLibrary" />
     </ItemGroup>
 
 </Project>

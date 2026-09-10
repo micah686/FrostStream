@@ -8,6 +8,7 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
+COPY Directory.Packages.props ./
 COPY App/Shared/Shared.csproj App/Shared/
 COPY App/StorageExtensions/StorageExtensions.csproj App/StorageExtensions/
 COPY App/ServiceDefaults/ServiceDefaults.csproj App/ServiceDefaults/
