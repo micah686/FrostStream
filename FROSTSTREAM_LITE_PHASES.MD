@@ -1,6 +1,6 @@
 # FrostStream Lite implementation phases
 
-Status: active implementation plan. Phase 1 is complete with its recorded runtime limitation; Phase 2 is verified and awaiting acceptance. Later phases remain unimplemented.
+Status: active implementation plan. Phase 1 is complete with its recorded runtime limitation; Phase 2 is accepted; Phase 3 is verified and awaiting acceptance. Later phases remain unimplemented.
 
 Source of truth: [FROSTREAM_LITE_PLAN.md](FROSTREAM_LITE_PLAN.md). This document divides that plan into actionable, sequential work blocks without changing its scope. Proposed files and command interfaces below become concrete during their owning phase.
 
@@ -62,7 +62,7 @@ Preserve these exact spellings. Internal namespaces use `FrostStream`. Installat
 
 ## Phase 2 — Prove native four-profile Aspire publishing
 
-**State (2026-09-10): Verified, awaiting acceptance.** The isolated fixture, pinned 13.5.3 toolchain, four native publish/prepare outputs, graph assertions, Compose validation, and byte-identical alternate publication are recorded in [`docs/lite/phase-02-compose-publishing.md`](docs/lite/phase-02-compose-publishing.md). Production topology is unchanged apart from aligning its AppHost SDK with the already centralized 13.5.3 packages.
+**State (2026-09-10): Accepted.** The isolated fixture, pinned 13.5.3 toolchain, four native publish/prepare outputs, graph assertions, Compose validation, and byte-identical alternate publication are recorded in [`docs/lite/phase-02-compose-publishing.md`](docs/lite/phase-02-compose-publishing.md). Production topology is unchanged apart from aligning its AppHost SDK with the already centralized 13.5.3 packages.
 
 **Outcome:** A small isolated fixture proves the publisher behavior before production topology is refactored.
 
@@ -83,18 +83,20 @@ Preserve these exact spellings. Internal namespaces use `FrostStream`. Installat
 
 ## Phase 3 — Add production profile selection and installation configuration
 
+**State (2026-09-11): Verified, awaiting acceptance.** Production AppHost profile resolution, installation-scoped configuration, preserved resolved inputs, typed Compose integration, Full publication, alternate-path validation, and limitations are recorded in [`docs/lite/phase-03-production-profiles.md`](docs/lite/phase-03-production-profiles.md). Lite profiles fail before resource construction because their production graph is intentionally deferred to Phase 8; the Full init/runtime lifecycle split remains Phase 5 work.
+
 **Outcome:** Production AppHost composition is driven by explicit profiles and stable installation inputs.
 
 **Primary areas:** `AppHost.cs`; proposed `DeploymentProfiles.cs` and `ComposePublishing.cs`; configuration loading and resource factories.
 
 **Work block**
 
-- [ ] Resolve the profile before profile-dependent configuration and resource registration. Build only its edition's graph; keep local development tooling a separate option.
-- [ ] Centralize project, volume, network, image, port, build-context, and persistent-host-path naming. Support an installation-name override and separate Full/Lite defaults.
-- [ ] Share resolved deployment inputs between an edition's init/runtime profiles so passwords and keys cannot be independently regenerated.
-- [ ] Apply input precedence: explicit publish inputs/environment, then profile defaults. Load development env values only in local run mode or through an explicitly selected file.
-- [ ] Define ignored resolved deployment output and sanitized templates. Preserve existing installation values when regenerating templates; keep live configuration separate from disposable publish output.
-- [ ] Integrate the proven typed Compose/env callbacks. Do not yet replace the public generation scripts or advertise incomplete Lite profiles as usable deployments.
+- [x] Resolve the profile before profile-dependent configuration and resource registration. Build only its edition's graph; keep local development tooling a separate option.
+- [x] Centralize project, volume, network, image, port, build-context, and persistent-host-path naming. Support an installation-name override and separate Full/Lite defaults.
+- [x] Share resolved deployment inputs between an edition's init/runtime profiles so passwords and keys cannot be independently regenerated.
+- [x] Apply input precedence: explicit publish inputs/environment, then profile defaults. Load development env values only in local run mode or through an explicitly selected file.
+- [x] Define ignored resolved deployment output and sanitized templates. Preserve existing installation values when regenerating templates; keep live configuration separate from disposable publish output.
+- [x] Integrate the proven typed Compose/env callbacks. Do not yet replace the public generation scripts or advertise incomplete Lite profiles as usable deployments.
 
 **Verification gate:** Tests prove profile selection, configuration precedence, pair naming/credential identity, independent-installation isolation, and path resolution in default/alternate destinations. Invalid configuration produces edition-specific errors without exposing secrets.
 

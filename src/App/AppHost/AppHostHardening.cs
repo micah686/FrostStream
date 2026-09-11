@@ -1,5 +1,7 @@
 namespace AppHost;
 
+using FrostStream.Deployment;
+
 public sealed record AppHostHardeningOptions(
     bool SingleUserMode,
     bool IsProduction,
@@ -52,7 +54,7 @@ public static class AppHostHardening
             OpenFgaApiToken: Helpers.GetEnv("OPENFGA_API_TOKEN"));
     }
 
-    public static void Validate(AppHostHardeningOptions options)
+    public static void Validate(AppHostHardeningOptions options, DeploymentEdition edition)
     {
         if (!options.IsProduction)
         {
@@ -114,7 +116,7 @@ public static class AppHostHardening
         if (errors.Count > 0)
         {
             throw new InvalidOperationException(
-                "Production hardening validation failed:" + Environment.NewLine +
+                $"Invalid {edition} deployment configuration:" + Environment.NewLine +
                 string.Join(Environment.NewLine, errors.Select(error => "- " + error)));
         }
     }

@@ -18,7 +18,6 @@
       <PackageReference Include="Aspire.Hosting.PostgreSQL" />
       <PackageReference Include="CommunityToolkit.Aspire.Hosting.DbGate" />
       <PackageReference Include="CommunityToolkit.Aspire.Hosting.PostgreSQL.Extensions" />
-      <PackageReference Include="DotNetEnv" />
     </ItemGroup>
 
     <ItemGroup>
@@ -32,6 +31,7 @@
       <ProjectReference Include="..\Scheduler\Scheduler.csproj" />
       <ProjectReference Include="..\WebAPI\WebAPI.csproj" />
       <ProjectReference Include="..\Worker\Worker.csproj" />
+      <ProjectReference Include="..\Deployment\Deployment.csproj" IsAspireProjectResource="false" />
     </ItemGroup>
 
 </Project>

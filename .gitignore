@@ -60,6 +60,9 @@ src/.idea/**
 *.vtt
 /data/
 
+# Per-installation resolved deployment inputs (contains generated credentials)
+src/App/AppHost/deployment/resolved/
+
 # OpenBao recovery material (unseal key and initial root token)
 src/App/docker-compose-artifacts/openbao-bootstrap/
 

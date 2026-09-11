@@ -17,44 +17,27 @@ namespace AppHost;
 public static class Ports
 {
     // ~~~~~ External (25xy0) ~~~~~
-    public static int Frontend => External("PORT_FRONTEND", 25000);
-    public static int Authentik => External("PORT_AUTHENTIK", 25100);
-    public static int WebApiHttp => External("PORT_WEBAPI_HTTP", 25200);
-    public static int WebApiHttps => External("PORT_WEBAPI_HTTPS", 25210);
-    public static int Scheduler => External("PORT_SCHEDULER", 25300);
-    public static int OpenBao => External("PORT_OPENBAO", 25400);
-    public static int Postgres => External("PORT_POSTGRES", 25500);
-    public static int DbGate => External("PORT_DBGATE", 25600);
-    public static int NatsUi => External("PORT_NATS_UI", 25700);
-    public static int OpenFgaStudio => External("PORT_OPENFGA_STUDIO", 25800);
+    public static int Frontend => DeploymentRuntime.Current.Ports.Frontend;
+    public static int Authentik => DeploymentRuntime.Current.Ports.Authentik;
+    public static int WebApiHttp => DeploymentRuntime.Current.Ports.WebApiHttp;
+    public static int WebApiHttps => DeploymentRuntime.Current.Ports.WebApiHttps;
+    public static int Scheduler => DeploymentRuntime.Current.Ports.Scheduler;
+    public static int OpenBao => DeploymentRuntime.Current.Ports.OpenBao;
+    public static int Postgres => DeploymentRuntime.Current.Ports.Postgres;
+    public static int DbGate => DeploymentRuntime.Current.Ports.DbGate;
+    public static int NatsUi => DeploymentRuntime.Current.Ports.NatsUi;
+    public static int OpenFgaStudio => DeploymentRuntime.Current.Ports.OpenFgaStudio;
     // Host-published so the break-glass restore wizard stays reachable when the rest of the
     // stack (frontend, Authentik) is down. The service's internal API stays on 24050.
-    public static int BackupRestoreUi => External("PORT_BACKUP_RESTORE_UI", 25900);
+    public static int BackupRestoreUi => DeploymentRuntime.Current.Ports.BackupRestoreUi;
 
     // ~~~~~ Internal (240xy) ~~~~~
-    public const int Typesense = 24010;
-    public const int PotProvider = 24020;
-    public const int OpenFga = 24030;
-    public const int NatsClient = 24040;
-    public const int NatsMonitor = 24041;
-    public const int NatsWebSocket = 24042;
-    public const int BackupService = 24050;
-    public const int ClickHouse = 24060;
-
-    private static int External(string variable, int fallback)
-    {
-        var value = Environment.GetEnvironmentVariable(variable);
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return fallback;
-        }
-
-        if (!int.TryParse(value, out var port) || port is < 1 or > 65535)
-        {
-            throw new InvalidOperationException(
-                $"{variable} must be a valid port number, but was '{value}'.");
-        }
-
-        return port;
-    }
+    public static int Typesense => DeploymentRuntime.Current.Ports.Typesense;
+    public static int PotProvider => DeploymentRuntime.Current.Ports.PotProvider;
+    public static int OpenFga => DeploymentRuntime.Current.Ports.OpenFga;
+    public static int NatsClient => DeploymentRuntime.Current.Ports.NatsClient;
+    public static int NatsMonitor => DeploymentRuntime.Current.Ports.NatsMonitor;
+    public static int NatsWebSocket => DeploymentRuntime.Current.Ports.NatsWebSocket;
+    public static int BackupService => DeploymentRuntime.Current.Ports.BackupService;
+    public static int ClickHouse => DeploymentRuntime.Current.Ports.ClickHouse;
 }

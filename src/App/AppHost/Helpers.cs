@@ -112,12 +112,18 @@ public static class Helpers
             return resource.WithBindMount(hostPath, target, isReadOnly);
         }
 
+        var source = composeRelativeSource.StartsWith("${", StringComparison.Ordinal)
+            ? Path.GetFullPath(hostPath)
+            : Path.GetRelativePath(
+                    DeploymentRuntime.Current.Paths.PublishOutputDirectory,
+                    Path.GetFullPath(hostPath))
+                .Replace('\\', '/');
         return resource.PublishAsDockerComposeService((_, service) =>
             service.Volumes.Add(new Aspire.Hosting.Docker.Resources.ServiceNodes.Volume
             {
                 Name = target,
                 Type = "bind",
-                Source = composeRelativeSource,
+                Source = source,
                 Target = target,
                 ReadOnly = isReadOnly ? true : null,
             }));
@@ -129,7 +135,7 @@ public static class Helpers
     }
 
     internal static bool DevelopmentToolsEnabled
-        => AppHostHardening.IsTruthy(Environment.GetEnvironmentVariable("FROSTSTREAM_DEV_TOOLS"));
+        => DeploymentRuntime.Current.Selection.IncludeDeveloperTools;
 
     public static bool IsSingleUserMode => AppHostHardening.IsTruthy(Environment.GetEnvironmentVariable("SINGLE_USER_MODE"));
 

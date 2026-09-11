@@ -47,8 +47,9 @@ public static class StartServices
         IResourceBuilder<ContainerResource> potProvider,
         ClickHouseResources clickHouse)
     {
+        var deployment = DeploymentRuntime.Current;
         var openBao = openBaoResources.Server;
-        var databridge = builder.AddProject<Projects.DataBridge>("databridge")
+        var databridge = builder.AddProject<Projects.DataBridge>(deployment.Names.DataBridge)
             .WithReference(postgres.FrostStreamDb).WaitFor(postgres.FrostStreamDb).WaitForDatabases(postgres)
             .WithReference(nats).WaitFor(nats)
             .WithEnvironment("OpenBao__Address", openBao.GetEndpoint("http"))
@@ -66,13 +67,13 @@ public static class StartServices
             .WaitFor(potProvider)
             .PublishAsDockerFile(c => c
                 .WithDockerfile(
-                    Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "DataBridge")),
+                    deployment.Paths.AppProjectDirectory("DataBridge"),
                     "Dockerfile")
-                .WithImage("localhost/froststream-databridge", "latest")
+                .WithImage(deployment.Images.ApplicationRepository(deployment.Names.DataBridge), "latest")
                 // Named volume (shared by databridge/webapi/worker) instead of a host bind mount
                 // so the compose export stays machine-portable.
-                .WithVolume("froststream-data", ContainerStorageRoot))
-            .WithLocalComposeBuild("localhost/froststream-databridge:latest", "App/DataBridge/Dockerfile");
+                .WithVolume(deployment.Names.Volume("data"), ContainerStorageRoot))
+            .WithLocalComposeBuild(deployment.Images.Application(deployment.Names.DataBridge), deployment.Paths.ComposeDockerfile("DataBridge"));
 
         if (clickHouse is { Server: { } clickHouseServer, HttpEndpoint: { } clickHouseEndpoint, Password: { } clickHousePassword })
         {
@@ -85,7 +86,7 @@ public static class StartServices
                 .WaitFor(clickHouseServer);
         }
 
-        return databridge.WithComposeDependencyCondition("openbao", "service_healthy");
+        return databridge.WithComposeDependencyCondition(deployment.Names.OpenBao, "service_healthy");
     }
 
     private static IResourceBuilder<ProjectResource> WireWebApi(
@@ -102,6 +103,7 @@ public static class StartServices
         string webApiEndpointName,
         ClickHouseResources clickHouse)
     {
+        var deployment = DeploymentRuntime.Current;
         var openBao = openBaoResources.Server;
         // LAN-reachable base URL that cast devices use to fetch media; deployment-specific, so
         // parameterized to land in the compose .env rather than the yaml.
@@ -122,7 +124,7 @@ public static class StartServices
             ? $"http://0.0.0.0:{Ports.WebApiHttp};https://0.0.0.0:{Ports.WebApiHttps}"
             : $"http://0.0.0.0:{Ports.WebApiHttp}";
 
-        var webapi = builder.AddProject<Projects.WebAPI>("webapi", launchProfileName: webApiEndpointName)
+        var webapi = builder.AddProject<Projects.WebAPI>(deployment.Names.WebApi, launchProfileName: webApiEndpointName)
             .WithReference(nats).WaitFor(nats)
             .WaitFor(databridge)
             // Published ASP.NET images default to Production. Keep the WebAPI runtime environment
@@ -171,18 +173,18 @@ public static class StartServices
             .WaitFor(backupService)
             .PublishAsDockerFile(c => c
                 .WithDockerfile(
-                    Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "WebAPI")),
+                    deployment.Paths.AppProjectDirectory("WebAPI"),
                     "Dockerfile")
-                .WithImage("localhost/froststream-webapi", "latest")
+                .WithImage(deployment.Images.ApplicationRepository(deployment.Names.WebApi), "latest")
                 // Named volume (shared by databridge/webapi/worker) instead of a host bind mount
                 // so the compose export stays machine-portable.
-                .WithVolume("froststream-data", ContainerStorageRoot)
-                .WithVolume("froststream-data-protection-keys", "/data-protection-keys"))
-            .WithLocalComposeBuild("localhost/froststream-webapi:latest", "App/WebAPI/Dockerfile");
+                .WithVolume(deployment.Names.Volume("data"), ContainerStorageRoot)
+                .WithVolume(deployment.Names.Volume("data-protection-keys"), "/data-protection-keys"))
+            .WithLocalComposeBuild(deployment.Images.Application(deployment.Names.WebApi), deployment.Paths.ComposeDockerfile("WebAPI"));
 
-        webapi.WithComposeDependencyCondition("openbao", "service_healthy");
-        webapi.WithComposeDependencyCondition("backupservice", "service_healthy");
-        webapi.WithComposeDependencyCondition("databridge", "service_started");
+        webapi.WithComposeDependencyCondition(deployment.Names.OpenBao, "service_healthy");
+        webapi.WithComposeDependencyCondition(deployment.Names.BackupService, "service_healthy");
+        webapi.WithComposeDependencyCondition(deployment.Names.DataBridge, "service_started");
         webapi.WithEndpointProxySupport(false);
         var isPublishMode = builder.ExecutionContext.IsPublishMode;
         webapi.WithEndpoint("http", endpoint =>
@@ -218,7 +220,7 @@ public static class StartServices
                 .WithEnvironment("OpenFga__Endpoint", openFga.Endpoint)
                 .WithEnvironment("Authentik__ApiUrl", authentikServer.GetEndpoint("http"))
                 .WaitFor(authentikServer)
-                .WithComposeDependencyCondition("authentik", "service_healthy")
+                .WithComposeDependencyCondition(deployment.Names.Authentik, "service_healthy")
                 .WaitFor(openFga.Server);
 
             if (authentik.ApiToken is { } authentikApiToken)
@@ -244,8 +246,9 @@ public static class StartServices
         IResourceBuilder<ParameterResource> openBaoToken,
         ClickHouseResources clickHouse)
     {
+        var deployment = DeploymentRuntime.Current;
         var openBao = openBaoResources.Server;
-        builder.AddProject<Projects.Worker>("worker")
+        builder.AddProject<Projects.Worker>(deployment.Names.Worker)
             .WithReference(nats).WaitFor(nats)
             .WithEnvironment("OpenBao__Address", openBao.GetEndpoint("http"))
             .WithEnvironment("OpenBao__Token", openBaoToken)
@@ -258,14 +261,14 @@ public static class StartServices
             .WaitForOpenBao(openBaoResources)
             .PublishAsDockerFile(c => c
                 .WithDockerfile(
-                    Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "Worker")),
+                    deployment.Paths.AppProjectDirectory("Worker"),
                     "Dockerfile")
-                .WithImage("localhost/froststream-worker", "latest")
+                .WithImage(deployment.Images.ApplicationRepository(deployment.Names.Worker), "latest")
                 // Named volume (shared by databridge/webapi/worker) instead of a host bind mount
                 // so the compose export stays machine-portable.
-                .WithVolume("froststream-data", ContainerStorageRoot))
-            .WithLocalComposeBuild("localhost/froststream-worker:latest", "App/Worker/Dockerfile")
-            .WithComposeDependencyCondition("openbao", "service_healthy");
+                .WithVolume(deployment.Names.Volume("data"), ContainerStorageRoot))
+            .WithLocalComposeBuild(deployment.Images.Application(deployment.Names.Worker), deployment.Paths.ComposeDockerfile("Worker"))
+            .WithComposeDependencyCondition(deployment.Names.OpenBao, "service_healthy");
     }
 
     private static void WireMediaProcessor(
@@ -275,23 +278,24 @@ public static class StartServices
         IResourceBuilder<ProjectResource> webapi,
         string webApiEndpointName)
     {
+        var deployment = DeploymentRuntime.Current;
         // Rendition claims/completions still go through DataBridge over NATS. Media bytes move
         // through WebAPI's internal HTTP storage endpoints, so MediaProcessor needs neither a
         // storage mount nor OpenBao. ffmpeg/ffprobe come from the container image (publish) or the
         // host PATH (run mode).
-        builder.AddProject<Projects.MediaProcessor>("mediaprocessor")
+        builder.AddProject<Projects.MediaProcessor>(deployment.Names.MediaProcessor)
             .WithReference(nats).WaitFor(nats)
             .WithEnvironment("MediaProcessor__WebApiBaseUrl", webapi.GetEndpoint(webApiEndpointName))
             .WaitFor(databridge)
             .WaitFor(webapi)
             .PublishAsDockerFile(c => c
                 .WithDockerfile(
-                    Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "MediaProcessor")),
+                    deployment.Paths.AppProjectDirectory("MediaProcessor"),
                     "Dockerfile")
-                .WithImage("localhost/froststream-mediaprocessor", "latest"))
-            .WithLocalComposeBuild("localhost/froststream-mediaprocessor:latest", "App/MediaProcessor/Dockerfile")
-            .WithComposeDependencyCondition("databridge", "service_started")
-            .WithComposeDependencyCondition("webapi", "service_started");
+                .WithImage(deployment.Images.ApplicationRepository(deployment.Names.MediaProcessor), "latest"))
+            .WithLocalComposeBuild(deployment.Images.Application(deployment.Names.MediaProcessor), deployment.Paths.ComposeDockerfile("MediaProcessor"))
+            .WithComposeDependencyCondition(deployment.Names.DataBridge, "service_started")
+            .WithComposeDependencyCondition(deployment.Names.WebApi, "service_started");
     }
 
     private static void WireScheduler(
@@ -300,7 +304,8 @@ public static class StartServices
         IResourceBuilder<ProjectResource> databridge,
         IResourceBuilder<ContainerResource> backupService)
     {
-        var scheduler = builder.AddProject<Projects.Scheduler>("scheduler")
+        var deployment = DeploymentRuntime.Current;
+        var scheduler = builder.AddProject<Projects.Scheduler>(deployment.Names.Scheduler)
             .WithReference(nats).WaitFor(nats)
             .WaitFor(databridge)
             // Scheduled backups dispatch over REST directly to BackupService.
@@ -314,10 +319,10 @@ public static class StartServices
             })
             .PublishAsDockerFile(c => c
                 .WithDockerfile(
-                    Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "Scheduler")),
+                    deployment.Paths.AppProjectDirectory("Scheduler"),
                     "Dockerfile")
-                .WithImage("localhost/froststream-scheduler", "latest"))
-            .WithLocalComposeBuild("localhost/froststream-scheduler:latest", "App/Scheduler/Dockerfile");
+                .WithImage(deployment.Images.ApplicationRepository(deployment.Names.Scheduler), "latest"))
+            .WithLocalComposeBuild(deployment.Images.Application(deployment.Names.Scheduler), deployment.Paths.ComposeDockerfile("Scheduler"));
 
         // The Quartz UI is host-facing, so publish a host mapping. The container itself keeps
         // listening on the aspnet default (HTTP_PORTS=8080).
@@ -338,13 +343,14 @@ public static class StartServices
         IResourceBuilder<ProjectResource> webapi,
         string webApiEndpointName)
     {
-        var frontend = builder.AddViteApp("frontend", "../Frontend")
+        var deployment = DeploymentRuntime.Current;
+        var frontend = builder.AddViteApp(deployment.Names.Frontend, deployment.Paths.AppProjectDirectory("Frontend"))
             .WithPnpm()
             .WithExternalHttpEndpoints()
             .WithReference(webapi)
             .WaitFor(webapi)
             .WithEnvironment("WEBAPI_UPSTREAM", webapi.GetEndpoint(webApiEndpointName))
-            .WithLocalComposeBuild("localhost/froststream-frontend:latest", "App/Frontend/Dockerfile");
+            .WithLocalComposeBuild(deployment.Images.Application(deployment.Names.Frontend), deployment.Paths.ComposeDockerfile("Frontend"));
 
         // Pin the host port in both modes; vite proxies during development and Caddy proxies in the
         // published image using the same /api, /auth, and /stream contract.
@@ -380,7 +386,7 @@ public static class StartServices
             {
                 // docker-compose.yaml is emitted under src/App/docker-compose-artifacts.
                 // The Dockerfiles expect the repository src/ directory as build context.
-                Context = "../..",
+                Context = DeploymentRuntime.Current.Paths.ComposeBuildContext,
                 Dockerfile = dockerfile
             };
         });

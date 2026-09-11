@@ -22,13 +22,12 @@ public static class StartAuthentik
     // authentik 2025.10+ dropped the Redis requirement; caching, the embedded outpost
     // and WebSocket state are now backed by PostgreSQL. Both server and worker share the
     // existing postgres instance.
-    private const string DatabaseName = "authentikdb";
-
     public static AuthentikResources Start(
         IDistributedApplicationBuilder builder,
         PostgresResources postgres,
         AppHostHardeningOptions hardening)
     {
+        var deployment = DeploymentRuntime.Current;
         // Client details and an optional externally-configured authority are needed regardless
         // of mode, so they are resolved before the single-user early-out below.
         var configuredAuthority = Environment.GetEnvironmentVariable("AUTHENTIK_AUTHORITY");
@@ -45,18 +44,9 @@ public static class StartAuthentik
             return new AuthentikResources(clientId, clientSecret, configuredAuthority, Server: null, Authority: null, ApiToken: null);
         }
 
-        var blueprintPath = Path.Combine(
-            builder.AppHostDirectory,
-            "configs",
-            "authentik",
-            "blueprints",
-            "froststream.yaml");
-        var brandingIconPath = Path.GetFullPath(Path.Combine(
-            builder.AppHostDirectory,
-            "..",
-            "Frontend",
-            "static",
-            "favicon.svg"));
+        var blueprintPath = deployment.Paths.AppHostConfig("authentik", "blueprints", "froststream.yaml");
+        var brandingIconPath = Path.Combine(
+            deployment.Paths.AppProjectDirectory("Frontend"), "static", "favicon.svg");
 
         var secretKey = builder.AddParameter(
             "authentik-secret-key",
@@ -84,7 +74,7 @@ public static class StartAuthentik
         // The server serves the web UI and OIDC endpoints; the worker applies blueprints and
         // runs background tasks. Both run the same image with different args and share config.
         var server = builder
-            .AddContainer("authentik", "ghcr.io/goauthentik/server", "2026.5.3")
+            .AddContainer(deployment.Names.Authentik, deployment.Images.Authentik.Repository, deployment.Images.Authentik.Tag)
             .WithArgs("server")
             .WithHttpEndpoint(port: Ports.Authentik, targetPort: 9000, name: "http")
             .WithExternalHttpEndpoints()
@@ -100,7 +90,7 @@ public static class StartAuthentik
             .WithHttpHealthCheck(path: "/-/health/ready/")
             .WaitFor(postgres.AuthentikDb)
             .WaitForDatabases(postgres)
-            .WithComposeDependencyCondition("postgres", "service_healthy")
+            .WithComposeDependencyCondition(deployment.Names.Postgres, "service_healthy")
             // Compose has no notion of Aspire health checks, so publish an explicit healthcheck.
             // "ak healthcheck" fails until first-boot migrations finish (verified), letting
             // dependents gate on service_healthy. Generous retries: first boot on slow hosts
@@ -123,7 +113,7 @@ public static class StartAuthentik
         }
 
         var worker = builder
-            .AddContainer("authentik-worker", "ghcr.io/goauthentik/server", "2026.5.3")
+            .AddContainer(deployment.Names.AuthentikWorker, deployment.Images.Authentik.Repository, deployment.Images.Authentik.Tag)
             .WithArgs("worker")
             .WithEnvironment("AUTHENTIK_SECRET_KEY", secretKey)
             .WithAuthentikPostgresEnv(postgres)
@@ -134,12 +124,12 @@ public static class StartAuthentik
             .WithPortableBindMount(blueprintPath, "../AppHost/configs/authentik/blueprints/froststream.yaml", "/blueprints/froststream.yaml", isReadOnly: true)
             .WaitFor(postgres.AuthentikDb)
             .WaitForDatabases(postgres)
-            .WithComposeDependencyCondition("postgres", "service_healthy")
+            .WithComposeDependencyCondition(deployment.Names.Postgres, "service_healthy")
             // Server and worker racing lifecycle.migrate on an empty database intermittently
             // fails ("relation authentik_core_group does not exist"), so the worker starts only
             // once the server is healthy — i.e. migrations are done.
             .WaitFor(server)
-            .WithComposeDependencyCondition("authentik", "service_healthy");
+            .WithComposeDependencyCondition(deployment.Names.Authentik, "service_healthy");
 
         if (!string.IsNullOrWhiteSpace(signingKeyName))
         {
@@ -156,10 +146,10 @@ public static class StartAuthentik
         PostgresResources postgres)
     {
         return container
-            .WithEnvironment("AUTHENTIK_POSTGRESQL__HOST", "postgres")
+            .WithEnvironment("AUTHENTIK_POSTGRESQL__HOST", DeploymentRuntime.Current.Names.Postgres)
             .WithEnvironment("AUTHENTIK_POSTGRESQL__PORT", "5432")
             .WithEnvironment("AUTHENTIK_POSTGRESQL__USER", postgres.User)
             .WithEnvironment("AUTHENTIK_POSTGRESQL__PASSWORD", postgres.Password)
-            .WithEnvironment("AUTHENTIK_POSTGRESQL__NAME", DatabaseName);
+            .WithEnvironment("AUTHENTIK_POSTGRESQL__NAME", DeploymentRuntime.Current.Names.AuthentikDatabase);
     }
 }

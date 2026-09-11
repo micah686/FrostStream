@@ -12,6 +12,7 @@ public static class StartBackupService
         OpenBaoResources openBao,
         IResourceBuilder<ParameterResource> openBaoToken)
     {
+        var deployment = DeploymentRuntime.Current;
         var backupRoot = BackupPaths.BackupRoot(sharedStorageRoot);
         Directory.CreateDirectory(backupRoot);
 
@@ -28,10 +29,10 @@ public static class StartBackupService
             publishValueAsDefault: false,
             secret: true);
 
-        var pgBackRestConf = Path.Combine(builder.AppHostDirectory, "configs", "pgbackrest", "pgbackrest.conf");
-        var context = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", ".."));
+        var pgBackRestConf = deployment.Paths.AppHostConfig("pgbackrest", "pgbackrest.conf");
+        var context = deployment.Paths.SourceRoot;
         var service = builder
-            .AddDockerfile("backupservice", context, "App/BackupService/Dockerfile")
+            .AddDockerfile(deployment.Names.BackupService, context, deployment.Paths.ComposeDockerfile("BackupService"))
             .WithHttpEndpoint(port: Ports.BackupService, targetPort: 8080, name: "http")
             // Host-published restore wizard; usable while everything except this container is down.
             .WithHttpEndpoint(port: Ports.BackupRestoreUi, targetPort: 8081, name: "restore-ui")
@@ -62,8 +63,8 @@ public static class StartBackupService
                 isReadOnly: true)
             // Shared with the postgres container: pgBackRest backup/restore reads and writes the
             // cluster files directly, and connects over the shared unix socket.
-            .WithVolume("froststream-postgres-data", "/var/lib/postgresql")
-            .WithVolume("froststream-postgres-socket", "/var/run/postgresql");
+            .WithVolume(deployment.Names.Volume("postgres-data"), "/var/lib/postgresql")
+            .WithVolume(deployment.Names.Volume("postgres-socket"), "/var/run/postgresql");
 
         service.WithEndpoint("restore-ui", endpoint =>
         {
@@ -76,12 +77,12 @@ public static class StartBackupService
 
         service.PublishAsDockerComposeService((_, compose) =>
         {
-            compose.Image = "localhost/froststream-backupservice:latest";
+            compose.Image = deployment.Images.Application(deployment.Names.BackupService);
             compose.PullPolicy = "build";
             compose.Build = new Aspire.Hosting.Docker.Resources.ServiceNodes.Build
             {
-                Context = "../..",
-                Dockerfile = "App/BackupService/Dockerfile"
+                Context = deployment.Paths.ComposeBuildContext,
+                Dockerfile = deployment.Paths.ComposeDockerfile("BackupService")
             };
             compose.Healthcheck = new()
             {
@@ -92,7 +93,7 @@ public static class StartBackupService
                 StartPeriod = "20s"
             };
         });
-        service.WithComposeDependencyCondition("openbao", "service_healthy");
+        service.WithComposeDependencyCondition(deployment.Names.OpenBao, "service_healthy");
 
         return service;
     }

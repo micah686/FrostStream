@@ -32,10 +32,19 @@ public static class DeploymentProfiles
     public static IReadOnlyList<DeploymentProfile> All { get; } =
         Array.AsReadOnly<DeploymentProfile>([FullInit, Full, LiteInit, Lite]);
 
-    public static DeploymentSelection Resolve(string[] args)
+    public static DeploymentSelection Resolve(
+        string[] args,
+        DeploymentProfile? defaultProfile = null,
+        IReadOnlyDictionary<string, string>? fallbackValues = null)
     {
         var requestedName = ReadOption(args, "--deployment-profile")
-            ?? Environment.GetEnvironmentVariable(ProfileEnvironmentVariable);
+            ?? Environment.GetEnvironmentVariable(ProfileEnvironmentVariable)
+            ?? ReadFallback(fallbackValues, ProfileEnvironmentVariable);
+
+        if (string.IsNullOrWhiteSpace(requestedName) && defaultProfile is not null)
+        {
+            requestedName = defaultProfile.Name;
+        }
 
         if (string.IsNullOrWhiteSpace(requestedName))
         {
@@ -54,7 +63,8 @@ public static class DeploymentProfiles
         }
 
         var developerToolsText = ReadOption(args, "--developer-tools")
-            ?? Environment.GetEnvironmentVariable(DeveloperToolsEnvironmentVariable);
+            ?? Environment.GetEnvironmentVariable(DeveloperToolsEnvironmentVariable)
+            ?? ReadFallback(fallbackValues, DeveloperToolsEnvironmentVariable);
         var includeDeveloperTools = developerToolsText is not null && ParseBoolean(
             developerToolsText,
             "--developer-tools");
@@ -62,7 +72,13 @@ public static class DeploymentProfiles
         return new DeploymentSelection(profile, includeDeveloperTools);
     }
 
-    private static string? ReadOption(IReadOnlyList<string> args, string option)
+    public static string? ReadOption(IReadOnlyList<string> args, string option) =>
+        ReadOptionValue(args, option);
+
+    private static string? ReadFallback(IReadOnlyDictionary<string, string>? values, string name) =>
+        values is not null && values.TryGetValue(name, out var value) ? value : null;
+
+    private static string? ReadOptionValue(IReadOnlyList<string> args, string option)
     {
         for (var index = 0; index < args.Count; index++)
         {

@@ -30,6 +30,7 @@ public static class StartPostgres
         AppHostHardeningOptions hardening,
         string sharedStorageRoot)
     {
+        var deployment = DeploymentRuntime.Current;
         var user = builder.AddParameter(
             "postgres-user",
             Environment.GetEnvironmentVariable("POSTGRES_USER") ?? "postgres",
@@ -63,24 +64,24 @@ public static class StartPostgres
             }
         }
 
-        var postgresConf = Path.Combine(builder.AppHostDirectory, "configs", "postgres", "postgresql.conf");
-        var postgresHba = Path.Combine(builder.AppHostDirectory, "configs", "postgres", "pg_hba.conf");
-        var pgBackRestConf = Path.Combine(builder.AppHostDirectory, "configs", "pgbackrest", "pgbackrest.conf");
-        var imageContext = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", ".."));
+        var postgresConf = deployment.Paths.AppHostConfig("postgres", "postgresql.conf");
+        var postgresHba = deployment.Paths.AppHostConfig("postgres", "pg_hba.conf");
+        var pgBackRestConf = deployment.Paths.AppHostConfig("pgbackrest", "pgbackrest.conf");
+        var imageContext = deployment.Paths.SourceRoot;
 
         // WithDbGate requires CommunityToolkit.Aspire.Hosting.DbGate and
         // CommunityToolkit.Aspire.Hosting.PostgreSQL.Extensions at the same version.
-        var server = builder.AddPostgres("postgres", user, password)
+        var server = builder.AddPostgres(deployment.Names.Postgres, user, password)
             .WithHostPort(Ports.Postgres)
             // stock postgres + pgbackrest, so archive_command can push WAL into the shared repo.
             .WithDockerfile(imageContext, "App/PostgresServer/Dockerfile")
             // Explicitly named so the backupservice container can mount the same volume for
             // pgBackRest backup/restore. (Pre-rework installs used an auto-generated name;
             // `podman volume rename` the old volume or start from a fresh database.)
-            .WithDataVolume("froststream-postgres-data")
+            .WithDataVolume(deployment.Names.Volume("postgres-data"))
             // Unix-socket volume shared with backupservice: pgBackRest's "local" mode connects
             // to PostgreSQL over the socket.
-            .WithVolume("froststream-postgres-socket", "/var/run/postgresql")
+            .WithVolume(deployment.Names.Volume("postgres-socket"), "/var/run/postgresql")
             .WithPortableBindMount(postgresConf, "../AppHost/configs/postgres/postgresql.conf", "/etc/postgresql/postgresql.conf", isReadOnly: true)
             .WithPortableBindMount(postgresHba, "../AppHost/configs/postgres/pg_hba.conf", "/etc/postgresql/pg_hba.conf", isReadOnly: true)
             .WithPortableBindMount(pgBackRestConf, "../AppHost/configs/pgbackrest/pgbackrest.conf", "/etc/pgbackrest/pgbackrest.conf", isReadOnly: true)
@@ -115,12 +116,12 @@ public static class StartPostgres
             // builds the pgbackrest-enabled server image from the repo checkout.
             server.PublishAsDockerComposeService((_, svc) =>
             {
-                svc.Image = "localhost/froststream-postgres:latest";
+                svc.Image = deployment.Images.Application(deployment.Names.Postgres);
                 svc.PullPolicy = "build";
                 svc.Build = new Aspire.Hosting.Docker.Resources.ServiceNodes.Build
                 {
-                    Context = "../..",
-                    Dockerfile = "App/PostgresServer/Dockerfile"
+                    Context = deployment.Paths.ComposeBuildContext,
+                    Dockerfile = deployment.Paths.ComposeDockerfile("PostgresServer")
                 };
                 svc.Healthcheck = new()
                 {
@@ -137,7 +138,7 @@ public static class StartPostgres
             // uid 999. One-shot ownership fix; postgres gates on its completion. Run mode covers
             // this with the host-side chmod above instead.
             var backupInit = builder
-                .AddContainer("backup-init", "docker.io/library/postgres", "18.3")
+                .AddContainer(deployment.Names.BackupInit, deployment.Images.Postgres.Repository, deployment.Images.Postgres.Tag)
                 .WithEntrypoint("/bin/bash")
                 .WithArgs("-c", "mkdir -p /backups/pgbackrest /backups/openbao /backups/jobs && chown -R 999:999 /backups && echo 'backup-init: done'")
                 .WithPortableBindMount(
@@ -146,19 +147,19 @@ public static class StartPostgres
                     "/backups");
             server
                 .WaitForCompletion(backupInit)
-                .WithComposeDependencyCondition("backup-init", "service_completed_successfully");
+                .WithComposeDependencyCondition(deployment.Names.BackupInit, "service_completed_successfully");
 
             // WithDbGate (run mode, above) is excluded from the compose publish by the community
             // toolkit, so publish a plain dbgate container with the same connection wiring.
             if (Helpers.DevelopmentToolsEnabled)
             {
                 builder
-                .AddContainer("dbgate", "docker.io/dbgate/dbgate", "6.1.4")
+                .AddContainer(deployment.Names.DbGate, deployment.Images.DbGate.Repository, deployment.Images.DbGate.Tag)
                 .WithHttpEndpoint(port: Ports.DbGate, targetPort: 3000, name: "http")
                 .WithExternalHttpEndpoints()
                 .WithEnvironment("CONNECTIONS", "con1")
                 .WithEnvironment("LABEL_con1", "postgres")
-                .WithEnvironment("SERVER_con1", "postgres")
+                .WithEnvironment("SERVER_con1", deployment.Names.Postgres)
                 .WithEnvironment("USER_con1", user)
                 .WithEnvironment("PASSWORD_con1", password)
                 .WithEnvironment("PORT_con1", "5432")
@@ -179,28 +180,33 @@ public static class StartPostgres
                   fi
                 done
                 echo 'postgres-init: done'
-                """.ReplaceLineEndings("\n");
+                """
+                .Replace("froststreamdb authentikdb openfgadb", string.Join(' ',
+                    deployment.Names.FrostStreamDatabase,
+                    deployment.Names.AuthentikDatabase,
+                    deployment.Names.OpenFgaDatabase), StringComparison.Ordinal)
+                .ReplaceLineEndings("\n");
 
             init = builder
-                .AddContainer("postgres-init", "docker.io/library/postgres", "18.3")
+                .AddContainer(deployment.Names.PostgresInit, deployment.Images.Postgres.Repository, deployment.Images.Postgres.Tag)
                 .WithEntrypoint("/bin/bash")
                 .WithArgs("-c", seedScript)
-                .WithEnvironment("PGHOST", "postgres")
+                .WithEnvironment("PGHOST", deployment.Names.Postgres)
                 .WithEnvironment("PGPORT", "5432")
                 .WithEnvironment("PGDATABASE", "postgres")
                 .WithEnvironment("PGUSER", user)
                 .WithEnvironment("PGPASSWORD", password)
                 .WaitFor(server)
-                .WithComposeDependencyCondition("postgres", "service_healthy");
+                .WithComposeDependencyCondition(deployment.Names.Postgres, "service_healthy");
         }
 
         return new PostgresResources(
             user,
             password,
             server,
-            server.AddDatabase("froststreamdb"),
-            server.AddDatabase("authentikdb"),
-            server.AddDatabase("openfgadb"),
+            server.AddDatabase(deployment.Names.FrostStreamDatabase),
+            server.AddDatabase(deployment.Names.AuthentikDatabase),
+            server.AddDatabase(deployment.Names.OpenFgaDatabase),
             init);
     }
 }

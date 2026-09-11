@@ -9,9 +9,10 @@ public static class StartTypesense
         IResourceBuilder<ParameterResource> apiKey)
     {
 
+        var deployment = DeploymentRuntime.Current;
         return builder
-            .AddContainer("typesense", "typesense/typesense", "30.2")
-            .WithVolume("typesense-data", Helpers.GetEnv("TYPESENSE_DATA_DIR"))
+            .AddContainer(deployment.Names.Typesense, deployment.Images.Typesense.Repository, deployment.Images.Typesense.Tag)
+            .WithVolume(deployment.Names.Volume("typesense-data"), Helpers.GetEnv("TYPESENSE_DATA_DIR"))
             .WithEnvironment("TYPESENSE_DATA_DIR", Helpers.GetEnv("TYPESENSE_DATA_DIR"))
             .WithEnvironment("TYPESENSE_API_KEY", apiKey)
             .WithEnvironment("TYPESENSE_ENABLE_CORS", Helpers.GetEnv("TYPESENSE_ENABLE_CORS"))

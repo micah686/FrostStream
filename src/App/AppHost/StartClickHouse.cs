@@ -26,10 +26,10 @@ public static class StartClickHouse
             publishValueAsDefault: false,
             secret: true);
 
+        var deployment = DeploymentRuntime.Current;
         var server = builder
-            .AddContainer("clickhouse", "clickhouse/clickhouse-server",
-                Environment.GetEnvironmentVariable("CLICKHOUSE_IMAGE_TAG") ?? "25.8")
-            .WithVolume("clickhouse-data", "/var/lib/clickhouse")
+            .AddContainer(deployment.Names.ClickHouse, deployment.Images.ClickHouse.Repository, deployment.Images.ClickHouse.Tag)
+            .WithVolume(deployment.Names.Volume("clickhouse-data"), "/var/lib/clickhouse")
             .WithEnvironment("CLICKHOUSE_DB", Database)
             .WithEnvironment("CLICKHOUSE_USER", User)
             .WithEnvironment("CLICKHOUSE_PASSWORD", password)

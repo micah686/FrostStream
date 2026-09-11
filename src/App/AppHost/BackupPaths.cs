@@ -7,9 +7,7 @@ namespace AppHost;
 internal static class BackupPaths
 {
     public static string BackupRoot(string sharedStorageRoot)
-        => string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FROSTSTREAM_BACKUP_ROOT"))
-            ? Path.Combine(sharedStorageRoot, "core-backups")
-            : Environment.GetEnvironmentVariable("FROSTSTREAM_BACKUP_ROOT")!;
+        => DeploymentRuntime.Current.Paths.BackupRoot;
 
     /// <summary>pgBackRest repository (repo1-path maps here inside the containers).</summary>
     public static string PgBackRestRepoDirectory(string sharedStorageRoot)

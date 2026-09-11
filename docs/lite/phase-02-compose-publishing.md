@@ -2,7 +2,7 @@
 
 Date verified: 2026-09-10
 
-Status: Verified, awaiting acceptance.
+Status: Accepted when Phase 3 was requested on 2026-09-10.
 
 This phase proves the required publisher behavior in an isolated fixture. It does not add the production Lite topology. The existing AppHost graph remains intact.
 

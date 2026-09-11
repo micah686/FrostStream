@@ -11,10 +11,11 @@ public static class StartPotProvider
     public static IResourceBuilder<ContainerResource> Start(
         IDistributedApplicationBuilder builder)
     {
+        var deployment = DeploymentRuntime.Current;
         return builder
             //MUST match YtDlpBinaryDownloaderOptions.BgUtilPluginVersion — bgutil requires the
             // provider server and the yt-dlp plugin to be the same version.
-            .AddContainer("pot-provider", "brainicism/bgutil-ytdlp-pot-provider", "1.3.1")
+            .AddContainer(deployment.Names.PotProvider, deployment.Images.PotProvider.Repository, deployment.Images.PotProvider.Tag)
             .WithHttpEndpoint(port: Ports.PotProvider, targetPort: 4416, name: "http")
             .WithHttpHealthCheck("/ping");
     }

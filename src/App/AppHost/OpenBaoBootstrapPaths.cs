@@ -10,18 +10,7 @@ internal static class OpenBaoBootstrapPaths
 
     public static string HostRoot(string sharedStorageRoot)
     {
-        var configured = Environment.GetEnvironmentVariable("FROSTSTREAM_OPENBAO_BOOTSTRAP_ROOT");
-        var root = string.IsNullOrWhiteSpace(configured)
-            ? Path.Combine(sharedStorageRoot, "openbao-bootstrap")
-            : configured;
-
-        if (!Path.IsPathRooted(root))
-        {
-            throw new InvalidOperationException(
-                "FROSTSTREAM_OPENBAO_BOOTSTRAP_ROOT must be an absolute path when running AppHost.");
-        }
-
-        root = Path.GetFullPath(root);
+        var root = DeploymentRuntime.Current.Paths.OpenBaoBootstrapRoot;
         Directory.CreateDirectory(root);
         return root;
     }

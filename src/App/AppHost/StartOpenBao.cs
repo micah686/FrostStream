@@ -15,7 +15,6 @@ public static class OpenBaoResourceExtensions
 
 public static class StartOpenBao
 {
-    private const string DataVolumeName = "openbao-data";
     // /openbao/file is a path the official image owns and fixes up before it drops privileges.
     // Mounting the Raft volume there lets the image handle first-use volume ownership itself.
     private const string DataDirectory = "/openbao/file";
@@ -26,16 +25,18 @@ public static class StartOpenBao
         string sharedStorageRoot,
         IResourceBuilder<ParameterResource> token)
     {
-        var config = Path.Combine(builder.AppHostDirectory, "configs", "openbao", "openbao.hcl");
+        var deployment = DeploymentRuntime.Current;
+        var config = deployment.Paths.AppHostConfig("openbao", "openbao.hcl");
         var bootstrapRoot = OpenBaoBootstrapPaths.HostRoot(sharedStorageRoot);
+        var dataVolumeName = deployment.Names.Volume("openbao-data");
 
         var server = builder
-            .AddContainer("openbao", "openbao/openbao", "2.5.5")
+            .AddContainer(deployment.Names.OpenBao, deployment.Images.OpenBao.Repository, deployment.Images.OpenBao.Tag)
             .WithHttpEndpoint(port: Ports.OpenBao, targetPort: 8200, name: "http")
             .WithExternalHttpEndpoints()
             .WithEnvironment("OPENBAO_APP_TOKEN", token)
             .WithArgs("server", "-config=/openbao/openbao.hcl")
-            .WithVolume(DataVolumeName, DataDirectory)
+            .WithVolume(dataVolumeName, DataDirectory)
             .WithPortableBindMount(config, "../AppHost/configs/openbao/openbao.hcl", "/openbao/openbao.hcl", isReadOnly: true);
 
         server.PublishAsDockerComposeService((_, service) =>
@@ -107,7 +108,7 @@ public static class StartOpenBao
             """.ReplaceLineEndings("\n");
 
         var bootstrap = builder
-            .AddContainer("openbao-bootstrap", "openbao/openbao", "2.5.5")
+            .AddContainer(deployment.Names.OpenBaoBootstrap, deployment.Images.OpenBao.Repository, deployment.Images.OpenBao.Tag)
             .WithEntrypoint("/bin/sh")
             .WithArgs("-c", script)
             .WithEnvironment("BAO_ADDR", server.GetEndpoint("http"))
@@ -119,7 +120,7 @@ public static class StartOpenBao
                 bootstrapRoot,
                 "${FROSTSTREAM_OPENBAO_BOOTSTRAP_ROOT:-./openbao-bootstrap}",
                 BootstrapDirectory)
-            .WithVolume(DataVolumeName, DataDirectory)
+            .WithVolume(dataVolumeName, DataDirectory)
             .WaitFor(server);
 
         return new OpenBaoResources(server, bootstrap);

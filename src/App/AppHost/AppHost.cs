@@ -1,13 +1,14 @@
 using AppHost;
 using Aspire.Hosting;
-using DotNetEnv;
 using Microsoft.Extensions.Configuration;
 
 var builder = DistributedApplication.CreateBuilder(args);
+var deployment = DeploymentBootstrap.Resolve(builder, args);
+DeploymentRuntime.Initialize(deployment);
 
-builder.AddDockerComposeEnvironment("aspire-docker-demo")
-    // WithLocalComposeBuild pins literal image names in the yaml, so the publisher's
-    // <SERVICE>_IMAGE placeholders are never referenced — keep them out of .env.
+var compose = builder.AddDockerComposeEnvironment(deployment.Selection.Profile.Name)
+    .WithDashboard(false)
+    .ConfigureComposeFile(file => file.Name = deployment.Names.InstallationName)
     .ConfigureEnvFile(env =>
     {
         foreach (var key in env.Keys.Where(static k => k.EndsWith("_IMAGE", StringComparison.Ordinal)).ToList())
@@ -15,33 +16,15 @@ builder.AddDockerComposeEnvironment("aspire-docker-demo")
             env.Remove(key);
         }
     });
-
-
-// aspire-development.env is the source of truth for all configurable environment
-// variables (mode flags, image tags, secrets, tunables). Values in the file override
-// variables inherited from the shell.
-var devEnvFile = Path.GetFullPath(
-    Environment.GetEnvironmentVariable("FROSTSTREAM_ENV_FILE") ??
-    Path.Combine(builder.AppHostDirectory, "aspire-development.env"));
-if (File.Exists(devEnvFile))
-{
-    Env.Load(devEnvFile);
-}
-
-// Empty optional path values mean "use the deployment default". Remove them before Aspire
-// snapshots environment variables into configuration, otherwise parameter publication emits
-// an empty bind source instead of the Compose-safe default.
-if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FROSTSTREAM_BACKUP_ROOT")))
-{
-    Environment.SetEnvironmentVariable("FROSTSTREAM_BACKUP_ROOT", null);
-}
+compose.Resource.DefaultNetworkName = deployment.Names.Network;
 
 builder.Configuration.AddEnvironmentVariables();
 
 var hardening = AppHostHardening.Read(AppHostHardening.IsTruthy(Environment.GetEnvironmentVariable("SINGLE_USER_MODE")));
-AppHostHardening.Validate(hardening);
+AppHostHardening.Validate(hardening, deployment.Selection.Profile.Edition);
 
-var sharedStorageRoot = ResolveStorageRoot(builder);
+var sharedStorageRoot = deployment.Paths.StorageRoot;
+Directory.CreateDirectory(sharedStorageRoot);
 
 // Deployment-specific secrets shared by several services. Declared as parameters (not inline
 // strings) so the compose publisher emits ${...} references backed by .env instead of baking
@@ -71,21 +54,3 @@ var clickHouse = StartClickHouse.Start(builder);
 StartServices.Wire(builder, hardening, sharedStorageRoot, nats, postgres, openBaoResources, openBaoToken, typesense, typesenseApiKey, authentik, openFga, potProvider, backupService, clickHouse);
 
 builder.Build().Run();
-
-static string ResolveStorageRoot(IDistributedApplicationBuilder builder)
-{
-    var configured = Environment.GetEnvironmentVariable("FROSTSTREAM_STORAGE_ROOT");
-    var root = string.IsNullOrWhiteSpace(configured)
-        ? Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "..", "..", "data"))
-        : configured;
-
-    if (!Path.IsPathRooted(root))
-    {
-        throw new InvalidOperationException(
-            $"FROSTSTREAM_STORAGE_ROOT must be an absolute path, but was '{root}'.");
-    }
-
-    root = Path.GetFullPath(root);
-    Directory.CreateDirectory(root);
-    return root;
-}

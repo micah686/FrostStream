@@ -10,4 +10,8 @@ Phase 2 artifact:
 
 - [`phase-02-compose-publishing.md`](phase-02-compose-publishing.md): pinned Aspire toolchain, isolated four-profile fixture, native publish/prepare behavior, graph assertions, and verification evidence.
 
+Phase 3 artifact:
+
+- [`phase-03-production-profiles.md`](phase-03-production-profiles.md): production profile selection, installation-scoped configuration, preserved resolved inputs, native Full output, and verification evidence.
+
 Evidence containing credentials, recovery material, dumps, cookies, or downloaded media must remain outside source control. Commit only redacted summaries.

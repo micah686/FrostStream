@@ -5,7 +5,8 @@ public static class StartNats
     public static IResourceBuilder<NatsServerResource> Start(IDistributedApplicationBuilder builder)
     {
         //Generate TLS certs for SSL
-        var certsDirectory = Path.Combine(builder.AppHostDirectory, "configs", "nats", "certs");
+        var deployment = DeploymentRuntime.Current;
+        var certsDirectory = deployment.Paths.AppHostConfig("nats", "certs");
         var websocketCertPath = Path.Combine(certsDirectory, "ws-cert.pem");
         var websocketKeyPath = Path.Combine(certsDirectory, "ws-key.pem");
         if (!File.Exists(websocketCertPath) || !File.Exists(websocketKeyPath))
@@ -14,9 +15,9 @@ public static class StartNats
         }
 
         var nats = builder
-            .AddNats("nats") // logical name "nats"
+            .AddNats(deployment.Names.Nats)
             //.WithDataVolume("nats-data")    // persist JS data across restarts (uses a Docker volume)
-            .WithPortableBindMount("./configs/nats/nats-server.conf", "../AppHost/configs/nats/nats-server.conf", "/etc/nats/nats.conf", isReadOnly: true)
+            .WithPortableBindMount(deployment.Paths.AppHostConfig("nats", "nats-server.conf"), "../AppHost/configs/nats/nats-server.conf", "/etc/nats/nats.conf", isReadOnly: true)
             .WithPortableBindMount(websocketCertPath, "../AppHost/configs/nats/certs/ws-cert.pem", "/etc/nats/certs/ws-cert.pem", isReadOnly: true)
             .WithPortableBindMount(websocketKeyPath, "../AppHost/configs/nats/certs/ws-key.pem", "/etc/nats/certs/ws-key.pem", isReadOnly: true)
             .WithArgs("-c", "/etc/nats/nats.conf")
@@ -54,6 +55,7 @@ public static class StartNats
 
     private static void AddNatsUI(IDistributedApplicationBuilder builder, IResourceBuilder<NatsServerResource> nats)
     {
+        var deployment = DeploymentRuntime.Current;
         // Parameters (not inline strings) so the compose publisher writes them to .env
         // instead of baking the credentials into docker-compose.yaml.
         var adminUser = builder.AddParameter(
@@ -72,7 +74,7 @@ public static class StartNats
             secret: true);
 
         var natsUi = builder
-            .AddContainer("nats-ui", "klinux/nats-ui", "0.4.0")
+            .AddContainer(deployment.Names.NatsUi, deployment.Images.NatsUi.Repository, deployment.Images.NatsUi.Tag)
             .WithHttpEndpoint(port: Ports.NatsUi, targetPort: 8080, name: "http")
             .WithExternalHttpEndpoints()
             .WithEnvironment("PORT", "8080")
