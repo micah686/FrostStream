@@ -18,11 +18,14 @@
     <Project Path="StorageExtensions/StorageExtensions.csproj" />
     <Project Path="WebAPI/WebAPI.csproj" />
     <Project Path="Worker/Worker.csproj" />
+    <Project Path="Deployment/Deployment.csproj" />
   </Folder>
   <Folder Name="/Startup/">
     <Project Path="AppHost/AppHost.csproj" />
+    <Project Path="ComposePublishingFixture/ComposePublishingFixture.csproj" />
   </Folder>
   <Folder Name="/Tests/">
+    <Project Path="ComposePublishingFixture.Tests/ComposePublishingFixture.Tests.csproj" />
     <Project Path="../../Tests/IntegrationTests/IntegrationTests/IntegrationTests.csproj" />
     <Project Path="../../Tests/UnitTests/UnitTests.csproj" />
   </Folder>

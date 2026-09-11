@@ -1,6 +1,6 @@
 # FrostStream Lite implementation phases
 
-Status: planning only. No implementation phase is complete merely because this document exists.
+Status: active implementation plan. Phase 1 is complete with its recorded runtime limitation; Phase 2 is verified and awaiting acceptance. Later phases remain unimplemented.
 
 Source of truth: [FROSTREAM_LITE_PLAN.md](FROSTREAM_LITE_PLAN.md). This document divides that plan into actionable, sequential work blocks without changing its scope. Proposed files and command interfaces below become concrete during their owning phase.
 
@@ -62,18 +62,20 @@ Preserve these exact spellings. Internal namespaces use `FrostStream`. Installat
 
 ## Phase 2 — Prove native four-profile Aspire publishing
 
+**State (2026-09-10): Verified, awaiting acceptance.** The isolated fixture, pinned 13.5.3 toolchain, four native publish/prepare outputs, graph assertions, Compose validation, and byte-identical alternate publication are recorded in [`docs/lite/phase-02-compose-publishing.md`](docs/lite/phase-02-compose-publishing.md). Production topology is unchanged apart from aligning its AppHost SDK with the already centralized 13.5.3 packages.
+
 **Outcome:** A small isolated fixture proves the publisher behavior before production topology is refactored.
 
 **Primary areas:** AppHost version configuration; proposed publishing fixture and profile model.
 
 **Work block**
 
-- [ ] Align and pin a verified compatible Aspire SDK/package/CLI toolchain; preserve the existing AppHost build.
-- [ ] Introduce/test immutable profile selection with explicit name, edition, initialization flag, and separate developer-tools option. Reject unknown profiles before constructing resources.
-- [ ] Use a fresh resource graph per selected profile. In the fixture, exercise a runtime resource, conditional init job, parameter, persistent volume, and conditional dependency.
-- [ ] Prove native Compose/env emission into four separate directories with native filenames, dashboard exclusion, and matching installation identity within pairs.
-- [ ] Prove the distinction between placeholder env publication and resolved-value preparation using the pinned version. Record exact working commands/APIs and how noninteractive inputs are supplied.
-- [ ] Verify publication to an alternate output directory and stable repeated generation. Record any native metadata differences.
+- [x] Align and pin a verified compatible Aspire SDK/package/CLI toolchain; preserve the existing AppHost build.
+- [x] Introduce/test immutable profile selection with explicit name, edition, initialization flag, and separate developer-tools option. Reject unknown profiles before constructing resources.
+- [x] Use a fresh resource graph per selected profile. In the fixture, exercise a runtime resource, conditional init job, parameter, persistent volume, and conditional dependency.
+- [x] Prove native Compose/env emission into four separate directories with native filenames, dashboard exclusion, and matching installation identity within pairs.
+- [x] Prove the distinction between placeholder env publication and resolved-value preparation using the pinned version. Record exact working commands/APIs and how noninteractive inputs are supplied.
+- [x] Verify publication to an alternate output directory and stable repeated generation. Record any native metadata differences.
 
 **Verification gate:** All four fixture bundles pass Compose configuration validation. Read-only graph assertions establish correct membership, valid references, pair identity, and expected parameter resolution. No generated artifact edits are used to pass.
 
