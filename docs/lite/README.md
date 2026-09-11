@@ -1,0 +1,10 @@
+# FrostStream Lite phase evidence
+
+Phase 1 artifacts:
+
+- [`phase-01-inventory.md`](phase-01-inventory.md): extraction, transport, lifecycle, persistence, route, and backup inventory.
+- [`phase-01-baseline.md`](phase-01-baseline.md): observed versions, build/test results, prerequisites, resource-measurement procedure, and gate status.
+- [`phase-01-smoke-test.md`](phase-01-smoke-test.md): reproducible Full behavioral smoke test.
+
+Evidence containing credentials, recovery material, dumps, cookies, or downloaded media must remain outside source control. Commit only redacted summaries.
+

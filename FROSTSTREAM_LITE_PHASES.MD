@@ -43,16 +43,18 @@ Preserve these exact spellings. Internal namespaces use `FrostStream`. Installat
 
 ## Phase 1 — Capture the implementation inventory and Full baseline
 
+**State (2026-09-10): Complete, with a blocked Full runtime verification.** Inventory, build/test results, runtime attempt, partial resource snapshot, prerequisites, and the repeatable smoke procedure are recorded under [`docs/lite/`](docs/lite/). SSH.NET correctly resolves to 2026.0.0 after restoring stale assets. The existing Full graph cannot pass its successful one-shot dependency under Podman Compose 1.6.0, so the application smoke/workload remains explicitly blocked until compatible Docker Compose is used or Phase 5 fixes lifecycle portability.
+
 **Outcome:** A concrete inventory and reproducible baseline against which extraction and consolidation can be checked.
 
 **Work block**
 
-- [ ] Inspect the six backend entry points, AppHost factories, frontend startup/auth flows, existing tests, and generation/startup scripts.
-- [ ] Inventory every request/reply, JetStream command, event consumer, progress stream, workflow ingress, schedule notification, POT call, and backup report. Record producer, consumer, payload, owner handling, persistence/acknowledgment semantics, and proposed Lite replacement.
-- [ ] Inventory schema/setup work, hosted services, HTTP routes, internal credentials, persistent paths, storage affinities, and backup coverage. Assign each item to a later phase; no unassigned paths remain.
-- [ ] Record .NET, Aspire SDK/package/CLI, Node/pnpm, database, yt-dlp, ffmpeg, and pgBackRest versions actually in use. Identify prerequisites for running existing tests.
-- [ ] Capture Full build/test results and a smoke scenario covering login, worker download, ingest, search, playback, and backup. Record pre-existing failures separately.
-- [ ] Capture a reproducible Full resource baseline: host configuration, idle memory, readiness time, container count, and representative download/search workload.
+- [x] Inspect the six backend entry points, AppHost factories, frontend startup/auth flows, existing tests, and generation/startup scripts.
+- [x] Inventory every request/reply, JetStream command, event consumer, progress stream, workflow ingress, schedule notification, POT call, and backup report. Record producer, consumer, payload, owner handling, persistence/acknowledgment semantics, and proposed Lite replacement.
+- [x] Inventory schema/setup work, hosted services, HTTP routes, internal credentials, persistent paths, storage affinities, and backup coverage. Assign each item to a later phase; no unassigned paths remain.
+- [x] Record .NET, Aspire SDK/package/CLI, Node/pnpm, database, yt-dlp, ffmpeg, and pgBackRest versions actually in use. Identify prerequisites for running existing tests.
+- [x] Capture Full build/test results and a smoke scenario covering login, worker download, ingest, search, playback, and backup. Record pre-existing failures separately.
+- [x] Capture a reproducible Full resource baseline attempt: host configuration, static/live partial container count, startup timing/failure, image/runtime versions, and partial memory are recorded. The representative download/search workload could not run because Podman Compose rejects the exited-zero `backup-init` dependency; this is retained as blocked evidence rather than reported as a pass.
 
 **Verification gate:** Inventory entries point to implementation files, baseline commands can be repeated, and failures are distinguished from missing prerequisites. Do not infer MediaProcessor functionality from the outdated README.
 
