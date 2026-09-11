@@ -2,15 +2,20 @@ namespace AppHost;
 
 public sealed record OpenBaoResources(
     IResourceBuilder<ContainerResource> Server,
-    IResourceBuilder<ContainerResource>? DevelopmentBootstrap);
+    IResourceBuilder<ContainerResource>? Initialization);
 
 public static class OpenBaoResourceExtensions
 {
     public static IResourceBuilder<T> WaitForOpenBao<T>(this IResourceBuilder<T> resource, OpenBaoResources openBao)
-        where T : IResourceWithWaitSupport
-        => openBao.DevelopmentBootstrap is null
-            ? resource.WaitFor(openBao.Server)
-            : resource.WaitForCompletion(openBao.DevelopmentBootstrap);
+        where T : IResourceWithWaitSupport, IComputeResource
+    {
+        if (openBao.Initialization is not null)
+            return resource.WaitForCompletion(openBao.Initialization);
+
+        return resource
+            .WaitFor(openBao.Server)
+            .WithComposeDependencyCondition(DeploymentRuntime.Current.Names.OpenBao, "service_healthy");
+    }
 }
 
 public static class StartOpenBao
@@ -29,14 +34,93 @@ public static class StartOpenBao
         var config = deployment.Paths.AppHostConfig("openbao", "openbao.hcl");
         var bootstrapRoot = OpenBaoBootstrapPaths.HostRoot(sharedStorageRoot);
         var dataVolumeName = deployment.Names.Volume("openbao-data");
+        var includeInitialization = deployment.Selection.Profile.IncludeInitialization;
+        if (builder.ExecutionContext.IsRunMode)
+            Directory.CreateDirectory(bootstrapRoot);
+
+        var serverScript = """
+            set -eu
+
+            bootstrap_file="/bootstrap/init.env"
+            init_allowed="${OPENBAO_INIT_ALLOWED:-false}"
+
+            bao server -config=/openbao/openbao.hcl &
+            server_pid=$!
+
+            shutdown() {
+              trap - TERM INT
+              kill -TERM "$server_pid" 2>/dev/null || true
+              wait "$server_pid" 2>/dev/null || true
+            }
+            fail() {
+              echo "openbao: $1" >&2
+              kill -TERM "$server_pid" 2>/dev/null || true
+              wait "$server_pid" 2>/dev/null || true
+              exit 1
+            }
+            trap shutdown TERM INT
+
+            state=""
+            attempt=1
+            while [ "$attempt" -le 120 ]; do
+              if ! kill -0 "$server_pid" 2>/dev/null; then
+                wait "$server_pid"
+                exit $?
+              fi
+              set +e
+              bao operator init -status >/dev/null 2>&1
+              status=$?
+              set -e
+              if [ "$status" -eq 0 ]; then
+                state="initialized"
+                break
+              fi
+              if [ "$status" -eq 2 ]; then
+                # Raft can briefly report "not initialized" while it restores its persisted
+                # barrier state. Recovery material means this installation is expected to be
+                # initialized, so keep polling instead of misclassifying a normal restart.
+                if [ ! -f "$bootstrap_file" ]; then
+                  state="uninitialized"
+                  break
+                fi
+              fi
+              sleep 1
+              attempt=$((attempt + 1))
+            done
+            [ -n "$state" ] || fail "API did not become ready within 120 seconds"
+
+            if [ "$state" = "uninitialized" ]; then
+              [ "$init_allowed" = "true" ] || fail "storage is uninitialized; run profile 'frostream-full-init'"
+              echo 'openbao: awaiting explicit first-time initialization'
+            else
+              [ -f "$bootstrap_file" ] || fail "recovery material is missing; restore /bootstrap/init.env from backup"
+              . "$bootstrap_file"
+              if bao status >/dev/null 2>&1; then
+                echo 'openbao: already unsealed'
+              else
+                bao operator unseal "$UNSEAL_KEY" >/dev/null || fail "unseal failed"
+                echo 'openbao: unsealed from persisted recovery material'
+              fi
+            fi
+
+            wait "$server_pid"
+            """.ReplaceLineEndings("\n");
 
         var server = builder
             .AddContainer(deployment.Names.OpenBao, deployment.Images.OpenBao.Repository, deployment.Images.OpenBao.Tag)
             .WithHttpEndpoint(port: Ports.OpenBao, targetPort: 8200, name: "http")
             .WithExternalHttpEndpoints()
             .WithEnvironment("OPENBAO_APP_TOKEN", token)
-            .WithArgs("server", "-config=/openbao/openbao.hcl")
+            .WithEnvironment("OPENBAO_INIT_ALLOWED", includeInitialization ? "true" : "false")
+            .WithEnvironment("BAO_ADDR", "http://127.0.0.1:8200")
+            .WithEntrypoint("/bin/sh")
+            .WithArgs("-c", serverScript)
             .WithVolume(dataVolumeName, DataDirectory)
+            .WithPortableBindMount(
+                bootstrapRoot,
+                "${FROSTSTREAM_OPENBAO_BOOTSTRAP_ROOT:-./openbao-bootstrap}",
+                BootstrapDirectory,
+                isReadOnly: true)
             .WithPortableBindMount(config, "../AppHost/configs/openbao/openbao.hcl", "/openbao/openbao.hcl", isReadOnly: true);
 
         server.PublishAsDockerComposeService((_, service) =>
@@ -49,7 +133,11 @@ public static class StartOpenBao
                 Retries = 30,
                 StartPeriod = "10s"
             };
+            service.Restart = "unless-stopped";
         });
+
+        if (!includeInitialization)
+            return new OpenBaoResources(server, Initialization: null);
 
         var script = """
             set -eu
@@ -64,7 +152,25 @@ public static class StartOpenBao
               mv "$temp_file" "$bootstrap_file"
             }
 
-            until bao operator init -status >/dev/null 2>&1 || [ "$?" -eq 2 ]; do sleep 1; done
+            ready=false
+            attempt=1
+            while [ "$attempt" -le 120 ]; do
+              set +e
+              bao operator init -status >/dev/null 2>&1
+              status=$?
+              set -e
+              if [ "$status" -eq 0 ]; then
+                ready=true
+                break
+              fi
+              if [ "$status" -eq 2 ]; then
+                ready=true
+                break
+              fi
+              sleep 1
+              attempt=$((attempt + 1))
+            done
+            [ "$ready" = true ] || { echo 'openbao-bootstrap: API did not become ready within 120 seconds' >&2; exit 1; }
             if bao operator init -status >/dev/null 2>&1; then
               if [ ! -f "$bootstrap_file" ]; then
                 if [ -f "$legacy_bootstrap_file" ]; then
@@ -121,7 +227,8 @@ public static class StartOpenBao
                 "${FROSTSTREAM_OPENBAO_BOOTSTRAP_ROOT:-./openbao-bootstrap}",
                 BootstrapDirectory)
             .WithVolume(dataVolumeName, DataDirectory)
-            .WaitFor(server);
+            .WaitFor(server)
+            .PublishAsDockerComposeService((_, service) => service.Restart = "no");
 
         return new OpenBaoResources(server, bootstrap);
     }

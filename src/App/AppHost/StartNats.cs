@@ -46,6 +46,7 @@ public static class StartNats
                 .OfType<Aspire.Hosting.ApplicationModel.HealthCheckAnnotation>()
                 .Single(a => a.Key == "nats_check"));
         nats.WithHttpHealthCheck("/healthz", endpointName: "monitor");
+        nats.PublishAsDockerComposeService((_, service) => service.Restart = "unless-stopped");
 
         if (Helpers.DevelopmentToolsEnabled)
             AddNatsUI(builder, nats);

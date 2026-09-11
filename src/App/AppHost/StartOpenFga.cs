@@ -2,7 +2,8 @@ namespace AppHost;
 
 public sealed record OpenFgaResources(
     IResourceBuilder<ContainerResource>? Server,
-    EndpointReference? Endpoint);
+    EndpointReference? Endpoint,
+    IResourceBuilder<ContainerResource>? Migration);
 
 public static class StartOpenFga
 {
@@ -14,16 +15,22 @@ public static class StartOpenFga
         var deployment = DeploymentRuntime.Current;
         if (Helpers.IsSingleUserMode)
         {
-            return new OpenFgaResources(Server: null, Endpoint: null);
+            return new OpenFgaResources(Server: null, Endpoint: null, Migration: null);
         }
 
-        var migrate = builder
-            .AddContainer(deployment.Names.OpenFgaMigrate, deployment.Images.OpenFga.Repository, deployment.Images.OpenFga.Tag)
-            .WithArgs("migrate")
-            .WithEnvironment("OPENFGA_DATASTORE_ENGINE", "postgres")
-            .WithEnvironment("OPENFGA_DATASTORE_URI", $"postgres://{postgres.User}:{postgres.Password}@{deployment.Names.Postgres}:5432/{deployment.Names.OpenFgaDatabase}?sslmode=disable")
-            .WaitFor(postgres.OpenFgaDb)
-            .WaitForDatabases(postgres);
+        IResourceBuilder<ContainerResource>? migrate = null;
+        if (deployment.Selection.Profile.IncludeInitialization)
+        {
+            migrate = builder
+                .AddContainer(deployment.Names.OpenFgaMigrate, deployment.Images.OpenFga.Repository, deployment.Images.OpenFga.Tag)
+                .WithArgs("migrate", "--timeout", "2m")
+                .WithEnvironment("OPENFGA_DATASTORE_ENGINE", "postgres")
+                .WithEnvironment("OPENFGA_DATASTORE_URI", $"postgres://{postgres.User}:{postgres.Password}@{deployment.Names.Postgres}:5432/{deployment.Names.OpenFgaDatabase}?sslmode=disable")
+                .WaitFor(postgres.OpenFgaDb)
+                .WaitForDatabases(postgres)
+                .WithComposeDependencyCondition(deployment.Names.Postgres, "service_healthy")
+                .PublishAsDockerComposeService((_, service) => service.Restart = "no");
+        }
 
         var server = builder
             .AddContainer(deployment.Names.OpenFga, deployment.Images.OpenFga.Repository, deployment.Images.OpenFga.Tag)
@@ -32,8 +39,12 @@ public static class StartOpenFga
             .WithHttpEndpoint(port: Ports.OpenFga, targetPort: 8080, name: "http")
             .WithEnvironment("OPENFGA_DATASTORE_ENGINE", "postgres")
             .WithEnvironment("OPENFGA_DATASTORE_URI", $"postgres://{postgres.User}:{postgres.Password}@{deployment.Names.Postgres}:5432/{deployment.Names.OpenFgaDatabase}?sslmode=disable")
-            .WaitForCompletion(migrate)
-            .WaitFor(postgres.OpenFgaDb);
+            .WaitFor(postgres.OpenFgaDb)
+            .WithComposeDependencyCondition(deployment.Names.Postgres, "service_healthy")
+            .PublishAsDockerComposeService((_, service) => service.Restart = "unless-stopped");
+
+        if (migrate is not null)
+            server.WaitForCompletion(migrate);
         
         if (Helpers.DevelopmentToolsEnabled)
         {
@@ -57,6 +68,6 @@ public static class StartOpenFga
                 .WithEnvironment("OPENFGA_AUTHN_PRESHARED_KEYS", Helpers.GetEnv("OPENFGA_API_TOKEN"));
         }
 
-        return new OpenFgaResources(server, server.GetEndpoint("http"));
+        return new OpenFgaResources(server, server.GetEndpoint("http"), migrate);
     }
 }

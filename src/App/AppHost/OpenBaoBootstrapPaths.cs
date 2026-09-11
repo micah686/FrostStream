@@ -9,9 +9,5 @@ internal static class OpenBaoBootstrapPaths
     public const string ComposeDefaultRoot = "./openbao-bootstrap";
 
     public static string HostRoot(string sharedStorageRoot)
-    {
-        var root = DeploymentRuntime.Current.Paths.OpenBaoBootstrapRoot;
-        Directory.CreateDirectory(root);
-        return root;
-    }
+        => DeploymentRuntime.Current.Paths.OpenBaoBootstrapRoot;
 }

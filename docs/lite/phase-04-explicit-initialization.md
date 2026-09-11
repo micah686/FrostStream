@@ -2,7 +2,7 @@
 
 Date implemented: 2026-09-11
 
-Status: Implemented, awaiting verification.
+Status: Accepted on 2026-09-11 when Phase 5 was requested; the remaining real pgBackRest check passed during Phase 5 disposable verification.
 
 Phase 4 removes schema creation and fixed-owner seeding from ordinary DataBridge startup and stanza creation from ordinary BackupService startup. It adds finite explicit command modes usable by Full now and by the future merged Lite image. This remains a development milestone, not a deployable Lite edition.
 
@@ -121,9 +121,9 @@ Expected: the initializer exits zero after `stanza-create`/`check`; the runtime 
 
 After recording the result, stop and remove only this explicitly isolated fixture with `docker compose -f /tmp/froststream-phase4-check/compose/docker-compose.yaml down -v`.
 
-## Known limitations and remaining gate
+## Gate resolution
 
-The application portion of the gate is verified against disposable services. A real pgBackRest stanza creation/check was not run because the available repository runtime uses non-disposable Full paths and the isolated PostgreSQL fixture was not archive/pgBackRest configured. The focused compatibility tests pass, but Phase 4 remains “awaiting verification” until the manual pgBackRest scenario above succeeds on disposable storage.
+The application portion of the gate was verified against disposable services. On 2026-09-11, Phase 5's isolated Full installation also ran `backupservice-initialize` against its disposable pgBackRest-enabled PostgreSQL and backup root. Stanza creation and `pgbackrest check` completed successfully, closing the remaining Phase 4 runtime check.
 
 Podman Compose 1.6.0 still has Phase 1's pre-existing successful-one-shot dependency limitation. Phase 5 owns lifecycle portability and the true Full init/runtime profile split.
 

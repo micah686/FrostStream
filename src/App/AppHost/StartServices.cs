@@ -50,36 +50,41 @@ public static class StartServices
         var deployment = DeploymentRuntime.Current;
         var openBao = openBaoResources.Server;
         var storageRoot = builder.ExecutionContext.IsRunMode ? sharedStorageRoot : ContainerStorageRoot;
-        var databridgeInitializer = builder.AddProject<Projects.DataBridge>(deployment.Names.DataBridgeInitialize)
-            .WithArgs("initialize")
-            .WithReference(postgres.FrostStreamDb).WaitFor(postgres.FrostStreamDb).WaitForDatabases(postgres)
-            .WithEnvironment("Typesense__Url", typesense.GetEndpoint("http"))
-            .WithEnvironment("Typesense__ApiKey", typesenseApiKey)
-            .WithEnvironment("FROSTSTREAM_STORAGE_ROOT", storageRoot)
-            .WithEnvironment("Initialization__RequiredDirectory", storageRoot)
-            .WithEnvironment("Initialization__InitProfile", "frostream-full-init")
-            .WithEnvironment("SINGLE_USER_MODE", hardening.SingleUserMode ? "true" : "false")
-            .WaitFor(typesense)
-            .PublishAsDockerFile(c => c
-                .WithDockerfile(deployment.Paths.AppProjectDirectory("DataBridge"), "Dockerfile")
-                .WithImage(deployment.Images.ApplicationRepository(deployment.Names.DataBridge), "latest")
-                .WithVolume(deployment.Names.Volume("data"), ContainerStorageRoot))
-            .WithLocalComposeBuild(deployment.Images.Application(deployment.Names.DataBridge), deployment.Paths.ComposeDockerfile("DataBridge"))
-            .PublishAsDockerComposeService((_, service) =>
-            {
-                service.Command = ["initialize"];
-                service.Restart = "no";
-            });
-
-        if (clickHouse is { Server: { } initClickHouse, HttpEndpoint: { } initClickHouseEndpoint, Password: { } initClickHousePassword })
+        IResourceBuilder<ProjectResource>? databridgeInitializer = null;
+        if (deployment.Selection.Profile.IncludeInitialization)
         {
-            databridgeInitializer = databridgeInitializer
-                .WithEnvironment("LiveChat__Enabled", "true")
-                .WithEnvironment("LiveChat__Url", initClickHouseEndpoint)
-                .WithEnvironment("LiveChat__Database", StartClickHouse.Database)
-                .WithEnvironment("LiveChat__User", StartClickHouse.User)
-                .WithEnvironment("LiveChat__Password", initClickHousePassword)
-                .WaitFor(initClickHouse);
+            databridgeInitializer = builder.AddProject<Projects.DataBridge>(deployment.Names.DataBridgeInitialize)
+                .WithArgs("initialize")
+                .WithReference(postgres.FrostStreamDb).WaitFor(postgres.FrostStreamDb).WaitForDatabases(postgres)
+                .WithEnvironment("Typesense__Url", typesense.GetEndpoint("http"))
+                .WithEnvironment("Typesense__ApiKey", typesenseApiKey)
+                .WithEnvironment("FROSTSTREAM_STORAGE_ROOT", storageRoot)
+                .WithEnvironment("Initialization__RequiredDirectory", storageRoot)
+                .WithEnvironment("Initialization__InitProfile", "frostream-full-init")
+                .WithEnvironment("SINGLE_USER_MODE", hardening.SingleUserMode ? "true" : "false")
+                .WaitFor(typesense)
+                .WithComposeDependencyCondition(deployment.Names.Typesense, "service_healthy")
+                .PublishAsDockerFile(c => c
+                    .WithDockerfile(deployment.Paths.AppProjectDirectory("DataBridge"), "Dockerfile")
+                    .WithImage(deployment.Images.ApplicationRepository(deployment.Names.DataBridge), "latest")
+                    .WithVolume(deployment.Names.Volume("data"), ContainerStorageRoot))
+                .WithLocalComposeBuild(deployment.Images.Application(deployment.Names.DataBridge), deployment.Paths.ComposeDockerfile("DataBridge"))
+                .PublishAsDockerComposeService((_, service) =>
+                {
+                    service.Command = ["initialize"];
+                    service.Restart = "no";
+                });
+
+            if (clickHouse is { Server: { } initClickHouse, HttpEndpoint: { } initClickHouseEndpoint, Password: { } initClickHousePassword })
+            {
+                databridgeInitializer = databridgeInitializer
+                    .WithEnvironment("LiveChat__Enabled", "true")
+                    .WithEnvironment("LiveChat__Url", initClickHouseEndpoint)
+                    .WithEnvironment("LiveChat__Database", StartClickHouse.Database)
+                    .WithEnvironment("LiveChat__User", StartClickHouse.User)
+                    .WithEnvironment("LiveChat__Password", initClickHousePassword)
+                    .WaitFor(initClickHouse);
+            }
         }
 
         var databridge = builder.AddProject<Projects.DataBridge>(deployment.Names.DataBridge)
@@ -99,6 +104,7 @@ public static class StartServices
             .WithEnvironment("PotBroker__ProviderUrl", potProvider.GetEndpoint("http"))
             .WaitForOpenBao(openBaoResources)
             .WaitFor(typesense)
+            .WithComposeDependencyCondition(deployment.Names.Typesense, "service_healthy")
             .WaitFor(potProvider)
             .PublishAsDockerFile(c => c
                 .WithDockerfile(
@@ -110,7 +116,8 @@ public static class StartServices
                 .WithVolume(deployment.Names.Volume("data"), ContainerStorageRoot))
             .WithLocalComposeBuild(deployment.Images.Application(deployment.Names.DataBridge), deployment.Paths.ComposeDockerfile("DataBridge"));
 
-        databridge.WaitForCompletion(databridgeInitializer);
+        if (databridgeInitializer is not null)
+            databridge.WaitForCompletion(databridgeInitializer);
 
         if (clickHouse is { Server: { } clickHouseServer, HttpEndpoint: { } clickHouseEndpoint, Password: { } clickHousePassword })
         {
@@ -123,7 +130,9 @@ public static class StartServices
                 .WaitFor(clickHouseServer);
         }
 
-        return databridge.WithComposeDependencyCondition(deployment.Names.OpenBao, "service_healthy");
+        return databridge
+            .WithComposeDependencyCondition(deployment.Names.Postgres, "service_healthy")
+            .WithComposeDependencyCondition(deployment.Names.OpenBao, "service_healthy");
     }
 
     private static IResourceBuilder<ProjectResource> WireWebApi(

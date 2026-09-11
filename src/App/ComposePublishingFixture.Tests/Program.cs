@@ -16,7 +16,7 @@ if (args is ["--production-pair", var initRoot, var runtimeRoot, var installatio
         installationName,
         Path.GetFullPath(sourceRoot),
         Path.GetFullPath(resolvedFile));
-    Console.WriteLine("Phase 3 production publishing verification passed.");
+    Console.WriteLine("Phase 5 Full lifecycle publishing verification passed.");
     return;
 }
 
@@ -381,15 +381,56 @@ static void VerifyProductionPair(
     var runtimeEnvironment = ReadRequired(Path.Combine(runtimeRoot, ".env"));
     var resolved = DeploymentEnvironmentFiles.Read(resolvedFile);
 
-    Assert(initCompose == runtimeCompose,
-        "Full pair runtime definitions diverged before the Phase 5 lifecycle split.");
     Assert(initEnvironment == runtimeEnvironment, "Full pair env contracts differ.");
     Assert(Regex.IsMatch(initCompose,
             $"^name:\\s*[\\\"']?{Regex.Escape(installationName)}[\\\"']?\\s*$",
             RegexOptions.Multiline),
         "Full Compose project identity is incorrect.");
 
-    var services = ReadTopLevelKeys(initCompose, "services");
+    var initServices = ReadTopLevelKeys(initCompose, "services");
+    var runtimeServices = ReadTopLevelKeys(runtimeCompose, "services");
+    var initializationServices = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "backup-init",
+        "postgres-init",
+        "openbao-bootstrap",
+        "openfga-migrate",
+        "backupservice-initialize",
+        "databridge-initialize"
+    };
+
+    Assert(initServices.Except(runtimeServices).ToHashSet(StringComparer.Ordinal).SetEquals(initializationServices),
+        "Full init does not contain exactly the expected one-shot resources.");
+    Assert(runtimeServices.SetEquals(initServices.Except(initializationServices)),
+        "Full runtime service membership differs from Full init beyond one-shot resources.");
+    foreach (var initializationService in initializationServices)
+    {
+        Assert(!Regex.IsMatch(runtimeCompose,
+                $"(?m)^      {Regex.Escape(initializationService)}:\\s*$"),
+            $"Full runtime contains a dangling reference to {initializationService}.");
+        Assert(ReadServiceBlock(initCompose, initializationService).Contains("restart: \"no\"", StringComparison.Ordinal),
+            $"Initialization service {initializationService} must not restart.");
+    }
+    Assert(ReadServiceBlock(initCompose, "openfga-migrate").Contains("- \"2m\"", StringComparison.Ordinal),
+        "OpenFGA migration does not have a finite connection deadline.");
+
+    var completionGates = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["backup-init"] = "postgres",
+        ["postgres-init"] = "authentik",
+        ["openbao-bootstrap"] = "databridge",
+        ["openfga-migrate"] = "openfga",
+        ["backupservice-initialize"] = "backupservice",
+        ["databridge-initialize"] = "databridge"
+    };
+    foreach (var (initializationService, dependentService) in completionGates)
+    {
+        var dependent = ReadServiceBlock(initCompose, dependentService);
+        Assert(Regex.IsMatch(dependent,
+                $"(?ms)^      {Regex.Escape(initializationService)}:\\s*$.*?^        condition: \\\"service_completed_successfully\\\"\\s*$"),
+            $"{dependentService} does not block on successful completion of {initializationService}.");
+    }
+
     foreach (var required in new[]
              {
                  "nats", "postgres", "openbao", "typesense", "authentik", "openfga",
@@ -397,16 +438,20 @@ static void VerifyProductionPair(
                  "mediaprocessor", "scheduler", "frontend"
              })
     {
-        Assert(services.Contains(required), $"Full production service {required} is missing.");
+        Assert(runtimeServices.Contains(required), $"Full production service {required} is missing.");
     }
 
     foreach (var developmentOnly in new[] { "aspire-dashboard", "dbgate", "nats-ui", "openfga-studio" })
     {
-        Assert(!services.Any(service => service.Contains(developmentOnly, StringComparison.OrdinalIgnoreCase)),
-            $"Development service {developmentOnly} leaked into Full output.");
+        Assert(!initServices.Any(service => service.Contains(developmentOnly, StringComparison.OrdinalIgnoreCase)),
+            $"Development service {developmentOnly} leaked into Full init output.");
+        Assert(!runtimeServices.Any(service => service.Contains(developmentOnly, StringComparison.OrdinalIgnoreCase)),
+            $"Development service {developmentOnly} leaked into Full runtime output.");
     }
 
     var volumes = ReadTopLevelKeys(initCompose, "volumes");
+    Assert(volumes.SetEquals(ReadTopLevelKeys(runtimeCompose, "volumes")),
+        "Full init and runtime persistent volume identities differ.");
     Assert(volumes.Count > 0, "Full output defines no persistent volumes.");
     var names = new DeploymentNames(installationName);
     foreach (var requiredVolume in new[]
@@ -423,11 +468,48 @@ static void VerifyProductionPair(
     }
     Assert(initCompose.Contains($"  {installationName}-network:", StringComparison.Ordinal),
         "Installation network is missing.");
+    Assert(runtimeCompose.Contains($"  {installationName}-network:", StringComparison.Ordinal),
+        "Installation network is missing from Full runtime.");
 
-    foreach (Match match in Regex.Matches(initCompose, "^\\s+context:\\s*[\\\"']?([^\\\"'\\r\\n]+)[\\\"']?\\s*$", RegexOptions.Multiline))
+    foreach (var serviceName in runtimeServices)
     {
-        var actualSourceRoot = Path.GetFullPath(Path.Combine(initRoot, match.Groups[1].Value));
-        Assert(actualSourceRoot == sourceRoot, $"Build context does not resolve to {sourceRoot}.");
+        var initService = ReadServiceBlock(initCompose, serviceName);
+        var runtimeService = ReadServiceBlock(runtimeCompose, serviceName);
+        Assert(ReadServiceProperty(initService, "image") == ReadServiceProperty(runtimeService, "image"),
+            $"Image differs between lifecycle profiles for {serviceName}.");
+        Assert(ReadServicePropertyBlock(initService, "ports") == ReadServicePropertyBlock(runtimeService, "ports"),
+            $"Ports differ between lifecycle profiles for {serviceName}.");
+        Assert(ReadServicePropertyBlock(initService, "volumes") == ReadServicePropertyBlock(runtimeService, "volumes"),
+            $"Volumes differ between lifecycle profiles for {serviceName}.");
+    }
+
+    foreach (var (serviceName, probe) in new[]
+             {
+                 ("postgres", "pg_isready"),
+                 ("openbao", "bao\"\n        - \"status"),
+                 ("typesense", "GET /health"),
+                 ("authentik", "healthcheck"),
+                 ("backupservice", "/health")
+             })
+    {
+        Assert(ReadServiceBlock(runtimeCompose, serviceName).Contains(probe, StringComparison.Ordinal),
+            $"Runtime service {serviceName} is missing its real readiness probe.");
+    }
+    var runtimeOpenBao = ReadServiceBlock(runtimeCompose, "openbao");
+    Assert(runtimeOpenBao.Contains("trap shutdown TERM INT", StringComparison.Ordinal),
+        "OpenBao runtime does not forward termination signals.");
+    Assert(runtimeOpenBao.Contains("unsealed from persisted recovery material", StringComparison.Ordinal),
+        "OpenBao runtime does not expose the recurring unseal path.");
+    Assert(runtimeOpenBao.Contains("API did not become ready within 120 seconds", StringComparison.Ordinal),
+        "OpenBao runtime readiness polling is not finite.");
+
+    foreach (var (compose, root) in new[] { (initCompose, initRoot), (runtimeCompose, runtimeRoot) })
+    {
+        foreach (Match match in Regex.Matches(compose, "^\\s+context:\\s*[\\\"']?([^\\\"'\\r\\n]+)[\\\"']?\\s*$", RegexOptions.Multiline))
+        {
+            var actualSourceRoot = Path.GetFullPath(Path.Combine(root, match.Groups[1].Value));
+            Assert(actualSourceRoot == sourceRoot, $"Build context does not resolve to {sourceRoot}.");
+        }
     }
 
     foreach (var secretName in DeploymentConfigurationResolver.SecretInputNames)
@@ -441,6 +523,10 @@ static void VerifyProductionPair(
             $"Resolved secret {secretName} leaked into Compose output.");
         Assert(!initEnvironment.Contains(secretValue, StringComparison.Ordinal),
             $"Resolved secret {secretName} leaked into the published env contract.");
+        Assert(!runtimeCompose.Contains(secretValue, StringComparison.Ordinal),
+            $"Resolved secret {secretName} leaked into Full runtime Compose output.");
+        Assert(!runtimeEnvironment.Contains(secretValue, StringComparison.Ordinal),
+            $"Resolved secret {secretName} leaked into the Full runtime env contract.");
     }
 
     Assert(new FileInfo(resolvedFile).Exists, "Resolved installation file is missing.");
@@ -449,6 +535,21 @@ static void VerifyProductionPair(
         Assert(File.GetUnixFileMode(resolvedFile) == (UnixFileMode.UserRead | UnixFileMode.UserWrite),
             "Resolved installation file permissions are not 0600.");
     }
+}
+
+static string? ReadServiceProperty(string serviceBlock, string property)
+{
+    var match = Regex.Match(serviceBlock,
+        $"(?m)^    {Regex.Escape(property)}:\\s*(.+?)\\s*$", RegexOptions.CultureInvariant);
+    return match.Success ? match.Groups[1].Value : null;
+}
+
+static string ReadServicePropertyBlock(string serviceBlock, string property)
+{
+    var match = Regex.Match(serviceBlock,
+        $"(?ms)^    {Regex.Escape(property)}:\\s*$.*?(?=^    [A-Za-z0-9_-]+:|\\z)",
+        RegexOptions.CultureInvariant);
+    return match.Success ? match.Value : "";
 }
 
 static string ReadRequired(string path)

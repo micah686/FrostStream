@@ -10,7 +10,7 @@ aspire_config="$repo_root/src/App/aspire.config.json"
 aspire_config_backup="$(mktemp)"
 
 if [[ "$profile" != "frostream-full-init" && "$profile" != "froststream-full" ]]; then
-  echo "Phase 3 can publish frostream-full-init or froststream-full only." >&2
+  echo "The Full lifecycle publisher accepts frostream-full-init or froststream-full only." >&2
   exit 2
 fi
 

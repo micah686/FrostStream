@@ -1,6 +1,6 @@
 # FrostStream Lite implementation phases
 
-Status: active implementation plan. Phase 1 is complete with its recorded runtime limitation; Phases 2 and 3 are accepted; Phase 4 is implemented and awaiting completion of its pgBackRest runtime verification. Later phases remain unimplemented.
+Status: active implementation plan. Phase 1 is complete with its recorded runtime limitation; Phases 2 through 4 are accepted; Phase 5 is implemented and awaiting its complete Full application smoke. Later phases remain unimplemented.
 
 Source of truth: [FROSTREAM_LITE_PLAN.md](FROSTREAM_LITE_PLAN.md). This document divides that plan into actionable, sequential work blocks without changing its scope. Proposed files and command interfaces below become concrete during their owning phase.
 
@@ -104,7 +104,7 @@ Preserve these exact spellings. Internal namespaces use `FrostStream`. Installat
 
 ## Phase 4 — Extract explicit initialization from recurring startup
 
-**State (2026-09-11): Implemented, awaiting verification.** DataBridge and BackupService now expose explicit finite `initialize` commands; normal startup performs read-only compatibility checks. Disposable PostgreSQL, Typesense, and ClickHouse evidence covers empty init, injected failure, absent success marker, retry, fixed-owner idempotency, and empty-runtime rejection. Native Full Compose emits both one-shot commands and successful-completion gates. The pgBackRest command has focused compatibility tests, but its real stanza create/check gate still needs a disposable archive-enabled PostgreSQL/pgBackRest fixture; see [`docs/lite/phase-04-explicit-initialization.md`](docs/lite/phase-04-explicit-initialization.md).
+**State (2026-09-11): Accepted.** DataBridge and BackupService expose explicit finite `initialize` commands; normal startup performs read-only compatibility checks. Disposable PostgreSQL, Typesense, and ClickHouse evidence covers empty init, injected failure, absent success marker, retry, fixed-owner idempotency, and empty-runtime rejection. Phase 5's isolated Full lifecycle check also completed real pgBackRest stanza creation/check against disposable archive-enabled PostgreSQL; see [`docs/lite/phase-04-explicit-initialization.md`](docs/lite/phase-04-explicit-initialization.md).
 
 **Outcome:** Application setup has a versioned initializer and a separate read-only startup compatibility check.
 
@@ -125,17 +125,19 @@ Preserve these exact spellings. Internal namespaces use `FrostStream`. Installat
 
 ## Phase 5 — Complete Full init/runtime lifecycle and OpenBao restart
 
+**State (2026-09-11): Implemented, awaiting the complete Full application smoke.** The native Full bundles now have distinct lifecycle membership, runtime-only restart/unseal behavior, real health gates, and no dangling one-shot dependencies. Publication and disposable PostgreSQL/OpenBao/Typesense, OpenFGA, application-schema, and pgBackRest handoff checks passed; login, worker messaging, and media workflow remain to be exercised as a complete stack. Evidence and exact handoff commands are recorded in [`docs/lite/phase-05-full-lifecycle.md`](docs/lite/phase-05-full-lifecycle.md).
+
 **Outcome:** Both Full bundles operate independently with the correct lifecycle responsibilities.
 
 **Primary areas:** `StartPostgres.cs`, `StartOpenBao.cs`, `StartOpenFga.cs`, `StartBackupService.cs`, service dependencies and resource records.
 
 **Work block**
 
-- [ ] Make required database lists and init resources profile-specific. Include directory preparation, PostgreSQL setup, application setup, OpenFGA migration, and first-time OpenBao work only where applicable.
-- [ ] Separate OpenBao first-time initialization/policy/recovery-material creation from recurring unseal behavior. Implement and document the supported runtime unseal path and signal/readiness handling.
-- [ ] Make omitted init resources optional in dependency helpers. Remove dangling dependencies, endpoint expressions, env references, and mounts from normal output.
-- [ ] Give init jobs `restart: "no"`, finite retry deadlines, nonzero failure exits, and successful-completion dependencies. Runtime uses real infrastructure health and compatibility checks.
-- [ ] Publish both Full bundles using native callbacks, without dashboards or database/NATS developer tooling by default.
+- [x] Make required database lists and init resources profile-specific. Include directory preparation, PostgreSQL setup, application setup, OpenFGA migration, and first-time OpenBao work only where applicable.
+- [x] Separate OpenBao first-time initialization/policy/recovery-material creation from recurring unseal behavior. Implement and document the supported runtime unseal path and signal/readiness handling.
+- [x] Make omitted init resources optional in dependency helpers. Remove dangling dependencies, endpoint expressions, env references, and mounts from normal output.
+- [x] Give init jobs `restart: "no"`, finite retry deadlines, nonzero failure exits, and successful-completion dependencies. Runtime uses real infrastructure health and compatibility checks.
+- [x] Publish both Full bundles using native callbacks, without dashboards or database/NATS developer tooling by default.
 
 **Verification gate:** On disposable volumes, Full init succeeds and seeded data survives handoff to normal under the same project. Remove completed init containers and recreate all runtime containers; Full becomes ready and OpenBao unseals. Failed init blocks dependent application readiness. Full login, authorization, worker messaging, media workflow, and backup still work.
 

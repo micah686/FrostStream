@@ -31,6 +31,7 @@ public static class StartPostgres
         string sharedStorageRoot)
     {
         var deployment = DeploymentRuntime.Current;
+        var includeInitialization = deployment.Selection.Profile.IncludeInitialization;
         var user = builder.AddParameter(
             "postgres-user",
             Environment.GetEnvironmentVariable("POSTGRES_USER") ?? "postgres",
@@ -46,21 +47,24 @@ public static class StartPostgres
         // Made world-writable so the containers' postgres user (uid 999) can write regardless of
         // the rootless-podman uid mapping.
         var backupRoot = BackupPaths.BackupRoot(sharedStorageRoot);
-        foreach (var dir in new[]
-                 {
-                     backupRoot,
-                     BackupPaths.PgBackRestRepoDirectory(sharedStorageRoot),
-                     BackupPaths.OpenBaoExportDirectory(sharedStorageRoot),
-                 })
+        if (builder.ExecutionContext.IsRunMode)
         {
-            Directory.CreateDirectory(dir);
-            if (!OperatingSystem.IsWindows())
+            foreach (var dir in new[]
+                     {
+                         backupRoot,
+                         BackupPaths.PgBackRestRepoDirectory(sharedStorageRoot),
+                         BackupPaths.OpenBaoExportDirectory(sharedStorageRoot),
+                     })
             {
-                File.SetUnixFileMode(
-                    dir,
-                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
-                    | UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute
-                    | UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute);
+                Directory.CreateDirectory(dir);
+                if (!OperatingSystem.IsWindows())
+                {
+                    File.SetUnixFileMode(
+                        dir,
+                        UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
+                        | UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute
+                        | UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute);
+                }
             }
         }
 
@@ -131,23 +135,25 @@ public static class StartPostgres
                     Retries = 10,
                     StartPeriod = "20s",
                 };
+                svc.Restart = "unless-stopped";
             });
 
-            // The compose bind-mounted ./backups directory is created root-owned on first start,
-            // but archive_command (postgres container) and BackupService both write to it as
-            // uid 999. One-shot ownership fix; postgres gates on its completion. Run mode covers
-            // this with the host-side chmod above instead.
-            var backupInit = builder
-                .AddContainer(deployment.Names.BackupInit, deployment.Images.Postgres.Repository, deployment.Images.Postgres.Tag)
-                .WithEntrypoint("/bin/bash")
-                .WithArgs("-c", "mkdir -p /backups/pgbackrest /backups/openbao /backups/jobs && chown -R 999:999 /backups && echo 'backup-init: done'")
-                .WithPortableBindMount(
-                    backupRoot,
-                    "${FROSTSTREAM_BACKUP_ROOT:-./backups}",
-                    "/backups");
-            server
-                .WaitForCompletion(backupInit)
-                .WithComposeDependencyCondition(deployment.Names.BackupInit, "service_completed_successfully");
+            if (includeInitialization)
+            {
+                // The compose bind-mounted backup directory may be root-owned on first start.
+                var backupInit = builder
+                    .AddContainer(deployment.Names.BackupInit, deployment.Images.Postgres.Repository, deployment.Images.Postgres.Tag)
+                    .WithEntrypoint("/bin/bash")
+                    .WithArgs("-c", "mkdir -p /backups/pgbackrest /backups/openbao /backups/jobs && chown -R 999:999 /backups && echo 'backup-init: done'")
+                    .WithPortableBindMount(
+                        backupRoot,
+                        "${FROSTSTREAM_BACKUP_ROOT:-./backups}",
+                        "/backups")
+                    .PublishAsDockerComposeService((_, service) => service.Restart = "no");
+                server
+                    .WaitForCompletion(backupInit)
+                    .WithComposeDependencyCondition(deployment.Names.BackupInit, "service_completed_successfully");
+            }
 
             // WithDbGate (run mode, above) is excluded from the compose publish by the community
             // toolkit, so publish a plain dbgate container with the same connection wiring.
@@ -170,7 +176,15 @@ public static class StartPostgres
             // ReplaceLineEndings: raw string literals on Windows have CRLF; bash rejects \r.
             var seedScript = """
                 set -eu
-                until pg_isready -q; do echo 'postgres-init: waiting for postgres'; sleep 1; done
+                ready=false
+                attempt=1
+                while [ "$attempt" -le 120 ]; do
+                  if pg_isready -q; then ready=true; break; fi
+                  echo "postgres-init: waiting for postgres ($attempt/120)"
+                  sleep 1
+                  attempt=$((attempt + 1))
+                done
+                [ "$ready" = true ] || { echo 'postgres-init: postgres was not ready within 120 seconds' >&2; exit 1; }
                 for db in froststreamdb authentikdb openfgadb; do
                   if [ "$(psql -tAc "SELECT 1 FROM pg_database WHERE datname = '$db'")" = '1' ]; then
                     echo "postgres-init: database $db already exists"
@@ -187,17 +201,21 @@ public static class StartPostgres
                     deployment.Names.OpenFgaDatabase), StringComparison.Ordinal)
                 .ReplaceLineEndings("\n");
 
-            init = builder
-                .AddContainer(deployment.Names.PostgresInit, deployment.Images.Postgres.Repository, deployment.Images.Postgres.Tag)
-                .WithEntrypoint("/bin/bash")
-                .WithArgs("-c", seedScript)
-                .WithEnvironment("PGHOST", deployment.Names.Postgres)
-                .WithEnvironment("PGPORT", "5432")
-                .WithEnvironment("PGDATABASE", "postgres")
-                .WithEnvironment("PGUSER", user)
-                .WithEnvironment("PGPASSWORD", password)
-                .WaitFor(server)
-                .WithComposeDependencyCondition(deployment.Names.Postgres, "service_healthy");
+            if (includeInitialization)
+            {
+                init = builder
+                    .AddContainer(deployment.Names.PostgresInit, deployment.Images.Postgres.Repository, deployment.Images.Postgres.Tag)
+                    .WithEntrypoint("/bin/bash")
+                    .WithArgs("-c", seedScript)
+                    .WithEnvironment("PGHOST", deployment.Names.Postgres)
+                    .WithEnvironment("PGPORT", "5432")
+                    .WithEnvironment("PGDATABASE", "postgres")
+                    .WithEnvironment("PGUSER", user)
+                    .WithEnvironment("PGPASSWORD", password)
+                    .WaitFor(server)
+                    .WithComposeDependencyCondition(deployment.Names.Postgres, "service_healthy")
+                    .PublishAsDockerComposeService((_, service) => service.Restart = "no");
+            }
         }
 
         return new PostgresResources(
