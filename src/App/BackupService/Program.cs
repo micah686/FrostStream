@@ -13,6 +13,10 @@ using NodaTime;
 using Shared.Backups;
 using Shared.Messaging;
 
+var initialize = args.Length > 0 && string.Equals(args[0], "initialize", StringComparison.OrdinalIgnoreCase);
+if (args.Length > 0 && !initialize && !args[0].StartsWith("-", StringComparison.Ordinal))
+    throw new ArgumentException($"Unknown BackupService command '{args[0]}'. Supported command: initialize.");
+
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
 builder.Services.AddOptions<BackupServiceOptions>()
@@ -30,7 +34,6 @@ builder.Services.AddSingleton<OpenBaoPairing>();
 builder.Services.AddSingleton<BackupRepositoryReader>();
 builder.Services.AddSingleton<BackupCoordinator>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<BackupCoordinator>());
-builder.Services.AddHostedService<StanzaStartupService>();
 builder.Services.AddSingleton<IClock>(NodaTime.SystemClock.Instance);
 builder.Services.AddSingleton<IBackgroundRunReporter>(sp => new BackgroundRunReporter(
     sp.GetRequiredService<IMessageBus>(),
@@ -73,6 +76,16 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 var serviceOptions = app.Services.GetRequiredService<BackupServiceOptions>();
+
+if (initialize)
+{
+    using var deadline = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+    await app.Services.GetRequiredService<PgBackRestRunner>().EnsureStanzaAsync(deadline.Token);
+    app.Logger.LogInformation("pgBackRest initialization completed successfully.");
+    return;
+}
+
+await app.Services.GetRequiredService<PgBackRestRunner>().ValidateStanzaAsync(CancellationToken.None);
 
 // Port guard: the restore-UI port is host-published, so the unauthenticated /internal surface
 // must never be reachable through it.

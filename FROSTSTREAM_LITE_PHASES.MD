@@ -1,6 +1,6 @@
 # FrostStream Lite implementation phases
 
-Status: active implementation plan. Phase 1 is complete with its recorded runtime limitation; Phase 2 is accepted; Phase 3 is verified and awaiting acceptance. Later phases remain unimplemented.
+Status: active implementation plan. Phase 1 is complete with its recorded runtime limitation; Phases 2 and 3 are accepted; Phase 4 is implemented and awaiting completion of its pgBackRest runtime verification. Later phases remain unimplemented.
 
 Source of truth: [FROSTREAM_LITE_PLAN.md](FROSTREAM_LITE_PLAN.md). This document divides that plan into actionable, sequential work blocks without changing its scope. Proposed files and command interfaces below become concrete during their owning phase.
 
@@ -83,7 +83,7 @@ Preserve these exact spellings. Internal namespaces use `FrostStream`. Installat
 
 ## Phase 3 — Add production profile selection and installation configuration
 
-**State (2026-09-11): Verified, awaiting acceptance.** Production AppHost profile resolution, installation-scoped configuration, preserved resolved inputs, typed Compose integration, Full publication, alternate-path validation, and limitations are recorded in [`docs/lite/phase-03-production-profiles.md`](docs/lite/phase-03-production-profiles.md). Lite profiles fail before resource construction because their production graph is intentionally deferred to Phase 8; the Full init/runtime lifecycle split remains Phase 5 work.
+**State (2026-09-11): Accepted.** Production AppHost profile resolution, installation-scoped configuration, preserved resolved inputs, typed Compose integration, Full publication, alternate-path validation, and limitations are recorded in [`docs/lite/phase-03-production-profiles.md`](docs/lite/phase-03-production-profiles.md). Lite profiles fail before resource construction because their production graph is intentionally deferred to Phase 8; the Full init/runtime lifecycle split remains Phase 5 work.
 
 **Outcome:** Production AppHost composition is driven by explicit profiles and stable installation inputs.
 
@@ -104,18 +104,20 @@ Preserve these exact spellings. Internal namespaces use `FrostStream`. Installat
 
 ## Phase 4 — Extract explicit initialization from recurring startup
 
+**State (2026-09-11): Implemented, awaiting verification.** DataBridge and BackupService now expose explicit finite `initialize` commands; normal startup performs read-only compatibility checks. Disposable PostgreSQL, Typesense, and ClickHouse evidence covers empty init, injected failure, absent success marker, retry, fixed-owner idempotency, and empty-runtime rejection. Native Full Compose emits both one-shot commands and successful-completion gates. The pgBackRest command has focused compatibility tests, but its real stanza create/check gate still needs a disposable archive-enabled PostgreSQL/pgBackRest fixture; see [`docs/lite/phase-04-explicit-initialization.md`](docs/lite/phase-04-explicit-initialization.md).
+
 **Outcome:** Application setup has a versioned initializer and a separate read-only startup compatibility check.
 
 **Primary areas:** DataBridge migrations/startup, owner seeding, search/chat setup, Cleipnir setup, PostgreSQL and backup initialization.
 
 **Work block**
 
-- [ ] Turn Phase 1's lifecycle inventory into reusable initialization steps with dependencies, finite deadlines, failure reporting, and safe retries.
-- [ ] Move application migrations, fixed-owner seeding where applicable, ClickHouse schema, Typesense collections, required workflow tables, and backup stanza setup behind explicit initialization entry points.
-- [ ] Record durable initialization/schema compatibility only after all required steps succeed. Account for partial success across services; retries must reconcile it safely.
-- [ ] Add ordinary-startup validation for required databases, schema/version compatibility, collections, directories, and stanza. Preserve reconnects, schedule hydration, workflow recovery, and incremental indexing as runtime duties.
-- [ ] Expose an initializer that Full can execute now and the merged Lite image can invoke later. Retain supported Authentik lifecycle behavior; do not invent an unsupported standalone migration job.
-- [ ] Wire the transitional Full deployment to call explicit setup so extraction does not break existing first-start behavior before Phase 5 finishes the split.
+- [x] Turn Phase 1's lifecycle inventory into reusable initialization steps with dependencies, finite deadlines, failure reporting, and safe retries.
+- [x] Move application migrations, fixed-owner seeding where applicable, ClickHouse schema, Typesense collections, required workflow tables, and backup stanza setup behind explicit initialization entry points.
+- [x] Record durable initialization/schema compatibility only after all required steps succeed. Account for partial success across services; retries must reconcile it safely.
+- [x] Add ordinary-startup validation for required databases, schema/version compatibility, collections, directories, and stanza. Preserve reconnects, schedule hydration, workflow recovery, and incremental indexing as runtime duties.
+- [x] Expose an initializer that Full can execute now and the merged Lite image can invoke later. Retain supported Authentik lifecycle behavior; do not invent an unsupported standalone migration job.
+- [x] Wire the transitional Full deployment to call explicit setup so extraction does not break existing first-start behavior before Phase 5 finishes the split.
 
 **Verification gate:** Empty-state initialization succeeds; injected mid-initialization failure records no overall success; retry creates no duplicate owner or changed credentials. Normal startup on empty/incompatible state fails with the matching init-profile instruction. An already initialized restart does not run migrations/seeding.
 

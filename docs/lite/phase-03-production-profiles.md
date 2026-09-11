@@ -2,7 +2,7 @@
 
 Date verified: 2026-09-11
 
-Status: Verified, awaiting acceptance.
+Status: Accepted on 2026-09-11 when Phase 4 was requested.
 
 Phase 3 connects the proven profile and Compose APIs to the production AppHost. It centralizes deployment inputs and proves sanitized Full publication. It does not implement the Lite graph or split Full initialization from recurring runtime.
 

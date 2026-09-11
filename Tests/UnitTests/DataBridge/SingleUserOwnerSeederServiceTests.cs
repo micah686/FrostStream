@@ -11,7 +11,7 @@ using UnitTests.Storage;
 
 namespace UnitTests.DataBridge;
 
-public sealed class SingleUserOwnerSeederServiceTests
+public sealed class SingleUserOwnerInitializerTests
 {
     [Test]
     public async Task Seeds_Then_Reuses_The_Stable_Owner_Row()
@@ -48,28 +48,13 @@ public sealed class SingleUserOwnerSeederServiceTests
 
     private static async Task RunSeederAsync(ServiceProvider services, IConfiguration config)
     {
-        var seeder = new SingleUserOwnerSeederService(
+        var initializer = new SingleUserOwnerInitializer(
             services.GetRequiredService<IServiceScopeFactory>(),
             config,
             new FixedClock(DataBridgeTestHelpers.Now),
-            NullLogger<SingleUserOwnerSeederService>.Instance);
+            NullLogger<SingleUserOwnerInitializer>.Instance);
 
-        await seeder.StartAsync(CancellationToken.None);
-
-        // The seeder runs to completion in ExecuteAsync; give the background task a moment to finish.
-        for (var attempt = 0; attempt < 100; attempt++)
-        {
-            await using var scope = services.CreateAsyncScope();
-            var db = scope.ServiceProvider.GetRequiredService<DataBridgeDbContext>();
-            if (await db.FrostStreamUsers.AnyAsync(x => x.Id == AuthConstants.SingleUserId))
-            {
-                break;
-            }
-
-            await Task.Delay(20);
-        }
-
-        await seeder.StopAsync(CancellationToken.None);
+        await initializer.InitializeAsync(CancellationToken.None);
     }
 
     private static async Task AssertSingleOwnerRowAsync(ServiceProvider services)

@@ -31,6 +31,7 @@
       <PackageReference Include="ClickHouse.Driver" />
       <PackageReference Include="Cleipnir.Flows" />
       <PackageReference Include="Cleipnir.Flows.PostgresSql" />
+      <PackageReference Include="Cleipnir.ResilientFunctions.PostgreSQL" />
       <PackageReference Include="FluentMigrator" />
       <PackageReference Include="FluentMigrator.Runner.Core" />
       <PackageReference Include="FluentMigrator.Runner.Postgres" />

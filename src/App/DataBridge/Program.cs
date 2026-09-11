@@ -12,6 +12,7 @@ using DataBridge.Metadata;
 using DataBridge.Messaging;
 using DataBridge.Search;
 using DataBridge.Statistics;
+using DataBridge.Initialization;
 using Conduit.NATS;
 using FluentMigrator.Runner;
 using Microsoft.EntityFrameworkCore;
@@ -36,6 +37,10 @@ class Program
 {
     static async Task Main(string[] args)
     {
+        var initialize = args.Length > 0 && string.Equals(args[0], "initialize", StringComparison.OrdinalIgnoreCase);
+        if (args.Length > 0 && !initialize && !args[0].StartsWith("-", StringComparison.Ordinal))
+            throw new ArgumentException($"Unknown DataBridge command '{args[0]}'. Supported command: initialize.");
+
         var builder = Host.CreateApplicationBuilder(args);
         builder.AddServiceDefaults();
 
@@ -112,7 +117,8 @@ class Program
         }.ConnectionString;
 
         builder.Services.AddFlows(c => c
-            .UsePostgresStore(cleipnirConnectionString)
+            // Schema/table creation belongs to the explicit initializer. Runtime only opens it.
+            .UsePostgresStore(cleipnirConnectionString, initializeDatabase: false)
             // Cleipnir's DefaultSerializer has no NodaTime support and collapses every Instant in a
             // persisted message/effect to the Unix epoch. Swap in a NodaTime-aware serializer so
             // dates (OccurredAt, metadata scrape/release dates, …) survive the flow store round-trip.
@@ -129,6 +135,22 @@ class Program
             var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
             return dataSourceBuilder.Build();
         });
+        builder.Services.AddSingleton<IInitializationStateStore, PostgresInitializationStateStore>();
+        builder.Services.AddSingleton<ApplicationInitializationCoordinator>();
+        builder.Services.AddSingleton<ApplicationCompatibilityValidator>();
+        builder.Services.AddSingleton<SingleUserOwnerInitializer>();
+        builder.Services.AddSingleton<IApplicationInitializationStep, PostgresMigrationInitializationStep>();
+        builder.Services.AddSingleton<IApplicationInitializationStep, CleipnirStoreInitializationStep>();
+        builder.Services.AddSingleton<IApplicationInitializationStep, OwnerInitializationStep>();
+        builder.Services.AddSingleton<IApplicationInitializationStep, PersistentDirectoriesInitializationStep>();
+        builder.Services.AddSingleton<IApplicationInitializationStep, TypesenseCollectionsInitializationStep>();
+        builder.Services.AddOptions<InitializationOptions>()
+            .Bind(builder.Configuration.GetSection(InitializationOptions.SectionName))
+            .PostConfigure(options =>
+            {
+                if (string.IsNullOrWhiteSpace(options.RequiredDirectory))
+                    options.RequiredDirectory = builder.Configuration["FROSTSTREAM_STORAGE_ROOT"];
+            });
         builder.Services.AddSingleton<IDownloadJobStateNotifier, DownloadJobStateNotifier>();
         builder.Services.AddScoped<IDownloadJobsRepository, DownloadJobsRepository>();
         builder.Services.AddScoped<IDownloadFlowV2Repository, DownloadFlowV2Repository>();
@@ -163,10 +185,9 @@ class Program
         if (builder.Configuration.GetSection(LiveChatOptions.SectionName).GetValue<bool>("Enabled"))
         {
             builder.Services.AddSingleton<ClickHouseAccess>();
+            builder.Services.AddSingleton<ClickHouseSchemaService>();
+            builder.Services.AddSingleton<IApplicationInitializationStep, ClickHouseInitializationStep>();
             builder.Services.AddScoped<LiveChatIngestService>();
-            // Schema first: IHostedService instances start in registration order, and the
-            // consumers below must never race the DDL.
-            builder.Services.AddHostedService<ClickHouseSchemaService>();
             builder.Services.AddHostedService<LiveChatIngestConsumerService>();
             builder.Services.AddHostedService<LiveChatBackfillConsumerService>();
             builder.Services.AddHostedService<LiveChatQueryConsumerService>();
@@ -190,12 +211,12 @@ class Program
             config.ApiKey = builder.Configuration["Typesense:ApiKey"] ?? "froststream-dev-key";
         });
         builder.Services.AddSingleton<ITypesenseIndexService, TypesenseIndexService>();
+        builder.Services.AddSingleton<TypesenseInitialization>();
         builder.Services.AddSingleton<IMediaDocumentQuery, MediaDocumentQuery>();
         builder.Services.AddSingleton<CaptionDocumentHydrator>();
         builder.Services.AddSingleton<IMetadataRebuildCoordinator, MetadataRebuildCoordinator>();
 
         builder.Services.AddHostedService<TypesenseStartupService>();
-        builder.Services.AddHostedService<SingleUserOwnerSeederService>();
         builder.Services.AddHostedService<UserSessionConsumerService>();
         builder.Services.AddHostedService<NotificationPreferencesConsumerService>();
         builder.Services.AddHostedService<CookieProfileConsumerService>();
@@ -256,12 +277,18 @@ class Program
         
 
         var app = builder.Build();
-        
-        using (var scope = app.Services.CreateScope())
+
+        if (initialize)
         {
-            var migrationRunner = scope.ServiceProvider.GetRequiredService<IMigrationRunner>();
-            migrationRunner.MigrateUp();
+            await app.Services.GetRequiredService<ApplicationInitializationCoordinator>()
+                .InitializeAsync(CancellationToken.None);
+            return;
         }
+
+        // This check is read-only: migrations, seeding, and external schema creation are forbidden
+        // during an ordinary restart.
+        await app.Services.GetRequiredService<ApplicationCompatibilityValidator>()
+            .ValidateAsync(CancellationToken.None);
 
         await app.RunAsync();  // waits until Ctrl+C or SIGTERM, then calls StopAsync() gracefully
     }

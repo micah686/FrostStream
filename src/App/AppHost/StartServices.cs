@@ -49,6 +49,39 @@ public static class StartServices
     {
         var deployment = DeploymentRuntime.Current;
         var openBao = openBaoResources.Server;
+        var storageRoot = builder.ExecutionContext.IsRunMode ? sharedStorageRoot : ContainerStorageRoot;
+        var databridgeInitializer = builder.AddProject<Projects.DataBridge>(deployment.Names.DataBridgeInitialize)
+            .WithArgs("initialize")
+            .WithReference(postgres.FrostStreamDb).WaitFor(postgres.FrostStreamDb).WaitForDatabases(postgres)
+            .WithEnvironment("Typesense__Url", typesense.GetEndpoint("http"))
+            .WithEnvironment("Typesense__ApiKey", typesenseApiKey)
+            .WithEnvironment("FROSTSTREAM_STORAGE_ROOT", storageRoot)
+            .WithEnvironment("Initialization__RequiredDirectory", storageRoot)
+            .WithEnvironment("Initialization__InitProfile", "frostream-full-init")
+            .WithEnvironment("SINGLE_USER_MODE", hardening.SingleUserMode ? "true" : "false")
+            .WaitFor(typesense)
+            .PublishAsDockerFile(c => c
+                .WithDockerfile(deployment.Paths.AppProjectDirectory("DataBridge"), "Dockerfile")
+                .WithImage(deployment.Images.ApplicationRepository(deployment.Names.DataBridge), "latest")
+                .WithVolume(deployment.Names.Volume("data"), ContainerStorageRoot))
+            .WithLocalComposeBuild(deployment.Images.Application(deployment.Names.DataBridge), deployment.Paths.ComposeDockerfile("DataBridge"))
+            .PublishAsDockerComposeService((_, service) =>
+            {
+                service.Command = ["initialize"];
+                service.Restart = "no";
+            });
+
+        if (clickHouse is { Server: { } initClickHouse, HttpEndpoint: { } initClickHouseEndpoint, Password: { } initClickHousePassword })
+        {
+            databridgeInitializer = databridgeInitializer
+                .WithEnvironment("LiveChat__Enabled", "true")
+                .WithEnvironment("LiveChat__Url", initClickHouseEndpoint)
+                .WithEnvironment("LiveChat__Database", StartClickHouse.Database)
+                .WithEnvironment("LiveChat__User", StartClickHouse.User)
+                .WithEnvironment("LiveChat__Password", initClickHousePassword)
+                .WaitFor(initClickHouse);
+        }
+
         var databridge = builder.AddProject<Projects.DataBridge>(deployment.Names.DataBridge)
             .WithReference(postgres.FrostStreamDb).WaitFor(postgres.FrostStreamDb).WaitForDatabases(postgres)
             .WithReference(nats).WaitFor(nats)
@@ -58,6 +91,8 @@ public static class StartServices
             .WithEnvironment("Typesense__ApiKey", typesenseApiKey)
             .WithEnvironment(ctx => ctx.EnvironmentVariables["FROSTSTREAM_STORAGE_ROOT"] =
                 ctx.ExecutionContext.IsRunMode ? sharedStorageRoot : ContainerStorageRoot)
+            .WithEnvironment("Initialization__RequiredDirectory", storageRoot)
+            .WithEnvironment("Initialization__InitProfile", "frostream-full-init")
             .WithEnvironment("SINGLE_USER_MODE", hardening.SingleUserMode ? "true" : "false")
             // POT broker role: answers Worker pot.request messages from the co-located bgutil provider.
             .WithEnvironment("PotBroker__Enabled", "true")
@@ -74,6 +109,8 @@ public static class StartServices
                 // so the compose export stays machine-portable.
                 .WithVolume(deployment.Names.Volume("data"), ContainerStorageRoot))
             .WithLocalComposeBuild(deployment.Images.Application(deployment.Names.DataBridge), deployment.Paths.ComposeDockerfile("DataBridge"));
+
+        databridge.WaitForCompletion(databridgeInitializer);
 
         if (clickHouse is { Server: { } clickHouseServer, HttpEndpoint: { } clickHouseEndpoint, Password: { } clickHousePassword })
         {

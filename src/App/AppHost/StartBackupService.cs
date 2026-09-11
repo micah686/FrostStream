@@ -40,6 +40,7 @@ public static class StartBackupService
             .WithReference(postgres.FrostStreamDb).WaitFor(postgres.FrostStreamDb).WaitForDatabases(postgres)
             .WithEnvironment("Backup__Directory", ContainerBackupRoot)
             .WithEnvironment("Backup__Stanza", "froststream")
+            .WithEnvironment("Backup__InitializationProfile", "frostream-full-init")
             .WithEnvironment("Backup__PgDataPath", "/var/lib/postgresql/18/docker")
             .WithEnvironment("Backup__PostgresHost", postgres.Server.GetEndpoint("tcp").Property(EndpointProperty.Host))
             .WithEnvironment("Backup__PostgresPort", postgres.Server.GetEndpoint("tcp").Property(EndpointProperty.Port))
@@ -94,6 +95,45 @@ public static class StartBackupService
             };
         });
         service.WithComposeDependencyCondition(deployment.Names.OpenBao, "service_healthy");
+
+        // Transitional Phase 4 wiring: both legacy Full graphs still contain initialization.
+        // Phase 5 will include this one-shot service only in the init profile.
+        var initializer = builder
+            .AddDockerfile(deployment.Names.BackupInitialize, context, deployment.Paths.ComposeDockerfile("BackupService"))
+            .WithArgs("initialize")
+            .WithReference(postgres.FrostStreamDb).WaitFor(postgres.FrostStreamDb).WaitForDatabases(postgres)
+            .WithEnvironment("Backup__Directory", ContainerBackupRoot)
+            .WithEnvironment("Backup__Stanza", "froststream")
+            .WithEnvironment("Backup__InitializationProfile", "frostream-full-init")
+            .WithEnvironment("Backup__PgDataPath", "/var/lib/postgresql/18/docker")
+            .WithEnvironment("Backup__PostgresHost", postgres.Server.GetEndpoint("tcp").Property(EndpointProperty.Host))
+            .WithEnvironment("Backup__PostgresPort", postgres.Server.GetEndpoint("tcp").Property(EndpointProperty.Port))
+            .WithEnvironment("Backup__PostgresUser", postgres.User)
+            .WithEnvironment("Backup__PostgresPassword", postgres.Password)
+            .WithPortableBindMount(
+                backupRoot,
+                "${FROSTSTREAM_BACKUP_ROOT:-./backups}",
+                ContainerBackupRoot)
+            .WithPortableBindMount(
+                pgBackRestConf,
+                "../AppHost/configs/pgbackrest/pgbackrest.conf",
+                "/etc/pgbackrest/pgbackrest.conf",
+                isReadOnly: true)
+            .WithVolume(deployment.Names.Volume("postgres-data"), "/var/lib/postgresql")
+            .WithVolume(deployment.Names.Volume("postgres-socket"), "/var/run/postgresql")
+            .PublishAsDockerComposeService((_, compose) =>
+            {
+                compose.Image = deployment.Images.Application(deployment.Names.BackupService);
+                compose.PullPolicy = "build";
+                compose.Restart = "no";
+                compose.Build = new Aspire.Hosting.Docker.Resources.ServiceNodes.Build
+                {
+                    Context = deployment.Paths.ComposeBuildContext,
+                    Dockerfile = deployment.Paths.ComposeDockerfile("BackupService")
+                };
+            });
+
+        service.WaitForCompletion(initializer);
 
         return service;
     }

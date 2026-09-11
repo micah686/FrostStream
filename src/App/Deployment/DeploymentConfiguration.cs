@@ -48,8 +48,10 @@ public sealed record DeploymentNames(string InstallationName)
     public string OpenFgaStudio => "openfga-studio";
     public string PotProvider => "pot-provider";
     public string BackupService => "backupservice";
+    public string BackupInitialize => "backupservice-initialize";
     public string ClickHouse => "clickhouse";
     public string DataBridge => "databridge";
+    public string DataBridgeInitialize => "databridge-initialize";
     public string WebApi => "webapi";
     public string Worker => "worker";
     public string MediaProcessor => "mediaprocessor";

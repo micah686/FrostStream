@@ -10,6 +10,9 @@ public sealed class BackupServiceOptions
     /// <summary>pgBackRest stanza name; must match pgbackrest.conf and the server's archive_command.</summary>
     public string Stanza { get; init; } = "froststream";
 
+    /// <summary>Operator instruction emitted when ordinary startup finds no compatible stanza.</summary>
+    public string InitializationProfile { get; init; } = "frostream-full-init";
+
     /// <summary>The live cluster's PGDATA inside the shared data volume; pgBackRest restores here.</summary>
     public string PgDataPath { get; init; } = "/var/lib/postgresql/18/docker";
 

@@ -27,8 +27,7 @@ internal class PgBackRestRunner(BackupServiceOptions options, ILogger<PgBackRest
 
     /// <summary>
     /// Creates the stanza when the repository has none yet, then runs `check` to prove the
-    /// archive_command round-trip works. Check failures are logged, not thrown: postgres may
-    /// simply not be up yet (e.g. standalone restore mode).
+    /// archive_command round-trip works. This explicit initializer fails on an incomplete check.
     /// </summary>
     public virtual async Task EnsureStanzaAsync(CancellationToken cancellationToken)
     {
@@ -44,16 +43,22 @@ internal class PgBackRestRunner(BackupServiceOptions options, ILogger<PgBackRest
                 cancellationToken: cancellationToken);
         }
 
-        var check = await ProcessRunner.RunAsync(
+        await ProcessRunner.RunAsync(
             "pgbackrest",
             [.. ConnectionArguments(), "check"],
             environment: ConnectionEnvironment(),
-            throwOnError: false,
+            throwOnError: true,
             cancellationToken: cancellationToken);
-        if (check.ExitCode != 0)
+    }
+
+    /// <summary>Read-only ordinary-startup check; it never creates or repairs a stanza.</summary>
+    public virtual async Task ValidateStanzaAsync(CancellationToken cancellationToken)
+    {
+        var info = await InfoAsync(cancellationToken);
+        if (info is null || info.Status?.Code is 1 or 3)
         {
-            logger.LogWarning(
-                "pgbackrest check failed (exit {ExitCode}): {Error}", check.ExitCode, Tail(check));
+            throw new InvalidOperationException(
+                $"pgBackRest stanza is missing or incompatible. Stop the runtime and run init profile '{options.InitializationProfile}', then start the runtime again.");
         }
     }
 

@@ -14,29 +14,12 @@ namespace DataBridge.LiveChat;
 /// </summary>
 public sealed partial class ClickHouseSchemaService(
     ClickHouseAccess clickHouse,
-    ILogger<ClickHouseSchemaService> logger) : IHostedService
+    ILogger<ClickHouseSchemaService> logger)
 {
     private static readonly TimeSpan ConnectRetryDelay = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromMinutes(2);
 
-    public async Task StartAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            await ApplySchemaAsync(cancellationToken);
-        }
-        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
-        {
-            // Live chat is optional, so a broken ClickHouse must not take DataBridge down with
-            // it — WebAPI waits on DataBridge, so throwing here would 502 the whole site. Chat
-            // ingest and queries will fail loudly until it recovers; everything else runs.
-            logger.LogWarning(ex,
-                "ClickHouse schema setup failed. Live chat replay will be unavailable until ClickHouse " +
-                "is reachable and DataBridge is restarted; the rest of FrostStream is unaffected.");
-        }
-    }
-
-    private async Task ApplySchemaAsync(CancellationToken cancellationToken)
+    public async Task ApplySchemaAsync(CancellationToken cancellationToken)
     {
         await WaitForClickHouseAsync(cancellationToken);
 
@@ -81,7 +64,27 @@ public sealed partial class ClickHouseSchemaService(
             LoadScripts().Select(s => s.Version).DefaultIfEmpty(currentVersion).Max());
     }
 
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public async Task ValidateSchemaAsync(CancellationToken cancellationToken)
+    {
+        await WaitForClickHouseAsync(cancellationToken);
+        await using var connection = clickHouse.CreateConnection();
+        await connection.OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT toUInt32(max(version)) FROM schema_migrations";
+        uint currentVersion;
+        try
+        {
+            currentVersion = Convert.ToUInt32(await command.ExecuteScalarAsync(cancellationToken) ?? 0u);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException("ClickHouse schema_migrations is missing. Run the matching init profile.", ex);
+        }
+
+        var requiredVersion = LoadScripts().Select(s => s.Version).DefaultIfEmpty(0u).Max();
+        if (currentVersion != requiredVersion)
+            throw new InvalidOperationException($"ClickHouse schema version {currentVersion} is incompatible; required version is {requiredVersion}. Run the matching init profile.");
+    }
 
     private async Task WaitForClickHouseAsync(CancellationToken cancellationToken)
     {

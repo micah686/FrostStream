@@ -2,7 +2,6 @@ using DataBridge.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NodaTime;
 using Shared.Auth;
@@ -10,13 +9,14 @@ using Shared.Database;
 
 namespace DataBridge.Messaging;
 
-public sealed class SingleUserOwnerSeederService(
+/// <summary>Idempotent fixed-owner initialization. It is never run by ordinary runtime startup.</summary>
+public sealed class SingleUserOwnerInitializer(
     IServiceScopeFactory scopeFactory,
     IConfiguration configuration,
     IClock clock,
-    ILogger<SingleUserOwnerSeederService> logger) : BackgroundService
+    ILogger<SingleUserOwnerInitializer> logger)
 {
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    public async Task InitializeAsync(CancellationToken cancellationToken)
     {
         if (!AuthMode.IsSingleUserMode(configuration))
         {
@@ -27,7 +27,7 @@ public sealed class SingleUserOwnerSeederService(
         var db = scope.ServiceProvider.GetRequiredService<DataBridgeDbContext>();
         var now = clock.GetCurrentInstant();
         var existing = await db.FrostStreamUsers
-            .FirstOrDefaultAsync(x => x.Id == AuthConstants.SingleUserId, stoppingToken);
+            .FirstOrDefaultAsync(x => x.Id == AuthConstants.SingleUserId, cancellationToken);
 
         if (existing is null)
         {
@@ -47,7 +47,7 @@ public sealed class SingleUserOwnerSeederService(
             existing.LastUpdated = now;
         }
 
-        await db.SaveChangesAsync(stoppingToken);
+        await db.SaveChangesAsync(cancellationToken);
         logger.LogWarning("Single-user auth mode is active; ensured synthetic owner user {UserId}.", AuthConstants.SingleUserId);
     }
 }

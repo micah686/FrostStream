@@ -12,6 +12,7 @@
     <PackageVersion Include="Azure.Storage.Blobs" Version="12.29.2" />
     <PackageVersion Include="Cleipnir.Flows" Version="4.2.5" />
     <PackageVersion Include="Cleipnir.Flows.PostgresSql" Version="4.2.5" />
+    <PackageVersion Include="Cleipnir.ResilientFunctions.PostgreSQL" Version="4.2.5" />
     <PackageVersion Include="ClickHouse.Driver" Version="1.4.0" />
     <PackageVersion Include="CommunityToolkit.Aspire.Hosting.DbGate" Version="13.5.0" />
     <PackageVersion Include="CommunityToolkit.Aspire.Hosting.PostgreSQL.Extensions" Version="13.5.0" />

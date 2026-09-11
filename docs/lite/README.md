@@ -14,4 +14,8 @@ Phase 3 artifact:
 
 - [`phase-03-production-profiles.md`](phase-03-production-profiles.md): production profile selection, installation-scoped configuration, preserved resolved inputs, native Full output, and verification evidence.
 
+Phase 4 artifact:
+
+- [`phase-04-explicit-initialization.md`](phase-04-explicit-initialization.md): versioned application initialization, runtime compatibility checks, transitional Full wiring, disposable-state evidence, and the remaining pgBackRest runtime check.
+
 Evidence containing credentials, recovery material, dumps, cookies, or downloaded media must remain outside source control. Commit only redacted summaries.
