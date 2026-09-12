@@ -1,6 +1,6 @@
 # FrostStream Lite implementation phases
 
-Status: active implementation plan. Phase 1 is complete with its recorded runtime limitation; Phases 2 through 7 are accepted; Phase 8 is verified and awaiting acceptance. Later phases remain unimplemented.
+Status: active implementation plan. Phase 1 is complete with its recorded runtime limitation; Phases 2 through 8 are accepted; Phase 9 is verified and awaiting acceptance. Later phases remain unimplemented.
 
 Source of truth: [FROSTREAM_LITE_PLAN.md](FROSTREAM_LITE_PLAN.md). This document divides that plan into actionable, sequential work blocks without changing its scope. Proposed files and command interfaces below become concrete during their owning phase.
 
@@ -27,7 +27,7 @@ Suggested phase states: **Not started → In progress → Implemented, awaiting 
 4. Aspire owns all Compose/env differences. Publishing must not patch, rename, parse-and-rewrite, or merge generated artifacts. Read-only parsing for verification is allowed.
 5. Init bundles are complete first-start stacks. Normal bundles contain no init jobs or references to them. Init/runtime pairs reuse installation identity, credentials, volumes, networks, and host paths.
 6. PostgreSQL owns durable work. In-memory channels only deliver bounded wake-ups/progress. Lite must reject concurrent execution instances sharing its database.
-7. Use the existing fixed owner ID, encrypted persistent local secrets, and a persistent key ring. Backup and restore must preserve both secrets and keys.
+7. Use the existing fixed owner ID, encrypted persistent local secrets, and persistent key material. Backup and restore must preserve both secrets and keys.
 8. Schema-changing upgrades and edition migration are explicit operations. Do not destroy volumes during init/runtime handoff or modify the original Full installation during migration.
 
 ### Exact deployment profile names
@@ -185,7 +185,7 @@ Preserve these exact spellings. Internal namespaces use `FrostStream`. Installat
 
 ## Phase 8 — Build the merged Lite host with fixed-owner API access
 
-**State (2026-09-12): Verified, awaiting acceptance.** A dedicated ASP.NET Core Lite entry point now exposes a deliberately limited, unauthenticated route surface backed by direct DataBridge operations. It uses the established fixed owner, reports explicit capabilities, reserves future lifecycle commands, validates production data settings without identity/broker settings, checks database readiness, and rejects duplicate hosted-service or route registration. Seven focused tests, twelve unchanged Full hardening tests, a clean solution build, and live initialized-PostgreSQL catalog/preferences/session smoke checks passed. See [`docs/lite/phase-08-merged-lite-host.md`](docs/lite/phase-08-merged-lite-host.md).
+**State (2026-09-12): Accepted.** A dedicated ASP.NET Core Lite entry point now exposes a deliberately limited, unauthenticated route surface backed by direct DataBridge operations. It uses the established fixed owner, reports explicit capabilities, reserves future lifecycle commands, validates production data settings without identity/broker settings, checks database readiness, and rejects duplicate hosted-service or route registration. Seven focused tests, twelve unchanged Full hardening tests, a clean solution build, and live initialized-PostgreSQL catalog/preferences/session smoke checks passed. Acceptance is recorded by the request to proceed with Phase 9. See [`docs/lite/phase-08-merged-lite-host.md`](docs/lite/phase-08-merged-lite-host.md).
 
 **Outcome:** A minimal Lite backend runs catalog/API operations without an identity provider or broker.
 
@@ -206,17 +206,19 @@ Preserve these exact spellings. Internal namespaces use `FrostStream`. Installat
 
 ## Phase 9 — Implement encrypted local secrets
 
+**State (2026-09-12): Verified, awaiting acceptance.** Lite now uses an encrypted, atomic, path-bounded file implementation of the shared secret store with an NSec XChaCha20-Poly1305 master key, versioned/path-bound authenticated ciphertext, restrictive Unix modes, startup decryption validation, and explicit missing/mismatched-key recovery errors. Fixed-owner cookie metadata/content operations and local credential hydration are connected without NATS, while Full still selects OpenBao. Fifteen focused tests and a real initialized-PostgreSQL cookie create/restart/overwrite/delete smoke passed; ciphertext contained no synthetic plaintext. See [`docs/lite/phase-09-encrypted-local-secrets.md`](docs/lite/phase-09-encrypted-local-secrets.md).
+
 **Outcome:** Lite storage credentials and cookies persist securely through the shared secret abstraction.
 
 **Primary areas:** `ISecretStore`, `SecretPaths`, `StorageSecretSplitter`, Lite DI/options and persistent directories.
 
 **Work block**
 
-- [ ] Implement encrypted file-backed reads/writes/deletes using Data Protection with a persisted key ring and stable application name/purpose.
-- [ ] Preserve secret path/splitting semantics; enforce bounded, path-safe mapping, serialized writes, atomic replacement, restrictive permissions, and redacted diagnostics.
-- [ ] Distinguish fresh installation from existing ciphertext with missing/unusable keys. Fail with a clear recovery instruction rather than silently replacing credentials.
-- [ ] Connect credentialed storage and cookie-profile services to the local store. Keep Full's OpenBao implementation selected in Full.
-- [ ] Define the secret/key backup manifest and selected-owner migration interface for later phases. Document the limits of storing keys beside ciphertext.
+- [x] Implement encrypted file-backed reads/writes/deletes using NSec XChaCha20-Poly1305 with a persisted master key and stable purpose/path authentication.
+- [x] Preserve secret path/splitting semantics; enforce bounded, path-safe mapping, serialized writes, atomic replacement, restrictive permissions, and redacted diagnostics.
+- [x] Distinguish fresh installation from existing ciphertext with missing/unusable keys. Fail with a clear recovery instruction rather than silently replacing credentials.
+- [x] Connect credentialed storage and cookie-profile services to the local store. Keep Full's OpenBao implementation selected in Full.
+- [x] Define the secret/key backup manifest and selected-owner migration interface for later phases. Document the limits of storing keys beside ciphertext.
 
 **Verification gate:** Round-trip, overwrite/delete, concurrent-write, malformed-path, interrupted-write, missing-key, and restart tests pass. On-disk secret payloads are encrypted; logs/examples contain no real credentials. A credentialed storage operation and cookie materialization work with the local store.
 
@@ -323,7 +325,7 @@ Preserve these exact spellings. Internal namespaces use `FrostStream`. Installat
 - [ ] Move backup coordination into reusable services and invoke them locally; remove Lite internal HTTP/NATS backup calls.
 - [ ] Implement `backup` mode and scheduled backup execution with shared durable reporting and safe coordination with the running application.
 - [ ] Retain compatible PostgreSQL/pgBackRest tools, data/socket access, configuration, ownership, and stanza validation.
-- [ ] Define a consistent backup manifest covering PostgreSQL, media, encrypted secrets/key ring, chat source/ClickHouse recovery, and Typesense reconstruction. Explicitly identify external media handling and any data not included.
+- [ ] Define a consistent backup manifest covering PostgreSQL, media, encrypted secrets/key material, chat source/ClickHouse recovery, and Typesense reconstruction. Explicitly identify external media handling and any data not included.
 - [ ] Remove OpenBao pairing from Lite manifests while retaining Full behavior. Include a supported backup of irreplaceable chat data if source artifacts cannot reconstruct it.
 
 **Verification gate:** Manual and scheduled backup succeed on a populated disposable installation; manifest/content checks confirm required data and both secrets/key material. Inject a backup failure and verify truthful durable status and safe retry. Full backup regression checks pass.

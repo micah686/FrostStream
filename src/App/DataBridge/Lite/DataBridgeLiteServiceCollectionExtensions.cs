@@ -47,6 +47,9 @@ public static class DataBridgeLiteServiceCollectionExtensions
         services.AddScoped<IUserNotesRepository, UserNotesRepository>();
         services.AddScoped<IUserNoteApplication, UserNoteApplication>();
         services.AddScoped<IOptionPresetsRepository, OptionPresetsRepository>();
+        services.AddScoped<CookieProfileApplication>();
+        services.AddSingleton<IStorageConfigClient, LocalStorageConfigClient>();
+        services.AddSingleton<IStoreProvider, CachingStoreProvider>();
 
         return services;
     }

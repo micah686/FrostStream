@@ -55,6 +55,7 @@
     <PackageVersion Include="NATS.Net" Version="3.2.0" />
     <PackageVersion Include="NodaTime" Version="3.3.3" />
     <PackageVersion Include="NodaTime.Serialization.SystemTextJson" Version="1.4.0" />
+    <PackageVersion Include="NSec.Cryptography" Version="26.4.0" />
     <PackageVersion Include="Npgsql.DependencyInjection" Version="10.0.3" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime" Version="10.0.3" />

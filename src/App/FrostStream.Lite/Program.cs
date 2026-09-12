@@ -3,6 +3,7 @@ using FrostStream.Lite;
 using NodaTime;
 using NodaTime.Serialization.SystemTextJson;
 using Shared.Application;
+using Shared.Secrets;
 using System.Text.Json.Serialization;
 
 var command = LiteCommandLine.Parse(args);
@@ -17,6 +18,7 @@ builder.AddServiceDefaults();
 LiteProductionValidation.Validate(builder.Configuration, builder.Environment);
 
 builder.Services.AddSingleton<ICurrentOwner, FixedCurrentOwner>();
+builder.Services.AddLocalFileSecretStore(builder.Configuration);
 builder.Services.AddDataBridgeLiteApiOperations(builder.Configuration);
 builder.Services
     .AddControllers()

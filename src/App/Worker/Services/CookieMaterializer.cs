@@ -4,7 +4,7 @@ using Shared.Secrets;
 namespace Worker.Services;
 
 /// <summary>
-/// Reads a Netscape-formatted cookie file from a user-owned OpenBAO profile path
+/// Reads a Netscape-formatted cookie file from the configured user-owned secret profile path
 /// (<c>cookies/users/{subject}/{profileKey}</c>) and materializes it into a temp file the worker
 /// passes to yt-dlp's <c>--cookies</c> flag. Implements <see cref="IAsyncDisposable"/> so the file
 /// is removed after the run.
@@ -39,7 +39,7 @@ public sealed class CookieMaterializer : IAsyncDisposable
         if (secrets is null || !secrets.TryGetValue(CookieField, out var content) || string.IsNullOrEmpty(content))
         {
             throw new InvalidOperationException(
-                $"No cookie content was found in OpenBAO at '{secretPath}'. " +
+                $"No cookie content was found in the configured secret store at '{secretPath}'. " +
                 $"Expected a '{CookieField}' field with the Netscape cookie text.");
         }
 

@@ -24,6 +24,7 @@
       <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
       <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
       <PackageReference Include="NodaTime" />
+      <PackageReference Include="NSec.Cryptography" />
       <!-- Version pin, not a code dependency. FluentStorage.FTP/SFTP depend on Polly 8.4.0, which
            asks for Polly.Core 8.4.0; this lifts it to 8.7.0. No source file here uses Polly. -->
       <PackageReference Include="Polly.Core" />
