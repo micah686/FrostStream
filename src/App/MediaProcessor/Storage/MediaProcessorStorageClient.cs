@@ -12,6 +12,8 @@ public sealed class MediaProcessorStorageClient(
     IOptions<MediaProcessorOptions> options,
     ILogger<MediaProcessorStorageClient> logger)
 {
+    private const string ApiKeyHeader = "X-FrostStream-MediaProcessor-Key";
+
     public async Task DownloadToFileAsync(
         string storageKey,
         string storagePath,
@@ -19,6 +21,7 @@ public sealed class MediaProcessorStorageClient(
         CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, BuildBlobUri(storageKey, storagePath));
+        AddApiKey(request);
         using var response = await httpClient.SendAsync(
             request,
             HttpCompletionOption.ResponseHeadersRead,
@@ -48,6 +51,7 @@ public sealed class MediaProcessorStorageClient(
         {
             Content = content
         };
+        AddApiKey(request);
         using var response = await httpClient.SendAsync(
             request,
             HttpCompletionOption.ResponseHeadersRead,
@@ -68,6 +72,15 @@ public sealed class MediaProcessorStorageClient(
                 .Select(Uri.EscapeDataString));
 
         return new Uri(baseUri, $"api/internal/media-storage/{Uri.EscapeDataString(storageKey)}/{escapedPath}");
+    }
+
+    private void AddApiKey(HttpRequestMessage request)
+    {
+        var apiKey = options.Value.ApiKey;
+        if (string.IsNullOrWhiteSpace(apiKey))
+            throw new InvalidOperationException("MediaProcessor:ApiKey must be configured.");
+
+        request.Headers.TryAddWithoutValidation(ApiKeyHeader, apiKey);
     }
 
     private async Task EnsureSuccessAsync(HttpResponseMessage response, string message, CancellationToken cancellationToken)

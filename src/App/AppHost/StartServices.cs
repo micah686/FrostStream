@@ -25,10 +25,15 @@ public static class StartServices
     {
         var openBao = openBaoResources.Server;
         var webApiEndpointName = hardening.EnableHttps ? "https" : "http";
+        var mediaProcessorApiKey = builder.AddParameter(
+            "media-processor-api-key",
+            DeploymentRuntime.Current.Get("MEDIA_PROCESSOR_API_KEY"),
+            publishValueAsDefault: false,
+            secret: true);
         var databridge = WireDataBridge(builder, hardening, sharedStorageRoot, nats, postgres, openBaoResources, openBaoToken, typesense, typesenseApiKey, potProvider, clickHouse);
-        var webapi = WireWebApi(builder, hardening, sharedStorageRoot, nats, databridge, openBaoResources, openBaoToken, authentik, openFga, backupService, webApiEndpointName, clickHouse);
+        var webapi = WireWebApi(builder, hardening, sharedStorageRoot, nats, databridge, openBaoResources, openBaoToken, authentik, openFga, backupService, webApiEndpointName, clickHouse, mediaProcessorApiKey);
         WireWorker(builder, hardening, sharedStorageRoot, nats, openBaoResources, openBaoToken, clickHouse);
-        WireMediaProcessor(builder, nats, databridge, webapi, webApiEndpointName);
+        WireMediaProcessor(builder, nats, databridge, webapi, webApiEndpointName, mediaProcessorApiKey);
         WireScheduler(builder, nats, databridge, backupService);
         //WireAuthTester(builder, hardening, webapi, authentik, webApiEndpointName);
         WireFrontend(builder, webapi, webApiEndpointName);
@@ -147,7 +152,8 @@ public static class StartServices
         OpenFgaResources openFga,
         IResourceBuilder<ContainerResource> backupService,
         string webApiEndpointName,
-        ClickHouseResources clickHouse)
+        ClickHouseResources clickHouse,
+        IResourceBuilder<ParameterResource> mediaProcessorApiKey)
     {
         var deployment = DeploymentRuntime.Current;
         var openBao = openBaoResources.Server;
@@ -212,6 +218,7 @@ public static class StartServices
             .WithEnvironment("OpenFga__AutoProvision", Environment.GetEnvironmentVariable("OPENFGA_AUTO_PROVISION") ?? "true")
             .WithEnvironment("OpenFga__BootstrapOwnerSubjects", Environment.GetEnvironmentVariable("OPENFGA_BOOTSTRAP_OWNER_SUB") ?? "")
             .WithEnvironment("Cast__AdvertisedBaseUrl", castAdvertisedBaseUrl)
+            .WithEnvironment("MediaProcessor__ApiKey", mediaProcessorApiKey)
             // WebAPI only needs the flag: chat queries proxy to DataBridge over NATS.
             .WithEnvironment("LiveChat__Enabled", clickHouse.Server is not null ? "true" : "false")
             .WithEnvironment("BackupService__BaseUrl", backupService.GetEndpoint("http"))
@@ -322,7 +329,8 @@ public static class StartServices
         IResourceBuilder<NatsServerResource> nats,
         IResourceBuilder<ProjectResource> databridge,
         IResourceBuilder<ProjectResource> webapi,
-        string webApiEndpointName)
+        string webApiEndpointName,
+        IResourceBuilder<ParameterResource> mediaProcessorApiKey)
     {
         var deployment = DeploymentRuntime.Current;
         // Rendition claims/completions still go through DataBridge over NATS. Media bytes move
@@ -332,6 +340,7 @@ public static class StartServices
         builder.AddProject<Projects.MediaProcessor>(deployment.Names.MediaProcessor)
             .WithReference(nats).WaitFor(nats)
             .WithEnvironment("MediaProcessor__WebApiBaseUrl", webapi.GetEndpoint(webApiEndpointName))
+            .WithEnvironment("MediaProcessor__ApiKey", mediaProcessorApiKey)
             .WaitFor(databridge)
             .WaitFor(webapi)
             .PublishAsDockerFile(c => c

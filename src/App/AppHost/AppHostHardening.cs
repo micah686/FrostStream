@@ -88,6 +88,7 @@ public static class AppHostHardening
         RequireStrongSecret(errors, "POSTGRES_PASSWORD", Environment.GetEnvironmentVariable("POSTGRES_PASSWORD"),  16);
         RequireStrongSecret(errors, "OPENBAO_TOKEN", Environment.GetEnvironmentVariable("OPENBAO_TOKEN"), 32);
         RequireStrongSecret(errors, "TYPESENSE_API_KEY", Environment.GetEnvironmentVariable("TYPESENSE_API_KEY"), 32);
+        RequireStrongSecret(errors, "MEDIA_PROCESSOR_API_KEY", Environment.GetEnvironmentVariable("MEDIA_PROCESSOR_API_KEY"), 32);
 
         if (Helpers.LiveChatEnabled)
         {

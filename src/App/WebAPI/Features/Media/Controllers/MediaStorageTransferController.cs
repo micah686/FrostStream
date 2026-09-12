@@ -1,5 +1,7 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Shared.Storage;
+using WebAPI.Auth;
 
 namespace WebAPI.Features.Media.Controllers;
 
@@ -9,6 +11,7 @@ namespace WebAPI.Features.Media.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/internal/media-storage")]
+[Authorize(AuthenticationSchemes = MediaProcessorAuthenticationDefaults.Scheme)]
 public sealed class MediaStorageTransferController(
     IStoreProvider blobStorageProvider,
     ILogger<MediaStorageTransferController> logger) : ControllerBase

@@ -158,7 +158,8 @@ public static class DeploymentConfigurationResolver
         "AUTHENTIK_BOOTSTRAP_PASSWORD",
         "AUTHENTIK_BOOTSTRAP_TOKEN",
         "OPENFGA_API_TOKEN",
-        "BACKUP_RESTORE_UI_TOKEN"
+        "BACKUP_RESTORE_UI_TOKEN",
+        "MEDIA_PROCESSOR_API_KEY"
     ];
 
     public static IReadOnlySet<string> SecretInputNames { get; } =

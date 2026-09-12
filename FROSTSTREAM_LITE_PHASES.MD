@@ -1,6 +1,6 @@
 # FrostStream Lite implementation phases
 
-Status: active implementation plan. Phase 1 is complete with its recorded runtime limitation; Phases 2 through 4 are accepted; Phase 5 is implemented and awaiting its complete Full application smoke. Later phases remain unimplemented.
+Status: active implementation plan. Phase 1 is complete with its recorded runtime limitation; Phases 2 through 4 are accepted; Phase 5 is verified and awaiting acceptance. Later phases remain unimplemented.
 
 Source of truth: [FROSTREAM_LITE_PLAN.md](FROSTREAM_LITE_PLAN.md). This document divides that plan into actionable, sequential work blocks without changing its scope. Proposed files and command interfaces below become concrete during their owning phase.
 
@@ -125,7 +125,7 @@ Preserve these exact spellings. Internal namespaces use `FrostStream`. Installat
 
 ## Phase 5 — Complete Full init/runtime lifecycle and OpenBao restart
 
-**State (2026-09-11): Implemented, awaiting the complete Full application smoke.** The native Full bundles now have distinct lifecycle membership, runtime-only restart/unseal behavior, real health gates, and no dangling one-shot dependencies. Publication and disposable PostgreSQL/OpenBao/Typesense, OpenFGA, application-schema, and pgBackRest handoff checks passed; login, worker messaging, and media workflow remain to be exercised as a complete stack. Evidence and exact handoff commands are recorded in [`docs/lite/phase-05-full-lifecycle.md`](docs/lite/phase-05-full-lifecycle.md).
+**State (2026-09-11): Verified, awaiting acceptance.** The native Full bundles have distinct lifecycle membership, runtime-only restart/unseal behavior, real health gates, and no dangling one-shot dependencies. An isolated multi-user Full installation passed publication, initialization, Authentik login, OpenFGA authorization, NATS worker/SSE messaging, controlled download stop/restart, ingestion, search, range playback, watch state, MediaProcessor rendition, backup, complete runtime recreation, and persistence checks. The smoke exposed and fixed missing service authentication on MediaProcessor's internal byte-transfer path. Evidence and exact handoff commands are recorded in [`docs/lite/phase-05-full-lifecycle.md`](docs/lite/phase-05-full-lifecycle.md).
 
 **Outcome:** Both Full bundles operate independently with the correct lifecycle responsibilities.
 

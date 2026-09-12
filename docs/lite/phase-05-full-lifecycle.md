@@ -2,7 +2,7 @@
 
 Date implemented: 2026-09-11
 
-Status: Implemented, awaiting the complete Full login/messaging/media smoke.
+Status: Verified, awaiting acceptance.
 
 The Full profiles now publish distinct bundles under one stable Compose project identity. `frostream-full-init` includes six one-shot resources; `froststream-full` omits them and contains no dependency on them.
 
@@ -114,7 +114,54 @@ An isolated `froststream-phase5-smoke` installation used `/tmp/froststream-phase
 - After removing init containers without volumes, all three PostgreSQL databases remained, Typesense returned healthy, and OpenBao restored Raft state, logged `unsealed from persisted recovery material`, and became healthy.
 - Starting runtime OpenBao against empty state exited nonzero with the init-profile instruction, demonstrating the runtime failure gate.
 
-Podman Compose's monolithic successful-completion dependency bug prevented using one `up` command for this evidence; the documented ordered path was used. The complete Authentik login, authorization, NATS worker messaging, and media workflow smoke remains the review gate before marking Phase 5 accepted.
+Podman Compose's monolithic successful-completion dependency bug prevented using one `up` command for this evidence; the documented ordered path was used.
+
+## Complete Full application smoke
+
+On 2026-09-11, commit `22763b0e02b1dce997b8aa604d225c6083e2983b` plus the Phase 5 verification fix was exercised as the isolated `froststream-phase5-full` installation. It used synthetic credentials, installation-prefixed volumes, storage and recovery directories under `/tmp/froststream-phase5-full`, frontend port 25000, Authentik port 34100, and WebAPI port 34200. Secrets and recovery material were not copied into this record.
+
+The controlled source was a generated 30-second MP4 containing test video and audio: 7,374,405 bytes, served from a throttled host-only HTTP fixture. The direct-source path was tested; no YouTube/provider or POT claim is made by this run.
+
+The smoke initially found that MediaProcessor's internal GET/PUT storage requests received 401 in multi-user mode. The storage controller correctly fell under the deny-by-default fallback policy, but MediaProcessor sent no credential. The necessary Phase 5 fix adds a dedicated `MEDIA_PROCESSOR_API_KEY`, preserves it with the installation's other generated secrets, injects it only into WebAPI and MediaProcessor, applies an explicit MediaProcessor authentication scheme only to the internal controller, compares keys in fixed time, and fails closed when the key is absent or incorrect. Production hardening requires at least 32 characters. An unauthenticated request to the internal route now returns 401.
+
+Observed application results after rebuilding those two services:
+
+- Anonymous `/api/auth/me` returned 401. Authentik login returned to FrostStream and `/api/auth/me` returned the synthetic `akadmin` owner in multi-user mode.
+- Effective access returned bundle `all` and all 194 registered endpoint IDs. The worker registry contained the live Worker heartbeat.
+- Job `c876e1c7-4ea1-4664-b5f2-01360509cc67`, correlation `48ae428b-ef6f-4160-8fb9-57d87af033c1`, was stopped during metadata and reached `Stopped`, then restarted with a new run ID. Worker progress and state events arrived through the queue SSE stream. The restarted run downloaded all 7,374,405 bytes and reached the successful duplicate-safe `AlreadyDownloaded` terminal state because an earlier smoke attempt had committed the same fixture.
+- The resolved media ID was `e20aaa52-d443-474d-9349-11f84b6e7b08`. Metadata and unique-term search returned it once. A `bytes=0-1023` playback request returned 206 and exactly 1,024 bytes. Watch position 7.5 seconds round-tripped.
+- The Opus rendition reached `Ready` at `archives/e20aaa52d443474d934911f84b6e7b08/v1/stream/audio/media.opus`, with 912,445 bytes and a 30-second duration. A ranged audio request returned 206, proving the authenticated MediaProcessor download/upload path.
+- Backup job `3da6e39a-9d84-44ec-82fb-a92af28496aa` completed. Repository label `20260912-032452F` contained a 74,108,712-byte database backup, an 8,362,221-byte repository delta, and the OpenBao export.
+- A full `down` without `-v`, followed by runtime `up -d`, recreated all 16 runtime containers in about 54 seconds. PostgreSQL retained `authentikdb`, `froststreamdb`, and `openfgadb`; OpenBao logged `unsealed from persisted recovery material`; and PostgreSQL, OpenBao, Typesense, Authentik, and BackupService returned healthy.
+- The post-restart browser check retained the Authentik identity, catalog title, one search result, 7.5-second watch position, ready rendition, backup listing, and 206 range playback.
+- Three short idle samples after restart measured approximately 2.89 GB total container memory. The largest consumers were ClickHouse at 943–955 MB, Authentik server at 467 MB, Typesense at 345 MB, and Authentik worker at 273 MB. These Full-only measurements are evidence, not a Lite savings target.
+
+Verification commands included:
+
+```bash
+dotnet build src/App/FrostStream.slnx --no-restore --verbosity minimal --disable-build-servers
+
+dotnet Tests/UnitTests/bin/Debug/net10.0/UnitTests.dll \
+  --treenode-filter '/*/*/MediaProcessorAuthenticationTests/*' \
+  --minimum-expected-tests 4 --no-ansi --disable-logo --output Minimal
+
+./eng/publish-production-profile.sh frostream-full-init /tmp/froststream-phase5-fixed/init /tmp/froststream-phase5-full.env
+./eng/publish-production-profile.sh froststream-full /tmp/froststream-phase5-fixed/runtime /tmp/froststream-phase5-full.env
+
+dotnet run --project src/App/ComposePublishingFixture.Tests/ComposePublishingFixture.Tests.csproj -- \
+  --production-pair /tmp/froststream-phase5-fixed/init /tmp/froststream-phase5-fixed/runtime \
+  froststream-phase5-full src \
+  src/App/AppHost/deployment/resolved/froststream-phase5-full/resolved.env
+
+docker compose --env-file /tmp/froststream-phase5-full.env \
+  -f /tmp/froststream-phase5-full/runtime/docker-compose.yaml down
+docker compose --env-file /tmp/froststream-phase5-full.env \
+  -f /tmp/froststream-phase5-full/runtime/docker-compose.yaml up -d
+```
+
+The solution build passed with zero warnings and errors. The four focused authentication tests passed. The lifecycle publishing verifier passed. The browser lifecycle smoke and post-restart persistence check each passed. The complete 472-test unit run retained the same five unrelated baseline failures recorded in Phase 1; all four new tests were among its 467 passes.
+
+Archived-live-chat replay was unverified because this controlled fixture had no chat. Physical casting was unverified because no compatible device was available. Credentialed non-local storage was unverified because no provider fixture was supplied. Those conditional checks remain explicitly unverified; the mandatory Phase 5 login, authorization, worker messaging, media, backup, and restart lifecycle gate passed.
 
 ## Rollback
 
