@@ -4,6 +4,31 @@ Status: implemented, awaiting the runtime verification described in `phase-01-ba
 
 Captured: 2026-09-10 on commit `9ebc0ac` (`feature/lite-implementation`). This is the extraction checklist for later FrostStream Lite phases. The source files remain authoritative when code changes.
 
+## Phase 6 migration update (2026-09-11)
+
+Phase 6 collected the existing scoped synchronous seams into
+[`AddDataBridgeApplicationOperations`](../../src/App/DataBridge/DataBridgeApplicationServiceCollectionExtensions.cs).
+The module registers catalog metadata, statistics, media/storage resolution, playlists, notes,
+preferences/config sets, schedules, creator discovery, imports, and rendition/query repositories
+without invoking `DataBridge.Program.Main` or registering a NATS hosted service.
+
+User notes are the reference fully migrated path. The HTTP controller calls
+[`IUserNoteApplication`](../../src/App/Shared/Application/IUserNoteApplication.cs), Full selects
+[`NatsUserNoteApplication`](../../src/App/WebAPI/Features/Notes/NatsUserNoteApplication.cs), the
+DataBridge subscriber is only a subject/reply adapter, and
+[`UserNoteApplication`](../../src/App/DataBridge/Application/UserNoteApplication.cs) owns validation,
+repository calls, response mapping, failure semantics, and cancellation. Full identity is supplied by
+[`HttpCurrentOwner`](../../src/App/WebAPI/Auth/HttpCurrentOwner.cs); the future merged host can select
+`FixedCurrentOwner` with the established single-user subject.
+
+The remaining NATS dependencies are transport/execution destinations, not dependencies of the
+reusable registration module: Full HTTP proxies and DataBridge request/reply subscribers remain for
+the public distributed contract; durable download/import/playlist/rendition execution remains assigned
+to Phase 7; local secret implementations for storage and cookies remain assigned to Phase 9; local
+change/progress delivery remains assigned to Phases 10 and 13. The detailed category-to-interface map
+and verification evidence are in
+[`phase-06-application-operations.md`](phase-06-application-operations.md).
+
 ## Composition roots and ownership
 
 | Process | Current responsibility | Startup evidence | Lite destination |

@@ -1,11 +1,7 @@
-using System.Security.Claims;
-using Conduit.NATS;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
 using NodaTime;
 using NSubstitute;
-using Shared.Auth;
+using Shared.Application;
 using Shared.Messaging;
 using Shouldly;
 using TUnit.Core;
@@ -21,18 +17,16 @@ public sealed class UserNotesControllerTests
     [Test]
     public async Task Upsert_Sends_Owner_Scoped_Request()
     {
-        var bus = Substitute.For<IMessageBus>();
-        var controller = CreateController(bus, "micah");
+        var application = Substitute.For<IUserNoteApplication>();
+        var controller = CreateController(application, "micah");
         var mediaGuid = Guid.NewGuid();
 
-        bus.RequestAsync<UserNoteUpsertRequestMessage, UserNoteResponseMessage>(
-                UserNoteSubjects.Upsert,
+        application.UpsertAsync(
                 Arg.Is<UserNoteUpsertRequestMessage>(x => x != null &&
                     x.OwnerSubject == "micah" &&
                     x.TargetType == "video" &&
                     x.TargetId == mediaGuid.ToString() &&
                     x.Note == "remember this"),
-                Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new UserNoteResponseMessage
             {
@@ -60,37 +54,33 @@ public sealed class UserNotesControllerTests
     [Test]
     public async Task Search_Rejects_Blank_Query_And_Requires_User()
     {
-        var bus = Substitute.For<IMessageBus>();
-        var controller = CreateController(bus, "micah");
+        var application = Substitute.For<IUserNoteApplication>();
+        var controller = CreateController(application, "micah");
 
         var blank = await controller.Search(" ", cancellationToken: CancellationToken.None);
         blank.Result!.ShouldBeOfType<BadRequestObjectResult>().Value!.ShouldBe("Query parameter 'q' is required.");
 
-        var anonymous = await CreateController(bus, subject: null).Search("needle", cancellationToken: CancellationToken.None);
+        var anonymous = await CreateController(application, subject: null).Search("needle", cancellationToken: CancellationToken.None);
         anonymous.Result!.ShouldBeOfType<UnauthorizedResult>();
 
-        await bus.DidNotReceive().RequestAsync<UserNoteSearchRequestMessage, UserNoteSearchResponseMessage>(
-            Arg.Any<string>(),
+        await application.DidNotReceive().SearchAsync(
             Arg.Any<UserNoteSearchRequestMessage>(),
-            Arg.Any<TimeSpan>(),
             Arg.Any<CancellationToken>());
     }
 
     [Test]
     public async Task List_Sends_Paginated_Request_With_Blank_Query()
     {
-        var bus = Substitute.For<IMessageBus>();
-        var controller = CreateController(bus, "micah");
+        var application = Substitute.For<IUserNoteApplication>();
+        var controller = CreateController(application, "micah");
 
-        bus.RequestAsync<UserNoteSearchRequestMessage, UserNoteSearchResponseMessage>(
-                UserNoteSubjects.Search,
+        application.SearchAsync(
                 Arg.Is<UserNoteSearchRequestMessage>(x => x != null &&
                     x.OwnerSubject == "micah" &&
                     x.Query == string.Empty &&
                     x.TargetType == "video" &&
                     x.PageSize == 25 &&
                     x.PageOffset == 50),
-                Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new UserNoteSearchResponseMessage { Success = true });
 
@@ -101,15 +91,13 @@ public sealed class UserNotesControllerTests
     }
 
     [Test]
-    public async Task Delete_Maps_NotFound()
+    public async Task Delete_Is_Idempotent_When_Note_Is_Missing()
     {
-        var bus = Substitute.For<IMessageBus>();
-        var controller = CreateController(bus, "micah");
+        var application = Substitute.For<IUserNoteApplication>();
+        var controller = CreateController(application, "micah");
 
-        bus.RequestAsync<UserNoteDeleteRequestMessage, UserNoteResponseMessage>(
-                UserNoteSubjects.Delete,
+        application.DeleteAsync(
                 Arg.Any<UserNoteDeleteRequestMessage>(),
-                Arg.Any<TimeSpan>(),
                 Arg.Any<CancellationToken>())
             .Returns(new UserNoteResponseMessage
             {
@@ -120,21 +108,13 @@ public sealed class UserNotesControllerTests
 
         var result = await controller.Delete("channel", "123", CancellationToken.None);
 
-        result.ShouldBeOfType<NotFoundObjectResult>().Value!.ShouldBe("missing");
+        result.ShouldBeOfType<NoContentResult>();
     }
 
-    private static UserNotesController CreateController(IMessageBus bus, string? subject)
+    private static UserNotesController CreateController(IUserNoteApplication application, string? subject)
     {
-        var controller = new UserNotesController(bus, Substitute.For<ILogger<UserNotesController>>());
-        var http = new DefaultHttpContext();
-        if (subject is not null)
-        {
-            http.User = new ClaimsPrincipal(new ClaimsIdentity(
-                [new Claim(AuthConstants.SubjectClaim, subject)],
-                authenticationType: "test"));
-        }
-
-        controller.ControllerContext = new ControllerContext { HttpContext = http };
-        return controller;
+        var currentOwner = Substitute.For<ICurrentOwner>();
+        currentOwner.Subject.Returns(subject);
+        return new UserNotesController(application, currentOwner);
     }
 }

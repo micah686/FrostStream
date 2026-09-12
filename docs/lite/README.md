@@ -18,4 +18,12 @@ Phase 4 artifact:
 
 - [`phase-04-explicit-initialization.md`](phase-04-explicit-initialization.md): versioned application initialization, runtime compatibility checks, transitional Full wiring, disposable-state evidence, and the remaining pgBackRest runtime check.
 
+Phase 5 artifact:
+
+- [`phase-05-full-lifecycle.md`](phase-05-full-lifecycle.md): independent Full init/runtime bundles, OpenBao restart behavior, complete application smoke, persistence, and resource evidence.
+
+Phase 6 artifact:
+
+- [`phase-06-application-operations.md`](phase-06-application-operations.md): reusable application registration, typed direct/Full note adapters, current-owner abstraction, migration matrix, parity tests, and authenticated Full smoke evidence.
+
 Evidence containing credentials, recovery material, dumps, cookies, or downloaded media must remain outside source control. Commit only redacted summaries.

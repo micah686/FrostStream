@@ -6,6 +6,8 @@ namespace Shared.Messaging;
 public abstract class SubscriptionBackgroundService : BackgroundService
 {
     private readonly List<ISubscription> _subscriptions = [];
+    private readonly object _subscriptionsLock = new();
+    private bool _stopping;
 
     protected sealed override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -23,13 +25,20 @@ public abstract class SubscriptionBackgroundService : BackgroundService
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        foreach (var subscription in _subscriptions)
+        ISubscription[] subscriptions;
+        lock (_subscriptionsLock)
+        {
+            _stopping = true;
+            subscriptions = _subscriptions.ToArray();
+            _subscriptions.Clear();
+        }
+
+        foreach (var subscription in subscriptions)
         {
             await subscription.StopAsync(cancellationToken);
             await subscription.DisposeAsync();
         }
 
-        _subscriptions.Clear();
         await base.StopAsync(cancellationToken);
     }
 
@@ -42,10 +51,22 @@ public abstract class SubscriptionBackgroundService : BackgroundService
         string? queueGroup = null,
         CancellationToken cancellationToken = default)
     {
-        _subscriptions.Add(await messageBus.SubscribeAsync(
+        var subscription = await messageBus.SubscribeAsync(
             subject,
             handler,
             queueGroup,
-            cancellationToken));
+            cancellationToken);
+
+        lock (_subscriptionsLock)
+        {
+            if (!_stopping)
+            {
+                _subscriptions.Add(subscription);
+                return;
+            }
+        }
+
+        await subscription.StopAsync(CancellationToken.None);
+        await subscription.DisposeAsync();
     }
 }

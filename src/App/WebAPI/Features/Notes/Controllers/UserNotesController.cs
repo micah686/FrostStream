@@ -1,6 +1,5 @@
-using Conduit.NATS;
 using Microsoft.AspNetCore.Mvc;
-using Shared.Auth;
+using Shared.Application;
 using Shared.Messaging;
 using WebAPI.Auth;
 using WebAPI.Features.Notes.Models;
@@ -10,11 +9,9 @@ namespace WebAPI.Features.Notes.Controllers;
 [ApiController]
 [Route("api/user/notes")]
 public sealed class UserNotesController(
-    IMessageBus messageBus,
-    ILogger<UserNotesController> logger) : ControllerBase
+    IUserNoteApplication application,
+    ICurrentOwner currentOwner) : ControllerBase
 {
-    private static readonly TimeSpan QueryTimeout = TimeSpan.FromSeconds(10);
-
     [HttpPut("{targetType}/{targetId}")]
     [Endpoint(EndpointIds.UserNotesUpsert)]
     [EndpointSummary("Create or update a user note")]
@@ -28,8 +25,7 @@ public sealed class UserNotesController(
         if (ResolveSubject() is not { } owner)
             return Unauthorized();
 
-        var response = await SendAsync<UserNoteUpsertRequestMessage, UserNoteResponseMessage>(
-            UserNoteSubjects.Upsert,
+        var response = await application.UpsertAsync(
             new UserNoteUpsertRequestMessage
             {
                 OwnerSubject = owner,
@@ -37,7 +33,6 @@ public sealed class UserNotesController(
                 TargetId = targetId,
                 Note = request.Note
             },
-            "upsert user note",
             cancellationToken);
 
         return ToObjectResult(response);
@@ -55,15 +50,13 @@ public sealed class UserNotesController(
         if (ResolveSubject() is not { } owner)
             return Unauthorized();
 
-        var response = await SendAsync<UserNoteGetRequestMessage, UserNoteResponseMessage>(
-            UserNoteSubjects.Get,
+        var response = await application.GetAsync(
             new UserNoteGetRequestMessage
             {
                 OwnerSubject = owner,
                 TargetType = targetType,
                 TargetId = targetId
             },
-            "get user note",
             cancellationToken);
 
         // Having no note for a target is a normal empty result, not an error: answer 200 with a
@@ -88,15 +81,13 @@ public sealed class UserNotesController(
         if (ResolveSubject() is not { } owner)
             return Unauthorized();
 
-        var response = await SendAsync<UserNoteDeleteRequestMessage, UserNoteResponseMessage>(
-            UserNoteSubjects.Delete,
+        var response = await application.DeleteAsync(
             new UserNoteDeleteRequestMessage
             {
                 OwnerSubject = owner,
                 TargetType = targetType,
                 TargetId = targetId
             },
-            "delete user note",
             cancellationToken);
 
         if (response is null)
@@ -127,8 +118,7 @@ public sealed class UserNotesController(
         if (string.IsNullOrWhiteSpace(q))
             return BadRequest("Query parameter 'q' is required.");
 
-        var response = await SendAsync<UserNoteSearchRequestMessage, UserNoteSearchResponseMessage>(
-            UserNoteSubjects.Search,
+        var response = await application.SearchAsync(
             new UserNoteSearchRequestMessage
             {
                 OwnerSubject = owner,
@@ -137,7 +127,6 @@ public sealed class UserNotesController(
                 PageSize = pageSize,
                 PageOffset = pageOffset
             },
-            "search user notes",
             cancellationToken);
 
         if (response is null)
@@ -161,8 +150,7 @@ public sealed class UserNotesController(
         if (ResolveSubject() is not { } owner)
             return Unauthorized();
 
-        var response = await SendAsync<UserNoteSearchRequestMessage, UserNoteSearchResponseMessage>(
-            UserNoteSubjects.Search,
+        var response = await application.SearchAsync(
             new UserNoteSearchRequestMessage
             {
                 OwnerSubject = owner,
@@ -171,7 +159,6 @@ public sealed class UserNotesController(
                 PageSize = pageSize,
                 PageOffset = pageOffset
             },
-            "list user notes",
             cancellationToken);
 
         if (response is null)
@@ -183,28 +170,7 @@ public sealed class UserNotesController(
     }
 
     private string? ResolveSubject()
-        => AuthConstants.FindSubject(User);
-
-    private async Task<TResponse?> SendAsync<TRequest, TResponse>(
-        string subject,
-        TRequest request,
-        string operation,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            return await messageBus.RequestAsync<TRequest, TResponse>(
-                subject,
-                request,
-                QueryTimeout,
-                cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed processing {Operation}.", operation);
-            return default;
-        }
-    }
+        => currentOwner.Subject;
 
     private ActionResult<UserNoteDto> ToObjectResult(UserNoteResponseMessage? response)
     {

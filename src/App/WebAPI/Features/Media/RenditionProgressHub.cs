@@ -38,11 +38,11 @@ public sealed class RenditionProgressHub(IMessageBus messageBus, ILogger<Renditi
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        if (_subscription is not null)
+        var subscription = Interlocked.Exchange(ref _subscription, null);
+        if (subscription is not null)
         {
-            await _subscription.StopAsync(cancellationToken);
-            await _subscription.DisposeAsync();
-            _subscription = null;
+            await subscription.StopAsync(cancellationToken);
+            await subscription.DisposeAsync();
         }
 
         foreach (var (_, subscriber) in _subscribers)

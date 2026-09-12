@@ -1,6 +1,6 @@
 # FrostStream Lite implementation phases
 
-Status: active implementation plan. Phase 1 is complete with its recorded runtime limitation; Phases 2 through 4 are accepted; Phase 5 is verified and awaiting acceptance. Later phases remain unimplemented.
+Status: active implementation plan. Phase 1 is complete with its recorded runtime limitation; Phases 2 through 5 are accepted; Phase 6 is verified and awaiting acceptance. Later phases remain unimplemented.
 
 Source of truth: [FROSTREAM_LITE_PLAN.md](FROSTREAM_LITE_PLAN.md). This document divides that plan into actionable, sequential work blocks without changing its scope. Proposed files and command interfaces below become concrete during their owning phase.
 
@@ -125,7 +125,7 @@ Preserve these exact spellings. Internal namespaces use `FrostStream`. Installat
 
 ## Phase 5 — Complete Full init/runtime lifecycle and OpenBao restart
 
-**State (2026-09-11): Verified, awaiting acceptance.** The native Full bundles have distinct lifecycle membership, runtime-only restart/unseal behavior, real health gates, and no dangling one-shot dependencies. An isolated multi-user Full installation passed publication, initialization, Authentik login, OpenFGA authorization, NATS worker/SSE messaging, controlled download stop/restart, ingestion, search, range playback, watch state, MediaProcessor rendition, backup, complete runtime recreation, and persistence checks. The smoke exposed and fixed missing service authentication on MediaProcessor's internal byte-transfer path. Evidence and exact handoff commands are recorded in [`docs/lite/phase-05-full-lifecycle.md`](docs/lite/phase-05-full-lifecycle.md).
+**State (2026-09-11): Accepted.** The native Full bundles have distinct lifecycle membership, runtime-only restart/unseal behavior, real health gates, and no dangling one-shot dependencies. An isolated multi-user Full installation passed publication, initialization, Authentik login, OpenFGA authorization, NATS worker/SSE messaging, controlled download stop/restart, ingestion, search, range playback, watch state, MediaProcessor rendition, backup, complete runtime recreation, and persistence checks. The smoke exposed and fixed missing service authentication on MediaProcessor's internal byte-transfer path. Evidence and exact handoff commands are recorded in [`docs/lite/phase-05-full-lifecycle.md`](docs/lite/phase-05-full-lifecycle.md).
 
 **Outcome:** Both Full bundles operate independently with the correct lifecycle responsibilities.
 
@@ -145,17 +145,19 @@ Preserve these exact spellings. Internal namespaces use `FrostStream`. Installat
 
 ## Phase 6 — Extract shared catalog and API application operations
 
+**State (2026-09-11): Verified, awaiting acceptance.** Existing typed catalog/library/storage/preferences/playlist/watch/notification/cookie seams are collected under reusable DataBridge registration, and user notes provide the reference end-to-end extraction: a shared typed contract, scoped direct implementation, transport-only DataBridge subscriber, Full NATS proxy, and HTTP current-owner adapter. Direct/Full parity, owner, validation, failure, cancellation, composition, all 84 integration tests, and an authenticated isolated-Full note round trip passed. See [`docs/lite/phase-06-application-operations.md`](docs/lite/phase-06-application-operations.md).
+
 **Outcome:** Synchronous business operations can be called without NATS while Full keeps its existing transport contracts.
 
 **Primary areas:** DataBridge consumers/repositories, WebAPI services/controllers, Shared contracts; proposed reusable backend modules.
 
 **Work block**
 
-- [ ] Extract typed async application interfaces for catalog, library, storage, preferences, playlists, watch state, notes, notifications, cookie profiles, and related synchronous operations in the inventory.
-- [ ] Move business logic into reusable services; keep NATS serialization, routing, and replies in Full adapters.
-- [ ] Separate reusable dependency registration from executable startup. Keep scoped database lifetimes and cancellation propagation correct.
-- [ ] Introduce the current-owner abstraction: Full resolves its authenticated identity; the Lite implementation will resolve the established fixed owner ID.
-- [ ] Preserve public contracts and error semantics. Update the inventory with migrated paths and remaining transport dependencies.
+- [x] Extract typed async application interfaces for catalog, library, storage, preferences, playlists, watch state, notes, notifications, cookie profiles, and related synchronous operations in the inventory.
+- [x] Move business logic into reusable services; keep NATS serialization, routing, and replies in Full adapters.
+- [x] Separate reusable dependency registration from executable startup. Keep scoped database lifetimes and cancellation propagation correct.
+- [x] Introduce the current-owner abstraction: Full resolves its authenticated identity; the Lite implementation will resolve the established fixed owner ID.
+- [x] Preserve public contracts and error semantics. Update the inventory with migrated paths and remaining transport dependencies.
 
 **Verification gate:** Direct-call and Full-adapter tests produce equivalent results for representative success, validation, ownership, and failure cases. Existing affected API/storage/owner tests pass and the Full smoke path still works.
 

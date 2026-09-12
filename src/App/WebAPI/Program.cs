@@ -11,6 +11,7 @@ using Microsoft.IdentityModel.Tokens;
 using NodaTime;
 using NodaTime.Serialization.SystemTextJson;
 using Scalar.AspNetCore;
+using Shared.Application;
 using Shared.Auth;
 using Shared.Backups;
 using Shared.LiveChat;
@@ -23,6 +24,7 @@ using WebAPI.Features.Backups;
 using WebAPI.Features.Downloads;
 using WebAPI.Features.Media;
 using WebAPI.Features.Media.Casting;
+using WebAPI.Features.Notes;
 
 namespace WebAPI;
 
@@ -284,6 +286,9 @@ public class Program
 
         builder.Services.AddScoped<IAuthorizationHandler, FrostStreamPermissionHandler>();
         builder.Services.AddScoped<ISessionSynchronizationService, SessionSynchronizationService>();
+        builder.Services.AddHttpContextAccessor();
+        builder.Services.AddScoped<ICurrentOwner, HttpCurrentOwner>();
+        builder.Services.AddScoped<IUserNoteApplication, NatsUserNoteApplication>();
         builder.Services.AddAuthorization(AuthPolicies.AddFrostStreamPolicies);
         builder.Services.AddAntiforgery(options =>
         {
