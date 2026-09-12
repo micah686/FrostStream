@@ -1,6 +1,6 @@
 # FrostStream Lite implementation phases
 
-Status: active implementation plan. Phase 1 is complete with its recorded runtime limitation; Phases 2 through 5 are accepted; Phase 6 is verified and awaiting acceptance. Later phases remain unimplemented.
+Status: active implementation plan. Phase 1 is complete with its recorded runtime limitation; Phases 2 through 6 are accepted; Phase 7 is verified and awaiting acceptance. Later phases remain unimplemented.
 
 Source of truth: [FROSTREAM_LITE_PLAN.md](FROSTREAM_LITE_PLAN.md). This document divides that plan into actionable, sequential work blocks without changing its scope. Proposed files and command interfaces below become concrete during their owning phase.
 
@@ -145,7 +145,7 @@ Preserve these exact spellings. Internal namespaces use `FrostStream`. Installat
 
 ## Phase 6 — Extract shared catalog and API application operations
 
-**State (2026-09-11): Verified, awaiting acceptance.** Existing typed catalog/library/storage/preferences/playlist/watch/notification/cookie seams are collected under reusable DataBridge registration, and user notes provide the reference end-to-end extraction: a shared typed contract, scoped direct implementation, transport-only DataBridge subscriber, Full NATS proxy, and HTTP current-owner adapter. Direct/Full parity, owner, validation, failure, cancellation, composition, all 84 integration tests, and an authenticated isolated-Full note round trip passed. See [`docs/lite/phase-06-application-operations.md`](docs/lite/phase-06-application-operations.md).
+**State (2026-09-11): Accepted.** Existing typed catalog/library/storage/preferences/playlist/watch/notification/cookie seams are collected under reusable DataBridge registration, and user notes provide the reference end-to-end extraction: a shared typed contract, scoped direct implementation, transport-only DataBridge subscriber, Full NATS proxy, and HTTP current-owner adapter. Direct/Full parity, owner, validation, failure, cancellation, composition, all 84 integration tests, and an authenticated isolated-Full note round trip passed. Acceptance is recorded by the request to proceed with Phase 7. See [`docs/lite/phase-06-application-operations.md`](docs/lite/phase-06-application-operations.md).
 
 **Outcome:** Synchronous business operations can be called without NATS while Full keeps its existing transport contracts.
 
@@ -165,17 +165,19 @@ Preserve these exact spellings. Internal namespaces use `FrostStream`. Installat
 
 ## Phase 7 — Extract durable workflows and local executor interfaces
 
+**State (2026-09-11): Verified, awaiting acceptance.** Shared durable-ingress, local-executor, artifact-reconciliation, execution-result, and bounded progress/snapshot contracts now cover every long-running inventory family. Download acceptance is the reference end-to-end extraction: both Full JetStream subscribers call the same scoped operation that commits PostgreSQL/Cleipnir intent before the transport adapter acknowledges delivery. Focused ordering, duplicate, retry, graceful-cancellation, bounded-progress, and reconstruction tests pass; the complete integration suite is 85/85; and an authenticated isolated-Full submission persisted, appeared in history, and stopped successfully. See [`docs/lite/phase-07-durable-workflows.md`](docs/lite/phase-07-durable-workflows.md).
+
 **Outcome:** Long-running work has explicit transport-independent contracts and recovery semantics.
 
 **Primary areas:** DataBridge Cleipnir flows/job records, Worker and MediaProcessor handlers, Scheduler dispatch, backup reporting, progress hubs.
 
 **Work block**
 
-- [ ] Extract workflow/executor interfaces for downloads, creator scans, playlist expansion, imports, media processing, search/chat work, schedules, and backups.
-- [ ] Keep Full NATS adapters calling shared operations. Separate business completion from transport acknowledgment.
-- [ ] Specify each job category's durable intent, checkpoints, retry policy, cancellation, deduplication key, artifact reconciliation, and restart behavior.
-- [ ] Preserve PostgreSQL-backed Cleipnir state and persisted job records. Identify any schema additions needed for local execution and add them to explicit initialization.
-- [ ] Define bounded wake-up/progress interfaces and persisted snapshot recovery for SSE. Do not use an in-memory queue as the only record of accepted work.
+- [x] Extract workflow/executor interfaces for downloads, creator scans, playlist expansion, imports, media processing, search/chat work, schedules, and backups.
+- [x] Keep Full NATS adapters calling shared operations. Separate business completion from transport acknowledgment.
+- [x] Specify each job category's durable intent, checkpoints, retry policy, cancellation, deduplication key, artifact reconciliation, and restart behavior.
+- [x] Preserve PostgreSQL-backed Cleipnir state and persisted job records. Identify any schema additions needed for local execution and add them to explicit initialization.
+- [x] Define bounded wake-up/progress interfaces and persisted snapshot recovery for SSE. Do not use an in-memory queue as the only record of accepted work.
 
 **Verification gate:** Tests establish commit-before-acknowledgment, retry/cancellation semantics, and duplicate-delivery behavior for extracted operations. Full workflow contract/regression tests still pass. Every inventory path now has an assigned direct-call, durable-work, or local-event destination.
 

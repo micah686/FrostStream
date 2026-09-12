@@ -26,6 +26,21 @@ public sealed class DataBridgeApplicationRegistrationTests
     }
 
     [Test]
+    public void Reusable_Module_Registers_Durable_Ingress_And_Bounded_Local_Progress()
+    {
+        var services = new ServiceCollection();
+
+        services.AddDataBridgeApplicationOperations();
+
+        services.Single(service => service.ServiceType == typeof(IDownloadWorkflowIngress))
+            .Lifetime.ShouldBe(ServiceLifetime.Scoped);
+        services.Single(service => service.ServiceType == typeof(IDownloadWorkflowStarter))
+            .Lifetime.ShouldBe(ServiceLifetime.Singleton);
+        services.Single(service => service.ServiceType == typeof(ILocalProgressHub<,>))
+            .ImplementationType.ShouldBe(typeof(BoundedLocalProgressHub<,>));
+    }
+
+    [Test]
     public void Fixed_Current_Owner_Uses_Established_Single_User_Subject()
     {
         ICurrentOwner owner = new FixedCurrentOwner();

@@ -26,4 +26,8 @@ Phase 6 artifact:
 
 - [`phase-06-application-operations.md`](phase-06-application-operations.md): reusable application registration, typed direct/Full note adapters, current-owner abstraction, migration matrix, parity tests, and authenticated Full smoke evidence.
 
+Phase 7 artifact:
+
+- [`phase-07-durable-workflows.md`](phase-07-durable-workflows.md): durable ingress/executor contracts, Full acknowledgment boundary, recovery matrix, bounded progress snapshots, reconstruction tests, and authenticated Full workflow evidence.
+
 Evidence containing credentials, recovery material, dumps, cookies, or downloaded media must remain outside source control. Commit only redacted summaries.

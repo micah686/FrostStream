@@ -19,6 +19,7 @@ public static class DataBridgeApplicationServiceCollectionExtensions
 {
     public static IServiceCollection AddDataBridgeApplicationOperations(this IServiceCollection services)
     {
+        services.AddDurableWorkflowAbstractions();
         services.AddScoped<IDownloadJobsRepository, DownloadJobsRepository>();
         services.AddScoped<IDownloadFlowV2Repository, DownloadFlowV2Repository>();
         services.AddScoped<IImportSessionRepository, ImportSessionRepository>();
@@ -42,6 +43,8 @@ public static class DataBridgeApplicationServiceCollectionExtensions
         services.AddScoped<IScheduledTasksRepository, ScheduledTasksRepository>();
         services.AddScoped<ICreatorDiscoveryRepository, CreatorDiscoveryRepository>();
         services.AddScoped<IUserNoteApplication, UserNoteApplication>();
+        services.AddScoped<IDownloadWorkflowIngress, DownloadWorkflowIngress>();
+        services.AddSingleton<IDownloadWorkflowStarter, CleipnirDownloadWorkflowStarter>();
         return services;
     }
 }

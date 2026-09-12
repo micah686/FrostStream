@@ -1,3 +1,4 @@
+using DataBridge.Application;
 using DataBridge.Data;
 using DataBridge.Messaging;
 using DotNet.Testcontainers.Builders;
@@ -9,6 +10,8 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using NodaTime;
 using Npgsql;
+using NSubstitute;
+using Shared.Application;
 using Shared.Database;
 using Shared.Messaging;
 using Shared.Storage;
@@ -105,6 +108,46 @@ public sealed class DownloadJobsRepositoryTests
         (await repository.TryMarkMessageProcessedAsync(messageId, "op-a", Guid.NewGuid())).ShouldBeFalse();
 
         (await Fixture.CountAsync("processed_messages")).ShouldBe(1);
+    }
+
+    [Test]
+    public async Task Accepted_Download_Survives_Service_And_DbContext_Reconstruction()
+    {
+        var request = Request(Guid.NewGuid(), Guid.NewGuid());
+        var starter = Substitute.For<IDownloadWorkflowStarter>();
+
+        await using (var firstDb = Fixture.CreateDb())
+        {
+            var firstIngress = new DownloadWorkflowIngress(
+                new DownloadJobsRepository(firstDb, SystemClock.Instance),
+                new DownloadFlowV2Repository(firstDb, SystemClock.Instance, NullDownloadJobStateNotifier.Instance),
+                starter,
+                new DownloadFlowStartupState(SystemClock.Instance));
+
+            var accepted = await firstIngress.AcceptAsync(request);
+            accepted.Disposition.ShouldBe(DurableWorkDisposition.PersistedButPaused);
+        }
+
+        await using (var reconstructedDb = Fixture.CreateDb())
+        {
+            var reconstructedLegacy = new DownloadJobsRepository(reconstructedDb, SystemClock.Instance);
+            var reconstructedIngress = new DownloadWorkflowIngress(
+                reconstructedLegacy,
+                new DownloadFlowV2Repository(reconstructedDb, SystemClock.Instance, NullDownloadJobStateNotifier.Instance),
+                starter,
+                new DownloadFlowStartupState(SystemClock.Instance));
+
+            var persisted = await reconstructedLegacy.GetQueueJobAsync(request.JobId);
+            persisted.ShouldNotBeNull();
+            persisted.SourceUrl.ShouldBe(request.SourceUrl);
+
+            var duplicate = await reconstructedIngress.AcceptAsync(request);
+            duplicate.Disposition.ShouldBe(DurableWorkDisposition.Duplicate);
+        }
+
+        await starter.DidNotReceiveWithAnyArgs().StartJobAsync(default, default!);
+        (await Fixture.CountAsync("processed_messages")).ShouldBe(1);
+        (await Fixture.CountAsync("download_jobs")).ShouldBe(1);
     }
 
     [Test]

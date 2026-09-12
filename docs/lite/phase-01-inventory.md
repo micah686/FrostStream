@@ -77,6 +77,40 @@ The rows below cover every registered transport-facing service found in the six 
 
 Transport definitions are centralized under [`Shared/Messaging`](../../src/App/Shared/Messaging). Consumer implementations are under [`DataBridge/Messaging`](../../src/App/DataBridge/Messaging), [`Worker/Services`](../../src/App/Worker/Services), the DataBridge feature folders, WebAPI feature hubs, and [`Scheduler/Services`](../../src/App/Scheduler/Services). When a later phase changes a contract, it must update this inventory or record its replacement evidence.
 
+### Phase 7 destination closure
+
+Every transport row now has an explicit destination kind. “Local event” means a bounded notification only;
+the listed durable or direct store remains authoritative.
+
+| Inventory path | Destination |
+| --- | --- |
+| Sessions and access policies | Direct call in Lite; Full-only identity/policy management |
+| Notifications | Direct call; bounded local delivery hint where live UI updates are required |
+| Cookies | Direct call |
+| Storage | Direct call; bounded local cache-invalidation event |
+| Option presets and download config sets | Direct call |
+| Schedules | Durable work plus bounded local schedule-change wake-up |
+| Creator discovery and assets | Durable work |
+| Download submission, administration, and execution | Durable work; bounded local progress event |
+| Queue, history, and media queries | Direct call; persisted snapshot plus bounded local event |
+| Background run lifecycle | Durable work/status plus bounded local progress event |
+| Imports | Durable work |
+| Provider playlists | Durable work |
+| Catalog metadata, taxonomy, and statistics | Direct call |
+| Search | Direct query plus durable rebuild/index work |
+| Media stream resolution | Direct call |
+| Renditions and thumbnails | Durable work plus bounded local progress event |
+| Media deletion and transfer | Durable work |
+| Watch state, likes, user playlists, and notes | Direct call |
+| Live chat | Direct query plus durable ingest/backfill work |
+| Worker registry and heartbeat | Full-only; absent from Lite |
+| POT | Direct call; no durable transport |
+| Backup commands and status | Durable work/status plus bounded local progress event |
+
+The shared Phase 7 contracts are in [`Shared/Application/DurableWorkflowContracts.cs`](../../src/App/Shared/Application/DurableWorkflowContracts.cs)
+and [`Shared/Application/LocalProgressContracts.cs`](../../src/App/Shared/Application/LocalProgressContracts.cs).
+The concrete local executors and merged-host dispatch loops remain owned by Phases 10–15.
+
 ## Hosted-service inventory
 
 | Host | Registered background work | Assignment |
