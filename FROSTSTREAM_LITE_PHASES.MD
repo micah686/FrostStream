@@ -1,6 +1,6 @@
 # FrostStream Lite implementation phases
 
-Status: active implementation plan. Phase 1 is complete with its recorded runtime limitation; Phases 2 through 6 are accepted; Phase 7 is verified and awaiting acceptance. Later phases remain unimplemented.
+Status: active implementation plan. Phase 1 is complete with its recorded runtime limitation; Phases 2 through 7 are accepted; Phase 8 is verified and awaiting acceptance. Later phases remain unimplemented.
 
 Source of truth: [FROSTREAM_LITE_PLAN.md](FROSTREAM_LITE_PLAN.md). This document divides that plan into actionable, sequential work blocks without changing its scope. Proposed files and command interfaces below become concrete during their owning phase.
 
@@ -165,7 +165,7 @@ Preserve these exact spellings. Internal namespaces use `FrostStream`. Installat
 
 ## Phase 7 — Extract durable workflows and local executor interfaces
 
-**State (2026-09-11): Verified, awaiting acceptance.** Shared durable-ingress, local-executor, artifact-reconciliation, execution-result, and bounded progress/snapshot contracts now cover every long-running inventory family. Download acceptance is the reference end-to-end extraction: both Full JetStream subscribers call the same scoped operation that commits PostgreSQL/Cleipnir intent before the transport adapter acknowledges delivery. Focused ordering, duplicate, retry, graceful-cancellation, bounded-progress, and reconstruction tests pass; the complete integration suite is 85/85; and an authenticated isolated-Full submission persisted, appeared in history, and stopped successfully. See [`docs/lite/phase-07-durable-workflows.md`](docs/lite/phase-07-durable-workflows.md).
+**State (2026-09-12): Accepted.** Shared durable-ingress, local-executor, artifact-reconciliation, execution-result, and bounded progress/snapshot contracts now cover every long-running inventory family. Download acceptance is the reference end-to-end extraction: both Full JetStream subscribers call the same scoped operation that commits PostgreSQL/Cleipnir intent before the transport adapter acknowledges delivery. Focused ordering, duplicate, retry, graceful-cancellation, bounded-progress, and reconstruction tests pass; the complete integration suite is 85/85; and an authenticated isolated-Full submission persisted, appeared in history, and stopped successfully. Acceptance is recorded by the request to proceed with Phase 8. See [`docs/lite/phase-07-durable-workflows.md`](docs/lite/phase-07-durable-workflows.md).
 
 **Outcome:** Long-running work has explicit transport-independent contracts and recovery semantics.
 
@@ -185,18 +185,20 @@ Preserve these exact spellings. Internal namespaces use `FrostStream`. Installat
 
 ## Phase 8 — Build the merged Lite host with fixed-owner API access
 
+**State (2026-09-12): Verified, awaiting acceptance.** A dedicated ASP.NET Core Lite entry point now exposes a deliberately limited, unauthenticated route surface backed by direct DataBridge operations. It uses the established fixed owner, reports explicit capabilities, reserves future lifecycle commands, validates production data settings without identity/broker settings, checks database readiness, and rejects duplicate hosted-service or route registration. Seven focused tests, twelve unchanged Full hardening tests, a clean solution build, and live initialized-PostgreSQL catalog/preferences/session smoke checks passed. See [`docs/lite/phase-08-merged-lite-host.md`](docs/lite/phase-08-merged-lite-host.md).
+
 **Outcome:** A minimal Lite backend runs catalog/API operations without an identity provider or broker.
 
 **Primary areas:** Proposed `src/App/FrostStream.Lite/`, reusable module registration, WebAPI route discovery/auth policies, production validation.
 
 **Work block**
 
-- [ ] Create one ASP.NET Core entry point with explicit command dispatch boundaries for future `initialize`, `backup`, and `restore` modes. Register only the runtime modules currently implemented.
-- [ ] Consolidate DI, options, logging, HTTP clients, route/controller discovery, readiness, and graceful shutdown. Detect duplicate hosted-service registration and route collisions.
-- [ ] Resolve all user-owned operations to the existing fixed owner ID. Audit claims assumptions, authorization filters/attributes, and internal processing credentials.
-- [ ] Register no Lite OIDC/JWT/cookie authentication, session store, authentication challenge, OpenFGA client, or user provisioning. Add an edition/capabilities response and, if needed, sessionless `/api/auth/me` compatibility.
-- [ ] Make Lite Production validation accept absent identity/secrets infrastructure settings while retaining required database/search/storage credentials and Full validation.
-- [ ] Run against explicitly initialized development infrastructure. Disable dispatch capabilities that are not yet implemented instead of falsely reporting them as ready.
+- [x] Create one ASP.NET Core entry point with explicit command dispatch boundaries for future `initialize`, `backup`, and `restore` modes. Register only the runtime modules currently implemented.
+- [x] Consolidate DI, options, logging, HTTP clients, route/controller discovery, readiness, and graceful shutdown. Detect duplicate hosted-service registration and route collisions.
+- [x] Resolve all user-owned operations to the existing fixed owner ID. Audit claims assumptions, authorization filters/attributes, and internal processing credentials.
+- [x] Register no Lite OIDC/JWT/cookie authentication, session store, authentication challenge, OpenFGA client, or user provisioning. Add an edition/capabilities response and, if needed, sessionless `/api/auth/me` compatibility.
+- [x] Make Lite Production validation accept absent identity/secrets infrastructure settings while retaining required database/search/storage credentials and Full validation.
+- [x] Run against explicitly initialized development infrastructure. Disable dispatch capabilities that are not yet implemented instead of falsely reporting them as ready.
 
 **Verification gate:** Unauthenticated HTTP requests can perform owner-scoped catalog/preferences operations with no token, session cookie, or provider call. Two client sessions see the same owner. Full authentication behavior remains intact; DI/startup tests confirm no NATS or Full auth service is activated in Lite.
 

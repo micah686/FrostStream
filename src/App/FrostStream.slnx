@@ -12,6 +12,7 @@
   <Folder Name="/Core/">
     <Project Path="BackupService/BackupService.csproj" />
     <Project Path="DataBridge/DataBridge.csproj" />
+    <Project Path="FrostStream.Lite/FrostStream.Lite.csproj" />
     <Project Path="MediaProcessor/MediaProcessor.csproj" />
     <Project Path="Scheduler/Scheduler.csproj" />
     <Project Path="Shared/Shared.csproj" />
