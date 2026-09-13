@@ -30,4 +30,16 @@ Phase 7 artifact:
 
 - [`phase-07-durable-workflows.md`](phase-07-durable-workflows.md): durable ingress/executor contracts, Full acknowledgment boundary, recovery matrix, bounded progress snapshots, reconstruction tests, and authenticated Full workflow evidence.
 
+Phase 8 artifact:
+
+- [`phase-08-merged-lite-host.md`](phase-08-merged-lite-host.md): merged fixed-owner Lite API host, constrained route surface, composition validation, and HTTP smoke evidence.
+
+Phase 9 artifact:
+
+- [`phase-09-encrypted-local-secrets.md`](phase-09-encrypted-local-secrets.md): encrypted local secret persistence, recovery behavior, credential hydration, backup manifest, and restart evidence.
+
+Phase 10 artifact:
+
+- [`phase-10-exclusive-local-execution.md`](phase-10-exclusive-local-execution.md): PostgreSQL ownership lease, durable local ledger and dispatcher, bounded snapshot-first SSE, crash recovery, lock-loss, and controlled-executor evidence.
+
 Evidence containing credentials, recovery material, dumps, cookies, or downloaded media must remain outside source control. Commit only redacted summaries.

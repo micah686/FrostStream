@@ -16,8 +16,9 @@ namespace DataBridge.Lite;
 
 /// <summary>
 /// The transport-free subset of DataBridge that the Phase 8 Lite HTTP host can execute locally.
-/// Deliberately excludes Cleipnir execution, NATS consumers, search indexing, secrets, and storage
-/// dispatch; those modules are enabled by their owning Lite phases.
+/// Deliberately excludes Cleipnir execution, NATS consumers, search indexing, and storage dispatch;
+/// those modules are enabled by their owning Lite phases. Stage 10's transport-free execution
+/// ledger is registered separately by the Lite composition root.
 /// </summary>
 public static class DataBridgeLiteServiceCollectionExtensions
 {

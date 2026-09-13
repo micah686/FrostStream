@@ -1,6 +1,6 @@
 # FrostStream Lite implementation phases
 
-Status: active implementation plan. Phase 1 is complete with its recorded runtime limitation; Phases 2 through 8 are accepted; Phase 9 is verified and awaiting acceptance. Later phases remain unimplemented.
+Status: active implementation plan. Phase 1 is complete with its recorded runtime limitation; Phases 2 through 9 are accepted; Phase 10 is verified and awaiting acceptance. Later phases remain unimplemented.
 
 Source of truth: [FROSTREAM_LITE_PLAN.md](FROSTREAM_LITE_PLAN.md). This document divides that plan into actionable, sequential work blocks without changing its scope. Proposed files and command interfaces below become concrete during their owning phase.
 
@@ -206,7 +206,7 @@ Preserve these exact spellings. Internal namespaces use `FrostStream`. Installat
 
 ## Phase 9 — Implement encrypted local secrets
 
-**State (2026-09-12): Verified, awaiting acceptance.** Lite now uses an encrypted, atomic, path-bounded file implementation of the shared secret store with an NSec XChaCha20-Poly1305 master key, versioned/path-bound authenticated ciphertext, restrictive Unix modes, startup decryption validation, and explicit missing/mismatched-key recovery errors. Fixed-owner cookie metadata/content operations and local credential hydration are connected without NATS, while Full still selects OpenBao. Fifteen focused tests and a real initialized-PostgreSQL cookie create/restart/overwrite/delete smoke passed; ciphertext contained no synthetic plaintext. See [`docs/lite/phase-09-encrypted-local-secrets.md`](docs/lite/phase-09-encrypted-local-secrets.md).
+**State (2026-09-12): Accepted.** Lite now uses an encrypted, atomic, path-bounded file implementation of the shared secret store with an NSec XChaCha20-Poly1305 master key, versioned/path-bound authenticated ciphertext, restrictive Unix modes, startup decryption validation, and explicit missing/mismatched-key recovery errors. Fixed-owner cookie metadata/content operations and local credential hydration are connected without NATS, while Full still selects OpenBao. Fifteen focused tests and a real initialized-PostgreSQL cookie create/restart/overwrite/delete smoke passed; ciphertext contained no synthetic plaintext. Acceptance is recorded by the request to implement Phase 10. See [`docs/lite/phase-09-encrypted-local-secrets.md`](docs/lite/phase-09-encrypted-local-secrets.md).
 
 **Outcome:** Lite storage credentials and cookies persist securely through the shared secret abstraction.
 
@@ -226,18 +226,20 @@ Preserve these exact spellings. Internal namespaces use `FrostStream`. Installat
 
 ## Phase 10 — Add exclusive local execution and durable dispatch
 
+**State (2026-09-12): Verified, awaiting acceptance.** Lite now acquires a session-scoped PostgreSQL advisory lock before dispatch starts, cancels and stops permanently on ownership-session loss, and executes every claim/completion transition through that owned connection. Migration 99 adds a deduplicated local work ledger; a bounded dispatcher recovers interrupted rows, limits total and download concurrency, persists retry/cancel/terminal outcomes, and publishes bounded live events over snapshot-first SSE. Focused controlled-executor tests, real PostgreSQL lock-loss/second-owner/ledger recovery tests, explicit initialization version 2, and a live Lite startup/SSE/shutdown smoke passed. Real acquisition/media handlers remain intentionally deferred to Phase 11. See [`docs/lite/phase-10-exclusive-local-execution.md`](docs/lite/phase-10-exclusive-local-execution.md).
+
 **Outcome:** Lite can safely dispatch persisted jobs with bounded concurrency and restart recovery.
 
 **Primary areas:** Lite runtime lifecycle, PostgreSQL ownership lock, shared job/workflow services, local event hub.
 
 **Work block**
 
-- [ ] Hold an exclusive PostgreSQL advisory lock on a dedicated connection before enabling execution; reject a second Lite runtime using the database.
-- [ ] On lock/connection loss, stop dispatch and cancel active execution before any reacquisition/recovery. Prevent stale executors from committing after ownership is lost.
-- [ ] Implement local executor dispatch over durable job/workflow records, bounded wake-ups, and configurable bounded concurrency; default to one download at a time.
-- [ ] Recover persisted pending/running work at startup using Phase 7's policies. Implement cancellation, retry, and idempotent completion boundaries.
-- [ ] Add bounded local SSE subscribers with slow-client handling and an authoritative persisted snapshot on reconnect.
-- [ ] Exclude remote worker registration, heartbeat, queue groups, tag routing, and distributed lease monitoring from Lite execution.
+- [x] Hold an exclusive PostgreSQL advisory lock on a dedicated connection before enabling execution; reject a second Lite runtime using the database.
+- [x] On lock/connection loss, stop dispatch and cancel active execution before any reacquisition/recovery. Prevent stale executors from committing after ownership is lost.
+- [x] Implement local executor dispatch over durable job/workflow records, bounded wake-ups, and configurable bounded concurrency; default to one download at a time.
+- [x] Recover persisted pending/running work at startup using Phase 7's policies. Implement cancellation, retry, and idempotent completion boundaries.
+- [x] Add bounded local SSE subscribers with slow-client handling and an authoritative persisted snapshot on reconnect.
+- [x] Exclude remote worker registration, heartbeat, queue groups, tag routing, and distributed lease monitoring from Lite execution.
 
 **Verification gate:** A persisted test job survives a process kill; duplicate wake-ups cause one logical completion. Concurrency stays bounded. A second process is rejected. Deliberate lock-connection loss cancels execution and prevents stale completion, and SSE reconnect obtains current persisted state.
 

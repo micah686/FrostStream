@@ -19,7 +19,8 @@ public sealed class ApplicationInitializationCoordinatorTests
 
         await coordinator.InitializeAsync(CancellationToken.None);
 
-        events.ShouldBe(["clear", "database", "collections", "success:1"]);
+        events.ShouldBe(["clear", "database", "collections",
+            $"success:{ApplicationInitializationCoordinator.CurrentVersion}"]);
     }
 
     [Test]
@@ -48,7 +49,7 @@ public sealed class ApplicationInitializationCoordinatorTests
         events.Count(entry => entry == "clear").ShouldBe(2);
         events.Count(entry => entry == "database").ShouldBe(2);
         events.Count(entry => entry == "external").ShouldBe(2);
-        events.Last().ShouldBe("success:1");
+        events.Last().ShouldBe($"success:{ApplicationInitializationCoordinator.CurrentVersion}");
     }
 
     [Test]

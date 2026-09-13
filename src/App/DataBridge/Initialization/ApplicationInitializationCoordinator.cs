@@ -7,7 +7,7 @@ public sealed class ApplicationInitializationCoordinator(
     IInitializationStateStore stateStore,
     ILogger<ApplicationInitializationCoordinator> logger)
 {
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 2;
 
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
