@@ -21,6 +21,7 @@ builder.Services.AddSingleton<ICurrentOwner, FixedCurrentOwner>();
 builder.Services.AddLocalFileSecretStore(builder.Configuration);
 builder.Services.AddDataBridgeLiteApiOperations(builder.Configuration);
 builder.Services.AddLiteDurableExecution(builder.Configuration);
+builder.Services.AddLiteAcquisition(builder.Configuration);
 builder.Services
     .AddControllers()
     .AddJsonOptions(options =>

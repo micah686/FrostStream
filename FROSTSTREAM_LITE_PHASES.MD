@@ -1,6 +1,6 @@
 # FrostStream Lite implementation phases
 
-Status: active implementation plan. Phase 1 is complete with its recorded runtime limitation; Phases 2 through 9 are accepted; Phase 10 is verified and awaiting acceptance. Later phases remain unimplemented.
+Status: active implementation plan. Phase 1 is complete with its recorded runtime limitation; Phases 2 through 10 are accepted; Phase 11 is verified and awaiting acceptance. Later phases remain unimplemented.
 
 Source of truth: [FROSTREAM_LITE_PLAN.md](FROSTREAM_LITE_PLAN.md). This document divides that plan into actionable, sequential work blocks without changing its scope. Proposed files and command interfaces below become concrete during their owning phase.
 
@@ -226,7 +226,7 @@ Preserve these exact spellings. Internal namespaces use `FrostStream`. Installat
 
 ## Phase 10 — Add exclusive local execution and durable dispatch
 
-**State (2026-09-12): Verified, awaiting acceptance.** Lite now acquires a session-scoped PostgreSQL advisory lock before dispatch starts, cancels and stops permanently on ownership-session loss, and executes every claim/completion transition through that owned connection. Migration 99 adds a deduplicated local work ledger; a bounded dispatcher recovers interrupted rows, limits total and download concurrency, persists retry/cancel/terminal outcomes, and publishes bounded live events over snapshot-first SSE. Focused controlled-executor tests, real PostgreSQL lock-loss/second-owner/ledger recovery tests, explicit initialization version 2, and a live Lite startup/SSE/shutdown smoke passed. Real acquisition/media handlers remain intentionally deferred to Phase 11. See [`docs/lite/phase-10-exclusive-local-execution.md`](docs/lite/phase-10-exclusive-local-execution.md).
+**State (2026-09-13): Accepted.** Lite now acquires a session-scoped PostgreSQL advisory lock before dispatch starts, cancels and stops permanently on ownership-session loss, and executes every claim/completion transition through that owned connection. Migration 99 adds a deduplicated local work ledger; a bounded dispatcher recovers interrupted rows, limits total and download concurrency, persists retry/cancel/terminal outcomes, and publishes bounded live events over snapshot-first SSE. Focused controlled-executor tests, real PostgreSQL lock-loss/second-owner/ledger recovery tests, explicit initialization version 2, and a live Lite startup/SSE/shutdown smoke passed. Acceptance is recorded by the request to implement Phase 11. See [`docs/lite/phase-10-exclusive-local-execution.md`](docs/lite/phase-10-exclusive-local-execution.md).
 
 **Outcome:** Lite can safely dispatch persisted jobs with bounded concurrency and restart recovery.
 
@@ -247,17 +247,19 @@ Preserve these exact spellings. Internal namespaces use `FrostStream`. Installat
 
 ## Phase 11 — Connect downloads, discovery, imports, and POT support
 
+**State (2026-09-13): Verified, awaiting acceptance.** Lite now executes downloads, creator scans, playlist expansion, and reviewed local imports through four durable local handlers. Downloads preserve presets, cookies, storage selection, metadata, content editions, artifacts, cancellation, retry, progress/SSE snapshots, and restart reconciliation. Creator subscriptions have direct CRUD, playlists preserve ordered fan-out, and the optional bgutil integration is a direct in-process HTTP proxy with no NATS registration. Migration 100 adds durable progress fields and initialization compatibility version 3. Controlled and live yt-dlp fixtures, process interruption, storage/catalog inspection, focused tests, the clean solution build, and all 85 Full integration tests are recorded in [`docs/lite/phase-11-local-acquisition.md`](docs/lite/phase-11-local-acquisition.md).
+
 **Outcome:** Lite's main acquisition workflows run locally without service-to-service transport.
 
 **Primary areas:** Worker operations, download/discovery/import flows, cookie materialization, artifact storage, POT integration.
 
 **Work block**
 
-- [ ] Wire yt-dlp execution, creator subscriptions/scans, playlist expansion, and imports to local executor interfaces.
-- [ ] Preserve option presets, cookies, metadata enrichment, media editions, multiple storage targets, and storage validation.
-- [ ] Replace the NATS POT broker/shim path with direct provider/application calls. Support an explicitly configured bgutil provider and actionable provider-failure reporting.
-- [ ] Reconcile temporary/final artifacts and sidecars across cancellation, retry, process death, and catalog commit boundaries.
-- [ ] Keep persisted status/progress and local SSE aligned with durable job state; update capability availability and the transport inventory.
+- [x] Wire yt-dlp execution, creator subscriptions/scans, playlist expansion, and imports to local executor interfaces.
+- [x] Preserve option presets, cookies, metadata enrichment, media editions, multiple storage targets, and storage validation.
+- [x] Replace the NATS POT broker/shim path with direct provider/application calls. Support an explicitly configured bgutil provider and actionable provider-failure reporting.
+- [x] Reconcile temporary/final artifacts and sidecars across cancellation, retry, process death, and catalog commit boundaries.
+- [x] Keep persisted status/progress and local SSE aligned with durable job state; update capability availability and the transport inventory.
 
 **Verification gate:** Controlled download → artifact storage → catalog ingest works with progress, cancel, and retry. Creator scan, playlist expansion, local import, cookie-backed acquisition, and credentialed storage pass. Kill/restart during download and artifact commit yields no duplicate catalog commit or permanently stuck job. Exercise POT enabled, disabled, and unavailable cases.
 

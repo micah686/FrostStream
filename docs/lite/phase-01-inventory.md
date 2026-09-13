@@ -111,6 +111,28 @@ The shared Phase 7 contracts are in [`Shared/Application/DurableWorkflowContract
 and [`Shared/Application/LocalProgressContracts.cs`](../../src/App/Shared/Application/LocalProgressContracts.cs).
 The concrete local executors and merged-host dispatch loops remain owned by Phases 10–15.
 
+### Phase 11 acquisition closure (2026-09-13)
+
+The acquisition transport rows now have concrete Lite implementations:
+
+| Inventory path | Phase 11 Lite implementation |
+| --- | --- |
+| Cookies in acquisition | The fixed-owner profile resolves through `ISecretStore`, is materialized as a mode-0600 temporary Netscape file for yt-dlp, and is removed after the attempt. |
+| Storage in acquisition | `IStoreProvider` resolves every requested storage key directly, including Phase 9 credential hydration; a bounded probe fails before acquisition when the target is unavailable. |
+| Creator discovery/source CRUD | Direct `/api/creators` CRUD persists subscriptions; `creator-scan` resolves configured download options, runs flat yt-dlp discovery, persists scan checkpoints/candidates, and optionally creates durable child downloads. |
+| Download submission/execution | `/api/downloads` creates the normal job/run intent before `download` ledger work is exposed. The local handler performs metadata, dedupe, acquisition, version reservation, artifact storage, rich metadata, playlist linkage, and terminal run settlement. |
+| Queue/progress | Migration 100 persists monotonic progress sequence, percentage, and message on the authoritative local ledger. Per-work reads and snapshot-first SSE expose those same fields; terminal events reload the persisted row. |
+| Imports | Direct scan, session/item review, bulk include/accept, and commit endpoints drive `local-import` work with bounded incoming-path validation, content hashing, version reservation, idempotent storage, and terminal session updates. |
+| Provider playlists | `playlist-expansion` uses flat yt-dlp metadata, persists entries in source order, and creates one normal durable child run/ledger item per entry. |
+| POT | `LitePotProvider` health-checks and forwards directly to the explicitly configured bgutil HTTP provider through an in-process Lite proxy. Lite registers neither the Full POT broker nor NATS. |
+
+Primary media, info JSON, thumbnails/captions when emitted, and recovery `.meta` files are represented
+in `jobs.download_artifacts`. Stable per-work acquisition directories plus content-hash/version and
+object-existence checks converge interrupted attempts without duplicate catalog versions. Creator
+avatar/banner generation remains with the media/asset execution work assigned to Phase 12; Phase 11
+closes subscription and scan transport. Detailed verification is in
+[`phase-11-local-acquisition.md`](phase-11-local-acquisition.md).
+
 ## Hosted-service inventory
 
 | Host | Registered background work | Assignment |

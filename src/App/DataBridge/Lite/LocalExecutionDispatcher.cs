@@ -152,7 +152,11 @@ public sealed class LocalExecutionDispatcher(
         {
             var persistedStatus = await store.CompleteAsync(item, result, ownershipToken);
             if (persistedStatus is { } status)
-                Publish(item, status, result.ErrorCode, result.ErrorMessage);
+            {
+                var snapshot = await store.LoadSnapshotAsync(item.WorkId.ToString(), ownershipToken);
+                var persistedItem = snapshot.Items.SingleOrDefault(candidate => candidate.WorkId == item.WorkId) ?? item;
+                Publish(persistedItem, status, result.ErrorCode, result.ErrorMessage);
+            }
         }
     }
 
@@ -163,7 +167,8 @@ public sealed class LocalExecutionDispatcher(
 
     private void Publish(LocalExecutionItem item, LocalExecutionStatus status, string? code = null, string? message = null)
     {
-        var evt = new LocalExecutionEvent(item.WorkId, item.Kind, status, item.Attempt, DateTimeOffset.UtcNow, code, message);
+        var evt = new LocalExecutionEvent(item.WorkId, item.Kind, status, item.Attempt, DateTimeOffset.UtcNow, code, message,
+            item.ProgressSequence, item.ProgressPercent, item.ProgressMessage);
         progressHub.Publish("all", evt);
         progressHub.Publish(item.WorkId.ToString(), evt);
     }

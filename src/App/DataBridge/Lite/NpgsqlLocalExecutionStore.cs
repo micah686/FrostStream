@@ -28,7 +28,8 @@ public sealed class NpgsqlLocalExecutionStore(
                 ON CONFLICT (deduplication_key) DO UPDATE
                     SET deduplication_key = EXCLUDED.deduplication_key
                 RETURNING work_id, kind, deduplication_key, payload::text, status, attempt,
-                          maximum_attempts, available_at, updated_at, error_code, error_message
+                          maximum_attempts, available_at, updated_at, error_code, error_message,
+                          progress_sequence, progress_percent, progress_message
                 """;
             command.Parameters.AddWithValue(Guid.NewGuid());
             command.Parameters.AddWithValue(kind);
@@ -76,7 +77,8 @@ public sealed class NpgsqlLocalExecutionStore(
                 WHERE work.work_id = candidate.work_id
                 RETURNING work.work_id, work.kind, work.deduplication_key, work.payload::text,
                           work.status, work.attempt, work.maximum_attempts, work.available_at,
-                          work.updated_at, work.error_code, work.error_message
+                          work.updated_at, work.error_code, work.error_message,
+                          work.progress_sequence, work.progress_percent, work.progress_message
                 """;
             await using var reader = await command.ExecuteReaderAsync(ct);
             return await reader.ReadAsync(ct) ? Read(reader) : null;
@@ -123,6 +125,32 @@ public sealed class NpgsqlLocalExecutionStore(
             return await command.ExecuteNonQueryAsync(ct) == 1;
         }, cancellationToken);
 
+    public Task<bool> ReportProgressAsync(
+        Guid workId,
+        int sequence,
+        double? percent,
+        string message,
+        CancellationToken cancellationToken = default)
+        => lease.ExecuteOwnedAsync(async (connection, ct) =>
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                UPDATE jobs.local_execution_work
+                SET progress_sequence = $2,
+                    progress_percent = $3,
+                    progress_message = $4,
+                    updated_at = now()
+                WHERE work_id = $1
+                  AND status IN ('running', 'cancellation_requested')
+                  AND progress_sequence < $2
+                """;
+            command.Parameters.AddWithValue(workId);
+            command.Parameters.AddWithValue(sequence);
+            command.Parameters.AddWithValue((object?)percent ?? DBNull.Value);
+            command.Parameters.AddWithValue(message.Length <= 2048 ? message : message[..2048]);
+            return await command.ExecuteNonQueryAsync(ct) == 1;
+        }, cancellationToken);
+
     public async Task<LocalExecutionSnapshot> LoadSnapshotAsync(
         string streamKey,
         CancellationToken cancellationToken = default)
@@ -130,7 +158,8 @@ public sealed class NpgsqlLocalExecutionStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(streamKey);
         await using var command = dataSource.CreateCommand("""
             SELECT work_id, kind, deduplication_key, payload::text, status, attempt,
-                   maximum_attempts, available_at, updated_at, error_code, error_message
+                   maximum_attempts, available_at, updated_at, error_code, error_message,
+                   progress_sequence, progress_percent, progress_message
             FROM jobs.local_execution_work
             WHERE ($1 = 'all' OR work_id = CASE WHEN $1 ~* '^[0-9a-f-]{36}$' THEN $1::uuid ELSE NULL END)
             ORDER BY updated_at DESC, work_id
@@ -178,7 +207,9 @@ public sealed class NpgsqlLocalExecutionStore(
         JsonDocument.Parse(reader.GetString(3)).RootElement.Clone(),
         ParseStatus(reader.GetString(4)), reader.GetInt32(5), reader.GetInt32(6), reader.GetFieldValue<DateTimeOffset>(7),
         reader.GetFieldValue<DateTimeOffset>(8), reader.IsDBNull(9) ? null : reader.GetString(9),
-        reader.IsDBNull(10) ? null : reader.GetString(10));
+        reader.IsDBNull(10) ? null : reader.GetString(10), reader.GetInt32(11),
+        reader.IsDBNull(12) ? null : reader.GetDouble(12),
+        reader.IsDBNull(13) ? null : reader.GetString(13));
 
     private static LocalExecutionStatus ParseStatus(string value) => value switch
     {

@@ -26,7 +26,10 @@ public sealed record LocalExecutionItem(
     DateTimeOffset AvailableAt,
     DateTimeOffset UpdatedAt,
     string? ErrorCode = null,
-    string? ErrorMessage = null);
+    string? ErrorMessage = null,
+    int ProgressSequence = 0,
+    double? ProgressPercent = null,
+    string? ProgressMessage = null);
 
 public sealed record LocalExecutionEvent(
     Guid WorkId,
@@ -35,7 +38,10 @@ public sealed record LocalExecutionEvent(
     int Attempt,
     DateTimeOffset OccurredAt,
     string? ErrorCode = null,
-    string? ErrorMessage = null);
+    string? ErrorMessage = null,
+    int ProgressSequence = 0,
+    double? ProgressPercent = null,
+    string? ProgressMessage = null);
 
 public sealed record LocalExecutionSnapshot(
     string StreamKey,
@@ -75,6 +81,12 @@ public interface ILocalExecutionStore
     Task<LocalExecutionItem?> ClaimNextAsync(CancellationToken cancellationToken = default);
     Task<LocalExecutionStatus?> CompleteAsync(LocalExecutionItem item, WorkExecutionResult result, CancellationToken cancellationToken = default);
     Task<bool> RequestCancellationAsync(Guid workId, CancellationToken cancellationToken = default);
+    Task<bool> ReportProgressAsync(
+        Guid workId,
+        int sequence,
+        double? percent,
+        string message,
+        CancellationToken cancellationToken = default) => Task.FromResult(false);
     Task<LocalExecutionSnapshot> LoadSnapshotAsync(string streamKey, CancellationToken cancellationToken = default);
 }
 

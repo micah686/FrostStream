@@ -27,6 +27,13 @@ public sealed class LocalExecutionController(
     public Task<LocalExecutionSnapshot> List(CancellationToken cancellationToken)
         => store.LoadSnapshotAsync("all", cancellationToken);
 
+    [HttpGet("{workId:guid}")]
+    public async Task<IActionResult> Get(Guid workId, CancellationToken cancellationToken)
+    {
+        var snapshot = await store.LoadSnapshotAsync(workId.ToString(), cancellationToken);
+        return snapshot.Items.SingleOrDefault() is { } item ? Ok(item) : NotFound();
+    }
+
     [HttpPost("{workId:guid}/cancel")]
     public async Task<IActionResult> Cancel(Guid workId, CancellationToken cancellationToken)
         => await dispatcher.RequestCancellationAsync(workId, cancellationToken) ? Accepted() : NotFound();

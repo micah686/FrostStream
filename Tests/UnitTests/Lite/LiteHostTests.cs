@@ -65,11 +65,14 @@ public sealed class LiteHostTests
         services.AddSingleton<ICurrentOwner, FixedCurrentOwner>();
         services.AddDataBridgeLiteApiOperations(configuration);
         services.AddLiteDurableExecution(configuration);
+        services.AddLiteAcquisition(configuration);
         services.AddControllers().AddApplicationPart(typeof(SystemController).Assembly);
 
         services.ShouldContain(descriptor => descriptor.ServiceType == typeof(IUserNoteApplication));
         services.ShouldContain(descriptor => descriptor.ServiceType == typeof(ILiteExecutionLease));
         services.ShouldContain(descriptor => descriptor.ServiceType == typeof(ILocalExecutionStore));
+        services.Count(descriptor => descriptor.ServiceType == typeof(ILocalExecutionHandler)).ShouldBe(4);
+        services.ShouldContain(descriptor => descriptor.ServiceType == typeof(ILiteDownloadIngress));
         services.ShouldNotContain(descriptor => ContainsForbiddenName(descriptor.ServiceType));
         services.Any(descriptor => descriptor.ImplementationType != null &&
                                    ContainsForbiddenName(descriptor.ImplementationType)).ShouldBeFalse();

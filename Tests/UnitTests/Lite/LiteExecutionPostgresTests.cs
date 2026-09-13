@@ -76,6 +76,8 @@ public sealed class LiteExecutionPostgresTests
 
             var claimed = await store.ClaimNextAsync();
             claimed.ShouldNotBeNull();
+            (await store.ReportProgressAsync(claimed.WorkId, 1, 42.5, "controlled progress")).ShouldBeTrue();
+            (await store.ReportProgressAsync(claimed.WorkId, 1, 99, "stale progress")).ShouldBeFalse();
             await store.CompleteAsync(claimed, new WorkExecutionResult(WorkExecutionDisposition.Completed));
             (await store.CompleteAsync(claimed, new WorkExecutionResult(WorkExecutionDisposition.Completed))).ShouldBeNull();
 
@@ -136,7 +138,10 @@ public sealed class LiteExecutionPostgresTests
                 updated_at timestamptz NOT NULL DEFAULT now(),
                 completed_at timestamptz NULL,
                 error_code varchar(128) NULL,
-                error_message varchar(4096) NULL
+                error_message varchar(4096) NULL,
+                progress_sequence integer NOT NULL DEFAULT 0,
+                progress_percent double precision NULL,
+                progress_message varchar(2048) NULL
             );
             """);
         await command.ExecuteNonQueryAsync();

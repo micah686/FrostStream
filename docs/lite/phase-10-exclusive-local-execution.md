@@ -2,7 +2,7 @@
 
 Date: 2026-09-12
 
-State: Verified, awaiting acceptance. This remains a development milestone, not a deployable Lite edition.
+State: Accepted on 2026-09-13 by the request to implement Phase 11. This remains a development milestone, not a deployable Lite edition.
 
 ## Delivered behavior
 
