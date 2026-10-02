@@ -1,8 +1,8 @@
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 
 namespace Scheduler.Messaging;
 
-public sealed class NatsMessagePublisher(IJetStreamPublisher publisher) : INatsMessagePublisher
+public sealed class NatsMessagePublisher(IDurableJobPublisher publisher) : INatsMessagePublisher
 {
     public Task PublishAsync<T>(
         string subject,

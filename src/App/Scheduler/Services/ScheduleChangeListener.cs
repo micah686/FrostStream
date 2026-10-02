@@ -1,4 +1,4 @@
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Quartz;
 using Scheduler.Databridge;
 using Scheduler.Scheduling;

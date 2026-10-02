@@ -1,4 +1,4 @@
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.AspNetCore.Mvc;
 using NodaTime;
 using NodaTime.Serialization.SystemTextJson;
@@ -14,8 +14,8 @@ namespace WebAPI.Features.Imports.Controllers;
 [Route("api/global/imports/sessions")]
 public sealed class ImportSessionsController(
     IMessageBus messageBus,
-    IJetStreamPublisher publisher,
-    Func<string, IObjectStore> objectStoreFactory,
+    IDurableJobPublisher publisher,
+    Func<string, IStagedObjectStore> objectStoreFactory,
     IClock clock,
     ILogger<ImportSessionsController> logger) : ControllerBase
 {

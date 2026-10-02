@@ -1,4 +1,4 @@
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -128,7 +128,7 @@ public sealed class MetadataAdminControllerDeleteTests
 
     private static MetadataAdminController CreateController(IMessageBus bus)
         => new(
-            Substitute.For<IJetStreamPublisher>(),
+            Substitute.For<IDurableJobPublisher>(),
             bus,
             SystemClock.Instance,
             Substitute.For<ILogger<MetadataAdminController>>());

@@ -1,5 +1,5 @@
 using System.Security.Claims;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -256,7 +256,7 @@ public sealed class DownloadQueueControllerTests
         var hub = new DownloadQueueHub(Substitute.For<IMessageBus>(), Substitute.For<ILogger<DownloadQueueHub>>());
         var controller = new DownloadQueueController(
             messageBus,
-            Substitute.For<IJetStreamPublisher>(),
+            Substitute.For<IDurableJobPublisher>(),
             hub,
             SystemClock.Instance,
             Substitute.For<ILogger<DownloadQueueController>>());

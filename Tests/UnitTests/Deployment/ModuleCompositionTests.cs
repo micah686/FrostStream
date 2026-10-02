@@ -1,0 +1,115 @@
+using Conduit.NATS;
+using DataBridge;
+using Lite;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Mvc.ApplicationParts;
+using Microsoft.AspNetCore.Mvc.Controllers;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Shared.Deployment;
+using Shared.Messaging;
+using Shouldly;
+using TUnit.Core;
+using WebAPI;
+
+namespace UnitTests.Deployment;
+
+public sealed class ModuleCompositionTests
+{
+    private static WebApplicationBuilder Builder()
+    {
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            EnvironmentName = Environments.Development,
+            ApplicationName = typeof(ModuleCompositionTests).Assembly.GetName().Name,
+            ContentRootPath = Path.GetTempPath()
+        });
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Auth:SingleUserMode"] = "true",
+            ["Worker:IncomingRoot"] = Path.Combine(Path.GetTempPath(), "froststream-module-tests", "incoming")
+        });
+        return builder;
+    }
+
+    [Test]
+    public void Deployment_Defaults_To_Full_And_Rejects_Invalid_Values()
+    {
+        DeploymentOptions.FromConfiguration(new ConfigurationBuilder().Build()).Mode.ShouldBe(DeploymentMode.Full);
+        foreach (var invalid in new[] { "", "other", "1", "Full, Lite" })
+        {
+            var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+                { ["Deployment:Mode"] = invalid }).Build();
+            Should.Throw<InvalidOperationException>(() => DeploymentOptions.FromConfiguration(configuration));
+        }
+    }
+
+    [Test]
+    public void Lite_Mode_Is_Recognized_But_Cannot_Silently_Use_Full_Adapters()
+    {
+        var builder = Builder();
+        builder.Configuration["Deployment:Mode"] = "Lite";
+        DeploymentOptions.FromConfiguration(builder.Configuration).Mode.ShouldBe(DeploymentMode.Lite);
+        Should.Throw<NotSupportedException>(() => builder.AddLiteModules()).Message.ShouldContain("phases 2 and 3");
+    }
+
+    [Test]
+    public async Task Combined_Modules_Are_Idempotent_And_Share_The_Controller_Assembly()
+    {
+        var builder = Builder();
+        builder.AddLiteModules();
+        var count = builder.Services.Count;
+        builder.AddLiteModules();
+        builder.Services.Count.ShouldBe(count);
+        builder.Services.Count(d => d.ServiceType == typeof(ITopologySource) && d.ImplementationType == typeof(DownloadTopology)).ShouldBe(1);
+        builder.Services.Count(d => d.ServiceType == typeof(FrostStream.ApplicationContracts.IMessageBus)).ShouldBe(1);
+        foreach (var role in new[] { "databridge", "worker", "media-processor" })
+            builder.Services.Count(d => d.ServiceType == typeof(IBackgroundRunReporter) && Equals(d.ServiceKey, role)).ShouldBe(1);
+        builder.Services.ShouldContain(d => d.ServiceType == typeof(global::DataBridge.Flows.DownloadJobV2Flows));
+
+        await using var app = builder.Build();
+        var parts = app.Services.GetRequiredService<ApplicationPartManager>();
+        parts.ApplicationParts.OfType<AssemblyPart>().Count(p => p.Assembly == typeof(WebAPIModule).Assembly).ShouldBe(1);
+    }
+
+    [Test]
+    public async Task Full_And_Combined_Hosts_Discover_Identical_Controller_Routes()
+    {
+        var full = Builder();
+        full.AddWebAPIModule();
+        var combined = Builder();
+        combined.AddLiteModules();
+        await using var fullApp = full.Build();
+        await using var combinedApp = combined.Build();
+        Routes(fullApp).ShouldBe(Routes(combinedApp));
+        Routes(combinedApp).ShouldContain("api/system/capabilities");
+    }
+
+    private static string[] Routes(WebApplication app) => app.Services
+        .GetRequiredService<IActionDescriptorCollectionProvider>().ActionDescriptors.Items
+        .OfType<ControllerActionDescriptor>().Select(a => a.AttributeRouteInfo?.Template ?? "")
+        .Order(StringComparer.Ordinal).ToArray();
+
+    [Test]
+    public void Capabilities_Reflect_Configured_Optional_Integrations_And_Access_Mode()
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["SINGLE_USER_MODE"] = "true",
+            ["LiveChat:Enabled"] = "true",
+            ["PotBroker:Enabled"] = "true"
+        }).Build();
+        var result = SystemCapabilities.Resolve(new(DeploymentMode.Full), configuration);
+        result.DeploymentMode.ShouldBe("Full");
+        result.AccessManagement.Enabled.ShouldBeFalse();
+        result.Integrations.LiveChat.ShouldBeTrue();
+        result.Integrations.PotProvider.ShouldBeTrue();
+        result.Backups.PointInTimeRecovery.ShouldBeTrue();
+        var defaults = SystemCapabilities.Resolve(new(DeploymentMode.Full), new ConfigurationBuilder().Build());
+        defaults.AccessManagement.Enabled.ShouldBeTrue();
+        defaults.Integrations.LiveChat.ShouldBeFalse();
+        defaults.Integrations.PotProvider.ShouldBeFalse();
+    }
+}

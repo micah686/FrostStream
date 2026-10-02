@@ -1,4 +1,4 @@
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -13,7 +13,7 @@ namespace DataBridge.LiveChat;
 /// messages (7-day MaxAge). Ingestion is idempotent, so a nack/redelivery never duplicates rows.
 /// </summary>
 public sealed class LiveChatIngestConsumerService(
-    IJetStreamConsumer consumer,
+    IDurableJobConsumer consumer,
     IServiceScopeFactory scopeFactory,
     ILogger<LiveChatIngestConsumerService> logger) : BackgroundService
 {
@@ -30,7 +30,7 @@ public sealed class LiveChatIngestConsumerService(
             cancellationToken: stoppingToken);
     }
 
-    private async Task HandleAsync(IJsMessageContext<LiveChatIngestRequested> context)
+    private async Task HandleAsync(IDurableMessageContext<LiveChatIngestRequested> context)
     {
         var request = context.Message;
         try

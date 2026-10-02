@@ -1,4 +1,4 @@
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Shared.Messaging;
@@ -6,7 +6,7 @@ using Shared.Messaging;
 namespace DataBridge.Messaging;
 
 public sealed class ImportSessionProbeEventsConsumerService(
-    IJetStreamConsumer consumer,
+    IDurableJobConsumer consumer,
     ImportSessionRequestReplyService sessionService,
     ILogger<ImportSessionProbeEventsConsumerService> logger) : BackgroundService
 {

@@ -1,6 +1,6 @@
 using System.Text.Json;
 using System.Globalization;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using DataBridge.Data;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -13,8 +13,8 @@ namespace DataBridge.Messaging;
 
 public sealed class ImportSessionRequestReplyService(
     IMessageBus messageBus,
-    IJetStreamPublisher publisher,
-    Func<string, IObjectStore> objectStoreFactory,
+    IDurableJobPublisher publisher,
+    Func<string, IStagedObjectStore> objectStoreFactory,
     IServiceScopeFactory scopeFactory,
     IClock clock,
     ILogger<ImportSessionRequestReplyService> logger) : SubscriptionBackgroundService

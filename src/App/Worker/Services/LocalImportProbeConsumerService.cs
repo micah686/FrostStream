@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -11,9 +11,9 @@ using Shared.Messaging;
 namespace Worker.Services;
 
 public sealed class LocalImportProbeConsumerService(
-    IJetStreamConsumer consumer,
-    IJetStreamPublisher publisher,
-    ITopologyManager topologyManager,
+    IDurableJobConsumer consumer,
+    IDurableJobPublisher publisher,
+    IWorkerJobRoutes topologyManager,
     IClock clock,
     IOptions<WorkerOptions> workerOptions,
     ILogger<LocalImportProbeConsumerService> logger) : BackgroundService
@@ -27,11 +27,11 @@ public sealed class LocalImportProbeConsumerService(
         var options = workerOptions.Value;
         foreach (var tag in options.Tags)
         {
-            await topologyManager.EnsureConsumerAsync(
-                LocalImportTopology.TaggedWorkerConsumerSpec(
-                    LocalImportTopology.WorkerProbeImportSessionItemsConsumer,
-                    LocalImportSubjects.ProbeImportSessionItemsCommand,
-                    tag),
+            await topologyManager.EnsureTaggedConsumerAsync(
+                LocalImportTopology.StreamNameValue,
+                LocalImportTopology.WorkerProbeImportSessionItemsConsumer,
+                LocalImportSubjects.ProbeImportSessionItemsCommand,
+                tag,
                 stoppingToken);
         }
 
@@ -58,7 +58,7 @@ public sealed class LocalImportProbeConsumerService(
             options: null,
             cancellationToken: stoppingToken);
 
-    private async Task HandleAsync(IJsMessageContext<ProbeImportSessionItemsCommand> context)
+    private async Task HandleAsync(IDurableMessageContext<ProbeImportSessionItemsCommand> context)
     {
         using var heartbeatCts = CancellationTokenSource.CreateLinkedTokenSource(CancellationToken.None);
         var heartbeatTask = JetStreamHeartbeat.RunAsync(context, HeartbeatInterval, logger, "Local import probe", heartbeatCts.Token);

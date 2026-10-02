@@ -1,6 +1,6 @@
 using DataBridge.Data;
 using DataBridge.Search;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NodaTime;
@@ -10,14 +10,14 @@ using Shared.Messaging;
 namespace DataBridge.Messaging;
 
 public sealed class BackgroundJobConsumerService(
-    IJetStreamConsumer consumer,
+    IDurableJobConsumer consumer,
     IMessageBus messageBus,
     NpgsqlDataSource dataSource,
     IMetadataRebuildCoordinator rebuildCoordinator,
     IDownloadHistoryPurger historyPurger,
     IImportSessionPurger importSessionPurger,
     INotificationDispatcher notificationDispatcher,
-    IBackgroundRunReporter runReporter,
+    [Microsoft.Extensions.DependencyInjection.FromKeyedServices("databridge")] IBackgroundRunReporter runReporter,
     IClock clock,
     ILogger<BackgroundJobConsumerService> logger) : BackgroundService
 {
@@ -46,7 +46,7 @@ public sealed class BackgroundJobConsumerService(
 
     private Task Consume<TMessage>(
         string consumerName,
-        Func<IJsMessageContext<TMessage>, Task> handler,
+        Func<IDurableMessageContext<TMessage>, Task> handler,
         CancellationToken stoppingToken)
         where TMessage : ScheduledBackgroundRequest
         => consumer.ConsumePullAsync(
@@ -56,7 +56,7 @@ public sealed class BackgroundJobConsumerService(
             options: null,
             cancellationToken: stoppingToken);
 
-    private async Task HandleSearchReindexAsync(IJsMessageContext<SearchReindexRequested> context)
+    private async Task HandleSearchReindexAsync(IDurableMessageContext<SearchReindexRequested> context)
     {
         var message = context.Message;
         await using var run = await runReporter.BeginAsync(message.TaskType, message);
@@ -92,7 +92,7 @@ public sealed class BackgroundJobConsumerService(
         }
     }
 
-    private async Task HandleDatabaseMaintenanceAsync(IJsMessageContext<DatabaseMaintenanceRequested> context)
+    private async Task HandleDatabaseMaintenanceAsync(IDurableMessageContext<DatabaseMaintenanceRequested> context)
     {
         var message = context.Message;
         await using var run = await runReporter.BeginAsync(message.TaskType, message);
@@ -117,7 +117,7 @@ public sealed class BackgroundJobConsumerService(
         }
     }
 
-    private async Task HandleDatabaseMaintenanceReindexAsync(IJsMessageContext<DatabaseMaintenanceReindexRequested> context)
+    private async Task HandleDatabaseMaintenanceReindexAsync(IDurableMessageContext<DatabaseMaintenanceReindexRequested> context)
     {
         var message = context.Message;
         await using var run = await runReporter.BeginAsync("database_maintenance_reindex", message);
@@ -150,7 +150,7 @@ public sealed class BackgroundJobConsumerService(
         }
     }
 
-    private async Task HandleDatabaseStaleMediaCleanupAsync(IJsMessageContext<DatabaseStaleMediaCleanupRequested> context)
+    private async Task HandleDatabaseStaleMediaCleanupAsync(IDurableMessageContext<DatabaseStaleMediaCleanupRequested> context)
     {
         var message = context.Message;
         await using var run = await runReporter.BeginAsync("database_stale_media_cleanup", message);
@@ -203,7 +203,7 @@ public sealed class BackgroundJobConsumerService(
         }
     }
 
-    private async Task HandleDownloadHistoryCleanupAsync(IJsMessageContext<DownloadHistoryCleanupRequested> context)
+    private async Task HandleDownloadHistoryCleanupAsync(IDurableMessageContext<DownloadHistoryCleanupRequested> context)
     {
         var message = context.Message;
         await using var run = await runReporter.BeginAsync(message.TaskType, message);
@@ -230,7 +230,7 @@ public sealed class BackgroundJobConsumerService(
         }
     }
 
-    private async Task HandleImportSessionCleanupAsync(IJsMessageContext<ImportSessionCleanupRequested> context)
+    private async Task HandleImportSessionCleanupAsync(IDurableMessageContext<ImportSessionCleanupRequested> context)
     {
         var message = context.Message;
         await using var run = await runReporter.BeginAsync("import_session_cleanup", message);

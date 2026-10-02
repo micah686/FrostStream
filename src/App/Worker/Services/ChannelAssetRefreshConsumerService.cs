@@ -1,4 +1,4 @@
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -12,13 +12,13 @@ using YtDlpSharpLib.Options;
 namespace Worker.Services;
 
 public sealed class ChannelAssetRefreshConsumerService(
-    IJetStreamConsumer consumer,
+    IDurableJobConsumer consumer,
     IMessageBus messageBus,
     IYtDlpClient ytDlp,
     PotOptionsApplier potOptionsApplier,
     AssetCacheWriter assetCacheWriter,
     IOptions<AssetCacheOptions> assetCacheOptions,
-    IBackgroundRunReporter runReporter,
+    [Microsoft.Extensions.DependencyInjection.FromKeyedServices("worker")] IBackgroundRunReporter runReporter,
     IClock clock,
     ILogger<ChannelAssetRefreshConsumerService> logger) : BackgroundService
 {

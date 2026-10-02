@@ -1,4 +1,4 @@
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NodaTime;
@@ -13,7 +13,7 @@ namespace WebAPI.Features.Metadata.Controllers;
 [Route("api/metadata")]
 public sealed class MetadataController(
     IMessageBus messageBus,
-    IJetStreamPublisher publisher,
+    IDurableJobPublisher publisher,
     IClock clock,
     ILogger<MetadataController> logger) : ControllerBase
 {

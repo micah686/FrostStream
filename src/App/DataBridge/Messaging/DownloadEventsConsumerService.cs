@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using DataBridge.Data;
 using DataBridge.Flows;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,7 +14,7 @@ namespace DataBridge.Messaging;
 /// them to Cleipnir. Stale and duplicate results are acknowledged but can never advance a run.
 /// </summary>
 public sealed class DownloadEventsConsumerService(
-    IJetStreamConsumer consumer,
+    IDurableJobConsumer consumer,
     IServiceScopeFactory scopeFactory,
     DownloadJobV2Flows flows,
     ILogger<DownloadEventsConsumerService> logger) : BackgroundService
@@ -45,7 +45,7 @@ public sealed class DownloadEventsConsumerService(
         where T : class, IFlowMessage
         => consumer.ConsumePullAsync<T>(stream, ConsumerName.From(durable), HandleAsync, cancellationToken: stoppingToken);
 
-    private async Task HandleAsync<T>(IJsMessageContext<T> context) where T : class, IFlowMessage
+    private async Task HandleAsync<T>(IDurableMessageContext<T> context) where T : class, IFlowMessage
     {
         var evt = context.Message;
         try
@@ -122,7 +122,7 @@ public sealed class DownloadEventsConsumerService(
 
 /// <summary>Consumes advisory stage telemetry; leases remain authoritative in PostgreSQL.</summary>
 public sealed class DownloadStageTelemetryConsumerService(
-    IJetStreamConsumer consumer,
+    IDurableJobConsumer consumer,
     ILogger<DownloadStageTelemetryConsumerService> logger) : BackgroundService
 {
     private static readonly StreamName Stream = StreamName.From(DownloadTopology.StreamNameValue);
@@ -146,7 +146,7 @@ public sealed class DownloadStageTelemetryConsumerService(
 
 /// <summary>Routes supervised channel-expansion results to the matching durable group flow.</summary>
 public sealed class DownloadGroupExpansionEventsConsumerService(
-    IJetStreamConsumer consumer,
+    IDurableJobConsumer consumer,
     IServiceScopeFactory scopeFactory,
     DownloadGroupV2Flows flows,
     ILogger<DownloadGroupExpansionEventsConsumerService> logger) : BackgroundService
@@ -165,16 +165,16 @@ public sealed class DownloadGroupExpansionEventsConsumerService(
             HandleAsync,
             cancellationToken: stoppingToken));
 
-    private Task HandleAsync(IJsMessageContext<DownloadGroupExpansionSucceeded> context)
+    private Task HandleAsync(IDurableMessageContext<DownloadGroupExpansionSucceeded> context)
         => ForwardAsync(context, context.Message.GroupId, context.Message.CorrelationId,
             context.Message.OperationKey, context.Message);
 
-    private Task HandleAsync(IJsMessageContext<DownloadGroupExpansionFailed> context)
+    private Task HandleAsync(IDurableMessageContext<DownloadGroupExpansionFailed> context)
         => ForwardAsync(context, context.Message.GroupId, context.Message.CorrelationId,
             context.Message.OperationKey, context.Message);
 
     private async Task ForwardAsync<T>(
-        IJsMessageContext<T> context,
+        IDurableMessageContext<T> context,
         Guid groupId,
         Guid correlationId,
         string operationKey,

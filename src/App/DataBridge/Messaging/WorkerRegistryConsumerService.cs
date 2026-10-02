@@ -1,4 +1,4 @@
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Shared.Messaging;
@@ -23,7 +23,7 @@ public sealed class WorkerRegistryConsumerService(
         await SubscribeAsync<WorkerRegistryListRequest>(messageBus, WorkerRegistrySubjects.List, HandleListAsync, WorkerRegistrySubjects.QueueGroup, stoppingToken);
     }
 
-    private Task HandleHeartbeatAsync(Conduit.NATS.IMessageContext<WorkerHeartbeat> context)
+    private Task HandleHeartbeatAsync(FrostStream.ApplicationContracts.IMessageContext<WorkerHeartbeat> context)
     {
         var heartbeat = context.Message;
         lock (gate)
@@ -31,6 +31,6 @@ public sealed class WorkerRegistryConsumerService(
         return Task.CompletedTask;
     }
 
-    private Task HandleListAsync(Conduit.NATS.IMessageContext<WorkerRegistryListRequest> context)
+    private Task HandleListAsync(FrostStream.ApplicationContracts.IMessageContext<WorkerRegistryListRequest> context)
         => context.RespondAsync(new WorkerRegistryListResponse { Workers = List(context.Message.Tag) });
 }

@@ -2,7 +2,7 @@ using System.IO.Pipelines;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -14,10 +14,10 @@ using Shared.Messaging;
 namespace Worker.Services;
 
 public sealed partial class LocalImportScanConsumerService(
-    IJetStreamConsumer consumer,
+    IDurableJobConsumer consumer,
     IMessageBus messageBus,
-    ITopologyManager topologyManager,
-    Func<string, IObjectStore> objectStoreFactory,
+    IWorkerJobRoutes topologyManager,
+    Func<string, IStagedObjectStore> objectStoreFactory,
     IClock clock,
     IOptions<WorkerOptions> workerOptions,
     ILogger<LocalImportScanConsumerService> logger) : BackgroundService
@@ -44,11 +44,11 @@ public sealed partial class LocalImportScanConsumerService(
         var options = workerOptions.Value;
         foreach (var tag in options.Tags)
         {
-            await topologyManager.EnsureConsumerAsync(
-                LocalImportTopology.TaggedWorkerConsumerSpec(
-                    LocalImportTopology.WorkerScanLocalImportSourceConsumer,
-                    LocalImportSubjects.ScanLocalImportSourceCommand,
-                    tag),
+            await topologyManager.EnsureTaggedConsumerAsync(
+                LocalImportTopology.StreamNameValue,
+                LocalImportTopology.WorkerScanLocalImportSourceConsumer,
+                LocalImportSubjects.ScanLocalImportSourceCommand,
+                tag,
                 stoppingToken);
         }
 
@@ -75,7 +75,7 @@ public sealed partial class LocalImportScanConsumerService(
             options: null,
             cancellationToken: stoppingToken);
 
-    private async Task HandleAsync(IJsMessageContext<ScanLocalImportSourceCommand> context)
+    private async Task HandleAsync(IDurableMessageContext<ScanLocalImportSourceCommand> context)
     {
         using var heartbeatCts = CancellationTokenSource.CreateLinkedTokenSource(CancellationToken.None);
         var heartbeatTask = JetStreamHeartbeat.RunAsync(context, HeartbeatInterval, logger, "Local import scan", heartbeatCts.Token);

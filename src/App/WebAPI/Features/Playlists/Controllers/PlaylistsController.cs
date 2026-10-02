@@ -1,4 +1,4 @@
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NodaTime;
@@ -14,7 +14,7 @@ namespace WebAPI.Features.Playlists.Controllers;
 [ApiController]
 [Route("api/playlists")]
 public class PlaylistsController(
-    IJetStreamPublisher jetStreamPublisher,
+    IDurableJobPublisher jetStreamPublisher,
     IMessageBus messageBus,
     IClock clock,
     ILogger<PlaylistsController> logger) : ControllerBase

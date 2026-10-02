@@ -1,5 +1,5 @@
 using System.Security.Claims;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Shared.Auth;
 using Shared.Messaging;
 

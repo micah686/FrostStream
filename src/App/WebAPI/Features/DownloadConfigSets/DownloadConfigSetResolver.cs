@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Shared.Messaging;
 using Shared.Secrets;
 using YtDlpSharpLib.Options;

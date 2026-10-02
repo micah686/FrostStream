@@ -10,6 +10,8 @@
     <Project Path="../Libs/YtDlpSharpLib/YtDlpSharpLib/YtDlpSharpLib.csproj" />
   </Folder>
   <Folder Name="/Core/">
+    <Project Path="ApplicationContracts/ApplicationContracts.csproj" />
+    <Project Path="Lite/Lite.csproj" />
     <Project Path="BackupService/BackupService.csproj" />
     <Project Path="DataBridge/DataBridge.csproj" />
     <Project Path="MediaProcessor/MediaProcessor.csproj" />

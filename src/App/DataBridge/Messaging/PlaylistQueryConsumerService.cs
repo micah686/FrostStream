@@ -1,7 +1,7 @@
 using System.Text.Json;
 using DataBridge;
 using DataBridge.Data;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NodaTime;
@@ -13,7 +13,7 @@ namespace DataBridge.Messaging;
 
 public sealed class PlaylistQueryConsumerService(
     IMessageBus messageBus,
-    IJetStreamPublisher publisher,
+    IDurableJobPublisher publisher,
     IServiceScopeFactory scopeFactory,
     IClock clock,
     ILogger<PlaylistQueryConsumerService> logger) : SubscriptionBackgroundService

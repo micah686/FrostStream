@@ -1,4 +1,4 @@
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using System.IO.Hashing;
 using System.Text;
 using Microsoft.Extensions.Hosting;
@@ -14,12 +14,12 @@ using YtDlpSharpLib.Options;
 namespace Worker.Services;
 
 public sealed class ChannelDiscoveryConsumerService(
-    IJetStreamConsumer consumer,
-    IJetStreamPublisher publisher,
+    IDurableJobConsumer consumer,
+    IDurableJobPublisher publisher,
     IMessageBus messageBus,
     IYtDlpClient ytDlp,
     PotOptionsApplier potOptionsApplier,
-    IBackgroundRunReporter runReporter,
+    [Microsoft.Extensions.DependencyInjection.FromKeyedServices("worker")] IBackgroundRunReporter runReporter,
     IClock clock,
     ILogger<ChannelDiscoveryConsumerService> logger) : BackgroundService
 {

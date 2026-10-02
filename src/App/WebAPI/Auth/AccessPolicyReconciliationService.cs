@@ -1,4 +1,4 @@
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Shared.Messaging;
 
 namespace WebAPI.Auth;

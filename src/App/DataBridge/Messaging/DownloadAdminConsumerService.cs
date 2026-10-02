@@ -1,4 +1,4 @@
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Cleipnir.ResilientFunctions.Domain;
 using DataBridge.Data;
 using DataBridge.Flows;

@@ -1,4 +1,4 @@
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -8,7 +8,7 @@ namespace DataBridge.AudioRenditions;
 
 public sealed class AudioRenditionConsumerService(
     IMessageBus messageBus,
-    IJetStreamPublisher publisher,
+    IDurableJobPublisher publisher,
     IServiceScopeFactory scopeFactory,
     ILogger<AudioRenditionConsumerService> logger) : SubscriptionBackgroundService
 {

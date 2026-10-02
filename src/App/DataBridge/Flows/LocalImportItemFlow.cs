@@ -2,7 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Cleipnir.Flows;
 using Cleipnir.ResilientFunctions.Reactive.Extensions;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using DataBridge.Data;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -25,7 +25,7 @@ namespace DataBridge.Flows;
 /// </summary>
 [GenerateFlows]
 public class LocalImportItemFlow(
-    IJetStreamPublisher bus,
+    IDurableJobPublisher bus,
     IMessageBus messageBus,
     IServiceScopeFactory scopeFactory,
     IClock clock,

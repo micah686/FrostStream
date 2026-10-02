@@ -4,6 +4,7 @@ using System.Text;
 using BackupService;
 using BackupService.PgBackRest;
 using Conduit.NATS;
+using Shared.Messaging.Adapters;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
@@ -15,6 +16,7 @@ using Shared.Messaging;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
+builder.Services.AddNatsApplicationTransport();
 builder.Services.AddOptions<BackupServiceOptions>()
     .Bind(builder.Configuration.GetSection(BackupServiceOptions.SectionName))
     .Validate(options => !string.IsNullOrWhiteSpace(options.Directory), "Backup:Directory is required.")
@@ -33,7 +35,7 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<BackupCoordinator>
 builder.Services.AddHostedService<StanzaStartupService>();
 builder.Services.AddSingleton<IClock>(NodaTime.SystemClock.Instance);
 builder.Services.AddSingleton<IBackgroundRunReporter>(sp => new BackgroundRunReporter(
-    sp.GetRequiredService<IMessageBus>(),
+    sp.GetRequiredService<FrostStream.ApplicationContracts.IMessageBus>(),
     sp.GetRequiredService<IClock>(),
     "backupservice",
     sp.GetService<ILogger<BackgroundRunReporter>>()));

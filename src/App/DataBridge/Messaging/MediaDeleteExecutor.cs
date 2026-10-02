@@ -1,6 +1,6 @@
 using DataBridge.LiveChat;
 using DataBridge.Search;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Npgsql;

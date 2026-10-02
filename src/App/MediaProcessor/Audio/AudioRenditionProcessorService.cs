@@ -1,4 +1,4 @@
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using MediaProcessor.Ffmpeg;
 using MediaProcessor.Storage;
 using Microsoft.Extensions.Hosting;
@@ -15,7 +15,7 @@ namespace MediaProcessor.Audio;
 /// packaging of the same track under <c>stream/audio/hls</c>.
 /// </summary>
 public sealed class AudioRenditionProcessorService(
-    IJetStreamConsumer consumer,
+    IDurableJobConsumer consumer,
     IMessageBus messageBus,
     MediaProcessorStorageClient storageClient,
     FfmpegRunner ffmpeg,
@@ -34,7 +34,7 @@ public sealed class AudioRenditionProcessorService(
             options: null,
             cancellationToken: stoppingToken);
 
-    private async Task HandleAsync(IJsMessageContext<AudioRenditionEncodeRequested> context)
+    private async Task HandleAsync(IDurableMessageContext<AudioRenditionEncodeRequested> context)
     {
         var request = context.Message;
         var workRoot = Path.Combine(options.Value.TempRoot, "audio-" + request.RenditionId.ToString("N"));
@@ -170,7 +170,7 @@ public sealed class AudioRenditionProcessorService(
         }
     }
 
-    private static async Task CompleteAsync(JetStreamHeartbeat heartbeat, IJsMessageContext<AudioRenditionEncodeRequested> context)
+    private static async Task CompleteAsync(JetStreamHeartbeat heartbeat, IDurableMessageContext<AudioRenditionEncodeRequested> context)
     {
         await heartbeat.StopAsync();
         await context.AckAsync();

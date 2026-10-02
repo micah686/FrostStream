@@ -1,4 +1,4 @@
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.Extensions.Logging;
 
 namespace MediaProcessor;
@@ -16,7 +16,7 @@ public sealed class JetStreamHeartbeat : IAsyncDisposable
     private readonly CancellationTokenSource _cts = new();
     private readonly Task _loop;
 
-    public JetStreamHeartbeat(IJsMessageContext<object> context, ILogger logger)
+    public JetStreamHeartbeat(IDurableMessageContext<object> context, ILogger logger)
     {
         _loop = Task.Run(async () =>
         {

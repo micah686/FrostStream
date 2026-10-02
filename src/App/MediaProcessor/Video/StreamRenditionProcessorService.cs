@@ -1,4 +1,4 @@
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using MediaProcessor.Ffmpeg;
 using MediaProcessor.Storage;
 using Microsoft.Extensions.Hosting;
@@ -15,7 +15,7 @@ namespace MediaProcessor.Video;
 /// tracks are already H.264/AAC are remuxed (<c>-c copy</c>) instead of re-encoded.
 /// </summary>
 public sealed class StreamRenditionProcessorService(
-    IJetStreamConsumer consumer,
+    IDurableJobConsumer consumer,
     IMessageBus messageBus,
     MediaProcessorStorageClient storageClient,
     FfmpegRunner ffmpeg,
@@ -36,7 +36,7 @@ public sealed class StreamRenditionProcessorService(
             options: null,
             cancellationToken: stoppingToken);
 
-    private async Task HandleAsync(IJsMessageContext<StreamRenditionEncodeRequested> context)
+    private async Task HandleAsync(IDurableMessageContext<StreamRenditionEncodeRequested> context)
     {
         var request = context.Message;
         var workRoot = Path.Combine(options.Value.TempRoot, "hls-" + request.RenditionId.ToString("N"));
@@ -161,7 +161,7 @@ public sealed class StreamRenditionProcessorService(
         }
     }
 
-    private static async Task CompleteAsync(JetStreamHeartbeat heartbeat, IJsMessageContext<StreamRenditionEncodeRequested> context)
+    private static async Task CompleteAsync(JetStreamHeartbeat heartbeat, IDurableMessageContext<StreamRenditionEncodeRequested> context)
     {
         await heartbeat.StopAsync();
         await context.AckAsync();

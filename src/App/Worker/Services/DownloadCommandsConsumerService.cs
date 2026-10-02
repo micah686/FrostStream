@@ -3,7 +3,7 @@ using System.Collections.Concurrent;
 using System.IO.Hashing;
 using System.Globalization;
 using FluentStorage.Storage;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -35,10 +35,10 @@ namespace Worker.Services;
 /// downstream events.
 /// </summary>
 public sealed class DownloadCommandsConsumerService(
-    IJetStreamConsumer consumer,
-    IJetStreamPublisher publisher,
+    IDurableJobConsumer consumer,
+    IDurableJobPublisher publisher,
     IMessageBus messageBus,
-    ITopologyManager topologyManager,
+    IWorkerJobRoutes topologyManager,
     IYtDlpClient ytDlp,
     IStoreProvider blobStorageProvider,
     ISecretStore secretStore,
@@ -90,11 +90,11 @@ public sealed class DownloadCommandsConsumerService(
         // consumers, and the second+ calls become no-ops.
         foreach (var tag in tags)
         {
-            await topologyManager.EnsureConsumerAsync(DownloadTopology.TaggedWorkerConsumerSpec(DownloadTopology.WorkerFetchMetadataConsumer,        DownloadSubjects.FetchMetadataCommand,        tag), stoppingToken);
-            await topologyManager.EnsureConsumerAsync(DownloadTopology.TaggedWorkerConsumerSpec(DownloadTopology.WorkerDownloadVideoConsumer,        DownloadSubjects.DownloadVideoCommand,        tag), stoppingToken);
-            await topologyManager.EnsureConsumerAsync(ArtifactStorageTopology.TaggedWorkerConsumerSpec(ArtifactStorageTopology.WorkerUploadConsumer, ArtifactStorageSubjects.UploadObjectCommand, tag), stoppingToken);
-            await topologyManager.EnsureConsumerAsync(ArtifactStorageTopology.TaggedWorkerConsumerSpec(ArtifactStorageTopology.WorkerDeleteTempConsumer, ArtifactStorageSubjects.DeleteTempFileCommand, tag), stoppingToken);
-            await topologyManager.EnsureConsumerAsync(ArtifactStorageTopology.TaggedWorkerConsumerSpec(ArtifactStorageTopology.WorkerDeleteObjectConsumer, ArtifactStorageSubjects.DeleteUploadedObjectCommand, tag), stoppingToken);
+            await topologyManager.EnsureTaggedConsumerAsync(DownloadTopology.StreamNameValue, DownloadTopology.WorkerFetchMetadataConsumer,        DownloadSubjects.FetchMetadataCommand,        tag, stoppingToken);
+            await topologyManager.EnsureTaggedConsumerAsync(DownloadTopology.StreamNameValue, DownloadTopology.WorkerDownloadVideoConsumer,        DownloadSubjects.DownloadVideoCommand,        tag, stoppingToken);
+            await topologyManager.EnsureTaggedConsumerAsync(ArtifactStorageTopology.StreamNameValue, ArtifactStorageTopology.WorkerUploadConsumer, ArtifactStorageSubjects.UploadObjectCommand, tag, stoppingToken);
+            await topologyManager.EnsureTaggedConsumerAsync(ArtifactStorageTopology.StreamNameValue, ArtifactStorageTopology.WorkerDeleteTempConsumer, ArtifactStorageSubjects.DeleteTempFileCommand, tag, stoppingToken);
+            await topologyManager.EnsureTaggedConsumerAsync(ArtifactStorageTopology.StreamNameValue, ArtifactStorageTopology.WorkerDeleteObjectConsumer, ArtifactStorageSubjects.DeleteUploadedObjectCommand, tag, stoppingToken);
             logger.LogInformation("Ensured tagged download consumers for tag '{Tag}'.", tag);
         }
 
@@ -147,7 +147,7 @@ public sealed class DownloadCommandsConsumerService(
 
     private Task Consume<TCommand>(
         string consumerName,
-        Func<IJsMessageContext<TCommand>, Task> handler,
+        Func<IDurableMessageContext<TCommand>, Task> handler,
         CancellationToken stoppingToken)
         where TCommand : class, IFlowMessage
         => consumer.ConsumePullAsync<TCommand>(
@@ -159,7 +159,7 @@ public sealed class DownloadCommandsConsumerService(
 
     private Task ConsumeArtifact<TCommand>(
         string consumerName,
-        Func<IJsMessageContext<TCommand>, Task> handler,
+        Func<IDurableMessageContext<TCommand>, Task> handler,
         CancellationToken stoppingToken)
         where TCommand : class, IFlowMessage
         => consumer.ConsumePullAsync<TCommand>(
@@ -169,7 +169,7 @@ public sealed class DownloadCommandsConsumerService(
             options: null,
             cancellationToken: stoppingToken);
 
-    private async Task HandleFetchMetadataAsync(IJsMessageContext<FetchMetadataCommand> context)
+    private async Task HandleFetchMetadataAsync(IDurableMessageContext<FetchMetadataCommand> context)
     {
         var cmd = context.Message;
         var cookieScratch = GetCookieScratchDirectory(cmd.JobId);
@@ -314,7 +314,7 @@ public sealed class DownloadCommandsConsumerService(
         }
     }
 
-    private async Task HandleDownloadVideoAsync(IJsMessageContext<DownloadVideoCommand> context)
+    private async Task HandleDownloadVideoAsync(IDurableMessageContext<DownloadVideoCommand> context)
     {
         var cmd = context.Message;
         await using var executionLease = await TryAcquireExecutionLeaseAsync(context, cmd.Execution);
@@ -608,7 +608,7 @@ public sealed class DownloadCommandsConsumerService(
             : FailureKind.Interrupted;
     }
 
-    private async Task HandleUploadObjectAsync(IJsMessageContext<UploadObjectCommand> context)
+    private async Task HandleUploadObjectAsync(IDurableMessageContext<UploadObjectCommand> context)
     {
         var cmd = context.Message;
         await using var executionLease = await TryAcquireExecutionLeaseAsync(context, cmd.Execution);
@@ -742,7 +742,7 @@ public sealed class DownloadCommandsConsumerService(
         }
     }
 
-    private async Task HandleDeleteTempFileAsync(IJsMessageContext<DeleteTempFileCommand> context)
+    private async Task HandleDeleteTempFileAsync(IDurableMessageContext<DeleteTempFileCommand> context)
     {
         var cmd = context.Message;
         await using var executionLease = await TryAcquireExecutionLeaseAsync(context, cmd.Execution);
@@ -835,7 +835,7 @@ public sealed class DownloadCommandsConsumerService(
         }
     }
 
-    private async Task HandleDeleteUploadedObjectAsync(IJsMessageContext<DeleteUploadedObjectCommand> context)
+    private async Task HandleDeleteUploadedObjectAsync(IDurableMessageContext<DeleteUploadedObjectCommand> context)
     {
         var cmd = context.Message;
         await using var executionLease = await TryAcquireExecutionLeaseAsync(context, cmd.Execution);
@@ -1043,7 +1043,7 @@ public sealed class DownloadCommandsConsumerService(
     }
 
     private async Task<WorkerExecutionLease?> TryAcquireExecutionLeaseAsync<T>(
-        IJsMessageContext<T> context,
+        IDurableMessageContext<T> context,
         DownloadExecutionIdentity? execution)
         where T : class
     {
@@ -1597,7 +1597,7 @@ public sealed class DownloadCommandsConsumerService(
     private sealed record InfoJsonSidecar(string TempFileRef, string FileName, long SizeBytes, string ContentHash);
 
     private static readonly System.Text.Json.JsonSerializerOptions CommentsSidecarJsonOptions =
-        JsonSerializerRegistry.CreateDefaultOptions();
+        ApplicationJson.CreateOptions();
 
     /// <summary>
     /// Parses the info.json sidecar into C# objects and serializes just the comment thread into a

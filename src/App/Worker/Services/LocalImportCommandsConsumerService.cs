@@ -1,6 +1,6 @@
 using System.Buffers;
 using System.IO.Hashing;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -11,9 +11,9 @@ using Shared.Messaging;
 namespace Worker.Services;
 
 public sealed class LocalImportCommandsConsumerService(
-    IJetStreamConsumer consumer,
-    IJetStreamPublisher publisher,
-    ITopologyManager topologyManager,
+    IDurableJobConsumer consumer,
+    IDurableJobPublisher publisher,
+    IWorkerJobRoutes topologyManager,
     IClock clock,
     IOptions<WorkerOptions> workerOptions,
     ILogger<LocalImportCommandsConsumerService> logger) : BackgroundService
@@ -25,17 +25,17 @@ public sealed class LocalImportCommandsConsumerService(
         var options = workerOptions.Value;
         foreach (var tag in options.Tags)
         {
-            await topologyManager.EnsureConsumerAsync(
-                LocalImportTopology.TaggedWorkerConsumerSpec(
-                    LocalImportTopology.WorkerPrepareLocalImportFileConsumer,
-                    LocalImportSubjects.PrepareLocalImportFileCommand,
-                    tag),
+            await topologyManager.EnsureTaggedConsumerAsync(
+                LocalImportTopology.StreamNameValue,
+                LocalImportTopology.WorkerPrepareLocalImportFileConsumer,
+                LocalImportSubjects.PrepareLocalImportFileCommand,
+                tag,
                 stoppingToken);
-            await topologyManager.EnsureConsumerAsync(
-                LocalImportTopology.TaggedWorkerConsumerSpec(
-                    LocalImportTopology.WorkerDeleteLocalImportSourceConsumer,
-                    LocalImportSubjects.DeleteLocalImportSourceCommand,
-                    tag),
+            await topologyManager.EnsureTaggedConsumerAsync(
+                LocalImportTopology.StreamNameValue,
+                LocalImportTopology.WorkerDeleteLocalImportSourceConsumer,
+                LocalImportSubjects.DeleteLocalImportSourceCommand,
+                tag,
                 stoppingToken);
             logger.LogInformation("Ensured tagged local import consumers for tag '{Tag}'.", tag);
         }
@@ -76,7 +76,7 @@ public sealed class LocalImportCommandsConsumerService(
 
     private Task Consume<TCommand>(
         string consumerName,
-        Func<IJsMessageContext<TCommand>, Task> handler,
+        Func<IDurableMessageContext<TCommand>, Task> handler,
         CancellationToken stoppingToken)
         where TCommand : class, IFlowMessage
         => consumer.ConsumePullAsync(
@@ -86,7 +86,7 @@ public sealed class LocalImportCommandsConsumerService(
             options: null,
             cancellationToken: stoppingToken);
 
-    private async Task HandlePrepareLocalImportFileAsync(IJsMessageContext<PrepareLocalImportFileCommand> context)
+    private async Task HandlePrepareLocalImportFileAsync(IDurableMessageContext<PrepareLocalImportFileCommand> context)
     {
         var cmd = context.Message;
         var incomingRoot = workerOptions.Value.IncomingRoot;
@@ -175,7 +175,7 @@ public sealed class LocalImportCommandsConsumerService(
         }
     }
 
-    private async Task HandleDeleteLocalImportSourceAsync(IJsMessageContext<DeleteLocalImportSourceCommand> context)
+    private async Task HandleDeleteLocalImportSourceAsync(IDurableMessageContext<DeleteLocalImportSourceCommand> context)
     {
         var cmd = context.Message;
         var incomingRoot = workerOptions.Value.IncomingRoot;

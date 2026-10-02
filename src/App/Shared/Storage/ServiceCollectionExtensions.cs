@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Shared.Storage;
@@ -12,8 +13,8 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddFrostStreamStorage(this IServiceCollection services)
     {
-        services.AddSingleton<IStorageConfigClient, NatsStorageConfigClient>();
-        services.AddSingleton<IStoreProvider, CachingStoreProvider>();
+        services.TryAddSingleton<IStorageConfigClient, NatsStorageConfigClient>();
+        services.TryAddSingleton<IStoreProvider, CachingStoreProvider>();
         services.AddHostedService<StorageConfigChangedSubscriber>();
         return services;
     }

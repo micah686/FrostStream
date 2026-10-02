@@ -1,4 +1,4 @@
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NodaTime;
@@ -17,8 +17,8 @@ namespace Worker.Services;
 /// <see cref="DownloadCommandsConsumerService"/> handle them just like any other download.
 /// </summary>
 public sealed class PlaylistCommandsConsumerService(
-    IJetStreamConsumer consumer,
-    IJetStreamPublisher publisher,
+    IDurableJobConsumer consumer,
+    IDurableJobPublisher publisher,
     IYtDlpClient ytDlp,
     PotOptionsApplier potOptionsApplier,
     IClock clock,
@@ -41,7 +41,7 @@ public sealed class PlaylistCommandsConsumerService(
         return task;
     }
 
-    private async Task HandleFetchPlaylistMetadataAsync(IJsMessageContext<FetchPlaylistMetadataCommand> context)
+    private async Task HandleFetchPlaylistMetadataAsync(IDurableMessageContext<FetchPlaylistMetadataCommand> context)
     {
         var cmd = context.Message;
 

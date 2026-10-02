@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -19,9 +19,9 @@ namespace Worker.Services;
 /// media, and publishes the complete metadata layer back to DataBridge.
 /// </summary>
 public sealed class LocalImportEnrichConsumerService(
-    IJetStreamConsumer consumer,
-    IJetStreamPublisher publisher,
-    ITopologyManager topologyManager,
+    IDurableJobConsumer consumer,
+    IDurableJobPublisher publisher,
+    IWorkerJobRoutes topologyManager,
     IYtDlpClient ytDlp,
     ISecretStore secretStore,
     PotOptionsApplier potOptionsApplier,
@@ -37,11 +37,11 @@ public sealed class LocalImportEnrichConsumerService(
         var options = workerOptions.Value;
         foreach (var tag in options.Tags)
         {
-            await topologyManager.EnsureConsumerAsync(
-                LocalImportTopology.TaggedWorkerConsumerSpec(
-                    LocalImportTopology.WorkerEnrichImportSessionItemConsumer,
-                    LocalImportSubjects.EnrichImportSessionItemCommand,
-                    tag),
+            await topologyManager.EnsureTaggedConsumerAsync(
+                LocalImportTopology.StreamNameValue,
+                LocalImportTopology.WorkerEnrichImportSessionItemConsumer,
+                LocalImportSubjects.EnrichImportSessionItemCommand,
+                tag,
                 stoppingToken);
         }
 
@@ -68,7 +68,7 @@ public sealed class LocalImportEnrichConsumerService(
             options: null,
             cancellationToken: stoppingToken);
 
-    private async Task HandleAsync(IJsMessageContext<EnrichImportSessionItemCommand> context)
+    private async Task HandleAsync(IDurableMessageContext<EnrichImportSessionItemCommand> context)
     {
         using var heartbeatCts = CancellationTokenSource.CreateLinkedTokenSource(CancellationToken.None);
         var heartbeatTask = JetStreamHeartbeat.RunAsync(context, HeartbeatInterval, logger, "Local import enrich", heartbeatCts.Token);

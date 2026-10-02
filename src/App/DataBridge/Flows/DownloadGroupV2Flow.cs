@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Cleipnir.Flows;
 using Cleipnir.ResilientFunctions.Reactive.Extensions;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using DataBridge.Data;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -20,7 +20,7 @@ namespace DataBridge.Flows;
 /// </summary>
 [GenerateFlows]
 public sealed class DownloadGroupV2Flow(
-    IJetStreamPublisher publisher,
+    IDurableJobPublisher publisher,
     IServiceScopeFactory scopeFactory,
     IClock clock,
     ILogger<DownloadGroupV2Flow> logger) : Flow<DownloadGroupRequested>

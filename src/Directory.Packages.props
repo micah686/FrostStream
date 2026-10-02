@@ -64,7 +64,8 @@
     <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.18.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.18.0" />
     <PackageVersion Include="Polly.Core" Version="8.7.0" />
-    <PackageVersion Include="Quartz" Version="4.0.0" />
+    <!-- Keep the core and hosting packages aligned for the combined host. -->
+    <PackageVersion Include="Quartz" Version="3.20.1" />
     <PackageVersion Include="Quartz.Extensions.Hosting" Version="3.20.1" />
     <PackageVersion Include="RecurPixel.Notify.Sdk" Version="0.3.0" />
     <PackageVersion Include="Scalar.AspNetCore" Version="2.17.2" />

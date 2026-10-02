@@ -1,4 +1,4 @@
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.Extensions.Logging;
 
 namespace Worker.Services;
@@ -6,7 +6,7 @@ namespace Worker.Services;
 internal static class JetStreamHeartbeat
 {
     public static Task RunAsync<T>(
-        IJsMessageContext<T> context,
+        IDurableMessageContext<T> context,
         TimeSpan interval,
         ILogger logger,
         string operation,

@@ -1,4 +1,4 @@
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NodaTime;
@@ -15,7 +15,7 @@ namespace WebAPI.Features.Downloads.Controllers;
 [ApiController]
 [Route("api/downloads")]
 public class DownloadsController(
-    IJetStreamPublisher publisher,
+    IDurableJobPublisher publisher,
     IMessageBus messageBus,
     IClock clock,
     ILogger<DownloadsController> logger) : ControllerBase

@@ -3,7 +3,7 @@ using System.Text;
 using System.Text.Json;
 using DataBridge;
 using DataBridge.Data;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -17,7 +17,7 @@ namespace DataBridge.Messaging;
 
 public sealed class CreatorDiscoveryConsumerService(
     IMessageBus messageBus,
-    IJetStreamPublisher publisher,
+    IDurableJobPublisher publisher,
     IServiceScopeFactory scopeFactory,
     IClock clock,
     ILogger<CreatorDiscoveryConsumerService> logger) : SubscriptionBackgroundService

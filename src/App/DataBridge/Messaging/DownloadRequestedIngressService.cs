@@ -1,5 +1,5 @@
 using Cleipnir.ResilientFunctions.Domain.Exceptions;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using DataBridge.Data;
 using DataBridge.Flows;
 using Microsoft.Extensions.DependencyInjection;
@@ -11,7 +11,7 @@ namespace DataBridge.Messaging;
 
 /// <summary>Creates a V2 job/run and starts its immutable Cleipnir instance.</summary>
 public sealed class DownloadRequestedIngressService(
-    IJetStreamConsumer consumer,
+    IDurableJobConsumer consumer,
     IServiceScopeFactory scopeFactory,
     DownloadJobV2Flows flows,
     DownloadFlowStartupState startupState,
@@ -24,7 +24,7 @@ public sealed class DownloadRequestedIngressService(
             HandleAsync,
             cancellationToken: stoppingToken);
 
-    private async Task HandleAsync(IJsMessageContext<DownloadRequested> context)
+    private async Task HandleAsync(IDurableMessageContext<DownloadRequested> context)
     {
         var request = context.Message;
         try

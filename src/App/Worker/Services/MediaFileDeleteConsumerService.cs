@@ -1,4 +1,4 @@
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using FluentStorage.Storage;
 using Microsoft.Extensions.Logging;
 using Shared.Messaging;

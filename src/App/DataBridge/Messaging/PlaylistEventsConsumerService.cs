@@ -1,4 +1,4 @@
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using DataBridge.Data;
 using DataBridge.Flows;
 using Microsoft.EntityFrameworkCore;
@@ -15,7 +15,7 @@ namespace DataBridge.Messaging;
 /// Results for a missing, stopped, failed, or already-settled group are stale and acknowledged.
 /// </summary>
 public sealed class PlaylistEventsConsumerService(
-    IJetStreamConsumer consumer,
+    IDurableJobConsumer consumer,
     IServiceScopeFactory scopeFactory,
     DownloadGroupV2Flows groupFlows,
     ILogger<PlaylistEventsConsumerService> logger) : BackgroundService
@@ -42,13 +42,13 @@ public sealed class PlaylistEventsConsumerService(
         return Task.WhenAll(consumers);
     }
 
-    private Task HandleAsync(IJsMessageContext<PlaylistMetadataFetched> context)
+    private Task HandleAsync(IDurableMessageContext<PlaylistMetadataFetched> context)
         => ForwardAsync(context, context.Message);
 
-    private Task HandleAsync(IJsMessageContext<PlaylistMetadataFetchFailed> context)
+    private Task HandleAsync(IDurableMessageContext<PlaylistMetadataFetchFailed> context)
         => ForwardAsync(context, context.Message);
 
-    private async Task ForwardAsync<T>(IJsMessageContext<T> context, T message)
+    private async Task ForwardAsync<T>(IDurableMessageContext<T> context, T message)
         where T : class, IPlaylistFlowMessage
     {
         try

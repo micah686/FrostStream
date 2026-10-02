@@ -1,9 +1,11 @@
+using static Conduit.NATS.ServiceCollectionExtensions;
+using Shared.Messaging.Adapters;
 using DataBridge.Data;
 using DataBridge.Messaging;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using FluentMigrator.Runner;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -313,7 +315,7 @@ public sealed class DownloadQueueFlowTests
 
             // Provision the production download.> stream so the queue subjects live under JetStream
             // subject capture exactly like the live stack (core request/reply must still work).
-            builder.Services.AddNats(options =>
+            builder.Services.AddNatsApplicationTransport().AddNats(options =>
             {
                 options.Url = _natsContainer.GetConnectionString();
                 options.EnableTopologyProvisioning = true;

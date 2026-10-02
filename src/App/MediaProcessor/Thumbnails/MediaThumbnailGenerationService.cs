@@ -1,5 +1,5 @@
 using System.Globalization;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using MediaProcessor.Ffmpeg;
 using MediaProcessor.Storage;
 using Microsoft.Extensions.Hosting;
@@ -10,12 +10,12 @@ using Shared.Messaging;
 namespace MediaProcessor.Thumbnails;
 
 public sealed class MediaThumbnailGenerationService(
-    IJetStreamConsumer consumer,
+    IDurableJobConsumer consumer,
     IMessageBus messageBus,
     MediaProcessorStorageClient storageClient,
     FfmpegRunner ffmpeg,
     IOptions<MediaProcessorOptions> options,
-    IBackgroundRunReporter runReporter,
+    [Microsoft.Extensions.DependencyInjection.FromKeyedServices("media-processor")] IBackgroundRunReporter runReporter,
     ILogger<MediaThumbnailGenerationService> logger) : BackgroundService
 {
     private static readonly StreamName Stream = StreamName.From(BackgroundJobsTopology.StreamNameValue);
@@ -30,7 +30,7 @@ public sealed class MediaThumbnailGenerationService(
             cancellationToken: stoppingToken);
 
     private async Task HandleAsync(
-        IJsMessageContext<GenerateMissingMediaThumbnailsRequested> context,
+        IDurableMessageContext<GenerateMissingMediaThumbnailsRequested> context,
         CancellationToken cancellationToken)
     {
         await using var heartbeat = new JetStreamHeartbeat(context, logger);

@@ -1,5 +1,5 @@
 using System.Security.Claims;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -125,7 +125,7 @@ public sealed class CreatorMonitorControllerTests
     public async Task RefreshAssets_Gets_Source_And_Publishes_Channel_Asset_Refresh()
     {
         var bus = Substitute.For<IMessageBus>();
-        var publisher = Substitute.For<IJetStreamPublisher>();
+        var publisher = Substitute.For<IDurableJobPublisher>();
         var controller = CreateController(bus, publisher);
 
         bus.RequestAsync<CreatorMonitorGetRequestMessage, CreatorMonitorOperationResponseMessage>(
@@ -161,7 +161,7 @@ public sealed class CreatorMonitorControllerTests
     public async Task DownloadChannel_Creates_Or_Reuses_Source_And_Publishes_Targeted_Channel_Scan()
     {
         var bus = Substitute.For<IMessageBus>();
-        var publisher = Substitute.For<IJetStreamPublisher>();
+        var publisher = Substitute.For<IDurableJobPublisher>();
         var controller = CreateController(bus, publisher);
 
         bus.RequestAsync<CreatorMonitorCreateOrReuseRequestMessage, CreatorMonitorOperationResponseMessage>(
@@ -217,7 +217,7 @@ public sealed class CreatorMonitorControllerTests
     public async Task RefreshAssets_Returns_503_When_Publish_Fails()
     {
         var bus = Substitute.For<IMessageBus>();
-        var publisher = Substitute.For<IJetStreamPublisher>();
+        var publisher = Substitute.For<IDurableJobPublisher>();
         var controller = CreateController(bus, publisher);
 
         bus.RequestAsync<CreatorMonitorGetRequestMessage, CreatorMonitorOperationResponseMessage>(
@@ -288,14 +288,14 @@ public sealed class CreatorMonitorControllerTests
 
     private static CreatorMonitorController CreateController(
         IMessageBus? bus = null,
-        IJetStreamPublisher? publisher = null)
+        IDurableJobPublisher? publisher = null)
     {
         var clock = Substitute.For<IClock>();
         clock.GetCurrentInstant().Returns(Now);
 
         var controller = new CreatorMonitorController(
             bus ?? Substitute.For<IMessageBus>(),
-            publisher ?? Substitute.For<IJetStreamPublisher>(),
+            publisher ?? Substitute.For<IDurableJobPublisher>(),
             clock,
             Substitute.For<ILogger<CreatorMonitorController>>());
 

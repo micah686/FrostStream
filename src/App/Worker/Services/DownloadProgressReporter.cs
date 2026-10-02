@@ -1,5 +1,5 @@
 using System.Globalization;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.Extensions.Logging;
 using NodaTime;
 using Shared.Messaging;
@@ -9,7 +9,7 @@ namespace Worker.Services;
 
 internal sealed class DownloadProgressReporter(
     DownloadVideoCommand command,
-    IJetStreamPublisher publisher,
+    IDurableJobPublisher publisher,
     IClock clock,
     ILogger logger) : IProgress<YtDlpProgress>
 {

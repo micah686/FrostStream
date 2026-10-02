@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Channels;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 using NodaTime;
@@ -23,7 +23,7 @@ namespace WebAPI.Features.Downloads.Controllers;
 [Route("api/downloads/queue")]
 public sealed class DownloadQueueController(
     IMessageBus messageBus,
-    IJetStreamPublisher publisher,
+    IDurableJobPublisher publisher,
     DownloadQueueHub hub,
     IClock clock,
     ILogger<DownloadQueueController> logger) : ControllerBase

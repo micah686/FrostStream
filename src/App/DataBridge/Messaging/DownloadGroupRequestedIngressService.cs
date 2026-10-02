@@ -1,5 +1,5 @@
 using Cleipnir.ResilientFunctions.Domain.Exceptions;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using DataBridge.Data;
 using DataBridge.Flows;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,7 +10,7 @@ using Shared.Messaging;
 namespace DataBridge.Messaging;
 
 public sealed class DownloadGroupRequestedIngressService(
-    IJetStreamConsumer consumer,
+    IDurableJobConsumer consumer,
     IServiceScopeFactory scopeFactory,
     DownloadGroupV2Flows flows,
     DownloadFlowStartupState startupState,
@@ -23,7 +23,7 @@ public sealed class DownloadGroupRequestedIngressService(
             HandleAsync,
             cancellationToken: stoppingToken);
 
-    private async Task HandleAsync(IJsMessageContext<DownloadGroupRequested> context)
+    private async Task HandleAsync(IDurableMessageContext<DownloadGroupRequested> context)
     {
         var request = context.Message;
         try

@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 using System.Threading.Channels;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Shared.Messaging;
 
 namespace WebAPI.Features.Media;

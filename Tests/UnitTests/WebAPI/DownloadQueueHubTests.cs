@@ -1,6 +1,6 @@
 using System.Text;
 using System.Threading.Channels;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -26,7 +26,7 @@ public sealed class DownloadQueueHubTests
             var body = new MemoryStream();
             var controller = new DownloadQueueController(
                 Substitute.For<IMessageBus>(),
-                Substitute.For<IJetStreamPublisher>(),
+                Substitute.For<IDurableJobPublisher>(),
                 hub.Hub,
                 SystemClock.Instance,
                 Substitute.For<ILogger<DownloadQueueController>>());

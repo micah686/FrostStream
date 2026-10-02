@@ -1,6 +1,6 @@
 using DataBridge;
 using DataBridge.Data;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NodaTime;
@@ -211,7 +211,7 @@ public sealed class ScheduleCrudConsumerService(
             return "interval_seconds must be greater than zero.";
         if (retentionDays < 0)
             return "retention_days must not be negative.";
-        if (!string.IsNullOrWhiteSpace(cron) && !CronExpression.TryParse(cron, out _))
+        if (!string.IsNullOrWhiteSpace(cron) && !CronExpression.IsValidExpression(cron))
             return "cron is not a valid Quartz cron expression.";
         if (DateTimeZoneProviders.Tzdb.GetZoneOrNull(timezone) is null)
             return "timezone is not a valid TZDB timezone id.";

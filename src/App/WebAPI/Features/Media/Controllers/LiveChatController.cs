@@ -1,5 +1,5 @@
 using System.Text.RegularExpressions;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using NodaTime;
@@ -19,7 +19,7 @@ namespace WebAPI.Features.Media.Controllers;
 [Route("api/media/watch")]
 public sealed partial class LiveChatController(
     IMessageBus messageBus,
-    IJetStreamPublisher publisher,
+    IDurableJobPublisher publisher,
     IStoreProvider blobStorageProvider,
     MediaAccessChecker accessChecker,
     IOptions<LiveChatOptions> liveChatOptions,

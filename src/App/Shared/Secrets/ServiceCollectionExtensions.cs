@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -8,7 +9,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddOpenBaoSecretStore(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<OpenBaoOptions>(configuration.GetSection(OpenBaoOptions.SectionName));
-        services.AddSingleton<ISecretStore, OpenBaoSecretStore>();
+        services.TryAddSingleton<ISecretStore, OpenBaoSecretStore>();
         return services;
     }
 }

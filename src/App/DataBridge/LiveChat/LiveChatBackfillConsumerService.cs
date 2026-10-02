@@ -1,4 +1,4 @@
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using FluentStorage.Storage;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -18,11 +18,11 @@ namespace DataBridge.LiveChat;
 /// primary file, so existence is a single storage probe per candidate.
 /// </summary>
 public sealed class LiveChatBackfillConsumerService(
-    IJetStreamConsumer consumer,
-    IJetStreamPublisher publisher,
+    IDurableJobConsumer consumer,
+    IDurableJobPublisher publisher,
     NpgsqlDataSource dataSource,
     IStoreProvider blobStorageProvider,
-    IBackgroundRunReporter runReporter,
+    [Microsoft.Extensions.DependencyInjection.FromKeyedServices("databridge")] IBackgroundRunReporter runReporter,
     ILogger<LiveChatBackfillConsumerService> logger) : BackgroundService
 {
     private const string ChatSidecarFileName = "media.live_chat.json";
@@ -44,7 +44,7 @@ public sealed class LiveChatBackfillConsumerService(
             cancellationToken: stoppingToken);
     }
 
-    private async Task HandleAsync(IJsMessageContext<LiveChatBackfillRequested> context)
+    private async Task HandleAsync(IDurableMessageContext<LiveChatBackfillRequested> context)
     {
         var message = context.Message;
         await using var run = await runReporter.BeginAsync(message.TaskType, message);

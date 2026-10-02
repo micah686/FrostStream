@@ -1,6 +1,6 @@
 using System.Text.Json;
 using DataBridge.Data;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;

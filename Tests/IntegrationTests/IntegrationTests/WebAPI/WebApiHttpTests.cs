@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using FluentStorage.Storage;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Routing;
@@ -25,6 +25,21 @@ namespace IntegrationTests.WebApiHttp;
 
 public sealed class WebApiHttpTests
 {
+    [Test]
+    public async Task Capabilities_Are_Available_Without_Login_And_Reflect_Single_User_Controls()
+    {
+        using var factory = new TestWebApiFactory();
+        using var client = factory.CreateClient();
+        using var response = await client.GetAsync("/api/system/capabilities");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        response.Headers.CacheControl!.NoStore.ShouldBeTrue();
+        var capabilities = await response.Content.ReadFromJsonAsync<Shared.Deployment.SystemCapabilities>();
+        capabilities.ShouldNotBeNull();
+        capabilities.DeploymentMode.ShouldBe("Full");
+        capabilities.AccessManagement.Enabled.ShouldBeFalse();
+        capabilities.Backups.Full.ShouldBeTrue();
+    }
+
     [Test]
     public void Access_Control_Routes_Are_Not_Registered_In_Single_User_Mode()
     {
@@ -178,13 +193,13 @@ internal sealed class TestWebApiFactory : WebApplicationFactory<global::WebAPI.P
         builder.ConfigureTestServices(services =>
         {
             services.RemoveAll<IHostedService>();
-            services.RemoveAll<IJetStreamPublisher>();
+            services.RemoveAll<IDurableJobPublisher>();
             services.RemoveAll<IMessageBus>();
             services.RemoveAll<ISecretStore>();
             services.RemoveAll<IClock>();
             services.RemoveAll<IStoreProvider>();
 
-            services.AddSingleton<IJetStreamPublisher>(Publisher);
+            services.AddSingleton<IDurableJobPublisher>(Publisher);
             services.AddSingleton<IMessageBus>(MessageBus);
             services.AddSingleton<ISecretStore>(SecretStore);
             services.AddSingleton<IClock>(new TestClock(Now));
@@ -198,7 +213,7 @@ internal sealed class TestClock(Instant now) : IClock
     public Instant GetCurrentInstant() => now;
 }
 
-internal sealed class CapturingJetStreamPublisher : IJetStreamPublisher
+internal sealed class CapturingJetStreamPublisher : IDurableJobPublisher
 {
     private readonly List<object> _published = [];
 

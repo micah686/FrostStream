@@ -3,7 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Cleipnir.Flows;
 using Cleipnir.ResilientFunctions.Reactive.Extensions;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using DataBridge.AudioRenditions;
 using DataBridge.Data;
 using DataBridge.Messaging;
@@ -28,7 +28,7 @@ namespace DataBridge.Flows;
 /// </summary>
 [GenerateFlows]
 public sealed class DownloadJobV2Flow(
-    IJetStreamPublisher bus,
+    IDurableJobPublisher bus,
     IMessageBus messageBus,
     IServiceScopeFactory scopeFactory,
     IClock clock,

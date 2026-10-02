@@ -1,4 +1,4 @@
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Cors;

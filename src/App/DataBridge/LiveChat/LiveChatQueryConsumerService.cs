@@ -1,6 +1,6 @@
 using ClickHouse.Driver.ADO;
 using ClickHouse.Driver.Utility;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Shared.LiveChat;

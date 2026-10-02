@@ -1,4 +1,4 @@
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using NodaTime;
 using Quartz;
 using Shared.Messaging;

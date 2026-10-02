@@ -37,7 +37,7 @@ public abstract class ScheduleRequestBase : IValidatableObject
                 [nameof(Cron), nameof(IntervalSeconds)]);
         }
 
-        if (hasCron && !CronExpression.TryParse(Cron!, out _))
+        if (hasCron && !CronExpression.IsValidExpression(Cron!))
         {
             yield return new ValidationResult("Cron must be a valid Quartz cron expression.", [nameof(Cron)]);
         }

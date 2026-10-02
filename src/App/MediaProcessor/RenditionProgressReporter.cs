@@ -1,5 +1,5 @@
 using System.Globalization;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using MediaProcessor.Ffmpeg;
 using Microsoft.Extensions.Logging;
 using NodaTime;

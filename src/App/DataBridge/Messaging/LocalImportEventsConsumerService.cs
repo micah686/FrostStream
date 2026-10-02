@@ -1,5 +1,5 @@
 using DataBridge.Flows;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Shared.Messaging;
@@ -7,7 +7,7 @@ using Shared.Messaging;
 namespace DataBridge.Messaging;
 
 public sealed class LocalImportEventsConsumerService(
-    IJetStreamConsumer consumer,
+    IDurableJobConsumer consumer,
     LocalImportItemV2Flows itemFlows,
     ILogger<LocalImportEventsConsumerService> logger) : BackgroundService
 {
@@ -48,7 +48,7 @@ public sealed class LocalImportEventsConsumerService(
             options: null,
             cancellationToken: stoppingToken);
 
-    private async Task HandleAsync<TEvent>(IJsMessageContext<TEvent> context)
+    private async Task HandleAsync<TEvent>(IDurableMessageContext<TEvent> context)
         where TEvent : class, IFlowMessage
     {
         var evt = context.Message;

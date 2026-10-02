@@ -22,6 +22,7 @@
     </ItemGroup>
 
     <ItemGroup>
+        <ProjectReference Include="..\..\src\App\Lite\Lite.csproj" />
         <ProjectReference Include="..\..\src\App\BackupService\BackupService.csproj" />
         <ProjectReference Include="..\..\src\App\DataBridge\DataBridge.csproj" />
         <ProjectReference Include="..\..\src\App\Scheduler\Scheduler.csproj" />

@@ -1,4 +1,4 @@
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NodaTime;
@@ -17,7 +17,7 @@ namespace WebAPI.Features.CreatorMonitor.Controllers;
 [Route("api/creator-monitor")]
 public sealed class CreatorMonitorController(
     IMessageBus messageBus,
-    IJetStreamPublisher publisher,
+    IDurableJobPublisher publisher,
     IClock clock,
     ILogger<CreatorMonitorController> logger) : ControllerBase
 {

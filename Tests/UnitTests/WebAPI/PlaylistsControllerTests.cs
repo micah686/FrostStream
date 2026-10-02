@@ -1,5 +1,5 @@
 using System.Security.Claims;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -21,7 +21,7 @@ public sealed class PlaylistsControllerTests
     [Test]
     public async Task Submit_Publishes_PlaylistRequested_With_Default_Storage()
     {
-        var publisher = Substitute.For<IJetStreamPublisher>();
+        var publisher = Substitute.For<IDurableJobPublisher>();
         var controller = CreateController(publisher: publisher);
 
         var result = await controller.Submit(new PlaylistRequest
@@ -114,7 +114,7 @@ public sealed class PlaylistsControllerTests
     [Test]
     public async Task Submit_Returns_502_When_Publish_Fails()
     {
-        var publisher = Substitute.For<IJetStreamPublisher>();
+        var publisher = Substitute.For<IDurableJobPublisher>();
         publisher.PublishAsync(
                 Arg.Any<string>(),
                 Arg.Any<DownloadGroupRequested>(),
@@ -135,7 +135,7 @@ public sealed class PlaylistsControllerTests
     [Test]
     public async Task Submit_Rejects_Localhost_Source_Url()
     {
-        var publisher = Substitute.For<IJetStreamPublisher>();
+        var publisher = Substitute.For<IDurableJobPublisher>();
         var controller = CreateController(publisher: publisher);
 
         var result = await controller.Submit(new PlaylistRequest
@@ -153,14 +153,14 @@ public sealed class PlaylistsControllerTests
     }
 
     private static PlaylistsController CreateController(
-        IJetStreamPublisher? publisher = null,
+        IDurableJobPublisher? publisher = null,
         IMessageBus? bus = null)
     {
         var clock = Substitute.For<IClock>();
         clock.GetCurrentInstant().Returns(Now);
 
         var controller = new PlaylistsController(
-            publisher ?? Substitute.For<IJetStreamPublisher>(),
+            publisher ?? Substitute.For<IDurableJobPublisher>(),
             bus ?? Substitute.For<IMessageBus>(),
             clock,
             Substitute.For<ILogger<PlaylistsController>>());

@@ -1,4 +1,4 @@
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.AspNetCore.Mvc;
 using Shared.Messaging;
 using Shared.Storage;
