@@ -1,3 +1,4 @@
+using DataBridge.Persistence;
 using Microsoft.EntityFrameworkCore;
 using NodaTime;
 using Shared.Database;
@@ -218,38 +219,22 @@ public sealed class UserPlaylistsRepository(DataBridgeDbContext db, IClock clock
     private async Task ShiftPositionsUpAsync(Guid playlistId, int fromPosition, CancellationToken ct)
     {
         await db.Database.ExecuteSqlInterpolatedAsync(
-            $"""
-             UPDATE playlists.user_playlist_items
-             SET position = position + {PositionOffset}
-             WHERE playlist_id = {playlistId} AND position >= {fromPosition}
-             """,
+            db.ParameterizedSql("UserPlaylistsRepository.ShiftPositionsUpAsync.1", PositionOffset, playlistId, fromPosition),
             ct);
 
         await db.Database.ExecuteSqlInterpolatedAsync(
-            $"""
-             UPDATE playlists.user_playlist_items
-             SET position = position - {PositionOffset} + 1
-             WHERE playlist_id = {playlistId} AND position >= {PositionOffset}
-             """,
+            db.ParameterizedSql("UserPlaylistsRepository.ShiftPositionsUpAsync.2", PositionOffset, playlistId, PositionOffset),
             ct);
     }
 
     private async Task ShiftPositionsDownAsync(Guid playlistId, int afterPosition, CancellationToken ct)
     {
         await db.Database.ExecuteSqlInterpolatedAsync(
-            $"""
-             UPDATE playlists.user_playlist_items
-             SET position = position + {PositionOffset}
-             WHERE playlist_id = {playlistId} AND position > {afterPosition}
-             """,
+            db.ParameterizedSql("UserPlaylistsRepository.ShiftPositionsDownAsync.1", PositionOffset, playlistId, afterPosition),
             ct);
 
         await db.Database.ExecuteSqlInterpolatedAsync(
-            $"""
-             UPDATE playlists.user_playlist_items
-             SET position = position - {PositionOffset} - 1
-             WHERE playlist_id = {playlistId} AND position >= {PositionOffset}
-             """,
+            db.ParameterizedSql("UserPlaylistsRepository.ShiftPositionsDownAsync.2", PositionOffset, playlistId, PositionOffset),
             ct);
     }
 

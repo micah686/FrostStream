@@ -21,15 +21,15 @@ Authoritative scope: [phase2plan.md](phase2plan.md). Design: [persistence archit
 - [x] Validate initialization twice, schema manifest equivalence, expected indexes, unique/check constraints and FK rejection on every connection. Confirm Full migrations still run unmodified.
 - [x] Keep Lite opt-in/experimental; successful schema creation does not imply repository/workflow readiness.
 
-## 2c — repositories and mappings (after 2b)
+## 2c — repositories and mappings — completed
 
-- [ ] Port ordinary EF repositories first: presets/config sets, schedules, creator discovery, imports, playlists and users/storage. Exercise direct-EF consumers too.
-- [ ] Extract operation contracts for embedded SQL; retain shared handlers, DTOs and ownership/validation rules.
-- [ ] Port metadata graph write/read, raw note search, rendition/encoding queries, account/caption/thumbnail reads and search hydration.
-- [ ] Port watch/likes, policy persistence, deletion/cleanup, provider circuits, deduplication and statistics SQL through selected adapters. Keep optional ClickHouse persistence separate; port its application DB marker/backfill queries.
-- [ ] Test native enum labels versus existing string enums; JSON/null/empty collections; GUID identity; UTC microsecond precision/pre-epoch/date semantics; generated IDs and deterministic aggregate/latest ordering.
-- [ ] Verify ordinary transactions and all upsert conflict targets, COALESCE behavior, affected rows and atomic increments on both providers. Keep SQLite FK failures/unique conflicts observable.
-- [ ] Reuse behavioral cases with real PostgreSQL and SQLite fixtures. Existing EF InMemory repository tests do not prove SQL, constraints or transaction portability.
+- [x] Port ordinary EF repositories first: presets/config sets, schedules, creator discovery, imports, playlists and users/storage. Exercise direct-EF consumers too.
+- [x] Extract operation contracts for embedded SQL; retain shared handlers, DTOs and ownership/validation rules.
+- [x] Port metadata graph write/read, raw note search, rendition/encoding queries, account/caption/thumbnail reads and search hydration.
+- [x] Port watch/likes, policy persistence, deletion/cleanup, provider circuits, deduplication and statistics SQL through selected adapters. Keep optional ClickHouse persistence separate; port its application DB marker/backfill queries.
+- [x] Test native enum labels versus existing string enums; JSON/null/empty collections; GUID identity; UTC microsecond precision/pre-epoch/date semantics; generated IDs and deterministic aggregate/latest ordering.
+- [x] Verify ordinary transactions and all upsert conflict targets, COALESCE behavior, affected rows and atomic increments on both providers. Keep SQLite FK failures/unique conflicts observable.
+- [x] Reuse behavioral cases with real PostgreSQL and SQLite fixtures. Existing EF InMemory repository tests do not prove SQL, constraints or transaction portability.
 
 ## 2d — bulk and contention (after 2c)
 
@@ -80,3 +80,13 @@ Scope decisions: the SQLite opt-in supports `Persistence:InitializeOnly=true` an
 Verification: 11 real-file SQLite foundation tests passed (schema/catalog comparison, checks/FKs/cascades, raw/async/reopened-EF pragmas, repeatable seeds, native enum/GUID/negative timestamp round trips, provider model isolation, history rejection, migration rollback/retry, concurrent initialization, bounded lock contention, pre-cancellation). Lite and UnitTests builds pass with zero warnings/errors. Baseline/inventory drift checks pass. Full unit suite result: 479 passed, 5 failed out of 484; the same five failures were reproduced on the unchanged HEAD (`102d16a`, 2a) in an isolated worktree (468 passed, 5 failed of 473). Existing failures: `AccessControlControllerTests.CreatePolicy_Returns_Accepted_When_OpenFga_Synchronization_Is_Deferred`, `EndpointMetadataTests.Every_Controller_Endpoint_Has_Detailed_OpenApi_Metadata`, `UserNotesControllerTests.Delete_Maps_NotFound`, `YtDlpFailureDetailsTests.Authentication_Challenge_Is_Reported_As_Permanent_With_Specific_Code`, and `YtDlpMetadataMapperTests.Map_Uses_Per_Comment_Unknown_Account_Handle_When_Comment_Author_Is_Missing`. They are outside 2b.
 
 Next: 2c starts by extracting raw SQL operations into the provider boundaries and running shared repository cases on PostgreSQL and SQLite. Native enum/time/GUID/JSON storage primitives are in place, but reads/writes/dialect/upsert behavior is not yet ported. 2d owns contention beyond schema initialization; 2e owns the Cleipnir store; 2f closes upgrades and download restart verification. SQLite application versions after v1 are not implemented by this foundation.
+
+## 2c handoff
+
+Implemented: shared connection/command, parameter, reader and unique-conflict adapters; 141 explicit PostgreSQL/SQLite SQL statement and fragment pairs grouped by operation; ordinary EF and raw repositories and their direct consumers. Metadata graph writes/reads, notes/search hydration, policies, watch/likes, downloads/circuits/deduplication, rendition/media asset queries, statistics, cleanup and optional ClickHouse application markers now use the selected application provider. PostgreSQL query text and migration source remain unchanged. See the [query adapter README](../src/App/DataBridge/Persistence/Queries/README.md) for the contracts and test commands.
+
+Mapping decisions: SQLite array parameters use JSON plus `json_each`, superseding 2a's proposed expanded parameter lists. Raw GUIDs, native enum labels, JSON/null values and UTC microseconds match the EF encodings. GUID search preserves dashed text; epoch rounding and UTC date buckets preserve PostgreSQL behavior, including negative instants and month-end clamping. Caption ordering preserves native enum order. Media root deletion explicitly shares a transaction with policy cleanup on SQLite. Unique conflicts are classified across providers without hiding other constraint failures.
+
+Verification: all 16 focused tests pass, comprising 15 shared behavioral cases run against both real PostgreSQL and real-file SQLite, plus SQLite preparation of over 120 complete catalog statements. Existing PostgreSQL watch-state and media-deletion integration fixtures pass (4 and 8 tests). Lite, UnitTests and IntegrationTests build successfully. Full unit suite: 495 passed, 5 failed out of 500; these are the same five pre-existing failures recorded in the 2b handoff. SQLite baseline and inventory drift checks and whitespace checks pass.
+
+Next: 2d owns bulk operations and writer ownership before read-modify-write, contention/retry boundaries and races. Workflow retention queries and the durable SQLite Cleipnir store remain 2e; upgrades/restart closure remain 2f. Normal SQLite runtime stays gated until those increments are complete. Optional ClickHouse storage retains its own SQL and connection.

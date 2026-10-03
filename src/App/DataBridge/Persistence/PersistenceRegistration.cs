@@ -25,10 +25,12 @@ public static class PersistenceRegistration
             var connectionString = builder.Configuration.GetConnectionString("froststreamdb")
                 ?? "Host=localhost;Port=5432;Database=froststreamdb;Username=postgres;Password=postgres";
             builder.Services.AddPostgresPersistence(connectionString);
+            builder.Services.AddSingleton(sp => new ApplicationDatabase(sp.GetRequiredService<Npgsql.NpgsqlDataSource>()));
         }
         else
         {
             builder.Services.AddSingleton<SqliteConnectionFactory>();
+            builder.Services.AddSingleton(sp => new ApplicationDatabase(sp.GetRequiredService<SqliteConnectionFactory>()));
             builder.Services.AddSingleton<SqliteConnectionSetupInterceptor>();
             builder.Services.AddDbContext<DataBridgeDbContext>((sp, db) => db
                 .UseSqlite(sp.GetRequiredService<SqliteConnectionFactory>().ConnectionString,

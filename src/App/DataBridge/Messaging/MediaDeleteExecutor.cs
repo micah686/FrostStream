@@ -3,7 +3,8 @@ using DataBridge.Search;
 using FrostStream.ApplicationContracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Npgsql;
+using System.Data.Common;
+using DataBridge.Persistence;
 using Shared.Messaging;
 
 namespace DataBridge.Messaging;
@@ -24,14 +25,14 @@ public sealed class MediaDeleteExecutor
 {
     private static readonly TimeSpan WorkerRequestTimeout = TimeSpan.FromMinutes(5);
 
-    private readonly NpgsqlDataSource _dataSource;
+    private readonly ApplicationDatabase _dataSource;
     private readonly IMessageBus _messageBus;
     private readonly ITypesenseIndexService _searchIndex;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<MediaDeleteExecutor> _logger;
 
     public MediaDeleteExecutor(
-        NpgsqlDataSource dataSource,
+        ApplicationDatabase dataSource,
         IMessageBus messageBus,
         ITypesenseIndexService searchIndex,
         IServiceScopeFactory scopeFactory,
@@ -173,25 +174,17 @@ public sealed class MediaDeleteExecutor
     private async Task<bool> MediaExistsAsync(Guid mediaGuid, CancellationToken cancellationToken)
     {
         await using var command = _dataSource.CreateCommand(
-            "SELECT EXISTS (SELECT 1 FROM media.media WHERE media_guid = @id);");
+            _dataSource.Sql("MediaDeleteExecutor.MediaExistsAsync.1"));
         command.Parameters.AddWithValue("id", mediaGuid);
-        return (bool)(await command.ExecuteScalarAsync(cancellationToken) ?? false);
+        return Convert.ToBoolean(await command.ExecuteScalarAsync(cancellationToken) ?? false);
     }
 
     private async Task<bool> HasActiveDownloadJobAsync(Guid mediaGuid, CancellationToken cancellationToken)
     {
-        await using var command = _dataSource.CreateCommand("""
-            SELECT EXISTS (
-                SELECT 1
-                FROM media.media_source_versions sv
-                JOIN jobs.download_jobs dj ON dj.job_id = sv.latest_job_id
-                WHERE sv.media_guid = @id
-                  AND dj.state::text = ANY(@active_download_job_states)
-            );
-            """);
+        await using var command = _dataSource.CreateCommand(_dataSource.Sql("MediaDeleteExecutor.HasActiveDownloadJobAsync.1"));
         command.Parameters.AddWithValue("id", mediaGuid);
         DownloadJobStateSql.AddActiveStatesParameter(command);
-        return (bool)(await command.ExecuteScalarAsync(cancellationToken) ?? false);
+        return Convert.ToBoolean(await command.ExecuteScalarAsync(cancellationToken) ?? false);
     }
 
     private async Task<(int OnKey, int Total)> CountContentVersionsAsync(
@@ -199,13 +192,7 @@ public sealed class MediaDeleteExecutor
         string storageKey,
         CancellationToken cancellationToken)
     {
-        await using var command = _dataSource.CreateCommand("""
-            SELECT
-                count(*) FILTER (WHERE storage_key = @key)::int,
-                count(*)::int
-            FROM media.media_content_id_versions
-            WHERE media_guid = @id;
-            """);
+        await using var command = _dataSource.CreateCommand(_dataSource.Sql("MediaDeleteExecutor.CountContentVersionsAsync.1"));
         command.Parameters.AddWithValue("id", mediaGuid);
         command.Parameters.AddWithValue("key", storageKey);
 
@@ -222,22 +209,7 @@ public sealed class MediaDeleteExecutor
         Guid mediaGuid,
         CancellationToken cancellationToken)
     {
-        await using var command = _dataSource.CreateCommand("""
-            SELECT storage_key, storage_path
-            FROM media.media_content_id_versions
-            WHERE media_guid = @id
-            UNION
-            SELECT storage_key, thumbnail_storage_path
-            FROM metadata.media_metadata
-            WHERE media_guid = @id
-              AND storage_key IS NOT NULL
-              AND thumbnail_storage_path IS NOT NULL
-            UNION
-            SELECT storage_key, storage_path
-            FROM metadata.media_captions
-            WHERE media_guid = @id
-              AND storage_key IS NOT NULL;
-            """);
+        await using var command = _dataSource.CreateCommand(_dataSource.Sql("MediaDeleteExecutor.LoadAllMediaFilesAsync.1"));
         command.Parameters.AddWithValue("id", mediaGuid);
 
         var files = new List<MediaFileLocation>();
@@ -255,19 +227,7 @@ public sealed class MediaDeleteExecutor
         string storageKey,
         CancellationToken cancellationToken)
     {
-        await using var command = _dataSource.CreateCommand("""
-            SELECT storage_path
-            FROM media.media_content_id_versions
-            WHERE media_guid = @id AND storage_key = @key
-            UNION
-            SELECT thumbnail_storage_path
-            FROM metadata.media_metadata
-            WHERE media_guid = @id AND storage_key = @key AND thumbnail_storage_path IS NOT NULL
-            UNION
-            SELECT storage_path
-            FROM metadata.media_captions
-            WHERE media_guid = @id AND storage_key = @key;
-            """);
+        await using var command = _dataSource.CreateCommand(_dataSource.Sql("MediaDeleteExecutor.LoadMediaFilesForKeyAsync.1"));
         command.Parameters.AddWithValue("id", mediaGuid);
         command.Parameters.AddWithValue("key", storageKey);
 
@@ -285,12 +245,13 @@ public sealed class MediaDeleteExecutor
     {
         // FK cascades from media.media wipe all version, metadata, caption, and comment rows. Policy
         // deny scopes live in the auth schema with no media FK, so wipe matching GUID scopes explicitly.
-        await using var command = _dataSource.CreateCommand("""
-            DELETE FROM auth.access_policy_media WHERE media_guid = @id;
-            DELETE FROM media.media WHERE media_guid = @id;
-            """);
+        // PostgreSQL batches run atomically; SQLite requires an explicit transaction for both deletes.
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await using var command = ApplicationDbCommands.Create(connection, _dataSource.Sql("MediaDeleteExecutor.DeleteMediaRowAsync.1"), transaction);
         command.Parameters.AddWithValue("id", mediaGuid);
         await command.ExecuteNonQueryAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     private async Task DeleteStorageKeyRowsAsync(Guid mediaGuid, string storageKey, CancellationToken cancellationToken)
@@ -302,17 +263,7 @@ public sealed class MediaDeleteExecutor
             await using (var command = connection.CreateCommand())
             {
                 command.Transaction = transaction;
-                command.CommandText = """
-                    DELETE FROM media.media_content_id_versions
-                    WHERE media_guid = @id AND storage_key = @key;
-
-                    DELETE FROM metadata.media_captions
-                    WHERE media_guid = @id AND storage_key = @key;
-
-                    UPDATE metadata.media_metadata
-                    SET storage_key = NULL, thumbnail_storage_path = NULL
-                    WHERE media_guid = @id AND storage_key = @key;
-                    """;
+                command.CommandText = _dataSource.Sql("MediaDeleteExecutor.DeleteStorageKeyRowsAsync.1");
                 command.Parameters.AddWithValue("id", mediaGuid);
                 command.Parameters.AddWithValue("key", storageKey);
                 await command.ExecuteNonQueryAsync(cancellationToken);
@@ -336,7 +287,7 @@ public sealed class MediaDeleteExecutor
     }
 
     /// <summary>
-    /// Best-effort removal of the media's chat replay (ClickHouse rows + Postgres marker).
+    /// Best-effort removal of the media's chat replay (ClickHouse rows + application database marker).
     /// Resolves the ingest service lazily — it is only registered when live chat is enabled —
     /// and never fails the delete: orphaned chat rows are invisible without their media.
     /// </summary>
@@ -351,9 +302,9 @@ public sealed class MediaDeleteExecutor
                 return;
             }
 
-            // Feature disabled: still clear the Postgres marker so HasLiveChat stays truthful.
+            // Feature disabled: still clear the application database marker so HasLiveChat stays truthful.
             await using var command = _dataSource.CreateCommand(
-                "DELETE FROM metadata.media_live_chat WHERE media_guid = @id;");
+                _dataSource.Sql("MediaDeleteExecutor.DeleteLiveChatAsync.1"));
             command.Parameters.AddWithValue("id", mediaGuid);
             await command.ExecuteNonQueryAsync(cancellationToken);
         }

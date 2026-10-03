@@ -2,7 +2,8 @@ using FrostStream.ApplicationContracts;
 using FluentStorage.Storage;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Npgsql;
+using System.Data.Common;
+using DataBridge.Persistence;
 using Shared.Messaging;
 using Shared.Storage;
 
@@ -20,7 +21,7 @@ namespace DataBridge.LiveChat;
 public sealed class LiveChatBackfillConsumerService(
     IDurableJobConsumer consumer,
     IDurableJobPublisher publisher,
-    NpgsqlDataSource dataSource,
+    ApplicationDatabase dataSource,
     IStoreProvider blobStorageProvider,
     [Microsoft.Extensions.DependencyInjection.FromKeyedServices("databridge")] IBackgroundRunReporter runReporter,
     ILogger<LiveChatBackfillConsumerService> logger) : BackgroundService
@@ -118,18 +119,8 @@ public sealed class LiveChatBackfillConsumerService(
     {
         // Chat replays only exist for live streams, so was_live keeps the storage probes bounded.
         // DISTINCT ON keeps one (the newest) version per media item.
-        await using var command = dataSource.CreateCommand("""
-            SELECT DISTINCT ON (v.media_guid)
-                v.media_guid, v.storage_key, v.storage_path, v.version_num
-            FROM media.media_content_id_versions v
-            JOIN metadata.media_metadata mm ON mm.media_guid = v.media_guid
-            WHERE mm.was_live = true
-              AND (@target_media_guid IS NULL OR v.media_guid = @target_media_guid)
-              AND (@force OR NOT EXISTS (
-                    SELECT 1 FROM metadata.media_live_chat lc WHERE lc.media_guid = v.media_guid))
-            ORDER BY v.media_guid, v.version_num DESC
-            """);
-        command.Parameters.AddWithValue("@target_media_guid", (object?)targetMediaGuid ?? DBNull.Value);
+        await using var command = dataSource.CreateCommand(dataSource.Sql("LiveChatBackfillConsumerService.LoadCandidatesAsync.1"));
+        command.Parameters.AddWithValue("@target_media_guid", ApplicationParameterType.Guid, targetMediaGuid);
         command.Parameters.AddWithValue("@force", force);
 
         var candidates = new List<BackfillCandidate>();

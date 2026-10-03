@@ -1,3 +1,4 @@
+using DataBridge.Persistence;
 using Microsoft.EntityFrameworkCore;
 using NodaTime;
 using NodaTime.Serialization.SystemTextJson;
@@ -99,9 +100,9 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         {
             var pattern = $"%{request.Search.Trim()}%";
             query = query.Where(x =>
-                EF.Functions.ILike(x.RelativePath, pattern)
-                || EF.Functions.ILike(x.FileName, pattern)
-                || (x.Title != null && EF.Functions.ILike(x.Title, pattern)));
+                PersistenceFunctions.ILike(x.RelativePath, pattern, "\\")
+                || PersistenceFunctions.ILike(x.FileName, pattern, "\\")
+                || (x.Title != null && PersistenceFunctions.ILike(x.Title, pattern, "\\")));
         }
 
         var total = await query.CountAsync(ct);
@@ -368,9 +369,9 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
             {
                 var pattern = $"%{request.Search.Trim()}%";
                 query = query.Where(x =>
-                    EF.Functions.ILike(x.RelativePath, pattern)
-                    || EF.Functions.ILike(x.FileName, pattern)
-                    || (x.Title != null && EF.Functions.ILike(x.Title, pattern)));
+                    PersistenceFunctions.ILike(x.RelativePath, pattern, "\\")
+                    || PersistenceFunctions.ILike(x.FileName, pattern, "\\")
+                    || (x.Title != null && PersistenceFunctions.ILike(x.Title, pattern, "\\")));
             }
         }
 

@@ -28,6 +28,8 @@ Phase 2 is split into reviewable increments so each can be completed and checked
 
 ## 2c — Core repositories and type mappings
 
+**Status: complete (2026-10-03).** See [operation adapters and shared verification](../src/App/DataBridge/Persistence/Queries/README.md) and the [2c handoff](phase2-checklist.md#2c-handoff). Core behaviors pass on PostgreSQL and SQLite; normal SQLite runtime remains gated pending 2d–2f.
+
 - Port repository reads and writes for the core application entities to SQLite through the boundaries from 2a.
 - Implement portable mappings for enums, JSON, arrays, and timestamp values used by those repositories.
 - Keep shared repository interfaces and business rules; isolate provider-specific SQL and mapping details in adapters.

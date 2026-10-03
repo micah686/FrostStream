@@ -1,65 +1,17 @@
-using static DataBridge.NpgsqlDataReaderExtensions;
+using static DataBridge.ApplicationDataReaderExtensions;
 using NodaTime;
-using Npgsql;
+using System.Data.Common;
+using DataBridge.Persistence;
 using Shared.Messaging;
 
 namespace DataBridge.Statistics;
 
-public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatisticsReadService
+public sealed class StatisticsReadService(ApplicationDatabase dataSource) : IStatisticsReadService
 {
     private const int DefaultPageSize = 20;
     private const int MaxPageSize = 100;
 
-    private const string ClassifiedMediaCte = """
-        WITH media_bytes AS (
-            SELECT DISTINCT ON (cmd.media_guid) cmd.media_guid, cmd.bytes AS size_bytes
-            FROM statistics.channel_media_downloads cmd
-            ORDER BY cmd.media_guid, cmd.completed_at DESC
-        ),
-        stream_flags AS (
-            SELECT
-                mb.media_guid,
-                bool_or(ms.stream_type = 'video') AS has_video,
-                bool_or(ms.stream_type = 'audio') AS has_audio
-            FROM metadata.media_base mb
-            JOIN metadata.media_streams ms ON ms.media_base_id = mb.id
-            GROUP BY mb.media_guid
-        ),
-        discovery_flags AS (
-            SELECT
-                dm.platform,
-                dm.external_media_id,
-                bool_or(cs.source_type = 'Shorts') AS is_shorts,
-                bool_or(lower(COALESCE(dm.live_status, '')) IN ('is_live', 'was_live', 'post_live')) AS is_live
-            FROM discovery.discovered_media dm
-            JOIN discovery.creator_sources cs ON cs.id = dm.creator_source_id
-            GROUP BY dm.platform, dm.external_media_id
-        ),
-        classified_media AS (
-            SELECT
-                mm.media_guid,
-                mm.external_media_id,
-                a.platform,
-                mm.account_id,
-                COALESCE(mm.duration, 0) AS duration_seconds,
-                COALESCE(mb.size_bytes, 0) AS size_bytes,
-                CASE
-                    WHEN sm.media_guid IS NOT NULL THEN 'tv'
-                    WHEN mm.was_live OR COALESCE(df.is_live, false) THEN 'live'
-                    WHEN COALESCE(df.is_shorts, false) THEN 'shorts'
-                    WHEN COALESCE(sf.has_audio, false) AND NOT COALESCE(sf.has_video, false) THEN 'audio_only'
-                    WHEN COALESCE(sf.has_video, false) AND COALESCE(mm.duration, 0) >= 2400 THEN 'movies'
-                    WHEN COALESCE(sf.has_video, false) THEN 'videos'
-                    ELSE 'unknown'
-                END AS media_type
-            FROM metadata.media_metadata mm
-            JOIN metadata.accounts a ON a.id = mm.account_id
-            LEFT JOIN media_bytes mb ON mb.media_guid = mm.media_guid
-            LEFT JOIN stream_flags sf ON sf.media_guid = mm.media_guid
-            LEFT JOIN metadata.series_metadata sm ON sm.media_guid = mm.media_guid
-            LEFT JOIN discovery_flags df ON df.platform = a.platform AND df.external_media_id = mm.external_media_id
-        )
-        """;
+    private string ClassifiedMediaCte => dataSource.Sql("StatisticsReadService.Fields.1");
 
     public async Task<StatisticsOverviewDto> GetOverviewAsync(string? ownerSubject, CancellationToken ct = default)
     {
@@ -91,19 +43,10 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
         var orderBy = ChannelOrderBy(sortBy, sortOrder);
         var normalizedSearch = search?.Trim() ?? string.Empty;
         var searchPattern = $"%{EscapeLikePattern(normalizedSearch)}%";
-        const string searchWhere = """
-            WHERE @search = ''
-               OR account_rollup.account_name ILIKE @search_pattern ESCAPE '\'
-               OR account_rollup.account_handle ILIKE @search_pattern ESCAPE '\'
-               OR account_rollup.platform ILIKE @search_pattern ESCAPE '\'
-            """;
+        var searchWhere = dataSource.Sql("StatisticsReadService.ListChannelsAsync.1");
 
         var totalCount = await GetChannelWithMediaCountAsync(normalizedSearch, searchPattern, ct);
-        var sql = AccountSummarySql($"""
-            {searchWhere}
-            ORDER BY {orderBy}
-            LIMIT @limit OFFSET @offset
-            """);
+        var sql = AccountSummarySql(dataSource.Sql("StatisticsReadService.ListChannelsAsync.2", searchWhere, orderBy));
 
         await using var command = dataSource.CreateCommand(sql);
         command.Parameters.AddWithValue("@search", normalizedSearch);
@@ -133,21 +76,7 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
         limit = Math.Clamp(limit <= 0 ? 8 : limit, 1, 20);
         var containsPattern = $"%{EscapeLikePattern(normalizedSearch)}%";
         var prefixPattern = $"{EscapeLikePattern(normalizedSearch)}%";
-        var sql = AccountSummarySql("""
-            WHERE account_rollup.account_name ILIKE @contains_pattern ESCAPE '\'
-               OR account_rollup.account_handle ILIKE @contains_pattern ESCAPE '\'
-               OR account_rollup.platform ILIKE @contains_pattern ESCAPE '\'
-            ORDER BY
-                CASE
-                    WHEN account_rollup.account_name ILIKE @prefix_pattern ESCAPE '\' THEN 0
-                    WHEN account_rollup.account_handle ILIKE @prefix_pattern ESCAPE '\' THEN 1
-                    ELSE 2
-                END,
-                account_rollup.available_count DESC,
-                COALESCE(account_rollup.account_name, account_rollup.account_handle, account_rollup.platform) ASC,
-                account_rollup.account_id ASC
-            LIMIT @limit
-            """);
+        var sql = AccountSummarySql(dataSource.Sql("StatisticsReadService.SuggestChannelsAsync.1"));
 
         await using var command = dataSource.CreateCommand(sql);
         command.Parameters.AddWithValue("@contains_pattern", containsPattern);
@@ -180,7 +109,7 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
 
     public async Task<ChannelStatisticsDetailDto?> GetChannelAsync(long creatorSourceId, CancellationToken ct = default)
     {
-        var summarySql = ChannelSummarySql("WHERE source_rollup.creator_source_id = @creator_source_id");
+        var summarySql = ChannelSummarySql(dataSource.Sql("StatisticsReadService.GetChannelAsync.1"));
         ChannelStatisticsSummaryDto? summary = null;
         await using (var command = dataSource.CreateCommand(summarySql))
         {
@@ -216,7 +145,7 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
     // to be resolvable by account too. Discovery-derived counts stay zero when nothing links back.
     public async Task<ChannelStatisticsDetailDto?> GetChannelByAccountAsync(long accountId, CancellationToken ct = default)
     {
-        var summarySql = AccountSummarySql("WHERE account_rollup.account_id = @account_id");
+        var summarySql = AccountSummarySql(dataSource.Sql("StatisticsReadService.GetChannelByAccountAsync.1"));
         ChannelStatisticsSummaryDto? summary = null;
         await using (var command = dataSource.CreateCommand(summarySql))
         {
@@ -256,35 +185,7 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
         // UTC days too. Bucketing on the raw timestamps instead truncated the trailing partial bucket
         // down to `@to::date`, which is exclusive — so activity recorded on the request's own end day
         // (i.e. everything downloaded today) fell outside every bucket and the charts read empty.
-        await using var command = dataSource.CreateCommand("""
-            WITH bounds AS (
-                SELECT
-                    (@from AT TIME ZONE 'UTC')::date AS from_day,
-                    (@to AT TIME ZONE 'UTC')::date AS to_day
-            ),
-            buckets AS (
-                SELECT
-                    series::date AS bucket_start,
-                    LEAST((series + @step::interval)::date, bounds.to_day + 1) AS bucket_end
-                FROM bounds,
-                     generate_series(bounds.from_day::timestamp, bounds.to_day::timestamp, @step::interval) AS series
-            )
-            SELECT
-                (b.bucket_start::timestamp AT TIME ZONE 'UTC') AS bucket_start,
-                (b.bucket_end::timestamp AT TIME ZONE 'UTC') AS bucket_end,
-                COALESCE(SUM(a.job_count) FILTER (WHERE a.state = 'created'), 0) AS created,
-                COALESCE(SUM(a.job_count) FILTER (WHERE a.state = 'completed'), 0) AS completed,
-                COALESCE(SUM(a.job_count) FILTER (WHERE a.state IN ('failed_transient', 'failed_permanent', 'dead_lettered')), 0) AS failed,
-                COALESCE(SUM(a.job_count) FILTER (WHERE a.state = 'cancelled'), 0) AS cancelled,
-                COALESCE(SUM(a.job_count) FILTER (WHERE a.state = 'ignored'), 0) AS ignored,
-                COALESCE(SUM(a.bytes) FILTER (WHERE a.state = 'completed'), 0)::bigint AS bytes_completed,
-                COALESCE(SUM(a.duration_seconds) FILTER (WHERE a.state = 'completed'), 0) AS duration_completed_seconds
-            FROM buckets b
-            LEFT JOIN statistics.download_daily_activity a
-                ON a.day >= b.bucket_start AND a.day < b.bucket_end
-            GROUP BY b.bucket_start, b.bucket_end
-            ORDER BY b.bucket_start
-            """);
+        await using var command = dataSource.CreateCommand(dataSource.Sql("StatisticsReadService.GetDownloadHistoryAsync.1"));
         command.Parameters.AddWithValue("@from", request.From.ToDateTimeOffset());
         command.Parameters.AddWithValue("@to", request.To.ToDateTimeOffset());
         command.Parameters.AddWithValue("@step", step);
@@ -320,14 +221,7 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
     public async Task<CoverageSummaryDto> GetCoverageSummaryAsync(CancellationToken ct = default)
     {
         long available = 0, unavailable = 0, ignored = 0, removed = 0;
-        await using (var command = dataSource.CreateCommand($"""
-            SELECT
-                COUNT(*) FILTER (WHERE discovery_status NOT IN {ExcludedDiscoveryStatuses}) AS available_count,
-                COUNT(*) FILTER (WHERE discovery_status IN ('Unavailable', 'PossiblyUnavailable')) AS unavailable_count,
-                COUNT(*) FILTER (WHERE discovery_status = 'Ignored') AS ignored_count,
-                COUNT(*) FILTER (WHERE discovery_status = 'RemovedFromSource') AS removed_count
-            FROM discovery.discovered_media
-            """))
+        await using (var command = dataSource.CreateCommand(dataSource.Sql("StatisticsReadService.GetCoverageSummaryAsync.1", ExcludedDiscoveryStatuses)))
         {
             await using var reader = await command.ExecuteReaderAsync(ct);
             if (await reader.ReadAsync(ct))
@@ -340,15 +234,7 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
         }
 
         var platforms = new List<PlatformCoverageDto>();
-        await using (var command = dataSource.CreateCommand($"""
-            SELECT
-                platform,
-                COUNT(*) FILTER (WHERE discovery_status NOT IN {ExcludedDiscoveryStatuses}) AS available_count
-            FROM discovery.discovered_media
-            GROUP BY platform
-            ORDER BY available_count DESC, platform
-            LIMIT 10
-            """))
+        await using (var command = dataSource.CreateCommand(dataSource.Sql("StatisticsReadService.GetCoverageSummaryAsync.2", ExcludedDiscoveryStatuses)))
         {
             await using var reader = await command.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct))
@@ -373,17 +259,7 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
 
     private async Task<InventoryStatisticsDto> GetInventoryAsync(CancellationToken ct)
     {
-        await using var command = dataSource.CreateCommand($"""
-            {ClassifiedMediaCte}
-            SELECT
-                (SELECT COUNT(*) FROM media.media) AS total_media,
-                (SELECT COUNT(*) FROM metadata.accounts) AS total_channels,
-                (SELECT COUNT(*) FROM discovery.creator_sources) AS total_creator_sources,
-                (SELECT COUNT(*) FROM jobs.playlists) AS total_playlists,
-                COALESCE((SELECT SUM(job_count) FROM statistics.download_daily_activity WHERE state = 'created'), 0) AS total_downloads,
-                COALESCE((SELECT SUM(bytes) FROM statistics.download_daily_activity WHERE state = 'completed'), 0)::bigint AS total_bytes,
-                COALESCE((SELECT SUM(duration_seconds) FROM classified_media), 0) AS total_duration_seconds
-            """);
+        await using var command = dataSource.CreateCommand(dataSource.Sql("StatisticsReadService.GetInventoryAsync.1", ClassifiedMediaCte));
 
         await using var reader = await command.ExecuteReaderAsync(ct);
         await reader.ReadAsync(ct);
@@ -401,29 +277,14 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
 
     private async Task<IReadOnlyList<MediaTypeStatisticsDto>> GetMediaTypesAsync(CancellationToken ct)
     {
-        await using var command = dataSource.CreateCommand($"""
-            {ClassifiedMediaCte}
-            SELECT
-                media_type,
-                COUNT(*) AS count,
-                COALESCE(SUM(duration_seconds), 0) AS duration_seconds,
-                COALESCE(SUM(size_bytes), 0)::bigint AS bytes
-            FROM classified_media
-            GROUP BY media_type
-            ORDER BY count DESC, media_type
-            """);
+        await using var command = dataSource.CreateCommand(dataSource.Sql("StatisticsReadService.GetMediaTypesAsync.1", ClassifiedMediaCte));
 
         return await ReadMediaTypesAsync(command, ct);
     }
 
     private async Task<IReadOnlyList<DownloadStateStatisticsDto>> GetDownloadStatesAsync(CancellationToken ct)
     {
-        await using var command = dataSource.CreateCommand("""
-            SELECT state::text AS state, COUNT(*) AS count
-            FROM jobs.download_jobs
-            GROUP BY state
-            ORDER BY count DESC, state
-            """);
+        await using var command = dataSource.CreateCommand(dataSource.Sql("StatisticsReadService.GetDownloadStatesAsync.1"));
 
         return await ReadDownloadStatesAsync(command, ct);
     }
@@ -443,18 +304,7 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
             };
         }
 
-        await using var command = dataSource.CreateCommand("""
-            SELECT
-                COUNT(*) FILTER (WHERE completed) AS watched_count,
-                COALESCE(SUM(
-                    CASE
-                        WHEN position_seconds IS NULL THEN 0
-                        WHEN duration_seconds IS NULL THEN position_seconds
-                        ELSE LEAST(position_seconds, duration_seconds)
-                    END), 0) AS watch_progress_seconds
-            FROM media.watch_states
-            WHERE owner_subject = @owner_subject
-            """);
+        await using var command = dataSource.CreateCommand(dataSource.Sql("StatisticsReadService.GetWatchStatisticsAsync.1"));
         command.Parameters.AddWithValue("@owner_subject", ownerSubject);
 
         await using var reader = await command.ExecuteReaderAsync(ct);
@@ -479,15 +329,7 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
         string searchPattern,
         CancellationToken ct)
     {
-        await using var command = dataSource.CreateCommand("""
-            SELECT COUNT(DISTINCT mm.account_id)
-            FROM metadata.media_metadata mm
-            JOIN metadata.accounts a ON a.id = mm.account_id
-            WHERE @search = ''
-               OR a.account_name ILIKE @search_pattern ESCAPE '\'
-               OR a.account_handle ILIKE @search_pattern ESCAPE '\'
-               OR a.platform ILIKE @search_pattern ESCAPE '\'
-            """);
+        await using var command = dataSource.CreateCommand(dataSource.Sql("StatisticsReadService.GetChannelWithMediaCountAsync.1"));
         command.Parameters.AddWithValue("@search", search);
         command.Parameters.AddWithValue("@search_pattern", searchPattern);
         var value = await command.ExecuteScalarAsync(ct);
@@ -497,133 +339,9 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
     // Channel statistics are keyed on the accounts that media actually belongs to, so ad-hoc
     // (non-subscribed) downloads still surface. Scan timestamps and source type are pulled from a
     // matching creator source when one exists, otherwise left null.
-    private static string AccountSummarySql(string suffix) => $"""
-        {ClassifiedMediaCte},
-        downloaded_guids AS (
-            SELECT DISTINCT media_guid
-            FROM statistics.channel_media_downloads
-        ),
-        account_rollup AS (
-            SELECT
-                a.id AS account_id,
-                a.platform,
-                a.account_name,
-                a.account_handle,
-                a.avatar_storage_path,
-                COUNT(cm.media_guid) AS available_count,
-                COUNT(cm.media_guid) FILTER (WHERE dg.media_guid IS NOT NULL) AS downloaded_count,
-                COALESCE(SUM(cm.duration_seconds), 0) AS total_duration_seconds,
-                COALESCE(SUM(cm.duration_seconds) FILTER (WHERE dg.media_guid IS NOT NULL), 0) AS downloaded_duration_seconds,
-                COALESCE(SUM(cm.size_bytes), 0)::bigint AS total_bytes
-            FROM metadata.accounts a
-            JOIN classified_media cm ON cm.account_id = a.id
-            LEFT JOIN downloaded_guids dg ON dg.media_guid = cm.media_guid
-            GROUP BY a.id, a.platform, a.account_name, a.account_handle, a.avatar_storage_path
-        )
-        SELECT
-            source_link.creator_source_id,
-            account_rollup.platform,
-            source_link.source_type,
-            source_link.source_url,
-            account_rollup.account_id,
-            account_rollup.account_name,
-            account_rollup.account_handle,
-            account_rollup.avatar_storage_path,
-            account_rollup.available_count,
-            account_rollup.downloaded_count,
-            account_rollup.total_duration_seconds,
-            account_rollup.downloaded_duration_seconds,
-            account_rollup.total_bytes,
-            source_link.last_successful_scan_at,
-            source_link.last_full_scan_at
-        FROM account_rollup
-        LEFT JOIN LATERAL (
-            SELECT
-                cs.id AS creator_source_id,
-                cs.source_type,
-                cs.source_url,
-                css.last_successful_scan_at,
-                css.last_full_scan_at
-            FROM discovery.discovered_media dm
-            JOIN metadata.media_metadata mm ON mm.external_media_id = dm.external_media_id
-            JOIN discovery.creator_sources cs ON cs.id = dm.creator_source_id AND cs.platform = account_rollup.platform
-            LEFT JOIN jobs.creator_scan_state css ON css.creator_source_id = cs.id
-            WHERE mm.account_id = account_rollup.account_id
-            GROUP BY cs.id, cs.source_type, cs.source_url, css.last_successful_scan_at, css.last_full_scan_at
-            ORDER BY css.last_successful_scan_at DESC NULLS LAST, cs.id
-            LIMIT 1
-        ) source_link ON true
-        {suffix}
-        """;
+    private string AccountSummarySql(string suffix) => dataSource.Sql("StatisticsReadService.AccountSummarySql.1", ClassifiedMediaCte, suffix);
 
-    private static string ChannelSummarySql(string suffix) => $"""
-        {ClassifiedMediaCte},
-        source_downloaded_media AS (
-            SELECT DISTINCT
-                dm.creator_source_id,
-                cm.media_guid,
-                cm.duration_seconds,
-                cm.size_bytes
-            FROM discovery.discovered_media dm
-            JOIN classified_media cm ON cm.platform = dm.platform AND cm.external_media_id = dm.external_media_id
-            JOIN statistics.channel_media_downloads cmd ON cmd.media_guid = cm.media_guid
-        ),
-        source_rollup AS (
-            SELECT
-                cs.id AS creator_source_id,
-                cs.platform,
-                cs.source_type,
-                cs.source_url,
-                css.last_successful_scan_at,
-                css.last_full_scan_at,
-                COUNT(dm.id) FILTER (
-                    WHERE dm.discovery_status NOT IN ('Ignored', 'Unavailable', 'RemovedFromSource')
-                ) AS available_count,
-                COALESCE(downloaded_rollup.downloaded_count, 0) AS downloaded_count,
-                COALESCE(SUM(dm.duration_seconds) FILTER (
-                    WHERE dm.discovery_status NOT IN ('Ignored', 'Unavailable', 'RemovedFromSource')
-                ), 0) AS total_duration_seconds,
-                COALESCE(downloaded_rollup.downloaded_duration_seconds, 0) AS downloaded_duration_seconds,
-                COALESCE(downloaded_rollup.total_bytes, 0)::bigint AS total_bytes
-            FROM discovery.creator_sources cs
-            LEFT JOIN jobs.creator_scan_state css ON css.creator_source_id = cs.id
-            LEFT JOIN discovery.discovered_media dm ON dm.creator_source_id = cs.id
-            LEFT JOIN LATERAL (
-                SELECT
-                    COUNT(*) AS downloaded_count,
-                    COALESCE(SUM(duration_seconds), 0) AS downloaded_duration_seconds,
-                    COALESCE(SUM(size_bytes), 0)::bigint AS total_bytes
-                FROM source_downloaded_media sdm
-                WHERE sdm.creator_source_id = cs.id
-            ) downloaded_rollup ON true
-            GROUP BY cs.id, cs.platform, cs.source_type, cs.source_url, css.last_successful_scan_at, css.last_full_scan_at
-                , downloaded_rollup.downloaded_count, downloaded_rollup.downloaded_duration_seconds, downloaded_rollup.total_bytes
-        )
-        SELECT
-            source_rollup.*,
-            CASE WHEN available_count = 0 THEN 0 ELSE downloaded_count::double precision * 100 / available_count END AS downloaded_percent,
-            account_rollup.account_id,
-            account_rollup.account_name,
-            account_rollup.account_handle,
-            account_rollup.avatar_storage_path
-        FROM source_rollup
-        LEFT JOIN LATERAL (
-            SELECT
-                a.id AS account_id,
-                a.account_name,
-                a.account_handle,
-                a.avatar_storage_path,
-                COUNT(*) AS linked_count
-            FROM discovery.discovered_media dm
-            JOIN metadata.media_metadata mm ON mm.external_media_id = dm.external_media_id
-            JOIN metadata.accounts a ON a.id = mm.account_id AND a.platform = dm.platform
-            WHERE dm.creator_source_id = source_rollup.creator_source_id
-            GROUP BY a.id, a.account_name, a.account_handle, a.avatar_storage_path
-            ORDER BY linked_count DESC, a.id
-            LIMIT 1
-        ) account_rollup ON true
-        {suffix}
-        """;
+    private string ChannelSummarySql(string suffix) => dataSource.Sql("StatisticsReadService.ChannelSummarySql.1", ClassifiedMediaCte, suffix);
 
     private static string ChannelOrderBy(string sortBy, string sortOrder)
     {
@@ -641,12 +359,7 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
 
     private async Task<IReadOnlyDictionary<string, long>> GetChannelStatusCountsAsync(long creatorSourceId, CancellationToken ct)
     {
-        await using var command = dataSource.CreateCommand("""
-            SELECT discovery_status, COUNT(*) AS count
-            FROM discovery.discovered_media
-            WHERE creator_source_id = @creator_source_id
-            GROUP BY discovery_status
-            """);
+        await using var command = dataSource.CreateCommand(dataSource.Sql("StatisticsReadService.GetChannelStatusCountsAsync.1"));
         command.Parameters.AddWithValue("@creator_source_id", creatorSourceId);
 
         var values = new Dictionary<string, long>(StringComparer.Ordinal);
@@ -661,26 +374,7 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
 
     private async Task<IReadOnlyList<MediaTypeStatisticsDto>> GetChannelMediaTypesAsync(long creatorSourceId, CancellationToken ct)
     {
-        await using var command = dataSource.CreateCommand($"""
-            {ClassifiedMediaCte}
-            SELECT
-                cm.media_type,
-                COUNT(*) AS count,
-                COALESCE(SUM(cm.duration_seconds), 0) AS duration_seconds,
-                COALESCE(SUM(cm.size_bytes), 0)::bigint AS bytes
-            FROM (
-                SELECT DISTINCT
-                    cm.media_guid,
-                    cm.media_type,
-                    cm.duration_seconds,
-                    cm.size_bytes
-                FROM discovery.discovered_media dm
-                JOIN classified_media cm ON cm.platform = dm.platform AND cm.external_media_id = dm.external_media_id
-                WHERE dm.creator_source_id = @creator_source_id
-            ) cm
-            GROUP BY cm.media_type
-            ORDER BY count DESC, cm.media_type
-            """);
+        await using var command = dataSource.CreateCommand(dataSource.Sql("StatisticsReadService.GetChannelMediaTypesAsync.1", ClassifiedMediaCte));
         command.Parameters.AddWithValue("@creator_source_id", creatorSourceId);
 
         return await ReadMediaTypesAsync(command, ct);
@@ -692,13 +386,7 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
     // for the global view. See DownloadStatisticsRecorder.RecordChannelDailyStatesAsync.
     private async Task<IReadOnlyList<DownloadStateStatisticsDto>> GetChannelDownloadStatesAsync(long creatorSourceId, CancellationToken ct)
     {
-        await using var command = dataSource.CreateCommand("""
-            SELECT state, SUM(job_count) AS count
-            FROM statistics.creator_source_daily_states
-            WHERE creator_source_id = @creator_source_id
-            GROUP BY state
-            ORDER BY count DESC, state
-            """);
+        await using var command = dataSource.CreateCommand(dataSource.Sql("StatisticsReadService.GetChannelDownloadStatesAsync.1"));
         command.Parameters.AddWithValue("@creator_source_id", creatorSourceId);
 
         return await ReadDownloadStatesAsync(command, ct);
@@ -706,14 +394,7 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
 
     private async Task<IReadOnlyDictionary<string, long>> GetAccountStatusCountsAsync(long accountId, CancellationToken ct)
     {
-        await using var command = dataSource.CreateCommand("""
-            SELECT dm.discovery_status, COUNT(DISTINCT dm.id) AS count
-            FROM discovery.discovered_media dm
-            JOIN metadata.media_metadata mm ON mm.external_media_id = dm.external_media_id
-            JOIN metadata.accounts a ON a.id = mm.account_id AND a.platform = dm.platform
-            WHERE mm.account_id = @account_id
-            GROUP BY dm.discovery_status
-            """);
+        await using var command = dataSource.CreateCommand(dataSource.Sql("StatisticsReadService.GetAccountStatusCountsAsync.1"));
         command.Parameters.AddWithValue("@account_id", accountId);
 
         var values = new Dictionary<string, long>(StringComparer.Ordinal);
@@ -728,18 +409,7 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
 
     private async Task<IReadOnlyList<MediaTypeStatisticsDto>> GetAccountMediaTypesAsync(long accountId, CancellationToken ct)
     {
-        await using var command = dataSource.CreateCommand($"""
-            {ClassifiedMediaCte}
-            SELECT
-                cm.media_type,
-                COUNT(*) AS count,
-                COALESCE(SUM(cm.duration_seconds), 0) AS duration_seconds,
-                COALESCE(SUM(cm.size_bytes), 0)::bigint AS bytes
-            FROM classified_media cm
-            WHERE cm.account_id = @account_id
-            GROUP BY cm.media_type
-            ORDER BY count DESC, cm.media_type
-            """);
+        await using var command = dataSource.CreateCommand(dataSource.Sql("StatisticsReadService.GetAccountMediaTypesAsync.1", ClassifiedMediaCte));
         command.Parameters.AddWithValue("@account_id", accountId);
 
         return await ReadMediaTypesAsync(command, ct);
@@ -749,19 +419,13 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
     // statistics.account_daily_states rather than joining the ephemeral jobs.download_jobs table.
     private async Task<IReadOnlyList<DownloadStateStatisticsDto>> GetAccountDownloadStatesAsync(long accountId, CancellationToken ct)
     {
-        await using var command = dataSource.CreateCommand("""
-            SELECT state, SUM(job_count) AS count
-            FROM statistics.account_daily_states
-            WHERE account_id = @account_id
-            GROUP BY state
-            ORDER BY count DESC, state
-            """);
+        await using var command = dataSource.CreateCommand(dataSource.Sql("StatisticsReadService.GetAccountDownloadStatesAsync.1"));
         command.Parameters.AddWithValue("@account_id", accountId);
 
         return await ReadDownloadStatesAsync(command, ct);
     }
 
-    private static async Task<IReadOnlyList<MediaTypeStatisticsDto>> ReadMediaTypesAsync(NpgsqlCommand command, CancellationToken ct)
+    private static async Task<IReadOnlyList<MediaTypeStatisticsDto>> ReadMediaTypesAsync(DbCommand command, CancellationToken ct)
     {
         var items = new List<MediaTypeStatisticsDto>();
         await using var reader = await command.ExecuteReaderAsync(ct);
@@ -779,7 +443,7 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
         return items;
     }
 
-    private static async Task<IReadOnlyList<DownloadStateStatisticsDto>> ReadDownloadStatesAsync(NpgsqlCommand command, CancellationToken ct)
+    private static async Task<IReadOnlyList<DownloadStateStatisticsDto>> ReadDownloadStatesAsync(DbCommand command, CancellationToken ct)
     {
         var items = new List<DownloadStateStatisticsDto>();
         await using var reader = await command.ExecuteReaderAsync(ct);
@@ -795,7 +459,7 @@ public sealed class StatisticsReadService(NpgsqlDataSource dataSource) : IStatis
         return items;
     }
 
-    private static ChannelStatisticsSummaryDto ReadChannelSummary(NpgsqlDataReader reader)
+    private static ChannelStatisticsSummaryDto ReadChannelSummary(DbDataReader reader)
     {
         var availableCount = GetInt64(reader, "available_count");
         var downloadedCount = GetInt64(reader, "downloaded_count");

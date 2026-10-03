@@ -2,7 +2,8 @@ using System.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using NodaTime;
-using Npgsql;
+using System.Data.Common;
+using DataBridge.Persistence;
 using Shared.Metadata;
 
 namespace DataBridge.Data;
@@ -19,29 +20,16 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
         string storageKey,
         CancellationToken ct = default)
     {
-        var conn = (NpgsqlConnection)db.Database.GetDbConnection();
+        var conn = db.Database.GetDbConnection();
         var opened = conn.State != ConnectionState.Open;
         if (opened)
-            await conn.OpenAsync(ct);
+            await db.Database.OpenConnectionAsync(ct);
 
         try
         {
             // Don't overwrite account_name on conflict: a media-download write may already have
             // recorded a better name than a channel refresh can derive.
-            await using var cmd = new NpgsqlCommand("""
-                INSERT INTO metadata.accounts
-                    (platform, account_name, account_handle, account_url, is_verified,
-                     avatar_storage_path, banner_storage_path, storage_key)
-                VALUES
-                    (@platform, @account_name, @account_handle, @account_url, false,
-                     @avatar_path, @banner_path, @storage_key)
-                ON CONFLICT (platform, account_handle) DO UPDATE SET
-                    account_url         = COALESCE(EXCLUDED.account_url, accounts.account_url),
-                    avatar_storage_path = COALESCE(EXCLUDED.avatar_storage_path, accounts.avatar_storage_path),
-                    banner_storage_path = COALESCE(EXCLUDED.banner_storage_path, accounts.banner_storage_path),
-                    storage_key         = COALESCE(EXCLUDED.storage_key, accounts.storage_key)
-                RETURNING id
-                """, conn);
+            await using var cmd = ApplicationDbCommands.Create(conn.Sql("MetadataRepository.UpsertAccountAssetsAsync.1"), conn);
 
             cmd.Parameters.AddWithValue("@platform", platform);
             cmd.Parameters.AddWithValue("@account_name", accountName);
@@ -56,7 +44,7 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
         finally
         {
             if (opened)
-                await conn.CloseAsync();
+                await db.Database.CloseConnectionAsync();
         }
     }
 
@@ -67,20 +55,14 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
         string? storageKey,
         CancellationToken ct = default)
     {
-        var conn = (NpgsqlConnection)db.Database.GetDbConnection();
+        var conn = db.Database.GetDbConnection();
         var opened = conn.State != ConnectionState.Open;
         if (opened)
-            await conn.OpenAsync(ct);
+            await db.Database.OpenConnectionAsync(ct);
 
         try
         {
-            await using var cmd = new NpgsqlCommand("""
-                UPDATE metadata.accounts SET
-                    avatar_storage_path = COALESCE(@avatar_path, avatar_storage_path),
-                    banner_storage_path = COALESCE(@banner_path, banner_storage_path),
-                    storage_key         = COALESCE(@storage_key, storage_key)
-                WHERE id = @account_id
-                """, conn);
+            await using var cmd = ApplicationDbCommands.Create(conn.Sql("MetadataRepository.UpdateAccountAssetsByIdAsync.1"), conn);
 
             cmd.Parameters.AddWithValue("@account_id", accountId);
             cmd.Parameters.AddWithValue("@avatar_path", (object?)avatarStoragePath ?? DBNull.Value);
@@ -91,7 +73,7 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
         finally
         {
             if (opened)
-                await conn.CloseAsync();
+                await db.Database.CloseConnectionAsync();
         }
     }
 
@@ -99,8 +81,8 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
     {
         await db.Database.OpenConnectionAsync(ct);
         await using var tx = await db.Database.BeginTransactionAsync(ct);
-        var conn = (NpgsqlConnection)db.Database.GetDbConnection();
-        var npgsqlTx = (NpgsqlTransaction)tx.GetDbTransaction();
+        var conn = db.Database.GetDbConnection();
+        var npgsqlTx = tx.GetDbTransaction();
 
         try
         {
@@ -125,22 +107,15 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
     // ── accounts ────────────────────────────────────────────────────────────
 
     private static async Task<long> UpsertAccountAsync(
-        NpgsqlConnection conn,
-        NpgsqlTransaction tx,
+        DbConnection conn,
+        DbTransaction tx,
         CapturedAccountMetadata account,
         CancellationToken ct)
     {
         var aliasedAccountId = await FindAccountIdByExternalIdsAsync(conn, tx, account, ct);
         if (aliasedAccountId is { } existingAccountId)
         {
-            await using var update = new NpgsqlCommand("""
-                UPDATE metadata.accounts SET
-                    account_name       = COALESCE(NULLIF(@account_name, ''), account_name),
-                    account_url        = COALESCE(@account_url, account_url),
-                    account_follower_count = COALESCE(@follower_count, account_follower_count),
-                    account_description = COALESCE(@description, account_description)
-                WHERE id = @account_id
-                """, conn, tx);
+            await using var update = ApplicationDbCommands.Create(conn.Sql("MetadataRepository.UpsertAccountAsync.1"), conn, tx);
 
             update.Parameters.AddWithValue("@account_id", existingAccountId);
             update.Parameters.AddWithValue("@account_name", account.AccountName);
@@ -152,18 +127,7 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
             return existingAccountId;
         }
 
-        await using var cmd = new NpgsqlCommand("""
-            INSERT INTO metadata.accounts
-                (platform, account_name, account_handle, account_url, account_follower_count, is_verified, account_description)
-            VALUES
-                (@platform, @account_name, @account_handle, @account_url, @follower_count, false, @description)
-            ON CONFLICT (platform, account_handle) DO UPDATE SET
-                account_name       = COALESCE(NULLIF(EXCLUDED.account_name, ''), metadata.accounts.account_name),
-                account_url        = COALESCE(EXCLUDED.account_url, metadata.accounts.account_url),
-                account_follower_count = EXCLUDED.account_follower_count,
-                account_description = EXCLUDED.account_description
-            RETURNING id
-            """, conn, tx);
+        await using var cmd = ApplicationDbCommands.Create(conn.Sql("MetadataRepository.UpsertAccountAsync.2"), conn, tx);
 
         cmd.Parameters.AddWithValue("@platform", account.Platform);
         cmd.Parameters.AddWithValue("@account_name", account.AccountName);
@@ -178,20 +142,14 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
     }
 
     private static async Task<long?> FindAccountIdByExternalIdsAsync(
-        NpgsqlConnection conn,
-        NpgsqlTransaction tx,
+        DbConnection conn,
+        DbTransaction tx,
         CapturedAccountMetadata account,
         CancellationToken ct)
     {
         foreach (var externalId in NormalizeExternalIds(account.ExternalIds))
         {
-            await using var cmd = new NpgsqlCommand("""
-                SELECT account_id
-                FROM metadata.account_external_ids
-                WHERE platform = @platform
-                  AND external_id = @external_id
-                LIMIT 1
-                """, conn, tx);
+            await using var cmd = ApplicationDbCommands.Create(conn.Sql("MetadataRepository.FindAccountIdByExternalIdsAsync.1"), conn, tx);
 
             cmd.Parameters.AddWithValue("@platform", account.Platform);
             cmd.Parameters.AddWithValue("@external_id", externalId.Value);
@@ -204,21 +162,15 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
     }
 
     private static async Task AddAccountExternalIdsAsync(
-        NpgsqlConnection conn,
-        NpgsqlTransaction tx,
+        DbConnection conn,
+        DbTransaction tx,
         long accountId,
         CapturedAccountMetadata account,
         CancellationToken ct)
     {
         foreach (var externalId in NormalizeExternalIds(account.ExternalIds))
         {
-            await using var cmd = new NpgsqlCommand("""
-                INSERT INTO metadata.account_external_ids
-                    (account_id, platform, id_kind, external_id)
-                VALUES
-                    (@account_id, @platform, @id_kind, @external_id)
-                ON CONFLICT (platform, external_id) DO NOTHING
-                """, conn, tx);
+            await using var cmd = ApplicationDbCommands.Create(conn.Sql("MetadataRepository.AddAccountExternalIdsAsync.1"), conn, tx);
 
             cmd.Parameters.AddWithValue("@account_id", accountId);
             cmd.Parameters.AddWithValue("@platform", account.Platform);
@@ -259,34 +211,20 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
     // ── media_metadata ───────────────────────────────────────────────────────
 
     private static async Task<long> InsertMediaMetadataAsync(
-        NpgsqlConnection conn,
-        NpgsqlTransaction tx,
+        DbConnection conn,
+        DbTransaction tx,
         Guid mediaGuid,
         long accountId,
         CapturedMediaMetadataCore core,
         string storageKey,
         CancellationToken ct)
     {
-        await using var del = new NpgsqlCommand(
-            "DELETE FROM metadata.media_metadata WHERE media_guid = @media_guid", conn, tx);
+        await using var del = ApplicationDbCommands.Create(
+            conn.Sql("MetadataRepository.InsertMediaMetadataAsync.1"), conn, tx);
         del.Parameters.AddWithValue("@media_guid", mediaGuid);
         await del.ExecuteNonQueryAsync(ct);
 
-        await using var ins = new NpgsqlCommand("""
-            INSERT INTO metadata.media_metadata
-                (media_guid, account_id, external_media_id, metadata_scrape_date,
-                 thumbnail_storage_path, storage_key, age_limit, average_rating, like_count, dislike_count,
-                 duration, description, release_date, title, was_live, webpage_url,
-                 view_count, comment_count, availability, location)
-            VALUES
-                (@media_guid, @account_id, @external_media_id, @scrape_date,
-                 @thumbnail, @storage_key, @age_limit, @avg_rating, @like_count, @dislike_count,
-                 @duration, @description, @release_date, @title, @was_live, @webpage_url,
-                 @view_count, @comment_count,
-                 CAST(NULLIF(@availability, '') AS metadata.availability_enum),
-                 @location)
-            RETURNING id
-            """, conn, tx);
+        await using var ins = ApplicationDbCommands.Create(conn.Sql("MetadataRepository.InsertMediaMetadataAsync.2"), conn, tx);
 
         ins.Parameters.AddWithValue("@media_guid", mediaGuid);
         ins.Parameters.AddWithValue("@account_id", accountId);
@@ -315,8 +253,8 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
     // ── taxonomy (artists, genres, tags, categories, cast) ──────────────────
 
     private static async Task InsertTaxonomyAsync(
-        NpgsqlConnection conn,
-        NpgsqlTransaction tx,
+        DbConnection conn,
+        DbTransaction tx,
         long mediaMetadataId,
         CapturedMediaMetadata metadata,
         CancellationToken ct)
@@ -325,7 +263,7 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
         {
             var id = await UpsertLookupAsync(conn, tx, "metadata.artists", "artist_name", artist, ct);
             await InsertJunctionAsync(conn, tx,
-                "INSERT INTO metadata.media_artists (media_metadata_id, artist_id, is_album_artist) VALUES (@mm, @ref, false) ON CONFLICT DO NOTHING",
+                conn.Sql("MetadataRepository.InsertTaxonomyAsync.1"),
                 mediaMetadataId, id, ct);
         }
 
@@ -333,7 +271,7 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
         {
             var id = await UpsertLookupAsync(conn, tx, "metadata.artists", "artist_name", artist, ct);
             await InsertJunctionAsync(conn, tx,
-                "INSERT INTO metadata.media_artists (media_metadata_id, artist_id, is_album_artist) VALUES (@mm, @ref, true) ON CONFLICT DO NOTHING",
+                conn.Sql("MetadataRepository.InsertTaxonomyAsync.2"),
                 mediaMetadataId, id, ct);
         }
 
@@ -341,7 +279,7 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
         {
             var id = await UpsertLookupAsync(conn, tx, "metadata.genres", "genre_name", genre, ct);
             await InsertJunctionAsync(conn, tx,
-                "INSERT INTO metadata.media_genres (media_metadata_id, genre_id) VALUES (@mm, @ref) ON CONFLICT DO NOTHING",
+                conn.Sql("MetadataRepository.InsertTaxonomyAsync.3"),
                 mediaMetadataId, id, ct);
         }
 
@@ -349,7 +287,7 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
         {
             var id = await UpsertLookupAsync(conn, tx, "metadata.tags", "tag_name", tag, ct);
             await InsertJunctionAsync(conn, tx,
-                "INSERT INTO metadata.media_tags (media_metadata_id, tag_id) VALUES (@mm, @ref) ON CONFLICT DO NOTHING",
+                conn.Sql("MetadataRepository.InsertTaxonomyAsync.4"),
                 mediaMetadataId, id, ct);
         }
 
@@ -357,7 +295,7 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
         {
             var id = await UpsertLookupAsync(conn, tx, "metadata.categories", "category_name", category, ct);
             await InsertJunctionAsync(conn, tx,
-                "INSERT INTO metadata.media_categories (media_metadata_id, category_id) VALUES (@mm, @ref) ON CONFLICT DO NOTHING",
+                conn.Sql("MetadataRepository.InsertTaxonomyAsync.5"),
                 mediaMetadataId, id, ct);
         }
 
@@ -365,35 +303,35 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
         {
             var id = await UpsertLookupAsync(conn, tx, "metadata.cast_members", "cast_name", cast, ct);
             await InsertJunctionAsync(conn, tx,
-                "INSERT INTO metadata.media_cast (media_metadata_id, cast_member_id) VALUES (@mm, @ref) ON CONFLICT DO NOTHING",
+                conn.Sql("MetadataRepository.InsertTaxonomyAsync.6"),
                 mediaMetadataId, id, ct);
         }
     }
 
     private static async Task<long> UpsertLookupAsync(
-        NpgsqlConnection conn,
-        NpgsqlTransaction tx,
+        DbConnection conn,
+        DbTransaction tx,
         string table,
         string column,
         string value,
         CancellationToken ct)
     {
-        await using var cmd = new NpgsqlCommand(
-            $"INSERT INTO {table} ({column}) VALUES (@v) ON CONFLICT ({column}) DO UPDATE SET {column} = EXCLUDED.{column} RETURNING id",
+        await using var cmd = ApplicationDbCommands.Create(
+            conn.Sql("MetadataRepository.UpsertLookupAsync.1", conn.Table(table), column, column, column, column),
             conn, tx);
         cmd.Parameters.AddWithValue("@v", value);
         return Convert.ToInt64(await cmd.ExecuteScalarAsync(ct));
     }
 
     private static async Task InsertJunctionAsync(
-        NpgsqlConnection conn,
-        NpgsqlTransaction tx,
+        DbConnection conn,
+        DbTransaction tx,
         string sql,
         long mediaMetadataId,
         long refId,
         CancellationToken ct)
     {
-        await using var cmd = new NpgsqlCommand(sql, conn, tx);
+        await using var cmd = ApplicationDbCommands.Create(sql, conn, tx);
         cmd.Parameters.AddWithValue("@mm", mediaMetadataId);
         cmd.Parameters.AddWithValue("@ref", refId);
         await cmd.ExecuteNonQueryAsync(ct);
@@ -402,30 +340,26 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
     // ── technical (media_base, format, streams, chapters) ───────────────────
 
     private static async Task InsertTechnicalAsync(
-        NpgsqlConnection conn,
-        NpgsqlTransaction tx,
+        DbConnection conn,
+        DbTransaction tx,
         Guid mediaGuid,
         CapturedMediaTechnicalMetadata technical,
         CancellationToken ct)
     {
-        await using var del = new NpgsqlCommand(
-            "DELETE FROM metadata.media_base WHERE media_guid = @media_guid", conn, tx);
+        await using var del = ApplicationDbCommands.Create(
+            conn.Sql("MetadataRepository.InsertTechnicalAsync.1"), conn, tx);
         del.Parameters.AddWithValue("@media_guid", mediaGuid);
         await del.ExecuteNonQueryAsync(ct);
 
-        await using var ins = new NpgsqlCommand(
-            "INSERT INTO metadata.media_base (media_guid, duration_ticks) VALUES (@media_guid, @ticks) RETURNING id",
+        await using var ins = ApplicationDbCommands.Create(
+            conn.Sql("MetadataRepository.InsertTechnicalAsync.2"),
             conn, tx);
         ins.Parameters.AddWithValue("@media_guid", mediaGuid);
         ins.Parameters.AddWithValue("@ticks", technical.DurationTicks);
         var mediaBaseId = Convert.ToInt64(await ins.ExecuteScalarAsync(ct));
 
         var fmt = technical.Format;
-        await using var fmtCmd = new NpgsqlCommand("""
-            INSERT INTO metadata.media_format_details
-                (media_base_id, duration_ticks, start_time_ticks, format_long_names, stream_count, bit_rate)
-            VALUES (@base_id, @dur, @start, @names, @streams, @bitrate)
-            """, conn, tx);
+        await using var fmtCmd = ApplicationDbCommands.Create(conn.Sql("MetadataRepository.InsertTechnicalAsync.3"), conn, tx);
         fmtCmd.Parameters.AddWithValue("@base_id", mediaBaseId);
         fmtCmd.Parameters.AddWithValue("@dur", fmt.DurationTicks);
         fmtCmd.Parameters.AddWithValue("@start", fmt.StartTimeTicks);
@@ -436,14 +370,7 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
 
         foreach (var stream in technical.Streams)
         {
-            await using var streamCmd = new NpgsqlCommand("""
-                INSERT INTO metadata.media_streams
-                    (media_base_id, stream_type, is_primary, codec_name, codec_long_name,
-                     bit_rate, bit_depth, start_time_ticks, duration_ticks, language)
-                VALUES (@base_id, @type, @primary, @codec, @codec_long,
-                        @bitrate, @depth, 0, @dur, @lang)
-                RETURNING id
-                """, conn, tx);
+            await using var streamCmd = ApplicationDbCommands.Create(conn.Sql("MetadataRepository.InsertTechnicalAsync.4"), conn, tx);
             streamCmd.Parameters.AddWithValue("@base_id", mediaBaseId);
             streamCmd.Parameters.AddWithValue("@type", stream.StreamType);
             streamCmd.Parameters.AddWithValue("@primary", stream.IsPrimary);
@@ -457,14 +384,7 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
 
             if (stream.Video is { } video)
             {
-                await using var vidCmd = new NpgsqlCommand("""
-                    INSERT INTO metadata.video_stream_details
-                        (media_stream_id, avg_frame_rate, bits_per_raw_sample,
-                         display_aspect_ratio_width, display_aspect_ratio_height,
-                         profile, width, height, pixel_format, rotation,
-                         color_space, color_transfer, color_primaries, hdr_type)
-                    VALUES (@id, @fps, 0, 0, 0, '', @w, @h, '', 0, '', '', '', @hdr)
-                    """, conn, tx);
+                await using var vidCmd = ApplicationDbCommands.Create(conn.Sql("MetadataRepository.InsertTechnicalAsync.5"), conn, tx);
                 vidCmd.Parameters.AddWithValue("@id", streamId);
                 vidCmd.Parameters.AddWithValue("@fps", video.AvgFrameRate);
                 vidCmd.Parameters.AddWithValue("@w", video.Width);
@@ -475,11 +395,7 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
 
             if (stream.Audio is { } audio)
             {
-                await using var audCmd = new NpgsqlCommand("""
-                    INSERT INTO metadata.audio_stream_details
-                        (media_stream_id, channels, channel_layout, sample_rate_hz, profile)
-                    VALUES (@id, @channels, '', @rate, '')
-                    """, conn, tx);
+                await using var audCmd = ApplicationDbCommands.Create(conn.Sql("MetadataRepository.InsertTechnicalAsync.6"), conn, tx);
                 audCmd.Parameters.AddWithValue("@id", streamId);
                 audCmd.Parameters.AddWithValue("@channels", audio.Channels);
                 audCmd.Parameters.AddWithValue("@rate", audio.SampleRateHz);
@@ -489,10 +405,7 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
 
         foreach (var chapter in technical.Chapters)
         {
-            await using var chapCmd = new NpgsqlCommand("""
-                INSERT INTO metadata.chapter_data (media_base_id, title, start_ticks, end_ticks)
-                VALUES (@base_id, @title, @start, @end)
-                """, conn, tx);
+            await using var chapCmd = ApplicationDbCommands.Create(conn.Sql("MetadataRepository.InsertTechnicalAsync.7"), conn, tx);
             chapCmd.Parameters.AddWithValue("@base_id", mediaBaseId);
             chapCmd.Parameters.AddWithValue("@title", chapter.Title);
             chapCmd.Parameters.AddWithValue("@start", chapter.StartTicks);
@@ -504,26 +417,21 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
     // ── captions ─────────────────────────────────────────────────────────────
 
     private static async Task InsertCaptionsAsync(
-        NpgsqlConnection conn,
-        NpgsqlTransaction tx,
+        DbConnection conn,
+        DbTransaction tx,
         Guid mediaGuid,
         IReadOnlyList<CapturedCaptionMetadata> captions,
         string storageKey,
         CancellationToken ct)
     {
-        await using var del = new NpgsqlCommand(
-            "DELETE FROM metadata.media_captions WHERE media_guid = @media_guid", conn, tx);
+        await using var del = ApplicationDbCommands.Create(
+            conn.Sql("MetadataRepository.InsertCaptionsAsync.1"), conn, tx);
         del.Parameters.AddWithValue("@media_guid", mediaGuid);
         await del.ExecuteNonQueryAsync(ct);
 
         foreach (var caption in captions)
         {
-            await using var ins = new NpgsqlCommand("""
-                INSERT INTO metadata.media_captions
-                    (media_guid, storage_path, storage_key, caption_type, two_digit_language_code, name)
-                VALUES
-                    (@media_guid, @path, @storage_key, @type::metadata.subtitle_type_enum, @lang, @name)
-                """, conn, tx);
+            await using var ins = ApplicationDbCommands.Create(conn.Sql("MetadataRepository.InsertCaptionsAsync.2"), conn, tx);
             ins.Parameters.AddWithValue("@media_guid", mediaGuid);
             ins.Parameters.AddWithValue("@path", caption.StoragePath);
             ins.Parameters.AddWithValue("@storage_key", storageKey);
@@ -537,15 +445,15 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
     // ── comments ─────────────────────────────────────────────────────────────
 
     private static async Task InsertCommentsAsync(
-        NpgsqlConnection conn,
-        NpgsqlTransaction tx,
+        DbConnection conn,
+        DbTransaction tx,
         Guid mediaGuid,
         long uploaderAccountId,
         IReadOnlyList<CapturedCommentMetadata> comments,
         CancellationToken ct)
     {
-        await using var del = new NpgsqlCommand(
-            "DELETE FROM metadata.media_comments WHERE media_guid = @media_guid", conn, tx);
+        await using var del = ApplicationDbCommands.Create(
+            conn.Sql("MetadataRepository.InsertCommentsAsync.1"), conn, tx);
         del.Parameters.AddWithValue("@media_guid", mediaGuid);
         await del.ExecuteNonQueryAsync(ct);
 
@@ -558,14 +466,7 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
             if (comment.IsUploader)
                 await AddAccountExternalIdsAsync(conn, tx, uploaderAccountId, comment.Account, ct);
 
-            await using var ins = new NpgsqlCommand("""
-                INSERT INTO metadata.media_comments
-                    (media_guid, comment_id, parent_comment_id, text_comment, account_id,
-                     comment_timestamp, like_count, dislike_count, is_favorited, is_uploader, is_pinned)
-                VALUES
-                    (@media_guid, @comment_id, @parent_id, @text, @account_id,
-                     @timestamp, @like_count, @dislike_count, @is_favorited, @is_uploader, @is_pinned)
-                """, conn, tx);
+            await using var ins = ApplicationDbCommands.Create(conn.Sql("MetadataRepository.InsertCommentsAsync.2"), conn, tx);
             ins.Parameters.AddWithValue("@media_guid", mediaGuid);
             ins.Parameters.AddWithValue("@comment_id", comment.CommentId);
             ins.Parameters.AddWithValue("@parent_id", (object?)comment.ParentCommentId ?? DBNull.Value);
@@ -584,26 +485,21 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
     // ── series ────────────────────────────────────────────────────────────────
 
     private static async Task InsertSeriesAsync(
-        NpgsqlConnection conn,
-        NpgsqlTransaction tx,
+        DbConnection conn,
+        DbTransaction tx,
         Guid mediaGuid,
         CapturedSeriesMetadata? series,
         CancellationToken ct)
     {
-        await using var del = new NpgsqlCommand(
-            "DELETE FROM metadata.series_metadata WHERE media_guid = @media_guid", conn, tx);
+        await using var del = ApplicationDbCommands.Create(
+            conn.Sql("MetadataRepository.InsertSeriesAsync.1"), conn, tx);
         del.Parameters.AddWithValue("@media_guid", mediaGuid);
         await del.ExecuteNonQueryAsync(ct);
 
         if (series is null)
             return;
 
-        await using var ins = new NpgsqlCommand("""
-            INSERT INTO metadata.series_metadata
-                (media_guid, series_name, season_count, season_number, season_name, episode_number, episode_name)
-            VALUES
-                (@media_guid, @series_name, @season_count, @season_num, @season_name, @episode_num, @episode_name)
-            """, conn, tx);
+        await using var ins = ApplicationDbCommands.Create(conn.Sql("MetadataRepository.InsertSeriesAsync.2"), conn, tx);
         ins.Parameters.AddWithValue("@media_guid", mediaGuid);
         ins.Parameters.AddWithValue("@series_name", series.SeriesName);
         ins.Parameters.AddWithValue("@season_count", (object?)series.SeasonCount ?? DBNull.Value);
@@ -617,26 +513,21 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
     // ── music ─────────────────────────────────────────────────────────────────
 
     private static async Task InsertMusicAsync(
-        NpgsqlConnection conn,
-        NpgsqlTransaction tx,
+        DbConnection conn,
+        DbTransaction tx,
         Guid mediaGuid,
         CapturedMusicMetadata? music,
         CancellationToken ct)
     {
-        await using var del = new NpgsqlCommand(
-            "DELETE FROM metadata.music_metadata WHERE media_guid = @media_guid", conn, tx);
+        await using var del = ApplicationDbCommands.Create(
+            conn.Sql("MetadataRepository.InsertMusicAsync.1"), conn, tx);
         del.Parameters.AddWithValue("@media_guid", mediaGuid);
         await del.ExecuteNonQueryAsync(ct);
 
         if (music is null)
             return;
 
-        await using var ins = new NpgsqlCommand("""
-            INSERT INTO metadata.music_metadata
-                (media_guid, album_title, album_type, disc_number, release_year, track_title, track_number, composer)
-            VALUES
-                (@media_guid, @album_title, @album_type, @disc_num, @release_year, @track_title, @track_num, @composer)
-            """, conn, tx);
+        await using var ins = ApplicationDbCommands.Create(conn.Sql("MetadataRepository.InsertMusicAsync.2"), conn, tx);
         ins.Parameters.AddWithValue("@media_guid", mediaGuid);
         ins.Parameters.AddWithValue("@album_title", music.AlbumTitle);
         ins.Parameters.AddWithValue("@album_type", (object?)music.AlbumType ?? DBNull.Value);

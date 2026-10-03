@@ -1,3 +1,4 @@
+using DataBridge.Persistence;
 using System.Text.Json;
 using DataBridge.Statistics;
 using Microsoft.EntityFrameworkCore;
@@ -53,16 +54,7 @@ public sealed class DownloadFlowV2Repository(
             _ => "direct"
         };
         var groupStatus = autoStart ? "running" : "stopped";
-        await db.Database.ExecuteSqlInterpolatedAsync($"""
-            INSERT INTO jobs.download_groups
-              (group_id, correlation_id, kind, status, source_url, requested_by, storage_key,
-               total_jobs, completed_jobs, warning_jobs, failed_jobs, created_at, updated_at)
-            VALUES
-              ({request.CorrelationId}, {request.CorrelationId}, CAST({groupKind} AS jobs.download_group_kind),
-               CAST({groupStatus} AS jobs.download_group_status), {request.SourceUrl}, {request.RequestedBy},
-               {request.StorageKey}, 0, 0, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-            ON CONFLICT (correlation_id) DO NOTHING
-            """, ct);
+        await db.Database.ExecuteSqlInterpolatedAsync(db.ParameterizedSql("DownloadFlowV2Repository.CreateInitialRunAsync.1", request.CorrelationId, request.CorrelationId, groupKind, groupStatus, request.SourceUrl, request.RequestedBy, request.StorageKey), ct);
 
         var previous = existingJob?.Status ?? DownloadJobStatus.Queued;
         var job = existingJob ?? new DownloadJobEntity
@@ -1188,12 +1180,7 @@ public sealed class DownloadFlowV2Repository(
         if (provider.Length == 0)
             return;
 
-        await db.Database.ExecuteSqlInterpolatedAsync($"""
-            INSERT INTO jobs.download_provider_circuits (provider, is_open, reason, opened_at, cleared_at)
-            VALUES ({provider}, TRUE, {reason}, CURRENT_TIMESTAMP, NULL)
-            ON CONFLICT (provider) DO UPDATE
-            SET is_open = TRUE, reason = EXCLUDED.reason, opened_at = CURRENT_TIMESTAMP, cleared_at = NULL
-            """, ct);
+        await db.Database.ExecuteSqlInterpolatedAsync(db.ParameterizedSql("DownloadFlowV2Repository.OpenProviderCircuitAsync.1", provider, reason), ct);
 
         var queued = await db.DownloadJobs
             .Where(x => x.Status == DownloadJobStatus.Queued)
@@ -1220,29 +1207,19 @@ public sealed class DownloadFlowV2Repository(
         if (provider.Length == 0)
             throw new ArgumentException("Provider is required.", nameof(provider));
 
-        await db.Database.ExecuteSqlInterpolatedAsync($"""
-            INSERT INTO jobs.download_provider_circuits
-                (provider, is_open, reason, opened_at, cleared_at)
-            VALUES ({provider}, FALSE, NULL, NULL, CURRENT_TIMESTAMP)
-            ON CONFLICT (provider) DO UPDATE
-            SET is_open = FALSE, cleared_at = CURRENT_TIMESTAMP
-            """, ct);
+        await db.Database.ExecuteSqlInterpolatedAsync(db.ParameterizedSql("DownloadFlowV2Repository.ClearProviderCircuitAsync.1", provider), ct);
     }
 
     public async Task<string?> FindOpenProviderCircuitAsync(string sourceUrl, CancellationToken ct = default)
     {
-        var providers = await db.Database.SqlQuery<string>($"""
-                SELECT provider AS "Value"
-                FROM jobs.download_provider_circuits
-                WHERE is_open = TRUE
-                """)
+        var providers = await db.Database.SqlQuery<string>(db.ParameterizedSql("DownloadFlowV2Repository.FindOpenProviderCircuitAsync.1"))
             .ToListAsync(ct);
         return providers.FirstOrDefault(provider => ProviderMatchesSource(provider, sourceUrl));
     }
 
     private Task<DownloadJobEntity?> LockJobAsync(Guid jobId, CancellationToken ct)
         => db.DownloadJobs
-            .FromSqlInterpolated($"SELECT * FROM jobs.download_jobs WHERE job_id = {jobId} FOR UPDATE")
+            .FromSqlInterpolated(db.ParameterizedSql("DownloadFlowV2Repository.LockJobAsync.1", jobId))
             .SingleOrDefaultAsync(ct);
 
     private async Task LinkPlaylistMembershipIfNeededAsync(Guid jobId, Guid mediaGuid, CancellationToken ct)

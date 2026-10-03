@@ -1,5 +1,6 @@
 using NodaTime;
-using Npgsql;
+using System.Data.Common;
+using DataBridge.Persistence;
 using Shared.Messaging;
 
 namespace DataBridge.Renditions;
@@ -10,7 +11,7 @@ namespace DataBridge.Renditions;
 /// the channel-audio source query) since it spans two tables with a UNION ALL — EF Core has no
 /// entity that represents "either rendition kind" to project through.
 /// </summary>
-public sealed class RenditionQueueRepository(NpgsqlDataSource dataSource) : IRenditionQueueRepository
+public sealed class RenditionQueueRepository(ApplicationDatabase dataSource) : IRenditionQueueRepository
 {
     private const int DefaultLimit = 50;
     private const int MaxLimit = 200;
@@ -25,64 +26,7 @@ public sealed class RenditionQueueRepository(NpgsqlDataSource dataSource) : IRen
         var storageKey = NormalizeOptional(request.StorageKey);
         var search = NormalizeOptional(request.Query);
 
-        await using var command = dataSource.CreateCommand("""
-            WITH combined AS (
-                SELECT
-                    'Stream'::text AS kind,
-                    sr.rendition_id,
-                    sr.media_guid,
-                    sr.source_version_num,
-                    sr.status::text AS status,
-                    sr.storage_key,
-                    sr.storage_path,
-                    sr.size_bytes,
-                    sr.duration_seconds,
-                    sr.error_message,
-                    EXTRACT(EPOCH FROM sr.created_at)::bigint AS created_at,
-                    EXTRACT(EPOCH FROM sr.updated_at)::bigint AS updated_at
-                FROM media.stream_renditions sr
-                UNION ALL
-                SELECT
-                    'Audio'::text AS kind,
-                    ar.rendition_id,
-                    ar.media_guid,
-                    ar.source_version_num,
-                    ar.status::text AS status,
-                    ar.storage_key,
-                    ar.storage_path,
-                    ar.size_bytes,
-                    ar.duration_seconds,
-                    ar.error_message,
-                    EXTRACT(EPOCH FROM ar.created_at)::bigint AS created_at,
-                    EXTRACT(EPOCH FROM ar.updated_at)::bigint AS updated_at
-                FROM media.audio_renditions ar
-            )
-            SELECT
-                c.kind,
-                c.rendition_id,
-                c.media_guid,
-                COALESCE(NULLIF(mm.title, ''), 'Untitled') AS title,
-                c.source_version_num,
-                c.status,
-                c.storage_key,
-                c.storage_path,
-                c.size_bytes,
-                c.duration_seconds,
-                c.error_message,
-                c.created_at,
-                c.updated_at,
-                COUNT(*) OVER() AS total_count
-            FROM combined c
-            LEFT JOIN metadata.media_metadata mm ON mm.media_guid = c.media_guid
-            WHERE (@kind::text IS NULL OR c.kind = @kind::text)
-              AND (@status::text IS NULL OR c.status = @status::text)
-              AND (@storage_key::text IS NULL OR c.storage_key = @storage_key::text)
-              AND (@query::text IS NULL
-                   OR mm.title ILIKE '%' || @query::text || '%'
-                   OR c.media_guid::text ILIKE '%' || @query::text || '%')
-            ORDER BY c.created_at DESC, c.rendition_id DESC
-            LIMIT @limit OFFSET @offset
-            """);
+        await using var command = dataSource.CreateCommand(dataSource.Sql("RenditionQueueRepository.QueryAsync.1"));
         command.Parameters.AddWithValue("@kind", (object?)kind ?? DBNull.Value);
         command.Parameters.AddWithValue("@status", (object?)status ?? DBNull.Value);
         command.Parameters.AddWithValue("@storage_key", (object?)storageKey ?? DBNull.Value);

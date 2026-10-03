@@ -1,15 +1,16 @@
 using FrostStream.ApplicationContracts;
 using Microsoft.Extensions.Logging;
 using NodaTime;
-using Npgsql;
+using System.Data.Common;
+using DataBridge.Persistence;
 using Shared.Messaging;
-using static DataBridge.NpgsqlDataReaderExtensions;
+using static DataBridge.ApplicationDataReaderExtensions;
 
 namespace DataBridge.Messaging;
 
 public sealed class WatchStateConsumerService(
     IMessageBus messageBus,
-    NpgsqlDataSource dataSource,
+    ApplicationDatabase dataSource,
     IClock clock,
     ILogger<WatchStateConsumerService> logger) : SubscriptionBackgroundService
 {
@@ -52,25 +53,7 @@ public sealed class WatchStateConsumerService(
             }
 
             var now = clock.GetCurrentInstant();
-            await using var command = dataSource.CreateCommand("""
-                INSERT INTO media.watch_states
-                    (owner_subject, media_guid, position_seconds, duration_seconds, completed, watched_at, last_played_at, created_at, updated_at)
-                VALUES
-                    (@owner_subject, @media_guid, @position_seconds, @duration_seconds, @completed, @watched_at, @now, @now, @now)
-                ON CONFLICT (owner_subject, media_guid)
-                DO UPDATE SET
-                    position_seconds = EXCLUDED.position_seconds,
-                    duration_seconds = EXCLUDED.duration_seconds,
-                    completed = EXCLUDED.completed,
-                    watched_at = CASE
-                        WHEN EXCLUDED.completed AND media.watch_states.completed THEN media.watch_states.watched_at
-                        WHEN EXCLUDED.completed THEN EXCLUDED.watched_at
-                        ELSE NULL
-                    END,
-                    last_played_at = EXCLUDED.last_played_at,
-                    updated_at = EXCLUDED.updated_at
-                RETURNING owner_subject, media_guid, position_seconds, duration_seconds, completed, watched_at, last_played_at, updated_at;
-                """);
+            await using var command = dataSource.CreateCommand(dataSource.Sql("WatchStateConsumerService.HandleUpsertAsync.1"));
             command.Parameters.AddWithValue("owner_subject", request.OwnerSubject.Trim());
             command.Parameters.AddWithValue("media_guid", request.MediaGuid);
             command.Parameters.AddWithValue("position_seconds", (object?)request.PositionSeconds ?? DBNull.Value);
@@ -115,11 +98,7 @@ public sealed class WatchStateConsumerService(
                 return;
             }
 
-            await using var command = dataSource.CreateCommand("""
-                SELECT owner_subject, media_guid, position_seconds, duration_seconds, completed, watched_at, last_played_at, updated_at
-                FROM media.watch_states
-                WHERE owner_subject = @owner_subject AND media_guid = @media_guid;
-                """);
+            await using var command = dataSource.CreateCommand(dataSource.Sql("WatchStateConsumerService.HandleGetAsync.1"));
             command.Parameters.AddWithValue("owner_subject", request.OwnerSubject.Trim());
             command.Parameters.AddWithValue("media_guid", request.MediaGuid);
 
@@ -159,18 +138,7 @@ public sealed class WatchStateConsumerService(
             }
 
             var limit = Math.Clamp(request.Limit, 1, 100);
-            await using var command = dataSource.CreateCommand("""
-                SELECT ws.owner_subject, ws.media_guid, ws.position_seconds, ws.duration_seconds,
-                       ws.completed, ws.watched_at, ws.last_played_at, ws.updated_at
-                FROM media.watch_states ws
-                JOIN media.media m ON m.media_guid = ws.media_guid
-                WHERE ws.owner_subject = @owner_subject
-                  AND NOT ws.completed
-                  AND ws.position_seconds IS NOT NULL
-                  AND ws.position_seconds > 0
-                ORDER BY ws.last_played_at DESC
-                LIMIT @limit;
-                """);
+            await using var command = dataSource.CreateCommand(dataSource.Sql("WatchStateConsumerService.HandleListInProgressAsync.1"));
             command.Parameters.AddWithValue("owner_subject", request.OwnerSubject.Trim());
             command.Parameters.AddWithValue("limit", limit);
 
@@ -217,29 +185,7 @@ public sealed class WatchStateConsumerService(
                 return;
             }
 
-            await using var command = dataSource.CreateCommand("""
-                SELECT ws.owner_subject, ws.media_guid, ws.position_seconds, ws.duration_seconds,
-                       ws.completed, ws.watched_at, ws.last_played_at, ws.updated_at,
-                       COUNT(*) OVER() AS total_count,
-                       COALESCE(mm.title, '') AS title,
-                       mm.thumbnail_storage_path,
-                       mm.duration,
-                       mm.release_date,
-                       mm.view_count,
-                       mm.availability::text AS availability,
-                       mm.was_live,
-                       a.id AS account_id,
-                       a.platform,
-                       a.account_name,
-                       a.account_handle,
-                       a.avatar_storage_path
-                FROM media.watch_states ws
-                JOIN metadata.media_metadata mm ON mm.media_guid = ws.media_guid
-                JOIN metadata.accounts a ON a.id = mm.account_id
-                WHERE ws.owner_subject = @owner_subject
-                ORDER BY ws.last_played_at DESC
-                LIMIT @limit OFFSET @offset;
-                """);
+            await using var command = dataSource.CreateCommand(dataSource.Sql("WatchStateConsumerService.HandleListHistoryAsync.1"));
             command.Parameters.AddWithValue("owner_subject", request.OwnerSubject.Trim());
             command.Parameters.AddWithValue("limit", pageSize);
             command.Parameters.AddWithValue("offset", (page - 1) * pageSize);
@@ -298,11 +244,7 @@ public sealed class WatchStateConsumerService(
                 return;
             }
 
-            await using var command = dataSource.CreateCommand("""
-                SELECT owner_subject, media_guid, liked_at, updated_at
-                FROM media.user_media_likes
-                WHERE owner_subject = @owner_subject AND media_guid = @media_guid;
-                """);
+            await using var command = dataSource.CreateCommand(dataSource.Sql("WatchStateConsumerService.HandleGetLikeAsync.1"));
             command.Parameters.AddWithValue("owner_subject", request.OwnerSubject.Trim());
             command.Parameters.AddWithValue("media_guid", request.MediaGuid);
 
@@ -345,16 +287,7 @@ public sealed class WatchStateConsumerService(
             }
 
             var now = clock.GetCurrentInstant();
-            await using var command = dataSource.CreateCommand("""
-                INSERT INTO media.user_media_likes
-                    (owner_subject, media_guid, liked_at, updated_at)
-                VALUES
-                    (@owner_subject, @media_guid, @now, @now)
-                ON CONFLICT (owner_subject, media_guid)
-                DO UPDATE SET
-                    updated_at = EXCLUDED.updated_at
-                RETURNING owner_subject, media_guid, liked_at, updated_at;
-                """);
+            await using var command = dataSource.CreateCommand(dataSource.Sql("WatchStateConsumerService.HandleLikeAsync.1"));
             command.Parameters.AddWithValue("owner_subject", request.OwnerSubject.Trim());
             command.Parameters.AddWithValue("media_guid", request.MediaGuid);
             command.Parameters.AddWithValue("now", now.ToDateTimeOffset());
@@ -401,10 +334,7 @@ public sealed class WatchStateConsumerService(
                 return;
             }
 
-            await using var command = dataSource.CreateCommand("""
-                DELETE FROM media.user_media_likes
-                WHERE owner_subject = @owner_subject AND media_guid = @media_guid;
-                """);
+            await using var command = dataSource.CreateCommand(dataSource.Sql("WatchStateConsumerService.HandleUnlikeAsync.1"));
             command.Parameters.AddWithValue("owner_subject", request.OwnerSubject.Trim());
             command.Parameters.AddWithValue("media_guid", request.MediaGuid);
             await command.ExecuteNonQueryAsync();
@@ -447,28 +377,7 @@ public sealed class WatchStateConsumerService(
                 return;
             }
 
-            await using var command = dataSource.CreateCommand("""
-                SELECT uml.owner_subject, uml.media_guid, uml.liked_at, uml.updated_at,
-                       COUNT(*) OVER() AS total_count,
-                       COALESCE(mm.title, '') AS title,
-                       mm.thumbnail_storage_path,
-                       mm.duration,
-                       mm.release_date,
-                       mm.view_count,
-                       mm.availability::text AS availability,
-                       mm.was_live,
-                       a.id AS account_id,
-                       a.platform,
-                       a.account_name,
-                       a.account_handle,
-                       a.avatar_storage_path
-                FROM media.user_media_likes uml
-                JOIN metadata.media_metadata mm ON mm.media_guid = uml.media_guid
-                JOIN metadata.accounts a ON a.id = mm.account_id
-                WHERE uml.owner_subject = @owner_subject
-                ORDER BY uml.liked_at DESC
-                LIMIT @limit OFFSET @offset;
-                """);
+            await using var command = dataSource.CreateCommand(dataSource.Sql("WatchStateConsumerService.HandleListLikesAsync.1"));
             command.Parameters.AddWithValue("owner_subject", request.OwnerSubject.Trim());
             command.Parameters.AddWithValue("limit", pageSize);
             command.Parameters.AddWithValue("offset", (page - 1) * pageSize);
@@ -513,9 +422,9 @@ public sealed class WatchStateConsumerService(
     private async Task<bool> MediaExistsAsync(Guid mediaGuid, CancellationToken cancellationToken)
     {
         await using var command = dataSource.CreateCommand(
-            "SELECT EXISTS (SELECT 1 FROM media.media WHERE media_guid = @media_guid);");
+            dataSource.Sql("WatchStateConsumerService.MediaExistsAsync.1"));
         command.Parameters.AddWithValue("media_guid", mediaGuid);
-        return (bool)(await command.ExecuteScalarAsync(cancellationToken) ?? false);
+        return Convert.ToBoolean(await command.ExecuteScalarAsync(cancellationToken) ?? false);
     }
 
     private static string? Validate(WatchStateUpsertRequest request)
@@ -552,7 +461,7 @@ public sealed class WatchStateConsumerService(
     private static int NormalizePageSize(int pageSize)
         => Math.Clamp(pageSize <= 0 ? 24 : pageSize, 1, 100);
 
-    private static WatchStateDto Map(NpgsqlDataReader reader)
+    private static WatchStateDto Map(DbDataReader reader)
         => new()
         {
             OwnerSubject = reader.GetString(0),
@@ -560,19 +469,19 @@ public sealed class WatchStateConsumerService(
             PositionSeconds = reader.IsDBNull(2) ? null : reader.GetDouble(2),
             DurationSeconds = reader.IsDBNull(3) ? null : reader.GetDouble(3),
             Completed = reader.GetBoolean(4),
-            WatchedAt = reader.IsDBNull(5) ? null : Instant.FromDateTimeOffset(reader.GetFieldValue<DateTimeOffset>(5)),
-            LastPlayedAt = Instant.FromDateTimeOffset(reader.GetFieldValue<DateTimeOffset>(6)),
-            UpdatedAt = Instant.FromDateTimeOffset(reader.GetFieldValue<DateTimeOffset>(7))
+            WatchedAt = reader.IsDBNull(5) ? null : Instant.FromDateTimeOffset(reader.GetApplicationValue<DateTimeOffset>(5)),
+            LastPlayedAt = Instant.FromDateTimeOffset(reader.GetApplicationValue<DateTimeOffset>(6)),
+            UpdatedAt = Instant.FromDateTimeOffset(reader.GetApplicationValue<DateTimeOffset>(7))
         };
 
-    private static MediaLikeStateDto MapLike(NpgsqlDataReader reader, bool liked)
+    private static MediaLikeStateDto MapLike(DbDataReader reader, bool liked)
         => new()
         {
             OwnerSubject = GetString(reader, "owner_subject"),
             MediaGuid = GetGuid(reader, "media_guid"),
             Liked = liked,
-            LikedAt = liked ? Instant.FromDateTimeOffset(reader.GetFieldValue<DateTimeOffset>(reader.GetOrdinal("liked_at"))) : null,
-            UpdatedAt = liked ? Instant.FromDateTimeOffset(reader.GetFieldValue<DateTimeOffset>(reader.GetOrdinal("updated_at"))) : null
+            LikedAt = liked ? Instant.FromDateTimeOffset(reader.GetApplicationValue<DateTimeOffset>(reader.GetOrdinal("liked_at"))) : null,
+            UpdatedAt = liked ? Instant.FromDateTimeOffset(reader.GetApplicationValue<DateTimeOffset>(reader.GetOrdinal("updated_at"))) : null
         };
 
     private static MediaLikeStateDto EmptyLikeState(string ownerSubject, Guid mediaGuid)
@@ -585,7 +494,7 @@ public sealed class WatchStateConsumerService(
             UpdatedAt = null
         };
 
-    private static MetadataCardDto MapMetadataCard(NpgsqlDataReader reader)
+    private static MetadataCardDto MapMetadataCard(DbDataReader reader)
         => new()
         {
             MediaGuid = GetGuid(reader, "media_guid"),

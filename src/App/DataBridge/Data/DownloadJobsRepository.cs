@@ -1,3 +1,4 @@
+using DataBridge.Persistence;
 using Microsoft.EntityFrameworkCore;
 using System.Linq.Expressions;
 using System.Text.Json;
@@ -46,11 +47,7 @@ public sealed class DownloadJobsRepository(
     public async Task<bool> TryMarkMessageProcessedAsync(Guid messageId, string operationKey, Guid jobId, CancellationToken ct = default)
     {
         var inserted = await db.Database.ExecuteSqlInterpolatedAsync(
-            $"""
-             INSERT INTO jobs.processed_messages (message_id, operation_key, job_id)
-             VALUES ({messageId}, {operationKey}, {jobId})
-             ON CONFLICT (message_id) DO NOTHING
-             """,
+            db.ParameterizedSql("DownloadJobsRepository.TryMarkMessageProcessedAsync.1", messageId, operationKey, jobId),
             ct);
 
         return inserted == 1;
@@ -335,7 +332,7 @@ public sealed class DownloadJobsRepository(
         try
         {
             await db.Database.ExecuteSqlInterpolatedAsync(
-                $"INSERT INTO media.media (media_guid) VALUES ({mediaGuid}) ON CONFLICT (media_guid) DO NOTHING", ct);
+                db.ParameterizedSql("DownloadJobsRepository.ReserveVersionAsync.1", mediaGuid), ct);
 
             await db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
@@ -368,7 +365,7 @@ public sealed class DownloadJobsRepository(
             await db.SaveChangesAsync(ct);
 
             await db.Database.ExecuteSqlInterpolatedAsync(
-                $"DELETE FROM media.media WHERE media_guid = {mediaGuid}", ct);
+                db.ParameterizedSql("DownloadJobsRepository.DeleteNewMediaGuidAsync.1", mediaGuid), ct);
 
             await tx.CommitAsync(ct);
         }
@@ -569,13 +566,13 @@ public sealed class DownloadJobsRepository(
         {
             var pattern = $"%{EscapeLike(search)}%";
             query = query.Where(x =>
-                EF.Functions.ILike(x.SourceUrl, pattern, "\\")
-                || EF.Functions.ILike(x.JobId.ToString(), pattern, "\\")
-                || EF.Functions.ILike(x.CorrelationId.ToString(), pattern, "\\")
-                || (x.RequestedBy != null && EF.Functions.ILike(x.RequestedBy, pattern, "\\"))
-                || (x.StorageKey != null && EF.Functions.ILike(x.StorageKey, pattern, "\\"))
-                || (x.FailureCode != null && EF.Functions.ILike(x.FailureCode, pattern, "\\"))
-                || (x.FailureMessage != null && EF.Functions.ILike(x.FailureMessage, pattern, "\\")));
+                PersistenceFunctions.ILike(x.SourceUrl, pattern, "\\")
+                || PersistenceFunctions.ILike(PersistenceFunctions.GuidText(x.JobId), pattern, "\\")
+                || PersistenceFunctions.ILike(PersistenceFunctions.GuidText(x.CorrelationId), pattern, "\\")
+                || (x.RequestedBy != null && PersistenceFunctions.ILike(x.RequestedBy, pattern, "\\"))
+                || (x.StorageKey != null && PersistenceFunctions.ILike(x.StorageKey, pattern, "\\"))
+                || (x.FailureCode != null && PersistenceFunctions.ILike(x.FailureCode, pattern, "\\"))
+                || (x.FailureMessage != null && PersistenceFunctions.ILike(x.FailureMessage, pattern, "\\")));
         }
 
         var totalCount = await query.CountAsync(ct);

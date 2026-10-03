@@ -5,7 +5,8 @@ using ClickHouse.Driver;
 using ClickHouse.Driver.Utility;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Npgsql;
+using System.Data.Common;
+using DataBridge.Persistence;
 using Shared.LiveChat;
 using Shared.Messaging;
 using Shared.Storage;
@@ -30,7 +31,7 @@ public sealed record LiveChatIngestResult(
 public sealed class LiveChatIngestService(
     ClickHouseAccess clickHouse,
     IStoreProvider blobStorageProvider,
-    NpgsqlDataSource dataSource,
+    ApplicationDatabase dataSource,
     IOptions<LiveChatOptions> options,
     ILogger<LiveChatIngestService> logger)
 {
@@ -167,7 +168,7 @@ public sealed class LiveChatIngestService(
         }
 
         await using var command = dataSource.CreateCommand(
-            "DELETE FROM metadata.media_live_chat WHERE media_guid = @media_guid");
+            dataSource.Sql("LiveChatIngestService.DeleteForMediaAsync.1"));
         command.Parameters.AddWithValue("@media_guid", mediaGuid);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
@@ -252,17 +253,7 @@ public sealed class LiveChatIngestService(
         long lastOffsetMs,
         CancellationToken cancellationToken)
     {
-        await using var command = dataSource.CreateCommand("""
-            INSERT INTO metadata.media_live_chat
-                (media_guid, version_num, message_count, first_offset_ms, last_offset_ms, ingested_at)
-            VALUES (@media_guid, @version_num, @message_count, @first_offset_ms, @last_offset_ms, now())
-            ON CONFLICT (media_guid) DO UPDATE SET
-                version_num = EXCLUDED.version_num,
-                message_count = EXCLUDED.message_count,
-                first_offset_ms = EXCLUDED.first_offset_ms,
-                last_offset_ms = EXCLUDED.last_offset_ms,
-                ingested_at = now()
-            """);
+        await using var command = dataSource.CreateCommand(dataSource.Sql("LiveChatIngestService.UpsertMarkerAsync.1"));
         command.Parameters.AddWithValue("@media_guid", request.MediaGuid);
         command.Parameters.AddWithValue("@version_num", (object?)request.VersionNum ?? DBNull.Value);
         command.Parameters.AddWithValue("@message_count", messageCount);

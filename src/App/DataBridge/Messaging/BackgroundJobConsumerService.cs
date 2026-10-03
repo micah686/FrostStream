@@ -4,7 +4,8 @@ using FrostStream.ApplicationContracts;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NodaTime;
-using Npgsql;
+using System.Data.Common;
+using DataBridge.Persistence;
 using Shared.Messaging;
 
 namespace DataBridge.Messaging;
@@ -12,7 +13,7 @@ namespace DataBridge.Messaging;
 public sealed class BackgroundJobConsumerService(
     IDurableJobConsumer consumer,
     IMessageBus messageBus,
-    NpgsqlDataSource dataSource,
+    ApplicationDatabase dataSource,
     IMetadataRebuildCoordinator rebuildCoordinator,
     IDownloadHistoryPurger historyPurger,
     IImportSessionPurger importSessionPurger,
@@ -100,7 +101,7 @@ public sealed class BackgroundJobConsumerService(
         {
             await MarkAttemptAsync(message);
             await run.ReportAsync("Running VACUUM (ANALYZE) over the database…");
-            await using var command = dataSource.CreateCommand("VACUUM (ANALYZE);");
+            await using var command = dataSource.CreateCommand(dataSource.Sql("BackgroundJobConsumerService.HandleDatabaseMaintenanceAsync.1"));
             command.CommandTimeout = 0;
             await command.ExecuteNonQueryAsync();
             run.Succeed("VACUUM (ANALYZE) completed.");
@@ -127,12 +128,10 @@ public sealed class BackgroundJobConsumerService(
             await using var connection = await dataSource.OpenConnectionAsync();
             var databaseName = connection.Database.Replace("\"", "\"\"", StringComparison.Ordinal);
             await run.ReportAsync($"Reindexing database \"{connection.Database}\" concurrently…");
-            await using var command = new NpgsqlCommand(
-                $"REINDEX DATABASE CONCURRENTLY \"{databaseName}\";",
-                connection)
-            {
-                CommandTimeout = 0
-            };
+            await using var command = ApplicationDbCommands.Create(
+                dataSource.Sql("BackgroundJobConsumerService.HandleDatabaseMaintenanceReindexAsync.1", databaseName),
+                connection);
+            command.CommandTimeout = 0;
             await command.ExecuteNonQueryAsync();
             run.Succeed("Database reindex completed.");
             await MarkSuccessAsync(message);
@@ -158,31 +157,7 @@ public sealed class BackgroundJobConsumerService(
         {
             await MarkAttemptAsync(message);
             await run.ReportAsync("Scanning for media rows with no remaining content storage…");
-            await using var command = dataSource.CreateCommand("""
-                WITH candidates AS (
-                    SELECT m.media_guid
-                    FROM media.media m
-                    WHERE NOT EXISTS (
-                        SELECT 1
-                        FROM media.media_content_id_versions civ
-                        WHERE civ.media_guid = m.media_guid
-                    )
-                    AND NOT EXISTS (
-                        SELECT 1
-                        FROM media.media_source_versions sv
-                        JOIN jobs.download_jobs dj ON dj.job_id = sv.latest_job_id
-                        WHERE sv.media_guid = m.media_guid
-                        AND dj.state::text = ANY(@active_download_job_states)
-                    )
-                ),
-                deleted AS (
-                    DELETE FROM media.media m
-                    USING candidates c
-                    WHERE m.media_guid = c.media_guid
-                    RETURNING m.media_guid
-                )
-                SELECT count(*)::bigint FROM deleted;
-                """);
+            await using var command = dataSource.CreateCommand(dataSource.Sql("BackgroundJobConsumerService.HandleDatabaseStaleMediaCleanupAsync.1"));
             DownloadJobStateSql.AddActiveStatesParameter(command);
             command.CommandTimeout = 0;
             var deletedCount = (long)(await command.ExecuteScalarAsync() ?? 0L);

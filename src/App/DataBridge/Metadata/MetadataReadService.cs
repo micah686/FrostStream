@@ -1,117 +1,18 @@
 using System.Text;
-using static DataBridge.NpgsqlDataReaderExtensions;
+using static DataBridge.ApplicationDataReaderExtensions;
 using NodaTime;
-using Npgsql;
-using NpgsqlTypes;
+using System.Data.Common;
+using DataBridge.Persistence;
+
 using Shared.Messaging;
 
 namespace DataBridge.Metadata;
 
-public sealed class MetadataReadService(NpgsqlDataSource dataSource) : IMetadataReadService
+public sealed class MetadataReadService(ApplicationDatabase dataSource) : IMetadataReadService
 {
     public async Task<MetadataDetailDto?> GetDetailAsync(Guid mediaGuid, CancellationToken ct = default)
     {
-        await using var command = dataSource.CreateCommand("""
-            SELECT
-                mm.media_guid,
-                COALESCE(mm.title, '') AS title,
-                mm.description,
-                mm.thumbnail_storage_path,
-                mm.duration,
-                mm.release_date,
-                mm.view_count,
-                mm.like_count,
-                mm.dislike_count,
-                mm.average_rating,
-                mm.comment_count,
-                mm.age_limit,
-                mm.was_live,
-                mm.availability::text AS availability,
-                mm.location,
-                mm.webpage_url,
-                mm.external_media_id,
-                mm.metadata_scrape_date,
-                a.id AS account_id,
-                a.platform,
-                a.account_name,
-                a.account_handle,
-                a.account_url,
-                a.account_creation_date,
-                a.account_follower_count,
-                a.is_verified,
-                a.account_description,
-                a.avatar_storage_path,
-                a.banner_storage_path,
-                (SELECT COUNT(*) FROM metadata.media_metadata amm WHERE amm.account_id = a.id) AS account_media_count,
-                COALESCE(
-                    (SELECT json_agg(t.tag_name ORDER BY t.tag_name)
-                     FROM metadata.media_tags mt
-                     JOIN metadata.tags t ON t.id = mt.tag_id
-                     WHERE mt.media_metadata_id = mm.id),
-                    '[]'::json)::text AS tags_json,
-                COALESCE(
-                    (SELECT json_agg(c.category_name ORDER BY c.category_name)
-                     FROM metadata.media_categories mc
-                     JOIN metadata.categories c ON c.id = mc.category_id
-                     WHERE mc.media_metadata_id = mm.id),
-                    '[]'::json)::text AS categories_json,
-                COALESCE(
-                    (SELECT json_agg(g.genre_name ORDER BY g.genre_name)
-                     FROM metadata.media_genres mg
-                     JOIN metadata.genres g ON g.id = mg.genre_id
-                     WHERE mg.media_metadata_id = mm.id),
-                    '[]'::json)::text AS genres_json,
-                COALESCE(
-                    (SELECT json_agg(cm.cast_name ORDER BY cm.cast_name)
-                     FROM metadata.media_cast mc
-                     JOIN metadata.cast_members cm ON cm.id = mc.cast_member_id
-                     WHERE mc.media_metadata_id = mm.id),
-                    '[]'::json)::text AS cast_json,
-                COALESCE(
-                    (SELECT json_agg(ar.artist_name ORDER BY ar.artist_name)
-                     FROM metadata.media_artists ma
-                     JOIN metadata.artists ar ON ar.id = ma.artist_id
-                     WHERE ma.media_metadata_id = mm.id AND ma.is_album_artist = false),
-                    '[]'::json)::text AS artists_json,
-                COALESCE(
-                    (SELECT json_agg(ar.artist_name ORDER BY ar.artist_name)
-                     FROM metadata.media_artists ma
-                     JOIN metadata.artists ar ON ar.id = ma.artist_id
-                     WHERE ma.media_metadata_id = mm.id AND ma.is_album_artist = true),
-                    '[]'::json)::text AS album_artists_json,
-                COALESCE(
-                    (SELECT json_agg(row_to_json(caption_rows))
-                     FROM (
-                         SELECT DISTINCT
-                             c.two_digit_language_code AS "languageCode",
-                             c.caption_type::text AS "captionType",
-                             c.name AS "name"
-                         FROM metadata.media_captions c
-                         WHERE c.media_guid = mm.media_guid
-                         ORDER BY c.two_digit_language_code, c.caption_type::text
-                     ) caption_rows),
-                    '[]'::json)::text AS caption_languages_json,
-                EXISTS (SELECT 1 FROM metadata.media_live_chat lc
-                        WHERE lc.media_guid = mm.media_guid) AS has_live_chat,
-                s.series_name,
-                s.season_count,
-                s.season_number,
-                s.season_name,
-                s.episode_number,
-                s.episode_name,
-                m.album_title,
-                m.album_type,
-                m.disc_number,
-                m.release_year,
-                m.track_title,
-                m.track_number,
-                m.composer
-            FROM metadata.media_metadata mm
-            JOIN metadata.accounts a ON a.id = mm.account_id
-            LEFT JOIN metadata.series_metadata s ON s.media_guid = mm.media_guid
-            LEFT JOIN metadata.music_metadata m ON m.media_guid = mm.media_guid
-            WHERE mm.media_guid = @media_guid
-            """);
+        await using var command = dataSource.CreateCommand(dataSource.Sql("MetadataReadService.GetDetailAsync.1"));
         command.Parameters.AddWithValue("@media_guid", mediaGuid);
 
         await using var reader = await command.ExecuteReaderAsync(ct);
@@ -193,34 +94,16 @@ public sealed class MetadataReadService(NpgsqlDataSource dataSource) : IMetadata
 
     public async Task<Guid?> GetRandomMediaGuidAsync(Guid? excludeMediaGuid, CancellationToken ct = default)
     {
-        await using var command = dataSource.CreateCommand("""
-            SELECT mm.media_guid
-            FROM metadata.media_metadata mm
-            WHERE @exclude_media_guid IS NULL OR mm.media_guid <> @exclude_media_guid
-            ORDER BY random()
-            LIMIT 1
-            """);
-        command.Parameters.Add("@exclude_media_guid", NpgsqlDbType.Uuid).Value = (object?)excludeMediaGuid ?? DBNull.Value;
+        await using var command = dataSource.CreateCommand(dataSource.Sql("MetadataReadService.GetRandomMediaGuidAsync.1"));
+        command.Parameters.Add("@exclude_media_guid", ApplicationParameterType.Guid).Value = (object?)excludeMediaGuid ?? DBNull.Value;
 
         var result = await command.ExecuteScalarAsync(ct);
-        return result is Guid mediaGuid ? mediaGuid : null;
+        return result is null or DBNull ? null : result is Guid mediaGuid ? mediaGuid : Guid.Parse(Convert.ToString(result)!);
     }
 
     public async Task<MetadataTechnicalDto?> GetTechnicalAsync(Guid mediaGuid, CancellationToken ct = default)
     {
-        await using var baseCommand = dataSource.CreateCommand("""
-            SELECT
-                mb.media_guid,
-                mb.duration_ticks,
-                mfd.duration_ticks AS format_duration_ticks,
-                mfd.start_time_ticks,
-                mfd.format_long_names,
-                mfd.stream_count,
-                mfd.bit_rate AS format_bit_rate
-            FROM metadata.media_base mb
-            LEFT JOIN metadata.media_format_details mfd ON mfd.media_base_id = mb.id
-            WHERE mb.media_guid = @media_guid
-            """);
+        await using var baseCommand = dataSource.CreateCommand(dataSource.Sql("MetadataReadService.GetTechnicalAsync.1"));
         baseCommand.Parameters.AddWithValue("@media_guid", mediaGuid);
 
         Guid actualMediaGuid;
@@ -247,33 +130,7 @@ public sealed class MetadataReadService(NpgsqlDataSource dataSource) : IMetadata
         }
 
         var streams = new List<TechnicalStreamDto>();
-        await using (var streamCommand = dataSource.CreateCommand("""
-            SELECT
-                ms.stream_type,
-                ms.is_primary,
-                ms.codec_name,
-                ms.codec_long_name,
-                ms.bit_rate,
-                ms.bit_depth,
-                ms.duration_ticks,
-                ms.language,
-                vs.width,
-                vs.height,
-                vs.avg_frame_rate,
-                vs.hdr_type,
-                vs.color_space,
-                vs.profile AS video_profile,
-                ads.channels,
-                ads.channel_layout,
-                ads.sample_rate_hz,
-                ads.profile AS audio_profile
-            FROM metadata.media_base mb
-            JOIN metadata.media_streams ms ON ms.media_base_id = mb.id
-            LEFT JOIN metadata.video_stream_details vs ON vs.media_stream_id = ms.id
-            LEFT JOIN metadata.audio_stream_details ads ON ads.media_stream_id = ms.id
-            WHERE mb.media_guid = @media_guid
-            ORDER BY ms.id
-            """))
+        await using (var streamCommand = dataSource.CreateCommand(dataSource.Sql("MetadataReadService.GetTechnicalAsync.2")))
         {
             streamCommand.Parameters.AddWithValue("@media_guid", mediaGuid);
             await using var reader = await streamCommand.ExecuteReaderAsync(ct);
@@ -314,13 +171,7 @@ public sealed class MetadataReadService(NpgsqlDataSource dataSource) : IMetadata
         }
 
         var chapters = new List<TechnicalChapterDto>();
-        await using (var chapterCommand = dataSource.CreateCommand("""
-            SELECT cd.title, cd.start_ticks, cd.end_ticks
-            FROM metadata.media_base mb
-            JOIN metadata.chapter_data cd ON cd.media_base_id = mb.id
-            WHERE mb.media_guid = @media_guid
-            ORDER BY cd.start_ticks, cd.id
-            """))
+        await using (var chapterCommand = dataSource.CreateCommand(dataSource.Sql("MetadataReadService.GetTechnicalAsync.3")))
         {
             chapterCommand.Parameters.AddWithValue("@media_guid", mediaGuid);
             await using var reader = await chapterCommand.ExecuteReaderAsync(ct);
@@ -347,18 +198,7 @@ public sealed class MetadataReadService(NpgsqlDataSource dataSource) : IMetadata
 
     public async Task<IReadOnlyList<MetadataVersionDto>> ListVersionsAsync(Guid mediaGuid, CancellationToken ct = default)
     {
-        await using var command = dataSource.CreateCommand("""
-            SELECT
-                media_guid,
-                version_num,
-                storage_key,
-                storage_path,
-                content_hash_xxh128,
-                ingest_origin::text AS ingest_origin
-            FROM media.media_content_id_versions
-            WHERE media_guid = @media_guid
-            ORDER BY version_num
-            """);
+        await using var command = dataSource.CreateCommand(dataSource.Sql("MetadataReadService.ListVersionsAsync.1"));
         command.Parameters.AddWithValue("@media_guid", mediaGuid);
 
         var items = new List<MetadataVersionDto>();
@@ -384,32 +224,11 @@ public sealed class MetadataReadService(NpgsqlDataSource dataSource) : IMetadata
         var cursor = DecodeCursor(after);
         var fetchSize = Math.Clamp(pageSize, 1, 100) + 1;
 
-        await using var command = dataSource.CreateCommand("""
-            SELECT
-                a.id,
-                a.platform,
-                a.account_name,
-                a.account_handle,
-                a.account_url,
-                a.account_follower_count,
-                a.is_verified,
-                a.avatar_storage_path,
-                COUNT(mm.id) AS media_count
-            FROM metadata.accounts a
-            JOIN metadata.media_metadata mm ON mm.account_id = a.id
-            WHERE (@platform IS NULL OR a.platform = @platform)
-              AND (
-                  @after_handle IS NULL
-                  OR (a.account_handle, a.id) > (@after_handle, @after_id)
-              )
-            GROUP BY a.id
-            ORDER BY a.account_handle, a.id
-            LIMIT @page_size
-            """);
-        command.Parameters.Add("@platform", NpgsqlDbType.Text).Value = (object?)Normalize(platform) ?? DBNull.Value;
-        command.Parameters.Add("@after_handle", NpgsqlDbType.Text).Value = (object?)cursor?.Handle ?? DBNull.Value;
-        command.Parameters.Add("@after_id", NpgsqlDbType.Bigint).Value = (object?)cursor?.Id ?? DBNull.Value;
-        command.Parameters.Add("@page_size", NpgsqlDbType.Integer).Value = fetchSize;
+        await using var command = dataSource.CreateCommand(dataSource.Sql("MetadataReadService.ListAccountsAsync.1"));
+        command.Parameters.Add("@platform", ApplicationParameterType.Text).Value = (object?)Normalize(platform) ?? DBNull.Value;
+        command.Parameters.Add("@after_handle", ApplicationParameterType.Text).Value = (object?)cursor?.Handle ?? DBNull.Value;
+        command.Parameters.Add("@after_id", ApplicationParameterType.Int64).Value = (object?)cursor?.Id ?? DBNull.Value;
+        command.Parameters.Add("@page_size", ApplicationParameterType.Integer).Value = fetchSize;
 
         var items = new List<AccountSummaryDto>();
         await using var reader = await command.ExecuteReaderAsync(ct);
@@ -442,25 +261,7 @@ public sealed class MetadataReadService(NpgsqlDataSource dataSource) : IMetadata
 
     public async Task<AccountDto?> GetAccountAsync(long accountId, CancellationToken ct = default)
     {
-        await using var command = dataSource.CreateCommand("""
-            SELECT
-                a.id,
-                a.platform,
-                a.account_name,
-                a.account_handle,
-                a.account_url,
-                a.account_creation_date,
-                a.account_follower_count,
-                a.is_verified,
-                a.account_description,
-                a.avatar_storage_path,
-                a.banner_storage_path,
-                COUNT(mm.id) AS media_count
-            FROM metadata.accounts a
-            LEFT JOIN metadata.media_metadata mm ON mm.account_id = a.id
-            WHERE a.id = @account_id
-            GROUP BY a.id
-            """);
+        await using var command = dataSource.CreateCommand(dataSource.Sql("MetadataReadService.GetAccountAsync.1"));
         command.Parameters.AddWithValue("@account_id", accountId);
 
         await using var reader = await command.ExecuteReaderAsync(ct);
@@ -503,28 +304,14 @@ public sealed class MetadataReadService(NpgsqlDataSource dataSource) : IMetadata
         var offset = Math.Max(pageOffset, 0);
         var searchValue = Normalize(search);
 
-        await using var countCommand = dataSource.CreateCommand($"""
-            SELECT COUNT(*)
-            FROM {table} t
-            WHERE (@search IS NULL OR t.{nameColumn} ILIKE @search || '%')
-            """);
-        countCommand.Parameters.Add("@search", NpgsqlDbType.Text).Value = (object?)searchValue ?? DBNull.Value;
+        await using var countCommand = dataSource.CreateCommand(dataSource.Sql("MetadataReadService.ListTaxonomyAsync.1", dataSource.Table(table), nameColumn));
+        countCommand.Parameters.Add("@search", ApplicationParameterType.Text).Value = (object?)searchValue ?? DBNull.Value;
         var total = Convert.ToInt32(await countCommand.ExecuteScalarAsync(ct));
 
-        await using var command = dataSource.CreateCommand($"""
-            SELECT
-                t.{nameColumn} AS name,
-                COUNT(j.media_metadata_id) AS media_count
-            FROM {table} t
-            LEFT JOIN {junctionTable} j ON j.{refColumn} = t.id
-            WHERE (@search IS NULL OR t.{nameColumn} ILIKE @search || '%')
-            GROUP BY t.id, t.{nameColumn}
-            ORDER BY t.{nameColumn}
-            LIMIT @page_size OFFSET @page_offset
-            """);
-        command.Parameters.Add("@search", NpgsqlDbType.Text).Value = (object?)searchValue ?? DBNull.Value;
-        command.Parameters.Add("@page_size", NpgsqlDbType.Integer).Value = limit;
-        command.Parameters.Add("@page_offset", NpgsqlDbType.Integer).Value = offset;
+        await using var command = dataSource.CreateCommand(dataSource.Sql("MetadataReadService.ListTaxonomyAsync.2", nameColumn, dataSource.Table(table), dataSource.Table(junctionTable), refColumn, nameColumn, nameColumn, nameColumn));
+        command.Parameters.Add("@search", ApplicationParameterType.Text).Value = (object?)searchValue ?? DBNull.Value;
+        command.Parameters.Add("@page_size", ApplicationParameterType.Integer).Value = limit;
+        command.Parameters.Add("@page_offset", ApplicationParameterType.Integer).Value = offset;
 
         var items = new List<TaxonomyItemDto>();
         await using var reader = await command.ExecuteReaderAsync(ct);

@@ -1,15 +1,14 @@
-using Npgsql;
-using static DataBridge.NpgsqlDataReaderExtensions;
+using System.Data.Common;
+using DataBridge.Persistence;
+using static DataBridge.ApplicationDataReaderExtensions;
 
 namespace DataBridge.Search;
 
-public sealed class MediaDocumentQuery(NpgsqlDataSource dataSource) : IMediaDocumentQuery
+public sealed class MediaDocumentQuery(ApplicationDatabase dataSource) : IMediaDocumentQuery
 {
     public async Task<MediaDocument?> GetMediaByGuidAsync(Guid mediaGuid, CancellationToken ct = default)
     {
-        await using var command = CreateMediaCommand("""
-            WHERE mm.media_guid = @media_guid
-            """);
+        await using var command = CreateMediaCommand(dataSource.Sql("MediaDocumentQuery.GetMediaByGuidAsync.1"));
         command.Parameters.AddWithValue("@media_guid", mediaGuid);
 
         var (items, _) = await ReadMediaDocumentsAsync(command, ct);
@@ -21,10 +20,7 @@ public sealed class MediaDocumentQuery(NpgsqlDataSource dataSource) : IMediaDocu
         if (mediaGuids.Count == 0)
             return [];
 
-        await using var command = CreateMediaCommand("""
-            WHERE mm.media_guid = ANY(@media_guids)
-            ORDER BY mm.id
-            """);
+        await using var command = CreateMediaCommand(dataSource.Sql("MediaDocumentQuery.GetMediaByGuidsAsync.1"));
         command.Parameters.AddWithValue("@media_guids", mediaGuids.Distinct().ToArray());
 
         var (items, _) = await ReadMediaDocumentsAsync(command, ct);
@@ -33,10 +29,7 @@ public sealed class MediaDocumentQuery(NpgsqlDataSource dataSource) : IMediaDocu
 
     public async Task<IReadOnlyList<CommentDocument>> GetCommentsByMediaGuidAsync(Guid mediaGuid, CancellationToken ct = default)
     {
-        await using var command = CreateCommentsCommand("""
-            WHERE mc.media_guid = @media_guid
-            ORDER BY mc.comment_timestamp, mc.id
-            """);
+        await using var command = CreateCommentsCommand(dataSource.Sql("MediaDocumentQuery.GetCommentsByMediaGuidAsync.1"));
         command.Parameters.AddWithValue("@media_guid", mediaGuid);
 
         var (items, _) = await ReadCommentDocumentsAsync(command, ct);
@@ -45,11 +38,7 @@ public sealed class MediaDocumentQuery(NpgsqlDataSource dataSource) : IMediaDocu
 
     public async Task<IReadOnlyList<CaptionDocument>> GetCaptionsByMediaGuidAsync(Guid mediaGuid, CancellationToken ct = default)
     {
-        await using var command = CreateCaptionsCommand("""
-            WHERE mc.media_guid = @media_guid
-              AND mc.storage_key IS NOT NULL
-            ORDER BY mc.two_digit_language_code, mc.caption_type, mc.id
-            """);
+        await using var command = CreateCaptionsCommand(dataSource.Sql("MediaDocumentQuery.GetCaptionsByMediaGuidAsync.1"));
         command.Parameters.AddWithValue("@media_guid", mediaGuid);
 
         var (items, _) = await ReadCaptionDocumentsAsync(command, ct);
@@ -58,11 +47,7 @@ public sealed class MediaDocumentQuery(NpgsqlDataSource dataSource) : IMediaDocu
 
     public async Task<DocumentBatch<MediaDocument>> GetMediaBatchAsync(long lastId, int pageSize, CancellationToken ct = default)
     {
-        await using var command = CreateMediaCommand("""
-            WHERE mm.id > @last_id
-            ORDER BY mm.id
-            LIMIT @page_size
-            """);
+        await using var command = CreateMediaCommand(dataSource.Sql("MediaDocumentQuery.GetMediaBatchAsync.1"));
         command.Parameters.AddWithValue("@last_id", lastId);
         command.Parameters.AddWithValue("@page_size", Math.Max(1, pageSize));
 
@@ -72,11 +57,7 @@ public sealed class MediaDocumentQuery(NpgsqlDataSource dataSource) : IMediaDocu
 
     public async Task<DocumentBatch<CommentDocument>> GetCommentBatchAsync(long lastId, int pageSize, CancellationToken ct = default)
     {
-        await using var command = CreateCommentsCommand("""
-            WHERE mc.id > @last_id
-            ORDER BY mc.id
-            LIMIT @page_size
-            """);
+        await using var command = CreateCommentsCommand(dataSource.Sql("MediaDocumentQuery.GetCommentBatchAsync.1"));
         command.Parameters.AddWithValue("@last_id", lastId);
         command.Parameters.AddWithValue("@page_size", Math.Max(1, pageSize));
 
@@ -86,12 +67,7 @@ public sealed class MediaDocumentQuery(NpgsqlDataSource dataSource) : IMediaDocu
 
     public async Task<DocumentBatch<CaptionDocument>> GetCaptionBatchAsync(long lastId, int pageSize, CancellationToken ct = default)
     {
-        await using var command = CreateCaptionsCommand("""
-            WHERE mc.id > @last_id
-              AND mc.storage_key IS NOT NULL
-            ORDER BY mc.id
-            LIMIT @page_size
-            """);
+        await using var command = CreateCaptionsCommand(dataSource.Sql("MediaDocumentQuery.GetCaptionBatchAsync.1"));
         command.Parameters.AddWithValue("@last_id", lastId);
         command.Parameters.AddWithValue("@page_size", Math.Max(1, pageSize));
 
@@ -99,143 +75,17 @@ public sealed class MediaDocumentQuery(NpgsqlDataSource dataSource) : IMediaDocu
         return new DocumentBatch<CaptionDocument>(items, nextLastId == 0 ? lastId : nextLastId);
     }
 
-    private NpgsqlCommand CreateMediaCommand(string whereClause)
-        => dataSource.CreateCommand($"""
-            SELECT
-                mm.id AS row_id,
-                mm.media_guid,
-                COALESCE(mm.title, '') AS title,
-                mm.description,
-                mm.thumbnail_storage_path,
-                mm.webpage_url,
-                EXTRACT(EPOCH FROM mm.release_date)::bigint AS release_date_unix,
-                COALESCE(EXTRACT(EPOCH FROM mm.release_date)::bigint, 0) AS release_date_sort,
-                EXTRACT(EPOCH FROM mm.metadata_scrape_date)::bigint AS added_at_sort,
-                mm.view_count,
-                mm.like_count,
-                mm.duration,
-                mm.was_live,
-                mm.availability::text AS availability,
-                mm.age_limit,
-                v.video_codec,
-                v.video_width,
-                v.video_height,
-                v.hdr_type,
-                au.audio_codec,
-                au.audio_channels,
-                CASE
-                    WHEN v.video_height >= 2160 THEN '2160p'
-                    WHEN v.video_height >= 1440 THEN '1440p'
-                    WHEN v.video_height >= 1080 THEN '1080p'
-                    WHEN v.video_height >= 720 THEN '720p'
-                    WHEN v.video_height >= 480 THEN '480p'
-                    WHEN v.video_height > 0 THEN 'SD'
-                    ELSE NULL
-                END AS resolution_label,
-                a.id AS account_id,
-                a.platform,
-                a.account_name,
-                a.account_handle,
-                a.avatar_storage_path AS account_avatar_storage_path,
-                COALESCE(
-                    (SELECT json_agg(t.tag_name ORDER BY t.tag_name)
-                     FROM metadata.media_tags mt
-                     JOIN metadata.tags t ON t.id = mt.tag_id
-                     WHERE mt.media_metadata_id = mm.id),
-                    '[]'::json)::text AS tags_json,
-                COALESCE(
-                    (SELECT json_agg(c.category_name ORDER BY c.category_name)
-                     FROM metadata.media_categories mc
-                     JOIN metadata.categories c ON c.id = mc.category_id
-                     WHERE mc.media_metadata_id = mm.id),
-                    '[]'::json)::text AS categories_json,
-                COALESCE(
-                    (SELECT json_agg(g.genre_name ORDER BY g.genre_name)
-                     FROM metadata.media_genres mg
-                     JOIN metadata.genres g ON g.id = mg.genre_id
-                     WHERE mg.media_metadata_id = mm.id),
-                    '[]'::json)::text AS genres_json,
-                COALESCE(
-                    (SELECT json_agg(ar.artist_name ORDER BY ar.artist_name)
-                     FROM metadata.media_artists ma
-                     JOIN metadata.artists ar ON ar.id = ma.artist_id
-                     WHERE ma.media_metadata_id = mm.id),
-                    '[]'::json)::text AS artists_json,
-                COALESCE(
-                    (SELECT json_agg(DISTINCT c.two_digit_language_code ORDER BY c.two_digit_language_code)
-                     FROM metadata.media_captions c
-                     WHERE c.media_guid = mm.media_guid),
-                    '[]'::json)::text AS caption_languages_json
-            FROM metadata.media_metadata mm
-            JOIN media.media m ON m.media_guid = mm.media_guid
-            JOIN metadata.accounts a ON a.id = mm.account_id
-            LEFT JOIN LATERAL (
-                SELECT ms.codec_name AS video_codec, vsd.width AS video_width,
-                       vsd.height AS video_height, vsd.hdr_type
-                FROM metadata.media_base mb
-                JOIN metadata.media_streams ms
-                    ON ms.media_base_id = mb.id AND ms.stream_type = 'video'
-                JOIN metadata.video_stream_details vsd ON vsd.media_stream_id = ms.id
-                WHERE mb.media_guid = mm.media_guid
-                ORDER BY ms.is_primary DESC, ms.id
-                LIMIT 1
-            ) v ON true
-            LEFT JOIN LATERAL (
-                SELECT ms.codec_name AS audio_codec, asd.channels AS audio_channels
-                FROM metadata.media_base mb
-                JOIN metadata.media_streams ms
-                    ON ms.media_base_id = mb.id AND ms.stream_type = 'audio'
-                JOIN metadata.audio_stream_details asd ON asd.media_stream_id = ms.id
-                WHERE mb.media_guid = mm.media_guid
-                ORDER BY ms.is_primary DESC, ms.id
-                LIMIT 1
-            ) au ON true
-            {whereClause}
-            """);
+    private DbCommand CreateMediaCommand(string whereClause)
+        => dataSource.CreateCommand(dataSource.Sql("MediaDocumentQuery.CreateMediaCommand.1", whereClause));
 
-    private NpgsqlCommand CreateCommentsCommand(string whereClause)
-        => dataSource.CreateCommand($"""
-            SELECT
-                mc.id AS row_id,
-                mc.comment_id AS id,
-                mc.media_guid,
-                COALESCE(mc.parent_comment_id, '') AS parent_comment_id,
-                mc.text_comment AS text,
-                EXTRACT(EPOCH FROM mc.comment_timestamp)::bigint AS comment_timestamp_unix,
-                mc.like_count,
-                mc.dislike_count,
-                mc.is_favorited,
-                mc.is_pinned,
-                mc.is_uploader,
-                a.id AS account_id,
-                a.account_name,
-                a.account_handle,
-                a.platform,
-                a.avatar_storage_path AS account_avatar_storage_path
-            FROM metadata.media_comments mc
-            JOIN media.media m ON m.media_guid = mc.media_guid
-            JOIN metadata.accounts a ON a.id = mc.account_id
-            {whereClause}
-            """);
+    private DbCommand CreateCommentsCommand(string whereClause)
+        => dataSource.CreateCommand(dataSource.Sql("MediaDocumentQuery.CreateCommentsCommand.1", whereClause));
 
-    private NpgsqlCommand CreateCaptionsCommand(string whereClause)
-        => dataSource.CreateCommand($"""
-            SELECT
-                mc.id AS row_id,
-                mc.media_guid::text || ':' || mc.two_digit_language_code || ':' || mc.caption_type::text AS id,
-                mc.media_guid,
-                mc.two_digit_language_code AS language_code,
-                mc.caption_type::text AS caption_type,
-                mc.name,
-                mc.storage_path,
-                mc.storage_key
-            FROM metadata.media_captions mc
-            JOIN media.media m ON m.media_guid = mc.media_guid
-            {whereClause}
-            """);
+    private DbCommand CreateCaptionsCommand(string whereClause)
+        => dataSource.CreateCommand(dataSource.Sql("MediaDocumentQuery.CreateCaptionsCommand.1", whereClause));
 
     private static async Task<(IReadOnlyList<MediaDocument> Documents, long LastId)> ReadMediaDocumentsAsync(
-        NpgsqlCommand command,
+        DbCommand command,
         CancellationToken ct)
     {
         var documents = new List<MediaDocument>();
@@ -286,7 +136,7 @@ public sealed class MediaDocumentQuery(NpgsqlDataSource dataSource) : IMediaDocu
     }
 
     private static async Task<(IReadOnlyList<CommentDocument> Documents, long LastId)> ReadCommentDocumentsAsync(
-        NpgsqlCommand command,
+        DbCommand command,
         CancellationToken ct)
     {
         var documents = new List<CommentDocument>();
@@ -320,7 +170,7 @@ public sealed class MediaDocumentQuery(NpgsqlDataSource dataSource) : IMediaDocu
     }
 
     private static async Task<(IReadOnlyList<CaptionDocument> Documents, long LastId)> ReadCaptionDocumentsAsync(
-        NpgsqlCommand command,
+        DbCommand command,
         CancellationToken ct)
     {
         var documents = new List<CaptionDocument>();

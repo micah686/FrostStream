@@ -1,3 +1,4 @@
+using DataBridge.Persistence;
 using DataBridge.Messaging;
 using DataBridge.Search;
 using DotNet.Testcontainers.Builders;
@@ -210,7 +211,7 @@ public sealed class MediaDeleteExecutorTests
             new ServiceCollection().BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
 
         public MediaDeleteExecutor CreateExecutor(IMessageBus messageBus, ITypesenseIndexService searchIndex)
-            => new(DataSource, messageBus, searchIndex, EmptyScopeFactory, NullLogger<MediaDeleteExecutor>.Instance);
+            => new(new ApplicationDatabase(DataSource), messageBus, searchIndex, EmptyScopeFactory, NullLogger<MediaDeleteExecutor>.Instance);
 
         private string ConnectionString =>
             new NpgsqlConnectionStringBuilder

@@ -1,21 +1,17 @@
-using static DataBridge.NpgsqlDataReaderExtensions;
-using Npgsql;
+using static DataBridge.ApplicationDataReaderExtensions;
+using System.Data.Common;
+using DataBridge.Persistence;
 using Shared.Messaging;
 
 namespace DataBridge.MediaStream;
 
-public sealed class MediaCaptionReadService(NpgsqlDataSource dataSource) : IMediaCaptionReadService
+public sealed class MediaCaptionReadService(ApplicationDatabase dataSource) : IMediaCaptionReadService
 {
     public async Task<IReadOnlyList<MediaCaptionLocationDto>> ListAsync(
         Guid mediaGuid,
         CancellationToken cancellationToken = default)
     {
-        await using var command = dataSource.CreateCommand("""
-            SELECT media_guid, storage_key, storage_path, two_digit_language_code, caption_type::text AS caption_type, name
-            FROM metadata.media_captions
-            WHERE media_guid = @media_guid AND storage_key IS NOT NULL
-            ORDER BY two_digit_language_code, CASE WHEN caption_type::text = 'subtitles' THEN 0 ELSE 1 END, id
-            """);
+        await using var command = dataSource.CreateCommand(dataSource.Sql("MediaCaptionReadService.ListAsync.1"));
         command.Parameters.AddWithValue("@media_guid", mediaGuid);
 
         var items = new List<MediaCaptionLocationDto>();
@@ -43,28 +39,10 @@ public sealed class MediaCaptionReadService(NpgsqlDataSource dataSource) : IMedi
         CancellationToken cancellationToken = default)
     {
         // Manual subtitles win over automatic captions when the caller does not pin a type.
-        await using var command = dataSource.CreateCommand("""
-            SELECT
-                media_guid,
-                storage_key,
-                storage_path,
-                two_digit_language_code,
-                caption_type::text AS caption_type,
-                name
-            FROM metadata.media_captions
-            WHERE media_guid = @media_guid
-              AND two_digit_language_code = @language_code
-              AND storage_key IS NOT NULL
-              AND (@caption_type IS NULL OR caption_type::text = @caption_type)
-            ORDER BY CASE WHEN caption_type::text = 'subtitles' THEN 0 ELSE 1 END
-            LIMIT 1
-            """);
+        await using var command = dataSource.CreateCommand(dataSource.Sql("MediaCaptionReadService.ResolveAsync.1"));
         command.Parameters.AddWithValue("@media_guid", mediaGuid);
         command.Parameters.AddWithValue("@language_code", languageCode);
-        command.Parameters.Add(new NpgsqlParameter("@caption_type", NpgsqlTypes.NpgsqlDbType.Text)
-        {
-            Value = (object?)captionType ?? DBNull.Value
-        });
+        command.Parameters.AddWithValue("@caption_type", ApplicationParameterType.Text, captionType);
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         if (!await reader.ReadAsync(cancellationToken))

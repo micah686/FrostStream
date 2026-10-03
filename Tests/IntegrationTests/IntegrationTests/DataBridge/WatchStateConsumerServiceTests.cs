@@ -1,3 +1,4 @@
+using DataBridge.Persistence;
 using DataBridge.Messaging;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
@@ -306,9 +307,9 @@ public sealed class WatchStateConsumerServiceTests
         private NpgsqlDataSource DataSource => _dataSource ?? throw new InvalidOperationException("Fixture not initialized.");
 
         public WatchStateConsumerService CreateService(FakeMessageBus bus)
-            => new(bus, DataSource, new FixedClock(Now), NullLogger<WatchStateConsumerService>.Instance);
+            => new(bus, new ApplicationDatabase(DataSource), new FixedClock(Now), NullLogger<WatchStateConsumerService>.Instance);
 
-        public AccessPolicyExecutor CreateAccessPolicyExecutor() => new(DataSource);
+        public AccessPolicyExecutor CreateAccessPolicyExecutor() => new(new ApplicationDatabase(DataSource));
 
         public async Task InitializeAsync()
         {

@@ -1,10 +1,11 @@
-using static DataBridge.NpgsqlDataReaderExtensions;
-using Npgsql;
+using static DataBridge.ApplicationDataReaderExtensions;
+using System.Data.Common;
+using DataBridge.Persistence;
 using Shared.Messaging;
 
 namespace DataBridge.MediaStream;
 
-public sealed class AccountAssetReadService(NpgsqlDataSource dataSource) : IAccountAssetReadService
+public sealed class AccountAssetReadService(ApplicationDatabase dataSource) : IAccountAssetReadService
 {
     public async Task<AccountAssetLocationDto?> ResolveAsync(
         long accountId,
@@ -15,16 +16,7 @@ public sealed class AccountAssetReadService(NpgsqlDataSource dataSource) : IAcco
             ? "banner_storage_path"
             : "avatar_storage_path";
 
-        await using var command = dataSource.CreateCommand($"""
-            SELECT
-                id,
-                storage_key,
-                {pathColumn} AS asset_storage_path
-            FROM metadata.accounts
-            WHERE id = @account_id
-              AND storage_key IS NOT NULL
-              AND {pathColumn} IS NOT NULL
-            """);
+        await using var command = dataSource.CreateCommand(dataSource.Sql("AccountAssetReadService.ResolveAsync.1", pathColumn, pathColumn));
         command.Parameters.AddWithValue("@account_id", accountId);
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);

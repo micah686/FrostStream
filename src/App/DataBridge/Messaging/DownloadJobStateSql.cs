@@ -1,6 +1,7 @@
 using System.Text;
-using Npgsql;
-using NpgsqlTypes;
+using System.Data.Common;
+using DataBridge.Persistence;
+
 using Shared.Messaging;
 
 namespace DataBridge.Messaging;
@@ -23,8 +24,8 @@ internal static class DownloadJobStateSql
         DownloadJobState.Cancelling
     }.Select(ToPostgresName).ToArray();
 
-    public static void AddActiveStatesParameter(NpgsqlCommand command)
-        => command.Parameters.Add("active_download_job_states", NpgsqlDbType.Array | NpgsqlDbType.Text).Value = ActiveStates;
+    public static void AddActiveStatesParameter(DbCommand command)
+        => command.Parameters.Add("active_download_job_states", ApplicationParameterType.TextArray).Value = ActiveStates;
 
     /// <summary>
     /// Renders an enum member as the snake_case label its PostgreSQL enum type uses, for raw SQL that

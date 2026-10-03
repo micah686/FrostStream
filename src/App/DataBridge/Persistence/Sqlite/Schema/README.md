@@ -18,7 +18,7 @@ dotnet run --project src/App/Lite/Lite.csproj --no-launch-profile -- \
 
 Run the same command again to verify repeatability. `Persistence:Sqlite:Path` defaults to `/data/frostreamlitedb`; relative paths resolve against the host content root. It must name a persistent file, not `:memory:` or a SQLite URI. `Persistence:Sqlite:BusyTimeoutSeconds` defaults to 5 and accepts 1–60. The same keys can be supplied with environment variables, e.g. `Persistence__Sqlite__Enabled=true`.
 
-Initialization-only composition registers the selected database, runs migrations and exits without starting application services or an HTTP listener. It works with Full/PostgreSQL too, which is useful for disposable catalog capture. Normal startup remains on PostgreSQL unless SQLite is explicitly selected. Selecting SQLite in Full is a configuration error. Normal SQLite runtime startup is rejected until the repository/workflow/restart work is ready; database initialization is the scope of 2b.
+Initialization-only composition registers the selected database, runs migrations and exits without starting application services or an HTTP listener. It works with Full/PostgreSQL too, which is useful for disposable catalog capture. Normal startup remains on PostgreSQL unless SQLite is explicitly selected. Selecting SQLite in Full is a configuration error. Normal SQLite runtime startup is rejected until the repository/workflow/restart work is ready; database initialization was the scope of 2b. Core repository adapters and verification are now available in [2c](../../Queries/README.md); normal runtime still depends on 2d–2f.
 
 ## Connection and storage rules
 
@@ -27,7 +27,7 @@ Raw connections use `SqliteConnectionFactory`. EF opens and reopens use its setu
 - Logical `schema.table` names become `schema_table`. Explicit index names also get the schema prefix. PostgreSQL primary-key indexes are represented by SQLite primary keys; non-primary unique indexes preserve unique constraints without duplicate SQLite autoindexes.
 - Native enums use Npgsql's field-name translator/PgName rules, checked against catalog labels before building the SQLite EF model. Existing CLR string enum conversions stay unchanged. No ordinal mapping for native enums is introduced.
 - GUIDs are lowercase 32-hex TEXT. JSON is TEXT with `json_valid` checks. VARCHAR limits, enum membership, booleans and GUID format are enforced with SQLite checks in addition to translated application checks.
-- Instants are signed INTEGER Unix microseconds, floored for values between microsecond boundaries, including before the epoch. Metadata timestamps without a PostgreSQL timezone are mapped to the same integer UTC representation for future raw adapters. Date-only values remain ISO date TEXT. Repository/query behavior beyond these foundation mappings is 2c.
+- Instants are signed INTEGER Unix microseconds, floored for values between microsecond boundaries, including before the epoch. Metadata timestamps without a PostgreSQL timezone are mapped to the same integer UTC representation for the shared raw adapters. Date-only values remain ISO date TEXT. Repository/query behavior is covered by the [2c adapters](../../Queries/README.md).
 - Database-generated time defaults use integer epoch arithmetic at SQLite's millisecond clock resolution. Application-supplied values retain microsecond precision. These defaults do not round-trip all of PostgreSQL's generated microsecond clock precision; callers needing it must supply a shared-clock value.
 - Active seeds include default local storage and ten schedules. Captured numeric IDs are retained; creation/update times are supplied by `IClock`, and next-due times are computed from each seed's Quartz cron and timezone. No timestamp from the disposable database is shipped. Backup schedule adaptation remains later scope; these schedules cannot execute through the initialization-only host.
 
@@ -48,4 +48,4 @@ dotnet run --project Tests/UnitTests/UnitTests.csproj -- \
   --treenode-filter '/*/*/SqlitePersistenceFoundationTests/*'
 ```
 
-Use `sqlite_baseline.py` without `--check` only while authoring/reviewing a baseline. An unchanged cutoff does not authorize silently changing a released SQLite v1. Cross-provider repository equivalence, workflow durability and upgrades remain 2c–2f acceptance work.
+Use `sqlite_baseline.py` without `--check` only while authoring/reviewing a baseline. An unchanged cutoff does not authorize silently changing a released SQLite v1. Core repository equivalence is verified by 2c. Bulk/contention, workflow durability and upgrades remain 2d–2f acceptance work.

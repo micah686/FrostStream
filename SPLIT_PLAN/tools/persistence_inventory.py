@@ -39,6 +39,8 @@ def generate():
         if re.search(r'\binterface\s+I\w*(?:Repository|Purger|ReadService|DocumentQuery)\b', p.read_text()):
             lines.append(f'| {link(p)} |')
     patterns = {
+        'application adapter': r'\bApplication(?:Database|DbCommands|Queries|Parameters|DatabaseErrors)\b|\.ParameterizedSql\(',
+        'provider query catalog': r'\bProviderQuery\b',
         'SQLite': r'\bSqlite(?:Connection|Transaction|ConnectionFactory|SchemaInitializer)\b',
         'Npgsql': r'\bNpgsql(?:DataSourceBuilder|DataSource|Connection|Command|Transaction|DataReader|DbType)\b|using Npgsql;',
         'EF SQL': r'ExecuteSql\w*|FromSql\w*|\.SqlQuery\b',

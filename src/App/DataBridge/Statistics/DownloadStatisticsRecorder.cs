@@ -1,3 +1,4 @@
+using DataBridge.Persistence;
 using DataBridge.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -22,14 +23,7 @@ internal static class DownloadStatisticsRecorder
         try
         {
             var day = occurredAt.InUtc().Date;
-            await db.Database.ExecuteSqlInterpolatedAsync($"""
-                INSERT INTO statistics.download_daily_activity (day, state, job_count, bytes, duration_seconds)
-                VALUES ({day}, {state}, 1, {bytes}, {durationSeconds})
-                ON CONFLICT (day, state) DO UPDATE SET
-                    job_count = statistics.download_daily_activity.job_count + 1,
-                    bytes = statistics.download_daily_activity.bytes + EXCLUDED.bytes,
-                    duration_seconds = statistics.download_daily_activity.duration_seconds + EXCLUDED.duration_seconds
-                """, ct);
+            await db.Database.ExecuteSqlInterpolatedAsync(db.ParameterizedSql("DownloadStatisticsRecorder.RecordDailyActivityAsync.1", day, state, bytes, durationSeconds), ct);
         }
         catch (Exception ex)
         {
@@ -56,15 +50,7 @@ internal static class DownloadStatisticsRecorder
 
         try
         {
-            await db.Database.ExecuteSqlInterpolatedAsync($"""
-                INSERT INTO statistics.creator_source_daily_states (day, creator_source_id, state, job_count)
-                SELECT {day}, dm.creator_source_id, {state}, 1
-                FROM discovery.discovered_media dm
-                WHERE dm.canonical_url = {sourceUrl}
-                LIMIT 1
-                ON CONFLICT (day, creator_source_id, state) DO UPDATE SET
-                    job_count = statistics.creator_source_daily_states.job_count + 1
-                """, ct);
+            await db.Database.ExecuteSqlInterpolatedAsync(db.ParameterizedSql("DownloadStatisticsRecorder.RecordChannelDailyStatesAsync.1", day, state, sourceUrl), ct);
         }
         catch (Exception ex)
         {
@@ -73,15 +59,7 @@ internal static class DownloadStatisticsRecorder
 
         try
         {
-            await db.Database.ExecuteSqlInterpolatedAsync($"""
-                INSERT INTO statistics.account_daily_states (day, account_id, state, job_count)
-                SELECT {day}, mm.account_id, {state}, 1
-                FROM metadata.media_metadata mm
-                WHERE mm.webpage_url = {sourceUrl}
-                LIMIT 1
-                ON CONFLICT (day, account_id, state) DO UPDATE SET
-                    job_count = statistics.account_daily_states.job_count + 1
-                """, ct);
+            await db.Database.ExecuteSqlInterpolatedAsync(db.ParameterizedSql("DownloadStatisticsRecorder.RecordChannelDailyStatesAsync.2", day, state, sourceUrl), ct);
         }
         catch (Exception ex)
         {
@@ -108,22 +86,11 @@ internal static class DownloadStatisticsRecorder
             // SqlQuery only supports scalar element types, so the duration comes back on its own and
             // the ledger row resolves its owning account inline — a missing metadata row then simply
             // inserts nothing instead of costing us the daily rollup too.
-            var durationSeconds = await db.Database.SqlQuery<double>($"""
-                SELECT COALESCE(mm.duration, 0) AS "Value"
-                FROM metadata.media_metadata mm
-                WHERE mm.media_guid = {mediaGuid}
-                """).FirstOrDefaultAsync(ct);
+            var durationSeconds = await db.Database.SqlQuery<double>(db.ParameterizedSql("DownloadStatisticsRecorder.RecordCompletionStatisticsAsync.1", mediaGuid)).FirstOrDefaultAsync(ct);
 
             await RecordDailyActivityAsync(db, logger, "completed", completedAt, bytes, durationSeconds, ct);
 
-            var ledgerRows = await db.Database.ExecuteSqlInterpolatedAsync($"""
-                INSERT INTO statistics.channel_media_downloads
-                    (media_guid, account_id, platform, bytes, duration_seconds, completed_at)
-                SELECT mm.media_guid, mm.account_id, a.platform, {bytes}, COALESCE(mm.duration, 0), {completedAt}
-                FROM metadata.media_metadata mm
-                JOIN metadata.accounts a ON a.id = mm.account_id
-                WHERE mm.media_guid = {mediaGuid}
-                """, ct);
+            var ledgerRows = await db.Database.ExecuteSqlInterpolatedAsync(db.ParameterizedSql("DownloadStatisticsRecorder.RecordCompletionStatisticsAsync.2", bytes, completedAt, mediaGuid), ct);
 
             if (ledgerRows == 0)
             {

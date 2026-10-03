@@ -19,6 +19,15 @@ internal static class PersistenceModelConfiguration
 
     public static void Apply(ModelBuilder modelBuilder, bool sqlite)
     {
+        var guidText = modelBuilder.HasDbFunction(typeof(PersistenceFunctions).GetMethod(nameof(PersistenceFunctions.GuidText))!);
+        if (sqlite) guidText.HasName("fs_guid_text");
+        else guidText.HasTranslation(args => new Microsoft.EntityFrameworkCore.Query.SqlExpressions.SqlUnaryExpression(
+            System.Linq.Expressions.ExpressionType.Convert, args[0], typeof(string), new Microsoft.EntityFrameworkCore.Storage.StringTypeMapping("text", System.Data.DbType.String)));
+        var like = modelBuilder.HasDbFunction(typeof(PersistenceFunctions).GetMethod(nameof(PersistenceFunctions.ILike))!);
+        if (sqlite) like.HasName("fs_ilike");
+#pragma warning disable EF1001 // Explicit provider expression preserves PostgreSQL's existing native ILIKE behavior.
+        else like.HasTranslation(args => new Npgsql.EntityFrameworkCore.PostgreSQL.Query.Expressions.Internal.PgILikeExpression(args[0], args[1], args[2], null));
+#pragma warning restore EF1001
         if (sqlite)
         {
             SqliteModelConfiguration.Apply(modelBuilder);

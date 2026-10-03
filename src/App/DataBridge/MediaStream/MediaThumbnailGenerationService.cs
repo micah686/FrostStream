@@ -1,5 +1,6 @@
-using Npgsql;
-using NpgsqlTypes;
+using System.Data.Common;
+using DataBridge.Persistence;
+
 using Shared.Messaging;
 
 namespace DataBridge.MediaStream;
@@ -19,7 +20,7 @@ public interface IMediaThumbnailGenerationService
         CancellationToken cancellationToken = default);
 }
 
-public sealed class MediaThumbnailGenerationService(NpgsqlDataSource dataSource) : IMediaThumbnailGenerationService
+public sealed class MediaThumbnailGenerationService(ApplicationDatabase dataSource) : IMediaThumbnailGenerationService
 {
     public async Task<IReadOnlyList<MissingMediaThumbnailItem>> ListMissingAsync(
         long accountId,
@@ -27,26 +28,14 @@ public sealed class MediaThumbnailGenerationService(NpgsqlDataSource dataSource)
         int limit,
         CancellationToken cancellationToken = default)
     {
-        const string sql = """
-            SELECT DISTINCT ON (mm.media_guid)
-                mm.media_guid,
-                content.storage_key,
-                content.storage_path
-            FROM metadata.media_metadata mm
-            JOIN media.media_content_id_versions content ON content.media_guid = mm.media_guid
-            WHERE mm.account_id = @account_id
-              AND NULLIF(BTRIM(mm.thumbnail_storage_path), '') IS NULL
-              AND (@after_media_guid IS NULL OR mm.media_guid > @after_media_guid)
-            ORDER BY mm.media_guid, content.version_num DESC
-            LIMIT @limit
-            """;
+        var sql = dataSource.Sql("MediaThumbnailGenerationService.ListMissingAsync.1");
 
         var items = new List<MissingMediaThumbnailItem>();
         await using var command = dataSource.CreateCommand(sql);
         command.Parameters.AddWithValue("@account_id", accountId);
         command.Parameters.AddWithValue(
             "@after_media_guid",
-            NpgsqlDbType.Uuid,
+            ApplicationParameterType.Guid,
             (object?)afterMediaGuid ?? DBNull.Value);
         command.Parameters.AddWithValue("@limit", Math.Clamp(limit, 1, 200));
 
@@ -70,13 +59,7 @@ public sealed class MediaThumbnailGenerationService(NpgsqlDataSource dataSource)
         string storagePath,
         CancellationToken cancellationToken = default)
     {
-        const string sql = """
-            UPDATE metadata.media_metadata
-            SET thumbnail_storage_path = @storage_path,
-                storage_key = @storage_key
-            WHERE media_guid = @media_guid
-              AND NULLIF(BTRIM(thumbnail_storage_path), '') IS NULL
-            """;
+        var sql = dataSource.Sql("MediaThumbnailGenerationService.CompleteAsync.1");
 
         await using var command = dataSource.CreateCommand(sql);
         command.Parameters.AddWithValue("@media_guid", mediaGuid);

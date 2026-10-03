@@ -1,7 +1,7 @@
 using FrostStream.ApplicationContracts;
+using DataBridge.Persistence;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Npgsql;
 using Shared.Messaging;
 using System.Text.RegularExpressions;
 
@@ -55,7 +55,7 @@ public sealed partial class AccessPolicyConsumerService(
                 var saved = await executor.SaveAsync(Normalize(context.Message.Policy), CancellationToken.None);
                 return new AccessPolicyOperationResponseMessage { Success = true, Policy = saved };
             }
-            catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
+            catch (Exception ex) when (ApplicationDatabaseErrors.IsUniqueViolation(ex))
             {
                 return Failure("validation", "An access policy with this name already exists.");
             }

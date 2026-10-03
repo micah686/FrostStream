@@ -1,7 +1,8 @@
 using DataBridge.Data;
 using Microsoft.EntityFrameworkCore;
 using NodaTime;
-using Npgsql;
+using System.Data.Common;
+using DataBridge.Persistence;
 using Shared.Database;
 using Shared.Messaging;
 
@@ -14,7 +15,7 @@ namespace DataBridge.AudioRenditions;
 /// </summary>
 public sealed class MediaEncodingStatusRepository(
     DataBridgeDbContext db,
-    NpgsqlDataSource dataSource,
+    ApplicationDatabase dataSource,
     IClock clock) : IMediaEncodingStatusRepository
 {
     private const int DefaultLimit = 50;
@@ -102,48 +103,12 @@ public sealed class MediaEncodingStatusRepository(
         // Filters against the media's archived source storage key (media_content_id_versions), the
         // same thing /status filters on, not audio_encoding_status.storage_key — items that aren't
         // encoded yet have no row there, so filtering by that column would silently drop them.
-        await using var encodedCountCommand = dataSource.CreateCommand("""
-            SELECT COUNT(*) FILTER (WHERE COALESCE(s.is_encoded, false))
-            FROM metadata.media_metadata mm
-            JOIN LATERAL (
-                SELECT storage_key
-                FROM media.media_content_id_versions
-                WHERE media_guid = mm.media_guid
-                ORDER BY version_num DESC
-                LIMIT 1
-            ) source ON true
-            LEFT JOIN media.audio_encoding_status s ON s.media_guid = mm.media_guid
-            WHERE mm.account_id = @account_id
-              AND (@storage_key::text IS NULL OR source.storage_key = @storage_key::text)
-            """);
+        await using var encodedCountCommand = dataSource.CreateCommand(dataSource.Sql("MediaEncodingStatusRepository.ListChannelAsync.1"));
         encodedCountCommand.Parameters.AddWithValue("@account_id", accountId);
         encodedCountCommand.Parameters.AddWithValue("@storage_key", (object?)storageKey ?? DBNull.Value);
         var encodedCount = (int)(long)(await encodedCountCommand.ExecuteScalarAsync(cancellationToken) ?? 0L);
 
-        await using var command = dataSource.CreateCommand("""
-            SELECT
-                mm.media_guid,
-                COALESCE(NULLIF(mm.title, ''), 'Untitled'),
-                COALESCE(s.is_encoded, false),
-                s.storage_key,
-                s.storage_path,
-                EXTRACT(EPOCH FROM s.encoded_at)::bigint,
-                COUNT(*) OVER() AS total_count
-            FROM metadata.media_metadata mm
-            JOIN LATERAL (
-                SELECT storage_key
-                FROM media.media_content_id_versions
-                WHERE media_guid = mm.media_guid
-                ORDER BY version_num DESC
-                LIMIT 1
-            ) source ON true
-            LEFT JOIN media.audio_encoding_status s ON s.media_guid = mm.media_guid
-            WHERE mm.account_id = @account_id
-              AND (@storage_key::text IS NULL OR source.storage_key = @storage_key::text)
-              AND (@is_encoded::boolean IS NULL OR COALESCE(s.is_encoded, false) = @is_encoded::boolean)
-            ORDER BY mm.media_guid
-            LIMIT @limit OFFSET @offset
-            """);
+        await using var command = dataSource.CreateCommand(dataSource.Sql("MediaEncodingStatusRepository.ListChannelAsync.2"));
         command.Parameters.AddWithValue("@account_id", accountId);
         command.Parameters.AddWithValue("@storage_key", (object?)storageKey ?? DBNull.Value);
         command.Parameters.AddWithValue("@is_encoded", (object?)isEncodedFilter ?? DBNull.Value);
@@ -176,9 +141,7 @@ public sealed class MediaEncodingStatusRepository(
 
     private async Task<bool> MediaBelongsToAccountAsync(long accountId, Guid mediaGuid, CancellationToken cancellationToken)
     {
-        await using var command = dataSource.CreateCommand("""
-            SELECT 1 FROM metadata.media_metadata WHERE media_guid = @media_guid AND account_id = @account_id
-            """);
+        await using var command = dataSource.CreateCommand(dataSource.Sql("MediaEncodingStatusRepository.MediaBelongsToAccountAsync.1"));
         command.Parameters.AddWithValue("@media_guid", mediaGuid);
         command.Parameters.AddWithValue("@account_id", accountId);
         var result = await command.ExecuteScalarAsync(cancellationToken);
@@ -187,9 +150,7 @@ public sealed class MediaEncodingStatusRepository(
 
     private async Task<long?> ReadAccountIdForMediaAsync(Guid mediaGuid, CancellationToken cancellationToken)
     {
-        await using var command = dataSource.CreateCommand("""
-            SELECT account_id FROM metadata.media_metadata WHERE media_guid = @media_guid
-            """);
+        await using var command = dataSource.CreateCommand(dataSource.Sql("MediaEncodingStatusRepository.ReadAccountIdForMediaAsync.1"));
         command.Parameters.AddWithValue("@media_guid", mediaGuid);
         var result = await command.ExecuteScalarAsync(cancellationToken);
         return result is null or DBNull ? null : (long)result;

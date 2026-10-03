@@ -1,20 +1,16 @@
 using NodaTime;
-using Npgsql;
+using System.Data.Common;
+using DataBridge.Persistence;
 using Shared.Messaging;
 
 namespace DataBridge.Messaging;
 
-public sealed class AccessPolicyExecutor(NpgsqlDataSource dataSource)
+public sealed class AccessPolicyExecutor(ApplicationDatabase dataSource)
 {
     public async Task<IReadOnlyList<AccessPolicyDto>> ListAsync(CancellationToken cancellationToken)
     {
         var policies = new Dictionary<Guid, PolicyBuilder>();
-        await using (var command = dataSource.CreateCommand("""
-            SELECT policy_id, name, description, enabled, sync_status, sync_error, version,
-                   created_at, created_by_subject, updated_at, updated_by_subject
-            FROM auth.access_policies
-            ORDER BY lower(name), policy_id;
-            """))
+        await using (var command = dataSource.CreateCommand(dataSource.Sql("AccessPolicyExecutor.ListAsync.1")))
         await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
         {
             while (await reader.ReadAsync(cancellationToken))
@@ -47,11 +43,7 @@ public sealed class AccessPolicyExecutor(NpgsqlDataSource dataSource)
         await LoadStringsAsync("access_policy_providers", "provider", policies, (p, value) => p.Providers.Add(value), cancellationToken);
         await LoadIntsAsync("access_policy_age_tiers", "minimum_age", policies, (p, value) => p.AgeThresholds.Add(value), cancellationToken);
 
-        await using (var command = dataSource.CreateCommand("""
-            SELECT policy_id, principal_type, principal_id
-            FROM auth.access_policy_assignments
-            ORDER BY principal_type, principal_id;
-            """))
+        await using (var command = dataSource.CreateCommand(dataSource.Sql("AccessPolicyExecutor.ListAsync.2")))
         await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
         {
             while (await reader.ReadAsync(cancellationToken))
@@ -78,23 +70,7 @@ public sealed class AccessPolicyExecutor(NpgsqlDataSource dataSource)
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
-        await using (var command = new NpgsqlCommand("""
-            INSERT INTO auth.access_policies
-                (policy_id, name, description, enabled, sync_status, sync_error, version,
-                 created_at, created_by_subject, updated_at, updated_by_subject)
-            VALUES
-                (@id, @name, @description, @enabled, 'pending', NULL, 1,
-                 CURRENT_TIMESTAMP, @created_by, CURRENT_TIMESTAMP, @updated_by)
-            ON CONFLICT (policy_id) DO UPDATE SET
-                name = EXCLUDED.name,
-                description = EXCLUDED.description,
-                enabled = EXCLUDED.enabled,
-                sync_status = 'pending',
-                sync_error = NULL,
-                version = auth.access_policies.version + 1,
-                updated_at = CURRENT_TIMESTAMP,
-                updated_by_subject = EXCLUDED.updated_by_subject;
-            """, connection, transaction))
+        await using (var command = ApplicationDbCommands.Create(connection.Sql("AccessPolicyExecutor.SaveAsync.1"), connection, transaction))
         {
             command.Parameters.AddWithValue("id", policy.PolicyId);
             command.Parameters.AddWithValue("name", policy.Name);
@@ -111,7 +87,7 @@ public sealed class AccessPolicyExecutor(NpgsqlDataSource dataSource)
                      "access_policy_age_tiers", "access_policy_assignments"
                  })
         {
-            await using var delete = new NpgsqlCommand($"DELETE FROM auth.{table} WHERE policy_id = @id;", connection, transaction);
+            await using var delete = ApplicationDbCommands.Create(connection.Sql("AccessPolicyExecutor.SaveAsync.2", table), connection, transaction);
             delete.Parameters.AddWithValue("id", policy.PolicyId);
             await delete.ExecuteNonQueryAsync(cancellationToken);
         }
@@ -123,10 +99,7 @@ public sealed class AccessPolicyExecutor(NpgsqlDataSource dataSource)
 
         foreach (var assignment in policy.Assignments)
         {
-            await using var command = new NpgsqlCommand("""
-                INSERT INTO auth.access_policy_assignments (policy_id, principal_type, principal_id)
-                VALUES (@id, @type, @principal);
-                """, connection, transaction);
+            await using var command = ApplicationDbCommands.Create(connection.Sql("AccessPolicyExecutor.SaveAsync.3"), connection, transaction);
             command.Parameters.AddWithValue("id", policy.PolicyId);
             command.Parameters.AddWithValue("type", assignment.Type);
             command.Parameters.AddWithValue("principal", assignment.Id);
@@ -141,7 +114,7 @@ public sealed class AccessPolicyExecutor(NpgsqlDataSource dataSource)
     public async Task<bool> DeleteAsync(Guid policyId, CancellationToken cancellationToken)
     {
         await using var command = dataSource.CreateCommand(
-            "DELETE FROM auth.access_policies WHERE policy_id = @id;");
+            dataSource.Sql("AccessPolicyExecutor.DeleteAsync.1"));
         command.Parameters.AddWithValue("id", policyId);
         return await command.ExecuteNonQueryAsync(cancellationToken) > 0;
     }
@@ -153,11 +126,7 @@ public sealed class AccessPolicyExecutor(NpgsqlDataSource dataSource)
         string? error,
         CancellationToken cancellationToken)
     {
-        await using var command = dataSource.CreateCommand("""
-            UPDATE auth.access_policies
-            SET sync_status = @status, sync_error = @error
-            WHERE policy_id = @id AND version = @version;
-            """);
+        await using var command = dataSource.CreateCommand(dataSource.Sql("AccessPolicyExecutor.SetSyncAsync.1"));
         command.Parameters.AddWithValue("id", policyId);
         command.Parameters.AddWithValue("version", version);
         command.Parameters.AddWithValue("status", status.ToString().ToLowerInvariant());
@@ -168,12 +137,7 @@ public sealed class AccessPolicyExecutor(NpgsqlDataSource dataSource)
 
     public async Task<IReadOnlyList<string>> ListProviderCatalogAsync(CancellationToken cancellationToken)
     {
-        await using var command = dataSource.CreateCommand("""
-            SELECT DISTINCT lower(provider)
-            FROM media.media_source_versions
-            WHERE provider IS NOT NULL AND provider <> ''
-            ORDER BY lower(provider);
-            """);
+        await using var command = dataSource.CreateCommand(dataSource.Sql("AccessPolicyExecutor.ListProviderCatalogAsync.1"));
         var values = new List<string>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
@@ -185,14 +149,7 @@ public sealed class AccessPolicyExecutor(NpgsqlDataSource dataSource)
 
     public async Task<AccessPolicyMediaSummaryDto> GetMediaSummaryAsync(Guid mediaGuid, CancellationToken cancellationToken)
     {
-        await using var command = dataSource.CreateCommand("""
-            SELECT EXISTS(SELECT 1 FROM media.media WHERE media_guid = @media) AS found,
-                   (SELECT max(title) FROM metadata.media_metadata WHERE media_guid = @media) AS title,
-                   (SELECT max(age_limit) FROM metadata.media_metadata WHERE media_guid = @media) AS age_limit,
-                   COALESCE((SELECT array_agg(DISTINCT lower(provider) ORDER BY lower(provider))
-                             FROM media.media_source_versions
-                             WHERE media_guid = @media AND provider IS NOT NULL AND provider <> ''), ARRAY[]::text[]) AS providers;
-            """);
+        await using var command = dataSource.CreateCommand(dataSource.Sql("AccessPolicyExecutor.GetMediaSummaryAsync.1"));
         command.Parameters.AddWithValue("media", mediaGuid);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         await reader.ReadAsync(cancellationToken);
@@ -202,7 +159,7 @@ public sealed class AccessPolicyExecutor(NpgsqlDataSource dataSource)
             Found = reader.GetBoolean(reader.GetOrdinal("found")),
             Title = reader.IsDBNull(reader.GetOrdinal("title")) ? null : reader.GetString(reader.GetOrdinal("title")),
             AgeLimit = reader.IsDBNull(reader.GetOrdinal("age_limit")) ? null : reader.GetInt32(reader.GetOrdinal("age_limit")),
-            Providers = reader.GetFieldValue<string[]>(reader.GetOrdinal("providers"))
+            Providers = reader.GetApplicationValue<string[]>(reader.GetOrdinal("providers"))
         };
     }
 
@@ -227,30 +184,7 @@ public sealed class AccessPolicyExecutor(NpgsqlDataSource dataSource)
         IReadOnlySet<string> groups,
         CancellationToken cancellationToken)
     {
-        await using var command = dataSource.CreateCommand("""
-            WITH assigned AS (
-                SELECT DISTINCT p.policy_id
-                FROM auth.access_policies p
-                JOIN auth.access_policy_assignments a ON a.policy_id = p.policy_id
-                WHERE p.enabled
-                  AND ((a.principal_type = 'user' AND a.principal_id = @subject)
-                       OR (a.principal_type = 'group' AND lower(a.principal_id) = ANY(@groups)))
-            ),
-            scopes AS (
-                SELECT policy_id, 'media'::text AS axis, media_guid::text AS resource
-                FROM auth.access_policy_media
-                UNION ALL
-                SELECT policy_id, 'provider', provider
-                FROM auth.access_policy_providers
-                UNION ALL
-                SELECT policy_id, 'age', minimum_age::text
-                FROM auth.access_policy_age_tiers
-            )
-            SELECT scopes.policy_id, scopes.axis, scopes.resource
-            FROM scopes
-            JOIN assigned ON assigned.policy_id = scopes.policy_id
-            ORDER BY scopes.policy_id, scopes.axis, scopes.resource;
-            """);
+        await using var command = dataSource.CreateCommand(dataSource.Sql("AccessPolicyExecutor.LoadAssignedDenyScopesAsync.1"));
         command.Parameters.AddWithValue("subject", (object?)subject ?? "");
         command.Parameters.AddWithValue(
             "groups",
@@ -300,7 +234,7 @@ public sealed class AccessPolicyExecutor(NpgsqlDataSource dataSource)
         Action<PolicyBuilder, string> add, CancellationToken cancellationToken)
     {
         await using var command = dataSource.CreateCommand(
-            $"SELECT policy_id, {column} FROM auth.{table} ORDER BY {column};");
+            dataSource.Sql("AccessPolicyExecutor.LoadStringsAsync.1", column, table, column));
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
@@ -316,7 +250,7 @@ public sealed class AccessPolicyExecutor(NpgsqlDataSource dataSource)
         Action<PolicyBuilder, Guid> add, CancellationToken cancellationToken)
     {
         await using var command = dataSource.CreateCommand(
-            $"SELECT policy_id, {column} FROM auth.{table} ORDER BY {column};");
+            dataSource.Sql("AccessPolicyExecutor.LoadGuidsAsync.1", column, table, column));
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
@@ -332,7 +266,7 @@ public sealed class AccessPolicyExecutor(NpgsqlDataSource dataSource)
         Action<PolicyBuilder, int> add, CancellationToken cancellationToken)
     {
         await using var command = dataSource.CreateCommand(
-            $"SELECT policy_id, {column} FROM auth.{table} ORDER BY {column};");
+            dataSource.Sql("AccessPolicyExecutor.LoadIntsAsync.1", column, table, column));
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
@@ -344,8 +278,8 @@ public sealed class AccessPolicyExecutor(NpgsqlDataSource dataSource)
     }
 
     private static async Task InsertValuesAsync<T>(
-        NpgsqlConnection connection,
-        NpgsqlTransaction transaction,
+        DbConnection connection,
+        DbTransaction transaction,
         string table,
         string column,
         Guid policyId,
@@ -354,8 +288,8 @@ public sealed class AccessPolicyExecutor(NpgsqlDataSource dataSource)
     {
         foreach (var value in values.Distinct())
         {
-            await using var command = new NpgsqlCommand(
-                $"INSERT INTO auth.{table} (policy_id, {column}) VALUES (@id, @value);",
+            await using var command = ApplicationDbCommands.Create(
+                connection.Sql("AccessPolicyExecutor.InsertValuesAsync.1", table, column),
                 connection, transaction);
             command.Parameters.AddWithValue("id", policyId);
             command.Parameters.AddWithValue("value", value!);
@@ -368,15 +302,15 @@ public sealed class AccessPolicyExecutor(NpgsqlDataSource dataSource)
             ? status
             : AccessPolicySyncStatus.Failed;
 
-    private static string? GetNullableString(NpgsqlDataReader reader, string name)
+    private static string? GetNullableString(DbDataReader reader, string name)
     {
         var ordinal = reader.GetOrdinal(name);
         return reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
     }
 
-    private static Instant GetInstant(NpgsqlDataReader reader, string name)
+    private static Instant GetInstant(DbDataReader reader, string name)
     {
-        var value = reader.GetDateTime(reader.GetOrdinal(name));
+        var value = reader.GetApplicationDateTime(reader.GetOrdinal(name));
         var utc = value.Kind == DateTimeKind.Utc
             ? value
             : DateTime.SpecifyKind(value, DateTimeKind.Utc);

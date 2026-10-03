@@ -74,40 +74,56 @@ Migration files are listed separately. Registration and reader helpers are inclu
 | Source | Observed features |
 | --- | --- |
 | [StartNats.cs](../src/App/AppHost/StartNats.cs) | query dialect |
-| [AudioRenditionRepository.cs](../src/App/DataBridge/AudioRenditions/AudioRenditionRepository.cs) | Npgsql, query dialect |
-| [MediaEncodingStatusRepository.cs](../src/App/DataBridge/AudioRenditions/MediaEncodingStatusRepository.cs) | Npgsql, query dialect |
-| [DownloadFlowV2Repository.cs](../src/App/DataBridge/Data/DownloadFlowV2Repository.cs) | EF SQL, transaction, upsert, row lock |
+| [AudioRenditionRepository.cs](../src/App/DataBridge/AudioRenditions/AudioRenditionRepository.cs) | application adapter |
+| [MediaEncodingStatusRepository.cs](../src/App/DataBridge/AudioRenditions/MediaEncodingStatusRepository.cs) | application adapter |
+| [DownloadFlowV2Repository.cs](../src/App/DataBridge/Data/DownloadFlowV2Repository.cs) | application adapter, EF SQL, transaction |
 | [DownloadHistoryPurger.cs](../src/App/DataBridge/Data/DownloadHistoryPurger.cs) | Npgsql, transaction, array parameter, query dialect, unbounded timeout |
-| [DownloadJobsRepository.cs](../src/App/DataBridge/Data/DownloadJobsRepository.cs) | EF SQL, transaction, upsert, set update/delete |
+| [DownloadJobsRepository.cs](../src/App/DataBridge/Data/DownloadJobsRepository.cs) | application adapter, EF SQL, transaction, set update/delete |
 | [ImportSessionPurger.cs](../src/App/DataBridge/Data/ImportSessionPurger.cs) | Npgsql, transaction, array parameter, query dialect, unbounded timeout |
 | [ImportSessionRepository.cs](../src/App/DataBridge/Data/ImportSessionRepository.cs) | set update/delete |
-| [MetadataRepository.cs](../src/App/DataBridge/Data/MetadataRepository.cs) | Npgsql, transaction, upsert, query dialect |
-| [UserNotesRepository.cs](../src/App/DataBridge/Data/UserNotesRepository.cs) | Npgsql |
-| [UserPlaylistsRepository.cs](../src/App/DataBridge/Data/UserPlaylistsRepository.cs) | EF SQL, transaction |
+| [MetadataRepository.cs](../src/App/DataBridge/Data/MetadataRepository.cs) | application adapter, transaction |
+| [UserNotesRepository.cs](../src/App/DataBridge/Data/UserNotesRepository.cs) | application adapter |
+| [UserPlaylistsRepository.cs](../src/App/DataBridge/Data/UserPlaylistsRepository.cs) | application adapter, EF SQL, transaction |
 | [DataBridgeModule.cs](../src/App/DataBridge/DataBridgeModule.cs) | Npgsql |
-| [LiveChatBackfillConsumerService.cs](../src/App/DataBridge/LiveChat/LiveChatBackfillConsumerService.cs) | Npgsql, query dialect |
-| [LiveChatIngestService.cs](../src/App/DataBridge/LiveChat/LiveChatIngestService.cs) | Npgsql, upsert |
-| [AccountAssetReadService.cs](../src/App/DataBridge/MediaStream/AccountAssetReadService.cs) | Npgsql |
-| [MediaCaptionReadService.cs](../src/App/DataBridge/MediaStream/MediaCaptionReadService.cs) | Npgsql, query dialect |
-| [MediaThumbnailGenerationService.cs](../src/App/DataBridge/MediaStream/MediaThumbnailGenerationService.cs) | Npgsql, query dialect |
-| [MediaThumbnailReadService.cs](../src/App/DataBridge/MediaStream/MediaThumbnailReadService.cs) | Npgsql |
-| [AccessPolicyConsumerService.cs](../src/App/DataBridge/Messaging/AccessPolicyConsumerService.cs) | Npgsql |
-| [AccessPolicyExecutor.cs](../src/App/DataBridge/Messaging/AccessPolicyExecutor.cs) | Npgsql, transaction, upsert, array parameter, query dialect |
-| [BackgroundJobConsumerService.cs](../src/App/DataBridge/Messaging/BackgroundJobConsumerService.cs) | Npgsql, array parameter, query dialect, unbounded timeout |
-| [DownloadJobStateSql.cs](../src/App/DataBridge/Messaging/DownloadJobStateSql.cs) | Npgsql, query dialect |
-| [MediaDeleteExecutor.cs](../src/App/DataBridge/Messaging/MediaDeleteExecutor.cs) | Npgsql, transaction, array parameter, query dialect |
-| [WatchStateConsumerService.cs](../src/App/DataBridge/Messaging/WatchStateConsumerService.cs) | Npgsql, upsert, query dialect |
-| [MetadataReadService.cs](../src/App/DataBridge/Metadata/MetadataReadService.cs) | Npgsql, query dialect |
-| [NpgsqlDataReaderExtensions.cs](../src/App/DataBridge/NpgsqlDataReaderExtensions.cs) | Npgsql |
-| [PersistenceRegistration.cs](../src/App/DataBridge/Persistence/PersistenceRegistration.cs) | SQLite |
+| [LiveChatBackfillConsumerService.cs](../src/App/DataBridge/LiveChat/LiveChatBackfillConsumerService.cs) | application adapter, query dialect |
+| [LiveChatIngestService.cs](../src/App/DataBridge/LiveChat/LiveChatIngestService.cs) | application adapter |
+| [AccountAssetReadService.cs](../src/App/DataBridge/MediaStream/AccountAssetReadService.cs) | application adapter |
+| [MediaCaptionReadService.cs](../src/App/DataBridge/MediaStream/MediaCaptionReadService.cs) | application adapter |
+| [MediaThumbnailGenerationService.cs](../src/App/DataBridge/MediaStream/MediaThumbnailGenerationService.cs) | application adapter |
+| [MediaThumbnailReadService.cs](../src/App/DataBridge/MediaStream/MediaThumbnailReadService.cs) | application adapter |
+| [AccessPolicyConsumerService.cs](../src/App/DataBridge/Messaging/AccessPolicyConsumerService.cs) | application adapter |
+| [AccessPolicyExecutor.cs](../src/App/DataBridge/Messaging/AccessPolicyExecutor.cs) | application adapter, transaction |
+| [BackgroundJobConsumerService.cs](../src/App/DataBridge/Messaging/BackgroundJobConsumerService.cs) | application adapter, unbounded timeout |
+| [DownloadJobStateSql.cs](../src/App/DataBridge/Messaging/DownloadJobStateSql.cs) | query dialect |
+| [MediaDeleteExecutor.cs](../src/App/DataBridge/Messaging/MediaDeleteExecutor.cs) | application adapter, transaction |
+| [WatchStateConsumerService.cs](../src/App/DataBridge/Messaging/WatchStateConsumerService.cs) | application adapter |
+| [MetadataReadService.cs](../src/App/DataBridge/Metadata/MetadataReadService.cs) | application adapter |
+| [ApplicationDatabase.cs](../src/App/DataBridge/Persistence/ApplicationDatabase.cs) | application adapter, SQLite, Npgsql |
+| [ApplicationDatabaseErrors.cs](../src/App/DataBridge/Persistence/ApplicationDatabaseErrors.cs) | application adapter, Npgsql |
+| [ApplicationParameters.cs](../src/App/DataBridge/Persistence/ApplicationParameters.cs) | application adapter, Npgsql |
+| [ApplicationQueries.cs](../src/App/DataBridge/Persistence/ApplicationQueries.cs) | application adapter, provider query catalog |
+| [PersistenceFunctions.cs](../src/App/DataBridge/Persistence/PersistenceFunctions.cs) | query dialect |
+| [PersistenceModelConfiguration.cs](../src/App/DataBridge/Persistence/PersistenceModelConfiguration.cs) | query dialect |
+| [PersistenceRegistration.cs](../src/App/DataBridge/Persistence/PersistenceRegistration.cs) | application adapter, SQLite, Npgsql |
 | [PostgresPersistenceRegistration.cs](../src/App/DataBridge/Persistence/Postgres/PostgresPersistenceRegistration.cs) | Npgsql |
+| [ApplicationQueryCatalog.cs](../src/App/DataBridge/Persistence/Queries/ApplicationQueryCatalog.cs) | provider query catalog |
+| [DownloadsQueries.cs](../src/App/DataBridge/Persistence/Queries/DownloadsQueries.cs) | provider query catalog, upsert, row lock |
+| [LiveChatQueries.cs](../src/App/DataBridge/Persistence/Queries/LiveChatQueries.cs) | provider query catalog, upsert, query dialect |
+| [MaintenanceQueries.cs](../src/App/DataBridge/Persistence/Queries/MaintenanceQueries.cs) | provider query catalog, array parameter, query dialect |
+| [MediaFilesQueries.cs](../src/App/DataBridge/Persistence/Queries/MediaFilesQueries.cs) | provider query catalog, array parameter, query dialect |
+| [MetadataReadQueries.cs](../src/App/DataBridge/Persistence/Queries/MetadataReadQueries.cs) | provider query catalog, query dialect |
+| [MetadataWriteQueries.cs](../src/App/DataBridge/Persistence/Queries/MetadataWriteQueries.cs) | provider query catalog, upsert, query dialect |
+| [PoliciesQueries.cs](../src/App/DataBridge/Persistence/Queries/PoliciesQueries.cs) | provider query catalog, upsert, array parameter, query dialect |
+| [RenditionsQueries.cs](../src/App/DataBridge/Persistence/Queries/RenditionsQueries.cs) | provider query catalog, query dialect |
+| [StatisticsQueries.cs](../src/App/DataBridge/Persistence/Queries/StatisticsQueries.cs) | provider query catalog, upsert, query dialect |
+| [WatchStatesQueries.cs](../src/App/DataBridge/Persistence/Queries/WatchStatesQueries.cs) | provider query catalog, upsert, query dialect |
 | [SqliteConnectionFactory.cs](../src/App/DataBridge/Persistence/Sqlite/SqliteConnectionFactory.cs) | SQLite |
 | [SqliteConnectionSetupInterceptor.cs](../src/App/DataBridge/Persistence/Sqlite/SqliteConnectionSetupInterceptor.cs) | SQLite |
 | [SqliteSchemaInitializer.cs](../src/App/DataBridge/Persistence/Sqlite/SqliteSchemaInitializer.cs) | SQLite, transaction |
-| [RenditionQueueRepository.cs](../src/App/DataBridge/Renditions/RenditionQueueRepository.cs) | Npgsql, query dialect |
-| [MediaDocumentQuery.cs](../src/App/DataBridge/Search/MediaDocumentQuery.cs) | Npgsql, array parameter, query dialect |
-| [DownloadStatisticsRecorder.cs](../src/App/DataBridge/Statistics/DownloadStatisticsRecorder.cs) | EF SQL, upsert |
-| [StatisticsReadService.cs](../src/App/DataBridge/Statistics/StatisticsReadService.cs) | Npgsql, query dialect |
+| [RenditionQueueRepository.cs](../src/App/DataBridge/Renditions/RenditionQueueRepository.cs) | application adapter |
+| [MediaDocumentQuery.cs](../src/App/DataBridge/Search/MediaDocumentQuery.cs) | application adapter |
+| [DownloadStatisticsRecorder.cs](../src/App/DataBridge/Statistics/DownloadStatisticsRecorder.cs) | application adapter, EF SQL |
+| [StatisticsReadService.cs](../src/App/DataBridge/Statistics/StatisticsReadService.cs) | application adapter, query dialect |
 
 ## PostgreSQL migration history
 

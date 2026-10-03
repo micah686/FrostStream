@@ -1,7 +1,8 @@
 using DataBridge.Data;
 using Microsoft.EntityFrameworkCore;
 using NodaTime;
-using Npgsql;
+using System.Data.Common;
+using DataBridge.Persistence;
 using Shared.Database;
 using Shared.Messaging;
 
@@ -9,7 +10,7 @@ namespace DataBridge.AudioRenditions;
 
 public sealed class AudioRenditionRepository(
     DataBridgeDbContext db,
-    NpgsqlDataSource dataSource,
+    ApplicationDatabase dataSource,
     IClock clock) : IAudioRenditionRepository
 {
     public async Task<ChannelAudioResolveResult?> ResolveChannelAsync(
@@ -292,9 +293,7 @@ public sealed class AudioRenditionRepository(
 
     private async Task<long?> ReadAccountIdForMediaAsync(Guid mediaGuid, CancellationToken cancellationToken)
     {
-        await using var command = dataSource.CreateCommand("""
-            SELECT account_id FROM metadata.media_metadata WHERE media_guid = @media_guid
-            """);
+        await using var command = dataSource.CreateCommand(dataSource.Sql("AudioRenditionRepository.ReadAccountIdForMediaAsync.1"));
         command.Parameters.AddWithValue("@media_guid", mediaGuid);
         var result = await command.ExecuteScalarAsync(cancellationToken);
         return result is null or DBNull ? null : (long)result;
@@ -337,11 +336,7 @@ public sealed class AudioRenditionRepository(
     private async Task<(long AccountId, string AccountName, string? Description, string? AvatarStoragePath)?>
         ReadChannelAccountAsync(long accountId, CancellationToken cancellationToken)
     {
-        await using var command = dataSource.CreateCommand("""
-            SELECT id, account_name, account_description, avatar_storage_path
-            FROM metadata.accounts
-            WHERE id = @account_id
-            """);
+        await using var command = dataSource.CreateCommand(dataSource.Sql("AudioRenditionRepository.ReadChannelAccountAsync.1"));
         command.Parameters.AddWithValue("@account_id", accountId);
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -359,27 +354,7 @@ public sealed class AudioRenditionRepository(
         long accountId,
         CancellationToken cancellationToken)
     {
-        await using var command = dataSource.CreateCommand("""
-            SELECT
-                mm.media_guid,
-                COALESCE(NULLIF(mm.title, ''), 'Untitled'),
-                mm.description,
-                EXTRACT(EPOCH FROM COALESCE(mm.release_date, media_root.created_at))::bigint,
-                CASE WHEN mm.duration IS NULL THEN NULL ELSE ROUND(mm.duration)::integer END,
-                source.version_num,
-                source.storage_key
-            FROM metadata.media_metadata mm
-            JOIN media.media media_root ON media_root.media_guid = mm.media_guid
-            JOIN LATERAL (
-                SELECT version_num, storage_key
-                FROM media.media_content_id_versions
-                WHERE media_guid = mm.media_guid
-                ORDER BY version_num DESC
-                LIMIT 1
-            ) source ON true
-            WHERE mm.account_id = @account_id
-            ORDER BY COALESCE(mm.release_date, media_root.created_at) DESC, mm.media_guid
-            """);
+        await using var command = dataSource.CreateCommand(dataSource.Sql("AudioRenditionRepository.ReadChannelSourcesAsync.1"));
         command.Parameters.AddWithValue("@account_id", accountId);
 
         var items = new List<ChannelAudioSource>();

@@ -1,25 +1,17 @@
-using static DataBridge.NpgsqlDataReaderExtensions;
-using Npgsql;
+using static DataBridge.ApplicationDataReaderExtensions;
+using System.Data.Common;
+using DataBridge.Persistence;
 using Shared.Messaging;
 
 namespace DataBridge.MediaStream;
 
-public sealed class MediaThumbnailReadService(NpgsqlDataSource dataSource) : IMediaThumbnailReadService
+public sealed class MediaThumbnailReadService(ApplicationDatabase dataSource) : IMediaThumbnailReadService
 {
     public async Task<MediaThumbnailLocationDto?> ResolveAsync(
         Guid mediaGuid,
         CancellationToken cancellationToken = default)
     {
-        await using var command = dataSource.CreateCommand("""
-            SELECT
-                media_guid,
-                storage_key,
-                thumbnail_storage_path
-            FROM metadata.media_metadata
-            WHERE media_guid = @media_guid
-              AND storage_key IS NOT NULL
-              AND thumbnail_storage_path IS NOT NULL
-            """);
+        await using var command = dataSource.CreateCommand(dataSource.Sql("MediaThumbnailReadService.ResolveAsync.1"));
         command.Parameters.AddWithValue("@media_guid", mediaGuid);
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);

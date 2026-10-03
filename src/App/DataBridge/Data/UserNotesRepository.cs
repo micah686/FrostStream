@@ -2,7 +2,8 @@ using System.Data;
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using NodaTime;
-using Npgsql;
+using System.Data.Common;
+using DataBridge.Persistence;
 using Shared.Database;
 using Shared.Messaging;
 
@@ -223,7 +224,7 @@ public sealed class UserNotesRepository(DataBridgeDbContext db, IClock clock) : 
             return query.Where(x => x.Note.ToLower().Contains(lower));
         }
 
-        return query.Where(x => EF.Functions.ILike(x.Note, "%" + EscapeLike(value) + "%"));
+        return query.Where(x => PersistenceFunctions.ILike(x.Note, "%" + EscapeLike(value) + "%", "\\"));
     }
 
     private async Task<TargetValidationResult> NormalizeAndValidateAsync(
@@ -266,23 +267,23 @@ public sealed class UserNotesRepository(DataBridgeDbContext db, IClock clock) : 
         if (IsInMemory())
             return true;
 
-        var conn = (NpgsqlConnection)db.Database.GetDbConnection();
+        var conn = db.Database.GetDbConnection();
         var opened = conn.State != ConnectionState.Open;
         if (opened)
-            await conn.OpenAsync(ct);
+            await db.Database.OpenConnectionAsync(ct);
 
         try
         {
-            await using var cmd = new NpgsqlCommand(
-                "SELECT EXISTS (SELECT 1 FROM metadata.accounts WHERE id = @account_id)",
+            await using var cmd = ApplicationDbCommands.Create(
+                conn.Sql("UserNotesRepository.ChannelExistsAsync.1"),
                 conn);
             cmd.Parameters.AddWithValue("@account_id", accountId);
-            return (bool)(await cmd.ExecuteScalarAsync(ct) ?? false);
+            return Convert.ToBoolean(await cmd.ExecuteScalarAsync(ct) ?? false);
         }
         finally
         {
             if (opened)
-                await conn.CloseAsync();
+                await db.Database.CloseConnectionAsync();
         }
     }
 
