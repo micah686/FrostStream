@@ -2,6 +2,7 @@ using DataBridge.Data;
 using DataBridge.Search;
 using FrostStream.ApplicationContracts;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NodaTime;
 using System.Data.Common;
@@ -14,6 +15,7 @@ public sealed class BackgroundJobConsumerService(
     IDurableJobConsumer consumer,
     IMessageBus messageBus,
     ApplicationDatabase dataSource,
+    IServiceScopeFactory scopes,
     IMetadataRebuildCoordinator rebuildCoordinator,
     IDownloadHistoryPurger historyPurger,
     IImportSessionPurger importSessionPurger,
@@ -102,8 +104,8 @@ public sealed class BackgroundJobConsumerService(
             await MarkAttemptAsync(message);
             await run.ReportAsync("Running VACUUM (ANALYZE) over the database…");
             await using var command = dataSource.CreateCommand(dataSource.Sql("BackgroundJobConsumerService.HandleDatabaseMaintenanceAsync.1"));
-            command.CommandTimeout = 0;
-            await command.ExecuteNonQueryAsync();
+            command.CommandTimeout = 300;
+            await command.ExecuteNonQueryAsync(_stoppingToken);
             run.Succeed("VACUUM (ANALYZE) completed.");
             await MarkSuccessAsync(message);
             logger.LogInformation("Completed PostgreSQL VACUUM ANALYZE for background request {IdempotencyKey}.", message.IdempotencyKey);
@@ -125,14 +127,14 @@ public sealed class BackgroundJobConsumerService(
         try
         {
             await MarkAttemptAsync(message);
-            await using var connection = await dataSource.OpenConnectionAsync();
+            await using var connection = await dataSource.OpenConnectionAsync(_stoppingToken);
             var databaseName = connection.Database.Replace("\"", "\"\"", StringComparison.Ordinal);
             await run.ReportAsync($"Reindexing database \"{connection.Database}\" concurrently…");
             await using var command = ApplicationDbCommands.Create(
                 dataSource.Sql("BackgroundJobConsumerService.HandleDatabaseMaintenanceReindexAsync.1", databaseName),
                 connection);
-            command.CommandTimeout = 0;
-            await command.ExecuteNonQueryAsync();
+            command.CommandTimeout = 300;
+            await command.ExecuteNonQueryAsync(_stoppingToken);
             run.Succeed("Database reindex completed.");
             await MarkSuccessAsync(message);
             logger.LogInformation(
@@ -157,10 +159,17 @@ public sealed class BackgroundJobConsumerService(
         {
             await MarkAttemptAsync(message);
             await run.ReportAsync("Scanning for media rows with no remaining content storage…");
-            await using var command = dataSource.CreateCommand(dataSource.Sql("BackgroundJobConsumerService.HandleDatabaseStaleMediaCleanupAsync.1"));
-            DownloadJobStateSql.AddActiveStatesParameter(command);
-            command.CommandTimeout = 0;
-            var deletedCount = (long)(await command.ExecuteScalarAsync() ?? 0L);
+            long deletedCount = 0;
+            while (true)
+            {
+                _stoppingToken.ThrowIfCancellationRequested();
+                using var scope = scopes.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<DataBridgeDbContext>();
+                var deleted = await new ApplicationRetention(db).DeleteStaleMediaBatchAsync(_stoppingToken);
+                deletedCount += deleted;
+                if (deleted < ApplicationBatches.MembershipBatchSize) break;
+                await run.ReportAsync($"Deleted {deletedCount} stale media row(s) so far…");
+            }
             run.Succeed($"Deleted {deletedCount} stale media row(s).");
             await MarkSuccessAsync(message);
             logger.LogInformation(

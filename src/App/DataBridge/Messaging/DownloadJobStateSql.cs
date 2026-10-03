@@ -8,7 +8,7 @@ namespace DataBridge.Messaging;
 
 internal static class DownloadJobStateSql
 {
-    private static readonly string[] ActiveStates = new[]
+    internal static readonly DownloadJobState[] ActiveJobStates =
     {
         DownloadJobState.Queued,
         DownloadJobState.MetadataPending,
@@ -22,7 +22,9 @@ internal static class DownloadJobStateSql
         DownloadJobState.Compensating,
         DownloadJobState.FailedTransient,
         DownloadJobState.Cancelling
-    }.Select(ToPostgresName).ToArray();
+    };
+
+    private static readonly string[] ActiveStates = ActiveJobStates.Select(ToPostgresName).ToArray();
 
     public static void AddActiveStatesParameter(DbCommand command)
         => command.Parameters.Add("active_download_job_states", ApplicationParameterType.TextArray).Value = ActiveStates;

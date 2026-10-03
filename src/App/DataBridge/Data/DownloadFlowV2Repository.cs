@@ -17,7 +17,13 @@ public sealed class DownloadFlowV2Repository(
 {
     public static readonly Duration LeaseDuration = Duration.FromSeconds(45);
 
-    public async Task<DownloadRunRequest?> CreateInitialRunAsync(
+    public Task<DownloadRunRequest?> CreateInitialRunAsync(
+        DownloadRequested request,
+        bool autoStart,
+        CancellationToken ct = default)
+        => db.MutateAsync("DownloadFlowV2Repository.CreateInitialRunAsync", () => CreateInitialRunAsyncCore(request, autoStart, ct), ct);
+
+    private async Task<DownloadRunRequest?> CreateInitialRunAsyncCore(
         DownloadRequested request,
         bool autoStart,
         CancellationToken ct = default)
@@ -126,8 +132,8 @@ public sealed class DownloadFlowV2Repository(
         await db.SaveChangesAsync(ct);
         if (existingJob is null)
         {
-            await DownloadStatisticsRecorder.RecordDailyActivityAsync(db, logger, "created", now, 0, 0, ct);
-            await DownloadStatisticsRecorder.RecordChannelDailyStatesAsync(db, logger, job.SourceUrl, "created", now, ct);
+            await db.AfterCommitAsync(() => DownloadStatisticsRecorder.RecordDailyActivityAsync(db, logger, "created", now, 0, 0, ct));
+            await db.AfterCommitAsync(() => DownloadStatisticsRecorder.RecordChannelDailyStatesAsync(db, logger, job.SourceUrl, "created", now, ct));
         }
         await NotifyAsync(job, previous, ct);
         await RefreshGroupAggregateAsync(job.CorrelationId, ct);
@@ -137,9 +143,11 @@ public sealed class DownloadFlowV2Repository(
             : null;
     }
 
-    public async Task<DownloadRunRequest?> StartFreshRunAsync(Guid jobId, CancellationToken ct = default)
+    public Task<DownloadRunRequest?> StartFreshRunAsync(Guid jobId, CancellationToken ct = default)
+        => db.MutateAsync("DownloadFlowV2Repository.StartFreshRunAsync", () => StartFreshRunAsyncCore(jobId, ct), ct);
+
+    private async Task<DownloadRunRequest?> StartFreshRunAsyncCore(Guid jobId, CancellationToken ct = default)
     {
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var job = await LockJobAsync(jobId, ct);
         if (job is null || job.Status is not (DownloadJobStatus.Stopped or DownloadJobStatus.Failed))
             return null;
@@ -151,7 +159,6 @@ public sealed class DownloadFlowV2Repository(
             job.FailureMessage = $"The provider circuit for '{blockedProvider}' is open. Clear it before starting this job.";
             job.UpdatedAt = clock.GetCurrentInstant();
             await db.SaveChangesAsync(ct);
-            await transaction.CommitAsync(ct);
             return null;
         }
 
@@ -210,7 +217,6 @@ public sealed class DownloadFlowV2Repository(
         });
 
         await db.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
         await NotifyAsync(job, previous, ct);
         await RefreshGroupAggregateAsync(job.CorrelationId, ct);
 
@@ -229,13 +235,19 @@ public sealed class DownloadFlowV2Repository(
         };
     }
 
-    public async Task<DownloadControlDecision> RequestStopAsync(
+    public Task<DownloadControlDecision> RequestStopAsync(
+        Guid jobId,
+        string? requestedBy,
+        string? reason,
+        CancellationToken ct = default)
+        => db.MutateAsync("DownloadFlowV2Repository.RequestStopAsync", () => RequestStopAsyncCore(jobId, requestedBy, reason, ct), ct);
+
+    private async Task<DownloadControlDecision> RequestStopAsyncCore(
         Guid jobId,
         string? requestedBy,
         string? reason,
         CancellationToken ct = default)
     {
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var job = await LockJobAsync(jobId, ct);
         if (job is null)
             return new DownloadControlDecision(false, false, jobId, null, Guid.Empty, null, "not_found", "Job not found.");
@@ -276,11 +288,10 @@ public sealed class DownloadFlowV2Repository(
         }
 
         await db.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
         if (immediate)
         {
-            await DownloadStatisticsRecorder.RecordDailyActivityAsync(db, logger, "cancelled", job.UpdatedAt, 0, 0, ct);
-            await DownloadStatisticsRecorder.RecordChannelDailyStatesAsync(db, logger, job.SourceUrl, "cancelled", job.UpdatedAt, ct);
+            await db.AfterCommitAsync(() => DownloadStatisticsRecorder.RecordDailyActivityAsync(db, logger, "cancelled", job.UpdatedAt, 0, 0, ct));
+            await db.AfterCommitAsync(() => DownloadStatisticsRecorder.RecordChannelDailyStatesAsync(db, logger, job.SourceUrl, "cancelled", job.UpdatedAt, ct));
         }
         await NotifyAsync(job, previous, ct);
         if (immediate)
@@ -307,13 +318,9 @@ public sealed class DownloadFlowV2Repository(
 
     public async Task<IReadOnlyList<DownloadControlDecision>> StopGroupAsync(Guid correlationId, string? requestedBy, string? reason, CancellationToken ct = default)
     {
-        var group = await db.DownloadGroups.FirstOrDefaultAsync(x => x.CorrelationId == correlationId, ct);
+        var group = await db.DownloadGroups.AsNoTracking().FirstOrDefaultAsync(x => x.CorrelationId == correlationId, ct);
         if (group is not null)
-        {
-            group.Status = DownloadGroupStatus.Stopping;
-            group.UpdatedAt = clock.GetCurrentInstant();
-            await db.SaveChangesAsync(ct);
-        }
+            await SetGroupStatusAsync(group.GroupId, DownloadGroupStatus.Stopping, ct: ct);
         var ids = await db.DownloadJobs.AsNoTracking()
             .Where(x => x.CorrelationId == correlationId)
             .Select(x => x.JobId)
@@ -328,7 +335,10 @@ public sealed class DownloadFlowV2Repository(
         return decisions;
     }
 
-    public async Task<bool> BeginStageAttemptAsync(DownloadExecutionIdentity execution, string operationKey, CancellationToken ct = default)
+    public Task<bool> BeginStageAttemptAsync(DownloadExecutionIdentity execution, string operationKey, CancellationToken ct = default)
+        => db.MutateAsync("DownloadFlowV2Repository.BeginStageAttemptAsync", () => BeginStageAttemptAsyncCore(execution, operationKey, ct), ct);
+
+    private async Task<bool> BeginStageAttemptAsyncCore(DownloadExecutionIdentity execution, string operationKey, CancellationToken ct = default)
     {
         var currentStatus = await CurrentExecutableStatusAsync(execution.JobId, execution.RunId, execution.Stage, ct);
         if (currentStatus is null)
@@ -353,16 +363,24 @@ public sealed class DownloadFlowV2Repository(
                 UpdatedAt = clock.GetCurrentInstant()
             });
         }
-        else if (existing.DispatchId != execution.DispatchId)
+        else
         {
-            return false;
+            // Redelivery may arrive after a claim/result. Never reset an existing attempt to Pending.
+            return existing.DispatchId == execution.DispatchId
+                && existing.Status is DownloadStageStatus.Pending or DownloadStageStatus.Running
+                && await db.DownloadJobs.AsNoTracking().AnyAsync(x => x.JobId == execution.JobId
+                    && x.Stage == execution.Stage && x.CurrentAttempt == execution.Attempt
+                    && (x.CurrentArtifactKey ?? "") == artifactKey, ct);
         }
 
         return await TransitionAsync(execution.JobId, execution.RunId, currentStatus.Value,
             execution.Stage, DownloadStageStatus.Pending, execution.Attempt, artifactKey, ct);
     }
 
-    public async Task<bool> CompleteStageAttemptAsync(DownloadExecutionIdentity execution, CancellationToken ct = default)
+    public Task<bool> CompleteStageAttemptAsync(DownloadExecutionIdentity execution, CancellationToken ct = default)
+        => db.MutateAsync("DownloadFlowV2Repository.CompleteStageAttemptAsync", () => CompleteStageAttemptAsyncCore(execution, ct), ct);
+
+    private async Task<bool> CompleteStageAttemptAsyncCore(DownloadExecutionIdentity execution, CancellationToken ct = default)
     {
         var row = await CurrentAttemptAsync(execution, ct);
         if (row is null)
@@ -376,7 +394,10 @@ public sealed class DownloadFlowV2Repository(
             execution.Stage, DownloadStageStatus.Succeeded, execution.Attempt, execution.ArtifactKey, ct);
     }
 
-    public async Task<bool> MarkRetryWaitingAsync(DownloadExecutionIdentity execution, FailureKind kind, string? code, string message, CancellationToken ct = default)
+    public Task<bool> MarkRetryWaitingAsync(DownloadExecutionIdentity execution, FailureKind kind, string? code, string message, CancellationToken ct = default)
+        => db.MutateAsync("DownloadFlowV2Repository.MarkRetryWaitingAsync", () => MarkRetryWaitingAsyncCore(execution, kind, code, message, ct), ct);
+
+    private async Task<bool> MarkRetryWaitingAsyncCore(DownloadExecutionIdentity execution, FailureKind kind, string? code, string message, CancellationToken ct = default)
     {
         var row = await CurrentAttemptAsync(execution, ct);
         if (row is null)
@@ -396,7 +417,11 @@ public sealed class DownloadFlowV2Repository(
             execution.Stage, DownloadStageStatus.RetryWaiting, execution.Attempt, execution.ArtifactKey, ct);
     }
 
-    public async Task<bool> FailStageAttemptAsync(DownloadExecutionIdentity execution, FailureKind kind, string? code,
+    public Task<bool> FailStageAttemptAsync(DownloadExecutionIdentity execution, FailureKind kind, string? code,
+        string message, CancellationToken ct = default)
+        => db.MutateAsync("DownloadFlowV2Repository.FailStageAttemptAsync", () => FailStageAttemptAsyncCore(execution, kind, code, message, ct), ct);
+
+    private async Task<bool> FailStageAttemptAsyncCore(DownloadExecutionIdentity execution, FailureKind kind, string? code,
         string message, CancellationToken ct = default)
     {
         var row = await CurrentAttemptAsync(execution, ct);
@@ -415,10 +440,13 @@ public sealed class DownloadFlowV2Repository(
             execution.Stage, DownloadStageStatus.Failed, execution.Attempt, execution.ArtifactKey, ct);
     }
 
-    public async Task<bool> TransitionAsync(Guid jobId, Guid runId, DownloadJobStatus status, DownloadStage stage,
+    public Task<bool> TransitionAsync(Guid jobId, Guid runId, DownloadJobStatus status, DownloadStage stage,
+        DownloadStageStatus stageStatus, int attempt = 0, string? artifactKey = null, CancellationToken ct = default)
+        => db.MutateAsync("DownloadFlowV2Repository.TransitionAsync", () => TransitionAsyncCore(jobId, runId, status, stage, stageStatus, attempt, artifactKey, ct), ct);
+
+    private async Task<bool> TransitionAsyncCore(Guid jobId, Guid runId, DownloadJobStatus status, DownloadStage stage,
         DownloadStageStatus stageStatus, int attempt = 0, string? artifactKey = null, CancellationToken ct = default)
     {
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var job = await LockJobAsync(jobId, ct);
         if (job is null || job.Status is DownloadJobStatus.Failed or DownloadJobStatus.Stopped
             or DownloadJobStatus.Completed or DownloadJobStatus.CompletedWithWarnings or DownloadJobStatus.AlreadyDownloaded
@@ -444,14 +472,15 @@ public sealed class DownloadFlowV2Repository(
         run.StageStatus = stageStatus;
         run.UpdatedAt = now;
         await db.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
         await NotifyAsync(job, previous, ct);
         return true;
     }
 
-    public async Task<bool> FailRunAsync(Guid jobId, Guid runId, FailureKind kind, string? code, string message, CancellationToken ct = default)
+    public Task<bool> FailRunAsync(Guid jobId, Guid runId, FailureKind kind, string? code, string message, CancellationToken ct = default)
+        => db.MutateAsync("DownloadFlowV2Repository.FailRunAsync", () => FailRunAsyncCore(jobId, runId, kind, code, message, ct), ct);
+
+    private async Task<bool> FailRunAsyncCore(Guid jobId, Guid runId, FailureKind kind, string? code, string message, CancellationToken ct = default)
     {
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var job = await LockJobAsync(jobId, ct);
         var run = await db.DownloadJobRuns.FirstOrDefaultAsync(x => x.RunId == runId && x.JobId == jobId, ct);
         var compensationFailure = string.Equals(code, "compensation_incomplete", StringComparison.Ordinal);
@@ -460,7 +489,7 @@ public sealed class DownloadFlowV2Repository(
         if (job is null || run is null || job.CurrentRunId != runId
             || (job.StopRequestedAt is not null && !compensationFailure && !leaseInterruption)
             || job.Status is DownloadJobStatus.Completed or DownloadJobStatus.CompletedWithWarnings
-                or DownloadJobStatus.AlreadyDownloaded or DownloadJobStatus.Stopped
+                or DownloadJobStatus.AlreadyDownloaded or DownloadJobStatus.Stopped or DownloadJobStatus.Failed
             || (job.Status == DownloadJobStatus.Stopping && !compensationFailure && !leaseInterruption))
             return false;
 
@@ -482,17 +511,18 @@ public sealed class DownloadFlowV2Repository(
         run.UpdatedAt = now;
         run.EndedAt = now;
         await db.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
-        await DownloadStatisticsRecorder.RecordDailyActivityAsync(db, logger, "failed_permanent", now, 0, 0, ct);
-        await DownloadStatisticsRecorder.RecordChannelDailyStatesAsync(db, logger, job.SourceUrl, "failed_permanent", now, ct);
+        await db.AfterCommitAsync(() => DownloadStatisticsRecorder.RecordDailyActivityAsync(db, logger, "failed_permanent", now, 0, 0, ct));
+        await db.AfterCommitAsync(() => DownloadStatisticsRecorder.RecordChannelDailyStatesAsync(db, logger, job.SourceUrl, "failed_permanent", now, ct));
         await NotifyAsync(job, previous, ct);
         await RefreshGroupAggregateAsync(job.CorrelationId, ct);
         return true;
     }
 
-    public async Task<bool> CompleteRunAsync(Guid jobId, Guid runId, bool withWarnings, CancellationToken ct = default)
+    public Task<bool> CompleteRunAsync(Guid jobId, Guid runId, bool withWarnings, CancellationToken ct = default)
+        => db.MutateAsync("DownloadFlowV2Repository.CompleteRunAsync", () => CompleteRunAsyncCore(jobId, runId, withWarnings, ct), ct);
+
+    private async Task<bool> CompleteRunAsyncCore(Guid jobId, Guid runId, bool withWarnings, CancellationToken ct = default)
     {
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var job = await LockJobAsync(jobId, ct);
         var run = await db.DownloadJobRuns.FirstOrDefaultAsync(x => x.RunId == runId && x.JobId == jobId, ct);
         if (job is null || run is null || job.CurrentRunId != runId || job.StopRequestedAt is not null
@@ -516,9 +546,8 @@ public sealed class DownloadFlowV2Repository(
         run.UpdatedAt = now;
         run.EndedAt = now;
         await db.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
-        await DownloadStatisticsRecorder.RecordDailyActivityAsync(db, logger, "completed", now, 0, 0, ct);
-        await DownloadStatisticsRecorder.RecordChannelDailyStatesAsync(db, logger, job.SourceUrl, "completed", now, ct);
+        await db.AfterCommitAsync(() => DownloadStatisticsRecorder.RecordDailyActivityAsync(db, logger, "completed", now, 0, 0, ct));
+        await db.AfterCommitAsync(() => DownloadStatisticsRecorder.RecordChannelDailyStatesAsync(db, logger, job.SourceUrl, "completed", now, ct));
         await NotifyAsync(job, previous, ct);
         await RefreshGroupAggregateAsync(job.CorrelationId, ct);
         return true;
@@ -529,7 +558,16 @@ public sealed class DownloadFlowV2Repository(
     /// job row makes this mutually exclusive with Stop: either the final commit wins and Stop sees
     /// a terminal job, or Stop wins and no playlist membership is inserted.
     /// </summary>
-    public async Task<bool> FinalizeRunAsync(
+    public Task<bool> FinalizeRunAsync(
+        DownloadExecutionIdentity execution,
+        Guid mediaGuid,
+        string? provider = null,
+        string? sourceMediaId = null,
+        Instant? sourceLastModified = null,
+        CancellationToken ct = default)
+        => db.MutateAsync("DownloadFlowV2Repository.FinalizeRunAsync", () => FinalizeRunAsyncCore(execution, mediaGuid, provider, sourceMediaId, sourceLastModified, ct), ct);
+
+    private async Task<bool> FinalizeRunAsyncCore(
         DownloadExecutionIdentity execution,
         Guid mediaGuid,
         string? provider = null,
@@ -537,7 +575,6 @@ public sealed class DownloadFlowV2Repository(
         Instant? sourceLastModified = null,
         CancellationToken ct = default)
     {
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var job = await LockJobAsync(execution.JobId, ct);
         if (job is null || job.CurrentRunId != execution.RunId)
             return false;
@@ -583,17 +620,18 @@ public sealed class DownloadFlowV2Repository(
         run.UpdatedAt = now;
         run.EndedAt = now;
         await db.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
-        await DownloadStatisticsRecorder.RecordCompletionStatisticsAsync(db, logger, mediaGuid, execution.RunId, now, ct);
-        await DownloadStatisticsRecorder.RecordChannelDailyStatesAsync(db, logger, job.SourceUrl, "completed", now, ct);
+        await db.AfterCommitAsync(() => DownloadStatisticsRecorder.RecordCompletionStatisticsAsync(db, logger, mediaGuid, execution.RunId, now, ct));
+        await db.AfterCommitAsync(() => DownloadStatisticsRecorder.RecordChannelDailyStatesAsync(db, logger, job.SourceUrl, "completed", now, ct));
         await NotifyAsync(job, previous, ct);
         await RefreshGroupAggregateAsync(job.CorrelationId, ct);
         return true;
     }
 
-    public async Task<bool> MarkStoppedAsync(Guid jobId, Guid runId, string? message, CancellationToken ct = default)
+    public Task<bool> MarkStoppedAsync(Guid jobId, Guid runId, string? message, CancellationToken ct = default)
+        => db.MutateAsync("DownloadFlowV2Repository.MarkStoppedAsync", () => MarkStoppedAsyncCore(jobId, runId, message, ct), ct);
+
+    private async Task<bool> MarkStoppedAsyncCore(Guid jobId, Guid runId, string? message, CancellationToken ct = default)
     {
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var job = await LockJobAsync(jobId, ct);
         var run = await db.DownloadJobRuns.FirstOrDefaultAsync(x => x.RunId == runId && x.JobId == jobId, ct);
         if (job is null || run is null || job.CurrentRunId != runId)
@@ -621,15 +659,24 @@ public sealed class DownloadFlowV2Repository(
         run.UpdatedAt = now;
         run.EndedAt = now;
         await db.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
-        await DownloadStatisticsRecorder.RecordDailyActivityAsync(db, logger, "cancelled", now, 0, 0, ct);
-        await DownloadStatisticsRecorder.RecordChannelDailyStatesAsync(db, logger, job.SourceUrl, "cancelled", now, ct);
+        await db.AfterCommitAsync(() => DownloadStatisticsRecorder.RecordDailyActivityAsync(db, logger, "cancelled", now, 0, 0, ct));
+        await db.AfterCommitAsync(() => DownloadStatisticsRecorder.RecordChannelDailyStatesAsync(db, logger, job.SourceUrl, "cancelled", now, ct));
         await NotifyAsync(job, previous, ct);
         await RefreshGroupAggregateAsync(job.CorrelationId, ct);
         return true;
     }
 
-    public async Task<bool> MarkAlreadyDownloadedAsync(
+    public Task<bool> MarkAlreadyDownloadedAsync(
+        Guid jobId,
+        Guid runId,
+        Guid mediaGuid,
+        string? provider,
+        string? sourceMediaId,
+        Instant? sourceLastModified = null,
+        CancellationToken ct = default)
+        => db.MutateAsync("DownloadFlowV2Repository.MarkAlreadyDownloadedAsync", () => MarkAlreadyDownloadedAsyncCore(jobId, runId, mediaGuid, provider, sourceMediaId, sourceLastModified, ct), ct);
+
+    private async Task<bool> MarkAlreadyDownloadedAsyncCore(
         Guid jobId,
         Guid runId,
         Guid mediaGuid,
@@ -638,7 +685,6 @@ public sealed class DownloadFlowV2Repository(
         Instant? sourceLastModified = null,
         CancellationToken ct = default)
     {
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var job = await LockJobAsync(jobId, ct);
         var run = await db.DownloadJobRuns.FirstOrDefaultAsync(x => x.RunId == runId && x.JobId == jobId, ct);
         if (job is null || run is null || job.CurrentRunId != runId)
@@ -674,9 +720,8 @@ public sealed class DownloadFlowV2Repository(
         run.UpdatedAt = now;
         run.EndedAt = now;
         await db.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
-        await DownloadStatisticsRecorder.RecordDailyActivityAsync(db, logger, "already_downloaded", now, 0, 0, ct);
-        await DownloadStatisticsRecorder.RecordChannelDailyStatesAsync(db, logger, job.SourceUrl, "already_downloaded", now, ct);
+        await db.AfterCommitAsync(() => DownloadStatisticsRecorder.RecordDailyActivityAsync(db, logger, "already_downloaded", now, 0, 0, ct));
+        await db.AfterCommitAsync(() => DownloadStatisticsRecorder.RecordChannelDailyStatesAsync(db, logger, job.SourceUrl, "already_downloaded", now, ct));
         await NotifyAsync(job, previous, ct);
         await RefreshGroupAggregateAsync(job.CorrelationId, ct);
         return true;
@@ -686,7 +731,11 @@ public sealed class DownloadFlowV2Repository(
         => db.DownloadJobs.AsNoTracking().AnyAsync(x => x.JobId == jobId && x.CurrentRunId == runId
             && x.StopRequestedAt != null, ct);
 
-    public async Task RecordWarningAsync(Guid jobId, Guid runId, DownloadStage stage, string? artifactKey,
+    public Task RecordWarningAsync(Guid jobId, Guid runId, DownloadStage stage, string? artifactKey,
+        string code, string message, CancellationToken ct = default)
+        => db.MutateAsync("DownloadFlowV2Repository.RecordWarningAsync", () => RecordWarningAsyncCore(jobId, runId, stage, artifactKey, code, message, ct), ct);
+
+    private async Task RecordWarningAsyncCore(Guid jobId, Guid runId, DownloadStage stage, string? artifactKey,
         string code, string message, CancellationToken ct = default)
     {
         var job = await db.DownloadJobs.FirstOrDefaultAsync(x => x.JobId == jobId && x.CurrentRunId == runId, ct);
@@ -717,8 +766,13 @@ public sealed class DownloadFlowV2Repository(
         await NotifyAsync(job, previous, ct);
     }
 
-    public async Task UpsertArtifactAsync(DownloadArtifactSnapshot artifact, CancellationToken ct = default)
+    public Task UpsertArtifactAsync(DownloadArtifactSnapshot artifact, CancellationToken ct = default)
+        => db.MutateAsync("DownloadFlowV2Repository.UpsertArtifactAsync", () => UpsertArtifactAsyncCore(artifact, ct), ct);
+
+    private async Task UpsertArtifactAsyncCore(DownloadArtifactSnapshot artifact, CancellationToken ct = default)
     {
+        if (!await db.DownloadJobs.AsNoTracking().AnyAsync(x => x.JobId == artifact.JobId && x.CurrentRunId == artifact.RunId, ct))
+            return;
         var key = NormalizeArtifactKey(artifact.ArtifactKey);
         var row = await db.DownloadArtifacts.FirstOrDefaultAsync(x => x.RunId == artifact.RunId && x.ArtifactKey == key, ct);
         if (row is null)
@@ -780,10 +834,12 @@ public sealed class DownloadFlowV2Repository(
                 WarningMessage = x.WarningMessage
             }).ToListAsync(ct);
 
-    public async Task<AcquireDownloadLeaseResponse> TryAcquireLeaseAsync(AcquireDownloadLeaseRequest request, CancellationToken ct = default)
+    public Task<AcquireDownloadLeaseResponse> TryAcquireLeaseAsync(AcquireDownloadLeaseRequest request, CancellationToken ct = default)
+        => db.MutateAsync("DownloadFlowV2Repository.TryAcquireLeaseAsync", () => TryAcquireLeaseAsyncCore(request, ct), ct);
+
+    private async Task<AcquireDownloadLeaseResponse> TryAcquireLeaseAsyncCore(AcquireDownloadLeaseRequest request, CancellationToken ct = default)
     {
         var execution = request.Execution;
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var job = await LockJobAsync(execution.JobId, ct);
         var existingLease = await db.DownloadWorkerLeases
             .FirstOrDefaultAsync(x => x.DispatchId == execution.DispatchId, ct);
@@ -794,13 +850,19 @@ public sealed class DownloadFlowV2Repository(
             // instead of stranding a lease nobody heartbeats until the expiry sweep kills the run.
             var regrantNow = clock.GetCurrentInstant();
             if (existingLease.WorkerInstanceId == request.WorkerInstanceId
+                && job?.CurrentRunId == execution.RunId
+                && job.Stage == execution.Stage && job.CurrentAttempt == execution.Attempt
+                && NormalizeArtifactKey(job.CurrentArtifactKey) == NormalizeArtifactKey(execution.ArtifactKey)
+                && job.Status is DownloadJobStatus.Running or DownloadJobStatus.Stopping or DownloadJobStatus.Compensating
+                && existingLease.RunId == execution.RunId && existingLease.JobId == execution.JobId
                 && existingLease.Status == DownloadWorkerLeaseStatus.Active
+                && await db.DownloadStageAttempts.AsNoTracking().AnyAsync(x => x.DispatchId == execution.DispatchId
+                    && x.Status == DownloadStageStatus.Running, ct)
                 && existingLease.ExpiresAt > regrantNow)
             {
                 existingLease.LastHeartbeatAt = regrantNow;
                 existingLease.ExpiresAt = regrantNow + LeaseDuration;
                 await db.SaveChangesAsync(ct);
-                await transaction.CommitAsync(ct);
                 return new AcquireDownloadLeaseResponse
                 {
                     Granted = true,
@@ -823,6 +885,9 @@ public sealed class DownloadFlowV2Repository(
 
         var attempt = await db.DownloadStageAttempts.FirstOrDefaultAsync(x => x.DispatchId == execution.DispatchId, ct);
         if (job is null || attempt is null || job.CurrentRunId != execution.RunId
+            || attempt.RunId != execution.RunId || attempt.JobId != execution.JobId || attempt.Stage != execution.Stage
+            || attempt.Attempt != execution.Attempt || attempt.ArtifactKey != NormalizeArtifactKey(execution.ArtifactKey)
+            || attempt.Status is not (DownloadStageStatus.Pending or DownloadStageStatus.Running)
             || job.Status is not (DownloadJobStatus.Running or DownloadJobStatus.Compensating
                 or DownloadJobStatus.Stopping)
             || job.Stage != execution.Stage
@@ -874,7 +939,6 @@ public sealed class DownloadFlowV2Repository(
             run.UpdatedAt = now;
         }
         await db.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
         await NotifyAsync(job, job.Status, ct);
         return new AcquireDownloadLeaseResponse
         {
@@ -885,7 +949,10 @@ public sealed class DownloadFlowV2Repository(
         };
     }
 
-    public async Task<RenewDownloadLeaseResponse> TryRenewLeaseAsync(RenewDownloadLeaseRequest request, CancellationToken ct = default)
+    public Task<RenewDownloadLeaseResponse> TryRenewLeaseAsync(RenewDownloadLeaseRequest request, CancellationToken ct = default)
+        => db.MutateAsync("DownloadFlowV2Repository.TryRenewLeaseAsync", () => TryRenewLeaseAsyncCore(request, ct), ct);
+
+    private async Task<RenewDownloadLeaseResponse> TryRenewLeaseAsyncCore(RenewDownloadLeaseRequest request, CancellationToken ct = default)
     {
         var lease = await db.DownloadWorkerLeases.FirstOrDefaultAsync(x => x.DispatchId == request.DispatchId, ct);
         var now = clock.GetCurrentInstant();
@@ -893,7 +960,9 @@ public sealed class DownloadFlowV2Repository(
             || lease.Status != DownloadWorkerLeaseStatus.Active || lease.ExpiresAt <= now)
             return new RenewDownloadLeaseResponse { Renewed = false };
 
-        var current = await CurrentExecutableStatusAsync(lease.JobId, lease.RunId, lease.Stage, ct) is not null;
+        var current = await CurrentExecutableStatusAsync(lease.JobId, lease.RunId, lease.Stage, ct) is not null
+            && await db.DownloadJobs.AsNoTracking().AnyAsync(x => x.JobId == lease.JobId && x.Stage == lease.Stage
+                && x.CurrentAttempt == lease.Attempt && (x.CurrentArtifactKey ?? "") == lease.ArtifactKey, ct);
         if (!current)
             return new RenewDownloadLeaseResponse { Renewed = false };
 
@@ -903,7 +972,10 @@ public sealed class DownloadFlowV2Repository(
         return new RenewDownloadLeaseResponse { Renewed = true, ExpiresAt = lease.ExpiresAt };
     }
 
-    public async Task ReleaseLeaseAsync(Guid dispatchId, DownloadWorkerLeaseStatus status, CancellationToken ct = default)
+    public Task ReleaseLeaseAsync(Guid dispatchId, DownloadWorkerLeaseStatus status, CancellationToken ct = default)
+        => db.MutateAsync("DownloadFlowV2Repository.ReleaseLeaseAsync", () => ReleaseLeaseAsyncCore(dispatchId, status, ct), ct);
+
+    private async Task ReleaseLeaseAsyncCore(Guid dispatchId, DownloadWorkerLeaseStatus status, CancellationToken ct = default)
     {
         var lease = await db.DownloadWorkerLeases.FirstOrDefaultAsync(x => x.DispatchId == dispatchId, ct);
         if (lease is null || lease.Status != DownloadWorkerLeaseStatus.Active)
@@ -935,11 +1007,15 @@ public sealed class DownloadFlowV2Repository(
                        || x.Status == DownloadWorkerLeaseStatus.Stopped), ct);
     }
 
-    public async Task<IReadOnlyList<ExpiredDownloadLease>> FailExpiredLeasesAsync(CancellationToken ct = default)
+    public Task<IReadOnlyList<ExpiredDownloadLease>> FailExpiredLeasesAsync(CancellationToken ct = default)
+        => db.MutateAsync("DownloadFlowV2Repository.FailExpiredLeasesAsync", () => FailExpiredLeasesAsyncCore(ct), ct);
+
+    private async Task<IReadOnlyList<ExpiredDownloadLease>> FailExpiredLeasesAsyncCore(CancellationToken ct = default)
     {
         var now = clock.GetCurrentInstant();
         var leases = await db.DownloadWorkerLeases
             .Where(x => x.Status == DownloadWorkerLeaseStatus.Active && x.ExpiresAt <= now)
+            .OrderBy(x => x.DispatchId).Take(ApplicationBatches.WriteBatchSize)
             .ToListAsync(ct);
         foreach (var lease in leases)
         {
@@ -971,7 +1047,7 @@ public sealed class DownloadFlowV2Repository(
             }
             if (uncertainArtifacts.Count > 0)
             {
-                var job = await db.DownloadJobs.FirstOrDefaultAsync(x => x.JobId == lease.JobId, ct);
+                var job = await db.DownloadJobs.FirstOrDefaultAsync(x => x.JobId == lease.JobId && x.CurrentRunId == lease.RunId, ct);
                 if (job is not null)
                     job.WarningCount += uncertainArtifacts.Count;
             }
@@ -994,7 +1070,10 @@ public sealed class DownloadFlowV2Repository(
             .ToListAsync(ct);
     }
 
-    public async Task<StartupReconciliationResult> ReconcileForStartupAsync(CancellationToken ct = default)
+    public Task<StartupReconciliationResult> ReconcileForStartupAsync(CancellationToken ct = default)
+        => db.MutateAsync("DownloadFlowV2Repository.ReconcileForStartupAsync", () => ReconcileForStartupAsyncCore(ct), ct);
+
+    private async Task<StartupReconciliationResult> ReconcileForStartupAsyncCore(CancellationToken ct = default)
     {
         var now = clock.GetCurrentInstant();
         var notifications = new List<(DownloadJobEntity Job, DownloadJobStatus Previous)>();
@@ -1089,7 +1168,10 @@ public sealed class DownloadFlowV2Repository(
         return new StartupReconciliationResult(queued.Count, active.Count, activeLeases.Count, activeGroups.Count);
     }
 
-    public async Task CreateGroupIfMissingAsync(DownloadGroupRequested request, CancellationToken ct = default)
+    public Task CreateGroupIfMissingAsync(DownloadGroupRequested request, CancellationToken ct = default)
+        => db.MutateAsync("DownloadFlowV2Repository.CreateGroupIfMissingAsync", () => CreateGroupIfMissingAsyncCore(request, ct), ct);
+
+    private async Task CreateGroupIfMissingAsyncCore(DownloadGroupRequested request, CancellationToken ct = default)
     {
         if (await db.DownloadGroups.AnyAsync(x => x.GroupId == request.GroupId, ct))
             return;
@@ -1107,7 +1189,11 @@ public sealed class DownloadFlowV2Repository(
         await db.SaveChangesAsync(ct);
     }
 
-    public async Task SetGroupStatusAsync(Guid groupId, DownloadGroupStatus status, string? failureCode = null,
+    public Task SetGroupStatusAsync(Guid groupId, DownloadGroupStatus status, string? failureCode = null,
+        string? failureMessage = null, CancellationToken ct = default)
+        => db.MutateAsync("DownloadFlowV2Repository.SetGroupStatusAsync", () => SetGroupStatusAsyncCore(groupId, status, failureCode, failureMessage, ct), ct);
+
+    private async Task SetGroupStatusAsyncCore(Guid groupId, DownloadGroupStatus status, string? failureCode = null,
         string? failureMessage = null, CancellationToken ct = default)
     {
         var group = await db.DownloadGroups.FirstOrDefaultAsync(x => x.GroupId == groupId, ct);
@@ -1123,7 +1209,10 @@ public sealed class DownloadFlowV2Repository(
         await db.SaveChangesAsync(ct);
     }
 
-    public async Task RefreshGroupAggregateAsync(Guid correlationId, CancellationToken ct = default)
+    public Task RefreshGroupAggregateAsync(Guid correlationId, CancellationToken ct = default)
+        => db.MutateAsync("DownloadFlowV2Repository.RefreshGroupAggregateAsync", () => RefreshGroupAggregateAsyncCore(correlationId, ct), ct);
+
+    private async Task RefreshGroupAggregateAsyncCore(Guid correlationId, CancellationToken ct = default)
     {
         var group = await db.DownloadGroups.FirstOrDefaultAsync(x => x.CorrelationId == correlationId, ct);
         if (group is null)
@@ -1174,7 +1263,10 @@ public sealed class DownloadFlowV2Repository(
             or DownloadGroupStatus.Stopped or DownloadGroupStatus.Failed);
     }
 
-    public async Task OpenProviderCircuitAsync(string provider, string reason, CancellationToken ct = default)
+    public Task OpenProviderCircuitAsync(string provider, string reason, CancellationToken ct = default)
+        => db.MutateAsync("DownloadFlowV2Repository.OpenProviderCircuitAsync", () => OpenProviderCircuitAsyncCore(provider, reason, ct), ct);
+
+    private async Task OpenProviderCircuitAsyncCore(string provider, string reason, CancellationToken ct = default)
     {
         provider = provider.Trim().ToLowerInvariant();
         if (provider.Length == 0)
@@ -1201,7 +1293,10 @@ public sealed class DownloadFlowV2Repository(
         }
     }
 
-    public async Task ClearProviderCircuitAsync(string provider, CancellationToken ct = default)
+    public Task ClearProviderCircuitAsync(string provider, CancellationToken ct = default)
+        => db.MutateAsync("DownloadFlowV2Repository.ClearProviderCircuitAsync", () => ClearProviderCircuitAsyncCore(provider, ct), ct);
+
+    private async Task ClearProviderCircuitAsyncCore(string provider, CancellationToken ct = default)
     {
         provider = provider.Trim().ToLowerInvariant();
         if (provider.Length == 0)
@@ -1288,7 +1383,8 @@ public sealed class DownloadFlowV2Repository(
             return null;
         return await db.DownloadStageAttempts.FirstOrDefaultAsync(x => x.DispatchId == execution.DispatchId
             && x.RunId == execution.RunId && x.JobId == execution.JobId && x.Stage == execution.Stage
-            && x.Attempt == execution.Attempt && x.ArtifactKey == artifactKey, ct);
+            && x.Attempt == execution.Attempt && x.ArtifactKey == artifactKey
+            && (x.Status == DownloadStageStatus.Pending || x.Status == DownloadStageStatus.Running), ct);
     }
 
     private Task<DownloadJobStatus?> CurrentExecutableStatusAsync(
@@ -1302,8 +1398,13 @@ public sealed class DownloadFlowV2Repository(
             .FirstOrDefaultAsync(ct);
 
     private Task NotifyAsync(DownloadJobEntity job, DownloadJobStatus previous, CancellationToken ct)
-        => notifier.NotifyV2Async(job.JobId, job.CorrelationId, job.Status, previous, job.Stage, job.StageStatus,
-            job.CurrentRunId, job.CurrentRunNumber, job.CurrentAttempt, job.CurrentArtifactKey, job.WarningCount, ct);
+        {
+        var snapshot = (job.JobId, job.CorrelationId, job.Status, job.Stage, job.StageStatus,
+            job.CurrentRunId, job.CurrentRunNumber, job.CurrentAttempt, job.CurrentArtifactKey, job.WarningCount);
+        return db.AfterCommitAsync(() => notifier.NotifyV2Async(snapshot.JobId, snapshot.CorrelationId, snapshot.Status, previous,
+            snapshot.Stage, snapshot.StageStatus, snapshot.CurrentRunId, snapshot.CurrentRunNumber,
+            snapshot.CurrentAttempt, snapshot.CurrentArtifactKey, snapshot.WarningCount, ct));
+    }
 
     private static string NormalizeArtifactKey(string? value) => value?.Trim() ?? string.Empty;
 

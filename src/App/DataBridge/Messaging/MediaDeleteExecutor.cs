@@ -1,3 +1,6 @@
+using DataBridge.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using DataBridge.LiveChat;
 using DataBridge.Search;
 using FrostStream.ApplicationContracts;
@@ -99,7 +102,8 @@ public sealed class MediaDeleteExecutor
             return Failure(deletion.ErrorCode!, deletion.ErrorMessage!, deletion.Deleted);
         }
 
-        await DeleteStorageKeyRowsAsync(mediaGuid, storageKey, cancellationToken);
+        if (!await DeleteStorageKeyRowsAsync(mediaGuid, storageKey, files, cancellationToken))
+            return Failure("conflict", "Media changed while its files were being deleted. Retry after active downloads finish.", deletion.Deleted);
 
         _logger.LogInformation(
             "Deleted storage-key copy of media {MediaGuid} on '{StorageKey}' ({FilesDeleted} files).",
@@ -119,7 +123,8 @@ public sealed class MediaDeleteExecutor
             return Failure(deletion.ErrorCode!, deletion.ErrorMessage!, deletion.Deleted);
         }
 
-        await DeleteMediaRowAsync(mediaGuid, cancellationToken);
+        if (!await DeleteMediaRowAsync(mediaGuid, files, cancellationToken))
+            return Failure("conflict", "Media changed while its files were being deleted. Retry after active downloads finish.", deletion.Deleted);
         await DeleteFromSearchIndexAsync(mediaGuid, cancellationToken);
         await DeleteLiveChatAsync(mediaGuid, cancellationToken);
 
@@ -241,41 +246,46 @@ public sealed class MediaDeleteExecutor
         return files;
     }
 
-    private async Task DeleteMediaRowAsync(Guid mediaGuid, CancellationToken cancellationToken)
-    {
-        // FK cascades from media.media wipe all version, metadata, caption, and comment rows. Policy
-        // deny scopes live in the auth schema with no media FK, so wipe matching GUID scopes explicitly.
-        // PostgreSQL batches run atomically; SQLite requires an explicit transaction for both deletes.
-        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
-        await using var command = ApplicationDbCommands.Create(connection, _dataSource.Sql("MediaDeleteExecutor.DeleteMediaRowAsync.1"), transaction);
-        command.Parameters.AddWithValue("id", mediaGuid);
-        await command.ExecuteNonQueryAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-    }
+    private Task<bool> DeleteMediaRowAsync(Guid mediaGuid, IReadOnlyList<MediaFileLocation> files, CancellationToken ct)
+        => DeleteRowsAsync(mediaGuid, null, files, ct);
 
-    private async Task DeleteStorageKeyRowsAsync(Guid mediaGuid, string storageKey, CancellationToken cancellationToken)
+    private Task<bool> DeleteStorageKeyRowsAsync(Guid mediaGuid, string storageKey, IReadOnlyList<MediaFileLocation> files, CancellationToken ct)
+        => DeleteRowsAsync(mediaGuid, storageKey, files, ct);
+
+    private async Task<bool> DeleteRowsAsync(Guid mediaGuid, string? storageKey, IReadOnlyList<MediaFileLocation> expectedFiles, CancellationToken ct)
     {
-        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
-        try
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<DataBridgeDbContext>();
+        return await db.MutateAsync("Media.DeleteRows", async () =>
         {
-            await using (var command = connection.CreateCommand())
+            var connection = db.Database.GetDbConnection();
+            var transaction = db.Database.CurrentTransaction!.GetDbTransaction();
+            await using (var active = ApplicationDbCommands.Create(connection, _dataSource.Sql("MediaDeleteExecutor.HasActiveDownloadJobAsync.1"), transaction))
             {
-                command.Transaction = transaction;
-                command.CommandText = _dataSource.Sql("MediaDeleteExecutor.DeleteStorageKeyRowsAsync.1");
-                command.Parameters.AddWithValue("id", mediaGuid);
-                command.Parameters.AddWithValue("key", storageKey);
-                await command.ExecuteNonQueryAsync(cancellationToken);
+                active.Parameters.AddWithValue("id", mediaGuid);
+                DownloadJobStateSql.AddActiveStatesParameter(active);
+                if (Convert.ToBoolean(await active.ExecuteScalarAsync(ct))) return false;
             }
-
-            await transaction.CommitAsync(cancellationToken);
-        }
-        catch
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            throw;
-        }
+            // Filesystem/network deletion happens once, before this retryable callback. Refuse to
+            // remove rows added by a writer after that snapshot, including new storage objects.
+            await using (var snapshot = ApplicationDbCommands.Create(connection, _dataSource.Sql(storageKey is null
+                ? "MediaDeleteExecutor.LoadAllMediaFilesAsync.1" : "MediaDeleteExecutor.LoadMediaFilesForKeyAsync.1"), transaction))
+            {
+                snapshot.Parameters.AddWithValue("id", mediaGuid);
+                if (storageKey is not null) snapshot.Parameters.AddWithValue("key", storageKey);
+                var current = new HashSet<MediaFileLocation>();
+                await using var reader = await snapshot.ExecuteReaderAsync(ct);
+                while (await reader.ReadAsync(ct)) current.Add(storageKey is null
+                    ? new(reader.GetString(0), reader.GetString(1)) : new(storageKey, reader.GetString(0)));
+                if (!current.SetEquals(expectedFiles)) return false;
+            }
+            await using var command = ApplicationDbCommands.Create(connection, _dataSource.Sql(storageKey is null
+                ? "MediaDeleteExecutor.DeleteMediaRowAsync.1" : "MediaDeleteExecutor.DeleteStorageKeyRowsAsync.1"), transaction);
+            command.Parameters.AddWithValue("id", mediaGuid);
+            if (storageKey is not null) command.Parameters.AddWithValue("key", storageKey);
+            await command.ExecuteNonQueryAsync(ct);
+            return true;
+        }, ct);
     }
 
     private async Task DeleteFromSearchIndexAsync(Guid mediaGuid, CancellationToken cancellationToken)

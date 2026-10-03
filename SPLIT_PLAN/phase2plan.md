@@ -28,7 +28,7 @@ Phase 2 is split into reviewable increments so each can be completed and checked
 
 ## 2c — Core repositories and type mappings
 
-**Status: complete (2026-10-03).** See [operation adapters and shared verification](../src/App/DataBridge/Persistence/Queries/README.md) and the [2c handoff](phase2-checklist.md#2c-handoff). Core behaviors pass on PostgreSQL and SQLite; normal SQLite runtime remains gated pending 2d–2f.
+**Status: complete (2026-10-03).** See [operation adapters and shared verification](../src/App/DataBridge/Persistence/Queries/README.md) and the [2c handoff](phase2-checklist.md#2c-handoff). Core behaviors pass on PostgreSQL and SQLite; normal SQLite runtime remains gated pending 2e–2f.
 
 - Port repository reads and writes for the core application entities to SQLite through the boundaries from 2a.
 - Implement portable mappings for enums, JSON, arrays, and timestamp values used by those repositories.
@@ -39,6 +39,8 @@ Phase 2 is split into reviewable increments so each can be completed and checked
 **Completion:** Core repository behaviors work on both providers, and Full's PostgreSQL behavior remains unchanged.
 
 ## 2d — High-contention and bulk operations
+
+**Status: complete (2026-10-03).** See [mutation ownership, limits and shared verification](../src/App/DataBridge/Persistence/Mutations.md) and the [2d handoff](phase2-checklist.md#2d-handoff). SQLite runtime remains gated pending 2e–2f.
 
 - Port bulk insert/update paths and any provider-specific batching.
 - Replace PostgreSQL locking assumptions with SQLite-safe write coordination and short transaction scopes.

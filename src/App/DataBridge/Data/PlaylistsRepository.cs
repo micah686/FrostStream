@@ -1,3 +1,4 @@
+using DataBridge.Persistence;
 using DataBridge.Statistics;
 using Microsoft.EntityFrameworkCore;
 using NodaTime;
@@ -19,7 +20,10 @@ public sealed class PlaylistsRepository(
     public Task<PlaylistEntity?> FindBySourceUrlAsync(string sourceUrl, CancellationToken ct = default)
         => db.Playlists.AsNoTracking().FirstOrDefaultAsync(x => x.SourceUrl == sourceUrl, ct);
 
-    public async Task<UpsertResult> CreateOrReuseAsync(PlaylistRequested request, CancellationToken ct = default)
+    public Task<UpsertResult> CreateOrReuseAsync(PlaylistRequested request, CancellationToken ct = default)
+        => db.MutateAsync("PlaylistsRepository.CreateOrReuseAsync", () => CreateOrReuseAsyncCore(request, ct), ct);
+
+    private async Task<UpsertResult> CreateOrReuseAsyncCore(PlaylistRequested request, CancellationToken ct = default)
     {
         var existingById = await db.Playlists.FirstOrDefaultAsync(x => x.PlaylistId == request.PlaylistId, ct);
         if (existingById is not null)
@@ -78,7 +82,10 @@ public sealed class PlaylistsRepository(
         return new UpsertResult(entity, WasReused: false);
     }
 
-    public async Task UpdateStateAsync(Guid playlistId, PlaylistState state, CancellationToken ct = default)
+    public Task UpdateStateAsync(Guid playlistId, PlaylistState state, CancellationToken ct = default)
+        => db.MutateAsync("PlaylistsRepository.UpdateStateAsync", () => UpdateStateAsyncCore(playlistId, state, ct), ct);
+
+    private async Task UpdateStateAsyncCore(Guid playlistId, PlaylistState state, CancellationToken ct = default)
     {
         var playlist = await db.Playlists.FirstOrDefaultAsync(x => x.PlaylistId == playlistId, ct);
         if (playlist is null)
@@ -94,7 +101,10 @@ public sealed class PlaylistsRepository(
         await db.SaveChangesAsync(ct);
     }
 
-    public async Task ApplyMetadataFetchedAsync(Guid playlistId, PlaylistMetadataFetched evt, CancellationToken ct = default)
+    public Task ApplyMetadataFetchedAsync(Guid playlistId, PlaylistMetadataFetched evt, CancellationToken ct = default)
+        => db.MutateAsync("PlaylistsRepository.ApplyMetadataFetchedAsync", () => ApplyMetadataFetchedAsyncCore(playlistId, evt, ct), ct);
+
+    private async Task ApplyMetadataFetchedAsyncCore(Guid playlistId, PlaylistMetadataFetched evt, CancellationToken ct = default)
     {
         var playlist = await db.Playlists.FirstOrDefaultAsync(x => x.PlaylistId == playlistId, ct);
         if (playlist is null)
@@ -146,7 +156,10 @@ public sealed class PlaylistsRepository(
         await db.SaveChangesAsync(ct);
     }
 
-    public async Task WriteStagingEntriesAsync(Guid playlistId, IReadOnlyList<PlaylistEntry> entries, CancellationToken ct = default)
+    public Task WriteStagingEntriesAsync(Guid playlistId, IReadOnlyList<PlaylistEntry> entries, CancellationToken ct = default)
+        => db.MutateAsync("PlaylistsRepository.WriteStagingEntriesAsync", () => WriteStagingEntriesAsyncCore(playlistId, entries, ct), ct);
+
+    private async Task WriteStagingEntriesAsyncCore(Guid playlistId, IReadOnlyList<PlaylistEntry> entries, CancellationToken ct = default)
     {
         if (entries.Count == 0)
             return;
@@ -165,9 +178,9 @@ public sealed class PlaylistsRepository(
 
         foreach (var entry in entries)
         {
-            if (skipIndexes.Contains(entry.PlaylistIndex))
+            if (!skipIndexes.Add(entry.PlaylistIndex))
                 continue;
-            if (skipUrls.Contains(entry.EntryUrl))
+            if (!skipUrls.Add(entry.EntryUrl))
                 continue;
 
             db.PlaylistScanEntries.Add(new PlaylistScanEntryEntity
@@ -191,7 +204,10 @@ public sealed class PlaylistsRepository(
             .ToListAsync(ct);
     }
 
-    public async Task FanOutEntryAsync(FanOutEntryRequest request, CancellationToken ct = default)
+    public Task FanOutEntryAsync(FanOutEntryRequest request, CancellationToken ct = default)
+        => db.MutateAsync("PlaylistsRepository.FanOutEntryAsync", () => FanOutEntryAsyncCore(request, ct), ct);
+
+    private async Task FanOutEntryAsyncCore(FanOutEntryRequest request, CancellationToken ct = default)
     {
         var staging = await db.PlaylistScanEntries
             .FirstOrDefaultAsync(x => x.PlaylistId == request.PlaylistId
@@ -250,17 +266,20 @@ public sealed class PlaylistsRepository(
         if (!jobExists)
         {
             var occurredAt = clock.GetCurrentInstant();
-            await DownloadStatisticsRecorder.RecordDailyActivityAsync(db, null, "created", occurredAt, 0, 0, ct);
-            await DownloadStatisticsRecorder.RecordChannelDailyStatesAsync(db, null, request.EntryUrl, "created", occurredAt, ct);
+            await db.AfterCommitAsync(() => DownloadStatisticsRecorder.RecordDailyActivityAsync(db, null, "created", occurredAt, 0, 0, ct));
+            await db.AfterCommitAsync(() => DownloadStatisticsRecorder.RecordChannelDailyStatesAsync(db, null, request.EntryUrl, "created", occurredAt, ct));
             if (request.InitialState == DownloadJobState.Ignored)
             {
-                await DownloadStatisticsRecorder.RecordDailyActivityAsync(db, null, "ignored", occurredAt, 0, 0, ct);
-                await DownloadStatisticsRecorder.RecordChannelDailyStatesAsync(db, null, request.EntryUrl, "ignored", occurredAt, ct);
+                await db.AfterCommitAsync(() => DownloadStatisticsRecorder.RecordDailyActivityAsync(db, null, "ignored", occurredAt, 0, 0, ct));
+                await db.AfterCommitAsync(() => DownloadStatisticsRecorder.RecordChannelDailyStatesAsync(db, null, request.EntryUrl, "ignored", occurredAt, ct));
             }
         }
     }
 
-    public async Task<string?> RequeuePlaylistItemAsync(Guid playlistId, Guid jobId, CancellationToken ct = default)
+    public Task<string?> RequeuePlaylistItemAsync(Guid playlistId, Guid jobId, CancellationToken ct = default)
+        => db.MutateAsync("PlaylistsRepository.RequeuePlaylistItemAsync", () => RequeuePlaylistItemAsyncCore(playlistId, jobId, ct), ct);
+
+    private async Task<string?> RequeuePlaylistItemAsyncCore(Guid playlistId, Guid jobId, CancellationToken ct = default)
     {
         var item = await db.PlaylistItems
             .AsNoTracking()
@@ -288,13 +307,16 @@ public sealed class PlaylistsRepository(
         job.UpdatedAt = clock.GetCurrentInstant();
         await db.SaveChangesAsync(ct);
         if (previousState != job.State || previousStatus != job.Status)
-            await _stateNotifier.NotifyV2Async(job.JobId, job.CorrelationId, job.Status, previousStatus,
+            await db.AfterCommitAsync(() => _stateNotifier.NotifyV2Async(job.JobId, job.CorrelationId, job.Status, previousStatus,
                 job.Stage, job.StageStatus, job.CurrentRunId, job.CurrentRunNumber, job.CurrentAttempt, job.CurrentArtifactKey,
-                job.WarningCount, ct);
+                job.WarningCount, ct));
         return item.EntryUrl;
     }
 
-    public async Task<bool> TryLinkMediaGuidAsync(Guid jobId, Guid mediaGuid, CancellationToken ct = default)
+    public Task<bool> TryLinkMediaGuidAsync(Guid jobId, Guid mediaGuid, CancellationToken ct = default)
+        => db.MutateAsync("PlaylistsRepository.TryLinkMediaGuidAsync", () => TryLinkMediaGuidAsyncCore(jobId, mediaGuid, ct), ct);
+
+    private async Task<bool> TryLinkMediaGuidAsyncCore(Guid jobId, Guid mediaGuid, CancellationToken ct = default)
     {
         var item = await db.PlaylistItems
             .AsNoTracking()

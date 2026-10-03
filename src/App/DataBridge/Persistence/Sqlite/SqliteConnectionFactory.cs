@@ -59,6 +59,7 @@ public sealed class SqliteConnectionFactory
         connection.CreateFunction<string?, string?>("fs_guid_text", value => value is null ? null : Guid.Parse(value).ToString("D"), isDeterministic: true);
         connection.CreateFunction<long?, long?>("fs_epoch_round", value => value is null ? null : checked((long)Math.Round(value.Value / 1000000m, MidpointRounding.AwayFromZero)), isDeterministic: true);
         using var command = connection.CreateCommand();
+        command.CommandTimeout = 1;
         // Microsoft.Data.Sqlite retries busy/locked commands up to CommandTimeout. A small native
         // wait avoids spinning; do not set a second multi-second wait or use unbounded timeout=0.
         command.CommandText = "PRAGMA foreign_keys=ON; PRAGMA busy_timeout=100;";

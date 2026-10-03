@@ -76,14 +76,14 @@ Migration files are listed separately. Registration and reader helpers are inclu
 | [StartNats.cs](../src/App/AppHost/StartNats.cs) | query dialect |
 | [AudioRenditionRepository.cs](../src/App/DataBridge/AudioRenditions/AudioRenditionRepository.cs) | application adapter |
 | [MediaEncodingStatusRepository.cs](../src/App/DataBridge/AudioRenditions/MediaEncodingStatusRepository.cs) | application adapter |
-| [DownloadFlowV2Repository.cs](../src/App/DataBridge/Data/DownloadFlowV2Repository.cs) | application adapter, EF SQL, transaction |
-| [DownloadHistoryPurger.cs](../src/App/DataBridge/Data/DownloadHistoryPurger.cs) | Npgsql, transaction, array parameter, query dialect, unbounded timeout |
-| [DownloadJobsRepository.cs](../src/App/DataBridge/Data/DownloadJobsRepository.cs) | application adapter, EF SQL, transaction, set update/delete |
-| [ImportSessionPurger.cs](../src/App/DataBridge/Data/ImportSessionPurger.cs) | Npgsql, transaction, array parameter, query dialect, unbounded timeout |
-| [ImportSessionRepository.cs](../src/App/DataBridge/Data/ImportSessionRepository.cs) | set update/delete |
+| [DownloadFlowV2Repository.cs](../src/App/DataBridge/Data/DownloadFlowV2Repository.cs) | application adapter, EF SQL |
+| [DownloadHistoryPurger.cs](../src/App/DataBridge/Data/DownloadHistoryPurger.cs) | application adapter, Npgsql, array parameter, query dialect |
+| [DownloadJobsRepository.cs](../src/App/DataBridge/Data/DownloadJobsRepository.cs) | application adapter, EF SQL, set update/delete |
+| [ImportSessionPurger.cs](../src/App/DataBridge/Data/ImportSessionPurger.cs) | application adapter, Npgsql, array parameter, query dialect |
+| [ImportSessionRepository.cs](../src/App/DataBridge/Data/ImportSessionRepository.cs) | application adapter, EF SQL, set update/delete |
 | [MetadataRepository.cs](../src/App/DataBridge/Data/MetadataRepository.cs) | application adapter, transaction |
 | [UserNotesRepository.cs](../src/App/DataBridge/Data/UserNotesRepository.cs) | application adapter |
-| [UserPlaylistsRepository.cs](../src/App/DataBridge/Data/UserPlaylistsRepository.cs) | application adapter, EF SQL, transaction |
+| [UserPlaylistsRepository.cs](../src/App/DataBridge/Data/UserPlaylistsRepository.cs) | application adapter, EF SQL |
 | [DataBridgeModule.cs](../src/App/DataBridge/DataBridgeModule.cs) | Npgsql |
 | [LiveChatBackfillConsumerService.cs](../src/App/DataBridge/LiveChat/LiveChatBackfillConsumerService.cs) | application adapter, query dialect |
 | [LiveChatIngestService.cs](../src/App/DataBridge/LiveChat/LiveChatIngestService.cs) | application adapter |
@@ -93,15 +93,18 @@ Migration files are listed separately. Registration and reader helpers are inclu
 | [MediaThumbnailReadService.cs](../src/App/DataBridge/MediaStream/MediaThumbnailReadService.cs) | application adapter |
 | [AccessPolicyConsumerService.cs](../src/App/DataBridge/Messaging/AccessPolicyConsumerService.cs) | application adapter |
 | [AccessPolicyExecutor.cs](../src/App/DataBridge/Messaging/AccessPolicyExecutor.cs) | application adapter, transaction |
-| [BackgroundJobConsumerService.cs](../src/App/DataBridge/Messaging/BackgroundJobConsumerService.cs) | application adapter, unbounded timeout |
+| [BackgroundJobConsumerService.cs](../src/App/DataBridge/Messaging/BackgroundJobConsumerService.cs) | application adapter |
 | [DownloadJobStateSql.cs](../src/App/DataBridge/Messaging/DownloadJobStateSql.cs) | query dialect |
 | [MediaDeleteExecutor.cs](../src/App/DataBridge/Messaging/MediaDeleteExecutor.cs) | application adapter, transaction |
 | [WatchStateConsumerService.cs](../src/App/DataBridge/Messaging/WatchStateConsumerService.cs) | application adapter |
 | [MetadataReadService.cs](../src/App/DataBridge/Metadata/MetadataReadService.cs) | application adapter |
+| [ApplicationBatches.cs](../src/App/DataBridge/Persistence/ApplicationBatches.cs) | application adapter |
 | [ApplicationDatabase.cs](../src/App/DataBridge/Persistence/ApplicationDatabase.cs) | application adapter, SQLite, Npgsql |
 | [ApplicationDatabaseErrors.cs](../src/App/DataBridge/Persistence/ApplicationDatabaseErrors.cs) | application adapter, Npgsql |
+| [ApplicationMutation.cs](../src/App/DataBridge/Persistence/ApplicationMutation.cs) | application adapter, SQLite, Npgsql, EF SQL, transaction |
 | [ApplicationParameters.cs](../src/App/DataBridge/Persistence/ApplicationParameters.cs) | application adapter, Npgsql |
 | [ApplicationQueries.cs](../src/App/DataBridge/Persistence/ApplicationQueries.cs) | application adapter, provider query catalog |
+| [ApplicationRetention.cs](../src/App/DataBridge/Persistence/ApplicationRetention.cs) | application adapter, set update/delete |
 | [PersistenceFunctions.cs](../src/App/DataBridge/Persistence/PersistenceFunctions.cs) | query dialect |
 | [PersistenceModelConfiguration.cs](../src/App/DataBridge/Persistence/PersistenceModelConfiguration.cs) | query dialect |
 | [PersistenceRegistration.cs](../src/App/DataBridge/Persistence/PersistenceRegistration.cs) | application adapter, SQLite, Npgsql |
@@ -113,6 +116,7 @@ Migration files are listed separately. Registration and reader helpers are inclu
 | [MediaFilesQueries.cs](../src/App/DataBridge/Persistence/Queries/MediaFilesQueries.cs) | provider query catalog, array parameter, query dialect |
 | [MetadataReadQueries.cs](../src/App/DataBridge/Persistence/Queries/MetadataReadQueries.cs) | provider query catalog, query dialect |
 | [MetadataWriteQueries.cs](../src/App/DataBridge/Persistence/Queries/MetadataWriteQueries.cs) | provider query catalog, upsert, query dialect |
+| [MutationQueries.cs](../src/App/DataBridge/Persistence/Queries/MutationQueries.cs) | provider query catalog, row lock |
 | [PoliciesQueries.cs](../src/App/DataBridge/Persistence/Queries/PoliciesQueries.cs) | provider query catalog, upsert, array parameter, query dialect |
 | [RenditionsQueries.cs](../src/App/DataBridge/Persistence/Queries/RenditionsQueries.cs) | provider query catalog, query dialect |
 | [StatisticsQueries.cs](../src/App/DataBridge/Persistence/Queries/StatisticsQueries.cs) | provider query catalog, upsert, query dialect |

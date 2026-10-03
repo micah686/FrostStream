@@ -1,10 +1,11 @@
+using DataBridge.Persistence;
+using Microsoft.Extensions.DependencyInjection;
 using Cleipnir.ResilientFunctions.Domain;
 using DataBridge.Flows;
 using DataBridge.Messaging;
 using Microsoft.Extensions.Logging;
 using NodaTime;
 using Npgsql;
-using NpgsqlTypes;
 using Shared.Messaging;
 
 namespace DataBridge.Data;
@@ -61,16 +62,23 @@ public interface IDownloadHistoryPurger
 /// </remarks>
 public sealed class DownloadHistoryPurger(
     NpgsqlDataSource dataSource,
+    IServiceScopeFactory scopes,
     DownloadJobV2Flows jobFlows,
     DownloadGroupV2Flows groupFlows,
     LocalImportItemV2Flows importFlows,
     IClock clock,
     ILogger<DownloadHistoryPurger> logger) : IDownloadHistoryPurger
 {
+    private async Task<T> ApplicationAsync<T>(Func<ApplicationRetention, Task<T>> operation)
+    {
+        using var scope = scopes.CreateScope();
+        return await operation(new ApplicationRetention(scope.ServiceProvider.GetRequiredService<DataBridgeDbContext>()));
+    }
+
     public const int DefaultRetentionDays = 30;
 
     /// <summary>Jobs are purged a batch at a time so a first run on a long-lived install never holds one huge transaction.</summary>
-    private const int BatchSize = 500;
+    private const int BatchSize = ApplicationBatches.WriteBatchSize;
 
     /// <summary>Ceiling on how many terminal flow rows one run inspects, so the sweep cannot run away.</summary>
     private const int OrphanSweepLimit = 20_000;
@@ -119,6 +127,7 @@ public sealed class DownloadHistoryPurger(
         Func<string, Task>? reportProgress,
         CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var days = Math.Max(0, retentionDays);
         var cutoff = clock.GetCurrentInstant().Minus(Duration.FromDays(days));
 
@@ -155,9 +164,9 @@ public sealed class DownloadHistoryPurger(
         {
             var batch = await SelectEligibleJobsAsync(
                 cutoff,
-                DownloadJobStateSql.ToPostgresLabels(jobStatuses),
-                DownloadJobStateSql.ToPostgresLabels(groupStatuses),
-                DownloadJobStateSql.ToPostgresLabels(blockingStatuses),
+                jobStatuses,
+                groupStatuses,
+                blockingStatuses,
                 cancellationToken);
 
             if (batch.Count == 0)
@@ -169,7 +178,7 @@ public sealed class DownloadHistoryPurger(
             // Flows first: once the run rows are gone the instance ids are unrecoverable.
             deletedJobFlows += await DeleteJobFlowsAsync(jobIds, cancellationToken);
 
-            purgedJobs += await DeleteJobRowsAsync(jobIds, cancellationToken);
+            purgedJobs += await DeleteJobRowsAsync(jobIds, cutoff, jobStatuses, groupStatuses, blockingStatuses, cancellationToken);
 
             // A group only drains once its last child is gone, which for a large playlist happens on a
             // later batch than the one that started it.
@@ -207,6 +216,7 @@ public sealed class DownloadHistoryPurger(
             OrphanSweepTruncated = sweep.Truncated
         };
 
+        cancellationToken.ThrowIfCancellationRequested();
         logger.LogInformation(
             "Download history cleanup purged {Jobs} job(s), {Groups} group(s), {JobFlows} job flow(s), "
             + "{GroupFlows} group flow(s) and {Orphans} orphaned flow(s) using a {Days}-day retention "
@@ -216,141 +226,24 @@ public sealed class DownloadHistoryPurger(
         return result;
     }
 
-    private async Task<List<(Guid JobId, Guid CorrelationId)>> SelectEligibleJobsAsync(
-        Instant cutoff,
-        string[] jobStatuses,
-        string[] groupStatuses,
-        string[] blockingStatuses,
-        CancellationToken cancellationToken)
-    {
-        await using var command = dataSource.CreateCommand("""
-            SELECT dj.job_id, dj.correlation_id
-            FROM jobs.download_jobs dj
-            JOIN jobs.download_groups g ON g.correlation_id = dj.correlation_id
-            WHERE dj.status::text = ANY(@job_statuses)
-              AND g.status::text = ANY(@group_statuses)
-              AND COALESCE(dj.completed_at, dj.updated_at) < @cutoff
-              AND COALESCE(g.completed_at, g.updated_at) < @cutoff
-              AND NOT EXISTS (
-                  SELECT 1
-                  FROM jobs.download_jobs sibling
-                  WHERE sibling.correlation_id = dj.correlation_id
-                    AND sibling.status::text = ANY(@blocking_statuses)
-              )
-              AND NOT EXISTS (
-                  SELECT 1
-                  FROM jobs.download_job_runs r
-                  JOIN jobs.download_worker_leases wl ON wl.run_id = r.run_id
-                  WHERE r.job_id = dj.job_id
-                    AND wl.status::text = 'active'
-              )
-            ORDER BY dj.job_id
-            LIMIT @batch_size;
-            """);
+    private Task<List<(Guid JobId, Guid CorrelationId)>> SelectEligibleJobsAsync(
+        Instant cutoff, DownloadJobStatus[] jobStatuses, DownloadGroupStatus[] groupStatuses,
+        DownloadJobStatus[] blockingStatuses, CancellationToken cancellationToken)
+        => ApplicationAsync(store => store.SelectJobsAsync(cutoff, jobStatuses, groupStatuses, blockingStatuses, cancellationToken));
 
-        AddTextArray(command, "job_statuses", jobStatuses);
-        AddTextArray(command, "group_statuses", groupStatuses);
-        AddTextArray(command, "blocking_statuses", blockingStatuses);
-        command.Parameters.AddWithValue("cutoff", cutoff.ToDateTimeOffset());
-        command.Parameters.AddWithValue("batch_size", BatchSize);
-        command.CommandTimeout = 0;
+    private Task<int> DeleteJobRowsAsync(Guid[] jobIds, Instant cutoff, DownloadJobStatus[] jobs,
+        DownloadGroupStatus[] groups, DownloadJobStatus[] blocking, CancellationToken ct)
+        => ApplicationAsync(store => store.DeleteJobsAsync(jobIds, cutoff, jobs, groups, blocking, ct));
 
-        var rows = new List<(Guid, Guid)>(BatchSize);
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        while (await reader.ReadAsync(cancellationToken))
-            rows.Add((reader.GetGuid(0), reader.GetGuid(1)));
+    private Task<List<(Guid GroupId, Guid CorrelationId)>> SelectDrainedGroupsAsync(Guid[] ids, CancellationToken ct)
+        => ApplicationAsync(store => store.SelectDrainedGroupsAsync(ids, ct));
 
-        return rows;
-    }
-
-    private async Task<int> DeleteJobRowsAsync(Guid[] jobIds, CancellationToken cancellationToken)
-    {
-        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
-
-        // Deleting the job row cascades to download_job_runs (and through it to stage_attempts,
-        // artifacts, worker_leases and warnings), download_job_history, download_job_progress_log and
-        // playlist_items, and nulls media.media_source_versions.latest_job_id.
-        var deleted = await ExecuteAsync(
-            connection, transaction, "DELETE FROM jobs.download_jobs WHERE job_id = ANY(@ids);", jobIds, cancellationToken);
-
-        // Neither of these has a foreign key to download_jobs, deliberately, so nothing cascades.
-        await ExecuteAsync(
-            connection, transaction, "DELETE FROM jobs.failed_download_jobs WHERE job_id = ANY(@ids);", jobIds, cancellationToken);
-        await ExecuteAsync(
-            connection, transaction, "DELETE FROM jobs.processed_messages WHERE job_id = ANY(@ids);", jobIds, cancellationToken);
-
-        await transaction.CommitAsync(cancellationToken);
-        return deleted;
-    }
-
-    private async Task<List<(Guid GroupId, Guid CorrelationId)>> SelectDrainedGroupsAsync(
-        Guid[] correlationIds,
-        CancellationToken cancellationToken)
-    {
-        await using var command = dataSource.CreateCommand("""
-            SELECT g.group_id, g.correlation_id
-            FROM jobs.download_groups g
-            WHERE g.correlation_id = ANY(@correlation_ids)
-              AND NOT EXISTS (
-                  SELECT 1
-                  FROM jobs.download_jobs dj
-                  WHERE dj.correlation_id = g.correlation_id
-              );
-            """);
-        command.Parameters.AddWithValue("correlation_ids", correlationIds);
-        command.CommandTimeout = 0;
-
-        var rows = new List<(Guid, Guid)>();
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        while (await reader.ReadAsync(cancellationToken))
-            rows.Add((reader.GetGuid(0), reader.GetGuid(1)));
-
-        return rows;
-    }
-
-    private async Task<int> DeleteGroupRowsAsync(Guid[] correlationIds, CancellationToken cancellationToken)
-    {
-        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
-
-        // Post-fan-out staging debris. jobs.playlists itself is deliberately left alone: both
-        // playlists.media_playlist_membership and playlists.playlist_metadata cascade off it, and those
-        // hold which media belong to which playlist — user library data, not job history.
-        await ExecuteAsync(connection, transaction, """
-            DELETE FROM jobs.playlist_scan_entries
-            WHERE playlist_id IN (
-                SELECT p.playlist_id FROM jobs.playlists p WHERE p.correlation_id = ANY(@ids)
-            );
-            """, correlationIds, cancellationToken);
-
-        // No foreign key ties groups to jobs, so the group row must be removed explicitly. Re-check
-        // for children inside the transaction in case one was inserted since the drain check.
-        var deleted = await ExecuteAsync(connection, transaction, """
-            DELETE FROM jobs.download_groups g
-            WHERE g.correlation_id = ANY(@ids)
-              AND NOT EXISTS (
-                  SELECT 1 FROM jobs.download_jobs dj WHERE dj.correlation_id = g.correlation_id
-              );
-            """, correlationIds, cancellationToken);
-
-        await transaction.CommitAsync(cancellationToken);
-        return deleted;
-    }
+    private Task<int> DeleteGroupRowsAsync(Guid[] ids, CancellationToken ct)
+        => ApplicationAsync(store => store.DeleteGroupsAsync(ids, ct));
 
     private async Task<int> DeleteJobFlowsAsync(Guid[] jobIds, CancellationToken cancellationToken)
     {
-        await using var command = dataSource.CreateCommand(
-            "SELECT job_id, run_id FROM jobs.download_job_runs WHERE job_id = ANY(@job_ids);");
-        command.Parameters.AddWithValue("job_ids", jobIds);
-        command.CommandTimeout = 0;
-
-        var runs = new List<(Guid JobId, Guid RunId)>();
-        await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
-        {
-            while (await reader.ReadAsync(cancellationToken))
-                runs.Add((reader.GetGuid(0), reader.GetGuid(1)));
-        }
+        var runs = await ApplicationAsync(store => store.SelectRunsAsync(jobIds, cancellationToken));
 
         var deleted = 0;
         foreach (var run in runs)
@@ -422,7 +315,7 @@ public sealed class DownloadHistoryPurger(
             """);
         command.Parameters.AddWithValue("statuses", terminalStatuses);
         command.Parameters.AddWithValue("limit", OrphanSweepLimit);
-        command.CommandTimeout = 0;
+        command.CommandTimeout = 15;
 
         var orphans = new List<string>();
         await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
@@ -461,7 +354,7 @@ public sealed class DownloadHistoryPurger(
         try
         {
             var panel = await jobFlows.ControlPanel(new FlowInstance(instance));
-            if (panel is null)
+            if (panel is null || panel.Status is not (Status.Succeeded or Status.Failed))
                 return false;
             await panel.Delete();
             return true;
@@ -479,7 +372,7 @@ public sealed class DownloadHistoryPurger(
         try
         {
             var panel = await groupFlows.ControlPanel(new FlowInstance(instance));
-            if (panel is null)
+            if (panel is null || panel.Status is not (Status.Succeeded or Status.Failed))
                 return false;
             await panel.Delete();
             return true;
@@ -496,7 +389,7 @@ public sealed class DownloadHistoryPurger(
         try
         {
             var panel = await importFlows.ControlPanel(new FlowInstance(instance));
-            if (panel is null)
+            if (panel is null || panel.Status is not (Status.Succeeded or Status.Failed))
                 return false;
             await panel.Delete();
             return true;
@@ -512,23 +405,6 @@ public sealed class DownloadHistoryPurger(
     // present, so skipping it is safe and the next run retries.
     private void LogFlowDeleteFailure(Exception ex, string instance)
         => logger.LogWarning(ex, "Failed deleting Cleipnir flow instance {Instance} during download history cleanup; skipping it.", instance);
-
-    private static void AddTextArray(NpgsqlCommand command, string name, string[] values)
-        => command.Parameters.Add(name, NpgsqlDbType.Array | NpgsqlDbType.Text).Value = values;
-
-    /// <summary>Runs a delete whose only parameter is the <c>@ids</c> uuid array.</summary>
-    private static async Task<int> ExecuteAsync(
-        NpgsqlConnection connection,
-        NpgsqlTransaction transaction,
-        string sql,
-        Guid[] ids,
-        CancellationToken cancellationToken)
-    {
-        await using var command = new NpgsqlCommand(sql, connection, transaction);
-        command.Parameters.AddWithValue("ids", ids);
-        command.CommandTimeout = 0;
-        return await command.ExecuteNonQueryAsync(cancellationToken);
-    }
 
     /// <summary>Job flow instances are <c>{jobId:N}-{runId:N}</c> — see <see cref="DownloadFlowInstance.Job"/>.</summary>
     private static bool TryParseJobInstance(string instance, out Guid jobId, out Guid runId)

@@ -1,10 +1,11 @@
+using DataBridge.Persistence;
+using Microsoft.Extensions.DependencyInjection;
 using Cleipnir.ResilientFunctions.Domain;
 using DataBridge.Flows;
 using DataBridge.Messaging;
 using Microsoft.Extensions.Logging;
 using NodaTime;
 using Npgsql;
-using NpgsqlTypes;
 using Shared.Messaging;
 
 namespace DataBridge.Data;
@@ -26,29 +27,28 @@ namespace DataBridge.Data;
 /// </remarks>
 public sealed class ImportSessionPurger(
     NpgsqlDataSource dataSource,
+    IServiceScopeFactory scopes,
     LocalImportItemV2Flows importFlows,
     IClock clock,
     ILogger<ImportSessionPurger> logger) : IImportSessionPurger
 {
+    private async Task<T> ApplicationAsync<T>(Func<ApplicationRetention, Task<T>> operation)
+    {
+        using var scope = scopes.CreateScope();
+        return await operation(new ApplicationRetention(scope.ServiceProvider.GetRequiredService<DataBridgeDbContext>()));
+    }
+
     public const int DefaultRetentionDays = 30;
 
     /// <summary>Sessions are purged a batch at a time so a first run on a long-lived install never holds one huge transaction.</summary>
-    private const int BatchSize = 500;
-
-    /// <summary>Terminal statuses for an import session. Once a session reaches one of these it will never return to a non-terminal state.</summary>
-    private static readonly ImportSessionStatus[] TerminalSessionStatuses =
-    [
-        ImportSessionStatus.ScanFailed,
-        ImportSessionStatus.Completed,
-        ImportSessionStatus.CompletedWithFailures,
-        ImportSessionStatus.Cancelled
-    ];
+    private const int BatchSize = ApplicationBatches.WriteBatchSize;
 
     public async Task<ImportSessionCleanupResult> PurgeAsync(
         int retentionDays,
         Func<string, Task>? reportProgress,
         CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var days = Math.Max(0, retentionDays);
         var cutoff = clock.GetCurrentInstant().Minus(Duration.FromDays(days));
 
@@ -69,7 +69,7 @@ public sealed class ImportSessionPurger(
 
             // Flows first: once the item rows are gone the instance ids are unrecoverable.
             deletedFlows += await DeleteImportFlowsAsync(itemIds, cancellationToken);
-            purgedSessions += await DeleteSessionRowsAsync(sessionIdArray, cancellationToken);
+            purgedSessions += await DeleteSessionRowsAsync(sessionIdArray, cutoff, cancellationToken);
 
             if (reportProgress is not null)
                 await reportProgress($"Purged {purgedSessions} import session(s) and {deletedFlows} flow instance(s) so far…");
@@ -79,6 +79,7 @@ public sealed class ImportSessionPurger(
                 break;
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
         logger.LogInformation(
             "Import session cleanup purged {Sessions} session(s) and {Flows} local-import flow instance(s) using a {Days}-day retention.",
             purgedSessions, deletedFlows, days);
@@ -91,51 +92,11 @@ public sealed class ImportSessionPurger(
         };
     }
 
-    private async Task<List<Guid>> SelectEligibleSessionIdsAsync(
-        Instant cutoff,
-        CancellationToken cancellationToken)
-    {
-        await using var command = dataSource.CreateCommand("""
-            SELECT session_id
-            FROM imports.import_sessions
-            WHERE status = ANY(@statuses)
-              AND completed_at < @cutoff
-            ORDER BY session_id
-            LIMIT @batch_size;
-            """);
+    private Task<List<Guid>> SelectEligibleSessionIdsAsync(Instant cutoff, CancellationToken ct)
+        => ApplicationAsync(store => store.SelectSessionsAsync(cutoff, ct));
 
-        AddTextArray(command, "statuses", DownloadJobStateSql.ToPostgresLabels(TerminalSessionStatuses));
-        command.Parameters.AddWithValue("cutoff", cutoff.ToDateTimeOffset());
-        command.Parameters.AddWithValue("batch_size", BatchSize);
-        command.CommandTimeout = 0;
-
-        var sessionIds = new List<Guid>(BatchSize);
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        while (await reader.ReadAsync(cancellationToken))
-            sessionIds.Add(reader.GetGuid(0));
-
-        return sessionIds;
-    }
-
-    private async Task<List<Guid>> SelectSessionItemIdsAsync(
-        Guid[] sessionIds,
-        CancellationToken cancellationToken)
-    {
-        await using var command = dataSource.CreateCommand("""
-            SELECT item_id
-            FROM imports.import_session_items
-            WHERE session_id = ANY(@session_ids);
-            """);
-        command.Parameters.AddWithValue("session_ids", sessionIds);
-        command.CommandTimeout = 0;
-
-        var itemIds = new List<Guid>();
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        while (await reader.ReadAsync(cancellationToken))
-            itemIds.Add(reader.GetGuid(0));
-
-        return itemIds;
-    }
+    private Task<List<Guid>> SelectSessionItemIdsAsync(Guid[] ids, CancellationToken ct)
+        => ApplicationAsync(store => store.SelectSessionItemsAsync(ids, ct));
 
     private async Task<int> DeleteImportFlowsAsync(
         List<Guid> itemIds,
@@ -156,7 +117,7 @@ public sealed class ImportSessionPurger(
             """);
         command.Parameters.AddWithValue("statuses", terminalStatuses);
         command.Parameters.AddWithValue("item_ids", itemIds.ToArray());
-        command.CommandTimeout = 0;
+        command.CommandTimeout = 15;
 
         var instanceIds = new List<string>();
         await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
@@ -181,7 +142,7 @@ public sealed class ImportSessionPurger(
         try
         {
             var panel = await importFlows.ControlPanel(new FlowInstance(instance));
-            if (panel is null)
+            if (panel is null || panel.Status is not (Status.Succeeded or Status.Failed))
                 return false;
             await panel.Delete();
             return true;
@@ -193,26 +154,7 @@ public sealed class ImportSessionPurger(
         }
     }
 
-    private async Task<int> DeleteSessionRowsAsync(
-        Guid[] sessionIds,
-        CancellationToken cancellationToken)
-    {
-        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+    private Task<int> DeleteSessionRowsAsync(Guid[] ids, Instant cutoff, CancellationToken ct)
+        => ApplicationAsync(store => store.DeleteSessionsAsync(ids, cutoff, ct));
 
-        // Cascade deletes import_session_items and import_session_mappings.
-        await using var command = new NpgsqlCommand(
-            "DELETE FROM imports.import_sessions WHERE session_id = ANY(@ids);",
-            connection,
-            transaction);
-        command.Parameters.AddWithValue("ids", sessionIds);
-        command.CommandTimeout = 0;
-
-        var deleted = await command.ExecuteNonQueryAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-        return deleted;
-    }
-
-    private static void AddTextArray(NpgsqlCommand command, string name, string[] values)
-        => command.Parameters.Add(name, NpgsqlDbType.Array | NpgsqlDbType.Text).Value = values;
 }

@@ -66,7 +66,7 @@ public static class ApplicationDbCommands
         public override int CommandTimeout
         {
             get => inner.CommandTimeout;
-            set => inner.CommandTimeout = inner.Connection is Microsoft.Data.Sqlite.SqliteConnection sqlite && value == 0 ? sqlite.DefaultTimeout : value;
+            set => inner.CommandTimeout = inner.Connection is Microsoft.Data.Sqlite.SqliteConnection sqlite ? (value == 0 ? sqlite.DefaultTimeout : Math.Min(value, sqlite.DefaultTimeout)) : value;
         }
         public override CommandType CommandType { get => inner.CommandType; set => inner.CommandType = value; }
         public override bool DesignTimeVisible { get => inner.DesignTimeVisible; set => inner.DesignTimeVisible = value; }

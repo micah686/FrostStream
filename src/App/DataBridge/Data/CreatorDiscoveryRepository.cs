@@ -1,3 +1,4 @@
+using DataBridge.Persistence;
 using Microsoft.EntityFrameworkCore;
 using NodaTime;
 using Shared.Database;
@@ -61,7 +62,10 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
             .ToList();
     }
 
-    public async Task<CreatorSourceRecord> CreateSourceAsync(CreatorSourceEntity source, CancellationToken cancellationToken = default)
+    public Task<CreatorSourceRecord> CreateSourceAsync(CreatorSourceEntity source, CancellationToken cancellationToken = default)
+        => db.MutateAsync("CreatorDiscoveryRepository.CreateSourceAsync", () => CreateSourceAsyncCore(source, cancellationToken), cancellationToken);
+
+    private async Task<CreatorSourceRecord> CreateSourceAsyncCore(CreatorSourceEntity source, CancellationToken cancellationToken = default)
     {
         source.SourceUrl = SourceUrlCanonicalizer.Canonicalize(source.SourceUrl);
         db.CreatorSources.Add(source);
@@ -69,7 +73,10 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
         return new CreatorSourceRecord(source, await CreateScanStateAsync(source.Id, cancellationToken));
     }
 
-    public async Task<CreatorSourceRecord> CreateOrReuseSourceAsync(CreatorSourceEntity source, CancellationToken cancellationToken = default)
+    public Task<CreatorSourceRecord> CreateOrReuseSourceAsync(CreatorSourceEntity source, CancellationToken cancellationToken = default)
+        => db.MutateAsync("CreatorDiscoveryRepository.CreateOrReuseSourceAsync", () => CreateOrReuseSourceAsyncCore(source, cancellationToken), cancellationToken);
+
+    private async Task<CreatorSourceRecord> CreateOrReuseSourceAsyncCore(CreatorSourceEntity source, CancellationToken cancellationToken = default)
     {
         // Dedupe is exact string equality on source_url, so both sides must be canonical.
         source.SourceUrl = SourceUrlCanonicalizer.Canonicalize(source.SourceUrl);
@@ -98,7 +105,10 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
         }
     }
 
-    public async Task<CreatorSourceRecord?> UpdateSourceAsync(CreatorSourceEntity source, CancellationToken cancellationToken = default)
+    public Task<CreatorSourceRecord?> UpdateSourceAsync(CreatorSourceEntity source, CancellationToken cancellationToken = default)
+        => db.MutateAsync("CreatorDiscoveryRepository.UpdateSourceAsync", () => UpdateSourceAsyncCore(source, cancellationToken), cancellationToken);
+
+    private async Task<CreatorSourceRecord?> UpdateSourceAsyncCore(CreatorSourceEntity source, CancellationToken cancellationToken = default)
     {
         var existing = await db.CreatorSources.FirstOrDefaultAsync(x => x.Id == source.Id, cancellationToken);
         if (existing is null)
@@ -132,7 +142,10 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
         return new CreatorSourceRecord(existing, scanState);
     }
 
-    public async Task<bool> DeleteSourceAsync(long id, CancellationToken cancellationToken = default)
+    public Task<bool> DeleteSourceAsync(long id, CancellationToken cancellationToken = default)
+        => db.MutateAsync("CreatorDiscoveryRepository.DeleteSourceAsync", () => DeleteSourceAsyncCore(id, cancellationToken), cancellationToken);
+
+    private async Task<bool> DeleteSourceAsyncCore(long id, CancellationToken cancellationToken = default)
     {
         var existing = await db.CreatorSources.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (existing is null)
@@ -145,7 +158,12 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
         return true;
     }
 
-    public async Task<DiscoveredMediaUpsertResult> UpsertDiscoveredMediaBatchAsync(
+    public Task<DiscoveredMediaUpsertResult> UpsertDiscoveredMediaBatchAsync(
+        UpsertDiscoveredMediaBatchRequestMessage request,
+        CancellationToken cancellationToken = default)
+        => db.MutateAsync("CreatorDiscoveryRepository.UpsertDiscoveredMediaBatchAsync", () => UpsertDiscoveredMediaBatchAsyncCore(request, cancellationToken), cancellationToken);
+
+    private async Task<DiscoveredMediaUpsertResult> UpsertDiscoveredMediaBatchAsyncCore(
         UpsertDiscoveredMediaBatchRequestMessage request,
         CancellationToken cancellationToken = default)
     {
@@ -283,7 +301,12 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
             .OrderByDescending(x => x.FirstSeenAt)
             .ToListAsync(cancellationToken);
 
-    public async Task<DiscoveredMediaEntity?> RequeueIgnoredMediaAsync(
+    public Task<DiscoveredMediaEntity?> RequeueIgnoredMediaAsync(
+        long discoveredMediaId,
+        CancellationToken cancellationToken = default)
+        => db.MutateAsync("CreatorDiscoveryRepository.RequeueIgnoredMediaAsync", () => RequeueIgnoredMediaAsyncCore(discoveredMediaId, cancellationToken), cancellationToken);
+
+    private async Task<DiscoveredMediaEntity?> RequeueIgnoredMediaAsyncCore(
         long discoveredMediaId,
         CancellationToken cancellationToken = default)
     {
@@ -324,7 +347,12 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
         return IgnoreKeywordMatcher.Deserialize(json);
     }
 
-    public async Task<CreatorSourceRecord?> UpdateAssetsAsync(
+    public Task<CreatorSourceRecord?> UpdateAssetsAsync(
+        UpdateCreatorMonitorAssetsRequestMessage request,
+        CancellationToken cancellationToken = default)
+        => db.MutateAsync("CreatorDiscoveryRepository.UpdateAssetsAsync", () => UpdateAssetsAsyncCore(request, cancellationToken), cancellationToken);
+
+    private async Task<CreatorSourceRecord?> UpdateAssetsAsyncCore(
         UpdateCreatorMonitorAssetsRequestMessage request,
         CancellationToken cancellationToken = default)
     {
@@ -385,7 +413,10 @@ public sealed class CreatorDiscoveryRepository(DataBridgeDbContext db, IClock cl
         return new CreatorSourceRecord(existing, scanState);
     }
 
-    public async Task LinkAccountAsync(long creatorSourceId, long accountId, CancellationToken cancellationToken = default)
+    public Task LinkAccountAsync(long creatorSourceId, long accountId, CancellationToken cancellationToken = default)
+        => db.MutateAsync("CreatorDiscoveryRepository.LinkAccountAsync", () => LinkAccountAsyncCore(creatorSourceId, accountId, cancellationToken), cancellationToken);
+
+    private async Task LinkAccountAsyncCore(long creatorSourceId, long accountId, CancellationToken cancellationToken = default)
     {
         var existing = await db.CreatorSources.FirstOrDefaultAsync(x => x.Id == creatorSourceId, cancellationToken);
         if (existing is null || existing.AccountId == accountId)

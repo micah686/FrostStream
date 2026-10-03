@@ -29,7 +29,7 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
         {
             // Don't overwrite account_name on conflict: a media-download write may already have
             // recorded a better name than a channel refresh can derive.
-            await using var cmd = ApplicationDbCommands.Create(conn.Sql("MetadataRepository.UpsertAccountAssetsAsync.1"), conn);
+            await using var cmd = ApplicationDbCommands.Create(conn.Sql("MetadataRepository.UpsertAccountAssetsAsync.1"), conn, db.Database.CurrentTransaction?.GetDbTransaction());
 
             cmd.Parameters.AddWithValue("@platform", platform);
             cmd.Parameters.AddWithValue("@account_name", accountName);
@@ -62,7 +62,7 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
 
         try
         {
-            await using var cmd = ApplicationDbCommands.Create(conn.Sql("MetadataRepository.UpdateAccountAssetsByIdAsync.1"), conn);
+            await using var cmd = ApplicationDbCommands.Create(conn.Sql("MetadataRepository.UpdateAccountAssetsByIdAsync.1"), conn, db.Database.CurrentTransaction?.GetDbTransaction());
 
             cmd.Parameters.AddWithValue("@account_id", accountId);
             cmd.Parameters.AddWithValue("@avatar_path", (object?)avatarStoragePath ?? DBNull.Value);
@@ -77,31 +77,22 @@ public sealed class MetadataRepository(DataBridgeDbContext db) : IMetadataReposi
         }
     }
 
-    public async Task WriteMetadataAsync(Guid mediaGuid, CapturedMediaMetadata metadata, string storageKey, CancellationToken ct = default)
+    public Task WriteMetadataAsync(Guid mediaGuid, CapturedMediaMetadata metadata, string storageKey, CancellationToken ct = default)
+        => db.MutateAsync("MetadataRepository.WriteMetadataAsync", () => WriteMetadataAsyncCore(mediaGuid, metadata, storageKey, ct), ct);
+
+    private async Task WriteMetadataAsyncCore(Guid mediaGuid, CapturedMediaMetadata metadata, string storageKey, CancellationToken ct = default)
     {
-        await db.Database.OpenConnectionAsync(ct);
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
         var conn = db.Database.GetDbConnection();
-        var npgsqlTx = tx.GetDbTransaction();
+        var transaction = db.Database.CurrentTransaction!.GetDbTransaction();
 
-        try
-        {
-            var accountId = await UpsertAccountAsync(conn, npgsqlTx, metadata.Account, ct);
-            var mediaMetadataId = await InsertMediaMetadataAsync(conn, npgsqlTx, mediaGuid, accountId, metadata.Media, storageKey, ct);
-            await InsertTaxonomyAsync(conn, npgsqlTx, mediaMetadataId, metadata, ct);
-            await InsertTechnicalAsync(conn, npgsqlTx, mediaGuid, metadata.Technical, ct);
-            await InsertCaptionsAsync(conn, npgsqlTx, mediaGuid, metadata.Captions, storageKey, ct);
-            await InsertCommentsAsync(conn, npgsqlTx, mediaGuid, accountId, metadata.Comments, ct);
-            await InsertSeriesAsync(conn, npgsqlTx, mediaGuid, metadata.Series, ct);
-            await InsertMusicAsync(conn, npgsqlTx, mediaGuid, metadata.Music, ct);
-
-            await tx.CommitAsync(ct);
-        }
-        catch
-        {
-            await tx.RollbackAsync(ct);
-            throw;
-        }
+        var accountId = await UpsertAccountAsync(conn, transaction, metadata.Account, ct);
+        var mediaMetadataId = await InsertMediaMetadataAsync(conn, transaction, mediaGuid, accountId, metadata.Media, storageKey, ct);
+        await InsertTaxonomyAsync(conn, transaction, mediaMetadataId, metadata, ct);
+        await InsertTechnicalAsync(conn, transaction, mediaGuid, metadata.Technical, ct);
+        await InsertCaptionsAsync(conn, transaction, mediaGuid, metadata.Captions, storageKey, ct);
+        await InsertCommentsAsync(conn, transaction, mediaGuid, accountId, metadata.Comments, ct);
+        await InsertSeriesAsync(conn, transaction, mediaGuid, metadata.Series, ct);
+        await InsertMusicAsync(conn, transaction, mediaGuid, metadata.Music, ct);
     }
 
     // ── accounts ────────────────────────────────────────────────────────────

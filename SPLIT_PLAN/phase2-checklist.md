@@ -31,13 +31,13 @@ Authoritative scope: [phase2plan.md](phase2plan.md). Design: [persistence archit
 - [x] Verify ordinary transactions and all upsert conflict targets, COALESCE behavior, affected rows and atomic increments on both providers. Keep SQLite FK failures/unique conflicts observable.
 - [x] Reuse behavioral cases with real PostgreSQL and SQLite fixtures. Existing EF InMemory repository tests do not prove SQL, constraints or transaction portability.
 
-## 2d — bulk and contention (after 2c)
+## 2d — bulk and contention — completed
 
-- [ ] Port import batches (500), discovery upserts, set updates, metadata child replacement, playlist reorder and retention/delete batches; bound SQLite parameter counts.
-- [ ] Implement atomic download mutation boundary preserving run/attempt/lease guards. SQLite must acquire writer ownership before read-modify-write; Full retains row locks.
-- [ ] Use short database-only transactions, finite retry/busy budgets and cancellation. Preserve connection/transaction sharing between EF and raw operations.
-- [ ] Exercise concurrent claim/start/stop/results, duplicate messages, conflicting reorder, concurrent upserts and purge/write races; prove rollback and no partial graph updates.
-- [ ] Verify retries cannot repeat external side effects and do not hide non-contention errors; record retry/timeout outcomes. Review zero-command-timeout sites from inventory.
+- [x] Port import batches (500), discovery upserts, set updates, metadata child replacement, playlist reorder and retention/delete batches; bound SQLite parameter counts.
+- [x] Implement atomic download mutation boundary preserving run/attempt/lease guards. SQLite must acquire writer ownership before read-modify-write; Full retains row locks.
+- [x] Use short database-only transactions, finite retry/busy budgets and cancellation. Preserve connection/transaction sharing between EF and raw operations.
+- [x] Exercise concurrent claim/start/stop/results, duplicate messages, conflicting reorder, concurrent upserts and purge/write races; prove rollback and no partial graph updates.
+- [x] Verify retries cannot repeat external side effects and do not hide non-contention errors; record retry/timeout outcomes. Review zero-command-timeout sites from inventory.
 
 ## 2e — durable workflow store (after stable persistence primitives)
 
@@ -90,3 +90,17 @@ Mapping decisions: SQLite array parameters use JSON plus `json_each`, supersedin
 Verification: all 16 focused tests pass, comprising 15 shared behavioral cases run against both real PostgreSQL and real-file SQLite, plus SQLite preparation of over 120 complete catalog statements. Existing PostgreSQL watch-state and media-deletion integration fixtures pass (4 and 8 tests). Lite, UnitTests and IntegrationTests build successfully. Full unit suite: 495 passed, 5 failed out of 500; these are the same five pre-existing failures recorded in the 2b handoff. SQLite baseline and inventory drift checks and whitespace checks pass.
 
 Next: 2d owns bulk operations and writer ownership before read-modify-write, contention/retry boundaries and races. Workflow retention queries and the durable SQLite Cleipnir store remain 2e; upgrades/restart closure remain 2f. Normal SQLite runtime stays gated until those increments are complete. Optional ClickHouse storage retains its own SQL and connection.
+
+## 2d handoff
+
+Changed files: `ApplicationMutation`, `ApplicationBatches`, `ApplicationRetention` and the import-session lock query; download/job/import/discovery/metadata/playlist repository wrappers; both retention purgers; media deletion and stale-media maintenance; finite SQLite/raw command timeouts; shared fixture and contention tests; PostgreSQL media-deletion fixture composition; plan/architecture/inventory and [mutation contracts](../src/App/DataBridge/Persistence/Mutations.md). PostgreSQL migrations, the captured M097 catalog and SQLite v1 baseline are unchanged.
+
+Implemented: SQLite acquires immediate writer ownership before mutation reads; PostgreSQL retains row locks and uses serializable transactions. Complete database-only operations replay classified contention with fresh tracked state and bounded jitter/budgets. Only named natural-key races in identity-reusing PostgreSQL operations retry unique violations; plain creation, other constraints and unknown failures remain errors. Nested calls share the same EF/raw transaction. Pending caller changes and caller-owned mutation transactions are rejected; the single-statement processed-message insert still supports a caller-owned transaction. Notifications and best-effort statistics run after commit and outside retries. Retry, timeout, cancellation and duration metrics identify operation/provider.
+
+Bulk decisions: preserve 500-item import flushes while atomically committing the full submitted scan and counters; lock the PostgreSQL session before reading paths. Bound GUID membership and retention write batches to 400 parameters/roots. Coordinate discovery/source upserts, metadata replacement, content reservation, set updates and playlist reorder before their reads; deduplicate submitted playlist staging entries. Expired leases are processed at most 500 at a time. Attempt redelivery does not reset claimed work, and obsolete artifacts/leases cannot mutate a fresh run.
+
+Deletion decisions: shared application retention rechecks age, terminal/group/sibling state, active leases and drained groups inside each delete transaction; cleanup touches dependent history only for deleted jobs. Stale-media cleanup uses short 400-root transactions. Worker file deletion runs once outside database retries; the database checks active downloads and file snapshots and returns a conflict when they changed. Flow panels remain outside application transactions and live panels are skipped. PostgreSQL workflow-instance discovery remains 2e; its query timeout is now finite, as are vacuum/reindex commands.
+
+Verification: 34 focused persistence tests passed, including all 16 existing 2c cases and 18 new 2d cases. Seventeen new cases ran against both real PostgreSQL and real-file SQLite; the eighteenth verifies SQLite held-writer timeout metrics. Coverage includes concurrent redelivery/start/claim/result/finalize/stop, heartbeat/expiry and stale leases, conflicting reorder, content/source/discovery upserts, 1,201-item import rollback/deduplication, a reduced SQLite variable limit, metadata rollback, cancellation, post-commit callback behavior, purge/restart races and media objects added during Worker deletion. Temporary PostgreSQL fixtures disable pooling and bound simultaneous cases to avoid exhausting a stock server's client limit. Full unit suite with PostgreSQL enabled: 513 passed, the same five pre-existing failures from 2b, out of 518. PostgreSQL download repository, media deletion and watch-state integration fixtures passed (24 + 8 + 4). Lite, UnitTests and IntegrationTests builds pass; baseline/inventory/whitespace checks pass. All original 141 PostgreSQL catalog statement/fragment values remain unchanged; the separate mutation family adds one lock statement.
+
+Next: 2e must inspect the exact pinned Cleipnir/ResilientFunctions 4.2.5 contract, implement its durable SQLite store and move the remaining terminal/orphan workflow-discovery SQL behind that store boundary. Then 2f verifies upgrades and restart closure. Normal SQLite runtime remains gated through 2f; there is no in-memory or mixed-provider workflow fallback.

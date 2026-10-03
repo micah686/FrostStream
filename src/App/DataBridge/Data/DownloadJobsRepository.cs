@@ -44,7 +44,13 @@ public sealed class DownloadJobsRepository(
     public Task<bool> IsMessageProcessedAsync(Guid messageId, CancellationToken ct = default)
         => db.ProcessedMessages.AsNoTracking().AnyAsync(x => x.MessageId == messageId, ct);
 
-    public async Task<bool> TryMarkMessageProcessedAsync(Guid messageId, string operationKey, Guid jobId, CancellationToken ct = default)
+    public Task<bool> TryMarkMessageProcessedAsync(Guid messageId, string operationKey, Guid jobId, CancellationToken ct = default)
+        // This single-statement idempotent insert can also join a caller-owned transaction.
+        => db.Database.CurrentTransaction is not null
+            ? TryMarkMessageProcessedAsyncCore(messageId, operationKey, jobId, ct)
+            : db.MutateAsync("DownloadJobsRepository.TryMarkMessageProcessedAsync", () => TryMarkMessageProcessedAsyncCore(messageId, operationKey, jobId, ct), ct);
+
+    private async Task<bool> TryMarkMessageProcessedAsyncCore(Guid messageId, string operationKey, Guid jobId, CancellationToken ct = default)
     {
         var inserted = await db.Database.ExecuteSqlInterpolatedAsync(
             db.ParameterizedSql("DownloadJobsRepository.TryMarkMessageProcessedAsync.1", messageId, operationKey, jobId),
@@ -56,7 +62,10 @@ public sealed class DownloadJobsRepository(
     public async Task MarkMessageProcessedAsync(Guid messageId, string operationKey, Guid jobId, CancellationToken ct = default)
         => await TryMarkMessageProcessedAsync(messageId, operationKey, jobId, ct);
 
-    public async Task CreateJobIfMissingAsync(DownloadRequested request, CancellationToken ct = default)
+    public Task CreateJobIfMissingAsync(DownloadRequested request, CancellationToken ct = default)
+        => db.MutateAsync("DownloadJobsRepository.CreateJobIfMissingAsync", () => CreateJobIfMissingAsyncCore(request, ct), ct);
+
+    private async Task CreateJobIfMissingAsyncCore(DownloadRequested request, CancellationToken ct = default)
     {
         var exists = await db.DownloadJobs.AnyAsync(x => x.JobId == request.JobId, ct);
         if (exists)
@@ -105,7 +114,10 @@ public sealed class DownloadJobsRepository(
             : JsonSerializer.Deserialize<MetadataFetched>(row);
     }
 
-    public async Task UpdateStateAsync(Guid jobId, DownloadJobState state, CancellationToken ct = default)
+    public Task UpdateStateAsync(Guid jobId, DownloadJobState state, CancellationToken ct = default)
+        => db.MutateAsync("DownloadJobsRepository.UpdateStateAsync", () => UpdateStateAsyncCore(jobId, state, ct), ct);
+
+    private async Task UpdateStateAsyncCore(Guid jobId, DownloadJobState state, CancellationToken ct = default)
     {
         var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
         if (job.State is DownloadJobState.Cancelled && state is DownloadJobState.Queued)
@@ -139,7 +151,10 @@ public sealed class DownloadJobsRepository(
         await NotifyStateAsync(job, previousState, ct);
     }
 
-    public async Task ApplyMetadataAsync(Guid jobId, MetadataFetched evt, CancellationToken ct = default)
+    public Task ApplyMetadataAsync(Guid jobId, MetadataFetched evt, CancellationToken ct = default)
+        => db.MutateAsync("DownloadJobsRepository.ApplyMetadataAsync", () => ApplyMetadataAsyncCore(jobId, evt, ct), ct);
+
+    private async Task ApplyMetadataAsyncCore(Guid jobId, MetadataFetched evt, CancellationToken ct = default)
     {
         var snapshot = await GetStateSnapshotAsync(jobId, ct);
         var now = clock.GetCurrentInstant();
@@ -195,7 +210,10 @@ public sealed class DownloadJobsRepository(
         return new SourceVersionDecision(alreadyDownloaded, source.MediaGuid, source.LatestJobId);
     }
 
-    public async Task MarkAlreadyDownloadedAsync(Guid jobId, Guid mediaGuid, CancellationToken ct = default)
+    public Task MarkAlreadyDownloadedAsync(Guid jobId, Guid mediaGuid, CancellationToken ct = default)
+        => db.MutateAsync("DownloadJobsRepository.MarkAlreadyDownloadedAsync", () => MarkAlreadyDownloadedAsyncCore(jobId, mediaGuid, ct), ct);
+
+    private async Task MarkAlreadyDownloadedAsyncCore(Guid jobId, Guid mediaGuid, CancellationToken ct = default)
     {
         var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
         var latest = await db.MediaContentIdVersions
@@ -217,7 +235,10 @@ public sealed class DownloadJobsRepository(
         await NotifyStateAsync(job, previousState, ct);
     }
 
-    public async Task DeleteReservedVersionAsync(Guid mediaGuid, int versionNum, CancellationToken ct = default)
+    public Task DeleteReservedVersionAsync(Guid mediaGuid, int versionNum, CancellationToken ct = default)
+        => db.MutateAsync("DownloadJobsRepository.DeleteReservedVersionAsync", () => DeleteReservedVersionAsyncCore(mediaGuid, versionNum, ct), ct);
+
+    private async Task DeleteReservedVersionAsyncCore(Guid mediaGuid, int versionNum, CancellationToken ct = default)
     {
         var row = await db.MediaContentIdVersions
             .FirstOrDefaultAsync(x => x.MediaGuid == mediaGuid && x.VersionNum == versionNum, ct);
@@ -227,7 +248,10 @@ public sealed class DownloadJobsRepository(
         await db.SaveChangesAsync(ct);
     }
 
-    public async Task ApplyDownloadCompletedAsync(Guid jobId, DownloadCompleted evt, CancellationToken ct = default)
+    public Task ApplyDownloadCompletedAsync(Guid jobId, DownloadCompleted evt, CancellationToken ct = default)
+        => db.MutateAsync("DownloadJobsRepository.ApplyDownloadCompletedAsync", () => ApplyDownloadCompletedAsyncCore(jobId, evt, ct), ct);
+
+    private async Task ApplyDownloadCompletedAsyncCore(Guid jobId, DownloadCompleted evt, CancellationToken ct = default)
     {
         var snapshot = await GetStateSnapshotAsync(jobId, ct);
         var now = clock.GetCurrentInstant();
@@ -244,7 +268,10 @@ public sealed class DownloadJobsRepository(
         await NotifyProgressAsync(snapshot, affected, DownloadJobState.DownloadedTemp, ct);
     }
 
-    public async Task<VersionReservation> ReserveVersionAsync(VersionReservationRequest request, CancellationToken ct = default)
+    public Task<VersionReservation> ReserveVersionAsync(VersionReservationRequest request, CancellationToken ct = default)
+        => db.MutateAsync("DownloadJobsRepository.ReserveVersionAsync", () => ReserveVersionAsyncCore(request, ct), ct);
+
+    private async Task<VersionReservation> ReserveVersionAsyncCore(VersionReservationRequest request, CancellationToken ct = default)
     {
         var contentHash = NormalizeHash(request.ContentHashXxh128)
             ?? throw new ArgumentException("Content hash is required.", nameof(request));
@@ -328,25 +355,18 @@ public sealed class DownloadJobsRepository(
             }
         }
 
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
-        try
-        {
-            await db.Database.ExecuteSqlInterpolatedAsync(
-                db.ParameterizedSql("DownloadJobsRepository.ReserveVersionAsync.1", mediaGuid), ct);
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            db.ParameterizedSql("DownloadJobsRepository.ReserveVersionAsync.1", mediaGuid), ct);
 
-            await db.SaveChangesAsync(ct);
-            await tx.CommitAsync(ct);
-        }
-        catch
-        {
-            await tx.RollbackAsync(ct);
-            throw;
-        }
+        await db.SaveChangesAsync(ct);
 
         return new VersionReservation(mediaGuid, storagePath, versionNum, contentAlreadyStored, isNewMediaGuid);
     }
 
-    public async Task DeleteNewMediaGuidAsync(Guid mediaGuid, string? provider, string? sourceMediaId, CancellationToken ct = default)
+    public Task DeleteNewMediaGuidAsync(Guid mediaGuid, string? provider, string? sourceMediaId, CancellationToken ct = default)
+        => db.MutateAsync("DownloadJobsRepository.DeleteNewMediaGuidAsync", () => DeleteNewMediaGuidAsyncCore(mediaGuid, provider, sourceMediaId, ct), ct);
+
+    private async Task DeleteNewMediaGuidAsyncCore(Guid mediaGuid, string? provider, string? sourceMediaId, CancellationToken ct = default)
     {
         var normalizedProvider = NormalizeOptional(provider);
         var normalizedSourceId = NormalizeOptional(sourceMediaId);
@@ -359,24 +379,16 @@ public sealed class DownloadJobsRepository(
                 db.MediaSourceVersions.Remove(sourceRow);
         }
 
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
-        try
-        {
-            await db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct);
 
-            await db.Database.ExecuteSqlInterpolatedAsync(
-                db.ParameterizedSql("DownloadJobsRepository.DeleteNewMediaGuidAsync.1", mediaGuid), ct);
-
-            await tx.CommitAsync(ct);
-        }
-        catch
-        {
-            await tx.RollbackAsync(ct);
-            throw;
-        }
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            db.ParameterizedSql("DownloadJobsRepository.DeleteNewMediaGuidAsync.1", mediaGuid), ct);
     }
 
-    public async Task CommitUploadAsync(Guid jobId, UploadCompleted evt, CancellationToken ct = default)
+    public Task CommitUploadAsync(Guid jobId, UploadCompleted evt, CancellationToken ct = default)
+        => db.MutateAsync("DownloadJobsRepository.CommitUploadAsync", () => CommitUploadAsyncCore(jobId, evt, ct), ct);
+
+    private async Task CommitUploadAsyncCore(Guid jobId, UploadCompleted evt, CancellationToken ct = default)
     {
         var snapshot = await GetStateSnapshotAsync(jobId, ct);
         var now = clock.GetCurrentInstant();
@@ -395,7 +407,10 @@ public sealed class DownloadJobsRepository(
         await NotifyProgressAsync(snapshot, affected, DownloadJobState.Uploaded, ct);
     }
 
-    public async Task ApplySidecarUploadCompletedAsync(Guid jobId, UploadCompleted evt, CancellationToken ct = default)
+    public Task ApplySidecarUploadCompletedAsync(Guid jobId, UploadCompleted evt, CancellationToken ct = default)
+        => db.MutateAsync("DownloadJobsRepository.ApplySidecarUploadCompletedAsync", () => ApplySidecarUploadCompletedAsyncCore(jobId, evt, ct), ct);
+
+    private async Task ApplySidecarUploadCompletedAsyncCore(Guid jobId, UploadCompleted evt, CancellationToken ct = default)
     {
         var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
         job.InfoJsonStoragePath = evt.StoragePath;
@@ -406,7 +421,10 @@ public sealed class DownloadJobsRepository(
         await db.SaveChangesAsync(ct);
     }
 
-    public async Task ApplyMetaUploadCompletedAsync(Guid jobId, UploadCompleted evt, CancellationToken ct = default)
+    public Task ApplyMetaUploadCompletedAsync(Guid jobId, UploadCompleted evt, CancellationToken ct = default)
+        => db.MutateAsync("DownloadJobsRepository.ApplyMetaUploadCompletedAsync", () => ApplyMetaUploadCompletedAsyncCore(jobId, evt, ct), ct);
+
+    private async Task ApplyMetaUploadCompletedAsyncCore(Guid jobId, UploadCompleted evt, CancellationToken ct = default)
     {
         var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
         job.MetaStoragePath = evt.StoragePath;
@@ -414,7 +432,10 @@ public sealed class DownloadJobsRepository(
         await db.SaveChangesAsync(ct);
     }
 
-    public async Task<bool> UpdatePriorityAsync(Guid jobId, int priority, CancellationToken ct = default)
+    public Task<bool> UpdatePriorityAsync(Guid jobId, int priority, CancellationToken ct = default)
+        => db.MutateAsync("DownloadJobsRepository.UpdatePriorityAsync", () => UpdatePriorityAsyncCore(jobId, priority, ct), ct);
+
+    private async Task<bool> UpdatePriorityAsyncCore(Guid jobId, int priority, CancellationToken ct = default)
     {
         var job = await db.DownloadJobs.FirstOrDefaultAsync(x => x.JobId == jobId, ct);
         if (job is null) return false;
@@ -424,7 +445,10 @@ public sealed class DownloadJobsRepository(
         return true;
     }
 
-    public async Task IncrementMetadataAttemptAsync(Guid jobId, int attempt, CancellationToken ct = default)
+    public Task IncrementMetadataAttemptAsync(Guid jobId, int attempt, CancellationToken ct = default)
+        => db.MutateAsync("DownloadJobsRepository.IncrementMetadataAttemptAsync", () => IncrementMetadataAttemptAsyncCore(jobId, attempt, ct), ct);
+
+    private async Task IncrementMetadataAttemptAsyncCore(Guid jobId, int attempt, CancellationToken ct = default)
     {
         var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
         job.AttemptMetadata = attempt;
@@ -432,7 +456,10 @@ public sealed class DownloadJobsRepository(
         await db.SaveChangesAsync(ct);
     }
 
-    public async Task IncrementDownloadAttemptAsync(Guid jobId, int attempt, CancellationToken ct = default)
+    public Task IncrementDownloadAttemptAsync(Guid jobId, int attempt, CancellationToken ct = default)
+        => db.MutateAsync("DownloadJobsRepository.IncrementDownloadAttemptAsync", () => IncrementDownloadAttemptAsyncCore(jobId, attempt, ct), ct);
+
+    private async Task IncrementDownloadAttemptAsyncCore(Guid jobId, int attempt, CancellationToken ct = default)
     {
         var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
         job.AttemptDownload = attempt;
@@ -440,7 +467,10 @@ public sealed class DownloadJobsRepository(
         await db.SaveChangesAsync(ct);
     }
 
-    public async Task IncrementUploadAttemptAsync(Guid jobId, int attempt, CancellationToken ct = default)
+    public Task IncrementUploadAttemptAsync(Guid jobId, int attempt, CancellationToken ct = default)
+        => db.MutateAsync("DownloadJobsRepository.IncrementUploadAttemptAsync", () => IncrementUploadAttemptAsyncCore(jobId, attempt, ct), ct);
+
+    private async Task IncrementUploadAttemptAsyncCore(Guid jobId, int attempt, CancellationToken ct = default)
     {
         var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
         job.AttemptUpload = attempt;
@@ -448,7 +478,10 @@ public sealed class DownloadJobsRepository(
         await db.SaveChangesAsync(ct);
     }
 
-    public async Task RecordHistoryAsync(Guid jobId, Guid messageId, string operationKey, string eventName, string? payloadJson, CancellationToken ct = default)
+    public Task RecordHistoryAsync(Guid jobId, Guid messageId, string operationKey, string eventName, string? payloadJson, CancellationToken ct = default)
+        => db.MutateAsync("DownloadJobsRepository.RecordHistoryAsync", () => RecordHistoryAsyncCore(jobId, messageId, operationKey, eventName, payloadJson, ct), ct);
+
+    private async Task RecordHistoryAsyncCore(Guid jobId, Guid messageId, string operationKey, string eventName, string? payloadJson, CancellationToken ct = default)
     {
         db.DownloadJobHistory.Add(new DownloadJobHistoryEntity
         {
@@ -461,7 +494,10 @@ public sealed class DownloadJobsRepository(
         await db.SaveChangesAsync(ct);
     }
 
-    public async Task AppendProgressLogAsync(Guid jobId, int sequence, string message, CancellationToken ct = default)
+    public Task AppendProgressLogAsync(Guid jobId, int sequence, string message, CancellationToken ct = default)
+        => db.MutateAsync("DownloadJobsRepository.AppendProgressLogAsync", () => AppendProgressLogAsyncCore(jobId, sequence, message, ct), ct);
+
+    private async Task AppendProgressLogAsyncCore(Guid jobId, int sequence, string message, CancellationToken ct = default)
     {
         db.DownloadJobProgressLog.Add(new DownloadJobProgressLogEntity
         {
@@ -482,7 +518,10 @@ public sealed class DownloadJobsRepository(
         }
     }
 
-    public async Task RecordTerminalFailureAsync(Guid jobId, FailureKind kind, string? code, string message, DownloadJobState terminalState, string? lastPayloadJson, CancellationToken ct = default)
+    public Task RecordTerminalFailureAsync(Guid jobId, FailureKind kind, string? code, string message, DownloadJobState terminalState, string? lastPayloadJson, CancellationToken ct = default)
+        => db.MutateAsync("DownloadJobsRepository.RecordTerminalFailureAsync", () => RecordTerminalFailureAsyncCore(jobId, kind, code, message, terminalState, lastPayloadJson, ct), ct);
+
+    private async Task RecordTerminalFailureAsyncCore(Guid jobId, FailureKind kind, string? code, string message, DownloadJobState terminalState, string? lastPayloadJson, CancellationToken ct = default)
     {
         var job = await db.DownloadJobs.FirstAsync(x => x.JobId == jobId, ct);
         var previousState = job.State;

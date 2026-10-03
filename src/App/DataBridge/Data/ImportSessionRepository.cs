@@ -13,7 +13,7 @@ namespace DataBridge.Data;
 public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock) : IImportSessionRepository
 {
     private const int MaxItemsLimit = 200;
-    private const int InsertBatchSize = 500;
+    private const int InsertBatchSize = ApplicationBatches.WriteBatchSize;
 
     // user_metadata JSON is camelCase (matches the values PatchItemAsync historically wrote).
     private static readonly JsonSerializerOptions UserMetadataJsonOptions = CreateUserMetadataJsonOptions();
@@ -42,7 +42,14 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         }
     }
 
-    public async Task<ImportSessionDto> CreateAsync(
+    public Task<ImportSessionDto> CreateAsync(
+        ImportSessionCreateRequest request,
+        Guid sessionId,
+        Guid correlationId,
+        CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.CreateAsync", () => CreateAsyncCore(request, sessionId, correlationId, ct), ct);
+
+    private async Task<ImportSessionDto> CreateAsyncCore(
         ImportSessionCreateRequest request,
         Guid sessionId,
         Guid correlationId,
@@ -122,12 +129,20 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         return (rows, next, total);
     }
 
-    public async Task<ImportSessionDto?> IngestScannedItemsAsync(
+    public Task<ImportSessionDto?> IngestScannedItemsAsync(
+        Guid sessionId,
+        IReadOnlyList<ImportSessionScannedItem> items,
+        CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.IngestScannedItemsAsync", () => IngestScannedItemsAsyncCore(sessionId, items, ct), ct);
+
+    private async Task<ImportSessionDto?> IngestScannedItemsAsyncCore(
         Guid sessionId,
         IReadOnlyList<ImportSessionScannedItem> items,
         CancellationToken ct = default)
     {
-        var session = await db.ImportSessions.FirstOrDefaultAsync(x => x.SessionId == sessionId, ct);
+        var session = db.Database.IsRelational()
+            ? await db.ImportSessions.FromSqlInterpolated(db.ParameterizedSql("Mutation.LockImportSession", sessionId)).SingleOrDefaultAsync(ct)
+            : await db.ImportSessions.FirstOrDefaultAsync(x => x.SessionId == sessionId, ct);
         if (session is null)
             return null;
 
@@ -212,7 +227,10 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         }
     }
 
-    public async Task<ImportSessionDto?> MarkScanFailedAsync(Guid sessionId, string errorMessage, CancellationToken ct = default)
+    public Task<ImportSessionDto?> MarkScanFailedAsync(Guid sessionId, string errorMessage, CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.MarkScanFailedAsync", () => MarkScanFailedAsyncCore(sessionId, errorMessage, ct), ct);
+
+    private async Task<ImportSessionDto?> MarkScanFailedAsyncCore(Guid sessionId, string errorMessage, CancellationToken ct = default)
     {
         var session = await db.ImportSessions.FirstOrDefaultAsync(x => x.SessionId == sessionId, ct);
         if (session is null)
@@ -238,7 +256,13 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
             .Select(x => new ImportSessionProbeItemRef { ItemId = x.ItemId, RelativePath = x.RelativePath })
             .ToListAsync(ct);
 
-    public async Task<ImportSessionDto?> ApplyProbeResultsAsync(
+    public Task<ImportSessionDto?> ApplyProbeResultsAsync(
+        Guid sessionId,
+        IReadOnlyList<ImportSessionProbeResult> results,
+        CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.ApplyProbeResultsAsync", () => ApplyProbeResultsAsyncCore(sessionId, results, ct), ct);
+
+    private async Task<ImportSessionDto?> ApplyProbeResultsAsyncCore(
         Guid sessionId,
         IReadOnlyList<ImportSessionProbeResult> results,
         CancellationToken ct = default)
@@ -249,8 +273,8 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         var byId = results.ToDictionary(x => x.ItemId);
         var ids = byId.Keys.ToList();
         var rows = await db.ImportSessionItems
-            .Where(x => x.SessionId == sessionId && ids.Contains(x.ItemId))
-            .ToListAsync(ct);
+            .Where(x => x.SessionId == sessionId)
+            .WithIdsAsync(ids, x => x.ItemId, ct);
         var now = clock.GetCurrentInstant();
 
         foreach (var item in rows)
@@ -270,7 +294,13 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         return await RecalculateCountersAsync(sessionId, ct);
     }
 
-    public async Task<ImportSessionDto?> ApplyProbeFailuresAsync(
+    public Task<ImportSessionDto?> ApplyProbeFailuresAsync(
+        Guid sessionId,
+        IReadOnlyList<ImportSessionProbeFailure> failures,
+        CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.ApplyProbeFailuresAsync", () => ApplyProbeFailuresAsyncCore(sessionId, failures, ct), ct);
+
+    private async Task<ImportSessionDto?> ApplyProbeFailuresAsyncCore(
         Guid sessionId,
         IReadOnlyList<ImportSessionProbeFailure> failures,
         CancellationToken ct = default)
@@ -281,8 +311,8 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         var byId = failures.ToDictionary(x => x.ItemId);
         var ids = byId.Keys.ToList();
         var rows = await db.ImportSessionItems
-            .Where(x => x.SessionId == sessionId && ids.Contains(x.ItemId))
-            .ToListAsync(ct);
+            .Where(x => x.SessionId == sessionId)
+            .WithIdsAsync(ids, x => x.ItemId, ct);
         var now = clock.GetCurrentInstant();
 
         foreach (var item in rows)
@@ -303,7 +333,12 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         return await RecalculateCountersAsync(sessionId, ct);
     }
 
-    public async Task<(ImportSessionItemDto? Item, ImportSessionDto? Session)> PatchItemAsync(
+    public Task<(ImportSessionItemDto? Item, ImportSessionDto? Session)> PatchItemAsync(
+        ImportSessionItemPatchRequest request,
+        CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.PatchItemAsync", () => PatchItemAsyncCore(request, ct), ct);
+
+    private async Task<(ImportSessionItemDto? Item, ImportSessionDto? Session)> PatchItemAsyncCore(
         ImportSessionItemPatchRequest request,
         CancellationToken ct = default)
     {
@@ -349,15 +384,21 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         return (ToItemDto(item), session);
     }
 
-    public async Task<(int AffectedCount, ImportSessionDto? Session)> ApplyBulkAsync(
+    public Task<(int AffectedCount, ImportSessionDto? Session)> ApplyBulkAsync(
+        ImportSessionItemsBulkRequest request,
+        CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.ApplyBulkAsync", () => ApplyBulkAsyncCore(request, ct), ct);
+
+    private async Task<(int AffectedCount, ImportSessionDto? Session)> ApplyBulkAsyncCore(
         ImportSessionItemsBulkRequest request,
         CancellationToken ct = default)
     {
         var query = db.ImportSessionItems.Where(x => x.SessionId == request.SessionId);
+        IReadOnlyList<Guid>? selectedIds = null;
         if (request.ItemIds is { Count: > 0 })
         {
             var ids = request.ItemIds.ToHashSet();
-            query = query.Where(x => ids.Contains(x.ItemId));
+            selectedIds = ids.ToArray();
         }
         else
         {
@@ -375,7 +416,7 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
             }
         }
 
-        var rows = await query.ToListAsync(ct);
+        var rows = selectedIds is null ? await query.ToListAsync(ct) : await query.WithIdsAsync(selectedIds, x => x.ItemId, ct);
         var now = clock.GetCurrentInstant();
         foreach (var item in rows)
         {
@@ -409,7 +450,16 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         return (rows.Count, session);
     }
 
-    public async Task<(int MatchedCount, int UnmatchedCount, ImportSessionDto? Session)> ApplyMappingAsync(
+    public Task<(int MatchedCount, int UnmatchedCount, ImportSessionDto? Session)> ApplyMappingAsync(
+        Guid sessionId,
+        IReadOnlyList<ImportSessionMappingRow> rows,
+        string objectBucket,
+        string objectKey,
+        string format,
+        CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.ApplyMappingAsync", () => ApplyMappingAsyncCore(sessionId, rows, objectBucket, objectKey, format, ct), ct);
+
+    private async Task<(int MatchedCount, int UnmatchedCount, ImportSessionDto? Session)> ApplyMappingAsyncCore(
         Guid sessionId,
         IReadOnlyList<ImportSessionMappingRow> rows,
         string objectBucket,
@@ -507,6 +557,7 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         int limit,
         CancellationToken ct = default)
     {
+        IReadOnlyList<Guid>? selectedIds = null;
         var query = db.ImportSessionItems
             .AsNoTracking()
             .Where(x => x.SessionId == sessionId
@@ -519,21 +570,20 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         if (itemIds is { Count: > 0 })
         {
             var ids = itemIds.ToHashSet();
-            query = query.Where(x => ids.Contains(x.ItemId));
+            selectedIds = ids.ToArray();
         }
 
-        return await query
-            .OrderBy(x => x.ItemId)
-            .Take(Math.Clamp(limit, 1, 1000))
-            .Select(x => new ImportSessionEnrichItemRef
+        var projection = query.Select(x => new ImportSessionEnrichItemRef
             {
                 ItemId = x.ItemId,
                 SourceUrl = x.SourceUrl!,
                 RelativePath = x.RelativePath,
                 Attempt = x.MetadataFetchAttempt + 1,
                 Provider = x.Provider
-            })
-            .ToListAsync(ct);
+            });
+        return selectedIds is null
+            ? await projection.OrderBy(x => x.ItemId).Take(Math.Clamp(limit, 1, 1000)).ToListAsync(ct)
+            : (await projection.WithIdsAsync(selectedIds, x => x.ItemId, ct)).OrderBy(x => x.ItemId).Take(Math.Clamp(limit, 1, 1000)).ToArray();
     }
 
     public async Task<IReadOnlyList<ImportSessionMetadataRefreshItemRef>> ListItemsForMetadataRefreshAsync(
@@ -542,6 +592,7 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         int limit,
         CancellationToken ct = default)
     {
+        IReadOnlyList<Guid>? selectedIds = null;
         var query = db.ImportSessionItems
             .AsNoTracking()
             .Where(x => x.SessionId == sessionId
@@ -552,24 +603,29 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         if (itemIds is { Count: > 0 })
         {
             var ids = itemIds.ToHashSet();
-            query = query.Where(x => ids.Contains(x.ItemId));
+            selectedIds = ids.ToArray();
         }
 
-        return await query
-            .OrderBy(x => x.ItemId)
-            .Take(Math.Clamp(limit, 1, 1000))
-            .Select(x => new ImportSessionMetadataRefreshItemRef
+        var projection = query.Select(x => new ImportSessionMetadataRefreshItemRef
             {
                 ItemId = x.ItemId,
                 RelativePath = x.RelativePath,
                 Attempt = x.MetadataFetchAttempt + 1,
                 Provider = x.Provider,
                 SourceUrl = x.SourceUrl
-            })
-            .ToListAsync(ct);
+            });
+        return selectedIds is null
+            ? await projection.OrderBy(x => x.ItemId).Take(Math.Clamp(limit, 1, 1000)).ToListAsync(ct)
+            : (await projection.WithIdsAsync(selectedIds, x => x.ItemId, ct)).OrderBy(x => x.ItemId).Take(Math.Clamp(limit, 1, 1000)).ToArray();
     }
 
-    public async Task<ImportSessionDto?> MarkEnrichmentQueuedAsync(
+    public Task<ImportSessionDto?> MarkEnrichmentQueuedAsync(
+        Guid sessionId,
+        IReadOnlyList<Guid> itemIds,
+        CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.MarkEnrichmentQueuedAsync", () => MarkEnrichmentQueuedAsyncCore(sessionId, itemIds, ct), ct);
+
+    private async Task<ImportSessionDto?> MarkEnrichmentQueuedAsyncCore(
         Guid sessionId,
         IReadOnlyList<Guid> itemIds,
         CancellationToken ct = default)
@@ -579,8 +635,8 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
 
         var ids = itemIds.ToHashSet();
         var rows = await db.ImportSessionItems
-            .Where(x => x.SessionId == sessionId && ids.Contains(x.ItemId))
-            .ToListAsync(ct);
+            .Where(x => x.SessionId == sessionId)
+            .WithIdsAsync(ids, x => x.ItemId, ct);
         var now = clock.GetCurrentInstant();
         foreach (var item in rows)
         {
@@ -596,7 +652,10 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         return await RecalculateCountersAsync(sessionId, ct);
     }
 
-    public async Task<ImportSessionDto?> ApplyEnrichmentAsync(ImportSessionItemEnriched message, CancellationToken ct = default)
+    public Task<ImportSessionDto?> ApplyEnrichmentAsync(ImportSessionItemEnriched message, CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.ApplyEnrichmentAsync", () => ApplyEnrichmentAsyncCore(message, ct), ct);
+
+    private async Task<ImportSessionDto?> ApplyEnrichmentAsyncCore(ImportSessionItemEnriched message, CancellationToken ct = default)
     {
         var item = await db.ImportSessionItems
             .FirstOrDefaultAsync(x => x.SessionId == message.SessionId && x.ItemId == message.ItemId, ct);
@@ -635,7 +694,10 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         return await RecalculateCountersAsync(message.SessionId, ct);
     }
 
-    public async Task<ImportSessionDto?> ApplyEnrichFailureAsync(ImportSessionItemEnrichFailed message, CancellationToken ct = default)
+    public Task<ImportSessionDto?> ApplyEnrichFailureAsync(ImportSessionItemEnrichFailed message, CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.ApplyEnrichFailureAsync", () => ApplyEnrichFailureAsyncCore(message, ct), ct);
+
+    private async Task<ImportSessionDto?> ApplyEnrichFailureAsyncCore(ImportSessionItemEnrichFailed message, CancellationToken ct = default)
     {
         var item = await db.ImportSessionItems
             .FirstOrDefaultAsync(x => x.SessionId == message.SessionId && x.ItemId == message.ItemId, ct);
@@ -656,7 +718,10 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         return await GetAsync(message.SessionId, ct);
     }
 
-    public async Task<(ImportSessionDto? Session, string? Error)> UpdateOptionsAsync(ImportSessionUpdateOptionsRequest request, CancellationToken ct = default)
+    public Task<(ImportSessionDto? Session, string? Error)> UpdateOptionsAsync(ImportSessionUpdateOptionsRequest request, CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.UpdateOptionsAsync", () => UpdateOptionsAsyncCore(request, ct), ct);
+
+    private async Task<(ImportSessionDto? Session, string? Error)> UpdateOptionsAsyncCore(ImportSessionUpdateOptionsRequest request, CancellationToken ct = default)
     {
         var session = await db.ImportSessions.FirstOrDefaultAsync(x => x.SessionId == request.SessionId, ct);
         if (session is null)
@@ -674,7 +739,10 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         return (ToDto(session), null);
     }
 
-    public async Task<(ImportSessionDto? Session, int ApprovedCount, string? Error)> CommitAsync(Guid sessionId, CancellationToken ct = default)
+    public Task<(ImportSessionDto? Session, int ApprovedCount, string? Error)> CommitAsync(Guid sessionId, CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.CommitAsync", () => CommitAsyncCore(sessionId, ct), ct);
+
+    private async Task<(ImportSessionDto? Session, int ApprovedCount, string? Error)> CommitAsyncCore(Guid sessionId, CancellationToken ct = default)
     {
         var session = await db.ImportSessions.FirstOrDefaultAsync(x => x.SessionId == sessionId, ct);
         if (session is null)
@@ -708,7 +776,10 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         return (updated, eligible.Count, null);
     }
 
-    public async Task<(ImportSessionDto? Session, int ResetCount)> RetryFailedAsync(Guid sessionId, CancellationToken ct = default)
+    public Task<(ImportSessionDto? Session, int ResetCount)> RetryFailedAsync(Guid sessionId, CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.RetryFailedAsync", () => RetryFailedAsyncCore(sessionId, ct), ct);
+
+    private async Task<(ImportSessionDto? Session, int ResetCount)> RetryFailedAsyncCore(Guid sessionId, CancellationToken ct = default)
     {
         var session = await db.ImportSessions.FirstOrDefaultAsync(x => x.SessionId == sessionId, ct);
         if (session is null)
@@ -738,7 +809,10 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         return (await RecalculateCountersAsync(sessionId, ct), rows.Count);
     }
 
-    public async Task<ImportSessionDto?> CancelAsync(Guid sessionId, CancellationToken ct = default)
+    public Task<ImportSessionDto?> CancelAsync(Guid sessionId, CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.CancelAsync", () => CancelAsyncCore(sessionId, ct), ct);
+
+    private async Task<ImportSessionDto?> CancelAsyncCore(Guid sessionId, CancellationToken ct = default)
     {
         var session = await db.ImportSessions.FirstOrDefaultAsync(x => x.SessionId == sessionId, ct);
         if (session is null)
@@ -771,7 +845,10 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
             .Select(x => ToDto(x))
             .ToListAsync(ct);
 
-    public async Task<int> RecoverStaleHashingItemsAsync(Guid sessionId, Instant staleBefore, CancellationToken ct = default)
+    public Task<int> RecoverStaleHashingItemsAsync(Guid sessionId, Instant staleBefore, CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.RecoverStaleHashingItemsAsync", () => RecoverStaleHashingItemsAsyncCore(sessionId, staleBefore, ct), ct);
+
+    private async Task<int> RecoverStaleHashingItemsAsyncCore(Guid sessionId, Instant staleBefore, CancellationToken ct = default)
     {
         var rows = await db.ImportSessionItems
             .Where(x => x.SessionId == sessionId
@@ -797,7 +874,10 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         return rows.Count;
     }
 
-    public async Task<IReadOnlyList<ImportSessionItemWork>> ClaimApprovedWorkAsync(Guid sessionId, int limit, CancellationToken ct = default)
+    public Task<IReadOnlyList<ImportSessionItemWork>> ClaimApprovedWorkAsync(Guid sessionId, int limit, CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.ClaimApprovedWorkAsync", () => ClaimApprovedWorkAsyncCore(sessionId, limit, ct), ct);
+
+    private async Task<IReadOnlyList<ImportSessionItemWork>> ClaimApprovedWorkAsyncCore(Guid sessionId, int limit, CancellationToken ct = default)
     {
         var rows = await BuildWorkQuery(sessionId)
             .Where(x => !x.Item.Excluded
@@ -836,7 +916,10 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
     public Task MarkItemHashingAsync(Guid sessionId, Guid itemId, CancellationToken ct = default)
         => UpdateItemStatusAsync(sessionId, itemId, ImportSessionItemStatus.Hashing, ct);
 
-    public async Task MarkItemPreparedAsync(Guid sessionId, Guid itemId, LocalImportFilePrepared prepared, CancellationToken ct = default)
+    public Task MarkItemPreparedAsync(Guid sessionId, Guid itemId, LocalImportFilePrepared prepared, CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.MarkItemPreparedAsync", () => MarkItemPreparedAsyncCore(sessionId, itemId, prepared, ct), ct);
+
+    private async Task MarkItemPreparedAsyncCore(Guid sessionId, Guid itemId, LocalImportFilePrepared prepared, CancellationToken ct = default)
     {
         var item = await db.ImportSessionItems.FirstAsync(x => x.SessionId == sessionId && x.ItemId == itemId, ct);
         item.ContentHashXxh128 = NormalizeOptional(prepared.ContentHashXxh128)?.ToLowerInvariant();
@@ -845,7 +928,10 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         await db.SaveChangesAsync(ct);
     }
 
-    public async Task MarkItemUploadingAsync(Guid sessionId, Guid itemId, Guid mediaGuid, string storagePath, CancellationToken ct = default)
+    public Task MarkItemUploadingAsync(Guid sessionId, Guid itemId, Guid mediaGuid, string storagePath, CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.MarkItemUploadingAsync", () => MarkItemUploadingAsyncCore(sessionId, itemId, mediaGuid, storagePath, ct), ct);
+
+    private async Task MarkItemUploadingAsyncCore(Guid sessionId, Guid itemId, Guid mediaGuid, string storagePath, CancellationToken ct = default)
     {
         var item = await db.ImportSessionItems.FirstAsync(x => x.SessionId == sessionId && x.ItemId == itemId, ct);
         item.Status = ImportSessionItemStatus.Uploading;
@@ -859,7 +945,10 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
     public Task MarkItemFinalizingAsync(Guid sessionId, Guid itemId, CancellationToken ct = default)
         => UpdateItemStatusAsync(sessionId, itemId, ImportSessionItemStatus.Finalizing, ct);
 
-    public async Task MarkItemAlreadyImportedAsync(Guid sessionId, Guid itemId, Guid mediaGuid, string storagePath, LocalImportFilePrepared prepared, CancellationToken ct = default)
+    public Task MarkItemAlreadyImportedAsync(Guid sessionId, Guid itemId, Guid mediaGuid, string storagePath, LocalImportFilePrepared prepared, CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.MarkItemAlreadyImportedAsync", () => MarkItemAlreadyImportedAsyncCore(sessionId, itemId, mediaGuid, storagePath, prepared, ct), ct);
+
+    private async Task MarkItemAlreadyImportedAsyncCore(Guid sessionId, Guid itemId, Guid mediaGuid, string storagePath, LocalImportFilePrepared prepared, CancellationToken ct = default)
     {
         var item = await db.ImportSessionItems.FirstAsync(x => x.SessionId == sessionId && x.ItemId == itemId, ct);
         item.Status = ImportSessionItemStatus.AlreadyImported;
@@ -873,7 +962,20 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         await RecalculateCountersAsync(sessionId, ct);
     }
 
-    public async Task MarkItemImportedAsync(
+    public Task MarkItemImportedAsync(
+        Guid sessionId,
+        Guid itemId,
+        Guid mediaGuid,
+        string storagePath,
+        string? storageVersion,
+        string? metaStoragePath,
+        string? infoJsonStoragePath,
+        string? thumbnailStoragePath,
+        string? captionStoragePathsJson,
+        CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.MarkItemImportedAsync", () => MarkItemImportedAsyncCore(sessionId, itemId, mediaGuid, storagePath, storageVersion, metaStoragePath, infoJsonStoragePath, thumbnailStoragePath, captionStoragePathsJson, ct), ct);
+
+    private async Task MarkItemImportedAsyncCore(
         Guid sessionId,
         Guid itemId,
         Guid mediaGuid,
@@ -900,7 +1002,17 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         await RecalculateCountersAsync(sessionId, ct);
     }
 
-    public async Task MarkItemCommitFailedAsync(
+    public Task MarkItemCommitFailedAsync(
+        Guid sessionId,
+        Guid itemId,
+        string? errorCode,
+        string errorMessage,
+        Guid? mediaGuid = null,
+        string? storagePath = null,
+        CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.MarkItemCommitFailedAsync", () => MarkItemCommitFailedAsyncCore(sessionId, itemId, errorCode, errorMessage, mediaGuid, storagePath, ct), ct);
+
+    private async Task MarkItemCommitFailedAsyncCore(
         Guid sessionId,
         Guid itemId,
         string? errorCode,
@@ -921,7 +1033,10 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         await RecalculateCountersAsync(sessionId, ct);
     }
 
-    public async Task<ImportSessionDto?> CompleteSessionIfTerminalAsync(Guid sessionId, CancellationToken ct = default)
+    public Task<ImportSessionDto?> CompleteSessionIfTerminalAsync(Guid sessionId, CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.CompleteSessionIfTerminalAsync", () => CompleteSessionIfTerminalAsyncCore(sessionId, ct), ct);
+
+    private async Task<ImportSessionDto?> CompleteSessionIfTerminalAsyncCore(Guid sessionId, CancellationToken ct = default)
     {
         var session = await db.ImportSessions.FirstOrDefaultAsync(x => x.SessionId == sessionId, ct);
         if (session is null)
@@ -948,7 +1063,10 @@ public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock
         return await RecalculateCountersAsync(sessionId, ct);
     }
 
-    private async Task UpdateItemStatusAsync(Guid sessionId, Guid itemId, ImportSessionItemStatus status, CancellationToken ct)
+    private Task UpdateItemStatusAsync(Guid sessionId, Guid itemId, ImportSessionItemStatus status, CancellationToken ct)
+        => db.MutateAsync("ImportSessionRepository.UpdateItemStatusAsync", () => UpdateItemStatusCoreAsync(sessionId, itemId, status, ct), ct);
+
+    private async Task UpdateItemStatusCoreAsync(Guid sessionId, Guid itemId, ImportSessionItemStatus status, CancellationToken ct)
     {
         var item = await db.ImportSessionItems.FirstAsync(x => x.SessionId == sessionId && x.ItemId == itemId, ct);
         item.Status = status;

@@ -32,6 +32,7 @@ namespace UnitTests.DataBridge;
 /// <summary>Every case uses a real SQLite file; an explicit disposable PostgreSQL server adds the same cases on Full.</summary>
 public sealed class CoreRepositoryPersistenceTests
 {
+    private static readonly SemaphoreSlim ProviderCases = new(4, 4);
     private static readonly Instant Timestamp = Instant.FromUnixTimeTicks(-12345670);
 
     [Test]
@@ -546,7 +547,7 @@ public sealed class CoreRepositoryPersistenceTests
         prepared.ShouldBeGreaterThan(120);
     }
 
-    private static CapturedMediaMetadata Capture() => new()
+    internal static CapturedMediaMetadata Capture() => new()
     {
         Account = new() { Platform = "test", AccountName = "Channel", AccountHandle = "channel", ExternalIds = [new() { Kind = "channel_id", Value = "stable" }] },
         Media = new() { MetadataScrapeDate = Timestamp, ReleaseDate = Timestamp, Title = "Portable media", Availability = "public", DurationSeconds = 42, WebpageUrl = "https://test/media", ExternalMediaId = "external" },
@@ -563,14 +564,21 @@ public sealed class CoreRepositoryPersistenceTests
         }
     };
 
-    private static async Task Both(Func<Fixture, Task> test)
+    internal static async Task Both(Func<Fixture, Task> test)
     {
-        await using (var sqlite = await Fixture.Create(false)) await test(sqlite);
-        if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FROSTSTREAM_TEST_POSTGRES")))
-            await using (var postgres = await Fixture.Create(true)) await test(postgres);
+        // Each contention case intentionally opens several independent writer connections. Keep
+        // simultaneous cases below a stock disposable PostgreSQL server's connection limit.
+        await ProviderCases.WaitAsync();
+        try
+        {
+            await using (var sqlite = await Fixture.Create(false)) await test(sqlite);
+            if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FROSTSTREAM_TEST_POSTGRES")))
+                await using (var postgres = await Fixture.Create(true)) await test(postgres);
+        }
+        finally { ProviderCases.Release(); }
     }
 
-    private sealed class Fixture : IAsyncDisposable
+    internal sealed class Fixture : IAsyncDisposable
     {
         private readonly IHost host;
         private readonly IServiceScope scope;
@@ -601,7 +609,7 @@ public sealed class CoreRepositoryPersistenceTests
                 await using var command = connection.CreateCommand();
                 command.CommandText = $"CREATE DATABASE {name}";
                 await command.ExecuteNonQueryAsync();
-                builder.Configuration["ConnectionStrings:froststreamdb"] = new NpgsqlConnectionStringBuilder(admin) { Database = name }.ConnectionString;
+                builder.Configuration["ConnectionStrings:froststreamdb"] = new NpgsqlConnectionStringBuilder(admin) { Database = name, Pooling = false }.ConnectionString;
             }
             else
             {

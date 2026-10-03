@@ -9,7 +9,14 @@ public sealed class UserPlaylistsRepository(DataBridgeDbContext db, IClock clock
 {
     private const int PositionOffset = 1_000_000;
 
-    public async Task<UserPlaylistDetail> CreateAsync(
+    public Task<UserPlaylistDetail> CreateAsync(
+        string ownerSubject,
+        string name,
+        string? description,
+        CancellationToken ct = default)
+        => db.MutateAsync("UserPlaylistsRepository.CreateAsync", () => CreateAsyncCore(ownerSubject, name, description, ct), ct);
+
+    private async Task<UserPlaylistDetail> CreateAsyncCore(
         string ownerSubject,
         string name,
         string? description,
@@ -28,7 +35,15 @@ public sealed class UserPlaylistsRepository(DataBridgeDbContext db, IClock clock
         return new UserPlaylistDetail(entity, []);
     }
 
-    public async Task<UserPlaylistDetail?> UpdateAsync(
+    public Task<UserPlaylistDetail?> UpdateAsync(
+        string ownerSubject,
+        Guid playlistId,
+        string name,
+        string? description,
+        CancellationToken ct = default)
+        => db.MutateAsync("UserPlaylistsRepository.UpdateAsync", () => UpdateAsyncCore(ownerSubject, playlistId, name, description, ct), ct);
+
+    private async Task<UserPlaylistDetail?> UpdateAsyncCore(
         string ownerSubject,
         Guid playlistId,
         string name,
@@ -48,7 +63,10 @@ public sealed class UserPlaylistsRepository(DataBridgeDbContext db, IClock clock
         return await GetAsync(ownerSubject, playlistId, ct);
     }
 
-    public async Task<bool> DeleteAsync(string ownerSubject, Guid playlistId, CancellationToken ct = default)
+    public Task<bool> DeleteAsync(string ownerSubject, Guid playlistId, CancellationToken ct = default)
+        => db.MutateAsync("UserPlaylistsRepository.DeleteAsync", () => DeleteAsyncCore(ownerSubject, playlistId, ct), ct);
+
+    private async Task<bool> DeleteAsyncCore(string ownerSubject, Guid playlistId, CancellationToken ct = default)
     {
         var playlist = await db.UserPlaylists
             .FirstOrDefaultAsync(x => x.PlaylistId == playlistId && x.OwnerSubject == ownerSubject, ct);
@@ -111,7 +129,15 @@ public sealed class UserPlaylistsRepository(DataBridgeDbContext db, IClock clock
             .ToArray();
     }
 
-    public async Task<UserPlaylistMutationResult> AddItemAsync(
+    public Task<UserPlaylistMutationResult> AddItemAsync(
+        string ownerSubject,
+        Guid playlistId,
+        Guid mediaGuid,
+        int? position,
+        CancellationToken ct = default)
+        => db.MutateAsync("UserPlaylistsRepository.AddItemAsync", () => AddItemAsyncCore(ownerSubject, playlistId, mediaGuid, position, ct), ct);
+
+    private async Task<UserPlaylistMutationResult> AddItemAsyncCore(
         string ownerSubject,
         Guid playlistId,
         Guid mediaGuid,
@@ -132,7 +158,6 @@ public sealed class UserPlaylistsRepository(DataBridgeDbContext db, IClock clock
         var itemCount = await db.UserPlaylistItems.CountAsync(x => x.PlaylistId == playlistId, ct);
         var targetPosition = Math.Clamp(position ?? itemCount + 1, 1, itemCount + 1);
 
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
         await ShiftPositionsUpAsync(playlistId, targetPosition, ct);
         db.UserPlaylistItems.Add(new UserPlaylistItemEntity
         {
@@ -142,12 +167,18 @@ public sealed class UserPlaylistsRepository(DataBridgeDbContext db, IClock clock
         });
         playlist.UpdatedAt = clock.GetCurrentInstant();
         await db.SaveChangesAsync(ct);
-        await tx.CommitAsync(ct);
 
         return UserPlaylistMutationResult.Ok((await GetAsync(ownerSubject, playlistId, ct))!);
     }
 
-    public async Task<UserPlaylistMutationResult> RemoveItemAsync(
+    public Task<UserPlaylistMutationResult> RemoveItemAsync(
+        string ownerSubject,
+        Guid playlistId,
+        Guid mediaGuid,
+        CancellationToken ct = default)
+        => db.MutateAsync("UserPlaylistsRepository.RemoveItemAsync", () => RemoveItemAsyncCore(ownerSubject, playlistId, mediaGuid, ct), ct);
+
+    private async Task<UserPlaylistMutationResult> RemoveItemAsyncCore(
         string ownerSubject,
         Guid playlistId,
         Guid mediaGuid,
@@ -165,18 +196,23 @@ public sealed class UserPlaylistsRepository(DataBridgeDbContext db, IClock clock
 
         var removedPosition = item.Position;
 
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
         db.UserPlaylistItems.Remove(item);
         await db.SaveChangesAsync(ct);
         await ShiftPositionsDownAsync(playlistId, removedPosition, ct);
         playlist.UpdatedAt = clock.GetCurrentInstant();
         await db.SaveChangesAsync(ct);
-        await tx.CommitAsync(ct);
 
         return UserPlaylistMutationResult.Ok((await GetAsync(ownerSubject, playlistId, ct))!);
     }
 
-    public async Task<UserPlaylistMutationResult> ReorderItemsAsync(
+    public Task<UserPlaylistMutationResult> ReorderItemsAsync(
+        string ownerSubject,
+        Guid playlistId,
+        IReadOnlyList<Guid> mediaGuids,
+        CancellationToken ct = default)
+        => db.MutateAsync("UserPlaylistsRepository.ReorderItemsAsync", () => ReorderItemsAsyncCore(ownerSubject, playlistId, mediaGuids, ct), ct);
+
+    private async Task<UserPlaylistMutationResult> ReorderItemsAsyncCore(
         string ownerSubject,
         Guid playlistId,
         IReadOnlyList<Guid> mediaGuids,
@@ -200,7 +236,6 @@ public sealed class UserPlaylistsRepository(DataBridgeDbContext db, IClock clock
             return UserPlaylistMutationResult.Fail("invalid_order", "The order contains media that is not in the playlist.");
 
         var byMediaGuid = items.ToDictionary(x => x.MediaGuid);
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
 
         for (var i = 0; i < mediaGuids.Count; i++)
             byMediaGuid[mediaGuids[i]].Position = -(i + 1);
@@ -211,7 +246,6 @@ public sealed class UserPlaylistsRepository(DataBridgeDbContext db, IClock clock
 
         playlist.UpdatedAt = clock.GetCurrentInstant();
         await db.SaveChangesAsync(ct);
-        await tx.CommitAsync(ct);
 
         return UserPlaylistMutationResult.Ok((await GetAsync(ownerSubject, playlistId, ct))!);
     }

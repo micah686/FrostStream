@@ -6,6 +6,7 @@ internal static class ApplicationQueryCatalog
 {
     public static IReadOnlyDictionary<string, ProviderQuery> Statements { get; } = new IReadOnlyDictionary<string, ProviderQuery>[]
     {
+        MutationQueries.Statements,
         DownloadsQueries.Statements,
         LiveChatQueries.Statements,
         MaintenanceQueries.Statements,
