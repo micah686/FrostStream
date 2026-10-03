@@ -1,3 +1,4 @@
+using DataBridge.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Shared.Database;
@@ -26,11 +27,11 @@ public sealed class CreatorSourceConfiguration : IEntityTypeConfiguration<Creato
         builder.Property(x => x.MetadataRefreshWindow).HasColumnName("metadata_refresh_window").IsRequired();
         builder.Property(x => x.CreatedAt)
             .HasColumnName("created_at")
-            .HasColumnType("timestamp with time zone")
-            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .HasPersistenceType("timestamp with time zone")
+            .HasPersistenceTimestampDefault()
             .ValueGeneratedOnAdd()
             .IsRequired();
-        builder.Property(x => x.LastUpdated).HasColumnName("last_updated").HasColumnType("timestamp with time zone");
+        builder.Property(x => x.LastUpdated).HasColumnName("last_updated").HasPersistenceType("timestamp with time zone");
 
         builder.HasIndex(x => x.SourceUrl).HasDatabaseName("uq_creator_sources_source_url").IsUnique();
         builder.HasIndex(x => x.ScanEnabled).HasDatabaseName("ix_creator_sources_scan_enabled");
@@ -48,16 +49,16 @@ public sealed class CreatorScanStateConfiguration : IEntityTypeConfiguration<Cre
 
         builder.HasKey(x => x.CreatorSourceId);
         builder.Property(x => x.CreatorSourceId).HasColumnName("creator_source_id").ValueGeneratedNever();
-        builder.Property(x => x.LastSuccessfulScanAt).HasColumnName("last_successful_scan_at").HasColumnType("timestamp with time zone");
-        builder.Property(x => x.LastFullScanAt).HasColumnName("last_full_scan_at").HasColumnType("timestamp with time zone");
+        builder.Property(x => x.LastSuccessfulScanAt).HasColumnName("last_successful_scan_at").HasPersistenceType("timestamp with time zone");
+        builder.Property(x => x.LastFullScanAt).HasColumnName("last_full_scan_at").HasPersistenceType("timestamp with time zone");
         builder.Property(x => x.LastSeenHighWatermark).HasColumnName("last_seen_high_watermark").HasMaxLength(512);
         builder.Property(x => x.NextFullScanStartIndex).HasColumnName("next_full_scan_start_index");
         builder.Property(x => x.AvatarUrl).HasColumnName("avatar_url").HasMaxLength(4096);
         builder.Property(x => x.AvatarContentHash).HasColumnName("avatar_content_hash").HasMaxLength(64);
         builder.Property(x => x.BannerUrl).HasColumnName("banner_url").HasMaxLength(4096);
         builder.Property(x => x.BannerContentHash).HasColumnName("banner_content_hash").HasMaxLength(64);
-        builder.Property(x => x.AssetsLastRefreshedAt).HasColumnName("assets_last_refreshed_at").HasColumnType("timestamp with time zone");
-        builder.Property(x => x.AssetsLastAttemptAt).HasColumnName("assets_last_attempt_at").HasColumnType("timestamp with time zone");
+        builder.Property(x => x.AssetsLastRefreshedAt).HasColumnName("assets_last_refreshed_at").HasPersistenceType("timestamp with time zone");
+        builder.Property(x => x.AssetsLastAttemptAt).HasColumnName("assets_last_attempt_at").HasPersistenceType("timestamp with time zone");
         builder.Property(x => x.AssetsAttemptCount).HasColumnName("assets_attempt_count").IsRequired();
         builder.Property(x => x.AssetsLastError).HasColumnName("assets_last_error").HasMaxLength(2048);
 
@@ -92,14 +93,14 @@ public sealed class DiscoveredMediaConfiguration : IEntityTypeConfiguration<Disc
         builder.Property(x => x.MetadataStatus).HasColumnName("metadata_status").HasMaxLength(50).HasConversion<string>().IsRequired();
         builder.Property(x => x.FirstSeenAt)
             .HasColumnName("first_seen_at")
-            .HasColumnType("timestamp with time zone")
-            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .HasPersistenceType("timestamp with time zone")
+            .HasPersistenceTimestampDefault()
             .IsRequired();
-        builder.Property(x => x.LastSeenAt).HasColumnName("last_seen_at").HasColumnType("timestamp with time zone").IsRequired();
+        builder.Property(x => x.LastSeenAt).HasColumnName("last_seen_at").HasPersistenceType("timestamp with time zone").IsRequired();
         builder.Property(x => x.MissedFullScanCount).HasColumnName("missed_full_scan_count").IsRequired();
-        builder.Property(x => x.LastChangedAt).HasColumnName("last_changed_at").HasColumnType("timestamp with time zone");
-        builder.Property(x => x.LastEnqueuedAt).HasColumnName("last_enqueued_at").HasColumnType("timestamp with time zone");
-        builder.Property(x => x.LastUpdated).HasColumnName("last_updated").HasColumnType("timestamp with time zone");
+        builder.Property(x => x.LastChangedAt).HasColumnName("last_changed_at").HasPersistenceType("timestamp with time zone");
+        builder.Property(x => x.LastEnqueuedAt).HasColumnName("last_enqueued_at").HasPersistenceType("timestamp with time zone");
+        builder.Property(x => x.LastUpdated).HasColumnName("last_updated").HasPersistenceType("timestamp with time zone");
 
         builder.HasIndex(x => new { x.Platform, x.Extractor, x.ExternalMediaId })
             .HasDatabaseName("ux_discovered_media_identity")

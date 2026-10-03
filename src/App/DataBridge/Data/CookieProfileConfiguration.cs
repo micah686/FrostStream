@@ -1,3 +1,4 @@
+using DataBridge.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Shared.Database;
@@ -21,10 +22,10 @@ public sealed class CookieProfileConfiguration : IEntityTypeConfiguration<Cookie
         // CURRENT_TIMESTAMP default (FluentMigrator) as a safety net for any non-EF inserts.
         builder.Property(x => x.CreatedAt)
             .HasColumnName("created_at")
-            .HasColumnType("timestamp with time zone")
+            .HasPersistenceType("timestamp with time zone")
             .ValueGeneratedNever()
             .IsRequired();
-        builder.Property(x => x.LastUpdated).HasColumnName("last_updated").HasColumnType("timestamp with time zone");
+        builder.Property(x => x.LastUpdated).HasColumnName("last_updated").HasPersistenceType("timestamp with time zone");
 
         builder.HasIndex(x => new { x.OwnerSubject, x.ProfileKey })
             .HasDatabaseName("ux_cookie_profiles_owner_profile")

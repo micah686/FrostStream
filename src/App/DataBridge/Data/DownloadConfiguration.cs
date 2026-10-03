@@ -1,3 +1,4 @@
+using DataBridge.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Shared.Database;
@@ -18,18 +19,18 @@ public sealed class DownloadJobConfiguration : IEntityTypeConfiguration<Download
 
         builder.Property(x => x.State)
             .HasColumnName("state")
-            .HasColumnType("jobs.download_job_state")
+            .HasPersistenceType("jobs.download_job_state")
             .IsRequired();
 
-        builder.Property(x => x.Status).HasColumnName("status").HasColumnType("jobs.download_job_status").IsRequired();
-        builder.Property(x => x.Stage).HasColumnName("stage").HasColumnType("jobs.download_stage").IsRequired();
-        builder.Property(x => x.StageStatus).HasColumnName("stage_status").HasColumnType("jobs.download_stage_status").IsRequired();
+        builder.Property(x => x.Status).HasColumnName("status").HasPersistenceType("jobs.download_job_status").IsRequired();
+        builder.Property(x => x.Stage).HasColumnName("stage").HasPersistenceType("jobs.download_stage").IsRequired();
+        builder.Property(x => x.StageStatus).HasColumnName("stage_status").HasPersistenceType("jobs.download_stage_status").IsRequired();
         builder.Property(x => x.CurrentRunId).HasColumnName("current_run_id");
         builder.Property(x => x.CurrentRunNumber).HasColumnName("current_run_number").IsRequired();
         builder.Property(x => x.CurrentAttempt).HasColumnName("current_attempt").IsRequired();
         builder.Property(x => x.CurrentArtifactKey).HasColumnName("current_artifact_key").HasMaxLength(512);
         builder.Property(x => x.WarningCount).HasColumnName("warning_count").IsRequired();
-        builder.Property(x => x.StopRequestedAt).HasColumnName("stop_requested_at").HasColumnType("timestamp with time zone");
+        builder.Property(x => x.StopRequestedAt).HasColumnName("stop_requested_at").HasPersistenceType("timestamp with time zone");
         builder.Property(x => x.StopRequestedBy).HasColumnName("stop_requested_by").HasMaxLength(255);
         builder.Property(x => x.StopReason).HasColumnName("stop_reason").HasMaxLength(512);
 
@@ -57,33 +58,33 @@ public sealed class DownloadJobConfiguration : IEntityTypeConfiguration<Download
             .IsRequired();
         builder.Property(x => x.IngestOrigin)
             .HasColumnName("ingest_origin")
-            .HasColumnType("media.ingest_origin")
+            .HasPersistenceType("media.ingest_origin")
             .HasDefaultValue(IngestOrigin.Download)
             .IsRequired();
 
         builder.Property(x => x.FailureKind)
             .HasColumnName("failure_kind")
-            .HasColumnType("jobs.failure_kind");
+            .HasPersistenceType("jobs.failure_kind");
 
         builder.Property(x => x.FailureCode).HasColumnName("failure_code").HasMaxLength(255);
         builder.Property(x => x.FailureMessage).HasColumnName("failure_message").HasMaxLength(4096);
 
         builder.Property(x => x.CreatedAt)
             .HasColumnName("created_at")
-            .HasColumnType("timestamp with time zone")
-            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .HasPersistenceType("timestamp with time zone")
+            .HasPersistenceTimestampDefault()
             .ValueGeneratedOnAdd()
             .IsRequired();
 
         builder.Property(x => x.UpdatedAt)
             .HasColumnName("updated_at")
-            .HasColumnType("timestamp with time zone")
-            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .HasPersistenceType("timestamp with time zone")
+            .HasPersistenceTimestampDefault()
             .IsRequired();
 
         builder.Property(x => x.CompletedAt)
             .HasColumnName("completed_at")
-            .HasColumnType("timestamp with time zone");
+            .HasPersistenceType("timestamp with time zone");
 
         builder.HasIndex(x => new { x.State, x.UpdatedAt })
             .HasDatabaseName("ix_download_jobs_state_updated_at");
@@ -104,8 +105,8 @@ public sealed class DownloadGroupConfiguration : IEntityTypeConfiguration<Downlo
         builder.HasKey(x => x.GroupId);
         builder.Property(x => x.GroupId).HasColumnName("group_id").ValueGeneratedNever();
         builder.Property(x => x.CorrelationId).HasColumnName("correlation_id").IsRequired();
-        builder.Property(x => x.Kind).HasColumnName("kind").HasColumnType("jobs.download_group_kind").IsRequired();
-        builder.Property(x => x.Status).HasColumnName("status").HasColumnType("jobs.download_group_status").IsRequired();
+        builder.Property(x => x.Kind).HasColumnName("kind").HasPersistenceType("jobs.download_group_kind").IsRequired();
+        builder.Property(x => x.Status).HasColumnName("status").HasPersistenceType("jobs.download_group_status").IsRequired();
         builder.Property(x => x.SourceUrl).HasColumnName("source_url").HasMaxLength(4096).IsRequired();
         builder.Property(x => x.RequestedBy).HasColumnName("requested_by").HasMaxLength(255);
         builder.Property(x => x.StorageKey).HasColumnName("storage_key").HasMaxLength(100);
@@ -125,9 +126,9 @@ public sealed class DownloadGroupConfiguration : IEntityTypeConfiguration<Downlo
         System.Linq.Expressions.Expression<Func<DownloadGroupEntity, NodaTime.Instant>> updated,
         System.Linq.Expressions.Expression<Func<DownloadGroupEntity, NodaTime.Instant?>> completed)
     {
-        builder.Property(created).HasColumnName("created_at").HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP").ValueGeneratedOnAdd().IsRequired();
-        builder.Property(updated).HasColumnName("updated_at").HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP").IsRequired();
-        builder.Property(completed).HasColumnName("completed_at").HasColumnType("timestamp with time zone");
+        builder.Property(created).HasColumnName("created_at").HasPersistenceType("timestamp with time zone").HasPersistenceTimestampDefault().ValueGeneratedOnAdd().IsRequired();
+        builder.Property(updated).HasColumnName("updated_at").HasPersistenceType("timestamp with time zone").HasPersistenceTimestampDefault().IsRequired();
+        builder.Property(completed).HasColumnName("completed_at").HasPersistenceType("timestamp with time zone");
     }
 }
 
@@ -140,16 +141,16 @@ public sealed class DownloadJobRunConfiguration : IEntityTypeConfiguration<Downl
         builder.Property(x => x.RunId).HasColumnName("run_id").ValueGeneratedNever();
         builder.Property(x => x.JobId).HasColumnName("job_id").IsRequired();
         builder.Property(x => x.RunNumber).HasColumnName("run_number").IsRequired();
-        builder.Property(x => x.Status).HasColumnName("status").HasColumnType("jobs.download_job_status").IsRequired();
-        builder.Property(x => x.Stage).HasColumnName("stage").HasColumnType("jobs.download_stage").IsRequired();
-        builder.Property(x => x.StageStatus).HasColumnName("stage_status").HasColumnType("jobs.download_stage_status").IsRequired();
-        builder.Property(x => x.FailureKind).HasColumnName("failure_kind").HasColumnType("jobs.failure_kind");
+        builder.Property(x => x.Status).HasColumnName("status").HasPersistenceType("jobs.download_job_status").IsRequired();
+        builder.Property(x => x.Stage).HasColumnName("stage").HasPersistenceType("jobs.download_stage").IsRequired();
+        builder.Property(x => x.StageStatus).HasColumnName("stage_status").HasPersistenceType("jobs.download_stage_status").IsRequired();
+        builder.Property(x => x.FailureKind).HasColumnName("failure_kind").HasPersistenceType("jobs.failure_kind");
         builder.Property(x => x.FailureCode).HasColumnName("failure_code").HasMaxLength(255);
         builder.Property(x => x.FailureMessage).HasColumnName("failure_message").HasMaxLength(4096);
-        builder.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP").ValueGeneratedOnAdd().IsRequired();
-        builder.Property(x => x.StartedAt).HasColumnName("started_at").HasColumnType("timestamp with time zone");
-        builder.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP").IsRequired();
-        builder.Property(x => x.EndedAt).HasColumnName("ended_at").HasColumnType("timestamp with time zone");
+        builder.Property(x => x.CreatedAt).HasColumnName("created_at").HasPersistenceType("timestamp with time zone").HasPersistenceTimestampDefault().ValueGeneratedOnAdd().IsRequired();
+        builder.Property(x => x.StartedAt).HasColumnName("started_at").HasPersistenceType("timestamp with time zone");
+        builder.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasPersistenceType("timestamp with time zone").HasPersistenceTimestampDefault().IsRequired();
+        builder.Property(x => x.EndedAt).HasColumnName("ended_at").HasPersistenceType("timestamp with time zone");
         builder.HasIndex(x => new { x.JobId, x.RunNumber }).IsUnique().HasDatabaseName("ux_download_job_runs_job_run_number");
         builder.HasOne<DownloadJobEntity>().WithMany().HasForeignKey(x => x.JobId).OnDelete(DeleteBehavior.Cascade);
     }
@@ -164,19 +165,19 @@ public sealed class DownloadStageAttemptConfiguration : IEntityTypeConfiguration
         builder.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
         builder.Property(x => x.RunId).HasColumnName("run_id").IsRequired();
         builder.Property(x => x.JobId).HasColumnName("job_id").IsRequired();
-        builder.Property(x => x.Stage).HasColumnName("stage").HasColumnType("jobs.download_stage").IsRequired();
+        builder.Property(x => x.Stage).HasColumnName("stage").HasPersistenceType("jobs.download_stage").IsRequired();
         builder.Property(x => x.ArtifactKey).HasColumnName("artifact_key").HasMaxLength(512).IsRequired();
         builder.Property(x => x.Attempt).HasColumnName("attempt").IsRequired();
-        builder.Property(x => x.Status).HasColumnName("status").HasColumnType("jobs.download_stage_status").IsRequired();
+        builder.Property(x => x.Status).HasColumnName("status").HasPersistenceType("jobs.download_stage_status").IsRequired();
         builder.Property(x => x.DispatchId).HasColumnName("dispatch_id").IsRequired();
         builder.Property(x => x.OperationKey).HasColumnName("operation_key").HasMaxLength(512).IsRequired();
-        builder.Property(x => x.FailureKind).HasColumnName("failure_kind").HasColumnType("jobs.failure_kind");
+        builder.Property(x => x.FailureKind).HasColumnName("failure_kind").HasPersistenceType("jobs.failure_kind");
         builder.Property(x => x.FailureCode).HasColumnName("failure_code").HasMaxLength(255);
         builder.Property(x => x.FailureMessage).HasColumnName("failure_message").HasMaxLength(4096);
-        builder.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP").ValueGeneratedOnAdd().IsRequired();
-        builder.Property(x => x.StartedAt).HasColumnName("started_at").HasColumnType("timestamp with time zone");
-        builder.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP").IsRequired();
-        builder.Property(x => x.EndedAt).HasColumnName("ended_at").HasColumnType("timestamp with time zone");
+        builder.Property(x => x.CreatedAt).HasColumnName("created_at").HasPersistenceType("timestamp with time zone").HasPersistenceTimestampDefault().ValueGeneratedOnAdd().IsRequired();
+        builder.Property(x => x.StartedAt).HasColumnName("started_at").HasPersistenceType("timestamp with time zone");
+        builder.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasPersistenceType("timestamp with time zone").HasPersistenceTimestampDefault().IsRequired();
+        builder.Property(x => x.EndedAt).HasColumnName("ended_at").HasPersistenceType("timestamp with time zone");
         builder.HasIndex(x => new { x.RunId, x.Stage, x.ArtifactKey, x.Attempt }).IsUnique().HasDatabaseName("ux_download_stage_attempt");
         builder.HasIndex(x => x.DispatchId).IsUnique().HasDatabaseName("ux_download_stage_attempt_dispatch");
         builder.HasOne<DownloadJobRunEntity>().WithMany().HasForeignKey(x => x.RunId).OnDelete(DeleteBehavior.Cascade);
@@ -192,11 +193,11 @@ public sealed class DownloadArtifactConfiguration : IEntityTypeConfiguration<Dow
         builder.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
         builder.Property(x => x.RunId).HasColumnName("run_id").IsRequired();
         builder.Property(x => x.JobId).HasColumnName("job_id").IsRequired();
-        builder.Property(x => x.Stage).HasColumnName("stage").HasColumnType("jobs.download_stage").IsRequired();
+        builder.Property(x => x.Stage).HasColumnName("stage").HasPersistenceType("jobs.download_stage").IsRequired();
         builder.Property(x => x.ArtifactKey).HasColumnName("artifact_key").HasMaxLength(512).IsRequired();
         builder.Property(x => x.Kind).HasColumnName("kind").IsRequired();
         builder.Property(x => x.Required).HasColumnName("required").IsRequired();
-        builder.Property(x => x.Status).HasColumnName("status").HasColumnType("jobs.download_artifact_status").IsRequired();
+        builder.Property(x => x.Status).HasColumnName("status").HasPersistenceType("jobs.download_artifact_status").IsRequired();
         builder.Property(x => x.TempFileRef).HasColumnName("temp_file_ref").HasMaxLength(2048);
         builder.Property(x => x.StorageKey).HasColumnName("storage_key").HasMaxLength(100);
         builder.Property(x => x.StoragePath).HasColumnName("storage_path").HasMaxLength(2048);
@@ -205,8 +206,8 @@ public sealed class DownloadArtifactConfiguration : IEntityTypeConfiguration<Dow
         builder.Property(x => x.SizeBytes).HasColumnName("size_bytes");
         builder.Property(x => x.WarningCode).HasColumnName("warning_code").HasMaxLength(255);
         builder.Property(x => x.WarningMessage).HasColumnName("warning_message").HasMaxLength(4096);
-        builder.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP").ValueGeneratedOnAdd().IsRequired();
-        builder.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP").IsRequired();
+        builder.Property(x => x.CreatedAt).HasColumnName("created_at").HasPersistenceType("timestamp with time zone").HasPersistenceTimestampDefault().ValueGeneratedOnAdd().IsRequired();
+        builder.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasPersistenceType("timestamp with time zone").HasPersistenceTimestampDefault().IsRequired();
         builder.HasIndex(x => new { x.RunId, x.ArtifactKey }).IsUnique().HasDatabaseName("ux_download_artifacts_run_key");
         builder.HasOne<DownloadJobRunEntity>().WithMany().HasForeignKey(x => x.RunId).OnDelete(DeleteBehavior.Cascade);
     }
@@ -221,15 +222,15 @@ public sealed class DownloadWorkerLeaseConfiguration : IEntityTypeConfiguration<
         builder.Property(x => x.DispatchId).HasColumnName("dispatch_id").ValueGeneratedNever();
         builder.Property(x => x.RunId).HasColumnName("run_id").IsRequired();
         builder.Property(x => x.JobId).HasColumnName("job_id").IsRequired();
-        builder.Property(x => x.Stage).HasColumnName("stage").HasColumnType("jobs.download_stage").IsRequired();
+        builder.Property(x => x.Stage).HasColumnName("stage").HasPersistenceType("jobs.download_stage").IsRequired();
         builder.Property(x => x.ArtifactKey).HasColumnName("artifact_key").HasMaxLength(512).IsRequired();
         builder.Property(x => x.Attempt).HasColumnName("attempt").IsRequired();
         builder.Property(x => x.WorkerInstanceId).HasColumnName("worker_instance_id").HasMaxLength(255).IsRequired();
-        builder.Property(x => x.Status).HasColumnName("status").HasColumnType("jobs.download_worker_lease_status").IsRequired();
-        builder.Property(x => x.AcquiredAt).HasColumnName("acquired_at").HasColumnType("timestamp with time zone").IsRequired();
-        builder.Property(x => x.LastHeartbeatAt).HasColumnName("last_heartbeat_at").HasColumnType("timestamp with time zone").IsRequired();
-        builder.Property(x => x.ExpiresAt).HasColumnName("expires_at").HasColumnType("timestamp with time zone").IsRequired();
-        builder.Property(x => x.ReleasedAt).HasColumnName("released_at").HasColumnType("timestamp with time zone");
+        builder.Property(x => x.Status).HasColumnName("status").HasPersistenceType("jobs.download_worker_lease_status").IsRequired();
+        builder.Property(x => x.AcquiredAt).HasColumnName("acquired_at").HasPersistenceType("timestamp with time zone").IsRequired();
+        builder.Property(x => x.LastHeartbeatAt).HasColumnName("last_heartbeat_at").HasPersistenceType("timestamp with time zone").IsRequired();
+        builder.Property(x => x.ExpiresAt).HasColumnName("expires_at").HasPersistenceType("timestamp with time zone").IsRequired();
+        builder.Property(x => x.ReleasedAt).HasColumnName("released_at").HasPersistenceType("timestamp with time zone");
         builder.HasIndex(x => new { x.Status, x.ExpiresAt }).HasDatabaseName("ix_download_worker_leases_status_expiry");
         builder.HasOne<DownloadJobRunEntity>().WithMany().HasForeignKey(x => x.RunId).OnDelete(DeleteBehavior.Cascade);
     }
@@ -244,11 +245,11 @@ public sealed class DownloadJobWarningConfiguration : IEntityTypeConfiguration<D
         builder.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
         builder.Property(x => x.RunId).HasColumnName("run_id").IsRequired();
         builder.Property(x => x.JobId).HasColumnName("job_id").IsRequired();
-        builder.Property(x => x.Stage).HasColumnName("stage").HasColumnType("jobs.download_stage").IsRequired();
+        builder.Property(x => x.Stage).HasColumnName("stage").HasPersistenceType("jobs.download_stage").IsRequired();
         builder.Property(x => x.ArtifactKey).HasColumnName("artifact_key").HasMaxLength(512).IsRequired();
         builder.Property(x => x.WarningCode).HasColumnName("warning_code").HasMaxLength(255).IsRequired();
         builder.Property(x => x.WarningMessage).HasColumnName("warning_message").HasMaxLength(4096).IsRequired();
-        builder.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP").ValueGeneratedOnAdd().IsRequired();
+        builder.Property(x => x.CreatedAt).HasColumnName("created_at").HasPersistenceType("timestamp with time zone").HasPersistenceTimestampDefault().ValueGeneratedOnAdd().IsRequired();
         builder.HasIndex(x => new { x.RunId, x.Stage, x.ArtifactKey }).HasDatabaseName("ix_download_job_warnings_run_stage");
         builder.HasOne<DownloadJobRunEntity>().WithMany().HasForeignKey(x => x.RunId).OnDelete(DeleteBehavior.Cascade);
     }
@@ -267,12 +268,12 @@ public sealed class DownloadJobHistoryConfiguration : IEntityTypeConfiguration<D
         builder.Property(x => x.MessageId).HasColumnName("message_id").IsRequired();
         builder.Property(x => x.OperationKey).HasColumnName("operation_key").HasMaxLength(512).IsRequired();
         builder.Property(x => x.EventName).HasColumnName("event_name").HasMaxLength(255).IsRequired();
-        builder.Property(x => x.PayloadJson).HasColumnName("payload_json").HasColumnType("jsonb");
+        builder.Property(x => x.PayloadJson).HasColumnName("payload_json").HasPersistenceType("jsonb");
 
         builder.Property(x => x.RecordedAt)
             .HasColumnName("recorded_at")
-            .HasColumnType("timestamp with time zone")
-            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .HasPersistenceType("timestamp with time zone")
+            .HasPersistenceTimestampDefault()
             .ValueGeneratedOnAdd()
             .IsRequired();
 
@@ -302,8 +303,8 @@ public sealed class DownloadJobProgressLogConfiguration : IEntityTypeConfigurati
 
         builder.Property(x => x.RecordedAt)
             .HasColumnName("recorded_at")
-            .HasColumnType("timestamp with time zone")
-            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .HasPersistenceType("timestamp with time zone")
+            .HasPersistenceTimestampDefault()
             .ValueGeneratedOnAdd()
             .IsRequired();
 
@@ -331,22 +332,22 @@ public sealed class FailedDownloadJobConfiguration : IEntityTypeConfiguration<Fa
 
         builder.Property(x => x.FailedState)
             .HasColumnName("failed_state")
-            .HasColumnType("jobs.download_job_state")
+            .HasPersistenceType("jobs.download_job_state")
             .IsRequired();
 
         builder.Property(x => x.FailureKind)
             .HasColumnName("failure_kind")
-            .HasColumnType("jobs.failure_kind")
+            .HasPersistenceType("jobs.failure_kind")
             .IsRequired();
 
         builder.Property(x => x.FailureCode).HasColumnName("failure_code").HasMaxLength(255);
         builder.Property(x => x.FailureMessage).HasColumnName("failure_message").HasMaxLength(4096).IsRequired();
-        builder.Property(x => x.LastPayloadJson).HasColumnName("last_payload_json").HasColumnType("jsonb");
+        builder.Property(x => x.LastPayloadJson).HasColumnName("last_payload_json").HasPersistenceType("jsonb");
 
         builder.Property(x => x.FailedAt)
             .HasColumnName("failed_at")
-            .HasColumnType("timestamp with time zone")
-            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .HasPersistenceType("timestamp with time zone")
+            .HasPersistenceTimestampDefault()
             .ValueGeneratedOnAdd()
             .IsRequired();
     }
@@ -366,8 +367,8 @@ public sealed class ProcessedMessageConfiguration : IEntityTypeConfiguration<Pro
 
         builder.Property(x => x.ProcessedAt)
             .HasColumnName("processed_at")
-            .HasColumnType("timestamp with time zone")
-            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .HasPersistenceType("timestamp with time zone")
+            .HasPersistenceTimestampDefault()
             .ValueGeneratedOnAdd()
             .IsRequired();
 
@@ -388,8 +389,8 @@ public sealed class MediaConfiguration : IEntityTypeConfiguration<MediaEntity>
 
         builder.Property(x => x.CreatedAt)
             .HasColumnName("created_at")
-            .HasColumnType("timestamp with time zone")
-            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .HasPersistenceType("timestamp with time zone")
+            .HasPersistenceTimestampDefault()
             .ValueGeneratedOnAdd()
             .IsRequired();
     }
@@ -408,7 +409,7 @@ public sealed class MediaSourceVersionConfiguration : IEntityTypeConfiguration<M
         builder.Property(x => x.SourceMediaId).HasColumnName("source_media_id").HasMaxLength(512);
         builder.Property(x => x.SourceLastModified)
             .HasColumnName("source_last_modified")
-            .HasColumnType("timestamp with time zone");
+            .HasPersistenceType("timestamp with time zone");
         builder.Property(x => x.MediaGuid).HasColumnName("media_guid").IsRequired();
         builder.Property(x => x.LatestJobId).HasColumnName("latest_job_id");
 
@@ -445,7 +446,7 @@ public sealed class MediaContentIdVersionConfiguration : IEntityTypeConfiguratio
         builder.Property(x => x.VersionNum).HasColumnName("version_num").IsRequired();
         builder.Property(x => x.IngestOrigin)
             .HasColumnName("ingest_origin")
-            .HasColumnType("media.ingest_origin")
+            .HasPersistenceType("media.ingest_origin")
             .HasDefaultValue(IngestOrigin.Download)
             .IsRequired();
 
@@ -472,7 +473,7 @@ public sealed class AudioRenditionConfiguration : IEntityTypeConfiguration<Audio
         builder.Property(x => x.SourceVersionNum).HasColumnName("source_version_num").IsRequired();
         builder.Property(x => x.Status)
             .HasColumnName("status")
-            .HasColumnType("media.audio_rendition_status")
+            .HasPersistenceType("media.audio_rendition_status")
             .IsRequired();
         builder.Property(x => x.StorageKey).HasColumnName("storage_key").HasMaxLength(100).IsRequired();
         builder.Property(x => x.StoragePath).HasColumnName("storage_path").HasMaxLength(2048);
@@ -482,14 +483,14 @@ public sealed class AudioRenditionConfiguration : IEntityTypeConfiguration<Audio
         builder.Property(x => x.ErrorMessage).HasColumnName("error_message").HasMaxLength(4096);
         builder.Property(x => x.CreatedAt)
             .HasColumnName("created_at")
-            .HasColumnType("timestamp with time zone")
-            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .HasPersistenceType("timestamp with time zone")
+            .HasPersistenceTimestampDefault()
             .ValueGeneratedOnAdd()
             .IsRequired();
         builder.Property(x => x.UpdatedAt)
             .HasColumnName("updated_at")
-            .HasColumnType("timestamp with time zone")
-            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .HasPersistenceType("timestamp with time zone")
+            .HasPersistenceTimestampDefault()
             .IsRequired();
 
         builder.HasIndex(x => new { x.MediaGuid, x.SourceVersionNum, x.StorageKey })
@@ -521,11 +522,11 @@ public sealed class MediaEncodingStatusConfiguration : IEntityTypeConfiguration<
         builder.Property(x => x.IsEncoded).HasColumnName("is_encoded").IsRequired();
         builder.Property(x => x.StorageKey).HasColumnName("storage_key").HasMaxLength(100);
         builder.Property(x => x.StoragePath).HasColumnName("storage_path").HasMaxLength(2048);
-        builder.Property(x => x.EncodedAt).HasColumnName("encoded_at").HasColumnType("timestamp with time zone");
+        builder.Property(x => x.EncodedAt).HasColumnName("encoded_at").HasPersistenceType("timestamp with time zone");
         builder.Property(x => x.UpdatedAt)
             .HasColumnName("updated_at")
-            .HasColumnType("timestamp with time zone")
-            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .HasPersistenceType("timestamp with time zone")
+            .HasPersistenceTimestampDefault()
             .IsRequired();
 
         builder.HasIndex(x => new { x.AccountId, x.IsEncoded })
@@ -552,7 +553,7 @@ public sealed class StreamRenditionConfiguration : IEntityTypeConfiguration<Stre
         builder.Property(x => x.SourceVersionNum).HasColumnName("source_version_num").IsRequired();
         builder.Property(x => x.Status)
             .HasColumnName("status")
-            .HasColumnType("media.stream_rendition_status")
+            .HasPersistenceType("media.stream_rendition_status")
             .IsRequired();
         builder.Property(x => x.StorageKey).HasColumnName("storage_key").HasMaxLength(100).IsRequired();
         builder.Property(x => x.StoragePath).HasColumnName("storage_path").HasMaxLength(2048);
@@ -561,14 +562,14 @@ public sealed class StreamRenditionConfiguration : IEntityTypeConfiguration<Stre
         builder.Property(x => x.ErrorMessage).HasColumnName("error_message").HasMaxLength(4096);
         builder.Property(x => x.CreatedAt)
             .HasColumnName("created_at")
-            .HasColumnType("timestamp with time zone")
-            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .HasPersistenceType("timestamp with time zone")
+            .HasPersistenceTimestampDefault()
             .ValueGeneratedOnAdd()
             .IsRequired();
         builder.Property(x => x.UpdatedAt)
             .HasColumnName("updated_at")
-            .HasColumnType("timestamp with time zone")
-            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .HasPersistenceType("timestamp with time zone")
+            .HasPersistenceTimestampDefault()
             .IsRequired();
 
         builder.HasIndex(x => new { x.MediaGuid, x.SourceVersionNum, x.StorageKey })

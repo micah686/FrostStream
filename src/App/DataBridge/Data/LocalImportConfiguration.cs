@@ -1,3 +1,4 @@
+using DataBridge.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Shared.Database;
@@ -16,7 +17,7 @@ public sealed class LocalImportBatchConfiguration : IEntityTypeConfiguration<Loc
         builder.Property(x => x.CorrelationId).HasColumnName("correlation_id").IsRequired();
         builder.Property(x => x.Status)
             .HasColumnName("status")
-            .HasColumnType("imports.local_import_status")
+            .HasPersistenceType("imports.local_import_status")
             .IsRequired();
         builder.Property(x => x.ManifestObjectBucket).HasColumnName("manifest_object_bucket").HasMaxLength(255).IsRequired();
         builder.Property(x => x.ManifestObjectKey).HasColumnName("manifest_object_key").HasMaxLength(1024).IsRequired();
@@ -31,18 +32,18 @@ public sealed class LocalImportBatchConfiguration : IEntityTypeConfiguration<Loc
         builder.Property(x => x.ErrorMessage).HasColumnName("error_message").HasMaxLength(4096);
         builder.Property(x => x.CreatedAt)
             .HasColumnName("created_at")
-            .HasColumnType("timestamp with time zone")
-            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .HasPersistenceType("timestamp with time zone")
+            .HasPersistenceTimestampDefault()
             .ValueGeneratedOnAdd()
             .IsRequired();
         builder.Property(x => x.UpdatedAt)
             .HasColumnName("updated_at")
-            .HasColumnType("timestamp with time zone")
-            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .HasPersistenceType("timestamp with time zone")
+            .HasPersistenceTimestampDefault()
             .IsRequired();
         builder.Property(x => x.CompletedAt)
             .HasColumnName("completed_at")
-            .HasColumnType("timestamp with time zone");
+            .HasPersistenceType("timestamp with time zone");
 
         builder.HasIndex(x => new { x.Status, x.UpdatedAt })
             .HasDatabaseName("ix_local_import_batches_status_updated_at");
@@ -62,7 +63,7 @@ public sealed class LocalImportItemConfiguration : IEntityTypeConfiguration<Loca
         builder.Property(x => x.ItemIndex).HasColumnName("item_index").IsRequired();
         builder.Property(x => x.Status)
             .HasColumnName("status")
-            .HasColumnType("imports.local_import_status")
+            .HasPersistenceType("imports.local_import_status")
             .IsRequired();
         builder.Property(x => x.SourceRoot).HasColumnName("source_root").HasMaxLength(2048).IsRequired();
         builder.Property(x => x.RelativePath).HasColumnName("relative_path").HasMaxLength(2048).IsRequired();
@@ -71,7 +72,7 @@ public sealed class LocalImportItemConfiguration : IEntityTypeConfiguration<Loca
         builder.Property(x => x.SourceMediaId).HasColumnName("source_media_id").HasMaxLength(512);
         builder.Property(x => x.SourceLastModified)
             .HasColumnName("source_last_modified")
-            .HasColumnType("timestamp with time zone");
+            .HasPersistenceType("timestamp with time zone");
         builder.Property(x => x.SourceUrl).HasColumnName("source_url").HasMaxLength(4096);
         builder.Property(x => x.Title).HasColumnName("title").HasMaxLength(1024);
         builder.Property(x => x.FileSizeBytes).HasColumnName("file_size_bytes");
@@ -82,23 +83,23 @@ public sealed class LocalImportItemConfiguration : IEntityTypeConfiguration<Loca
         builder.Property(x => x.MetaStoragePath).HasColumnName("meta_storage_path").HasMaxLength(2048);
         builder.Property(x => x.InfoJsonStoragePath).HasColumnName("info_json_storage_path").HasMaxLength(2048);
         builder.Property(x => x.ThumbnailStoragePath).HasColumnName("thumbnail_storage_path").HasMaxLength(2048);
-        builder.Property(x => x.CaptionStoragePathsJson).HasColumnName("caption_storage_paths").HasColumnType("jsonb");
+        builder.Property(x => x.CaptionStoragePathsJson).HasColumnName("caption_storage_paths").HasPersistenceType("jsonb");
         builder.Property(x => x.ErrorCode).HasColumnName("error_code").HasMaxLength(255);
         builder.Property(x => x.ErrorMessage).HasColumnName("error_message").HasMaxLength(4096);
         builder.Property(x => x.CreatedAt)
             .HasColumnName("created_at")
-            .HasColumnType("timestamp with time zone")
-            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .HasPersistenceType("timestamp with time zone")
+            .HasPersistenceTimestampDefault()
             .ValueGeneratedOnAdd()
             .IsRequired();
         builder.Property(x => x.UpdatedAt)
             .HasColumnName("updated_at")
-            .HasColumnType("timestamp with time zone")
-            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .HasPersistenceType("timestamp with time zone")
+            .HasPersistenceTimestampDefault()
             .IsRequired();
         builder.Property(x => x.CompletedAt)
             .HasColumnName("completed_at")
-            .HasColumnType("timestamp with time zone");
+            .HasPersistenceType("timestamp with time zone");
 
         builder.HasIndex(x => new { x.BatchId, x.ItemIndex })
             .IsUnique()

@@ -3,6 +3,7 @@ using Cleipnir.Flows;
 using Cleipnir.Flows.AspNet;
 using Cleipnir.Flows.PostgresSql;
 using DataBridge.Data;
+using DataBridge.Persistence;
 using DataBridge.AudioRenditions;
 using DataBridge.Renditions;
 using DataBridge.StreamRenditions;
@@ -14,8 +15,6 @@ using DataBridge.Messaging;
 using DataBridge.Search;
 using DataBridge.Statistics;
 using Conduit.NATS;
-using FluentMigrator.Runner;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -23,7 +22,6 @@ using Microsoft.Extensions.Hosting.Internal;
 using NATS.Client.Core;
 using NodaTime;
 using Npgsql;
-using Shared.Database;
 using Shared.LiveChat;
 using Shared.Messaging;
 using Shared.Pot;
@@ -41,6 +39,10 @@ public static class DataBridgeModule
     {
         if (!builder.Services.TryAddModule(typeof(DataBridgeModule))) return builder;
         builder.AddDeployment();
+        builder.AddDataBridgePersistence();
+        var persistence = PersistenceOptions.FromConfiguration(builder.Configuration, builder.Environment.ContentRootPath);
+        if (persistence.Provider == PersistenceProvider.Sqlite)
+            throw new InvalidOperationException("SQLite runtime is not available until Phase 2 is complete. Use Persistence:InitializeOnly=true to initialize the experimental database.");
         builder.Services.AddApplicationTransport(builder.Configuration);
 
         var connectionString = builder.Configuration.GetConnectionString("froststreamdb")
@@ -50,43 +52,6 @@ public static class DataBridgeModule
             ?? "nats://localhost:24040";
         var natsAuth = BuildNatsAuth(builder.Configuration);
 
-        builder.Services.AddDbContext<DataBridgeDbContext>(options =>
-            options.UseNpgsql(
-                    connectionString,
-                    npgsqlOptions => npgsqlOptions
-                        .UseNodaTime()
-                        .MapEnum<LocalStorageProtocol>("local_storage_protocol", "storage")
-                        .MapEnum<NetworkStorageProtocol>("network_storage_protocol", "storage")
-                        .MapEnum<S3CompatibleObjectStorageProvider>("s3_compatible_object_storage_provider", "storage")
-                        .MapEnum<AzureBlobCredentialMode>("azure_blob_credential_mode", "storage")
-                        .MapEnum<GoogleCloudStorageCredentialMode>("google_cloud_storage_credential_mode", "storage")
-                        .MapEnum<DownloadJobState>("download_job_state", "jobs")
-                        .MapEnum<DownloadJobStatus>("download_job_status", "jobs")
-                        .MapEnum<DownloadStage>("download_stage", "jobs")
-                        .MapEnum<DownloadStageStatus>("download_stage_status", "jobs")
-                        .MapEnum<DownloadGroupKind>("download_group_kind", "jobs")
-                        .MapEnum<DownloadGroupStatus>("download_group_status", "jobs")
-                        .MapEnum<DownloadArtifactStatus>("download_artifact_status", "jobs")
-                        .MapEnum<DownloadWorkerLeaseStatus>("download_worker_lease_status", "jobs")
-                        .MapEnum<FailureKind>("failure_kind", "jobs")
-                        .MapEnum<IngestOrigin>("ingest_origin", "media")
-                        .MapEnum<AudioRenditionStatus>("audio_rendition_status", "media")
-                        .MapEnum<StreamRenditionStatus>("stream_rendition_status", "media")
-                        .MapEnum<LocalImportStatus>("local_import_status", "imports")
-                        .MapEnum<ImportSessionStatus>("import_session_status", "imports")
-                        .MapEnum<ImportSessionSourceKind>("import_session_source_kind", "imports")
-                        .MapEnum<ImportSessionItemStatus>("import_session_item_status", "imports")
-                        .MapEnum<ImportSessionItemMetadataState>("import_session_item_metadata_state", "imports")
-                        .MapEnum<PlaylistState>("playlist_state", "jobs"))
-                .UseSnakeCaseNamingConvention());
-
-        builder.Services
-            .AddFluentMigratorCore()
-            .ConfigureRunner(runnerBuilder => runnerBuilder
-                .AddPostgres()
-                .WithGlobalConnectionString(connectionString)
-                .ScanIn(typeof(DataBridgeModule).Assembly).For.Migrations());
-        
         builder.Services.AddModuleNats(options =>
         {
             options.Url = natsUrl;
@@ -127,12 +92,6 @@ public static class DataBridgeModule
             .GracefulShutdown(enable: true)
             .RegisterFlowsAutomatically(typeof(DataBridgeModule).Assembly));
 
-        builder.Services.AddSingleton<IClock>(SystemClock.Instance);
-        builder.Services.AddSingleton(_ =>
-        {
-            var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
-            return dataSourceBuilder.Build();
-        });
         builder.Services.AddSingleton<IDownloadJobStateNotifier, DownloadJobStateNotifier>();
         builder.Services.AddScoped<IDownloadJobsRepository, DownloadJobsRepository>();
         builder.Services.AddScoped<IDownloadFlowV2Repository, DownloadFlowV2Repository>();
@@ -257,24 +216,16 @@ public static class DataBridgeModule
             // set true to hide "Application started/stopped" messages
             o.SuppressStatusMessages = false;
         });
-        
+
 
         return builder;
     }
 
-    public static void InitializeDataBridge(this IHost app)
+    public static void InitializeDataBridge(this IHost app, CancellationToken cancellationToken = default)
     {
-
-        
-        using (var scope = app.Services.CreateScope())
-        {
-            var migrationRunner = scope.ServiceProvider.GetRequiredService<IMigrationRunner>();
-            migrationRunner.MigrateUp();
-        }
-
-
+        using var scope = app.Services.CreateScope();
+        scope.ServiceProvider.GetRequiredService<IApplicationSchemaInitializer>().Initialize(cancellationToken);
     }
-
 
     private static NatsAuthOpts? BuildNatsAuth(IConfiguration configuration)
     {

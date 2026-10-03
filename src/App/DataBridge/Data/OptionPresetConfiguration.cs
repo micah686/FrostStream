@@ -1,3 +1,4 @@
+using DataBridge.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Shared.Database;
@@ -44,18 +45,18 @@ public sealed class OptionPresetConfiguration : IEntityTypeConfiguration<OptionP
 
         builder.Property(x => x.YtDlpOptionsJson)
             .HasColumnName("ytdlp_options_json")
-            .HasColumnType("jsonb")
+            .HasPersistenceType("jsonb")
             .IsRequired();
 
         builder.Property(x => x.CreatedAt)
             .HasColumnName("created_at")
-            .HasColumnType("timestamp with time zone")
-            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .HasPersistenceType("timestamp with time zone")
+            .HasPersistenceTimestampDefault()
             .ValueGeneratedOnAdd()
             .IsRequired();
 
         builder.Property(x => x.LastUpdated)
             .HasColumnName("last_updated")
-            .HasColumnType("timestamp with time zone");
+            .HasPersistenceType("timestamp with time zone");
     }
 }

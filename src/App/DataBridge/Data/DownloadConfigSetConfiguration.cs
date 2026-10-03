@@ -1,3 +1,4 @@
+using DataBridge.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Shared.Database;
@@ -28,19 +29,19 @@ public sealed class DownloadConfigSetConfiguration : IEntityTypeConfiguration<Do
         builder.Property(x => x.StorageKey).HasColumnName("storage_key").HasMaxLength(100);
         builder.Property(x => x.CookieProfileKey).HasColumnName("cookie_profile_key").HasMaxLength(100);
         builder.Property(x => x.WorkerTag).HasColumnName("worker_tag").HasMaxLength(50);
-        builder.Property(x => x.YtDlpOptionsJson).HasColumnName("ytdlp_options_json").HasColumnType("jsonb");
-        builder.Property(x => x.IgnoreKeywordsJson).HasColumnName("ignore_keywords_json").HasColumnType("jsonb");
+        builder.Property(x => x.YtDlpOptionsJson).HasColumnName("ytdlp_options_json").HasPersistenceType("jsonb");
+        builder.Property(x => x.IgnoreKeywordsJson).HasColumnName("ignore_keywords_json").HasPersistenceType("jsonb");
         builder.Property(x => x.Priority).HasColumnName("priority").HasDefaultValue(0).IsRequired();
         builder.Property(x => x.CreatedAt)
             .HasColumnName("created_at")
-            .HasColumnType("timestamp with time zone")
-            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .HasPersistenceType("timestamp with time zone")
+            .HasPersistenceTimestampDefault()
             .ValueGeneratedOnAdd()
             .IsRequired();
         builder.Property(x => x.UpdatedAt)
             .HasColumnName("updated_at")
-            .HasColumnType("timestamp with time zone")
-            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .HasPersistenceType("timestamp with time zone")
+            .HasPersistenceTimestampDefault()
             .IsRequired();
 
         builder.HasIndex(x => new { x.OwnerSubject, x.Key })

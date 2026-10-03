@@ -16,6 +16,8 @@ Phase 2 is split into reviewable increments so each can be completed and checked
 
 ## 2b — SQLite connection and schema foundation
 
+**Status: complete (2026-10-03).** See [baseline configuration and verification](../src/App/DataBridge/Persistence/Sqlite/Schema/README.md) and the [2b handoff](phase2-checklist.md#2b-handoff). SQLite remains opt-in and available for initialization only; Lite runtime is not complete.
+
 - Add Lite SQLite configuration using `/data/frostreamlitedb`, with a configurable path for development and tests.
 - Configure foreign keys, WAL, and bounded busy handling in one shared connection setup.
 - Implement the initial SQLite schema/baseline for the core shared entities and indexes, keeping PostgreSQL migrations untouched.

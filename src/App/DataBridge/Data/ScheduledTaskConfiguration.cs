@@ -1,3 +1,4 @@
+using DataBridge.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Shared.Database;
@@ -35,20 +36,20 @@ public sealed class ScheduledTaskConfiguration : IEntityTypeConfiguration<Schedu
             .IsRequired();
         builder.Property(x => x.RetentionDays).HasColumnName("retention_days").HasDefaultValue(0).IsRequired();
         builder.Property(x => x.IncludeFailed).HasColumnName("include_failed").HasDefaultValue(false).IsRequired();
-        builder.Property(x => x.LastAttemptAt).HasColumnName("last_attempt_at").HasColumnType("timestamp with time zone");
-        builder.Property(x => x.LastSuccessAt).HasColumnName("last_success_at").HasColumnType("timestamp with time zone");
+        builder.Property(x => x.LastAttemptAt).HasColumnName("last_attempt_at").HasPersistenceType("timestamp with time zone");
+        builder.Property(x => x.LastSuccessAt).HasColumnName("last_success_at").HasPersistenceType("timestamp with time zone");
         builder.Property(x => x.LastRunStatus)
             .HasColumnName("last_run_status")
             .HasMaxLength(32)
             .HasConversion<string>();
-        builder.Property(x => x.NextDueAt).HasColumnName("next_due_at").HasColumnType("timestamp with time zone");
+        builder.Property(x => x.NextDueAt).HasColumnName("next_due_at").HasPersistenceType("timestamp with time zone");
         builder.Property(x => x.CreatedAt)
             .HasColumnName("created_at")
-            .HasColumnType("timestamp with time zone")
-            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .HasPersistenceType("timestamp with time zone")
+            .HasPersistenceTimestampDefault()
             .ValueGeneratedOnAdd()
             .IsRequired();
-        builder.Property(x => x.LastUpdated).HasColumnName("last_updated").HasColumnType("timestamp with time zone");
+        builder.Property(x => x.LastUpdated).HasColumnName("last_updated").HasPersistenceType("timestamp with time zone");
 
         builder.HasIndex(x => x.Key).IsUnique().HasDatabaseName("uq_scheduled_tasks_key");
         builder.HasIndex(x => x.NextDueAt).HasDatabaseName("ix_scheduled_tasks_next_due_at");

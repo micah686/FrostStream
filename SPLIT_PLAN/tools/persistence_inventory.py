@@ -25,20 +25,21 @@ def generate():
         entities = re.findall(r'\b(?:class|record)\s+(\w+Entity)\b', p.read_text())
         lines.append(f"| {link(p)} | {', '.join(f'`{e}`' for e in entities)} |")
     lines += ['', '## EF configuration and provider mappings', '',
-              'All current configuration files are applied by `DataBridgeDbContext.ApplyConfigurationsFromAssembly`.', '',
-              '| Source | Explicit table names (schema is specified in source) | Explicit column types |', '| --- | --- | --- |']
+              'Shared configuration files are applied by `DataBridgeDbContext.ApplyConfigurationsFromAssembly`; the selected provider pass materializes logical type/default hints.', '',
+              '| Source | Explicit table names (schema is specified in source) | Logical column types (provider hints) |', '| --- | --- | --- |']
     for p in sources('src/App/DataBridge/Data'):
         if not p.name.endswith('Configuration.cs'):
             continue
         s = p.read_text()
         tables = sorted(set(re.findall(r'ToTable\(\s*"([^"]+)"', s)))
-        types = sorted(set(re.findall(r'HasColumnType\("([^"]+)"', s)))
+        types = sorted(set(re.findall(r'Has(?:ColumnType|PersistenceType)\("([^"]+)"', s)))
         lines.append(f"| {link(p)} | {', '.join(f'`{v}`' for v in tables)} | {', '.join(f'`{v}`' for v in types)} |")
     lines += ['', '## Persistence contracts', '', '| Source |', '| --- |']
     for p in sources('src/App/DataBridge'):
         if re.search(r'\binterface\s+I\w*(?:Repository|Purger|ReadService|DocumentQuery)\b', p.read_text()):
             lines.append(f'| {link(p)} |')
     patterns = {
+        'SQLite': r'\bSqlite(?:Connection|Transaction|ConnectionFactory|SchemaInitializer)\b',
         'Npgsql': r'\bNpgsql(?:DataSourceBuilder|DataSource|Connection|Command|Transaction|DataReader|DbType)\b|using Npgsql;',
         'EF SQL': r'ExecuteSql\w*|FromSql\w*|\.SqlQuery\b',
         'transaction': r'BeginTransaction\w*|GetDbTransaction',

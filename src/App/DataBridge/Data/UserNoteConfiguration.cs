@@ -1,3 +1,4 @@
+using DataBridge.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Shared.Database;
@@ -16,8 +17,8 @@ public sealed class UserNoteConfiguration : IEntityTypeConfiguration<UserNoteEnt
         builder.Property(x => x.TargetType).HasColumnName("target_type").HasMaxLength(32).IsRequired();
         builder.Property(x => x.TargetId).HasColumnName("target_id").HasMaxLength(64).IsRequired();
         builder.Property(x => x.Note).HasColumnName("note").HasMaxLength(8192).IsRequired();
-        builder.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone").ValueGeneratedOnAdd().IsRequired();
-        builder.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp with time zone").IsRequired();
+        builder.Property(x => x.CreatedAt).HasColumnName("created_at").HasPersistenceType("timestamp with time zone").ValueGeneratedOnAdd().IsRequired();
+        builder.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasPersistenceType("timestamp with time zone").IsRequired();
 
         builder.HasIndex(x => new { x.OwnerSubject, x.TargetType, x.TargetId })
             .IsUnique()

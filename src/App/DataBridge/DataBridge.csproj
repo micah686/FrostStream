@@ -16,6 +16,8 @@
 
     <ItemGroup>
       <EmbeddedResource Include="LiveChat\Schema\*.sql" />
+      <EmbeddedResource Include="Persistence/Sqlite/Schema/*.sql" />
+      <EmbeddedResource Include="Persistence/Sqlite/Schema/*.json" />
     </ItemGroup>
 
     <ItemGroup>
@@ -44,6 +46,7 @@
            EF Relational 10.0.4; this lifts it to match the EF Core 10.0.10 that Shared pins, so the
            two halves of EF stay on the same patch level. -->
       <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+      <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
       <!-- Version pin, not a code dependency. The Polly.Extensions/Polly.RateLimiting that arrive
            via ServiceDefaults -> Microsoft.Extensions.Http.Resilience ask for Polly.Core 8.4.2, and
            FluentStorage.FTP/SFTP ask for 8.4.0; this lifts the whole graph to 8.7.0. No source file

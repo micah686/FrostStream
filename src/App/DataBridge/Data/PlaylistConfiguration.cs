@@ -1,3 +1,4 @@
+using DataBridge.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Shared.Database;
@@ -14,7 +15,7 @@ public sealed class PlaylistConfiguration : IEntityTypeConfiguration<PlaylistEnt
 
         builder.Property(x => x.PlaylistId).HasColumnName("playlist_id").ValueGeneratedNever();
         builder.Property(x => x.CorrelationId).HasColumnName("correlation_id").IsRequired();
-        builder.Property(x => x.State).HasColumnName("state").HasColumnType("jobs.playlist_state").IsRequired();
+        builder.Property(x => x.State).HasColumnName("state").HasPersistenceType("jobs.playlist_state").IsRequired();
         builder.Property(x => x.SourceUrl).HasColumnName("source_url").HasMaxLength(4096).IsRequired();
         builder.Property(x => x.RequestedBy).HasColumnName("requested_by").HasMaxLength(255);
         builder.Property(x => x.StorageKey).HasColumnName("storage_key").HasMaxLength(100);
@@ -22,12 +23,12 @@ public sealed class PlaylistConfiguration : IEntityTypeConfiguration<PlaylistEnt
         builder.Property(x => x.WorkerTag).HasColumnName("worker_tag").HasMaxLength(50);
         builder.Property(x => x.EncodeForPlaylist).HasColumnName("encode_for_playlist").HasDefaultValue(false).IsRequired();
         builder.Property(x => x.CookieSecretPath).HasColumnName("cookie_secret_path").HasMaxLength(512);
-        builder.Property(x => x.YtDlpOptionsJson).HasColumnName("ytdlp_options_json").HasColumnType("jsonb");
+        builder.Property(x => x.YtDlpOptionsJson).HasColumnName("ytdlp_options_json").HasPersistenceType("jsonb");
         builder.Property(x => x.Priority).HasColumnName("priority").HasDefaultValue(0).IsRequired();
         builder.Property(x => x.FetchComments).HasColumnName("fetch_comments").HasDefaultValue(false).IsRequired();
-        builder.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone").ValueGeneratedOnAdd().IsRequired();
-        builder.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp with time zone").IsRequired();
-        builder.Property(x => x.CompletedAt).HasColumnName("completed_at").HasColumnType("timestamp with time zone");
+        builder.Property(x => x.CreatedAt).HasColumnName("created_at").HasPersistenceType("timestamp with time zone").ValueGeneratedOnAdd().IsRequired();
+        builder.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasPersistenceType("timestamp with time zone").IsRequired();
+        builder.Property(x => x.CompletedAt).HasColumnName("completed_at").HasPersistenceType("timestamp with time zone");
 
         builder.HasIndex(x => new { x.State, x.UpdatedAt }).HasDatabaseName("ix_playlists_state_updated_at");
         builder.HasIndex(x => x.CorrelationId).HasDatabaseName("ix_playlists_correlation_id");
@@ -130,7 +131,7 @@ public sealed class PlaylistSourceMetadataConfiguration : IEntityTypeConfigurati
         builder.Property(x => x.ProviderPlaylistId).HasColumnName("provider_playlist_id").HasMaxLength(512);
         builder.Property(x => x.Title).HasColumnName("title").HasMaxLength(2048);
         builder.Property(x => x.TotalItems).HasColumnName("total_items").IsRequired();
-        builder.Property(x => x.LastScannedAt).HasColumnName("last_scanned_at").HasColumnType("timestamp with time zone");
+        builder.Property(x => x.LastScannedAt).HasColumnName("last_scanned_at").HasPersistenceType("timestamp with time zone");
 
         builder.HasOne<PlaylistEntity>()
             .WithOne()
@@ -171,8 +172,8 @@ public sealed class UserPlaylistConfiguration : IEntityTypeConfiguration<UserPla
         builder.Property(x => x.OwnerSubject).HasColumnName("owner_subject").HasMaxLength(255).IsRequired();
         builder.Property(x => x.Name).HasColumnName("name").HasMaxLength(255).IsRequired();
         builder.Property(x => x.Description).HasColumnName("description").HasMaxLength(2048);
-        builder.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone").ValueGeneratedOnAdd().IsRequired();
-        builder.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp with time zone").IsRequired();
+        builder.Property(x => x.CreatedAt).HasColumnName("created_at").HasPersistenceType("timestamp with time zone").ValueGeneratedOnAdd().IsRequired();
+        builder.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasPersistenceType("timestamp with time zone").IsRequired();
 
         builder.HasIndex(x => new { x.OwnerSubject, x.CreatedAt }).HasDatabaseName("ix_user_playlists_owner_created_at");
     }
@@ -189,7 +190,7 @@ public sealed class UserPlaylistItemConfiguration : IEntityTypeConfiguration<Use
         builder.Property(x => x.PlaylistId).HasColumnName("playlist_id").IsRequired();
         builder.Property(x => x.MediaGuid).HasColumnName("media_guid").IsRequired();
         builder.Property(x => x.Position).HasColumnName("position").IsRequired();
-        builder.Property(x => x.AddedAt).HasColumnName("added_at").HasColumnType("timestamp with time zone").ValueGeneratedOnAdd().IsRequired();
+        builder.Property(x => x.AddedAt).HasColumnName("added_at").HasPersistenceType("timestamp with time zone").ValueGeneratedOnAdd().IsRequired();
 
         builder.HasIndex(x => new { x.PlaylistId, x.Position })
             .IsUnique()

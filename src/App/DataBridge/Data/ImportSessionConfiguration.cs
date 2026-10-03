@@ -1,3 +1,4 @@
+using DataBridge.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Shared.Database;
@@ -13,8 +14,8 @@ public sealed class ImportSessionConfiguration : IEntityTypeConfiguration<Import
 
         builder.Property(x => x.SessionId).HasColumnName("session_id").ValueGeneratedNever();
         builder.Property(x => x.CorrelationId).HasColumnName("correlation_id").IsRequired();
-        builder.Property(x => x.Status).HasColumnName("status").HasColumnType("imports.import_session_status").IsRequired();
-        builder.Property(x => x.SourceKind).HasColumnName("source_kind").HasColumnType("imports.import_session_source_kind").IsRequired();
+        builder.Property(x => x.Status).HasColumnName("status").HasPersistenceType("imports.import_session_status").IsRequired();
+        builder.Property(x => x.SourceKind).HasColumnName("source_kind").HasPersistenceType("imports.import_session_source_kind").IsRequired();
         builder.Property(x => x.SourceRoot).HasColumnName("source_root").HasMaxLength(2048).IsRequired();
         builder.Property(x => x.SubPath).HasColumnName("sub_path").HasMaxLength(2048);
         builder.Property(x => x.StorageKey).HasColumnName("storage_key").HasMaxLength(100).IsRequired();
@@ -34,18 +35,18 @@ public sealed class ImportSessionConfiguration : IEntityTypeConfiguration<Import
         builder.Property(x => x.ErrorMessage).HasColumnName("error_message").HasMaxLength(4096);
         builder.Property(x => x.CreatedAt)
             .HasColumnName("created_at")
-            .HasColumnType("timestamp with time zone")
-            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .HasPersistenceType("timestamp with time zone")
+            .HasPersistenceTimestampDefault()
             .ValueGeneratedOnAdd()
             .IsRequired();
         builder.Property(x => x.UpdatedAt)
             .HasColumnName("updated_at")
-            .HasColumnType("timestamp with time zone")
-            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .HasPersistenceType("timestamp with time zone")
+            .HasPersistenceTimestampDefault()
             .IsRequired();
         builder.Property(x => x.CompletedAt)
             .HasColumnName("completed_at")
-            .HasColumnType("timestamp with time zone");
+            .HasPersistenceType("timestamp with time zone");
 
         builder.HasIndex(x => new { x.Status, x.UpdatedAt })
             .HasDatabaseName("ix_import_sessions_status_updated_at");
@@ -64,23 +65,23 @@ public sealed class ImportSessionItemConfiguration : IEntityTypeConfiguration<Im
         builder.Property(x => x.RelativePath).HasColumnName("relative_path").HasMaxLength(2048).IsRequired();
         builder.Property(x => x.FileName).HasColumnName("file_name").HasMaxLength(1024).IsRequired();
         builder.Property(x => x.FileSizeBytes).HasColumnName("file_size_bytes").IsRequired();
-        builder.Property(x => x.FileMtime).HasColumnName("file_mtime").HasColumnType("timestamp with time zone");
-        builder.Property(x => x.SidecarsJson).HasColumnName("sidecars").HasColumnType("jsonb");
+        builder.Property(x => x.FileMtime).HasColumnName("file_mtime").HasPersistenceType("timestamp with time zone");
+        builder.Property(x => x.SidecarsJson).HasColumnName("sidecars").HasPersistenceType("jsonb");
         builder.Property(x => x.Provider).HasColumnName("provider").HasMaxLength(255);
         builder.Property(x => x.SourceMediaId).HasColumnName("source_media_id").HasMaxLength(512);
         builder.Property(x => x.SourceUrl).HasColumnName("source_url").HasMaxLength(4096);
         builder.Property(x => x.Title).HasColumnName("title").HasMaxLength(1024);
-        builder.Property(x => x.ProbeMetadataJson).HasColumnName("probe_metadata").HasColumnType("jsonb");
-        builder.Property(x => x.ScanMetadataJson).HasColumnName("scan_metadata").HasColumnType("jsonb");
-        builder.Property(x => x.EnrichedMetadataJson).HasColumnName("enriched_metadata").HasColumnType("jsonb");
-        builder.Property(x => x.UserMetadataJson).HasColumnName("user_metadata").HasColumnType("jsonb");
-        builder.Property(x => x.MetadataState).HasColumnName("metadata_state").HasColumnType("imports.import_session_item_metadata_state").IsRequired();
+        builder.Property(x => x.ProbeMetadataJson).HasColumnName("probe_metadata").HasPersistenceType("jsonb");
+        builder.Property(x => x.ScanMetadataJson).HasColumnName("scan_metadata").HasPersistenceType("jsonb");
+        builder.Property(x => x.EnrichedMetadataJson).HasColumnName("enriched_metadata").HasPersistenceType("jsonb");
+        builder.Property(x => x.UserMetadataJson).HasColumnName("user_metadata").HasPersistenceType("jsonb");
+        builder.Property(x => x.MetadataState).HasColumnName("metadata_state").HasPersistenceType("imports.import_session_item_metadata_state").IsRequired();
         builder.Property(x => x.MetadataSource).HasColumnName("metadata_source").HasConversion<string>().HasMaxLength(32).IsRequired();
         builder.Property(x => x.MetadataFetchState).HasColumnName("metadata_fetch_state").HasConversion<string>().HasMaxLength(32).IsRequired();
         builder.Property(x => x.MetadataFetchAttempt).HasColumnName("metadata_fetch_attempt").IsRequired();
         builder.Property(x => x.MetadataFetchMessage).HasColumnName("metadata_fetch_message").HasMaxLength(4096);
         builder.Property(x => x.Excluded).HasColumnName("excluded").IsRequired();
-        builder.Property(x => x.Status).HasColumnName("status").HasColumnType("imports.import_session_item_status").IsRequired();
+        builder.Property(x => x.Status).HasColumnName("status").HasPersistenceType("imports.import_session_item_status").IsRequired();
         builder.Property(x => x.Attempt).HasColumnName("attempt").IsRequired();
         builder.Property(x => x.ContentHashXxh128).HasColumnName("content_hash_xxh128").HasMaxLength(64);
         builder.Property(x => x.MediaGuid).HasColumnName("media_guid");
@@ -89,23 +90,23 @@ public sealed class ImportSessionItemConfiguration : IEntityTypeConfiguration<Im
         builder.Property(x => x.MetaStoragePath).HasColumnName("meta_storage_path").HasMaxLength(2048);
         builder.Property(x => x.InfoJsonStoragePath).HasColumnName("info_json_storage_path").HasMaxLength(2048);
         builder.Property(x => x.ThumbnailStoragePath).HasColumnName("thumbnail_storage_path").HasMaxLength(2048);
-        builder.Property(x => x.CaptionStoragePathsJson).HasColumnName("caption_storage_paths").HasColumnType("jsonb");
+        builder.Property(x => x.CaptionStoragePathsJson).HasColumnName("caption_storage_paths").HasPersistenceType("jsonb");
         builder.Property(x => x.ErrorCode).HasColumnName("error_code").HasMaxLength(255);
         builder.Property(x => x.ErrorMessage).HasColumnName("error_message").HasMaxLength(4096);
         builder.Property(x => x.CreatedAt)
             .HasColumnName("created_at")
-            .HasColumnType("timestamp with time zone")
-            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .HasPersistenceType("timestamp with time zone")
+            .HasPersistenceTimestampDefault()
             .ValueGeneratedOnAdd()
             .IsRequired();
         builder.Property(x => x.UpdatedAt)
             .HasColumnName("updated_at")
-            .HasColumnType("timestamp with time zone")
-            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .HasPersistenceType("timestamp with time zone")
+            .HasPersistenceTimestampDefault()
             .IsRequired();
         builder.Property(x => x.CompletedAt)
             .HasColumnName("completed_at")
-            .HasColumnType("timestamp with time zone");
+            .HasPersistenceType("timestamp with time zone");
 
         builder.HasIndex(x => new { x.SessionId, x.RelativePath })
             .IsUnique()
@@ -142,8 +143,8 @@ public sealed class ImportSessionMappingConfiguration : IEntityTypeConfiguration
         builder.Property(x => x.UnmatchedCount).HasColumnName("unmatched_count").IsRequired();
         builder.Property(x => x.AppliedAt)
             .HasColumnName("applied_at")
-            .HasColumnType("timestamp with time zone")
-            .HasDefaultValueSql("CURRENT_TIMESTAMP")
+            .HasPersistenceType("timestamp with time zone")
+            .HasPersistenceTimestampDefault()
             .ValueGeneratedOnAdd()
             .IsRequired();
 
