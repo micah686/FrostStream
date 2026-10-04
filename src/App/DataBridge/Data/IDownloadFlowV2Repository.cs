@@ -42,6 +42,7 @@ public interface IDownloadFlowV2Repository
     Task<IReadOnlyList<ActiveDownloadRun>> ListActiveRunsAsync(Duration minAge, CancellationToken ct = default);
     Task<StartupReconciliationResult> ReconcileForStartupAsync(CancellationToken ct = default);
 
+    Task<bool> AcceptGroupRequestAsync(DownloadGroupRequested request, Instant generationStartedAt, CancellationToken ct = default);
     Task CreateGroupIfMissingAsync(DownloadGroupRequested request, CancellationToken ct = default);
     Task SetGroupStatusAsync(Guid groupId, DownloadGroupStatus status, string? failureCode = null,
         string? failureMessage = null, CancellationToken ct = default);
@@ -86,7 +87,10 @@ public sealed record StartupReconciliationResult(
     int StoppedQueuedJobs,
     int FailedActiveJobs,
     int ExpiredLeases,
-    int FailedActiveGroups);
+    int FailedActiveGroups)
+{
+    public Instant GenerationStartedAt { get; init; }
+}
 
 public sealed record ExpiredDownloadLease(Guid JobId, Guid RunId, Guid DispatchId);
 

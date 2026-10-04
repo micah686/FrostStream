@@ -587,6 +587,7 @@ public sealed class CoreRepositoryPersistenceTests
         private readonly string? databaseName;
         public DataBridgeDbContext Db { get; }
         public ApplicationDatabase Database { get; }
+        public IServiceProvider Services => host.Services;
         public IServiceScopeFactory ScopeFactory => host.Services.GetRequiredService<IServiceScopeFactory>();
         private Fixture(IHost host, string? directory, string? adminConnection, string? databaseName)
         {
@@ -595,7 +596,7 @@ public sealed class CoreRepositoryPersistenceTests
             Db = scope.ServiceProvider.GetRequiredService<DataBridgeDbContext>();
             Database = host.Services.GetRequiredService<ApplicationDatabase>();
         }
-        public static async Task<Fixture> Create(bool postgres)
+        public static async Task<Fixture> Create(bool postgres, Action<IHostApplicationBuilder>? configure = null)
         {
             var builder = Host.CreateApplicationBuilder();
             builder.Logging.ClearProviders();
@@ -619,6 +620,7 @@ public sealed class CoreRepositoryPersistenceTests
                 builder.Configuration["Persistence:Sqlite:Path"] = Path.Combine(dir, "core.db");
             }
             builder.AddDataBridgePersistence();
+            configure?.Invoke(builder);
             var host = builder.Build();
             host.InitializeDataBridge();
             return new Fixture(host, dir, admin, name);

@@ -1122,23 +1122,35 @@ public sealed class DownloadFlowV2Repository(
             notifications.Add((job, previous));
         }
 
-        var activeRunIds = active.Where(x => x.CurrentRunId is not null).Select(x => x.CurrentRunId!.Value).ToArray();
-        if (activeRunIds.Length > 0)
+        // Settle every unfinished run, including queued and historical runs whose job has already
+        // advanced. Leaving them live makes a later startup/retention sweep treat them as resumable.
+        var unfinishedRuns = await db.DownloadJobRuns.Where(r => r.Status == DownloadJobStatus.Queued
+            || r.Status == DownloadJobStatus.Running || r.Status == DownloadJobStatus.Stopping
+            || r.Status == DownloadJobStatus.Compensating).ToListAsync(ct);
+        foreach (var run in unfinishedRuns)
         {
-            var attempts = await db.DownloadStageAttempts
-                .Where(x => activeRunIds.Contains(x.RunId)
-                            && (x.Status == DownloadStageStatus.Pending
-                                || x.Status == DownloadStageStatus.Running
-                                || x.Status == DownloadStageStatus.RetryWaiting))
-                .ToListAsync(ct);
+            var stopped = run.Status == DownloadJobStatus.Queued;
+            run.Status = stopped ? DownloadJobStatus.Stopped : DownloadJobStatus.Failed;
+            run.StageStatus = stopped ? DownloadStageStatus.Stopped : DownloadStageStatus.Failed;
+            run.FailureKind = FailureKind.Interrupted;
+            run.FailureCode = stopped ? "service_restarted_before_start" : "service_restarted";
+            run.FailureMessage = "The coordinating service restarted. Start the job explicitly to create a fresh run.";
+            run.UpdatedAt = now; run.EndedAt = now;
+        }
+        var interruptedRunIds = unfinishedRuns.Select(r => r.RunId)
+            .Concat(active.Where(x => x.CurrentRunId != null).Select(x => x.CurrentRunId!.Value)).Distinct().ToArray();
+        foreach (var batch in interruptedRunIds.Chunk(ApplicationBatches.WriteBatchSize))
+        {
+            var attempts = await db.DownloadStageAttempts.Where(x => batch.Contains(x.RunId)
+                && (x.Status == DownloadStageStatus.Pending || x.Status == DownloadStageStatus.Running
+                    || x.Status == DownloadStageStatus.RetryWaiting)).ToListAsync(ct);
             foreach (var attempt in attempts)
             {
                 attempt.Status = DownloadStageStatus.Failed;
                 attempt.FailureKind = FailureKind.Interrupted;
                 attempt.FailureCode = "service_restarted";
                 attempt.FailureMessage = "The coordinating service restarted during this attempt.";
-                attempt.UpdatedAt = now;
-                attempt.EndedAt = now;
+                attempt.UpdatedAt = now; attempt.EndedAt = now;
             }
         }
 
@@ -1165,8 +1177,32 @@ public sealed class DownloadFlowV2Repository(
             await NotifyAsync(job, previous, ct);
         foreach (var correlationId in notifications.Select(x => x.Job.CorrelationId).Distinct())
             await RefreshGroupAggregateAsync(correlationId, ct);
-        return new StartupReconciliationResult(queued.Count, active.Count, activeLeases.Count, activeGroups.Count);
+        var generation = await DownloadStartupGeneration.AdvanceAsync(db, clock.GetCurrentInstant(), ct);
+        return new StartupReconciliationResult(queued.Count, active.Count, activeLeases.Count, activeGroups.Count)
+            { GenerationStartedAt = generation };
     }
+
+    public Task<bool> AcceptGroupRequestAsync(DownloadGroupRequested request, Instant generationStartedAt, CancellationToken ct = default)
+        => db.MutateAsync("DownloadFlowV2Repository.AcceptGroupRequestAsync", async () =>
+        {
+            var existing = await db.DownloadGroups.FirstOrDefaultAsync(g => g.GroupId == request.GroupId || g.CorrelationId == request.CorrelationId, ct);
+            if (request.OccurredAt < generationStartedAt)
+            {
+                // Never let old queued requests stop a group or child explicitly started in this generation.
+                if (existing is not null) return false;
+                await CreateGroupIfMissingAsync(request,ct);
+                if (request.Kind == DownloadGroupKind.Direct && request.DirectRequest is { } direct)
+                    await CreateInitialRunAsync(direct,autoStart:false,ct);
+                await SetGroupStatusAsync(request.GroupId,DownloadGroupStatus.Stopped,ct:ct);
+                return false;
+            }
+            if (existing is not null && (existing.GroupId != request.GroupId || existing.CorrelationId != request.CorrelationId
+                || existing.Status is DownloadGroupStatus.Failed or DownloadGroupStatus.Stopped or DownloadGroupStatus.Stopping
+                    or DownloadGroupStatus.Completed or DownloadGroupStatus.CompletedWithWarnings or DownloadGroupStatus.CompletedWithFailures))
+                return false;
+            await CreateGroupIfMissingAsync(request,ct);
+            return true;
+        },ct);
 
     public Task CreateGroupIfMissingAsync(DownloadGroupRequested request, CancellationToken ct = default)
         => db.MutateAsync("DownloadFlowV2Repository.CreateGroupIfMissingAsync", () => CreateGroupIfMissingAsyncCore(request, ct), ct);
@@ -1218,6 +1254,7 @@ public sealed class DownloadFlowV2Repository(
         if (group is null)
             return;
         var stopInProgress = group.Status == DownloadGroupStatus.Stopping;
+        var interrupted = group.Status == DownloadGroupStatus.Failed && group.FailureCode == "service_restarted";
         var children = await db.DownloadJobs.AsNoTracking().Where(x => x.CorrelationId == correlationId)
             .Select(x => new { x.Status, x.WarningCount }).ToListAsync(ct);
         var statuses = children.Select(x => x.Status).ToList();
@@ -1228,7 +1265,7 @@ public sealed class DownloadFlowV2Repository(
         group.FailedJobs = children.Count(x => x.Status == DownloadJobStatus.Failed);
         var terminalCount = statuses.Count(x => x is DownloadJobStatus.Completed or DownloadJobStatus.CompletedWithWarnings
             or DownloadJobStatus.AlreadyDownloaded or DownloadJobStatus.Ignored or DownloadJobStatus.Failed or DownloadJobStatus.Stopped);
-        if (children.Count > 0 && terminalCount == children.Count)
+        if (!interrupted && children.Count > 0 && terminalCount == children.Count)
         {
             group.Status = stopInProgress && statuses.Any(x => x == DownloadJobStatus.Stopped)
                 ? DownloadGroupStatus.Stopped
@@ -1238,7 +1275,7 @@ public sealed class DownloadFlowV2Repository(
                 : DownloadGroupStatus.Completed;
             group.CompletedAt = clock.GetCurrentInstant();
         }
-        else if (children.Count > 0 && !stopInProgress)
+        else if (children.Count > 0 && terminalCount < children.Count && !stopInProgress)
         {
             group.Status = DownloadGroupStatus.Running;
             group.CompletedAt = null;
@@ -1251,16 +1288,17 @@ public sealed class DownloadFlowV2Repository(
         => db.DownloadGroups.AsNoTracking().AnyAsync(x => x.CorrelationId == correlationId
             && x.Status != DownloadGroupStatus.Stopping
             && x.Status != DownloadGroupStatus.Stopped
-            && x.Status != DownloadGroupStatus.Failed, ct);
+            && x.Status != DownloadGroupStatus.Failed
+            && x.FailureCode != "service_restarted", ct);
 
     public async Task<bool> CanAcceptGroupChildAsync(Guid correlationId, CancellationToken ct = default)
     {
-        var status = await db.DownloadGroups.AsNoTracking()
+        var group = await db.DownloadGroups.AsNoTracking()
             .Where(x => x.CorrelationId == correlationId)
-            .Select(x => (DownloadGroupStatus?)x.Status)
+            .Select(x => new { x.Status, x.FailureCode })
             .FirstOrDefaultAsync(ct);
-        return status is null || status is not (DownloadGroupStatus.Stopping
-            or DownloadGroupStatus.Stopped or DownloadGroupStatus.Failed);
+        return group is null || (group.FailureCode != "service_restarted"
+            && group.Status is not (DownloadGroupStatus.Stopping or DownloadGroupStatus.Stopped or DownloadGroupStatus.Failed));
     }
 
     public Task OpenProviderCircuitAsync(string provider, string reason, CancellationToken ct = default)

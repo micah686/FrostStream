@@ -2,7 +2,7 @@
 
 The baseline represents Full's application catalog after unchanged PostgreSQL migrations 1–97. Capture used a fresh, disposable PostgreSQL 18.3 database; the normalized manifest has 82 application tables, 66 foreign keys, 16 application check constraints and 96 non-primary indexes. All 45 EF entity tables and their column names match the catalog. The remaining tables include metadata graphs, policies, watch/likes, statistics, provider circuits and live-chat markers. Removed maintenance features and Cleipnir runtime tables are absent from the final application catalog.
 
-`001-baseline.sql` is embedded alongside `postgres-v97-manifest.json`. SQLite applies it with the seeds and a row in `froststream_schema_versions` in one immediate writer transaction. The version is **1**, independently of PostgreSQL's version **97**. Repeated initialization preserves existing data and edits. Unknown/newer histories, a changed baseline checksum and unversioned databases containing tables are rejected. Version tracking does not repair a manually damaged schema. Future schema changes require appended migrations (2f); do not edit a released baseline.
+`001-baseline.sql` is embedded alongside `postgres-v97-manifest.json`. SQLite applies it with the seeds and a row in `froststream_schema_versions` in one immediate writer transaction. The version is **1**, independently of PostgreSQL's version **97**. Repeated initialization preserves existing data and edits. Unknown/newer histories, a changed baseline checksum and unversioned databases containing tables are rejected. Version tracking does not repair a manually damaged schema. Current initialization appends application v2 after this immutable baseline and initializes workflow v1 independently. Future changes require appended migrations; see the [upgrade and restart contract](../../Schema/README.md).
 
 ## Initialize an experimental Lite database
 
@@ -18,7 +18,7 @@ dotnet run --project src/App/Lite/Lite.csproj --no-launch-profile -- \
 
 Run the same command again to verify repeatability. `Persistence:Sqlite:Path` defaults to `/data/frostreamlitedb`; relative paths resolve against the host content root. It must name a persistent file, not `:memory:` or a SQLite URI. `Persistence:Sqlite:BusyTimeoutSeconds` defaults to 5 and accepts 1–60. The same keys can be supplied with environment variables, e.g. `Persistence__Sqlite__Enabled=true`.
 
-Initialization-only composition registers the selected database, runs migrations and exits without starting application services or an HTTP listener. It works with Full/PostgreSQL too, which is useful for disposable catalog capture. Normal startup remains on PostgreSQL unless SQLite is explicitly selected. Selecting SQLite in Full is a configuration error. Normal SQLite runtime startup is rejected until the repository/workflow/restart work is ready; database initialization was the scope of 2b. Core repository adapters and verification are now available in [2c](../../Queries/README.md); normal runtime still depends on 2d–2f.
+Initialization-only composition registers the selected database, runs migrations and exits without starting application services or an HTTP listener. It works with Full/PostgreSQL too, which is useful for disposable catalog capture. Normal startup remains on PostgreSQL unless SQLite is explicitly selected. Selecting SQLite in Full is a configuration error. Phase 2 persistence, workflows and restart reconciliation are complete. Normal Lite startup still requires Phase 3 local infrastructure adapters. Core repository contracts are documented in [the query adapters](../../Queries/README.md).
 
 ## Connection and storage rules
 
@@ -48,4 +48,4 @@ dotnet run --project Tests/UnitTests/UnitTests.csproj -- \
   --treenode-filter '/*/*/SqlitePersistenceFoundationTests/*'
 ```
 
-Use `sqlite_baseline.py` without `--check` only while authoring/reviewing a baseline. An unchanged cutoff does not authorize silently changing a released SQLite v1. Core repository equivalence is verified by 2c. Bulk/contention, workflow durability and upgrades remain 2d–2f acceptance work.
+Use `sqlite_baseline.py` without `--check` only while authoring/reviewing a baseline. An unchanged cutoff does not authorize silently changing a released SQLite v1. Core repository equivalence is verified by 2c. Bulk/contention, workflow durability and upgrades are verified in 2d–2f.

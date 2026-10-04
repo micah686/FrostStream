@@ -41,8 +41,6 @@ public static class DataBridgeModule
         builder.AddDeployment();
         builder.AddDataBridgePersistence();
         var persistence = PersistenceOptions.FromConfiguration(builder.Configuration, builder.Environment.ContentRootPath);
-        if (persistence.Provider == PersistenceProvider.Sqlite)
-            throw new InvalidOperationException("SQLite runtime is not available until Phase 2 is complete. Use Persistence:InitializeOnly=true to initialize the experimental database.");
         builder.Services.AddApplicationTransport(builder.Configuration);
 
         var connectionString = builder.Configuration.GetConnectionString("froststreamdb")
@@ -80,6 +78,10 @@ public static class DataBridgeModule
             // Interrupted; graceful host teardown never implies automatic resume.
             .GracefulShutdown(enable: true)
             .RegisterFlowsAutomatically(typeof(DataBridgeModule).Assembly));
+        // Host construction may instantiate flows; their watchdogs are gated by the store until
+        // reconciliation commits. Every application consumer starts after this blocking service.
+        builder.Services.PostConfigure<HostOptions>(o => o.ServicesStartConcurrently = false);
+        builder.Services.AddHostedService<DownloadFlowStartupService>();
 
         builder.Services.AddSingleton<IDownloadJobStateNotifier, DownloadJobStateNotifier>();
         builder.Services.AddScoped<IDownloadJobsRepository, DownloadJobsRepository>();
@@ -164,7 +166,6 @@ public static class DataBridgeModule
         builder.Services.AddHostedService<CreatorDiscoveryConsumerService>();
         builder.Services.AddHostedService<WatchStateConsumerService>();
         builder.Services.AddHostedService<BackgroundJobConsumerService>();
-        builder.Services.AddHostedService<DownloadFlowStartupService>();
         builder.Services.AddHostedService<DownloadAdminConsumerService>();
         builder.Services.AddHostedService<DownloadLeaseMonitorService>();
         builder.Services.AddHostedService<DownloadQueueConsumerService>();

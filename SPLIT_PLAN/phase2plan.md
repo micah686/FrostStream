@@ -62,6 +62,8 @@ Phase 2 is split into reviewable increments so each can be completed and checked
 
 ## 2f — Upgrade path and restart reconciliation
 
+**Status: complete (2026-10-03).** See [schema evolution and restart contracts](../src/App/DataBridge/Persistence/Schema/README.md) and the [2f handoff](phase2-checklist.md#2f-handoff). Phase 2 is complete and Phase 3 is unblocked. Lite persistence is ready; ordinary Lite startup still requires Phase 3 local infrastructure adapters.
+
 - Complete shared schema evolution support where possible and isolate provider-specific migration operations where necessary.
 - Verify fresh installs and upgrades from each supported SQLite baseline; retain and verify Full's existing PostgreSQL migration sequence.
 - Implement and verify Lite download restart reconciliation: queued jobs stop, active jobs become interrupted/failed, and stale queue messages cannot restart invalidated runs.

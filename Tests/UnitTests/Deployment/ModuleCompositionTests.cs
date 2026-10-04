@@ -52,7 +52,7 @@ public sealed class ModuleCompositionTests
         var builder = Builder();
         builder.Configuration["Deployment:Mode"] = "Lite";
         DeploymentOptions.FromConfiguration(builder.Configuration).Mode.ShouldBe(DeploymentMode.Lite);
-        Should.Throw<NotSupportedException>(() => builder.AddLiteModules()).Message.ShouldContain("phases 2 and 3");
+        Should.Throw<NotSupportedException>(() => builder.AddLiteModules()).Message.ShouldContain("phase 3");
     }
 
     [Test]

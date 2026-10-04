@@ -136,8 +136,8 @@ public static class ApplicationMutation
             ("CreatorDiscoveryRepository.CreateOrReuseSourceAsync", "uq_creator_sources_source_url") => true,
             ("PlaylistsRepository.CreateOrReuseAsync", "ux_playlists_source_url") => true,
             ("PlaylistsRepository.FanOutEntryAsync", "ux_playlist_items_playlist_id_entry_url" or "PK_download_jobs") => true,
-            ("DownloadFlowV2Repository.CreateInitialRunAsync", "PK_download_jobs") => true,
-            ("DownloadFlowV2Repository.CreateGroupIfMissingAsync", "PK_download_groups" or "ux_download_groups_correlation_id") => true,
+            ("DownloadFlowV2Repository.CreateInitialRunAsync" or "DownloadFlowV2Repository.AcceptGroupRequestAsync", "PK_download_jobs") => true,
+            ("DownloadFlowV2Repository.CreateGroupIfMissingAsync" or "DownloadFlowV2Repository.AcceptGroupRequestAsync", "PK_download_groups" or "ux_download_groups_correlation_id") => true,
             ("DownloadFlowV2Repository.UpsertArtifactAsync", "ux_download_artifacts_run_key") => true,
             _ => false
         };

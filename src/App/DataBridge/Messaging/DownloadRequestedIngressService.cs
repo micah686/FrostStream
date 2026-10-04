@@ -24,8 +24,9 @@ public sealed class DownloadRequestedIngressService(
             HandleAsync,
             cancellationToken: stoppingToken);
 
-    private async Task HandleAsync(IDurableMessageContext<DownloadRequested> context)
+    internal async Task HandleAsync(IDurableMessageContext<DownloadRequested> context)
     {
+        if (!startupState.IsReady) { await context.NackAsync(); return; }
         var request = context.Message;
         try
         {

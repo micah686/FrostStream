@@ -105,6 +105,7 @@ Migration files are listed separately. Registration and reader helpers are inclu
 | [ApplicationParameters.cs](../src/App/DataBridge/Persistence/ApplicationParameters.cs) | application adapter, Npgsql |
 | [ApplicationQueries.cs](../src/App/DataBridge/Persistence/ApplicationQueries.cs) | application adapter, provider query catalog |
 | [ApplicationRetention.cs](../src/App/DataBridge/Persistence/ApplicationRetention.cs) | application adapter, set update/delete |
+| [DownloadStartupGeneration.cs](../src/App/DataBridge/Persistence/DownloadStartupGeneration.cs) | application adapter, Npgsql, transaction, upsert |
 | [PersistenceFunctions.cs](../src/App/DataBridge/Persistence/PersistenceFunctions.cs) | query dialect |
 | [PersistenceModelConfiguration.cs](../src/App/DataBridge/Persistence/PersistenceModelConfiguration.cs) | query dialect |
 | [PersistenceRegistration.cs](../src/App/DataBridge/Persistence/PersistenceRegistration.cs) | application adapter, SQLite, Npgsql |
@@ -124,6 +125,7 @@ Migration files are listed separately. Registration and reader helpers are inclu
 | [SqliteConnectionFactory.cs](../src/App/DataBridge/Persistence/Sqlite/SqliteConnectionFactory.cs) | SQLite |
 | [SqliteConnectionSetupInterceptor.cs](../src/App/DataBridge/Persistence/Sqlite/SqliteConnectionSetupInterceptor.cs) | SQLite |
 | [SqliteSchemaInitializer.cs](../src/App/DataBridge/Persistence/Sqlite/SqliteSchemaInitializer.cs) | SQLite, transaction |
+| [SqliteSchemaMigration.cs](../src/App/DataBridge/Persistence/Sqlite/SqliteSchemaMigration.cs) | SQLite, transaction |
 | [SqliteFunctionStore.cs](../src/App/DataBridge/Persistence/Workflows/SqliteFunctionStore.cs) | SQLite, upsert |
 | [SqliteWorkflowDatabase.cs](../src/App/DataBridge/Persistence/Workflows/SqliteWorkflowDatabase.cs) | SQLite, transaction |
 | [SqliteWorkflowStores.cs](../src/App/DataBridge/Persistence/Workflows/SqliteWorkflowStores.cs) | upsert |
@@ -237,5 +239,6 @@ Full uses FluentMigrator, not EF migrations. The list records source history, no
 | 95 | [095_AddDirectNetworkStorageSettings.cs](../src/App/DataBridge/Migrations/FluentMigrator/095_AddDirectNetworkStorageSettings.cs) | Add direct NFS, SMB, and CIFS connection settings | Default |
 | 96 | [096_AddMediaLiveChatMarker.cs](../src/App/DataBridge/Migrations/FluentMigrator/096_AddMediaLiveChatMarker.cs) | Add metadata.media_live_chat ingestion marker table | Default |
 | 97 | [097_AddLiveChatUploadDownloadStage.cs](../src/App/DataBridge/Migrations/FluentMigrator/097_AddLiveChatUploadDownloadStage.cs) | Add 'live_chat_upload' download stage for live chat replay artifacts | None |
+| 98 | [098_AddDownloadStartupGeneration.cs](../src/App/DataBridge/Migrations/FluentMigrator/098_AddDownloadStartupGeneration.cs) | Persist download startup generation boundary | Default |
 
-Source history contains 97 distinct consecutive versions (1–97).
+Source history contains 98 distinct consecutive versions (1–98); SQLite baseline cutoff remains M097.

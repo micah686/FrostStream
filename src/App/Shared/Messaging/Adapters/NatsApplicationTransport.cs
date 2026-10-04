@@ -93,7 +93,7 @@ public static class ApplicationTransportRegistration
         {
             Shared.Deployment.DeploymentMode.Full => services.AddNatsApplicationTransport(),
             Shared.Deployment.DeploymentMode.Lite => throw new NotSupportedException(
-                "Deployment:Mode=Lite requires the SQLite and local infrastructure adapters from phases 2 and 3. " +
+                "Deployment:Mode=Lite requires the local infrastructure adapters from phase 3. " +
                 "The phase-1 combined host can be exercised with Deployment:Mode=Full and existing Full infrastructure."),
             _ => throw new InvalidOperationException("Unsupported deployment mode.")
         };

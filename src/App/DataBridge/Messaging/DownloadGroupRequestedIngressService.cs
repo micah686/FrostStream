@@ -23,25 +23,16 @@ public sealed class DownloadGroupRequestedIngressService(
             HandleAsync,
             cancellationToken: stoppingToken);
 
-    private async Task HandleAsync(IDurableMessageContext<DownloadGroupRequested> context)
+    internal async Task HandleAsync(IDurableMessageContext<DownloadGroupRequested> context)
     {
         var request = context.Message;
         try
         {
             using var scope = scopeFactory.CreateScope();
             var repository = scope.ServiceProvider.GetRequiredService<IDownloadFlowV2Repository>();
-            await repository.CreateGroupIfMissingAsync(request);
-
-            // JetStream may still contain a request published by the prior process generation.
-            // Make it visible to the user, but never turn service startup into an implicit Start.
-            if (request.OccurredAt < startupState.GenerationStartedAt)
+            if (!startupState.IsReady) { await context.NackAsync(); return; }
+            if (!await repository.AcceptGroupRequestAsync(request,startupState.GenerationStartedAt))
             {
-                // A direct group already contains its only child, so persist that child as Stopped
-                // as well. It then appears on the Jobs page and the user can explicitly Start a
-                // fresh run. Collection groups cannot invent children until discovery is requested.
-                if (request.Kind == DownloadGroupKind.Direct && request.DirectRequest is { } direct)
-                    await repository.CreateInitialRunAsync(direct, autoStart: false);
-                await repository.SetGroupStatusAsync(request.GroupId, DownloadGroupStatus.Stopped);
                 await context.AckAsync();
                 return;
             }

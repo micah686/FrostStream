@@ -1,6 +1,6 @@
 # Durable workflow persistence (Phase 2e)
 
-Full retains `Cleipnir.Flows.PostgresSql` 4.2.5's `UsePostgresStore`, table prefix `flows`, and `Search Path=cleipnir,public`. SQLite uses `SqliteFunctionStore` and the same flows and `NodaTimeFlowSerializer`. The application initializer creates SQLite workflow tables before any hosted consumers start, including initialization-only Lite. Normal SQLite runtime remains gated through **2f**.
+Full retains `Cleipnir.Flows.PostgresSql` 4.2.5's `UsePostgresStore`, table prefix `flows`, and `Search Path=cleipnir,public`. SQLite uses `SqliteFunctionStore` and the same flows and `NodaTimeFlowSerializer`. The application initializer creates SQLite workflow tables before any hosted consumers start, including initialization-only Lite. Phase 2 persistence is complete. Normal SQLite startup requires the Phase 3 local infrastructure adapters. See the [startup and upgrade handoff](../Schema/README.md).
 
 ## Verified pinned contract
 
@@ -18,7 +18,7 @@ The effective package pins are in `src/Directory.Packages.props`. The installed 
 | `Utilities` / `IUnderlyingRegister` | Separate register/arbitrator namespaces with durable set-if-empty, compare-and-swap, get, exists and conditional/unconditional deletion. |
 | `IMigrator` | Independently versioned, repeatable workflow schema initialization. |
 
-These interfaces do **not** accept cancellation tokens. Application retention discovery does; workflow SQLite operations use the shared finite busy timeout rather than inventing incompatible overloads. Cancellation at the workflow level uses existing control-panel failure/deletion, not a new store status. Import work can be recovered by watchdogs; unfinished download flows remain subject to the application's intentional startup invalidation in `DownloadFlowStartupService` (integration verification in 2f).
+These interfaces do **not** accept cancellation tokens. Application retention discovery does; workflow SQLite operations use the shared finite busy timeout rather than inventing incompatible overloads. Cancellation at the workflow level uses existing control-panel failure/deletion, not a new store status. Import work can be recovered by watchdogs; unfinished download flows remain subject to the application's intentional startup invalidation in `DownloadFlowStartupService` (integration verified in 2f).
 
 ## SQLite invariants
 

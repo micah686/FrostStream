@@ -7,13 +7,20 @@ using Quartz;
 
 namespace DataBridge.Persistence.Sqlite;
 
-internal sealed class SqliteSchemaInitializer(SqliteConnectionFactory factory, IClock clock) : IApplicationSchemaInitializer
+internal sealed class SqliteSchemaInitializer(SqliteConnectionFactory factory, IClock clock, IReadOnlyList<SqliteSchemaMigration>? migrations = null) : IApplicationSchemaInitializer
 {
     // Includes seeds as well as DDL. A released baseline must not silently change under an existing DB.
     internal static string Checksum { get; } = Convert.ToHexString(SHA256.HashData(
         Encoding.UTF8.GetBytes(SqliteBaseline.Sql + "\n" + SqliteBaseline.ManifestJson)));
 
     public void Initialize(CancellationToken cancellationToken = default)
+    {
+        InitializeBaseline(cancellationToken);
+        using var connection = factory.OpenConnection(cancellationToken);
+        SqliteSchemaMigrations.Apply(connection, migrations ?? SqliteSchemaMigrations.All, cancellationToken, clock.GetCurrentInstant());
+    }
+
+    private void InitializeBaseline(CancellationToken cancellationToken)
     {
         using var connection = factory.OpenConnection(cancellationToken);
         // Acquire writer ownership before checking the version. Racing initializers either see the
@@ -42,7 +49,7 @@ internal sealed class SqliteSchemaInitializer(SqliteConnectionFactory factory, I
         {
             if (reader.Read())
             {
-                if (reader.GetInt32(0) != SqliteBaseline.Version || reader.GetString(1) != Checksum || reader.Read())
+                if (reader.GetInt32(0) != SqliteBaseline.Version || reader.GetString(1) != Checksum)
                     throw new InvalidOperationException("SQLite migration history is newer, unknown or has a different baseline checksum. Use a compatible application version.");
                 cancellationToken.ThrowIfCancellationRequested();
                 transaction.Commit();

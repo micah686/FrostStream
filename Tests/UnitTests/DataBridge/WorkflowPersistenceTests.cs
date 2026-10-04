@@ -34,7 +34,7 @@ public sealed class WorkflowPersistenceTests
     private static StoredMessage Message(string value) => new(Bytes(value), Bytes("type"), "key");
     private static string PostgresConnection(Fixture f) => new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable("FROSTSTREAM_TEST_POSTGRES"))
         { Database = new NpgsqlConnectionStringBuilder(f.Db.Database.GetConnectionString()).Database, SearchPath = "cleipnir,public" }.ConnectionString;
-    private static async Task<IFunctionStore> Store(Fixture f)
+    internal static async Task<IFunctionStore> Store(Fixture f)
     {
         IFunctionStore store;
         if (f.Database.Provider == PersistenceProvider.Sqlite)

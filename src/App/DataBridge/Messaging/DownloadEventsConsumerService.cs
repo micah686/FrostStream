@@ -45,7 +45,7 @@ public sealed class DownloadEventsConsumerService(
         where T : class, IFlowMessage
         => consumer.ConsumePullAsync<T>(stream, ConsumerName.From(durable), HandleAsync, cancellationToken: stoppingToken);
 
-    private async Task HandleAsync<T>(IDurableMessageContext<T> context) where T : class, IFlowMessage
+    internal async Task HandleAsync<T>(IDurableMessageContext<T> context) where T : class, IFlowMessage
     {
         var evt = context.Message;
         try

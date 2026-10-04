@@ -76,9 +76,9 @@ def generate():
         version, no_transaction, description = m.groups()
         versions.append(int(version))
         lines.append(f'| {version} | {link(p)} | {description} | {"None" if no_transaction else "Default"} |')
-    if sorted(versions) != list(range(1, 98)):
+    if sorted(versions) != list(range(1, 99)):
         raise ValueError('Migration history changed; review the baseline cutoff and expected version range')
-    lines += ['', 'Source history contains 97 distinct consecutive versions (1–97).', '']
+    lines += ['', 'Source history contains 98 distinct consecutive versions (1–98); SQLite baseline cutoff remains M097.', '']
     return '\n'.join(lines)
 
 if __name__ == '__main__':
@@ -89,7 +89,7 @@ if __name__ == '__main__':
     if args.check:
         if not OUTPUT.exists() or OUTPUT.read_text() != content:
             parser.exit(1, 'Persistence inventory is stale; regenerate and review it.\n')
-        print('Persistence inventory matches application sources; migrations 1–97 verified.')
+        print('Persistence inventory matches application sources; migrations 1–98 verified; baseline cutoff M097.')
     else:
         OUTPUT.write_text(content)
         print(f'Wrote {OUTPUT.relative_to(ROOT)}')
