@@ -6,13 +6,18 @@ using System.Security.Claims;
 
 namespace WebAPI.Features.Media;
 
+public interface IMediaAccessChecker
+{
+    Task<IActionResult?> CheckWatchAccessAsync(ClaimsPrincipal? user, Guid mediaGuid, CancellationToken cancellationToken);
+}
+
 /// <summary>
 /// Evaluates watch-time access to a media item via DataBridge. Shared by the progressive watch
 /// endpoints and the HLS streaming endpoints. Returns <c>null</c> when playback is permitted, or a
 /// non-null result (403 when restricted, 503 when the check is unreachable) that the caller must
 /// return instead of serving the stream. Fails closed.
 /// </summary>
-public sealed class MediaAccessChecker(IMessageBus messageBus, ILogger<MediaAccessChecker> logger)
+public sealed class MediaAccessChecker(IMessageBus messageBus, ILogger<MediaAccessChecker> logger) : IMediaAccessChecker
 {
     private static readonly TimeSpan QueryTimeout = TimeSpan.FromSeconds(10);
 

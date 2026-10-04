@@ -28,7 +28,7 @@ public sealed class CastController(
     CastSessionManager sessions,
     ICastDeviceRegistry devices,
     CastTokenService castTokens,
-    MediaAccessChecker accessChecker,
+    IMediaAccessChecker accessChecker,
     AudioRenditionResolver audioRenditions,
     StreamRenditionResolver streamRenditions,
     IStoreProvider blobStorageProvider,

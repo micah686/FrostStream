@@ -9,7 +9,8 @@ namespace WebAPI.Auth;
 public sealed class SingleUserAuthenticationHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
     ILoggerFactory logger,
-    UrlEncoder encoder)
+    UrlEncoder encoder,
+    Shared.Deployment.DeploymentOptions deployment)
     : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
@@ -20,7 +21,7 @@ public sealed class SingleUserAuthenticationHandler(
             new Claim(ClaimTypes.NameIdentifier, AuthConstants.SingleUserSubject),
             new Claim(ClaimTypes.Email, "owner@localhost"),
             new Claim("email", "owner@localhost"),
-            new Claim(AuthConstants.PreferredUsernameClaim, "owner"),
+            new Claim(AuthConstants.PreferredUsernameClaim, deployment.Mode == Shared.Deployment.DeploymentMode.Lite ? "Admin" : "owner"),
             new Claim(AuthConstants.GroupsClaim, "owner"),
             new Claim(AuthConstants.GroupsClaim, "admins"),
             new Claim(ClaimTypes.Role, "owner"),

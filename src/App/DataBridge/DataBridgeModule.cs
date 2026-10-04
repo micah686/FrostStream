@@ -81,6 +81,8 @@ public static class DataBridgeModule
         // Host construction may instantiate flows; their watchdogs are gated by the store until
         // reconciliation commits. Every application consumer starts after this blocking service.
         builder.Services.PostConfigure<HostOptions>(o => o.ServicesStartConcurrently = false);
+        var liteMode = DeploymentOptions.FromConfiguration(builder.Configuration).Mode == DeploymentMode.Lite;
+        if (liteMode) builder.Services.AddHostedService<SingleUserOwnerSeederService>();
         builder.Services.AddHostedService<DownloadFlowStartupService>();
 
         builder.Services.AddSingleton<IDownloadJobStateNotifier, DownloadJobStateNotifier>();
@@ -149,7 +151,7 @@ public static class DataBridgeModule
         builder.Services.AddSingleton<IMetadataRebuildCoordinator, MetadataRebuildCoordinator>();
 
         builder.Services.AddHostedService<TypesenseStartupService>();
-        builder.Services.AddHostedService<SingleUserOwnerSeederService>();
+        if (!liteMode) builder.Services.AddHostedService<SingleUserOwnerSeederService>();
         builder.Services.AddHostedService<UserSessionConsumerService>();
         builder.Services.AddHostedService<NotificationPreferencesConsumerService>();
         builder.Services.AddHostedService<CookieProfileConsumerService>();

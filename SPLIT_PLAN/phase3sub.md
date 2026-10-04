@@ -43,6 +43,8 @@ This breaks Phase 3 of `SIDE_PLAN.MD` into ordered, reviewable subphases. Phases
 
 **Completion:** All Lite endpoints and resources are accessible as Admin, including endpoints without permission metadata; repeated startup preserves the same identity, and Full still enforces its configured protections.
 
+**Implementation:** Lite seeds the existing `SingleUserId`/`SingleUserSubject` as **Admin** and awaits that seed before startup reconciliation and consumer initialization. The authentication selector always chooses the local identity in Lite, ignoring stored bearer tokens, browser cookies, and cast/podcast credentials. Lite selects a shared allow-all authorization service and policy provider for default, fallback, named endpoint, role, and direct authorization checks; its policy evaluator also ignores explicit external authentication schemes. Playback, streaming, casting, channel audio, and live-chat consumers share an access-check interface whose Lite implementation permits resource access without transport or group-policy checks. Lite keeps shared controller routes, including access-management routes, and requires no external-auth production opt-in. Full retains its configured authentication, fail-closed fallback, role and endpoint permissions, resource checks, and existing single-user behavior. SQLite restart seeding and HTTP authorization tests cover these boundaries.
+
 ## Phase 3e — Frontend access behavior
 
 - Use the shared capabilities endpoint to select Lite's frontend behavior.

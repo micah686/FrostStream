@@ -21,7 +21,7 @@ public sealed partial class LiveChatController(
     IMessageBus messageBus,
     IDurableJobPublisher publisher,
     IStoreProvider blobStorageProvider,
-    MediaAccessChecker accessChecker,
+    IMediaAccessChecker accessChecker,
     IOptions<LiveChatOptions> liveChatOptions,
     IConfiguration configuration,
     IClock clock,

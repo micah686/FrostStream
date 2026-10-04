@@ -16,7 +16,14 @@ public sealed class SingleUserOwnerSeederService(
     IClock clock,
     ILogger<SingleUserOwnerSeederService> logger) : BackgroundService
 {
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    public override Task StartAsync(CancellationToken cancellationToken)
+        => Shared.Deployment.DeploymentOptions.FromConfiguration(configuration).Mode == Shared.Deployment.DeploymentMode.Lite
+            ? SeedAsync(cancellationToken)
+            : base.StartAsync(cancellationToken);
+
+    protected override Task ExecuteAsync(CancellationToken stoppingToken) => SeedAsync(stoppingToken);
+
+    private async Task SeedAsync(CancellationToken stoppingToken)
     {
         if (!AuthMode.IsSingleUserMode(configuration))
         {
@@ -26,6 +33,8 @@ public sealed class SingleUserOwnerSeederService(
         await using var scope = scopeFactory.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<DataBridgeDbContext>();
         var now = clock.GetCurrentInstant();
+        var displayName = Shared.Deployment.DeploymentOptions.FromConfiguration(configuration).Mode == Shared.Deployment.DeploymentMode.Lite
+            ? "Admin" : "Single User Owner";
         var existing = await db.FrostStreamUsers
             .FirstOrDefaultAsync(x => x.Id == AuthConstants.SingleUserId, stoppingToken);
 
@@ -35,14 +44,14 @@ public sealed class SingleUserOwnerSeederService(
             {
                 Id = AuthConstants.SingleUserId,
                 AuthentikSubjectId = AuthConstants.SingleUserSubject,
-                DisplayName = "Single User Owner",
+                DisplayName = displayName,
                 LastSeenAt = now
             });
         }
         else
         {
             existing.AuthentikSubjectId = AuthConstants.SingleUserSubject;
-            existing.DisplayName = "Single User Owner";
+            existing.DisplayName = displayName;
             existing.LastSeenAt = now;
             existing.LastUpdated = now;
         }

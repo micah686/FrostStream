@@ -43,10 +43,12 @@ public static class WebAPIModule
         EndpointCatalogValidator.Validate(typeof(WebAPIModule).Assembly);
 
         var singleUserMode = AuthMode.IsSingleUserMode(builder.Configuration);
+        var liteMode = DeploymentOptions.FromConfiguration(builder.Configuration).Mode == DeploymentMode.Lite;
         var authOptions = builder.Configuration
             .GetSection(FrostStreamAuthOptions.SectionName)
             .Get<FrostStreamAuthOptions>() ?? new FrostStreamAuthOptions();
-        WebApiHardening.ValidateStartup(authOptions, singleUserMode, builder.Environment.IsProduction());
+        if (!liteMode)
+            WebApiHardening.ValidateStartup(authOptions, singleUserMode, builder.Environment.IsProduction());
         builder.Services.Configure<FrostStreamAuthOptions>(builder.Configuration.GetSection(FrostStreamAuthOptions.SectionName));
         builder.Services.Configure<OpenFgaOptions>(builder.Configuration.GetSection(OpenFgaOptions.SectionName));
         builder.Services.Configure<AuthentikOptions>(builder.Configuration.GetSection(AuthentikOptions.SectionName));
@@ -67,6 +69,8 @@ public static class WebAPIModule
             {
                 options.ForwardDefaultSelector = context =>
                 {
+                    if (liteMode) return AuthConstants.SingleUserScheme;
+
                     if (context.Request.Query.ContainsKey(CastTokenDefaults.QueryParameter))
                     {
                         return CastTokenDefaults.Scheme;
@@ -111,7 +115,10 @@ public static class WebAPIModule
         builder.Services.AddSingleton<ICastProtocol, FCastCastProtocol>();
         builder.Services.AddSingleton<ICastDeviceRegistry, CastDeviceRegistry>();
         builder.Services.AddSingleton<CastSessionManager>();
-        builder.Services.AddScoped<MediaAccessChecker>();
+        if (liteMode)
+            builder.Services.AddScoped<IMediaAccessChecker, LiteMediaAccessChecker>();
+        else
+            builder.Services.AddScoped<IMediaAccessChecker, MediaAccessChecker>();
         builder.Services.AddScoped<AudioRenditionResolver>();
         builder.Services.AddScoped<ChannelAudioResolver>();
         builder.Services.AddScoped<StreamRenditionResolver>();
@@ -299,11 +306,20 @@ public static class WebAPIModule
             options.HeaderName = BffAuthenticationDefaults.AntiforgeryHeaderName;
         });
         // Per-endpoint policies (fs.endpoint:<id>) are resolved dynamically rather than registered up front.
-        builder.Services.AddSingleton<IAuthorizationPolicyProvider, EndpointPolicyProvider>();
+        if (liteMode)
+        {
+            builder.Services.AddSingleton<IAuthorizationPolicyProvider, LiteAuthorizationPolicyProvider>();
+            builder.Services.AddSingleton<IAuthorizationService, LiteAuthorizationService>();
+            builder.Services.AddTransient<Microsoft.AspNetCore.Authorization.Policy.IPolicyEvaluator, LitePolicyEvaluator>();
+        }
+        else
+        {
+            builder.Services.AddSingleton<IAuthorizationPolicyProvider, EndpointPolicyProvider>();
+        }
         builder.Services
             .AddControllers(options =>
             {
-                if (singleUserMode)
+                if (singleUserMode && !liteMode)
                 {
                     options.Conventions.Add(new SingleUserAccessControlConvention());
                 }

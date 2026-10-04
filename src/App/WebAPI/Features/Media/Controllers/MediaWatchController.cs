@@ -19,7 +19,7 @@ namespace WebAPI.Features.Media.Controllers;
 public sealed class MediaWatchController(
     IMessageBus messageBus,
     IStoreProvider blobStorageProvider,
-    MediaAccessChecker accessChecker,
+    IMediaAccessChecker accessChecker,
     AudioRenditionResolver audioRenditions,
     CastTokenService castTokens,
     ILogger<MediaWatchController> logger) : ControllerBase

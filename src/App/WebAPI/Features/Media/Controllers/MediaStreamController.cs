@@ -16,7 +16,7 @@ namespace WebAPI.Features.Media.Controllers;
 [Route("api/media/stream")]
 public sealed class MediaStreamController(
     IStoreProvider blobStorageProvider,
-    MediaAccessChecker accessChecker,
+    IMediaAccessChecker accessChecker,
     AudioRenditionResolver audioRenditions,
     StreamRenditionResolver streamRenditions,
     ILogger<MediaStreamController> logger) : ControllerBase
