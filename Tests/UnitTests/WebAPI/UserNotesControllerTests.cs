@@ -101,7 +101,7 @@ public sealed class UserNotesControllerTests
     }
 
     [Test]
-    public async Task Delete_Maps_NotFound()
+    public async Task Delete_Is_Idempotent_When_Note_Is_NotFound()
     {
         var bus = Substitute.For<IMessageBus>();
         var controller = CreateController(bus, "micah");
@@ -120,7 +120,7 @@ public sealed class UserNotesControllerTests
 
         var result = await controller.Delete("channel", "123", CancellationToken.None);
 
-        result.ShouldBeOfType<NotFoundObjectResult>().Value!.ShouldBe("missing");
+        result.ShouldBeOfType<NoContentResult>();
     }
 
     private static UserNotesController CreateController(IMessageBus bus, string? subject)

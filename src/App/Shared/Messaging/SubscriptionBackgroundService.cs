@@ -6,6 +6,8 @@ namespace Shared.Messaging;
 public abstract class SubscriptionBackgroundService : BackgroundService, IApplicationHandlerInitialization
 {
     private readonly List<ISubscription> _subscriptions = [];
+    private readonly object subscriptionsGate = new();
+    private bool stopping;
     private readonly TaskCompletionSource registrationCompleted = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     /// <summary>Completes only after all subscriptions are installed; local hosts await this before scheduling.</summary>
@@ -41,14 +43,21 @@ public abstract class SubscriptionBackgroundService : BackgroundService, IApplic
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        foreach (var subscription in _subscriptions)
+        lock (subscriptionsGate) stopping = true;
+        await base.StopAsync(cancellationToken);
+        // Host shutdown can time out while a broker finishes registration, or StopAsync can
+        // be called twice. Snapshot ownership once; late subscriptions dispose themselves.
+        ISubscription[] subscriptions;
+        lock (subscriptionsGate)
+        {
+            subscriptions = _subscriptions.ToArray();
+            _subscriptions.Clear();
+        }
+        foreach (var subscription in subscriptions)
         {
             await subscription.StopAsync(cancellationToken);
             await subscription.DisposeAsync();
         }
-
-        _subscriptions.Clear();
-        await base.StopAsync(cancellationToken);
     }
 
     protected abstract Task RegisterSubscriptionsAsync(CancellationToken stoppingToken);
@@ -60,10 +69,16 @@ public abstract class SubscriptionBackgroundService : BackgroundService, IApplic
         string? queueGroup = null,
         CancellationToken cancellationToken = default)
     {
-        _subscriptions.Add(await messageBus.SubscribeAsync(
-            subject,
-            handler,
-            queueGroup,
-            cancellationToken));
+        var subscription = await messageBus.SubscribeAsync(subject, handler, queueGroup, cancellationToken);
+        lock (subscriptionsGate)
+        {
+            if (!stopping)
+            {
+                _subscriptions.Add(subscription);
+                return;
+            }
+        }
+        await subscription.StopAsync(CancellationToken.None);
+        await subscription.DisposeAsync();
     }
 }

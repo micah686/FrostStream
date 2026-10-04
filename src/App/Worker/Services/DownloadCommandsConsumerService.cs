@@ -354,7 +354,7 @@ public sealed class DownloadCommandsConsumerService(
                 cookieScratch,
                 logger);
 
-            progress = new DownloadProgressReporter(cmd, publisher, clock, logger);
+            progress = new DownloadProgressReporter(cmd, messageBus, clock, logger);
             try
             {
                 await DispatchYtDlpAsync(cmd, tempDirectory, cookies.FilePath, progress, operationCts.Token);

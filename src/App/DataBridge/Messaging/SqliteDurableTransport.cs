@@ -72,11 +72,16 @@ public sealed class SqliteDurableTransport : IDurableJobPublisher, IDurableJobCo
         {
             lock (delivery.Outbox)
             {
-                if (delivery.Completed) throw new InvalidOperationException("Publish must precede acknowledgement.");
-                delivery.Outbox.Add(outgoing);
+                // Resumable workflows can retain an ExecutionContext after the ingress handler
+                // acknowledges. Their later publications are independent durable writes.
+                if (!delivery.Completed)
+                {
+                    delivery.Outbox.Add(outgoing);
+                    return;
+                }
             }
         }
-        else await db.Write(s => { Insert(s, outgoing); return true; });
+        await db.Write(s => { Insert(s, outgoing); return true; });
     }
 
     public async Task PublishBatchAsync<T>(IReadOnlyList<BatchMessage<T>> messages, CancellationToken cancellationToken = default)
@@ -175,21 +180,27 @@ public sealed class SqliteDurableTransport : IDurableJobPublisher, IDurableJobCo
         public string Token { get; } = Guid.NewGuid().ToString("N");
         public List<Outgoing> Outbox { get; } = [];
         public bool Completed { get; private set; }
-        public async Task Finish(bool ack, TimeSpan delay, CancellationToken ct, bool commitOutbox = true)
+        public Task Finish(bool ack, TimeSpan delay, CancellationToken ct, bool commitOutbox = true)
         {
             ct.ThrowIfCancellationRequested();
-            await owner.db.Write(s =>
+            // Write uses a synchronous, short SQLite transaction. Keep publication and completion
+            // under the same lock so a concurrent workflow cannot append after the outbox commits.
+            lock (Outbox)
             {
-                if (Completed) return false;
-                var updated = s.Execute("""
-                    UPDATE messaging_inbox SET acknowledged=$1,available=$2,token=NULL
-                    WHERE consumer=$3 AND seq=$4 AND token=$5 AND available>$6
-                    """, ack ? 1 : 0, Now + (long)delay.TotalMilliseconds, consumer, seq, Token, Now);
-                if (updated == 0) throw new InvalidOperationException("Delivery lease expired or was replaced.");
-                if (ack && commitOutbox) lock (Outbox) foreach (var m in Outbox) Insert(s, m);
-                return true;
-            });
-            Completed = true;
+                if (Completed) return Task.CompletedTask;
+                owner.db.Write(s =>
+                {
+                    var updated = s.Execute("""
+                        UPDATE messaging_inbox SET acknowledged=$1,available=$2,token=NULL
+                        WHERE consumer=$3 AND seq=$4 AND token=$5 AND available>$6
+                        """, ack ? 1 : 0, Now + (long)delay.TotalMilliseconds, consumer, seq, Token, Now);
+                    if (updated == 0) throw new InvalidOperationException("Delivery lease expired or was replaced.");
+                    if (ack && commitOutbox) foreach (var message in Outbox) Insert(s, message);
+                    return true;
+                }).GetAwaiter().GetResult();
+                Completed = true;
+            }
+            return Task.CompletedTask;
         }
         public async Task Renew(CancellationToken ct)
         {

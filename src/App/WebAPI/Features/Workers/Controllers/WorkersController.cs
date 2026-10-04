@@ -12,6 +12,7 @@ public sealed class WorkersController(IMessageBus messageBus) : ControllerBase
     [HttpGet]
     [Endpoint(EndpointIds.WorkersList)]
     [EndpointSummary("List registered workers")]
+    [EndpointDescription("Returns registered worker instances and their advertised routing tags, capacity, heartbeat timestamps, and current availability for the administrative worker list.")]
     public async Task<ActionResult<WorkerRegistryListResponse>> List([FromQuery] string? tag, CancellationToken cancellationToken)
     {
         var response = await messageBus.RequestAsync<WorkerRegistryListRequest, WorkerRegistryListResponse>(

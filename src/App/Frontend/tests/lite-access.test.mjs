@@ -19,9 +19,9 @@ const http = await loadModule('../src/lib/api/http.ts');
 const capabilities = (deploymentMode, enabled = true) => ({ deploymentMode, accessManagement: { enabled } });
 const profile = { subject: 'single-user-owner', name: 'Admin', groups: ['admins'], initials: 'A' };
 
-async function loadSession(mode, status = 200, singleUser = false) {
+async function loadSession(mode, status = 200, singleUser = false, location = '/library?tab=History') {
   const calls = [];
-  const data = await root.load({ url: new URL('http://localhost/library?tab=History'), fetch: async (url) => {
+  const data = await root.load({ url: new URL(location, 'http://localhost'), fetch: async (url) => {
     calls.push(url);
     return url === '/api/system/capabilities'
       ? Response.json(capabilities(mode))
@@ -93,4 +93,19 @@ test('API boundary suppresses Lite login and CSRF requests but preserves validat
     globalThis.window = previousWindow;
     globalThis.fetch = previousFetch;
   }
+});
+
+
+test('Lite navigation retains Admin across library, playback, search and administration', async () => {
+  for (const route of ['/library', '/watch/11111111-1111-1111-1111-111111111111', '/search?q=fixture',
+    '/admin', '/admin/import', '/admin/storage', '/admin/workers']) {
+    const session = await loadSession('Lite', 200, true, route);
+    assert.equal(session.user.subject, profile.subject);
+    assert.equal(session.user.name, 'Admin');
+    assert.equal(session.lite, true);
+    assert.equal(hasFrontendPermission(false), true);
+  }
+  const full = await loadSession('Full', 200, false, '/admin/storage');
+  assert.equal(full.accessManagementEnabled, true);
+  assert.equal(hasFrontendPermission(false), false);
 });

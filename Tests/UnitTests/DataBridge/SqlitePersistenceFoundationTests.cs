@@ -56,8 +56,8 @@ public sealed class SqlitePersistenceFoundationTests
         var builder = Host.CreateApplicationBuilder();
         builder.Configuration["Deployment:Mode"] = "Lite";
         builder.Configuration["Persistence:Sqlite:Enabled"] = "true";
-        // Persistence is ready; the ordinary Lite host still requires Phase 3 transport adapters.
-        Should.Throw<NotSupportedException>(() => builder.AddDataBridgeModule()).Message.ShouldContain("phase 3");
+        builder.AddDataBridgeModule();
+        builder.Services.ShouldContain(d => d.ServiceType == typeof(FrostStream.ApplicationContracts.IDurableJobPublisher));
         builder.Services.ShouldNotContain(d => d.ServiceType == typeof(NpgsqlDataSource));
     }
 
@@ -68,8 +68,8 @@ public sealed class SqlitePersistenceFoundationTests
         fixture.Host.InitializeDataBridge();
         fixture.Host.InitializeDataBridge();
         using var connection = fixture.Factory.OpenConnection();
-        Scalar(connection, $"SELECT count(*) FROM {SqliteBaseline.HistoryTable}").ShouldBe(2L);
-        Scalar(connection, $"SELECT MAX(version) FROM {SqliteBaseline.HistoryTable}").ShouldBe(2L);
+        Scalar(connection, $"SELECT count(*) FROM {SqliteBaseline.HistoryTable}").ShouldBe(4L);
+        Scalar(connection, $"SELECT MAX(version) FROM {SqliteBaseline.HistoryTable}").ShouldBe(4L);
         Scalar(connection, "SELECT count(*) FROM scheduling_scheduled_tasks").ShouldBe(10L);
         Scalar(connection, "SELECT count(*) FROM storage_storage_keys").ShouldBe(1L);
         Scalar(connection, "SELECT count(*) FROM storage_storage_keys_local").ShouldBe(1L);
@@ -96,7 +96,7 @@ public sealed class SqlitePersistenceFoundationTests
         var tables = manifest.RootElement.GetProperty("tables").EnumerateArray().ToArray();
         tables.Length.ShouldBe(82);
         Scalar(connection, "SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'cleipnir_%'")
-            .ShouldBe(84L); // 82 baseline tables, the v2 startup boundary and separate SQLite history.
+            .ShouldBe(86L); // Baseline, startup boundary, staged objects, local secrets, and history.
         foreach (var table in tables)
         {
             var schema = table.GetProperty("schema").GetString()!;

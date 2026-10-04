@@ -14,6 +14,44 @@ public sealed class SqliteDurableTransportTests
         NullLogger<SqliteDurableTransport>.Instance, lease);
 
     [Test]
+    public async Task Resumed_Workflow_Can_Publish_After_Its_Ingress_Delivery_Completes()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        try
+        {
+            var bus = Transport(Path.Combine(directory, "test.db"));
+            await bus.PublishAsync("test.input", 1, "ingress");
+            var resume = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var scheduled = new TaskCompletionSource<Task>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var loop = bus.ConsumeAsync<int>(StreamName.From("test"), SubjectName.From("test.input"), async context =>
+            {
+                // Cleipnir retains the ingress execution context while waiting for a worker result.
+                var continuation = Task.Run(async () =>
+                {
+                    await resume.Task.WaitAsync(stop.Token);
+                    await bus.PublishAsync("test.output", 42, "resumed-flow", cancellationToken: stop.Token);
+                });
+                await context.AckAsync(stop.Token);
+                scheduled.TrySetResult(continuation);
+            }, cancellationToken: stop.Token);
+            var workflow = await scheduled.Task.WaitAsync(stop.Token);
+            resume.TrySetResult();
+            await workflow.WaitAsync(stop.Token);
+            var received = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var output = bus.ConsumeAsync<int>(StreamName.From("test"), SubjectName.From("test.output"), async context =>
+            {
+                await context.AckAsync(stop.Token);
+                received.TrySetResult(context.Message);
+            }, cancellationToken: stop.Token);
+            (await received.Task.WaitAsync(stop.Token)).ShouldBe(42);
+            stop.Cancel();
+            try { await Task.WhenAll(loop, output); } catch (OperationCanceledException) { }
+        }
+        finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); }
+    }
+
+    [Test]
     public async Task Consumer_Waits_For_Handler_Startup_Before_Delivering_Persisted_Work()
     {
         var directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));

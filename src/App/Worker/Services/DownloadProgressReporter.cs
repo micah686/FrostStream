@@ -9,7 +9,7 @@ namespace Worker.Services;
 
 internal sealed class DownloadProgressReporter(
     DownloadVideoCommand command,
-    IDurableJobPublisher publisher,
+    IMessageBus messageBus,
     IClock clock,
     ILogger logger) : IProgress<YtDlpProgress>
 {
@@ -122,10 +122,9 @@ internal sealed class DownloadProgressReporter(
     {
         try
         {
-            await publisher.PublishAsync(
+            await messageBus.PublishAsync(
                 DownloadSubjects.DownloadProgress,
-                message,
-                messageId: message.MessageId.ToString("N"));
+                message);
         }
         catch (Exception ex)
         {

@@ -114,7 +114,7 @@ public sealed class AccessControlControllerTests
         var result = await controller.CreatePolicy(
             new AccessPolicyWriteRequest
             {
-                Name = "Family",
+                Name = "family",
                 BundleIds = ["media"]
             },
             CancellationToken.None);

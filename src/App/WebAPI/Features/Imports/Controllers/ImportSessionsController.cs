@@ -242,6 +242,7 @@ public sealed class ImportSessionsController(
     [HttpGet("{sessionId:guid}/mapping-example")]
     [Endpoint(EndpointIds.ImportsSessionsMappingExample)]
     [EndpointSummary("Download a populated JSON metadata example")]
+    [EndpointDescription("Downloads a populated metadata mapping example for one import session, using its discovered items so users can prepare and review JSON metadata before applying it.")]
     public IActionResult MappingExample(Guid sessionId)
     {
         var json = JsonSerializer.SerializeToUtf8Bytes(new[]
