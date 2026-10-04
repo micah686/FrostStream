@@ -35,6 +35,8 @@ public static class PersistenceRegistration
         else
         {
             builder.Services.AddSingleton<SqliteConnectionFactory>();
+            builder.Services.AddSingleton<Func<string, IStagedObjectStore>>(sp =>
+                bucket => new SqliteStagedObjectStore(sp.GetRequiredService<SqliteConnectionFactory>(), bucket));
             builder.Services.AddSingleton<SqliteDurableTransport>();
             builder.Services.Replace(ServiceDescriptor.Singleton<IDurableJobPublisher>(sp => sp.GetRequiredService<SqliteDurableTransport>()));
             builder.Services.Replace(ServiceDescriptor.Singleton<IDurableJobConsumer>(sp => sp.GetRequiredService<SqliteDurableTransport>()));

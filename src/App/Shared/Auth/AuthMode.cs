@@ -5,7 +5,8 @@ namespace Shared.Auth;
 public static class AuthMode
 {
     public static bool IsSingleUserMode(IConfiguration configuration)
-        => IsTruthy(configuration["SINGLE_USER_MODE"]) ||
+        => Shared.Deployment.DeploymentOptions.FromConfiguration(configuration).Mode == Shared.Deployment.DeploymentMode.Lite ||
+           IsTruthy(configuration["SINGLE_USER_MODE"]) ||
            IsTruthy(configuration["Auth:SingleUserMode"]);
 
     public static bool IsTruthy(string? value)

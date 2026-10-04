@@ -44,8 +44,14 @@ public sealed class ModuleCompositionTests
         builder.Configuration["Persistence:Sqlite:Path"] = Path.Combine(dir, "test.db");
         try
         {
+            builder.Configuration["Auth:SingleUserMode"] = "false";
             builder.AddLiteModules();
             await using var provider = builder.Services.BuildServiceProvider();
+            builder.Services.ShouldNotContain(d => d.ServiceType == typeof(ITopologySource));
+            builder.Services.ShouldNotContain(d => d.ServiceType == typeof(NATS.Client.Core.INatsConnection));
+            builder.Services.ShouldNotContain(d => d.ServiceType == typeof(global::WebAPI.Auth.NatsBffTicketStore));
+            provider.GetRequiredService<Func<string, FrostStream.ApplicationContracts.IStagedObjectStore>>() ("manifests")
+                .ShouldBeOfType<global::DataBridge.Persistence.Sqlite.SqliteStagedObjectStore>();
             var publisher = provider.GetRequiredService<FrostStream.ApplicationContracts.IDurableJobPublisher>();
             publisher.ShouldBeOfType<global::DataBridge.Messaging.SqliteDurableTransport>();
             provider.GetRequiredService<FrostStream.ApplicationContracts.IDurableJobConsumer>().ShouldBeSameAs(publisher);

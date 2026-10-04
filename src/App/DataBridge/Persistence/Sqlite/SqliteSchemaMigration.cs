@@ -14,7 +14,15 @@ internal static class SqliteSchemaMigrations
 {
     // Append only. Released baseline and upgrade checksums must remain unchanged.
     public static IReadOnlyList<SqliteSchemaMigration> All { get; } =
-        [new(2, "Persist download startup generation boundary", DownloadStartupSchema.Table.CreateSql(PersistenceProvider.Sqlite))];
+        [new(2, "Persist download startup generation boundary", DownloadStartupSchema.Table.CreateSql(PersistenceProvider.Sqlite)),
+         new(3, "Persist staged import objects", """
+             CREATE TABLE staged_objects (
+                 bucket TEXT NOT NULL,
+                 object_key TEXT NOT NULL,
+                 data BLOB NOT NULL,
+                 PRIMARY KEY (bucket, object_key)
+             );
+             """)];
 
     /// <summary>Explicit rebuild descriptions must supply the full new table DDL and recreate all indexes/triggers.</summary>
     public static string Rebuild(string table, IReadOnlyList<string> preservedColumns, string createReplacementSql,

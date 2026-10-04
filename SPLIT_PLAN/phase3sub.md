@@ -31,6 +31,8 @@ This breaks Phase 3 of `SIDE_PLAN.MD` into ordered, reviewable subphases. Phases
 
 **Completion:** Imports can stage and retrieve manifests through SQLite, including after restart, and Lite neither registers nor attempts to connect to NATS infrastructure.
 
+**Implementation:** With SQLite persistence enabled, Lite resolves the shared staged-object factory to `SqliteStagedObjectStore`. Migration 3 adds bucket/key-isolated BLOB storage in the application database; writes atomically replace existing objects, reads survive restart, and deletion remains idempotent. Shared import handlers retain their existing manifest staging, retrieval, and cleanup lifecycle. Local transport registration suppresses NATS connections and topology services across modules and no longer registers NATS application adapters as fallbacks. Lite selects the existing single-user authentication branch so external auth configuration cannot register the NATS BFF session store; Admin identity and comprehensive access behavior remain in 3d. Full retains its NATS adapters and configured authentication.
+
 ## Phase 3d — Automatic Admin identity and backend access
 
 - Seed the existing stable single-user identity idempotently and present it as **Admin**.
