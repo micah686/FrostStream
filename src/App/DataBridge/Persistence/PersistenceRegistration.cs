@@ -5,6 +5,9 @@ using DataBridge.Persistence.Postgres;
 using DataBridge.Persistence.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using FrostStream.ApplicationContracts;
+using DataBridge.Messaging;
 using Microsoft.Extensions.Hosting;
 using NodaTime;
 using Shared.Deployment;
@@ -32,6 +35,10 @@ public static class PersistenceRegistration
         else
         {
             builder.Services.AddSingleton<SqliteConnectionFactory>();
+            builder.Services.AddSingleton<SqliteDurableTransport>();
+            builder.Services.Replace(ServiceDescriptor.Singleton<IDurableJobPublisher>(sp => sp.GetRequiredService<SqliteDurableTransport>()));
+            builder.Services.Replace(ServiceDescriptor.Singleton<IDurableJobConsumer>(sp => sp.GetRequiredService<SqliteDurableTransport>()));
+            builder.Services.Replace(ServiceDescriptor.Singleton<IWorkerJobRoutes>(sp => sp.GetRequiredService<SqliteDurableTransport>()));
             builder.Services.AddSingleton<SqliteFunctionStore>();
             builder.Services.AddSingleton(sp => new ApplicationDatabase(sp.GetRequiredService<SqliteConnectionFactory>()));
             builder.Services.AddSingleton<SqliteConnectionSetupInterceptor>();

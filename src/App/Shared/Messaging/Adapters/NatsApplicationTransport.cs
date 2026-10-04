@@ -102,7 +102,8 @@ public static class ApplicationTransportRegistration
     {
         var capacity = configuration.GetValue<int?>("Messaging:Local:SubscriptionCapacity") ?? 256;
         if (capacity <= 0) throw new InvalidOperationException("Messaging:Local:SubscriptionCapacity must be positive.");
-        // Durable jobs and staged objects remain on their existing adapters until phases 3b/3c.
+        // SQLite persistence replaces durable jobs and worker routes in Lite (3b).
+        // Staged objects retain their existing adapter until 3c.
         services.AddNatsApplicationTransport();
         services.TryAddSingleton<LocalApplicationTransport>(sp => new(
             sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<LocalApplicationTransport>>(), capacity));

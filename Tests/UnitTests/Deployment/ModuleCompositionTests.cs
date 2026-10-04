@@ -35,6 +35,26 @@ public sealed class ModuleCompositionTests
     }
 
     [Test]
+    public async Task Sqlite_Lite_Selects_Durable_Transport_After_All_Modules_Register()
+    {
+        var builder = Builder();
+        builder.Configuration["Deployment:Mode"] = "Lite";
+        builder.Configuration["Persistence:Sqlite:Enabled"] = "true";
+        var dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        builder.Configuration["Persistence:Sqlite:Path"] = Path.Combine(dir, "test.db");
+        try
+        {
+            builder.AddLiteModules();
+            await using var provider = builder.Services.BuildServiceProvider();
+            var publisher = provider.GetRequiredService<FrostStream.ApplicationContracts.IDurableJobPublisher>();
+            publisher.ShouldBeOfType<global::DataBridge.Messaging.SqliteDurableTransport>();
+            provider.GetRequiredService<FrostStream.ApplicationContracts.IDurableJobConsumer>().ShouldBeSameAs(publisher);
+            provider.GetRequiredService<FrostStream.ApplicationContracts.IWorkerJobRoutes>().ShouldBeSameAs(publisher);
+        }
+        finally { if (Directory.Exists(dir)) Directory.Delete(dir, true); }
+    }
+
+    [Test]
     public void Deployment_Defaults_To_Full_And_Rejects_Invalid_Values()
     {
         DeploymentOptions.FromConfiguration(new ConfigurationBuilder().Build()).Mode.ShouldBe(DeploymentMode.Full);

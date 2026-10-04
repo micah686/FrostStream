@@ -21,6 +21,8 @@ This breaks Phase 3 of `SIDE_PLAN.MD` into ordered, reviewable subphases. Phases
 
 **Completion:** Durable jobs survive restarts and retry safely; duplicate delivery and expired leases do not produce duplicate effects or revive invalidated runs.
 
+**Implementation:** With SQLite persistence enabled, Lite selects `SqliteDurableTransport` for durable publishing, consumption, and worker routes. Messages and stable IDs, per-consumer inbox acknowledgments, attempt counts, and fenced leases persist in the application SQLite file. Immediate transactions serialize claims across consumers; expired leases are reclaimed, and stale acknowledgments/heartbeats are rejected. Handler publications form an outbox committed atomically with acknowledgment; negative acknowledgments discard that outbox. Cancellation releases unfinished deliveries after the running handler returns. Shared download handlers retain their existing generation/run/dispatch fences and idempotency checks from Phase 2. Database/file side effects outside the transport transaction must remain idempotent, since a crash before acknowledgment can repeat a handler, as in Full. Staged objects and NATS infrastructure removal remain in 3c.
+
 ## Phase 3c — SQLite-backed staged objects
 
 - Replace NATS object storage for import manifests with SQLite-backed storage through the shared object interface.
