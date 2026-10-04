@@ -77,9 +77,9 @@ Migration files are listed separately. Registration and reader helpers are inclu
 | [AudioRenditionRepository.cs](../src/App/DataBridge/AudioRenditions/AudioRenditionRepository.cs) | application adapter |
 | [MediaEncodingStatusRepository.cs](../src/App/DataBridge/AudioRenditions/MediaEncodingStatusRepository.cs) | application adapter |
 | [DownloadFlowV2Repository.cs](../src/App/DataBridge/Data/DownloadFlowV2Repository.cs) | application adapter, EF SQL |
-| [DownloadHistoryPurger.cs](../src/App/DataBridge/Data/DownloadHistoryPurger.cs) | application adapter, Npgsql, array parameter, query dialect |
+| [DownloadHistoryPurger.cs](../src/App/DataBridge/Data/DownloadHistoryPurger.cs) | application adapter |
 | [DownloadJobsRepository.cs](../src/App/DataBridge/Data/DownloadJobsRepository.cs) | application adapter, EF SQL, set update/delete |
-| [ImportSessionPurger.cs](../src/App/DataBridge/Data/ImportSessionPurger.cs) | application adapter, Npgsql, array parameter, query dialect |
+| [ImportSessionPurger.cs](../src/App/DataBridge/Data/ImportSessionPurger.cs) | application adapter |
 | [ImportSessionRepository.cs](../src/App/DataBridge/Data/ImportSessionRepository.cs) | application adapter, EF SQL, set update/delete |
 | [MetadataRepository.cs](../src/App/DataBridge/Data/MetadataRepository.cs) | application adapter, transaction |
 | [UserNotesRepository.cs](../src/App/DataBridge/Data/UserNotesRepository.cs) | application adapter |
@@ -124,6 +124,11 @@ Migration files are listed separately. Registration and reader helpers are inclu
 | [SqliteConnectionFactory.cs](../src/App/DataBridge/Persistence/Sqlite/SqliteConnectionFactory.cs) | SQLite |
 | [SqliteConnectionSetupInterceptor.cs](../src/App/DataBridge/Persistence/Sqlite/SqliteConnectionSetupInterceptor.cs) | SQLite |
 | [SqliteSchemaInitializer.cs](../src/App/DataBridge/Persistence/Sqlite/SqliteSchemaInitializer.cs) | SQLite, transaction |
+| [SqliteFunctionStore.cs](../src/App/DataBridge/Persistence/Workflows/SqliteFunctionStore.cs) | SQLite, upsert |
+| [SqliteWorkflowDatabase.cs](../src/App/DataBridge/Persistence/Workflows/SqliteWorkflowDatabase.cs) | SQLite, transaction |
+| [SqliteWorkflowStores.cs](../src/App/DataBridge/Persistence/Workflows/SqliteWorkflowStores.cs) | upsert |
+| [WorkflowPersistenceRegistration.cs](../src/App/DataBridge/Persistence/Workflows/WorkflowPersistenceRegistration.cs) | Npgsql |
+| [WorkflowRetentionQueries.cs](../src/App/DataBridge/Persistence/Workflows/WorkflowRetentionQueries.cs) | application adapter, SQLite, array parameter, query dialect |
 | [RenditionQueueRepository.cs](../src/App/DataBridge/Renditions/RenditionQueueRepository.cs) | application adapter |
 | [MediaDocumentQuery.cs](../src/App/DataBridge/Search/MediaDocumentQuery.cs) | application adapter |
 | [DownloadStatisticsRecorder.cs](../src/App/DataBridge/Statistics/DownloadStatisticsRecorder.cs) | application adapter, EF SQL |

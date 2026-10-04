@@ -41,12 +41,12 @@ Authoritative scope: [phase2plan.md](phase2plan.md). Design: [persistence archit
 
 ## 2e — durable workflow store (after stable persistence primitives)
 
-- [ ] Inspect exact pinned Cleipnir/ResilientFunctions 4.2.5 store interfaces and schema initialization/versioning. Record the complete supported contract before writing the store.
-- [ ] Implement all required SQLite workflow state, effects/messages, leases/epochs, timeout/scheduling and recovery primitives; no in-memory fallback.
-- [ ] Retain PostgreSQL UsePostgresStore and shared flows/NodaTimeFlowSerializer; initialize SQLite workflow schema independently of application baseline history.
-- [ ] Replace terminal/orphan discovery SQL in both purgers with the workflow retention query boundary; keep actual instance deletion through Cleipnir control panels.
-- [ ] Verify creation, message/effect round trips, progress, completion, cancellation, crash recovery and workflow schema upgrades against both stores.
-- [ ] Distinguish recoverable import workflows from intentionally interrupted download runs on startup.
+- [x] Inspect exact pinned Cleipnir/ResilientFunctions 4.2.5 store interfaces and schema initialization/versioning. Record the complete supported contract before writing the store.
+- [x] Implement all required SQLite workflow state, effects/messages, leases/epochs, timeout/scheduling and recovery primitives; no in-memory fallback.
+- [x] Retain PostgreSQL UsePostgresStore and shared flows/NodaTimeFlowSerializer; initialize SQLite workflow schema independently of application baseline history.
+- [x] Replace terminal/orphan discovery SQL in both purgers with the workflow retention query boundary; keep actual instance deletion through Cleipnir control panels.
+- [x] Verify creation, message/effect round trips, progress, completion, cancellation, crash recovery and workflow schema upgrades against both stores.
+- [x] Distinguish recoverable import workflows from intentionally interrupted download runs on startup.
 
 ## 2f — upgrades and restart closure (after 2b–2e)
 
@@ -104,3 +104,20 @@ Deletion decisions: shared application retention rechecks age, terminal/group/si
 Verification: 34 focused persistence tests passed, including all 16 existing 2c cases and 18 new 2d cases. Seventeen new cases ran against both real PostgreSQL and real-file SQLite; the eighteenth verifies SQLite held-writer timeout metrics. Coverage includes concurrent redelivery/start/claim/result/finalize/stop, heartbeat/expiry and stale leases, conflicting reorder, content/source/discovery upserts, 1,201-item import rollback/deduplication, a reduced SQLite variable limit, metadata rollback, cancellation, post-commit callback behavior, purge/restart races and media objects added during Worker deletion. Temporary PostgreSQL fixtures disable pooling and bound simultaneous cases to avoid exhausting a stock server's client limit. Full unit suite with PostgreSQL enabled: 513 passed, the same five pre-existing failures from 2b, out of 518. PostgreSQL download repository, media deletion and watch-state integration fixtures passed (24 + 8 + 4). Lite, UnitTests and IntegrationTests builds pass; baseline/inventory/whitespace checks pass. All original 141 PostgreSQL catalog statement/fragment values remain unchanged; the separate mutation family adds one lock statement.
 
 Next: 2e must inspect the exact pinned Cleipnir/ResilientFunctions 4.2.5 contract, implement its durable SQLite store and move the remaining terminal/orphan workflow-discovery SQL behind that store boundary. Then 2f verifies upgrades and restart closure. Normal SQLite runtime remains gated through 2f; there is no in-memory or mixed-provider workflow fallback.
+
+
+## 2e handoff
+
+Completed 2026-10-03. Verified the exact installed ResilientFunctions 4.2.5 source commit `019b221566784e015c01403376bf42c4f126bccc` and all required store interfaces before implementing SQLite. See [workflow persistence contracts and test commands](../src/App/DataBridge/Persistence/Workflows/README.md).
+
+Changed files: new `Persistence/Workflows` database/session, complete function and auxiliary stores, provider composition, retention query boundary and contract notes; persistence registration and DataBridge initialization; both workflow-aware purgers; shared workflow tests and two updated foundation schema assertions; plan, architecture and regenerated source inventory. Packages, PostgreSQL migrations and SQLite application baseline remain unchanged.
+
+Implemented: independently versioned SQLite workflow v1 schema in the selected application database, preserving function state/parent/epoch/lease/interruption, type identities, effects (including library workflow state), ordered messages, timeouts, correlations, FIFO semaphore queues and register/arbitrator compare-and-swap. Immediate transactions coordinate writers across processes. Creation/initial state, restart snapshots, message/effect batches, utility updates and deletion roll back atomically; busy waits remain finite through the shared factory. Workflow operations follow the pinned Task-only interface; application retention retains cancellation tokens.
+
+Composition/retention decisions: Full still uses the pinned `UsePostgresStore`, `flows` prefix, `cleipnir,public` search path and shared flows/NodaTime serializer. SQLite initialization-only startup now initializes both independent schemas before consumers. The provider-specific flow configuration is ready for 2f; normal SQLite runtime remains gated. Terminal discovery moved out of both purgers; Full's discovery SQL is preserved, SQLite uses shared strict instance parsers and owner lookups before applying the orphan limit. Import selections batch parameters. Deletion stays with typed control panels and rechecks terminal status.
+
+Recovery/upgrade decisions: watchdog recovery preserves import-style durable progress; download runs retain their intentional blocking startup invalidation/reconciliation, to be integrated and verified in 2f. SQLite supports a fresh/empty workflow version 0 to v1 transition, atomic/repeatable initialization and rejection of unknown versions. No older SQLite workflow schema shipped. The pinned PostgreSQL workflow migrator is at version 0 with no upgrade scripts; there is no earlier supported workflow schema migration to invent. Repeated initialize/migrate/reopen preserves state on both stores.
+
+Verification: 12 shared behavioral tests pass against real-file SQLite and PostgreSQL 18.3, plus two SQLite-only schema/busy tests (15 reported tests including the no-op subprocess helper). Coverage includes creation, initial effects/messages, progress and serialized NodaTime payloads, completion/failure, epoch guards/lease renewal, suspend/interrupt/postpone wakeups, scheduling, durable auxiliary state, FIFO semaphores, concurrent creation/message append/restart/type registration, transactional rollback, cancellation through a control panel, retention owner/shape/status/limit checks and schema reinitialization. The restart test kills a subprocess after a persisted effect, then verifies a new registry/watchdog resumes with the original parameter, advances the epoch and does not repeat completed work. The full unit suite with PostgreSQL enabled reports **528 passed, five failed out of 533**: the same five pre-existing failures documented in 2b–2d. UnitTests, Lite Release and IntegrationTests builds pass with zero warnings/errors. Application baseline, source inventory and whitespace checks pass. Temporary PostgreSQL test databases and the test container were removed.
+
+Next: 2f owns application schema evolution and upgrade paths, provider integration of the existing download startup gate, queued/active/lease/group reconciliation and stale-message/run-generation verification. Lite is not complete until those pass. No messaging, authentication, secrets, backup UI or deployment work was added.

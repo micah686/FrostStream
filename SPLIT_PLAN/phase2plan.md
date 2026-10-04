@@ -51,6 +51,8 @@ Phase 2 is split into reviewable increments so each can be completed and checked
 
 ## 2e — Durable Cleipnir workflow store
 
+**Status: complete (2026-10-03).** See the [pinned store contract and verification](../src/App/DataBridge/Persistence/Workflows/README.md) and [2e handoff](phase2-checklist.md#2e-handoff). Both workflow providers pass restart coverage; normal Lite SQLite runtime remains gated through 2f.
+
 - Confirm the durable-store contract supported by the currently pinned Cleipnir version before implementation.
 - Implement a SQLite-backed store compatible with that contract; keep the existing PostgreSQL-backed store for Full.
 - Persist workflow state and required scheduling/recovery data using the shared workflow model.

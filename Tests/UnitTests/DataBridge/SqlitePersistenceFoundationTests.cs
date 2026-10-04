@@ -80,7 +80,9 @@ public sealed class SqlitePersistenceFoundationTests
         Scalar(connection, "SELECT enabled FROM scheduling_scheduled_tasks WHERE key='channel-scan-refresh'").ShouldBe(0L);
         Scalar(connection, "PRAGMA integrity_check").ShouldBe("ok");
         Scalar(connection, "PRAGMA foreign_key_check").ShouldBeNull();
-        Scalar(connection, "SELECT count(*) FROM sqlite_master WHERE name LIKE 'cleipnir_%' OR name='VersionInfo'").ShouldBe(0L);
+        Scalar(connection, "SELECT count(*) FROM sqlite_master WHERE name='VersionInfo'").ShouldBe(0L);
+        Scalar(connection, "SELECT count(*) FROM sqlite_master WHERE type='table' AND name LIKE 'cleipnir_%'").ShouldBe(9L);
+        Scalar(connection, "SELECT version FROM cleipnir_schema WHERE id=1").ShouldBe(1L);
     }
 
     [Test]
@@ -92,7 +94,7 @@ public sealed class SqlitePersistenceFoundationTests
         using var manifest = JsonDocument.Parse(SqliteBaseline.ManifestJson);
         var tables = manifest.RootElement.GetProperty("tables").EnumerateArray().ToArray();
         tables.Length.ShouldBe(82);
-        Scalar(connection, "SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+        Scalar(connection, "SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'cleipnir_%'")
             .ShouldBe(83L); // 82 application tables plus the separate SQLite history.
         foreach (var table in tables)
         {

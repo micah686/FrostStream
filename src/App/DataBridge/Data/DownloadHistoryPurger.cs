@@ -5,7 +5,7 @@ using DataBridge.Flows;
 using DataBridge.Messaging;
 using Microsoft.Extensions.Logging;
 using NodaTime;
-using Npgsql;
+using DataBridge.Persistence.Workflows;
 using Shared.Messaging;
 
 namespace DataBridge.Data;
@@ -61,7 +61,7 @@ public interface IDownloadHistoryPurger
 /// </para>
 /// </remarks>
 public sealed class DownloadHistoryPurger(
-    NpgsqlDataSource dataSource,
+    IWorkflowRetentionQueries workflowQueries,
     IServiceScopeFactory scopes,
     DownloadJobV2Flows jobFlows,
     DownloadGroupV2Flows groupFlows,
@@ -277,52 +277,7 @@ public sealed class DownloadHistoryPurger(
     /// </summary>
     private async Task<(int Deleted, bool Truncated)> SweepOrphanedFlowsAsync(CancellationToken cancellationToken)
     {
-        // Orphan detection happens entirely in SQL so only genuine orphans cross the wire. Doing the
-        // shape test in C# instead would mean streaming every terminal flow on the install — the
-        // overwhelming majority of which have a live owner — and would make the LIMIT below sample a
-        // nondeterministic subset each run rather than meaning "there are more orphans left".
-        //
-        // The instance-id shapes come from DownloadFlowInstance.Job/.Group and
-        // LocalImportFlowInstance.ForItemAttempt. PostgreSQL accepts undashed 32-hex as a uuid literal,
-        // so substr(...)::uuid resolves each id back to its owning table.
-        //
-        // Only settled flows are candidates: Postponed/Suspended instances are still live. The status
-        // ints are read off Cleipnir's own enum rather than hardcoded.
-        var terminalStatuses = new[] { (int)Status.Succeeded, (int)Status.Failed };
-
-        await using var command = dataSource.CreateCommand("""
-            SELECT f.human_instance_id
-            FROM cleipnir.flows f
-            WHERE f.status = ANY(@statuses)
-              AND f.human_instance_id IS NOT NULL
-              AND (
-                  (f.human_instance_id ~ '^[0-9a-fA-F]{32}-[0-9a-fA-F]{32}$'
-                   AND NOT EXISTS (
-                       SELECT 1 FROM jobs.download_job_runs r
-                       WHERE r.job_id = substr(f.human_instance_id, 1, 32)::uuid
-                         AND r.run_id = substr(f.human_instance_id, 34, 32)::uuid))
-                  OR (f.human_instance_id ~ '^[0-9a-fA-F]{32}$'
-                   AND NOT EXISTS (
-                       SELECT 1 FROM jobs.download_groups g
-                       WHERE g.group_id = f.human_instance_id::uuid))
-                  OR (f.human_instance_id ~ '^[0-9a-fA-F]{32}/attempt-[0-9]+$'
-                   AND NOT EXISTS (
-                       SELECT 1 FROM imports.import_session_items i
-                       WHERE i.item_id = substr(f.human_instance_id, 1, 32)::uuid))
-              )
-            ORDER BY f.human_instance_id
-            LIMIT @limit;
-            """);
-        command.Parameters.AddWithValue("statuses", terminalStatuses);
-        command.Parameters.AddWithValue("limit", OrphanSweepLimit);
-        command.CommandTimeout = 15;
-
-        var orphans = new List<string>();
-        await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
-        {
-            while (await reader.ReadAsync(cancellationToken))
-                orphans.Add(reader.GetString(0));
-        }
+        var orphans = await workflowQueries.FindOrphansAsync(OrphanSweepLimit, cancellationToken);
 
         // Deletion still goes through the typed container matching each id shape, so Cleipnir keeps
         // flows/flows_effects/flows_messages/flows_timeouts consistent. A panel fetched from the wrong
@@ -407,7 +362,7 @@ public sealed class DownloadHistoryPurger(
         => logger.LogWarning(ex, "Failed deleting Cleipnir flow instance {Instance} during download history cleanup; skipping it.", instance);
 
     /// <summary>Job flow instances are <c>{jobId:N}-{runId:N}</c> — see <see cref="DownloadFlowInstance.Job"/>.</summary>
-    private static bool TryParseJobInstance(string instance, out Guid jobId, out Guid runId)
+    internal static bool TryParseJobInstance(string instance, out Guid jobId, out Guid runId)
     {
         jobId = default;
         runId = default;
@@ -418,17 +373,19 @@ public sealed class DownloadHistoryPurger(
     }
 
     /// <summary>Group flow instances are <c>{groupId:N}</c> — see <see cref="DownloadFlowInstance.Group"/>.</summary>
-    private static bool TryParseGroupInstance(string instance, out Guid groupId)
+    internal static bool TryParseGroupInstance(string instance, out Guid groupId)
     {
         groupId = default;
         return instance.Length == 32 && Guid.TryParseExact(instance, "N", out groupId);
     }
 
     /// <summary>Local-import instances are <c>{itemId:N}/attempt-{n}</c> — see <c>LocalImportFlowInstance.ForItemAttempt</c>.</summary>
-    private static bool TryParseImportInstance(string instance, out Guid itemId)
+    internal static bool TryParseImportInstance(string instance, out Guid itemId)
     {
         itemId = default;
         var separator = instance.IndexOf("/attempt-", StringComparison.Ordinal);
-        return separator == 32 && Guid.TryParseExact(instance[..32], "N", out itemId);
+        return separator == 32 && instance.Length > 41
+               && instance[41..].All(c => c is >= '0' and <= '9')
+               && Guid.TryParseExact(instance[..32], "N", out itemId);
     }
 }

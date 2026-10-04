@@ -1,7 +1,7 @@
 using Shared.Messaging.Adapters;
 using Cleipnir.Flows;
 using Cleipnir.Flows.AspNet;
-using Cleipnir.Flows.PostgresSql;
+using DataBridge.Persistence.Workflows;
 using DataBridge.Data;
 using DataBridge.Persistence;
 using DataBridge.AudioRenditions;
@@ -69,19 +69,8 @@ public static class DataBridgeModule
         builder.Services.AddOpenBaoSecretStore(builder.Configuration);
         builder.Services.AddFrostStreamStorage();
 
-        // Isolate Cleipnir's runtime tables in their own Postgres schema. Cleipnir's
-        // PostgresSql store only exposes `tablePrefix`, not a schema option, so we route
-        // its DDL/DML into the `cleipnir` schema via Npgsql's Search Path. The schema
-        // itself is created by FluentMigrator (M004_CreateCleipnirSchema) which runs
-        // before the host starts, so by the time AddFlows resolves its store the schema
-        // already exists.
-        var cleipnirConnectionString = new NpgsqlConnectionStringBuilder(connectionString)
-        {
-            SearchPath = "cleipnir,public"
-        }.ConnectionString;
-
         builder.Services.AddFlows(c => c
-            .UsePostgresStore(cleipnirConnectionString)
+            .UsePersistenceStore(persistence, connectionString)
             // Cleipnir's DefaultSerializer has no NodaTime support and collapses every Instant in a
             // persisted message/effect to the Unix epoch. Swap in a NodaTime-aware serializer so
             // dates (OccurredAt, metadata scrape/release dates, …) survive the flow store round-trip.
@@ -225,6 +214,9 @@ public static class DataBridgeModule
     {
         using var scope = app.Services.CreateScope();
         scope.ServiceProvider.GetRequiredService<IApplicationSchemaInitializer>().Initialize(cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (scope.ServiceProvider.GetRequiredService<PersistenceOptions>().Provider == PersistenceProvider.Sqlite)
+            scope.ServiceProvider.GetRequiredService<SqliteFunctionStore>().Initialize().GetAwaiter().GetResult();
     }
 
     private static NatsAuthOpts? BuildNatsAuth(IConfiguration configuration)

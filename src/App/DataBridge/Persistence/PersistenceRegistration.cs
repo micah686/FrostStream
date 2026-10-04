@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using DataBridge.Data;
+using DataBridge.Persistence.Workflows;
 using DataBridge.Persistence.Postgres;
 using DataBridge.Persistence.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -20,6 +21,7 @@ public static class PersistenceRegistration
         var options = PersistenceOptions.FromConfiguration(builder.Configuration, builder.Environment.ContentRootPath);
         builder.Services.AddSingleton(options);
         builder.Services.AddSingleton<IClock>(SystemClock.Instance);
+        builder.Services.AddSingleton<IWorkflowRetentionQueries, WorkflowRetentionQueries>();
         if (options.Provider == PersistenceProvider.Postgres)
         {
             var connectionString = builder.Configuration.GetConnectionString("froststreamdb")
@@ -30,6 +32,7 @@ public static class PersistenceRegistration
         else
         {
             builder.Services.AddSingleton<SqliteConnectionFactory>();
+            builder.Services.AddSingleton<SqliteFunctionStore>();
             builder.Services.AddSingleton(sp => new ApplicationDatabase(sp.GetRequiredService<SqliteConnectionFactory>()));
             builder.Services.AddSingleton<SqliteConnectionSetupInterceptor>();
             builder.Services.AddDbContext<DataBridgeDbContext>((sp, db) => db

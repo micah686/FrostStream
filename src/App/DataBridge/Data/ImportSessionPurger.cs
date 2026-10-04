@@ -5,7 +5,7 @@ using DataBridge.Flows;
 using DataBridge.Messaging;
 using Microsoft.Extensions.Logging;
 using NodaTime;
-using Npgsql;
+using DataBridge.Persistence.Workflows;
 using Shared.Messaging;
 
 namespace DataBridge.Data;
@@ -26,7 +26,7 @@ namespace DataBridge.Data;
 /// </para>
 /// </remarks>
 public sealed class ImportSessionPurger(
-    NpgsqlDataSource dataSource,
+    IWorkflowRetentionQueries workflowQueries,
     IServiceScopeFactory scopes,
     LocalImportItemV2Flows importFlows,
     IClock clock,
@@ -105,26 +105,7 @@ public sealed class ImportSessionPurger(
         if (itemIds.Count == 0)
             return 0;
 
-        var terminalStatuses = new[] { (int)Status.Succeeded, (int)Status.Failed };
-
-        await using var command = dataSource.CreateCommand("""
-            SELECT human_instance_id
-            FROM cleipnir.flows
-            WHERE status = ANY(@statuses)
-              AND human_instance_id ~ '^[0-9a-fA-F]{32}/attempt-[0-9]+$'
-              AND substr(human_instance_id, 1, 32)::uuid = ANY(@item_ids)
-            ORDER BY human_instance_id;
-            """);
-        command.Parameters.AddWithValue("statuses", terminalStatuses);
-        command.Parameters.AddWithValue("item_ids", itemIds.ToArray());
-        command.CommandTimeout = 15;
-
-        var instanceIds = new List<string>();
-        await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
-        {
-            while (await reader.ReadAsync(cancellationToken))
-                instanceIds.Add(reader.GetString(0));
-        }
+        var instanceIds = await workflowQueries.FindImportInstancesAsync(itemIds, cancellationToken);
 
         var deleted = 0;
         foreach (var instance in instanceIds)
