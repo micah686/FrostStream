@@ -58,7 +58,7 @@ public sealed class ModuleCompositionTests
             builder.Services.ShouldNotContain(d => d.ServiceType == typeof(NATS.Client.Core.INatsConnection));
             builder.Services.ShouldNotContain(d => d.ServiceType == typeof(Npgsql.NpgsqlDataSource));
             provider.GetRequiredService<Shared.Backups.IBackupServiceClient>()
-                .ShouldBeOfType<Shared.Backups.UnavailableLocalBackupClient>();
+                .ShouldBeOfType<global::DataBridge.Persistence.Sqlite.SqliteBackupServiceClient>();
             provider.GetRequiredService<global::MediaProcessor.Storage.IMediaProcessorStorageClient>()
                 .ShouldBeOfType<global::MediaProcessor.Storage.LocalMediaProcessorStorageClient>();
             builder.Services.ShouldNotContain(d => d.ServiceType == typeof(global::WebAPI.Auth.NatsBffTicketStore));
