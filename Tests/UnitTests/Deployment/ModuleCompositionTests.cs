@@ -47,12 +47,15 @@ public sealed class ModuleCompositionTests
     }
 
     [Test]
-    public void Lite_Mode_Is_Recognized_But_Cannot_Silently_Use_Full_Adapters()
+    public async Task Lite_Mode_Selects_Local_Requests_And_Events()
     {
         var builder = Builder();
         builder.Configuration["Deployment:Mode"] = "Lite";
         DeploymentOptions.FromConfiguration(builder.Configuration).Mode.ShouldBe(DeploymentMode.Lite);
-        Should.Throw<NotSupportedException>(() => builder.AddLiteModules()).Message.ShouldContain("phase 3");
+        builder.AddLiteModules();
+        await using var provider = builder.Services.BuildServiceProvider();
+        provider.GetRequiredService<FrostStream.ApplicationContracts.IMessageBus>()
+            .ShouldBeOfType<Shared.Messaging.Adapters.LocalApplicationTransport>();
     }
 
     [Test]

@@ -10,6 +10,8 @@ This breaks Phase 3 of `SIDE_PLAN.MD` into ordered, reviewable subphases. Phases
 
 **Completion:** Shared requests and transient notifications work in-process, including cancellation and progress subscriptions, while Full continues using its existing transport.
 
+**Implementation:** Lite selects `LocalApplicationTransport` for `IMessageBus`, `IRequestDispatcher`, and `IEventBus`. Requests invoke existing subscription handlers directly, including nested requests. Each transient subscription has an ordered bounded channel; `Messaging:Local:SubscriptionCapacity` defaults to 256 and must be positive. Publishers wait for capacity and can cancel that wait. Stopping a subscription releases blocked publishers and discards pending events after the current handler finishes. Request cancellation stops waiting for a reply; the existing handler context does not expose a cancellation token, so it cannot forcibly stop a running handler. Full retains its NATS transport. Durable jobs and staged objects still use the existing adapters until 3b/3c; this subphase alone does not provide an infrastructure-free Lite runtime.
+
 ## Phase 3b — Durable SQLite messaging
 
 - Persist durable messages, delivery attempts, leases, and acknowledgments in SQLite.

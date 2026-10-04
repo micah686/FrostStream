@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using FrostStream.ApplicationContracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -92,11 +93,21 @@ public static class ApplicationTransportRegistration
         return Shared.Deployment.DeploymentOptions.FromConfiguration(configuration).Mode switch
         {
             Shared.Deployment.DeploymentMode.Full => services.AddNatsApplicationTransport(),
-            Shared.Deployment.DeploymentMode.Lite => throw new NotSupportedException(
-                "Deployment:Mode=Lite requires the local infrastructure adapters from phase 3. " +
-                "The phase-1 combined host can be exercised with Deployment:Mode=Full and existing Full infrastructure."),
+            Shared.Deployment.DeploymentMode.Lite => services.AddLocalApplicationTransport(configuration),
             _ => throw new InvalidOperationException("Unsupported deployment mode.")
         };
+    }
+
+    public static IServiceCollection AddLocalApplicationTransport(this IServiceCollection services, Microsoft.Extensions.Configuration.IConfiguration configuration)
+    {
+        var capacity = configuration.GetValue<int?>("Messaging:Local:SubscriptionCapacity") ?? 256;
+        if (capacity <= 0) throw new InvalidOperationException("Messaging:Local:SubscriptionCapacity must be positive.");
+        // Durable jobs and staged objects remain on their existing adapters until phases 3b/3c.
+        services.AddNatsApplicationTransport();
+        services.TryAddSingleton<LocalApplicationTransport>(sp => new(
+            sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<LocalApplicationTransport>>(), capacity));
+        services.Replace(ServiceDescriptor.Singleton<IMessageBus>(sp => sp.GetRequiredService<LocalApplicationTransport>()));
+        return services;
     }
 
     public static IServiceCollection AddNatsApplicationTransport(this IServiceCollection services)
