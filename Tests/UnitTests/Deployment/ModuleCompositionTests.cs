@@ -173,6 +173,10 @@ public sealed class ModuleCompositionTests
         result.Integrations.LiveChat.ShouldBeTrue();
         result.Integrations.PotProvider.ShouldBeTrue();
         result.Backups.PointInTimeRecovery.ShouldBeTrue();
+        result.Backups.Full.ShouldBeTrue();
+        result.Backups.Differential.ShouldBeTrue();
+        result.Backups.Verification.ShouldBeTrue();
+        result.Backups.DeepVerification.ShouldBeTrue();
         var defaults = SystemCapabilities.Resolve(new(DeploymentMode.Full), new ConfigurationBuilder().Build());
         defaults.AccessManagement.Enabled.ShouldBeTrue();
         defaults.Integrations.LiveChat.ShouldBeFalse();

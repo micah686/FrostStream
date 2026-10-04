@@ -33,6 +33,8 @@ public sealed record BackupRepositoryResponse(
     bool RepositoryOk,
     string? StatusMessage,
     IReadOnlyList<BackupSummaryResponse> Backups,
-    PitrWindowResponse PitrWindow);
+    PitrWindowResponse PitrWindow,
+    string? DatabasePath = null,
+    string? BackupDirectory = null);
 
 public sealed record VerifyBackupRequest(string? Label = null, bool Deep = false);

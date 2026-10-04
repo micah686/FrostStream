@@ -14,7 +14,7 @@ public sealed class ScheduleCrudConsumerService(
     IMessageBus messageBus,
     IServiceScopeFactory scopeFactory,
     IClock clock,
-    ILogger<ScheduleCrudConsumerService> logger) : SubscriptionBackgroundService
+    ILogger<ScheduleCrudConsumerService> logger, Shared.Deployment.SystemCapabilities? capabilities = null) : SubscriptionBackgroundService
 {
     private const string QueueGroup = "databridge-schedules";
 
@@ -39,7 +39,8 @@ public sealed class ScheduleCrudConsumerService(
         var msg = context.Message;
         try
         {
-            if (Validate(msg) is { } validationError)
+            if ((msg.Enabled && msg.TaskType == "backup-diff" && capabilities?.Backups.Differential == false
+                ? "Differential backup schedules are not supported in this deployment." : Validate(msg)) is { } validationError)
             {
                 await context.RespondAsync(Failure("validation", validationError));
                 return;
@@ -67,7 +68,8 @@ public sealed class ScheduleCrudConsumerService(
         var msg = context.Message;
         try
         {
-            if (Validate(msg) is { } validationError)
+            if ((msg.Enabled && msg.TaskType == "backup-diff" && capabilities?.Backups.Differential == false
+                ? "Differential backup schedules are not supported in this deployment." : Validate(msg)) is { } validationError)
             {
                 await context.RespondAsync(Failure("validation", validationError));
                 return;

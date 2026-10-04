@@ -90,9 +90,10 @@ public sealed class SqliteBackupServiceClient : IBackupServiceClient
                 file.Name, "full", Path.GetFileNameWithoutExtension(file.Name),
                 new DateTimeOffset(file.CreationTimeUtc, TimeSpan.Zero),
                 new DateTimeOffset(file.LastWriteTimeUtc, TimeSpan.Zero),
-                file.Length, file.Length, null, null, false, true))
+                file.Length, file.Length, null, null, false, false))
             .ToArray();
-        return Task.FromResult(new BackupRepositoryDto(true, null, backups, new PitrWindowDto(null, null)));
+        return Task.FromResult(new BackupRepositoryDto(true, null, backups, new PitrWindowDto(null, null),
+            new SqliteConnectionStringBuilder(connectionFactory.ConnectionString).DataSource, backupDirectory));
     }
 
     public async Task<BackupJobDto> VerifyAsync(VerifyBackupRequest request, CancellationToken cancellationToken = default)
@@ -102,6 +103,7 @@ public sealed class SqliteBackupServiceClient : IBackupServiceClient
         if (request.Deep)
             throw new NotSupportedException("Lite supports SQLite integrity verification only; deep restore verification is not supported.");
 
+        Directory.CreateDirectory(backupDirectory);
         var targetPath = request.Label is null
             ? Directory.EnumerateFiles(backupDirectory, "*.sqlite", SearchOption.TopDirectoryOnly)
                 .OrderByDescending(File.GetLastWriteTimeUtc).FirstOrDefault()
@@ -112,7 +114,7 @@ public sealed class SqliteBackupServiceClient : IBackupServiceClient
         var started = DateTimeOffset.UtcNow;
         await VerifyFileAsync(targetPath, cancellationToken);
         var label = Path.GetFileName(targetPath);
-        var job = new BackupJobDto(Guid.NewGuid(), "verify", null, "completed", label, label, null,
+        var job = new BackupJobDto(Guid.NewGuid(), "verify-quick", null, "completed", label, label, null,
             started, DateTimeOffset.UtcNow, [$"SQLite integrity check passed for {label}."]);
         jobs[job.JobId] = job;
         return job;

@@ -41,7 +41,9 @@ public sealed record BackupRepositoryDto(
     bool RepositoryOk,
     string? StatusMessage,
     IReadOnlyList<BackupInfoDto> Backups,
-    PitrWindowDto PitrWindow);
+    PitrWindowDto PitrWindow,
+    string? DatabasePath = null,
+    string? BackupDirectory = null);
 
 public interface IBackupServiceClient
 {

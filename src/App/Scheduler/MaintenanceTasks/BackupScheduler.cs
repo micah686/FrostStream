@@ -8,8 +8,7 @@ using Shared.Messaging;
 namespace Scheduler.MaintenanceTasks;
 
 /// <summary>
-/// Dispatches scheduled backups to BackupService over REST (commands are infrequent, so no
-/// JetStream queue) and polls the job until it settles. The Scheduler owns the schedule marks
+/// Dispatches scheduled backups through the deployment-selected client and polls the job until it settles. The Scheduler owns the schedule marks
 /// and the admin failure notification; BackupService owns the Jobs &gt; Background run row,
 /// where the manual and scheduled paths converge.
 /// </summary>

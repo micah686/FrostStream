@@ -1,15 +1,23 @@
 using Shared.Backups;
+using Shared.Deployment;
 using WebAPI.Features.Backups.Models;
 
 namespace WebAPI.Features.Backups;
 
-public sealed class BackupJobService(IBackupServiceClient client)
+public sealed class BackupJobService(IBackupServiceClient client, SystemCapabilities capabilities)
 {
     public async Task<BackupJobResponse> StartBackupAsync(
         string? name,
         string? type,
         CancellationToken cancellationToken)
-        => ToResponse(await client.CreateAsync(new CreateBackupJobRequest(name, type), cancellationToken));
+    {
+        type = type?.Trim().ToLowerInvariant() ?? "full";
+        if (!(type == "full" && capabilities.Backups.Full || type == "diff" && capabilities.Backups.Differential))
+            throw new NotSupportedException(capabilities.Backups.Provider == "SQLite"
+                ? "Lite supports full SQLite snapshots only; differential and point-in-time backups are not supported."
+                : $"Backup type '{type}' is not supported in this deployment.");
+        return ToResponse(await client.CreateAsync(new CreateBackupJobRequest(name, type), cancellationToken));
+    }
 
     public async Task<IReadOnlyList<BackupJobResponse>> ListJobsAsync(CancellationToken cancellationToken)
         => (await client.ListJobsAsync(cancellationToken)).Select(ToResponse).ToArray();
@@ -28,14 +36,21 @@ public sealed class BackupJobService(IBackupServiceClient client)
                     x.Label, x.Type, x.Name, x.StartedAt, x.CompletedAt, x.DatabaseSize, x.RepositorySize,
                     x.WalStart, x.WalStop, x.HasError, x.OpenBaoExportPresent))
                 .ToArray(),
-            new PitrWindowResponse(repository.PitrWindow.Earliest, repository.PitrWindow.LatestApprox));
+            new PitrWindowResponse(repository.PitrWindow.Earliest, repository.PitrWindow.LatestApprox),
+            repository.DatabasePath, repository.BackupDirectory);
     }
 
     public async Task<BackupJobResponse> VerifyAsync(
         string? label,
         bool deep,
         CancellationToken cancellationToken)
-        => ToResponse(await client.VerifyAsync(new Shared.Backups.VerifyBackupRequest(label, deep), cancellationToken));
+    {
+        if (!capabilities.Backups.Verification || deep && !capabilities.Backups.DeepVerification)
+            throw new NotSupportedException(capabilities.Backups.Provider == "SQLite"
+                ? "Lite supports SQLite integrity verification only; deep restore verification is not supported."
+                : "This verification operation is not supported in this deployment.");
+        return ToResponse(await client.VerifyAsync(new Shared.Backups.VerifyBackupRequest(label, deep), cancellationToken));
+    }
 
     private static BackupJobResponse ToResponse(BackupJobDto job)
         => new(

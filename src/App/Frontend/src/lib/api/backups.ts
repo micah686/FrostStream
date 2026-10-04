@@ -41,6 +41,8 @@ export interface BackupRepository {
   statusMessage: string | null;
   backups: BackupInfo[];
   pitrWindow: PitrWindow;
+  databasePath?: string | null;
+  backupDirectory?: string | null;
 }
 
 const BASE = '/api/global/backups';

@@ -408,10 +408,16 @@ public static class WebAPIModule
             catch (Exception ex) when (context.Request.Path.StartsWithSegments("/api/global/backups"))
             {
                 app.Logger.LogError(ex, "BackupService request failed.");
-                context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+                context.Response.StatusCode = ex switch
+                {
+                    NotSupportedException or ArgumentException => StatusCodes.Status400BadRequest,
+                    FileNotFoundException => StatusCodes.Status404NotFound,
+                    InvalidDataException => StatusCodes.Status422UnprocessableEntity,
+                    _ => StatusCodes.Status503ServiceUnavailable
+                };
                 await context.Response.WriteAsJsonAsync(new
                 {
-                    error = ex is LocalBackupUnavailableException
+                    error = ex is NotSupportedException or ArgumentException or FileNotFoundException or InvalidDataException or LocalBackupUnavailableException
                         ? ex.Message
                         : "The backup service is unavailable. Check its health and configured backup directory."
                 });

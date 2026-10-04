@@ -1,5 +1,9 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
+  import { page } from '$app/state';
+  const capabilities = $derived(page.data.capabilities.backups);
+  const lite = $derived(page.data.lite);
+  const deepVerification = $derived(capabilities.deepVerification ?? capabilities.pointInTimeRecovery);
   import { Select } from '$lib/components/ui';
   import {
     CircleAlert,
@@ -22,10 +26,10 @@
     type BackupType
   } from '$lib/api/backups';
 
-  const backupTypeOptions: { value: BackupType; name: string }[] = [
-    { value: 'full', name: 'Full — complete cluster backup' },
-    { value: 'diff', name: 'Differential — changes since the last full' }
-  ];
+  const backupTypeOptions = $derived([
+    { value: 'full' as BackupType, name: lite ? 'Full — complete SQLite snapshot' : 'Full — complete cluster backup' },
+    { value: 'diff' as BackupType, name: 'Differential — changes since the last full' }
+  ].filter((option) => option.value === 'full' ? capabilities.full : capabilities.differential));
 
   const backupTypeHints: Record<BackupType, string> = {
     full: 'Complete pgBackRest cluster backup plus an OpenBao secrets export. The weekly schedule takes one every Sunday.',
@@ -153,7 +157,7 @@
     deepVerifyBusyLabel = backup.label;
     verifyError = null;
     try {
-      mergeJob(await verifyBackup(backup.label, true));
+      mergeJob(await verifyBackup(backup.label, deepVerification));
     } catch (err) {
       verifyError = err instanceof Error ? err.message : 'Could not start the deep verification.';
     } finally {
@@ -163,7 +167,8 @@
 
   function mergeJob(job: BackupJob) {
     jobs = [job, ...jobs.filter((item) => item.jobId !== job.jobId)];
-    startPolling();
+    if (job.status === 'queued' || job.status === 'running') startPolling();
+    else void loadRepository();
   }
 
   function statusBadgeClass(status: BackupJob['status']): string {
@@ -219,9 +224,21 @@
 <section class={cardClass} aria-labelledby="backups-run-title">
   <h2 id="backups-run-title" class="text-base font-bold text-base-content">Backups</h2>
   <p class="mt-2 max-w-3xl text-sm leading-6 text-base-content/60">
-    pgBackRest backups cover the FrostStream, Authentik, and OpenFGA databases plus OpenBao secrets, with continuous
-    WAL archiving for point-in-time recovery. Media files and rebuildable search or queue state are excluded.
+    {#if lite}
+      Full SQLite snapshots cover application data, workflow and queue state, staged objects, and encrypted secrets.
+      Media files and optional ClickHouse data are managed separately.
+    {:else}
+      pgBackRest backups cover the FrostStream, Authentik, and OpenFGA databases plus OpenBao secrets, with continuous
+      WAL archiving for point-in-time recovery. Media files and rebuildable search or queue state are excluded.
+    {/if}
   </p>
+
+  {#if repository?.databasePath || repository?.backupDirectory}
+    <dl class="mt-3 text-sm text-base-content/70">
+      {#if repository.databasePath}<dt class="font-semibold">Database location</dt><dd class="break-all font-mono">{repository.databasePath}</dd>{/if}
+      {#if repository.backupDirectory}<dt class="mt-2 font-semibold">Backup directory</dt><dd class="break-all font-mono">{repository.backupDirectory}</dd>{/if}
+    </dl>
+  {/if}
 
   {#if startError}
     <div class="alert alert-error mt-5 text-sm" role="alert">
@@ -239,7 +256,7 @@
       <label class="label mb-2 text-sm" for="backup-type">Type</label>
       <Select id="backup-type" bind:value={backupType} items={backupTypeOptions} />
     </div>
-    <button class="btn btn-sm btn-primary text-xs sm:-translate-y-1" type="submit" disabled={startBusy}>
+    <button class="btn btn-sm btn-primary text-xs sm:-translate-y-1" type="submit" disabled={startBusy || !capabilities.full}>
       {#if startBusy}
         <span class="loading loading-spinner loading-xs mr-1.5"></span>
       {:else}
@@ -248,7 +265,7 @@
       Run backup now
     </button>
   </form>
-  <p class="mt-2 text-xs text-base-content/50">{backupTypeHints[backupType]}</p>
+  <p class="mt-2 text-xs text-base-content/50">{lite ? 'Creates and verifies a full database snapshot while the server is running.' : backupTypeHints[backupType]}</p>
 </section>
 
 <!-- Jobs -->
@@ -257,7 +274,7 @@
     <div>
       <h2 id="backups-jobs-title" class="text-base font-bold text-base-content">Backup jobs</h2>
       <p class="mt-2 text-sm text-base-content/60">
-        Backup, verification, and restore jobs recorded by the backup service.
+        {lite ? 'Backup and verification jobs from this server session.' : 'Backup, verification, and restore jobs recorded by the backup service.'}
       </p>
     </div>
     <button class="btn btn-sm btn-neutral" disabled={jobsLoading} onclick={() => void loadJobs(true)}>
@@ -324,18 +341,22 @@
     <div>
       <h2 id="backups-repo-title" class="text-base font-bold text-base-content">Backup repository</h2>
       <p class="mt-2 text-sm text-base-content/60">
-        Backups in the pgBackRest repository. Quick verify checks every checksum in the repository; deep verify
-        test-restores one backup and checks the data inside it.
+        {#if lite}
+          Verified SQLite snapshots. Verify checks the latest snapshot; individual snapshots can also be verified below.
+        {:else}
+          Backups in the pgBackRest repository. Quick verify checks every checksum in the repository; deep verify
+          test-restores one backup and checks the data inside it.
+        {/if}
       </p>
     </div>
     <div class="flex shrink-0 gap-2">
-      <button class="btn btn-sm btn-neutral" disabled={quickVerifyBusy} onclick={() => void runQuickVerify()}>
+      <button class="btn btn-sm btn-neutral" disabled={quickVerifyBusy || !capabilities.verification || (lite && !repository?.backups.length)} onclick={() => void runQuickVerify()}>
         {#if quickVerifyBusy}
           <span class="loading loading-spinner loading-xs mr-1.5"></span>
         {:else}
           <ShieldCheck class="mr-1.5 h-3.5 w-3.5" />
         {/if}
-        Quick verify
+        {lite ? 'Verify latest' : 'Quick verify'}
       </button>
       <button class="btn btn-sm btn-neutral" disabled={repositoryLoading} onclick={() => void loadRepository()}>
         <RefreshCw class="mr-1.5 h-3.5 w-3.5" />
@@ -371,10 +392,12 @@
         <CircleCheck class="mt-0.5 h-4 w-4 shrink-0" />
         <span>
           Repository healthy.
+          {#if capabilities.pointInTimeRecovery}
           {#if repository.pitrWindow.earliest}
             Point-in-time recovery covers {formatDate(repository.pitrWindow.earliest)} → now.
           {:else}
             Point-in-time recovery becomes available after the first full backup.
+          {/if}
           {/if}
         </span>
       {:else}
@@ -417,7 +440,7 @@
                   {#if backup.hasError}
                     <span class="badge badge-sm badge-error text-[10px] font-semibold text-error-content">error</span>
                   {/if}
-                  {#if !backup.openBaoExportPresent}
+                  {#if !lite && !backup.openBaoExportPresent}
                     <span class="badge badge-sm badge-warning text-[10px] font-semibold text-warning-content">
                       no secrets export
                     </span>
@@ -437,7 +460,7 @@
               <button
                 type="button"
                 class={rowActionClass}
-                disabled={deepVerifyBusyLabel === backup.label}
+                disabled={deepVerifyBusyLabel === backup.label || !capabilities.verification}
                 onclick={() => void runDeepVerify(backup)}
               >
                 {#if deepVerifyBusyLabel === backup.label}
@@ -445,7 +468,7 @@
                 {:else}
                   <ShieldCheck class="h-4 w-4" />
                 {/if}
-                Deep verify
+                {deepVerification ? 'Deep verify' : 'Verify'}
               </button>
             </div>
           </div>
@@ -456,6 +479,7 @@
 </section>
 
 <!-- Restore -->
+{#if capabilities.pointInTimeRecovery}
 <section class={cardClass} aria-labelledby="backups-restore-title">
   <div class="flex items-start gap-3">
     <span class="grid h-9 w-9 shrink-0 place-items-center rounded-field bg-base-300/70 text-primary">
@@ -475,3 +499,4 @@
     </div>
   </div>
 </section>
+{/if}

@@ -17,10 +17,10 @@ public sealed record SystemCapabilities(
             PotProvider: configuration.GetValue("PotBroker:Enabled", false) || configuration.GetValue("PotProvider:Enabled", false)),
         new(Enabled: !AuthMode.IsSingleUserMode(configuration)),
         deployment.Mode == Shared.Deployment.DeploymentMode.Lite
-            ? new(Provider: "SQLite", Full: false, Differential: false, Incremental: false, Verification: false, PointInTimeRecovery: false)
+            ? new(Provider: "SQLite", Full: true, Differential: false, Incremental: false, Verification: true, PointInTimeRecovery: false, DeepVerification: false)
             : new(Provider: "PostgreSQL", Full: true, Differential: true, Incremental: true, Verification: true, PointInTimeRecovery: true));
 }
 
 public sealed record IntegrationCapabilities(bool Search, bool LiveChat, bool PotProvider);
 public sealed record AccessManagementCapabilities(bool Enabled);
-public sealed record BackupCapabilities(string Provider, bool Full, bool Differential, bool Incremental, bool Verification, bool PointInTimeRecovery);
+public sealed record BackupCapabilities(string Provider, bool Full, bool Differential, bool Incremental, bool Verification, bool PointInTimeRecovery, bool DeepVerification = true);

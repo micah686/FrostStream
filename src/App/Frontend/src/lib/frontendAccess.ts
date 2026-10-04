@@ -10,6 +10,7 @@ export interface SystemCapabilities {
     incremental: boolean;
     verification: boolean;
     pointInTimeRecovery: boolean;
+    deepVerification?: boolean;
   };
 }
 

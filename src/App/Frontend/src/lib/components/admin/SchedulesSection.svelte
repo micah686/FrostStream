@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { page } from '$app/state';
   import { Select } from '$lib/components/ui';
   import {
     ChevronDown,
@@ -26,7 +27,8 @@
 
   const cardClass = 'card border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6';
 
-  const taskTypeItems = scheduleTaskTypes.map((taskType) => ({ value: taskType, name: taskType }));
+  const supportedTaskTypes = $derived(scheduleTaskTypes.filter((type) => type !== 'backup-diff' || page.data.capabilities.backups.differential));
+  const taskTypeItems = $derived(supportedTaskTypes.map((taskType) => ({ value: taskType, name: taskType })));
   const timingItems = [
     { value: 'interval', name: 'Interval' },
     { value: 'cron', name: 'Cron expression' }
@@ -132,10 +134,12 @@
   ] as const;
 
   function taskTypeSummary(taskType: string): string {
+    if (taskType === 'backup-full' && page.data.lite) return 'Creates and verifies a full SQLite snapshot.';
     return taskTypeHelp.find((item) => item.type === taskType)?.summary ?? 'No description available.';
   }
 
   let schedules = $state<ScheduledTask[]>([]);
+  const visibleSchedules = $derived(schedules.filter((schedule) => schedule.taskType !== 'backup-diff' || page.data.capabilities.backups.differential));
   let loading = $state(true);
   let loadError = $state<Error | null>(null);
   let mutation = $state<string | null>(null);
@@ -500,7 +504,7 @@
 
   {#if !editOnly && loading}
     <div class="mt-10 flex justify-center"><span class="loading loading-spinner loading-md"></span></div>
-  {:else if !editOnly && schedules.length === 0}
+  {:else if !editOnly && visibleSchedules.length === 0}
     <div class="mt-5 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/30 p-8 text-center">
       <Clock class="mx-auto h-9 w-9 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No schedules yet</p>
@@ -508,7 +512,7 @@
     </div>
   {:else if !editOnly}
     <div class="mt-5 space-y-2">
-      {#each schedules as schedule (schedule.key)}
+      {#each visibleSchedules as schedule (schedule.key)}
         <article
           class="flex flex-col gap-3 rounded-field border-[length:var(--border)] border-base-content/20 bg-base-100 px-3 py-3 transition hover:border-base-content/30 hover:bg-base-300/30 sm:px-4 lg:flex-row lg:items-center"
         >

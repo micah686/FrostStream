@@ -21,6 +21,10 @@ This breaks Phase 4 of [SIDE_PLAN.MD](SIDE_PLAN.MD) into ordered, reviewable sub
 
 **Completion:** Backup operations and status are usable through the shared API and UI in both modes; Lite presents only operations it supports and displays the actual resolved storage paths.
 
+**Implementation:** Lite capabilities now advertise full SQLite snapshots and integrity verification, with differential, incremental, deep verification, and PITR unavailable. Shared backup handlers validate operations before dispatch; unsupported requests return a clear 400 response, missing snapshots return 404, and integrity failures return 422. Repository responses carry the resolved Lite database and backup directory (`Backup:Directory`, with `Persistence:Sqlite:BackupPath` as a fallback, defaults to `/data/backups`); paths remain within the protected backup API. The shared page displays these paths, offers latest/per-snapshot verification, refreshes the repository immediately after completed operations, and hides unsupported controls and PostgreSQL recovery metadata in Lite. Lite's job list explicitly describes its server-session lifetime. Shared schedule validation rejects enabled differential backup schedules when unsupported, and Quartz skips existing unsupported definitions during hydration and changes. Full retains its HTTP adapter, differential backups, deep verification, and PITR controls. Companion key backups and restore instructions remain in 4c.
+
+**Validation:** Assembled Lite-host tests exercise capability reporting, resolved paths, HTTP snapshot creation and verification, job status/listing, unsupported-operation errors, missing snapshots, rejected differential schedules, skipped seeded differential jobs, and scheduled full snapshots. Full handler tests cover differential/deep dispatch and rejection before dispatch. Frontend type checking and access/navigation tests verify the shared frontend.
+
 ## Phase 4c — Recovery and encryption-key preservation
 
 - Document and validate the supported restore procedure: stop the server, preserve the current database, replace it with the chosen snapshot named `frostreamlitedb`, then restart.
