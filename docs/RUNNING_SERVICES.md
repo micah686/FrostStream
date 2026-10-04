@@ -1,5 +1,7 @@
 # Running FrostStream Services
 
+For generated Full and Lite container installations, see [Deployment profiles](DEPLOYMENT_PROFILES.md).
+
 This guide matches the current video-archive pipeline:
 
 1. `POST /api/videos/download` queues a `FileDownloadRequest`

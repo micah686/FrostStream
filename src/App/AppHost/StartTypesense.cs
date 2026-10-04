@@ -11,10 +11,10 @@ public static class StartTypesense
 
         return builder
             .AddContainer("typesense", "typesense/typesense", "30.2")
-            .WithVolume("typesense-data", Helpers.GetEnv("TYPESENSE_DATA_DIR"))
-            .WithEnvironment("TYPESENSE_DATA_DIR", Helpers.GetEnv("TYPESENSE_DATA_DIR"))
+            .WithVolume("typesense-data", Environment.GetEnvironmentVariable("TYPESENSE_DATA_DIR") ?? "/data")
+            .WithEnvironment("TYPESENSE_DATA_DIR", Environment.GetEnvironmentVariable("TYPESENSE_DATA_DIR") ?? "/data")
             .WithEnvironment("TYPESENSE_API_KEY", apiKey)
-            .WithEnvironment("TYPESENSE_ENABLE_CORS", Helpers.GetEnv("TYPESENSE_ENABLE_CORS"))
+            .WithEnvironment("TYPESENSE_ENABLE_CORS", Environment.GetEnvironmentVariable("TYPESENSE_ENABLE_CORS") ?? "false")
             // Internal-only: the compose export keeps this off the host network.
             .WithHttpEndpoint(port: Ports.Typesense, targetPort: 8108, name: "http");
     }

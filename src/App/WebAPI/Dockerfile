@@ -8,6 +8,7 @@ WORKDIR /src
 
 COPY Directory.Packages.props ./
 # Project files first so the restore layer caches until dependencies change.
+COPY App/ApplicationContracts/ App/ApplicationContracts/
 COPY App/Shared/Shared.csproj App/Shared/
 COPY App/StorageExtensions/StorageExtensions.csproj App/StorageExtensions/
 COPY App/ServiceDefaults/ServiceDefaults.csproj App/ServiceDefaults/

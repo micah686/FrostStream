@@ -52,7 +52,7 @@ public static class AppHostHardening
             OpenFgaApiToken: Helpers.GetEnv("OPENFGA_API_TOKEN"));
     }
 
-    public static void Validate(AppHostHardeningOptions options)
+    public static void Validate(AppHostHardeningOptions options, bool lite = false)
     {
         if (!options.IsProduction)
         {
@@ -61,12 +61,12 @@ public static class AppHostHardening
 
         var errors = new List<string>();
 
-        if (options.SingleUserMode && !IsTruthy(Environment.GetEnvironmentVariable("AUTH_ALLOW_SINGLE_USER_MODE_IN_PRODUCTION")))
+        if (!lite && options.SingleUserMode && !IsTruthy(Environment.GetEnvironmentVariable("AUTH_ALLOW_SINGLE_USER_MODE_IN_PRODUCTION")))
         {
             errors.Add("SINGLE_USER_MODE is not allowed when FROSTSTREAM_PRODUCTION=true unless AUTH_ALLOW_SINGLE_USER_MODE_IN_PRODUCTION=true.");
         }
 
-        if (!options.EnableHttps)
+        if (!lite && !options.EnableHttps)
         {
             errors.Add("ENABLE_HTTPS=true is required when FROSTSTREAM_PRODUCTION=true.");
         }
@@ -83,8 +83,11 @@ public static class AppHostHardening
             errors.Add("AUTHENTIK_AUTHORITY must use https:// in production.");
         }
 
-        RequireStrongSecret(errors, "POSTGRES_PASSWORD", Environment.GetEnvironmentVariable("POSTGRES_PASSWORD"),  16);
-        RequireStrongSecret(errors, "OPENBAO_TOKEN", Environment.GetEnvironmentVariable("OPENBAO_TOKEN"), 32);
+        if (!lite)
+        {
+            RequireStrongSecret(errors, "POSTGRES_PASSWORD", Environment.GetEnvironmentVariable("POSTGRES_PASSWORD"),  16);
+            RequireStrongSecret(errors, "OPENBAO_TOKEN", Environment.GetEnvironmentVariable("OPENBAO_TOKEN"), 32);
+        }
         RequireStrongSecret(errors, "TYPESENSE_API_KEY", Environment.GetEnvironmentVariable("TYPESENSE_API_KEY"), 32);
 
         if (Helpers.LiveChatEnabled)

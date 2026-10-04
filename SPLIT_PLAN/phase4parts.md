@@ -49,6 +49,11 @@ This breaks Phase 4 of [SIDE_PLAN.MD](SIDE_PLAN.MD) into ordered, reviewable sub
 
 **Completion:** A clean build produces installable Full and Lite profiles from the shared AppHost configuration, with Lite carrying its required runtime assets and no removed infrastructure dependencies.
 
+**Implementation:** The shared AppHost selects `Deployment:Mode=Full|Lite` (Full by default). Lite publishes only its combined host, the shared frontend, Typesense, POT provider, and configured optional ClickHouse; Full retains its service graph and HTTP backup adapter. `src/App/generateProfiles.sh` emits both installable Compose profiles with private, populated parameter files and development tools disabled. The Lite Dockerfile packages ffmpeg/ffprobe, versioned yt-dlp and Deno, and the matching bgutil plugin at build time. Full service Dockerfiles now include the extracted ApplicationContracts dependency. Lite database, backup and key-ring locations are configurable and persist under the default `/data` volume. [Deployment instructions](../docs/DEPLOYMENT_PROFILES.md) cover prerequisites, configuration, image builds, storage overrides, backups, upgrades and each profile's recovery procedure; generated local artifacts are ignored by Git.
+
+**Validation:** AppHost builds and publishes both profiles. Generated-profile checks pass with ClickHouse disabled and enabled; Compose interpolation preserves custom database, backup and key-ring paths. All seven Full application/PostgreSQL images, the Lite image, and the shared frontend image build successfully on Linux amd64. Lite's packaged tools execute with networking disabled, schema-only initialization succeeds, and an isolated Lite container with Typesense/POT reaches `/health` and returns the expected SQLite capabilities. Full installation/runtime release checks, arm64 execution and CI publication remain in 4e.
+
+
 ## Phase 4e — Release verification
 
 - Run shared API, repository, and workflow checks against both deployment profiles and assert route parity.

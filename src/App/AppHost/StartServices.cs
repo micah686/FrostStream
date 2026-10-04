@@ -333,7 +333,7 @@ public static class StartServices
     }
     
     
-    private static void WireFrontend(
+    internal static void WireFrontend(
         IDistributedApplicationBuilder builder,
         IResourceBuilder<ProjectResource> webapi,
         string webApiEndpointName)
@@ -366,7 +366,7 @@ public static class StartServices
     private static string FrontendPublicOrigin()
         => (Environment.GetEnvironmentVariable("FRONTEND_PUBLIC_ORIGIN") ?? $"http://localhost:{Ports.Frontend}").TrimEnd('/');
 
-    private static IResourceBuilder<TResource> WithLocalComposeBuild<TResource>(
+    internal static IResourceBuilder<TResource> WithLocalComposeBuild<TResource>(
         this IResourceBuilder<TResource> resource,
         string image,
         string dockerfile)
