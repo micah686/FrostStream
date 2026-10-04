@@ -83,7 +83,7 @@ public sealed record BackgroundRunView
 /// ever picks up is held for <see cref="QueuedRetention"/> — long enough to be noticed as stuck.
 /// </summary>
 public sealed class BackgroundJobHub(IMessageBus messageBus, IClock clock, ILogger<BackgroundJobHub> logger)
-    : BackgroundService
+    : SubscriptionBackgroundService
 {
     private const int MaxLogLines = 200;
     private const int MaxCompletedRetained = 25;
@@ -92,37 +92,22 @@ public sealed class BackgroundJobHub(IMessageBus messageBus, IClock clock, ILogg
 
     private readonly ConcurrentDictionary<Guid, BackgroundRunView> _runs = new();
     private readonly ConcurrentDictionary<Guid, Channel<BackgroundRunStreamEvent>> _subscribers = new();
-    private readonly List<ISubscription> _subscriptions = [];
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
     {
-        _subscriptions.Add(await messageBus.SubscribeAsync<BackgroundRunDispatched>(
-            BackgroundRunSubjects.Dispatched, HandleDispatchedAsync, queueGroup: null, cancellationToken: stoppingToken));
-        _subscriptions.Add(await messageBus.SubscribeAsync<BackgroundRunStarted>(
-            BackgroundRunSubjects.Started, HandleStartedAsync, queueGroup: null, cancellationToken: stoppingToken));
-        _subscriptions.Add(await messageBus.SubscribeAsync<BackgroundRunProgress>(
-            BackgroundRunSubjects.Progress, HandleProgressAsync, queueGroup: null, cancellationToken: stoppingToken));
-        _subscriptions.Add(await messageBus.SubscribeAsync<BackgroundRunCompleted>(
-            BackgroundRunSubjects.Completed, HandleCompletedAsync, queueGroup: null, cancellationToken: stoppingToken));
+        await SubscribeAsync<BackgroundRunDispatched>(messageBus,
+            BackgroundRunSubjects.Dispatched, HandleDispatchedAsync, queueGroup: null, cancellationToken: stoppingToken);
+        await SubscribeAsync<BackgroundRunStarted>(messageBus,
+            BackgroundRunSubjects.Started, HandleStartedAsync, queueGroup: null, cancellationToken: stoppingToken);
+        await SubscribeAsync<BackgroundRunProgress>(messageBus,
+            BackgroundRunSubjects.Progress, HandleProgressAsync, queueGroup: null, cancellationToken: stoppingToken);
+        await SubscribeAsync<BackgroundRunCompleted>(messageBus,
+            BackgroundRunSubjects.Completed, HandleCompletedAsync, queueGroup: null, cancellationToken: stoppingToken);
 
-        try
-        {
-            await Task.Delay(Timeout.Infinite, stoppingToken);
-        }
-        catch (OperationCanceledException)
-        {
-        }
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        foreach (var subscription in _subscriptions)
-        {
-            await subscription.StopAsync(cancellationToken);
-            await subscription.DisposeAsync();
-        }
-        _subscriptions.Clear();
-
         foreach (var (_, channel) in _subscribers)
             channel.Writer.TryComplete();
 

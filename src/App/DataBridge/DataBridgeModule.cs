@@ -42,6 +42,7 @@ public static class DataBridgeModule
         builder.AddDataBridgePersistence();
         var persistence = PersistenceOptions.FromConfiguration(builder.Configuration, builder.Environment.ContentRootPath);
         builder.Services.AddApplicationTransport(builder.Configuration);
+        var liteMode = DeploymentOptions.FromConfiguration(builder.Configuration).Mode == DeploymentMode.Lite;
 
         var connectionString = builder.Configuration.GetConnectionString("froststreamdb")
             ?? "Host=localhost;Port=5432;Database=froststreamdb;Username=postgres;Password=postgres";
@@ -67,6 +68,11 @@ public static class DataBridgeModule
         builder.Services.AddApplicationSecretStore(builder.Configuration);
         builder.Services.AddFrostStreamStorage();
 
+        if (liteMode)
+        {
+            builder.Services.AddHostedService<SingleUserOwnerSeederService>();
+            builder.Services.AddHostedService<DownloadFlowStartupService>();
+        }
         builder.Services.AddFlows(c => c
             .UsePersistenceStore(persistence, connectionString)
             // Cleipnir's DefaultSerializer has no NodaTime support and collapses every Instant in a
@@ -81,9 +87,7 @@ public static class DataBridgeModule
         // Host construction may instantiate flows; their watchdogs are gated by the store until
         // reconciliation commits. Every application consumer starts after this blocking service.
         builder.Services.PostConfigure<HostOptions>(o => o.ServicesStartConcurrently = false);
-        var liteMode = DeploymentOptions.FromConfiguration(builder.Configuration).Mode == DeploymentMode.Lite;
-        if (liteMode) builder.Services.AddHostedService<SingleUserOwnerSeederService>();
-        builder.Services.AddHostedService<DownloadFlowStartupService>();
+        if (!liteMode) builder.Services.AddHostedService<DownloadFlowStartupService>();
 
         builder.Services.AddSingleton<IDownloadJobStateNotifier, DownloadJobStateNotifier>();
         builder.Services.AddScoped<IDownloadJobsRepository, DownloadJobsRepository>();

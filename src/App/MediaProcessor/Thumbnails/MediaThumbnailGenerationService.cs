@@ -12,7 +12,7 @@ namespace MediaProcessor.Thumbnails;
 public sealed class MediaThumbnailGenerationService(
     IDurableJobConsumer consumer,
     IMessageBus messageBus,
-    MediaProcessorStorageClient storageClient,
+    IMediaProcessorStorageClient storageClient,
     FfmpegRunner ffmpeg,
     IOptions<MediaProcessorOptions> options,
     [Microsoft.Extensions.DependencyInjection.FromKeyedServices("media-processor")] IBackgroundRunReporter runReporter,

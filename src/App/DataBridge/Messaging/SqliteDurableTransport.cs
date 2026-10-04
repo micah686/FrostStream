@@ -18,17 +18,20 @@ public sealed class SqliteDurableTransport : IDurableJobPublisher, IDurableJobCo
     private readonly AsyncLocal<Delivery?> current = new();
     private readonly Dictionary<(string, string), string> routes = new();
     private readonly TimeSpan leaseDuration;
+    private readonly Lazy<Task> initialization;
+    private readonly Shared.Deployment.ApplicationStartupGate? startup;
     private readonly JsonSerializerOptions json = new JsonSerializerOptions(JsonSerializerDefaults.Web).ConfigureForNodaTime(DateTimeZoneProviders.Tzdb);
 
     public SqliteDurableTransport(SqliteConnectionFactory connections, ILogger<SqliteDurableTransport> logger,
-        TimeSpan? leaseDuration = null)
+        TimeSpan? leaseDuration = null, Shared.Deployment.ApplicationStartupGate? startup = null)
     {
         this.logger = logger;
+        this.startup = startup;
         json.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
         this.leaseDuration = leaseDuration ?? TimeSpan.FromMinutes(2);
         if (this.leaseDuration <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(leaseDuration));
         db = new(connections);
-        db.Write(s => s.Execute("""
+        initialization = new Lazy<Task>(() => db.Write(s => s.Execute("""
             CREATE TABLE IF NOT EXISTS messaging_messages(
                 seq INTEGER PRIMARY KEY AUTOINCREMENT, subject TEXT NOT NULL, message_id TEXT NOT NULL UNIQUE,
                 payload TEXT NOT NULL, headers TEXT NOT NULL, created INTEGER NOT NULL);
@@ -37,7 +40,7 @@ public sealed class SqliteDurableTransport : IDurableJobPublisher, IDurableJobCo
                 attempts INTEGER NOT NULL DEFAULT 0, token TEXT, available INTEGER NOT NULL DEFAULT 0,
                 acknowledged INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(consumer,seq));
             CREATE INDEX IF NOT EXISTS messaging_inbox_pending ON messaging_inbox(consumer,acknowledged,available);
-            """)).GetAwaiter().GetResult();
+            """)));
         Conduit.NATS.ITopologySource[] sources = [new DownloadTopology(), new ArtifactStorageTopology(),
             new LocalImportTopology(), new PlaylistTopology(), new BackgroundJobsTopology()];
         foreach (var spec in sources.SelectMany(s => s.GetConsumers()))
@@ -62,6 +65,7 @@ public sealed class SqliteDurableTransport : IDurableJobPublisher, IDurableJobCo
         ArgumentException.ThrowIfNullOrWhiteSpace(subject);
         ArgumentException.ThrowIfNullOrWhiteSpace(messageId);
         cancellationToken.ThrowIfCancellationRequested();
+        await initialization.Value.WaitAsync(cancellationToken);
         var outgoing = new Outgoing(subject, messageId, JsonSerializer.Serialize(message, json),
             JsonSerializer.Serialize(headers?.Headers ?? new(), json), Now);
         if (current.Value is { } delivery)
@@ -120,6 +124,8 @@ public sealed class SqliteDurableTransport : IDurableJobPublisher, IDurableJobCo
 
     private async Task Run<T>(string consumer, string filter, Func<IDurableMessageContext<T>, Task> handler, CancellationToken ct)
     {
+        if (startup is not null) await startup.WaitAsync(ct);
+        await initialization.Value.WaitAsync(ct);
         while (!ct.IsCancellationRequested)
         {
             var delivery = await db.Write(s =>

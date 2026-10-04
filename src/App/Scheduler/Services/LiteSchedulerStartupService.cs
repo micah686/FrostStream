@@ -18,7 +18,8 @@ public sealed class LiteSchedulerStartupService(
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         var registrations = services.GetServices<IHostedService>()
-            .OfType<SubscriptionBackgroundService>().Select(service => service.RegistrationCompleted);
+            .TakeWhile(service => !ReferenceEquals(service, this))
+            .OfType<FrostStream.ApplicationContracts.IApplicationHandlerInitialization>().Select(service => service.RegistrationCompleted);
         await Task.WhenAll(registrations).WaitAsync(cancellationToken);
         scheduler = await schedulerFactory.GetScheduler(cancellationToken);
         try

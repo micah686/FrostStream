@@ -14,6 +14,35 @@ public sealed class SqliteDurableTransportTests
         NullLogger<SqliteDurableTransport>.Instance, lease);
 
     [Test]
+    public async Task Consumer_Waits_For_Handler_Startup_Before_Delivering_Persisted_Work()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        try
+        {
+            var path = Path.Combine(directory, "test.db");
+            var gate = new Shared.Deployment.ApplicationStartupGate();
+            var transport = new SqliteDurableTransport(new SqliteConnectionFactory(new(PersistenceProvider.Sqlite, path, 5)),
+                NullLogger<SqliteDurableTransport>.Instance, startup: gate);
+            File.Exists(path).ShouldBeFalse();
+            await transport.PublishAsync("test.input", 1, "before-startup");
+            var delivered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var consuming = transport.ConsumeAsync<int>(StreamName.From("test"), SubjectName.From("test.input"), async context =>
+            {
+                await context.AckAsync();
+                delivered.TrySetResult();
+            }, cancellationToken: stop.Token);
+            await Task.Delay(100, stop.Token);
+            delivered.Task.IsCompleted.ShouldBeFalse();
+            gate.Release();
+            await delivered.Task.WaitAsync(stop.Token);
+            stop.Cancel();
+            try { await consuming; } catch (OperationCanceledException) { }
+        }
+        finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); }
+    }
+
+    [Test]
     public async Task Expired_Lease_Is_Reclaimed_And_Old_Acknowledgment_Is_Fenced()
     {
         var dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));

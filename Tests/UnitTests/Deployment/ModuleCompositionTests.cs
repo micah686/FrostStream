@@ -56,6 +56,11 @@ public sealed class ModuleCompositionTests
                 .ShouldBeLessThan(hostedTypes.IndexOf(typeof(global::Scheduler.Services.LiteSchedulerStartupService)));
             builder.Services.ShouldNotContain(d => d.ServiceType == typeof(ITopologySource));
             builder.Services.ShouldNotContain(d => d.ServiceType == typeof(NATS.Client.Core.INatsConnection));
+            builder.Services.ShouldNotContain(d => d.ServiceType == typeof(Npgsql.NpgsqlDataSource));
+            provider.GetRequiredService<Shared.Backups.IBackupServiceClient>()
+                .ShouldBeOfType<Shared.Backups.UnavailableLocalBackupClient>();
+            provider.GetRequiredService<global::MediaProcessor.Storage.IMediaProcessorStorageClient>()
+                .ShouldBeOfType<global::MediaProcessor.Storage.LocalMediaProcessorStorageClient>();
             builder.Services.ShouldNotContain(d => d.ServiceType == typeof(global::WebAPI.Auth.NatsBffTicketStore));
             provider.GetRequiredService<Func<string, FrostStream.ApplicationContracts.IStagedObjectStore>>() ("manifests")
                 .ShouldBeOfType<global::DataBridge.Persistence.Sqlite.SqliteStagedObjectStore>();
@@ -101,6 +106,7 @@ public sealed class ModuleCompositionTests
     {
         var builder = Builder();
         builder.Configuration["Deployment:Mode"] = "Lite";
+        builder.Configuration["Persistence:Sqlite:Enabled"] = "true";
         DeploymentOptions.FromConfiguration(builder.Configuration).Mode.ShouldBe(DeploymentMode.Lite);
         builder.AddLiteModules();
         await using var provider = builder.Services.BuildServiceProvider();
@@ -131,8 +137,15 @@ public sealed class ModuleCompositionTests
     public async Task Full_And_Combined_Hosts_Discover_Identical_Controller_Routes()
     {
         var full = Builder();
+        full.Configuration["Auth:SingleUserMode"] = "false";
+        full.Configuration["Auth:Authority"] = "https://identity.example.test";
+        full.Configuration["Auth:PublicOrigin"] = "https://app.example.test";
+        full.Configuration["Auth:ClientId"] = "test";
+        full.Configuration["Auth:ClientSecret"] = "test";
+        full.Configuration["Auth:Scopes"] = "openid profile offline_access";
         full.AddWebAPIModule();
         var combined = Builder();
+        combined.ConfigureLiteHost();
         combined.AddLiteModules();
         await using var fullApp = full.Build();
         await using var combinedApp = combined.Build();

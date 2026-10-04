@@ -47,7 +47,7 @@ public sealed class DownloadCommandsConsumerService(
     PotOptionsApplier potOptionsApplier,
     IReturnYouTubeDislikeClient returnYouTubeDislikeClient,
     LiveChatSidecarProcessor liveChatSidecarProcessor,
-    ILogger<DownloadCommandsConsumerService> logger) : BackgroundService
+    ILogger<DownloadCommandsConsumerService> logger) : InitializingBackgroundService
 {
     private const string MediaFileBase = "media";
     private static readonly StreamName Stream = StreamName.From(DownloadTopology.StreamNameValue);
@@ -70,7 +70,7 @@ public sealed class DownloadCommandsConsumerService(
     private ISubscription? _cancelSubscription;
     private CancellationToken _serviceStoppingToken;
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task ExecuteInitializedAsync(CancellationToken stoppingToken)
     {
         _serviceStoppingToken = stoppingToken;
         // Remove any cookie scratch dirs left behind by a previous crash before serving traffic.
@@ -127,6 +127,7 @@ public sealed class DownloadCommandsConsumerService(
             string.Join(", ", tags),
             options.AcceptsUntaggedJobs);
 
+        MarkInitialized();
         await Task.WhenAll(consumerTasks);
     }
 

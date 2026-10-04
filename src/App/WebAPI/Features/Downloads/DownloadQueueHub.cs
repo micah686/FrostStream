@@ -32,51 +32,31 @@ public abstract record QueueStreamEvent
 /// Progress is coalesced to at most one frame per job per <see cref="ProgressInterval"/>; state and
 /// terminal/phase-change progress frames are never dropped.
 /// </summary>
-public sealed class DownloadQueueHub(IMessageBus messageBus, ILogger<DownloadQueueHub> logger) : BackgroundService
+public sealed class DownloadQueueHub(IMessageBus messageBus, ILogger<DownloadQueueHub> logger) : SubscriptionBackgroundService
 {
     private readonly ConcurrentDictionary<Guid, Subscriber> _subscribers = new();
     private readonly ProgressForwardGate _progressGate = new(ProgressForwardGate.DefaultInterval);
-    private ISubscription? _progressSubscription;
-    private ISubscription? _stateSubscription;
 
     private sealed record Subscriber(Guid? JobFilter, Channel<QueueStreamEvent> Channel);
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
     {
-        _progressSubscription = await messageBus.SubscribeAsync<DownloadProgress>(
+        await SubscribeAsync<DownloadProgress>(messageBus,
             DownloadSubjects.DownloadProgress,
             HandleProgressAsync,
             queueGroup: null,
             cancellationToken: stoppingToken);
 
-        _stateSubscription = await messageBus.SubscribeAsync<DownloadQueueStateChanged>(
+        await SubscribeAsync<DownloadQueueStateChanged>(messageBus,
             DownloadQueueSubjects.StateChanged,
             HandleStateAsync,
             queueGroup: null,
             cancellationToken: stoppingToken);
 
-        try
-        {
-            await Task.Delay(Timeout.Infinite, stoppingToken);
-        }
-        catch (OperationCanceledException)
-        {
-        }
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        foreach (var subscription in new[] { _progressSubscription, _stateSubscription })
-        {
-            if (subscription is not null)
-            {
-                await subscription.StopAsync(cancellationToken);
-                await subscription.DisposeAsync();
-            }
-        }
-        _progressSubscription = null;
-        _stateSubscription = null;
-
         foreach (var (_, subscriber) in _subscribers)
             subscriber.Channel.Writer.TryComplete();
 

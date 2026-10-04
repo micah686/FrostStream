@@ -13,13 +13,15 @@ public sealed class ImportDispatcherService(
     IServiceScopeFactory scopeFactory,
     LocalImportItemV2Flows flows,
     IClock clock,
-    ILogger<ImportDispatcherService> logger) : BackgroundService
+    ILogger<ImportDispatcherService> logger,
+    Shared.Deployment.ApplicationStartupGate? startup = null) : BackgroundService
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
     private static readonly Duration HashingClaimTimeout = Duration.FromMinutes(5);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if (startup is not null) await startup.WaitAsync(stoppingToken);
         using var timer = new PeriodicTimer(PollInterval);
         while (!stoppingToken.IsCancellationRequested)
         {

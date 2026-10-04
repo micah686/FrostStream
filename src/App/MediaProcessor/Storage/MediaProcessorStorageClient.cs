@@ -10,7 +10,7 @@ namespace MediaProcessor.Storage;
 public sealed class MediaProcessorStorageClient(
     HttpClient httpClient,
     IOptions<MediaProcessorOptions> options,
-    ILogger<MediaProcessorStorageClient> logger)
+    ILogger<MediaProcessorStorageClient> logger) : IMediaProcessorStorageClient
 {
     public async Task DownloadToFileAsync(
         string storageKey,

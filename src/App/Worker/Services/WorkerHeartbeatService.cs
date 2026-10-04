@@ -11,7 +11,8 @@ public sealed class WorkerHeartbeatService(
     IMessageBus messageBus,
     IOptions<WorkerOptions> options,
     IClock clock,
-    ILogger<WorkerHeartbeatService> logger) : BackgroundService
+    ILogger<WorkerHeartbeatService> logger,
+    Shared.Deployment.ApplicationStartupGate? startup = null) : BackgroundService
 {
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(15);
     private readonly string workerId = Environment.GetEnvironmentVariable("FROSTSTREAM_WORKER_ID")
@@ -19,6 +20,7 @@ public sealed class WorkerHeartbeatService(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if (startup is not null) await startup.WaitAsync(stoppingToken);
         while (!stoppingToken.IsCancellationRequested)
         {
             var configured = options.Value;

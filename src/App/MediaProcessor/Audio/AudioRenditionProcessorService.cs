@@ -17,7 +17,7 @@ namespace MediaProcessor.Audio;
 public sealed class AudioRenditionProcessorService(
     IDurableJobConsumer consumer,
     IMessageBus messageBus,
-    MediaProcessorStorageClient storageClient,
+    IMediaProcessorStorageClient storageClient,
     FfmpegRunner ffmpeg,
     IOptions<MediaProcessorOptions> options,
     IClock clock,

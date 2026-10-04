@@ -17,7 +17,7 @@ namespace MediaProcessor.Video;
 public sealed class StreamRenditionProcessorService(
     IDurableJobConsumer consumer,
     IMessageBus messageBus,
-    MediaProcessorStorageClient storageClient,
+    IMediaProcessorStorageClient storageClient,
     FfmpegRunner ffmpeg,
     IOptions<MediaProcessorOptions> options,
     IClock clock,

@@ -16,7 +16,7 @@ namespace Worker.Services;
 /// queue group, which replays it against a nearby bgutil provider and returns the response. Tokens are
 /// bound to the request's visitor/account context (not the broker's IP), so any healthy broker works.
 /// </summary>
-public sealed class PotShimService : BackgroundService
+public sealed class PotShimService : InitializingBackgroundService
 {
     private readonly IMessageBus _messageBus;
     private readonly PotProviderOptions _options;
@@ -45,16 +45,18 @@ public sealed class PotShimService : BackgroundService
         }
     }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task ExecuteInitializedAsync(CancellationToken stoppingToken)
     {
         if (!_options.Enabled || _prefix is null)
         {
+            MarkInitialized();
             return;
         }
 
         using var listener = new HttpListener();
         listener.Prefixes.Add(_prefix);
         listener.Start();
+        MarkInitialized();
         _logger.LogInformation("POT shim listening on {BaseUrl} (tunnelling to '{QueueGroup}' over NATS).",
             _endpoint.BaseUrl, PotSubjects.BrokersQueueGroup);
 

@@ -12,39 +12,24 @@ namespace WebAPI.Features.Media;
 /// re-snapshots rendition status via the existing query endpoints. No re-throttling happens here —
 /// MediaProcessor already gates frames at the producer.
 /// </summary>
-public sealed class RenditionProgressHub(IMessageBus messageBus, ILogger<RenditionProgressHub> logger) : BackgroundService
+public sealed class RenditionProgressHub(IMessageBus messageBus, ILogger<RenditionProgressHub> logger) : SubscriptionBackgroundService
 {
     private readonly ConcurrentDictionary<Guid, Subscriber> _subscribers = new();
-    private ISubscription? _subscription;
 
     private sealed record Subscriber(Guid? MediaGuidFilter, Channel<RenditionProgress> Channel);
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
     {
-        _subscription = await messageBus.SubscribeAsync<RenditionProgress>(
+        await SubscribeAsync<RenditionProgress>(messageBus,
             RenditionProgressSubjects.Progress,
             HandleProgressAsync,
             queueGroup: null,
             cancellationToken: stoppingToken);
 
-        try
-        {
-            await Task.Delay(Timeout.Infinite, stoppingToken);
-        }
-        catch (OperationCanceledException)
-        {
-        }
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        if (_subscription is not null)
-        {
-            await _subscription.StopAsync(cancellationToken);
-            await _subscription.DisposeAsync();
-            _subscription = null;
-        }
-
         foreach (var (_, subscriber) in _subscribers)
             subscriber.Channel.Writer.TryComplete();
 

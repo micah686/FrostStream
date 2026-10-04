@@ -3,7 +3,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace Shared.Messaging;
 
-public abstract class SubscriptionBackgroundService : BackgroundService
+public abstract class SubscriptionBackgroundService : BackgroundService, IApplicationHandlerInitialization
 {
     private readonly List<ISubscription> _subscriptions = [];
     private readonly TaskCompletionSource registrationCompleted = new(TaskCreationOptions.RunContinuationsAsynchronously);

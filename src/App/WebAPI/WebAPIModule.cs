@@ -332,8 +332,7 @@ public static class WebAPIModule
             });
         
         builder.Services.AddSingleton<IClock>(NodaTime.SystemClock.Instance);
-        builder.Services.AddHttpClient<IBackupServiceClient, BackupServiceClient>(client =>
-            client.BaseAddress = new Uri(builder.Configuration["BackupService:BaseUrl"] ?? "http://backupservice"));
+        Shared.Backups.ApplicationBackupRegistration.AddApplicationBackupClient(builder.Services, builder.Configuration);
         builder.Services.AddSingleton<BackupJobService>();
         builder.Services.AddSingleton<DownloadQueueHub>();
         builder.Services.AddHostedService<DownloadQueueHub>(p => p.GetRequiredService<DownloadQueueHub>());
@@ -412,7 +411,9 @@ public static class WebAPIModule
                 context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
                 await context.Response.WriteAsJsonAsync(new
                 {
-                    error = "The backup service is unavailable. Check its health and configured backup directory."
+                    error = ex is LocalBackupUnavailableException
+                        ? ex.Message
+                        : "The backup service is unavailable. Check its health and configured backup directory."
                 });
             }
         });

@@ -4,7 +4,8 @@ using DataBridge.Persistence;
 using WebAPI;
 
 var builder = WebApplication.CreateBuilder(args);
-// Schema initialization is intentionally available without starting unported consumers/flows.
+builder.ConfigureLiteHost();
+// Schema-only initialization does not start the runtime.
 if (builder.Configuration.GetValue<bool>("Persistence:InitializeOnly"))
 {
     builder.AddDataBridgePersistence();
@@ -18,6 +19,10 @@ if (builder.Configuration.GetValue<bool>("Persistence:InitializeOnly"))
 builder.AddServiceDefaults();
 builder.AddLiteModules();
 var app = builder.Build();
-app.InitializeDataBridge();
 app.MapWebAPIModule();
+app.MapHealthChecks("/health").AllowAnonymous();
+app.MapHealthChecks("/alive", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = registration => registration.Tags.Contains("live")
+}).AllowAnonymous();
 await app.RunAsync();

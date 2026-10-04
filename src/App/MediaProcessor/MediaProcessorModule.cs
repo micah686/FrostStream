@@ -40,7 +40,13 @@ public static class MediaProcessorModule
         builder.Services.AddModuleTopology<BackgroundJobsTopology>();
         builder.Services.AddOptions<MediaProcessorOptions>()
             .Bind(builder.Configuration.GetSection(MediaProcessorOptions.SectionName));
-        builder.Services.AddHttpClient<MediaProcessorStorageClient>();
+        if (DeploymentOptions.FromConfiguration(builder.Configuration).Mode == DeploymentMode.Lite)
+            builder.Services.AddSingleton<IMediaProcessorStorageClient, LocalMediaProcessorStorageClient>();
+        else
+        {
+            builder.Services.AddHttpClient<MediaProcessorStorageClient>();
+            builder.Services.AddTransient<IMediaProcessorStorageClient>(sp => sp.GetRequiredService<MediaProcessorStorageClient>());
+        }
         builder.Services.AddSingleton<IClock>(SystemClock.Instance);
         builder.Services.AddKeyedSingleton<IBackgroundRunReporter>("media-processor", (sp, _) => new BackgroundRunReporter(
             sp.GetRequiredService<FrostStream.ApplicationContracts.IMessageBus>(),

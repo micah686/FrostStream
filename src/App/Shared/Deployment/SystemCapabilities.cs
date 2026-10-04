@@ -16,7 +16,9 @@ public sealed record SystemCapabilities(
             LiveChat: configuration.GetValue("LiveChat:Enabled", false),
             PotProvider: configuration.GetValue("PotBroker:Enabled", false) || configuration.GetValue("PotProvider:Enabled", false)),
         new(Enabled: !AuthMode.IsSingleUserMode(configuration)),
-        new(Provider: "PostgreSQL", Full: true, Differential: true, Incremental: true, Verification: true, PointInTimeRecovery: true));
+        deployment.Mode == Shared.Deployment.DeploymentMode.Lite
+            ? new(Provider: "SQLite", Full: false, Differential: false, Incremental: false, Verification: false, PointInTimeRecovery: false)
+            : new(Provider: "PostgreSQL", Full: true, Differential: true, Incremental: true, Verification: true, PointInTimeRecovery: true));
 }
 
 public sealed record IntegrationCapabilities(bool Search, bool LiveChat, bool PotProvider);
