@@ -33,7 +33,7 @@
   ];
 
   const sections = $derived(
-    data.singleUser
+    !data.accessManagementEnabled
       ? allSections.filter((section) => section.href !== '/admin/access-control')
       : allSections
   );
@@ -49,7 +49,7 @@
 <section class="min-h-[calc(100vh-7rem)]" aria-labelledby="admin-title">
   <div class="min-w-0">
     <h1 id="admin-title" class="text-2xl font-bold tracking-tight text-base-content">Administration</h1>
-    <p class="mt-2 text-sm text-base-content/60">Server-wide settings · requires Owner</p>
+    <p class="mt-2 text-sm text-base-content/60">Server-wide settings{data.lite ? '' : ' · requires Owner'}</p>
   </div>
 
   <div class="mt-6 grid gap-6 xl:grid-cols-[16rem_minmax(0,1fr)]">

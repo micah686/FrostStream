@@ -396,7 +396,7 @@
       >
         {data.user.initials}
       </a>
-    {:else}
+    {:else if !data.lite}
       <a class="btn btn-sm btn-primary text-xs" href="/auth/login">
         <LogIn class="mr-1.5 h-4 w-4" />
         Login

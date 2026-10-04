@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { requiresLogin } from '$lib/frontendAccess';
   import { page } from '$app/state';
   import { onDestroy } from 'svelte';
   import { Select } from '$lib/components/ui';
@@ -363,7 +364,7 @@
       const response = await fetch(`/api/metadata/accounts/${id}`);
       if (!response.ok) {
         loadError =
-          response.status === 401
+          requiresLogin(response.status)
             ? 'Your session has expired — log in again from the button in the top bar.'
             : response.status === 404
               ? 'This creator does not exist on the server.'

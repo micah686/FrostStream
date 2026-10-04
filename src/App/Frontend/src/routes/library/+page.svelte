@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { requiresLogin } from '$lib/frontendAccess';
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
@@ -154,6 +155,7 @@
   async function loadPage(target: number) {
     loading = true;
     loadError = null;
+    needsLogin = false;
 
     try {
       if (activeTab === 'History') {
@@ -192,7 +194,7 @@
         sortOrder
       });
       const response = await fetch(`/api/metadata?${query}`);
-      if (response.status === 401) {
+      if (requiresLogin(response.status)) {
         needsLogin = true;
         loadError = 'Your session has expired.';
         return;
@@ -440,7 +442,7 @@
       >
         <CircleAlert class="h-4 w-4 shrink-0" />
         <span>{loadError}</span>
-        {#if needsLogin}
+        {#if needsLogin && requiresLogin(401)}
           <a class="btn btn-sm btn-primary ml-auto text-xs" href="/auth/login">
             Log in again
           </a>

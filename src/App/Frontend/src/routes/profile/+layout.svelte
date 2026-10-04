@@ -24,7 +24,7 @@
 
   let { data, children } = $props();
 
-  const authLabel = $derived(data.singleUser ? 'Owner' : 'Signed in');
+  const authLabel = $derived(data.lite ? 'Admin' : data.singleUser ? 'Owner' : 'Signed in');
 
   const sections: ProfileSection[] = [
     { label: 'Overview', icon: User, href: '/profile' },
@@ -68,7 +68,7 @@
     </div>
 
     <div class="flex flex-wrap items-center gap-2">
-      {#if !data.singleUser}
+      {#if !data.lite && !data.singleUser}
         <button class="btn btn-sm btn-neutral text-xs" onclick={() => void logout()}>
           <LogOut class="mr-1.5 h-4 w-4" />
           Sign out

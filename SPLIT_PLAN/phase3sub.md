@@ -54,6 +54,8 @@ This breaks Phase 3 of `SIDE_PLAN.MD` into ordered, reviewable subphases. Phases
 
 **Completion:** Lite users can navigate and use normal feature flows without login redirects or permission restrictions, and validation and Full's access controls remain functional.
 
+**Implementation:** The shared frontend loads `/api/system/capabilities` before the session and uses its deployment mode to configure centralized permission and login behavior. Lite permits frontend permission decisions, suppresses session/API login redirects and external-auth CSRF/logout requests, presents Admin in the profile, and hides login, sign-out, and access-management controls. Direct access-management URLs (including nested editors and legacy redirects) return to Administration before their controls load. Session failures, API errors, form validation, and feature-state restrictions remain visible and functional. Full retains permission decisions, login return paths, CSRF behavior, and its configured access-management controls. `pnpm test:access` exercises Lite/Full behavior against production load and HTTP modules.
+
 ## Phase 3f — Encrypted local secret storage
 
 - Implement `ISecretStore` using encrypted SQLite values.

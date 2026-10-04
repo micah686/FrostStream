@@ -1,3 +1,5 @@
+import { requiresLogin, usesExternalAuthentication } from '$lib/frontendAccess';
+
 export class ApiRequestError extends Error {
   constructor(
     message: string,
@@ -30,7 +32,7 @@ async function apiFetch(
   transport: typeof fetch = nativeFetch ?? fetch
 ): Promise<Response> {
   const method = (init.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase();
-  const csrfProtected = isUnsafe(method) && isSameOriginApi(input);
+  const csrfProtected = usesExternalAuthentication() && isUnsafe(method) && isSameOriginApi(input);
   let requestInit: RequestInit = { ...init, credentials: init.credentials ?? 'same-origin' };
 
   if (csrfProtected) {
@@ -43,7 +45,7 @@ async function apiFetch(
     response = await transport(input, withCsrfHeader(requestInit, await getCsrfToken(transport)));
   }
 
-  if (response.status === 401 && isSameOriginApi(input)) {
+  if (requiresLogin(response.status) && isSameOriginApi(input)) {
     navigateToLoginOnce();
   }
 
@@ -51,6 +53,7 @@ async function apiFetch(
 }
 
 export async function logout(): Promise<void> {
+  if (!usesExternalAuthentication()) return;
   const response = await fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' });
   if (!response.ok) {
     throw new ApiRequestError('Sign out failed.', response.status);

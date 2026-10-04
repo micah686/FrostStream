@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { requiresLogin, hasFrontendPermission } from '$lib/frontendAccess';
   import { page } from '$app/state';
   import { tick } from 'svelte';
   import { goto } from '$app/navigation';
@@ -618,11 +619,11 @@
           'The archived media file is missing from storage. If this item was downloaded before the storage mount was fixed, queue it again with Force download enabled.';
         return;
       }
-      if (response.status === 401) {
+      if (requiresLogin(response.status)) {
         streamError = 'Your session has expired. Log in again before playback.';
         return;
       }
-      if (response.status === 403) {
+      if (!hasFrontendPermission(response.status !== 403)) {
         streamError = 'You do not have permission to play this media.';
         return;
       }
@@ -811,7 +812,7 @@
       const response = await fetch(`/api/metadata/${guid}`);
       if (!response.ok) {
         loadError =
-          response.status === 401
+          requiresLogin(response.status)
             ? 'Your session has expired — log in again from the button in the top bar.'
             : response.status === 404
               ? 'This video does not exist on the server.'
