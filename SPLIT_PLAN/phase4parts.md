@@ -1,0 +1,52 @@
+# Phase 4 — Backups, packaging, and release
+
+This breaks Phase 4 of [SIDE_PLAN.MD](SIDE_PLAN.MD) into ordered, reviewable subphases. It assumes Phase 3's Lite host, SQLite persistence, encrypted local secrets, shared backup routes, and capability reporting are in place. Keep backup behavior behind `IBackupServiceClient`, preserve Full's existing HTTP-backed behavior, and keep the shared application and frontend as the single feature implementation.
+
+## Phase 4a — SQLite backup service
+
+- Implement the Lite `IBackupServiceClient` with SQLite's online backup API, writing into the configured backup directory.
+- Support full snapshots and verification. Publish a snapshot only after creation and verification both succeed; clean up incomplete artifacts on failure.
+- Cover application data, workflow and queue state, staged objects, and encrypted secrets. Keep media files and optional ClickHouse data outside this backup scope.
+- Bind Full to its existing HTTP backup client and Lite to the embedded implementation at startup.
+- Return consistent errors for unsupported differential and point-in-time recovery operations.
+
+**Completion:** Lite can create and verify a complete SQLite snapshot while the application is active. Failed or cancelled operations do not expose a partial backup, unsupported operations fail consistently, and Full retains its existing backup behavior.
+
+## Phase 4b — Shared backup experience and capabilities
+
+- Connect the existing backup endpoints, UI, and scheduling flows to the selected `IBackupServiceClient`.
+- Show the resolved live database location and backup directory in the shared backup page.
+- Advertise Lite's full-snapshot and verification support, and hide differential/PITR controls in Lite while retaining Full's supported options.
+- Keep routes shared and make unsupported requests return the same clear result whether initiated from the UI or API.
+
+**Completion:** Backup operations and status are usable through the shared API and UI in both modes; Lite presents only operations it supports and displays the actual resolved storage paths.
+
+## Phase 4c — Recovery and encryption-key preservation
+
+- Document and validate the supported restore procedure: stop the server, preserve the current database, replace it with the chosen snapshot named `frostreamlitedb`, then restart.
+- Explain that WAL/SHM files may be handled only after shutdown and that media and optional ClickHouse data are managed separately.
+- Preserve the complete local Data Protection key ring when making a recovery copy, including older keys required to decrypt secrets after key rotation.
+- Include a companion key backup with a recoverable database backup so restoring onto another installation retains access to encrypted secrets.
+- Verify restored workflow state, durable queues, staged objects, and secrets; retain and clearly report a recoverable copy if restore validation fails.
+
+**Completion:** The documented shutdown/file-replacement workflow restores a usable Lite installation, including encrypted secrets, and makes the database/key-ring recovery requirements explicit.
+
+## Phase 4d — Reproducible Full and Lite deployment profiles
+
+- Generate both deployment profiles from the same AppHost configuration, selecting services and adapters by deployment mode.
+- Package the Lite C# host, shared frontend, and required media tools.
+- Exclude NATS, PostgreSQL, OpenBao, Authentik, OpenFGA, and the PostgreSQL backup service from the Lite profile; retain supporting services required by the plan, including Typesense and configured optional integrations.
+- Make persistent database and backup locations configurable while preserving the defaults `/data/frostreamlitedb` and `/data/backups/<timestamp>-<id>.sqlite`.
+- Document installation prerequisites, persistent storage, configuration, backup location, and restore steps for each profile.
+
+**Completion:** A clean build produces installable Full and Lite profiles from the shared AppHost configuration, with Lite carrying its required runtime assets and no removed infrastructure dependencies.
+
+## Phase 4e — Release verification
+
+- Run shared API, repository, and workflow checks against both deployment profiles and assert route parity.
+- Test backup creation during activity, snapshot verification failure, cancellation/cleanup, and the documented shutdown/file-replacement restore procedure, including key-ring recovery.
+- Verify Lite's resolved paths, capability/UI behavior, unsupported-operation handling, and zero connection attempts to removed services.
+- Verify Full's existing backup client, authentication, and deployment behavior remain intact.
+- Run clean installation/package checks in CI and publish the release artifacts with the matching deployment and recovery documentation.
+
+**Completion:** Both profiles install reproducibly and pass CI. Backup and restore behavior is validated for Lite, Full behavior remains intact, and release artifacts and operating instructions are ready for use.
