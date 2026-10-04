@@ -91,6 +91,8 @@ public sealed class LiteHostStartupTests
             var repository = await client.GetFromJsonAsync<global::WebAPI.Features.Backups.Models.BackupRepositoryResponse>("/api/global/backups", timeout.Token);
             repository.ShouldNotBeNull().DatabasePath.ShouldBe(Path.Combine(dir, "test.db"));
             repository.BackupDirectory.ShouldBe(Path.Combine(dir, "backups"));
+            repository.KeyRingPath.ShouldBe(Path.Combine(dir, "test.db.keys"));
+            await app.Services.GetRequiredService<Shared.Secrets.ISecretStore>().WriteAsync("host-backup-secret", new Dictionary<string, string> { ["value"] = "persisted-credential" }, timeout.Token);
             using var created = await client.PostAsJsonAsync("/api/global/backups", new CreateBackupJobRequest("http-snapshot", "full"), timeout.Token);
             created.StatusCode.ShouldBe(HttpStatusCode.Accepted);
             var job = (await created.Content.ReadFromJsonAsync<BackupJobDto>(timeout.Token)).ShouldNotBeNull();
@@ -126,6 +128,13 @@ public sealed class LiteHostStartupTests
                 .QueueBackupAsync(new("backup-full", "backup-full", NodaTime.SystemClock.Instance.GetCurrentInstant(), "test-backup-full", 0, false), timeout.Token);
             var snapshots = (await client.GetFromJsonAsync<global::WebAPI.Features.Backups.Models.BackupRepositoryResponse>("/api/global/backups", timeout.Token)).ShouldNotBeNull();
             snapshots.Backups.Count.ShouldBe(2);
+            snapshots.Backups.ShouldAllBe(snapshot => snapshot.KeyRingBackupPresent == true);
+            // An incomplete recovery set reports 422 through the shared API, leaving live credentials intact.
+            File.Delete(Path.Combine(dir, "backups", job.Label! + ".recovery.json"));
+            using var incomplete = await client.PostAsJsonAsync("/api/global/backups/verify", new VerifyBackupRequest(job.Label), timeout.Token);
+            incomplete.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+            (await incomplete.Content.ReadAsStringAsync(timeout.Token)).ShouldContain("Preserve the current database and complete key ring");
+            (await app.Services.GetRequiredService<Shared.Secrets.ISecretStore>().ReadAsync("host-backup-secret", timeout.Token)).ShouldNotBeNull()["value"].ShouldBe("persisted-credential");
             await app.StopAsync(timeout.Token);
             app.Services.GetRequiredService<LiteReadinessState>().IsReady.ShouldBeFalse();
             scheduler.IsShutdown.ShouldBeTrue();

@@ -29,6 +29,7 @@ export interface BackupInfo {
   walStop: string | null;
   hasError: boolean;
   openBaoExportPresent: boolean;
+  keyRingBackupPresent?: boolean | null;
 }
 
 export interface PitrWindow {
@@ -43,6 +44,7 @@ export interface BackupRepository {
   pitrWindow: PitrWindow;
   databasePath?: string | null;
   backupDirectory?: string | null;
+  keyRingPath?: string | null;
 }
 
 const BASE = '/api/global/backups';

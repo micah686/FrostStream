@@ -34,10 +34,10 @@ public sealed class BackupJobService(IBackupServiceClient client, SystemCapabili
             repository.Backups
                 .Select(x => new BackupSummaryResponse(
                     x.Label, x.Type, x.Name, x.StartedAt, x.CompletedAt, x.DatabaseSize, x.RepositorySize,
-                    x.WalStart, x.WalStop, x.HasError, x.OpenBaoExportPresent))
+                    x.WalStart, x.WalStop, x.HasError, x.OpenBaoExportPresent, x.KeyRingBackupPresent))
                 .ToArray(),
             new PitrWindowResponse(repository.PitrWindow.Earliest, repository.PitrWindow.LatestApprox),
-            repository.DatabasePath, repository.BackupDirectory);
+            repository.DatabasePath, repository.BackupDirectory, repository.KeyRingPath);
     }
 
     public async Task<BackupJobResponse> VerifyAsync(

@@ -25,7 +25,8 @@ public sealed record BackupSummaryResponse(
     string? WalStart,
     string? WalStop,
     bool HasError,
-    bool OpenBaoExportPresent);
+    bool OpenBaoExportPresent,
+    bool? KeyRingBackupPresent = null);
 
 public sealed record PitrWindowResponse(DateTimeOffset? Earliest, DateTimeOffset? LatestApprox);
 
@@ -35,6 +36,7 @@ public sealed record BackupRepositoryResponse(
     IReadOnlyList<BackupSummaryResponse> Backups,
     PitrWindowResponse PitrWindow,
     string? DatabasePath = null,
-    string? BackupDirectory = null);
+    string? BackupDirectory = null,
+    string? KeyRingPath = null);
 
 public sealed record VerifyBackupRequest(string? Label = null, bool Deep = false);

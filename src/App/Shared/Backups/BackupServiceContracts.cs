@@ -33,7 +33,8 @@ public sealed record BackupInfoDto(
     string? WalStart,
     string? WalStop,
     bool HasError,
-    bool OpenBaoExportPresent);
+    bool OpenBaoExportPresent,
+    bool? KeyRingBackupPresent = null);
 
 public sealed record PitrWindowDto(DateTimeOffset? Earliest, DateTimeOffset? LatestApprox);
 
@@ -43,7 +44,8 @@ public sealed record BackupRepositoryDto(
     IReadOnlyList<BackupInfoDto> Backups,
     PitrWindowDto PitrWindow,
     string? DatabasePath = null,
-    string? BackupDirectory = null);
+    string? BackupDirectory = null,
+    string? KeyRingPath = null);
 
 public interface IBackupServiceClient
 {

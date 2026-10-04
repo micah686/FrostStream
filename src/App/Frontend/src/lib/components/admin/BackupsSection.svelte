@@ -236,6 +236,7 @@
   {#if repository?.databasePath || repository?.backupDirectory}
     <dl class="mt-3 text-sm text-base-content/70">
       {#if repository.databasePath}<dt class="font-semibold">Database location</dt><dd class="break-all font-mono">{repository.databasePath}</dd>{/if}
+      {#if repository.keyRingPath}<dt class="mt-2 font-semibold">Encryption key directory</dt><dd class="break-all font-mono">{repository.keyRingPath}</dd>{/if}
       {#if repository.backupDirectory}<dt class="mt-2 font-semibold">Backup directory</dt><dd class="break-all font-mono">{repository.backupDirectory}</dd>{/if}
     </dl>
   {/if}
@@ -342,7 +343,7 @@
       <h2 id="backups-repo-title" class="text-base font-bold text-base-content">Backup repository</h2>
       <p class="mt-2 text-sm text-base-content/60">
         {#if lite}
-          Verified SQLite snapshots. Verify checks the latest snapshot; individual snapshots can also be verified below.
+          SQLite recovery sets include a database snapshot, its complete encryption key ring, and a checksum manifest. Verify checks checksums, database integrity, and encrypted-secret recovery.
         {:else}
           Backups in the pgBackRest repository. Quick verify checks every checksum in the repository; deep verify
           test-restores one backup and checks the data inside it.
@@ -391,7 +392,7 @@
       {#if repository.repositoryOk}
         <CircleCheck class="mt-0.5 h-4 w-4 shrink-0" />
         <span>
-          Repository healthy.
+          {repository.statusMessage || 'Repository healthy.'}
           {#if capabilities.pointInTimeRecovery}
           {#if repository.pitrWindow.earliest}
             Point-in-time recovery covers {formatDate(repository.pitrWindow.earliest)} → now.
@@ -439,6 +440,9 @@
                   {/if}
                   {#if backup.hasError}
                     <span class="badge badge-sm badge-error text-[10px] font-semibold text-error-content">error</span>
+                  {/if}
+                  {#if lite && backup.keyRingBackupPresent === false}
+                    <span class="badge badge-sm badge-warning text-[10px] font-semibold text-warning-content">missing recovery keys or manifest</span>
                   {/if}
                   {#if !lite && !backup.openBaoExportPresent}
                     <span class="badge badge-sm badge-warning text-[10px] font-semibold text-warning-content">
@@ -498,5 +502,19 @@
       </a>
     </div>
   </div>
+</section>
+{/if}
+
+{#if lite}
+<section class={cardClass} aria-labelledby="backups-lite-restore-title">
+  <h2 id="backups-lite-restore-title" class="text-base font-bold text-base-content">Restore a SQLite snapshot</h2>
+  <ol class="mt-3 list-decimal space-y-2 pl-5 text-sm leading-6 text-base-content/70">
+    <li>Verify the selected recovery set above. Keep its <code>.sqlite</code> file, matching <code>.sqlite.keys</code> directory, and <code>.sqlite.recovery.json</code> manifest together.</li>
+    <li>Shut down the Lite server and any other process using the database. Preserve the current database, any WAL/SHM files, and the complete current encryption key directory in a separate rollback directory.</li>
+    <li>Only after shutdown, move leftover WAL/SHM files out of the live database location. Copy the selected snapshot to the displayed database location (default <code>/data/frostreamlitedb</code>). Copy its companion key directory to the displayed encryption key location, retaining all older keys and owner-only permissions.</li>
+    <li>Restart with the same configuration. Check readiness, library data, workflows, schedules, imports, and encrypted storage credentials. Media files, import source files, and optional ClickHouse data are managed separately; rebuild Typesense from the restored application data.</li>
+    <li>If validation fails, stop the server again, preserve the failed restored files separately, and put the saved database and complete key ring back. Keep the rollback copy until recovery succeeds.</li>
+  </ol>
+  <p class="mt-3 text-xs text-base-content/60">Recovery on another installation requires the companion keys. Restored downloads follow normal startup reconciliation; queued or active runs do not automatically resume. Create a new complete snapshot on the original installation before migrating an older database-only backup.</p>
 </section>
 {/if}
