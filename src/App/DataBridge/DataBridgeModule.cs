@@ -64,7 +64,7 @@ public static class DataBridgeModule
         builder.Services.AddModuleTopology<BackgroundJobsTopology>();
         builder.Services.AddModuleTopology<LocalImportTopology>();
         builder.Services.AddModuleTopology<AuthSessionsTopology>();
-        builder.Services.AddOpenBaoSecretStore(builder.Configuration);
+        builder.Services.AddApplicationSecretStore(builder.Configuration);
         builder.Services.AddFrostStreamStorage();
 
         builder.Services.AddFlows(c => c

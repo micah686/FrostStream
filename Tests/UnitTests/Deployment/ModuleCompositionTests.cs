@@ -52,12 +52,27 @@ public sealed class ModuleCompositionTests
             builder.Services.ShouldNotContain(d => d.ServiceType == typeof(global::WebAPI.Auth.NatsBffTicketStore));
             provider.GetRequiredService<Func<string, FrostStream.ApplicationContracts.IStagedObjectStore>>() ("manifests")
                 .ShouldBeOfType<global::DataBridge.Persistence.Sqlite.SqliteStagedObjectStore>();
+            provider.GetRequiredService<Shared.Secrets.ISecretStore>()
+                .ShouldBeOfType<global::DataBridge.Persistence.Secrets.SqliteSecretStore>();
+            provider.GetRequiredService<global::DataBridge.Persistence.Secrets.LocalSecretStoreOptions>()
+                .KeyRingPath.ShouldBe(Path.Combine(dir, "test.db.keys"));
+            builder.Services.ShouldNotContain(d => d.ImplementationType == typeof(Shared.Secrets.OpenBaoSecretStore));
             var publisher = provider.GetRequiredService<FrostStream.ApplicationContracts.IDurableJobPublisher>();
             publisher.ShouldBeOfType<global::DataBridge.Messaging.SqliteDurableTransport>();
             provider.GetRequiredService<FrostStream.ApplicationContracts.IDurableJobConsumer>().ShouldBeSameAs(publisher);
             provider.GetRequiredService<FrostStream.ApplicationContracts.IWorkerJobRoutes>().ShouldBeSameAs(publisher);
         }
         finally { if (Directory.Exists(dir)) Directory.Delete(dir, true); }
+    }
+
+    [Test]
+    public async Task Full_Keeps_OpenBao_Secret_Store()
+    {
+        var builder = Builder();
+        builder.Configuration["OpenBao:Token"] = "test-token";
+        builder.AddLiteModules();
+        await using var provider = builder.Services.BuildServiceProvider();
+        provider.GetRequiredService<Shared.Secrets.ISecretStore>().ShouldBeOfType<Shared.Secrets.OpenBaoSecretStore>();
     }
 
     [Test]

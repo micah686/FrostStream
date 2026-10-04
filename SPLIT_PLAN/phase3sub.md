@@ -65,6 +65,8 @@ This breaks Phase 3 of `SIDE_PLAN.MD` into ordered, reviewable subphases. Phases
 
 **Completion:** Shared secret consumers can store and retrieve secrets in Lite without OpenBao, and persisted secrets remain decryptable after restart.
 
+**Implementation:** With SQLite persistence enabled, Lite binds `ISecretStore` to `SqliteSecretStore`; shared storage, cookie, and notification consumers keep their existing interface and secret paths. Migration 4 adds atomically replaced encrypted secret documents to `local_secrets`. A dedicated ASP.NET Core Data Protection provider protects each document with a path-specific purpose, so tampering and ciphertext moved between paths fail authentication. The persistent key ring defaults to `<resolved SQLite database path>.keys`; `Secrets:Local:KeyRingPath` can select a dedicated directory (relative paths resolve against the host content root). On Unix the directory is created with owner-only permissions, and existing directories with group/other access are rejected. `LocalSecretStoreOptions.KeyRingPath` exposes the resolved companion artifact for Phase 4: recovery must preserve the complete key ring alongside the database, including older keys needed after rotation. The local provider is independent of WebAPI cookie/token keys. Lite modules do not register OpenBao; Full retains its existing adapter and configuration. Tests cover restart, rotation, database-plus-key-ring relocation, shared storage hydration, tampering/path isolation, cancellation, concurrent replacement, and idempotent deletion.
+
 ## Phase 3g — Scheduler integration
 
 - Reuse existing Scheduler jobs and their trigger/misfire behavior.

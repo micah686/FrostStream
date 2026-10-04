@@ -61,7 +61,7 @@ public static class WorkerModule
             sp.GetRequiredService<IClock>(),
             "worker",
             sp.GetService<Microsoft.Extensions.Logging.ILogger<BackgroundRunReporter>>()));
-        builder.Services.AddOpenBaoSecretStore(builder.Configuration);
+        builder.Services.AddApplicationSecretStore(builder.Configuration);
         builder.Services.AddFrostStreamStorage();
 
         // yt-dlp wiring. The binary downloader writes into <BaseDirectory>/tools and the

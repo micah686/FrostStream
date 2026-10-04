@@ -341,7 +341,7 @@ public static class WebAPIModule
         builder.Services.AddHostedService<RenditionProgressHub>(p => p.GetRequiredService<RenditionProgressHub>());
         builder.Services.AddSingleton<BackgroundJobHub>();
         builder.Services.AddHostedService<BackgroundJobHub>(p => p.GetRequiredService<BackgroundJobHub>());
-        builder.Services.AddOpenBaoSecretStore(builder.Configuration);
+        builder.Services.AddApplicationSecretStore(builder.Configuration);
         builder.Services.AddFrostStreamStorage();
 
         //var natsUrl = builder.Configuration["NATS:Url"] ?? "nats://localhost:24040";

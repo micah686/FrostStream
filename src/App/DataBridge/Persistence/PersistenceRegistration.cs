@@ -11,6 +11,8 @@ using DataBridge.Messaging;
 using Microsoft.Extensions.Hosting;
 using NodaTime;
 using Shared.Deployment;
+using Shared.Secrets;
+using DataBridge.Persistence.Secrets;
 
 namespace DataBridge.Persistence;
 
@@ -35,6 +37,8 @@ public static class PersistenceRegistration
         else
         {
             builder.Services.AddSingleton<SqliteConnectionFactory>();
+            builder.Services.AddSingleton(LocalSecretStoreOptions.FromConfiguration(builder.Configuration, options, builder.Environment.ContentRootPath));
+            builder.Services.TryAddSingleton<ISecretStore, SqliteSecretStore>();
             builder.Services.AddSingleton<Func<string, IStagedObjectStore>>(sp =>
                 bucket => new SqliteStagedObjectStore(sp.GetRequiredService<SqliteConnectionFactory>(), bucket));
             builder.Services.AddSingleton<SqliteDurableTransport>();

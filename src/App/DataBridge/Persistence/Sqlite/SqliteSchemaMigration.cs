@@ -22,6 +22,12 @@ internal static class SqliteSchemaMigrations
                  data BLOB NOT NULL,
                  PRIMARY KEY (bucket, object_key)
              );
+             """),
+         new(4, "Persist encrypted local secrets", """
+             CREATE TABLE local_secrets (
+                 path TEXT NOT NULL PRIMARY KEY,
+                 payload BLOB NOT NULL
+             );
              """)];
 
     /// <summary>Explicit rebuild descriptions must supply the full new table DDL and recreate all indexes/triggers.</summary>
