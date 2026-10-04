@@ -13,6 +13,10 @@ public sealed class ScheduleHydrationService(
     ILogger<ScheduleHydrationService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        => await HydrateAsync(stoppingToken);
+
+    /// <summary>Registers the persisted definitions without starting Quartz.</summary>
+    public async Task<bool> HydrateAsync(CancellationToken stoppingToken)
     {
         var activeResponse = await RequestWithRetryAsync(
             () => databridgeClient.ListActiveSchedulesAsync(stoppingToken),
@@ -20,7 +24,7 @@ public sealed class ScheduleHydrationService(
         if (activeResponse is null || !activeResponse.Success)
         {
             logger.LogWarning("Could not hydrate schedules: {Error}", activeResponse?.ErrorMessage ?? "no response");
-            return;
+            return false;
         }
 
         var scheduler = await schedulerFactory.GetScheduler(stoppingToken);
@@ -28,6 +32,7 @@ public sealed class ScheduleHydrationService(
         {
             await registrar.RegisterAsync(scheduler, task, stoppingToken);
         }
+        return true;
     }
 
     private async Task<ScheduleOperationResponseMessage?> RequestWithRetryAsync(

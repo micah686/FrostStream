@@ -47,6 +47,13 @@ public sealed class ModuleCompositionTests
             builder.Configuration["Auth:SingleUserMode"] = "false";
             builder.AddLiteModules();
             await using var provider = builder.Services.BuildServiceProvider();
+            var hostedTypes = builder.Services.Where(d => d.ServiceType == typeof(IHostedService))
+                .Select(d => d.ImplementationType).ToList();
+            hostedTypes.ShouldNotContain(typeof(Quartz.QuartzHostedService));
+            hostedTypes.IndexOf(typeof(global::DataBridge.Messaging.DownloadFlowStartupService))
+                .ShouldBeLessThan(hostedTypes.IndexOf(typeof(global::Scheduler.Services.LiteSchedulerStartupService)));
+            hostedTypes.IndexOf(typeof(global::DataBridge.Messaging.ScheduleCrudConsumerService))
+                .ShouldBeLessThan(hostedTypes.IndexOf(typeof(global::Scheduler.Services.LiteSchedulerStartupService)));
             builder.Services.ShouldNotContain(d => d.ServiceType == typeof(ITopologySource));
             builder.Services.ShouldNotContain(d => d.ServiceType == typeof(NATS.Client.Core.INatsConnection));
             builder.Services.ShouldNotContain(d => d.ServiceType == typeof(global::WebAPI.Auth.NatsBffTicketStore));
@@ -73,6 +80,8 @@ public sealed class ModuleCompositionTests
         builder.AddLiteModules();
         await using var provider = builder.Services.BuildServiceProvider();
         provider.GetRequiredService<Shared.Secrets.ISecretStore>().ShouldBeOfType<Shared.Secrets.OpenBaoSecretStore>();
+        builder.Services.ShouldContain(d => d.ServiceType == typeof(IHostedService) && d.ImplementationType == typeof(Quartz.QuartzHostedService));
+        builder.Services.ShouldNotContain(d => d.ImplementationType == typeof(global::Scheduler.Services.LiteSchedulerStartupService));
     }
 
     [Test]

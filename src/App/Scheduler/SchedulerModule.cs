@@ -23,6 +23,7 @@ public static class SchedulerModule
     {
         if (!builder.Services.TryAddModule(typeof(SchedulerModule))) return builder;
         builder.AddDeployment();
+        var liteMode = DeploymentOptions.FromConfiguration(builder.Configuration).Mode == DeploymentMode.Lite;
         builder.Services.AddApplicationTransport(builder.Configuration);
 
         builder.Services.Configure<QuartzDashboardOptions>(
@@ -66,10 +67,11 @@ public static class SchedulerModule
             // Every firing announces itself on Jobs > Background before the task publishes its request.
             q.AddJobListener(sp => sp.GetRequiredService<BackgroundRunDispatchListener>());
         });
-        builder.Services.AddQuartzHostedService(options =>
-        {
-            options.WaitForJobsToComplete = true;
-        });
+        if (!liteMode)
+            builder.Services.AddQuartzHostedService(options =>
+            {
+                options.WaitForJobsToComplete = true;
+            });
 
         builder.Services.AddSingleton<IClock>(SystemClock.Instance);
         builder.Services.AddSingleton<IQuartzJobRegistrar, QuartzJobRegistrar>();
@@ -96,8 +98,20 @@ public static class SchedulerModule
         builder.Services.AddSingleton<IImportSessionCleanupScheduler, ImportSessionCleanupScheduler>();
         builder.Services.AddSingleton<IBackupScheduler, BackupScheduler>();
 
-        builder.Services.AddHostedService<ScheduleHydrationService>();
-        builder.Services.AddHostedService<ScheduleChangeListener>();
+        if (liteMode)
+        {
+            // DataBridge's blocking reconciliation and module startup run first. BackgroundService
+            // subscription registration is asynchronous on .NET 10, so Quartz also awaits readiness.
+            builder.Services.PostConfigure<HostOptions>(options => options.ServicesStartConcurrently = false);
+            builder.Services.AddSingleton<ScheduleHydrationService>();
+            builder.Services.AddHostedService<ScheduleChangeListener>();
+            builder.Services.AddHostedService<LiteSchedulerStartupService>();
+        }
+        else
+        {
+            builder.Services.AddHostedService<ScheduleHydrationService>();
+            builder.Services.AddHostedService<ScheduleChangeListener>();
+        }
 
         return builder;
     }

@@ -6,10 +6,28 @@ namespace Shared.Messaging;
 public abstract class SubscriptionBackgroundService : BackgroundService
 {
     private readonly List<ISubscription> _subscriptions = [];
+    private readonly TaskCompletionSource registrationCompleted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>Completes only after all subscriptions are installed; local hosts await this before scheduling.</summary>
+    public Task RegistrationCompleted => registrationCompleted.Task;
 
     protected sealed override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await RegisterSubscriptionsAsync(stoppingToken);
+        try
+        {
+            await RegisterSubscriptionsAsync(stoppingToken);
+            registrationCompleted.TrySetResult();
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            registrationCompleted.TrySetCanceled(stoppingToken);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            registrationCompleted.TrySetException(ex);
+            throw;
+        }
 
         try
         {
