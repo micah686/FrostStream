@@ -21,13 +21,13 @@ def generate():
              'not a database schema dump; matches include comments and migration Down methods. '
              'Architecture decisions and interpretation are in [phase2-persistence-architecture.md](phase2-persistence-architecture.md).', '',
              '## Shared entities', '', '| Source | Entity declarations |', '| --- | --- |']
-    for p in sources('src/App/Shared/Database'):
+    for p in sources('src/App/SharedApp/Shared/Database'):
         entities = re.findall(r'\b(?:class|record)\s+(\w+Entity)\b', p.read_text())
         lines.append(f"| {link(p)} | {', '.join(f'`{e}`' for e in entities)} |")
     lines += ['', '## EF configuration and provider mappings', '',
               'Shared configuration files are applied by `DataBridgeDbContext.ApplyConfigurationsFromAssembly`; the selected provider pass materializes logical type/default hints.', '',
               '| Source | Explicit table names (schema is specified in source) | Logical column types (provider hints) |', '| --- | --- | --- |']
-    for p in sources('src/App/DataBridge/Data'):
+    for p in sources('src/App/SharedApp/DataBridge/Data'):
         if not p.name.endswith('Configuration.cs'):
             continue
         s = p.read_text()
@@ -35,7 +35,7 @@ def generate():
         types = sorted(set(re.findall(r'Has(?:ColumnType|PersistenceType)\("([^"]+)"', s)))
         lines.append(f"| {link(p)} | {', '.join(f'`{v}`' for v in tables)} | {', '.join(f'`{v}`' for v in types)} |")
     lines += ['', '## Persistence contracts', '', '| Source |', '| --- |']
-    for p in sources('src/App/DataBridge'):
+    for p in sources('src/App/SharedApp/DataBridge'):
         if re.search(r'\binterface\s+I\w*(?:Repository|Purger|ReadService|DocumentQuery)\b', p.read_text()):
             lines.append(f'| {link(p)} |')
     patterns = {
@@ -68,7 +68,7 @@ def generate():
               'not versions applied to a running installation. Cleipnir owns its runtime table DDL separately.', '',
               '| Version | Source | Description | Transaction |', '| --- | --- | --- | --- |']
     versions = []
-    for p in sources('src/App/DataBridge/Migrations/FluentMigrator'):
+    for p in sources('src/App/SharedApp/DataBridge/Migrations/FluentMigrator'):
         s = p.read_text()
         m = re.search(r'\[Migration\((\d+),\s*(TransactionBehavior.None,\s*)?"([^"]+)"\)\]', s)
         if not m:

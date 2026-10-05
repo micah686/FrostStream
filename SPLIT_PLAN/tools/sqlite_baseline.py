@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SCHEMA = ROOT / 'src/App/DataBridge/Persistence/Sqlite/Schema'
+SCHEMA = ROOT / 'src/App/SharedApp/DataBridge/Persistence/Sqlite/Schema'
 NOW = "(CAST(strftime('%s', 'now') AS INTEGER) * 1000000 + CAST(substr(strftime('%f', 'now'), 4, 3) AS INTEGER) * 1000)"
 
 def quote(value):

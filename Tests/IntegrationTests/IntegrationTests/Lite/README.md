@@ -40,7 +40,7 @@ The Full suites also include namespaces `IntegrationTests.Storage`, `Integration
 Frontend access/navigation verification:
 
 ```sh
-cd src/App/Frontend
+cd src/App/SharedApp/Frontend
 pnpm test:access
 pnpm check
 ```

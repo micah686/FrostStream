@@ -22,7 +22,7 @@ This guide matches the current video-archive pipeline:
 
 ```bash
 cd /home/micah/RiderProjects/FrostStream
-DOTNET_ENVIRONMENT=Development dotnet run --project src/AppHost/AppHost.csproj
+DOTNET_ENVIRONMENT=Development dotnet run --project src/App/SharedApp/AppHost/AppHost.csproj
 ```
 
 What AppHost starts:

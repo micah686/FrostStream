@@ -31,7 +31,7 @@ disk space for Docker builds and media.
    material locally. The release excludes private TLS keys, deployment credentials,
    OpenBao recovery material and database backups. Regeneration is required before
    starting the provided Compose graphs.
-4. Choose `src/App/docker-compose-lite` or `src/App/docker-compose-full`. From
+4. Choose `src/App/LiteApp/docker-compose-lite` or `src/App/FullApp/docker-compose-full`. From
    that directory run `docker compose build` and `docker compose up -d`.
    Alternatively, download the matching `froststream-images-linux-amd64.tar.gz`
    or `froststream-images-linux-arm64.tar.gz`, verify it with the release checksum,

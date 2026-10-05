@@ -29,7 +29,7 @@ The current architecture is moving in that direction. The remaining work is larg
 | Code boundaries | Lite references executable service projects; shared code still carries infrastructure dependencies. Startup relies on registration order and constructor side effects. | Extract reusable libraries and make startup stages explicit. |
 | Installation | Documented installation requires profile generation, development tools, and infrastructure credentials even for Lite. | Ship an immediately usable Lite Compose file and prebuilt images. |
 
-Representative evidence includes [Lite composition](../../src/App/Lite/LiteModule.cs), [DataBridge registration](../../src/App/DataBridge/DataBridgeModule.cs), [Lite authorization](../../src/App/WebAPI/Auth/LiteAuthorization.cs), [SQLite durable delivery](../../src/App/DataBridge/Messaging/SqliteDurableTransport.cs), and [download startup reconciliation](../../src/App/DataBridge/Messaging/DownloadFlowStartupService.cs).
+Representative evidence includes [Lite composition](../../src/App/LiteApp/Lite/LiteModule.cs), [DataBridge registration](../../src/App/SharedApp/DataBridge/DataBridgeModule.cs), [Lite authorization](../../src/App/SharedApp/WebAPI/Auth/LiteAuthorization.cs), [SQLite durable delivery](../../src/App/SharedApp/DataBridge/Messaging/SqliteDurableTransport.cs), and [download startup reconciliation](../../src/App/SharedApp/DataBridge/Messaging/DownloadFlowStartupService.cs).
 
 The earlier [Full/Lite plan](../../SPLIT_PLAN/SIDE_PLAN.MD) explicitly retained Typesense, optional ClickHouse, and automatic Admin access. Removing those dependencies and requiring login are revised requirements, rather than omissions against that earlier plan.
 

@@ -1,10 +1,10 @@
 param(
-    [string]$OutputPath = (Join-Path $PSScriptRoot 'docker-compose-artifacts')
+    [string]$OutputPath = (Join-Path $PSScriptRoot 'SharedApp/docker-compose-artifacts')
 )
 
 $ErrorActionPreference = 'Stop'
-$appHostProject = Join-Path $PSScriptRoot 'AppHost/AppHost.csproj'
-$sourceEnv = Join-Path $PSScriptRoot 'AppHost/aspire-development.env'
+$appHostProject = Join-Path $PSScriptRoot 'SharedApp/AppHost/AppHost.csproj'
+$sourceEnv = Join-Path $PSScriptRoot 'SharedApp/AppHost/aspire-development.env'
 
 if (-not (Test-Path -LiteralPath $appHostProject)) { throw "AppHost project not found: $appHostProject" }
 if (-not (Test-Path -LiteralPath $sourceEnv)) { throw "Environment file not found: $sourceEnv" }
@@ -21,9 +21,11 @@ function Publish-ComposeVariant([bool]$Development, [string]$ComposeName, [strin
 
     $previousEnvFile = $env:FROSTSTREAM_ENV_FILE
     $previousDevTools = $env:FROSTSTREAM_DEV_TOOLS
+    $previousOutputKind = $env:FROSTSTREAM_COMPOSE_OUTPUT_KIND
     try {
         $env:FROSTSTREAM_ENV_FILE = $tempEnv
         $env:FROSTSTREAM_DEV_TOOLS = if ($Development) { 'true' } else { 'false' }
+        $env:FROSTSTREAM_COMPOSE_OUTPUT_KIND = 'shared'
         Push-Location $PSScriptRoot
         try {
             Remove-Item -LiteralPath (Join-Path $OutputPath '.env') -Force -ErrorAction SilentlyContinue
@@ -35,6 +37,8 @@ function Publish-ComposeVariant([bool]$Development, [string]$ComposeName, [strin
         else { $env:FROSTSTREAM_ENV_FILE = $previousEnvFile }
         if ($null -eq $previousDevTools) { Remove-Item Env:FROSTSTREAM_DEV_TOOLS -ErrorAction SilentlyContinue }
         else { $env:FROSTSTREAM_DEV_TOOLS = $previousDevTools }
+        if ($null -eq $previousOutputKind) { Remove-Item Env:FROSTSTREAM_COMPOSE_OUTPUT_KIND -ErrorAction SilentlyContinue }
+        else { $env:FROSTSTREAM_COMPOSE_OUTPUT_KIND = $previousOutputKind }
         Remove-Item -LiteralPath $tempEnv -Force -ErrorAction SilentlyContinue
     }
 

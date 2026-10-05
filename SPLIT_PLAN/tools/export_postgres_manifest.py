@@ -6,7 +6,7 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SCHEMA = ROOT / 'src/App/DataBridge/Persistence/Sqlite/Schema'
+SCHEMA = ROOT / 'src/App/SharedApp/DataBridge/Persistence/Sqlite/Schema'
 
 
 def query(sql):

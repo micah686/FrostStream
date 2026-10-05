@@ -2,11 +2,11 @@
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-apphost_project="$script_dir/AppHost/AppHost.csproj"
-source_env="$script_dir/AppHost/aspire-development.env"
+apphost_project="$script_dir/SharedApp/AppHost/AppHost.csproj"
+source_env="$script_dir/SharedApp/AppHost/aspire-development.env"
 # Defaults to the committed artifacts; override to generate elsewhere (mirrors -OutputPath in
 # the PowerShell script), which is handy for inspecting a change before overwriting them.
-output_path="${1:-$script_dir/docker-compose-artifacts}"
+output_path="${1:-$script_dir/SharedApp/docker-compose-artifacts}"
 
 command -v aspire >/dev/null 2>&1 || { echo "Aspire CLI not found on PATH." >&2; exit 127; }
 mkdir -p "$output_path"
@@ -18,12 +18,15 @@ publish_variant() {
   if [[ "$dev" == true ]]; then echo 'FROSTSTREAM_DEV_TOOLS="true"' >> "$temp_env"; else echo 'FROSTSTREAM_DEV_TOOLS="false"' >> "$temp_env"; fi
   local old_env_file="${FROSTSTREAM_ENV_FILE-}"
   local old_dev_tools="${FROSTSTREAM_DEV_TOOLS-}"
+  local old_output_kind="${FROSTSTREAM_COMPOSE_OUTPUT_KIND-}"
   export FROSTSTREAM_ENV_FILE="$temp_env"
   export FROSTSTREAM_DEV_TOOLS="$dev"
+  export FROSTSTREAM_COMPOSE_OUTPUT_KIND=shared
   rm -f "$output_path/.env"
   (cd "$script_dir" && aspire publish --apphost "$apphost_project" -o "$output_path" --non-interactive --nologo)
   if [[ -n "$old_env_file" ]]; then export FROSTSTREAM_ENV_FILE="$old_env_file"; else unset FROSTSTREAM_ENV_FILE; fi
   if [[ -n "$old_dev_tools" ]]; then export FROSTSTREAM_DEV_TOOLS="$old_dev_tools"; else unset FROSTSTREAM_DEV_TOOLS; fi
+  if [[ -n "$old_output_kind" ]]; then export FROSTSTREAM_COMPOSE_OUTPUT_KIND="$old_output_kind"; else unset FROSTSTREAM_COMPOSE_OUTPUT_KIND; fi
   rm -f "$temp_env"
 
   local compose_file="$output_path/docker-compose.yaml"

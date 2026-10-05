@@ -61,16 +61,16 @@ src/.idea/**
 /data/
 
 # OpenBao recovery material (unseal key and initial root token)
-src/App/docker-compose-artifacts/openbao-bootstrap/
+src/App/SharedApp/docker-compose-artifacts/openbao-bootstrap/
 
 src/VideoServeLocalTest/data/*
 
 # SvelteKit frontend output
-src/App/Frontend/node_modules/
-src/App/Frontend/.svelte-kit/
-src/App/Frontend/build/
-src/App/Frontend/.vite/
-src/App/Frontend/*.tsbuildinfo
+src/App/SharedApp/Frontend/node_modules/
+src/App/SharedApp/Frontend/.svelte-kit/
+src/App/SharedApp/Frontend/build/
+src/App/SharedApp/Frontend/.vite/
+src/App/SharedApp/Frontend/*.tsbuildinfo
 
 #Ignore data protection keys
 .dataprotection/
@@ -514,5 +514,5 @@ FodyWeavers.xsd
 # End of https://www.toptal.com/developers/gitignore/api/visualstudio,rider
 
 # Generated deployment profiles contain local parameter values.
-src/App/docker-compose-full/
-src/App/docker-compose-lite/
+src/App/FullApp/docker-compose-full/
+src/App/LiteApp/docker-compose-lite/

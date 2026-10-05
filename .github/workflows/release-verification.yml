@@ -28,7 +28,7 @@ jobs:
           dotnet run --project Tests/UnitTests -c Release -- --minimum-expected-tests 1 --results-directory "$RUNNER_TEMP/unit-results"
           dotnet run --project Tests/IntegrationTests/IntegrationTests -c Release -- --minimum-expected-tests 1 --results-directory "$RUNNER_TEMP/integration-results"
       - name: Shared frontend access and type checks
-        working-directory: src/App/Frontend
+        working-directory: src/App/SharedApp/Frontend
         run: |
           pnpm install --frozen-lockfile
           pnpm check
@@ -63,23 +63,23 @@ jobs:
           cp src/App/profiles.env.example "$RUNNER_TEMP/profiles.env"
           sed -i 's/LIVE_CHAT_ENABLED=false/LIVE_CHAT_ENABLED=true/' "$RUNNER_TEMP/profiles.env"
           FROSTSTREAM_ENV_FILE="$RUNNER_TEMP/profiles.env" bash src/App/generateProfiles.sh
-          python3 src/App/deployment/verify_profiles.py --live-chat
+          python3 src/App/SharedApp/deployment/verify_profiles.py --live-chat
       - name: Generate default release profiles
         run: |
           FROSTSTREAM_ENV_FILE="$GITHUB_WORKSPACE/src/App/profiles.env.example" bash src/App/generateProfiles.sh
-          python3 src/App/deployment/verify_profiles.py
+          python3 src/App/SharedApp/deployment/verify_profiles.py
       - name: Package source, generated profiles and matching operating guides
-        run: python3 src/App/deployment/package_release.py --output "$RUNNER_TEMP/release"
+        run: python3 src/App/SharedApp/deployment/package_release.py --output "$RUNNER_TEMP/release"
       - name: Verify installation from the actual archive on fresh storage
         run: |
           mkdir "$RUNNER_TEMP/install"
           tar -xzf "$RUNNER_TEMP/release/froststream-release.tar.gz" -C "$RUNNER_TEMP/install"
           cd "$RUNNER_TEMP/install/froststream"
           FROSTSTREAM_ENV_FILE="$PWD/src/App/profiles.env.example" bash src/App/generateProfiles.sh
-          python3 src/App/deployment/verify_profiles.py
-          python3 src/App/deployment/smoke_profiles.py
+          python3 src/App/SharedApp/deployment/verify_profiles.py
+          python3 src/App/SharedApp/deployment/smoke_profiles.py
       - name: Export verified application images
-        run: python3 src/App/deployment/export_images.py --output "$RUNNER_TEMP/release" --architecture "${{ matrix.arch }}"
+        run: python3 src/App/SharedApp/deployment/export_images.py --output "$RUNNER_TEMP/release" --architecture "${{ matrix.arch }}"
       - uses: actions/upload-artifact@v4
         with:
           name: froststream-release-${{ matrix.arch }}
