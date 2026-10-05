@@ -91,6 +91,11 @@ public static class WorkerModule
         {
             YtDlpExecutablePath = Path.Combine(toolsDirectory, YtDlpPaths.YtDlpFileName),
             FfmpegExecutablePath = Path.Combine(toolsDirectory, YtDlpPaths.FfmpegFileName),
+            EnvironmentVariables = new Dictionary<string, string?>
+            {
+                // yt-dlp enables Deno by default, but its child process must be able to find it.
+                ["PATH"] = toolsDirectory + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH")
+            },
             DownloadLimitRate = configuredWorkerOptions.YtDlpLimitRate,
             DownloadThrottledRate = configuredWorkerOptions.YtDlpThrottledRate,
             MinimumDelayBetweenProcessStarts = configuredWorkerOptions.EffectiveYtDlpMinDelay()
@@ -123,6 +128,8 @@ public static class WorkerModule
         // Register startup service (downloads yt-dlp/ffmpeg/ffprobe binaries before any
         // BackgroundService starts).
         builder.Services.AddHostedService<StartupService>();
+        builder.Services.AddSingleton<MediaToolsUpdateManager>();
+        builder.Services.AddHostedService<MediaToolsRefreshService>();
         builder.Services.AddHostedService<WorkerHeartbeatService>();
 
         // POT shim: starts after StartupService; its constructor publishes the loopback base URL.

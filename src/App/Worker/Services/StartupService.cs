@@ -13,6 +13,7 @@ namespace Worker.Services;
 /// </summary>
 public sealed class StartupService(
     IYtDlpBinaryDownloader downloader,
+    MediaToolsUpdateManager updates,
     IOptions<PotProviderOptions> potOptions,
     ILogger<StartupService> logger) : IHostedService
 {
@@ -40,8 +41,10 @@ public sealed class StartupService(
             ct: cancellationToken);
 
         logger.LogInformation(
-            "Binaries ready: yt-dlp={YtDlpPath} ffmpeg={FfmpegPath} ffprobe={FfprobePath} potPlugin={PotPluginDir}",
-            result.YtDlpPath, result.FfmpegPath, result.FfprobePath, result.BgUtilPluginDir);
+            "Binaries ready: yt-dlp={YtDlpPath} ffmpeg={FfmpegPath} ffprobe={FfprobePath} deno={DenoPath} potPlugin={PotPluginDir}",
+            result.YtDlpPath, result.FfmpegPath, result.FfprobePath, result.DenoPath, result.BgUtilPluginDir);
+
+        await updates.RefreshIfDueAsync(cancellationToken);
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;

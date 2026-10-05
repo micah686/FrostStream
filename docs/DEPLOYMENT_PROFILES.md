@@ -11,8 +11,9 @@ parameters and the deployment and recovery guides from that revision.
 
 Use Linux amd64 or arm64, Docker Engine with Compose v2, .NET 10 (see
 `global.json`), Aspire CLI 13.4.6, and Python 3.12 or newer with PyYAML 6.0.2 for profile
-validation. Image builds download their pinned media tools; runtime does not need
-to download those tools. Allow sufficient disk space for Docker builds and media.
+validation. Lite bundles media tools during its image build. Both profiles need
+outbound access to the tool release sources for periodic updates. Allow sufficient
+disk space for Docker builds and media.
 
 1. Download `froststream-release.tar.gz` and `SHA256SUMS` from the same release.
    Run `sha256sum -c SHA256SUMS`, then extract the archive.
@@ -46,6 +47,22 @@ example uses local HTTP for installation checks. `LIVE_CHAT_ENABLED=true` adds
 optional ClickHouse to either profile. Typesense and the POT provider remain in
 both profiles. Lite excludes NATS, PostgreSQL, OpenBao, Authentik, OpenFGA and the
 PostgreSQL backup service.
+
+## Media tool updates
+
+Lite and Full provision yt-dlp, FFmpeg, ffprobe and Deno in the application's
+`tools` directory. Both refresh yt-dlp and Deno at startup if the last successful
+refresh was more than seven days ago, then check once a day while running. Full
+also refreshes FFmpeg and ffprobe from ffbinaries. Lite uses distro FFmpeg
+packages; rebuild its image to update those. Downloads are staged before
+replacing the installed binaries. A failed refresh is logged and the installed
+tools remain available; the next check retries it.
+
+Set `MediaTools__RefreshIntervalDays` on the Lite container or Full Worker to
+change the interval; set it to `0` to disable automatic refreshes. To request an
+immediate refresh, remove `/app/tools/.last-media-tools-refresh` in that
+container and restart it. yt-dlp is launched with the provisioned Deno directory
+on its `PATH`, so YouTube extraction can use the JavaScript runtime.
 
 ## Persistent storage and backups
 

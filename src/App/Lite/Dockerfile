@@ -18,9 +18,7 @@ RUN dotnet publish App/Lite/Lite.csproj -c Release -o /app
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
 # Provision the complete runtime toolset at image build time. Startup's SkipExisting
-# check finds these files, so a clean installation needs no tool downloads.
-ARG YTDLP_VERSION=2026.03.17
-ARG DENO_VERSION=2.7.5
+# check finds these files before the scheduled refresh checks for newer releases.
 # Must match StartPotProvider and YtDlpBinaryDownloaderOptions.
 ARG BGUTIL_VERSION=1.3.1
 RUN apt-get update \
@@ -35,8 +33,9 @@ RUN set -eu; \
       *) echo 'Lite supports Linux amd64 and arm64' >&2; exit 1 ;; \
     esac; \
     mkdir -p tools/yt-dlp-plugins; \
-    curl -fSL --retry 3 "https://github.com/yt-dlp/yt-dlp/releases/download/${YTDLP_VERSION}/${yt_asset}" -o "tools/${yt_asset}"; \
-    curl -fSL --retry 3 "https://github.com/denoland/deno/releases/download/v${DENO_VERSION}/deno-${deno_target}.zip" -o /tmp/deno.zip; \
+    curl -fSL --retry 3 "https://github.com/yt-dlp/yt-dlp/releases/latest/download/${yt_asset}" -o "tools/${yt_asset}"; \
+    deno_version="$(curl -fsSL --retry 3 https://dl.deno.land/release-latest.txt)"; \
+    curl -fSL --retry 3 "https://dl.deno.land/release/${deno_version}/deno-${deno_target}.zip" -o /tmp/deno.zip; \
     unzip /tmp/deno.zip -d tools; \
     curl -fSL --retry 3 "https://github.com/Brainicism/bgutil-ytdlp-pot-provider/releases/download/${BGUTIL_VERSION}/bgutil-ytdlp-pot-provider.zip" -o /tmp/bgutil.zip; \
     unzip /tmp/bgutil.zip -d tools/yt-dlp-plugins; \
