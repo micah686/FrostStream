@@ -139,7 +139,7 @@ repository-host mode and nothing needs PostgreSQL tools on the host:
     local libpq connection.
 - Both containers run as uid 999 (`postgres`), so files written by one are natively owned
   correctly for the other.
-- Configuration is one file, `src/App/SharedApp/AppHost/configs/pgbackrest/pgbackrest.conf`, mounted
+- Configuration is one file, `src/App/FullApp/AppHostFull/configs/pgbackrest/pgbackrest.conf`, mounted
   read-only into both containers. Compression (`compress-type=zst`) and retention
   (`repo1-retention-full=4`, `repo1-retention-diff=14`) live only there — pgBackRest expires old
   backups (and their WAL) automatically after every backup, and BackupService prunes the paired
@@ -251,11 +251,11 @@ commands inside the backupservice container, e.g.
   `./backups` beside the generated compose file). AppHost pre-creates and world-writes the
   repo/openbao subdirectories in run mode; the compose export gains a one-shot `backup-init`
   container that `chown`s the bind mount to uid 999 before postgres starts.
-- `src/App/SharedApp/AppHost/configs/postgres/postgresql.conf` (mounted with `-c config_file=…`) pins
+- `src/App/FullApp/AppHostFull/configs/postgres/postgresql.conf` (mounted with `-c config_file=…`) pins
   `wal_level=replica`, `max_wal_senders`, `archive_mode=on`, and the pgbackrest
   `archive_command`. Changing `archive_mode`/`archive_command` requires the container to be
   recreated.
-- `src/App/SharedApp/AppHost/configs/postgres/pg_hba.conf` adds a `local all postgres peer` rule so
+- `src/App/FullApp/AppHostFull/configs/postgres/pg_hba.conf` adds a `local all postgres peer` rule so
   pgBackRest's socket connection needs no password (BackupService also exports `PGPASSWORD` as a
   fallback), plus the SCRAM network rules.
 - BackupService env: `Backup__Stanza`, `Backup__PgDataPath`, `Backup__Postgres*`,

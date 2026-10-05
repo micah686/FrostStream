@@ -2,8 +2,8 @@
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-apphost_project="$script_dir/SharedApp/AppHost/AppHost.csproj"
-source_env="$script_dir/SharedApp/AppHost/aspire-development.env"
+apphost_project="$script_dir/FullApp/AppHostFull/AppHostFull.csproj"
+source_env="$script_dir/SharedApp/AppHostCommon/aspire-development.env"
 # Defaults to the committed artifacts; override to generate elsewhere (mirrors -OutputPath in
 # the PowerShell script), which is handy for inspecting a change before overwriting them.
 output_path="${1:-$script_dir/SharedApp/docker-compose-artifacts}"

@@ -25,13 +25,16 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\..\LiteApp\Lite\Lite.csproj" />
-      <ProjectReference Include="..\..\FullApp\BackupService\BackupService.csproj" />
-      <ProjectReference Include="..\DataBridge\DataBridge.csproj" />
-      <ProjectReference Include="..\MediaProcessor\MediaProcessor.csproj" />
-      <ProjectReference Include="..\Scheduler\Scheduler.csproj" />
-      <ProjectReference Include="..\WebAPI\WebAPI.csproj" />
-      <ProjectReference Include="..\Worker\Worker.csproj" />
+      <ProjectReference Include="..\BackupService\BackupService.csproj" />
+      <ProjectReference Include="..\..\SharedApp\DataBridge\DataBridge.csproj" />
+      <ProjectReference Include="..\..\SharedApp\MediaProcessor\MediaProcessor.csproj" />
+      <ProjectReference Include="..\..\SharedApp\Scheduler\Scheduler.csproj" />
+      <ProjectReference Include="..\..\SharedApp\WebAPI\WebAPI.csproj" />
+      <ProjectReference Include="..\..\SharedApp\Worker\Worker.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Compile Include="..\..\SharedApp\AppHostCommon\*.cs" Link="Shared\%(Filename)%(Extension)" />
     </ItemGroup>
 
 </Project>

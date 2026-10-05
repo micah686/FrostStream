@@ -16,9 +16,9 @@ public static class StartNats
         var nats = builder
             .AddNats("nats") // logical name "nats"
             //.WithDataVolume("nats-data")    // persist JS data across restarts (uses a Docker volume)
-            .WithPortableBindMount("./configs/nats/nats-server.conf", "../SharedApp/AppHost/configs/nats/nats-server.conf", "/etc/nats/nats.conf", isReadOnly: true)
-            .WithPortableBindMount(websocketCertPath, "../SharedApp/AppHost/configs/nats/certs/ws-cert.pem", "/etc/nats/certs/ws-cert.pem", isReadOnly: true)
-            .WithPortableBindMount(websocketKeyPath, "../SharedApp/AppHost/configs/nats/certs/ws-key.pem", "/etc/nats/certs/ws-key.pem", isReadOnly: true)
+            .WithPortableBindMount(Path.Combine(builder.AppHostDirectory, "configs", "nats", "nats-server.conf"), "../FullApp/AppHostFull/configs/nats/nats-server.conf", "/etc/nats/nats.conf", isReadOnly: true)
+            .WithPortableBindMount(websocketCertPath, "../FullApp/AppHostFull/configs/nats/certs/ws-cert.pem", "/etc/nats/certs/ws-cert.pem", isReadOnly: true)
+            .WithPortableBindMount(websocketKeyPath, "../FullApp/AppHostFull/configs/nats/certs/ws-key.pem", "/etc/nats/certs/ws-key.pem", isReadOnly: true)
             .WithArgs("-c", "/etc/nats/nats.conf")
             // Proxyless endpoints pin the host port and avoid Aspire's inner-loop proxy. On
             // Windows + Docker Desktop the proxy path allocates random ephemeral host ports

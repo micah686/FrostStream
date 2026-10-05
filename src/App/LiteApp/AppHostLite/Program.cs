@@ -38,7 +38,7 @@ var compose = builder.AddDockerComposeEnvironment("aspire-docker-demo")
 // variables inherited from the shell.
 var devEnvFile = Path.GetFullPath(
     Environment.GetEnvironmentVariable("FROSTSTREAM_ENV_FILE") ??
-    Path.Combine(builder.AppHostDirectory, "aspire-development.env"));
+    Path.Combine(builder.AppHostDirectory, "..", "..", "SharedApp", "AppHostCommon", "aspire-development.env"));
 if (File.Exists(devEnvFile))
 {
     Env.Load(devEnvFile);
@@ -55,13 +55,8 @@ if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FROSTSTREAM_BA
 builder.Configuration.AddEnvironmentVariables();
 compose.WithDashboard(Helpers.DevelopmentToolsEnabled);
 
-var mode = builder.Configuration["Deployment:Mode"] ?? "Full";
-if (!string.Equals(mode, "Full", StringComparison.OrdinalIgnoreCase) &&
-    !string.Equals(mode, "Lite", StringComparison.OrdinalIgnoreCase))
-    throw new InvalidOperationException($"Unsupported Deployment:Mode '{mode}'. Expected Full or Lite.");
-var lite = string.Equals(mode, "Lite", StringComparison.OrdinalIgnoreCase);
-var hardening = AppHostHardening.Read(lite || AppHostHardening.IsTruthy(Environment.GetEnvironmentVariable("SINGLE_USER_MODE")));
-AppHostHardening.Validate(hardening, lite);
+var hardening = AppHostHardening.Read(singleUserMode: true);
+AppHostHardening.Validate(hardening, lite: true);
 var sharedStorageRoot = ResolveStorageRoot(builder);
 var typesenseApiKey = builder.AddParameter("typesense-api-key", hardening.TypesenseApiKey,
     publishValueAsDefault: false, secret: true);
@@ -69,23 +64,7 @@ var typesense = StartTypesense.Start(builder, typesenseApiKey);
 var potProvider = StartPotProvider.Start(builder);
 var clickHouse = StartClickHouse.Start(builder);
 
-if (lite)
-{
-    StartLite.Start(builder, sharedStorageRoot, typesense, typesenseApiKey, potProvider, clickHouse);
-}
-else
-{
-    var openBaoToken = builder.AddParameter("openbao-token", hardening.OpenBaoToken,
-        publishValueAsDefault: false, secret: true);
-    var nats = StartNats.Start(builder);
-    var postgres = StartPostgres.Start(builder, hardening, sharedStorageRoot);
-    var openBaoResources = StartOpenBao.Start(builder, sharedStorageRoot, openBaoToken);
-    var authentik = StartAuthentik.Start(builder, postgres, hardening);
-    var openFga = StartOpenFga.Start(builder, postgres, hardening);
-    var backupService = StartBackupService.Start(builder, sharedStorageRoot, nats, postgres, openBaoResources, openBaoToken);
-    StartServices.Wire(builder, hardening, sharedStorageRoot, nats, postgres, openBaoResources,
-        openBaoToken, typesense, typesenseApiKey, authentik, openFga, potProvider, backupService, clickHouse);
-}
+StartLite.Start(builder, sharedStorageRoot, typesense, typesenseApiKey, potProvider, clickHouse);
 
 builder.Build().Run();
 

@@ -43,7 +43,7 @@ public static class StartLite
             .WithEnvironment("LiveChat__Enabled", clickHouse.Server is null ? "false" : "true")
             .WaitFor(typesense).WaitFor(potProvider)
             .PublishAsDockerFile(c => c
-                .WithDockerfile(Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "..", "LiteApp", "Lite")), "Dockerfile")
+                .WithDockerfile(Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "Lite")), "Dockerfile")
                 .WithImage("localhost/froststream-lite", "latest")
                 .WithVolume("froststream-lite-data", "/data"))
             .WithLocalComposeBuild("localhost/froststream-lite:latest", "App/LiteApp/Lite/Dockerfile");
@@ -56,6 +56,6 @@ public static class StartLite
                 .WithEnvironment("LiveChat__Password", password)
                 .WaitFor(server);
         }
-        StartServices.WireFrontend(builder, lite, "http");
+        StartFrontend.Wire(builder, lite, "http");
     }
 }

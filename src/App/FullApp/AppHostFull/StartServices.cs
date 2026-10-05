@@ -31,7 +31,7 @@ public static class StartServices
         WireMediaProcessor(builder, nats, databridge, webapi, webApiEndpointName);
         WireScheduler(builder, nats, databridge, backupService);
         //WireAuthTester(builder, hardening, webapi, authentik, webApiEndpointName);
-        WireFrontend(builder, webapi, webApiEndpointName);
+        StartFrontend.Wire(builder, webapi, webApiEndpointName);
     }
 
     private static IResourceBuilder<ProjectResource> WireDataBridge(
@@ -66,7 +66,7 @@ public static class StartServices
             .WaitFor(potProvider)
             .PublishAsDockerFile(c => c
                 .WithDockerfile(
-                    Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "DataBridge")),
+                    Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "..", "SharedApp", "DataBridge")),
                     "Dockerfile")
                 .WithImage("localhost/froststream-databridge", "latest")
                 // Named volume (shared by databridge/webapi/worker) instead of a host bind mount
@@ -171,7 +171,7 @@ public static class StartServices
             .WaitFor(backupService)
             .PublishAsDockerFile(c => c
                 .WithDockerfile(
-                    Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "WebAPI")),
+                    Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "..", "SharedApp", "WebAPI")),
                     "Dockerfile")
                 .WithImage("localhost/froststream-webapi", "latest")
                 // Named volume (shared by databridge/webapi/worker) instead of a host bind mount
@@ -258,7 +258,7 @@ public static class StartServices
             .WaitForOpenBao(openBaoResources)
             .PublishAsDockerFile(c => c
                 .WithDockerfile(
-                    Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "Worker")),
+                    Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "..", "SharedApp", "Worker")),
                     "Dockerfile")
                 .WithImage("localhost/froststream-worker", "latest")
                 // Named volume (shared by databridge/webapi/worker) instead of a host bind mount
@@ -286,7 +286,7 @@ public static class StartServices
             .WaitFor(webapi)
             .PublishAsDockerFile(c => c
                 .WithDockerfile(
-                    Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "MediaProcessor")),
+                    Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "..", "SharedApp", "MediaProcessor")),
                     "Dockerfile")
                 .WithImage("localhost/froststream-mediaprocessor", "latest"))
             .WithLocalComposeBuild("localhost/froststream-mediaprocessor:latest", "App/SharedApp/MediaProcessor/Dockerfile")
@@ -314,7 +314,7 @@ public static class StartServices
             })
             .PublishAsDockerFile(c => c
                 .WithDockerfile(
-                    Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "Scheduler")),
+                    Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "..", "SharedApp", "Scheduler")),
                     "Dockerfile")
                 .WithImage("localhost/froststream-scheduler", "latest"))
             .WithLocalComposeBuild("localhost/froststream-scheduler:latest", "App/SharedApp/Scheduler/Dockerfile");
@@ -333,24 +333,6 @@ public static class StartServices
     }
     
     
-    internal static void WireFrontend(
-        IDistributedApplicationBuilder builder,
-        IResourceBuilder<ProjectResource> webapi,
-        string webApiEndpointName)
-    {
-        var frontend = builder.AddViteApp("frontend", "../Frontend")
-            .WithPnpm()
-            .WithExternalHttpEndpoints()
-            .WithReference(webapi)
-            .WaitFor(webapi)
-            .WithEnvironment("WEBAPI_UPSTREAM", webapi.GetEndpoint(webApiEndpointName))
-            .WithLocalComposeBuild("localhost/froststream-frontend:latest", "App/SharedApp/Frontend/Dockerfile");
-
-        // Pin the host port in both modes; vite proxies during development and Caddy proxies in the
-        // published image using the same /api, /auth, and /stream contract.
-        frontend.WithEndpoint("http", endpoint => endpoint.Port = Ports.Frontend, createIfNotExists: false);
-    }
-
     private static string FrontendPublicAuthAuthority(AppHostHardeningOptions hardening)
     {
         if (hardening.SingleUserMode)
@@ -366,23 +348,4 @@ public static class StartServices
     private static string FrontendPublicOrigin()
         => (Environment.GetEnvironmentVariable("FRONTEND_PUBLIC_ORIGIN") ?? $"http://localhost:{Ports.Frontend}").TrimEnd('/');
 
-    internal static IResourceBuilder<TResource> WithLocalComposeBuild<TResource>(
-        this IResourceBuilder<TResource> resource,
-        string image,
-        string dockerfile)
-        where TResource : IComputeResource
-    {
-        return resource.PublishAsDockerComposeService((_, service) =>
-        {
-            service.Image = image;
-            service.PullPolicy = "build";
-            service.Build = new Aspire.Hosting.Docker.Resources.ServiceNodes.Build
-            {
-                // Compose output lives one directory below LiteApp, FullApp or SharedApp.
-                // The Dockerfiles expect the repository src/ directory as build context.
-                Context = "../../..",
-                Dockerfile = dockerfile
-            };
-        });
-    }
 }

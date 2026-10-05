@@ -1,0 +1,21 @@
+<Solution>
+  <Folder Name="/LiteApp/">
+    <Project Path="Lite/Lite.csproj" />
+    <Project Path="AppHostLite/AppHostLite.csproj" />
+  </Folder>
+  <Folder Name="/SharedApp/">
+    <Project Path="../SharedApp/ApplicationContracts/ApplicationContracts.csproj" />
+    <Project Path="../SharedApp/DataBridge/DataBridge.csproj" />
+    <Project Path="../SharedApp/MediaProcessor/MediaProcessor.csproj" />
+    <Project Path="../SharedApp/Scheduler/Scheduler.csproj" />
+    <Project Path="../SharedApp/ServiceDefaults/ServiceDefaults.csproj" />
+    <Project Path="../SharedApp/Shared/Shared.csproj" />
+    <Project Path="../SharedApp/StorageExtensions/StorageExtensions.csproj" />
+    <Project Path="../SharedApp/WebAPI/WebAPI.csproj" />
+    <Project Path="../SharedApp/Worker/Worker.csproj" />
+  </Folder>
+  <Folder Name="/Libs/">
+    <Project Path="../../Libs/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj" />
+    <Project Path="../../Libs/YtDlpSharpLib/YtDlpSharpLib/YtDlpSharpLib.csproj" />
+  </Folder>
+</Solution>

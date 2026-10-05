@@ -16,15 +16,15 @@ services:
     volumes:
       - type: "bind"
         target: "/etc/nats/nats.conf"
-        source: "../AppHost/configs/nats/nats-server.conf"
+        source: "../../FullApp/AppHostFull/configs/nats/nats-server.conf"
         read_only: true
       - type: "bind"
         target: "/etc/nats/certs/ws-cert.pem"
-        source: "../AppHost/configs/nats/certs/ws-cert.pem"
+        source: "../../FullApp/AppHostFull/configs/nats/certs/ws-cert.pem"
         read_only: true
       - type: "bind"
         target: "/etc/nats/certs/ws-key.pem"
-        source: "../AppHost/configs/nats/certs/ws-key.pem"
+        source: "../../FullApp/AppHostFull/configs/nats/certs/ws-key.pem"
         read_only: true
     networks:
       - "aspire"
@@ -56,15 +56,15 @@ services:
         read_only: false
       - type: "bind"
         target: "/etc/postgresql/postgresql.conf"
-        source: "../AppHost/configs/postgres/postgresql.conf"
+        source: "../../FullApp/AppHostFull/configs/postgres/postgresql.conf"
         read_only: true
       - type: "bind"
         target: "/etc/postgresql/pg_hba.conf"
-        source: "../AppHost/configs/postgres/pg_hba.conf"
+        source: "../../FullApp/AppHostFull/configs/postgres/pg_hba.conf"
         read_only: true
       - type: "bind"
         target: "/etc/pgbackrest/pgbackrest.conf"
-        source: "../AppHost/configs/pgbackrest/pgbackrest.conf"
+        source: "../../FullApp/AppHostFull/configs/pgbackrest/pgbackrest.conf"
         read_only: true
       - type: "bind"
         target: "/backups"
@@ -132,7 +132,7 @@ services:
         read_only: false
       - type: "bind"
         target: "/openbao/openbao.hcl"
-        source: "../AppHost/configs/openbao/openbao.hcl"
+        source: "../../FullApp/AppHostFull/configs/openbao/openbao.hcl"
         read_only: true
     networks:
       - "aspire"
@@ -207,7 +207,7 @@ services:
     volumes:
       - type: "bind"
         target: "/blueprints/froststream.yaml"
-        source: "../AppHost/configs/authentik/blueprints/froststream.yaml"
+        source: "../../FullApp/AppHostFull/configs/authentik/blueprints/froststream.yaml"
         read_only: true
       - type: "bind"
         target: "/web/dist/assets/icons/froststream.svg"
@@ -247,7 +247,7 @@ services:
     volumes:
       - type: "bind"
         target: "/blueprints/froststream.yaml"
-        source: "../AppHost/configs/authentik/blueprints/froststream.yaml"
+        source: "../../FullApp/AppHostFull/configs/authentik/blueprints/froststream.yaml"
         read_only: true
     depends_on:
       postgres:
@@ -349,7 +349,7 @@ services:
         source: "${FROSTSTREAM_BACKUP_ROOT:-./backups}"
       - type: "bind"
         target: "/etc/pgbackrest/pgbackrest.conf"
-        source: "../AppHost/configs/pgbackrest/pgbackrest.conf"
+        source: "../../FullApp/AppHostFull/configs/pgbackrest/pgbackrest.conf"
         read_only: true
     depends_on:
       nats:

@@ -4,7 +4,7 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace AppHost;
 
-public static class Helpers
+public static partial class Helpers
 {
     /// <summary>
     /// Generate local TLS certs for NATS websockets
@@ -120,24 +120,11 @@ public static class Helpers
                 Name = target,
                 Type = "bind",
                 Source = Environment.GetEnvironmentVariable("FROSTSTREAM_COMPOSE_OUTPUT_KIND") == "shared"
-                    ? composeRelativeSource.Replace("../SharedApp/", "../", StringComparison.Ordinal)
-                    : composeRelativeSource.Replace("../SharedApp/", "../../SharedApp/", StringComparison.Ordinal),
+                    ? composeRelativeSource.Replace("../FullApp/", "../../FullApp/", StringComparison.Ordinal).Replace("../SharedApp/", "../", StringComparison.Ordinal)
+                    : composeRelativeSource.Replace("../FullApp/", "../", StringComparison.Ordinal).Replace("../SharedApp/", "../../SharedApp/", StringComparison.Ordinal),
                 Target = target,
                 ReadOnly = isReadOnly ? true : null,
             }));
     }
-
-    internal static string GetEnv(string variable)
-    {
-        return Environment.GetEnvironmentVariable(variable) ?? "VALUE_NOT_SET";
-    }
-
-    internal static bool DevelopmentToolsEnabled
-        => AppHostHardening.IsTruthy(Environment.GetEnvironmentVariable("FROSTSTREAM_DEV_TOOLS"));
-
-    public static bool IsSingleUserMode => AppHostHardening.IsTruthy(Environment.GetEnvironmentVariable("SINGLE_USER_MODE"));
-
-    internal static bool LiveChatEnabled
-        => AppHostHardening.IsTruthy(Environment.GetEnvironmentVariable("LIVE_CHAT_ENABLED"));
 
 }

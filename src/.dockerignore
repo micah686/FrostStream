@@ -9,7 +9,9 @@ HelperTestingApps/
 Libs/YtDlpSharpLib/Tests/
 Libs/YtDlpSharpLib/ConsoleDownloader/
 Libs/Conduit.NATS/Tests/
-App/SharedApp/AppHost/
+App/FullApp/AppHostFull/
+App/LiteApp/AppHostLite/
+App/SharedApp/AppHostCommon/
 App/SharedApp/Frontend/static/.gitkeep
 
 App/*App/docker-compose-*/

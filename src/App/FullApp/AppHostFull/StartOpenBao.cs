@@ -36,7 +36,7 @@ public static class StartOpenBao
             .WithEnvironment("OPENBAO_APP_TOKEN", token)
             .WithArgs("server", "-config=/openbao/openbao.hcl")
             .WithVolume(DataVolumeName, DataDirectory)
-            .WithPortableBindMount(config, "../SharedApp/AppHost/configs/openbao/openbao.hcl", "/openbao/openbao.hcl", isReadOnly: true);
+            .WithPortableBindMount(config, "../FullApp/AppHostFull/configs/openbao/openbao.hcl", "/openbao/openbao.hcl", isReadOnly: true);
 
         server.PublishAsDockerComposeService((_, service) =>
         {

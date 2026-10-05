@@ -1,6 +1,6 @@
 # Installing Full and Lite
 
-Both profiles come from the same AppHost and use the shared frontend and API.
+Full and Lite use separate AppHosts and solutions. Both use the shared frontend and API modules.
 Release CI tests API, repositories, durable workflows, access controls and SQLite
 recovery, then builds and installs both Compose profiles on Linux amd64 and arm64.
 A `v*` tag publishes the source installation archive, verified application image archives and SHA256SUMS only after

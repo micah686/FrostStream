@@ -25,7 +25,8 @@
     <Project Path="SharedApp/StorageExtensions/StorageExtensions.csproj" />
     <Project Path="SharedApp/WebAPI/WebAPI.csproj" />
     <Project Path="SharedApp/Worker/Worker.csproj" />
-    <Project Path="SharedApp/AppHost/AppHost.csproj" />
+    <Project Path="FullApp/AppHostFull/AppHostFull.csproj" />
+    <Project Path="LiteApp/AppHostLite/AppHostLite.csproj" />
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="../../Tests/IntegrationTests/IntegrationTests/IntegrationTests.csproj" />

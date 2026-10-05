@@ -81,9 +81,9 @@ public static class StartPostgres
             // Unix-socket volume shared with backupservice: pgBackRest's "local" mode connects
             // to PostgreSQL over the socket.
             .WithVolume("froststream-postgres-socket", "/var/run/postgresql")
-            .WithPortableBindMount(postgresConf, "../SharedApp/AppHost/configs/postgres/postgresql.conf", "/etc/postgresql/postgresql.conf", isReadOnly: true)
-            .WithPortableBindMount(postgresHba, "../SharedApp/AppHost/configs/postgres/pg_hba.conf", "/etc/postgresql/pg_hba.conf", isReadOnly: true)
-            .WithPortableBindMount(pgBackRestConf, "../SharedApp/AppHost/configs/pgbackrest/pgbackrest.conf", "/etc/pgbackrest/pgbackrest.conf", isReadOnly: true)
+            .WithPortableBindMount(postgresConf, "../FullApp/AppHostFull/configs/postgres/postgresql.conf", "/etc/postgresql/postgresql.conf", isReadOnly: true)
+            .WithPortableBindMount(postgresHba, "../FullApp/AppHostFull/configs/postgres/pg_hba.conf", "/etc/postgresql/pg_hba.conf", isReadOnly: true)
+            .WithPortableBindMount(pgBackRestConf, "../FullApp/AppHostFull/configs/pgbackrest/pgbackrest.conf", "/etc/pgbackrest/pgbackrest.conf", isReadOnly: true)
             .WithPortableBindMount(backupRoot, "${FROSTSTREAM_BACKUP_ROOT:-./backups}", "/backups")
             .WithArgs("-c", "config_file=/etc/postgresql/postgresql.conf");
 

@@ -57,7 +57,7 @@ public static class StartBackupService
                 ContainerBackupRoot)
             .WithPortableBindMount(
                 pgBackRestConf,
-                "../SharedApp/AppHost/configs/pgbackrest/pgbackrest.conf",
+                "../FullApp/AppHostFull/configs/pgbackrest/pgbackrest.conf",
                 "/etc/pgbackrest/pgbackrest.conf",
                 isReadOnly: true)
             // Shared with the postgres container: pgBackRest backup/restore reads and writes the

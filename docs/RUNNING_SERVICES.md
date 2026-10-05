@@ -22,8 +22,11 @@ This guide matches the current video-archive pipeline:
 
 ```bash
 cd /home/micah/RiderProjects/FrostStream
-DOTNET_ENVIRONMENT=Development dotnet run --project src/App/SharedApp/AppHost/AppHost.csproj
+DOTNET_ENVIRONMENT=Development dotnet run --project src/App/FullApp/AppHostFull/AppHostFull.csproj
 ```
+
+To run Lite, use `src/App/LiteApp/AppHostLite/AppHostLite.csproj` instead.
+Each variant also has its own solution under `src/App/FullApp` or `src/App/LiteApp`.
 
 What AppHost starts:
 

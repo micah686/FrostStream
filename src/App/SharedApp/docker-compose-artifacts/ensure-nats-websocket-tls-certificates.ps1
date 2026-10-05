@@ -1,6 +1,6 @@
 param(
-    [string]$CertificatePath = (Join-Path $PSScriptRoot '../AppHost/configs/nats/certs/ws-cert.pem'),
-    [string]$KeyPath = (Join-Path $PSScriptRoot '../AppHost/configs/nats/certs/ws-key.pem')
+    [string]$CertificatePath = (Join-Path $PSScriptRoot '../../FullApp/AppHostFull/configs/nats/certs/ws-cert.pem'),
+    [string]$KeyPath = (Join-Path $PSScriptRoot '../../FullApp/AppHostFull/configs/nats/certs/ws-key.pem')
 )
 
 $certificateDirectory = Split-Path -Parent $CertificatePath

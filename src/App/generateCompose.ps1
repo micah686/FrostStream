@@ -3,8 +3,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$appHostProject = Join-Path $PSScriptRoot 'SharedApp/AppHost/AppHost.csproj'
-$sourceEnv = Join-Path $PSScriptRoot 'SharedApp/AppHost/aspire-development.env'
+$appHostProject = Join-Path $PSScriptRoot 'FullApp/AppHostFull/AppHostFull.csproj'
+$sourceEnv = Join-Path $PSScriptRoot 'SharedApp/AppHostCommon/aspire-development.env'
 
 if (-not (Test-Path -LiteralPath $appHostProject)) { throw "AppHost project not found: $appHostProject" }
 if (-not (Test-Path -LiteralPath $sourceEnv)) { throw "Environment file not found: $sourceEnv" }

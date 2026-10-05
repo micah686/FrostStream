@@ -103,10 +103,15 @@ bash generateCompose.sh
 ### Run for development (Aspire)
 
 ```bash
-dotnet run --project src/App/SharedApp/AppHost/AppHost.csproj
+dotnet run --project src/App/FullApp/AppHostFull/AppHostFull.csproj
 ```
 
-AppHost loads [`aspire-development.env`](src/App/SharedApp/AppHost/aspire-development.env). The defaults are
+For Lite, run `dotnet run --project src/App/LiteApp/AppHostLite/AppHostLite.csproj`.
+The app-specific solutions are `src/App/FullApp/FullApp.slnx` and
+`src/App/LiteApp/LiteApp.slnx`; the root solution remains available for work
+across both apps.
+
+AppHost loads [`aspire-development.env`](src/App/SharedApp/AppHostCommon/aspire-development.env). The defaults are
 for local development only. In multi-user mode, the development Authentik account is
 `admin@localhost` / `froststream-dev-admin`.
 
@@ -140,7 +145,7 @@ Everything — services, containers, config — is orchestrated by the AppHost:
 
 ## Configuration and data
 
-- `src/App/SharedApp/AppHost/aspire-development.env` is the source of truth for local development settings.
+- `src/App/SharedApp/AppHostCommon/aspire-development.env` is the source of truth for local development settings.
 - `FROSTSTREAM_STORAGE_ROOT` controls the shared host media directory; the default is `<repo>/data`.
 - `FROSTSTREAM_BACKUP_ROOT` controls the Compose backup directory; its default is `./backups` beside the Compose file.
 - `FROSTSTREAM_OPENBAO_BOOTSTRAP_ROOT` controls where OpenBao recovery material is stored. For Compose, it defaults to the ignored `./openbao-bootstrap` directory.
@@ -191,7 +196,7 @@ THIS KEY IS NOT BACKED UP WITH THE STANDARD BACKUPS
 
 ### Port scheme
 
-All host ports live in one registry ([`src/App/SharedApp/AppHost/Ports.cs`](src/App/SharedApp/AppHost/Ports.cs)) and follow a two-range convention — the same numbers apply in development and in the compose deployment:
+All host ports live in one registry ([`src/App/SharedApp/AppHostCommon/Ports.cs`](src/App/SharedApp/AppHostCommon/Ports.cs)) and follow a two-range convention — the same numbers apply in development and in the compose deployment:
 
 | Range                | Meaning                                                                            | Ports                                                                                                                                                                                      |
 | -------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -205,7 +210,7 @@ External ports are overridable via `PORT_*` variables in the generated Aspire de
 
 Live chat replay is **opt-in**: it adds a ClickHouse container, which most deployments do not need. Chat volumes are large enough (a long stream can produce well over a million messages) that PostgreSQL is the wrong store for them.
 
-Turn it on in `src/App/SharedApp/AppHost/aspire-development.env`:
+Turn it on in `src/App/SharedApp/AppHostCommon/aspire-development.env`:
 
 ```bash
 LIVE_CHAT_ENABLED="true"
@@ -230,7 +235,7 @@ That queues a sweep of archived live streams with no ingested chat. Add `?mediaG
 │   ├── App/
 │   │   ├── LiteApp/                  # Lite host and generated Lite Compose profile
 │   │   ├── FullApp/                  # Full-only services and generated Full profile
-│   │   └── SharedApp/                # shared services, frontend, AppHost and deployment tools
+│   │   └── SharedApp/                # shared services, frontend, host helpers and deployment tools
 │   └── Libs/                         # reusable libraries (Conduit.NATS, …)
 ├── Tests/                            # unit tests
 ├── docs/                             # design notes & feature inventory
@@ -263,7 +268,7 @@ pnpm run check
 For the AppHost and backend projects:
 
 ```bash
-dotnet build src/App/SharedApp/AppHost/AppHost.csproj
+dotnet build src/App/FullApp/AppHostFull/AppHostFull.csproj
 ```
 
 ## Security note
