@@ -230,7 +230,9 @@ The wizard walks through:
 Typical compose flow:
 
 ```bash
-cd src/App/SharedApp/docker-compose-artifacts
+cd src/App/FullApp
+bash generate-compose.sh
+cd docker-compose
 docker compose stop webapi databridge worker scheduler mediaprocessor frontend authentik authentik-worker openfga postgres
 # open http://<host>:25900 and run the wizard
 docker compose start postgres    # watch logs until "ready to accept connections"
@@ -287,7 +289,9 @@ OpenBao uses a persistent single-node Raft volume instead of ephemeral `-dev` mo
 deployment, initialize and unseal it before starting the application:
 
 ```bash
-cd src/App/SharedApp/docker-compose-artifacts
+cd src/App/FullApp
+bash generate-compose.sh
+cd docker-compose
 docker compose up -d openbao
 docker compose exec openbao bao operator init
 docker compose exec openbao bao operator unseal

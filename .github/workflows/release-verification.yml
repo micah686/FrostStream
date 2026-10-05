@@ -62,11 +62,13 @@ jobs:
         run: |
           cp src/App/profiles.env.example "$RUNNER_TEMP/profiles.env"
           sed -i 's/LIVE_CHAT_ENABLED=false/LIVE_CHAT_ENABLED=true/' "$RUNNER_TEMP/profiles.env"
-          FROSTSTREAM_ENV_FILE="$RUNNER_TEMP/profiles.env" bash src/App/generateProfiles.sh
+          FROSTSTREAM_ENV_FILE="$RUNNER_TEMP/profiles.env" bash src/App/FullApp/generate-compose.sh
+          FROSTSTREAM_ENV_FILE="$RUNNER_TEMP/profiles.env" bash src/App/LiteApp/generate-compose.sh
           python3 src/App/SharedApp/deployment/verify_profiles.py --live-chat
       - name: Generate default release profiles
         run: |
-          FROSTSTREAM_ENV_FILE="$GITHUB_WORKSPACE/src/App/profiles.env.example" bash src/App/generateProfiles.sh
+          FROSTSTREAM_ENV_FILE="$GITHUB_WORKSPACE/src/App/profiles.env.example" bash src/App/FullApp/generate-compose.sh
+          FROSTSTREAM_ENV_FILE="$GITHUB_WORKSPACE/src/App/profiles.env.example" bash src/App/LiteApp/generate-compose.sh
           python3 src/App/SharedApp/deployment/verify_profiles.py
       - name: Package source, generated profiles and matching operating guides
         run: python3 src/App/SharedApp/deployment/package_release.py --output "$RUNNER_TEMP/release"
@@ -75,7 +77,8 @@ jobs:
           mkdir "$RUNNER_TEMP/install"
           tar -xzf "$RUNNER_TEMP/release/froststream-release.tar.gz" -C "$RUNNER_TEMP/install"
           cd "$RUNNER_TEMP/install/froststream"
-          FROSTSTREAM_ENV_FILE="$PWD/src/App/profiles.env.example" bash src/App/generateProfiles.sh
+          FROSTSTREAM_ENV_FILE="$PWD/src/App/profiles.env.example" bash src/App/FullApp/generate-compose.sh
+          FROSTSTREAM_ENV_FILE="$PWD/src/App/profiles.env.example" bash src/App/LiteApp/generate-compose.sh
           python3 src/App/SharedApp/deployment/verify_profiles.py
           python3 src/App/SharedApp/deployment/smoke_profiles.py
       - name: Export verified application images

@@ -21,18 +21,18 @@ disk space for Docker builds and media.
    to a private file outside the checkout. Replace its credential placeholders,
    including Typesense, PostgreSQL, OpenBao, Authentik and the restore console token.
    Restrict this file to your account (`chmod 600`).
-3. Generate both profiles with:
+3. Generate the profile you intend to run with one of the app-local scripts:
 
    ```sh
-   FROSTSTREAM_ENV_FILE=/absolute/path/to/private-profiles.env bash src/App/generateProfiles.sh
+   FROSTSTREAM_ENV_FILE=/absolute/path/to/private-profiles.env bash src/App/FullApp/generate-compose.sh
+   # or: FROSTSTREAM_ENV_FILE=/absolute/path/to/private-profiles.env bash src/App/LiteApp/generate-compose.sh
    ```
 
-   The generator creates private `.env` files for Compose, and creates NATS TLS
-   material locally. The release excludes private TLS keys, deployment credentials,
-   OpenBao recovery material and database backups. Regeneration is required before
-   starting the provided Compose graphs.
-4. Choose `src/App/LiteApp/docker-compose-lite` or `src/App/FullApp/docker-compose-full`. From
-   that directory run `docker compose build` and `docker compose up -d`.
+   The selected AppHost creates the Compose file and a private `.env` in its
+   app-local `docker-compose` directory. Regeneration is required after changing
+   AppHost settings.
+4. From `src/App/LiteApp/docker-compose` or `src/App/FullApp/docker-compose`, run
+   `docker compose build` and `docker compose up -d`.
    Alternatively, download the matching `froststream-images-linux-amd64.tar.gz`
    or `froststream-images-linux-arm64.tar.gz`, verify it with the release checksum,
    run `docker load -i /path/to/froststream-images-linux-<architecture>.tar.gz`, then

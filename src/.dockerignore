@@ -14,4 +14,4 @@ App/LiteApp/AppHostLite/
 App/SharedApp/AppHostCommon/
 App/SharedApp/Frontend/static/.gitkeep
 
-App/*App/docker-compose-*/
+App/*App/docker-compose/

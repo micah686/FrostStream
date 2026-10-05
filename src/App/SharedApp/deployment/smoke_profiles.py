@@ -131,4 +131,4 @@ if __name__ == '__main__':
         raise SystemExit('This destructive fresh-install check runs only with CI=true on a disposable runner.')
     app = Path(__file__).resolve().parent.parent.parent
     for mode in ('Lite', 'Full'):
-        smoke(app / (mode + 'App') / ('docker-compose-' + mode.lower()), mode)
+        smoke(app / (mode + 'App') / 'docker-compose', mode)

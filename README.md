@@ -80,25 +80,19 @@ When using Aspire, you also need these prerequesites:
 
 ### Docker Compose
 
-The ready-to-run Compose deployment is in `src/App/SharedApp/docker-compose-artifacts`:
+Generate the ready-to-run Compose deployment from the app you want to run:
 
 ```bash
-cd src/App/SharedApp/docker-compose-artifacts
+FROSTSTREAM_ENV_FILE=/absolute/path/to/private.env bash src/App/FullApp/generate-compose.sh
+cd src/App/FullApp/docker-compose
 docker compose up -d --build
 ```
+
+Use `src/App/LiteApp/generate-compose.sh` and `src/App/LiteApp/docker-compose` for Lite.
 
 Review `.env` before exposing a deployment beyond your machine. It contains deployment-specific
 credentials, public URLs, and service settings. The default frontend URL is
 <http://localhost:25000>.
-
-The Compose files are generated. Regenerate them after changing AppHost configuration:
-The env is regenerated on generateCompose.sh, so be careful.
-```bash
-cd src/App
-bash generateCompose.sh
-(or generateCompose.ps1 on windows)
-```
-
 
 ### Run for development (Aspire)
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check real AppHost publish output. Requires PyYAML; never prints parameter secrets."""
+"""Check app-local AppHost publish output. Requires PyYAML; never prints parameter secrets."""
 import argparse
 from pathlib import Path
 import yaml
@@ -54,4 +54,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
     app = Path(__file__).resolve().parent.parent.parent
     for mode in ("Full", "Lite"):
-        check(app / f"{mode}App" / f"docker-compose-{mode.lower()}", mode, args.live_chat)
+        check(app / f"{mode}App" / "docker-compose", mode, args.live_chat)
