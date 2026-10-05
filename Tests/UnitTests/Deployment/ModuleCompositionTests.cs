@@ -85,6 +85,7 @@ public sealed class ModuleCompositionTests
         builder.AddLiteModules();
         await using var provider = builder.Services.BuildServiceProvider();
         provider.GetRequiredService<Shared.Secrets.ISecretStore>().ShouldBeOfType<Shared.Secrets.OpenBaoSecretStore>();
+        provider.GetRequiredService<Shared.Backups.IBackupServiceClient>().ShouldBeOfType<Shared.Backups.BackupServiceClient>();
         builder.Services.ShouldContain(d => d.ServiceType == typeof(IHostedService) && d.ImplementationType == typeof(Quartz.QuartzHostedService));
         builder.Services.ShouldNotContain(d => d.ImplementationType == typeof(global::Scheduler.Services.LiteSchedulerStartupService));
     }
@@ -150,12 +151,15 @@ public sealed class ModuleCompositionTests
         await using var fullApp = full.Build();
         await using var combinedApp = combined.Build();
         Routes(fullApp).ShouldBe(Routes(combinedApp));
-        Routes(combinedApp).ShouldContain("api/system/capabilities");
+        Routes(combinedApp).ShouldContain("GET api/system/capabilities");
     }
 
     private static string[] Routes(WebApplication app) => app.Services
         .GetRequiredService<IActionDescriptorCollectionProvider>().ActionDescriptors.Items
-        .OfType<ControllerActionDescriptor>().Select(a => a.AttributeRouteInfo?.Template ?? "")
+        .OfType<ControllerActionDescriptor>().SelectMany(a =>
+            a.ActionConstraints?.OfType<Microsoft.AspNetCore.Mvc.ActionConstraints.HttpMethodActionConstraint>()
+                .SelectMany(c => c.HttpMethods).Select(method => $"{method} {a.AttributeRouteInfo?.Template}")
+            ?? [$"ANY {a.AttributeRouteInfo?.Template}"])
         .Order(StringComparer.Ordinal).ToArray();
 
     [Test]

@@ -69,6 +69,101 @@ public sealed class SqliteBackupServiceClientTests
     }
 
     [Test]
+    public async Task Cancellation_After_Snapshot_Staging_Removes_All_Recovery_Artifacts()
+    {
+        var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var backups = Path.Combine(root, "backups");
+        Directory.CreateDirectory(backups);
+        try
+        {
+            var factory = new SqliteConnectionFactory(new(PersistenceProvider.Sqlite, Path.Combine(root, "frostreamlitedb"), 5));
+            new SqliteSchemaInitializer(factory, NodaTime.SystemClock.Instance).Initialize();
+            using (var connection = factory.OpenConnection())
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "CREATE TABLE cancellation_payload (data BLOB); INSERT INTO cancellation_payload VALUES (zeroblob(33554432));";
+                command.ExecuteNonQuery();
+            }
+            using var cancelled = new CancellationTokenSource();
+            using var watcher = new FileSystemWatcher(backups);
+            var staged = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            watcher.Created += (_, change) =>
+            {
+                if (change.Name?.EndsWith(".tmp", StringComparison.Ordinal) == true)
+                {
+                    cancelled.Cancel();
+                    staged.TrySetResult();
+                }
+            };
+            watcher.EnableRaisingEvents = true;
+            var client = CreateClient(factory, root, backups);
+            await Should.ThrowAsync<OperationCanceledException>(() => client.CreateAsync(new("cancelled", "full"), cancelled.Token));
+            await staged.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Directory.EnumerateFileSystemEntries(backups).ShouldBeEmpty();
+            (await client.ListJobsAsync()).ShouldBeEmpty();
+            using var live = factory.OpenConnection();
+            using var integrity = live.CreateCommand();
+            integrity.CommandText = "PRAGMA integrity_check";
+            integrity.ExecuteScalar().ShouldBe("ok");
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
+    }
+
+    [Test]
+    public async Task Snapshot_During_Concurrent_Commits_Is_Consistent_And_Recoverable()
+    {
+        var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        try
+        {
+            var factory = new SqliteConnectionFactory(new(PersistenceProvider.Sqlite, Path.Combine(root, "frostreamlitedb"), 5));
+            new SqliteSchemaInitializer(factory, NodaTime.SystemClock.Instance).Initialize();
+            using (var connection = factory.OpenConnection())
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "CREATE TABLE activity (id INTEGER PRIMARY KEY, amount INTEGER NOT NULL);";
+                command.ExecuteNonQuery();
+            }
+            var active = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var stop = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token);
+            var commits = 0;
+            var writer = Task.Run(async () =>
+            {
+                using var connection = factory.OpenConnection(stop.Token);
+                try
+                {
+                    while (!stop.IsCancellationRequested)
+                    {
+                        using var command = connection.CreateCommand();
+                        command.CommandText = "INSERT INTO activity(amount) VALUES (1),(-1);";
+                        command.ExecuteNonQuery();
+                        Interlocked.Increment(ref commits);
+                        active.TrySetResult();
+                        await Task.Delay(1, stop.Token);
+                    }
+                }
+                catch (OperationCanceledException) when (stop.IsCancellationRequested) { }
+            }, timeout.Token);
+            try
+            {
+                await active.Task.WaitAsync(timeout.Token);
+                var client = CreateClient(factory, root, Path.Combine(root, "backups"));
+                var snapshot = await client.CreateAsync(new("active", "full"), timeout.Token);
+                (await client.VerifyAsync(new(snapshot.Label), timeout.Token)).Status.ShouldBe("completed");
+                using var restored = new SqliteConnection($"Data Source={Path.Combine(root, "backups", snapshot.Label!)};Mode=ReadOnly;Pooling=False");
+                restored.Open();
+                using var invariant = restored.CreateCommand();
+                invariant.CommandText = "SELECT SUM(amount) FROM activity";
+                Convert.ToInt64(invariant.ExecuteScalar()).ShouldBe(0);
+                Volatile.Read(ref commits).ShouldBeGreaterThan(0);
+            }
+            finally { stop.Cancel(); await writer; }
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
+    }
+
+    [Test]
     public async Task Rejects_Unsupported_Backup_Operations_And_Removes_Incomplete_Files()
     {
         var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
