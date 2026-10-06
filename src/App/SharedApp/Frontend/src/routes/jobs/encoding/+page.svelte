@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import { Select } from '$lib/components/ui';
+  import { Select } from '#lib/components/ui/index.js';
   import {
     ChevronLeft,
     ChevronRight,
@@ -11,9 +11,9 @@
     Square,
     Video
   } from '@lucide/svelte';
-  import { createEncodingQueueStore, type EncodingQueueState } from '$lib/stores/encodingQueue';
-  import type { RenditionKind, RenditionStatus } from '$lib/api/encodingQueue';
-  import { formatBytes, formatDuration, formatRelativeDate } from '$lib/media';
+  import { createEncodingQueueStore, type EncodingQueueState } from '#lib/stores/encodingQueue.js';
+  import type { RenditionKind, RenditionStatus } from '#lib/api/encodingQueue.js';
+  import { formatBytes, formatDuration, formatRelativeDate } from '#lib/media.js';
 
   type StatusFilterKey = 'all' | RenditionStatus;
   type KindFilterKey = 'all' | RenditionKind;

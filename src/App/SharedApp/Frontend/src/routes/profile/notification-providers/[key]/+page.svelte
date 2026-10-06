@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { CircleAlert } from '@lucide/svelte';
-  import NotificationProviderForm from '$lib/components/profile/NotificationProviderForm.svelte';
-  import { getNotificationProvider, type NotificationProvider } from '$lib/api/notifications';
+  import NotificationProviderForm from '#lib/components/profile/NotificationProviderForm.svelte';
+  import { getNotificationProvider, type NotificationProvider } from '#lib/api/notifications.js';
 
   let { params } = $props();
 

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Select } from '$lib/components/ui';
+  import { Select } from '#lib/components/ui/index.js';
   import {
     Check,
     CircleAlert,
@@ -10,14 +10,14 @@
     Search,
     Trash2
   } from '@lucide/svelte';
-  import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
+  import ConfirmDeleteModal from '#lib/components/admin/ConfirmDeleteModal.svelte';
   import {
     deleteNote,
     saveNote,
     searchNotes,
     type NoteTargetType,
     type UserNote
-  } from '$lib/api/notes';
+  } from '#lib/api/notes.js';
 
 
   const targetOptions = [

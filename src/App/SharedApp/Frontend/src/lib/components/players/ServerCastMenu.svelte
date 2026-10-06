@@ -17,9 +17,9 @@
     endCastSession,
     type CastDevice,
     type CastSession
-  } from '$lib/api/cast';
-  import { readEventStream } from '$lib/sse/eventStream';
-  import RangeSlider from '$lib/components/RangeSlider.svelte';
+  } from '#lib/api/cast.js';
+  import { readEventStream } from '#lib/sse/eventStream.js';
+  import RangeSlider from '#lib/components/RangeSlider.svelte';
   import {
     Cast,
     Pause,

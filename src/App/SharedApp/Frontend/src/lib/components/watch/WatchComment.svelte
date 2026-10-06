@@ -7,7 +7,7 @@
     ThumbsDown,
     ThumbsUp
   } from '@lucide/svelte';
-  import { accentFor, formatCount, formatRelativeDate, initialsFor } from '$lib/media';
+  import { accentFor, formatCount, formatRelativeDate, initialsFor } from '#lib/media.js';
   import WatchComment from './WatchComment.svelte';
 
   export interface WatchCommentNode {

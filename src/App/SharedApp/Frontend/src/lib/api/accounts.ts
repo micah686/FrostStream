@@ -1,4 +1,4 @@
-import { getJson } from '$lib/api/http';
+import { getJson } from '#lib/api/http.js';
 
 const BASE = '/api/metadata/accounts';
 

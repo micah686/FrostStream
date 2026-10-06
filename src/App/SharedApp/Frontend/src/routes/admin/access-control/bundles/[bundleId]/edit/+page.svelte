@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import BundleManagementSection from '$lib/components/admin/BundleManagementSection.svelte';
+  import BundleManagementSection from '#lib/components/admin/BundleManagementSection.svelte';
 </script>
 
 <svelte:head>

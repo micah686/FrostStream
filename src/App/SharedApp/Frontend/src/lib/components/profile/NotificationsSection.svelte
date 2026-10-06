@@ -13,8 +13,8 @@
     listNotificationProviders,
     updateNotificationProviderEnabled,
     type NotificationProvider
-  } from '$lib/api/notifications';
-  import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
+  } from '#lib/api/notifications.js';
+  import ConfirmDeleteModal from '#lib/components/admin/ConfirmDeleteModal.svelte';
 
   const cardClass = 'card border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6';
   let providers = $state<NotificationProvider[]>([]);

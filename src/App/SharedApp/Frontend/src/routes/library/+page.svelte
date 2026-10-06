@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { requiresLogin } from '$lib/frontendAccess';
+  import { requiresLogin } from '#lib/frontendAccess.js';
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
-  import { Select } from '$lib/components/ui';
+  import { Select } from '#lib/components/ui/index.js';
   import {
     ChevronLeft,
     ChevronRight,
@@ -14,11 +14,11 @@
     Play,
     Plus
   } from '@lucide/svelte';
-  import { getUserPlaylist, listUserPlaylists, type UserPlaylist } from '$lib/api/userPlaylists';
+  import { getUserPlaylist, listUserPlaylists, type UserPlaylist } from '#lib/api/userPlaylists.js';
   import {
     listProviderPlaylistLibrary,
     type ProviderPlaylistLibraryItem
-  } from '$lib/api/playlists';
+  } from '#lib/api/playlists.js';
   import {
     accentFor,
     formatBytes,
@@ -26,9 +26,9 @@
     formatRelativeDate,
     formatViews,
     initialsFor
-  } from '$lib/media';
-  import { listWatchHistory, type WatchState } from '$lib/api/watchState';
-  import { listLikedMedia } from '$lib/api/mediaLikes';
+  } from '#lib/media.js';
+  import { listWatchHistory, type WatchState } from '#lib/api/watchState.js';
+  import { listLikedMedia } from '#lib/api/mediaLikes.js';
 
   interface MediaCard {
     mediaGuid: string;
@@ -220,13 +220,13 @@
   }
 
   function selectTab(tab: Tab) {
-    const url = new URL(page.url);
+    const url = new URL(page.url.href);
     if (tab === 'Videos') {
       url.searchParams.delete('tab');
     } else {
       url.searchParams.set('tab', tab);
     }
-    void goto(`${url.pathname}${url.search}`, { replaceState: true, noScroll: true, keepFocus: true });
+    void goto(`${url.pathname}${url.search}`, { replace: true, reset: false });
   }
 
   async function loadUserPlaylistCards() {

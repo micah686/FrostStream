@@ -1,4 +1,4 @@
-import { getJson } from '$lib/api/http';
+import { getJson } from '#lib/api/http.js';
 
 export type RenditionKind = 'Stream' | 'Audio';
 export type RenditionStatus = 'Pending' | 'Processing' | 'Ready' | 'Failed';

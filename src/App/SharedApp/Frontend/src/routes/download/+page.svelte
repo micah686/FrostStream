@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Select } from '$lib/components/ui';
+  import { Select } from '#lib/components/ui/index.js';
   import {
     CircleAlert,
     CircleCheck,
@@ -9,10 +9,10 @@
     Users,
     Video
   } from '@lucide/svelte';
-  import { listOptionPresets, type OptionPreset } from '$lib/api/optionPresets';
-  import { listDownloadConfigSets, type DownloadConfigSet } from '$lib/api/downloadConfigSets';
-  import { queuePlaylistDownload } from '$lib/api/playlists';
-  import { queueChannelDownload } from '$lib/api/creatorSources';
+  import { listOptionPresets, type OptionPreset } from '#lib/api/optionPresets.js';
+  import { listDownloadConfigSets, type DownloadConfigSet } from '#lib/api/downloadConfigSets.js';
+  import { queuePlaylistDownload } from '#lib/api/playlists.js';
+  import { queueChannelDownload } from '#lib/api/creatorSources.js';
 
   type TabKey = 'video' | 'playlist' | 'creator';
 

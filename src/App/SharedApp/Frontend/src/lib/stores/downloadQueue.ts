@@ -6,8 +6,8 @@ import {
   type QueueListParams,
   type ProgressFrame,
   type StateFrame
-} from '$lib/api/downloadQueue';
-import { readEventStream, type EventStreamHandlers } from '$lib/sse/eventStream';
+} from '#lib/api/downloadQueue.js';
+import { readEventStream, type EventStreamHandlers } from '#lib/sse/eventStream.js';
 
 export interface QueueRow {
   job: DownloadQueueJob;

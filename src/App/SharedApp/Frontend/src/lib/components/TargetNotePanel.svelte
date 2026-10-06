@@ -7,7 +7,7 @@
     Pencil,
     Trash2
   } from '@lucide/svelte';
-  import { deleteNote, getNote, saveNote, type NoteTargetType } from '$lib/api/notes';
+  import { deleteNote, getNote, saveNote, type NoteTargetType } from '#lib/api/notes.js';
 
   interface Props {
     targetType: NoteTargetType;

@@ -4,7 +4,7 @@
   const capabilities = $derived(page.data.capabilities.backups);
   const lite = $derived(page.data.lite);
   const deepVerification = $derived(capabilities.deepVerification ?? capabilities.pointInTimeRecovery);
-  import { Select } from '$lib/components/ui';
+  import { Select } from '#lib/components/ui/index.js';
   import {
     CircleAlert,
     CircleCheck,
@@ -24,7 +24,7 @@
     type BackupJob,
     type BackupRepository,
     type BackupType
-  } from '$lib/api/backups';
+  } from '#lib/api/backups.js';
 
   const backupTypeOptions = $derived([
     { value: 'full' as BackupType, name: lite ? 'Full — complete SQLite snapshot' : 'Full — complete cluster backup' },

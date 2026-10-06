@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Select } from '$lib/components/ui';
+  import { Select } from '#lib/components/ui/index.js';
   import { triStateItems, type TriState } from './ytDlpPresetOptions';
 
   interface Props {

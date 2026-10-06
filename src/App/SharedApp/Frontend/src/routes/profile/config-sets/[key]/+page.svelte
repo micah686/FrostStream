@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { CircleAlert } from '@lucide/svelte';
-  import DownloadConfigSetForm from '$lib/components/profile/DownloadConfigSetForm.svelte';
-  import { getDownloadConfigSet, type DownloadConfigSet } from '$lib/api/downloadConfigSets';
+  import DownloadConfigSetForm from '#lib/components/profile/DownloadConfigSetForm.svelte';
+  import { getDownloadConfigSet, type DownloadConfigSet } from '#lib/api/downloadConfigSets.js';
 
   let { params } = $props();
 

@@ -1,3 +1,5 @@
+import adapter from '@sveltejs/adapter-static';
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import tailwindcss from '@tailwindcss/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
@@ -9,7 +11,13 @@ const port = Number(process.env.PORT ?? 25000);
 const webApiUpstream = process.env.WEBAPI_UPSTREAM ?? process.env.WEBAPI_HTTP ?? 'http://localhost:25200';
 
 export default defineConfig({
-  plugins: [tailwindcss(), sveltekit()],
+  plugins: [
+    tailwindcss(),
+    sveltekit({
+      preprocess: vitePreprocess(),
+      adapter: adapter({ fallback: 'index.html' })
+    })
+  ],
   resolve: {
     alias: [
       {

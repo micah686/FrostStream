@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { ArrowLeft, CircleAlert } from '@lucide/svelte';
-  import { getCookieProfile, upsertCookieProfile, type CookieProfile } from '$lib/api/cookies';
+  import { getCookieProfile, upsertCookieProfile, type CookieProfile } from '#lib/api/cookies.js';
 
   let { params } = $props();
   let profile = $state<CookieProfile | null>(null);

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { emoteImageUrl, type ChatFragment } from '$lib/api/liveChat';
+  import { emoteImageUrl, type ChatFragment } from '#lib/api/liveChat.js';
 
   let { fragments }: { fragments: ChatFragment[] } = $props();
 

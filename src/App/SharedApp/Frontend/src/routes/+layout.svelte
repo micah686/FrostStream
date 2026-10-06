@@ -3,11 +3,11 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { Drawer } from '$lib/components/ui';
-  import { installApiFetch } from '$lib/api/http';
-  import { initTheme } from '$lib/stores/theme';
-  import { searchMedia, type SearchHit } from '$lib/api/search';
-  import { accentFor, formatDuration, initialsFor } from '$lib/media';
+  import { Drawer } from '#lib/components/ui/index.js';
+  import { installApiFetch } from '#lib/api/http.js';
+  import { initTheme } from '#lib/stores/theme.js';
+  import { searchMedia, type SearchHit } from '#lib/api/search.js';
+  import { accentFor, formatDuration, initialsFor } from '#lib/media.js';
   import {
     ClipboardList,
     Cog,
@@ -75,7 +75,7 @@
       return false;
     }
 
-    const target = new URL(item.href, page.url);
+    const target = new URL(item.href, page.url.href);
     if (page.url.pathname === target.pathname && page.url.search === target.search) {
       return true;
     }

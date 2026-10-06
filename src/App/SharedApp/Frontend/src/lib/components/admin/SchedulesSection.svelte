@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { page } from '$app/state';
-  import { Select } from '$lib/components/ui';
+  import { Select } from '#lib/components/ui/index.js';
   import {
     ChevronDown,
     CircleAlert,
@@ -12,7 +12,7 @@
     Server,
     X
   } from '@lucide/svelte';
-  import { ApiRequestError } from '$lib/api/http';
+  import { ApiRequestError } from '#lib/api/http.js';
   import {
     listSchedules,
     scheduleTaskTypes,
@@ -20,7 +20,7 @@
     updateSchedule,
     type ScheduleCatchupPolicy,
     type ScheduledTask
-  } from '$lib/api/schedules';
+  } from '#lib/api/schedules.js';
 
   let { editKey = null } = $props<{ editKey?: string | null }>();
   const editOnly = $derived(editKey !== null);

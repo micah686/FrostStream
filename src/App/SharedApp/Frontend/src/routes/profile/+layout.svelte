@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { logout } from '$lib/api/http';
+  import { logout } from '#lib/api/http.js';
   import {
     Bell,
     Cookie,

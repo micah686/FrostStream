@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { requiresLogin, hasFrontendPermission } from '$lib/frontendAccess';
+  import { requiresLogin, hasFrontendPermission } from '#lib/frontendAccess.js';
   import { page } from '$app/state';
   import { tick } from 'svelte';
   import { goto } from '$app/navigation';
-  import { browser } from '$app/environment';
+  import { browser } from '$app/env';
   import {
     ChevronDown,
     ChevronUp,
@@ -16,23 +16,23 @@
     ThumbsDown,
     ThumbsUp
   } from '@lucide/svelte';
-  import VideoJs10Player, { type TextTrackSource } from '$lib/components/players/VideoJs10Player.svelte';
-  import CastDropdown from '$lib/components/players/CastDropdown.svelte';
-  import SaveToPlaylistButton from '$lib/components/SaveToPlaylistButton.svelte';
-  import PlaylistPanel from '$lib/components/PlaylistPanel.svelte';
-  import ChatReplayPanel from '$lib/components/chat/ChatReplayPanel.svelte';
-  import TargetNotePanel from '$lib/components/TargetNotePanel.svelte';
-  import WatchComment from '$lib/components/watch/WatchComment.svelte';
+  import VideoJs10Player, { type TextTrackSource } from '#lib/components/players/VideoJs10Player.svelte';
+  import CastDropdown from '#lib/components/players/CastDropdown.svelte';
+  import SaveToPlaylistButton from '#lib/components/SaveToPlaylistButton.svelte';
+  import PlaylistPanel from '#lib/components/PlaylistPanel.svelte';
+  import ChatReplayPanel from '#lib/components/chat/ChatReplayPanel.svelte';
+  import TargetNotePanel from '#lib/components/TargetNotePanel.svelte';
+  import WatchComment from '#lib/components/watch/WatchComment.svelte';
   import {
     getWatchState,
     markUnwatched,
     markWatched,
     updateWatchState,
     type WatchState
-  } from '$lib/api/watchState';
-  import { getLikeState, likeMedia, unlikeMedia, type MediaLikeState } from '$lib/api/mediaLikes';
-  import { getMetadataVersions, type MetadataVersion } from '$lib/api/metadata';
-  import { listCaptionTracks, type CaptionTrack } from '$lib/api/captions';
+  } from '#lib/api/watchState.js';
+  import { getLikeState, likeMedia, unlikeMedia, type MediaLikeState } from '#lib/api/mediaLikes.js';
+  import { getMetadataVersions, type MetadataVersion } from '#lib/api/metadata.js';
+  import { listCaptionTracks, type CaptionTrack } from '#lib/api/captions.js';
   import {
     accentFor,
     formatCount,
@@ -40,7 +40,7 @@
     formatRelativeDate,
     formatViews,
     initialsFor
-  } from '$lib/media';
+  } from '#lib/media.js';
 
   interface Series {
     seriesName: string;
@@ -380,11 +380,8 @@
       }
 
       const target = event.target;
-      if (
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLTextAreaElement ||
-        (target instanceof HTMLElement && target.isContentEditable)
-      ) {
+
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLElement && target.isContentEditable) {
         return;
       }
 
@@ -676,7 +673,7 @@
         if (response.status !== 202) {
           throw new Error(`Compatible stream could not be prepared (status ${response.status}).`);
         }
-        const result = (await response.json()) as { status?: string };
+        const result = await response.json() as { status?: string };
         if (result.status === 'failed') {
           throw new Error('The compatible stream could not be encoded. Check the rendition queue for details.');
         }
@@ -698,10 +695,8 @@
       versions = response.versions ?? [];
       // Default to the storage that holds the latest version, matching the previous
       // "resolve latest" playback behaviour.
-      const latest = versions.reduce<MetadataVersion | null>(
-        (best, version) => (best === null || version.versionNum > best.versionNum ? version : best),
-        null
-      );
+      const latest = versions.reduce<MetadataVersion | null>((best, version) => best === null || version.versionNum > best.versionNum ? version : best, null);
+
       selectedStorage = latest?.storageKey ?? '';
     } catch {
       versions = [];
@@ -751,7 +746,7 @@
     lastSentPosition = positionSeconds;
 
     const nearEnd = durationSeconds !== null && positionSeconds >= durationSeconds * 0.95;
-    const completed = watched || (nearEnd && !suppressAutoComplete);
+    const completed = watched || nearEnd && !suppressAutoComplete;
     const guid = mediaGuid;
     updateWatchState(guid, { positionSeconds, durationSeconds, completed })
       .then((state) => {
@@ -813,7 +808,7 @@
         if (!response.ok) {
           return null;
         }
-        const data = (await response.json()) as { mediaGuid?: string };
+        const data = await response.json() as { mediaGuid?: string };
         return data.mediaGuid && data.mediaGuid !== current ? `/watch/${data.mediaGuid}` : null;
       } catch {
         return null;
@@ -871,8 +866,8 @@
               : `Could not load the video (status ${response.status}).`;
         return;
       }
-      detail = (await response.json()) as Detail;
-    } catch (err) {
+      detail = await response.json() as Detail;
+    } catch(err) {
       loadError = err instanceof Error ? err.message : 'Could not load the video.';
     }
   }
@@ -900,7 +895,7 @@
           return;
         }
 
-        const data = (await response.json()) as {
+        const data = await response.json() as { 
           items: Comment[];
           page: number;
           totalCount: number;
@@ -944,14 +939,8 @@
       }
     }
 
-    const compare = (left: CommentNode, right: CommentNode) =>
-      (right.isPinned ? 1 : 0) - (left.isPinned ? 1 : 0) ||
-      new Date(right.commentTimestamp).getTime() - new Date(left.commentTimestamp).getTime() ||
-      left.commentId.localeCompare(right.commentId);
-
-    const compareReplies = (left: CommentNode, right: CommentNode) =>
-      new Date(left.commentTimestamp).getTime() - new Date(right.commentTimestamp).getTime() ||
-      left.commentId.localeCompare(right.commentId);
+    const compare = (left: CommentNode, right: CommentNode) => (right.isPinned ? 1 : 0) - (left.isPinned ? 1 : 0) || new Date(right.commentTimestamp).getTime() - new Date(left.commentTimestamp).getTime() || left.commentId.localeCompare(right.commentId);
+    const compareReplies = (left: CommentNode, right: CommentNode) => new Date(left.commentTimestamp).getTime() - new Date(right.commentTimestamp).getTime() || left.commentId.localeCompare(right.commentId);
 
     const sortTree = (nodesToSort: CommentNode[], isReplyLevel: boolean) => {
       nodesToSort.sort(isReplyLevel ? compareReplies : compare);
@@ -972,7 +961,7 @@
       if (!response.ok) {
         return;
       }
-      const data = (await response.json()) as { items: UpNextCard[] };
+      const data = await response.json() as { items: UpNextCard[] };
       upNext = data.items.filter((item) => item.mediaGuid !== guid).slice(0, 10);
     } catch {
       // The rail is optional.
@@ -997,8 +986,8 @@
             : `Could not load technical metadata (status ${response.status}).`;
         return;
       }
-      technical = (await response.json()) as Technical;
-    } catch (err) {
+      technical = await response.json() as Technical;
+    } catch(err) {
       technicalError = err instanceof Error ? err.message : 'Could not load technical metadata.';
     }
   }
@@ -1184,8 +1173,8 @@
               startTime={resumeTime}
               loop={repeatEnabled}
               autoplay={autoplayEnabled}
-              {repeatEnabled}
-              {shuffleEnabled}
+              repeatEnabled={repeatEnabled}
+              shuffleEnabled={shuffleEnabled}
               focusAvailable={chatAvailable}
               focusActive={focusMode}
               onToggleRepeat={toggleRepeat}
@@ -1206,117 +1195,170 @@
       <h1 class="mt-4 text-xl font-bold tracking-tight text-base-content sm:text-2xl">{detail.title}</h1>
 
       <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
-        <div class="flex items-center gap-3">
-          <a
-            href={`/channel/${detail.account.accountId}`}
-            aria-label={`Open ${detail.account.accountName}'s channel`}
-            class={`relative grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br ${accentFor(detail.account.accountName)} text-xs font-bold text-base-content`}
-          >
-            {initialsFor(detail.account.accountName)}
-            <img
-              src={`/api/media/watch/accounts/${detail.account.accountId}/avatar`}
-              alt=""
-              loading="lazy"
-              decoding="async"
-              class="absolute inset-0 h-full w-full object-cover"
-              onerror={hideBrokenImage}
-            />
-          </a>
-          <div class="min-w-0">
+          <div class="flex items-center gap-3">
+            <a
+              href={`/channel/${detail.account.accountId}`}
+              aria-label={`Open ${detail.account.accountName}'s channel`}
+              class={`relative grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br ${accentFor(detail.account.accountName)} text-xs font-bold text-base-content`}
+            >
+              {initialsFor(detail.account.accountName)} 
+              <img
+                src={`/api/media/watch/accounts/${detail.account.accountId}/avatar`}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                class="absolute inset-0 h-full w-full object-cover"
+                onerror={hideBrokenImage}
+              />
+            </a>
+            <div class="min-w-0">
             <p class="flex items-center gap-1 text-sm font-semibold text-base-content/90">
               <a href={`/channel/${detail.account.accountId}`} class="hover:text-base-content">
                 {detail.account.accountName}
               </a>
-              {#if detail.account.isVerified}
-                <span class="text-primary" title="Verified">✓</span>
+                {#if detail.account.isVerified}
+                  <span class="text-primary" title="Verified">✓</span>
+                {/if}
+              </p>
+              {#if formatCount(detail.account.followerCount)}
+                <p class="text-xs text-base-content/50">{formatCount(detail.account.followerCount)} subscribers</p>
+              {:else}
+                <p class="text-xs text-base-content/50">@{detail.account.accountHandle}</p>
               {/if}
-            </p>
-            {#if formatCount(detail.account.followerCount)}
-              <p class="text-xs text-base-content/50">{formatCount(detail.account.followerCount)} subscribers</p>
-            {:else}
-              <p class="text-xs text-base-content/50">@{detail.account.accountHandle}</p>
-            {/if}
+            </div>
           </div>
-        </div>
 
         <div class="flex items-center gap-2" bind:this={controlsRowEl}>
-          <button
-            type="button"
-            onclick={toggleLike}
-            disabled={!likeStateLoaded || likeBusy}
-            aria-pressed={liked}
-            aria-label={liked ? 'Remove from favorites' : 'Add to favorites'}
-            title={liked ? 'Remove from favorites' : 'Add to favorites'}
-            class="btn btn-sm btn-neutral px-2 text-xs disabled:opacity-60"
-          >
+            <button
+              type="button"
+              onclick={toggleLike}
+              disabled={!likeStateLoaded || likeBusy}
+              aria-pressed={liked}
+              aria-label={liked ? 'Remove from favorites' : 'Add to favorites'}
+              title={liked ? 'Remove from favorites' : 'Add to favorites'}
+              class="btn btn-sm btn-neutral px-2 text-xs disabled:opacity-60"
+            >
             <Heart class="h-4 w-4" fill={liked ? 'currentColor' : 'none'} />
-          </button>
-          <button
-            type="button"
-            onclick={toggleWatched}
-            disabled={!watchStateLoaded || watchedBusy}
-            aria-pressed={watched}
-            title={watched ? 'Mark as unwatched' : 'Mark as watched'}
-            class="btn btn-sm btn-neutral text-xs disabled:opacity-60"
-          >
-            <CircleCheck class="h-4 w-4" />
-            {#if watched}
-              Watched
-            {:else}
-              Mark watched
+            </button>
+            <button
+              type="button"
+              onclick={toggleWatched}
+              disabled={!watchStateLoaded || watchedBusy}
+              aria-pressed={watched}
+              title={watched ? 'Mark as unwatched' : 'Mark as watched'}
+              class="btn btn-sm btn-neutral text-xs disabled:opacity-60"
+            >
+              <CircleCheck class="h-4 w-4" />
+              {#if watched}
+                Watched
+              {:else}
+                Mark watched
+              {/if}
+            </button>
+            <CastDropdown
+              mediaGuid={mediaGuid}
+              title={detail.title}
+              posterUrl={posterUrl}
+              captionLanguages={captionTracksAvailable}
+              position={livePosition}
+              storageKey={selectedStorage || null}
+              version={selectedVersion ? Number(selectedVersion) : null}
+            />
+            {#if storageOptions.length > 0}
+              <div class="relative" bind:this={storageMenuContainer}>
+                <button
+                  type="button"
+                  onclick={() => storageMenuOpen = !storageMenuOpen}
+                  aria-haspopup="menu"
+                  aria-expanded={storageMenuOpen}
+                  disabled={versionsLoading}
+                  class="btn btn-sm btn-neutral text-xs disabled:cursor-wait disabled:opacity-60"
+                >
+                  {#if versionsLoading}
+                    <span class="loading loading-spinner loading-xs"></span>
+                    Storage
+                  {:else}
+                    Storage 
+                  <span class="badge badge-ghost badge-sm max-w-24 truncate">{selectedStorageLabel}</span>
+                    <ChevronDown class="h-3.5 w-3.5" />
+                  {/if}
+                </button>
+
+                {#if storageMenuOpen}
+                  <div
+                    class="absolute right-0 z-30 mt-2 w-64 rounded-box border-[length:var(--border)] border-base-300 bg-base-200/95 p-2 shadow-2xl shadow-black/50 backdrop-blur"
+                    role="menu"
+                    aria-label="Select storage backend"
+                  >
+                    <div class="space-y-1">
+                      {#each storageOptions as option (option.value)}
+                        <button
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={selectedStorage === option.value}
+                          onclick={() => selectStorage(option.value)}
+                          class={[
+                            'flex w-full items-center justify-between gap-3 rounded-field px-3 py-2 text-left text-sm transition',
+                            selectedStorage === option.value
+                              ? 'bg-primary/15 text-primary'
+                              : 'text-base-content/90 hover:bg-base-300/70'
+                          ]}
+                        >
+                          <span class="truncate">{option.name}</span>
+                          {#if selectedStorage === option.value}
+                            <CircleCheck class="h-4 w-4 shrink-0 text-primary" />
+                          {/if}
+                        </button>
+                      {/each}
+                    </div>
+                  </div>
+                {/if}
+              </div>
             {/if}
-          </button>
-          <CastDropdown
-            {mediaGuid}
-            title={detail.title}
-            posterUrl={posterUrl}
-            captionLanguages={captionTracksAvailable}
-            position={livePosition}
-            storageKey={selectedStorage || null}
-            version={selectedVersion ? Number(selectedVersion) : null}
-          />
-          {#if storageOptions.length > 0}
-            <div class="relative" bind:this={storageMenuContainer}>
+            <div class="relative" bind:this={versionMenuContainer}>
               <button
                 type="button"
-                onclick={() => (storageMenuOpen = !storageMenuOpen)}
+                onclick={() => versionMenuOpen = !versionMenuOpen}
                 aria-haspopup="menu"
-                aria-expanded={storageMenuOpen}
+                aria-expanded={versionMenuOpen}
                 disabled={versionsLoading}
                 class="btn btn-sm btn-neutral text-xs disabled:cursor-wait disabled:opacity-60"
               >
                 {#if versionsLoading}
                   <span class="loading loading-spinner loading-xs"></span>
-                  Storage
+                  Versions
                 {:else}
-                  Storage
-                  <span class="badge badge-ghost badge-sm max-w-24 truncate">{selectedStorageLabel}</span>
+                  Version 
+                <span class="badge badge-ghost badge-sm max-w-24 truncate">{selectedVersionLabel}</span>
                   <ChevronDown class="h-3.5 w-3.5" />
                 {/if}
               </button>
 
-              {#if storageMenuOpen}
+              {#if versionMenuOpen}
                 <div
                   class="absolute right-0 z-30 mt-2 w-64 rounded-box border-[length:var(--border)] border-base-300 bg-base-200/95 p-2 shadow-2xl shadow-black/50 backdrop-blur"
                   role="menu"
-                  aria-label="Select storage backend"
+                  aria-label="Select media version"
                 >
                   <div class="space-y-1">
-                    {#each storageOptions as option (option.value)}
+                    {#each mediaVersionOptions as option (option.value)}
                       <button
                         type="button"
                         role="menuitemradio"
-                        aria-checked={selectedStorage === option.value}
-                        onclick={() => selectStorage(option.value)}
+                        aria-checked={selectedVersion === option.value}
+                        onclick={() => {
+                          selectedVersion = option.value;
+                          versionMenuOpen = false;
+                        }}
                         class={[
                           'flex w-full items-center justify-between gap-3 rounded-field px-3 py-2 text-left text-sm transition',
-                          selectedStorage === option.value
+                          selectedVersion === option.value
                             ? 'bg-primary/15 text-primary'
                             : 'text-base-content/90 hover:bg-base-300/70'
                         ]}
                       >
                         <span class="truncate">{option.name}</span>
-                        {#if selectedStorage === option.value}
+                        {#if selectedVersion === option.value}
                           <CircleCheck class="h-4 w-4 shrink-0 text-primary" />
                         {/if}
                       </button>
@@ -1325,488 +1367,438 @@
                 </div>
               {/if}
             </div>
-          {/if}
-          <div class="relative" bind:this={versionMenuContainer}>
-            <button
-              type="button"
-              onclick={() => (versionMenuOpen = !versionMenuOpen)}
-              aria-haspopup="menu"
-              aria-expanded={versionMenuOpen}
-              disabled={versionsLoading}
-              class="btn btn-sm btn-neutral text-xs disabled:cursor-wait disabled:opacity-60"
-            >
-              {#if versionsLoading}
-                <span class="loading loading-spinner loading-xs"></span>
-                Versions
-              {:else}
-                Version
-                <span class="badge badge-ghost badge-sm max-w-24 truncate">{selectedVersionLabel}</span>
-                <ChevronDown class="h-3.5 w-3.5" />
-              {/if}
-            </button>
-
-            {#if versionMenuOpen}
-              <div
-                class="absolute right-0 z-30 mt-2 w-64 rounded-box border-[length:var(--border)] border-base-300 bg-base-200/95 p-2 shadow-2xl shadow-black/50 backdrop-blur"
-                role="menu"
-                aria-label="Select media version"
-              >
-                <div class="space-y-1">
-                  {#each mediaVersionOptions as option (option.value)}
-                    <button
-                      type="button"
-                      role="menuitemradio"
-                      aria-checked={selectedVersion === option.value}
-                      onclick={() => {
-                        selectedVersion = option.value;
-                        versionMenuOpen = false;
-                      }}
-                      class={[
-                        'flex w-full items-center justify-between gap-3 rounded-field px-3 py-2 text-left text-sm transition',
-                        selectedVersion === option.value
-                          ? 'bg-primary/15 text-primary'
-                          : 'text-base-content/90 hover:bg-base-300/70'
-                      ]}
-                    >
-                      <span class="truncate">{option.name}</span>
-                      {#if selectedVersion === option.value}
-                        <CircleCheck class="h-4 w-4 shrink-0 text-primary" />
-                      {/if}
-                    </button>
-                  {/each}
-                </div>
-              </div>
-            {/if}
-          </div>
-          <SaveToPlaylistButton {mediaGuid} />
-          <div class="relative" bind:this={moreMenuContainer}>
-            <button
-              type="button"
-              aria-label="More actions"
-              aria-haspopup="menu"
-              aria-expanded={moreMenuOpen}
-              onclick={() => (moreMenuOpen = !moreMenuOpen)}
-              class="btn btn-sm btn-neutral px-2 text-xs"
+            <SaveToPlaylistButton mediaGuid={mediaGuid} />
+            <div class="relative" bind:this={moreMenuContainer}>
+              <button
+                type="button"
+                aria-label="More actions"
+                aria-haspopup="menu"
+                aria-expanded={moreMenuOpen}
+                onclick={() => moreMenuOpen = !moreMenuOpen}
+                class="btn btn-sm btn-neutral px-2 text-xs"
             >
               <Ellipsis class="h-4 w-4" />
             </button>
 
-            {#if moreMenuOpen}
-              <div
-                class="absolute right-0 top-full z-40 mt-2 w-80 rounded-box border-[length:var(--border)] border-base-content/20 bg-base-100 p-1.5 shadow-2xl shadow-black/50"
-                role="menu"
-                aria-label="More actions"
-              >
-                <a
-                  role="menuitem"
-                  href={`/search?similar=${mediaGuid}`}
-                  onclick={() => (moreMenuOpen = false)}
-                  class="flex items-center gap-2.5 rounded-field px-3 py-2 text-sm font-medium text-base-content/90 transition hover:bg-base-300/70"
+              {#if moreMenuOpen}
+                <div
+                  class="absolute right-0 top-full z-40 mt-2 w-80 rounded-box border-[length:var(--border)] border-base-content/20 bg-base-100 p-1.5 shadow-2xl shadow-black/50"
+                  role="menu"
+                  aria-label="More actions"
                 >
-                  <Search class="h-4 w-4 text-base-content/50" />
-                  Find similar
-                </a>
-                <button
-                  type="button"
-                  role="menuitem"
-                  onclick={() => (noteMenuOpen = !noteMenuOpen)}
-                  class="flex w-full items-center justify-between gap-2.5 rounded-field px-3 py-2 text-left text-sm font-medium text-base-content/90 transition hover:bg-base-300/70"
-                >
-                  <span class="flex items-center gap-2.5">
+                  <a
+                    role="menuitem"
+                    href={`/search?similar=${mediaGuid}`}
+                    onclick={() => moreMenuOpen = false}
+                    class="flex items-center gap-2.5 rounded-field px-3 py-2 text-sm font-medium text-base-content/90 transition hover:bg-base-300/70"
+                  >
+                    <Search class="h-4 w-4 text-base-content/50" />
+                    Find similar
+                  </a>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onclick={() => noteMenuOpen = !noteMenuOpen}
+                    class="flex w-full items-center justify-between gap-2.5 rounded-field px-3 py-2 text-left text-sm font-medium text-base-content/90 transition hover:bg-base-300/70"
+                  >
+                    <span class="flex items-center gap-2.5">
                     <Pencil class={['h-4 w-4', detail.userNote ? 'text-primary' : 'text-base-content/50']} />
-                    Note
-                  </span>
+                      Note
+                    </span>
+                    {#if noteMenuOpen}
+                      <ChevronUp class="h-3.5 w-3.5 text-base-content/50" />
+                    {:else}
+                      <ChevronDown class="h-3.5 w-3.5 text-base-content/50" />
+                    {/if}
+                  </button>
                   {#if noteMenuOpen}
-                    <ChevronUp class="h-3.5 w-3.5 text-base-content/50" />
-                  {:else}
-                    <ChevronDown class="h-3.5 w-3.5 text-base-content/50" />
-                  {/if}
-                </button>
-                {#if noteMenuOpen}
                   <div class="mt-1 rounded-field border-[length:var(--border)] border-base-content/20 bg-base-200/45 p-3">
-                    <TargetNotePanel
-                      targetType="video"
-                      targetId={mediaGuid}
-                      targetLabel="Video"
-                      initialNote={detail.userNote ?? null}
-                      embedded
-                      initialOpen
-                      onChange={(note) => {
-                        if (detail) {
-                          detail = { ...detail, userNote: note };
-                        }
-                      }}
-                    />
-                  </div>
-                {/if}
-              </div>
-            {/if}
+                      <TargetNotePanel
+                        targetType="video"
+                        targetId={mediaGuid}
+                        targetLabel="Video"
+                        initialNote={detail.userNote ?? null}
+                        embedded
+                        initialOpen
+                        onChange={(note) => {
+                          if (detail) {
+                            detail = { ...detail, userNote: note };
+                          }
+                        }}
+                      />
+                    </div>
+                  {/if}
+                </div>
+              {/if}
+            </div>
           </div>
         </div>
-      </div>
 
       <div class="mt-4 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-5">
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-semibold text-base-content/80">
           {#if formatViews(detail.viewCount)}<span>{formatViews(detail.viewCount)}</span>{/if}
           {#if formatRelativeDate(detail.releaseDate)}<span class="text-base-content/50">·</span><span>{formatRelativeDate(detail.releaseDate)}</span>{/if}
-          {#if detail.likeCount != null}
+            {#if detail.likeCount != null}
             <span class="inline-flex items-center gap-1 text-base-content/60" title="Provider likes at download time">
-              <ThumbsUp class="h-3.5 w-3.5" />
-              {formatCount(detail.likeCount) ?? detail.likeCount.toLocaleString()}
-            </span>
-          {/if}
-          {#if detail.dislikeCount != null}
+                <ThumbsUp class="h-3.5 w-3.5" />
+                {formatCount(detail.likeCount) ?? detail.likeCount.toLocaleString()}
+              </span>
+            {/if}
+            {#if detail.dislikeCount != null}
             <span class="inline-flex items-center gap-1 text-base-content/50" title="Provider dislikes at download time">
-              <ThumbsDown class="h-3.5 w-3.5" />
-              {formatCount(detail.dislikeCount) ?? detail.dislikeCount.toLocaleString()}
-            </span>
-          {/if}
-          {#each detail.tags.slice(0, 6) as tag}
+                <ThumbsDown class="h-3.5 w-3.5" />
+                {formatCount(detail.dislikeCount) ?? detail.dislikeCount.toLocaleString()}
+              </span>
+            {/if}
+            {#each detail.tags.slice(0, 6) as tag}
             <span class="rounded-full bg-base-300/80 px-2.5 py-0.5 text-xs font-medium text-base-content/60">
               #{tag}
             </span>
-          {/each}
-        </div>
-        {#if detail.description}
-          <p
-            class={[
-              'mt-3 whitespace-pre-line text-sm leading-6 text-base-content/60',
-              !descriptionExpanded && 'line-clamp-3'
-            ]}
+            {/each}
+          </div>
+          {#if detail.description}
+            <p
+              class={[
+                'mt-3 whitespace-pre-line text-sm leading-6 text-base-content/60',
+                !descriptionExpanded && 'line-clamp-3'
+              ]}
           >
             {detail.description}
           </p>
-          <button
-            type="button"
-            onclick={() => (descriptionExpanded = !descriptionExpanded)}
-            class="mt-2 flex items-center gap-1 text-xs font-semibold text-base-content/50 transition hover:text-base-content/80"
-          >
-            {descriptionExpanded ? 'Show less' : 'Show more'}
-            {#if descriptionExpanded}
-              <ChevronUp class="h-3 w-3" />
-            {:else}
-              <ChevronDown class="h-3 w-3" />
-            {/if}
-          </button>
-        {/if}
-      </div>
+            <button
+              type="button"
+              onclick={() => descriptionExpanded = !descriptionExpanded}
+              class="mt-2 flex items-center gap-1 text-xs font-semibold text-base-content/50 transition hover:text-base-content/80"
+            >
+              {descriptionExpanded ? 'Show less' : 'Show more'} 
+              {#if descriptionExpanded}
+                <ChevronUp class="h-3 w-3" />
+              {:else}
+                <ChevronDown class="h-3 w-3" />
+              {/if}
+            </button>
+          {/if}
+        </div>
 
       <section class="mt-4 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40" aria-label="Media metadata">
         <div class="flex gap-1 border-b border-base-300/80 p-2" role="tablist" aria-label="Metadata sections">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={metaTab === 'details'}
-            onclick={() => (metaTab = 'details')}
-            class={[
-              'rounded-field px-4 py-2 text-xs font-semibold transition',
-              metaTab === 'details'
-                ? 'bg-primary/15 text-primary'
-                : 'text-base-content/50 hover:bg-base-300/70 hover:text-base-content/80'
-            ]}
+            <button
+              type="button"
+              role="tab"
+              aria-selected={metaTab === 'details'}
+              onclick={() => metaTab = 'details'}
+              class={[
+                'rounded-field px-4 py-2 text-xs font-semibold transition',
+                metaTab === 'details'
+                  ? 'bg-primary/15 text-primary'
+                  : 'text-base-content/50 hover:bg-base-300/70 hover:text-base-content/80'
+              ]}
           >
             Details
           </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={metaTab === 'technical'}
-            onclick={openTechnicalTab}
-            class={[
-              'rounded-field px-4 py-2 text-xs font-semibold transition',
-              metaTab === 'technical'
-                ? 'bg-primary/15 text-primary'
-                : 'text-base-content/50 hover:bg-base-300/70 hover:text-base-content/80'
-            ]}
+            <button
+              type="button"
+              role="tab"
+              aria-selected={metaTab === 'technical'}
+              onclick={openTechnicalTab}
+              class={[
+                'rounded-field px-4 py-2 text-xs font-semibold transition',
+                metaTab === 'technical'
+                  ? 'bg-primary/15 text-primary'
+                  : 'text-base-content/50 hover:bg-base-300/70 hover:text-base-content/80'
+              ]}
           >
             Technical
           </button>
-        </div>
+          </div>
 
-        {#if metaTab === 'details'}
-          <div class="space-y-5 p-5">
-            {#if detailRows.length > 0}
+          {#if metaTab === 'details'}
+            <div class="space-y-5 p-5">
+              {#if detailRows.length > 0}
               <dl class="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
-                {#each detailRows as row (row.label)}
-                  <div class="flex min-w-0 gap-2">
-                    <dt class="w-32 shrink-0 text-base-content/50">{row.label}</dt>
+                  {#each detailRows as row (row.label)}
+                    <div class="flex min-w-0 gap-2">
+                      <dt class="w-32 shrink-0 text-base-content/50">{row.label}</dt>
                     <dd class="min-w-0 flex-1 truncate text-base-content/80">
-                      {#if row.href}
-                        <a
-                          href={row.href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          class="text-primary hover:underline"
+                        {#if row.href}
+                          <a
+                            href={row.href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="text-primary hover:underline"
                         >
                           {row.value}
                         </a>
-                      {:else}
-                        {row.value}
-                      {/if}
-                    </dd>
-                  </div>
-                {/each}
-              </dl>
-            {/if}
+                        {:else}
+                          {row.value}
+                        {/if}
+                      </dd>
+                    </div>
+                  {/each}
+                </dl>
+              {/if}
 
-            {#if detail.series}
-              <div>
+              {#if detail.series}
+                <div>
                 <h3 class="text-xs font-bold uppercase tracking-[0.08em] text-base-content/50">Series</h3>
-                <p class="mt-1.5 text-sm text-base-content/80">{seriesSummary(detail.series)}</p>
-              </div>
-            {/if}
+                  <p class="mt-1.5 text-sm text-base-content/80">{seriesSummary(detail.series)}</p>
+                </div>
+              {/if}
 
-            {#if detail.music}
-              <div>
+              {#if detail.music}
+                <div>
                 <h3 class="text-xs font-bold uppercase tracking-[0.08em] text-base-content/50">Music</h3>
-                <p class="mt-1.5 text-sm text-base-content/80">{musicSummary(detail.music)}</p>
-              </div>
-            {/if}
+                  <p class="mt-1.5 text-sm text-base-content/80">{musicSummary(detail.music)}</p>
+                </div>
+              {/if}
 
-            {#each [
+              {#each [
               { label: 'Tags', values: detail.tags, prefix: '#', chip: 'bg-base-300/80 text-base-content/60' },
               { label: 'Categories', values: detail.categories, prefix: '', chip: 'bg-primary/10 text-primary' },
               { label: 'Genres', values: detail.genres, prefix: '', chip: 'bg-secondary/10 text-secondary' },
               { label: 'Cast', values: detail.cast, prefix: '', chip: 'bg-base-300/80 text-base-content/60' },
               { label: 'Artists', values: detail.artists, prefix: '', chip: 'bg-base-300/80 text-base-content/60' },
               { label: 'Album artists', values: detail.albumArtists, prefix: '', chip: 'bg-base-300/80 text-base-content/60' }
-            ] as group (group.label)}
-              {#if group.values.length > 0}
-                <div>
+              ] as group (group.label)}
+                {#if group.values.length > 0}
+                  <div>
                   <h3 class="text-xs font-bold uppercase tracking-[0.08em] text-base-content/50">{group.label}</h3>
-                  <div class="mt-1.5 flex flex-wrap gap-1.5">
-                    {#each group.values as value}
+                    <div class="mt-1.5 flex flex-wrap gap-1.5">
+                      {#each group.values as value}
                       <span class={`rounded-full px-2.5 py-0.5 text-xs font-medium ${group.chip}`}>
                         {group.prefix}{value}
                       </span>
-                    {/each}
+                      {/each}
+                    </div>
                   </div>
-                </div>
-              {/if}
-            {/each}
+                {/if}
+              {/each}
 
-          </div>
-        {:else}
-          <div class="space-y-5 p-5">
-            {#if technicalError}
-              <p class="text-sm text-base-content/50">{technicalError}</p>
-            {:else if !technical}
+            </div>
+          {:else}
+            <div class="space-y-5 p-5">
+              {#if technicalError}
+                <p class="text-sm text-base-content/50">{technicalError}</p>
+              {:else if !technical}
               <div class="flex justify-center py-4">
                 <span class="loading loading-spinner loading-sm"></span>
               </div>
-            {:else}
-              {#if technical.format}
+              {:else}
+                {#if technical.format}
                 <dl class="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
-                  <div class="flex gap-2">
-                    <dt class="w-32 shrink-0 text-base-content/50">Container</dt>
-                    <dd class="min-w-0 text-base-content/80">{technical.format.formatLongNames}</dd>
-                  </div>
-                  {#if formatTicks(technical.format.durationTicks)}
                     <div class="flex gap-2">
-                      <dt class="w-32 shrink-0 text-base-content/50">Duration</dt>
-                      <dd class="text-base-content/80">{formatTicks(technical.format.durationTicks)}</dd>
+                      <dt class="w-32 shrink-0 text-base-content/50">Container</dt>
+                      <dd class="min-w-0 text-base-content/80">{technical.format.formatLongNames}</dd>
                     </div>
-                  {/if}
-                  {#if formatBitRate(technical.format.bitRate)}
+                    {#if formatTicks(technical.format.durationTicks)}
+                      <div class="flex gap-2">
+                        <dt class="w-32 shrink-0 text-base-content/50">Duration</dt>
+                        <dd class="text-base-content/80">{formatTicks(technical.format.durationTicks)}</dd>
+                      </div>
+                    {/if}
+                    {#if formatBitRate(technical.format.bitRate)}
+                      <div class="flex gap-2">
+                        <dt class="w-32 shrink-0 text-base-content/50">Overall bitrate</dt>
+                        <dd class="text-base-content/80">{formatBitRate(technical.format.bitRate)}</dd>
+                      </div>
+                    {/if}
                     <div class="flex gap-2">
-                      <dt class="w-32 shrink-0 text-base-content/50">Overall bitrate</dt>
-                      <dd class="text-base-content/80">{formatBitRate(technical.format.bitRate)}</dd>
+                      <dt class="w-32 shrink-0 text-base-content/50">Streams</dt>
+                      <dd class="text-base-content/80">{technical.format.streamCount}</dd>
                     </div>
-                  {/if}
-                  <div class="flex gap-2">
-                    <dt class="w-32 shrink-0 text-base-content/50">Streams</dt>
-                    <dd class="text-base-content/80">{technical.format.streamCount}</dd>
-                  </div>
-                </dl>
-              {/if}
+                  </dl>
+                {/if}
 
-              {#if technical.streams.length > 0}
-                <div>
+                {#if technical.streams.length > 0}
+                  <div>
                   <h3 class="text-xs font-bold uppercase tracking-[0.08em] text-base-content/50">Streams</h3>
-                  <ul class="mt-2 space-y-2">
-                    {#each technical.streams as stream}
+                    <ul class="mt-2 space-y-2">
+                      {#each technical.streams as stream}
                       <li class="rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 px-4 py-3">
-                        <p class="flex flex-wrap items-center gap-2 text-xs">
+                          <p class="flex flex-wrap items-center gap-2 text-xs">
                           <span class="rounded-full bg-base-300 px-2 py-0.5 font-semibold uppercase tracking-wide text-base-content/80">
                             {stream.streamType}
                           </span>
-                          {#if stream.isPrimary}
+                            {#if stream.isPrimary}
                             <span class="rounded-full bg-primary/15 px-2 py-0.5 font-semibold text-primary">Primary</span>
-                          {/if}
+                            {/if}
                           <span class="font-semibold text-base-content/80" title={stream.codecLongName}>{stream.codecName}</span>
-                        </p>
-                        {#if streamSummary(stream)}
-                          <p class="mt-1 text-xs text-base-content/50">{streamSummary(stream)}</p>
-                        {/if}
-                      </li>
-                    {/each}
-                  </ul>
-                </div>
-              {/if}
+                          </p>
+                          {#if streamSummary(stream)}
+                            <p class="mt-1 text-xs text-base-content/50">{streamSummary(stream)}</p>
+                          {/if}
+                        </li>
+                      {/each}
+                    </ul>
+                  </div>
+                {/if}
 
-              {#if technical.chapters.length > 0}
-                <div>
+                {#if technical.chapters.length > 0}
+                  <div>
                   <h3 class="text-xs font-bold uppercase tracking-[0.08em] text-base-content/50">Chapters</h3>
-                  <ul class="mt-2 space-y-1">
-                    {#each technical.chapters as chapter}
-                      <li class="flex gap-3 text-sm">
-                        <button
-                          type="button"
-                          class="w-16 shrink-0 rounded text-left font-mono text-xs leading-6 text-primary transition hover:text-primary hover:underline focus:outline-none focus:ring-2 focus:ring-primary/60"
-                          title={`Jump to ${formatTicks(chapter.startTicks) ?? '0:00'}`}
-                          onclick={() => seekToChapter(chapter.startTicks)}
+                    <ul class="mt-2 space-y-1">
+                      {#each technical.chapters as chapter}
+                        <li class="flex gap-3 text-sm">
+                          <button
+                            type="button"
+                            class="w-16 shrink-0 rounded text-left font-mono text-xs leading-6 text-primary transition hover:text-primary hover:underline focus:outline-none focus:ring-2 focus:ring-primary/60"
+                            title={`Jump to ${formatTicks(chapter.startTicks) ?? '0:00'}`}
+                            onclick={() => seekToChapter(chapter.startTicks)}
                         >
                           {formatTicks(chapter.startTicks) ?? '0:00'}
                         </button>
-                        <span class="min-w-0 truncate text-base-content/80">{chapter.title}</span>
-                      </li>
-                    {/each}
-                  </ul>
-                </div>
-              {/if}
+                          <span class="min-w-0 truncate text-base-content/80">{chapter.title}</span>
+                        </li>
+                      {/each}
+                    </ul>
+                  </div>
+                {/if}
 
-              {#if !technical.format && technical.streams.length === 0 && technical.chapters.length === 0}
-                <p class="text-sm text-base-content/50">No technical metadata was archived for this video.</p>
+                {#if !technical.format && technical.streams.length === 0 && technical.chapters.length === 0}
+                  <p class="text-sm text-base-content/50">No technical metadata was archived for this video.</p>
+                {/if}
               {/if}
-            {/if}
-          </div>
-        {/if}
-      </section>
+            </div>
+          {/if}
+        </section>
 
-      <section class="mt-8" aria-label="Comments">
+        <section class="mt-8" aria-label="Comments">
         <h2 class="text-lg font-bold text-base-content">
           {commentTotal > 0 ? `${commentTotal} comments` : 'Comments'}
         </h2>
 
-        {#if commentThreads.length === 0}
-          <p class="mt-4 text-sm text-base-content/50">No comments were archived for this video.</p>
-        {:else}
-          <div class="mt-5 space-y-6">
-            {#each commentThreads as comment (comment.commentId)}
-              <WatchComment comment={comment} />
-            {/each}
-          </div>
+          {#if commentThreads.length === 0}
+            <p class="mt-4 text-sm text-base-content/50">No comments were archived for this video.</p>
+          {:else}
+            <div class="mt-5 space-y-6">
+              {#each commentThreads as comment (comment.commentId)}
+                <WatchComment comment={comment} />
+              {/each}
+            </div>
 
-        {/if}
-      </section>
-    {:else if !loadError}
+          {/if}
+        </section>
+      {:else if !loadError}
       <div class="mt-10 flex justify-center">
         <span class="loading loading-spinner loading-sm"></span>
       </div>
-    {/if}
+      {/if}
     {/if}
   </section>
 
   <aside class={focusMode ? 'min-h-0' : ''} aria-label={chatAvailable ? 'Chat and up next' : 'Up next'}>
     {#if focusMode}
       <ChatReplayPanel
-        {mediaGuid}
+        mediaGuid={mediaGuid}
         positionSeconds={livePosition}
         heightPx={null}
         fillHeight
         onSeek={(seconds) => player?.seekTo(seconds)}
       />
     {:else}
-    {#if chatAvailable}
-      <div role="tablist" class="mb-5 grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={sidebarTab === 'chat'}
-          class={['btn btn-sm text-xs', sidebarTab === 'chat' ? 'btn-primary' : 'btn-neutral']}
-          onclick={() => (sidebarTab = 'chat')}
-        >
-          Chat
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={sidebarTab === 'upNext'}
-          class={['btn btn-sm text-xs', sidebarTab === 'upNext' ? 'btn-primary' : 'btn-neutral']}
-          onclick={() => (sidebarTab = 'upNext')}
-        >
-          Up next
-        </button>
-      </div>
+      {#if chatAvailable}
+        <div role="tablist" class="mb-5 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={sidebarTab === 'chat'}
+            class={[
+              'btn btn-sm text-xs',
+              sidebarTab === 'chat' ? 'btn-primary' : 'btn-neutral'
+            ]}
+            onclick={() => sidebarTab = 'chat'}
+          >Chat</button>
 
-      {#if sidebarTab === 'chat'}
-        <ChatReplayPanel
-          {mediaGuid}
-          positionSeconds={livePosition}
-          heightPx={sidebarHeightPx}
-          onSeek={(seconds) => player?.seekTo(seconds)}
-        />
-      {/if}
-    {/if}
+          <button
+            type="button"
+            role="tab"
+            aria-selected={sidebarTab === 'upNext'}
+            class={[
+              'btn btn-sm text-xs',
+              sidebarTab === 'upNext' ? 'btn-primary' : 'btn-neutral'
+            ]}
+            onclick={() => sidebarTab = 'upNext'}
+          >Up next</button>
+        </div>
 
-    {#if !chatAvailable || sidebarTab === 'upNext'}
-    {#if userListId || platformListId}
-      <div class="mb-6">
-        {#key `${userListId ?? platformListId}`}
-          <PlaylistPanel
-            {mediaGuid}
-            playlistId={userListId ?? platformListId ?? ''}
-            kind={userListId ? 'user' : 'platform'}
-            onEntriesChange={(guids) => (playlistGuids = guids)}
+        {#if sidebarTab === 'chat'}
+          <ChatReplayPanel
+            mediaGuid={mediaGuid}
+            positionSeconds={livePosition}
+            heightPx={sidebarHeightPx}
+            onSeek={(seconds) => player?.seekTo(seconds)}
           />
-        {/key}
-      </div>
-    {/if}
+        {/if}
+      {/if}
+
+      {#if !chatAvailable || sidebarTab === 'upNext'}
+        {#if userListId || platformListId}
+          <div class="mb-6">
+            {#key `${userListId ?? platformListId}`}
+              <PlaylistPanel
+                mediaGuid={mediaGuid}
+                playlistId={userListId ?? platformListId ?? ''}
+                kind={userListId ? 'user' : 'platform'}
+                onEntriesChange={(guids) => playlistGuids = guids}
+              />
+            {/key}
+          </div>
+        {/if}
 
     <div class="mb-5 flex items-center justify-between gap-3 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 px-4 py-3">
-      <span class="text-sm font-semibold text-base-content/80">Autoplay</span>
-      <input
-        type="checkbox"
-        class="toggle toggle-primary"
-        bind:checked={autoplayEnabled}
-        aria-label="Autoplay"
-        title="Autoplay - play the next video when this one ends"
-      />
-    </div>
+          <span class="text-sm font-semibold text-base-content/80">Autoplay</span>
+          <input
+            type="checkbox"
+            class="toggle toggle-primary"
+            bind:checked={autoplayEnabled}
+            aria-label="Autoplay"
+            title="Autoplay - play the next video when this one ends"
+          />
+        </div>
 
     <h2 class="text-sm font-bold uppercase tracking-[0.08em] text-base-content/50">Up next</h2>
-    <ul class="mt-4 space-y-4">
-      {#each upNext as card (card.mediaGuid)}
-        <li>
+        <ul class="mt-4 space-y-4">
+          {#each upNext as card (card.mediaGuid)}
+            <li>
           <a href={`/watch/${card.mediaGuid}`} class="group flex gap-3 rounded-box focus-visible:outline-offset-4">
-            <span
-              class={`relative block aspect-video w-40 shrink-0 overflow-hidden rounded-box bg-gradient-to-br ${accentFor(card.mediaGuid)} shadow-lg shadow-black/20`}
-            >
+                <span
+                  class={`relative block aspect-video w-40 shrink-0 overflow-hidden rounded-box bg-gradient-to-br ${accentFor(card.mediaGuid)} shadow-lg shadow-black/20`}
+                >
               <span class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-xl font-black text-white/15">
                 {initialsFor(card.account.accountName)}
               </span>
-              {#if thumbnailUrl(card)}
-                <img
-                  src={thumbnailUrl(card)}
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                  class="absolute inset-0 h-full w-full object-cover"
-                  onerror={hideBrokenImage}
-                />
-              {/if}
-              {#if formatDuration(card.durationSeconds)}
+                  {#if thumbnailUrl(card)}
+                    <img
+                      src={thumbnailUrl(card)}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      class="absolute inset-0 h-full w-full object-cover"
+                      onerror={hideBrokenImage}
+                    />
+                  {/if}
+                  {#if formatDuration(card.durationSeconds)}
                 <span class="absolute bottom-1.5 right-1.5 rounded bg-black/75 px-1.5 py-0.5 text-[10px] font-semibold text-white">
                   {formatDuration(card.durationSeconds)}
                 </span>
-              {/if}
-            </span>
-            <span class="min-w-0">
+                  {/if}
+                </span>
+                <span class="min-w-0">
               <span class="line-clamp-2 text-sm font-semibold leading-snug text-base-content/90 group-hover:text-base-content">
                 {card.title}
               </span>
               <span class="mt-1 block truncate text-xs text-base-content/50">{card.account.accountName}</span>
-              {#if upNextMeta(card)}
+                  {#if upNextMeta(card)}
                 <span class="mt-0.5 block truncate text-xs text-base-content/40">{upNextMeta(card)}</span>
-              {/if}
-            </span>
-          </a>
-        </li>
-      {:else}
-        <li class="text-sm text-base-content/40">Nothing else on the server yet.</li>
-      {/each}
-    </ul>
-    {/if}
+                  {/if}
+                </span>
+              </a>
+            </li>
+          {:else}
+            <li class="text-sm text-base-content/40">Nothing else on the server yet.</li>
+          {/each}
+        </ul>
+      {/if}
     {/if}
   </aside>
 </div>

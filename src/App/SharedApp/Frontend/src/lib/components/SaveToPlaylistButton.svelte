@@ -13,7 +13,7 @@
     listUserPlaylists,
     removeUserPlaylistItem,
     type UserPlaylist
-  } from '$lib/api/userPlaylists';
+  } from '#lib/api/userPlaylists.js';
 
   interface Props {
     mediaGuid: string;

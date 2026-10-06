@@ -1,4 +1,4 @@
-import { formatBytes } from '$lib/media';
+import { formatBytes } from '#lib/media.js';
 
 export function normalizeStatus(status: string): string {
   return status.toLowerCase();

@@ -6,22 +6,31 @@ import { isHttpError, isRedirect } from '@sveltejs/kit';
 import { configureFrontendAccess, hasFrontendPermission, requiresLogin } from '../src/lib/frontendAccess.ts';
 
 // Compile the production modules without introducing a separate frontend test framework.
+/** @param {string} path */
 async function loadModule(path) {
   const source = await readFile(new URL(path, import.meta.url), 'utf8');
   const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText
-    .replaceAll("'$lib/frontendAccess'", JSON.stringify(new URL('../src/lib/frontendAccess.ts', import.meta.url).href))
+    .replaceAll("'#lib/frontendAccess.js'", JSON.stringify(new URL('../src/lib/frontendAccess.ts', import.meta.url).href))
     .replaceAll("'@sveltejs/kit'", JSON.stringify(import.meta.resolve('@sveltejs/kit')));
   return import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
 }
 const root = await loadModule('../src/routes/+layout.ts');
 const accessControl = await loadModule('../src/routes/admin/access-control/+layout.ts');
 const http = await loadModule('../src/lib/api/http.ts');
-const capabilities = (deploymentMode, enabled = true) => ({ deploymentMode, accessManagement: { enabled } });
+/** @param {'Full' | 'Lite'} deploymentMode */
+const capabilities = (deploymentMode, enabled = true) => ({
+  deploymentMode,
+  integrations: { search: true, liveChat: true, potProvider: true },
+  accessManagement: { enabled },
+  backups: { provider: 'test', full: true, differential: true, incremental: true, verification: true, pointInTimeRecovery: true }
+});
 const profile = { subject: 'single-user-owner', name: 'Admin', groups: ['admins'], initials: 'A' };
 
+/** @param {'Full' | 'Lite'} mode */
 async function loadSession(mode, status = 200, singleUser = false, location = '/library?tab=History') {
+  /** @type {string[]} */
   const calls = [];
-  const data = await root.load({ url: new URL(location, 'http://localhost'), fetch: async (url) => {
+  const data = await root.load({ url: new URL(location, 'http://localhost'), fetch: async (/** @type {string} */ url) => {
     calls.push(url);
     return url === '/api/system/capabilities'
       ? Response.json(capabilities(mode))
@@ -60,15 +69,18 @@ test('direct access-management routes redirect only in Lite', async () => {
 test('API boundary suppresses Lite login and CSRF requests but preserves validation and Full behavior', async () => {
   const previousWindow = globalThis.window;
   const previousFetch = globalThis.fetch;
+  /** @type {{ input: RequestInfo | URL, init: RequestInit | undefined }[]} */
   const calls = [];
+  /** @type {(string | URL)[]} */
   const navigations = [];
   let status = 401;
+  /** @type {typeof fetch} */
   const transport = async (input, init) => {
     calls.push({ input, init });
     if (input === '/api/auth/csrf') return Response.json({ token: 'csrf-test' });
     return status === 400 ? Response.json({ errors: { name: ['Name is required.'] } }, { status }) : Response.json({}, { status });
   };
-  globalThis.window = { fetch: transport, location: { href: 'http://localhost/library', origin: 'http://localhost', pathname: '/library', search: '', assign: url => navigations.push(url) } };
+  globalThis.window = /** @type {Window & typeof globalThis} */ (/** @type {unknown} */ ({ fetch: transport, location: { href: 'http://localhost/library', origin: 'http://localhost', pathname: '/library', search: '', assign: (/** @type {string | URL} */ url) => navigations.push(url) } }));
   try {
     http.installApiFetch();
     globalThis.fetch = window.fetch;
@@ -77,14 +89,14 @@ test('API boundary suppresses Lite login and CSRF requests but preserves validat
     assert.equal(calls.length, 1);
     assert.equal(navigations.length, 0);
     status = 400;
-    await assert.rejects(() => http.sendJson('/api/test', 'POST', {}), err => err.status === 400 && err.message.includes('Name is required.'));
+    await assert.rejects(() => http.sendJson('/api/test', 'POST', {}), err => err instanceof Error && 'status' in err && err.status === 400 && err.message.includes('Name is required.'));
     await http.logout();
     assert.equal(calls.length, 2);
     configureFrontendAccess(capabilities('Full'));
     status = 200;
     await fetch('/api/test', { method: 'POST' });
     assert.equal(calls[2].input, '/api/auth/csrf');
-    assert.equal(new Headers(calls[3].init.headers).get('X-CSRF-TOKEN'), 'csrf-test');
+    assert.equal(new Headers(calls[3].init?.headers).get('X-CSRF-TOKEN'), 'csrf-test');
     status = 401;
     await fetch('/api/test');
     await fetch('/api/test');

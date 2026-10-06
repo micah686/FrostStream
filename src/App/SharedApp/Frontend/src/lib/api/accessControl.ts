@@ -1,5 +1,5 @@
-import { getJson, sendEmpty, sendJson } from '$lib/api/http';
-import type { GranteeType } from '$lib/api/bundles';
+import { getJson, sendEmpty, sendJson } from '#lib/api/http.js';
+import type { GranteeType } from '#lib/api/bundles.js';
 
 export type AccessPolicySyncStatus = 'Pending' | 'Synced' | 'Failed';
 

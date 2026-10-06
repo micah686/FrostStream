@@ -1,4 +1,4 @@
-import { requiresLogin, usesExternalAuthentication } from '$lib/frontendAccess';
+import { requiresLogin, usesExternalAuthentication } from '#lib/frontendAccess.js';
 
 export class ApiRequestError extends Error {
   constructor(

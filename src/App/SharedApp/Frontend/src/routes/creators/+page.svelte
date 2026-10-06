@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Modal, Select } from '$lib/components/ui';
+  import { Modal, Select } from '#lib/components/ui/index.js';
   import {
     Ban,
     CircleAlert,
@@ -29,10 +29,10 @@
     type CreatorSource,
     type CreatorSourceRequest,
     type IgnoredMedia
-  } from '$lib/api/creatorSources';
-  import { listDownloadConfigSets, type DownloadConfigSet } from '$lib/api/downloadConfigSets';
-  import { formatRelativeDate } from '$lib/media';
-  import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
+  } from '#lib/api/creatorSources.js';
+  import { listDownloadConfigSets, type DownloadConfigSet } from '#lib/api/downloadConfigSets.js';
+  import { formatRelativeDate } from '#lib/media.js';
+  import ConfirmDeleteModal from '#lib/components/admin/ConfirmDeleteModal.svelte';
 
   const rowActionClass = 'btn btn-sm btn-neutral text-xs';
 

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import { Modal, Select } from '$lib/components/ui';
+  import { Modal, Select } from '#lib/components/ui/index.js';
   import {
     ChevronLeft,
     ChevronRight,
@@ -18,11 +18,11 @@
     startJob,
     stopGroup,
     stopJob
-  } from '$lib/api/downloadQueue';
-  import { createDownloadQueueStore, type DownloadQueueState, type QueueRow } from '$lib/stores/downloadQueue';
-  import { isActive, isDone, isFailed, isQueued, isStopped } from '$lib/jobs/jobState';
-  import { listOptionPresets } from '$lib/api/optionPresets';
-  import JobRow from '$lib/components/jobs/JobRow.svelte';
+  } from '#lib/api/downloadQueue.js';
+  import { createDownloadQueueStore, type DownloadQueueState, type QueueRow } from '#lib/stores/downloadQueue.js';
+  import { isActive, isDone, isFailed, isQueued, isStopped } from '#lib/jobs/jobState.js';
+  import { listOptionPresets } from '#lib/api/optionPresets.js';
+  import JobRow from '#lib/components/jobs/JobRow.svelte';
 
   type FilterKey = 'all' | 'active' | 'queued' | 'failed' | 'done' | 'stopped';
   type SourceFilterKey = 'all' | 'Direct' | 'Playlist' | 'Channel';

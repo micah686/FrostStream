@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import { ChevronLeft, ChevronRight, Clock, RefreshCw } from '@lucide/svelte';
-  import BackgroundRunRow from '$lib/components/jobs/BackgroundRunRow.svelte';
-  import { createBackgroundJobsStore, type BackgroundJobsState } from '$lib/stores/backgroundJobs';
+  import BackgroundRunRow from '#lib/components/jobs/BackgroundRunRow.svelte';
+  import { createBackgroundJobsStore, type BackgroundJobsState } from '#lib/stores/backgroundJobs.js';
 
   const jobs = createBackgroundJobsStore();
 

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { Select } from '$lib/components/ui';
+  import { Select } from '#lib/components/ui/index.js';
   import { ChevronDown } from '@lucide/svelte';
   import TriStateSelect from './TriStateSelect.svelte';
   import {

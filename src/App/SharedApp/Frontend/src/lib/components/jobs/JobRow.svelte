@@ -14,8 +14,8 @@
     type DownloadQueueHistoryEntry,
     type DownloadQueueJob,
     type ProgressFrame
-  } from '$lib/api/downloadQueue';
-  import type { QueueRow } from '$lib/stores/downloadQueue';
+  } from '#lib/api/downloadQueue.js';
+  import type { QueueRow } from '#lib/stores/downloadQueue.js';
   import {
     canStart,
     canStop,
@@ -28,7 +28,7 @@
     isStopped,
     isTerminal,
     normalizeStatus
-  } from '$lib/jobs/jobState';
+  } from '#lib/jobs/jobState.js';
 
   let {
     row,

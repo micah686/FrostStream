@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ChevronDown, CircleAlert } from '@lucide/svelte';
-  import { humanizeTaskType, type BackgroundRun } from '$lib/api/backgroundJobs';
+  import { humanizeTaskType, type BackgroundRun } from '#lib/api/backgroundJobs.js';
 
   let { run, now }: { run: BackgroundRun; now: number } = $props();
 

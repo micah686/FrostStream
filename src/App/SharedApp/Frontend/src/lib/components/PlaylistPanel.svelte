@@ -1,8 +1,8 @@
 <script lang="ts">
   import { CircleAlert, ListMusic, Play } from '@lucide/svelte';
-  import { accentFor, formatDuration } from '$lib/media';
-  import { getUserPlaylist } from '$lib/api/userPlaylists';
-  import { getPlatformPlaylist } from '$lib/api/playlists';
+  import { accentFor, formatDuration } from '#lib/media.js';
+  import { getUserPlaylist } from '#lib/api/userPlaylists.js';
+  import { getPlatformPlaylist } from '#lib/api/playlists.js';
 
   interface PanelEntry {
     /** Null when the entry is not playable (platform item not downloaded yet). */

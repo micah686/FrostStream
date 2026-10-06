@@ -9,14 +9,14 @@
     Plus,
     Trash2
   } from '@lucide/svelte';
-  import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
+  import ConfirmDeleteModal from '#lib/components/admin/ConfirmDeleteModal.svelte';
   import {
     deleteStorage,
     listStorage,
     storageMethodLabel,
     storageSummary,
     type StorageConfig
-  } from '$lib/api/storage';
+  } from '#lib/api/storage.js';
 
   type IconComponent = typeof Database;
 

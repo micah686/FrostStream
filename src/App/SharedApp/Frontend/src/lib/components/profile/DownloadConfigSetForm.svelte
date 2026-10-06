@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
   import { goto } from '$app/navigation';
-  import { Select } from '$lib/components/ui';
+  import { Select } from '#lib/components/ui/index.js';
   import {
     ArrowLeft,
     CircleAlert,
@@ -14,10 +14,10 @@
     type DownloadConfigSet,
     type DownloadConfigSetRequest,
     type IgnoreKeyword
-  } from '$lib/api/downloadConfigSets';
-  import { listOptionPresets, type OptionPreset } from '$lib/api/optionPresets';
-  import { listStorage } from '$lib/api/storage';
-  import { listCookieProfiles } from '$lib/api/cookies';
+  } from '#lib/api/downloadConfigSets.js';
+  import { listOptionPresets, type OptionPreset } from '#lib/api/optionPresets.js';
+  import { listStorage } from '#lib/api/storage.js';
+  import { listCookieProfiles } from '#lib/api/cookies.js';
 
   interface Props {
     mode: 'create' | 'update';

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { page as pageState } from '$app/state';
-  import { Select } from '$lib/components/ui';
+  import { Select } from '#lib/components/ui/index.js';
   import {
     ChevronLeft,
     ChevronRight,
@@ -9,8 +9,8 @@
     Play,
     Search
   } from '@lucide/svelte';
-  import { accentFor, formatDuration, formatRelativeDate, formatViews, initialsFor } from '$lib/media';
-  import { findSimilarMedia, searchMedia, searchMatchLabel, type SearchHit, type SearchScope } from '$lib/api/search';
+  import { accentFor, formatDuration, formatRelativeDate, formatViews, initialsFor } from '#lib/media.js';
+  import { findSimilarMedia, searchMedia, searchMatchLabel, type SearchHit, type SearchScope } from '#lib/api/search.js';
 
   const pageSize = 24;
 
@@ -148,12 +148,12 @@
   });
 
   function navigate(params: { scope?: SearchScope; page?: number; sort?: string }) {
-    const url = new URL(pageState.url);
+    const url = new URL(pageState.url.href);
     url.searchParams.set('q', query);
     url.searchParams.set('scope', params.scope ?? scope);
     url.searchParams.set('sort', params.sort ?? sort);
     url.searchParams.set('page', String(params.page ?? 1));
-    void goto(`${url.pathname}${url.search}`, { keepFocus: true, noScroll: params.page === undefined });
+    void goto(`${url.pathname}${url.search}`, { reset: params.page !== undefined });
   }
 
   function metaLine(hit: SearchHit): string {

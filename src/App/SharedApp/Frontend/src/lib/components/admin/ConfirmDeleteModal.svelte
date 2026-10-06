@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Modal } from '$lib/components/ui';
+  import { Modal } from '#lib/components/ui/index.js';
   import { CircleAlert } from '@lucide/svelte';
 
   interface Props {
