@@ -4,7 +4,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Security.Cryptography;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using IntegrationTests.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;

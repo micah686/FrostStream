@@ -22,7 +22,7 @@ public sealed class YtDlpFailureDetailsTests
         YtDlpFailureDetails.ErrorCode(exception, sourceUrl: "https://www.youtube.com/watch?v=abc123")
             .ShouldBe("yt-dlp.youtube.bot-detection-halted");
         YtDlpFailureDetails.DescribeException(exception, sourceUrl: "https://www.youtube.com/watch?v=abc123")
-            .ShouldContain("YouTube downloads have been halted");
+            .ShouldContain("YouTube is requiring bot verification");
 
         var providerFailure = YtDlpFailureDetails.ClassifyProviderAccessFailure(
             exception,

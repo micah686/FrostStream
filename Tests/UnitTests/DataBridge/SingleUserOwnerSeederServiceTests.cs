@@ -14,6 +14,39 @@ namespace UnitTests.DataBridge;
 public sealed class SingleUserOwnerSeederServiceTests
 {
     [Test]
+    public async Task Lite_Seeds_Admin_Before_Start_Returns_And_Reuses_Identity_After_Restart()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        try
+        {
+            for (var restart = 0; restart < 2; restart++)
+            {
+                var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder();
+                builder.Configuration["Deployment:Mode"] = "Lite";
+                builder.Configuration["Auth:SingleUserMode"] = "false";
+                builder.Configuration["Persistence:Sqlite:Enabled"] = "true";
+                builder.Configuration["Persistence:Sqlite:Path"] = Path.Combine(dir, "test.db");
+                global::DataBridge.Persistence.PersistenceRegistration.AddDataBridgePersistence(builder);
+                using var host = builder.Build();
+                global::DataBridge.DataBridgeModule.InitializeDataBridge(host);
+                using var seeder = new SingleUserOwnerSeederService(
+                    host.Services.GetRequiredService<IServiceScopeFactory>(), builder.Configuration,
+                    new FixedClock(DataBridgeTestHelpers.Now), NullLogger<SingleUserOwnerSeederService>.Instance);
+                await seeder.StartAsync(default);
+                using var scope = host.Services.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<DataBridgeDbContext>();
+                var rows = await db.FrostStreamUsers.ToListAsync();
+                rows.ShouldHaveSingleItem();
+                rows[0].Id.ShouldBe(AuthConstants.SingleUserId);
+                rows[0].AuthentikSubjectId.ShouldBe(AuthConstants.SingleUserSubject);
+                rows[0].DisplayName.ShouldBe("Admin");
+                await seeder.StopAsync(default);
+            }
+        }
+        finally { if (Directory.Exists(dir)) Directory.Delete(dir, true); }
+    }
+
+    [Test]
     public async Task Seeds_Then_Reuses_The_Stable_Owner_Row()
     {
         var dbName = Guid.NewGuid().ToString("n");

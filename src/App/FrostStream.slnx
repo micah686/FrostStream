@@ -9,23 +9,27 @@
   <Folder Name="/Libs/YtDlpSharpLib/">
     <Project Path="../Libs/YtDlpSharpLib/YtDlpSharpLib/YtDlpSharpLib.csproj" />
   </Folder>
-  <Folder Name="/Core/">
-    <Project Path="BackupService/BackupService.csproj" />
-    <Project Path="DataBridge/DataBridge.csproj" />
-    <Project Path="MediaProcessor/MediaProcessor.csproj" />
-    <Project Path="Scheduler/Scheduler.csproj" />
-    <Project Path="Shared/Shared.csproj" />
-    <Project Path="StorageExtensions/StorageExtensions.csproj" />
-    <Project Path="WebAPI/WebAPI.csproj" />
-    <Project Path="Worker/Worker.csproj" />
+  <Folder Name="/LiteApp/">
+    <Project Path="LiteApp/Lite/Lite.csproj" />
   </Folder>
-  <Folder Name="/Startup/">
-    <Project Path="AppHost/AppHost.csproj" />
+  <Folder Name="/FullApp/">
+    <Project Path="FullApp/BackupService/BackupService.csproj" />
+  </Folder>
+  <Folder Name="/SharedApp/">
+    <Project Path="SharedApp/ApplicationContracts/ApplicationContracts.csproj" />
+    <Project Path="SharedApp/DataBridge/DataBridge.csproj" />
+    <Project Path="SharedApp/MediaProcessor/MediaProcessor.csproj" />
+    <Project Path="SharedApp/Scheduler/Scheduler.csproj" />
+    <Project Path="SharedApp/ServiceDefaults/ServiceDefaults.csproj" />
+    <Project Path="SharedApp/Shared/Shared.csproj" />
+    <Project Path="SharedApp/StorageExtensions/StorageExtensions.csproj" />
+    <Project Path="SharedApp/WebAPI/WebAPI.csproj" />
+    <Project Path="SharedApp/Worker/Worker.csproj" />
+    <Project Path="FullApp/AppHostFull/AppHostFull.csproj" />
+    <Project Path="LiteApp/AppHostLite/AppHostLite.csproj" />
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="../../Tests/IntegrationTests/IntegrationTests/IntegrationTests.csproj" />
     <Project Path="../../Tests/UnitTests/UnitTests.csproj" />
   </Folder>
-  <Project Path="ServiceDefaults/ServiceDefaults.csproj" />
-
 </Solution>

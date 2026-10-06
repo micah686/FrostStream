@@ -1,5 +1,116 @@
 # Core Backup And Restore
 
+## Lite: SQLite snapshots and recovery
+
+Lite uses the shared **Admin → Backups** page and backup API with an embedded SQLite adapter.
+It supports full snapshots and verification; differential backups, deep PostgreSQL restore verification,
+and PITR are unavailable. Recovery is a **server-shutdown and file-replacement procedure**.
+There is no Lite online restore endpoint or standalone PostgreSQL restore console.
+
+### Locations and recovery artifacts
+
+The page shows resolved paths; relative configuration paths resolve against the Lite host content root.
+
+| Artifact | Setting | Default |
+| --- | --- | --- |
+| Live application database | `Persistence:Sqlite:Path` | `/data/frostreamlitedb` |
+| Live secret encryption key directory | `Secrets:Local:KeyRingPath` | `<resolved database path>.keys` |
+| Backup directory | `Backup:Directory` (fallback `Persistence:Sqlite:BackupPath`) | `/data/backups` |
+
+Each newly completed snapshot is a **three-part recovery set**:
+
+- `<timestamp>-<id>.sqlite`: the standalone database, made through SQLite's online backup API.
+- `<timestamp>-<id>.sqlite.keys/`: the **entire** local Data Protection key ring, including older
+  and revoked key records and any other persisted ring files. Keep all of it, even after rotation.
+- `<timestamp>-<id>.sqlite.recovery.json`: versioned SHA-256 checksums of the database and every
+  companion key file. These detect missing or changed files; they do not authenticate an untrusted backup.
+
+The adapter copies keys **after** capturing the database, then checks database integrity, foreign keys,
+checksums, and decryption of every snapshotted secret using the companion ring. Verification uses a
+read-only database connection and disables automatic key generation. The database is published last,
+so incomplete sets do not appear as completed snapshots. On Unix, companion directories have mode
+`0700` and files have mode `0600`; on Windows, restrict the backup directory ACL to the server/operator
+account. Keep the recovery set in protected storage: its keys permit decryption of the encrypted secrets.
+Copy all three artifacts together to off-host storage. The live key ring remains independent of the
+WebAPI cookie/token key ring, which is not needed to recover local secrets.
+
+Snapshots include application data, Cleipnir workflow state, durable queue/inbox state, staged import
+objects, and encrypted secrets. **Media files, local import source files, optional ClickHouse data,
+and Typesense indexes are not in the snapshot.** Preserve media/import sources separately and rebuild
+Typesense from restored application data. The existing full-backup schedule works in Lite; differential
+schedule definitions are skipped. Job history currently lasts for the server session; published recovery
+sets survive restarts.
+
+### Restore procedure
+
+1. Choose a snapshot and use its **Verify** action (or
+   `POST /api/global/backups/verify` with `{ "label": "<filename>.sqlite", "deep": false }`).
+   A successful completed job confirms database integrity and secret recovery with the companion keys.
+   Preserve the original recovery set; perform restoration from copies. A missing companion/manifest
+   or verification failure returns a clear error and leaves the live database and keys untouched.
+   Older database-only snapshots are flagged in the page and cannot pass this recovery verification.
+   If still running the original installation, create a new complete snapshot before moving it.
+2. **Shut down the Lite server and every process using the database.** Confirm that shutdown has
+   completed before copying/moving the live database, keys, or WAL/SHM files. Do not manipulate
+   SQLite sidecars while the server is running.
+3. Preserve the current database, its `-wal` and `-shm` files if present, and the complete current
+   key directory in a separate, owner-only rollback directory. Record that directory's full path.
+   A key directory configured outside `/data` must be preserved as well. Keep this copy until all
+   post-restore validation succeeds.
+4. Only after shutdown, move any leftover live WAL/SHM files into that rollback directory.
+   Copy the selected snapshot to the **resolved live database location**, naming it `frostreamlitedb`
+   for the default configuration. Copy the snapshot's entire companion ring to the **resolved live
+   key directory**. On a different installation, install these keys before starting the server; newly
+   generated keys cannot decrypt the old secrets. Preserve the original key ring in the rollback copy
+   rather than deleting it or copying only the newest key. Ensure the server account owns and can
+   read/write the restored database and keys; retain owner-only key-directory permissions.
+5. Restart with the same deployment configuration and a schema-compatible application version.
+   Check `/health`, library data, schedules, import manifests, and workflows. Exercise a storage or
+   notification operation that reads saved credentials to confirm secret decryption. Rebuild the
+   Typesense index. Restored queues/workflows follow normal startup reconciliation: queued downloads
+   stop and active runs become interrupted/failed; explicit retry is required, and stale deliveries
+   must not restart invalidated runs. Restoring state does not roll back external media-file effects.
+6. If any validation fails, **stop the server again**. Record/report the rollback directory, keep it
+   intact, and preserve the failed restored database, sidecars, and keys in a different directory for
+   diagnosis. Put the saved database and complete key ring back at their original locations. Keep
+   any preserved sidecars with the database they belong to; never apply the old WAL to the selected
+   snapshot. Restart and verify the previous installation before retrying recovery. Do not overwrite
+   the only known recoverable copy.
+
+Example file replacement on Unix **after shutdown**, run as the server's storage owner (adjust paths
+for mounts/custom settings; `$LITE_ROLLBACK` must be a new directory outside the live key ring):
+
+```bash
+(
+set -eu
+LITE_DB=/data/frostreamlitedb
+LITE_KEYS=/data/frostreamlitedb.keys
+LITE_SNAPSHOT='/data/backups/<timestamp>-<id>.sqlite'
+LITE_ROLLBACK=/data/rollback-$(date -u +%Y%m%dT%H%M%SZ)
+mkdir -m 700 -- "$LITE_ROLLBACK"
+mv -- "$LITE_DB" "$LITE_ROLLBACK/database"
+for suffix in -wal -shm; do
+  if [ -f "$LITE_DB$suffix" ]; then
+    mv -- "$LITE_DB$suffix" "$LITE_ROLLBACK/database$suffix"
+  fi
+done
+if [ -d "$LITE_KEYS" ]; then mv -- "$LITE_KEYS" "$LITE_ROLLBACK/keys"; fi
+cp -- "$LITE_SNAPSHOT" "$LITE_DB"
+cp -a -- "$LITE_SNAPSHOT.keys" "$LITE_KEYS"
+chmod 600 -- "$LITE_DB"
+chmod 700 -- "$LITE_KEYS"
+printf 'Preserved the original database and keys at %s\n' "$LITE_ROLLBACK"
+# Restart the Lite service/container, then perform the validation above.
+)
+```
+
+Replace the example snapshot placeholder before running the commands. If any command fails, leave
+all preserved files in place and resolve the problem before restarting. On Windows, perform the same
+sequence after stopping the process/service; preserve sidecars and both key directories, use restrictive
+ACLs, and account for the service identity. This procedure does not require PostgreSQL tools.
+
+## Full: pgBackRest backups and recovery
+
 FrostStream core backups are **pgBackRest** backups of the PostgreSQL cluster (the
 `froststreamdb`, `authentikdb`, and `openfgadb` databases), paired with an **OpenBao Raft
 snapshot** (its actual storage — everything in the vault, not just one mount) plus a **KV v2
@@ -13,7 +124,7 @@ intentionally excluded — they are rebuildable or live elsewhere.
 Everything runs co-located on the shared container volumes; there is no pgBackRest TLS/SSH
 repository-host mode and nothing needs PostgreSQL tools on the host:
 
-- The **postgres** container is a custom image (`App/PostgresServer/Dockerfile`: stock
+- The **postgres** container is a custom image (`App/FullApp/PostgresServer/Dockerfile`: stock
   `postgres:18.3` + pgbackrest). Its `archive_command` is
   `pgbackrest --stanza=froststream archive-push %p`, pushing every completed WAL segment into
   the shared repository.
@@ -28,7 +139,7 @@ repository-host mode and nothing needs PostgreSQL tools on the host:
     local libpq connection.
 - Both containers run as uid 999 (`postgres`), so files written by one are natively owned
   correctly for the other.
-- Configuration is one file, `src/App/AppHost/configs/pgbackrest/pgbackrest.conf`, mounted
+- Configuration is one file, `src/App/FullApp/AppHostFull/configs/pgbackrest/pgbackrest.conf`, mounted
   read-only into both containers. Compression (`compress-type=zst`) and retention
   (`repo1-retention-full=4`, `repo1-retention-diff=14`) live only there — pgBackRest expires old
   backups (and their WAL) automatically after every backup, and BackupService prunes the paired
@@ -119,7 +230,9 @@ The wizard walks through:
 Typical compose flow:
 
 ```bash
-cd src/App/docker-compose-artifacts
+cd src/App/FullApp
+bash generate-compose.sh
+cd docker-compose
 docker compose stop webapi databridge worker scheduler mediaprocessor frontend authentik authentik-worker openfga postgres
 # open http://<host>:25900 and run the wizard
 docker compose start postgres    # watch logs until "ready to accept connections"
@@ -140,11 +253,11 @@ commands inside the backupservice container, e.g.
   `./backups` beside the generated compose file). AppHost pre-creates and world-writes the
   repo/openbao subdirectories in run mode; the compose export gains a one-shot `backup-init`
   container that `chown`s the bind mount to uid 999 before postgres starts.
-- `src/App/AppHost/configs/postgres/postgresql.conf` (mounted with `-c config_file=…`) pins
+- `src/App/FullApp/AppHostFull/configs/postgres/postgresql.conf` (mounted with `-c config_file=…`) pins
   `wal_level=replica`, `max_wal_senders`, `archive_mode=on`, and the pgbackrest
   `archive_command`. Changing `archive_mode`/`archive_command` requires the container to be
   recreated.
-- `src/App/AppHost/configs/postgres/pg_hba.conf` adds a `local all postgres peer` rule so
+- `src/App/FullApp/AppHostFull/configs/postgres/pg_hba.conf` adds a `local all postgres peer` rule so
   pgBackRest's socket connection needs no password (BackupService also exports `PGPASSWORD` as a
   fallback), plus the SCRAM network rules.
 - BackupService env: `Backup__Stanza`, `Backup__PgDataPath`, `Backup__Postgres*`,
@@ -176,7 +289,9 @@ OpenBao uses a persistent single-node Raft volume instead of ephemeral `-dev` mo
 deployment, initialize and unseal it before starting the application:
 
 ```bash
-cd src/App/docker-compose-artifacts
+cd src/App/FullApp
+bash generate-compose.sh
+cd docker-compose
 docker compose up -d openbao
 docker compose exec openbao bao operator init
 docker compose exec openbao bao operator unseal

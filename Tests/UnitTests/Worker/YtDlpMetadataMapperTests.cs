@@ -203,7 +203,7 @@ public sealed class YtDlpMetadataMapperTests
         }, "youtube", new FixedClock(Now));
 
         var comment = result.Comments.Single();
-        comment.Account.AccountName.ShouldBe("unknown");
+        comment.Account.AccountName.ShouldBeEmpty();
         comment.Account.AccountHandle.ShouldBe("unknown:comment:video-1:comment-1");
     }
 

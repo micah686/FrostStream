@@ -1,5 +1,5 @@
 using System.ComponentModel.DataAnnotations;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using NodaTime;

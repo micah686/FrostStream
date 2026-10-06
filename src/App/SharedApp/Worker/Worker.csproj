@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <!-- Version pins, not code dependencies. Worker never uses the Azure.Storage or
+           Google.Cloud namespaces; the SDKs arrive via Shared -> FluentStorage.Azure.Blobs
+           (Azure.Storage.Blobs 12.20.0) and FluentStorage.GCP (Google.Cloud.Storage.V1 4.10.0),
+           and these references lift both to a current build in Worker's output. -->
+      <PackageReference Include="Azure.Storage.Blobs" />
+      <PackageReference Include="Google.Cloud.Storage.V1" />
+      <PackageReference Include="FluentStorage" />
+      <PackageReference Include="Microsoft.Extensions.Hosting" />
+      <!-- Version pin, not a code dependency. Polly.Extensions/Polly.RateLimiting (via
+           ServiceDefaults) ask for Polly.Core 8.4.2 and FluentStorage.FTP/SFTP for 8.4.0; this
+           lifts the graph to 8.7.0. No source file here uses Polly. -->
+      <PackageReference Include="Polly.Core" />
+      <PackageReference Include="System.IO.Hashing" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\..\..\Libs\Conduit.NATS\Conduit.NATS\Conduit.NATS.csproj" />
+      <ProjectReference Include="..\..\..\Libs\YtDlpSharpLib\YtDlpSharpLib\YtDlpSharpLib.csproj" />
+      <ProjectReference Include="..\ServiceDefaults\ServiceDefaults.csproj" />
+      <ProjectReference Include="..\Shared\Shared.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Content Include="appsettings.json">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
+    </ItemGroup>
+
+</Project>

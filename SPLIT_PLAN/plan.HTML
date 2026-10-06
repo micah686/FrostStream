@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="description" content="FrostStream's four-phase plan for Full and Lite deployments: shared application code, SQLite persistence, local execution, and built-in backups.">
+<title>FrostStream · Full / Lite Refactor</title>
+<style>
+:root { --paper:#f5f4ee; --ink:#183732; --muted:#5b6b64; --line:#d7ded5; --green:#315e49; --mint:#dcecd8; --accent:#ba512e; --white:#fffef9; --mono:ui-monospace,SFMono-Regular,Consolas,monospace; --sans:Inter,"Segoe UI",Arial,sans-serif; }
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; scroll-padding-top:36px; }
+body { margin:0; color:var(--ink); background:var(--paper); font:15px/1.7 var(--sans); -webkit-font-smoothing:antialiased; }
+::selection { background:#d6eabc; color:var(--ink); }
+a { color:inherit; text-underline-offset:4px; }
+button, a { -webkit-tap-highlight-color:transparent; }
+button { font:inherit; cursor:pointer; }
+:focus-visible { outline:3px solid var(--accent); outline-offset:5px; }
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+.skip { position:fixed; top:-80px; left:20px; z-index:10; padding:10px 18px; background:var(--white); }
+.skip:focus { top:15px; }
+.shell { max-width:1530px; margin:0 auto; display:grid; grid-template-columns:224px minmax(0,1fr); }
+.rail { position:sticky; top:0; height:100vh; padding:35px 25px 28px; border-right:1px solid var(--line); display:flex; flex-direction:column; gap:42px; }
+.brand { display:flex; align-items:center; gap:10px; font-weight:750; font-size:18px; letter-spacing:-.6px; }
+.brand-mark { width:30px; height:30px; background:var(--ink); color:var(--mint); display:grid; place-items:center; font-size:21px; }
+.eyebrow { display:block; font:10px/1.6 var(--mono); letter-spacing:1.7px; text-transform:uppercase; }
+.rail-label { color:var(--muted); margin-bottom:14px; }
+.nav { display:grid; gap:4px; }
+.nav a { text-decoration:none; font-size:13px; padding:10px 9px; border-left:2px solid transparent; color:var(--muted); transition:background .15s; }
+.nav a:hover { background:#e9ede3; }
+.nav a[aria-current="location"] { border-color:var(--green); color:var(--ink); background:#e4eadf; }
+.nav span { font-family:var(--mono); margin-right:11px; font-size:11px; opacity:.65; }
+.rail-note { margin-top:auto; border-top:1px solid var(--line); padding-top:20px; color:var(--muted); font-size:12px; }
+.rail-note strong { display:block; color:var(--ink); margin:7px 0; }
+.reading { margin-top:18px; width:100%; height:3px; background:var(--line); }
+.reading span { display:block; height:100%; width:0; background:var(--green); }
+main { min-width:0; padding:0 60px 36px; }
+.topbar { min-height:95px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; gap:16px; }
+.doc-tag { font:10px/1.5 var(--mono); letter-spacing:1.2px; color:var(--muted); text-transform:uppercase; }
+.actions { display:flex; gap:9px; align-items:center; }
+.button { display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:8px 12px; font-size:11px; font-weight:600; text-decoration:none; border:1px solid var(--line); background:transparent; border-radius:3px; color:var(--ink); }
+.button:hover { border-color:var(--green); background:#e9ede3; }
+.button-dark { background:var(--ink); color:var(--white); border-color:var(--ink); }
+.button-dark:hover { background:var(--green); color:var(--white); }
+.hero { padding:53px 0 35px; }
+.overline { color:var(--accent); display:flex; gap:9px; align-items:center; }
+.overline::before { content:""; height:6px; width:6px; background:var(--accent); }
+h1 { font-size:clamp(43px,5.4vw,77px); line-height:1.07; letter-spacing:-3.7px; font-weight:580; margin:19px 0 25px; }
+h1 em { font-family:Georgia,"Times New Roman",serif; font-weight:400; }
+.lede { color:var(--muted); font-size:16px; max-width:710px; }
+.lede p { margin:0 0 12px; }
+.lede strong { color:var(--ink); font-weight:650; }
+.hero-meta { display:flex; gap:23px; flex-wrap:wrap; padding-top:10px; font:10px var(--mono); letter-spacing:1px; color:var(--green); text-transform:uppercase; }
+.hero-meta span { display:flex; gap:8px; align-items:center; }
+.hero-meta span::before { content:""; border:1px solid #648071; width:5px; height:5px; }
+.architecture { margin:4px 0 47px; border:1px solid #325549; background:var(--ink); color:#f0f6ea; padding:25px 28px 24px; position:relative; overflow:hidden; }
+.architecture::before { content:""; position:absolute; inset:0; pointer-events:none; background-image:linear-gradient(#ffffff04 1px,transparent 1px),linear-gradient(90deg,#ffffff04 1px,transparent 1px); background-size:22px 22px; }
+.architecture > * { position:relative; }
+.architecture strong { color:inherit; }
+.architecture .eyebrow { color:#b9cdb4; }
+.arch-header { display:flex; justify-content:space-between; gap:15px; align-items:center; margin-bottom:16px; }
+.arch-header strong { font-size:17px; font-weight:550; letter-spacing:-.3px; }
+.shared-core { padding:19px 16px; border:1px solid #7d9d82; background:#ffffff05; text-align:center; }
+.shared-core strong { display:block; font-size:16px; font-weight:550; }
+.shared-core p { color:#c5d9be; font-size:12px; margin:6px 0 0; }
+.fork { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+.fork-path { display:flex; flex-direction:column; align-items:center; }
+.connector { height:23px; width:1px; background:#7d9d82; position:relative; }
+.connector::after { content:""; position:absolute; bottom:0; left:-3px; height:6px; width:6px; border-bottom:1px solid #7d9d82; border-right:1px solid #7d9d82; transform:rotate(45deg); }
+.destination { width:100%; padding:12px 16px; border:1px solid #527461; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+.destination strong { font-size:13px; }
+.destination span { color:#c2d4bb; font:10px/1.5 var(--mono); }
+.destination.lite { background:#dcebcf; color:var(--ink); border-color:#dcebcf; }
+.destination.lite span { color:#446049; }
+section { margin-bottom:47px; }
+.section-heading { display:flex; justify-content:space-between; align-items:flex-end; gap:20px; margin-bottom:21px; }
+.section-heading .eyebrow { color:var(--accent); margin-bottom:6px; }
+h2 { font-size:27px; font-weight:550; letter-spacing:-1px; line-height:1.2; margin:0; }
+.section-note { font-size:12px; color:var(--muted); max-width:200px; text-align:right; line-height:1.55; margin:0; }
+.table-wrap { border:1px solid var(--line); background:var(--white); overflow:auto; }
+table { width:100%; border-collapse:collapse; text-align:left; font-size:12px; }
+thead { background:#e9eee3; }
+thead th { font:10px/1.4 var(--mono); text-transform:uppercase; letter-spacing:1px; padding:15px 18px; }
+thead th:last-child { background:#dce9d3; }
+tbody th, tbody td { padding:13px 18px; border-top:1px solid #e5e8df; vertical-align:top; }
+tbody th { font-weight:600; width:22%; }
+tbody td { color:#51645a; width:37%; }
+tbody td:last-child { background:#f1f6eb; color:var(--ink); }
+code { font: .88em/1.5 var(--mono); background:#e8ede2; border:1px solid #dce4d6; padding:2px 5px; border-radius:3px; overflow-wrap:anywhere; }
+.phase { border:1px solid var(--line); background:var(--white); margin-bottom:13px; scroll-margin-top:30px; }
+.phase summary { padding:23px 25px; display:flex; align-items:center; gap:20px; cursor:pointer; list-style:none; }
+.phase summary::-webkit-details-marker { display:none; }
+.phase summary:hover { background:#f3f5ed; }
+.phase-number { font:30px/1 var(--mono); letter-spacing:-1.5px; color:#73906c; min-width:38px; }
+.phase-heading { flex:1; min-width:0; }
+.phase-heading .eyebrow { color:var(--muted); font-size:9px; margin-bottom:5px; }
+.phase-title { font-weight:600; font-size:17px; line-height:1.4; display:block; letter-spacing:-.35px; }
+.disclosure { color:var(--green); border:1px solid var(--line); width:26px; height:26px; flex:0 0 26px; line-height:23px; text-align:center; font-size:19px; }
+.phase[open] .disclosure { font-size:0; }
+.phase[open] .disclosure::after { content:"−"; font-size:19px; }
+.phase-body { padding:0 27px 21px 84px; font-size:13px; color:#4b5d53; }
+ul { margin:0; padding-left:17px; }
+li { padding-left:4px; margin-bottom:10px; }
+li::marker { color:#7c9274; }
+li:last-child { margin-bottom:0; }
+strong { color:var(--ink); }
+.paths { list-style:none; padding:12px 0 0; }
+.paths li { padding-left:0; }
+.gate { background:#edf3e7; border-left:2px solid #809d72; padding:12px 15px; margin:21px 0 0; font-size:12px; }
+.gate strong { display:block; font:9px/1.5 var(--mono); text-transform:uppercase; letter-spacing:1px; color:var(--green); margin-bottom:4px; }
+.verification { border-top:1px solid var(--line); padding-top:32px; }
+.verification-content > ul { list-style:none; display:grid; grid-template-columns:1fr 1fr; gap:14px 28px; padding:0; font-size:13px; }
+.verification-content > ul > li { margin:0; padding:0 0 0 25px; position:relative; color:#4b5d53; }
+.verification-content > ul > li::before { content:""; position:absolute; width:10px; height:10px; border:1px solid #82957a; left:0; top:6px; }
+.defaults { border:1px solid #d9cfb3; background:#f0ecd9; margin:30px 0 0; padding:19px 22px; color:#645c43; font-size:12px; }
+.defaults strong { display:block; color:#756340; font:10px/1.6 var(--mono); text-transform:uppercase; letter-spacing:1px; margin-bottom:6px; }
+footer { border-top:1px solid var(--line); padding-top:20px; color:var(--muted); display:flex; justify-content:space-between; gap:16px; font:10px/1.7 var(--mono); }
+footer a { color:var(--ink); }
+@media (min-width:1500px) { main { padding-right:80px; padding-left:80px; } }
+@media (max-width:1000px) { .shell { grid-template-columns:184px minmax(0,1fr); } .rail { padding:28px 17px; } main { padding:0 30px 30px; } h1 { letter-spacing:-2.5px; } .destination { flex-direction:column; gap:3px; align-items:flex-start; } .phase-body { padding-left:28px; } }
+@media (max-width:720px) { .shell { display:block; } .rail { height:auto; position:static; border-right:0; border-bottom:1px solid var(--line); padding:18px 22px 0; gap:18px; } .brand { font-size:16px; } .rail-label,.rail-note { display:none; } .nav { display:flex; gap:8px; flex-wrap:wrap; padding-bottom:12px; } .nav a { padding:5px 7px; font-size:11px; } .nav span { margin-right:5px; } main { padding:0 22px 25px; } .topbar { min-height:75px; flex-wrap:wrap; padding:14px 0; } .doc-tag { font-size:9px; } .actions { gap:6px; } .button { font-size:10px; padding:7px 9px; } .hero { padding:35px 0 25px; } h1 { font-size:clamp(39px,8.5vw,61px); letter-spacing:-2px; margin-top:15px; } .lede { font-size:14px; } .hero-meta { gap:15px; font-size:9px; } .architecture { padding:20px 16px; margin-bottom:35px; } .arch-header { align-items:flex-start; flex-direction:column; gap:5px; } .arch-header strong { font-size:15px; } .shared-core { padding:15px 10px; } .shared-core p { font-size:11px; } .fork { gap:10px; } .destination { padding:10px; } .destination span { font-size:9px; } h2 { font-size:24px; } .section-note { display:none; } section { margin-bottom:35px; } table { font-size:11px; } thead th { padding:12px 10px; font-size:9px; } tbody th,tbody td { padding:11px 10px; } tbody th { width:23%; } .phase summary { padding:20px 16px; gap:13px; } .phase-title { font-size:15px; } .phase-number { font-size:25px; min-width:31px; } .phase-body { padding:0 20px 19px; font-size:12px; } .verification-content > ul { grid-template-columns:1fr; gap:15px; } footer { flex-direction:column; gap:6px; } }
+@media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } * { transition:none!important; } }
+@media print { @page { size:A4; margin:15mm; } :root { --paper:#fff; --white:#fff; } body { font-size:10pt; background:white; } .shell { display:block; } .rail,.actions,.doc-tag,.skip,#toggle-phases,.disclosure,.reading { display:none!important; } main { padding:0; } .topbar { display:none; } .hero { padding:0 0 15px; } h1 { font-size:38pt; margin:10px 0 15px; } .lede { font-size:10pt; } .architecture { background:#eff3e9; color:#183732; border-color:#bccab4; margin:10px 0 20px; break-inside:avoid; } .architecture .eyebrow,.shared-core p,.destination span { color:#315e49; } .shared-core,.destination { border-color:#82957a; } .architecture::before { display:none; } section { margin-bottom:23px; } h2 { font-size:18pt; } .section-heading { break-after:avoid; margin-bottom:12px; } .phase { break-inside:auto; } .phase summary { padding:14px 18px; break-after:avoid; } .phase-body { padding:0 22px 16px 69px; font-size:9pt; } .phase-title { font-size:12pt; } .phase-number { font-size:22pt; } .phase-heading .eyebrow { font-size:7pt; } .gate { break-inside:avoid; } table { font-size:8pt; } thead { display:table-header-group; } tr { break-inside:avoid; } tbody th,tbody td { padding:8px 10px; } .table-wrap { overflow:visible; } .verification-content > ul { font-size:9pt; } .defaults { font-size:9pt; } footer { font-size:8pt; } a { text-decoration:none; } }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to plan</a>
+<div class="shell">
+<aside class="rail" aria-label="Document navigation">
+<div class="brand"><span class="brand-mark" aria-hidden="true">✳</span>FrostStream</div>
+<div><span class="eyebrow rail-label">Architecture / 001</span><nav class="nav" aria-label="Plan sections">
+<a href="#overview" aria-current="location"><span>01</span>Overview</a>
+<a href="#deployments"><span>02</span>Deployments</a>
+<a href="#roadmap"><span>03</span>Implementation</a>
+<a href="#verification"><span>04</span>Verification</a>
+</nav></div>
+<div class="rail-note"><span class="eyebrow">The guiding principle</span><strong>Develop once.<br>Run in both environments.</strong>Shared features.<br>Replaceable infrastructure.<div class="reading" aria-hidden="true"><span id="reading-progress"></span></div></div>
+</aside>
+<main id="main">
+<header class="topbar"><span class="doc-tag">Engineering plan · Full / Lite</span><div class="actions"><a class="button" href="SIDE_PLAN.MD" download>Markdown <span aria-hidden="true">↗</span></a><button class="button button-dark" id="print-plan" type="button">Print / Save PDF</button></div></header>
+<section class="hero" id="overview" aria-labelledby="page-title">
+<span class="eyebrow overline">One application · two deployments</span>
+<h1 id="page-title">One <em>codebase.</em><br>Two ways to run.</h1>
+<div class="lede"><p>Maintain <strong>one implementation of each feature</strong>: shared endpoints, controllers, workflows, jobs, models, and frontend. Deployment mode selects infrastructure adapters and hosting arrangements.</p>
+<p>Full retains its complete current feature set. Lite combines DataBridge, MediaProcessor, Scheduler, WebAPI, and Worker into one C# process.</p></div>
+<div class="hero-meta"><span>4 implementation phases</span><span>Full feature preservation</span><span>Shared API &amp; frontend</span></div>
+</section>
+<div class="architecture" role="img" aria-label="One shared application layer with endpoints, workflows, jobs, models and frontend. Full runs separate services with distributed infrastructure. Lite runs all five modules in one C# host with local infrastructure.">
+<div class="arch-header"><span class="eyebrow">The architecture</span><strong>One feature. Both environments.</strong></div>
+<div class="shared-core"><strong>Shared application layer</strong><p>Endpoints · Controllers · Workflows · Jobs · Models · Frontend</p></div>
+<div class="fork"><div class="fork-path"><span class="connector"></span><div class="destination"><strong>FULL</strong><span>Separate services</span></div></div><div class="fork-path"><span class="connector"></span><div class="destination lite"><strong>LITE</strong><span>One C# host / five modules</span></div></div></div>
+</div>
+<section id="deployments" aria-labelledby="deployment-title"><div class="section-heading"><div><span class="eyebrow">02 / Deployment model</span><h2 id="deployment-title">Shared features. Different infrastructure.</h2></div><p class="section-note">Select adapters and hosting<br>at application startup.</p></div>
+<div class="table-wrap"><table><caption class="sr-only">Full and Lite deployment comparison</caption><thead><tr><th scope="col">Concern</th><th scope="col">Full / distributed</th><th scope="col">Lite / standalone</th></tr></thead><tbody><tr><th scope="row">Hosting</th><td>Existing separate services</td><td>One ASP.NET Core application</td></tr>
+<tr><th scope="row">Messaging</th><td>NATS / JetStream</td><td>Local dispatch and SQLite-backed durable queues</td></tr>
+<tr><th scope="row">Database</th><td>PostgreSQL</td><td>SQLite database named <code>frostreamlitedb</code></td></tr>
+<tr><th scope="row">Authentication</th><td>Existing Authentik integration</td><td>Automatic local admin identity; no login</td></tr>
+<tr><th scope="row">Authorization</th><td>Existing OpenFGA policies</td><td>Allow all endpoints and resources</td></tr>
+<tr><th scope="row">Secrets</th><td>OpenBao</td><td>Encrypted local persistence</td></tr>
+<tr><th scope="row">Backups</th><td>Existing PostgreSQL backup service</td><td>Built-in SQLite backups</td></tr>
+<tr><th scope="row">Supporting services</th><td>Existing services</td><td>Keep Typesense, optional ClickHouse, and POT provider</td></tr></tbody></table></div>
+</section>
+<section id="roadmap" aria-labelledby="roadmap-title"><div class="section-heading"><div><span class="eyebrow">03 / Implementation roadmap</span><h2 id="roadmap-title">Four phases. One continuous codebase.</h2></div><button class="button" id="toggle-phases" type="button" aria-expanded="true" aria-controls="phase-1 phase-2 phase-3 phase-4">Collapse phases</button></div>
+<details class="phase" id="phase-1" open>
+<summary><span class="phase-number">01</span><span class="phase-heading"><span class="eyebrow">MODULES</span><span class="phase-title">Establish shared application modules</span></span><span class="disclosure" aria-hidden="true">+</span></summary>
+<div class="phase-body"><ul>
+<li>Extract each service’s registrations and application logic into reusable modules. Full’s entry points register their respective modules; a new Lite host registers all five.
+</li>
+<li>Add <code>Deployment:Mode=Full|Lite</code>, defaulting to Full. Select implementations at startup; avoid deployment checks throughout feature code.
+</li>
+<li>Separate application contracts from NATS types. Introduce shared interfaces for request dispatch, events, durable jobs, and staged objects. Both transports invoke the same handlers.
+</li>
+<li>Keep one controller assembly and frontend. Add <code>GET /api/system/capabilities</code> for available integrations, access-management controls, and backup capabilities.
+</li>
+<li>Preserve Full’s existing routes, message contracts, configuration compatibility, and behavior throughout extraction.
+</li>
+</ul>
+<p class="gate"><strong>Completion:</strong> Full works through the shared modules without regressions.</p></div></details>
+<details class="phase" id="phase-2" open>
+<summary><span class="phase-number">02</span><span class="phase-heading"><span class="eyebrow">PERSISTENCE</span><span class="phase-title">Add SQLite persistence</span></span><span class="disclosure" aria-hidden="true">+</span></summary>
+<div class="phase-body"><ul>
+<li>Keep shared entities, repositories, and business rules. Isolate provider-specific SQL and mappings behind small adapters.
+</li>
+<li>Port PostgreSQL schemas, enums, JSON/arrays, timestamps, bulk operations, upserts, and locking. This requires more than replacing <code>UseNpgsql</code>.
+</li>
+<li>Preserve PostgreSQL migration history; introduce a SQLite baseline. Express future schema changes through shared migrations where supported, isolating database-specific operations.
+</li>
+<li>Use <code>/data/frostreamlitedb</code>, with persistent local storage, foreign keys, WAL, bounded write contention, and short transactions.
+</li>
+<li>Keep Cleipnir workflows shared. Implement a durable SQLite store compatible with the currently pinned workflow library; retain the existing PostgreSQL store for Full.
+</li>
+<li>Preserve current download restart behavior: queued jobs stop and active jobs become interrupted/failed. Prevent old queue messages from restarting invalidated runs.
+</li>
+</ul>
+<p class="gate"><strong>Completion:</strong> Both databases pass the same repository and workflow tests, including upgrades and restart reconciliation.</p></div></details>
+<details class="phase" id="phase-3" open>
+<summary><span class="phase-number">03</span><span class="phase-heading"><span class="eyebrow">RUNTIME</span><span class="phase-title">Assemble the Lite runtime</span></span><span class="disclosure" aria-hidden="true">+</span></summary>
+<div class="phase-body"><ul>
+<li>Dispatch requests locally and use bounded channels for transient notifications. Persist durable messages, delivery attempts, leases, and acknowledgments in SQLite; use transactional outbox/inbox handling and idempotent handlers.
+</li>
+<li>Replace NATS object storage for import manifests with SQLite-backed storage through the shared object interface. Register no NATS connections, topology services, or session store in Lite.
+</li>
+<li>Reuse Scheduler jobs and existing trigger/misfire behavior; load schedule definitions from SQLite.
+</li>
+<li>Seed the existing stable single-user identity idempotently, presenting it as <strong>Admin</strong>. Every request uses that identity automatically.
+</li>
+<li>Centralize Lite’s allow-all behavior across default/fallback policies, endpoint permissions, role checks, and resource access. Existing credentials must not trigger external authentication. Full retains its current protections.
+</li>
+<li>Make frontend permission checks allow all in Lite; remove login redirects and access-management controls. Keep normal validation.
+</li>
+<li>Implement <code>ISecretStore</code> using encrypted SQLite values and a persistent local encryption key ring.
+</li>
+<li>Initialize in order: migrations → admin seed → startup reconciliation → handlers → scheduling and HTTP readiness. Explicitly register shared controllers/workflows and avoid duplicate hosted services.
+</li>
+</ul>
+<p class="gate"><strong>Completion:</strong> Lite runs normal download, import, processing, playback, search, scheduling, and progress flows without any removed infrastructure.</p></div></details>
+<details class="phase" id="phase-4" open>
+<summary><span class="phase-number">04</span><span class="phase-heading"><span class="eyebrow">RELEASE</span><span class="phase-title">Backups, packaging, and release</span></span><span class="disclosure" aria-hidden="true">+</span></summary>
+<div class="phase-body"><ul>
+<li>Reuse existing backup endpoints, UI, scheduling, and <code>IBackupServiceClient</code>; bind Full to its HTTP client and Lite to an embedded SQLite implementation.
+</li>
+<li>Lite supports full snapshots and verification. Hide differential/PITR options; reject unsupported operations consistently through shared handlers. Create snapshots using SQLite’s <a href="https://learn.microsoft.com/en-us/dotnet/standard/data/sqlite/backup" target="_blank" rel="noopener noreferrer">backup API<span class="sr-only"> (opens in a new tab)</span></a>, publishing files only after successful verification.
+</li>
+<li>Display the resolved database location and backup directory in the shared backup page. Defaults:
+<ul class="paths">
+<li>Database: <code>/data/frostreamlitedb</code></li>
+<li>Backups: <code>/data/backups/&lt;timestamp&gt;-&lt;id&gt;.sqlite</code></li>
+</ul>
+</li>
+<li>Provide restore instructions: <strong>shut down the server, preserve the current database, replace it with the selected backup renamed <code>frostreamlitedb</code>, then restart</strong>. Handle leftover WAL/SHM files only after shutdown. Preserve the encryption key ring; include a companion key backup for recovery onto another installation.
+</li>
+<li>Backups cover application data, workflow/queue state, staged objects, and secrets. Media files and optional ClickHouse data remain separately managed.
+</li>
+<li>Generate Full and Lite deployment profiles from the same AppHost configuration. Lite packages the C# host, shared frontend, and media tools; excludes NATS, PostgreSQL, OpenBao, Authentik, OpenFGA, and the PostgreSQL backup service.
+</li>
+</ul>
+<p class="gate"><strong>Completion:</strong> Both deployment profiles install reproducibly and pass CI.</p></div></details>
+</section>
+<section class="verification" id="verification" aria-labelledby="verification-title"><div class="section-heading"><div><span class="eyebrow">04 / Acceptance &amp; ongoing development</span><h2 id="verification-title">Build once. Verify in both.</h2></div><p class="section-note">Acceptance criteria for implementation; no completion status is implied.</p></div><div class="verification-content"><ul>
+<li>Run shared API, repository, and workflow tests against both deployments; assert identical application routes.
+</li>
+<li>Test Lite’s automatic admin access, including new endpoints without permission metadata. Verify Full still enforces its configured authentication and authorization.
+</li>
+<li>Exercise concurrent writes, duplicate delivery, cancellation, crashes, imports, progress subscriptions, scheduled jobs, and database upgrades.
+</li>
+<li>Test backup creation during activity, verification failures, and documented shutdown/file-replacement restoration.
+</li>
+<li>Check that Lite neither deploys nor attempts connections to removed services.
+</li>
+<li>Require new features to use shared handlers and contracts. Architecture checks prevent feature code from depending directly on deployment adapters.
+</li>
+</ul>
+<p class="defaults"><strong>Defaults:</strong> Fresh Lite installations first; PostgreSQL-to-SQLite conversion is deferred. Restore uses documented file replacement. Mode changes require restart. Infrastructure adapters and occasional provider-specific migrations require separate maintenance; normal feature development remains shared.</p></div></section>
+<footer><span>FROSTSTREAM / FULL + LITE REFACTOR</span><span>Companion to <a href="SIDE_PLAN.MD">SIDE_PLAN.MD</a> · Implementation plan</span></footer>
+</main></div>
+<script>
+(() => {
+  const phases = [...document.querySelectorAll('.phase')];
+  const toggle = document.getElementById('toggle-phases');
+  function syncToggle() {
+    const allOpen = phases.every(phase => phase.open);
+    toggle.textContent = allOpen ? 'Collapse phases' : 'Expand phases';
+    toggle.setAttribute('aria-expanded', String(allOpen));
+  }
+  toggle.addEventListener('click', () => {
+    const open = !phases.every(phase => phase.open);
+    phases.forEach(phase => { phase.open = open; });
+    syncToggle();
+  });
+  phases.forEach(phase => phase.addEventListener('toggle', syncToggle));
+  document.getElementById('print-plan').addEventListener('click', () => window.print());
+  let printState = null;
+  window.addEventListener('beforeprint', () => {
+    if (printState === null) printState = phases.map(phase => phase.open);
+    phases.forEach(phase => { phase.open = true; });
+  });
+  window.addEventListener('afterprint', () => {
+    if (printState) phases.forEach((phase, i) => { phase.open = printState[i]; });
+    printState = null;
+    syncToggle();
+  });
+  const links = [...document.querySelectorAll('.nav a')];
+  const sections = links.map(link => document.querySelector(link.getAttribute('href')));
+  function updateReading() {
+    const max = document.documentElement.scrollHeight - window.innerHeight;
+    document.getElementById('reading-progress').style.width = (max > 0 ? Math.min(100, Math.max(0, window.scrollY / max * 100)) : 100) + '%';
+    let active = 0;
+    sections.forEach((section, index) => { if (section.getBoundingClientRect().top <= 150) active = index; });
+    links.forEach((link, index) => {
+      if (index === active) link.setAttribute('aria-current', 'location');
+      else link.removeAttribute('aria-current');
+    });
+  }
+  let scheduled = false;
+  function scheduleReading() {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(() => { scheduled = false; updateReading(); });
+  }
+  window.addEventListener('scroll', scheduleReading, { passive:true });
+  window.addEventListener('resize', scheduleReading);
+  phases.forEach(phase => phase.addEventListener('toggle', scheduleReading));
+  window.addEventListener('hashchange', () => {
+    const target = document.getElementById(window.location.hash.slice(1));
+    if (target instanceof HTMLDetailsElement) target.open = true;
+  });
+  updateReading();
+})();
+</script>
+</body>
+</html>

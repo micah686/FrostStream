@@ -1,5 +1,5 @@
 {
   "appHost": {
-    "path": "AppHost/AppHost.csproj"
+    "path": "FullApp/AppHostFull/AppHostFull.csproj"
   }
 }

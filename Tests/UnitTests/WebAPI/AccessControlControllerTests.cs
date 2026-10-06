@@ -1,5 +1,5 @@
 using System.Security.Claims;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -114,7 +114,7 @@ public sealed class AccessControlControllerTests
         var result = await controller.CreatePolicy(
             new AccessPolicyWriteRequest
             {
-                Name = "Family",
+                Name = "family",
                 BundleIds = ["media"]
             },
             CancellationToken.None);

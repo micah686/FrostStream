@@ -1,9 +1,12 @@
+using DataBridge.Persistence;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using DataBridge.Messaging;
 using DataBridge.Search;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using FluentMigrator.Runner;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using NodaTime;
@@ -204,13 +207,11 @@ public sealed class MediaDeleteExecutorTests
 
         public Instant Now { get; } = Instant.FromUtc(2026, 6, 1, 0, 0);
 
-        // Empty container: DeleteLiveChatAsync resolves LiveChatIngestService optionally and no-ops
-        // when it isn't registered, matching a deployment with live chat replay disabled.
-        private static readonly IServiceScopeFactory EmptyScopeFactory =
-            new ServiceCollection().BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
+        private IHost? applicationHost;
 
         public MediaDeleteExecutor CreateExecutor(IMessageBus messageBus, ITypesenseIndexService searchIndex)
-            => new(DataSource, messageBus, searchIndex, EmptyScopeFactory, NullLogger<MediaDeleteExecutor>.Instance);
+            => new(new ApplicationDatabase(DataSource), messageBus, searchIndex,
+                applicationHost!.Services.GetRequiredService<IServiceScopeFactory>(), NullLogger<MediaDeleteExecutor>.Instance);
 
         private string ConnectionString =>
             new NpgsqlConnectionStringBuilder
@@ -237,6 +238,11 @@ public sealed class MediaDeleteExecutorTests
             await RunMigrationsAsync();
 
             _dataSource = new NpgsqlDataSourceBuilder(ConnectionString).Build();
+            var builder = Host.CreateApplicationBuilder();
+            builder.Logging.ClearProviders();
+            builder.Configuration["ConnectionStrings:froststreamdb"] = ConnectionString;
+            builder.AddDataBridgePersistence();
+            applicationHost = builder.Build();
             _initialized = true;
         }
 
@@ -340,6 +346,7 @@ public sealed class MediaDeleteExecutorTests
 
         public async ValueTask DisposeAsync()
         {
+            applicationHost?.Dispose();
             if (_dataSource is not null)
             {
                 await _dataSource.DisposeAsync();

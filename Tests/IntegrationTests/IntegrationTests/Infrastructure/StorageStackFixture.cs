@@ -1,9 +1,11 @@
+using static Conduit.NATS.ServiceCollectionExtensions;
+using Shared.Messaging.Adapters;
 using DataBridge.Data;
 using DataBridge.Messaging;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using FluentMigrator.Runner;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -156,7 +158,7 @@ public sealed class StorageStackFixture(SaveChangesInterceptor? interceptor = nu
                 .WithGlobalConnectionString(PostgresConnectionString)
                 .ScanIn(typeof(StorageCrudConsumerService).Assembly).For.Migrations());
 
-        builder.Services.AddNats(options =>
+        builder.Services.AddNatsApplicationTransport().AddNats(options =>
         {
             options.Url = NatsUrl;
             options.EnableTopologyProvisioning = false;
@@ -202,7 +204,7 @@ public sealed class StorageStackFixture(SaveChangesInterceptor? interceptor = nu
         // (the concrete bus type is internal to the library by design).
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddNats(o =>
+        services.AddNatsApplicationTransport().AddNats(o =>
         {
             o.Url = NatsUrl;
             o.EnableTopologyProvisioning = false;

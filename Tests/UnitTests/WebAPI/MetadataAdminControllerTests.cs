@@ -1,4 +1,4 @@
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -18,7 +18,7 @@ public sealed class MetadataAdminControllerTests
     [Test]
     public async Task TriggerReindex_Publishes_Manual_Search_Reindex_Request()
     {
-        var publisher = Substitute.For<IJetStreamPublisher>();
+        var publisher = Substitute.For<IDurableJobPublisher>();
         var controller = CreateController(publisher: publisher);
 
         var result = await controller.TriggerReindex(CancellationToken.None);
@@ -40,7 +40,7 @@ public sealed class MetadataAdminControllerTests
     [Test]
     public async Task TriggerReindex_Returns_503_When_Publish_Fails()
     {
-        var publisher = Substitute.For<IJetStreamPublisher>();
+        var publisher = Substitute.For<IDurableJobPublisher>();
         var controller = CreateController(publisher: publisher);
 
         publisher.PublishAsync(
@@ -59,7 +59,7 @@ public sealed class MetadataAdminControllerTests
     [Test]
     public async Task TriggerDatabaseReindex_Publishes_Manual_Database_Reindex_Request()
     {
-        var publisher = Substitute.For<IJetStreamPublisher>();
+        var publisher = Substitute.For<IDurableJobPublisher>();
         var controller = CreateController(publisher: publisher);
 
         var result = await controller.TriggerDatabaseReindex(CancellationToken.None);
@@ -79,14 +79,14 @@ public sealed class MetadataAdminControllerTests
     }
 
     private static MetadataAdminController CreateController(
-        IJetStreamPublisher? publisher = null,
+        IDurableJobPublisher? publisher = null,
         IMessageBus? bus = null)
     {
         var clock = Substitute.For<IClock>();
         clock.GetCurrentInstant().Returns(Now);
 
         return new MetadataAdminController(
-            publisher ?? Substitute.For<IJetStreamPublisher>(),
+            publisher ?? Substitute.For<IDurableJobPublisher>(),
             bus ?? Substitute.For<IMessageBus>(),
             clock,
             Substitute.For<ILogger<MetadataAdminController>>());

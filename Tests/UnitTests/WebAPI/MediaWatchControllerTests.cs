@@ -1,5 +1,5 @@
 using FluentStorage.Storage;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -51,6 +51,30 @@ public sealed class MediaWatchControllerTests
         file.FileStream.ShouldBeSameAs(stream);
         file.ContentType.ShouldBe("video/mp4");
         file.EnableRangeProcessing.ShouldBeTrue();
+    }
+
+    [Test]
+    public async Task GetWatch_Uses_Direct_Seekable_Stream_For_Local_Files()
+    {
+        var mediaGuid = Guid.NewGuid();
+        var bus = Substitute.For<IMessageBus>();
+        var provider = Substitute.For<IStoreProvider>();
+        var storage = Substitute.For<IStore>();
+        var stream = new MemoryStream([1, 2, 3]);
+
+        ArrangeResolved(bus, mediaGuid, Location(mediaGuid, "storage-a", "media/video.webm", 1));
+        provider.GetAsync("storage-a", Arg.Any<CancellationToken>()).Returns(storage);
+        storage.IsSeekable().Returns(true);
+        storage.IsFileSystem().Returns(true);
+        storage.OpenRead("media/video.webm", Arg.Any<CancellationToken>()).Returns(stream);
+
+        var result = await CreateController(bus, provider).GetWatch(mediaGuid);
+
+        var file = result.ShouldBeOfType<FileStreamResult>();
+        file.FileStream.ShouldBeSameAs(stream);
+        file.EnableRangeProcessing.ShouldBeTrue();
+        await storage.DidNotReceive().OpenSeekable(
+            Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 
     [Test]

@@ -10,6 +10,23 @@ namespace UnitTests.DataBridge;
 public sealed class ScheduledTasksRepositoryTests
 {
     [Test]
+    public async Task Cron_Next_Due_Uses_The_Configured_Timezone()
+    {
+        await using var db = DataBridgeTestHelpers.CreateDb();
+        var now = Instant.FromUtc(2026, 10, 1, 12, 0);
+        var repo = new ScheduledTasksRepository(db, new FixedClock(now));
+        var created = await repo.CreateAsync(new ScheduledTaskEntity
+        {
+            Key = "daily",
+            TaskType = "channel_asset_refresh",
+            Cron = "0 0 9 * * ?",
+            Timezone = "America/Los_Angeles",
+            Enabled = true
+        });
+        created.NextDueAt.ShouldBe(Instant.FromUtc(2026, 10, 1, 16, 0));
+    }
+
+    [Test]
     public async Task Create_Computes_Next_Due_For_Interval_Tasks()
     {
         await using var db = DataBridgeTestHelpers.CreateDb();

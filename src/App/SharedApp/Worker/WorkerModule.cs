@@ -1,0 +1,197 @@
+using Shared.Messaging.Adapters;
+using Conduit.NATS;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Hosting.Internal;
+using NATS.Client.Core;
+using NodaTime;
+using Shared.Messaging;
+using Shared.Secrets;
+using Shared.Storage;
+using Worker.Services;
+using YtDlpSharpLib;
+using YtDlpSharpLib.Process;
+using YtDlpSharpLib.Rendering;
+
+using Shared.Deployment;
+
+namespace Worker;
+
+public static class WorkerModule
+{
+    public static IHostApplicationBuilder AddWorkerModule(this IHostApplicationBuilder builder)
+    {
+        if (!builder.Services.TryAddModule(typeof(WorkerModule))) return builder;
+        builder.AddDeployment();
+        builder.Services.AddApplicationTransport(builder.Configuration);
+
+        // Force ConsoleLifetime so Ctrl+C / SIGTERM triggers StopAsync on hosted services
+        builder.Services.AddSingleton<IHostLifetime, ConsoleLifetime>();
+        builder.Services.Configure<ConsoleLifetimeOptions>(o =>
+        {
+            // set true to hide "Application started/stopped" messages
+            o.SuppressStatusMessages = false;
+        });
+
+        var natsUrl = builder.Configuration.GetConnectionString("nats")
+            ?? builder.Configuration["NATS:Url"]
+            ?? "nats://localhost:24040";
+        var natsAuth = BuildNatsAuth(builder.Configuration);
+
+        builder.Services.AddModuleNats(options =>
+        {
+            options.Url = natsUrl;
+            options.AuthOpts = natsAuth;
+            // Provisions every ITopologySource registered below (idempotent — DataBridge
+            // registers the same source, so whichever service starts first wins).
+            options.EnableTopologyProvisioning = true;
+        });
+
+        builder.Services.AddModuleTopology<DownloadTopology>();
+        builder.Services.AddModuleTopology<ArtifactStorageTopology>();
+        builder.Services.AddModuleTopology<PlaylistTopology>();
+        builder.Services.AddModuleTopology<BackgroundJobsTopology>();
+        builder.Services.AddModuleTopology<LocalImportTopology>();
+
+        builder.Services.AddSingleton<IClock>(SystemClock.Instance);
+        builder.Services.AddKeyedSingleton<IBackgroundRunReporter>("worker", (sp, _) => new BackgroundRunReporter(
+            sp.GetRequiredService<FrostStream.ApplicationContracts.IMessageBus>(),
+            sp.GetRequiredService<IClock>(),
+            "worker",
+            sp.GetService<Microsoft.Extensions.Logging.ILogger<BackgroundRunReporter>>()));
+        builder.Services.AddApplicationSecretStore(builder.Configuration);
+        builder.Services.AddFrostStreamStorage();
+
+        // yt-dlp wiring. The binary downloader writes into <BaseDirectory>/tools and the
+        // client points at the predicted absolute paths so the first invocation finds them
+        // (StartupService runs first as a plain IHostedService and blocks host startup until
+        // the downloads are complete). YtDlpClientOptions and YtDlpBinaryDownloaderOptions are
+        // init-only records, so we bypass the AddYtDlpClient/AddYtDlpBinaryDownloader helpers
+        // and register the services directly with prebuilt options instances.
+        var toolsDirectory = Path.Combine(AppContext.BaseDirectory, "tools");
+        Directory.CreateDirectory(toolsDirectory);
+        var configuredWorkerOptions = builder.Configuration
+            .GetSection(WorkerOptions.SectionName)
+            .Get<WorkerOptions>() ?? new WorkerOptions();
+
+        // Static local-import discovery folder: created up front and seeded with a
+        // manifest.json.template so operators know where to drop content + manifest.json.
+        Shared.Imports.LocalImportIncoming.EnsureScaffold(configuredWorkerOptions.IncomingRoot);
+
+        var binaryDownloaderOptions = new YtDlpSharpLib.Provisioning.YtDlpBinaryDownloaderOptions
+        {
+            DefaultDirectory = toolsDirectory,
+        };
+        builder.Services.AddSingleton<YtDlpSharpLib.Provisioning.IYtDlpBinaryDownloader>(_ =>
+            new YtDlpSharpLib.Provisioning.YtDlpBinaryDownloader(binaryDownloaderOptions));
+
+        var ytDlpClientOptions = new YtDlpClientOptions
+        {
+            YtDlpExecutablePath = Path.Combine(toolsDirectory, YtDlpPaths.YtDlpFileName),
+            FfmpegExecutablePath = Path.Combine(toolsDirectory, YtDlpPaths.FfmpegFileName),
+            EnvironmentVariables = new Dictionary<string, string?>
+            {
+                // yt-dlp enables Deno by default, but its child process must be able to find it.
+                ["PATH"] = toolsDirectory + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH")
+            },
+            DownloadLimitRate = configuredWorkerOptions.YtDlpLimitRate,
+            DownloadThrottledRate = configuredWorkerOptions.YtDlpThrottledRate,
+            MinimumDelayBetweenProcessStarts = configuredWorkerOptions.EffectiveYtDlpMinDelay()
+        };
+        builder.Services.TryAddSingleton(TimeProvider.System);
+        builder.Services.TryAddSingleton<IYtDlpArgumentRenderer, YtDlpArgumentRenderer>();
+        builder.Services.TryAddSingleton<IYtDlpProcessFactory, YtDlpProcessFactory>();
+        builder.Services.TryAddSingleton<IYtDlpClient>(sp => new YtDlpClient(
+            ytDlpClientOptions,
+            sp.GetRequiredService<IYtDlpProcessFactory>(),
+            sp.GetRequiredService<IYtDlpArgumentRenderer>(),
+            sp.GetRequiredService<TimeProvider>()));
+
+        // POT (Proof-of-Origin Token) wiring. When enabled, the Worker provisions the bgutil plugin,
+        // runs a loopback HTTP→NATS shim, and injects the bgutil extractor-args into every download.
+        builder.Services.AddOptions<PotProviderOptions>()
+            .Bind(builder.Configuration.GetSection(PotProviderOptions.SectionName));
+        builder.Services.AddSingleton<PotShimEndpoint>();
+        builder.Services.AddSingleton<PotOptionsApplier>();
+        builder.Services.AddHttpClient<IReturnYouTubeDislikeClient, ReturnYouTubeDislikeClient>((sp, client) =>
+        {
+            var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<WorkerOptions>>()
+                .Value
+                .ReturnYouTubeDislike;
+            client.BaseAddress = options.BaseUrl;
+            client.Timeout = options.Timeout > TimeSpan.Zero ? options.Timeout : TimeSpan.FromSeconds(5);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("FrostStream-Worker/1.0 (+return-youtube-dislike)");
+        });
+
+        // Register startup service (downloads yt-dlp/ffmpeg/ffprobe binaries before any
+        // BackgroundService starts).
+        builder.Services.AddHostedService<StartupService>();
+        builder.Services.AddSingleton<MediaToolsUpdateManager>();
+        builder.Services.AddHostedService<MediaToolsRefreshService>();
+        builder.Services.AddHostedService<WorkerHeartbeatService>();
+
+        // POT shim: starts after StartupService; its constructor publishes the loopback base URL.
+        builder.Services.AddHostedService<PotShimService>();
+
+        // Worker tag routing config.
+        builder.Services.AddOptions<WorkerOptions>()
+            .Bind(builder.Configuration.GetSection(WorkerOptions.SectionName));
+
+        // Channel-asset cache wiring.
+        builder.Services.AddOptions<AssetCacheOptions>()
+            .Bind(builder.Configuration.GetSection(AssetCacheOptions.SectionName));
+        builder.Services.AddSingleton<AssetCacheWriter>();
+        builder.Services.AddSingleton<LiveChatSidecarProcessor>();
+        builder.Services.AddHttpClient("asset-cache", (sp, client) =>
+        {
+            var assetOptions = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AssetCacheOptions>>().Value;
+            client.Timeout = assetOptions.RequestTimeout > TimeSpan.Zero ? assetOptions.RequestTimeout : TimeSpan.FromSeconds(30);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("FrostStream-Worker/1.0 (+asset-cache)");
+        });
+
+        // Command consumers for the download flow.
+        builder.Services.AddHostedService<DownloadCommandsConsumerService>();
+        builder.Services.AddHostedService<LocalImportScanConsumerService>();
+        builder.Services.AddHostedService<LocalImportBrowseConsumerService>();
+        builder.Services.AddHostedService<LocalImportProbeConsumerService>();
+        builder.Services.AddHostedService<LocalImportEnrichConsumerService>();
+        builder.Services.AddHostedService<LocalImportCommandsConsumerService>();
+        builder.Services.AddHostedService<PlaylistCommandsConsumerService>();
+        builder.Services.AddHostedService<ChannelDiscoveryConsumerService>();
+        builder.Services.AddHostedService<ChannelAssetRefreshConsumerService>();
+        builder.Services.AddHostedService<MediaFileDeleteConsumerService>();
+
+        return builder;
+    }
+
+
+    private static NatsAuthOpts? BuildNatsAuth(IConfiguration configuration)
+    {
+        var token = configuration["NATS:Token"];
+        if (!string.IsNullOrWhiteSpace(token))
+        {
+            return new NatsAuthOpts { Token = token };
+        }
+
+        var username = configuration["NATS:Username"];
+        var password = configuration["NATS:Password"];
+        if (!string.IsNullOrWhiteSpace(username) && !string.IsNullOrWhiteSpace(password))
+        {
+            return new NatsAuthOpts
+            {
+                Username = username,
+                Password = password
+            };
+        }
+
+        var credsFile = configuration["NATS:CredsFile"];
+        if (!string.IsNullOrWhiteSpace(credsFile))
+        {
+            return new NatsAuthOpts { CredsFile = credsFile };
+        }
+
+        return null;
+    }
+}

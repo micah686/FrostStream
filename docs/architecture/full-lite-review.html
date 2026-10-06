@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="An evidence-based review of FrostStream Full and Lite, with a shared target architecture, six refactor phases, and acceptance criteria.">
+<meta name="color-scheme" content="light">
+<title>FrostStream Full/Lite architecture review and refactor proposal</title>
+<!-- Rendered from full-lite-review.md; SHA-256: d1f651c48a7520b0d76851bdbe360248f43770b610360aed96f981af285c71f9 -->
+<style>
+:root{color-scheme:light;--ink:#162a3d;--muted:#52667a;--navy:#102a43;--navy-deep:#091c2e;--teal:#096d64;--teal-light:#e9f5f1;--line:#dce5e9;--paper:#fff;--canvas:#f1f4f5;--gold:#c6a769;--radius:18px}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:30px}
+body{margin:0;background:var(--canvas);color:var(--ink);font:16px/1.75 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--teal);text-decoration-thickness:1px;text-underline-offset:3px;overflow-wrap:anywhere}
+a:hover{text-decoration-thickness:2px}
+a:focus-visible,.table-scroll:focus-visible{outline:3px solid #b56d13;outline-offset:5px;border-radius:4px}
+.skip{position:fixed;top:12px;left:12px;z-index:10;padding:10px 18px;background:#fff;border:2px solid var(--teal);transform:translateY(-160%)}
+.skip:focus{transform:translateY(0)}
+.topbar{background:var(--navy-deep);color:#dce9f2;border-bottom:1px solid #2a4257}
+.topbar-inner{max-width:1480px;margin:auto;padding:17px 38px;display:flex;justify-content:space-between;gap:20px;align-items:center;font-size:12px;letter-spacing:.12em;text-transform:uppercase}
+.brand{font-weight:800;color:white;letter-spacing:.2em;font-size:14px;display:flex;gap:12px;align-items:center}
+.mark{width:19px;height:19px;display:inline-block;border:2px solid #84d2c2;transform:rotate(45deg);border-radius:4px}
+.status{color:#d6efea;border:1px solid #456c70;border-radius:30px;padding:5px 12px;white-space:nowrap;font-size:10px;letter-spacing:.12em}
+.layout{max-width:1480px;margin:auto;display:grid;grid-template-columns:240px minmax(0,1fr);gap:44px;padding:42px 38px 64px}
+.sidebar{position:sticky;top:30px;align-self:start;font-size:13px}
+.sidebar-label{font-size:10px;letter-spacing:.17em;text-transform:uppercase;color:var(--muted);font-weight:800;margin:5px 0 20px}
+nav a{display:flex;align-items:baseline;gap:13px;text-decoration:none;color:var(--muted);padding:12px 0;border-bottom:1px solid var(--line);line-height:1.5}
+nav a:hover{color:var(--teal)}
+.nav-number{font-size:11px;letter-spacing:.1em;color:var(--teal);font-weight:800;flex-shrink:0}
+.sidebar-note{margin-top:28px;padding:18px 0;border-top:2px solid var(--teal);font-size:12px;line-height:1.7;color:var(--muted)}
+.sidebar-note strong{display:block;color:var(--ink);margin-bottom:6px}
+.source-link{display:inline-block;margin-top:8px;font-size:12px}
+main{min-width:0}
+article{background:var(--paper);border-radius:var(--radius);overflow:hidden;box-shadow:0 8px 32px #102a4308;border:1px solid var(--line)}
+.hero{background:linear-gradient(125deg,var(--navy-deep),#173e53);padding:48px 48px 38px;color:#fff;border-top:5px solid #5cae9f;position:relative}
+.hero:before{content:"ARCHITECTURE REVIEW / 2026";display:block;color:#a0d8ca;font-size:11px;letter-spacing:.19em;font-weight:700;margin-bottom:22px}
+h1{font-size:clamp(30px,3.3vw,48px);line-height:1.16;letter-spacing:-.04em;font-weight:730;max-width:800px;margin:0 0 28px;text-wrap:balance}
+.metadata{font-size:12px;line-height:1.9;color:#cad8e4;margin:0;padding-top:22px;border-top:1px solid #ffffff25}
+.metadata strong{color:#fff;font-weight:600}
+.metadata code{background:#ffffff12;color:#d5f3ec;border-color:#ffffff20}
+.chapter{padding:42px 48px;border-bottom:1px solid var(--line)}
+.chapter:last-child{border-bottom:0}
+h2{font-size:27px;line-height:1.3;font-weight:730;letter-spacing:-.025em;margin:0 0 24px;color:var(--navy)}
+h3{font-size:20px;line-height:1.4;margin:34px 0 15px;letter-spacing:-.015em;color:var(--navy)}
+h4{font-size:14px;line-height:1.5;margin:25px 0 12px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--teal)}
+p{margin:0 0 18px}
+li{padding-left:3px;margin-bottom:9px}
+ul,ol{padding-left:22px;margin:16px 0 24px}
+strong{font-weight:700}
+code{font: .86em/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;background:#eff3f5;border:1px solid #e0e7ea;border-radius:4px;padding:2px 5px;overflow-wrap:anywhere}
+.recommendation{padding:21px 24px;background:var(--teal-light);border-left:4px solid var(--teal);border-radius:0 9px 9px 0;margin-bottom:26px;color:#17483f}
+.verification{padding:18px 22px;background:#faf6ec;border:1px solid #e8ddc6;border-left:4px solid var(--gold);border-radius:0 8px 8px 0;font-size:14px;line-height:1.7;margin:26px 0 0}
+.table-scroll{margin:26px 0;border:1px solid var(--line);border-radius:10px;overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px;line-height:1.6;text-align:left}
+thead{background:var(--navy);color:#fff}
+th,td{padding:14px 17px;vertical-align:top;border-bottom:1px solid var(--line)}
+thead th{font-size:11px;text-transform:uppercase;letter-spacing:.075em;font-weight:700;border-color:#294459}
+tbody th{font-weight:700;width:20%;color:var(--navy);background:#f6f8f9}
+tbody td{width:40%}
+tbody tr:nth-child(even) td{background:#fafcfc}
+tbody tr:last-child>*{border-bottom:0}
+.chapter[data-section="02"] tbody td:nth-child(2){background:#f0f8f5}
+.chapter[data-section="04"] tbody td{width:80%}
+.phase{margin:30px 0;padding:26px 27px 8px;border:1px solid var(--line);border-top:3px solid var(--teal);border-radius:8px;background:linear-gradient(#f7fbfa,#fff 150px)}
+.phase>h3{margin:0 0 20px;font-size:21px}
+.phase li{font-size:15px}
+.completion{font-size:13px;line-height:1.7;padding-top:17px;margin:20px 0 16px;border-top:1px solid var(--line);color:#27594f}
+.footer{padding:22px 4px;color:var(--muted);font-size:11px;display:flex;justify-content:space-between;gap:20px;line-height:1.6}
+.footer a{color:var(--muted)}
+@media(min-width:1450px){.layout{gap:54px;grid-template-columns:250px minmax(0,1fr)}}
+@media(max-width:1100px){.layout{grid-template-columns:200px minmax(0,1fr);gap:25px;padding:30px 24px}.hero,.chapter{padding:32px}.phase{padding:23px 21px 7px}}
+@media(max-width:820px){.layout{display:block;padding:20px}.sidebar{position:static;margin-bottom:24px}.sidebar-label{margin-bottom:8px}nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:22px}nav a{padding:9px 0}.sidebar-note{display:none}.source-link{margin-top:14px}.hero,.chapter{padding:30px}.topbar-inner{padding:16px 22px}.topbar-context{display:none}}
+@media(max-width:520px){body{font-size:15px}.layout{padding:14px 12px 30px}.hero,.chapter{padding:25px 21px}.hero{padding-top:31px}h1{font-size:32px}h2{font-size:23px}h3{font-size:19px}nav{column-gap:14px;font-size:12px}.phase{padding:21px 16px 5px;margin:25px -4px}.phase>h3{font-size:19px}.recommendation,.verification{padding:17px}table{min-width:620px}th,td{padding:12px 14px}.footer{display:block}.footer span{display:block;margin:5px 0}.topbar-inner{padding:14px 17px;gap:12px}.brand{font-size:12px}.status{font-size:9px}.hero:before{font-size:10px;letter-spacing:.13em}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+@page{size:A4;margin:16mm}
+@media print{
+  :root{--ink:#111;--muted:#444;--line:#ccc}
+  html{scroll-behavior:auto}body{background:white;font:10pt/1.5 Arial,sans-serif;color:#111}
+  .skip,.topbar,.sidebar,.footer{display:none!important}.layout{display:block;padding:0;max-width:none}article{border:0;box-shadow:none;border-radius:0;overflow:visible}
+  .hero{background:none;color:#111;padding:0 0 20px;border-top:3px solid #096d64}.hero:before{color:#096d64;margin:12px 0;font-size:8pt}
+  h1{font-size:26pt;max-width:none;margin-bottom:14px}.metadata,.metadata strong{color:#333;font-size:9pt}.metadata{border-color:#bbb;padding-top:12px}.metadata code{color:#111;background:none;border-color:#ccc}
+  .chapter{padding:22px 0;border-bottom:1px solid #bbb}.chapter:last-child{border:0}h2{font-size:18pt;margin:0 0 14px}h3,.phase>h3{font-size:13pt}h4{font-size:10pt}
+  h1,h2,h3,h4{break-after:avoid}p,li{orphans:3;widows:3}p{margin-bottom:12px}ul{margin:10px 0 16px}li{margin-bottom:6px}
+  .table-scroll{overflow:visible;border-radius:0;margin:15px 0;border-color:#aaa}table{min-width:0;width:100%;font-size:8.5pt;line-height:1.4}thead{display:table-header-group;background:#eee;color:#111}thead th{font-size:8pt;letter-spacing:0;color:#111}th,td{padding:8px 9px}tbody th{width:20%}tr{break-inside:avoid}
+  .phase{padding:16px 16px 0;margin:18px 0;background:none;border-color:#bbb;border-top-color:#096d64;border-radius:0}.phase li{font-size:10pt}.completion{font-size:9pt}
+  .recommendation,.verification{background:#f5f5f5;border-radius:0;padding:12px 15px;font-size:10pt}.verification{break-inside:avoid}
+  code{font-size:8.5pt;background:none}a{color:#164f59;text-decoration:underline}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#review-content">Skip to review</a>
+<div class="topbar"><div class="topbar-inner"><span class="brand"><span class="mark" aria-hidden="true"></span>FrostStream</span><span class="topbar-context">Engineering / architecture</span><span class="status">Proposal · for review</span></div></div>
+<div class="layout">
+<aside class="sidebar" aria-label="Document navigation">
+<p class="sidebar-label">Inside this review</p>
+<nav aria-label="Review sections"><a href="#1-assessment-and-recommendation"><span class="nav-number">01</span><span>Assessment and recommendation</span></a>
+<a href="#2-target-architecture"><span class="nav-number">02</span><span>Target architecture</span></a>
+<a href="#3-staged-refactor"><span class="nav-number">03</span><span>Staged refactor</span></a>
+<a href="#4-acceptance-and-verification"><span class="nav-number">04</span><span>Acceptance and verification</span></a>
+<a href="#5-review-decisions-and-document-deliverables"><span class="nav-number">05</span><span>Review decisions and document deliverables</span></a></nav>
+<div class="sidebar-note"><strong>One shared application.<br>Two deployment modes.</strong>Assessment, implementation phases, and acceptance criteria for engineering review.<br><br>Baseline <code>5d610cb</code><br>October 4, 2026</div>
+<a class="source-link" href="full-lite-review.md">Read the Markdown source ↗</a>
+</aside>
+<main><article id="review-content" aria-label="Full and Lite architecture review"><header class="hero"><h1 id="froststream-full-lite-architecture-review-and-refactor-proposal">FrostStream Full/Lite architecture review and refactor proposal</h1><p class="metadata"><strong>Review baseline:</strong> <code>5d610cb</code><br/>
+<strong>Review date:</strong> October 4, 2026<br/>
+<strong>Status:</strong> Proposed architecture — for review before application implementation.</p></header>
+
+<section aria-labelledby="1-assessment-and-recommendation" class="chapter" data-section="01"><h2 id="1-assessment-and-recommendation">1. Assessment and recommendation</h2>
+<p class="recommendation"><strong>Keep the shared application and refactor its infrastructure boundaries.</strong> The existing implementation already contains substantial work worth preserving: reusable backend modules, SQLite persistence, durable workflows, local messaging, encrypted secrets, backups, and deployment tests.</p>
+<p>Starting from scratch, I would build a modular application with two hosting arrangements:</p>
+<ul>
+<li><strong>Lite:</strong> one FrostStream application container plus one POT provider container.</li>
+<li><strong>Full:</strong> separately deployable application services using external infrastructure.</li>
+</ul>
+<p>The current architecture is moving in that direction. The remaining work is larger than changing Compose: search, live chat, authentication, startup sequencing, and messaging need explicit changes.</p>
+<div aria-label="1. Assessment and recommendation table — scroll horizontally on small screens" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th scope="col">Area</th>
+<th scope="col">Current finding</th>
+<th scope="col">Assessment</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<th scope="row">Application reuse</th>
+<td>Lite composes DataBridge, Worker, MediaProcessor, WebAPI, and Scheduler.</td>
+<td>Preserve this approach and the shared feature implementations.</td>
+</tr>
+<tr>
+<th scope="row">Lite packaging</th>
+<td>Generated Lite deployment includes separate frontend and Typesense containers, plus optional ClickHouse.</td>
+<td>Does not meet the requested two-container shape.</td>
+</tr>
+<tr>
+<th scope="row">Search</th>
+<td>DataBridge registers Typesense unconditionally; search handlers and the advanced-query parser produce Typesense-specific queries.</td>
+<td>Introduce a search boundary before adding SQLite search.</td>
+</tr>
+<tr>
+<th scope="row">Live chat</th>
+<td>Ingestion and playback queries directly use ClickHouse.</td>
+<td>Lite needs embedded storage behind shared ingestion and query logic.</td>
+</tr>
+<tr>
+<th scope="row">Authentication</th>
+<td>Lite automatically authenticates every request as Admin and bypasses authorization. Frontend logic suppresses login redirects.</td>
+<td>Replace with authenticated single-user access.</td>
+</tr>
+<tr>
+<th scope="row">SQLite foundation</th>
+<td>Provider-specific queries, append-only migrations, workflow persistence, startup reconciliation, secrets, and recoverable backups exist.</td>
+<td>Retain and extend; avoid rebuilding these systems.</td>
+</tr>
+<tr>
+<th scope="row">Durable queue</th>
+<td>Delivery polling loads candidates before filtering subjects in memory. No message-retention cleanup was found.</td>
+<td>Address contention and database growth before adding indexing and chat workloads.</td>
+</tr>
+<tr>
+<th scope="row">Transaction boundaries</th>
+<td>The SQLite reply outbox commits with inbox acknowledgment, separately from application-data transactions.</td>
+<td>Do not describe it as a complete application transactional outbox.</td>
+</tr>
+<tr>
+<th scope="row">Distributed operation</th>
+<td>DataBridge startup reconciles unfinished downloads globally; Quartz uses an in-memory runtime store hydrated from saved schedules.</td>
+<td>Support one active DataBridge and Scheduler initially. Queue groups alone do not establish safe replication.</td>
+</tr>
+<tr>
+<th scope="row">Code boundaries</th>
+<td>Lite references executable service projects; shared code still carries infrastructure dependencies. Startup relies on registration order and constructor side effects.</td>
+<td>Extract reusable libraries and make startup stages explicit.</td>
+</tr>
+<tr>
+<th scope="row">Installation</th>
+<td>Documented installation requires profile generation, development tools, and infrastructure credentials even for Lite.</td>
+<td>Ship an immediately usable Lite Compose file and prebuilt images.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Representative evidence includes <a href="../../src/App/LiteApp/Lite/LiteModule.cs">Lite composition</a>, <a href="../../src/App/SharedApp/DataBridge/DataBridgeModule.cs">DataBridge registration</a>, <a href="../../src/App/SharedApp/WebAPI/Auth/LiteAuthorization.cs">Lite authorization</a>, <a href="../../src/App/SharedApp/DataBridge/Messaging/SqliteDurableTransport.cs">SQLite durable delivery</a>, and <a href="../../src/App/SharedApp/DataBridge/Messaging/DownloadFlowStartupService.cs">download startup reconciliation</a>.</p>
+<p>The earlier <a href="../../SPLIT_PLAN/SIDE_PLAN.MD">Full/Lite plan</a> explicitly retained Typesense, optional ClickHouse, and automatic Admin access. Removing those dependencies and requiring login are revised requirements, rather than omissions against that earlier plan.</p>
+<p class="verification"><strong>Verification performed during the review:</strong> the unit-test project builds with zero warnings or errors; all 39 deployment-focused unit tests pass. Full integration tests, clean container installations, performance, and release CI results were not verified during this review. The findings above combine inspected implementation facts with architectural risk assessments; the performance targets below are proposals, not measured results.</p>
+</section><section aria-labelledby="2-target-architecture" class="chapter" data-section="02"><h2 id="2-target-architecture">2. Target architecture</h2>
+<div aria-label="2. Target architecture table — scroll horizontally on small screens" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th scope="col">Concern</th>
+<th scope="col">Lite</th>
+<th scope="col">Full</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<th scope="row">Application hosting</th>
+<td>One ASP.NET Core process; media tools run as subprocesses</td>
+<td>Separate WebAPI, DataBridge, Worker, MediaProcessor, and Scheduler hosts</td>
+</tr>
+<tr>
+<th scope="row">Frontend</th>
+<td>Shared static frontend served by FrostStream</td>
+<td>Existing separately deployable frontend</td>
+</tr>
+<tr>
+<th scope="row">Application records</th>
+<td>One local SQLite database</td>
+<td>PostgreSQL</td>
+</tr>
+<tr>
+<th scope="row">Search</th>
+<td>SQLite FTS5 and relational queries</td>
+<td>Typesense</td>
+</tr>
+<tr>
+<th scope="row">Live-chat archive</th>
+<td>SQLite tables</td>
+<td>Existing optional ClickHouse integration</td>
+</tr>
+<tr>
+<th scope="row">Requests and transient events</th>
+<td>In-process dispatch</td>
+<td>NATS</td>
+</tr>
+<tr>
+<th scope="row">Durable jobs</th>
+<td>SQLite-backed delivery</td>
+<td>JetStream</td>
+</tr>
+<tr>
+<th scope="row">Workflow execution</th>
+<td>Shared workflows with existing SQLite store</td>
+<td>Shared workflows with PostgreSQL store</td>
+</tr>
+<tr>
+<th scope="row">Identity</th>
+<td>One local account requiring login</td>
+<td>Existing Authentik/OIDC integration</td>
+</tr>
+<tr>
+<th scope="row">Permissions</th>
+<td>Authenticated local owner</td>
+<td>OpenFGA</td>
+</tr>
+<tr>
+<th scope="row">Secrets</th>
+<td>Encrypted SQLite values and persistent local keys</td>
+<td>OpenBao</td>
+</tr>
+<tr>
+<th scope="row">Media</th>
+<td>Files or configured storage targets</td>
+<td>Shared network storage or object storage for cross-host deployments</td>
+</tr>
+<tr>
+<th scope="row">Backups</th>
+<td>Embedded database snapshots plus key companions</td>
+<td>Existing PostgreSQL/OpenBao backup service</td>
+</tr>
+<tr>
+<th scope="row">Supporting containers</th>
+<td>POT provider only</td>
+<td>Existing infrastructure services</td>
+</tr>
+</tbody>
+</table></div>
+<p>Lite stores application records, accounts, sessions, encrypted secrets, jobs, schedules, search indexes, and chat records in SQLite. Media, sidecars, temporary files, and encryption keys remain outside the database in persistent storage.</p>
+<p>The SQLite database must reside on local storage. WAL permits concurrent readers but only one writer, and is unsuitable for a database shared across hosts over a network filesystem. <a href="https://www.sqlite.org/wal.html">SQLite WAL documentation</a></p>
+<h3 id="code-structure">Code structure</h3>
+<p>Use three layers beneath thin executable hosts:</p>
+<ul>
+<li><strong>Contracts and feature modules:</strong> application behavior, workflows, validation, DTOs, and infrastructure interfaces.</li>
+<li><strong>Infrastructure adapters:</strong> PostgreSQL/SQLite, NATS/local dispatch, Typesense/FTS5, ClickHouse/SQLite chat, OpenBao/local secrets, and identity/session implementations.</li>
+<li><strong>Composition roots:</strong> select compatible adapters and orchestrate startup.</li>
+</ul>
+<p>Keep one implementation of each feature. Provider-specific queries and migrations remain explicit; do not build a universal database or messaging abstraction.</p>
+<p>Retain Cleipnir, Quartz, the existing repositories, and the established job/run/lease identifiers. Replacing those systems would add migration risk without being necessary to achieve the deployment goals.</p>
+</section><section aria-labelledby="3-staged-refactor" class="chapter" data-section="03"><h2 id="3-staged-refactor">3. Staged refactor</h2>
+<section aria-labelledby="phase-1-establish-explicit-composition-and-ownership" class="phase"><h3 id="phase-1-establish-explicit-composition-and-ownership">Phase 1 — Establish explicit composition and ownership</h3>
+<ul>
+<li>Extract reusable modules from executable projects into libraries. Full hosts register their respective modules; Lite registers all modules.</li>
+<li>Move infrastructure registrations and dependencies out of feature libraries. The final Lite dependency graph should not require Full-only service clients.</li>
+<li>Resolve <code>Deployment:Mode</code> once into a validated deployment profile. Separate deployment topology, identity provider, single-user ownership, and feature availability.</li>
+<li>Replace schema work in service constructors and hosted-service list manipulation with an explicit sequence: schema initialization → owner initialization → download reconciliation → handler readiness → scheduling → HTTP readiness.</li>
+<li>Keep workflow watchdogs gated until reconciliation completes.</li>
+<li>Preserve existing configuration names where practical. Reject incompatible combinations with actionable startup errors.</li>
+</ul>
+<p class="completion"><strong>Completion:</strong> both existing deployments behave as before through the extracted modules, with architectural checks preventing new infrastructure dependencies in feature code.</p>
+</section><section aria-labelledby="phase-2-complete-the-sqlite-messaging-foundation" class="phase"><h3 id="phase-2-complete-the-sqlite-messaging-foundation">Phase 2 — Complete the SQLite messaging foundation</h3>
+<ul>
+<li>Introduce a provider-neutral durable-route catalog containing subscription, delivery, retry, and retention policies. Both SQLite and JetStream adapters consume it.</li>
+<li>Replace broad queue scans with persisted delivery routing and indexed, bounded claims. Use notification-assisted wakeups with bounded polling for recovery.</li>
+<li>Preserve leases, renewal, fencing, acknowledgment, idempotency, cancellation, and existing restart behavior.</li>
+<li>Add bounded retries and recorded terminal failures using the existing route policies.</li>
+<li>Clean completed payloads and inbox records safely. Preserve deduplication markers separately for the supported replay period and never discard active work.</li>
+<li>Add a transactional application outbox for durable consequences of database changes, particularly job dispatch and search-index updates. Write outbox records in the same application transaction; dispatch after commit with stable message IDs.</li>
+<li>Keep progress notifications transient. Do not turn every UI update into durable work.</li>
+</ul>
+<p class="completion"><strong>Completion:</strong> crashes between database commit, publication, processing, and acknowledgment cannot silently lose required work or duplicate committed effects.</p>
+</section><section aria-labelledby="phase-3-replace-lite-search-and-chat-infrastructure" class="phase"><h3 id="phase-3-replace-lite-search-and-chat-infrastructure">Phase 3 — Replace Lite search and chat infrastructure</h3>
+<h4 id="search">Search</h4>
+<p>Introduce <code>ISearchService</code> and <code>ISearchIndexer</code>. Shared handlers depend on these interfaces; provider adapters own query translation and index operations.</p>
+<ul>
+<li>Change the advanced-query parser to produce typed filters, rather than Typesense filter strings.</li>
+<li>Preserve current routes, search scopes, structured filters, sorting, pagination fields, caption/comment lookup, private-note behavior, and similar-media navigation.</li>
+<li>Use SQL for ordinary browsing and structured filtering; use FTS5 for text matching and weighted relevance. FTS5 provides prefix queries, BM25 ranking, and snippet support. <a href="https://www.sqlite.org/fts5.html">SQLite FTS5 documentation</a></li>
+<li>Keep indexes derived from canonical application records and stored sidecars. Feed updates through the durable outbox, with idempotent indexing and resumable rebuilds.</li>
+<li>Expose rebuild progress and temporary search unavailability explicitly. Library browsing and playback remain usable during rebuilds.</li>
+<li>Document differences in tokenization, ranking, and typo tolerance. Exact Typesense relevance is outside the agreed scope.</li>
+</ul>
+<h4 id="live-chat">Live chat</h4>
+<p>Introduce <code>ILiveChatStore</code> for ingestion batches, playback windows, deletion, and backfill.</p>
+<ul>
+<li>Share parsing, normalization, emote handling, and API responses.</li>
+<li>Add SQLite storage indexed by media, playback offset, and message identity.</li>
+<li>Use bounded ingestion batches and an ingestion generation so an incomplete replacement does not become the visible archive.</li>
+<li>Preserve window limits, ordering, deduplication, seek behavior, and restart recovery.</li>
+<li>Enable chat availability in Lite without requiring a ClickHouse connection.</li>
+</ul>
+<p class="completion"><strong>Completion:</strong> search and chat workflows operate with no Typesense or ClickHouse container or connection attempt.</p>
+</section><section aria-labelledby="phase-4-add-authenticated-single-user-lite" class="phase"><h3 id="phase-4-add-authenticated-single-user-lite">Phase 4 — Add authenticated single-user Lite</h3>
+<p>Introduce a local identity provider and SQLite-backed session storage while retaining the existing owner subject. Existing media ownership and preferences must remain attached to that identity.</p>
+<ul>
+<li>Provide first-run account setup protected by a single-use token obtained through a local container command.</li>
+<li>Use ASP.NET Core password hashing and cookie authentication with opaque, revocable server-side sessions. Keep persistent protection keys. <a href="https://learn.microsoft.com/en-us/aspnet/core/security/authentication/cookie?view=aspnetcore-10.0">ASP.NET Core cookie authentication</a></li>
+<li>Provide login, logout, password change, and local-command recovery. No registration, email delivery, or external identity service is required.</li>
+<li>Require authentication before granting owner access. Remove unconditional backend success policies and automatic identity injection.</li>
+<li>Retain CSRF protection, login throttling, cookie protections, and safe return-path validation.</li>
+<li>Preserve scoped casting and podcast access; those mechanisms must not become unrestricted owner sessions.</li>
+<li>Change frontend behavior to use authentication capabilities rather than assuming that Lite means “no login.”</li>
+</ul>
+<h4 id="public-interface-changes">Public interface changes</h4>
+<ul>
+<li>Extend <code>/api/system/capabilities</code> additively with authentication provider, login requirement, and setup state. Preserve existing capability fields.</li>
+<li>Keep <code>/api/auth/me</code> and the existing session/profile contract.</li>
+<li>Retain <code>/auth/login</code> as the browser entry point: local login for Lite, OIDC for Full.</li>
+<li>Add Lite setup, credential login, password change, and recovery operations.</li>
+<li>Route logout through a session abstraction so Lite does not depend on <code>NatsBffTicketStore</code>.</li>
+<li>Protect newly added feature endpoints by default; only explicitly public setup/login, capability, health, and scoped-token surfaces bypass ordinary session authentication.</li>
+</ul>
+<p class="completion"><strong>Completion:</strong> unauthenticated requests cannot access private application data, while the authenticated owner can use all supported Lite features.</p>
+</section><section aria-labelledby="phase-5-deliver-the-deployment-shapes" class="phase"><h3 id="phase-5-deliver-the-deployment-shapes">Phase 5 — Deliver the deployment shapes</h3>
+<h4 id="lite">Lite</h4>
+<ul>
+<li>Build the existing static Svelte frontend into the Lite image and serve it from ASP.NET Core. Preserve SPA deep links, immutable-asset caching, <code>/stream</code> routing, streaming responses, and authentication paths. <a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/static-files?view=aspnetcore-10.0">ASP.NET Core static files</a></li>
+<li>Publish exactly two services: <code>froststream</code> and <code>pot-provider</code>.</li>
+<li>Keep yt-dlp, FFmpeg, FFprobe, Deno, and the matching POT plugin packaged at image-build time.</li>
+<li>Default the published port to localhost; document explicit LAN binding and HTTPS configuration.</li>
+<li>Publish versioned amd64/arm64 images and a ready-to-run Compose file. End users need a container runtime, not .NET, Aspire, Python, or frontend build tools.</li>
+<li>Preserve existing database, backup, and key paths. Do not rename the existing database merely to correct its spelling.</li>
+<li>POT provider outages should report download failures without preventing library browsing or playback.</li>
+</ul>
+<h4 id="full">Full</h4>
+<ul>
+<li>Retain separate service hosts, external dependencies, and existing API/message contracts.</li>
+<li>Support explicit cross-host service addresses, credentials, TLS, storage configuration, and worker-local scratch paths.</li>
+<li>Enforce one active DataBridge and Scheduler using PostgreSQL advisory locks held for their lifetimes. Acquire ownership before reconciliation or scheduling; shut down on ownership loss.</li>
+<li>Support multiple workers and independently placed media processors. Multiple active API/control-plane instances and automatic failover remain outside this release.</li>
+<li>Add an explicit service authentication policy for MediaProcessor’s HTTP storage transfers. The current client supplies no service credentials, while the controller inherits Full’s restrictive fallback policy. Use an OIDC service client with an internal-storage audience and read/write scopes.</li>
+<li>Validate cross-host storage access. Host-local volumes cannot serve as shared media storage across machines.</li>
+<li>Correct outdated deployment and scaling documentation.</li>
+</ul>
+<p class="completion"><strong>Completion:</strong> Lite installs as two containers; Full completes a download and playback workflow with workers/processors on a different host from the control services.</p>
+</section><section aria-labelledby="phase-6-preserve-upgrades-and-release-evidence" class="phase"><h3 id="phase-6-preserve-upgrades-and-release-evidence">Phase 6 — Preserve upgrades and release evidence</h3>
+<ul>
+<li>Append migrations to existing SQLite and PostgreSQL histories; preserve released migration checksums and workflow serialization.</li>
+<li>Back up data and keys before upgrade. Rollback uses the preserved database, keys, configuration, and matching prior image.</li>
+<li>Rebuild SQLite search from canonical data before retiring the old Typesense service. Retain old volumes until verification completes.</li>
+<li>For existing Lite installations using ClickHouse, backfill SQLite from retained sidecars. Provide a one-time import utility for records whose sidecars are unavailable. Verify imported coverage before removing the dependency.</li>
+<li>Existing Lite installations enter protected account setup without changing owner identifiers or losing settings.</li>
+<li>Extend backup verification to cover local credentials, restored records, chat, and search integrity. Invalidate restored browser sessions.</li>
+<li>Update profile validators and runtime tests that currently require Typesense and a frontend container in Lite.</li>
+<li>Publish matching operating guides and release artifacts only after the complete installation matrix succeeds.</li>
+</ul>
+<p class="completion"><strong>Completion:</strong> existing Full and Lite installations upgrade without losing application data; deployment-mode conversion remains deferred.</p>
+</section></section><section aria-labelledby="4-acceptance-and-verification" class="chapter" data-section="04"><h2 id="4-acceptance-and-verification">4. Acceptance and verification</h2>
+<div aria-label="4. Acceptance and verification table — scroll horizontally on small screens" class="table-scroll" role="region" tabindex="0"><table>
+<thead>
+<tr>
+<th scope="col">Area</th>
+<th scope="col">Required evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<th scope="row">Container shape</th>
+<td>Lite starts from fresh storage using exactly FrostStream and POT provider, including search and chat.</td>
+</tr>
+<tr>
+<th scope="row">Dependency isolation</th>
+<td>Runtime canaries detect zero Lite connection attempts to removed infrastructure.</td>
+</tr>
+<tr>
+<th scope="row">Feature preservation</th>
+<td>Shared scenarios cover downloads, imports, metadata, playback, captions, comments, search, notes, schedules, notifications, backups, casting, and podcasts.</td>
+</tr>
+<tr>
+<th scope="row">Authentication</th>
+<td>Test setup races, anonymous access, login/logout, expiration, password changes, session revocation, CSRF, recovery, and scoped media tokens.</td>
+</tr>
+<tr>
+<th scope="row">Search</th>
+<td>Compare supported fields, operators, filters, sorting, and response contracts across providers; test index updates, deletes, rebuild interruption, and private-note isolation.</td>
+</tr>
+<tr>
+<th scope="row">Chat</th>
+<td>Test duplicate ingestion, interrupted replacement, backfill, seeks, ordering, bounded windows, deletion, and upgrade import.</td>
+</tr>
+<tr>
+<th scope="row">Reliability</th>
+<td>Kill processes around commit/publication/acknowledgment; verify deduplication, fencing, lease recovery, and preserved explicit-retry behavior.</td>
+</tr>
+<tr>
+<th scope="row">Queue maintenance</th>
+<td>Large completed histories must not cause unbounded polling scans; retention must preserve pending delivery and replay protection.</td>
+</tr>
+<tr>
+<th scope="row">Upgrades and recovery</th>
+<td>Upgrade representative existing databases; restore snapshots and complete key rings into another installation; verify credentials and application records.</td>
+</tr>
+<tr>
+<th scope="row">Full distribution</th>
+<td>Exercise two hosts, remote media storage, service authentication, network interruptions, worker scaling, and rejection of duplicate control-service instances.</td>
+</tr>
+<tr>
+<th scope="row">Packaging</th>
+<td>Install prebuilt images on Linux amd64 and arm64; verify frontend deep links, range playback, streaming progress, and packaged media tools.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Use a repeatable home-library benchmark containing <strong>10,000 media items and one million records each for captions, comments, and chat</strong>, on a documented 4-core, 8-GB machine with local SSD storage. Run it with two download jobs, one transcode, and online backup activity.</p>
+<p>Initial release targets are <strong>p95 search under one second</strong>, <strong>p95 bounded chat-window reads under 250 milliseconds</strong>, and no lost writes or unhandled database-lock failures. These are proposed acceptance targets, not measured claims. Record database size, process memory, queue latency, writer contention, and rebuild duration alongside results.</p>
+</section><section aria-labelledby="5-review-decisions-and-document-deliverables" class="chapter" data-section="05"><h2 id="5-review-decisions-and-document-deliverables">5. Review decisions and document deliverables</h2>
+<p>The following decisions are fixed by this review:</p>
+<ul>
+<li>Preserve everyday feature coverage in Lite.</li>
+<li>Require one local login account.</li>
+<li>Preserve existing Full and Lite data through upgrades.</li>
+<li>Permit documented search-ranking and typo-tolerance differences.</li>
+<li>Keep media and encryption keys outside SQLite.</li>
+<li>Preserve current download restart semantics: queued downloads stop; active downloads become interrupted; retry is explicit.</li>
+<li>Support distributed placement and worker scaling before control-plane high availability.</li>
+<li>Defer automated Lite-to-Full and Full-to-Lite conversion.</li>
+<li>Prioritize an ordinary home-library workload.</li>
+</ul>
+<p>The review is delivered in two equivalent documents:</p>
+<ul>
+<li><strong><code>full-lite-review.md</code></strong> — canonical Markdown containing the assessment, evidence, architecture, phases, and acceptance criteria.</li>
+<li><strong><code>full-lite-review.html</code></strong> — standalone styled rendering of the same content, with section navigation, a deployment comparison, findings table, and print layout.</li>
+</ul>
+<p>The HTML uses embedded CSS, readable typography, responsive tables, and accessible contrast. It works offline without external fonts, scripts, or diagram services. Source-code links resolve within this checkout; external reference links require an internet connection. Both versions distinguish observed facts, proposed changes, and unverified targets.</p>
+</section></article>
+<footer class="footer"><span>FrostStream · Architecture proposal · October 2026</span><span>Offline document · Print with your browser · <a href="#review-content">Back to top ↑</a></span></footer>
+</main></div>
+</body>
+</html>

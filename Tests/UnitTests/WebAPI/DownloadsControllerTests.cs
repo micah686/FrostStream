@@ -1,5 +1,5 @@
 using System.Security.Claims;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -22,7 +22,7 @@ public sealed class DownloadsControllerTests
     [Test]
     public async Task Download_Publishes_Video_Request_With_Default_Storage()
     {
-        var publisher = Substitute.For<IJetStreamPublisher>();
+        var publisher = Substitute.For<IDurableJobPublisher>();
         var controller = CreateController(publisher);
 
         var result = await controller.Download(new DownloadRequest
@@ -70,7 +70,7 @@ public sealed class DownloadsControllerTests
     [Test]
     public async Task Download_Publishes_SponsorBlock_Options()
     {
-        var publisher = Substitute.For<IJetStreamPublisher>();
+        var publisher = Substitute.For<IDurableJobPublisher>();
         var controller = CreateController(publisher);
 
         await controller.Download(new DownloadRequest
@@ -105,7 +105,7 @@ public sealed class DownloadsControllerTests
     [Test]
     public async Task Download_Returns_502_When_Publish_Fails()
     {
-        var publisher = Substitute.For<IJetStreamPublisher>();
+        var publisher = Substitute.For<IDurableJobPublisher>();
         publisher.PublishAsync(
                 Arg.Any<string>(),
                 Arg.Any<DownloadGroupRequested>(),
@@ -129,7 +129,7 @@ public sealed class DownloadsControllerTests
     [Test]
     public async Task Download_Rejects_Non_Http_Source_Url()
     {
-        var publisher = Substitute.For<IJetStreamPublisher>();
+        var publisher = Substitute.For<IDurableJobPublisher>();
         var controller = CreateController(publisher);
 
         var result = await controller.Download(new DownloadRequest
@@ -151,7 +151,7 @@ public sealed class DownloadsControllerTests
     [Test]
     public async Task Download_Rejects_Private_Ip_Source_Url()
     {
-        var publisher = Substitute.For<IJetStreamPublisher>();
+        var publisher = Substitute.For<IDurableJobPublisher>();
         var controller = CreateController(publisher);
 
         var result = await controller.Download(new DownloadRequest
@@ -169,7 +169,7 @@ public sealed class DownloadsControllerTests
             default);
     }
 
-    private static DownloadsController CreateController(IJetStreamPublisher publisher, IMessageBus? messageBus = null)
+    private static DownloadsController CreateController(IDurableJobPublisher publisher, IMessageBus? messageBus = null)
     {
         var clock = Substitute.For<IClock>();
         clock.GetCurrentInstant().Returns(Now);

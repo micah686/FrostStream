@@ -227,12 +227,13 @@ public sealed class OpenFgaProvisionerTests
     private static async Task RunAsync(OpenFgaProvisioner provisioner)
     {
         await ((IHostedService)provisioner).StartAsync(CancellationToken.None);
+        // Model ids are available before the final bootstrap write has completed.
+        await provisioner.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(5));
     }
 
     private static async Task WaitUntilProvisionedAsync(OpenFgaRuntimeState state)
     {
-        // Wait for the full flow (store + model + bootstrap tuples) to finish, which the model id
-        // signals. IsReady alone is true the instant a store id is known, even with a preset store.
+        // Check the resolved model identifier. RunAsync separately awaits bootstrap completion.
         for (var attempt = 0; attempt < 100 && string.IsNullOrEmpty(state.AuthorizationModelId); attempt++)
         {
             await Task.Delay(20);

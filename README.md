@@ -80,33 +80,32 @@ When using Aspire, you also need these prerequesites:
 
 ### Docker Compose
 
-The ready-to-run Compose deployment is in `src/App/docker-compose-artifacts`:
+Generate the ready-to-run Compose deployment from the app you want to run:
 
 ```bash
-cd src/App/docker-compose-artifacts
+FROSTSTREAM_ENV_FILE=/absolute/path/to/private.env bash src/App/FullApp/generate-compose.sh
+cd src/App/FullApp/docker-compose
 docker compose up -d --build
 ```
+
+Use `src/App/LiteApp/generate-compose.sh` and `src/App/LiteApp/docker-compose` for Lite.
 
 Review `.env` before exposing a deployment beyond your machine. It contains deployment-specific
 credentials, public URLs, and service settings. The default frontend URL is
 <http://localhost:25000>.
 
-The Compose files are generated. Regenerate them after changing AppHost configuration:
-The env is regenerated on generateCompose.sh, so be careful.
-```bash
-cd src/App
-bash generateCompose.sh
-(or generateCompose.ps1 on windows)
-```
-
-
 ### Run for development (Aspire)
 
 ```bash
-dotnet run --project src/App/AppHost/AppHost.csproj
+dotnet run --project src/App/FullApp/AppHostFull/AppHostFull.csproj
 ```
 
-AppHost loads [`aspire-development.env`](src/App/AppHost/aspire-development.env). The defaults are
+For Lite, run `dotnet run --project src/App/LiteApp/AppHostLite/AppHostLite.csproj`.
+The app-specific solutions are `src/App/FullApp/FullApp.slnx` and
+`src/App/LiteApp/LiteApp.slnx`; the root solution remains available for work
+across both apps.
+
+AppHost loads [`aspire-development.env`](src/App/SharedApp/AppHostCommon/aspire-development.env). The defaults are
 for local development only. In multi-user mode, the development Authentik account is
 `admin@localhost` / `froststream-dev-admin`.
 
@@ -140,7 +139,7 @@ Everything — services, containers, config — is orchestrated by the AppHost:
 
 ## Configuration and data
 
-- `src/App/AppHost/aspire-development.env` is the source of truth for local development settings.
+- `src/App/SharedApp/AppHostCommon/aspire-development.env` is the source of truth for local development settings.
 - `FROSTSTREAM_STORAGE_ROOT` controls the shared host media directory; the default is `<repo>/data`.
 - `FROSTSTREAM_BACKUP_ROOT` controls the Compose backup directory; its default is `./backups` beside the Compose file.
 - `FROSTSTREAM_OPENBAO_BOOTSTRAP_ROOT` controls where OpenBao recovery material is stored. For Compose, it defaults to the ignored `./openbao-bootstrap` directory.
@@ -191,7 +190,7 @@ THIS KEY IS NOT BACKED UP WITH THE STANDARD BACKUPS
 
 ### Port scheme
 
-All host ports live in one registry ([`src/App/AppHost/Ports.cs`](src/App/AppHost/Ports.cs)) and follow a two-range convention — the same numbers apply in development and in the compose deployment:
+All host ports live in one registry ([`src/App/SharedApp/AppHostCommon/Ports.cs`](src/App/SharedApp/AppHostCommon/Ports.cs)) and follow a two-range convention — the same numbers apply in development and in the compose deployment:
 
 | Range                | Meaning                                                                            | Ports                                                                                                                                                                                      |
 | -------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -205,7 +204,7 @@ External ports are overridable via `PORT_*` variables in the generated Aspire de
 
 Live chat replay is **opt-in**: it adds a ClickHouse container, which most deployments do not need. Chat volumes are large enough (a long stream can produce well over a million messages) that PostgreSQL is the wrong store for them.
 
-Turn it on in `src/App/AppHost/aspire-development.env`:
+Turn it on in `src/App/SharedApp/AppHostCommon/aspire-development.env`:
 
 ```bash
 LIVE_CHAT_ENABLED="true"
@@ -228,16 +227,9 @@ That queues a sweep of archived live streams with no ingested chat. Add `?mediaG
 ```
 ├── src/
 │   ├── App/
-│   │   ├── AppHost/                  # Aspire orchestrator + all env/port/secret wiring
-│   │   ├── WebAPI/                   # REST API
-│   │   ├── Worker/                   # yt-dlp + storage execution
-│   │   ├── DataBridge/               # persistence, sagas, migrations
-│   │   ├── Scheduler/                # Quartz jobs
-│   │   ├── Frontend/                 # SvelteKit app
-│   │   ├── BackupService/            # pgBackRest engine + OpenBao export + restore wizard
-│   │   ├── Shared/                   # shared contracts & options
-│   │   ├── StorageExtensions/        # Extensions for FluentStorage, mainly NFS/SMB/CIFS
-│   │   └── docker-compose-artifacts/ # generated compose deployment
+│   │   ├── LiteApp/                  # Lite host and generated Lite Compose profile
+│   │   ├── FullApp/                  # Full-only services and generated Full profile
+│   │   └── SharedApp/                # shared services, frontend, host helpers and deployment tools
 │   └── Libs/                         # reusable libraries (Conduit.NATS, …)
 ├── Tests/                            # unit tests
 ├── docs/                             # design notes & feature inventory
@@ -263,14 +255,14 @@ FrostStream is under active development. The core download → ingest → librar
 Run the appropriate checks for the code you modify. For the frontend:
 
 ```bash
-cd src/App/Frontend
+cd src/App/SharedApp/Frontend
 pnpm run check
 ```
 
 For the AppHost and backend projects:
 
 ```bash
-dotnet build src/App/AppHost/AppHost.csproj
+dotnet build src/App/FullApp/AppHostFull/AppHostFull.csproj
 ```
 
 ## Security note

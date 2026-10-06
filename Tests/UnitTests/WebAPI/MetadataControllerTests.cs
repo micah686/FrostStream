@@ -1,4 +1,4 @@
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -349,7 +349,7 @@ public sealed class MetadataControllerTests
     public async Task RefreshAccountAssets_Gets_Account_And_Publishes_Channel_Asset_Refresh()
     {
         var bus = Substitute.For<IMessageBus>();
-        var publisher = Substitute.For<IJetStreamPublisher>();
+        var publisher = Substitute.For<IDurableJobPublisher>();
         var controller = CreateController(bus, publisher);
 
         bus.RequestAsync<MetadataAccountGetRequestMessage, MetadataAccountGetResponseMessage>(
@@ -392,7 +392,7 @@ public sealed class MetadataControllerTests
     public async Task RefreshAccountAssets_Returns_400_When_Account_Has_No_Url()
     {
         var bus = Substitute.For<IMessageBus>();
-        var publisher = Substitute.For<IJetStreamPublisher>();
+        var publisher = Substitute.For<IDurableJobPublisher>();
         var controller = CreateController(bus, publisher);
 
         bus.RequestAsync<MetadataAccountGetRequestMessage, MetadataAccountGetResponseMessage>(
@@ -456,14 +456,14 @@ public sealed class MetadataControllerTests
         return await controller.Get(mediaGuid, CancellationToken.None);
     }
 
-    private static MetadataController CreateController(IMessageBus bus, IJetStreamPublisher? publisher = null)
+    private static MetadataController CreateController(IMessageBus bus, IDurableJobPublisher? publisher = null)
     {
         var clock = Substitute.For<IClock>();
         clock.GetCurrentInstant().Returns(Now);
 
         return new MetadataController(
             bus,
-            publisher ?? Substitute.For<IJetStreamPublisher>(),
+            publisher ?? Substitute.For<IDurableJobPublisher>(),
             clock,
             Substitute.For<ILogger<MetadataController>>());
     }

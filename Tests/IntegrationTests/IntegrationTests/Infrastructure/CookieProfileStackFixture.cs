@@ -1,9 +1,11 @@
+using static Conduit.NATS.ServiceCollectionExtensions;
+using Shared.Messaging.Adapters;
 using DataBridge.Data;
 using DataBridge.Messaging;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using FluentMigrator.Runner;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -164,7 +166,7 @@ public sealed class CookieProfileStackFixture : IAsyncDisposable
                 .WithGlobalConnectionString(PostgresConnectionString)
                 .ScanIn(typeof(CookieProfileConsumerService).Assembly).For.Migrations());
 
-        builder.Services.AddNats(options =>
+        builder.Services.AddNatsApplicationTransport().AddNats(options =>
         {
             options.Url = NatsUrl;
             options.EnableTopologyProvisioning = false;

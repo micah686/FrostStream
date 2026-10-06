@@ -1,5 +1,5 @@
 using System.Security.Claims;
-using Conduit.NATS;
+using FrostStream.ApplicationContracts;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Http;
