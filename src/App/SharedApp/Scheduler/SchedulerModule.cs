@@ -55,8 +55,11 @@ public static class SchedulerModule
 
         builder.Services.AddQuartz(q =>
         {
-            q.SchedulerName = "FrostStream Scheduler";
-            q.SchedulerId = "froststream-scheduler";
+            q.ConfigureScheduler(options =>
+            {
+                options.InstanceName = "FrostStream Scheduler";
+                options.InstanceId = "froststream-scheduler";
+            });
             q.UseSimpleTypeLoader();
             q.UseInMemoryStore();
             q.UseDefaultThreadPool(threadPool =>

@@ -105,10 +105,8 @@ internal sealed class SqliteSchemaInitializer(SqliteConnectionFactory factory, I
 
     private static object NextCron(JsonElement row, Instant now)
     {
-        var cron = new CronExpression(row.GetProperty("cron").GetString()!)
-        {
-            TimeZone = TimeZoneInfo.FindSystemTimeZoneById(row.GetProperty("timezone").GetString()!)
-        };
+        var cron = CronExpression.Parse(row.GetProperty("cron").GetString()!)
+            .WithTimeZone(TimeZoneInfo.FindSystemTimeZoneById(row.GetProperty("timezone").GetString()!));
         var next = cron.GetNextValidTimeAfter(now.ToDateTimeOffset());
         return next is null ? DBNull.Value : SqliteStorageEncoding.ToUnixMicroseconds(Instant.FromDateTimeOffset(next.Value));
     }

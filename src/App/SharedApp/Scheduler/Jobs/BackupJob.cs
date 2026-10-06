@@ -8,6 +8,6 @@ namespace Scheduler.Jobs;
 [DisallowConcurrentExecution]
 public sealed class BackupJob(IBackupScheduler task, IClock clock) : IJob
 {
-    public Task Execute(IJobExecutionContext context)
-        => task.QueueBackupAsync(ScheduledJobContextFactory.Create(context, clock), context.CancellationToken);
+    public ValueTask Execute(IJobExecutionContext context, CancellationToken cancellationToken)
+        => new(task.QueueBackupAsync(ScheduledJobContextFactory.Create(context, clock), cancellationToken));
 }
