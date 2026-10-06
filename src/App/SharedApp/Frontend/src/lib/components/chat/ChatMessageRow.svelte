@@ -6,7 +6,7 @@
     parseMembershipBadge,
     NEW_MEMBER_COLOR,
     type ChatMessage
-  } from '$lib/api/liveChat';
+  } from '#lib/api/liveChat.js';
   import ChatFragments from './ChatFragments.svelte';
 
   let {

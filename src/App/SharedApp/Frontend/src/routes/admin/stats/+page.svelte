@@ -13,11 +13,11 @@
     Tv,
     X
   } from '@lucide/svelte';
-  import { Select } from '$lib/components/ui';
-  import StatisticsChart from '$lib/components/admin/StatisticsChart.svelte';
-  import { categoricalPalette, readChartTheme, stateColors, withAlpha, type ChartTheme } from '$lib/charts/theme';
-  import { theme } from '$lib/stores/theme';
-  import { formatBytes } from '$lib/media';
+  import { Select } from '#lib/components/ui/index.js';
+  import StatisticsChart from '#lib/components/admin/StatisticsChart.svelte';
+  import { categoricalPalette, readChartTheme, stateColors, withAlpha, type ChartTheme } from '#lib/charts/theme.js';
+  import { theme } from '#lib/stores/theme.js';
+  import { formatBytes } from '#lib/media.js';
   import {
     getChannelStatistics,
     getChannelStatisticsByAccount,
@@ -33,7 +33,7 @@
     type DownloadHistoryBucket,
     type StatisticsBucket,
     type StatisticsOverview
-  } from '$lib/api/statistics';
+  } from '#lib/api/statistics.js';
 
   // "All download activity" widens its bucket as the requested span grows so the point count stays
   // bounded no matter how many years of history exist — see pickBucketForSpan. The lookback itself is

@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { Modal } from '$lib/components/ui';
+  import { Modal } from '#lib/components/ui/index.js';
   import { ArrowLeft, ChevronRight, CircleAlert, Folder } from '@lucide/svelte';
-  import { browseImportIncoming } from '$lib/api/imports';
+  import { browseImportIncoming } from '#lib/api/imports.js';
 
   interface Props { open: boolean; workerTag?: string; initialPath?: string; onselect: (path: string) => void; }
   let { open = $bindable(false), workerTag = '', initialPath = '', onselect }: Props = $props();

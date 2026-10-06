@@ -1,4 +1,4 @@
-import { env } from '$env/dynamic/public';
+import { PUBLIC_CAST_BASE_URL } from '$app/env/public';
 
 const SDK_URL = 'https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1';
 
@@ -124,8 +124,8 @@ export async function startBrowserCast(
     throw new Error(`Cast token request failed (${tokenResponse.status}).`);
   }
 
-  const { token } = (await tokenResponse.json()) as { token: string };
-  const base = env.PUBLIC_CAST_BASE_URL || window.location.origin;
+  const { token } = await tokenResponse.json() as { token: string };
+  const base = PUBLIC_CAST_BASE_URL || window.location.origin;
   // The selected storage/version pin which stored copy plays, matching the watch page.
   const sourceQuery = new URLSearchParams();
   if (storageKey) {
@@ -151,7 +151,7 @@ export async function startBrowserCast(
     throw new Error('The Google Cast SDK failed to initialize.');
   }
 
-  const session = framework.CastContext.getInstance().getCurrentSession() ?? (await requestSession(framework));
+  const session = framework.CastContext.getInstance().getCurrentSession() ?? await requestSession(framework);
   if (!session) {
     return;
   }

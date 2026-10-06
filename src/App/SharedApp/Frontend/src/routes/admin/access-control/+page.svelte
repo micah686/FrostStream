@@ -3,10 +3,10 @@
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import { ArrowLeft, Copy, Edit, Trash2, X } from '@lucide/svelte';
-  import { Modal } from '$lib/components/ui';
-  import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
-  import BundleManagementSection from '$lib/components/admin/BundleManagementSection.svelte';
-  import { ApiRequestError } from '$lib/api/http';
+  import { Modal } from '#lib/components/ui/index.js';
+  import ConfirmDeleteModal from '#lib/components/admin/ConfirmDeleteModal.svelte';
+  import BundleManagementSection from '#lib/components/admin/BundleManagementSection.svelte';
+  import { ApiRequestError } from '#lib/api/http.js';
   import {
     checkEffectiveAccess,
     createAccessPolicy,
@@ -23,7 +23,7 @@
     type EffectiveAccess,
     type EffectiveAccessCheck,
     type MediaSummary
-  } from '$lib/api/accessControl';
+  } from '#lib/api/accessControl.js';
   import {
     listBundles,
     listCatalog,
@@ -32,7 +32,7 @@
     type CatalogEntry,
     type DirectoryEntry,
     type GranteeType
-  } from '$lib/api/bundles';
+  } from '#lib/api/bundles.js';
 
   type Tab = 'policies' | 'bundles' | 'effective';
 

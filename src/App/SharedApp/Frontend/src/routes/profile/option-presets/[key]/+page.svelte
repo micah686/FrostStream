@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { CircleAlert } from '@lucide/svelte';
-  import OptionPresetForm from '$lib/components/profile/OptionPresetForm.svelte';
-  import { getOptionPreset, type OptionPreset } from '$lib/api/optionPresets';
+  import OptionPresetForm from '#lib/components/profile/OptionPresetForm.svelte';
+  import { getOptionPreset, type OptionPreset } from '#lib/api/optionPresets.js';
 
   let { params } = $props();
 

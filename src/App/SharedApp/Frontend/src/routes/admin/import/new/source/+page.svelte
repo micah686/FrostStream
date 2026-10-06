@@ -1,14 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { Select } from '$lib/components/ui';
+  import { Select } from '#lib/components/ui/index.js';
   import { ArrowLeft, FolderOpen } from '@lucide/svelte';
-  import FolderPickerModal from '$lib/components/admin/FolderPickerModal.svelte';
-  import ImportNotice from '$lib/components/admin/ImportNotice.svelte';
-  import ImportWizardStepper from '$lib/components/admin/ImportWizardStepper.svelte';
-  import { createImportSession } from '$lib/api/imports';
-  import { listStorage } from '$lib/api/storage';
-  import { listWorkers, type WorkerInfo } from '$lib/api/workers';
+  import FolderPickerModal from '#lib/components/admin/FolderPickerModal.svelte';
+  import ImportNotice from '#lib/components/admin/ImportNotice.svelte';
+  import ImportWizardStepper from '#lib/components/admin/ImportWizardStepper.svelte';
+  import { createImportSession } from '#lib/api/imports.js';
+  import { listStorage } from '#lib/api/storage.js';
+  import { listWorkers, type WorkerInfo } from '#lib/api/workers.js';
 
   const card = 'card border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6';
   let storageKey = $state(''); let workerTag = $state(''); let subPath = $state('');

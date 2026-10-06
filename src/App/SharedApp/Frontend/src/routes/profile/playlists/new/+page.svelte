@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { ArrowLeft, CircleAlert } from '@lucide/svelte';
-  import { createUserPlaylist } from '$lib/api/userPlaylists';
+  import { createUserPlaylist } from '#lib/api/userPlaylists.js';
 
   let name = $state('');
   let description = $state('');

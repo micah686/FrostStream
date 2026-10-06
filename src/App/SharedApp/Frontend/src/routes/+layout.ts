@@ -1,5 +1,5 @@
 import { error, redirect } from '@sveltejs/kit';
-import { configureFrontendAccess, requiresLogin, type SystemCapabilities } from '$lib/frontendAccess';
+import { configureFrontendAccess, requiresLogin, type SystemCapabilities } from '#lib/frontendAccess.js';
 import type { LayoutLoad } from './$types';
 
 export const ssr = false;

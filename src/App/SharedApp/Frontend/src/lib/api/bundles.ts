@@ -1,4 +1,4 @@
-import { getJson, sendEmpty, sendJson } from '$lib/api/http';
+import { getJson, sendEmpty, sendJson } from '#lib/api/http.js';
 
 export type GranteeType = 'user' | 'group';
 

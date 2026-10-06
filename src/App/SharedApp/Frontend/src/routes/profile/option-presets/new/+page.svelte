@@ -1,5 +1,5 @@
 <script lang="ts">
-  import OptionPresetForm from '$lib/components/profile/OptionPresetForm.svelte';
+  import OptionPresetForm from '#lib/components/profile/OptionPresetForm.svelte';
 </script>
 
 <svelte:head>

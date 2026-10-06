@@ -8,8 +8,8 @@
     Search,
     Users
   } from '@lucide/svelte';
-  import { listAccounts, type AccountSummary } from '$lib/api/accounts';
-  import { accentFor, formatCount, initialsFor } from '$lib/media';
+  import { listAccounts, type AccountSummary } from '#lib/api/accounts.js';
+  import { accentFor, formatCount, initialsFor } from '#lib/media.js';
 
   const pageSize = 36;
 

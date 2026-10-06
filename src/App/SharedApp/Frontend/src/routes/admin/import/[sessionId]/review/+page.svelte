@@ -2,9 +2,9 @@
   import { onMount } from 'svelte';
   import { page } from '$app/state';
   import { ArrowLeft } from '@lucide/svelte';
-  import ImportNotice from '$lib/components/admin/ImportNotice.svelte';
-  import ImportWizardStepper from '$lib/components/admin/ImportWizardStepper.svelte';
-  import { getImportSession, listAllImportSessionItems, type ImportSession, type ImportSessionItem } from '$lib/api/imports';
+  import ImportNotice from '#lib/components/admin/ImportNotice.svelte';
+  import ImportWizardStepper from '#lib/components/admin/ImportWizardStepper.svelte';
+  import { getImportSession, listAllImportSessionItems, type ImportSession, type ImportSessionItem } from '#lib/api/imports.js';
   const card = 'card border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6';
   const sessionId = $derived(page.params.sessionId ?? '');
   let session = $state<ImportSession | null>(null); let items = $state<ImportSessionItem[]>([]); let loading = $state(false); let error = $state<string | null>(null);

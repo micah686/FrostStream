@@ -30,10 +30,11 @@ public sealed class QuartzJobRegistrar(ILogger<QuartzJobRegistrar> logger, Share
         await scheduler.ScheduleJob(
             QuartzScheduleFactory.BuildJob(task),
             QuartzScheduleFactory.BuildTrigger(task),
+            default,
             cancellationToken);
         logger.LogInformation("Registered schedule {ScheduleKey} ({TaskType}) in Quartz.", task.Key, task.TaskType);
     }
 
-    public Task DeleteAsync(IScheduler scheduler, string scheduleKey, CancellationToken cancellationToken = default)
-        => scheduler.DeleteJob(JobKeys.ForSchedule(scheduleKey), cancellationToken);
+    public async Task DeleteAsync(IScheduler scheduler, string scheduleKey, CancellationToken cancellationToken = default)
+        => _ = await scheduler.DeleteJob(JobKeys.ForSchedule(scheduleKey), cancellationToken);
 }

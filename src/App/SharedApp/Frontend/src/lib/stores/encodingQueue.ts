@@ -4,9 +4,9 @@ import {
   renditionQueueStreamUrl,
   type RenditionQueueItem,
   type RenditionQueueListParams
-} from '$lib/api/encodingQueue';
-import type { RenditionProgressFrame } from '$lib/api/channelAudio';
-import { readEventStream, type EventStreamHandlers } from '$lib/sse/eventStream';
+} from '#lib/api/encodingQueue.js';
+import type { RenditionProgressFrame } from '#lib/api/channelAudio.js';
+import { readEventStream, type EventStreamHandlers } from '#lib/sse/eventStream.js';
 
 export interface EncodingQueueRow {
   item: RenditionQueueItem;

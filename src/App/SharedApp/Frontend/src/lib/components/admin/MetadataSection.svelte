@@ -1,14 +1,14 @@
 <script lang="ts">
   import { CircleAlert, CircleCheck, Database, Repeat, Trash2 } from '@lucide/svelte';
-  import { Select } from '$lib/components/ui';
-  import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
+  import { Select } from '#lib/components/ui/index.js';
+  import ConfirmDeleteModal from '#lib/components/admin/ConfirmDeleteModal.svelte';
   import {
     deleteMedia,
     deleteMediaForStorageKey,
     getMetadataVersions,
     triggerDatabaseReindex,
     triggerReindex
-  } from '$lib/api/metadata';
+  } from '#lib/api/metadata.js';
 
   const cardClass = 'card border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6';
 

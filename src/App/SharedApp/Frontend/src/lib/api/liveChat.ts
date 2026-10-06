@@ -1,4 +1,4 @@
-import { getJson } from '$lib/api/http';
+import { getJson } from '#lib/api/http.js';
 
 /** One renderable piece of a chat message; archived chats from any platform share this shape. */
 export type ChatFragment =

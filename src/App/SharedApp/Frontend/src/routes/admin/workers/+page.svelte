@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { RefreshCw } from '@lucide/svelte';
-  import { listWorkers, type WorkerInfo } from '$lib/api/workers';
+  import { listWorkers, type WorkerInfo } from '#lib/api/workers.js';
 
   let workers = $state<WorkerInfo[]>([]);
   let loading = $state(false);

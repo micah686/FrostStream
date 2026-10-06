@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { requiresLogin } from '$lib/frontendAccess';
+  import { requiresLogin } from '#lib/frontendAccess.js';
   import { page } from '$app/state';
   import { onDestroy } from 'svelte';
-  import { Select } from '$lib/components/ui';
+  import { Select } from '#lib/components/ui/index.js';
   import {
     ChevronDown,
     ChevronLeft,
@@ -19,8 +19,8 @@
     Music,
     Play
   } from '@lucide/svelte';
-  import { accentFor, formatBytes, formatCount, formatDuration, formatRelativeDate, formatViews, initialsFor } from '$lib/media';
-  import { generateMissingAccountThumbnails, refreshAccountAssets } from '$lib/api/metadata';
+  import { accentFor, formatBytes, formatCount, formatDuration, formatRelativeDate, formatViews, initialsFor } from '#lib/media.js';
+  import { generateMissingAccountThumbnails, refreshAccountAssets } from '#lib/api/metadata.js';
   import {
     createPodcastFeedLink,
     encodeChannelAudio,
@@ -30,16 +30,16 @@
     type ChannelAudioEncodedStatusResponse,
     type ChannelAudioStatus,
     type RenditionProgressFrame
-  } from '$lib/api/channelAudio';
-  import { readEventStream } from '$lib/sse/eventStream';
-  import TargetNotePanel from '$lib/components/TargetNotePanel.svelte';
-  import VideoJs10AudioPlayer from '$lib/components/players/VideoJs10AudioPlayer.svelte';
+  } from '#lib/api/channelAudio.js';
+  import { readEventStream } from '#lib/sse/eventStream.js';
+  import TargetNotePanel from '#lib/components/TargetNotePanel.svelte';
+  import VideoJs10AudioPlayer from '#lib/components/players/VideoJs10AudioPlayer.svelte';
   import {
     getChannelStatistics,
     listChannelStatistics,
     type ChannelStatisticsDetail,
     type ChannelStatisticsSummary
-  } from '$lib/api/statistics';
+  } from '#lib/api/statistics.js';
 
   interface Account {
     accountId: number;

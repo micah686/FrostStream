@@ -8,15 +8,15 @@
     Plus,
     Trash2
   } from '@lucide/svelte';
-  import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
-  import PlaylistItemsManager from '$lib/components/profile/PlaylistItemsManager.svelte';
-  import { formatRelativeDate } from '$lib/media';
+  import ConfirmDeleteModal from '#lib/components/admin/ConfirmDeleteModal.svelte';
+  import PlaylistItemsManager from '#lib/components/profile/PlaylistItemsManager.svelte';
+  import { formatRelativeDate } from '#lib/media.js';
   import {
     deleteUserPlaylist,
     getUserPlaylist,
     listUserPlaylists,
     type UserPlaylist
-  } from '$lib/api/userPlaylists';
+  } from '#lib/api/userPlaylists.js';
 
 
   let playlists = $state<UserPlaylist[]>([]);

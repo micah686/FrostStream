@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { goto } from '$app/navigation';
-  import { Select } from '$lib/components/ui';
+  import { Select } from '#lib/components/ui/index.js';
   import {
     ArrowLeft,
     Bell,
@@ -24,7 +24,7 @@
     upsertNotificationProviderSecrets,
     type NotificationEventKey,
     type NotificationProvider
-  } from '$lib/api/notifications';
+  } from '#lib/api/notifications.js';
 
   interface Props {
     mode: 'create' | 'update';

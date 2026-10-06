@@ -1,13 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { ArrowLeft, Check, CircleAlert } from '@lucide/svelte';
-  import PlaylistItemsManager from '$lib/components/profile/PlaylistItemsManager.svelte';
-  import TargetNotePanel from '$lib/components/TargetNotePanel.svelte';
+  import PlaylistItemsManager from '#lib/components/profile/PlaylistItemsManager.svelte';
+  import TargetNotePanel from '#lib/components/TargetNotePanel.svelte';
   import {
     getUserPlaylist,
     updateUserPlaylist,
     type UserPlaylist
-  } from '$lib/api/userPlaylists';
+  } from '#lib/api/userPlaylists.js';
 
   let { params } = $props();
 

@@ -36,6 +36,9 @@ public sealed class LiteSchedulerStartupService(
         }
     }
 
-    public Task StopAsync(CancellationToken cancellationToken)
-        => scheduler is null ? Task.CompletedTask : scheduler.Shutdown(waitForJobsToComplete: true, cancellationToken);
+    public async Task StopAsync(CancellationToken cancellationToken)
+    {
+        if (scheduler is not null)
+            await scheduler.Shutdown(waitForJobsToComplete: true, cancellationToken);
+    }
 }

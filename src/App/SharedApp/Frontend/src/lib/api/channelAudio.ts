@@ -1,4 +1,4 @@
-import { getJson, sendJson } from '$lib/api/http';
+import { getJson, sendJson } from '#lib/api/http.js';
 
 export type AudioRenditionStatus = 'Pending' | 'Processing' | 'Ready' | 'Failed';
 

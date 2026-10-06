@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { ArrowLeft, Check } from '@lucide/svelte';
-  import { customCss, setCustomCss, setCustomCssEnabled, themes, themeLabels } from '$lib/stores/theme';
+  import { customCss, setCustomCss, setCustomCssEnabled, themes, themeLabels } from '#lib/stores/theme.js';
 
   type Field = { key: string; label: string; color?: boolean };
 

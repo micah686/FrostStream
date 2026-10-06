@@ -131,10 +131,8 @@ public sealed class ScheduledTasksRepository(DataBridgeDbContext db, IClock cloc
             return null;
         }
 
-        var cron = new CronExpression(entity.Cron)
-        {
-            TimeZone = TimeZoneInfo.FindSystemTimeZoneById(entity.Timezone)
-        };
+        var cron = CronExpression.Parse(entity.Cron)
+            .WithTimeZone(TimeZoneInfo.FindSystemTimeZoneById(entity.Timezone));
         var next = cron.GetNextValidTimeAfter(from.ToDateTimeOffset());
         return next is null ? null : Instant.FromDateTimeOffset(next.Value);
     }

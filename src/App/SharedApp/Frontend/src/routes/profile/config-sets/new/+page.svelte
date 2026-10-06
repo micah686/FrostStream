@@ -1,5 +1,5 @@
 <script lang="ts">
-  import DownloadConfigSetForm from '$lib/components/profile/DownloadConfigSetForm.svelte';
+  import DownloadConfigSetForm from '#lib/components/profile/DownloadConfigSetForm.svelte';
 </script>
 
 <svelte:head>

@@ -11,8 +11,8 @@
     deleteOptionPreset,
     listOptionPresets,
     type OptionPreset
-  } from '$lib/api/optionPresets';
-  import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
+  } from '#lib/api/optionPresets.js';
+  import ConfirmDeleteModal from '#lib/components/admin/ConfirmDeleteModal.svelte';
 
   let optionPresets = $state<OptionPreset[]>([]);
   let optionPresetsLoading = $state(true);

@@ -7,7 +7,7 @@
     getStorage,
     storageMethodLabel,
     type StorageConfig
-  } from '$lib/api/storage';
+  } from '#lib/api/storage.js';
 
   interface SettingEntry {
     label: string;

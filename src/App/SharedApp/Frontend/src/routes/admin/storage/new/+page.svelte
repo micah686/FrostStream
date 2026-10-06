@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { Select } from '$lib/components/ui';
+  import { Select } from '#lib/components/ui/index.js';
   import {
     Archive,
     ArrowLeft,
@@ -23,7 +23,7 @@
     type GoogleCloudStorageCredentialMode,
     type NetworkStorageProtocol,
     type S3CompatibleObjectStorageProvider
-  } from '$lib/api/storage';
+  } from '#lib/api/storage.js';
 
   type IconComponent = typeof Database;
   type TargetType = 'local' | 'network' | 's3' | 'azure' | 'gcs';

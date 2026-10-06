@@ -8,6 +8,6 @@ namespace Scheduler.Jobs;
 [DisallowConcurrentExecution]
 public sealed class DatabaseMaintenanceJob(IDatabaseMaintenanceScheduler task, IClock clock) : IJob
 {
-    public Task Execute(IJobExecutionContext context)
-        => task.QueueMaintenanceAsync(ScheduledJobContextFactory.Create(context, clock), context.CancellationToken);
+    public ValueTask Execute(IJobExecutionContext context, CancellationToken cancellationToken)
+        => new(task.QueueMaintenanceAsync(ScheduledJobContextFactory.Create(context, clock), cancellationToken));
 }

@@ -12,8 +12,8 @@
     deleteDownloadConfigSet,
     listDownloadConfigSets,
     type DownloadConfigSet
-  } from '$lib/api/downloadConfigSets';
-  import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
+  } from '#lib/api/downloadConfigSets.js';
+  import ConfirmDeleteModal from '#lib/components/admin/ConfirmDeleteModal.svelte';
 
   type IconComponent = typeof SlidersHorizontal;
 

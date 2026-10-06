@@ -4,8 +4,8 @@ import {
   fetchBackgroundRuns,
   type BackgroundRun,
   type BackgroundRunProgressFrame
-} from '$lib/api/backgroundJobs';
-import { readEventStream, type EventStreamHandlers } from '$lib/sse/eventStream';
+} from '#lib/api/backgroundJobs.js';
+import { readEventStream, type EventStreamHandlers } from '#lib/sse/eventStream.js';
 
 const MAX_LOG_LINES = 200;
 

@@ -1,9 +1,9 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { page as pageState } from '$app/state';
-  import { Select } from '$lib/components/ui';
+  import { Select } from '#lib/components/ui/index.js';
   import { RefreshCw, Search } from '@lucide/svelte';
-  import type { SearchScope } from '$lib/api/search';
+  import type { SearchScope } from '#lib/api/search.js';
 
   // Structured builder over the DataBridge advanced-query syntax (AdvancedQueryParser).
   // Every control maps to one or more `field:value` tokens that the /search page already understands,

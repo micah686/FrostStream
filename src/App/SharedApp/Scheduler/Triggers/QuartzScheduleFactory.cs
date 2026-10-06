@@ -16,7 +16,7 @@ internal static class QuartzScheduleFactory
     public static JobKey JobKeyFor(string scheduleKey) => JobKeys.ForSchedule(scheduleKey);
 
     public static IJobDetail BuildJob(ScheduledTaskDto task)
-        => JobBuilder.Create(TaskTypeRegistry.GetJobType(task.TaskType))
+        => JobBuilder.Create().OfType(TaskTypeRegistry.GetJobType(task.TaskType))
             .WithIdentity(JobKeyFor(task))
             .UsingJobData(ScheduleKeyData, task.Key)
             .UsingJobData(TaskTypeData, task.TaskType)
@@ -38,9 +38,9 @@ internal static class QuartzScheduleFactory
         {
             var timezone = TimeZoneInfo.FindSystemTimeZoneById(task.Timezone);
             return builder
-                .WithCronSchedule(task.Cron, schedule => schedule
+                .WithSchedule(CronScheduleBuilder.Create(task.Cron)
                     .InTimeZone(timezone)
-                    .WithMisfireHandlingInstructionDoNothing())
+                    .WithMisfireInstruction(CronTriggerMisfireInstruction.DoNothing))
                 .Build();
         }
 
@@ -48,10 +48,10 @@ internal static class QuartzScheduleFactory
         {
             return builder
                 .StartNow()
-                .WithSimpleSchedule(schedule => schedule
+                .WithSchedule(SimpleScheduleBuilder.Create()
                     .WithInterval(TimeSpan.FromSeconds(intervalSeconds))
                     .RepeatForever()
-                    .WithMisfireHandlingInstructionNextWithRemainingCount())
+                    .WithMisfireInstruction(SimpleTriggerMisfireInstruction.NextWithRemainingCount))
                 .Build();
         }
 

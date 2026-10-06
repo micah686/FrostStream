@@ -1,5 +1,5 @@
 <script lang="ts">
-  import NotificationProviderForm from '$lib/components/profile/NotificationProviderForm.svelte';
+  import NotificationProviderForm from '#lib/components/profile/NotificationProviderForm.svelte';
 </script>
 
 <svelte:head>

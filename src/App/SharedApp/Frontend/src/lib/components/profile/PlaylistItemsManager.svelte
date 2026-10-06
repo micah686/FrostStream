@@ -6,12 +6,12 @@
     ListMusic,
     Trash2
   } from '@lucide/svelte';
-  import { accentFor, formatDuration, formatRelativeDate, initialsFor } from '$lib/media';
+  import { accentFor, formatDuration, formatRelativeDate, initialsFor } from '#lib/media.js';
   import {
     removeUserPlaylistItem,
     reorderUserPlaylistItems,
     type UserPlaylist
-  } from '$lib/api/userPlaylists';
+  } from '#lib/api/userPlaylists.js';
 
   interface MediaSummary {
     title: string;

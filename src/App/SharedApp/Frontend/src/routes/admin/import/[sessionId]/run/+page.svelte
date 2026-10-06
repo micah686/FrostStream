@@ -3,10 +3,10 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { ArrowLeft } from '@lucide/svelte';
-  import { Modal } from '$lib/components/ui';
-  import ImportNotice from '$lib/components/admin/ImportNotice.svelte';
-  import ImportWizardStepper from '$lib/components/admin/ImportWizardStepper.svelte';
-  import { commitImportSession, getImportSession, listAllImportSessionItems, retryFailedImportSession, type ImportSession, type ImportSessionItem } from '$lib/api/imports';
+  import { Modal } from '#lib/components/ui/index.js';
+  import ImportNotice from '#lib/components/admin/ImportNotice.svelte';
+  import ImportWizardStepper from '#lib/components/admin/ImportWizardStepper.svelte';
+  import { commitImportSession, getImportSession, listAllImportSessionItems, retryFailedImportSession, type ImportSession, type ImportSessionItem } from '#lib/api/imports.js';
   const card = 'card border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6';
   const sessionId = $derived(page.params.sessionId ?? '');
   let session = $state<ImportSession | null>(null); let items = $state<ImportSessionItem[]>([]); let loading = $state(false); let busy = $state(false); let error = $state<string | null>(null); let notice = $state<string | null>(null); let confirmOpen = $state(false); let completeOpen = $state(false); let timer: ReturnType<typeof setTimeout> | undefined; let completionHandled = $state(false);

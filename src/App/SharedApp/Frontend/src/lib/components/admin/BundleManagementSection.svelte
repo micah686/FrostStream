@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
-  import { Modal, Select } from '$lib/components/ui';
+  import { Modal, Select } from '#lib/components/ui/index.js';
   import {
     Boxes,
     Check,
@@ -14,9 +14,9 @@
     Users,
     X
   } from '@lucide/svelte';
-  import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
-  import { ApiRequestError } from '$lib/api/http';
-  import type { AccessPolicy } from '$lib/api/accessControl';
+  import ConfirmDeleteModal from '#lib/components/admin/ConfirmDeleteModal.svelte';
+  import { ApiRequestError } from '#lib/api/http.js';
+  import type { AccessPolicy } from '#lib/api/accessControl.js';
   import {
     createRuntimeBundle,
     deleteRuntimeBundle,
@@ -25,7 +25,7 @@
     replaceBundleEndpoints,
     type BundleView,
     type CatalogEntry
-  } from '$lib/api/bundles';
+  } from '#lib/api/bundles.js';
 
 let {
   onManagePolicies,

@@ -7,9 +7,9 @@
     Globe,
     Play
   } from '@lucide/svelte';
-  import { accentFor, formatBytes, formatDuration, formatRelativeDate, initialsFor } from '$lib/media';
-  import { getGlobalStatistics, type StatisticsOverview } from '$lib/api/statistics';
-  import { listInProgress } from '$lib/api/watchState';
+  import { accentFor, formatBytes, formatDuration, formatRelativeDate, initialsFor } from '#lib/media.js';
+  import { getGlobalStatistics, type StatisticsOverview } from '#lib/api/statistics.js';
+  import { listInProgress } from '#lib/api/watchState.js';
 
   interface ContinueCard {
     mediaGuid: string;

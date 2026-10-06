@@ -2,7 +2,7 @@
   import { onDestroy } from 'svelte';
   import { Virtualizer, type VirtualizerHandle } from 'virtua/svelte';
   import { MessageSquare } from '@lucide/svelte';
-  import type { ChatMessage } from '$lib/api/liveChat';
+  import type { ChatMessage } from '#lib/api/liveChat.js';
   import { ChatPlaybackController } from './ChatPlaybackController.svelte';
   import ChatMessageRow from './ChatMessageRow.svelte';
 

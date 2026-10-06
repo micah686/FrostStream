@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { ArrowLeft, CircleAlert } from '@lucide/svelte';
-  import { COOKIE_PROFILE_KEY_PATTERN, upsertCookieProfile } from '$lib/api/cookies';
+  import { COOKIE_PROFILE_KEY_PATTERN, upsertCookieProfile } from '#lib/api/cookies.js';
 
   let profileKey = $state('');
   let displayName = $state('');

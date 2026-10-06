@@ -1,5 +1,5 @@
-import { fetchChatWindow, type ChatMessage } from '$lib/api/liveChat';
-import { ApiRequestError } from '$lib/api/http';
+import { fetchChatWindow, type ChatMessage } from '#lib/api/liveChat.js';
+import { ApiRequestError } from '#lib/api/http.js';
 
 /** Buffer lead below which a top-up is issued. */
 const PREFETCH_LEAD_MS = 30_000;

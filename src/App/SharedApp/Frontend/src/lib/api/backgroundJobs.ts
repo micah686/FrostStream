@@ -1,4 +1,4 @@
-import { getJson } from '$lib/api/http';
+import { getJson } from '#lib/api/http.js';
 
 /** `queued` means the schedule fired and no service has picked the work up yet. */
 export type BackgroundRunStatus = 'queued' | 'running' | 'completed' | 'failed';

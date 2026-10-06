@@ -1,6 +1,6 @@
 <script lang="ts">
 import { Code2, Palette } from '@lucide/svelte';
-import { customCssEnabled, theme, themes, themeLabels, setCustomCssEnabled, setTheme } from '$lib/stores/theme';
+import { customCssEnabled, theme, themes, themeLabels, setCustomCssEnabled, setTheme } from '#lib/stores/theme.js';
 </script>
 
 <svelte:head>

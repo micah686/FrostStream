@@ -7,12 +7,12 @@
     Plus,
     Trash2
   } from '@lucide/svelte';
-  import ConfirmDeleteModal from '$lib/components/admin/ConfirmDeleteModal.svelte';
+  import ConfirmDeleteModal from '#lib/components/admin/ConfirmDeleteModal.svelte';
   import {
     deleteCookieProfile,
     listCookieProfiles,
     type CookieProfile
-  } from '$lib/api/cookies';
+  } from '#lib/api/cookies.js';
 
 
   let profiles = $state<CookieProfile[]>([]);

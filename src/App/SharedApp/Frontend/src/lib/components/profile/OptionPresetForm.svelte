@@ -11,7 +11,7 @@
     createOptionPreset,
     updateOptionPreset,
     type OptionPreset
-  } from '$lib/api/optionPresets';
+  } from '#lib/api/optionPresets.js';
   import YtDlpOptionsEditor from './YtDlpOptionsEditor.svelte';
 
   interface Props {

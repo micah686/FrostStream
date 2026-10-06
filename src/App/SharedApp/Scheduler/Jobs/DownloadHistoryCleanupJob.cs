@@ -8,6 +8,6 @@ namespace Scheduler.Jobs;
 [DisallowConcurrentExecution]
 public sealed class DownloadHistoryCleanupJob(IDownloadHistoryCleanupScheduler task, IClock clock) : IJob
 {
-    public Task Execute(IJobExecutionContext context)
-        => task.QueueCleanupAsync(ScheduledJobContextFactory.Create(context, clock), context.CancellationToken);
+    public ValueTask Execute(IJobExecutionContext context, CancellationToken cancellationToken)
+        => new(task.QueueCleanupAsync(ScheduledJobContextFactory.Create(context, clock), cancellationToken));
 }

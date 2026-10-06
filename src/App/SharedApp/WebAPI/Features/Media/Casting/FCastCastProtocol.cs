@@ -70,7 +70,7 @@ public sealed class FCastCastProtocol(
         await Task.Delay(timeout, cancellationToken);
 
         var devices = handler.Devices
-            .Where(info => info.protocol == ProtocolType.FCast)
+            .Where(info => info.Protocol == ProtocolType.FCast)
             .Select(info => (ToDto(info), info))
             .ToArray();
         logger.LogDebug("FCast discovery found {Count} receiver(s).", devices.Length);
@@ -79,22 +79,22 @@ public sealed class FCastCastProtocol(
 
     private static CastDeviceDto ToDto(DeviceInfo info)
     {
-        var host = info.addresses.FirstOrDefault() is { } address ? AddressToString(address) : "";
+        var host = info.Addresses.FirstOrDefault() is { } address ? AddressToString(address) : "";
         return new CastDeviceDto
         {
             Id = CastDeviceId.Create(CastProtocolIds.FCast, LocalIdOf(info)),
             Protocol = CastProtocolIds.FCast,
-            Name = info.name,
+            Name = info.Name,
             Host = host,
-            Port = info.port,
+            Port = info.Port,
             Model = "FCast",
-            Status = info.protocol.ToString()
+            Status = info.Protocol.ToString()
         };
     }
 
     private static string LocalIdOf(DeviceInfo info)
     {
-        var identity = $"{info.name}|{info.port}|{string.Join(",", info.addresses.Select(AddressToString))}";
+        var identity = $"{info.Name}|{info.Port}|{string.Join(",", info.Addresses.Select(AddressToString))}";
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(identity));
         return Convert.ToHexStringLower(bytes)[..16];
     }
@@ -102,15 +102,15 @@ public sealed class FCastCastProtocol(
     private static string AddressToString(IpAddr address)
         => address switch
         {
-            IpAddr.V4 v4 => new IPAddress([v4.o1, v4.o2, v4.o3, v4.o4]).ToString(),
+            IpAddr.V4 v4 => new IPAddress([v4.O1, v4.O2, v4.O3, v4.O4]).ToString(),
             IpAddr.V6 v6 => new IPAddress(
                 [
-                    v6.o1, v6.o2, v6.o3, v6.o4,
-                    v6.o5, v6.o6, v6.o7, v6.o8,
-                    v6.o9, v6.o10, v6.o11, v6.o12,
-                    v6.o13, v6.o14, v6.o15, v6.o16
+                    v6.O1, v6.O2, v6.O3, v6.O4,
+                    v6.O5, v6.O6, v6.O7, v6.O8,
+                    v6.O9, v6.O10, v6.O11, v6.O12,
+                    v6.O13, v6.O14, v6.O15, v6.O16
                 ],
-                v6.scopeId).ToString(),
+                v6.ScopeId).ToString(),
             _ => ""
         };
 
@@ -128,7 +128,7 @@ public sealed class FCastCastProtocol(
         {
             foreach (var (key, device) in _devices)
             {
-                if (string.Equals(device.name, deviceName, StringComparison.Ordinal))
+                if (string.Equals(device.Name, deviceName, StringComparison.Ordinal))
                 {
                     _devices.TryRemove(key, out _);
                 }
@@ -136,7 +136,7 @@ public sealed class FCastCastProtocol(
         }
 
         private static string KeyOf(DeviceInfo deviceInfo)
-            => $"{deviceInfo.name}|{deviceInfo.port}|{string.Join(",", deviceInfo.addresses.Select(AddressToString))}";
+            => $"{deviceInfo.Name}|{deviceInfo.Port}|{string.Join(",", deviceInfo.Addresses.Select(AddressToString))}";
     }
 }
 
@@ -187,10 +187,11 @@ public sealed class FCastSessionClient : ICastSessionClient
             spec.ContentType,
             spec.ContentUrl,
             spec.StartPositionSeconds ?? 0,
-            speed: null,
-            volume: null,
+            null,
+            null,
             metadata,
-            requestHeaders: null));
+            null),
+            progressUpdateIntervalMillis: null);
 
         _hasMediaSession = true;
         return Task.FromResult<CastSessionSnapshot?>(UpdateSnapshot(snapshot => snapshot with
@@ -365,10 +366,18 @@ public sealed class FCastSessionClient : ICastSessionClient
 
         public void SourceChanged(Source source) { }
 
-        public void KeyEvent(KeyEvent @event) { }
-
-        public void MediaEvent(MediaEvent @event) { }
-
         public void PlaybackError(string message) => owner.OnPlaybackError(message);
+
+        public void PlaybackStopped() { }
+
+        public void TracksAvailable(MediaTrack[] tracks) { }
+
+        public void TrackSelected(uint? id, MediaTrackType type) { }
+
+        public void TracksChanged(TrackList tracks) { }
+
+        public void QueueChanged(QueueState queue) { }
+
+        public void CommandError(ReceiverError error) { }
     }
 }

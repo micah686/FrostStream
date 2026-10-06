@@ -23,7 +23,7 @@ internal sealed class BackgroundRunDispatchListener(
 
     public string Name => "background-run-dispatch";
 
-    public async Task JobToBeExecuted(IJobExecutionContext context, CancellationToken cancellationToken = default)
+    public async ValueTask JobToBeExecuted(IJobExecutionContext context, CancellationToken cancellationToken = default)
     {
         if (Describe(context) is not { } job)
             return;
@@ -41,18 +41,18 @@ internal sealed class BackgroundRunDispatchListener(
         }, cancellationToken);
     }
 
-    public Task JobExecutionVetoed(IJobExecutionContext context, CancellationToken cancellationToken = default)
-        => CloseOutAsync(context, "The scheduler vetoed this firing before it ran.", cancellationToken);
+    public ValueTask JobExecutionVetoed(IJobExecutionContext context, CancellationToken cancellationToken = default)
+        => new(CloseOutAsync(context, "The scheduler vetoed this firing before it ran.", cancellationToken));
 
-    public Task JobWasExecuted(
+    public ValueTask JobWasExecuted(
         IJobExecutionContext context,
         JobExecutionException? jobException,
         CancellationToken cancellationToken = default)
         // Only failures are closed out here: on success the request is on the bus and the executing
         // service owns the run from this point, reporting its own progress and completion.
         => jobException is null
-            ? Task.CompletedTask
-            : CloseOutAsync(context, $"The schedule could not be dispatched: {jobException.Message}", cancellationToken);
+            ? ValueTask.CompletedTask
+            : new(CloseOutAsync(context, $"The schedule could not be dispatched: {jobException.Message}", cancellationToken));
 
     /// <summary>
     /// Fails the queued row when the firing never made it onto the bus, so it does not sit as
