@@ -54,6 +54,30 @@ public sealed class MediaWatchControllerTests
     }
 
     [Test]
+    public async Task GetWatch_Uses_Direct_Seekable_Stream_For_Local_Files()
+    {
+        var mediaGuid = Guid.NewGuid();
+        var bus = Substitute.For<IMessageBus>();
+        var provider = Substitute.For<IStoreProvider>();
+        var storage = Substitute.For<IStore>();
+        var stream = new MemoryStream([1, 2, 3]);
+
+        ArrangeResolved(bus, mediaGuid, Location(mediaGuid, "storage-a", "media/video.webm", 1));
+        provider.GetAsync("storage-a", Arg.Any<CancellationToken>()).Returns(storage);
+        storage.IsSeekable().Returns(true);
+        storage.IsFileSystem().Returns(true);
+        storage.OpenRead("media/video.webm", Arg.Any<CancellationToken>()).Returns(stream);
+
+        var result = await CreateController(bus, provider).GetWatch(mediaGuid);
+
+        var file = result.ShouldBeOfType<FileStreamResult>();
+        file.FileStream.ShouldBeSameAs(stream);
+        file.EnableRangeProcessing.ShouldBeTrue();
+        await storage.DidNotReceive().OpenSeekable(
+            Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task GetWatch_Disables_Ranges_For_NonSeekable_Stream_And_Uses_Binary_Mime()
     {
         var mediaGuid = Guid.NewGuid();

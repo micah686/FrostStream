@@ -13,6 +13,9 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import type JASSUB from 'jassub';
+  import type { HlsJsVideoElement } from '@videojs/html/media/hlsjs-video';
+
+  type PlayerVideo = HTMLVideoElement | HlsJsVideoElement;
 
   const REPEAT_ICON =
     '<svg class="media-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m16 10 3-3m0 0-3-3m3 3H5v3m3 4-3 3m0 0 3 3m-3-3h14v-3" /></svg>';
@@ -23,6 +26,7 @@
 
   let {
     src,
+    hls = false,
     poster = null,
     tracks = [],
     startTime = null,
@@ -37,9 +41,11 @@
     onToggleFocus = undefined,
     onFocusToFullscreen = undefined,
     onProgress = undefined,
-    onEnded = undefined
+    onEnded = undefined,
+    onPlaybackStalled = undefined
   }: {
     src: string;
+    hls?: boolean;
     poster?: string | null;
     tracks?: TextTrackSource[];
     /** Initial playback position in seconds, applied once when metadata loads. */
@@ -65,13 +71,14 @@
     onFocusToFullscreen?: () => Promise<void>;
     onProgress?: (positionSeconds: number, durationSeconds: number | null) => void;
     onEnded?: () => void;
+    onPlaybackStalled?: () => void;
   } = $props();
 
   // The custom elements touch browser globals at import time, so registration is client-only.
   let ready = $state(false);
   let startTimeApplied = false;
   let skinElement = $state<HTMLElement | null>(null);
-  let videoElement = $state<HTMLVideoElement | null>(null);
+  let videoElement = $state<PlayerVideo | null>(null);
   let repeatButton: HTMLButtonElement | null = null;
   let shuffleButton: HTMLButtonElement | null = null;
   let focusButton: HTMLButtonElement | null = null;
@@ -81,11 +88,13 @@
   let captionTracksChanged: (() => void) | null = null;
   let fullscreenClickCleanup: (() => void) | null = null;
   let completingFocusFullscreenHandoff = false;
+  let stallTimer: ReturnType<typeof setTimeout> | null = null;
 
   onMount(() => {
     void initializePlayer();
     return () => {
       stopProgressLoop();
+      clearStallTimer();
       captionTracksChanged?.();
       fullscreenClickCleanup?.();
       void destroyAssRenderer();
@@ -119,8 +128,29 @@
     }
   }
 
+  function clearStallTimer() {
+    if (stallTimer !== null) {
+      clearTimeout(stallTimer);
+      stallTimer = null;
+    }
+  }
+
+  function watchForStall() {
+    clearStallTimer();
+    if (!videoElement?.paused) {
+      stallTimer = setTimeout(() => {
+        stallTimer = null;
+        onPlaybackStalled?.();
+      }, 12000);
+    }
+  }
+
   async function initializePlayer() {
-    await Promise.all([import('@videojs/html/video/player'), import('@videojs/html/video/skin')]);
+    await Promise.all([
+      import('@videojs/html/video/player'),
+      import('@videojs/html/video/skin'),
+      ...(hls ? [import('@videojs/html/media/hlsjs-video')] : [])
+    ]);
     ready = true;
     await tick();
     addPlaybackModeControls();
@@ -147,7 +177,7 @@
 
   async function syncAssRenderer() {
     const video = videoElement;
-    if (!video) return;
+    if (!(video instanceof HTMLVideoElement)) return;
 
     const selected = Array.from(video.querySelectorAll<HTMLTrackElement>('track[data-caption-renderer="jassub"]'))
       .find((track) => track.track.mode === 'showing');
@@ -318,12 +348,12 @@
     button.style.backgroundColor = active ? 'color-mix(in oklch, currentColor 16%, transparent)' : '';
   }
 
-  function videoDuration(video: HTMLVideoElement): number | null {
+  function videoDuration(video: PlayerVideo): number | null {
     return Number.isFinite(video.duration) && video.duration > 0 ? video.duration : null;
   }
 
   function applyStartTime(event: Event) {
-    const video = event.currentTarget as HTMLVideoElement;
+    const video = event.currentTarget as PlayerVideo;
     if (!startTimeApplied && startTime && startTime > 0) {
       const duration = videoDuration(video);
       if (duration === null || startTime < duration) {
@@ -334,7 +364,7 @@
   }
 
   function reportProgress(event: Event) {
-    const video = event.currentTarget as HTMLVideoElement;
+    const video = event.currentTarget as PlayerVideo;
     onProgress?.(video.currentTime, videoDuration(video));
   }
 
@@ -362,7 +392,8 @@
       style="--media-border-radius: 1rem; --media-video-border-radius: 1rem;"
     >
       <!-- svelte-ignore a11y_media_has_caption — tracks are only present when captions were archived -->
-      <video
+      <svelte:element
+        this={hls ? 'hlsjs-video' : 'video'}
         bind:this={videoElement}
         {src}
         poster={poster ?? undefined}
@@ -372,15 +403,26 @@
         {autoplay}
         class="h-full w-full"
         onloadedmetadata={applyStartTime}
-        ontimeupdate={reportProgress}
-        onplaying={startProgressLoop}
+        ontimeupdate={(event) => {
+          reportProgress(event);
+          watchForStall();
+        }}
+        onplay={watchForStall}
+        onwaiting={watchForStall}
+        onplaying={() => {
+          clearStallTimer();
+          startProgressLoop();
+        }}
+        onerror={() => onPlaybackStalled?.()}
         onseeked={reportProgress}
         onpause={(event) => {
           stopProgressLoop();
+          clearStallTimer();
           reportProgress(event);
         }}
         onended={() => {
           stopProgressLoop();
+          clearStallTimer();
           onEnded?.();
         }}
       >
@@ -393,7 +435,7 @@
             data-caption-renderer={track.renderer ?? 'native'}
           />
         {/each}
-      </video>
+      </svelte:element>
     </video-skin>
   </video-player>
 {:else}

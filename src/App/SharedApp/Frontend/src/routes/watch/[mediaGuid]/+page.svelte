@@ -328,6 +328,9 @@
   let streamChecking = $state(false);
   let streamError = $state<string | null>(null);
   let streamCheckSeq = 0;
+  let hlsPreparing = $state(false);
+  let hlsPlaybackUrl = $state<string | null>(null);
+  let hlsPrepareSeq = 0;
   let player = $state<{ seekTo: (seconds: number, play?: boolean) => void } | null>(null);
   const commentsPageSize = 100;
 
@@ -485,6 +488,13 @@
     const query = params.toString();
     return `/api/media/watch/${mediaGuid}${query ? `?${query}` : ''}`;
   });
+  const hlsManifestUrl = $derived.by(() => {
+    const params = new URLSearchParams();
+    if (selectedStorage) params.set('storageKey', selectedStorage);
+    if (selectedVersion) params.set('sourceVersion', selectedVersion);
+    const query = params.toString();
+    return `/api/media/stream/${mediaGuid}/index.m3u8${query ? `?${query}` : ''}`;
+  });
   // Distinct storage keys across all versions, newest version first.
   const storageOptions = $derived.by((): MediaVersionOption[] => {
     const seen = new Set<string>();
@@ -559,6 +569,9 @@
     if (!guid || loadError) {
       return;
     }
+    ++hlsPrepareSeq;
+    hlsPreparing = false;
+    hlsPlaybackUrl = null;
     void checkStreamAvailability(guid, url);
   });
 
@@ -589,6 +602,9 @@
     versionsLoading = false;
     streamChecking = false;
     streamError = null;
+    ++hlsPrepareSeq;
+    hlsPreparing = false;
+    hlsPlaybackUrl = null;
     player = null;
 
     await Promise.all([
@@ -636,6 +652,42 @@
       if (seq === streamCheckSeq && guid === mediaGuid && url === streamUrl) {
         streamChecking = false;
       }
+    }
+  }
+
+  async function prepareCompatibleStream() {
+    if (hlsPlaybackUrl) {
+      streamError = 'The compatible stream could not be played in this browser.';
+      return;
+    }
+    if (hlsPreparing) return;
+    const url = hlsManifestUrl;
+    const seq = ++hlsPrepareSeq;
+    hlsPreparing = true;
+    streamError = null;
+    try {
+      while (seq === hlsPrepareSeq && url === hlsManifestUrl) {
+        const response = await fetch(url, { cache: 'no-store' });
+        if (seq !== hlsPrepareSeq || url !== hlsManifestUrl) return;
+        if (response.status === 200) {
+          hlsPlaybackUrl = url;
+          return;
+        }
+        if (response.status !== 202) {
+          throw new Error(`Compatible stream could not be prepared (status ${response.status}).`);
+        }
+        const result = (await response.json()) as { status?: string };
+        if (result.status === 'failed') {
+          throw new Error('The compatible stream could not be encoded. Check the rendition queue for details.');
+        }
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+    } catch (error) {
+      if (seq === hlsPrepareSeq) {
+        streamError = error instanceof Error ? error.message : 'Compatible stream is unavailable.';
+      }
+    } finally {
+      if (seq === hlsPrepareSeq) hlsPreparing = false;
     }
   }
 
@@ -1106,23 +1158,27 @@
       </div>
     {:else}
       <div class={focusMode ? 'h-full min-h-0 overflow-hidden rounded-box bg-black shadow-2xl shadow-black/30' : 'aspect-video overflow-hidden rounded-box bg-black shadow-2xl shadow-black/30'}>
-        {#if !watchStateLoaded || streamChecking}
+        {#if !watchStateLoaded || streamChecking || hlsPreparing}
           <div class="grid h-full w-full place-items-center">
-            <span class="loading loading-spinner loading-md"></span>
+            <div class="text-center text-sm text-white/70">
+              <span class="loading loading-spinner loading-md"></span>
+              {#if hlsPreparing}<p class="mt-3">Preparing a compatible stream…</p>{/if}
+            </div>
           </div>
         {:else if streamError}
           <div class="flex h-full items-center justify-center p-6">
             <div class="max-w-xl rounded-box border-[length:var(--border)] border-warning/30 bg-warning/10 p-5 text-center text-warning">
               <CircleAlert class="mx-auto h-8 w-8 text-warning" />
-              <h2 class="mt-3 text-base font-bold text-warning">Playback file unavailable</h2>
+              <h2 class="mt-3 text-base font-bold text-warning">Playback unavailable</h2>
               <p class="mt-2 text-sm leading-6 text-warning">{streamError}</p>
             </div>
           </div>
         {:else}
-          {#key `${mediaGuid}:${selectedVersion}`}
+          {#key `${streamUrl}:${hlsPlaybackUrl ?? 'original'}`}
             <VideoJs10Player
               bind:this={player}
-              src={streamUrl}
+              src={hlsPlaybackUrl ?? streamUrl}
+              hls={hlsPlaybackUrl !== null}
               poster={posterUrl}
               tracks={captionTracks}
               startTime={resumeTime}
@@ -1138,6 +1194,7 @@
               onFocusToFullscreen={exitFocusModeForPlayerFullscreen}
               onProgress={handlePlaybackProgress}
               onEnded={handlePlaybackEnded}
+              onPlaybackStalled={prepareCompatibleStream}
             />
           {/key}
         {/if}

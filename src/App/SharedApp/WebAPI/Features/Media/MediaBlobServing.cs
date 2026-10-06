@@ -37,9 +37,18 @@ public static class MediaBlobServing
         try
         {
             var storage = await blobStorageProvider.GetAsync(storageKey, cancellationToken);
-            var stream = enableRangeProcessing && await storage.IsSeekable()
+            var seekable = enableRangeProcessing && await storage.IsSeekable();
+            // Filesystem stores can return a seekable FileStream directly. The generic
+            // OpenSeekable adapter reads through small range windows, which adds avoidable
+            // overhead to every playback response backed by a local file.
+            var stream = seekable && !await storage.IsFileSystem()
                 ? await storage.OpenSeekable(storagePath, cancellationToken: cancellationToken)
                 : await storage.OpenRead(storagePath, cancellationToken);
+            if (stream is not null && seekable && !stream.CanSeek)
+            {
+                await stream.DisposeAsync();
+                stream = await storage.OpenSeekable(storagePath, cancellationToken: cancellationToken);
+            }
             if (stream is null)
             {
                 return controller.NotFound($"The selected {subject} is missing from storage.");
