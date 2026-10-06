@@ -32,7 +32,7 @@
   "packageManager": "pnpm@10.28.1",
   "dependencies": {
     "@lucide/svelte": "^1.41.0",
-    "@videojs/html": "10.0.0-beta.32",
+    "@videojs/html": "10.0.1",
     "chart.js": "^4.5.1",
     "jassub": "2.4.1",
     "virtua": "^0.50.6"
