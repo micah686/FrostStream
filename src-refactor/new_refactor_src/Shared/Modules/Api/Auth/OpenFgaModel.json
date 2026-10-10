@@ -1,0 +1,107 @@
+{
+  "schema_version": "1.1",
+  "type_definitions": [
+    {
+      "type": "user"
+    },
+    {
+      "type": "group",
+      "relations": {
+        "member": { "this": {} }
+      },
+      "metadata": {
+        "relations": {
+          "member": {
+            "directly_related_user_types": [
+              { "type": "user" }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "access_policy",
+      "relations": {
+        "grantee": { "this": {} }
+      },
+      "metadata": {
+        "relations": {
+          "grantee": {
+            "directly_related_user_types": [
+              { "type": "user" },
+              { "type": "group", "relation": "member" }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "capability_group",
+      "relations": {
+        "policy": { "this": {} },
+        "grantee": {
+          "union": {
+            "child": [
+              { "this": {} },
+              {
+                "tupleToUserset": {
+                  "tupleset": { "relation": "policy" },
+                  "computedUserset": { "relation": "grantee" }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "metadata": {
+        "relations": {
+          "policy": {
+            "directly_related_user_types": [
+              { "type": "access_policy" }
+            ]
+          },
+          "grantee": {
+            "directly_related_user_types": [
+              { "type": "user" },
+              { "type": "group", "relation": "member" }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "endpoint",
+      "relations": {
+        "bundle": { "this": {} },
+        "invoke": {
+          "union": {
+            "child": [
+              { "this": {} },
+              {
+                "tupleToUserset": {
+                  "tupleset": { "relation": "bundle" },
+                  "computedUserset": { "relation": "grantee" }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "metadata": {
+        "relations": {
+          "bundle": {
+            "directly_related_user_types": [
+              { "type": "capability_group" }
+            ]
+          },
+          "invoke": {
+            "directly_related_user_types": [
+              { "type": "user" },
+              { "type": "group", "relation": "member" }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

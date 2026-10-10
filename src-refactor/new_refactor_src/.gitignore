@@ -1,0 +1,10 @@
+**/bin/
+**/obj/
+**/node_modules/
+**/.svelte-kit/
+**/build/
+.phase0/
+**/docker-compose/
+**/TestResults/
+Full/AppHost/configs/nats/certs/
+**/__pycache__/

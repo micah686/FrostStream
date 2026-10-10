@@ -1,0 +1,21 @@
+{
+  "src/App/SharedApp/ApplicationContracts": "Shared/Contracts",
+  "src/App/SharedApp/Shared": "Shared/Core",
+  "src/App/SharedApp/StorageExtensions": "Shared/Integrations/StorageExtensions",
+  "src/App/SharedApp/ServiceDefaults": "Shared/Hosting/ServiceDefaults",
+  "src/App/SharedApp/AppHostCommon": "Shared/Hosting/AppHostCommon",
+  "src/App/SharedApp/Frontend": "Frontend",
+  "src/App/LiteApp/Lite": "Lite/Backend",
+  "src/App/LiteApp/AppHostLite": "Lite/AppHost",
+  "src/App/FullApp/AppHostFull": "Full/AppHost",
+  "src/App/FullApp/BackupService": "Full/Hosts/BackupService",
+  "src/App/FullApp/PostgresServer": "Full/Infrastructure/PostgresServer",
+  "src/Libs": "Shared/Integrations/Vendor",
+  "Tests": "Tests",
+  "assets": "assets",
+  "src/App/SharedApp/DataBridge": "Shared/Modules/DataBridge",
+  "src/App/SharedApp/MediaProcessor": "Shared/Modules/MediaProcessor",
+  "src/App/SharedApp/Scheduler": "Shared/Modules/Scheduler",
+  "src/App/SharedApp/Worker": "Shared/Modules/Worker",
+  "src/App/SharedApp/WebAPI": "Shared/Modules/Api"
+}

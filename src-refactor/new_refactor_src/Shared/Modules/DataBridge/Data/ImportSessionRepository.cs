@@ -1,0 +1,1348 @@
+using DataBridge.Persistence;
+using Microsoft.EntityFrameworkCore;
+using NodaTime;
+using NodaTime.Serialization.SystemTextJson;
+using Shared.Database;
+using Shared.Imports;
+using Shared.Messaging;
+using Shared.Metadata;
+using System.Text.Json;
+
+namespace DataBridge.Data;
+
+public sealed class ImportSessionRepository(DataBridgeDbContext db, IClock clock) : IImportSessionRepository
+{
+    private const int MaxItemsLimit = 200;
+    private const int InsertBatchSize = ApplicationBatches.WriteBatchSize;
+
+    // user_metadata JSON is camelCase (matches the values PatchItemAsync historically wrote).
+    private static readonly JsonSerializerOptions UserMetadataJsonOptions = CreateUserMetadataJsonOptions();
+
+    private static JsonSerializerOptions CreateUserMetadataJsonOptions()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+        {
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+        };
+        options.ConfigureForNodaTime(DateTimeZoneProviders.Tzdb);
+        return options;
+    }
+
+    private static ImportSessionUserMetadata? DeserializeUserMetadata(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return null;
+        try
+        {
+            return JsonSerializer.Deserialize<ImportSessionUserMetadata>(json, UserMetadataJsonOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    public Task<ImportSessionDto> CreateAsync(
+        ImportSessionCreateRequest request,
+        Guid sessionId,
+        Guid correlationId,
+        CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.CreateAsync", () => CreateAsyncCore(request, sessionId, correlationId, ct), ct);
+
+    private async Task<ImportSessionDto> CreateAsyncCore(
+        ImportSessionCreateRequest request,
+        Guid sessionId,
+        Guid correlationId,
+        CancellationToken ct = default)
+    {
+        var now = clock.GetCurrentInstant();
+        var entity = new ImportSessionEntity
+        {
+            SessionId = sessionId,
+            CorrelationId = correlationId,
+            Status = ImportSessionStatus.Scanning,
+            SourceKind = request.SourceKind,
+            SourceRoot = request.SourceKind == ImportSessionSourceKind.WorkerIncoming
+                ? LocalImportIncoming.SourceRootMarker
+                : "storage",
+            SubPath = NormalizeOptional(request.SubPath),
+            StorageKey = NormalizeRequired(request.StorageKey, "storageKey"),
+            WorkerTag = NormalizeOptional(request.WorkerTag),
+            RequestedBy = NormalizeOptional(request.RequestedBy),
+            MaxParallelItems = request.MaxParallelItems is >= 1 and <= 64 ? request.MaxParallelItems.Value : 6,
+            UpdatedAt = now
+        };
+
+        db.ImportSessions.Add(entity);
+        await db.SaveChangesAsync(ct);
+
+        return ToDto(entity);
+    }
+
+    public async Task<ImportSessionDto?> GetAsync(Guid sessionId, CancellationToken ct = default)
+        => await db.ImportSessions
+            .AsNoTracking()
+            .Where(x => x.SessionId == sessionId)
+            .Select(x => ToDto(x))
+            .FirstOrDefaultAsync(ct);
+
+    public async Task<(IReadOnlyList<ImportSessionItemDto> Items, Guid? NextItemId, int TotalCount)> ListItemsAsync(
+        ImportSessionItemsListRequest request,
+        CancellationToken ct = default)
+    {
+        var limit = Math.Clamp(request.Limit, 1, MaxItemsLimit);
+        var query = db.ImportSessionItems
+            .AsNoTracking()
+            .Where(x => x.SessionId == request.SessionId);
+
+        if (request.Status is { } status)
+            query = query.Where(x => x.Status == status);
+        if (request.MetadataState is { } metadataState)
+            query = query.Where(x => x.MetadataState == metadataState);
+        if (request.Included is { } included)
+            query = query.Where(x => x.Excluded == !included);
+        if (request.AfterItemId is { } after)
+            query = query.Where(x => x.ItemId.CompareTo(after) > 0);
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var pattern = $"%{request.Search.Trim()}%";
+            query = query.Where(x =>
+                PersistenceFunctions.ILike(x.RelativePath, pattern, "\\")
+                || PersistenceFunctions.ILike(x.FileName, pattern, "\\")
+                || (x.Title != null && PersistenceFunctions.ILike(x.Title, pattern, "\\")));
+        }
+
+        var total = await query.CountAsync(ct);
+        var rows = await query
+            .OrderBy(x => x.ItemId)
+            .Take(limit + 1)
+            .Select(x => ToItemDto(x))
+            .ToListAsync(ct);
+
+        Guid? next = null;
+        if (rows.Count > limit)
+        {
+            next = rows[limit - 1].ItemId;
+            rows.RemoveAt(rows.Count - 1);
+        }
+
+        return (rows, next, total);
+    }
+
+    public Task<ImportSessionDto?> IngestScannedItemsAsync(
+        Guid sessionId,
+        IReadOnlyList<ImportSessionScannedItem> items,
+        CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.IngestScannedItemsAsync", () => IngestScannedItemsAsyncCore(sessionId, items, ct), ct);
+
+    private async Task<ImportSessionDto?> IngestScannedItemsAsyncCore(
+        Guid sessionId,
+        IReadOnlyList<ImportSessionScannedItem> items,
+        CancellationToken ct = default)
+    {
+        var session = db.Database.IsRelational()
+            ? await db.ImportSessions.FromSqlInterpolated(db.ParameterizedSql("Mutation.LockImportSession", sessionId)).SingleOrDefaultAsync(ct)
+            : await db.ImportSessions.FirstOrDefaultAsync(x => x.SessionId == sessionId, ct);
+        if (session is null)
+            return null;
+
+        var now = clock.GetCurrentInstant();
+        var existing = await db.ImportSessionItems
+            .Where(x => x.SessionId == sessionId)
+            .Select(x => x.RelativePath)
+            .ToHashSetAsync(StringComparer.OrdinalIgnoreCase, ct);
+
+        var pending = new List<ImportSessionItemEntity>(InsertBatchSize);
+        foreach (var item in items)
+        {
+            if (!existing.Add(item.RelativePath))
+                continue;
+
+            var sidecarsJson = NormalizeJson(item.SidecarsJson);
+            var hasInfoJson = HasSidecar(sidecarsJson, "infoJson");
+            pending.Add(new ImportSessionItemEntity
+            {
+                ItemId = Guid.NewGuid(),
+                SessionId = sessionId,
+                RelativePath = item.RelativePath,
+                FileName = item.FileName,
+                FileSizeBytes = item.FileSizeBytes,
+                FileMtime = item.FileMtime,
+                SidecarsJson = sidecarsJson,
+                Provider = NormalizeOptional(item.Provider),
+                SourceMediaId = NormalizeOptional(item.SourceMediaId),
+                SourceUrl = NormalizeOptional(item.SourceUrl),
+                Title = NormalizeOptional(item.Title),
+                ScanMetadataJson = NormalizeJson(item.ScanMetadataJson),
+                MetadataState = item.MetadataState,
+                MetadataSource = item.MetadataSource,
+                MetadataFetchState = hasInfoJson
+                    ? ImportSessionMetadataFetchState.Succeeded
+                    : ImportSessionMetadataFetchState.NotAttempted,
+                MetadataFetchMessage = hasInfoJson
+                    ? "info.json found"
+                    : null,
+                Excluded = true,
+                Status = ImportSessionItemStatus.Discovered,
+                UpdatedAt = now
+            });
+
+            if (pending.Count >= InsertBatchSize)
+                await FlushAsync(pending, ct);
+        }
+
+        if (pending.Count > 0)
+            await FlushAsync(pending, ct);
+
+        var counts = await db.ImportSessionItems
+            .Where(x => x.SessionId == sessionId)
+            .GroupBy(x => x.SessionId)
+            .Select(g => new
+            {
+                Total = g.Count(),
+                Ready = g.Count(x => x.MetadataState == ImportSessionItemMetadataState.Ready || x.MetadataState == ImportSessionItemMetadataState.Edited || x.MetadataState == ImportSessionItemMetadataState.PlaceholderAccepted),
+                Incomplete = g.Count(x => x.MetadataState == ImportSessionItemMetadataState.Incomplete),
+                Excluded = g.Count(x => x.Excluded)
+            })
+            .FirstOrDefaultAsync(ct);
+
+        session.Status = ImportSessionStatus.Reviewing;
+        session.TotalItems = counts?.Total ?? 0;
+        session.ReadyItems = counts?.Ready ?? 0;
+        session.IncompleteItems = counts?.Incomplete ?? 0;
+        session.ExcludedItems = counts?.Excluded ?? 0;
+        session.ErrorMessage = null;
+        session.UpdatedAt = clock.GetCurrentInstant();
+        await db.SaveChangesAsync(ct);
+
+        return ToDto(session);
+
+        async Task FlushAsync(List<ImportSessionItemEntity> batch, CancellationToken cancellationToken)
+        {
+            db.ImportSessionItems.AddRange(batch);
+            await db.SaveChangesAsync(cancellationToken);
+            db.ChangeTracker.Clear();
+            batch.Clear();
+            session = await db.ImportSessions.FirstAsync(x => x.SessionId == sessionId, cancellationToken);
+        }
+    }
+
+    public Task<ImportSessionDto?> MarkScanFailedAsync(Guid sessionId, string errorMessage, CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.MarkScanFailedAsync", () => MarkScanFailedAsyncCore(sessionId, errorMessage, ct), ct);
+
+    private async Task<ImportSessionDto?> MarkScanFailedAsyncCore(Guid sessionId, string errorMessage, CancellationToken ct = default)
+    {
+        var session = await db.ImportSessions.FirstOrDefaultAsync(x => x.SessionId == sessionId, ct);
+        if (session is null)
+            return null;
+
+        session.Status = ImportSessionStatus.ScanFailed;
+        session.ErrorMessage = string.IsNullOrWhiteSpace(errorMessage) ? "Scan failed." : errorMessage;
+        session.UpdatedAt = clock.GetCurrentInstant();
+        session.CompletedAt = session.UpdatedAt;
+        await db.SaveChangesAsync(ct);
+        return ToDto(session);
+    }
+
+    public async Task<IReadOnlyList<ImportSessionProbeItemRef>> ListItemsForProbeAsync(
+        Guid sessionId,
+        int batchSize,
+        CancellationToken ct = default)
+        => await db.ImportSessionItems
+            .AsNoTracking()
+            .Where(x => x.SessionId == sessionId && x.Status == ImportSessionItemStatus.Discovered && !x.Excluded)
+            .OrderBy(x => x.ItemId)
+            .Take(Math.Clamp(batchSize, 1, 25))
+            .Select(x => new ImportSessionProbeItemRef { ItemId = x.ItemId, RelativePath = x.RelativePath })
+            .ToListAsync(ct);
+
+    public Task<ImportSessionDto?> ApplyProbeResultsAsync(
+        Guid sessionId,
+        IReadOnlyList<ImportSessionProbeResult> results,
+        CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.ApplyProbeResultsAsync", () => ApplyProbeResultsAsyncCore(sessionId, results, ct), ct);
+
+    private async Task<ImportSessionDto?> ApplyProbeResultsAsyncCore(
+        Guid sessionId,
+        IReadOnlyList<ImportSessionProbeResult> results,
+        CancellationToken ct = default)
+    {
+        if (results.Count == 0)
+            return await GetAsync(sessionId, ct);
+
+        var byId = results.ToDictionary(x => x.ItemId);
+        var ids = byId.Keys.ToList();
+        var rows = await db.ImportSessionItems
+            .Where(x => x.SessionId == sessionId)
+            .WithIdsAsync(ids, x => x.ItemId, ct);
+        var now = clock.GetCurrentInstant();
+
+        foreach (var item in rows)
+        {
+            var result = byId[item.ItemId];
+            item.ProbeMetadataJson = NormalizeJson(result.ProbeMetadataJson);
+            if (item.Status == ImportSessionItemStatus.Discovered)
+            {
+                item.Status = ImportSessionItemStatus.Probed;
+                item.ErrorCode = null;
+                item.ErrorMessage = null;
+            }
+            item.UpdatedAt = now;
+        }
+
+        await db.SaveChangesAsync(ct);
+        return await RecalculateCountersAsync(sessionId, ct);
+    }
+
+    public Task<ImportSessionDto?> ApplyProbeFailuresAsync(
+        Guid sessionId,
+        IReadOnlyList<ImportSessionProbeFailure> failures,
+        CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.ApplyProbeFailuresAsync", () => ApplyProbeFailuresAsyncCore(sessionId, failures, ct), ct);
+
+    private async Task<ImportSessionDto?> ApplyProbeFailuresAsyncCore(
+        Guid sessionId,
+        IReadOnlyList<ImportSessionProbeFailure> failures,
+        CancellationToken ct = default)
+    {
+        if (failures.Count == 0)
+            return await GetAsync(sessionId, ct);
+
+        var byId = failures.ToDictionary(x => x.ItemId);
+        var ids = byId.Keys.ToList();
+        var rows = await db.ImportSessionItems
+            .Where(x => x.SessionId == sessionId)
+            .WithIdsAsync(ids, x => x.ItemId, ct);
+        var now = clock.GetCurrentInstant();
+
+        foreach (var item in rows)
+        {
+            var failure = byId[item.ItemId];
+            // A probe failure is diagnostic only. The commit flow still gets a chance to read
+            // and import the file, where a real media failure is isolated to this item.
+            if (item.Status == ImportSessionItemStatus.Discovered)
+            {
+                item.Status = ImportSessionItemStatus.Probed;
+                item.ErrorCode = NormalizeOptional(failure.ErrorCode) ?? "probe_failed";
+                item.ErrorMessage = NormalizeOptional(failure.ErrorMessage) ?? "ffprobe failed.";
+            }
+            item.UpdatedAt = now;
+        }
+
+        await db.SaveChangesAsync(ct);
+        return await RecalculateCountersAsync(sessionId, ct);
+    }
+
+    public Task<(ImportSessionItemDto? Item, ImportSessionDto? Session)> PatchItemAsync(
+        ImportSessionItemPatchRequest request,
+        CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.PatchItemAsync", () => PatchItemAsyncCore(request, ct), ct);
+
+    private async Task<(ImportSessionItemDto? Item, ImportSessionDto? Session)> PatchItemAsyncCore(
+        ImportSessionItemPatchRequest request,
+        CancellationToken ct = default)
+    {
+        var item = await db.ImportSessionItems
+            .FirstOrDefaultAsync(x => x.SessionId == request.SessionId && x.ItemId == request.ItemId, ct);
+        if (item is null)
+            return (null, await GetAsync(request.SessionId, ct));
+
+        var metadata = new Dictionary<string, string?>(StringComparer.Ordinal)
+        {
+            ["title"] = NormalizeOptional(request.Title),
+            ["provider"] = NormalizeOptional(request.Provider),
+            ["sourceMediaId"] = NormalizeOptional(request.SourceMediaId),
+            ["sourceUrl"] = NormalizeOptional(request.SourceUrl)
+        };
+        item.Title = metadata["title"] ?? item.Title;
+        item.Provider = metadata["provider"] ?? item.Provider;
+        item.SourceMediaId = metadata["sourceMediaId"] ?? item.SourceMediaId;
+        item.SourceUrl = metadata["sourceUrl"] ?? item.SourceUrl;
+        var isManualMetadataEdit = metadata["title"] is not null
+                                   || metadata["provider"] is not null
+                                   || metadata["sourceMediaId"] is not null;
+        if (isManualMetadataEdit)
+        {
+            // Merge into the existing user metadata so rich fields from an applied mapping survive
+            // a later single-field edit in the UI.
+            var existing = DeserializeUserMetadata(item.UserMetadataJson) ?? new ImportSessionUserMetadata();
+            item.UserMetadataJson = JsonSerializer.Serialize(existing with
+            {
+                Title = metadata["title"] ?? existing.Title,
+                Provider = metadata["provider"] ?? existing.Provider,
+                SourceMediaId = metadata["sourceMediaId"] ?? existing.SourceMediaId,
+                SourceUrl = metadata["sourceUrl"] ?? existing.SourceUrl
+            }, UserMetadataJsonOptions);
+            item.MetadataState = ImportSessionItemMetadataState.Edited;
+            item.MetadataSource = ImportSessionItemMetadataSource.ManualMapping;
+        }
+        item.UpdatedAt = clock.GetCurrentInstant();
+        await db.SaveChangesAsync(ct);
+
+        var session = await RecalculateCountersAsync(request.SessionId, ct);
+        await db.Entry(item).ReloadAsync(ct);
+        return (ToItemDto(item), session);
+    }
+
+    public Task<(int AffectedCount, ImportSessionDto? Session)> ApplyBulkAsync(
+        ImportSessionItemsBulkRequest request,
+        CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.ApplyBulkAsync", () => ApplyBulkAsyncCore(request, ct), ct);
+
+    private async Task<(int AffectedCount, ImportSessionDto? Session)> ApplyBulkAsyncCore(
+        ImportSessionItemsBulkRequest request,
+        CancellationToken ct = default)
+    {
+        var query = db.ImportSessionItems.Where(x => x.SessionId == request.SessionId);
+        IReadOnlyList<Guid>? selectedIds = null;
+        if (request.ItemIds is { Count: > 0 })
+        {
+            var ids = request.ItemIds.ToHashSet();
+            selectedIds = ids.ToArray();
+        }
+        else
+        {
+            if (request.Status is { } status)
+                query = query.Where(x => x.Status == status);
+            if (request.MetadataState is { } metadataState)
+                query = query.Where(x => x.MetadataState == metadataState);
+            if (!string.IsNullOrWhiteSpace(request.Search))
+            {
+                var pattern = $"%{request.Search.Trim()}%";
+                query = query.Where(x =>
+                    PersistenceFunctions.ILike(x.RelativePath, pattern, "\\")
+                    || PersistenceFunctions.ILike(x.FileName, pattern, "\\")
+                    || (x.Title != null && PersistenceFunctions.ILike(x.Title, pattern, "\\")));
+            }
+        }
+
+        var rows = selectedIds is null ? await query.ToListAsync(ct) : await query.WithIdsAsync(selectedIds, x => x.ItemId, ct);
+        var now = clock.GetCurrentInstant();
+        foreach (var item in rows)
+        {
+            switch (request.Action)
+            {
+                case ImportSessionBulkAction.AcceptPlaceholders:
+                    if (item.MetadataState == ImportSessionItemMetadataState.Incomplete)
+                        item.MetadataState = ImportSessionItemMetadataState.PlaceholderAccepted;
+                    break;
+                case ImportSessionBulkAction.Exclude:
+                    item.Excluded = true;
+                    break;
+                case ImportSessionBulkAction.Include:
+                    item.Excluded = false;
+                    break;
+                case ImportSessionBulkAction.ResetFailed:
+                    if (item.Status == ImportSessionItemStatus.Failed)
+                    {
+                        item.Status = ImportSessionItemStatus.Discovered;
+                        item.ErrorCode = null;
+                        item.ErrorMessage = null;
+                    }
+                    break;
+            }
+
+            item.UpdatedAt = now;
+        }
+
+        await db.SaveChangesAsync(ct);
+        var session = await RecalculateCountersAsync(request.SessionId, ct);
+        return (rows.Count, session);
+    }
+
+    public Task<(int MatchedCount, int UnmatchedCount, ImportSessionDto? Session)> ApplyMappingAsync(
+        Guid sessionId,
+        IReadOnlyList<ImportSessionMappingRow> rows,
+        string objectBucket,
+        string objectKey,
+        string format,
+        CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.ApplyMappingAsync", () => ApplyMappingAsyncCore(sessionId, rows, objectBucket, objectKey, format, ct), ct);
+
+    private async Task<(int MatchedCount, int UnmatchedCount, ImportSessionDto? Session)> ApplyMappingAsyncCore(
+        Guid sessionId,
+        IReadOnlyList<ImportSessionMappingRow> rows,
+        string objectBucket,
+        string objectKey,
+        string format,
+        CancellationToken ct = default)
+    {
+        var sessionExists = await db.ImportSessions.AnyAsync(x => x.SessionId == sessionId, ct);
+        if (!sessionExists)
+            return (0, rows.Count, null);
+
+        var items = await db.ImportSessionItems
+            .Where(x => x.SessionId == sessionId
+                        && !x.Excluded)
+            .ToListAsync(ct);
+        var byFileName = items
+            .GroupBy(x => x.FileName, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
+        var byRelativePath = items.ToDictionary(x => x.RelativePath, StringComparer.OrdinalIgnoreCase);
+
+        var matched = 0;
+        var unmatched = 0;
+        var now = clock.GetCurrentInstant();
+        foreach (var row in rows)
+        {
+            if (!byRelativePath.TryGetValue(row.FileName, out var item)
+                && !byFileName.TryGetValue(row.FileName, out item))
+            {
+                unmatched++;
+                continue;
+            }
+
+            item.Title = NormalizeOptional(row.Title) ?? item.Title;
+            item.Provider = NormalizeOptional(row.Provider) ?? item.Provider;
+            item.SourceMediaId = NormalizeOptional(row.SourceMediaId) ?? item.SourceMediaId;
+            item.SourceUrl = NormalizeOptional(row.SourceUrl) ?? item.SourceUrl;
+            item.UserMetadataJson = row.Metadata is { } metadata
+                ? JsonSerializer.Serialize(metadata, UserMetadataJsonOptions)
+                // Serialize as the base type so FileName stays out of user_metadata.
+                : JsonSerializer.Serialize<ImportSessionUserMetadata>(row, UserMetadataJsonOptions);
+            item.MetadataState = ImportSessionItemMetadataState.Edited;
+            item.MetadataSource = ImportSessionItemMetadataSource.ManualMapping;
+            item.UpdatedAt = now;
+            matched++;
+        }
+
+        db.ImportSessionMappings.Add(new ImportSessionMappingEntity
+        {
+            MappingId = Guid.NewGuid(),
+            SessionId = sessionId,
+            ObjectBucket = objectBucket,
+            ObjectKey = objectKey,
+            Format = format,
+            MatchedCount = matched,
+            UnmatchedCount = unmatched
+        });
+
+        await db.SaveChangesAsync(ct);
+        var session = await RecalculateCountersAsync(sessionId, ct);
+        return (matched, unmatched, session);
+    }
+
+    public async Task<IReadOnlyList<ImportSessionMappingTemplateRow>> ListMappingTemplateAsync(
+        Guid sessionId,
+        CancellationToken ct = default)
+    {
+        var items = await db.ImportSessionItems
+            .AsNoTracking()
+            .Where(x => x.SessionId == sessionId
+                        && !x.Excluded
+                        && x.MetadataSource != ImportSessionItemMetadataSource.YtDlp
+                        && x.MetadataSource != ImportSessionItemMetadataSource.ManualMapping)
+            .OrderBy(x => x.RelativePath)
+            .Select(x => new { x.RelativePath, x.FileName, x.Title, x.Provider, x.SourceMediaId, x.SourceUrl })
+            .ToListAsync(ct);
+
+        return items
+            .Select(x => new ImportSessionMappingTemplateRow
+            {
+                FileName = x.RelativePath,
+                Metadata = CreateMappingTemplateMetadata(
+                    x.RelativePath,
+                    x.FileName,
+                    x.Title,
+                    x.Provider,
+                    x.SourceMediaId,
+                    x.SourceUrl)
+            })
+            .ToList();
+    }
+
+    public async Task<IReadOnlyList<ImportSessionEnrichItemRef>> ListItemsForEnrichAsync(
+        Guid sessionId,
+        IReadOnlyList<Guid>? itemIds,
+        int limit,
+        CancellationToken ct = default)
+    {
+        IReadOnlyList<Guid>? selectedIds = null;
+        var query = db.ImportSessionItems
+            .AsNoTracking()
+            .Where(x => x.SessionId == sessionId
+                        && !x.Excluded
+                        && x.SourceUrl != null
+                        && x.EnrichedMetadataJson == null
+                        && x.MetadataSource != ImportSessionItemMetadataSource.ManualMapping
+                        && (x.Status == ImportSessionItemStatus.Discovered || x.Status == ImportSessionItemStatus.Probed));
+
+        if (itemIds is { Count: > 0 })
+        {
+            var ids = itemIds.ToHashSet();
+            selectedIds = ids.ToArray();
+        }
+
+        var projection = query.Select(x => new ImportSessionEnrichItemRef
+            {
+                ItemId = x.ItemId,
+                SourceUrl = x.SourceUrl!,
+                RelativePath = x.RelativePath,
+                Attempt = x.MetadataFetchAttempt + 1,
+                Provider = x.Provider
+            });
+        return selectedIds is null
+            ? await projection.OrderBy(x => x.ItemId).Take(Math.Clamp(limit, 1, 1000)).ToListAsync(ct)
+            : (await projection.WithIdsAsync(selectedIds, x => x.ItemId, ct)).OrderBy(x => x.ItemId).Take(Math.Clamp(limit, 1, 1000)).ToArray();
+    }
+
+    public async Task<IReadOnlyList<ImportSessionMetadataRefreshItemRef>> ListItemsForMetadataRefreshAsync(
+        Guid sessionId,
+        IReadOnlyList<Guid>? itemIds,
+        int limit,
+        CancellationToken ct = default)
+    {
+        IReadOnlyList<Guid>? selectedIds = null;
+        var query = db.ImportSessionItems
+            .AsNoTracking()
+            .Where(x => x.SessionId == sessionId
+                        && !x.Excluded
+                        && x.MetadataSource != ImportSessionItemMetadataSource.ManualMapping
+                        && (x.Status == ImportSessionItemStatus.Discovered || x.Status == ImportSessionItemStatus.Probed));
+
+        if (itemIds is { Count: > 0 })
+        {
+            var ids = itemIds.ToHashSet();
+            selectedIds = ids.ToArray();
+        }
+
+        var projection = query.Select(x => new ImportSessionMetadataRefreshItemRef
+            {
+                ItemId = x.ItemId,
+                RelativePath = x.RelativePath,
+                Attempt = x.MetadataFetchAttempt + 1,
+                Provider = x.Provider,
+                SourceUrl = x.SourceUrl
+            });
+        return selectedIds is null
+            ? await projection.OrderBy(x => x.ItemId).Take(Math.Clamp(limit, 1, 1000)).ToListAsync(ct)
+            : (await projection.WithIdsAsync(selectedIds, x => x.ItemId, ct)).OrderBy(x => x.ItemId).Take(Math.Clamp(limit, 1, 1000)).ToArray();
+    }
+
+    public Task<ImportSessionDto?> MarkEnrichmentQueuedAsync(
+        Guid sessionId,
+        IReadOnlyList<Guid> itemIds,
+        CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.MarkEnrichmentQueuedAsync", () => MarkEnrichmentQueuedAsyncCore(sessionId, itemIds, ct), ct);
+
+    private async Task<ImportSessionDto?> MarkEnrichmentQueuedAsyncCore(
+        Guid sessionId,
+        IReadOnlyList<Guid> itemIds,
+        CancellationToken ct = default)
+    {
+        if (itemIds.Count == 0)
+            return await GetAsync(sessionId, ct);
+
+        var ids = itemIds.ToHashSet();
+        var rows = await db.ImportSessionItems
+            .Where(x => x.SessionId == sessionId)
+            .WithIdsAsync(ids, x => x.ItemId, ct);
+        var now = clock.GetCurrentInstant();
+        foreach (var item in rows)
+        {
+            item.MetadataFetchState = ImportSessionMetadataFetchState.Queued;
+            item.MetadataFetchAttempt += 1;
+            item.MetadataFetchMessage = "Waiting for an import worker.";
+            item.ErrorCode = null;
+            item.ErrorMessage = null;
+            item.UpdatedAt = now;
+        }
+
+        await db.SaveChangesAsync(ct);
+        return await RecalculateCountersAsync(sessionId, ct);
+    }
+
+    public Task<ImportSessionDto?> ApplyEnrichmentAsync(ImportSessionItemEnriched message, CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.ApplyEnrichmentAsync", () => ApplyEnrichmentAsyncCore(message, ct), ct);
+
+    private async Task<ImportSessionDto?> ApplyEnrichmentAsyncCore(ImportSessionItemEnriched message, CancellationToken ct = default)
+    {
+        var item = await db.ImportSessionItems
+            .FirstOrDefaultAsync(x => x.SessionId == message.SessionId && x.ItemId == message.ItemId, ct);
+        if (item is null)
+            return await GetAsync(message.SessionId, ct);
+
+        item.EnrichedMetadataJson = NormalizeJson(message.EnrichedMetadataJson);
+        item.MetadataSource = ImportSessionItemMetadataSource.YtDlp;
+        item.MetadataFetchState = ImportSessionMetadataFetchState.Succeeded;
+        item.MetadataFetchMessage = message.OperationKey.Contains("/metadata-refresh/", StringComparison.Ordinal)
+            ? "info.json found"
+            : "yt-dlp metadata fetched.";
+        if (!string.IsNullOrWhiteSpace(message.InfoJsonRelativePath))
+            item.SidecarsJson = WithInfoJson(item.SidecarsJson, message.InfoJsonRelativePath);
+
+        // Enrichment sits below user edits in the layered merge: only refresh the effective
+        // display columns while the item has not been touched by the user.
+        if (item.MetadataState is ImportSessionItemMetadataState.Incomplete or ImportSessionItemMetadataState.Ready)
+        {
+            item.Title = NormalizeOptional(message.Title) ?? item.Title;
+            item.Provider = NormalizeOptional(message.Provider) ?? item.Provider;
+            item.SourceMediaId = NormalizeOptional(message.SourceMediaId) ?? item.SourceMediaId;
+            item.SourceUrl = NormalizeOptional(message.SourceUrl) ?? item.SourceUrl;
+            if (item.MetadataState == ImportSessionItemMetadataState.Incomplete && !string.IsNullOrWhiteSpace(item.Title))
+                item.MetadataState = ImportSessionItemMetadataState.Ready;
+        }
+
+        if (item.ErrorCode?.StartsWith("enrich", StringComparison.Ordinal) == true)
+        {
+            item.ErrorCode = null;
+            item.ErrorMessage = null;
+        }
+
+        item.UpdatedAt = clock.GetCurrentInstant();
+        await db.SaveChangesAsync(ct);
+        return await RecalculateCountersAsync(message.SessionId, ct);
+    }
+
+    public Task<ImportSessionDto?> ApplyEnrichFailureAsync(ImportSessionItemEnrichFailed message, CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.ApplyEnrichFailureAsync", () => ApplyEnrichFailureAsyncCore(message, ct), ct);
+
+    private async Task<ImportSessionDto?> ApplyEnrichFailureAsyncCore(ImportSessionItemEnrichFailed message, CancellationToken ct = default)
+    {
+        var item = await db.ImportSessionItems
+            .FirstOrDefaultAsync(x => x.SessionId == message.SessionId && x.ItemId == message.ItemId, ct);
+        if (item is null)
+            return await GetAsync(message.SessionId, ct);
+
+        // Enrichment is optional; surface the error for the review UI without failing the item.
+        var errorCode = NormalizeOptional(message.ErrorCode) ?? "enrich_failed";
+        var errorMessage = NormalizeOptional(message.ErrorMessage) ?? "yt-dlp enrichment failed.";
+        item.ErrorCode = errorCode == "info_json_not_found" ? null : errorCode;
+        item.ErrorMessage = errorCode == "info_json_not_found" ? null : errorMessage;
+        item.MetadataFetchState = errorCode == "info_json_not_found"
+            ? ImportSessionMetadataFetchState.NotAttempted
+            : ImportSessionMetadataFetchState.Failed;
+        item.MetadataFetchMessage = errorMessage;
+        item.UpdatedAt = clock.GetCurrentInstant();
+        await db.SaveChangesAsync(ct);
+        return await GetAsync(message.SessionId, ct);
+    }
+
+    public Task<(ImportSessionDto? Session, string? Error)> UpdateOptionsAsync(ImportSessionUpdateOptionsRequest request, CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.UpdateOptionsAsync", () => UpdateOptionsAsyncCore(request, ct), ct);
+
+    private async Task<(ImportSessionDto? Session, string? Error)> UpdateOptionsAsyncCore(ImportSessionUpdateOptionsRequest request, CancellationToken ct = default)
+    {
+        var session = await db.ImportSessions.FirstOrDefaultAsync(x => x.SessionId == request.SessionId, ct);
+        if (session is null)
+            return (null, null);
+        if (session.Status is ImportSessionStatus.Committing
+            or ImportSessionStatus.Completed
+            or ImportSessionStatus.CompletedWithFailures
+            or ImportSessionStatus.Cancelled)
+            return (ToDto(session), "Session options can no longer be changed.");
+
+        if (request.DeleteSourceFiles is { } deleteSourceFiles)
+            session.DeleteSourceFiles = deleteSourceFiles;
+        session.UpdatedAt = clock.GetCurrentInstant();
+        await db.SaveChangesAsync(ct);
+        return (ToDto(session), null);
+    }
+
+    public Task<(ImportSessionDto? Session, int ApprovedCount, string? Error)> CommitAsync(Guid sessionId, CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.CommitAsync", () => CommitAsyncCore(sessionId, ct), ct);
+
+    private async Task<(ImportSessionDto? Session, int ApprovedCount, string? Error)> CommitAsyncCore(Guid sessionId, CancellationToken ct = default)
+    {
+        var session = await db.ImportSessions.FirstOrDefaultAsync(x => x.SessionId == sessionId, ct);
+        if (session is null)
+            return (null, 0, null);
+        if (session.Status is ImportSessionStatus.Cancelled or ImportSessionStatus.Completed)
+            return (ToDto(session), 0, "Session is terminal.");
+
+        var eligible = await db.ImportSessionItems
+            .Where(x => x.SessionId == sessionId
+                        && !x.Excluded
+                        && (x.Status == ImportSessionItemStatus.Discovered || x.Status == ImportSessionItemStatus.Probed)
+                        )
+            .ToListAsync(ct);
+
+        var now = clock.GetCurrentInstant();
+        foreach (var item in eligible)
+        {
+            if (item.MetadataState == ImportSessionItemMetadataState.Incomplete)
+                item.MetadataState = ImportSessionItemMetadataState.PlaceholderAccepted;
+            item.Status = ImportSessionItemStatus.Approved;
+            item.ErrorCode = null;
+            item.ErrorMessage = null;
+            item.UpdatedAt = now;
+        }
+
+        session.Status = ImportSessionStatus.Committing;
+        session.ErrorMessage = null;
+        session.UpdatedAt = now;
+        await db.SaveChangesAsync(ct);
+        var updated = await RecalculateCountersAsync(sessionId, ct);
+        return (updated, eligible.Count, null);
+    }
+
+    public Task<(ImportSessionDto? Session, int ResetCount)> RetryFailedAsync(Guid sessionId, CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.RetryFailedAsync", () => RetryFailedAsyncCore(sessionId, ct), ct);
+
+    private async Task<(ImportSessionDto? Session, int ResetCount)> RetryFailedAsyncCore(Guid sessionId, CancellationToken ct = default)
+    {
+        var session = await db.ImportSessions.FirstOrDefaultAsync(x => x.SessionId == sessionId, ct);
+        if (session is null)
+            return (null, 0);
+
+        var rows = await db.ImportSessionItems
+            .Where(x => x.SessionId == sessionId
+                        && !x.Excluded
+                        && x.Status == ImportSessionItemStatus.Failed
+                        && x.MetadataState != ImportSessionItemMetadataState.Incomplete)
+            .ToListAsync(ct);
+
+        var now = clock.GetCurrentInstant();
+        foreach (var item in rows)
+        {
+            item.Status = ImportSessionItemStatus.Approved;
+            item.ErrorCode = null;
+            item.ErrorMessage = null;
+            item.UpdatedAt = now;
+            item.CompletedAt = null;
+        }
+
+        session.Status = ImportSessionStatus.Committing;
+        session.CompletedAt = null;
+        session.UpdatedAt = now;
+        await db.SaveChangesAsync(ct);
+        return (await RecalculateCountersAsync(sessionId, ct), rows.Count);
+    }
+
+    public Task<ImportSessionDto?> CancelAsync(Guid sessionId, CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.CancelAsync", () => CancelAsyncCore(sessionId, ct), ct);
+
+    private async Task<ImportSessionDto?> CancelAsyncCore(Guid sessionId, CancellationToken ct = default)
+    {
+        var session = await db.ImportSessions.FirstOrDefaultAsync(x => x.SessionId == sessionId, ct);
+        if (session is null)
+            return null;
+        if (session.Status is ImportSessionStatus.Completed or ImportSessionStatus.CompletedWithFailures or ImportSessionStatus.Cancelled)
+            return ToDto(session);
+
+        var now = clock.GetCurrentInstant();
+        session.Status = ImportSessionStatus.Cancelled;
+        session.UpdatedAt = now;
+        session.CompletedAt = now;
+        await db.ImportSessionItems
+            .Where(x => x.SessionId == sessionId
+                        && (x.Status == ImportSessionItemStatus.Discovered
+                            || x.Status == ImportSessionItemStatus.Probed
+                            || x.Status == ImportSessionItemStatus.Approved))
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(x => x.Excluded, true)
+                .SetProperty(x => x.UpdatedAt, now), ct);
+        await db.SaveChangesAsync(ct);
+        return await RecalculateCountersAsync(sessionId, ct);
+    }
+
+    public async Task<IReadOnlyList<ImportSessionDto>> ListCommittingSessionsAsync(int limit, CancellationToken ct = default)
+        => await db.ImportSessions
+            .AsNoTracking()
+            .Where(x => x.Status == ImportSessionStatus.Committing)
+            .OrderBy(x => x.UpdatedAt)
+            .Take(Math.Clamp(limit, 1, 100))
+            .Select(x => ToDto(x))
+            .ToListAsync(ct);
+
+    public Task<int> RecoverStaleHashingItemsAsync(Guid sessionId, Instant staleBefore, CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.RecoverStaleHashingItemsAsync", () => RecoverStaleHashingItemsAsyncCore(sessionId, staleBefore, ct), ct);
+
+    private async Task<int> RecoverStaleHashingItemsAsyncCore(Guid sessionId, Instant staleBefore, CancellationToken ct = default)
+    {
+        var rows = await db.ImportSessionItems
+            .Where(x => x.SessionId == sessionId
+                        && !x.Excluded
+                        && x.Status == ImportSessionItemStatus.Hashing
+                        && x.UpdatedAt < staleBefore)
+            .ToListAsync(ct);
+        if (rows.Count == 0)
+            return 0;
+
+        var now = clock.GetCurrentInstant();
+        foreach (var item in rows)
+        {
+            item.Status = ImportSessionItemStatus.Approved;
+            item.ErrorCode = null;
+            item.ErrorMessage = null;
+            item.UpdatedAt = now;
+            item.CompletedAt = null;
+        }
+
+        await db.SaveChangesAsync(ct);
+        await RecalculateCountersAsync(sessionId, ct);
+        return rows.Count;
+    }
+
+    public Task<IReadOnlyList<ImportSessionItemWork>> ClaimApprovedWorkAsync(Guid sessionId, int limit, CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.ClaimApprovedWorkAsync", () => ClaimApprovedWorkAsyncCore(sessionId, limit, ct), ct);
+
+    private async Task<IReadOnlyList<ImportSessionItemWork>> ClaimApprovedWorkAsyncCore(Guid sessionId, int limit, CancellationToken ct = default)
+    {
+        var rows = await BuildWorkQuery(sessionId)
+            .Where(x => !x.Item.Excluded
+                        && (x.Item.Status == ImportSessionItemStatus.Approved
+                            || x.Item.Status == ImportSessionItemStatus.Probed
+                            || x.Item.Status == ImportSessionItemStatus.Discovered))
+            .OrderBy(x => x.Item.ItemId)
+            .Take(Math.Clamp(limit, 1, 100))
+            .ToListAsync(ct);
+        if (rows.Count == 0)
+            return [];
+
+        var now = clock.GetCurrentInstant();
+        foreach (var row in rows)
+        {
+            if (row.Item.MetadataState == ImportSessionItemMetadataState.Incomplete)
+                row.Item.MetadataState = ImportSessionItemMetadataState.PlaceholderAccepted;
+            row.Item.Status = ImportSessionItemStatus.Hashing;
+            row.Item.Attempt += 1;
+            row.Item.ErrorCode = null;
+            row.Item.ErrorMessage = null;
+            row.Item.UpdatedAt = now;
+        }
+
+        await db.SaveChangesAsync(ct);
+        await RecalculateCountersAsync(sessionId, ct);
+        return rows.Select(x => ToWork(x.Session, x.Item)).ToList();
+    }
+
+    public async Task<ImportSessionItemWork?> GetItemWorkAsync(Guid sessionId, Guid itemId, CancellationToken ct = default)
+        => await BuildWorkQuery(sessionId)
+            .Where(x => x.Item.ItemId == itemId)
+            .Select(x => ToWork(x.Session, x.Item))
+            .FirstOrDefaultAsync(ct);
+
+    public Task MarkItemHashingAsync(Guid sessionId, Guid itemId, CancellationToken ct = default)
+        => UpdateItemStatusAsync(sessionId, itemId, ImportSessionItemStatus.Hashing, ct);
+
+    public Task MarkItemPreparedAsync(Guid sessionId, Guid itemId, LocalImportFilePrepared prepared, CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.MarkItemPreparedAsync", () => MarkItemPreparedAsyncCore(sessionId, itemId, prepared, ct), ct);
+
+    private async Task MarkItemPreparedAsyncCore(Guid sessionId, Guid itemId, LocalImportFilePrepared prepared, CancellationToken ct = default)
+    {
+        var item = await db.ImportSessionItems.FirstAsync(x => x.SessionId == sessionId && x.ItemId == itemId, ct);
+        item.ContentHashXxh128 = NormalizeOptional(prepared.ContentHashXxh128)?.ToLowerInvariant();
+        item.FileSizeBytes = prepared.FileSizeBytes;
+        item.UpdatedAt = clock.GetCurrentInstant();
+        await db.SaveChangesAsync(ct);
+    }
+
+    public Task MarkItemUploadingAsync(Guid sessionId, Guid itemId, Guid mediaGuid, string storagePath, CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.MarkItemUploadingAsync", () => MarkItemUploadingAsyncCore(sessionId, itemId, mediaGuid, storagePath, ct), ct);
+
+    private async Task MarkItemUploadingAsyncCore(Guid sessionId, Guid itemId, Guid mediaGuid, string storagePath, CancellationToken ct = default)
+    {
+        var item = await db.ImportSessionItems.FirstAsync(x => x.SessionId == sessionId && x.ItemId == itemId, ct);
+        item.Status = ImportSessionItemStatus.Uploading;
+        item.MediaGuid = mediaGuid;
+        item.StoragePath = storagePath;
+        item.UpdatedAt = clock.GetCurrentInstant();
+        await db.SaveChangesAsync(ct);
+        await RecalculateCountersAsync(sessionId, ct);
+    }
+
+    public Task MarkItemFinalizingAsync(Guid sessionId, Guid itemId, CancellationToken ct = default)
+        => UpdateItemStatusAsync(sessionId, itemId, ImportSessionItemStatus.Finalizing, ct);
+
+    public Task MarkItemAlreadyImportedAsync(Guid sessionId, Guid itemId, Guid mediaGuid, string storagePath, LocalImportFilePrepared prepared, CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.MarkItemAlreadyImportedAsync", () => MarkItemAlreadyImportedAsyncCore(sessionId, itemId, mediaGuid, storagePath, prepared, ct), ct);
+
+    private async Task MarkItemAlreadyImportedAsyncCore(Guid sessionId, Guid itemId, Guid mediaGuid, string storagePath, LocalImportFilePrepared prepared, CancellationToken ct = default)
+    {
+        var item = await db.ImportSessionItems.FirstAsync(x => x.SessionId == sessionId && x.ItemId == itemId, ct);
+        item.Status = ImportSessionItemStatus.AlreadyImported;
+        item.MediaGuid = mediaGuid;
+        item.StoragePath = storagePath;
+        item.FileSizeBytes = prepared.FileSizeBytes;
+        item.ContentHashXxh128 = NormalizeOptional(prepared.ContentHashXxh128)?.ToLowerInvariant();
+        item.UpdatedAt = clock.GetCurrentInstant();
+        item.CompletedAt = item.UpdatedAt;
+        await db.SaveChangesAsync(ct);
+        await RecalculateCountersAsync(sessionId, ct);
+    }
+
+    public Task MarkItemImportedAsync(
+        Guid sessionId,
+        Guid itemId,
+        Guid mediaGuid,
+        string storagePath,
+        string? storageVersion,
+        string? metaStoragePath,
+        string? infoJsonStoragePath,
+        string? thumbnailStoragePath,
+        string? captionStoragePathsJson,
+        CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.MarkItemImportedAsync", () => MarkItemImportedAsyncCore(sessionId, itemId, mediaGuid, storagePath, storageVersion, metaStoragePath, infoJsonStoragePath, thumbnailStoragePath, captionStoragePathsJson, ct), ct);
+
+    private async Task MarkItemImportedAsyncCore(
+        Guid sessionId,
+        Guid itemId,
+        Guid mediaGuid,
+        string storagePath,
+        string? storageVersion,
+        string? metaStoragePath,
+        string? infoJsonStoragePath,
+        string? thumbnailStoragePath,
+        string? captionStoragePathsJson,
+        CancellationToken ct = default)
+    {
+        var item = await db.ImportSessionItems.FirstAsync(x => x.SessionId == sessionId && x.ItemId == itemId, ct);
+        item.Status = ImportSessionItemStatus.Imported;
+        item.MediaGuid = mediaGuid;
+        item.StoragePath = storagePath;
+        item.StorageVersion = storageVersion;
+        item.MetaStoragePath = metaStoragePath;
+        item.InfoJsonStoragePath = infoJsonStoragePath;
+        item.ThumbnailStoragePath = thumbnailStoragePath;
+        item.CaptionStoragePathsJson = captionStoragePathsJson;
+        item.UpdatedAt = clock.GetCurrentInstant();
+        item.CompletedAt = item.UpdatedAt;
+        await db.SaveChangesAsync(ct);
+        await RecalculateCountersAsync(sessionId, ct);
+    }
+
+    public Task MarkItemCommitFailedAsync(
+        Guid sessionId,
+        Guid itemId,
+        string? errorCode,
+        string errorMessage,
+        Guid? mediaGuid = null,
+        string? storagePath = null,
+        CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.MarkItemCommitFailedAsync", () => MarkItemCommitFailedAsyncCore(sessionId, itemId, errorCode, errorMessage, mediaGuid, storagePath, ct), ct);
+
+    private async Task MarkItemCommitFailedAsyncCore(
+        Guid sessionId,
+        Guid itemId,
+        string? errorCode,
+        string errorMessage,
+        Guid? mediaGuid = null,
+        string? storagePath = null,
+        CancellationToken ct = default)
+    {
+        var item = await db.ImportSessionItems.FirstAsync(x => x.SessionId == sessionId && x.ItemId == itemId, ct);
+        item.Status = ImportSessionItemStatus.Failed;
+        item.ErrorCode = NormalizeOptional(errorCode) ?? "item_failed";
+        item.ErrorMessage = NormalizeOptional(errorMessage) ?? "Import item failed.";
+        item.MediaGuid = mediaGuid ?? item.MediaGuid;
+        item.StoragePath = storagePath ?? item.StoragePath;
+        item.UpdatedAt = clock.GetCurrentInstant();
+        item.CompletedAt = item.UpdatedAt;
+        await db.SaveChangesAsync(ct);
+        await RecalculateCountersAsync(sessionId, ct);
+    }
+
+    public Task<ImportSessionDto?> CompleteSessionIfTerminalAsync(Guid sessionId, CancellationToken ct = default)
+        => db.MutateAsync("ImportSessionRepository.CompleteSessionIfTerminalAsync", () => CompleteSessionIfTerminalAsyncCore(sessionId, ct), ct);
+
+    private async Task<ImportSessionDto?> CompleteSessionIfTerminalAsyncCore(Guid sessionId, CancellationToken ct = default)
+    {
+        var session = await db.ImportSessions.FirstOrDefaultAsync(x => x.SessionId == sessionId, ct);
+        if (session is null)
+            return null;
+        if (session.Status != ImportSessionStatus.Committing)
+            return await RecalculateCountersAsync(sessionId, ct);
+
+        var remaining = await db.ImportSessionItems.CountAsync(
+            x => x.SessionId == sessionId
+                 && !x.Excluded
+                 && (x.Status == ImportSessionItemStatus.Approved
+                     || x.Status == ImportSessionItemStatus.Hashing
+                     || x.Status == ImportSessionItemStatus.Uploading
+                     || x.Status == ImportSessionItemStatus.Finalizing),
+            ct);
+        if (remaining > 0)
+            return await RecalculateCountersAsync(sessionId, ct);
+
+        var failed = await db.ImportSessionItems.AnyAsync(x => x.SessionId == sessionId && x.Status == ImportSessionItemStatus.Failed, ct);
+        session.Status = failed ? ImportSessionStatus.CompletedWithFailures : ImportSessionStatus.Completed;
+        session.UpdatedAt = clock.GetCurrentInstant();
+        session.CompletedAt = session.UpdatedAt;
+        await db.SaveChangesAsync(ct);
+        return await RecalculateCountersAsync(sessionId, ct);
+    }
+
+    private Task UpdateItemStatusAsync(Guid sessionId, Guid itemId, ImportSessionItemStatus status, CancellationToken ct)
+        => db.MutateAsync("ImportSessionRepository.UpdateItemStatusAsync", () => UpdateItemStatusCoreAsync(sessionId, itemId, status, ct), ct);
+
+    private async Task UpdateItemStatusCoreAsync(Guid sessionId, Guid itemId, ImportSessionItemStatus status, CancellationToken ct)
+    {
+        var item = await db.ImportSessionItems.FirstAsync(x => x.SessionId == sessionId && x.ItemId == itemId, ct);
+        item.Status = status;
+        item.UpdatedAt = clock.GetCurrentInstant();
+        await db.SaveChangesAsync(ct);
+        await RecalculateCountersAsync(sessionId, ct);
+    }
+
+    private IQueryable<ImportSessionWorkProjection> BuildWorkQuery(Guid sessionId)
+        => db.ImportSessions
+            .Where(session => session.SessionId == sessionId)
+            .Join(
+                db.ImportSessionItems,
+                session => session.SessionId,
+                item => item.SessionId,
+                (session, item) => new ImportSessionWorkProjection { Session = session, Item = item });
+
+    private async Task<ImportSessionDto?> RecalculateCountersAsync(Guid sessionId, CancellationToken ct)
+    {
+        var session = await db.ImportSessions.FirstOrDefaultAsync(x => x.SessionId == sessionId, ct);
+        if (session is null)
+            return null;
+
+        var counts = await db.ImportSessionItems
+            .Where(x => x.SessionId == sessionId)
+            .GroupBy(x => x.SessionId)
+            .Select(g => new
+            {
+                Total = g.Count(),
+                Probed = g.Count(x => x.Status == ImportSessionItemStatus.Probed),
+                Ready = g.Count(x => x.MetadataState == ImportSessionItemMetadataState.Ready || x.MetadataState == ImportSessionItemMetadataState.Edited || x.MetadataState == ImportSessionItemMetadataState.PlaceholderAccepted),
+                Incomplete = g.Count(x => x.MetadataState == ImportSessionItemMetadataState.Incomplete),
+                Excluded = g.Count(x => x.Excluded),
+                Approved = g.Count(x => x.Status == ImportSessionItemStatus.Approved),
+                Imported = g.Count(x => x.Status == ImportSessionItemStatus.Imported),
+                AlreadyImported = g.Count(x => x.Status == ImportSessionItemStatus.AlreadyImported),
+                Failed = g.Count(x => x.Status == ImportSessionItemStatus.Failed)
+            })
+            .FirstOrDefaultAsync(ct);
+
+        session.TotalItems = counts?.Total ?? 0;
+        session.ProbedItems = counts?.Probed ?? 0;
+        session.ReadyItems = counts?.Ready ?? 0;
+        session.IncompleteItems = counts?.Incomplete ?? 0;
+        session.ExcludedItems = counts?.Excluded ?? 0;
+        session.ApprovedItems = counts?.Approved ?? 0;
+        session.ImportedItems = counts?.Imported ?? 0;
+        session.AlreadyImportedItems = counts?.AlreadyImported ?? 0;
+        session.FailedItems = counts?.Failed ?? 0;
+        session.UpdatedAt = clock.GetCurrentInstant();
+        await db.SaveChangesAsync(ct);
+        return ToDto(session);
+    }
+
+    private static ImportSessionDto ToDto(ImportSessionEntity x) => new()
+    {
+        SessionId = x.SessionId,
+        CorrelationId = x.CorrelationId,
+        Status = x.Status,
+        SourceKind = x.SourceKind,
+        SourceRoot = x.SourceRoot,
+        SubPath = x.SubPath,
+        StorageKey = x.StorageKey,
+        WorkerTag = x.WorkerTag,
+        RequestedBy = x.RequestedBy,
+        TotalItems = x.TotalItems,
+        ProbedItems = x.ProbedItems,
+        ReadyItems = x.ReadyItems,
+        IncompleteItems = x.IncompleteItems,
+        ExcludedItems = x.ExcludedItems,
+        ApprovedItems = x.ApprovedItems,
+        ImportedItems = x.ImportedItems,
+        AlreadyImportedItems = x.AlreadyImportedItems,
+        FailedItems = x.FailedItems,
+        MaxParallelItems = x.MaxParallelItems,
+        DeleteSourceFiles = x.DeleteSourceFiles,
+        ErrorMessage = x.ErrorMessage,
+        CreatedAt = x.CreatedAt,
+        UpdatedAt = x.UpdatedAt,
+        CompletedAt = x.CompletedAt
+    };
+
+    private static ImportSessionItemDto ToItemDto(ImportSessionItemEntity x) => new()
+    {
+        ItemId = x.ItemId,
+        SessionId = x.SessionId,
+        RelativePath = x.RelativePath,
+        FileName = x.FileName,
+        FileSizeBytes = x.FileSizeBytes,
+        FileMtime = x.FileMtime,
+        Provider = x.Provider,
+        SourceMediaId = x.SourceMediaId,
+        SourceUrl = x.SourceUrl,
+        Title = x.Title,
+        MetadataState = x.MetadataState,
+        MetadataSource = x.MetadataSource,
+        MetadataFetchState = x.MetadataFetchState,
+        MetadataFetchAttempt = x.MetadataFetchAttempt,
+        MetadataFetchMessage = x.MetadataFetchMessage,
+        MetadataJson = MetadataJson(x),
+        HasNfo = HasSidecar(x.SidecarsJson, "nfo"),
+        HasInfoJson = HasSidecar(x.SidecarsJson, "infoJson"),
+        Excluded = x.Excluded,
+        Status = x.Status,
+        Attempt = x.Attempt,
+        ErrorCode = x.ErrorCode,
+        ErrorMessage = x.ErrorMessage,
+        CreatedAt = x.CreatedAt,
+        UpdatedAt = x.UpdatedAt,
+        CompletedAt = x.CompletedAt
+    };
+
+    private static ImportSessionItemWork ToWork(ImportSessionEntity session, ImportSessionItemEntity item) => new()
+    {
+        SessionId = session.SessionId,
+        CorrelationId = session.CorrelationId,
+        ItemId = item.ItemId,
+        StorageKey = session.StorageKey,
+        WorkerTag = session.WorkerTag,
+        RelativePath = item.RelativePath,
+        FileName = item.FileName,
+        SidecarsJson = item.SidecarsJson,
+        Provider = item.Provider,
+        SourceMediaId = item.SourceMediaId,
+        SourceLastModified = item.FileMtime,
+        SourceUrl = item.SourceUrl,
+        Title = item.Title,
+        ProbeMetadataJson = item.ProbeMetadataJson,
+        ScanMetadataJson = item.ScanMetadataJson,
+        EnrichedMetadataJson = item.EnrichedMetadataJson,
+        UserMetadataJson = item.UserMetadataJson,
+        MetadataState = item.MetadataState,
+        Attempt = item.Attempt,
+        DeleteSourceFiles = session.DeleteSourceFiles
+    };
+
+    private static string NormalizeRequired(string? value, string name)
+        => string.IsNullOrWhiteSpace(value)
+            ? throw new ArgumentException($"{name} is required.", name)
+            : value.Trim();
+
+    private static string? NormalizeOptional(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string? NormalizeJson(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string? MetadataJson(ImportSessionItemEntity item)
+        => item.MetadataSource == ImportSessionItemMetadataSource.ManualMapping ? item.UserMetadataJson : null;
+
+    private CapturedMediaMetadata CreateMappingTemplateMetadata(
+        string relativePath,
+        string fileName,
+        string? title,
+        string? provider,
+        string? sourceMediaId,
+        string? sourceUrl)
+    {
+        var normalizedProvider = NormalizeOptional(provider) ?? "local";
+        var folder = relativePath.Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        var extension = Path.GetExtension(fileName).Trim('.');
+        return new CapturedMediaMetadata
+        {
+            Account = new CapturedAccountMetadata
+            {
+                Platform = normalizedProvider,
+                AccountName = folder ?? "Unknown",
+                AccountHandle = folder ?? "unknown",
+                AccountUrl = "",
+                FollowerCount = 0,
+                Description = "",
+                ExternalIds = []
+            },
+            Media = new CapturedMediaMetadataCore
+            {
+                ExternalMediaId = NormalizeOptional(sourceMediaId) ?? "",
+                MetadataScrapeDate = clock.GetCurrentInstant(),
+                ThumbnailStoragePath = "",
+                AgeLimit = 0,
+                AverageRating = 0,
+                LikeCount = 0,
+                DislikeCount = 0,
+                DurationSeconds = 0,
+                Description = "",
+                ReleaseDate = clock.GetCurrentInstant(),
+                Title = NormalizeOptional(title) ?? Path.GetFileNameWithoutExtension(fileName),
+                WasLive = false,
+                WebpageUrl = NormalizeOptional(sourceUrl) ?? "",
+                ViewCount = 0,
+                CommentCount = 0,
+                Availability = "",
+                Location = ""
+            },
+            Technical = new CapturedMediaTechnicalMetadata
+            {
+                DurationTicks = 0,
+                Format = new CapturedFormatMetadata
+                {
+                    DurationTicks = 0,
+                    FormatLongNames = string.IsNullOrWhiteSpace(extension) ? "UNKNOWN" : extension.ToUpperInvariant(),
+                    StreamCount = 0
+                },
+                Streams = []
+            },
+            Captions = [],
+            Comments = [],
+            Series = new CapturedSeriesMetadata
+            {
+                SeriesName = "",
+                SeasonCount = 0,
+                SeasonNumber = 0,
+                SeasonName = "",
+                EpisodeNumber = 0,
+                EpisodeName = ""
+            },
+            Music = new CapturedMusicMetadata
+            {
+                AlbumTitle = "",
+                AlbumType = "",
+                DiscNumber = 0,
+                ReleaseYear = 0,
+                TrackTitle = "",
+                TrackNumber = 0,
+                Composer = ""
+            },
+            Artists = [],
+            AlbumArtists = [],
+            Genres = [],
+            Tags = [],
+            Categories = [],
+            Cast = []
+        };
+    }
+
+    private static bool HasSidecar(string? sidecarsJson, string propertyName)
+    {
+        if (string.IsNullOrWhiteSpace(sidecarsJson))
+            return false;
+        try
+        {
+            using var document = JsonDocument.Parse(sidecarsJson);
+            return document.RootElement.TryGetProperty(propertyName, out var value)
+                   && value.ValueKind == JsonValueKind.String
+                   && !string.IsNullOrWhiteSpace(value.GetString());
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static string WithInfoJson(string? sidecarsJson, string relativePath)
+    {
+        var values = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
+        if (!string.IsNullOrWhiteSpace(sidecarsJson))
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(sidecarsJson);
+                foreach (var property in document.RootElement.EnumerateObject())
+                    values[property.Name] = property.Value.Clone();
+            }
+            catch (JsonException)
+            {
+                // Replace malformed legacy sidecar JSON with a valid minimal object.
+            }
+        }
+
+        using var infoPath = JsonDocument.Parse(JsonSerializer.Serialize(relativePath));
+        values["infoJson"] = infoPath.RootElement.Clone();
+        return JsonSerializer.Serialize(values);
+    }
+
+    private sealed class ImportSessionWorkProjection
+    {
+        public required ImportSessionEntity Session { get; init; }
+        public required ImportSessionItemEntity Item { get; init; }
+    }
+}

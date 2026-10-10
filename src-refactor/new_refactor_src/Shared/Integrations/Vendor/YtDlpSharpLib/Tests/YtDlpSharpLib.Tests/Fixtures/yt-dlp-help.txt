@@ -1,0 +1,25 @@
+Usage: yt-dlp [OPTIONS] URL [URL...]
+
+  General Options:
+    --config-locations PATH        Location of the main configuration file. This option can be used multiple times
+    --alias NAME OPTIONS           Create aliases for an option string. This option can be used multiple times
+
+  Network Options:
+    --socket-timeout SECONDS       Time to wait before giving up, in seconds
+
+  Video Format Options:
+    --merge-output-format FORMAT   If a merge is required, output to the given container format
+
+  Subtitle Options:
+    --sub-format FORMAT            Subtitle format; accepts formats preference separated by "/"
+
+  Post-Processing Options:
+    -x, --extract-audio            Convert video files to audio-only files
+    --audio-format FORMAT          Format to convert the audio to when -x is used
+    --remux-video FORMAT           Remux the video into another container if necessary
+    --recode-video FORMAT          Re-encode the video into another format if necessary
+    --fixup POLICY                 Automatically correct known faults of the file. One of never, warn, detect_or_warn, force.
+    --convert-subs FORMAT          Convert the subtitles to another format
+
+  SponsorBlock Options:
+    --sponsorblock-mark CATS       SponsorBlock categories to create chapter markers for

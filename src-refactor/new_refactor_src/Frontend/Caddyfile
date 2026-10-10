@@ -1,0 +1,35 @@
+:25000 {
+	encode zstd gzip
+
+	respond /healthz 200
+
+	handle /api/* {
+		reverse_proxy {$WEBAPI_UPSTREAM:http://webapi:8080} {
+			flush_interval -1
+		}
+	}
+
+	handle /auth/* {
+		reverse_proxy {$WEBAPI_UPSTREAM:http://webapi:8080}
+	}
+
+	handle_path /stream/* {
+		rewrite * /api/media/stream{path}
+		reverse_proxy {$WEBAPI_UPSTREAM:http://webapi:8080} {
+			flush_interval -1
+		}
+	}
+
+	handle {
+		root * /srv
+		try_files {path} /index.html
+
+		@immutable path_regexp immutable ^/_app/immutable/.+
+		header @immutable Cache-Control "public, max-age=31536000, immutable"
+
+		@index path /index.html
+		header @index Cache-Control "no-cache, no-store, must-revalidate"
+
+		file_server
+	}
+}

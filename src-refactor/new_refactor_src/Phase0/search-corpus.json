@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Current parser characterization; vendor filter strings are historical evidence, not the Phase 4/5 contract.",
+  "cases": [
+    {"id":"S-001","query":"graphics card","text":"graphics card","filters":[]},
+    {"id":"S-002","query":"channel:\"Linus Tech Tips\"","text":"","filters":["(account_handle:=`Linus Tech Tips` || account_name:=`Linus Tech Tips`)"]},
+    {"id":"S-003","query":"codec:h265","text":"","filters":["(video_codec:=`hevc` || audio_codec:=`hevc`)"]},
+    {"id":"S-004","query":"duration:600","text":"","filters":["duration_seconds:>=600"]},
+    {"id":"S-005","query":"after:2023 duration:>600 views:>10000","text":"","filters":["release_date_unix:>1672531200","duration_seconds:>600","view_count:>10000"]},
+    {"id":"S-006","query":"platform:youtube tag:gaming","text":"","filters":["platform:=`youtube`","tags:=`gaming`"]},
+    {"id":"S-007","query":"foo:bar","text":"foo:bar","filters":[]},
+    {"id":"S-008","query":"日本語 café 🎥","text":"日本語 café 🎥","filters":[]},
+    {"id":"S-009","query":"resolution:1080p hdr:true audio:5.1","text":"","filters":["resolution_label:=`1080p`","hdr_type:!=`SDR`","audio_channels:=6"]},
+    {"id":"S-010","query":"  ","text":"","filters":[]}
+  ]
+}

@@ -1,0 +1,780 @@
+{
+  "projects": {
+    "Full/AppHost/AppHostFull.csproj": {
+      "executable": true,
+      "references": [
+        "Full/Hosts/BackupService/BackupService.csproj",
+        "Shared/Modules/Api/WebAPI.csproj",
+        "Shared/Modules/DataBridge/DataBridge.csproj",
+        "Shared/Modules/MediaProcessor/MediaProcessor.csproj",
+        "Shared/Modules/Scheduler/Scheduler.csproj",
+        "Shared/Modules/Worker/Worker.csproj"
+      ],
+      "packages": [
+        "Aspire.Hosting.AppHost",
+        "Aspire.Hosting.Docker",
+        "Aspire.Hosting.JavaScript",
+        "Aspire.Hosting.Nats",
+        "Aspire.Hosting.PostgreSQL",
+        "CommunityToolkit.Aspire.Hosting.DbGate",
+        "CommunityToolkit.Aspire.Hosting.PostgreSQL.Extensions",
+        "DotNetEnv"
+      ]
+    },
+    "Full/Hosts/BackupService/BackupService.csproj": {
+      "executable": true,
+      "references": [
+        "Shared/Core/Shared.csproj",
+        "Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj",
+        "Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj"
+      ],
+      "packages": []
+    },
+    "Lite/AppHost/AppHostLite.csproj": {
+      "executable": true,
+      "references": [
+        "Lite/Backend/Lite.csproj"
+      ],
+      "packages": [
+        "Aspire.Hosting.AppHost",
+        "Aspire.Hosting.Docker",
+        "Aspire.Hosting.JavaScript",
+        "DotNetEnv"
+      ]
+    },
+    "Lite/Backend/Lite.csproj": {
+      "executable": true,
+      "references": [
+        "Shared/Modules/Api/WebAPI.csproj",
+        "Shared/Modules/DataBridge/DataBridge.csproj",
+        "Shared/Modules/MediaProcessor/MediaProcessor.csproj",
+        "Shared/Modules/Scheduler/Scheduler.csproj",
+        "Shared/Modules/Worker/Worker.csproj"
+      ],
+      "packages": []
+    },
+    "Shared/Contracts/ApplicationContracts.csproj": {
+      "executable": false,
+      "references": [],
+      "packages": [
+        "Vogen"
+      ]
+    },
+    "Shared/Core/Shared.csproj": {
+      "executable": false,
+      "references": [
+        "Shared/Contracts/ApplicationContracts.csproj",
+        "Shared/Integrations/StorageExtensions/StorageExtensions.csproj",
+        "Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj",
+        "Shared/Integrations/Vendor/YtDlpSharpLib/YtDlpSharpLib/YtDlpSharpLib.csproj"
+      ],
+      "packages": [
+        "FluentStorage",
+        "FluentStorage.AWS",
+        "FluentStorage.Azure.Blobs",
+        "FluentStorage.FTP",
+        "FluentStorage.GCP",
+        "FluentStorage.Minio",
+        "FluentStorage.SFTP",
+        "Microsoft.EntityFrameworkCore",
+        "Microsoft.Extensions.Configuration.Abstractions",
+        "Microsoft.Extensions.DependencyInjection.Abstractions",
+        "Microsoft.Extensions.Hosting.Abstractions",
+        "Microsoft.Extensions.Http",
+        "Microsoft.Extensions.Logging.Abstractions",
+        "Microsoft.Extensions.Options.ConfigurationExtensions",
+        "NodaTime",
+        "Polly.Core",
+        "SSH.NET",
+        "System.IO.Hashing",
+        "VaultSharp"
+      ]
+    },
+    "Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj": {
+      "executable": false,
+      "references": [],
+      "packages": [
+        "Microsoft.Extensions.Http.Resilience",
+        "Microsoft.Extensions.ServiceDiscovery",
+        "OpenTelemetry.Exporter.OpenTelemetryProtocol",
+        "OpenTelemetry.Extensions.Hosting",
+        "OpenTelemetry.Instrumentation.AspNetCore",
+        "OpenTelemetry.Instrumentation.Http",
+        "OpenTelemetry.Instrumentation.Runtime"
+      ]
+    },
+    "Shared/Integrations/StorageExtensions/StorageExtensions.csproj": {
+      "executable": false,
+      "references": [],
+      "packages": [
+        "FluentStorage",
+        "LTRData.DiscUtils.Nfs",
+        "SMBLibrary"
+      ]
+    },
+    "Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj": {
+      "executable": false,
+      "references": [],
+      "packages": [
+        "Microsoft.Extensions.DependencyInjection.Abstractions",
+        "Microsoft.Extensions.Hosting.Abstractions",
+        "Microsoft.Extensions.Logging.Abstractions",
+        "Microsoft.Extensions.Options",
+        "NATS.Net",
+        "NodaTime",
+        "NodaTime.Serialization.SystemTextJson",
+        "Vogen"
+      ]
+    },
+    "Shared/Integrations/Vendor/Conduit.NATS/Tests/Conduit.NATS.IntegrationTests/Conduit.NATS.IntegrationTests.csproj": {
+      "executable": true,
+      "references": [
+        "Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj"
+      ],
+      "packages": [
+        "Microsoft.Extensions.Hosting",
+        "Microsoft.Testing.Extensions.Retry",
+        "Shouldly",
+        "TUnit",
+        "Testcontainers.Nats"
+      ]
+    },
+    "Shared/Integrations/Vendor/Conduit.NATS/Tests/Conduit.NATS.UnitTests/Conduit.NATS.UnitTests.csproj": {
+      "executable": true,
+      "references": [
+        "Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj"
+      ],
+      "packages": [
+        "Microsoft.Extensions.Logging.Abstractions",
+        "NSubstitute",
+        "NodaTime",
+        "Shouldly",
+        "TUnit"
+      ]
+    },
+    "Shared/Integrations/Vendor/YtDlpSharpLib/ConsoleDownloader/ConsoleDownloader.csproj": {
+      "executable": true,
+      "references": [
+        "Shared/Integrations/Vendor/YtDlpSharpLib/YtDlpSharpLib/YtDlpSharpLib.csproj"
+      ],
+      "packages": []
+    },
+    "Shared/Integrations/Vendor/YtDlpSharpLib/Tests/YtDlpSharpLib.IntegrationTests/YtDlpSharpLib.IntegrationTests.csproj": {
+      "executable": true,
+      "references": [
+        "Shared/Integrations/Vendor/YtDlpSharpLib/YtDlpSharpLib/YtDlpSharpLib.csproj"
+      ],
+      "packages": [
+        "TUnit"
+      ]
+    },
+    "Shared/Integrations/Vendor/YtDlpSharpLib/Tests/YtDlpSharpLib.Tests/YtDlpSharpLib.Tests.csproj": {
+      "executable": false,
+      "references": [
+        "Shared/Integrations/Vendor/YtDlpSharpLib/YtDlpSharpLib/YtDlpSharpLib.csproj"
+      ],
+      "packages": [
+        "Microsoft.NET.Test.Sdk",
+        "coverlet.collector",
+        "xunit",
+        "xunit.runner.visualstudio"
+      ]
+    },
+    "Shared/Integrations/Vendor/YtDlpSharpLib/YtDlpSharpLib/YtDlpSharpLib.csproj": {
+      "executable": false,
+      "references": [],
+      "packages": [
+        "Microsoft.Extensions.DependencyInjection.Abstractions",
+        "Microsoft.Extensions.Logging.Abstractions",
+        "Microsoft.Extensions.Options"
+      ]
+    },
+    "Shared/Modules/Api/WebAPI.csproj": {
+      "executable": true,
+      "references": [
+        "Shared/Core/Shared.csproj",
+        "Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj",
+        "Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj"
+      ],
+      "packages": [
+        "FCastSenderSDKDotnet",
+        "Microsoft.AspNetCore.Authentication.JwtBearer",
+        "Microsoft.AspNetCore.Authentication.OpenIdConnect",
+        "Microsoft.AspNetCore.OpenApi",
+        "Microsoft.OpenApi",
+        "NodaTime.Serialization.SystemTextJson",
+        "Quartz",
+        "Scalar.AspNetCore",
+        "Sharpcaster"
+      ]
+    },
+    "Shared/Modules/DataBridge/DataBridge.csproj": {
+      "executable": true,
+      "references": [
+        "Shared/Core/Shared.csproj",
+        "Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj",
+        "Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj"
+      ],
+      "packages": [
+        "Cleipnir.Flows",
+        "Cleipnir.Flows.PostgresSql",
+        "ClickHouse.Driver",
+        "EFCore.NamingConventions",
+        "FluentMigrator",
+        "FluentMigrator.Runner.Core",
+        "FluentMigrator.Runner.Postgres",
+        "FluentStorage",
+        "Microsoft.EntityFrameworkCore.Relational",
+        "Microsoft.EntityFrameworkCore.Sqlite",
+        "NodaTime.Serialization.SystemTextJson",
+        "Npgsql.DependencyInjection",
+        "Npgsql.EntityFrameworkCore.PostgreSQL",
+        "Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime",
+        "Polly.Core",
+        "Quartz",
+        "RecurPixel.Notify.Sdk",
+        "System.IO.Hashing",
+        "Typesense"
+      ]
+    },
+    "Shared/Modules/MediaProcessor/MediaProcessor.csproj": {
+      "executable": true,
+      "references": [
+        "Shared/Core/Shared.csproj",
+        "Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj",
+        "Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj"
+      ],
+      "packages": []
+    },
+    "Shared/Modules/Scheduler/Scheduler.csproj": {
+      "executable": true,
+      "references": [
+        "Shared/Core/Shared.csproj",
+        "Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj",
+        "Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj"
+      ],
+      "packages": [
+        "CrystalQuartz.AspNetCore",
+        "Quartz.Extensions.Hosting"
+      ]
+    },
+    "Shared/Modules/Worker/Worker.csproj": {
+      "executable": true,
+      "references": [
+        "Shared/Core/Shared.csproj",
+        "Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj",
+        "Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj",
+        "Shared/Integrations/Vendor/YtDlpSharpLib/YtDlpSharpLib/YtDlpSharpLib.csproj"
+      ],
+      "packages": [
+        "Azure.Storage.Blobs",
+        "FluentStorage",
+        "Google.Cloud.Storage.V1",
+        "Microsoft.Extensions.Hosting",
+        "Polly.Core",
+        "System.IO.Hashing"
+      ]
+    },
+    "Tests/IntegrationTests/IntegrationTests/IntegrationTests.csproj": {
+      "executable": true,
+      "references": [
+        "Lite/Backend/Lite.csproj",
+        "Shared/Modules/Api/WebAPI.csproj",
+        "Shared/Modules/DataBridge/DataBridge.csproj",
+        "Shared/Modules/Worker/Worker.csproj"
+      ],
+      "packages": [
+        "Microsoft.AspNetCore.Mvc.Testing",
+        "Microsoft.Testing.Extensions.Retry",
+        "NSubstitute",
+        "Shouldly",
+        "TUnit",
+        "Testcontainers.Nats",
+        "Testcontainers.PostgreSql"
+      ]
+    },
+    "Tests/UnitTests/UnitTests.csproj": {
+      "executable": true,
+      "references": [
+        "Full/Hosts/BackupService/BackupService.csproj",
+        "Lite/Backend/Lite.csproj",
+        "Shared/Core/Shared.csproj",
+        "Shared/Modules/Api/WebAPI.csproj",
+        "Shared/Modules/DataBridge/DataBridge.csproj",
+        "Shared/Modules/Scheduler/Scheduler.csproj",
+        "Shared/Modules/Worker/Worker.csproj"
+      ],
+      "packages": [
+        "Microsoft.EntityFrameworkCore.InMemory",
+        "NSubstitute",
+        "Shouldly",
+        "TUnit"
+      ]
+    }
+  },
+  "centralPackageVersions": {
+    "Aspire.Hosting.AppHost": "13.6.0",
+    "Aspire.Hosting.Docker": "13.6.0",
+    "Aspire.Hosting.JavaScript": "13.6.0",
+    "Aspire.Hosting.Nats": "13.6.0",
+    "Aspire.Hosting.PostgreSQL": "13.6.0",
+    "Azure.Storage.Blobs": "12.30.0",
+    "Cleipnir.Flows": "4.2.5",
+    "Cleipnir.Flows.PostgresSql": "4.2.5",
+    "ClickHouse.Driver": "1.5.0",
+    "CommunityToolkit.Aspire.Hosting.DbGate": "13.6.0",
+    "CommunityToolkit.Aspire.Hosting.PostgreSQL.Extensions": "13.6.0",
+    "coverlet.collector": "6.0.4",
+    "CrystalQuartz.AspNetCore": "7.3.0",
+    "DotNetEnv": "3.2.0",
+    "EFCore.NamingConventions": "10.0.1",
+    "FCastSenderSDKDotnet": "0.1.0",
+    "FluentMigrator": "8.0.1",
+    "FluentMigrator.Runner.Core": "8.0.1",
+    "FluentMigrator.Runner.Postgres": "8.0.1",
+    "FluentStorage": "8.0.22",
+    "FluentStorage.AWS": "8.0.23",
+    "FluentStorage.Azure.Blobs": "8.0.22",
+    "FluentStorage.FTP": "8.0.15",
+    "FluentStorage.GCP": "8.0.23",
+    "FluentStorage.Minio": "8.0.10",
+    "FluentStorage.SFTP": "8.0.16",
+    "Google.Cloud.Storage.V1": "5.0.0",
+    "LTRData.DiscUtils.Nfs": "1.0.89",
+    "Microsoft.AspNetCore.Authentication.JwtBearer": "10.0.12",
+    "Microsoft.AspNetCore.Authentication.OpenIdConnect": "10.0.12",
+    "Microsoft.AspNetCore.Mvc.Testing": "10.0.11",
+    "Microsoft.AspNetCore.OpenApi": "10.0.10",
+    "Microsoft.EntityFrameworkCore": "10.0.12",
+    "Microsoft.EntityFrameworkCore.InMemory": "10.0.11",
+    "Microsoft.EntityFrameworkCore.Relational": "10.0.12",
+    "Microsoft.EntityFrameworkCore.Sqlite": "10.0.12",
+    "Microsoft.Extensions.Configuration.Abstractions": "10.0.12",
+    "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.12",
+    "Microsoft.Extensions.Hosting": "10.0.12",
+    "Microsoft.Extensions.Hosting.Abstractions": "10.0.12",
+    "Microsoft.Extensions.Http": "10.0.12",
+    "Microsoft.Extensions.Http.Resilience": "10.10.0",
+    "Microsoft.Extensions.Logging.Abstractions": "10.0.12",
+    "Microsoft.Extensions.Options": "10.0.12",
+    "Microsoft.Extensions.Options.ConfigurationExtensions": "10.0.12",
+    "Microsoft.Extensions.ServiceDiscovery": "10.10.0",
+    "Microsoft.NET.Test.Sdk": "17.14.1",
+    "Microsoft.OpenApi": "2.9.0",
+    "Microsoft.Testing.Extensions.Retry": "2.4.0",
+    "NATS.Net": "3.3.0",
+    "NodaTime": "3.3.5",
+    "NodaTime.Serialization.SystemTextJson": "1.4.0",
+    "Npgsql.DependencyInjection": "10.0.3",
+    "Npgsql.EntityFrameworkCore.PostgreSQL": "10.0.3",
+    "Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime": "10.0.3",
+    "NSubstitute": "6.2.0",
+    "OpenTelemetry.Exporter.OpenTelemetryProtocol": "1.19.1",
+    "OpenTelemetry.Extensions.Hosting": "1.19.1",
+    "OpenTelemetry.Instrumentation.AspNetCore": "1.19.0",
+    "OpenTelemetry.Instrumentation.Http": "1.19.0",
+    "OpenTelemetry.Instrumentation.Runtime": "1.19.0",
+    "Polly.Core": "8.8.0",
+    "Quartz": "4.3.0",
+    "Quartz.Extensions.Hosting": "4.3.0",
+    "RecurPixel.Notify.Sdk": "0.3.0",
+    "Scalar.AspNetCore": "2.17.13",
+    "Sharpcaster": "3.0.0",
+    "Shouldly": "4.3.0",
+    "SMBLibrary": "1.5.8.1",
+    "SSH.NET": "2026.0.0",
+    "System.IO.Hashing": "10.0.12",
+    "Testcontainers.Nats": "4.15.0",
+    "Testcontainers.PostgreSql": "4.15.0",
+    "TUnit": "1.66.16",
+    "Typesense": "8.5.0",
+    "VaultSharp": "1.17.5.1",
+    "Vogen": "8.0.7",
+    "xunit": "2.9.3",
+    "xunit.runner.visualstudio": "3.1.4"
+  },
+  "apiRouteAttributes": [
+    {
+      "source": "Shared/Modules/Api/Features/Auth/Controllers/AuthController.cs",
+      "attributes": [
+        "[Route(\"api/auth\")]",
+        "[HttpGet(\"config\")]",
+        "[HttpGet(\"me\")]",
+        "[HttpGet(\"csrf\")]",
+        "[HttpPost(\"session\")]"
+      ]
+    },
+    {
+      "source": "Shared/Modules/Api/Features/Auth/Controllers/BrowserAuthController.cs",
+      "attributes": [
+        "[Route(\"auth\")]",
+        "[HttpGet(\"login\")]",
+        "[HttpPost(\"logout\")]"
+      ]
+    },
+    {
+      "source": "Shared/Modules/Api/Features/BackgroundJobs/Controllers/BackgroundJobsController.cs",
+      "attributes": [
+        "[Route(\"api/jobs/background\")]",
+        "[HttpGet(\"stream\")]"
+      ]
+    },
+    {
+      "source": "Shared/Modules/Api/Features/Backups/Controllers/BackupsController.cs",
+      "attributes": [
+        "[Route(\"api/global/backups\")]",
+        "[HttpGet(\"jobs\")]",
+        "[HttpGet(\"jobs/{jobId:guid}\")]",
+        "[HttpPost(\"verify\")]"
+      ]
+    },
+    {
+      "source": "Shared/Modules/Api/Features/Cookies/Controllers/CookiesController.cs",
+      "attributes": [
+        "[Route(\"api/user/cookies\")]",
+        "[HttpPut(\"{profileKey}\")]",
+        "[HttpGet(\"{profileKey}\")]",
+        "[HttpDelete(\"{profileKey}\")]"
+      ]
+    },
+    {
+      "source": "Shared/Modules/Api/Features/CreatorMonitor/Controllers/CreatorMonitorController.cs",
+      "attributes": [
+        "[Route(\"api/creator-monitor\")]",
+        "[HttpPost(\"channel-downloads\")]",
+        "[HttpPut(\"{id:long}\")]",
+        "[HttpGet(\"{id:long}\")]",
+        "[HttpPost(\"{id:long}/refresh-assets\")]",
+        "[HttpPost(\"{id:long}/scan\")]",
+        "[HttpDelete(\"{id:long}\")]",
+        "[HttpGet(\"{id:long}/ignored-media\")]"
+      ]
+    },
+    {
+      "source": "Shared/Modules/Api/Features/DownloadConfigSets/Controllers/DownloadConfigSetsController.cs",
+      "attributes": [
+        "[Route(\"api/user/config-sets\")]",
+        "[HttpPut(\"{key}\")]",
+        "[HttpGet(\"{key}\")]",
+        "[HttpDelete(\"{key}\")]"
+      ]
+    },
+    {
+      "source": "Shared/Modules/Api/Features/Downloads/Controllers/DownloadQueueController.cs",
+      "attributes": [
+        "[Route(\"api/downloads/queue\")]",
+        "[HttpGet(\"{jobId:guid}\")]",
+        "[HttpGet(\"{jobId:guid}/history\")]",
+        "[HttpGet(\"{jobId:guid}/media\")]",
+        "[HttpGet(\"stream\")]",
+        "[HttpGet(\"{jobId:guid}/progress\")]",
+        "[HttpPatch(\"{jobId:guid}/priority\")]",
+        "[HttpPost(\"{jobId:guid}/stop\")]",
+        "[HttpPost(\"{jobId:guid}/start\")]",
+        "[HttpPost(\"/api/downloads/groups/{correlationId:guid}/start\")]",
+        "[HttpPost(\"/api/downloads/groups/{correlationId:guid}/stop\")]",
+        "[HttpPost(\"cleanup\")]",
+        "[HttpPost(\"/api/downloads/providers/{provider}/circuit/clear\")]"
+      ]
+    },
+    {
+      "source": "Shared/Modules/Api/Features/Downloads/Controllers/DownloadsController.cs",
+      "attributes": [
+        "[Route(\"api/downloads\")]",
+        "[HttpPost(\"video\")]"
+      ]
+    },
+    {
+      "source": "Shared/Modules/Api/Features/Imports/Controllers/ImportSessionsController.cs",
+      "attributes": [
+        "[Route(\"api/global/imports/sessions\")]",
+        "[HttpGet(\"{sessionId:guid}\")]",
+        "[HttpGet(\"{sessionId:guid}/items\")]",
+        "[HttpPatch(\"{sessionId:guid}/items/{itemId:guid}\")]",
+        "[HttpPost(\"{sessionId:guid}/items/bulk\")]",
+        "[HttpPost(\"{sessionId:guid}/mapping\")]",
+        "[HttpGet(\"{sessionId:guid}/mapping-template\")]",
+        "[HttpGet(\"{sessionId:guid}/mapping-example\")]",
+        "[HttpPost(\"{sessionId:guid}/metadata-refresh\")]",
+        "[HttpPost(\"{sessionId:guid}/enrich\")]",
+        "[HttpPatch(\"{sessionId:guid}/options\")]",
+        "[HttpPost(\"{sessionId:guid}/commit\")]",
+        "[HttpPost(\"{sessionId:guid}/retry-failed\")]",
+        "[HttpPost(\"{sessionId:guid}/cancel\")]",
+        "[HttpPost(\"cleanup\")]",
+        "[HttpGet(\"/api/global/imports/incoming/browse\")]"
+      ]
+    },
+    {
+      "source": "Shared/Modules/Api/Features/Management/Controllers/AccessControlController.cs",
+      "attributes": [
+        "[Route(\"api/global/access-control\")]",
+        "[HttpGet(\"directory\")]",
+        "[HttpGet(\"catalog\")]",
+        "[HttpGet(\"bundles\")]",
+        "[HttpGet(\"bundles/{bundleId}\")]",
+        "[HttpGet(\"bundles/{bundleId}/policies\")]",
+        "[HttpPost(\"bundles\")]",
+        "[HttpPut(\"bundles/{bundleId}/endpoints\")]",
+        "[HttpDelete(\"bundles/{bundleId}\")]",
+        "[HttpGet(\"policies\")]",
+        "[HttpGet(\"policies/{policyId:guid}\")]",
+        "[HttpPost(\"policies\")]",
+        "[HttpPut(\"policies/{policyId:guid}\")]",
+        "[HttpPost(\"policies/{policyId:guid}/duplicate\")]",
+        "[HttpDelete(\"policies/{policyId:guid}\")]",
+        "[HttpGet(\"providers\")]",
+        "[HttpGet(\"media/{mediaGuid:guid}\")]",
+        "[HttpGet(\"effective\")]",
+        "[HttpPost(\"effective/check\")]",
+        "[HttpGet(\"effective/me\")]"
+      ]
+    },
+    {
+      "source": "Shared/Modules/Api/Features/Media/Controllers/CastController.cs",
+      "attributes": [
+        "[Route(\"api/cast\")]",
+        "[HttpGet(\"devices\")]",
+        "[HttpPost(\"devices/{deviceId}/session\")]",
+        "[HttpGet(\"sessions\")]",
+        "[HttpGet(\"sessions/{deviceId}\")]",
+        "[HttpDelete(\"sessions/{deviceId}\")]",
+        "[HttpPost(\"sessions/{deviceId}/play\")]",
+        "[HttpPost(\"sessions/{deviceId}/pause\")]",
+        "[HttpPost(\"sessions/{deviceId}/stop\")]",
+        "[HttpPost(\"sessions/{deviceId}/seek\")]",
+        "[HttpPost(\"sessions/{deviceId}/volume\")]",
+        "[HttpGet(\"sessions/{deviceId}/events\")]"
+      ]
+    },
+    {
+      "source": "Shared/Modules/Api/Features/Media/Controllers/ChannelAudioController.cs",
+      "attributes": [
+        "[Route(\"api/media/channels/{accountId:long}/audio\")]",
+        "[HttpGet(\"status\")]",
+        "[HttpPost(\"encode\")]",
+        "[HttpGet(\"encoded-status\")]",
+        "[HttpPatch(\"{mediaGuid:guid}/encoded-status\")]",
+        "[HttpPost(\"podcast-token\")]",
+        "[HttpGet(\"podcast.rss\")]",
+        "[HttpGet(\"episodes/{mediaGuid:guid}.opus\")]"
+      ]
+    },
+    {
+      "source": "Shared/Modules/Api/Features/Media/Controllers/LiveChatController.cs",
+      "attributes": [
+        "[Route(\"api/media/watch\")]",
+        "[HttpGet(\"{mediaGuid:guid}/chat\")]",
+        "[HttpGet(\"chat/emotes/{fileName}\")]",
+        "[HttpPost(\"chat/backfill\")]"
+      ]
+    },
+    {
+      "source": "Shared/Modules/Api/Features/Media/Controllers/MediaLikesController.cs",
+      "attributes": [
+        "[Route(\"api/media\")]",
+        "[HttpGet(\"{mediaGuid:guid}/like-state\")]",
+        "[HttpPost(\"{mediaGuid:guid}/like\")]",
+        "[HttpDelete(\"{mediaGuid:guid}/like\")]",
+        "[HttpGet(\"likes\")]"
+      ]
+    },
+    {
+      "source": "Shared/Modules/Api/Features/Media/Controllers/MediaStorageTransferController.cs",
+      "attributes": [
+        "[Route(\"api/internal/media-storage\")]",
+        "[HttpGet(\"{storageKey}/{**storagePath}\")]",
+        "[HttpPut(\"{storageKey}/{**storagePath}\")]"
+      ]
+    },
+    {
+      "source": "Shared/Modules/Api/Features/Media/Controllers/MediaStreamController.cs",
+      "attributes": [
+        "[Route(\"api/media/stream\")]",
+        "[HttpGet(\"{mediaGuid:guid}/index.m3u8\")]",
+        "[HttpGet(\"{mediaGuid:guid}/hls/{kind:regex(^(audio|video)$)}/{format}/{sourceVersion:int}/{fileName}\")]"
+      ]
+    },
+    {
+      "source": "Shared/Modules/Api/Features/Media/Controllers/MediaWatchController.cs",
+      "attributes": [
+        "[Route(\"api/media/watch\")]",
+        "[HttpGet(\"{mediaGuid:guid}\")]",
+        "[HttpPost(\"{mediaGuid:guid}/cast-token\")]",
+        "[HttpGet(\"{mediaGuid:guid}/thumbnail\")]",
+        "[HttpGet(\"accounts/{accountId:long}/{assetType:regex(^(avatar|banner)$)}\")]",
+        "[HttpGet(\"{mediaGuid:guid}/captions\")]",
+        "[HttpGet(\"{mediaGuid:guid}/captions/{languageCode}\")]"
+      ]
+    },
+    {
+      "source": "Shared/Modules/Api/Features/Media/Controllers/MediaWatchStateController.cs",
+      "attributes": [
+        "[Route(\"api/media/{mediaGuid:guid}/watch-state\")]",
+        "[HttpPost(\"watched\")]",
+        "[HttpPost(\"unwatched\")]",
+        "[HttpGet(\"/api/media/watch-states/in-progress\")]",
+        "[HttpGet(\"/api/media/watch-states/history\")]"
+      ]
+    },
+    {
+      "source": "Shared/Modules/Api/Features/Media/Controllers/RenditionProgressController.cs",
+      "attributes": [
+        "[Route(\"api/media/renditions\")]",
+        "[HttpGet(\"progress/stream\")]"
+      ]
+    },
+    {
+      "source": "Shared/Modules/Api/Features/Media/Controllers/RenditionQueueController.cs",
+      "attributes": [
+        "[Route(\"api/media/renditions/queue\")]"
+      ]
+    },
+    {
+      "source": "Shared/Modules/Api/Features/Metadata/Controllers/MetadataAdminController.cs",
+      "attributes": [
+        "[Route(\"api/global/metadata\")]",
+        "[HttpPost(\"reindex\")]",
+        "[HttpPost(\"database-reindex\")]",
+        "[HttpDelete(\"{mediaGuid:guid}\")]",
+        "[HttpDelete(\"{mediaGuid:guid}/storage/{storageKey}\")]"
+      ]
+    },
+    {
+      "source": "Shared/Modules/Api/Features/Metadata/Controllers/MetadataController.cs",
+      "attributes": [
+        "[Route(\"api/metadata\")]",
+        "[HttpGet(\"random\")]",
+        "[HttpGet(\"{mediaGuid:guid}\")]",
+        "[HttpGet(\"{mediaGuid:guid}/technical\")]",
+        "[HttpGet(\"{mediaGuid:guid}/versions\")]",
+        "[HttpGet(\"{mediaGuid:guid}/comments\")]",
+        "[HttpGet(\"{mediaGuid:guid}/captions\")]",
+        "[HttpGet(\"accounts\")]",
+        "[HttpGet(\"accounts/{accountId:long}\")]",
+        "[HttpPost(\"accounts/{accountId:long}/refresh-assets\")]",
+        "[HttpPost(\"accounts/{accountId:long}/generate-missing-thumbnails\")]",
+        "[HttpGet(\"accounts/{accountId:long}/media\")]",
+        "[HttpGet(\"taxonomy/tags\")]",
+        "[HttpGet(\"taxonomy/categories\")]",
+        "[HttpGet(\"taxonomy/genres\")]"
+      ]
+    },
+    {
+      "source": "Shared/Modules/Api/Features/Notes/Controllers/UserNotesController.cs",
+      "attributes": [
+        "[Route(\"api/user/notes\")]",
+        "[HttpPut(\"{targetType}/{targetId}\")]",
+        "[HttpGet(\"{targetType}/{targetId}\")]",
+        "[HttpDelete(\"{targetType}/{targetId}\")]",
+        "[HttpGet(\"search\")]"
+      ]
+    },
+    {
+      "source": "Shared/Modules/Api/Features/Notifications/Controllers/NotificationsController.cs",
+      "attributes": [
+        "[Route(\"api/user/notifications\")]",
+        "[HttpGet(\"preferences\")]",
+        "[HttpPut(\"preferences\")]",
+        "[HttpGet(\"providers\")]",
+        "[HttpGet(\"providers/{providerKey}\")]",
+        "[HttpPut(\"providers/{providerKey}\")]",
+        "[HttpDelete(\"providers/{providerKey}\")]",
+        "[HttpPut(\"providers/{providerKey}/secrets\")]",
+        "[HttpDelete(\"providers/{providerKey}/secrets/{secretName}\")]",
+        "[HttpPost(\"test\")]"
+      ]
+    },
+    {
+      "source": "Shared/Modules/Api/Features/OptionPresets/Controllers/OptionPresetsController.cs",
+      "attributes": [
+        "[Route(\"api/user/option-presets\")]",
+        "[HttpPut(\"{key}\")]",
+        "[HttpGet(\"{key}\")]",
+        "[HttpDelete(\"{key}\")]"
+      ]
+    },
+    {
+      "source": "Shared/Modules/Api/Features/Playlists/Controllers/PlaylistsController.cs",
+      "attributes": [
+        "[Route(\"api/playlists\")]",
+        "[HttpGet(\"library\")]",
+        "[HttpGet(\"{id:guid}\")]",
+        "[HttpPost(\"{id:guid}/items/{jobId:guid}/force-queue\")]"
+      ]
+    },
+    {
+      "source": "Shared/Modules/Api/Features/Playlists/Controllers/UserPlaylistsController.cs",
+      "attributes": [
+        "[Route(\"api/user/playlists\")]",
+        "[HttpGet(\"{playlistId:guid}\")]",
+        "[HttpPatch(\"{playlistId:guid}\")]",
+        "[HttpDelete(\"{playlistId:guid}\")]",
+        "[HttpPost(\"{playlistId:guid}/items\")]",
+        "[HttpDelete(\"{playlistId:guid}/items/{mediaGuid:guid}\")]",
+        "[HttpPut(\"{playlistId:guid}/items/order\")]"
+      ]
+    },
+    {
+      "source": "Shared/Modules/Api/Features/Schedules/Controllers/SchedulesController.cs",
+      "attributes": [
+        "[Route(\"api/global/schedules\")]",
+        "[HttpPut(\"{key}\")]",
+        "[HttpGet(\"{key}\")]",
+        "[HttpDelete(\"{key}\")]"
+      ]
+    },
+    {
+      "source": "Shared/Modules/Api/Features/Search/Controllers/SearchController.cs",
+      "attributes": [
+        "[Route(\"api/search\")]",
+        "[HttpGet(\"similar/{mediaGuid:guid}\")]"
+      ]
+    },
+    {
+      "source": "Shared/Modules/Api/Features/Statistics/Controllers/StatisticsController.cs",
+      "attributes": [
+        "[Route(\"api/global/statistics\")]",
+        "[HttpGet(\"overview\")]",
+        "[HttpGet(\"channels\")]",
+        "[HttpGet(\"channels/suggestions\")]",
+        "[HttpGet(\"channels/{creatorSourceId:long}\")]",
+        "[HttpGet(\"channels/by-account/{accountId:long}\")]",
+        "[HttpGet(\"download-history\")]",
+        "[HttpGet(\"coverage\")]"
+      ]
+    },
+    {
+      "source": "Shared/Modules/Api/Features/Storage/Controllers/StorageController.cs",
+      "attributes": [
+        "[Route(\"api/storage\")]",
+        "[HttpPost(\"local/create\")]",
+        "[HttpPut(\"local/update/{key}\")]",
+        "[HttpPost(\"network/create\")]",
+        "[HttpPut(\"network/update/{key}\")]",
+        "[HttpPost(\"object/s3-compatible/create\")]",
+        "[HttpPut(\"object/s3-compatible/update/{key}\")]",
+        "[HttpPost(\"object/azure-blob/create\")]",
+        "[HttpPut(\"object/azure-blob/update/{key}\")]",
+        "[HttpPost(\"object/google-cloud-storage/create\")]",
+        "[HttpPut(\"object/google-cloud-storage/update/{key}\")]",
+        "[HttpGet(\"list\")]",
+        "[HttpDelete(\"delete/{key}\")]",
+        "[HttpGet(\"{key}\")]"
+      ]
+    },
+    {
+      "source": "Shared/Modules/Api/Features/System/SystemCapabilitiesController.cs",
+      "attributes": [
+        "[Route(\"api/system\")]",
+        "[HttpGet(\"capabilities\")]"
+      ]
+    },
+    {
+      "source": "Shared/Modules/Api/Features/Workers/Controllers/WorkersController.cs",
+      "attributes": [
+        "[Route(\"api/admin/workers\")]"
+      ]
+    }
+  ]
+}

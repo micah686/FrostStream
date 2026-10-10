@@ -1,0 +1,67 @@
+<script lang="ts">
+  import { page } from '$app/state';
+  import { Clock, Download, Video } from '@lucide/svelte';
+
+  type IconComponent = typeof Download;
+
+  interface JobsSection {
+    label: string;
+    icon: IconComponent;
+    href: string;
+  }
+
+  let { children } = $props();
+
+  const sections: JobsSection[] = [
+    { label: 'Downloads', icon: Download, href: '/jobs' },
+    { label: 'Encoding', icon: Video, href: '/jobs/encoding' },
+    { label: 'Background', icon: Clock, href: '/jobs/background' }
+  ];
+
+  function isActive(section: JobsSection): boolean {
+    const path = page.url.pathname;
+    if (section.href === '/jobs') {
+      return path === '/jobs';
+    }
+    return path === section.href || path.startsWith(`${section.href}/`);
+  }
+</script>
+
+<svelte:head>
+  <title>Jobs · FrostStream</title>
+</svelte:head>
+
+<section class="min-h-[calc(100vh-7rem)]" aria-labelledby="jobs-title">
+  <div class="min-w-0">
+    <h1 id="jobs-title" class="text-2xl font-bold tracking-tight text-base-content">Jobs</h1>
+    <p class="mt-2 text-sm text-base-content/60">Downloads, encoding, and background work</p>
+  </div>
+
+  <div class="mt-6 grid gap-6 xl:grid-cols-[14rem_minmax(0,1fr)]">
+    <aside class="xl:pt-1" aria-label="Jobs sections">
+      <nav class="menu flex gap-2 overflow-x-auto p-0 pb-1 [--menu-active-bg:var(--color-primary)] [--menu-active-fg:var(--color-primary-content)] xl:block xl:space-y-2 xl:overflow-visible xl:pb-0">
+        {#each sections as section}
+          {@const { label, icon: Icon, href } = section}
+          {@const active = isActive(section)}
+          <a
+            {href}
+            class={[
+              'flex h-10 shrink-0 items-center gap-3 rounded-field px-4 text-sm font-medium transition xl:w-full',
+              active
+                ? 'menu-active bg-primary text-primary-content'
+                : 'text-base-content/70 hover:bg-base-200 hover:text-base-content'
+            ]}
+            aria-current={active ? 'page' : undefined}
+          >
+            <Icon class="h-4.5 w-4.5 shrink-0" />
+            <span>{label}</span>
+          </a>
+        {/each}
+      </nav>
+    </aside>
+
+    <div class="min-w-0 space-y-5">
+      {@render children()}
+    </div>
+  </div>
+</section>

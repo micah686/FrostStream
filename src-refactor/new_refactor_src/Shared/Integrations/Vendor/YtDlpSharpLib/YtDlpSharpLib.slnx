@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="ConsoleDownloader/ConsoleDownloader.csproj" />
+  <Project Path="YtDlpSharpLib/YtDlpSharpLib.csproj" />
+  <Project Path="Tests/YtDlpSharpLib.IntegrationTests/YtDlpSharpLib.IntegrationTests.csproj" />
+  <Project Path="Tests/YtDlpSharpLib.Tests/YtDlpSharpLib.Tests.csproj" />
+</Solution>

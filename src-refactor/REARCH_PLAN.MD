@@ -14,8 +14,42 @@ The desired shared base is a set of focused libraries, not a new catch-all `Shar
 
 The immediate deliverable is this repository-root `REARCH_PLAN.MD`. Each implementation phase below is subsequent work that can be undertaken separately.
 
-### IMPORTANT:
+### 0. IMPORTANT:
 All development will take place in this src-refactor folder. While you may read files from ../src/, the final files will need to be here. Assume I will be deleting the old ../src/ at the end of this excerise, so no referring to a library or similar that is staying in ../src/
+I have already copied the old src/tests/... into src-refactor/reference/src. this is to be your REFERENCE only. Any of the new arefactor needs to go over in src-refactor/new_refactor_src. 
+remember, the new refactor should structure should look like this (in the src-refactor/new_refactor_src/):
+```text
+Shared/
+  Contracts/
+  Core/
+  Persistence/
+  Integrations/
+  Modules/
+    Api/
+    DataBridge/
+    Worker/
+    MediaProcessor/
+    Scheduler/
+
+Lite/
+  Infrastructure/
+  Backend/
+  AppHost/
+
+Full/
+  Infrastructure/
+  Security/
+  Hosts/
+    WebAPI/
+    DataBridge/
+    Worker/
+    MediaProcessor/
+    Scheduler/
+    BackupService/
+  AppHost/
+
+Frontend/
+```
 
 ### Confirmed requirements
 

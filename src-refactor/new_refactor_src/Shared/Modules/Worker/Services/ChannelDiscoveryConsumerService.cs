@@ -1,0 +1,549 @@
+using FrostStream.ApplicationContracts;
+using System.IO.Hashing;
+using System.Text;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using NodaTime;
+using Shared.Database;
+using Shared.Messaging;
+using YtDlpSharpLib;
+using static Shared.Metadata.CreatorIdentity;
+using YtDlpSharpLib.Models;
+using YtDlpSharpLib.Options;
+
+namespace Worker.Services;
+
+public sealed class ChannelDiscoveryConsumerService(
+    IDurableJobConsumer consumer,
+    IDurableJobPublisher publisher,
+    IMessageBus messageBus,
+    IYtDlpClient ytDlp,
+    PotOptionsApplier potOptionsApplier,
+    [Microsoft.Extensions.DependencyInjection.FromKeyedServices("worker")] IBackgroundRunReporter runReporter,
+    IClock clock,
+    ILogger<ChannelDiscoveryConsumerService> logger) : BackgroundService
+{
+    internal const int MaxIncrementalScanEntries = 500;
+    internal const int MaxFullScanEntriesPerSource = 5_000;
+    internal const int DiscoveryUpsertBatchSize = 100;
+
+    private static readonly StreamName Stream = StreamName.From(BackgroundJobsTopology.StreamNameValue);
+    private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(30);
+
+    protected override Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        var consumers = new[]
+        {
+            Consume<ChannelScanRefreshRequested>(
+                BackgroundJobsTopology.WorkerChannelScanRefreshConsumer,
+                async message => { await HandleScheduledScanAsync(message, CreatorSourceScanMode.Incremental, stoppingToken); },
+                stoppingToken),
+            Consume<ChannelScanFullRequested>(
+                BackgroundJobsTopology.WorkerChannelScanFullConsumer,
+                message => HandleChannelScanFullAsync(message, stoppingToken),
+                stoppingToken)
+        };
+
+        logger.LogInformation("Subscribed to channel discovery consumers on stream {Stream}.", Stream.Value);
+        return Task.WhenAll(consumers);
+    }
+
+    private Task Consume<TMessage>(
+        string consumerName,
+        Func<TMessage, Task> handler,
+        CancellationToken stoppingToken)
+        where TMessage : ScheduledBackgroundRequest
+        => consumer.ConsumePullAsync<TMessage>(
+            Stream,
+            ConsumerName.From(consumerName),
+            async context =>
+            {
+                try
+                {
+                    await handler(context.Message);
+                    await context.AckAsync();
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed handling channel discovery request {IdempotencyKey}; nacking", context.Message.IdempotencyKey);
+                    await context.NackAsync();
+                }
+            },
+            options: null,
+            cancellationToken: stoppingToken);
+
+    private async Task HandleChannelScanFullAsync(
+        ChannelScanFullRequested request,
+        CancellationToken cancellationToken)
+    {
+        if (request.GroupId is null || request.ExpansionDispatchId is null
+            || request.CorrelationId is null)
+        {
+            await HandleScheduledScanAsync(request, CreatorSourceScanMode.Full, cancellationToken);
+            return;
+        }
+
+        try
+        {
+            var expectedJobs = await HandleScheduledScanAsync(
+                request, CreatorSourceScanMode.Full, cancellationToken);
+            var evt = new DownloadGroupExpansionSucceeded
+            {
+                GroupId = request.GroupId.Value,
+                CorrelationId = request.CorrelationId.Value,
+                MessageId = DeterministicGuid.Create(request.ExpansionDispatchId.Value, "/succeeded"),
+                CausationId = request.ExpansionDispatchId.Value,
+                OperationKey = $"group/{request.GroupId.Value:N}/expand/attempt/{request.ExpansionAttempt}/succeeded",
+                OccurredAt = clock.GetCurrentInstant(),
+                Attempt = request.ExpansionAttempt,
+                ExpectedJobs = expectedJobs
+            };
+            await publisher.PublishAsync(
+                DownloadSubjects.GroupExpansionSucceeded, evt, evt.MessageId.ToString("N"),
+                cancellationToken: cancellationToken);
+        }
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            logger.LogWarning(ex,
+                "V2 channel group {GroupId} expansion attempt {Attempt} failed.",
+                request.GroupId, request.ExpansionAttempt);
+            var evt = new DownloadGroupExpansionFailed
+            {
+                GroupId = request.GroupId.Value,
+                CorrelationId = request.CorrelationId.Value,
+                MessageId = DeterministicGuid.Create(request.ExpansionDispatchId.Value, "/failed"),
+                CausationId = request.ExpansionDispatchId.Value,
+                OperationKey = $"group/{request.GroupId.Value:N}/expand/attempt/{request.ExpansionAttempt}/failed",
+                OccurredAt = clock.GetCurrentInstant(),
+                Attempt = request.ExpansionAttempt,
+                FailureKind = YtDlpFailureDetails.ClassifyFailure(ex),
+                ErrorCode = YtDlpFailureDetails.ErrorCode(ex),
+                ErrorMessage = YtDlpFailureDetails.DescribeException(ex)
+            };
+            await publisher.PublishAsync(
+                DownloadSubjects.GroupExpansionFailed, evt, evt.MessageId.ToString("N"),
+                cancellationToken: cancellationToken);
+        }
+    }
+
+    private async Task<int> HandleScheduledScanAsync(
+        ScheduledBackgroundRequest request,
+        CreatorSourceScanMode scanMode,
+        CancellationToken cancellationToken)
+    {
+        var taskType = scanMode == CreatorSourceScanMode.Full ? "channel_scan_full" : "channel_scan_refresh";
+        await using var run = await runReporter.BeginAsync(
+            taskType, request, $"{scanMode} scan", cancellationToken);
+        try
+        {
+            await MarkAttemptAsync(request, cancellationToken);
+            await run.ReportAsync("Resolving creator sources to scan…");
+
+            var sources = await ResolveSourcesAsync(request, scanMode, cancellationToken);
+            var expectedJobs = 0;
+            var scanned = 0;
+            await run.ReportAsync($"Scanning {sources.Count} source(s).", 0, sources.Count);
+            foreach (var source in sources)
+            {
+                await run.ReportAsync(
+                    $"Scanning {SourceLabel(source)}…", scanned, sources.Count);
+                expectedJobs += await ScanSourceAsync(request, scanMode, source, cancellationToken);
+                scanned++;
+                await run.ReportAsync(
+                    $"Scanned {SourceLabel(source)} · {expectedJobs} item(s) queued so far.", scanned, sources.Count);
+            }
+
+            run.Succeed($"Scanned {sources.Count} source(s); queued {expectedJobs} item(s).");
+            await MarkSuccessAsync(request, cancellationToken);
+            logger.LogInformation(
+                "Completed {ScanMode} channel discovery request {IdempotencyKey} across {SourceCount} source(s).",
+                scanMode,
+                request.IdempotencyKey,
+                sources.Count);
+            return expectedJobs;
+        }
+        catch (Exception ex)
+        {
+            run.Fail(ex.Message);
+            throw;
+        }
+    }
+
+    private static string SourceLabel(CreatorMonitorDto source)
+    {
+        // Prefer the last URL path segment (usually the handle) so a progress line stays readable.
+        var handle = Uri.TryCreate(source.SourceUrl, UriKind.Absolute, out var uri)
+            ? uri.Segments.Select(x => x.Trim('/')).LastOrDefault(x => x.Length > 0)
+            : null;
+        return handle ?? source.SourceUrl;
+    }
+
+    private async Task<IReadOnlyList<CreatorMonitorDto>> ResolveSourcesAsync(
+        ScheduledBackgroundRequest request,
+        CreatorSourceScanMode scanMode,
+        CancellationToken cancellationToken)
+    {
+        var requestedSourceId = request switch
+        {
+            ChannelScanFullRequested { TargetSourceId: { } id } => (long?)id,
+            ChannelScanRefreshRequested { TargetSourceId: { } id } => id,
+            _ => null
+        };
+
+        if (requestedSourceId is { } targetSourceId)
+        {
+            var sourceResponse = await messageBus.RequestAsync<CreatorMonitorGetRequestMessage, CreatorMonitorOperationResponseMessage>(
+                CreatorMonitorSubjects.GetSource,
+                new CreatorMonitorGetRequestMessage { Id = targetSourceId },
+                RequestTimeout,
+                cancellationToken);
+
+            if (sourceResponse is not { Success: true, Entity: { } source })
+            {
+                throw new InvalidOperationException(sourceResponse?.ErrorMessage ?? $"Creator source '{targetSourceId}' was not found.");
+            }
+
+            return [source];
+        }
+
+        var sourcesResponse = await messageBus.RequestAsync<CreatorMonitorListEnabledForScanRequestMessage, CreatorMonitorOperationResponseMessage>(
+            CreatorMonitorSubjects.ListEnabledSourcesForScan,
+            new CreatorMonitorListEnabledForScanRequestMessage { ScanMode = scanMode },
+            RequestTimeout,
+            cancellationToken);
+
+        if (sourcesResponse is not { Success: true })
+        {
+            throw new InvalidOperationException(sourcesResponse?.ErrorMessage ?? "Creator source list request failed.");
+        }
+
+        return sourcesResponse.Items ?? Array.Empty<CreatorMonitorDto>();
+    }
+
+    private async Task<int> ScanSourceAsync(
+        ScheduledBackgroundRequest request,
+        CreatorSourceScanMode scanMode,
+        CreatorMonitorDto source,
+        CancellationToken cancellationToken)
+    {
+        var correlationId = ChannelCorrelationId(request, source.Id);
+        var options = BuildOptions(scanMode, source);
+        var result = await ytDlp.TryGetVideoInfoAsync(source.SourceUrl, cancellationToken, flat: true, overrideOptions: potOptionsApplier.Apply(options));
+        if (!result.Success || result.Data is not { } container)
+        {
+            throw new InvalidOperationException($"yt-dlp flat scan failed for creator source {source.Id}: {result.ErrorOutput}");
+        }
+
+        var candidates = ExtractCandidates(source, container)
+            .Take(EntryLimit(scanMode, source))
+            .ToArray();
+        var scanHighWatermark = candidates.FirstOrDefault()?.ExternalMediaId;
+        var pageStartIndex = PageStartIndex(scanMode, source);
+        var entryLimit = EntryLimit(scanMode, source);
+        var scanPageComplete = scanMode != CreatorSourceScanMode.Full || candidates.Length < entryLimit;
+        int? nextScanPageStartIndex = scanPageComplete ? null : pageStartIndex + candidates.Length;
+
+        var totalSeen = 0;
+        var newCount = 0;
+        var changedCount = 0;
+        var expectedJobs = 0;
+        var batchIndex = 0;
+        var batches = Chunk(candidates, DiscoveryUpsertBatchSize).ToArray();
+
+        foreach (var batch in batches)
+        {
+            var response = await messageBus.RequestAsync<UpsertDiscoveredMediaBatchRequestMessage, UpsertDiscoveredMediaBatchResponseMessage>(
+                CreatorMonitorSubjects.UpsertDiscoveredMediaBatch,
+                new UpsertDiscoveredMediaBatchRequestMessage
+                {
+                    CreatorSourceId = source.Id,
+                    CorrelationId = correlationId,
+                    ScanMode = scanMode,
+                    ScheduleKey = request.ScheduleKey,
+                    IdempotencyKey = $"{request.IdempotencyKey}:{source.Id}:batch-{batchIndex}",
+                    ScannedAt = clock.GetCurrentInstant(),
+                    ScanHighWatermarkExternalMediaId = scanHighWatermark,
+                    ScanPageStartIndex = pageStartIndex,
+                    NextScanPageStartIndex = nextScanPageStartIndex,
+                    ScanPageComplete = scanPageComplete,
+                    IsScanPageFinalBatch = batchIndex == batches.Length - 1,
+                    StorageKey = ChannelStorageKey(request),
+                    RequestedBy = SourceRequestedBy(request, source),
+                    ConfigSetKey = SourceConfigSetKey(request, source),
+                    WorkerTag = ChannelWorkerTag(request),
+                    EncodeForPlaylist = ChannelEncodeForPlaylist(request),
+                    CookieSecretPath = ChannelCookieSecretPath(request),
+                    Priority = ChannelPriority(request),
+                    FetchComments = ChannelFetchComments(request),
+                    QueueAllItems = ChannelQueueAllItems(request),
+                    ForceDownload = ChannelForceDownload(request),
+                    ResolveDownloadConfigSet = ShouldResolveSourceConfigSet(request, source),
+                    YtDlpOptions = ChannelYtDlpOptions(request),
+                    Items = batch
+                },
+                RequestTimeout,
+                cancellationToken);
+
+            if (response is not { Success: true })
+            {
+                throw new InvalidOperationException(response?.ErrorMessage ?? $"Discovery upsert failed for creator source {source.Id}.");
+            }
+
+            totalSeen += response.TotalSeen;
+            newCount += response.NewCount;
+            changedCount += response.ChangedCount;
+            expectedJobs += response.EnqueuedItems?.Count ?? 0;
+            batchIndex++;
+        }
+
+        if (batchIndex == 0)
+        {
+            var response = await messageBus.RequestAsync<UpsertDiscoveredMediaBatchRequestMessage, UpsertDiscoveredMediaBatchResponseMessage>(
+                CreatorMonitorSubjects.UpsertDiscoveredMediaBatch,
+                new UpsertDiscoveredMediaBatchRequestMessage
+                {
+                    CreatorSourceId = source.Id,
+                    CorrelationId = correlationId,
+                    ScanMode = scanMode,
+                    ScheduleKey = request.ScheduleKey,
+                    IdempotencyKey = $"{request.IdempotencyKey}:{source.Id}:batch-0",
+                    ScannedAt = clock.GetCurrentInstant(),
+                    ScanHighWatermarkExternalMediaId = scanHighWatermark,
+                    ScanPageStartIndex = pageStartIndex,
+                    NextScanPageStartIndex = nextScanPageStartIndex,
+                    ScanPageComplete = scanPageComplete,
+                    IsScanPageFinalBatch = true,
+                    StorageKey = ChannelStorageKey(request),
+                    RequestedBy = SourceRequestedBy(request, source),
+                    ConfigSetKey = SourceConfigSetKey(request, source),
+                    WorkerTag = ChannelWorkerTag(request),
+                    EncodeForPlaylist = ChannelEncodeForPlaylist(request),
+                    CookieSecretPath = ChannelCookieSecretPath(request),
+                    Priority = ChannelPriority(request),
+                    FetchComments = ChannelFetchComments(request),
+                    QueueAllItems = ChannelQueueAllItems(request),
+                    ForceDownload = ChannelForceDownload(request),
+                    ResolveDownloadConfigSet = ShouldResolveSourceConfigSet(request, source),
+                    YtDlpOptions = ChannelYtDlpOptions(request),
+                    Items = []
+                },
+                RequestTimeout,
+                cancellationToken);
+
+            if (response is not { Success: true })
+            {
+                throw new InvalidOperationException(response?.ErrorMessage ?? $"Discovery upsert failed for creator source {source.Id}.");
+            }
+            expectedJobs += response.EnqueuedItems?.Count ?? 0;
+        }
+
+        if (!scanPageComplete)
+        {
+            logger.LogWarning(
+                "Creator source {SourceId} ({ScanMode}) scanned page {PageStart}-{PageEnd} and will resume at index {NextStart}.",
+                source.Id,
+                scanMode,
+                pageStartIndex,
+                pageStartIndex + candidates.Length - 1,
+                nextScanPageStartIndex);
+        }
+
+        logger.LogInformation(
+            "Scanned creator source {SourceId} ({ScanMode}); seen {SeenCount}, new {NewCount}, changed {ChangedCount}, batches {BatchCount}.",
+            source.Id,
+            scanMode,
+            totalSeen,
+            newCount,
+            changedCount,
+            Math.Max(batchIndex, 1));
+        return expectedJobs;
+    }
+
+    internal static YtDlpOptions BuildOptions(
+        CreatorSourceScanMode scanMode,
+        CreatorMonitorDto source)
+        => new()
+        {
+            VideoSelection = new YtDlpVideoSelectionOptions
+            {
+                PlaylistItems = $"{PageStartIndex(scanMode, source)}:{PageEndIndex(scanMode, source)}"
+            }
+        };
+
+    internal static int EntryLimit(
+        CreatorSourceScanMode scanMode,
+        CreatorMonitorDto source)
+    {
+        return scanMode == CreatorSourceScanMode.Incremental
+            ? Math.Clamp(source.IncrementalPageSize, 1, MaxIncrementalScanEntries)
+            : MaxFullScanEntriesPerSource;
+    }
+
+    internal static int PageStartIndex(CreatorSourceScanMode scanMode, CreatorMonitorDto source)
+        => scanMode == CreatorSourceScanMode.Full
+            ? Math.Max(1, source.NextFullScanStartIndex ?? 1)
+            : 1;
+
+    private static int PageEndIndex(CreatorSourceScanMode scanMode, CreatorMonitorDto source)
+        => PageStartIndex(scanMode, source) + EntryLimit(scanMode, source) - 1;
+
+    private static string? ChannelStorageKey(ScheduledBackgroundRequest request)
+        => request is ChannelScanFullRequested channelRequest && !string.IsNullOrWhiteSpace(channelRequest.StorageKey)
+            ? channelRequest.StorageKey
+            : null;
+
+    private static string? ChannelRequestedBy(ScheduledBackgroundRequest request)
+        => request is ChannelScanFullRequested channelRequest && !string.IsNullOrWhiteSpace(channelRequest.RequestedBy)
+            ? channelRequest.RequestedBy
+            : null;
+
+    private static string? ChannelConfigSetKey(ScheduledBackgroundRequest request)
+        => request is ChannelScanFullRequested channelRequest ? channelRequest.ConfigSetKey : null;
+
+    private static string? SourceRequestedBy(ScheduledBackgroundRequest request, CreatorMonitorDto source)
+        => ChannelRequestedBy(request) ?? source.ConfigSetOwnerSubject;
+
+    private static string? SourceConfigSetKey(ScheduledBackgroundRequest request, CreatorMonitorDto source)
+        // A user-initiated full download must use only the config set explicitly selected
+        // for that request. Scheduled scans and "Scan now" inherit the source setting.
+        => string.IsNullOrWhiteSpace(ChannelRequestedBy(request))
+            ? ChannelConfigSetKey(request) ?? source.ConfigSetKey
+            : ChannelConfigSetKey(request);
+
+    private static bool ShouldResolveSourceConfigSet(ScheduledBackgroundRequest request, CreatorMonitorDto source)
+        => string.IsNullOrWhiteSpace(ChannelRequestedBy(request)) &&
+            string.IsNullOrWhiteSpace(ChannelConfigSetKey(request)) &&
+            !string.IsNullOrWhiteSpace(source.ConfigSetOwnerSubject) &&
+            !string.IsNullOrWhiteSpace(source.ConfigSetKey);
+
+    private static string? ChannelWorkerTag(ScheduledBackgroundRequest request)
+        => request is ChannelScanFullRequested channelRequest ? channelRequest.WorkerTag : null;
+
+    private static bool ChannelEncodeForPlaylist(ScheduledBackgroundRequest request)
+        => request is ChannelScanFullRequested channelRequest && channelRequest.EncodeForPlaylist;
+
+    private static string? ChannelCookieSecretPath(ScheduledBackgroundRequest request)
+        => request is ChannelScanFullRequested channelRequest ? channelRequest.CookieSecretPath : null;
+
+    private static int ChannelPriority(ScheduledBackgroundRequest request)
+        => request is ChannelScanFullRequested channelRequest ? channelRequest.Priority : 0;
+
+    private static bool ChannelFetchComments(ScheduledBackgroundRequest request)
+        => request is ChannelScanFullRequested channelRequest && channelRequest.FetchComments;
+
+    private static bool ChannelQueueAllItems(ScheduledBackgroundRequest request)
+        => request is ChannelScanFullRequested channelRequest && channelRequest.QueueAllItems;
+
+    private static bool ChannelForceDownload(ScheduledBackgroundRequest request)
+        => request is ChannelScanFullRequested channelRequest && channelRequest.ForceDownload;
+
+    private static YtDlpOptions? ChannelYtDlpOptions(ScheduledBackgroundRequest request)
+        => request is ChannelScanFullRequested channelRequest ? channelRequest.YtDlpOptions : null;
+
+    private static IEnumerable<DiscoveredMediaCandidate> ExtractCandidates(CreatorMonitorDto source, VideoInfo container)
+    {
+        var entries = container.Entries ?? Array.Empty<VideoInfo>();
+        foreach (var entry in entries)
+        {
+            var externalId = FirstNonBlank(entry.Id, entry.DisplayId);
+            if (externalId is null)
+            {
+                continue;
+            }
+
+            var canonicalUrl = ResolveCanonicalUrl(source, entry, externalId);
+            if (canonicalUrl is null)
+            {
+                continue;
+            }
+
+            yield return new DiscoveredMediaCandidate
+            {
+                Platform = NormalizePlatform(entry.Extractor, entry.ExtractorKey, container.Extractor, container.ExtractorKey, source.Platform)
+                    ?? source.Platform,
+                Extractor = FirstNonBlank(entry.Extractor, entry.ExtractorKey, container.Extractor, container.ExtractorKey, source.Platform) ?? source.Platform,
+                ExternalMediaId = externalId,
+                CanonicalUrl = canonicalUrl,
+                Title = FirstNonBlank(entry.Title, entry.FullTitle),
+                DurationSeconds = entry.Duration,
+                ThumbnailUrl = BestThumbnailUrl(entry),
+                LiveStatus = entry.LiveStatus?.ToString(),
+                Availability = entry.Availability?.ToString()
+            };
+        }
+    }
+
+    internal static string? ResolveCanonicalUrl(CreatorMonitorDto source, VideoInfo entry, string externalId)
+    {
+        // Flat YouTube collection entries occasionally report the collection URL in Url/WebpageUrl.
+        // The external id is the reliable per-video identity, so build the canonical watch URL first.
+        var extractor = FirstNonBlank(entry.Extractor, entry.ExtractorKey, source.Platform);
+        if (extractor?.Contains("youtube", StringComparison.OrdinalIgnoreCase) == true ||
+            source.Platform.Contains("youtube", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"https://www.youtube.com/watch?v={Uri.EscapeDataString(externalId)}";
+        }
+
+        var url = FirstIndividualAbsoluteUrl(source.SourceUrl, entry.WebpageUrl, entry.Url);
+        if (url is not null)
+        {
+            return url;
+        }
+
+        return null;
+    }
+
+    internal static Guid ChannelCorrelationId(ScheduledBackgroundRequest request, long sourceId)
+    {
+        if (request is ChannelScanFullRequested { CorrelationId: { } explicitId } && explicitId != Guid.Empty)
+            return explicitId;
+
+        var input = Encoding.UTF8.GetBytes($"channel/{sourceId}/{request.IdempotencyKey}");
+        Span<byte> hash = stackalloc byte[16];
+        XxHash128.Hash(input, hash);
+        return new Guid(hash);
+    }
+
+    private static string? BestThumbnailUrl(VideoInfo entry)
+        => entry.Thumbnails?
+            .Where(x => !string.IsNullOrWhiteSpace(x.Url))
+            .OrderByDescending(x => x.Preference ?? 0)
+            .ThenByDescending(x => x.Width ?? 0)
+            .Select(x => x.Url)
+            .FirstOrDefault();
+
+    private static string? FirstIndividualAbsoluteUrl(string collectionUrl, params string?[] values)
+        => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)
+            && Uri.TryCreate(value, UriKind.Absolute, out _)
+            && !SameUrl(value, collectionUrl));
+
+    private static bool SameUrl(string left, string right)
+        => string.Equals(left.Trim().TrimEnd('/'), right.Trim().TrimEnd('/'), StringComparison.OrdinalIgnoreCase);
+
+    private static IEnumerable<IReadOnlyList<DiscoveredMediaCandidate>> Chunk(
+        IReadOnlyList<DiscoveredMediaCandidate> candidates,
+        int size)
+    {
+        for (var offset = 0; offset < candidates.Count; offset += size)
+        {
+            yield return candidates
+                .Skip(offset)
+                .Take(size)
+                .ToArray();
+        }
+    }
+
+    private Task MarkAttemptAsync(ScheduledBackgroundRequest message, CancellationToken cancellationToken)
+        => messageBus.PublishAsync(ScheduleSubjects.MarkAttempt, new ScheduleMarkAttemptRequestMessage
+        {
+            Key = message.ScheduleKey,
+            AttemptedAt = clock.GetCurrentInstant()
+        }, cancellationToken: cancellationToken);
+
+    private Task MarkSuccessAsync(ScheduledBackgroundRequest message, CancellationToken cancellationToken)
+        => messageBus.PublishAsync(ScheduleSubjects.MarkSuccess, new ScheduleMarkSuccessRequestMessage
+        {
+            Key = message.ScheduleKey,
+            SucceededAt = clock.GetCurrentInstant()
+        }, cancellationToken: cancellationToken);
+}

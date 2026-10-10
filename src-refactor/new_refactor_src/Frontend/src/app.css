@@ -1,0 +1,104 @@
+@import "tailwindcss";
+@plugin "daisyui" {
+  themes: all;
+}
+
+@plugin "daisyui/theme" {
+  name: "froststream";
+  default: true;
+  prefersdark: true;
+  color-scheme: dark;
+
+  /* base-200 is the app canvas; base-100 is used for persistent chrome and
+     floating surfaces. This same relationship is used by the built-in themes. */
+  --color-base-100: #151a26;
+  --color-base-200: #10141e;
+  --color-base-300: #1e293b;
+  --color-base-content: #f8fafc;
+
+  --color-primary: #3b82f6;
+  --color-primary-content: #ffffff;
+  --color-secondary: #8b5cf6;
+  --color-secondary-content: #ffffff;
+  --color-accent: #06b6d4;
+  --color-accent-content: #04212b;
+  --color-neutral: #1e293b;
+  --color-neutral-content: #cbd5e1;
+
+  --color-info: #60a5fa;
+  --color-info-content: #0b1220;
+  --color-success: #10b981;
+  --color-success-content: #052e1f;
+  --color-warning: #f59e0b;
+  --color-warning-content: #1c1300;
+  --color-error: #ef4444;
+  --color-error-content: #ffffff;
+
+  /* rounded-2xl cards, rounded-lg buttons/inputs — matches the previous look */
+  --radius-box: 1rem;
+  --radius-field: 0.5rem;
+  --radius-selector: 0.5rem;
+  --size-field: 0.25rem;
+  --size-selector: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+@theme {
+  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+:root {
+  font-family: var(--font-sans);
+  color: var(--color-base-content);
+  background: var(--color-base-200);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+html {
+  min-width: 320px;
+  background: var(--color-base-200);
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  overflow-x: hidden;
+  color: var(--color-base-content);
+  background: var(--color-base-200);
+}
+
+button,
+a,
+input {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--color-primary) 40%, transparent);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-base-200);
+}
+
+::-webkit-scrollbar-thumb {
+  border: 3px solid var(--color-base-200);
+  border-radius: 999px;
+  background: var(--color-base-300);
+}

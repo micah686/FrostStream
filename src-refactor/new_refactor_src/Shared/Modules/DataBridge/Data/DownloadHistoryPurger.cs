@@ -1,0 +1,391 @@
+using DataBridge.Persistence;
+using Microsoft.Extensions.DependencyInjection;
+using Cleipnir.ResilientFunctions.Domain;
+using DataBridge.Flows;
+using DataBridge.Messaging;
+using Microsoft.Extensions.Logging;
+using NodaTime;
+using DataBridge.Persistence.Workflows;
+using Shared.Messaging;
+
+namespace DataBridge.Data;
+
+public sealed record DownloadHistoryCleanupResult
+{
+    public int RetentionDays { get; init; }
+    public bool IncludeFailed { get; init; }
+    public int PurgedJobs { get; init; }
+    public int PurgedGroups { get; init; }
+    public int DeletedJobFlows { get; init; }
+    public int DeletedGroupFlows { get; init; }
+    public int DeletedOrphanFlows { get; init; }
+    public bool OrphanSweepTruncated { get; init; }
+
+    public string Describe()
+        => $"Deleted {PurgedJobs} job(s), {PurgedGroups} group(s), "
+           + $"{DeletedJobFlows + DeletedGroupFlows} flow instance(s), and {DeletedOrphanFlows} orphaned flow(s)."
+           + (OrphanSweepTruncated ? " The orphan sweep hit its per-run cap and will continue next run." : string.Empty);
+}
+
+public interface IDownloadHistoryPurger
+{
+    Task<DownloadHistoryCleanupResult> PurgeAsync(
+        int retentionDays,
+        bool includeFailed,
+        Func<string, Task>? reportProgress,
+        CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// Deletes download-job history for work that has genuinely finished.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Two invariants govern this class and must not be relaxed.
+/// </para>
+/// <para>
+/// <b>Flows are deleted before the rows that name them.</b> There is no referential relationship
+/// between the <c>jobs</c> schema and the <c>cleipnir</c> schema — the only link is the instance-id
+/// string convention in <see cref="DownloadFlowInstance"/>, stored in
+/// <c>cleipnir.flows.human_instance_id</c>. Every existing flow-deletion path constructs that id from
+/// a SQL row, so deleting the row first leaves a flow nobody can name, and therefore nobody can ever
+/// delete. If the process dies between the flow delete and the row delete the rows simply survive and
+/// the next run retries, so this ordering is also the crash-safe one.
+/// </para>
+/// <para>
+/// <b>Failed and stopped jobs are preserved unless explicitly opted into.</b>
+/// <c>DownloadFlowV2Repository.StartFreshRunAsync</c> rebuilds the original request by deserializing
+/// the earliest <c>jobs.download_job_history</c> row with <c>event_name = 'DownloadRequested'</c>.
+/// That history cascades away with the job row, so purging a restartable job silently and permanently
+/// destroys the ability to retry it.
+/// </para>
+/// </remarks>
+public sealed class DownloadHistoryPurger(
+    IWorkflowRetentionQueries workflowQueries,
+    IServiceScopeFactory scopes,
+    DownloadJobV2Flows jobFlows,
+    DownloadGroupV2Flows groupFlows,
+    LocalImportItemV2Flows importFlows,
+    IClock clock,
+    ILogger<DownloadHistoryPurger> logger) : IDownloadHistoryPurger
+{
+    private async Task<T> ApplicationAsync<T>(Func<ApplicationRetention, Task<T>> operation)
+    {
+        using var scope = scopes.CreateScope();
+        return await operation(new ApplicationRetention(scope.ServiceProvider.GetRequiredService<DataBridgeDbContext>()));
+    }
+
+    public const int DefaultRetentionDays = 30;
+
+    /// <summary>Jobs are purged a batch at a time so a first run on a long-lived install never holds one huge transaction.</summary>
+    private const int BatchSize = ApplicationBatches.WriteBatchSize;
+
+    /// <summary>Ceiling on how many terminal flow rows one run inspects, so the sweep cannot run away.</summary>
+    private const int OrphanSweepLimit = 20_000;
+
+    /// <summary>A job in any of these is still in flight, so neither it nor any sibling under its correlation id may be purged.</summary>
+    private static readonly DownloadJobStatus[] NonTerminalJobStatuses =
+    [
+        DownloadJobStatus.Queued,
+        DownloadJobStatus.Running,
+        DownloadJobStatus.Stopping,
+        DownloadJobStatus.Compensating
+    ];
+
+    /// <summary>Terminal and not restartable: nothing is lost by deleting these.</summary>
+    private static readonly DownloadJobStatus[] SucceededJobStatuses =
+    [
+        DownloadJobStatus.Completed,
+        DownloadJobStatus.CompletedWithWarnings,
+        DownloadJobStatus.AlreadyDownloaded,
+        DownloadJobStatus.Ignored
+    ];
+
+    /// <summary>Terminal but restartable via Start; only purged when the caller opts in.</summary>
+    private static readonly DownloadJobStatus[] RestartableJobStatuses =
+    [
+        DownloadJobStatus.Failed,
+        DownloadJobStatus.Stopped
+    ];
+
+    private static readonly DownloadGroupStatus[] SucceededGroupStatuses =
+    [
+        DownloadGroupStatus.Completed,
+        DownloadGroupStatus.CompletedWithWarnings
+    ];
+
+    private static readonly DownloadGroupStatus[] FailedGroupStatuses =
+    [
+        DownloadGroupStatus.CompletedWithFailures,
+        DownloadGroupStatus.Failed,
+        DownloadGroupStatus.Stopped
+    ];
+
+    public async Task<DownloadHistoryCleanupResult> PurgeAsync(
+        int retentionDays,
+        bool includeFailed,
+        Func<string, Task>? reportProgress,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var days = Math.Max(0, retentionDays);
+        var cutoff = clock.GetCurrentInstant().Minus(Duration.FromDays(days));
+
+        // A group is all-or-nothing: its status gates every child. That is what keeps a
+        // partially-failed playlist intact in the default mode — the successful children stay so the
+        // group's aggregate counts remain coherent and the failed sibling stays restartable.
+        var jobStatuses = includeFailed
+            ? [.. SucceededJobStatuses, .. RestartableJobStatuses]
+            : SucceededJobStatuses;
+        var groupStatuses = includeFailed
+            ? [.. SucceededGroupStatuses, .. FailedGroupStatuses]
+            : SucceededGroupStatuses;
+
+        // Any sibling in a blocking status vetoes the whole correlation id. In the default mode
+        // restartable statuses block too, so a stale RefreshGroupAggregateAsync count can never let a
+        // retryable job's siblings be purged out from under it.
+        var blockingStatuses = includeFailed
+            ? NonTerminalJobStatuses
+            : [.. NonTerminalJobStatuses, .. RestartableJobStatuses];
+
+        if (reportProgress is not null)
+        {
+            var scope = includeFailed ? "finished, failed and stopped" : "successfully finished";
+            await reportProgress(
+                $"Purging {scope} download jobs whose group finished before {cutoff} ({days}-day retention)…");
+        }
+
+        var purgedJobs = 0;
+        var purgedGroups = 0;
+        var deletedJobFlows = 0;
+        var deletedGroupFlows = 0;
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            var batch = await SelectEligibleJobsAsync(
+                cutoff,
+                jobStatuses,
+                groupStatuses,
+                blockingStatuses,
+                cancellationToken);
+
+            if (batch.Count == 0)
+                break;
+
+            var jobIds = batch.Select(x => x.JobId).ToArray();
+            var correlationIds = batch.Select(x => x.CorrelationId).Distinct().ToArray();
+
+            // Flows first: once the run rows are gone the instance ids are unrecoverable.
+            deletedJobFlows += await DeleteJobFlowsAsync(jobIds, cancellationToken);
+
+            purgedJobs += await DeleteJobRowsAsync(jobIds, cutoff, jobStatuses, groupStatuses, blockingStatuses, cancellationToken);
+
+            // A group only drains once its last child is gone, which for a large playlist happens on a
+            // later batch than the one that started it.
+            var drained = await SelectDrainedGroupsAsync(correlationIds, cancellationToken);
+            if (drained.Count > 0)
+            {
+                deletedGroupFlows += await DeleteGroupFlowsAsync(drained.Select(x => x.GroupId), cancellationToken);
+                purgedGroups += await DeleteGroupRowsAsync(drained.Select(x => x.CorrelationId).ToArray(), cancellationToken);
+            }
+
+            if (reportProgress is not null)
+                await reportProgress($"Purged {purgedJobs} job(s) and {purgedGroups} group(s) so far…");
+
+            // A short batch means the eligible set is exhausted; avoid one extra empty round-trip.
+            if (batch.Count < BatchSize)
+                break;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (reportProgress is not null)
+            await reportProgress("Sweeping orphaned Cleipnir flow instances…");
+
+        var sweep = await SweepOrphanedFlowsAsync(cancellationToken);
+
+        var result = new DownloadHistoryCleanupResult
+        {
+            RetentionDays = days,
+            IncludeFailed = includeFailed,
+            PurgedJobs = purgedJobs,
+            PurgedGroups = purgedGroups,
+            DeletedJobFlows = deletedJobFlows,
+            DeletedGroupFlows = deletedGroupFlows,
+            DeletedOrphanFlows = sweep.Deleted,
+            OrphanSweepTruncated = sweep.Truncated
+        };
+
+        cancellationToken.ThrowIfCancellationRequested();
+        logger.LogInformation(
+            "Download history cleanup purged {Jobs} job(s), {Groups} group(s), {JobFlows} job flow(s), "
+            + "{GroupFlows} group flow(s) and {Orphans} orphaned flow(s) using a {Days}-day retention "
+            + "(includeFailed={IncludeFailed}).",
+            purgedJobs, purgedGroups, deletedJobFlows, deletedGroupFlows, sweep.Deleted, days, includeFailed);
+
+        return result;
+    }
+
+    private Task<List<(Guid JobId, Guid CorrelationId)>> SelectEligibleJobsAsync(
+        Instant cutoff, DownloadJobStatus[] jobStatuses, DownloadGroupStatus[] groupStatuses,
+        DownloadJobStatus[] blockingStatuses, CancellationToken cancellationToken)
+        => ApplicationAsync(store => store.SelectJobsAsync(cutoff, jobStatuses, groupStatuses, blockingStatuses, cancellationToken));
+
+    private Task<int> DeleteJobRowsAsync(Guid[] jobIds, Instant cutoff, DownloadJobStatus[] jobs,
+        DownloadGroupStatus[] groups, DownloadJobStatus[] blocking, CancellationToken ct)
+        => ApplicationAsync(store => store.DeleteJobsAsync(jobIds, cutoff, jobs, groups, blocking, ct));
+
+    private Task<List<(Guid GroupId, Guid CorrelationId)>> SelectDrainedGroupsAsync(Guid[] ids, CancellationToken ct)
+        => ApplicationAsync(store => store.SelectDrainedGroupsAsync(ids, ct));
+
+    private Task<int> DeleteGroupRowsAsync(Guid[] ids, CancellationToken ct)
+        => ApplicationAsync(store => store.DeleteGroupsAsync(ids, ct));
+
+    private async Task<int> DeleteJobFlowsAsync(Guid[] jobIds, CancellationToken cancellationToken)
+    {
+        var runs = await ApplicationAsync(store => store.SelectRunsAsync(jobIds, cancellationToken));
+
+        var deleted = 0;
+        foreach (var run in runs)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (await DeleteJobFlowAsync(run.JobId, run.RunId))
+                deleted++;
+        }
+
+        return deleted;
+    }
+
+    private async Task<int> DeleteGroupFlowsAsync(IEnumerable<Guid> groupIds, CancellationToken cancellationToken)
+    {
+        var deleted = 0;
+        foreach (var groupId in groupIds)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (await DeleteGroupFlowAsync(groupId))
+                deleted++;
+        }
+
+        return deleted;
+    }
+
+    /// <summary>
+    /// Removes terminal flow instances whose owning row is already gone. These accumulate from two
+    /// sources: rows deleted before this cleanup existed, and local-import flows, which nothing has
+    /// ever deleted. Deletion goes through Cleipnir's own control panel rather than raw SQL so
+    /// <c>flows</c>, <c>flows_effects</c>, <c>flows_messages</c> and <c>flows_timeouts</c> stay consistent.
+    /// </summary>
+    private async Task<(int Deleted, bool Truncated)> SweepOrphanedFlowsAsync(CancellationToken cancellationToken)
+    {
+        var orphans = await workflowQueries.FindOrphansAsync(OrphanSweepLimit, cancellationToken);
+
+        // Deletion still goes through the typed container matching each id shape, so Cleipnir keeps
+        // flows/flows_effects/flows_messages/flows_timeouts consistent. A panel fetched from the wrong
+        // container would simply come back null, because the (type, instance) key would not match.
+        var deleted = 0;
+        foreach (var instance in orphans)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var removed = TryParseJobInstance(instance, out var jobId, out var runId)
+                ? await DeleteJobFlowAsync(jobId, runId)
+                : TryParseGroupInstance(instance, out var groupId)
+                    ? await DeleteGroupFlowAsync(groupId)
+                    : await DeleteImportFlowAsync(instance);
+
+            if (removed)
+                deleted++;
+        }
+
+        return (deleted, orphans.Count >= OrphanSweepLimit);
+    }
+
+    // One method per flow container: each container's ControlPanel returns a differently-typed panel,
+    // so `var` at three call sites is simpler than a generic helper. A missing panel is not an error —
+    // it just means that flow was already deleted, which is the normal steady state.
+    private async Task<bool> DeleteJobFlowAsync(Guid jobId, Guid runId)
+    {
+        var instance = DownloadFlowInstance.Job(jobId, runId);
+        try
+        {
+            var panel = await jobFlows.ControlPanel(new FlowInstance(instance));
+            if (panel is null || panel.Status is not (Status.Succeeded or Status.Failed))
+                return false;
+            await panel.Delete();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LogFlowDeleteFailure(ex, instance);
+            return false;
+        }
+    }
+
+    private async Task<bool> DeleteGroupFlowAsync(Guid groupId)
+    {
+        var instance = DownloadFlowInstance.Group(groupId);
+        try
+        {
+            var panel = await groupFlows.ControlPanel(new FlowInstance(instance));
+            if (panel is null || panel.Status is not (Status.Succeeded or Status.Failed))
+                return false;
+            await panel.Delete();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LogFlowDeleteFailure(ex, instance);
+            return false;
+        }
+    }
+
+    private async Task<bool> DeleteImportFlowAsync(string instance)
+    {
+        try
+        {
+            var panel = await importFlows.ControlPanel(new FlowInstance(instance));
+            if (panel is null || panel.Status is not (Status.Succeeded or Status.Failed))
+                return false;
+            await panel.Delete();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LogFlowDeleteFailure(ex, instance);
+            return false;
+        }
+    }
+
+    // A single stubborn flow instance must not abort the whole purge: the SQL rows it names are still
+    // present, so skipping it is safe and the next run retries.
+    private void LogFlowDeleteFailure(Exception ex, string instance)
+        => logger.LogWarning(ex, "Failed deleting Cleipnir flow instance {Instance} during download history cleanup; skipping it.", instance);
+
+    /// <summary>Job flow instances are <c>{jobId:N}-{runId:N}</c> — see <see cref="DownloadFlowInstance.Job"/>.</summary>
+    internal static bool TryParseJobInstance(string instance, out Guid jobId, out Guid runId)
+    {
+        jobId = default;
+        runId = default;
+        return instance.Length == 65
+               && instance[32] == '-'
+               && Guid.TryParseExact(instance[..32], "N", out jobId)
+               && Guid.TryParseExact(instance[33..], "N", out runId);
+    }
+
+    /// <summary>Group flow instances are <c>{groupId:N}</c> — see <see cref="DownloadFlowInstance.Group"/>.</summary>
+    internal static bool TryParseGroupInstance(string instance, out Guid groupId)
+    {
+        groupId = default;
+        return instance.Length == 32 && Guid.TryParseExact(instance, "N", out groupId);
+    }
+
+    /// <summary>Local-import instances are <c>{itemId:N}/attempt-{n}</c> — see <c>LocalImportFlowInstance.ForItemAttempt</c>.</summary>
+    internal static bool TryParseImportInstance(string instance, out Guid itemId)
+    {
+        itemId = default;
+        var separator = instance.IndexOf("/attempt-", StringComparison.Ordinal);
+        return separator == 32 && instance.Length > 41
+               && instance[41..].All(c => c is >= '0' and <= '9')
+               && Guid.TryParseExact(instance[..32], "N", out itemId);
+    }
+}

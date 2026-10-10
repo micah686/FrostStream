@@ -1,0 +1,23 @@
+# Applies to every service image built with `src/` as the build context.
+**/bin/
+**/obj/
+**/node_modules/
+**/.svelte-kit/
+**/build/
+**/*.user
+HelperTestingApps/
+Shared/Integrations/Vendor/YtDlpSharpLib/Tests/
+Shared/Integrations/Vendor/YtDlpSharpLib/ConsoleDownloader/
+Shared/Integrations/Vendor/Conduit.NATS/Tests/
+Full/AppHost/
+Lite/AppHost/
+Shared/Hosting/AppHostCommon/
+Frontend/static/.gitkeep
+
+App/*App/docker-compose/
+
+.phase0/
+**/docker-compose/
+Tests/
+Phase0/
+**/TestResults/

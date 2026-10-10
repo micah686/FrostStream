@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+        <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+        <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
+        <PackageReference Include="NSubstitute" />
+        <PackageReference Include="Shouldly" />
+        <PackageReference Include="TUnit" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../../Lite/Backend/Lite.csproj" />
+        <ProjectReference Include="../../Full/Hosts/BackupService/BackupService.csproj" />
+        <ProjectReference Include="../../Shared/Modules/DataBridge/DataBridge.csproj" />
+        <ProjectReference Include="../../Shared/Modules/Scheduler/Scheduler.csproj" />
+        <ProjectReference Include="../../Shared/Core/Shared.csproj" />
+        <ProjectReference Include="../../Shared/Modules/Worker/Worker.csproj" />
+        <ProjectReference Include="../../Shared/Modules/Api/WebAPI.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Storage" />
+    </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../../Phase0/search-corpus.json" Link="search-corpus.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

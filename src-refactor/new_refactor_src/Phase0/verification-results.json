@@ -1,0 +1,29 @@
+{
+  "phase": 0,
+  "implementation": "baseline delivered",
+  "acceptance": "open",
+  "date": "2026-10-10",
+  "passed": {
+    "unit": 585,
+    "lite": 3,
+    "liteRepeat": 3,
+    "fullControlledAuth": 17,
+    "architectureGuardTests": 5,
+    "composeProfiles": [
+      "Lite",
+      "Full"
+    ],
+    "frontend": [
+      "test:access",
+      "test:backups",
+      "check",
+      "build"
+    ],
+    "fullControlledAuthRepeat": 17
+  },
+  "openGates": [
+    "Packaged clean Lite/Full startup and distributed Full media workflows",
+    "Real Authentik browser login and private-data isolation",
+    "Large-corpus measurements and approved thresholds on 8 GB reference hardware"
+  ]
+}
