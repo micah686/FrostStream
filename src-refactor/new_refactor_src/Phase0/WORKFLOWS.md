@@ -8,10 +8,13 @@
 | Stop/restart | Stop_Cancels_Worker_And_Restart_Fences_Interrupted_Run | Stopped work stays stopped; a new run requires explicit retry. |
 | Crash/redelivery | Killed_Process_Reconciles_Active_Work_And_Rejects_Stale_Durable_Redelivery | Separate process is killed; reconciliation fences the old run and handles expired durable inbox delivery. |
 | Full identity/authorization | Tests/IntegrationTests/IntegrationTests/Auth/MultiUserHttpAuthTests.cs and OpenFgaAxis1FlowTests.cs | Anonymous 401, ungranted 403, Admin allow, bearer/cookie precedence, real OpenFGA tuple-based grants. Controlled signing keys replace Authentik. |
+| Packaged real Full identity/private ownership | Phase0/check-authentik.mjs; .phase0/results/packaged-full-auth*.json | Real Authentik OIDC browser login for two fresh identities, session after reload, bidirectional private-playlist list/read/write isolation, logout CSRF and revoked-cookie replay. Passed twice through packaged frontend/WebAPI/NATS/DataBridge/PostgreSQL/OpenFGA. |
 | Search parser | Tests/UnitTests/Search/AdvancedQueryParserTests.cs; Tests/UnitTests/Phase0/SearchCorpusTests.cs | Versioned query corpus exercises text, quotes, Unicode, codec aliases, numeric/date ranges, empty and unknown-field behavior. |
 | Frontend access/backup presentation | Frontend/tests/lite-access.test.mjs and backup-capabilities.test.mjs | Existing logic/SSR assertions preserved; these are not browser playback or Authentik login tests. |
 
 Internet acquisition and binary provisioning are controlled in Lite fixtures. Database, queue/workflow, FFmpeg/FFprobe, storage, indexing and media HTTP responses are real. Full authorization tests use real OpenFGA; some application request handlers are substituted. Neither suite proves a complete distributed Full media workflow.
+
+The separate packaged browser checkpoint uses real Authentik and application services, with no substituted request handlers. It does not exercise Full media workflows. See PACKAGED.md for reproduction and engine limitations.
 
 Phase 4/5 search contracts must additionally cover metadata/library browsing, captions, comments, private notes, related media, every filter/sort, totals, deduplication, stable paging, deletions and missing documents. Use Alice/Bob ownership fixtures and require private-note isolation. Unknown field treatment is current characterization, not an irreversible product choice. Typesense syntax in the parser corpus is removed from shared tests when the typed query boundary lands; relevance-score equality is never required.
 

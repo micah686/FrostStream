@@ -19,11 +19,34 @@
       "check",
       "build"
     ],
-    "fullControlledAuthRepeat": 17
+    "fullControlledAuthRepeat": 17,
+    "phase0ToolingTests": 12,
+    "packagedLite": {
+      "freshInstallSmoke": true,
+      "secondEmptyStateSmoke": true,
+      "backendRestartSmoke": true,
+      "scope": "Frontend/API/capabilities/local Admin; not packaged media workflows"
+    },
+    "packagedFull": {
+      "applicationImagesBuilt": true,
+      "orderedStartup": true,
+      "finalServiceStates": 19,
+      "realAuthentikBrowserRuns": 2,
+      "privatePlaylistIsolation": "Bidirectional list/read/write isolation for fresh Admin identities",
+      "sessionChecks": [
+        "Session survives browser reload",
+        "Anonymous 401",
+        "Logout CSRF 403",
+        "Logout and old-cookie replay 401"
+      ],
+      "scope": "Podman workaround required; distributed media not exercised"
+    }
   },
   "openGates": [
-    "Packaged clean Lite/Full startup and distributed Full media workflows",
-    "Real Authentik browser login and private-data isolation",
-    "Large-corpus measurements and approved thresholds on 8 GB reference hardware"
-  ]
+    "Standard Full Compose startup without Podman workaround and second empty-state Full installation",
+    "Distributed packaged Full download/import/playback",
+    "Large-corpus indexing/search/combined-workload measurements",
+    "Measured thresholds on actual 8 GB reference hardware"
+  ],
+  "continuationEvidence": "PACKAGED.md; raw reports in ignored .phase0/results/"
 }

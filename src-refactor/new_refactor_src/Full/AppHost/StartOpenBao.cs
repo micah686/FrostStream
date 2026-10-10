@@ -34,6 +34,7 @@ public static class StartOpenBao
             .WithHttpEndpoint(port: Ports.OpenBao, targetPort: 8200, name: "http")
             .WithExternalHttpEndpoints()
             .WithEnvironment("OPENBAO_APP_TOKEN", token)
+            .WithEnvironment("BAO_ADDR", "http://127.0.0.1:8200")
             .WithArgs("server", "-config=/openbao/openbao.hcl")
             .WithVolume(DataVolumeName, DataDirectory)
             .WithPortableBindMount(config, "../../Full/AppHost/configs/openbao/openbao.hcl", "/openbao/openbao.hcl", isReadOnly: true);

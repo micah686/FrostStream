@@ -1,8 +1,8 @@
 # Implementation evaluation — 2026-10-10
 
-The Phase 0 working baseline is implemented and locally verified. Phase 0's complete exit gate is **not yet satisfied**: real Authentik browser login, packaged Full media workflows and the measured 8 GB performance acceptance still need evidence. CHECKLIST.md keeps those gates open.
+The Phase 0 working baseline is implemented and locally verified. The continuation also verifies packaged Lite startup/restart, Full startup with a documented Podman workaround, and real Authentik browser sessions/private-playlist isolation twice. Phase 0's complete exit gate is **not yet satisfied**: packaged Full media workflows, standard Full Compose startup/repeated empty-state installation and the measured 8 GB performance acceptance remain open. See PACKAGED.md and CHECKLIST.md.
 
-All new work is under `src-refactor/new_refactor_src/`. The supplied `src-refactor/reference_src/` was read only. The user's pre-existing changes to REARCH_PLAN.MD were preserved. No old-tree libraries, project references or linked compilation inputs are required. No existing deployment/volume was reset, and generated packaged stacks were not started.
+All new work is under `src-refactor/new_refactor_src/`. The supplied `src-refactor/reference_src/` was read only. The user's pre-existing changes to REARCH_PLAN.MD were preserved. No old-tree libraries, project references or linked compilation inputs are required. No existing deployment/volume was reset. The continuation started isolated `froststream-phase0-*` packaged projects on an initially empty engine; their volumes were retained.
 
 The mechanical copy establishes a runnable implementation where the next phases will work. It is larger than a documentation-only Phase 0 change because the destination was empty and the old source is scheduled for deletion. Existing application behavior, namespaces and assembly identities remain intact. Target directories reserved for later extraction do not pretend to contain completed libraries/hosts.
 
@@ -18,11 +18,13 @@ The architecture check deliberately snapshots the existing graph and reports its
 | Entire working solution build, including both AppHosts | Pass; 0 errors, two ASPIRE010 CLI-bundle warnings inherited from the environment configuration. |
 | Unit checkpoint | 585 passed, 0 failed/skipped. Includes ten-case parser corpus characterization. |
 | Real Lite download/import/process/playback/search/restart/crash suite | 3 passed, 0 failed/skipped; passed again from fresh fixture state. |
-| Controlled Full authentication/OpenFGA checkpoint | 17 passed, 0 failed/skipped; passed again from fresh fixture state. Real OpenFGA, controlled JWT identities; real Authentik login remains open. |
+| Controlled Full authentication/OpenFGA checkpoint | 17 passed, 0 failed/skipped; passed again from fresh fixture state. Real OpenFGA, controlled JWT identities. |
+| Packaged Full real Authentik checkpoint | Passed twice with fresh identities: OIDC login/session, bidirectional private-playlist isolation, CSRF/logout and revoked-cookie replay. All 19 service/initializer states verified using the documented Podman workaround. |
+| Packaged Lite smoke | Fresh frontend/API/local Admin checks and backend restart passed; see PACKAGED.md for scope and reproduction. |
 | Existing frontend access and backup suites | Both passed. Node reports one test-file result per command; no browser-suite count is inferred. |
 | Frontend check and production build | Pass; check reports 0 errors/warnings. |
 | Source graph/API containment and drift | Pass: 22 projects, central versions, route attributes from 34 API source files. |
-| Generated Compose profiles | Lite 4 services; Full 19 services. Both publish, pass source/build path validation and render through installed Podman Compose. No packaged startup claimed. |
+| Generated Compose profiles | Lite 4 services; Full 19 services. Both publish and pass source/build path validation. Packaged startup evidence and the standard Full Compose provider failure are recorded in PACKAGED.md. |
 | Corpus generator | 10,000 media / 100,000 captions / 250,000 comments; byte sizes and SHA-256 hashes recorded in corpus-manifest.json. Not seeded/indexed into an engine. |
 | Resource sampler failure/timeout checks | Nonzero child exit propagated (3); timed command fails (124), terminates its own process group and writes evidence. |
 
