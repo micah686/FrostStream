@@ -1,16 +1,19 @@
 using Microsoft.Extensions.Hosting;
 
-namespace DataBridge;
+using WebAPI;
+
+namespace FrostStream.Full.WebAPI;
 
 public class Program
 {
     public static async Task Main(string[] args)
     {
-        var builder = Host.CreateApplicationBuilder(args);
+        var builder = WebApplication.CreateBuilder(args);
         builder.AddServiceDefaults();
-        builder.AddDataBridgeModule();
+        builder.AddWebAPIModule();
         var app = builder.Build();
-        app.InitializeDataBridge();
+        app.MapWebAPIModule();
+        app.MapDefaultEndpoints();
         await app.RunAsync();
     }
 }

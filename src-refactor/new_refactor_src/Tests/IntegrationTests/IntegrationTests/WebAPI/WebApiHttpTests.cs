@@ -177,7 +177,7 @@ public sealed class WebApiHttpTests
     }
 }
 
-internal sealed class TestWebApiFactory : WebApplicationFactory<global::WebAPI.Program>
+internal sealed class TestWebApiFactory : WebApplicationFactory<global::FrostStream.Full.WebAPI.Program>
 {
     public static readonly Instant Now = Instant.FromUtc(2026, 6, 3, 15, 0);
 

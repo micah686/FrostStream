@@ -25,8 +25,9 @@ def inventory():
                 full = (p.parent / value.replace('\\', '/')).resolve()
                 if not full.is_relative_to(ROOT): errors.append(f'{p}: external compile input {value}')
                 elif not list(full.parent.glob(full.name)): errors.append(f'{p}: missing compile input {value}')
+        output = doc.findtext('.//OutputType')
         graph[p.relative_to(ROOT).as_posix()] = {
-            'executable': doc.findtext('.//OutputType') == 'Exe' or 'Sdk.Web' in doc.attrib.get('Sdk', ''),
+            'executable': output in ('Exe', 'WinExe') or (output is None and 'Sdk.Web' in doc.attrib.get('Sdk', '')),
             'references': sorted(refs),
             'packages': sorted(e.attrib['Include'] for e in doc.iter('PackageReference')),
         }
@@ -39,6 +40,28 @@ def inventory():
         visiting.remove(key); visited.add(key)
     if not errors:
         for key in graph: visit(key)
+    for key, project in graph.items():
+        path = Path(key)
+        # Test harnesses deliberately exercise executable composition roots. Aspire
+        # references are orchestration metadata, never runtime assembly references.
+        if 'AppHost' in path.parts:
+            document = ET.parse(ROOT / key).getroot()
+            if any(ref.attrib.get('ReferenceOutputAssembly') != 'false' for ref in document.iter('ProjectReference')):
+                errors.append(f'{key}: AppHost project references must be metadata only')
+            continue
+        if path.parts[0] == 'Tests':
+            continue
+        if key.startswith('Shared/Modules/'):
+            if project['executable']: errors.append(f'{key}: reusable module must be a library')
+            folder = ROOT / path.parent
+            if (folder / 'Program.cs').exists() or list(folder.glob('appsettings*.json')):
+                errors.append(f'{key}: module contains host entry point/settings')
+        for ref in project['references']:
+            if graph[ref]['executable']:
+                errors.append(f'{key}: runtime reference to executable {ref}')
+        document = ET.parse(ROOT / key).getroot()
+        if any('RemoveServiceSettings' in target.attrib.get('Name', '') for target in document.iter('Target')):
+            errors.append(f'{key}: appsettings output-removal workaround is forbidden')
     routes=[]
     for p in files('*.cs'):
         if '/Modules/Api/' in p.as_posix():

@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Hosting;
 
-namespace Worker;
+using MediaProcessor;
+
+namespace FrostStream.Full.MediaProcessor;
 
 public class Program
 {
@@ -8,7 +10,7 @@ public class Program
     {
         var builder = Host.CreateApplicationBuilder(args);
         builder.AddServiceDefaults();
-        builder.AddWorkerModule();
+        builder.AddMediaProcessorModule();
         var app = builder.Build();
         await app.RunAsync();
     }

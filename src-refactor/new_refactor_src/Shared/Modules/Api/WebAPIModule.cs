@@ -246,7 +246,7 @@ public static class WebAPIModule
                                 if (!sync.Success)
                                 {
                                     context.HttpContext.RequestServices
-                                        .GetRequiredService<ILogger<Program>>()
+                                        .GetRequiredService<ILoggerFactory>().CreateLogger("WebAPI.Oidc")
                                         .LogWarning("Session synchronization after login failed for subject {Subject}: {Error}",
                                             AuthConstants.FindSubject(principal), sync.ErrorMessage);
                                 }
@@ -434,7 +434,6 @@ public static class WebAPIModule
         app.UseMiddleware<CsrfProtectionMiddleware>();
         app.UseAuthorization();
         app.MapControllers();
-        app.MapDefaultEndpoints();
 
 
         return app;

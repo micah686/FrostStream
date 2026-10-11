@@ -17,4 +17,9 @@
   <Project Path="Shared/Modules/Worker/Worker.csproj" />
   <Project Path="Tests/IntegrationTests/IntegrationTests/IntegrationTests.csproj" />
   <Project Path="Tests/UnitTests/UnitTests.csproj" />
+  <Project Path="Full/Hosts/WebAPI/WebAPIHost.csproj" />
+  <Project Path="Full/Hosts/DataBridge/DataBridgeHost.csproj" />
+  <Project Path="Full/Hosts/Worker/WorkerHost.csproj" />
+  <Project Path="Full/Hosts/MediaProcessor/MediaProcessorHost.csproj" />
+  <Project Path="Full/Hosts/Scheduler/SchedulerHost.csproj" />
 </Solution>

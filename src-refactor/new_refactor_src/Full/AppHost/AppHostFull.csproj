@@ -25,12 +25,12 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="../Hosts/BackupService/BackupService.csproj" />
-      <ProjectReference Include="../../Shared/Modules/DataBridge/DataBridge.csproj" />
-      <ProjectReference Include="../../Shared/Modules/MediaProcessor/MediaProcessor.csproj" />
-      <ProjectReference Include="../../Shared/Modules/Scheduler/Scheduler.csproj" />
-      <ProjectReference Include="../../Shared/Modules/Api/WebAPI.csproj" />
-      <ProjectReference Include="../../Shared/Modules/Worker/Worker.csproj" />
+      <ProjectReference Include="../Hosts/BackupService/BackupService.csproj" ReferenceOutputAssembly="false" />
+      <ProjectReference Include="../Hosts/DataBridge/DataBridgeHost.csproj" ReferenceOutputAssembly="false" />
+      <ProjectReference Include="../Hosts/MediaProcessor/MediaProcessorHost.csproj" ReferenceOutputAssembly="false" />
+      <ProjectReference Include="../Hosts/Scheduler/SchedulerHost.csproj" ReferenceOutputAssembly="false" />
+      <ProjectReference Include="../Hosts/WebAPI/WebAPIHost.csproj" ReferenceOutputAssembly="false" />
+      <ProjectReference Include="../Hosts/Worker/WorkerHost.csproj" ReferenceOutputAssembly="false" />
     </ItemGroup>
 
     <ItemGroup>

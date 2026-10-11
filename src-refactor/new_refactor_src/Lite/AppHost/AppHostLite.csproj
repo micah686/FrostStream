@@ -14,7 +14,7 @@
     <PackageReference Include="DotNetEnv" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../Backend/Lite.csproj" />
+    <ProjectReference Include="../Backend/Lite.csproj" ReferenceOutputAssembly="false" />
     <Compile Include="../../Shared/Hosting/AppHostCommon/*.cs" Link="Shared\%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

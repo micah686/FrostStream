@@ -4,7 +4,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Hosting.Internal;
 using NATS.Client.Core;
 using NodaTime;
 using Shared.Messaging;
@@ -26,14 +25,6 @@ public static class WorkerModule
         if (!builder.Services.TryAddModule(typeof(WorkerModule))) return builder;
         builder.AddDeployment();
         builder.Services.AddApplicationTransport(builder.Configuration);
-
-        // Force ConsoleLifetime so Ctrl+C / SIGTERM triggers StopAsync on hosted services
-        builder.Services.AddSingleton<IHostLifetime, ConsoleLifetime>();
-        builder.Services.Configure<ConsoleLifetimeOptions>(o =>
-        {
-            // set true to hide "Application started/stopped" messages
-            o.SuppressStatusMessages = false;
-        });
 
         var natsUrl = builder.Configuration.GetConnectionString("nats")
             ?? builder.Configuration["NATS:Url"]

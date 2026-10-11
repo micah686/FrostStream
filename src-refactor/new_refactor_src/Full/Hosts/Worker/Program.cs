@@ -1,16 +1,17 @@
 using Microsoft.Extensions.Hosting;
 
-namespace Scheduler;
+using Worker;
+
+namespace FrostStream.Full.Worker;
 
 public class Program
 {
     public static async Task Main(string[] args)
     {
-        var builder = WebApplication.CreateBuilder(args);
+        var builder = Host.CreateApplicationBuilder(args);
         builder.AddServiceDefaults();
-        builder.AddSchedulerModule();
+        builder.AddWorkerModule();
         var app = builder.Build();
-        app.MapSchedulerModule();
         await app.RunAsync();
     }
 }

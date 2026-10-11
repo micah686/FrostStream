@@ -22,6 +22,7 @@
     </ItemGroup>
 
     <ItemGroup>
+        <ProjectReference Include="../../../Full/Hosts/WebAPI/WebAPIHost.csproj" />
         <ProjectReference Include="../../../Lite/Backend/Lite.csproj" />
         <ProjectReference Include="../../../Shared/Modules/DataBridge/DataBridge.csproj" />
         <ProjectReference Include="../../../Shared/Modules/Api/WebAPI.csproj" />

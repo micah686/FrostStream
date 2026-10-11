@@ -122,7 +122,6 @@ public static class SchedulerModule
     {
 
         app.UseCrystalQuartzDashboard();
-        app.MapDefaultEndpoints();
 
 
         return app;

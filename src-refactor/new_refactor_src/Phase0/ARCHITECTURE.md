@@ -1,11 +1,11 @@
 # Phase 0 architecture and boundary baseline
 
-`dependency-baseline.json` captures 22 project declarations, direct references, package names, pinned central package versions, and route attributes from 34 API source files. `lite-resolved-dependencies.json` captures the restored Lite transitive graph. Route attributes are source evidence, not a claim that every route was requested. `verify.py` fails on external/missing project references, external/missing compile links, cycles, or drift from the reviewed source graph/API snapshot.
+`dependency-baseline.json` now captures 27 project declarations after Phase 1 (22 in the initial Phase 0 inventory), direct references, package names, pinned central package versions, and route attributes from 34 API source files. `lite-resolved-dependencies.json` captures the historical Phase 0 Lite transitive graph. Route attributes are source evidence, not a claim that every route was requested. `verify.py` fails on external/missing project references, external/missing compile links, cycles, forbidden executable boundaries, or drift from the reviewed source graph/API snapshot.
 
 | Current process | Responsibilities and dependencies |
 | --- | --- |
 | Lite/Backend | Hosts WebAPI, DataBridge, Worker, MediaProcessor and Scheduler; SQLite application/workflow/transport state, encrypted local secrets, filesystem storage; Typesense remains external. |
-| Full WebAPI (currently Shared/Modules/Api) | HTTP/BFF, browser events, Authentik/OpenFGA; requests DataBridge/Worker/MediaProcessor over NATS. |
+| Full WebAPI (`Full/Hosts/WebAPI`, composing `Shared/Modules/Api`) | HTTP/BFF, browser events, Authentik/OpenFGA; requests DataBridge/Worker/MediaProcessor over NATS. |
 | Full DataBridge | EF/PostgreSQL authoritative records, orchestration, workflows, Typesense projection, secrets via OpenBao. |
 | Full Worker | Acquisition/import, media tools, storage; receives durable work over NATS. |
 | Full MediaProcessor | FFmpeg encoding and derived artifacts; independent durable consumers. |
@@ -17,9 +17,10 @@ Generated Lite profile: backend, frontend, POT provider, Typesense (four service
 
 Target rules are those in REARCH_PLAN.MD section 3: hosts select infrastructure; modules depend on Contracts/Core and shared Persistence; infrastructure/integrations implement shared ports; no executable references an executable; provider-neutral contracts/persistence contain no vendor types; Full.Security is used only by Full WebAPI. Final Lite excludes NATS, Npgsql/PostgreSQL, Typesense, VaultSharp, Authentik and OpenFGA implementations. The isolated Typesense exception exists only until Phase 5.
 
-Known existing violations are deliberately retained for characterization:
+Phase 1 resolved the executable-module and competing-appsettings violations. The five modules are libraries; Full shells live under `Full/Hosts`, and Lite's removal targets are gone. See `../Phase1/README.md` for verification.
 
-- Lite references executable modules and removes competing appsettings on build/publish (Phase 1).
+Known remaining violations are deliberately retained for characterization:
+
 - Shared/Core still owns EF entities, storage/security/provider code; DataBridge owns both persistence providers (Phase 2).
 - Lite's resolved packages include NATS, Npgsql, Typesense, VaultSharp/OpenFGA dependencies (Phase 2/5); absence of runtime connections does not prove dependency isolation.
 - Module registration chooses infrastructure; schema initialization and scheduler manipulation remain order sensitive (Phase 2).

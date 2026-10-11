@@ -11,19 +11,4 @@
     <ProjectReference Include="../../Shared/Modules/Api/WebAPI.csproj" />
     <ProjectReference Include="../../Shared/Modules/Worker/Worker.csproj" />
   </ItemGroup>
-  <Target Name="RemoveServiceSettingsFromBuild" AfterTargets="GetCopyToOutputDirectoryItems">
-    <ItemGroup>
-      <_SourceItemsToCopyToOutputDirectory Remove="@(_SourceItemsToCopyToOutputDirectory)" Condition="'%(Filename)' == 'appsettings' Or '%(Filename)' == 'appsettings.Development'" />
-      <_SourceItemsToCopyToOutputDirectoryAlways Remove="@(_SourceItemsToCopyToOutputDirectoryAlways)" Condition="'%(Filename)' == 'appsettings' Or '%(Filename)' == 'appsettings.Development'" />
-      <_SourceItemsToCopyToOutputDirectoryIfDifferent Remove="@(_SourceItemsToCopyToOutputDirectoryIfDifferent)" Condition="'%(Filename)' == 'appsettings' Or '%(Filename)' == 'appsettings.Development'" />
-      <AllItemsFullPathWithTargetPath Remove="@(AllItemsFullPathWithTargetPath)" Condition="'%(Filename)' == 'appsettings' Or '%(Filename)' == 'appsettings.Development'" />
-    </ItemGroup>
-  </Target>
-  <!-- Service-specific appsettings must not compete for the combined host's output path. -->
-  <Target Name="RemoveServiceSettingsFromPublish" AfterTargets="ComputeFilesToPublish">
-    <ItemGroup>
-      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
-        Condition="'%(ResolvedFileToPublish.RelativePath)' == 'appsettings.json' Or '%(ResolvedFileToPublish.RelativePath)' == 'appsettings.Development.json'" />
-    </ItemGroup>
-  </Target>
 </Project>

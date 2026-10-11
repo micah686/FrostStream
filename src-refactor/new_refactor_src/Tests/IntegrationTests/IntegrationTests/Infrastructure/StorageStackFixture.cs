@@ -333,7 +333,7 @@ public sealed class StorageStackFixture(SaveChangesInterceptor? interceptor = nu
 
     private sealed class StorageWebApplicationFactory(
         string natsUrl,
-        ISecretStore secretStore) : WebApplicationFactory<WebAPI.Program>
+        ISecretStore secretStore) : WebApplicationFactory<FrostStream.Full.WebAPI.Program>
     {
         protected override void ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder)
         {

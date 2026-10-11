@@ -141,11 +141,11 @@ public class MultiUserHttpAuthTests
 }
 
 /// <summary>
-/// Hosts <see cref="global::WebAPI.Program"/> in multi-user mode pointed at the live OpenFGA store,
+/// Hosts <see cref="global::FrostStream.Full.WebAPI.Program"/> in multi-user mode pointed at the live OpenFGA store,
 /// swaps NATS/secrets for in-process fakes, and validates RS256 tokens against an injected test key.
 /// </summary>
 internal sealed class MultiUserWebApiFactory(string openFgaEndpoint, string storeId, string modelId)
-    : WebApplicationFactory<global::WebAPI.Program>
+    : WebApplicationFactory<global::FrostStream.Full.WebAPI.Program>
 {
     public TestTokenIssuer Tokens { get; } = new();
 

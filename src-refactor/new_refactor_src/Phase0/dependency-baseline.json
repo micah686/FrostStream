@@ -4,11 +4,11 @@
       "executable": true,
       "references": [
         "Full/Hosts/BackupService/BackupService.csproj",
-        "Shared/Modules/Api/WebAPI.csproj",
-        "Shared/Modules/DataBridge/DataBridge.csproj",
-        "Shared/Modules/MediaProcessor/MediaProcessor.csproj",
-        "Shared/Modules/Scheduler/Scheduler.csproj",
-        "Shared/Modules/Worker/Worker.csproj"
+        "Full/Hosts/DataBridge/DataBridgeHost.csproj",
+        "Full/Hosts/MediaProcessor/MediaProcessorHost.csproj",
+        "Full/Hosts/Scheduler/SchedulerHost.csproj",
+        "Full/Hosts/WebAPI/WebAPIHost.csproj",
+        "Full/Hosts/Worker/WorkerHost.csproj"
       ],
       "packages": [
         "Aspire.Hosting.AppHost",
@@ -27,6 +27,46 @@
         "Shared/Core/Shared.csproj",
         "Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj",
         "Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj"
+      ],
+      "packages": []
+    },
+    "Full/Hosts/DataBridge/DataBridgeHost.csproj": {
+      "executable": true,
+      "references": [
+        "Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj",
+        "Shared/Modules/DataBridge/DataBridge.csproj"
+      ],
+      "packages": []
+    },
+    "Full/Hosts/MediaProcessor/MediaProcessorHost.csproj": {
+      "executable": true,
+      "references": [
+        "Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj",
+        "Shared/Modules/MediaProcessor/MediaProcessor.csproj"
+      ],
+      "packages": []
+    },
+    "Full/Hosts/Scheduler/SchedulerHost.csproj": {
+      "executable": true,
+      "references": [
+        "Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj",
+        "Shared/Modules/Scheduler/Scheduler.csproj"
+      ],
+      "packages": []
+    },
+    "Full/Hosts/WebAPI/WebAPIHost.csproj": {
+      "executable": true,
+      "references": [
+        "Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj",
+        "Shared/Modules/Api/WebAPI.csproj"
+      ],
+      "packages": []
+    },
+    "Full/Hosts/Worker/WorkerHost.csproj": {
+      "executable": true,
+      "references": [
+        "Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj",
+        "Shared/Modules/Worker/Worker.csproj"
       ],
       "packages": []
     },
@@ -190,7 +230,7 @@
       ]
     },
     "Shared/Modules/Api/WebAPI.csproj": {
-      "executable": true,
+      "executable": false,
       "references": [
         "Shared/Core/Shared.csproj",
         "Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj",
@@ -209,7 +249,7 @@
       ]
     },
     "Shared/Modules/DataBridge/DataBridge.csproj": {
-      "executable": true,
+      "executable": false,
       "references": [
         "Shared/Core/Shared.csproj",
         "Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj",
@@ -238,7 +278,7 @@
       ]
     },
     "Shared/Modules/MediaProcessor/MediaProcessor.csproj": {
-      "executable": true,
+      "executable": false,
       "references": [
         "Shared/Core/Shared.csproj",
         "Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj",
@@ -247,7 +287,7 @@
       "packages": []
     },
     "Shared/Modules/Scheduler/Scheduler.csproj": {
-      "executable": true,
+      "executable": false,
       "references": [
         "Shared/Core/Shared.csproj",
         "Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj",
@@ -259,7 +299,7 @@
       ]
     },
     "Shared/Modules/Worker/Worker.csproj": {
-      "executable": true,
+      "executable": false,
       "references": [
         "Shared/Core/Shared.csproj",
         "Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj",
@@ -278,6 +318,7 @@
     "Tests/IntegrationTests/IntegrationTests/IntegrationTests.csproj": {
       "executable": true,
       "references": [
+        "Full/Hosts/WebAPI/WebAPIHost.csproj",
         "Lite/Backend/Lite.csproj",
         "Shared/Modules/Api/WebAPI.csproj",
         "Shared/Modules/DataBridge/DataBridge.csproj",

@@ -1,7 +1,7 @@
 # Build from src/: docker build -f Lite/Backend/Dockerfile -t froststream/lite .
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
-COPY Directory.Packages.props ./
+COPY Directory.Packages.props Directory.Build.props ./
 COPY Shared/Contracts/ Shared/Contracts/
 COPY Shared/Core/ Shared/Core/
 COPY Shared/Integrations/StorageExtensions/ Shared/Integrations/StorageExtensions/
