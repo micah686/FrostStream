@@ -22,4 +22,10 @@
   <Project Path="Full/Hosts/Worker/WorkerHost.csproj" />
   <Project Path="Full/Hosts/MediaProcessor/MediaProcessorHost.csproj" />
   <Project Path="Full/Hosts/Scheduler/SchedulerHost.csproj" />
+  <Project Path="Shared/Persistence/Persistence.csproj" />
+  <Folder Name="/Full infrastructure/"><Project Path="Full/Infrastructure/Infrastructure.csproj" /></Folder>
+  <Project Path="Full/Infrastructure/Postgres/Persistence.Postgres.csproj" />
+  <Folder Name="/Lite infrastructure/"><Project Path="Lite/Infrastructure/Infrastructure.csproj" /></Folder>
+  <Project Path="Full/Security/Security.csproj" />
+  <Project Path="Shared/Integrations/Typesense/Typesense.csproj" />
 </Solution>

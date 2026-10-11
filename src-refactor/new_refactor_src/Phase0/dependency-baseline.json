@@ -24,6 +24,7 @@
     "Full/Hosts/BackupService/BackupService.csproj": {
       "executable": true,
       "references": [
+        "Full/Infrastructure/Infrastructure.csproj",
         "Shared/Core/Shared.csproj",
         "Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj",
         "Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj"
@@ -33,7 +34,10 @@
     "Full/Hosts/DataBridge/DataBridgeHost.csproj": {
       "executable": true,
       "references": [
+        "Full/Infrastructure/Infrastructure.csproj",
+        "Full/Infrastructure/Postgres/Persistence.Postgres.csproj",
         "Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj",
+        "Shared/Integrations/Typesense/Typesense.csproj",
         "Shared/Modules/DataBridge/DataBridge.csproj"
       ],
       "packages": []
@@ -41,6 +45,7 @@
     "Full/Hosts/MediaProcessor/MediaProcessorHost.csproj": {
       "executable": true,
       "references": [
+        "Full/Infrastructure/Infrastructure.csproj",
         "Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj",
         "Shared/Modules/MediaProcessor/MediaProcessor.csproj"
       ],
@@ -49,6 +54,7 @@
     "Full/Hosts/Scheduler/SchedulerHost.csproj": {
       "executable": true,
       "references": [
+        "Full/Infrastructure/Infrastructure.csproj",
         "Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj",
         "Shared/Modules/Scheduler/Scheduler.csproj"
       ],
@@ -57,6 +63,8 @@
     "Full/Hosts/WebAPI/WebAPIHost.csproj": {
       "executable": true,
       "references": [
+        "Full/Infrastructure/Infrastructure.csproj",
+        "Full/Security/Security.csproj",
         "Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj",
         "Shared/Modules/Api/WebAPI.csproj"
       ],
@@ -65,10 +73,48 @@
     "Full/Hosts/Worker/WorkerHost.csproj": {
       "executable": true,
       "references": [
+        "Full/Infrastructure/Infrastructure.csproj",
         "Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj",
         "Shared/Modules/Worker/Worker.csproj"
       ],
       "packages": []
+    },
+    "Full/Infrastructure/Infrastructure.csproj": {
+      "executable": false,
+      "references": [
+        "Shared/Core/Shared.csproj",
+        "Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj"
+      ],
+      "packages": [
+        "VaultSharp"
+      ]
+    },
+    "Full/Infrastructure/Postgres/Persistence.Postgres.csproj": {
+      "executable": false,
+      "references": [
+        "Shared/Persistence/Persistence.csproj"
+      ],
+      "packages": [
+        "Cleipnir.Flows.PostgresSql",
+        "EFCore.NamingConventions",
+        "FluentMigrator",
+        "FluentMigrator.Runner.Core",
+        "FluentMigrator.Runner.Postgres",
+        "Npgsql.DependencyInjection",
+        "Npgsql.EntityFrameworkCore.PostgreSQL",
+        "Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime"
+      ]
+    },
+    "Full/Security/Security.csproj": {
+      "executable": false,
+      "references": [
+        "Full/Infrastructure/Infrastructure.csproj",
+        "Shared/Modules/Api/WebAPI.csproj"
+      ],
+      "packages": [
+        "Microsoft.AspNetCore.Authentication.JwtBearer",
+        "Microsoft.AspNetCore.Authentication.OpenIdConnect"
+      ]
     },
     "Lite/AppHost/AppHostLite.csproj": {
       "executable": true,
@@ -85,6 +131,8 @@
     "Lite/Backend/Lite.csproj": {
       "executable": true,
       "references": [
+        "Lite/Infrastructure/Infrastructure.csproj",
+        "Shared/Integrations/Typesense/Typesense.csproj",
         "Shared/Modules/Api/WebAPI.csproj",
         "Shared/Modules/DataBridge/DataBridge.csproj",
         "Shared/Modules/MediaProcessor/MediaProcessor.csproj",
@@ -92,6 +140,19 @@
         "Shared/Modules/Worker/Worker.csproj"
       ],
       "packages": []
+    },
+    "Lite/Infrastructure/Infrastructure.csproj": {
+      "executable": false,
+      "references": [
+        "Shared/Core/Shared.csproj",
+        "Shared/Modules/Api/WebAPI.csproj",
+        "Shared/Persistence/Persistence.csproj"
+      ],
+      "packages": [
+        "Cleipnir.Flows",
+        "EFCore.NamingConventions",
+        "Microsoft.EntityFrameworkCore.Sqlite"
+      ]
     },
     "Shared/Contracts/ApplicationContracts.csproj": {
       "executable": false,
@@ -105,7 +166,6 @@
       "references": [
         "Shared/Contracts/ApplicationContracts.csproj",
         "Shared/Integrations/StorageExtensions/StorageExtensions.csproj",
-        "Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj",
         "Shared/Integrations/Vendor/YtDlpSharpLib/YtDlpSharpLib/YtDlpSharpLib.csproj"
       ],
       "packages": [
@@ -124,10 +184,10 @@
         "Microsoft.Extensions.Logging.Abstractions",
         "Microsoft.Extensions.Options.ConfigurationExtensions",
         "NodaTime",
+        "NodaTime.Serialization.SystemTextJson",
         "Polly.Core",
         "SSH.NET",
-        "System.IO.Hashing",
-        "VaultSharp"
+        "System.IO.Hashing"
       ]
     },
     "Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj": {
@@ -150,6 +210,15 @@
         "FluentStorage",
         "LTRData.DiscUtils.Nfs",
         "SMBLibrary"
+      ]
+    },
+    "Shared/Integrations/Typesense/Typesense.csproj": {
+      "executable": false,
+      "references": [
+        "Shared/Modules/DataBridge/DataBridge.csproj"
+      ],
+      "packages": [
+        "Typesense"
       ]
     },
     "Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj": {
@@ -233,13 +302,10 @@
       "executable": false,
       "references": [
         "Shared/Core/Shared.csproj",
-        "Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj",
-        "Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj"
+        "Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj"
       ],
       "packages": [
         "FCastSenderSDKDotnet",
-        "Microsoft.AspNetCore.Authentication.JwtBearer",
-        "Microsoft.AspNetCore.Authentication.OpenIdConnect",
         "Microsoft.AspNetCore.OpenApi",
         "Microsoft.OpenApi",
         "NodaTime.Serialization.SystemTextJson",
@@ -253,36 +319,25 @@
       "references": [
         "Shared/Core/Shared.csproj",
         "Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj",
-        "Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj"
+        "Shared/Persistence/Persistence.csproj"
       ],
       "packages": [
         "Cleipnir.Flows",
-        "Cleipnir.Flows.PostgresSql",
         "ClickHouse.Driver",
-        "EFCore.NamingConventions",
-        "FluentMigrator",
-        "FluentMigrator.Runner.Core",
-        "FluentMigrator.Runner.Postgres",
         "FluentStorage",
         "Microsoft.EntityFrameworkCore.Relational",
-        "Microsoft.EntityFrameworkCore.Sqlite",
         "NodaTime.Serialization.SystemTextJson",
-        "Npgsql.DependencyInjection",
-        "Npgsql.EntityFrameworkCore.PostgreSQL",
-        "Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime",
         "Polly.Core",
         "Quartz",
         "RecurPixel.Notify.Sdk",
-        "System.IO.Hashing",
-        "Typesense"
+        "System.IO.Hashing"
       ]
     },
     "Shared/Modules/MediaProcessor/MediaProcessor.csproj": {
       "executable": false,
       "references": [
         "Shared/Core/Shared.csproj",
-        "Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj",
-        "Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj"
+        "Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj"
       ],
       "packages": []
     },
@@ -290,8 +345,7 @@
       "executable": false,
       "references": [
         "Shared/Core/Shared.csproj",
-        "Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj",
-        "Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj"
+        "Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj"
       ],
       "packages": [
         "CrystalQuartz.AspNetCore",
@@ -303,7 +357,6 @@
       "references": [
         "Shared/Core/Shared.csproj",
         "Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj",
-        "Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj",
         "Shared/Integrations/Vendor/YtDlpSharpLib/YtDlpSharpLib/YtDlpSharpLib.csproj"
       ],
       "packages": [
@@ -315,10 +368,24 @@
         "System.IO.Hashing"
       ]
     },
+    "Shared/Persistence/Persistence.csproj": {
+      "executable": false,
+      "references": [
+        "Shared/Core/Shared.csproj"
+      ],
+      "packages": [
+        "Cleipnir.Flows",
+        "Microsoft.EntityFrameworkCore.Relational",
+        "NodaTime.Serialization.SystemTextJson",
+        "Quartz"
+      ]
+    },
     "Tests/IntegrationTests/IntegrationTests/IntegrationTests.csproj": {
       "executable": true,
       "references": [
         "Full/Hosts/WebAPI/WebAPIHost.csproj",
+        "Full/Infrastructure/Postgres/Persistence.Postgres.csproj",
+        "Full/Security/Security.csproj",
         "Lite/Backend/Lite.csproj",
         "Shared/Modules/Api/WebAPI.csproj",
         "Shared/Modules/DataBridge/DataBridge.csproj",
@@ -338,6 +405,8 @@
       "executable": true,
       "references": [
         "Full/Hosts/BackupService/BackupService.csproj",
+        "Full/Infrastructure/Postgres/Persistence.Postgres.csproj",
+        "Full/Security/Security.csproj",
         "Lite/Backend/Lite.csproj",
         "Shared/Core/Shared.csproj",
         "Shared/Modules/Api/WebAPI.csproj",
@@ -436,6 +505,46 @@
   },
   "apiRouteAttributes": [
     {
+      "source": "Full/Security/Controllers/AccessControlController.cs",
+      "attributes": [
+        "[Route(\"api/global/access-control\")]",
+        "[HttpGet(\"directory\")]",
+        "[HttpGet(\"catalog\")]",
+        "[HttpGet(\"bundles\")]",
+        "[HttpGet(\"bundles/{bundleId}\")]",
+        "[HttpGet(\"bundles/{bundleId}/policies\")]",
+        "[HttpPost(\"bundles\")]",
+        "[HttpPut(\"bundles/{bundleId}/endpoints\")]",
+        "[HttpDelete(\"bundles/{bundleId}\")]",
+        "[HttpGet(\"policies\")]",
+        "[HttpGet(\"policies/{policyId:guid}\")]",
+        "[HttpPost(\"policies\")]",
+        "[HttpPut(\"policies/{policyId:guid}\")]",
+        "[HttpPost(\"policies/{policyId:guid}/duplicate\")]",
+        "[HttpDelete(\"policies/{policyId:guid}\")]",
+        "[HttpGet(\"providers\")]",
+        "[HttpGet(\"media/{mediaGuid:guid}\")]",
+        "[HttpGet(\"effective\")]",
+        "[HttpPost(\"effective/check\")]",
+        "[HttpGet(\"effective/me\")]"
+      ]
+    },
+    {
+      "source": "Full/Security/Controllers/BrowserAuthController.cs",
+      "attributes": [
+        "[Route(\"auth\")]",
+        "[HttpGet(\"login\")]",
+        "[HttpPost(\"logout\")]"
+      ]
+    },
+    {
+      "source": "Lite/Infrastructure/Identity/LocalBrowserAuthController.cs",
+      "attributes": [
+        "[HttpGet(\"login\")]",
+        "[HttpPost(\"logout\")]"
+      ]
+    },
+    {
       "source": "Shared/Modules/Api/Features/Auth/Controllers/AuthController.cs",
       "attributes": [
         "[Route(\"api/auth\")]",
@@ -443,14 +552,6 @@
         "[HttpGet(\"me\")]",
         "[HttpGet(\"csrf\")]",
         "[HttpPost(\"session\")]"
-      ]
-    },
-    {
-      "source": "Shared/Modules/Api/Features/Auth/Controllers/BrowserAuthController.cs",
-      "attributes": [
-        "[Route(\"auth\")]",
-        "[HttpGet(\"login\")]",
-        "[HttpPost(\"logout\")]"
       ]
     },
     {
@@ -544,31 +645,6 @@
         "[HttpPost(\"{sessionId:guid}/cancel\")]",
         "[HttpPost(\"cleanup\")]",
         "[HttpGet(\"/api/global/imports/incoming/browse\")]"
-      ]
-    },
-    {
-      "source": "Shared/Modules/Api/Features/Management/Controllers/AccessControlController.cs",
-      "attributes": [
-        "[Route(\"api/global/access-control\")]",
-        "[HttpGet(\"directory\")]",
-        "[HttpGet(\"catalog\")]",
-        "[HttpGet(\"bundles\")]",
-        "[HttpGet(\"bundles/{bundleId}\")]",
-        "[HttpGet(\"bundles/{bundleId}/policies\")]",
-        "[HttpPost(\"bundles\")]",
-        "[HttpPut(\"bundles/{bundleId}/endpoints\")]",
-        "[HttpDelete(\"bundles/{bundleId}\")]",
-        "[HttpGet(\"policies\")]",
-        "[HttpGet(\"policies/{policyId:guid}\")]",
-        "[HttpPost(\"policies\")]",
-        "[HttpPut(\"policies/{policyId:guid}\")]",
-        "[HttpPost(\"policies/{policyId:guid}/duplicate\")]",
-        "[HttpDelete(\"policies/{policyId:guid}\")]",
-        "[HttpGet(\"providers\")]",
-        "[HttpGet(\"media/{mediaGuid:guid}\")]",
-        "[HttpGet(\"effective\")]",
-        "[HttpPost(\"effective/check\")]",
-        "[HttpGet(\"effective/me\")]"
       ]
     },
     {

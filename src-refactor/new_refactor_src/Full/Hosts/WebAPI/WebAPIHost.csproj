@@ -7,7 +7,8 @@
     <AssemblyName>FrostStream.Full.WebAPI</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../../Infrastructure/Infrastructure.csproj" />
     <ProjectReference Include="../../../Shared/Modules/Api/WebAPI.csproj" />
     <ProjectReference Include="../../../Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj" />
   </ItemGroup>
-</Project>
+<ItemGroup><ProjectReference Include="../../Security/Security.csproj" /></ItemGroup></Project>

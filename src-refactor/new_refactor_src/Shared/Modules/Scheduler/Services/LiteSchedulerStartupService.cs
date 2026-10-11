@@ -8,19 +8,16 @@ namespace Scheduler.Services;
 /// services, then subscriptions and SQLite-backed schedule hydration must finish before Quartz runs.
 /// </summary>
 public sealed class LiteSchedulerStartupService(
-    IServiceProvider services,
     ISchedulerFactory schedulerFactory,
     ScheduleHydrationService hydration,
-    ILogger<LiteSchedulerStartupService> logger) : IHostedService
+    ILogger<LiteSchedulerStartupService> logger) : IHostedService, Shared.Deployment.IApplicationReadyStep
 {
     private IScheduler? scheduler;
 
-    public async Task StartAsync(CancellationToken cancellationToken)
+    public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    async Task Shared.Deployment.IApplicationReadyStep.StartAsync(CancellationToken cancellationToken)
     {
-        var registrations = services.GetServices<IHostedService>()
-            .TakeWhile(service => !ReferenceEquals(service, this))
-            .OfType<FrostStream.ApplicationContracts.IApplicationHandlerInitialization>().Select(service => service.RegistrationCompleted);
-        await Task.WhenAll(registrations).WaitAsync(cancellationToken);
         scheduler = await schedulerFactory.GetScheduler(cancellationToken);
         try
         {

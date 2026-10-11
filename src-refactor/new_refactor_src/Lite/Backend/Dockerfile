@@ -6,13 +6,15 @@ COPY Shared/Contracts/ Shared/Contracts/
 COPY Shared/Core/ Shared/Core/
 COPY Shared/Integrations/StorageExtensions/ Shared/Integrations/StorageExtensions/
 COPY Shared/Hosting/ServiceDefaults/ Shared/Hosting/ServiceDefaults/
-COPY Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/ Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/
 COPY Shared/Integrations/Vendor/YtDlpSharpLib/YtDlpSharpLib/ Shared/Integrations/Vendor/YtDlpSharpLib/YtDlpSharpLib/
 COPY Shared/Modules/DataBridge/ Shared/Modules/DataBridge/
 COPY Shared/Modules/MediaProcessor/ Shared/Modules/MediaProcessor/
 COPY Shared/Modules/Scheduler/ Shared/Modules/Scheduler/
 COPY Shared/Modules/Api/ Shared/Modules/Api/
 COPY Shared/Modules/Worker/ Shared/Modules/Worker/
+COPY Shared/Persistence/ Shared/Persistence/
+COPY Shared/Integrations/Typesense/ Shared/Integrations/Typesense/
+COPY Lite/Infrastructure/ Lite/Infrastructure/
 COPY Lite/Backend/ Lite/Backend/
 RUN dotnet publish Lite/Backend/Lite.csproj -c Release -o /app
 

@@ -13,6 +13,8 @@ COPY Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj Sh
 COPY Shared/Integrations/Vendor/YtDlpSharpLib/YtDlpSharpLib/YtDlpSharpLib.csproj Shared/Integrations/Vendor/YtDlpSharpLib/YtDlpSharpLib/
 COPY Shared/Modules/Scheduler/Scheduler.csproj Shared/Modules/Scheduler/
 COPY Full/Hosts/Scheduler/SchedulerHost.csproj Full/Hosts/Scheduler/
+COPY Full/Infrastructure/ Full/Infrastructure/
+COPY Shared/Persistence/ Shared/Persistence/
 RUN dotnet restore Full/Hosts/Scheduler/SchedulerHost.csproj
 
 COPY Shared/Core/ Shared/Core/

@@ -15,6 +15,9 @@ COPY Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj Sh
 COPY Shared/Integrations/Vendor/YtDlpSharpLib/YtDlpSharpLib/YtDlpSharpLib.csproj Shared/Integrations/Vendor/YtDlpSharpLib/YtDlpSharpLib/
 COPY Shared/Modules/DataBridge/DataBridge.csproj Shared/Modules/DataBridge/
 COPY Full/Hosts/DataBridge/DataBridgeHost.csproj Full/Hosts/DataBridge/
+COPY Full/Infrastructure/ Full/Infrastructure/
+COPY Shared/Persistence/ Shared/Persistence/
+COPY Shared/Integrations/Typesense/ Shared/Integrations/Typesense/
 RUN dotnet restore Full/Hosts/DataBridge/DataBridgeHost.csproj
 
 COPY Shared/Core/ Shared/Core/

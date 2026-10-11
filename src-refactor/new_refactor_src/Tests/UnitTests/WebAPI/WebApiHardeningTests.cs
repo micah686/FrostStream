@@ -15,23 +15,23 @@ public sealed class WebApiHardeningTests
                 singleUserMode: true,
                 isProduction: true));
 
-        exception.Message.ShouldContain("SINGLE_USER_MODE");
+        exception.Message.ShouldContain("Full requires Authentik");
     }
 
     [Test]
-    public void Production_Single_User_Mode_Can_Be_Explicitly_Allowed()
+    public void Production_Single_User_Mode_Rejects_Former_Override()
     {
-        Should.NotThrow(() =>
+        Should.Throw<InvalidOperationException>(() =>
             WebApiHardening.ValidateStartup(
-                new FrostStreamAuthOptions { AllowSingleUserModeInProduction = true },
+                new FrostStreamAuthOptions(),
                 singleUserMode: true,
                 isProduction: true));
     }
 
     [Test]
-    public void Development_Single_User_Mode_Remains_Allowed()
+    public void Development_Single_User_Mode_Is_Rejected()
     {
-        Should.NotThrow(() =>
+        Should.Throw<InvalidOperationException>(() =>
             WebApiHardening.ValidateStartup(
                 new FrostStreamAuthOptions(),
                 singleUserMode: true,

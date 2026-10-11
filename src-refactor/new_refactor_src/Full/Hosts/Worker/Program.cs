@@ -1,4 +1,7 @@
+using Microsoft.Extensions.DependencyInjection;
+using Shared.Secrets;
 using Microsoft.Extensions.Hosting;
+using FrostStream.Full.Infrastructure;
 
 using Worker;
 
@@ -10,6 +13,8 @@ public class Program
     {
         var builder = Host.CreateApplicationBuilder(args);
         builder.AddServiceDefaults();
+        builder.AddFullMessaging();
+        builder.Services.AddOpenBaoSecretStore(builder.Configuration);
         builder.AddWorkerModule();
         var app = builder.Build();
         await app.RunAsync();

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Hosting;
+using FrostStream.Full.Infrastructure;
 
 using Scheduler;
 
@@ -10,7 +11,9 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
         builder.AddServiceDefaults();
+        builder.AddFullMessaging();
         builder.AddSchedulerModule();
+        builder.AddFullBackupClient();
         var app = builder.Build();
         app.MapSchedulerModule();
         app.MapDefaultEndpoints();

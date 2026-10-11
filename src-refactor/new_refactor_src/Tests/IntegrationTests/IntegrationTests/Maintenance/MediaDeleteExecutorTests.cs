@@ -1,3 +1,5 @@
+using FrostStream.Lite.Infrastructure;
+using FrostStream.Full.Infrastructure;
 using DataBridge.Persistence;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -210,7 +212,7 @@ public sealed class MediaDeleteExecutorTests
         private IHost? applicationHost;
 
         public MediaDeleteExecutor CreateExecutor(IMessageBus messageBus, ITypesenseIndexService searchIndex)
-            => new(new ApplicationDatabase(DataSource), messageBus, searchIndex,
+            => new(new ApplicationDatabase(new global::DataBridge.Persistence.Postgres.PostgresConnectionFactory(DataSource)), messageBus, searchIndex,
                 applicationHost!.Services.GetRequiredService<IServiceScopeFactory>(), NullLogger<MediaDeleteExecutor>.Instance);
 
         private string ConnectionString =>
@@ -241,7 +243,7 @@ public sealed class MediaDeleteExecutorTests
             var builder = Host.CreateApplicationBuilder();
             builder.Logging.ClearProviders();
             builder.Configuration["ConnectionStrings:froststreamdb"] = ConnectionString;
-            builder.AddDataBridgePersistence();
+            if (Shared.Deployment.DeploymentOptions.FromConfiguration(builder.Configuration).Mode == Shared.Deployment.DeploymentMode.Lite) builder.AddLitePersistence().AddLiteMessaging().AddLiteSecretStore().AddLiteBackupClient().AddLiteStagedStorage(); else builder.AddFullPersistence();
             applicationHost = builder.Build();
             _initialized = true;
         }

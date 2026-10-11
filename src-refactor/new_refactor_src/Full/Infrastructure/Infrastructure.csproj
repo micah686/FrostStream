@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>FrostStream.Full.Infrastructure</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../Shared/Core/Shared.csproj" />
+    <ProjectReference Include="../../Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj" />
+    <PackageReference Include="VaultSharp" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="Postgres/**/*.cs" />
+  </ItemGroup>
+</Project>

@@ -1,4 +1,7 @@
+using Shared.Secrets;
+using FrostStream.Full.Security;
 using Microsoft.Extensions.Hosting;
+using FrostStream.Full.Infrastructure;
 
 using WebAPI;
 
@@ -10,7 +13,11 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
         builder.AddServiceDefaults();
+        builder.AddFullMessaging(provisionTopology: false);
+        builder.Services.AddOpenBaoSecretStore(builder.Configuration);
+        builder.AddFullSecurity();
         builder.AddWebAPIModule();
+        builder.AddFullBackupClient();
         var app = builder.Build();
         app.MapWebAPIModule();
         app.MapDefaultEndpoints();

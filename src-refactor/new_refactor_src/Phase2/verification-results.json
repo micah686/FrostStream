@@ -1,0 +1,114 @@
+{
+  "phase": 2,
+  "date": "2026-10-11",
+  "status": "implemented and verified against characterized baseline",
+  "passed": {
+    "solutionBuild": {
+      "errors": 0,
+      "warnings": [
+        "Two inherited ASPIRE010 CLI-bundle environment warnings"
+      ]
+    },
+    "unit": 596,
+    "postgresAndSqlitePersistence": 116,
+    "liteMediaRestartCrash": 3,
+    "fullControlledAuthentication": 17,
+    "webApiHttp": 6,
+    "phase0Tooling": 20,
+    "phase2BoundaryTooling": 8,
+    "dependencyGuard": {
+      "projects": 33,
+      "restoredLiteGraph": true,
+      "sharedProviderSdkFree": true
+    },
+    "publishedCompositionRoots": [
+      {
+        "host": "Lite",
+        "fullSecurity": false,
+        "postgres": false,
+        "typesense": true,
+        "dependencyCount": 172
+      },
+      {
+        "host": "WebAPI",
+        "fullSecurity": true,
+        "postgres": false,
+        "typesense": false,
+        "dependencyCount": 119
+      },
+      {
+        "host": "DataBridge",
+        "fullSecurity": false,
+        "postgres": true,
+        "typesense": true,
+        "dependencyCount": 202
+      },
+      {
+        "host": "Worker",
+        "fullSecurity": false,
+        "postgres": false,
+        "typesense": false,
+        "dependencyCount": 134
+      },
+      {
+        "host": "MediaProcessor",
+        "fullSecurity": false,
+        "postgres": false,
+        "typesense": false,
+        "dependencyCount": 120
+      },
+      {
+        "host": "Scheduler",
+        "fullSecurity": false,
+        "postgres": false,
+        "typesense": false,
+        "dependencyCount": 103
+      }
+    ],
+    "composeProfiles": [
+      "Lite",
+      "Full"
+    ],
+    "applicationImages": [
+      "Lite",
+      "WebAPI",
+      "DataBridge",
+      "Worker",
+      "MediaProcessor",
+      "Scheduler"
+    ],
+    "packagedFull": {
+      "freshState": true,
+      "finalServiceStates": 19,
+      "realAuthentikBrowser": true,
+      "privatePlaylistIsolation": true,
+      "csrf": true,
+      "logoutSessionRevocation": true,
+      "engineWorkaroundRequired": true
+    },
+    "packagedLite": {
+      "freshState": true,
+      "standardComposeStartup": true,
+      "frontendApiCapabilities": true,
+      "localAdmin": true,
+      "finalRegistrationSplitVerified": true
+    }
+  },
+  "limitations": [
+    "Typesense remains the sole temporary Lite provider SDK exception until Phase 5.",
+    "Full startup uses the existing ordered Podman workaround; standard Full Compose remains an open Phase 0 gate.",
+    "Distributed Full media, large-corpus workload measurements and specified 8 GB machine acceptance remain open Phase 0 gates."
+  ],
+  "evidence": {
+    "publish": ".phase2/publish-final/verification.json",
+    "publishedDependencies": ".phase2/publish-final/edition-verification.json",
+    "unit": ".phase0/results/phase2-unit-final-composition/",
+    "postgresPersistence": ".phase0/results/phase2-postgres-final/",
+    "lite": ".phase0/results/phase2-lite-final/",
+    "fullControlled": ".phase0/results/phase2-full-auth/",
+    "http": ".phase0/results/phase2-http/",
+    "fullStartup": ".phase0/results/phase2-full-startup.json",
+    "fullBrowser": ".phase0/results/phase2-authentik.json",
+    "liteStartup": ".phase0/results/phase2-lite-startup-final.json"
+  }
+}

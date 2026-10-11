@@ -7,5 +7,5 @@ public sealed class EndpointCatalogValidatorTests
 {
     [Test]
     public void Catalog_Has_Exactly_One_Route_For_Every_Endpoint_Id()
-        => EndpointCatalogValidator.Validate(typeof(global::WebAPI.WebAPIModule).Assembly);
+        => EndpointCatalogValidator.Validate(typeof(global::WebAPI.WebAPIModule).Assembly, typeof(FrostStream.Full.Security.SecurityRegistration).Assembly);
 }

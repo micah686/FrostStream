@@ -55,7 +55,7 @@ if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FROSTSTREAM_BA
 builder.Configuration.AddEnvironmentVariables();
 compose.WithDashboard(Helpers.DevelopmentToolsEnabled);
 
-var hardening = AppHostHardening.Read(AppHostHardening.IsTruthy(Environment.GetEnvironmentVariable("SINGLE_USER_MODE")));
+var hardening = AppHostHardening.Read(Helpers.IsSingleUserMode);
 AppHostHardening.Validate(hardening);
 var sharedStorageRoot = ResolveStorageRoot(builder);
 var typesenseApiKey = builder.AddParameter("typesense-api-key", hardening.TypesenseApiKey,

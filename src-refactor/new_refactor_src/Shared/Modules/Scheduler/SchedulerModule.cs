@@ -1,5 +1,3 @@
-using Shared.Messaging.Adapters;
-using Conduit.NATS;
 using NodaTime;
 using Quartz;
 using Scheduler.ChannelTasks;
@@ -24,7 +22,6 @@ public static class SchedulerModule
         if (!builder.Services.TryAddModule(typeof(SchedulerModule))) return builder;
         builder.AddDeployment();
         var liteMode = DeploymentOptions.FromConfiguration(builder.Configuration).Mode == DeploymentMode.Lite;
-        builder.Services.AddApplicationTransport(builder.Configuration);
 
         builder.Services.Configure<QuartzDashboardOptions>(
             builder.Configuration.GetSection(QuartzDashboardOptions.SectionName));
@@ -37,17 +34,9 @@ public static class SchedulerModule
         builder.Services.Configure<MaintenanceJobOptions>(
             builder.Configuration.GetSection(MaintenanceJobOptions.SectionName));
 
-        builder.Services.AddModuleNats(options =>
-        {
-            options.Url = NatsConnectionFactory.GetUrl(builder.Configuration);
-            options.AuthOpts = NatsConnectionFactory.BuildAuth(builder.Configuration);
-            options.EnableTopologyProvisioning = true;
-        });
-        builder.Services.AddModuleTopology<BackgroundJobsTopology>();
         builder.Services.AddSingleton<INatsMessagePublisher, NatsMessagePublisher>();
         // Scheduled backups are dispatched to BackupService over REST rather than JetStream;
         // resilience + service discovery come from AddServiceDefaults.
-        Shared.Backups.ApplicationBackupRegistration.AddApplicationBackupClient(builder.Services, builder.Configuration);
         builder.Services.AddSingleton<INatsRequestClient, NatsRequestClient>();
         builder.Services.AddSingleton<IDatabridgeClient, DatabridgeClient>();
 
@@ -107,7 +96,9 @@ public static class SchedulerModule
             builder.Services.PostConfigure<HostOptions>(options => options.ServicesStartConcurrently = false);
             builder.Services.AddSingleton<ScheduleHydrationService>();
             builder.Services.AddHostedService<ScheduleChangeListener>();
-            builder.Services.AddHostedService<LiteSchedulerStartupService>();
+            builder.Services.AddSingleton<LiteSchedulerStartupService>();
+            builder.Services.AddHostedService(sp => sp.GetRequiredService<LiteSchedulerStartupService>());
+            builder.Services.AddSingleton<IApplicationReadyStep>(sp => sp.GetRequiredService<LiteSchedulerStartupService>());
         }
         else
         {

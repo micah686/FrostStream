@@ -307,9 +307,9 @@ public sealed class WatchStateConsumerServiceTests
         private NpgsqlDataSource DataSource => _dataSource ?? throw new InvalidOperationException("Fixture not initialized.");
 
         public WatchStateConsumerService CreateService(FakeMessageBus bus)
-            => new(bus, new ApplicationDatabase(DataSource), new FixedClock(Now), NullLogger<WatchStateConsumerService>.Instance);
+            => new(bus, new ApplicationDatabase(new global::DataBridge.Persistence.Postgres.PostgresConnectionFactory(DataSource)), new FixedClock(Now), NullLogger<WatchStateConsumerService>.Instance);
 
-        public AccessPolicyExecutor CreateAccessPolicyExecutor() => new(new ApplicationDatabase(DataSource));
+        public AccessPolicyExecutor CreateAccessPolicyExecutor() => new(new ApplicationDatabase(new global::DataBridge.Persistence.Postgres.PostgresConnectionFactory(DataSource)));
 
         public async Task InitializeAsync()
         {

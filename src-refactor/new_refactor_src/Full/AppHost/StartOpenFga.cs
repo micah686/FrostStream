@@ -11,10 +11,6 @@ public static class StartOpenFga
         PostgresResources postgres,
         AppHostHardeningOptions hardening)
     {
-        if (Helpers.IsSingleUserMode)
-        {
-            return new OpenFgaResources(Server: null, Endpoint: null);
-        }
 
         var migrate = builder
             .AddContainer("openfga-migrate", "openfga/openfga", "v1.18.0")

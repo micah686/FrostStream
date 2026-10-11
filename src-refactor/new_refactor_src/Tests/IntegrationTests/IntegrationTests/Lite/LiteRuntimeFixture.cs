@@ -1,3 +1,4 @@
+using Shared.Deployment;
 using System.Diagnostics;
 using System.Net.Http.Json;
 using System.Net;
@@ -119,6 +120,7 @@ internal sealed class LiteRuntimeFixture : IAsyncDisposable
         App.MapGet("/api/e2e/new-feature", (Microsoft.AspNetCore.Http.HttpContext context) => context.User.Identity!.Name)
             .RequireAuthorization("future-policy-without-permission-metadata");
         App.MapHealthChecks("/health").AllowAnonymous();
+        await App.InitializeApplicationAsync(token);
         await App.StartAsync(token);
         Client = new HttpClient { BaseAddress = new Uri(App.Urls.Single()) };
     }

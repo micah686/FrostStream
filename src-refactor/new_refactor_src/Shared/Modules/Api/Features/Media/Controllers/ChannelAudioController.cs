@@ -19,7 +19,7 @@ namespace WebAPI.Features.Media.Controllers;
 public sealed class ChannelAudioController(
     ChannelAudioResolver channelAudio,
     PodcastTokenService podcastTokens,
-    IOptions<FrostStreamAuthOptions> authOptions,
+    IConfiguration configuration,
     IStoreProvider blobStorageProvider,
     IMediaAccessChecker accessChecker,
     IMessageBus messageBus,
@@ -331,7 +331,7 @@ public sealed class ChannelAudioController(
     }
 
     private string PublicOrigin()
-        => authOptions.Value.PublicOrigin.TrimEnd('/');
+        => configuration["Auth:PublicOrigin"] ?? "http://localhost".TrimEnd('/');
 }
 
 public sealed record SetEncodedStatusRequest

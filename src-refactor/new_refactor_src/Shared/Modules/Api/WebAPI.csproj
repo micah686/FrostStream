@@ -8,8 +8,6 @@
 
     <ItemGroup>
         <PackageReference Include="FCastSenderSDKDotnet" />
-        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
-        <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" />
         <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
         <PackageReference Include="Microsoft.OpenApi" />
         <PackageReference Include="NodaTime.Serialization.SystemTextJson" />
@@ -19,15 +17,11 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="../../Integrations/Vendor/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj" />
       <ProjectReference Include="../../Hosting/ServiceDefaults/ServiceDefaults.csproj" />
       <ProjectReference Include="../../Core/Shared.csproj" />
     </ItemGroup>
 
-    <ItemGroup>
-      <EmbeddedResource Include="Auth/OpenFgaModel.json"
-                        LogicalName="WebAPI.Auth.OpenFgaModel.json" />
-    </ItemGroup>
+
 
     <ItemGroup>
       <FrameworkReference Include="Microsoft.AspNetCore.App" />

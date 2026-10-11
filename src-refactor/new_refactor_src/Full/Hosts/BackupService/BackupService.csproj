@@ -9,4 +9,4 @@
     <ProjectReference Include="../../../Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj" />
     <ProjectReference Include="../../../Shared/Core/Shared.csproj" />
   </ItemGroup>
-</Project>
+<ItemGroup><ProjectReference Include="../../Infrastructure/Infrastructure.csproj" /></ItemGroup></Project>

@@ -1,3 +1,4 @@
+using Shared.Deployment;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -33,6 +34,7 @@ internal static class LiteCrashHost
         await using var app = builder.Build();
         app.Urls.Add("http://127.0.0.1:0");
         app.MapWebAPIModule();
+        await app.InitializeApplicationAsync();
         await app.StartAsync();
         await File.WriteAllTextAsync(Path.Combine(directory, "child-address"), app.Urls.Single());
         await app.WaitForShutdownAsync();

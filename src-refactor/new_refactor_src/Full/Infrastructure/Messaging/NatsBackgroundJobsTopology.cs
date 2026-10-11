@@ -1,0 +1,109 @@
+using Conduit.NATS;
+using Shared.Messaging;
+using static Shared.Messaging.BackgroundJobsTopology;
+
+namespace FrostStream.Full.Infrastructure;
+
+public sealed class NatsBackgroundJobsTopology : ITopologySource
+{
+    public IEnumerable<StreamSpec> GetStreams()
+    {
+        yield return new StreamSpec
+        {
+            Name = StreamName.From(StreamNameValue),
+            // Only the JetStream background-job subjects may be captured here. Broad wildcards
+            // (e.g. "fs.cleanup.>") must not be used: they also capture core request/reply
+            // subjects (worker file ops, filesystem reconcile), and JetStream's publish-ack
+            // then races the responder's reply on the request inbox.
+            Subjects =
+            [
+                BackgroundJobSubjects.ChannelScanRefreshRequest,
+                BackgroundJobSubjects.ChannelAssetRefreshRequest,
+                BackgroundJobSubjects.ChannelScanFullRequest,
+                BackgroundJobSubjects.DatabaseStaleMediaCleanupRequest,
+                BackgroundJobSubjects.DownloadHistoryCleanupRequest,
+                BackgroundJobSubjects.ImportSessionCleanupRequest,
+                BackgroundJobSubjects.DatabaseMaintenanceRequest,
+                BackgroundJobSubjects.DatabaseMaintenanceReindexRequest,
+                BackgroundJobSubjects.SearchReindexRequest,
+                BackgroundJobSubjects.AudioRenditionEncodeRequest,
+                BackgroundJobSubjects.LiveChatIngestRequest,
+                BackgroundJobSubjects.LiveChatBackfillRequest,
+                BackgroundJobSubjects.StreamRenditionEncodeRequest,
+                BackgroundJobSubjects.MediaThumbnailGenerationRequest
+            ],
+            MaxAge = TimeSpan.FromDays(7),
+            RetentionPolicy = StreamRetention.WorkQueue,
+            StorageType = StorageType.File,
+            Replicas = 1
+        };
+    }
+
+    public IEnumerable<ConsumerSpec> GetConsumers()
+    {
+        // A first purge on a long-lived install walks a lot of history and deletes one Cleipnir flow
+        // instance per run, so the ack window is generous relative to the other cleanup consumers.
+        yield return DataBridgeConsumer(DownloadHistoryCleanupConsumer, BackgroundJobSubjects.DownloadHistoryCleanupRequest, TimeSpan.FromMinutes(30), maxDeliver: 3);
+        yield return DataBridgeConsumer(ImportSessionCleanupConsumer, BackgroundJobSubjects.ImportSessionCleanupRequest, TimeSpan.FromMinutes(30), maxDeliver: 3);
+        yield return DataBridgeConsumer(SearchReindexConsumer, BackgroundJobSubjects.SearchReindexRequest, TimeSpan.FromMinutes(30), maxDeliver: 3);
+        yield return DataBridgeConsumer(DatabaseMaintenanceConsumer, BackgroundJobSubjects.DatabaseMaintenanceRequest, TimeSpan.FromHours(2), maxDeliver: 3);
+        yield return DataBridgeConsumer(DatabaseMaintenanceReindexConsumer, BackgroundJobSubjects.DatabaseMaintenanceReindexRequest, TimeSpan.FromHours(24), maxDeliver: 2);
+        yield return DataBridgeConsumer(DatabaseStaleMediaCleanupConsumer, BackgroundJobSubjects.DatabaseStaleMediaCleanupRequest, TimeSpan.FromMinutes(15), maxDeliver: 5);
+        // Chat ingests stream millions of rows into ClickHouse in one message; the window is
+        // generous and the handler is idempotent (delete-first), so redelivery is safe.
+        yield return DataBridgeConsumer(LiveChatIngestConsumer, BackgroundJobSubjects.LiveChatIngestRequest, TimeSpan.FromMinutes(30), maxDeliver: 3);
+        // The backfill sweep probes storage for every live archive without a chat marker, so it
+        // can run long on a large library; it only enqueues ingests, it does not perform them.
+        yield return DataBridgeConsumer(LiveChatBackfillConsumer, BackgroundJobSubjects.LiveChatBackfillRequest, TimeSpan.FromHours(2), maxDeliver: 2);
+        yield return WorkerConsumer(WorkerChannelScanRefreshConsumer, BackgroundJobSubjects.ChannelScanRefreshRequest, TimeSpan.FromMinutes(30), maxDeliver: 5);
+        yield return WorkerConsumer(WorkerChannelScanFullConsumer, BackgroundJobSubjects.ChannelScanFullRequest, TimeSpan.FromHours(2), maxDeliver: 3);
+        yield return WorkerConsumer(WorkerChannelAssetRefreshConsumer, BackgroundJobSubjects.ChannelAssetRefreshRequest, TimeSpan.FromMinutes(30), maxDeliver: 3);
+        // Encodes run arbitrarily long, so MediaProcessor extends the short ack window with
+        // in-progress acks every 30s while ffmpeg works; a dead encoder is redelivered quickly.
+        yield return MediaProcessorConsumer(MediaProcessorAudioRenditionConsumer, BackgroundJobSubjects.AudioRenditionEncodeRequest, TimeSpan.FromMinutes(2), maxDeliver: 3);
+        yield return MediaProcessorConsumer(MediaProcessorStreamRenditionConsumer, BackgroundJobSubjects.StreamRenditionEncodeRequest, TimeSpan.FromMinutes(2), maxDeliver: 2);
+        yield return MediaProcessorConsumer(MediaProcessorThumbnailGenerationConsumer, BackgroundJobSubjects.MediaThumbnailGenerationRequest, TimeSpan.FromMinutes(2), maxDeliver: 3);
+        // Scheduled backups moved to REST dispatch (Scheduler → BackupService HTTP). On live NATS
+        // stores the old durable must be removed before this topology applies:
+        //   nats consumer rm FROSTSTREAM_BACKGROUND databridge-backup
+    }
+
+    public IEnumerable<ObjectStoreSpec> GetObjectStores()
+        => Array.Empty<ObjectStoreSpec>();
+
+    private static ConsumerSpec DataBridgeConsumer(string durableName, string subject, TimeSpan ackWait, int maxDeliver)
+        => new()
+        {
+            StreamName = StreamName.From(StreamNameValue),
+            DurableName = ConsumerName.From(durableName),
+            DeliverGroup = QueueGroup.From(DataBridgeQueueGroup),
+            FilterSubject = subject,
+            AckPolicy = AckPolicy.Explicit,
+            AckWait = ackWait,
+            MaxDeliver = maxDeliver
+        };
+
+    private static ConsumerSpec WorkerConsumer(string durableName, string subject, TimeSpan ackWait, int maxDeliver)
+        => new()
+        {
+            StreamName = StreamName.From(StreamNameValue),
+            DurableName = ConsumerName.From(durableName),
+            DeliverGroup = QueueGroup.From(WorkerQueueGroup),
+            FilterSubject = subject,
+            AckPolicy = AckPolicy.Explicit,
+            AckWait = ackWait,
+            MaxDeliver = maxDeliver
+        };
+
+    private static ConsumerSpec MediaProcessorConsumer(string durableName, string subject, TimeSpan ackWait, int maxDeliver)
+        => new()
+        {
+            StreamName = StreamName.From(StreamNameValue),
+            DurableName = ConsumerName.From(durableName),
+            DeliverGroup = QueueGroup.From(MediaProcessorQueueGroup),
+            FilterSubject = subject,
+            AckPolicy = AckPolicy.Explicit,
+            AckWait = ackWait,
+            MaxDeliver = maxDeliver
+        };
+}

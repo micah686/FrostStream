@@ -39,11 +39,6 @@ public static class StartAuthentik
             secret: true);
         var clientId = Helpers.GetEnv("AUTHENTIK_CLIENT_ID");
 
-        // Single-user mode runs without an identity provider, so no authentik containers are added.
-        if (hardening.SingleUserMode)
-        {
-            return new AuthentikResources(clientId, clientSecret, configuredAuthority, Server: null, Authority: null, ApiToken: null);
-        }
 
         var blueprintPath = Path.Combine(
             builder.AppHostDirectory,

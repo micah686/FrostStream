@@ -1,3 +1,5 @@
+using FrostStream.Lite.Infrastructure;
+using FrostStream.Full.Infrastructure;
 using DataBridge.Data;
 using DataBridge.Messaging;
 using Microsoft.EntityFrameworkCore;
@@ -26,7 +28,7 @@ public sealed class SingleUserOwnerSeederServiceTests
                 builder.Configuration["Auth:SingleUserMode"] = "false";
                 builder.Configuration["Persistence:Sqlite:Enabled"] = "true";
                 builder.Configuration["Persistence:Sqlite:Path"] = Path.Combine(dir, "test.db");
-                global::DataBridge.Persistence.PersistenceRegistration.AddDataBridgePersistence(builder);
+                builder.AddLitePersistence().AddLiteMessaging().AddLiteSecretStore().AddLiteBackupClient().AddLiteStagedStorage();
                 using var host = builder.Build();
                 global::DataBridge.DataBridgeModule.InitializeDataBridge(host);
                 using var seeder = new SingleUserOwnerSeederService(
@@ -76,7 +78,7 @@ public sealed class SingleUserOwnerSeederServiceTests
 
     private static IConfiguration SingleUserConfig(bool enabled)
         => new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?> { ["SINGLE_USER_MODE"] = enabled ? "true" : "false" })
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Deployment:Mode"] = enabled ? "Lite" : "Full" })
             .Build();
 
     private static async Task RunSeederAsync(ServiceProvider services, IConfiguration config)

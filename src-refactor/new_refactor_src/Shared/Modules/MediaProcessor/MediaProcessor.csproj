@@ -7,7 +7,6 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="../../Integrations/Vendor/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj" />
       <ProjectReference Include="../../Hosting/ServiceDefaults/ServiceDefaults.csproj" />
       <ProjectReference Include="../../Core/Shared.csproj" />
     </ItemGroup>

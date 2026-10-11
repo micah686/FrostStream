@@ -1,23 +1,5 @@
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
-using Shared.Deployment;
-
+using Shared.Backups;
 namespace Shared.Backups;
-
-public static class ApplicationBackupRegistration
-{
-    public static IServiceCollection AddApplicationBackupClient(this IServiceCollection services, IConfiguration configuration)
-    {
-        if (DeploymentOptions.FromConfiguration(configuration).Mode == DeploymentMode.Lite)
-            services.TryAddSingleton<IBackupServiceClient, UnavailableLocalBackupClient>();
-        else if (!services.Any(d => d.ServiceType == typeof(IBackupServiceClient)))
-            services.AddHttpClient<IBackupServiceClient, BackupServiceClient>(client =>
-                client.BaseAddress = new Uri(configuration["BackupService:BaseUrl"] ?? "http://backupservice"));
-        return services;
-    }
-}
-
 /// <summary>Until Phase 4, Lite preserves the shared routes without contacting PostgreSQL's backup service.</summary>
 public sealed class UnavailableLocalBackupClient : IBackupServiceClient
 {

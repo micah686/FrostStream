@@ -29,14 +29,12 @@
            asks for Polly.Core 8.4.0; this lifts it to 8.7.0. No source file here uses Polly. -->
       <PackageReference Include="Polly.Core" />
       <PackageReference Include="System.IO.Hashing" />
-      <PackageReference Include="VaultSharp" />
     </ItemGroup>
 
     <ItemGroup>
       <ProjectReference Include="../Contracts/ApplicationContracts.csproj" />
       <ProjectReference Include="../Integrations/StorageExtensions/StorageExtensions.csproj" />
-      <ProjectReference Include="../Integrations/Vendor/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj" />
       <ProjectReference Include="../Integrations/Vendor/YtDlpSharpLib/YtDlpSharpLib/YtDlpSharpLib.csproj" />
     </ItemGroup>
 
-</Project>
+<ItemGroup><PackageReference Include="NodaTime.Serialization.SystemTextJson" /></ItemGroup></Project>

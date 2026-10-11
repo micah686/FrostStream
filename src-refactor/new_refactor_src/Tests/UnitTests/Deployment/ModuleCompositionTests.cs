@@ -1,3 +1,6 @@
+using Scheduler;
+using FrostStream.Full.Infrastructure;
+using FrostStream.Full.Security;
 using Conduit.NATS;
 using DataBridge;
 using Lite;
@@ -28,7 +31,6 @@ public sealed class ModuleCompositionTests
         });
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["Auth:SingleUserMode"] = "true",
             ["Worker:IncomingRoot"] = Path.Combine(Path.GetTempPath(), "froststream-module-tests", "incoming")
         });
         return builder;
@@ -50,10 +52,8 @@ public sealed class ModuleCompositionTests
             var hostedTypes = builder.Services.Where(d => d.ServiceType == typeof(IHostedService))
                 .Select(d => d.ImplementationType).ToList();
             hostedTypes.ShouldNotContain(typeof(Quartz.QuartzHostedService));
-            hostedTypes.IndexOf(typeof(global::DataBridge.Messaging.DownloadFlowStartupService))
-                .ShouldBeLessThan(hostedTypes.IndexOf(typeof(global::Scheduler.Services.LiteSchedulerStartupService)));
-            hostedTypes.IndexOf(typeof(global::DataBridge.Messaging.ScheduleCrudConsumerService))
-                .ShouldBeLessThan(hostedTypes.IndexOf(typeof(global::Scheduler.Services.LiteSchedulerStartupService)));
+            builder.Services.Where(d => d.ServiceType == typeof(ApplicationInitializationStep)).Select(d => (ApplicationInitializationStep)d.ImplementationInstance!)
+                .Select(step => step.Order).Order().ShouldBe(new[] { 10, 20, 30, 40, 50 });
             builder.Services.ShouldNotContain(d => d.ServiceType == typeof(ITopologySource));
             builder.Services.ShouldNotContain(d => d.ServiceType == typeof(NATS.Client.Core.INatsConnection));
             builder.Services.ShouldNotContain(d => d.ServiceType == typeof(Npgsql.NpgsqlDataSource));
@@ -82,7 +82,10 @@ public sealed class ModuleCompositionTests
     {
         var builder = Builder();
         builder.Configuration["OpenBao:Token"] = "test-token";
-        builder.AddLiteModules();
+        Shared.Secrets.ServiceCollectionExtensions.AddOpenBaoSecretStore(builder.Services, builder.Configuration);
+        builder.AddFullBackupClient();
+        builder.AddFullMessaging();
+        builder.AddSchedulerModule();
         await using var provider = builder.Services.BuildServiceProvider();
         provider.GetRequiredService<Shared.Secrets.ISecretStore>().ShouldBeOfType<Shared.Secrets.OpenBaoSecretStore>();
         provider.GetRequiredService<Shared.Backups.IBackupServiceClient>().ShouldBeOfType<Shared.Backups.BackupServiceClient>();
@@ -119,11 +122,12 @@ public sealed class ModuleCompositionTests
     public async Task Combined_Modules_Are_Idempotent_And_Share_The_Controller_Assembly()
     {
         var builder = Builder();
+        builder.ConfigureLiteHost();
         builder.AddLiteModules();
         var count = builder.Services.Count;
         builder.AddLiteModules();
         builder.Services.Count.ShouldBe(count);
-        builder.Services.Count(d => d.ServiceType == typeof(ITopologySource) && d.ImplementationType == typeof(DownloadTopology)).ShouldBe(1);
+        builder.Services.Count(d => d.ServiceType == typeof(ITopologySource)).ShouldBe(0);
         builder.Services.Count(d => d.ServiceType == typeof(FrostStream.ApplicationContracts.IMessageBus)).ShouldBe(1);
         foreach (var role in new[] { "databridge", "worker", "media-processor" })
             builder.Services.Count(d => d.ServiceType == typeof(IBackgroundRunReporter) && Equals(d.ServiceKey, role)).ShouldBe(1);
@@ -138,19 +142,24 @@ public sealed class ModuleCompositionTests
     public async Task Full_And_Combined_Hosts_Discover_Identical_Controller_Routes()
     {
         var full = Builder();
-        full.Configuration["Auth:SingleUserMode"] = "false";
+        full.Configuration["OpenFga:Endpoint"] = "http://localhost:8080";
         full.Configuration["Auth:Authority"] = "https://identity.example.test";
         full.Configuration["Auth:PublicOrigin"] = "https://app.example.test";
         full.Configuration["Auth:ClientId"] = "test";
         full.Configuration["Auth:ClientSecret"] = "test";
         full.Configuration["Auth:Scopes"] = "openid profile offline_access";
+        full.AddFullMessaging();
+        Shared.Secrets.ServiceCollectionExtensions.AddOpenBaoSecretStore(full.Services, full.Configuration);
+        full.AddFullBackupClient();
+        full.AddFullSecurity();
         full.AddWebAPIModule();
         var combined = Builder();
         combined.ConfigureLiteHost();
         combined.AddLiteModules();
         await using var fullApp = full.Build();
         await using var combinedApp = combined.Build();
-        Routes(fullApp).ShouldBe(Routes(combinedApp));
+        Routes(fullApp).Where(route => !route.Contains("api/global/access-control", StringComparison.Ordinal)).ShouldBe(Routes(combinedApp));
+        Routes(combinedApp).ShouldNotContain(route => route.Contains("api/global/access-control", StringComparison.Ordinal));
         Routes(combinedApp).ShouldContain("GET api/system/capabilities");
     }
 
@@ -167,13 +176,12 @@ public sealed class ModuleCompositionTests
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["SINGLE_USER_MODE"] = "true",
             ["LiveChat:Enabled"] = "true",
             ["PotBroker:Enabled"] = "true"
         }).Build();
         var result = SystemCapabilities.Resolve(new(DeploymentMode.Full), configuration);
         result.DeploymentMode.ShouldBe("Full");
-        result.AccessManagement.Enabled.ShouldBeFalse();
+        result.AccessManagement.Enabled.ShouldBeTrue();
         result.Integrations.LiveChat.ShouldBeTrue();
         result.Integrations.PotProvider.ShouldBeTrue();
         result.Backups.PointInTimeRecovery.ShouldBeTrue();

@@ -21,3 +21,7 @@ App/*App/docker-compose/
 Tests/
 Phase0/
 **/TestResults/
+.phase1/
+.phase2/
+Phase1/
+Phase2/

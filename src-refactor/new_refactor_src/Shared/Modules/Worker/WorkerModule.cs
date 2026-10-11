@@ -1,10 +1,7 @@
-using Shared.Messaging.Adapters;
-using Conduit.NATS;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
-using NATS.Client.Core;
 using NodaTime;
 using Shared.Messaging;
 using Shared.Secrets;
@@ -24,27 +21,8 @@ public static class WorkerModule
     {
         if (!builder.Services.TryAddModule(typeof(WorkerModule))) return builder;
         builder.AddDeployment();
-        builder.Services.AddApplicationTransport(builder.Configuration);
 
-        var natsUrl = builder.Configuration.GetConnectionString("nats")
-            ?? builder.Configuration["NATS:Url"]
-            ?? "nats://localhost:24040";
-        var natsAuth = BuildNatsAuth(builder.Configuration);
 
-        builder.Services.AddModuleNats(options =>
-        {
-            options.Url = natsUrl;
-            options.AuthOpts = natsAuth;
-            // Provisions every ITopologySource registered below (idempotent — DataBridge
-            // registers the same source, so whichever service starts first wins).
-            options.EnableTopologyProvisioning = true;
-        });
-
-        builder.Services.AddModuleTopology<DownloadTopology>();
-        builder.Services.AddModuleTopology<ArtifactStorageTopology>();
-        builder.Services.AddModuleTopology<PlaylistTopology>();
-        builder.Services.AddModuleTopology<BackgroundJobsTopology>();
-        builder.Services.AddModuleTopology<LocalImportTopology>();
 
         builder.Services.AddSingleton<IClock>(SystemClock.Instance);
         builder.Services.AddKeyedSingleton<IBackgroundRunReporter>("worker", (sp, _) => new BackgroundRunReporter(
@@ -52,7 +30,6 @@ public static class WorkerModule
             sp.GetRequiredService<IClock>(),
             "worker",
             sp.GetService<Microsoft.Extensions.Logging.ILogger<BackgroundRunReporter>>()));
-        builder.Services.AddApplicationSecretStore(builder.Configuration);
         builder.Services.AddFrostStreamStorage();
 
         // yt-dlp wiring. The binary downloader writes into <BaseDirectory>/tools and the
@@ -158,31 +135,4 @@ public static class WorkerModule
     }
 
 
-    private static NatsAuthOpts? BuildNatsAuth(IConfiguration configuration)
-    {
-        var token = configuration["NATS:Token"];
-        if (!string.IsNullOrWhiteSpace(token))
-        {
-            return new NatsAuthOpts { Token = token };
-        }
-
-        var username = configuration["NATS:Username"];
-        var password = configuration["NATS:Password"];
-        if (!string.IsNullOrWhiteSpace(username) && !string.IsNullOrWhiteSpace(password))
-        {
-            return new NatsAuthOpts
-            {
-                Username = username,
-                Password = password
-            };
-        }
-
-        var credsFile = configuration["NATS:CredsFile"];
-        if (!string.IsNullOrWhiteSpace(credsFile))
-        {
-            return new NatsAuthOpts { CredsFile = credsFile };
-        }
-
-        return null;
-    }
 }

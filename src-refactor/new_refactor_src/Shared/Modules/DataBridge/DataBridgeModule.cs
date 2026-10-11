@@ -1,4 +1,3 @@
-using Shared.Messaging.Adapters;
 using Cleipnir.Flows;
 using Cleipnir.Flows.AspNet;
 using DataBridge.Persistence.Workflows;
@@ -14,20 +13,15 @@ using DataBridge.Metadata;
 using DataBridge.Messaging;
 using DataBridge.Search;
 using DataBridge.Statistics;
-using Conduit.NATS;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Hosting.Internal;
-using NATS.Client.Core;
 using NodaTime;
-using Npgsql;
 using Shared.LiveChat;
 using Shared.Messaging;
 using Shared.Pot;
-using Shared.Secrets;
 using Shared.Storage;
-using Typesense.Setup;
+
 
 using Shared.Deployment;
 
@@ -39,42 +33,10 @@ public static class DataBridgeModule
     {
         if (!builder.Services.TryAddModule(typeof(DataBridgeModule))) return builder;
         builder.AddDeployment();
-        builder.AddDataBridgePersistence();
-        var persistence = PersistenceOptions.FromConfiguration(builder.Configuration, builder.Environment.ContentRootPath);
-        builder.Services.AddApplicationTransport(builder.Configuration);
-        var liteMode = DeploymentOptions.FromConfiguration(builder.Configuration).Mode == DeploymentMode.Lite;
-
-        var connectionString = builder.Configuration.GetConnectionString("froststreamdb")
-            ?? "Host=localhost;Port=5432;Database=froststreamdb;Username=postgres;Password=postgres";
-        var natsUrl = builder.Configuration.GetConnectionString("nats")
-            ?? builder.Configuration["NATS:Url"]
-            ?? "nats://localhost:24040";
-        var natsAuth = BuildNatsAuth(builder.Configuration);
-
-        builder.Services.AddModuleNats(options =>
-        {
-            options.Url = natsUrl;
-            options.AuthOpts = natsAuth;
-            // Provisions every ITopologySource registered below at startup.
-            options.EnableTopologyProvisioning = true;
-        });
-
-        builder.Services.AddModuleTopology<DownloadTopology>();
-        builder.Services.AddModuleTopology<ArtifactStorageTopology>();
-        builder.Services.AddModuleTopology<PlaylistTopology>();
-        builder.Services.AddModuleTopology<BackgroundJobsTopology>();
-        builder.Services.AddModuleTopology<LocalImportTopology>();
-        builder.Services.AddModuleTopology<AuthSessionsTopology>();
-        builder.Services.AddApplicationSecretStore(builder.Configuration);
         builder.Services.AddFrostStreamStorage();
 
-        if (liteMode)
-        {
-            builder.Services.AddHostedService<SingleUserOwnerSeederService>();
-            builder.Services.AddHostedService<DownloadFlowStartupService>();
-        }
         builder.Services.AddFlows(c => c
-            .UsePersistenceStore(persistence, connectionString)
+            .UseApplicationStore()
             // Cleipnir's DefaultSerializer has no NodaTime support and collapses every Instant in a
             // persisted message/effect to the Unix epoch. Swap in a NodaTime-aware serializer so
             // dates (OccurredAt, metadata scrape/release dates, …) survive the flow store round-trip.
@@ -87,7 +49,9 @@ public static class DataBridgeModule
         // Host construction may instantiate flows; their watchdogs are gated by the store until
         // reconciliation commits. Every application consumer starts after this blocking service.
         builder.Services.PostConfigure<HostOptions>(o => o.ServicesStartConcurrently = false);
-        if (!liteMode) builder.Services.AddHostedService<DownloadFlowStartupService>();
+        builder.Services.AddSingleton<DownloadFlowStartupService>();
+        builder.Services.AddSingleton(new ApplicationInitializationStep("download reconciliation", 40,
+            (sp, ct) => sp.GetRequiredService<DownloadFlowStartupService>().StartAsync(ct)));
 
         builder.Services.AddSingleton<IDownloadJobStateNotifier, DownloadJobStateNotifier>();
         builder.Services.AddScoped<IDownloadJobsRepository, DownloadJobsRepository>();
@@ -126,7 +90,9 @@ public static class DataBridgeModule
             builder.Services.AddScoped<LiveChatIngestService>();
             // Schema first: IHostedService instances start in registration order, and the
             // consumers below must never race the DDL.
-            builder.Services.AddHostedService<ClickHouseSchemaService>();
+            builder.Services.AddSingleton<ClickHouseSchemaService>();
+            builder.Services.AddSingleton(new ApplicationInitializationStep("live-chat schema", 15,
+                (sp, ct) => sp.GetRequiredService<ClickHouseSchemaService>().StartAsync(ct)));
             builder.Services.AddHostedService<LiveChatIngestConsumerService>();
             builder.Services.AddHostedService<LiveChatBackfillConsumerService>();
             builder.Services.AddHostedService<LiveChatQueryConsumerService>();
@@ -144,26 +110,9 @@ public static class DataBridgeModule
         builder.Services.AddSingleton<IDownloadHistoryPurger, DownloadHistoryPurger>();
         builder.Services.AddSingleton<IImportSessionPurger, ImportSessionPurger>();
 
-        builder.Services.AddTypesenseClient(config =>
-        {
-            config.Nodes = [BuildTypesenseNode(builder.Configuration)];
-            config.ApiKey = builder.Configuration["Typesense:ApiKey"] ?? "froststream-dev-key";
-        });
-        builder.Services.AddSingleton<ITypesenseIndexService, TypesenseIndexService>();
-        builder.Services.AddSingleton<IMediaDocumentQuery, MediaDocumentQuery>();
-        builder.Services.AddSingleton<CaptionDocumentHydrator>();
-        builder.Services.AddSingleton<IMetadataRebuildCoordinator, MetadataRebuildCoordinator>();
-
-        builder.Services.AddHostedService<TypesenseStartupService>();
-        if (!liteMode) builder.Services.AddHostedService<SingleUserOwnerSeederService>();
         builder.Services.AddHostedService<UserSessionConsumerService>();
         builder.Services.AddHostedService<NotificationPreferencesConsumerService>();
         builder.Services.AddHostedService<CookieProfileConsumerService>();
-        builder.Services.AddHostedService<TypesenseSyncConsumerService>();
-        builder.Services.AddHostedService<MetadataListConsumerService>();
-        builder.Services.AddHostedService<MetadataCommentsConsumerService>();
-        builder.Services.AddHostedService<MetadataCaptionsConsumerService>();
-        builder.Services.AddHostedService<UnifiedSearchConsumerService>();
 
         builder.Services.AddHostedService<StorageCrudConsumerService>();
         builder.Services.AddHostedService<OptionPresetCrudConsumerService>();
@@ -205,15 +154,6 @@ public static class DataBridgeModule
         // PotBroker:Enabled is set, so this is inert on deployments without a co-located provider.
         builder.Services.AddPotBroker(builder.Configuration);
 
-        // Force ConsoleLifetime so Ctrl+C / SIGTERM triggers StopAsync on hosted services
-        builder.Services.AddSingleton<IHostLifetime, ConsoleLifetime>();
-        builder.Services.Configure<ConsoleLifetimeOptions>(o =>
-        {
-            // set true to hide "Application started/stopped" messages
-            o.SuppressStatusMessages = false;
-        });
-
-
         return builder;
     }
 
@@ -222,54 +162,7 @@ public static class DataBridgeModule
         using var scope = app.Services.CreateScope();
         scope.ServiceProvider.GetRequiredService<IApplicationSchemaInitializer>().Initialize(cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        if (scope.ServiceProvider.GetRequiredService<PersistenceOptions>().Provider == PersistenceProvider.Sqlite)
-            scope.ServiceProvider.GetRequiredService<SqliteFunctionStore>().Initialize().GetAwaiter().GetResult();
+        scope.ServiceProvider.GetRequiredService<IWorkflowStoreFactory>().Create().Initialize().GetAwaiter().GetResult();
     }
 
-    private static NatsAuthOpts? BuildNatsAuth(IConfiguration configuration)
-    {
-        var token = configuration["NATS:Token"];
-        if (!string.IsNullOrWhiteSpace(token))
-        {
-            return new NatsAuthOpts { Token = token };
-        }
-
-        var username = configuration["NATS:Username"];
-        var password = configuration["NATS:Password"];
-        if (!string.IsNullOrWhiteSpace(username) && !string.IsNullOrWhiteSpace(password))
-        {
-            return new NatsAuthOpts
-            {
-                Username = username,
-                Password = password
-            };
-        }
-
-        var credsFile = configuration["NATS:CredsFile"];
-        if (!string.IsNullOrWhiteSpace(credsFile))
-        {
-            return new NatsAuthOpts { CredsFile = credsFile };
-        }
-
-        return null;
-    }
-
-    private static Node BuildTypesenseNode(IConfiguration configuration)
-    {
-        var url = configuration["Typesense:Url"] ?? configuration.GetConnectionString("typesense");
-        if (!string.IsNullOrWhiteSpace(url))
-        {
-            var uri = new Uri(url, UriKind.Absolute);
-            var port = uri.IsDefaultPort
-                ? (uri.Scheme == Uri.UriSchemeHttps ? "443" : "80")
-                : uri.Port.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            var additionalPath = uri.AbsolutePath == "/" ? string.Empty : uri.AbsolutePath.TrimEnd('/');
-            return new Node(uri.Host, port, uri.Scheme, additionalPath);
-        }
-
-        return new Node(
-            configuration["Typesense:Host"] ?? "localhost",
-            configuration["Typesense:Port"] ?? "24010",
-            configuration["Typesense:Protocol"] ?? "http");
-    }
 }

@@ -7,10 +7,11 @@
     <AssemblyName>FrostStream.Full.DataBridge</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../../Infrastructure/Infrastructure.csproj" />
     <ProjectReference Include="../../../Shared/Modules/DataBridge/DataBridge.csproj" />
     <ProjectReference Include="../../../Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="appsettings*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
-</Project>
+<ItemGroup><ProjectReference Include="../../Infrastructure/Postgres/Persistence.Postgres.csproj" /></ItemGroup><ItemGroup><ProjectReference Include="../../../Shared/Integrations/Typesense/Typesense.csproj" /></ItemGroup></Project>

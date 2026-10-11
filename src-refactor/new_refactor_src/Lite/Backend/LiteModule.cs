@@ -1,3 +1,5 @@
+using FrostStream.Lite.Infrastructure;
+using FrostStream.Integrations.Typesense;
 using DataBridge;
 using DataBridge.Persistence;
 using Shared.Deployment;
@@ -30,34 +32,26 @@ public static class LiteModule
     public static IHostApplicationBuilder AddLiteModules(this IHostApplicationBuilder builder)
     {
         if (!builder.Services.TryAddModule(typeof(LiteModule))) return builder;
-        var liteMode = DeploymentOptions.FromConfiguration(builder.Configuration).Mode == DeploymentMode.Lite;
-        if (liteMode)
-        {
-            if (!builder.Configuration.GetValue<bool>("Persistence:Sqlite:Enabled"))
-                throw new InvalidOperationException("Lite requires SQLite persistence.");
-            builder.AddDataBridgePersistence();
-            builder.Services.AddSingleton<ApplicationStartupGate>();
-            builder.Services.AddSingleton<LiteReadinessState>();
-            builder.Services.AddHealthChecks().AddCheck<LiteReadinessHealthCheck>("lite-readiness");
-            builder.Services.AddHostedService<LiteSchemaInitializationService>();
-            builder.Services.PostConfigure<HostOptions>(options => options.ServicesStartConcurrently = false);
-        }
-        // DataBridge selects persistence and transport, then registers reconciliation before consumers.
+        builder.AddLitePersistence();
+        builder.AddLiteMessaging();
+        builder.AddLiteSecretStore();
+        builder.AddLiteBackupClient();
+        builder.AddLiteStagedStorage();
+        builder.AddLiteIdentity();
+        builder.Services.AddSingleton<ApplicationStartupGate>();
+        builder.Services.AddSingleton<LiteReadinessState>();
+        builder.Services.AddHealthChecks().AddCheck<LiteReadinessHealthCheck>("lite-readiness");
+        builder.Services.AddSingleton<DataBridge.Messaging.SingleUserOwnerSeederService>();
+        builder.Services.AddSingleton(new ApplicationInitializationStep("local owner", 30,
+            (sp, ct) => sp.GetRequiredService<DataBridge.Messaging.SingleUserOwnerSeederService>().StartAsync(ct)));
         builder.AddDataBridgeModule();
+        builder.Services.AddSingleton<MediaProcessor.Storage.IMediaProcessorStorageClient, MediaProcessor.Storage.LocalMediaProcessorStorageClient>();
         builder.AddMediaProcessorModule();
         builder.AddWorkerModule();
         builder.AddWebAPIModule();
         builder.AddSchedulerModule();
-        if (liteMode)
-        {
-            // Keep this gate before Quartz startup but after ScheduleChangeListener's registration.
-            var schedulerStart = builder.Services.Single(d => d.ServiceType == typeof(IHostedService)
-                && d.ImplementationType == typeof(Scheduler.Services.LiteSchedulerStartupService));
-            builder.Services.Remove(schedulerStart);
-            builder.Services.AddHostedService<LiteHandlerInitializationService>();
-            builder.Services.Add(schedulerStart);
-            builder.Services.AddHostedService<LiteReadinessService>();
-        }
+        builder.AddTypesenseIntegration();
+        builder.Services.AddHostedService<LiteRuntimeLifecycle>();
         return builder;
     }
 }

@@ -57,7 +57,6 @@ public static class StartServices
             .WithEnvironment("Typesense__ApiKey", typesenseApiKey)
             .WithEnvironment(ctx => ctx.EnvironmentVariables["FROSTSTREAM_STORAGE_ROOT"] =
                 ctx.ExecutionContext.IsRunMode ? sharedStorageRoot : ContainerStorageRoot)
-            .WithEnvironment("SINGLE_USER_MODE", hardening.SingleUserMode ? "true" : "false")
             // POT broker role: answers Worker pot.request messages from the co-located bgutil provider.
             .WithEnvironment("PotBroker__Enabled", "true")
             .WithEnvironment("PotBroker__ProviderUrl", potProvider.GetEndpoint("http"))
@@ -143,9 +142,6 @@ public static class StartServices
             .WithEnvironment("OpenBao__Token", openBaoToken)
             .WithEnvironment(ctx => ctx.EnvironmentVariables["FROSTSTREAM_STORAGE_ROOT"] =
                 ctx.ExecutionContext.IsRunMode ? sharedStorageRoot : ContainerStorageRoot)
-            .WithEnvironment("SINGLE_USER_MODE", hardening.SingleUserMode ? "true" : "false")
-            .WithEnvironment("Auth__SingleUserMode", hardening.SingleUserMode ? "true" : "false")
-            .WithEnvironment("Auth__AllowSingleUserModeInProduction", Environment.GetEnvironmentVariable("AUTH_ALLOW_SINGLE_USER_MODE_IN_PRODUCTION") ?? "false")
             .WithEnvironment("Auth__Audience", Environment.GetEnvironmentVariable("AUTHENTIK_API_AUDIENCE") ?? "froststream-api")
             .WithEnvironment("Auth__ClientId", authentik.ClientId)
             .WithEnvironment("Auth__ClientSecret", authentik.ClientSecret)

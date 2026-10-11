@@ -1,4 +1,8 @@
+using Shared.Secrets;
+using Shared.Deployment;
+using FrostStream.Integrations.Typesense;
 using Microsoft.Extensions.Hosting;
+using FrostStream.Full.Infrastructure;
 
 using DataBridge;
 
@@ -10,9 +14,13 @@ public class Program
     {
         var builder = Host.CreateApplicationBuilder(args);
         builder.AddServiceDefaults();
+        builder.AddFullMessaging();
+        builder.Services.AddOpenBaoSecretStore(builder.Configuration);
+        builder.AddFullPersistence();
         builder.AddDataBridgeModule();
+        builder.AddTypesenseIntegration();
         var app = builder.Build();
-        app.InitializeDataBridge();
+        await app.InitializeApplicationAsync();
         await app.RunAsync();
     }
 }

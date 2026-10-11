@@ -34,4 +34,4 @@
       <Folder Include="Storage" />
     </ItemGroup>
 
-</Project>
+<ItemGroup><ProjectReference Include="../../../Full/Infrastructure/Postgres/Persistence.Postgres.csproj" /><ProjectReference Include="../../../Full/Security/Security.csproj" /></ItemGroup></Project>

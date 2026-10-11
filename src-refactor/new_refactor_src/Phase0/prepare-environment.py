@@ -9,7 +9,7 @@ folder.mkdir(parents=True,exist_ok=True)
 output=folder/'fixture.env'
 if output.exists():p.error(f'{output} exists; use a new checkout for another clean install')
 text=(ROOT/'Shared/Hosting/AppHostCommon/aspire-development.env').read_text()
-values={'SINGLE_USER_MODE':'false','AUTH_ALLOW_SINGLE_USER_MODE_IN_PRODUCTION':'false','FROSTSTREAM_DEV_TOOLS':'false','LIVE_CHAT_ENABLED':'false','FROSTSTREAM_STORAGE_ROOT':str(folder/'data'),'FROSTSTREAM_BACKUP_ROOT':str(folder/'backups'),'FROSTSTREAM_OPENBAO_BOOTSTRAP_ROOT':str(folder/'openbao-bootstrap'),'Deployment__Mode':a.edition}
+values={'FROSTSTREAM_DEV_TOOLS':'false','LIVE_CHAT_ENABLED':'false','FROSTSTREAM_STORAGE_ROOT':str(folder/'data'),'FROSTSTREAM_BACKUP_ROOT':str(folder/'backups'),'FROSTSTREAM_OPENBAO_BOOTSTRAP_ROOT':str(folder/'openbao-bootstrap'),'Deployment__Mode':a.edition}
 for line in text.splitlines():
     match=re.match(r'([A-Z][A-Z0-9_]+)=',line)
     if match and any(word in match[1] for word in ['PASSWORD','SECRET','TOKEN','API_KEY']):values[match[1]]=secrets.token_hex(32)

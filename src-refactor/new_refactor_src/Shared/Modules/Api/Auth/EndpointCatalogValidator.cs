@@ -10,11 +10,16 @@ namespace WebAPI.Auth;
 /// </summary>
 public static class EndpointCatalogValidator
 {
-    public static void Validate(Assembly assembly)
+    public static void Validate(params Assembly[] assemblies) => ValidateIds(EndpointCatalog.Ids, assemblies);
+
+    public static void ValidateSharedEndpoints(Assembly assembly) => ValidateIds(
+        EndpointCatalog.Ids.Where(id => !id.StartsWith("access-control.", StringComparison.Ordinal)), assembly);
+
+    private static void ValidateIds(IEnumerable<string> expectedIds, params Assembly[] assemblies)
     {
         var declared = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        foreach (var type in assembly.GetTypes())
+        foreach (var type in assemblies.SelectMany(assembly => assembly.GetTypes()))
         {
             if (type.IsAbstract)
             {
@@ -49,7 +54,7 @@ public static class EndpointCatalogValidator
                 $"[Endpoint] declares id(s) not present in EndpointCatalog: {string.Join(", ", unknown)}.");
         }
 
-        var unrouted = EndpointCatalog.Ids.Where(id => !declaredIds.Contains(id)).OrderBy(id => id, StringComparer.Ordinal).ToArray();
+        var unrouted = expectedIds.Where(id => !declaredIds.Contains(id)).OrderBy(id => id, StringComparer.Ordinal).ToArray();
         if (unrouted.Length > 0)
         {
             throw new InvalidOperationException(

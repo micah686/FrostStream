@@ -8,36 +8,24 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="../../Integrations/Vendor/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj" />
       <ProjectReference Include="../../Hosting/ServiceDefaults/ServiceDefaults.csproj" />
       <ProjectReference Include="../../Core/Shared.csproj" />
     </ItemGroup>
 
     <ItemGroup>
       <EmbeddedResource Include="LiveChat/Schema/*.sql" />
-      <EmbeddedResource Include="Persistence/Sqlite/Schema/*.sql" />
-      <EmbeddedResource Include="Persistence/Sqlite/Schema/*.json" />
     </ItemGroup>
 
 
     <ItemGroup>
       <PackageReference Include="ClickHouse.Driver" />
       <PackageReference Include="Cleipnir.Flows" />
-      <PackageReference Include="Cleipnir.Flows.PostgresSql" />
-      <PackageReference Include="FluentMigrator" />
-      <PackageReference Include="FluentMigrator.Runner.Core" />
-      <PackageReference Include="FluentMigrator.Runner.Postgres" />
-      <PackageReference Include="Npgsql.DependencyInjection" />
-      <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
-      <PackageReference Include="EFCore.NamingConventions" />
       <PackageReference Include="FluentStorage" />
-      <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime" />
       <PackageReference Include="NodaTime.Serialization.SystemTextJson" />
       <!-- Version pin, not a code dependency. Npgsql.EntityFrameworkCore.PostgreSQL 10.0.3 asks for
            EF Relational 10.0.4; this lifts it to match the EF Core 10.0.10 that Shared pins, so the
            two halves of EF stay on the same patch level. -->
       <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
-      <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
       <!-- Version pin, not a code dependency. The Polly.Extensions/Polly.RateLimiting that arrive
            via ServiceDefaults -> Microsoft.Extensions.Http.Resilience ask for Polly.Core 8.4.2, and
            FluentStorage.FTP/SFTP ask for 8.4.0; this lifts the whole graph to 8.7.0. No source file
@@ -46,7 +34,7 @@
       <PackageReference Include="Quartz" />
       <PackageReference Include="RecurPixel.Notify.Sdk" />
       <PackageReference Include="System.IO.Hashing" />
-      <PackageReference Include="Typesense" />
+
     </ItemGroup>
 
-</Project>
+<ItemGroup><ProjectReference Include="../../Persistence/Persistence.csproj" /></ItemGroup></Project>

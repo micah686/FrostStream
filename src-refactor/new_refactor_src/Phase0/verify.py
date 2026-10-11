@@ -64,7 +64,7 @@ def inventory():
             errors.append(f'{key}: appsettings output-removal workaround is forbidden')
     routes=[]
     for p in files('*.cs'):
-        if '/Modules/Api/' in p.as_posix():
+        if any(part in p.as_posix() for part in ['/Modules/Api/', '/Full/Security/', '/Lite/Infrastructure/Identity/']):
             attrs=re.findall(r'\[(?:Route|HttpGet|HttpPost|HttpPut|HttpPatch|HttpDelete)\([^\n]*',p.read_text(encoding='utf-8-sig'))
             if attrs: routes.append({'source':p.relative_to(ROOT).as_posix(),'attributes':attrs})
     if errors: raise ValueError('\n'.join(errors))
@@ -74,6 +74,9 @@ def inventory():
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--capture',action='store_true');args=parser.parse_args()
     data=inventory()
+    import runpy
+    boundaries = runpy.run_path(str(ROOT / 'Phase2/verify-boundaries.py'))
+    boundaries['check'](data['projects'], ROOT)
     if args.capture:
         SNAPSHOT.write_text(json.dumps(data,indent=2)+'\n')
         print(f'Captured {len(data["projects"])} projects and {len(data["apiRouteAttributes"])} API source files.')

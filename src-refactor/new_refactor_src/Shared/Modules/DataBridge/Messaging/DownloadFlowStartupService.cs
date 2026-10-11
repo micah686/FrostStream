@@ -11,15 +11,6 @@ using Shared.Messaging;
 
 namespace DataBridge.Messaging;
 
-public sealed class DownloadFlowStartupState
-{
-    public Instant GenerationStartedAt { get; private set; } = Instant.MaxValue;
-    private int ready;
-    public bool IsReady => Volatile.Read(ref ready) != 0;
-    internal void BeginStartup() { Volatile.Write(ref ready, 0); GenerationStartedAt = Instant.MaxValue; }
-    internal void MarkReady(Instant generation) { GenerationStartedAt = generation; Volatile.Write(ref ready, 1); }
-}
-
 /// <summary>
 /// A blocking startup gate. It deletes non-terminal download flow instances, reconciles
 /// the selected application database, and completes before any V2 ingress/worker-result consumer is started.

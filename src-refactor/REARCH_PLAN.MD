@@ -398,6 +398,8 @@ Rollback for this fresh-install effort means reverting the phase and recreating 
 
 ### Phase 2 — Explicit edition infrastructure and identity
 
+**Status:** Implemented in `new_refactor_src/`. Edition-owned adapters now select persistence, messaging, secrets, backups and identity explicitly; shared modules and persistence compile without their provider SDKs. Full security belongs to the Full WebAPI host, and obsolete Full single-user configuration fails startup. Named initialization stages and a handler-registration barrier replace constructor I/O and hosted-service reordering. See [Phase 2 implementation and verification](new_refactor_src/Phase2/README.md) and [results](new_refactor_src/Phase2/verification-results.json). Typesense remains the documented temporary Lite exception; Phase 0's outstanding deployment and measurement gates remain open.
+
 **Work:** Extract provider-specific implementation/registration, slim shared dependencies, move Full security out of shared API, replace registration-order manipulation with lifecycle coordination, and remove Full single-user behavior.
 
 **Exit gate:** Lite cannot register NATS/PostgreSQL/OpenBao/Full security and no longer depends on their SDKs. The isolated Typesense adapter remains the documented temporary exception. Full requires Authentik and rejects single-user configuration. Initialization/shutdown/restart tests pass.

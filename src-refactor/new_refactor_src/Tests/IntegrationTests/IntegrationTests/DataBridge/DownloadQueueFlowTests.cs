@@ -311,7 +311,7 @@ public sealed class DownloadQueueFlowTests
                 .ConfigureRunner(runner => runner
                     .AddPostgres()
                     .WithGlobalConnectionString(ConnectionString)
-                    .ScanIn(typeof(DownloadQueueConsumerService).Assembly).For.Migrations());
+                    .ScanIn(typeof(global::DataBridge.Persistence.Postgres.PostgresPersistenceRegistration).Assembly).For.Migrations());
 
             // Provision the production download.> stream so the queue subjects live under JetStream
             // subject capture exactly like the live stack (core request/reply must still work).
@@ -320,7 +320,7 @@ public sealed class DownloadQueueFlowTests
                 options.Url = _natsContainer.GetConnectionString();
                 options.EnableTopologyProvisioning = true;
             });
-            builder.Services.AddNatsTopologySource<DownloadTopology>();
+            builder.Services.AddNatsTopologySource<FrostStream.Full.Infrastructure.NatsDownloadTopology>();
 
             builder.Services.AddSingleton<IDownloadJobStateNotifier, DownloadJobStateNotifier>();
             builder.Services.AddScoped<IDownloadJobsRepository, DownloadJobsRepository>();

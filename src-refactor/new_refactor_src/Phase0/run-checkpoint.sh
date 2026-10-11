@@ -13,6 +13,7 @@ esac
 mkdir -p .phase0/results
 # Build separately to bound MSBuild parallelism on the laptop profile.
 dotnet build "$project" -m:1 --nologo
+python3 Phase2/verify-boundaries.py --require-restored
 test_args=(--results-directory "$root/.phase0/results/$profile")
 if [[ -n "$filter" ]]; then test_args+=(--treenode-filter "$filter"); fi
 dotnet run --no-build --project "$project" -- "${test_args[@]}"

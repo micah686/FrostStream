@@ -9,3 +9,4 @@
 **/TestResults/
 Full/AppHost/configs/nats/certs/
 **/__pycache__/
+.phase2/

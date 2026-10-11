@@ -1,3 +1,4 @@
+using Shared.Deployment;
 using System.Net;
 using System.Net.Http.Json;
 using DataBridge.Data;
@@ -65,6 +66,7 @@ public sealed class LiteHostStartupTests
             app.Urls.Add("http://127.0.0.1:0");
             app.MapWebAPIModule();
             app.MapHealthChecks("/health").AllowAnonymous();
+            await app.InitializeApplicationAsync(timeout.Token);
             var starting = app.StartAsync(timeout.Token);
             await called.Task.WaitAsync(timeout.Token);
             starting.IsCompleted.ShouldBeFalse();
@@ -118,8 +120,8 @@ public sealed class LiteHostStartupTests
             unsupportedSchedule.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
             (await unsupportedSchedule.Content.ReadAsStringAsync(timeout.Token)).ShouldContain("Differential backup schedules are not supported");
             var hosted = app.Services.GetServices<IHostedService>().ToList();
-            hosted.OfType<LiteSchemaInitializationService>().Count().ShouldBe(1);
-            hosted.OfType<LiteReadinessService>().Count().ShouldBe(1);
+            app.Services.GetServices<ApplicationInitializationStep>().Count().ShouldBe(5);
+            hosted.OfType<LiteRuntimeLifecycle>().Count().ShouldBe(1);
             var scheduler = await app.Services.GetRequiredService<ISchedulerFactory>().GetScheduler(timeout.Token);
             scheduler.Status.ShouldBe(SchedulerStatus.Running);
             (await scheduler.Exists(new JobKey("backup-full", "scheduled-tasks"), timeout.Token)).ShouldBeTrue();
@@ -157,6 +159,7 @@ public sealed class LiteHostStartupTests
             ReplaceDownloader(builder, Task.FromException<BinaryDownloadResult>(new InvalidOperationException("binary initialization failed")));
             await using var app = builder.Build();
             app.Urls.Add("http://127.0.0.1:0");
+            await app.InitializeApplicationAsync(timeout.Token);
             await Should.ThrowAsync<InvalidOperationException>(() => app.StartAsync(timeout.Token));
             app.Services.GetRequiredService<LiteReadinessState>().IsReady.ShouldBeFalse();
             (await app.Services.GetRequiredService<ISchedulerFactory>().GetScheduler(timeout.Token)).Status.ShouldNotBe(SchedulerStatus.Running);

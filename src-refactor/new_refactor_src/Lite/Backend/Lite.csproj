@@ -5,10 +5,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../Infrastructure/Infrastructure.csproj" />
     <ProjectReference Include="../../Shared/Modules/DataBridge/DataBridge.csproj" />
     <ProjectReference Include="../../Shared/Modules/MediaProcessor/MediaProcessor.csproj" />
     <ProjectReference Include="../../Shared/Modules/Scheduler/Scheduler.csproj" />
     <ProjectReference Include="../../Shared/Modules/Api/WebAPI.csproj" />
     <ProjectReference Include="../../Shared/Modules/Worker/Worker.csproj" />
   </ItemGroup>
-</Project>
+<ItemGroup><ProjectReference Include="../../Shared/Integrations/Typesense/Typesense.csproj" /></ItemGroup></Project>

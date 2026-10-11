@@ -153,16 +153,6 @@ internal sealed class MultiUserWebApiFactory(string openFgaEndpoint, string stor
     {
         builder.UseEnvironment("Development");
 
-        // Turn single-user mode OFF for this test host only — the same way AppHost.cs flips it when
-        // launched with SINGLE_USER_MODE=false: it stamps the SINGLE_USER_MODE master switch and the
-        // derived Auth__SingleUserMode flag onto the WebAPI process (AuthMode checks both). We set the
-        // equivalent host settings here instead of real environment variables on purpose: this stays
-        // scoped to THIS WebApplicationFactory, so it never leaks into the single-user integration
-        // tests sharing this process, and normal `dotnet run` / AppHost dev use keeps single-user on
-        // (appsettings.Development.json still defaults Auth:SingleUserMode=true).
-        builder.UseSetting("SINGLE_USER_MODE", "false");
-        builder.UseSetting("Auth:SingleUserMode", "false");
-
         // A non-blank authority is required by Program; the test token issuer overrides JwtBearer so
         // the authority is never actually contacted.
         builder.UseSetting("Auth:Authority", "https://authentik.test/application/o/froststream/");

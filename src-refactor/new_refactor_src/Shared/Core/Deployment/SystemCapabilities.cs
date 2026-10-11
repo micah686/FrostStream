@@ -15,7 +15,7 @@ public sealed record SystemCapabilities(
         new(Search: true,
             LiveChat: configuration.GetValue("LiveChat:Enabled", false),
             PotProvider: configuration.GetValue("PotBroker:Enabled", false) || configuration.GetValue("PotProvider:Enabled", false)),
-        new(Enabled: !AuthMode.IsSingleUserMode(configuration)),
+        new(Enabled: deployment.Mode == Shared.Deployment.DeploymentMode.Full),
         deployment.Mode == Shared.Deployment.DeploymentMode.Lite
             ? new(Provider: "SQLite", Full: true, Differential: false, Incremental: false, Verification: true, PointInTimeRecovery: false, DeepVerification: false)
             : new(Provider: "PostgreSQL", Full: true, Differential: true, Incremental: true, Verification: true, PointInTimeRecovery: true));

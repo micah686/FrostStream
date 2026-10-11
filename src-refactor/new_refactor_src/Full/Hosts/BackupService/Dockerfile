@@ -10,6 +10,7 @@ COPY Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj Shared/Hosting/Servic
 COPY Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/
 COPY Shared/Integrations/Vendor/YtDlpSharpLib/YtDlpSharpLib/YtDlpSharpLib.csproj Shared/Integrations/Vendor/YtDlpSharpLib/YtDlpSharpLib/
 COPY Full/Hosts/BackupService/BackupService.csproj Full/Hosts/BackupService/
+COPY Full/Infrastructure/ Full/Infrastructure/
 RUN dotnet restore Full/Hosts/BackupService/BackupService.csproj
 
 COPY Shared/Core/ Shared/Core/

@@ -1,3 +1,5 @@
+using FrostStream.Lite.Infrastructure;
+using FrostStream.Full.Infrastructure;
 using System.Diagnostics;
 using System.Text.Json;
 using DataBridge;
@@ -56,6 +58,11 @@ public sealed class SqlitePersistenceFoundationTests
         var builder = Host.CreateApplicationBuilder();
         builder.Configuration["Deployment:Mode"] = "Lite";
         builder.Configuration["Persistence:Sqlite:Enabled"] = "true";
+        builder.AddLitePersistence();
+        builder.Services.ShouldNotContain(d => d.ServiceType == typeof(FrostStream.ApplicationContracts.IDurableJobPublisher));
+        builder.Services.ShouldNotContain(d => d.ServiceType == typeof(Shared.Secrets.ISecretStore));
+        builder.Services.ShouldNotContain(d => d.ServiceType == typeof(Shared.Backups.IBackupServiceClient));
+        builder.AddLiteMessaging().AddLiteSecretStore().AddLiteBackupClient().AddLiteStagedStorage();
         builder.AddDataBridgeModule();
         builder.Services.ShouldContain(d => d.ServiceType == typeof(FrostStream.ApplicationContracts.IDurableJobPublisher));
         builder.Services.ShouldNotContain(d => d.ServiceType == typeof(NpgsqlDataSource));
@@ -220,7 +227,7 @@ public sealed class SqlitePersistenceFoundationTests
         builder.Configuration["Deployment:Mode"] = "Full";
         builder.Configuration["Persistence:Sqlite:Enabled"] = "false";
         builder.Configuration["ConnectionStrings:froststreamdb"] = "Host=localhost;Database=phase2b_model_only;Username=postgres;Password=unused";
-        builder.AddDataBridgePersistence();
+        if (Shared.Deployment.DeploymentOptions.FromConfiguration(builder.Configuration).Mode == Shared.Deployment.DeploymentMode.Lite) builder.AddLitePersistence().AddLiteMessaging().AddLiteSecretStore().AddLiteBackupClient().AddLiteStagedStorage(); else builder.AddFullPersistence();
         using var postgresHost = builder.Build();
         using var postgresScope = postgresHost.Services.CreateScope();
         using var postgres = postgresScope.ServiceProvider.GetRequiredService<DataBridgeDbContext>();
@@ -351,7 +358,7 @@ public sealed class SqlitePersistenceFoundationTests
             builder.Configuration["Persistence:Sqlite:Path"] = Path.Combine(directory, "nested", "core.sqlite");
             builder.Configuration["Persistence:Sqlite:BusyTimeoutSeconds"] = busyTimeoutSeconds.ToString();
             builder.Logging.ClearProviders();
-            builder.AddDataBridgePersistence();
+            if (Shared.Deployment.DeploymentOptions.FromConfiguration(builder.Configuration).Mode == Shared.Deployment.DeploymentMode.Lite) builder.AddLitePersistence().AddLiteMessaging().AddLiteSecretStore().AddLiteBackupClient().AddLiteStagedStorage(); else builder.AddFullPersistence();
             builder.Services.AddSingleton<IClock>(new FixedClock(DataBridgeTestHelpers.Now));
             Host = builder.Build();
         }

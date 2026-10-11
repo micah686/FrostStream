@@ -47,8 +47,7 @@ public sealed class DownloadRestartPersistenceTests
         builder.Services.AddSingleton(Substitute.For<IDurableJobPublisher>());
         builder.Services.AddSingleton(Substitute.For<IMessageBus>());
         builder.Services.AddSingleton(Substitute.For<IDurableJobConsumer>());
-        builder.Services.AddFlows(c=>c.UsePersistenceStore(PersistenceOptions.FromConfiguration(builder.Configuration,builder.Environment.ContentRootPath),
-                builder.Configuration["ConnectionStrings:froststreamdb"] ?? "")
+        builder.Services.AddFlows(c=>c.UseApplicationStore()
             .WithOptions(new Options(serializer:new NodaTimeFlowSerializer(),leaseLength:TimeSpan.FromMilliseconds(100),watchdogCheckFrequency:TimeSpan.FromMilliseconds(10),delayStartup:TimeSpan.Zero))
             .RegisterFlow<DownloadJobV2Flow,DownloadJobV2Flows>()
             .RegisterFlow<DownloadGroupV2Flow,DownloadGroupV2Flows>());

@@ -1,3 +1,6 @@
+using Shared.Deployment;
+using FrostStream.Lite.Infrastructure;
+using FrostStream.Full.Infrastructure;
 using DataBridge;
 using DataBridge.Data;
 using DataBridge.Messaging;
@@ -29,13 +32,20 @@ public sealed class LiteSchedulerTests
         builder.Configuration["Deployment:Mode"] = "Lite";
         builder.Configuration["Persistence:Sqlite:Enabled"] = "true";
         builder.Configuration["Persistence:Sqlite:Path"] = path;
-        builder.AddDataBridgePersistence();
+        if (Shared.Deployment.DeploymentOptions.FromConfiguration(builder.Configuration).Mode == Shared.Deployment.DeploymentMode.Lite) builder.AddLitePersistence().AddLiteMessaging().AddLiteSecretStore().AddLiteBackupClient().AddLiteStagedStorage(); else builder.AddFullPersistence();
         builder.Services.AddScoped<IScheduledTasksRepository, ScheduledTasksRepository>();
         builder.Services.AddHostedService<ScheduleCrudConsumerService>();
         builder.AddSchedulerModule();
         var host = builder.Build();
         host.InitializeDataBridge();
         return host;
+    }
+
+    private static async Task StartReadySteps(IHost host, CancellationToken ct)
+    {
+        await Task.WhenAll(host.Services.GetServices<IHostedService>().OfType<IApplicationHandlerInitialization>()
+            .Select(handler => handler.RegistrationCompleted)).WaitAsync(ct);
+        foreach (var step in host.Services.GetServices<IApplicationReadyStep>()) await step.StartAsync(ct);
     }
 
     private static async Task Eventually(Func<Task<bool>> condition, CancellationToken token)
@@ -74,6 +84,7 @@ public sealed class LiteSchedulerTests
                         dispatched.TrySetResult(context.Message);
                     }, cancellationToken: consumerStop.Token);
                 await host.StartAsync(timeout.Token);
+                await StartReadySteps(host, timeout.Token);
                 var message = await dispatched.Task.WaitAsync(timeout.Token);
                 message.ScheduleKey.ShouldBe("test-interval");
                 message.TaskType.ShouldBe(TaskTypeRegistry.DatabaseMaintenance);
@@ -94,6 +105,7 @@ public sealed class LiteSchedulerTests
             using (var restarted = BuildHost(Path.Combine(dir, "test.db")))
             {
                 await restarted.StartAsync(timeout.Token);
+                await StartReadySteps(restarted, timeout.Token);
                 var scheduler = await restarted.Services.GetRequiredService<ISchedulerFactory>().GetScheduler(timeout.Token);
                 var cron = (await scheduler.GetTrigger(TriggerKeys.ForSchedule("test-cron"), timeout.Token)).ShouldBeAssignableTo<Quartz.ICronTrigger>()!;
                 cron.TimeZone.Id.ShouldBe("America/Los_Angeles");
@@ -149,10 +161,15 @@ public sealed class LiteSchedulerTests
             return definitions.Task;
         });
         var hydration = new ScheduleHydrationService(client, factory, Substitute.For<IQuartzJobRegistrar>(), NullLogger<ScheduleHydrationService>.Instance);
-        var startup = new LiteSchedulerStartupService(provider, factory, hydration, NullLogger<LiteSchedulerStartupService>.Instance);
+        var startup = new LiteSchedulerStartupService(factory, hydration, NullLogger<LiteSchedulerStartupService>.Instance);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         await delayed.StartAsync(timeout.Token);
-        var starting = startup.StartAsync(timeout.Token);
+        async Task StartWhenRegistered()
+        {
+            await delayed.RegistrationCompleted.WaitAsync(timeout.Token);
+            await ((IApplicationReadyStep)startup).StartAsync(timeout.Token);
+        }
+        var starting = StartWhenRegistered();
         starting.IsCompleted.ShouldBeFalse();
         await scheduler.DidNotReceive().Start(Arg.Any<CancellationToken>());
         delayed.Release.TrySetResult();
@@ -168,7 +185,7 @@ public sealed class LiteSchedulerTests
         delayed.Dispose();
         client.ListActiveSchedulesAsync(Arg.Any<CancellationToken>()).Returns(new ScheduleOperationResponseMessage { Success = false });
         scheduler.ClearReceivedCalls();
-        await Should.ThrowAsync<InvalidOperationException>(() => startup.StartAsync(timeout.Token));
+        await Should.ThrowAsync<InvalidOperationException>(() => ((IApplicationReadyStep)startup).StartAsync(timeout.Token));
         await scheduler.DidNotReceive().Start(Arg.Any<CancellationToken>());
         await scheduler.Received().Shutdown(false, Arg.Any<CancellationToken>());
     }

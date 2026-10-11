@@ -1,4 +1,6 @@
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using FrostStream.Full.Infrastructure;
 
 using MediaProcessor;
 
@@ -10,6 +12,9 @@ public class Program
     {
         var builder = Host.CreateApplicationBuilder(args);
         builder.AddServiceDefaults();
+        builder.AddFullMessaging();
+        builder.Services.AddHttpClient<global::MediaProcessor.Storage.MediaProcessorStorageClient>();
+        builder.Services.AddTransient<global::MediaProcessor.Storage.IMediaProcessorStorageClient>(sp => sp.GetRequiredService<global::MediaProcessor.Storage.MediaProcessorStorageClient>());
         builder.AddMediaProcessorModule();
         var app = builder.Build();
         await app.RunAsync();

@@ -16,6 +16,9 @@ COPY Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj Sh
 COPY Shared/Integrations/Vendor/YtDlpSharpLib/YtDlpSharpLib/YtDlpSharpLib.csproj Shared/Integrations/Vendor/YtDlpSharpLib/YtDlpSharpLib/
 COPY Shared/Modules/Api/WebAPI.csproj Shared/Modules/Api/
 COPY Full/Hosts/WebAPI/WebAPIHost.csproj Full/Hosts/WebAPI/
+COPY Full/Infrastructure/ Full/Infrastructure/
+COPY Shared/Persistence/ Shared/Persistence/
+COPY Full/Security/ Full/Security/
 RUN dotnet restore Full/Hosts/WebAPI/WebAPIHost.csproj
 
 COPY Shared/Core/ Shared/Core/

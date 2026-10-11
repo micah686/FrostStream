@@ -1,3 +1,5 @@
+using FrostStream.Lite.Infrastructure;
+using FrostStream.Full.Infrastructure;
 using System.Data.Common;
 using DataBridge;
 using DataBridge.Data;
@@ -619,7 +621,7 @@ public sealed class CoreRepositoryPersistenceTests
                 builder.Configuration["Persistence:Sqlite:Enabled"] = "true";
                 builder.Configuration["Persistence:Sqlite:Path"] = Path.Combine(dir, "core.db");
             }
-            builder.AddDataBridgePersistence();
+            if (Shared.Deployment.DeploymentOptions.FromConfiguration(builder.Configuration).Mode == Shared.Deployment.DeploymentMode.Lite) builder.AddLitePersistence().AddLiteMessaging().AddLiteSecretStore().AddLiteBackupClient().AddLiteStagedStorage(); else builder.AddFullPersistence();
             configure?.Invoke(builder);
             var host = builder.Build();
             host.InitializeDataBridge();
