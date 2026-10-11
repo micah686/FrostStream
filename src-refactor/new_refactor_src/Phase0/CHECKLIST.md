@@ -16,7 +16,8 @@ Status: baseline implementation and local regression checkpoint delivered; full 
 - [x] Packaged Lite startup from two separate empty-state installations and backend restart: frontend/API capabilities, SQLite backup provider and local Admin identity.
 - [x] Packaged Full startup on an initially empty engine using isolated project state and the documented Podman ordering workaround; all 19 service/initializer states verified.
 - [x] Real Authentik browser OIDC login/session flow, two-user private-playlist isolation and logout/cookie revocation; passed twice with fresh identities against real Full services.
-- [ ] Standard Full Compose startup without the Podman workaround, second empty-state Full install, and distributed Full download/import/playback.
+- [x] Second empty-state Full installation with unused project volumes and isolated backup/vault-bootstrap bind roots; all 19 service states and real two-user OIDC/private-playlist/logout checks pass.
+- [ ] Standard Full Compose startup without the Podman workaround and distributed Full download/import/playback.
 - [ ] Index the large corpus and measure full/incremental indexing, warm/cold search, idle activity, playback and combined workloads.
 - [ ] Measure on the specified 8 GB machine including container memory, FFmpeg children and filesystem cache; confirm acceptance thresholds against measurements.
 

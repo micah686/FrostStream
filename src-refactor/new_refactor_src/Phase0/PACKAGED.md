@@ -48,4 +48,21 @@ podman-compose --in-pod=false -p froststream-phase0-full -f Full/docker-compose/
 
 All Phase 0 stacks were stopped after verification; volumes and bind data were retained for inspection. Restarting a retained stack is not another empty-state install. Use a distinct project name and separate Full backup/bootstrap bind roots for a future truly fresh Full repetition.
 
-Still open: standard Full Compose startup, second empty-state Full deployment, distributed Full media workflows, large-corpus indexing/latency/combined-workload measurements, and actual 8 GB reference-machine acceptance. The provisional budgets are unchanged.
+## Second empty-state Full installation — 2026-10-11
+
+`froststream-phase0-full-repeat` passed startup and final read-only verification: 15 running services, four healthy declared health checks, and four initializers exited zero. The existing images and profile credentials were reused; database, application, search, vault and session-key volumes were new. Before startup, the runner verified that the project had no containers or named volumes. Backup and vault-bootstrap bind roots were created separately under `.phase0/installations/froststream-phase0-full-repeat/`; actual PostgreSQL and vault mount inspection confirmed isolation from the first installation.
+
+The real Authentik browser checkpoint also passed against this fresh database: two new users logged in through OIDC, retained sessions after reload, could not list/read/update each other's private playlists, and passed logout CSRF and revoked-cookie replay checks. Fixture identities/playlists were cleaned up. Reports are `.phase0/results/packaged-full-repeat-{startup,health,auth}.json`. A deliberate reuse attempt failed before startup, recorded in `packaged-full-repeat-reuse-rejected.json`. All 15 Phase 0 tooling tests pass, including state-reuse and path-traversal rejection.
+
+Use a new project name for each fresh installation:
+
+```sh
+python3 Phase0/start-packaged.py Full --project froststream-phase0-full-repeat --fresh --output .phase0/results/packaged-full-repeat-startup.json
+python3 Phase0/start-packaged.py Full --project froststream-phase0-full-repeat --verify-only --output .phase0/results/packaged-full-repeat-health.json
+node Phase0/check-authentik.mjs --playwright-module /tmp/frost-phase0-browser/node_modules/playwright/index.mjs --env-file Full/docker-compose/.env --output .phase0/results/packaged-full-repeat-auth.json
+podman-compose --in-pod=false -p froststream-phase0-full-repeat -f Full/docker-compose/docker-compose.yaml stop
+```
+
+`--fresh` refuses existing project containers, volumes or installation directories. Subsequent runner startup without `--fresh` automatically restores that project's isolated bind roots; it is a retained-state restart. Direct Compose startup must supply the same `FROSTSTREAM_BACKUP_ROOT` and `FROSTSTREAM_OPENBAO_BOOTSTRAP_ROOT` overrides. Stops retain all state. This repetition still uses the ordered Podman workaround and does not establish standard Compose compatibility or Full media behavior.
+
+Still open: standard Full Compose startup, distributed Full media workflows, large-corpus indexing/latency/combined-workload measurements, and actual 8 GB reference-machine acceptance. The provisional budgets are unchanged.

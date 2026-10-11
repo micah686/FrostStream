@@ -6,6 +6,8 @@ recreated, retaining their volumes. No volumes or bind contents are deleted.
 """
 import argparse
 import json
+import os
+import re
 import subprocess
 import tempfile
 import time
@@ -14,6 +16,23 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def fresh_environment(project, containers, volumes, root=ROOT):
+    """Refuse retained state before creating project-specific writable bind roots."""
+    if not re.fullmatch(r'froststream-phase0-[a-z0-9-]+', project):
+        raise ValueError('Invalid disposable project name')
+    if any(name.startswith(project + '_') or name.startswith(project + '-')
+           for name in [*containers, *volumes]):
+        raise ValueError('Fresh installation requires a project with no existing containers or volumes')
+    folder = root / '.phase0/installations' / project
+    folder.mkdir(mode=0o700, parents=True, exist_ok=False)
+    overrides = {'FROSTSTREAM_BACKUP_ROOT': str(folder / 'backups'),
+                 'FROSTSTREAM_OPENBAO_BOOTSTRAP_ROOT': str(folder / 'openbao-bootstrap')}
+    for path in overrides.values():
+        Path(path).mkdir(mode=0o700)
+    (folder / 'OWNED_BY_PHASE0').write_text('Fresh disposable installation; retain state after verification.\n')
+    return overrides
 
 
 def ordered_services(services):
@@ -37,11 +56,14 @@ def main():
     parser.add_argument('--timeout', type=float, default=300)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--verify-only', action='store_true', help='Inspect an existing Phase 0 stack without recreating containers')
+    parser.add_argument('--fresh', action='store_true', help='Require unused project/volumes and create isolated backup/bootstrap bind roots')
     args = parser.parse_args()
-    if not args.project.startswith('froststream-phase0-'):
+    if not re.fullmatch(r'froststream-phase0-[a-z0-9-]+', args.project):
         parser.error('Only froststream-phase0-* disposable projects are supported')
     if args.timeout <= 0:
         parser.error('--timeout must be positive')
+    if args.fresh and args.verify_only:
+        parser.error('--fresh and --verify-only are mutually exclusive')
     compose = ROOT / args.edition / 'docker-compose/docker-compose.yaml'
     definition = yaml.safe_load(compose.read_text())
     services = definition['services']
@@ -59,6 +81,21 @@ def main():
               'services': []}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     try:
+        environment = os.environ.copy()
+        if args.fresh:
+            containers = subprocess.check_output(['docker', 'ps', '-a', '--format', '{{.Names}}'], text=True).splitlines()
+            volumes = subprocess.check_output(['docker', 'volume', 'ls', '--format', '{{.Name}}'], text=True).splitlines()
+            overrides = fresh_environment(args.project, containers, volumes)
+            environment.update(overrides)
+            report['freshInstallation'] = {'preflightPassed': True, 'bindRoots': overrides,
+                                           'namedVolumes': 'Unused project namespace verified before startup'}
+        else:
+            folder = ROOT / '.phase0/installations' / args.project
+            if (folder / 'OWNED_BY_PHASE0').is_file():
+                overrides = {'FROSTSTREAM_BACKUP_ROOT': str(folder / 'backups'),
+                             'FROSTSTREAM_OPENBAO_BOOTSTRAP_ROOT': str(folder / 'openbao-bootstrap')}
+                environment.update(overrides)
+                report['retainedBindRoots'] = overrides
         for name in ([] if args.verify_only else order):
             print(f'Starting {name}', flush=True)
             started = time.monotonic()
@@ -75,7 +112,7 @@ def main():
                 subprocess.run(['podman-compose', '--in-pod=false', '--no-cleanup',
                                 '-p', args.project, '-f', temporary.name,
                                 'up', '-d', '--no-build', '--no-deps', '--force-recreate', name],
-                               check=True, timeout=args.timeout)
+                               check=True, timeout=args.timeout, env=environment)
             container = f'{args.project}_{name}_1'
             while True:
                 state = json.loads(subprocess.check_output(

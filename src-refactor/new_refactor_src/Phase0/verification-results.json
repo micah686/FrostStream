@@ -2,7 +2,7 @@
   "phase": 0,
   "implementation": "baseline delivered",
   "acceptance": "open",
-  "date": "2026-10-10",
+  "date": "2026-10-11",
   "passed": {
     "unit": 585,
     "lite": 3,
@@ -20,7 +20,7 @@
       "build"
     ],
     "fullControlledAuthRepeat": 17,
-    "phase0ToolingTests": 12,
+    "phase0ToolingTests": 15,
     "packagedLite": {
       "freshInstallSmoke": true,
       "secondEmptyStateSmoke": true,
@@ -31,7 +31,7 @@
       "applicationImagesBuilt": true,
       "orderedStartup": true,
       "finalServiceStates": 19,
-      "realAuthentikBrowserRuns": 2,
+      "realAuthentikBrowserRuns": 3,
       "privatePlaylistIsolation": "Bidirectional list/read/write isolation for fresh Admin identities",
       "sessionChecks": [
         "Session survives browser reload",
@@ -39,11 +39,23 @@
         "Logout CSRF 403",
         "Logout and old-cookie replay 401"
       ],
-      "scope": "Podman workaround required; distributed media not exercised"
+      "scope": "Podman workaround required; distributed media not exercised",
+      "emptyStateInstallations": 2,
+      "secondEmptyStateInstallation": {
+        "project": "froststream-phase0-full-repeat",
+        "freshStatePreflight": true,
+        "isolatedBackupAndVaultBootstrapBinds": true,
+        "finalServiceStates": 19,
+        "realAuthentikBrowser": true,
+        "privatePlaylistIsolation": true,
+        "sessionRevocation": true,
+        "stateReuseRejected": true,
+        "engineWorkaroundRequired": true
+      }
     }
   },
   "openGates": [
-    "Standard Full Compose startup without Podman workaround and second empty-state Full installation",
+    "Standard Full Compose startup without Podman workaround",
     "Distributed packaged Full download/import/playback",
     "Large-corpus indexing/search/combined-workload measurements",
     "Measured thresholds on actual 8 GB reference hardware"
