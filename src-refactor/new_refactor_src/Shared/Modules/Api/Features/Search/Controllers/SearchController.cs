@@ -1,4 +1,5 @@
 using FrostStream.ApplicationContracts;
+using DataBridge.Search;
 using Microsoft.AspNetCore.Mvc;
 using Shared.Auth;
 using Shared.Messaging;
@@ -14,6 +15,17 @@ public sealed class SearchController(
     ILogger<SearchController> logger) : ControllerBase
 {
     private static readonly TimeSpan QueryTimeout = TimeSpan.FromSeconds(10);
+
+    [HttpGet("status")]
+    [Endpoint(EndpointIds.SearchStatus)]
+    [EndpointSummary("Get search index status")]
+    [EndpointDescription("Returns the current search index lifecycle state and the latest rebuild error, allowing clients to distinguish a rebuilding or degraded index from an empty library.")]
+    public async Task<ActionResult<SearchStatusSnapshot>> Status(CancellationToken cancellationToken)
+    {
+        var response = await SendRequestAsync<SearchStatusRequest, SearchStatusSnapshot>(
+            SearchSubjects.Status, new SearchStatusRequest(), cancellationToken);
+        return response is null ? ServiceUnavailable() : Ok(response);
+    }
 
     [HttpGet]
     [Endpoint(EndpointIds.SearchQuery)]

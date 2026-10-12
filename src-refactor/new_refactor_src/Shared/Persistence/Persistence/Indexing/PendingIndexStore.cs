@@ -54,13 +54,24 @@ public sealed class PendingIndexStore(ApplicationDatabase database)
         await command.ExecuteNonQueryAsync(ct);
     }
     public async Task InvalidateAsync(CancellationToken ct) {
-        // Existing tombstones and every current media entity must survive a destructive legacy rebuild.
+        // Existing tombstones and every current media entity are replayed into a replacement generation.
         await using var connection=await database.OpenConnectionAsync(ct);
         await using var transaction=await connection.BeginTransactionAsync(ct);
         await using(var update=ApplicationDbCommands.Create(connection,"UPDATE search_pending_index SET revision=revision+1,available=0,attempts=0,last_error=NULL",transaction)) await update.ExecuteNonQueryAsync(ct);
         var source=database.Provider==PersistenceProvider.Sqlite ? "media_guid" : "replace(media_guid::text,'-','')";
         await using(var insert=ApplicationDbCommands.Create(connection,$"INSERT INTO search_pending_index(media_guid,revision) SELECT {source},1 FROM {database.Table("media.media")} WHERE 1=1 ON CONFLICT(media_guid) DO NOTHING",transaction)) await insert.ExecuteNonQueryAsync(ct);
         await transaction.CommitAsync(ct);
+    }
+    /// <summary>Bounded replay for a replacement index; never acknowledges active-index work.</summary>
+    public async Task<IReadOnlyList<IndexWork>> GetPendingBatchAsync(string after, int limit, CancellationToken ct)
+    {
+        await using var command = database.CreateCommand("SELECT media_guid,revision FROM search_pending_index WHERE revision>applied AND media_guid>@after ORDER BY media_guid LIMIT @limit");
+        command.Parameters.AddWithValue("@after", after);
+        command.Parameters.AddWithValue("@limit", Math.Clamp(limit, 1, 500));
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        var result = new List<IndexWork>();
+        while (await reader.ReadAsync(ct)) result.Add(new(reader.GetString(0), reader.GetInt64(1), ""));
+        return result;
     }
     public async Task RequestAsync(Guid mediaGuid,CancellationToken ct=default) {
         await using var command=database.CreateCommand("INSERT INTO search_pending_index(media_guid,revision) VALUES(@id,1) ON CONFLICT(media_guid) DO UPDATE SET revision=search_pending_index.revision+1,available=0,attempts=0,last_error=NULL");

@@ -342,7 +342,7 @@ public sealed class MediaWatchController(
     [EnableCors(MediaCors.Policy)]
     [Endpoint(EndpointIds.MediaCaptions)]
     [EndpointSummary("List archived caption tracks")]
-    [EndpointDescription("Lists caption tracks with durable sidecar files for a media item. This endpoint is watch-authorized and reads the caption locations from PostgreSQL, not Typesense.")]
+    [EndpointDescription("Lists caption tracks with durable sidecar files for a media item. This endpoint is watch-authorized and reads the caption locations from PostgreSQL, not search index.")]
     public async Task<IActionResult> ListCaptions(Guid mediaGuid, CancellationToken cancellationToken = default)
     {
         if (await accessChecker.CheckWatchAccessAsync(User, mediaGuid, cancellationToken) is { } denied)

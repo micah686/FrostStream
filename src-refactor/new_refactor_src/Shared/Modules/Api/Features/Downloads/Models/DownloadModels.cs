@@ -41,7 +41,7 @@ public sealed class DownloadRequest
     /// </summary>
     public YtDlpOptions? YtDlpOptions { get; init; }
 
-    /// <summary>When true, yt-dlp fetches comments and they are persisted to the database and indexed in Typesense.</summary>
+    /// <summary>When true, yt-dlp fetches comments and they are persisted to the database and indexed in search index.</summary>
     [DefaultValue(false)]
     public bool FetchComments { get; init; } = false;
 

@@ -107,6 +107,7 @@ public static class EndpointIds
     public const string UserNotesSearch = "user-notes.search";
 
     // Unified search
+    public const string SearchStatus = "search.status";
     public const string SearchQuery = "search.query";
     public const string SearchSimilar = "search.similar";
 
@@ -342,6 +343,7 @@ public static class EndpointCatalog
         new(EndpointIds.UserNotesDelete, Bundles.Metadata),
         new(EndpointIds.UserNotesList, Bundles.Metadata),
         new(EndpointIds.UserNotesSearch, Bundles.Metadata),
+        new(EndpointIds.SearchStatus, Bundles.Metadata),
         new(EndpointIds.SearchQuery, Bundles.Metadata),
         new(EndpointIds.SearchSimilar, Bundles.Metadata),
 

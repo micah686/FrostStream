@@ -7,6 +7,10 @@ public sealed record MediaDocument
     [JsonPropertyName("id")]
     public required string Id { get; init; }
 
+    /// <summary>Stable tie-breaker for deterministic paging within an index generation.</summary>
+    [JsonPropertyName("sort_id")]
+    public string SortId => Id;
+
     [JsonPropertyName("title")]
     public required string Title { get; init; }
 

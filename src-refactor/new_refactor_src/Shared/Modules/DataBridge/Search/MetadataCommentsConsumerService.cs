@@ -26,8 +26,8 @@ public sealed class MetadataCommentsConsumerService(
     private async Task HandleAsync(IMessageContext<MetadataCommentsListRequestMessage> context)
     {
         var request = context.Message;
-        var page = TypesenseSearchHelpers.NormalizePage(request.Page);
-        var pageSize = TypesenseSearchHelpers.NormalizePageSize(request.PageSize, defaultValue: 20);
+        var page = SearchHelpers.NormalizePage(request.Page);
+        var pageSize = SearchHelpers.NormalizePageSize(request.PageSize, defaultValue: 20);
 
         try
         {
@@ -57,7 +57,7 @@ public sealed class MetadataCommentsConsumerService(
             var items = filtered
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
-                .Select(TypesenseSearchHelpers.ToCommentDto)
+                .Select(SearchHelpers.ToCommentDto)
                 .ToArray();
 
             await context.RespondAsync(new MetadataCommentsListResponseMessage
@@ -87,8 +87,8 @@ public sealed class MetadataCommentsConsumerService(
         string sortBy,
         string sortOrder)
     {
-        var descending = string.Equals(TypesenseSearchHelpers.NormalizeSortOrder(sortOrder), "desc", StringComparison.OrdinalIgnoreCase);
-        var sorted = TypesenseSearchHelpers.MapCommentSortField(sortBy) switch
+        var descending = string.Equals(SearchHelpers.NormalizeSortOrder(sortOrder), "desc", StringComparison.OrdinalIgnoreCase);
+        var sorted = SearchHelpers.MapCommentSortField(sortBy) switch
         {
             "like_count" => descending
                 ? comments.OrderByDescending(comment => comment.LikeCount ?? int.MinValue).ThenByDescending(comment => comment.CommentTimestampUnix).ThenBy(comment => comment.Id, StringComparer.Ordinal)

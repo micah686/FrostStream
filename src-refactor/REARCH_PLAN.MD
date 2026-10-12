@@ -418,6 +418,8 @@ Rollback for this fresh-install effort means reverting the phase and recreating 
 
 ### Phase 4 — Complete search boundary, retaining Typesense
 
+**Status:** Implemented in `new_refactor_src/`. Shared handlers, typed parsing, result mapping, projection sourcing, durable indexing, and rebuild orchestration now use provider-neutral ports. Both editions retain the isolated Typesense adapter. Replacement generations activate through one persistent alias; failed/canceled builds retain active search. The solution builds and all 609 unit tests pass with real Typesense contracts enabled. See [Phase 4 implementation and limits](new_refactor_src/Phase4/README.md) and [verification evidence](new_refactor_src/Phase4/verification-results.json). Packaged Full deployment and Phase 0 measurement gates remain open.
+
 **Work:** Extract typed query parsing, common result semantics, projection sourcing, maintenance/status, and a Typesense adapter. Move every direct Typesense consumer, including library browsing, comments, captions, and related media, behind the boundary.
 
 **Exit gate:** Both deployments pass search contract tests using Typesense through the new interfaces. Shared modules no longer consume Typesense query/result/schema types. Rebuild failure does not clear a valid active index.

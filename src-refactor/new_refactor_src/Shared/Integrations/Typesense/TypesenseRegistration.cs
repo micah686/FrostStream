@@ -16,21 +16,13 @@ public static class TypesenseRegistration
             config.Nodes = [BuildTypesenseNode(builder.Configuration)];
             config.ApiKey = builder.Configuration["Typesense:ApiKey"] ?? "froststream-dev-key";
         });
-        builder.Services.AddSingleton<TypesenseWriterGate>();
-        builder.Services.AddSingleton<ITypesenseIndexService, TypesenseIndexService>();
-        builder.Services.AddSingleton<IMediaDocumentQuery, MediaDocumentQuery>();
-        builder.Services.AddSingleton<CaptionDocumentHydrator>();
-        builder.Services.AddSingleton<IMetadataRebuildCoordinator, MetadataRebuildCoordinator>();
+        builder.Services.AddSingleton<TypesenseGenerationRouter>();
+        builder.Services.AddSingleton<ISearchReader, TypesenseSearchReader>();
+        builder.Services.AddSingleton<ISearchIndexWriter, TypesenseIndexService>();
 
         builder.Services.AddSingleton<TypesenseStartupService>();
         builder.Services.AddSingleton(new ApplicationInitializationStep("search collections", 50,
             (sp, ct) => sp.GetRequiredService<TypesenseStartupService>().StartAsync(ct)));
-        builder.Services.AddHostedService<TypesenseSyncConsumerService>();
-        builder.Services.AddHostedService<PendingIndexWorker>();
-        builder.Services.AddHostedService<MetadataListConsumerService>();
-        builder.Services.AddHostedService<MetadataCommentsConsumerService>();
-        builder.Services.AddHostedService<MetadataCaptionsConsumerService>();
-        builder.Services.AddHostedService<UnifiedSearchConsumerService>();
         return builder;
     }
     private static Node BuildTypesenseNode(IConfiguration configuration)

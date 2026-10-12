@@ -6,10 +6,10 @@ using Shared.Messaging;
 
 namespace DataBridge.Search;
 
-public sealed class TypesenseSyncConsumerService(
+public sealed class SearchSyncConsumerService(
     IMessageBus messageBus,
     IServiceScopeFactory scopeFactory,
-    ILogger<TypesenseSyncConsumerService> logger) : SubscriptionBackgroundService
+    ILogger<SearchSyncConsumerService> logger) : SubscriptionBackgroundService
 {
     protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
     {

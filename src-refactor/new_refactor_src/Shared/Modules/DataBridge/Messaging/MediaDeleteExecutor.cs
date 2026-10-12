@@ -30,14 +30,14 @@ public sealed class MediaDeleteExecutor
 
     private readonly ApplicationDatabase _dataSource;
     private readonly IMessageBus _messageBus;
-    private readonly ITypesenseIndexService _searchIndex;
+    private readonly ISearchIndexWriter _searchIndex;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<MediaDeleteExecutor> _logger;
 
     public MediaDeleteExecutor(
         ApplicationDatabase dataSource,
         IMessageBus messageBus,
-        ITypesenseIndexService searchIndex,
+        ISearchIndexWriter searchIndex,
         IServiceScopeFactory scopeFactory,
         ILogger<MediaDeleteExecutor> logger)
     {

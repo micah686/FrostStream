@@ -9,9 +9,10 @@ namespace DataBridge.Search;
 
 public sealed class MetadataRebuildCoordinator(
     IServiceScopeFactory scopeFactory,
-    TypesenseWriterGate writerGate,
+    SearchWriterGate writerGate,
     DataBridge.Persistence.Indexing.PendingIndexStore pendingIndex,
-    ITypesenseIndexService indexService,
+    ISearchIndexWriter indexService,
+    SearchStatus status,
     CaptionDocumentHydrator captionDocumentHydrator,
     IHostApplicationLifetime applicationLifetime,
     INotificationDispatcher notificationDispatcher,
@@ -32,6 +33,7 @@ public sealed class MetadataRebuildCoordinator(
                 {
                     await RunRebuildAsync(reason, applicationLifetime.ApplicationStopping);
                 }
+                catch (Exception ex) { logger.LogError(ex, "Background search rebuild failed."); }
                 finally
                 {
                     Interlocked.Exchange(ref _isRunning, 0);
@@ -64,35 +66,56 @@ public sealed class MetadataRebuildCoordinator(
         try
         {
             await pendingIndex.InvalidateAsync(ct);
-            logger.LogInformation("Starting Typesense metadata rebuild. Reason: {Reason}", reason);
-            await indexService.RecreateAllCollectionsAsync(ct);
+            logger.LogInformation("Starting search metadata rebuild. Reason: {Reason}", reason);
+            status.Set(SearchState.Building);
+            await using var generation = await indexService.CreateGenerationAsync(ct);
 
             await scopeFactory.WithScopedAsync<IMediaDocumentQuery>(async query =>
             {
-                await RebuildMediaAsync(query, ct);
-                await RebuildCommentsAsync(query, ct);
-                await RebuildCaptionsAsync(query, ct);
+                await RebuildMediaAsync(query, generation.Writer, ct);
+                await RebuildCommentsAsync(query, generation.Writer, ct);
+                await RebuildCaptionsAsync(query, generation.Writer, ct);
             });
 
-            logger.LogInformation("Finished Typesense metadata rebuild.");
+            // Replay durable intent into the replacement without acknowledging it. Any mutation
+            // racing this pass remains pending and is applied to the activated generation.
+            await scopeFactory.WithScopedAsync<IMediaDocumentQuery>(async query =>
+            {
+                using var worker = new PendingIndexWorker(pendingIndex, query, generation.Writer, captionDocumentHydrator,
+                    writerGate, Microsoft.Extensions.Logging.Abstractions.NullLogger<PendingIndexWorker>.Instance);
+                string cursor = "";
+                while (true)
+                {
+                    var batch = await pendingIndex.GetPendingBatchAsync(cursor, BatchSize, ct);
+                    if (batch.Count == 0) break;
+                    foreach (var work in batch) await worker.ApplyAsync(work, ct);
+                    cursor = batch[^1].MediaGuid;
+                }
+            });
+            await generation.ActivateAsync(ct);
+            status.Set(SearchState.Ready);
+            logger.LogInformation("Finished search metadata rebuild.");
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            logger.LogInformation("Typesense metadata rebuild was canceled during shutdown.");
+            status.ReportFailure("Rebuild canceled; previous generation retained.");
+            throw;
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Typesense metadata rebuild failed.");
+            status.ReportFailure(ex.Message);
+            logger.LogError(ex, "Search metadata rebuild failed; previous generation retained.");
             await notificationDispatcher.NotifyAdminEventAsync(
                 NotificationEventKeys.IndexRebuildFailed,
                 "FrostStream search index rebuild failed",
-                $"Typesense metadata rebuild failed: {ex.Message}",
+                $"Search metadata rebuild failed: {ex.Message}",
                 cancellationToken: ct);
+            throw;
         }
         finally { writerGate.Semaphore.Release(); }
     }
 
-    private async Task RebuildMediaAsync(IMediaDocumentQuery query, CancellationToken ct)
+    private async Task RebuildMediaAsync(IMediaDocumentQuery query, ISearchIndexWriter writer, CancellationToken ct)
     {
         var lastId = 0L;
         var total = 0;
@@ -103,14 +126,14 @@ public sealed class MetadataRebuildCoordinator(
             if (batch.Documents.Count == 0)
                 break;
 
-            await indexService.BulkImportMediaAsync(batch.Documents, ct);
+            await writer.BulkImportMediaAsync(batch.Documents, ct);
             total += batch.Documents.Count;
             lastId = batch.LastId;
             LogProgress("media", total);
         }
     }
 
-    private async Task RebuildCommentsAsync(IMediaDocumentQuery query, CancellationToken ct)
+    private async Task RebuildCommentsAsync(IMediaDocumentQuery query, ISearchIndexWriter writer, CancellationToken ct)
     {
         var lastId = 0L;
         var total = 0;
@@ -121,14 +144,14 @@ public sealed class MetadataRebuildCoordinator(
             if (batch.Documents.Count == 0)
                 break;
 
-            await indexService.BulkImportCommentsAsync(batch.Documents, ct);
+            await writer.BulkImportCommentsAsync(batch.Documents, ct);
             total += batch.Documents.Count;
             lastId = batch.LastId;
             LogProgress("comments", total);
         }
     }
 
-    private async Task RebuildCaptionsAsync(IMediaDocumentQuery query, CancellationToken ct)
+    private async Task RebuildCaptionsAsync(IMediaDocumentQuery query, ISearchIndexWriter writer, CancellationToken ct)
     {
         var lastId = 0L;
         var total = 0;
@@ -139,8 +162,8 @@ public sealed class MetadataRebuildCoordinator(
             if (batch.Documents.Count == 0)
                 break;
 
-            var captions = await captionDocumentHydrator.HydrateAsync(batch.Documents, ct);
-            await indexService.BulkImportCaptionsAsync(captions, ct);
+            var captions = await captionDocumentHydrator.HydrateAsync(batch.Documents, ct, requireComplete: true);
+            await writer.BulkImportCaptionsAsync(captions, ct);
             total += batch.Documents.Count;
             lastId = batch.LastId;
             LogProgress("captions", total);
@@ -150,6 +173,6 @@ public sealed class MetadataRebuildCoordinator(
     private void LogProgress(string collection, int total)
     {
         if (total % 5_000 == 0)
-            logger.LogInformation("Typesense rebuild imported {Count} {Collection} documents.", total, collection);
+            logger.LogInformation("search index rebuild imported {Count} {Collection} documents.", total, collection);
     }
 }

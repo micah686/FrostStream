@@ -66,7 +66,7 @@ public sealed class BackgroundJobConsumerService(
         try
         {
             await MarkAttemptAsync(message);
-            await run.ReportAsync("Rebuilding the Typesense search index…");
+            await run.ReportAsync("Rebuilding the search index…");
 
             // Await the rebuild so the schedule is only marked completed once the
             // synchronous index rebuild actually finishes (not just when accepted).
@@ -75,7 +75,7 @@ public sealed class BackgroundJobConsumerService(
                 CancellationToken.None);
             if (!result.Accepted)
             {
-                logger.LogWarning("Typesense reindex request {IdempotencyKey} was not accepted: {Error}", message.IdempotencyKey, result.ErrorMessage);
+                logger.LogWarning("Search rebuild request {IdempotencyKey} was not accepted: {Error}", message.IdempotencyKey, result.ErrorMessage);
                 run.Fail(result.ErrorMessage ?? "The search index rebuild was not accepted.");
                 await MarkFailureAsync(message, result.ErrorMessage);
                 await context.NackAsync();
@@ -88,7 +88,7 @@ public sealed class BackgroundJobConsumerService(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed handling Typesense reindex request {IdempotencyKey}; nacking", message.IdempotencyKey);
+            logger.LogError(ex, "Failed handling Search rebuild request {IdempotencyKey}; nacking", message.IdempotencyKey);
             run.Fail(ex.Message);
             await MarkFailureAsync(message);
             await context.NackAsync();

@@ -3,7 +3,7 @@ using Shared.Messaging;
 
 namespace DataBridge.Search;
 
-public static class TypesenseSearchHelpers
+public static class SearchHelpers
 {
     public const int MaxPageSize = 100;
 
@@ -47,19 +47,11 @@ public static class TypesenseSearchHelpers
     public static string NormalizeGuid(Guid mediaGuid)
         => mediaGuid.ToString("N");
 
-    public static string Eq(string field, string value)
-        => field + ":=" + Quote(value);
+    public static SearchFilter Eq(string field, string value) => new SearchFilter.Text(field, value);
+    public static SearchFilter Eq(string field, long value) => new SearchFilter.Number(field, Comparison.Equal, value);
+    public static SearchFilter Ne(string field, string value) => new SearchFilter.Text(field, value, true);
 
-    public static string Eq(string field, long value)
-        => field + ":=" + value.ToString(System.Globalization.CultureInfo.InvariantCulture);
-
-    public static string Ne(string field, string value)
-        => field + ":!=" + Quote(value);
-
-    public static string Quote(string value)
-        => "`" + value.Replace("`", "\\`", StringComparison.Ordinal) + "`";
-
-    public static string? BuildMediaFilter(
+    public static SearchFilter? BuildMediaFilter(
         string? platform,
         long? accountId,
         string? tag,
@@ -67,7 +59,7 @@ public static class TypesenseSearchHelpers
         string? genre,
         string? captionLanguage)
     {
-        var parts = new List<string>();
+        var parts = new List<SearchFilter>();
 
         if (!string.IsNullOrWhiteSpace(platform))
             parts.Add(Eq("platform", platform.Trim()));
@@ -83,7 +75,7 @@ public static class TypesenseSearchHelpers
         if (!string.IsNullOrWhiteSpace(captionLanguage))
             parts.Add(Eq("caption_languages", captionLanguage.Trim()));
 
-        return parts.Count == 0 ? null : string.Join(" && ", parts);
+        return parts.Count == 0 ? null : new SearchFilter.All(parts);
     }
 
     public static MetadataCardDto ToCardDto(MediaDocument document)

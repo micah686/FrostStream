@@ -4,13 +4,12 @@ using FrostStream.ApplicationContracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Shared.Messaging;
-using Typesense;
 
 namespace DataBridge.Search;
 
 public sealed class MetadataListConsumerService(
     IMessageBus messageBus,
-    ITypesenseClient typesense,
+    ISearchReader search,
     IServiceScopeFactory scopeFactory,
     ILogger<MetadataListConsumerService> logger) : SubscriptionBackgroundService
 {
@@ -36,28 +35,28 @@ public sealed class MetadataListConsumerService(
     private async Task HandleAsync(IMessageContext<MetadataListRequestMessage> context)
     {
         var request = context.Message;
-        var page = TypesenseSearchHelpers.NormalizePage(request.Page);
-        var pageSize = TypesenseSearchHelpers.NormalizePageSize(request.PageSize, defaultValue: 24);
+        var page = SearchHelpers.NormalizePage(request.Page);
+        var pageSize = SearchHelpers.NormalizePageSize(request.PageSize, defaultValue: 24);
 
         try
         {
-            var parameters = new SearchParameters("*", "title")
+            var parameters = new SearchRequest("*", "title")
             {
-                FilterBy = TypesenseSearchHelpers.BuildMediaFilter(
+                Filter = SearchHelpers.BuildMediaFilter(
                     request.Platform,
                     request.AccountId,
                     request.Tag,
                     request.Category,
                     request.Genre,
                     request.CaptionLanguage),
-                SortBy = $"{TypesenseSearchHelpers.MapMediaSortField(request.SortBy)}:{TypesenseSearchHelpers.NormalizeSortOrder(request.SortOrder)}",
+                SortBy = new SearchSort(SearchHelpers.MapMediaSortField(request.SortBy), SearchHelpers.NormalizeSortOrder(request.SortOrder) == "desc"),
                 Page = page,
                 PerPage = pageSize,
                 IncludeFields = "id,title,thumbnail_storage_path,account_avatar_storage_path,duration_seconds,release_date_unix,view_count,availability,was_live,platform,account_id,account_name,account_handle"
             };
 
-            var result = await typesense.Search<MediaDocument>(
-                MediaCollectionSchema.CollectionName,
+            var result = await search.SearchAsync<MediaDocument>(
+                SearchCollection.Media,
                 parameters);
 
             var documents = await RefreshMissingThumbnailPathsAsync(
@@ -121,7 +120,7 @@ public sealed class MetadataListConsumerService(
             return [];
 
         if (string.IsNullOrWhiteSpace(ownerSubject))
-            return documents.Select(TypesenseSearchHelpers.ToCardDto).ToArray();
+            return documents.Select(SearchHelpers.ToCardDto).ToArray();
 
         var mediaGuids = documents
             .Select(x => Guid.ParseExact(x.Id, "N"))
@@ -135,7 +134,7 @@ public sealed class MetadataListConsumerService(
             .Select(x =>
             {
                 var mediaGuid = Guid.ParseExact(x.Id, "N");
-                return TypesenseSearchHelpers.ToCardDto(
+                return SearchHelpers.ToCardDto(
                     x,
                     notes.GetValueOrDefault(mediaGuid),
                     channelNotes.GetValueOrDefault(x.AccountId));

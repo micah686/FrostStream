@@ -6,9 +6,9 @@ public static class CaptionsCollectionSchema
 {
     public const string CollectionName = "captions";
 
-    public static Schema Build()
+    public static Schema Build(string? name = null)
         => new(
-            CollectionName,
+            name ?? CollectionName,
             [
                 new Field("id", FieldType.String),
                 new Field("media_guid", FieldType.String) { Facet = true },

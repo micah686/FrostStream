@@ -7,8 +7,8 @@ using Shared.Storage;
 namespace DataBridge.Search;
 
 /// <summary>
-/// Builds the search-only caption text from the durable sidecar. PostgreSQL deliberately stores
-/// only the track locator; Typesense remains the sole indexed copy of transcript text.
+/// Builds the search-only caption text from the durable sidecar. The application database stores
+/// only the track locator; The search index contains the derived copy of transcript text.
 /// </summary>
 public sealed partial class CaptionDocumentHydrator(
     IStoreProvider blobStorageProvider,
@@ -91,7 +91,7 @@ public sealed partial class CaptionDocumentHydrator(
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
             if (requireComplete) throw;
-            logger.LogWarning(ex, "Unable to read caption sidecar for Typesense indexing {StorageKey}:{StoragePath}.", caption.StorageKey, caption.StoragePath);
+            logger.LogWarning(ex, "Unable to read caption sidecar for search index indexing {StorageKey}:{StoragePath}.", caption.StorageKey, caption.StoragePath);
             return caption;
         }
     }

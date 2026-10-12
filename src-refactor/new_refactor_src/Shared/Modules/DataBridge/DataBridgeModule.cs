@@ -76,6 +76,17 @@ public static class DataBridgeModule
         builder.Services.AddScoped<IDownloadConfigSetsRepository, DownloadConfigSetsRepository>();
         builder.Services.AddScoped<IScheduledTasksRepository, ScheduledTasksRepository>();
         builder.Services.AddScoped<ICreatorDiscoveryRepository, CreatorDiscoveryRepository>();
+        builder.Services.AddSingleton<SearchWriterGate>();
+        builder.Services.AddSingleton<SearchStatus>();
+        builder.Services.AddHostedService<SearchSyncConsumerService>();
+        builder.Services.AddHostedService<PendingIndexWorker>();
+        builder.Services.AddSingleton<IMediaDocumentQuery, MediaDocumentQuery>();
+        builder.Services.AddSingleton<CaptionDocumentHydrator>();
+        builder.Services.AddSingleton<IMetadataRebuildCoordinator, MetadataRebuildCoordinator>();
+        builder.Services.AddHostedService<MetadataListConsumerService>();
+        builder.Services.AddHostedService<MetadataCommentsConsumerService>();
+        builder.Services.AddHostedService<MetadataCaptionsConsumerService>();
+        builder.Services.AddHostedService<UnifiedSearchConsumerService>();
         builder.Services.AddSingleton<MediaDeleteExecutor>();
         builder.Services.AddSingleton<AccessPolicyExecutor>();
         builder.Services.Configure<MediaAccessOptions>(

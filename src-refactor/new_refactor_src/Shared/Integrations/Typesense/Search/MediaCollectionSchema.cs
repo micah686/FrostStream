@@ -6,12 +6,13 @@ public static class MediaCollectionSchema
 {
     public const string CollectionName = "media";
 
-    public static Schema Build()
+    public static Schema Build(string? name = null)
         => new(
-            CollectionName,
+            name ?? CollectionName,
             [
                 new Field("id", FieldType.String),
-                new Field("title", FieldType.String) { Infix = true },
+                new Field("sort_id", FieldType.String) { Sort = true },
+                new Field("title", FieldType.String) { Infix = true, Sort = true },
                 new Field("description", FieldType.String) { Optional = true },
                 new Field("account_name", FieldType.String),
                 new Field("account_handle", FieldType.String) { Facet = true },

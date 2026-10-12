@@ -290,7 +290,7 @@ public sealed class CoreRepositoryPersistenceTests
         await f.Db.SaveChangesAsync();
         var bus = Substitute.For<IMessageBus>();
         bus.RequestAsync<DeleteMediaFileRequest, DeleteMediaFileResponse>(Arg.Any<string>(), Arg.Any<DeleteMediaFileRequest>(), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>()).Returns(new DeleteMediaFileResponse { Success = true });
-        var search = Substitute.For<ITypesenseIndexService>();
+        var search = Substitute.For<ISearchIndexWriter>();
         var executor = new MediaDeleteExecutor(f.Database, bus, search, f.ScopeFactory, NullLogger<MediaDeleteExecutor>.Instance);
         (await executor.DeleteMediaAsync(Guid.NewGuid())).ErrorCode.ShouldBe("not_found");
         (await executor.DeleteMediaAsync(media)).ErrorCode.ShouldBe("conflict");

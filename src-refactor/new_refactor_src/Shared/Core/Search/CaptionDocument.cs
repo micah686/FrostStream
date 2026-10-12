@@ -22,7 +22,7 @@ public sealed record CaptionDocument
     [JsonPropertyName("storage_path")]
     public required string StoragePath { get; init; }
 
-    /// <summary>Storage backend used only while hydrating the searchable Typesense document.</summary>
+    /// <summary>Storage backend used only while hydrating the searchable search document.</summary>
     [JsonIgnore]
     public string StorageKey { get; init; } = string.Empty;
 

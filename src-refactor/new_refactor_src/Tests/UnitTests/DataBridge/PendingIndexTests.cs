@@ -92,11 +92,11 @@ public sealed class PendingIndexTests
     {
         using var fixture = new Fixture(false); var id = Guid.NewGuid(); await fixture.Store.RequestAsync(id);
         var query = NSubstitute.Substitute.For<global::DataBridge.Search.IMediaDocumentQuery>();
-        var index = NSubstitute.Substitute.For<global::DataBridge.Search.ITypesenseIndexService>();
+        var index = NSubstitute.Substitute.For<global::DataBridge.Search.ISearchIndexWriter>();
         var fail = true;
         index.DeleteCommentsByMediaGuidAsync(NSubstitute.Arg.Any<string>(), NSubstitute.Arg.Any<CancellationToken>()).Returns(_ => fail ? Task.FromException(new IOException("offline")) : Task.CompletedTask);
         var hydrator = new global::DataBridge.Search.CaptionDocumentHydrator(NSubstitute.Substitute.For<Shared.Storage.IStoreProvider>(), Microsoft.Extensions.Logging.Abstractions.NullLogger<global::DataBridge.Search.CaptionDocumentHydrator>.Instance);
-        var gate = new global::DataBridge.Search.TypesenseWriterGate();
+        var gate = new global::DataBridge.Search.SearchWriterGate();
         global::DataBridge.Search.PendingIndexWorker Worker() => new(fixture.Store, query, index, hydrator, gate, Microsoft.Extensions.Logging.Abstractions.NullLogger<global::DataBridge.Search.PendingIndexWorker>.Instance);
         using (var first = Worker())
         {
@@ -128,7 +128,7 @@ public sealed class PendingIndexTests
         var startup=new Shared.Deployment.ApplicationStartupGate();
         var applied=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var query=Substitute.For<global::DataBridge.Search.IMediaDocumentQuery>();
-        var index=Substitute.For<global::DataBridge.Search.ITypesenseIndexService>();
+        var index=Substitute.For<global::DataBridge.Search.ISearchIndexWriter>();
         index.DeleteCaptionsByMediaGuidAsync(Arg.Any<string>(),Arg.Any<CancellationToken>()).Returns(_=>{applied.TrySetResult();return Task.CompletedTask;});
         var hydrator=new global::DataBridge.Search.CaptionDocumentHydrator(Substitute.For<Shared.Storage.IStoreProvider>(),Microsoft.Extensions.Logging.Abstractions.NullLogger<global::DataBridge.Search.CaptionDocumentHydrator>.Instance);
         using var worker=new global::DataBridge.Search.PendingIndexWorker(fixture.Store,query,index,hydrator,new(),Microsoft.Extensions.Logging.Abstractions.NullLogger<global::DataBridge.Search.PendingIndexWorker>.Instance,startup);

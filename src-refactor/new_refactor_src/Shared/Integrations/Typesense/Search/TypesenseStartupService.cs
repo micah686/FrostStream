@@ -9,9 +9,10 @@ namespace DataBridge.Search;
 
 public sealed class TypesenseStartupService(
     ITypesenseClient client,
-    ITypesenseIndexService indexService,
+    ISearchIndexWriter indexService,
     IMetadataRebuildCoordinator rebuildCoordinator,
     IClock clock,
+    SearchStatus status,
     INotificationDispatcher notificationDispatcher,
     ILogger<TypesenseStartupService> logger) : IHostedService
 {
@@ -23,10 +24,11 @@ public sealed class TypesenseStartupService(
             MediaCollectionSchema.CollectionName,
             cancellationToken);
 
+        if (mediaDocumentCount > 0) status.Set(SearchState.Ready);
+
         // A pre-existing collection from an earlier schema lacks the current fields; a rebuild
-        // recreates it with the current schema and backfills. added_at_sort (ingestion timestamp,
-        // used for "Recently added") is the newest addition.
-        var hasCurrentFields = await indexService.MediaCollectionHasFieldAsync("added_at_sort", cancellationToken);
+        // builds a replacement with the current schema. sort_id provides stable paging ties.
+        var hasCurrentFields = await indexService.MediaCollectionHasFieldAsync("sort_id", cancellationToken);
 
         if (createdAny || mediaDocumentCount == 0 || !hasCurrentFields)
         {
@@ -41,6 +43,7 @@ public sealed class TypesenseStartupService(
         }
         else
         {
+            status.Set(SearchState.Ready);
             logger.LogInformation("All Typesense metadata collections are present; skipping startup rebuild.");
         }
     }

@@ -248,7 +248,7 @@ public sealed record DownloadRequested : IFlowMessage
     public int Priority { get; init; } = 0;
 
     /// <summary>When true, the Worker passes <c>--write-comments</c> to yt-dlp so comments are fetched,
-    /// persisted to the database, and indexed in Typesense.</summary>
+    /// persisted to the database, and indexed for search.</summary>
     public bool FetchComments { get; init; } = false;
 }
 
@@ -295,7 +295,7 @@ public sealed record FetchMetadataCommand : IFlowMessage
     public string? CookieSecretPath { get; init; }
 
     /// <summary>When true, the Worker passes <c>--write-comments</c> to yt-dlp so comments are included in
-    /// the returned metadata and subsequently persisted to the database and indexed in Typesense.</summary>
+    /// the returned metadata and subsequently persisted to the database and indexed for search.</summary>
     public bool FetchComments { get; init; } = false;
 }
 

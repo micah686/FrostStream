@@ -211,7 +211,7 @@ public sealed class MediaDeleteExecutorTests
 
         private IHost? applicationHost;
 
-        public MediaDeleteExecutor CreateExecutor(IMessageBus messageBus, ITypesenseIndexService searchIndex)
+        public MediaDeleteExecutor CreateExecutor(IMessageBus messageBus, ISearchIndexWriter searchIndex)
             => new(new ApplicationDatabase(new global::DataBridge.Persistence.Postgres.PostgresConnectionFactory(DataSource)), messageBus, searchIndex,
                 applicationHost!.Services.GetRequiredService<IServiceScopeFactory>(), NullLogger<MediaDeleteExecutor>.Instance);
 
@@ -429,7 +429,7 @@ public sealed class MediaDeleteExecutorTests
         }
     }
 
-    private sealed class RecordingSearchIndex : ITypesenseIndexService
+    private sealed class RecordingSearchIndex : ISearchIndexWriter
     {
         public List<string> DeletedMedia { get; } = [];
         public List<string> DeletedComments { get; } = [];
@@ -459,7 +459,7 @@ public sealed class MediaDeleteExecutorTests
 
         public Task<bool> MediaCollectionHasFieldAsync(string fieldName, CancellationToken ct = default) => throw new NotSupportedException();
 
-        public Task RecreateAllCollectionsAsync(CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<ISearchGeneration> CreateGenerationAsync(CancellationToken ct = default) => throw new NotSupportedException();
 
         public Task UpsertMediaAsync(MediaDocument document, CancellationToken ct = default) => throw new NotSupportedException();
 

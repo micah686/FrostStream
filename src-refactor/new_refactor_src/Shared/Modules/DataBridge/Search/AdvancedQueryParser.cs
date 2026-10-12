@@ -1,16 +1,16 @@
 using System.Globalization;
 using System.Text;
-using static DataBridge.Search.TypesenseSearchHelpers;
+using static DataBridge.Search.SearchHelpers;
 
 namespace DataBridge.Search;
 
-/// <summary>The result of splitting a raw search string into free text and Typesense filter clauses.</summary>
-public sealed record ParsedQuery(string FreeText, IReadOnlyList<string> FilterParts)
+/// <summary>The result of splitting a raw search string into free text and typed filters.</summary>
+public sealed record ParsedQuery(string FreeText, IReadOnlyList<SearchFilter> FilterParts)
 {
-    /// <summary>The query string to pass to Typesense; <c>*</c> when only operators were supplied.</summary>
+    /// <summary>The effective search text; <c>*</c> when only operators were supplied.</summary>
     public string EffectiveQuery => string.IsNullOrWhiteSpace(FreeText) ? "*" : FreeText;
 
-    public string? FilterBy => FilterParts.Count == 0 ? null : string.Join(" && ", FilterParts);
+    public SearchFilter? Filter => FilterParts.Count == 0 ? null : new SearchFilter.All(FilterParts);
 
     public bool HasFilters => FilterParts.Count > 0;
 
@@ -19,7 +19,7 @@ public sealed record ParsedQuery(string FreeText, IReadOnlyList<string> FilterPa
 
 /// <summary>
 /// Parses advanced search syntax such as <c>channel:LinusTechTips codec:h264 after:2023 graphics card</c>
-/// into a free-text query plus structured Typesense <c>filter_by</c> clauses. Quoted values are
+/// into a free-text query plus structured provider-independent filters. Quoted values are
 /// supported (<c>channel:"Linus Tech Tips"</c>). Unknown <c>field:value</c> tokens are treated as
 /// free text so the parser never rejects input.
 /// </summary>
@@ -28,7 +28,7 @@ public static class AdvancedQueryParser
     public static ParsedQuery Parse(string? raw)
     {
         var freeText = new List<string>();
-        var filters = new List<string>();
+        var filters = new List<SearchFilter>();
 
         if (!string.IsNullOrWhiteSpace(raw))
         {
@@ -36,7 +36,7 @@ public static class AdvancedQueryParser
             {
                 if (TryParseOperator(token, out var filter))
                 {
-                    if (!string.IsNullOrEmpty(filter))
+                    if (filter is not null)
                         filters.Add(filter);
                 }
                 else
@@ -49,7 +49,7 @@ public static class AdvancedQueryParser
         return new ParsedQuery(string.Join(' ', freeText), filters);
     }
 
-    private static bool TryParseOperator(string token, out string? filter)
+    private static bool TryParseOperator(string token, out SearchFilter? filter)
     {
         filter = null;
 
@@ -123,15 +123,15 @@ public static class AdvancedQueryParser
         }
     }
 
-    private static string? ExactOrNull(string field, string value)
+    private static SearchFilter? ExactOrNull(string field, string value)
         => string.IsNullOrWhiteSpace(value) ? null : Eq(field, value);
 
-    private static string? ChannelFilter(string value)
+    private static SearchFilter? ChannelFilter(string value)
         => string.IsNullOrWhiteSpace(value)
             ? null
-            : "(" + Eq("account_handle", value) + " || " + Eq("account_name", value) + ")";
+            : new SearchFilter.Any([Eq("account_handle", value), Eq("account_name", value)]);
 
-    private static string? CodecFilter(string value)
+    private static SearchFilter? CodecFilter(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
             return null;
@@ -143,10 +143,10 @@ public static class AdvancedQueryParser
             _ => value.Trim()
         };
 
-        return "(" + Eq("video_codec", codec) + " || " + Eq("audio_codec", codec) + ")";
+        return new SearchFilter.Any([Eq("video_codec", codec), Eq("audio_codec", codec)]);
     }
 
-    private static string? ResolutionFilter(string value)
+    private static SearchFilter? ResolutionFilter(string value)
     {
         var label = value.Trim().ToLowerInvariant() switch
         {
@@ -162,7 +162,7 @@ public static class AdvancedQueryParser
         return string.IsNullOrWhiteSpace(label) ? null : Eq("resolution_label", label);
     }
 
-    private static string? HdrFilter(string value)
+    private static SearchFilter? HdrFilter(string value)
         => value.Trim().ToLowerInvariant() switch
         {
             "true" or "yes" or "1" or "hdr" or "hdr10" or "dv" or "dolbyvision" => Ne("hdr_type", "SDR"),
@@ -170,7 +170,7 @@ public static class AdvancedQueryParser
             _ => null
         };
 
-    private static string? AudioChannelsFilter(string value)
+    private static SearchFilter? AudioChannelsFilter(string value)
     {
         var channels = value.Trim().ToLowerInvariant() switch
         {
@@ -185,15 +185,15 @@ public static class AdvancedQueryParser
         return channels <= 0 ? null : Eq("audio_channels", channels);
     }
 
-    private static string? DateFilter(string value, bool before)
+    private static SearchFilter? DateFilter(string value, bool before)
     {
         var unix = ParseDateToUnix(value);
         if (unix is null)
             return null;
 
         return before
-            ? $"release_date_unix:<{unix.Value}"
-            : $"release_date_unix:>{unix.Value}";
+            ? new SearchFilter.Number("release_date_unix", Comparison.Less, unix.Value)
+            : new SearchFilter.Number("release_date_unix", Comparison.Greater, unix.Value);
     }
 
     private static long? ParseDateToUnix(string value)
@@ -219,7 +219,7 @@ public static class AdvancedQueryParser
         return null;
     }
 
-    private static string? NumericRange(string field, string value)
+    private static SearchFilter? NumericRange(string field, string value)
     {
         value = value.Trim();
         if (value.Length == 0)
@@ -238,8 +238,8 @@ public static class AdvancedQueryParser
         if (!long.TryParse(rest.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var number))
             return null;
 
-        var comparator = op == "=" ? ":=" : ":" + op;
-        return field + comparator + number.ToString(CultureInfo.InvariantCulture);
+        var comparator = op switch { "=" => Comparison.Equal, ">" => Comparison.Greater, "<" => Comparison.Less, "<=" => Comparison.LessOrEqual, _ => Comparison.GreaterOrEqual };
+        return new SearchFilter.Number(field, comparator, number);
     }
 
     private static IReadOnlyList<string> Tokenize(string input)

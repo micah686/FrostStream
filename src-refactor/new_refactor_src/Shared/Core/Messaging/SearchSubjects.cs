@@ -2,6 +2,7 @@ namespace Shared.Messaging;
 
 public static class SearchSubjects
 {
+    public const string Status = "search.status";
     /// <summary>Advanced unified search across metadata, subtitles, and comments.</summary>
     public const string Query = "search.query";
 

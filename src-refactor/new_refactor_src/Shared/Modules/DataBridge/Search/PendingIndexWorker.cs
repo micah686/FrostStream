@@ -5,8 +5,8 @@ using Microsoft.Extensions.Logging;
 namespace DataBridge.Search;
 
 /// <summary>Single bounded projection worker per control plane. Database leases coordinate other instances.</summary>
-public sealed class PendingIndexWorker(PendingIndexStore store, IMediaDocumentQuery query, ITypesenseIndexService index,
-    CaptionDocumentHydrator captions, TypesenseWriterGate writerGate, ILogger<PendingIndexWorker> logger, Shared.Deployment.ApplicationStartupGate? startup = null) : BackgroundService
+public sealed class PendingIndexWorker(PendingIndexStore store, IMediaDocumentQuery query, ISearchIndexWriter index,
+    CaptionDocumentHydrator captions, SearchWriterGate writerGate, ILogger<PendingIndexWorker> logger, Shared.Deployment.ApplicationStartupGate? startup = null, SearchStatus? status = null) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -40,6 +40,7 @@ public sealed class PendingIndexWorker(PendingIndexStore store, IMediaDocumentQu
             }
             catch (Exception error) when (!stoppingToken.IsCancellationRequested)
             {
+                status?.ReportFailure(error.Message);
                 logger.LogError(error, "Index intent failed for {MediaGuid}; retained for retry", work?.MediaGuid);
                 if (work is not null)
                 {

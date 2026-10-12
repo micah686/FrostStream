@@ -16,7 +16,7 @@ public sealed class SearchCorpusTests
             var id = item.GetProperty("id").GetString();
             var parsed = AdvancedQueryParser.Parse(item.GetProperty("query").GetString());
             parsed.FreeText.ShouldBe(item.GetProperty("text").GetString(), id);
-            parsed.FilterParts.ShouldBe(item.GetProperty("filters").EnumerateArray().Select(x => x.GetString()!).ToArray(), id);
+            parsed.FilterParts.Select(TypesenseSearchReader.Translate).ShouldBe(item.GetProperty("filters").EnumerateArray().Select(x => x.GetString()!).ToArray(), id);
             parsed.EffectiveQuery.ShouldBe(string.IsNullOrWhiteSpace(parsed.FreeText) ? "*" : parsed.FreeText, id);
         }
     }

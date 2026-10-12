@@ -1,13 +1,12 @@
 using FrostStream.ApplicationContracts;
 using Microsoft.Extensions.Logging;
 using Shared.Messaging;
-using Typesense;
 
 namespace DataBridge.Search;
 
 public sealed class MetadataCaptionsConsumerService(
     IMessageBus messageBus,
-    ITypesenseClient typesense,
+    ISearchReader search,
     ILogger<MetadataCaptionsConsumerService> logger) : SubscriptionBackgroundService
 {
     protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
@@ -28,32 +27,32 @@ public sealed class MetadataCaptionsConsumerService(
 
         try
         {
-            var filters = new List<string>
+            var filters = new List<SearchFilter>
             {
-                TypesenseSearchHelpers.Eq("media_guid", TypesenseSearchHelpers.NormalizeGuid(request.MediaGuid))
+                SearchHelpers.Eq("media_guid", SearchHelpers.NormalizeGuid(request.MediaGuid))
             };
 
             if (!string.IsNullOrWhiteSpace(request.LanguageCode))
-                filters.Add(TypesenseSearchHelpers.Eq("language_code", request.LanguageCode.Trim()));
+                filters.Add(SearchHelpers.Eq("language_code", request.LanguageCode.Trim()));
             if (!string.IsNullOrWhiteSpace(request.CaptionType))
-                filters.Add(TypesenseSearchHelpers.Eq("caption_type", request.CaptionType.Trim()));
+                filters.Add(SearchHelpers.Eq("caption_type", request.CaptionType.Trim()));
 
-            var parameters = new SearchParameters("*", "name")
+            var parameters = new SearchRequest("*", "name")
             {
-                FilterBy = string.Join(" && ", filters),
+                Filter = new SearchFilter.All(filters),
                 Page = 1,
                 PerPage = 250
             };
 
-            var result = await typesense.Search<CaptionDocument>(
-                CaptionsCollectionSchema.CollectionName,
+            var result = await search.SearchAsync<CaptionDocument>(
+                SearchCollection.Captions,
                 parameters);
 
             var items = result.Hits
                 .Select(x => x.Document)
                 .OrderBy(x => x.LanguageCode, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(x => x.CaptionType, StringComparer.OrdinalIgnoreCase)
-                .Select(TypesenseSearchHelpers.ToCaptionDto)
+                .Select(SearchHelpers.ToCaptionDto)
                 .ToArray();
 
             await context.RespondAsync(new MetadataCaptionsListResponseMessage

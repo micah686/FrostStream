@@ -4,7 +4,6 @@ using FrostStream.ApplicationContracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Shared.Messaging;
-using Typesense;
 
 namespace DataBridge.Search;
 
@@ -17,7 +16,8 @@ namespace DataBridge.Search;
 /// </summary>
 public sealed class UnifiedSearchConsumerService(
     IMessageBus messageBus,
-    ITypesenseClient typesense,
+    ISearchReader search,
+    SearchStatus status,
     IServiceScopeFactory scopeFactory,
     ILogger<UnifiedSearchConsumerService> logger) : SubscriptionBackgroundService
 {
@@ -26,6 +26,10 @@ public sealed class UnifiedSearchConsumerService(
 
     protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
     {
+        await SubscribeAsync<SearchStatusRequest>(messageBus, SearchSubjects.Status,
+            context => context.RespondAsync(status.Current), queueGroup: SearchSubjects.QueueGroup,
+            cancellationToken: stoppingToken);
+
         await SubscribeAsync<SearchQueryRequestMessage>(
             messageBus,
             SearchSubjects.Query,
@@ -46,8 +50,8 @@ public sealed class UnifiedSearchConsumerService(
     private async Task HandleQueryAsync(IMessageContext<SearchQueryRequestMessage> context)
     {
         var request = context.Message;
-        var page = TypesenseSearchHelpers.NormalizePage(request.Page);
-        var pageSize = TypesenseSearchHelpers.NormalizePageSize(request.PageSize, defaultValue: 24);
+        var page = SearchHelpers.NormalizePage(request.Page);
+        var pageSize = SearchHelpers.NormalizePageSize(request.PageSize, defaultValue: 24);
         var parsed = AdvancedQueryParser.Parse(request.Query);
 
         if (!parsed.HasFreeText && !parsed.HasFilters)
@@ -67,22 +71,24 @@ public sealed class UnifiedSearchConsumerService(
             var collector = new HitCollector();
 
             // 1. Primary, paginated media-metadata search.
-            var mediaParameters = new SearchParameters(parsed.EffectiveQuery, MediaQueryBy)
+            var mediaParameters = new SearchRequest(parsed.EffectiveQuery, MediaQueryBy)
             {
-                QueryByWeights = MediaQueryByWeights,
-                FilterBy = parsed.FilterBy,
+                Weights = [4,2,2,1,1,1,1],
+                Filter = parsed.Filter,
                 Page = page,
                 PerPage = pageSize,
-                IncludeFields = TypesenseSearchHelpers.MediaCardIncludeFields
+                IncludeFields = SearchHelpers.MediaCardIncludeFields
             };
 
             if (!string.IsNullOrWhiteSpace(request.SortBy))
             {
                 mediaParameters.SortBy =
-                    $"{TypesenseSearchHelpers.MapMediaSortField(request.SortBy)}:{TypesenseSearchHelpers.NormalizeSortOrder(request.SortOrder)}";
+                    new SearchSort(SearchHelpers.MapMediaSortField(request.SortBy), SearchHelpers.NormalizeSortOrder(request.SortOrder) == "desc");
             }
 
-            var mediaResult = await typesense.Search<MediaDocument>(MediaCollectionSchema.CollectionName, mediaParameters);
+            var mediaResult = ScopeIncludes(request.Scope, SearchScope.Metadata)
+                ? await search.SearchAsync<MediaDocument>(SearchCollection.Media, mediaParameters)
+                : new SearchPage<MediaDocument>([], 0);
             foreach (var hit in mediaResult.Hits)
                 collector.Add(hit.Document, SearchMatch.Metadata);
 
@@ -93,7 +99,7 @@ public sealed class UnifiedSearchConsumerService(
 
             // 3. Private user-note matches (parity with metadata.search).
             if (parsed.HasFreeText)
-                appended += await AugmentWithNoteMatchesAsync(request, pageSize, collector);
+                appended += await AugmentWithNoteMatchesAsync(request, parsed, pageSize, collector);
 
             var items = await ToHitsAsync(collector, request.OwnerSubject);
             await context.RespondAsync(new SearchQueryResponseMessage
@@ -121,7 +127,7 @@ public sealed class UnifiedSearchConsumerService(
     private async Task HandleSimilarAsync(IMessageContext<SearchSimilarRequestMessage> context)
     {
         var request = context.Message;
-        var pageSize = TypesenseSearchHelpers.NormalizePageSize(request.PageSize, defaultValue: 12);
+        var pageSize = SearchHelpers.NormalizePageSize(request.PageSize, defaultValue: 12);
 
         try
         {
@@ -153,16 +159,16 @@ public sealed class UnifiedSearchConsumerService(
                 return;
             }
 
-            var parameters = new SearchParameters(queryText, "tags,categories,genres,title,account_name")
+            var parameters = new SearchRequest(queryText, "tags,categories,genres,title,account_name")
             {
-                QueryByWeights = "4,3,3,2,1",
-                FilterBy = TypesenseSearchHelpers.Ne("id", source.Id),
+                Weights = [4,3,3,2,1],
+                Filter = SearchHelpers.Ne("id", source.Id),
                 Page = 1,
                 PerPage = pageSize,
-                IncludeFields = TypesenseSearchHelpers.MediaCardIncludeFields
+                IncludeFields = SearchHelpers.MediaCardIncludeFields
             };
 
-            var result = await typesense.Search<MediaDocument>(MediaCollectionSchema.CollectionName, parameters);
+            var result = await search.SearchAsync<MediaDocument>(SearchCollection.Media, parameters);
 
             var collector = new HitCollector();
             foreach (var hit in result.Hits)
@@ -199,13 +205,13 @@ public sealed class UnifiedSearchConsumerService(
 
         if (wantSubtitles)
         {
-            foreach (var guid in await SearchContentGuidsAsync(CaptionsCollectionSchema.CollectionName, parsed.FreeText, pageSize))
+            foreach (var guid in await SearchContentGuidsAsync(SearchCollection.Captions, parsed.FreeText, pageSize))
                 AddReason(contentReasons, guid, SearchMatch.Subtitles);
         }
 
         if (wantComments)
         {
-            foreach (var guid in await SearchContentGuidsAsync(CommentsCollectionSchema.CollectionName, parsed.FreeText, pageSize))
+            foreach (var guid in await SearchContentGuidsAsync(SearchCollection.Comments, parsed.FreeText, pageSize))
                 AddReason(contentReasons, guid, SearchMatch.Comments);
         }
 
@@ -231,7 +237,7 @@ public sealed class UnifiedSearchConsumerService(
             return 0;
 
         // Hydrate via the media collection so the same structured filters still apply.
-        var hydrated = await HydrateMediaByIdsAsync(toHydrate, parsed.FilterBy, pageSize);
+        var hydrated = await HydrateMediaByIdsAsync(toHydrate, parsed.Filter, pageSize);
         var appended = 0;
         foreach (var document in hydrated)
         {
@@ -245,6 +251,7 @@ public sealed class UnifiedSearchConsumerService(
 
     private async Task<int> AugmentWithNoteMatchesAsync(
         SearchQueryRequestMessage request,
+        ParsedQuery parsed,
         int pageSize,
         HitCollector collector)
     {
@@ -252,17 +259,16 @@ public sealed class UnifiedSearchConsumerService(
             return 0;
 
         var noteGuids = await scopeFactory.WithScopedAsync<IUserNotesRepository, IReadOnlyList<Guid>>(
-            notes => notes.SearchVideoNoteTargetsAsync(request.OwnerSubject, request.Query, pageSize));
+            notes => notes.SearchVideoNoteTargetsAsync(request.OwnerSubject, parsed.FreeText, pageSize));
 
         var missing = noteGuids
-            .Where(guid => !collector.Contains(TypesenseSearchHelpers.NormalizeGuid(guid)))
+            .Where(guid => !collector.Contains(SearchHelpers.NormalizeGuid(guid)))
             .Distinct()
             .ToArray();
         if (missing.Length == 0)
             return 0;
 
-        var documents = await scopeFactory.WithScopedAsync<IMediaDocumentQuery, IReadOnlyList<MediaDocument>>(
-            query => query.GetMediaByGuidsAsync(missing));
+        var documents = await HydrateMediaByIdsAsync(missing.Select(SearchHelpers.NormalizeGuid).ToArray(), parsed.Filter, pageSize);
 
         var appended = 0;
         foreach (var document in documents)
@@ -274,16 +280,16 @@ public sealed class UnifiedSearchConsumerService(
         return appended;
     }
 
-    private async Task<IReadOnlyList<string>> SearchContentGuidsAsync(string collection, string query, int limit)
+    private async Task<IReadOnlyList<string>> SearchContentGuidsAsync(SearchCollection collection, string query, int limit)
     {
-        var parameters = new SearchParameters(query, "text")
+        var parameters = new SearchRequest(query, "text")
         {
             Page = 1,
             PerPage = Math.Clamp(limit, 1, 250),
             IncludeFields = "media_guid"
         };
 
-        var result = await typesense.Search<MediaGuidHit>(collection, parameters);
+        var result = await search.SearchAsync<MediaGuidHit>(collection, parameters);
         return result.Hits
             .Select(x => x.Document.MediaGuid)
             .Where(x => !string.IsNullOrEmpty(x))
@@ -293,22 +299,22 @@ public sealed class UnifiedSearchConsumerService(
 
     private async Task<IReadOnlyList<MediaDocument>> HydrateMediaByIdsAsync(
         IReadOnlyList<string> ids,
-        string? baseFilter,
+        SearchFilter? baseFilter,
         int pageSize)
     {
-        var capped = ids.Take(TypesenseSearchHelpers.MaxPageSize).ToArray();
-        var idFilter = "(" + string.Join(" || ", capped.Select(id => TypesenseSearchHelpers.Eq("id", id))) + ")";
-        var filter = string.IsNullOrWhiteSpace(baseFilter) ? idFilter : $"{baseFilter} && {idFilter}";
+        var capped = ids.Take(SearchHelpers.MaxPageSize).ToArray();
+        var idFilter = new SearchFilter.Any(capped.Select(id => SearchHelpers.Eq("id", id)).ToArray());
+        SearchFilter filter = baseFilter is null ? idFilter : new SearchFilter.All([baseFilter, idFilter]);
 
-        var parameters = new SearchParameters("*", "title")
+        var parameters = new SearchRequest("*", "title")
         {
-            FilterBy = filter,
+            Filter = filter,
             Page = 1,
             PerPage = Math.Clamp(capped.Length, 1, 250),
-            IncludeFields = TypesenseSearchHelpers.MediaCardIncludeFields
+            IncludeFields = SearchHelpers.MediaCardIncludeFields
         };
 
-        var result = await typesense.Search<MediaDocument>(MediaCollectionSchema.CollectionName, parameters);
+        var result = await search.SearchAsync<MediaDocument>(SearchCollection.Media, parameters);
         return result.Hits.Select(x => x.Document).ToList();
     }
 
@@ -336,7 +342,7 @@ public sealed class UnifiedSearchConsumerService(
             .Select(document =>
             {
                 var mediaGuid = Guid.ParseExact(document.Id, "N");
-                var card = TypesenseSearchHelpers.ToCardDto(
+                var card = SearchHelpers.ToCardDto(
                     document,
                     videoNotes.GetValueOrDefault(mediaGuid),
                     channelNotes.GetValueOrDefault(document.AccountId));
