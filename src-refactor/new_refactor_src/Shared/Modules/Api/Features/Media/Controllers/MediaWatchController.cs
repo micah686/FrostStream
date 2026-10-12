@@ -275,7 +275,7 @@ public sealed class MediaWatchController(
     [HttpHead("accounts/{accountId:long}/{assetType:regex(^(avatar|banner)$)}")]
     [Endpoint(EndpointIds.MediaAccountAsset)]
     [EndpointSummary("Get a creator account avatar or banner")]
-    [EndpointDescription("Resolves the stored avatar or banner image for a creator account by its internal numeric identifier and streams it from the configured storage backend. Returns 404 when the account has no stored asset of the requested kind.")]
+    [EndpointDescription("Resolves the stored avatar or banner image for a creator account by its internal numeric identifier and streams it from the configured storage backend. If an avatar is missing, redirects to the shared placeholder image; a missing banner returns 404.")]
     public async Task<IActionResult> GetAccountAsset(
         long accountId,
         string assetType,
@@ -313,6 +313,11 @@ public sealed class MediaWatchController(
 
         if (!response.Success)
         {
+            if (kind == AccountAssetType.Avatar && response.ErrorCode == "not_found")
+            {
+                return Redirect("/placeholders/missing_avatar.svg");
+            }
+
             return response.ErrorCode == "not_found"
                 ? NotFound(response.ErrorMessage ?? "Account asset was not found.")
                 : StatusCode(

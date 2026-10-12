@@ -125,10 +125,18 @@
   const accountId = $derived(page.params.accountId ?? '');
   const totalPages = $derived(Math.max(1, Math.ceil(totalCount / pageSize)));
   const bannerUrl = $derived(
-    account?.bannerStoragePath && !bannerBroken ? `/api/media/watch/accounts/${account.accountId}/banner` : null
+    account
+      ? account.bannerStoragePath && !bannerBroken
+        ? `/api/media/watch/accounts/${account.accountId}/banner`
+        : '/placeholders/missing_banner.svg'
+      : null
   );
   const avatarUrl = $derived(
-    account?.avatarStoragePath && !avatarBroken ? `/api/media/watch/accounts/${account.accountId}/avatar` : null
+    account
+      ? account.avatarStoragePath && !avatarBroken
+        ? `/api/media/watch/accounts/${account.accountId}/avatar`
+        : '/placeholders/missing_avatar.svg'
+      : null
   );
   const readyAudioItems = $derived(
     channelAudio?.items.filter((item) => item.rendition?.status === 'Ready') ?? []
@@ -189,6 +197,18 @@
     podcastFeedUrl = null;
 
     await Promise.all([loadAccount(id), loadMedia(id, 1), loadStatistics(id), loadChannelAudio(id)]);
+  }
+
+  function handleBannerError(event: Event) {
+    const image = event.currentTarget as HTMLImageElement;
+    if (image.src.includes('/placeholders/')) image.hidden = true;
+    else bannerBroken = true;
+  }
+
+  function handleAvatarError(event: Event) {
+    const image = event.currentTarget as HTMLImageElement;
+    if (image.src.includes('/placeholders/')) image.hidden = true;
+    else avatarBroken = true;
   }
 
   async function loadChannelAudio(id: string, quiet = false) {
@@ -563,14 +583,8 @@
           alt=""
           decoding="async"
           class="absolute inset-0 h-full w-full object-cover"
-          onerror={() => (bannerBroken = true)}
+          onerror={handleBannerError}
         />
-      {:else}
-        <span
-          class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-6xl font-black text-white/10"
-        >
-          {initialsFor(account.accountName)}
-        </span>
       {/if}
     </div>
 
@@ -585,7 +599,7 @@
             alt={`${account.accountName} avatar`}
             decoding="async"
             class="absolute inset-0 h-full w-full object-cover"
-            onerror={() => (avatarBroken = true)}
+            onerror={handleAvatarError}
           />
         {/if}
       </span>

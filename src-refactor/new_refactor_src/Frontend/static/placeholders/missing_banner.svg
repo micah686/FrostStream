@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="360" viewBox="0 0 1280 360" role="img" aria-labelledby="title">
+  <title id="title">Default banner</title>
+  <rect width="1280" height="360" fill="#242A32"/>
+  <path d="M0 287 246 169 463 263 711 109 956 244 1280 95v265H0Z" fill="#303944"/>
+  <path d="m0 332 317-124 286 127 323-159 354 117v67H0Z" fill="#3C4653"/>
+</svg>
