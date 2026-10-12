@@ -438,6 +438,8 @@ Rollback for this fresh-install effort means reverting the phase and recreating 
 
 ### Phase 6 — Fresh-install packaging and recovery
 
+**Implementation status (2026-10-11):** Fresh private package generation, a consolidated checksummed PostgreSQL baseline, persistent mount/resource defaults, Production readiness probes, offline Lite snapshot/key-ring publication, mandatory Full vault checksums, bounded-memory snapshot hashing, and explicit post-restore search reconstruction are implemented in `new_refactor_src`. Packaged Lite snapshot/key-ring recovery, Full PostgreSQL/OpenBao Raft rollback, and restoration onto an empty vault using original unseal material pass; live-chat on/off profile evidence and verification scope are documented in `new_refactor_src/Phase6/README.md`. External HTTPS identity/browser flows and Phase 5’s physical 8 GB benchmark remain separate open acceptance areas.
+
 **Work:** Consolidate fresh-install schema baselines/configuration, finalize volumes and resource defaults, document ownership of media/chat backups, validate optional integrations, and verify both editions' recovery procedures and readiness reporting.
 
 **Exit gate:** Clean install, restart, Lite snapshot/key-ring recovery, Full PostgreSQL/OpenBao recovery, and live-chat on/off profiles pass from the packaged artifacts.

@@ -93,6 +93,8 @@ public static class DataBridgeModule
             builder.Configuration.GetSection(MediaAccessOptions.SectionName));
         builder.Services.Configure<LiveChatOptions>(
             builder.Configuration.GetSection(LiveChatOptions.SectionName));
+        builder.Services.AddSingleton(new Shared.Deployment.LiveChatInitializationStatus(
+            builder.Configuration.GetValue<bool>("LiveChat:Enabled") ? Shared.Deployment.OptionalIntegrationState.Starting : Shared.Deployment.OptionalIntegrationState.Disabled));
         // Optional live-chat replay store. Nothing ClickHouse-related is registered when the
         // feature is disabled — the flag gates the whole dependency, not individual calls.
         if (builder.Configuration.GetSection(LiveChatOptions.SectionName).GetValue<bool>("Enabled"))

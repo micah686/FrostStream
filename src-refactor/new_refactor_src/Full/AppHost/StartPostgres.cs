@@ -85,7 +85,8 @@ public static class StartPostgres
             .WithPortableBindMount(postgresHba, "../../Full/AppHost/configs/postgres/pg_hba.conf", "/etc/postgresql/pg_hba.conf", isReadOnly: true)
             .WithPortableBindMount(pgBackRestConf, "../../Full/AppHost/configs/pgbackrest/pgbackrest.conf", "/etc/pgbackrest/pgbackrest.conf", isReadOnly: true)
             .WithPortableBindMount(backupRoot, "${FROSTSTREAM_BACKUP_ROOT:-./backups}", "/backups")
-            .WithArgs("-c", "config_file=/etc/postgresql/postgresql.conf");
+            .WithArgs("-c", "config_file=/etc/postgresql/postgresql.conf")
+            .WithPackagedLimits("2g", "2");
 
         // The toolkit's DbGate resource never makes it into the compose publish, and its "dbgate"
         // name would collide with the explicit publish-only container below — so run mode only.
@@ -139,7 +140,7 @@ public static class StartPostgres
             var backupInit = builder
                 .AddContainer("backup-init", "docker.io/library/postgres", "18.3")
                 .WithEntrypoint("/bin/bash")
-                .WithArgs("-c", "mkdir -p /backups/pgbackrest /backups/openbao /backups/jobs && chown -R 999:999 /backups && echo 'backup-init: done'")
+                .WithArgs("-c", "umask 077; mkdir -p /backups/pgbackrest /backups/openbao /backups/jobs && chmod 700 /backups /backups/pgbackrest /backups/openbao /backups/jobs && chown -R 999:999 /backups && echo 'backup-init: done'")
                 .WithPortableBindMount(
                     backupRoot,
                     "${FROSTSTREAM_BACKUP_ROOT:-./backups}",

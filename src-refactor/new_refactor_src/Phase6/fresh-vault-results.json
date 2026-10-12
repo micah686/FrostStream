@@ -1,0 +1,7 @@
+{
+  "passed": true,
+  "newEmptyRaftVolume": true,
+  "originalUnsealMaterialUsed": true,
+  "originalApplicationTokenRestored": true,
+  "pairedSecretValueRestored": true
+}

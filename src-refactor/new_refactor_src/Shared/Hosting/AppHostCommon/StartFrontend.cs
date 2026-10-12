@@ -14,7 +14,13 @@ public static class StartFrontend
             .WithReference(backend)
             .WaitFor(backend)
             .WithEnvironment("WEBAPI_UPSTREAM", backend.GetEndpoint(backendEndpointName))
-            .WithLocalComposeBuild("localhost/froststream-frontend:latest", "Frontend/Dockerfile");
+            .WithLocalComposeBuild("localhost/froststream-frontend:latest", "Frontend/Dockerfile")
+            .WithPackagedLimits("128m", "1");
+        frontend.PublishAsDockerComposeService((_, service) => service.Healthcheck = new()
+        {
+            Test = ["CMD", "wget", "-qO-", "http://localhost:25000/readyz"],
+            Interval = "10s", Timeout = "5s", Retries = 12, StartPeriod = "120s"
+        });
 
         if (loopbackOnly)
             frontend.PublishAsDockerComposeService((_, service) =>
@@ -23,6 +29,11 @@ public static class StartFrontend
                     service.Ports[i] = "127.0.0.1:" + service.Ports[i];
             });
 
-        frontend.WithEndpoint("http", endpoint => endpoint.Port = Ports.Frontend, createIfNotExists: false);
+        if (builder.ExecutionContext.IsPublishMode) frontend.WithEnvironment("PORT", "25000");
+        frontend.WithEndpoint("http", endpoint =>
+        {
+            endpoint.Port = Ports.Frontend;
+            if (builder.ExecutionContext.IsPublishMode) endpoint.TargetPort = 25000;
+        }, createIfNotExists: false);
     }
 }

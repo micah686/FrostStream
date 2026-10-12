@@ -1,3 +1,5 @@
+> Phase 6 supersedes the historical startup instructions below. Full now uses a checksummed fresh-install M098 catalog; Lite runs the reviewed v1 baseline and v2–v4 steps with its local adapters. See [current packaging and recovery](../../../../../Phase6/README.md).
+
 # SQLite application baseline v1
 
 The baseline represents Full's application catalog after unchanged PostgreSQL migrations 1–97. Capture used a fresh, disposable PostgreSQL 18.3 database; the normalized manifest has 82 application tables, 66 foreign keys, 16 application check constraints and 96 non-primary indexes. All 45 EF entity tables and their column names match the catalog. The remaining tables include metadata graphs, policies, watch/likes, statistics, provider circuits and live-chat markers. Removed maintenance features and Cleipnir runtime tables are absent from the final application catalog.
@@ -16,7 +18,7 @@ dotnet run --project Lite/Backend/Lite.csproj --no-launch-profile -- \
   --Persistence:InitializeOnly=true
 ```
 
-Run the same command again to verify repeatability. `Persistence:Sqlite:Path` defaults to `/data/frostreamlitedb`; relative paths resolve against the host content root. It must name a persistent file, not `:memory:` or a SQLite URI. `Persistence:Sqlite:BusyTimeoutSeconds` defaults to 5 and accepts 1–60. The same keys can be supplied with environment variables, e.g. `Persistence__Sqlite__Enabled=true`.
+Run the same command again to verify repeatability. `Persistence:Sqlite:Path` defaults to `/data/core.sqlite`; relative paths resolve against the host content root. It must name a persistent file, not `:memory:` or a SQLite URI. `Persistence:Sqlite:BusyTimeoutSeconds` defaults to 5 and accepts 1–60. The same keys can be supplied with environment variables, e.g. `Persistence__Sqlite__Enabled=true`.
 
 Initialization-only composition registers the selected database, runs migrations and exits without starting application services or an HTTP listener. It works with Full/PostgreSQL too, which is useful for disposable catalog capture. Normal startup remains on PostgreSQL unless SQLite is explicitly selected. Selecting SQLite in Full is a configuration error. Phase 2 persistence, workflows and restart reconciliation are complete. Normal Lite startup still requires Phase 3 local infrastructure adapters. Core repository contracts are documented in [the query adapters](../../Queries/README.md).
 

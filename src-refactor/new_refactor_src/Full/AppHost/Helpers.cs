@@ -74,25 +74,6 @@ public static partial class Helpers
     }
 
     /// <summary>
-    /// Upgrades the published compose <c>depends_on</c> condition for <paramref name="dependency"/>
-    /// (default emitted by WaitFor is <c>service_started</c>). No effect in run mode.
-    /// </summary>
-    internal static IResourceBuilder<T> WithComposeDependencyCondition<T>(
-        this IResourceBuilder<T> resource,
-        string dependency,
-        string condition)
-        where T : IComputeResource
-    {
-        return resource.PublishAsDockerComposeService((_, service) =>
-        {
-            if (service.DependsOn.TryGetValue(dependency, out var dep))
-            {
-                dep.Condition = condition;
-            }
-        });
-    }
-
-    /// <summary>
     /// Bind-mounts <paramref name="hostPath"/> in run mode; in publish mode emits a bind volume
     /// whose source is <paramref name="composeRelativeSource"/>, resolved relative to
     /// docker-compose.yaml. This keeps the compose export machine-portable — no host-specific

@@ -55,6 +55,7 @@ public static class StartServices
             .WithEnvironment("OpenBao__Token", openBaoToken)
             .WithEnvironment("Typesense__Url", typesense.GetEndpoint("http"))
             .WithEnvironment("Typesense__ApiKey", typesenseApiKey)
+            .WithEnvironment("Search__RebuildOnStartup", Environment.GetEnvironmentVariable("SEARCH_REBUILD_ON_STARTUP") ?? "false")
             .WithEnvironment(ctx => ctx.EnvironmentVariables["FROSTSTREAM_STORAGE_ROOT"] =
                 ctx.ExecutionContext.IsRunMode ? sharedStorageRoot : ContainerStorageRoot)
             // POT broker role: answers Worker pot.request messages from the co-located bgutil provider.

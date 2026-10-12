@@ -3,6 +3,11 @@
 
 	respond /healthz 200
 
+	handle /readyz {
+		rewrite * /health
+		reverse_proxy {$WEBAPI_UPSTREAM:http://webapi:8080}
+	}
+
 	handle /api/* {
 		reverse_proxy {$WEBAPI_UPSTREAM:http://webapi:8080} {
 			flush_interval -1

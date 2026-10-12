@@ -1,5 +1,6 @@
 using DataBridge.Messaging;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using NodaTime;
 using Shared.Messaging;
@@ -14,7 +15,8 @@ public sealed class TypesenseStartupService(
     IClock clock,
     SearchStatus status,
     INotificationDispatcher notificationDispatcher,
-    ILogger<TypesenseStartupService> logger) : IHostedService
+    ILogger<TypesenseStartupService> logger,
+    IConfiguration? configuration = null) : IHostedService
 {
     public async Task StartAsync(CancellationToken cancellationToken)
     {
@@ -30,9 +32,9 @@ public sealed class TypesenseStartupService(
         // builds a replacement with the current schema. sort_id provides stable paging ties.
         var hasCurrentFields = await indexService.MediaCollectionHasFieldAsync("sort_id", cancellationToken);
 
-        if (createdAny || mediaDocumentCount == 0 || !hasCurrentFields)
+        if (createdAny || mediaDocumentCount == 0 || !hasCurrentFields || configuration?.GetValue<bool>("Search:RebuildOnStartup") == true)
         {
-            var reason = createdAny ? "missing collection created at startup"
+            var reason = configuration?.GetValue<bool>("Search:RebuildOnStartup") == true ? "configured recovery rebuild" : createdAny ? "missing collection created at startup"
                 : !hasCurrentFields ? "media collection schema is missing current fields"
                 : "media collection is empty at startup";
             var result = await rebuildCoordinator.RebuildAsync(reason, cancellationToken);

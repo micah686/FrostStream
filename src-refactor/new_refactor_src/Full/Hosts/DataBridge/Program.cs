@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using Shared.Secrets;
 using Shared.Deployment;
 using FrostStream.Integrations.Typesense;
@@ -13,6 +14,13 @@ public class Program
     public static async Task Main(string[] args)
     {
         var builder = Host.CreateApplicationBuilder(args);
+        if (builder.Configuration.GetValue<bool>("Persistence:InitializeOnly"))
+        {
+            builder.AddFullPersistence();
+            using var schemaHost = builder.Build();
+            await schemaHost.InitializeApplicationAsync();
+            return;
+        }
         builder.AddServiceDefaults();
         builder.AddFullMessaging();
         builder.Services.AddOpenBaoSecretStore(builder.Configuration);

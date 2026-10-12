@@ -11,6 +11,11 @@ public sealed class Program
     public static async Task Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
+        if (await DataBridge.Persistence.Sqlite.SqliteRecoveryCommand.RunAsync(builder.Configuration))
+        {
+            Console.WriteLine("Recovery verification completed. If restored, configure Persistence:Sqlite:Path to <destination>/core.sqlite and Secrets:Local:KeyRingPath to <destination>/core.sqlite.keys before starting.");
+            return;
+        }
         builder.ConfigureLiteHost();
         // Schema-only initialization does not start the runtime.
         if (builder.Configuration.GetValue<bool>("Persistence:InitializeOnly"))

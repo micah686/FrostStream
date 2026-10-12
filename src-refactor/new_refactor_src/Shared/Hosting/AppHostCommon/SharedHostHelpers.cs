@@ -21,6 +21,40 @@ public static partial class Helpers
     internal static bool LiveChatEnabled
         => AppHostHardening.IsTruthy(Environment.GetEnvironmentVariable("LIVE_CHAT_ENABLED"));
 
+    /// <summary>
+    /// Upgrades the published compose <c>depends_on</c> condition for <paramref name="dependency"/>
+    /// (default emitted by WaitFor is <c>service_started</c>). No effect in run mode.
+    /// </summary>
+    internal static IResourceBuilder<T> WithComposeDependencyCondition<T>(
+        this IResourceBuilder<T> resource,
+        string dependency,
+        string condition)
+        where T : IComputeResource
+    {
+        return resource.PublishAsDockerComposeService((_, service) =>
+        {
+            if (service.DependsOn.TryGetValue(dependency, out var dep))
+            {
+                dep.Condition = condition;
+            }
+        });
+    }
+
+    internal static IResourceBuilder<TResource> WithPackagedLimits<TResource>(
+        this IResourceBuilder<TResource> resource, string memory, string cpus)
+        where TResource : IComputeResource
+        => resource.PublishAsDockerComposeService((_, service) =>
+        {
+            service.Restart = "unless-stopped";
+            service.Deploy = new()
+            {
+                Resources = new()
+                {
+                    Limits = new() { Memory = memory, Cpus = cpus }
+                }
+            };
+        });
+
     internal static IResourceBuilder<TResource> WithLocalComposeBuild<TResource>(
         this IResourceBuilder<TResource> resource, string image, string dockerfile)
         where TResource : IComputeResource
@@ -28,6 +62,7 @@ public static partial class Helpers
         {
             service.Image = image;
             service.PullPolicy = "build";
+            service.Restart = "unless-stopped";
             service.Build = new Aspire.Hosting.Docker.Resources.ServiceNodes.Build
             {
                 Context = "../..",

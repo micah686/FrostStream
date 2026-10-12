@@ -153,8 +153,17 @@ app.MapStaticAssets();
 app.MapRazorComponents<BackupService.Components.App>()
     .AddInteractiveServerRenderMode();
 
-app.MapHealthChecks("/health", new HealthCheckOptions());
-app.MapDefaultEndpoints();
+// Recovery UI remains available with PostgreSQL/NATS stopped. Operational database
+// state is checked by the restore coordinator before changing any cluster files.
+app.MapHealthChecks("/health", new HealthCheckOptions
+{
+    Predicate = registration => registration.Tags.Contains("live")
+});
+app.MapHealthChecks("/alive", new HealthCheckOptions
+{
+    Predicate = registration => registration.Tags.Contains("live")
+});
+
 
 await app.RunAsync();
 

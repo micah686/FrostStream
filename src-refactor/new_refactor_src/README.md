@@ -42,3 +42,5 @@ python3 Phase0/measure.py --output .phase0/results/lite-resources.json --label l
 ```
 
 Generated corpus JSONL is input for future provider seeders, not evidence that the large corpus has been indexed. Search parser characterization runs from `Phase0/search-corpus.json`. Read `Phase0/CHECKLIST.md`, `Phase0/EVALUATION.md`, and the reconciled `TESTS_PLAN.MD` before declaring Phase 0's acceptance gates complete.
+
+Phase 6 adds private fresh-install package generation, packaged recovery commands and startup probes. Use [Phase6/README.md](Phase6/README.md) for installation, data ownership, resource limits and both recovery procedures. The historical Phase 0 profile scripts remain characterization tools.

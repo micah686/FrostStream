@@ -889,7 +889,8 @@
       "source": "Shared/Modules/Api/Features/System/SystemCapabilitiesController.cs",
       "attributes": [
         "[Route(\"api/system\")]",
-        "[HttpGet(\"capabilities\")]"
+        "[HttpGet(\"capabilities\")]",
+        "[HttpGet(\"integrations\")]"
       ]
     },
     {

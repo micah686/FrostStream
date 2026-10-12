@@ -16,6 +16,7 @@ public static class StartPotProvider
             // provider server and the yt-dlp plugin to be the same version.
             .AddContainer("pot-provider", "brainicism/bgutil-ytdlp-pot-provider", "1.3.1")
             .WithHttpEndpoint(port: Ports.PotProvider, targetPort: 4416, name: "http")
-            .WithHttpHealthCheck("/ping");
+            .WithHttpHealthCheck("/ping")
+            .WithPackagedLimits("512m", "2");
     }
 }

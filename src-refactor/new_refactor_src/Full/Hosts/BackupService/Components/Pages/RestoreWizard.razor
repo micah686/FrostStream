@@ -393,7 +393,7 @@ else if (_step == Step.Done)
         {
             await OpenBao.RestoreSnapshotAsync(_openBaoLabel, CancellationToken.None);
             _openBaoSnapshotSucceeded = true;
-            _openBaoSnapshotMessage = "OpenBao storage snapshot restored.";
+            _openBaoSnapshotMessage = "OpenBao accepted the storage snapshot. Wait for restore to finish, then unseal with the original recovery material before starting dependent services.";
         }
         catch (Exception ex)
         {

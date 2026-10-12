@@ -5,10 +5,10 @@ namespace DataBridge.Persistence;
 
 public enum PersistenceProvider { Postgres, Sqlite }
 
-/// <summary>Resolved once at startup. SQLite is experimental and requires an explicit Lite opt-in.</summary>
+/// <summary>Resolved once at startup. Lite owns SQLite; Full owns PostgreSQL.</summary>
 public sealed record PersistenceOptions(PersistenceProvider Provider, string SqlitePath, int BusyTimeoutSeconds)
 {
-    public const string DefaultSqlitePath = "/data/frostreamlitedb";
+    public const string DefaultSqlitePath = "/data/core.sqlite";
 
     public static PersistenceOptions FromConfiguration(IConfiguration configuration, string contentRoot)
     {

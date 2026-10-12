@@ -1,0 +1,4 @@
+# These resources are hashed into persistent installation histories.
+Full/Infrastructure/Postgres/Baseline/*.sql text eol=lf
+Shared/Persistence/Persistence/Sqlite/Schema/*.sql text eol=lf
+Shared/Persistence/Persistence/Sqlite/Schema/*.json text eol=lf

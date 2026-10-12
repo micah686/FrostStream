@@ -19,14 +19,18 @@ internal class OpenBaoPairing(BackupServiceOptions options, ILogger<OpenBaoPairi
     public virtual async Task ExportForBackupAsync(string label, CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(ExportDirectory);
+        if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(ExportDirectory,
+            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
 
         var openBaoOptions = OpenBaoOptions.From(options);
         var kvFile = ExportFile(label);
         await new OpenBaoBackup().ExportToFileAsync(openBaoOptions, kvFile);
+        MakePrivate(kvFile);
         await WriteChecksumAsync(kvFile, cancellationToken);
 
         var snapshotFile = SnapshotFile(label);
         await new OpenBaoRaftSnapshot().SaveToFileAsync(openBaoOptions, snapshotFile, cancellationToken);
+        MakePrivate(snapshotFile);
         await WriteChecksumAsync(snapshotFile, cancellationToken);
     }
 
@@ -61,7 +65,7 @@ internal class OpenBaoPairing(BackupServiceOptions options, ILogger<OpenBaoPairi
         // Verify the checksum up front rather than inside RestoreFromFileAsync: the snapshot
         // endpoint streams the file directly from disk, so corruption must be caught before that
         // stream opens, not after a partial upload.
-        await ReadVerifiedAsync(file, cancellationToken);
+        await VerifyChecksumAsync(file, cancellationToken);
         await new OpenBaoRaftSnapshot().RestoreFromFileAsync(OpenBaoOptions.From(options), file, cancellationToken);
     }
 
@@ -90,27 +94,48 @@ internal class OpenBaoPairing(BackupServiceOptions options, ILogger<OpenBaoPairi
         }
     }
 
-    private string ExportFile(string label) => Path.Combine(ExportDirectory, label + ".json");
-    private string SnapshotFile(string label) => Path.Combine(ExportDirectory, label + SnapshotExtension);
+    private string ExportFile(string label) => Path.Combine(ExportDirectory, ValidateLabel(label) + ".json");
+    private string SnapshotFile(string label) => Path.Combine(ExportDirectory, ValidateLabel(label) + SnapshotExtension);
+
+    private static string ValidateLabel(string label)
+    {
+        if (string.IsNullOrWhiteSpace(label) || label is "." or ".." || label.IndexOfAny(['/', '\\']) >= 0)
+            throw new ArgumentException("Backup label must be a filename component.", nameof(label));
+        return label;
+    }
+    private static void MakePrivate(string file)
+    {
+        if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(file, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+    }
 
     private static async Task WriteChecksumAsync(string file, CancellationToken cancellationToken)
         => await File.WriteAllTextAsync(
             file + ".sha256",
-            Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(file, cancellationToken))),
+            await HashFileAsync(file, cancellationToken),
             cancellationToken);
+
+    private static async Task<string> HashFileAsync(string file, CancellationToken cancellationToken)
+    {
+        await using var stream = File.OpenRead(file);
+        return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, cancellationToken));
+    }
 
     private static async Task<byte[]> ReadVerifiedAsync(string file, CancellationToken cancellationToken)
     {
-        var bytes = await File.ReadAllBytesAsync(file, cancellationToken);
+        await VerifyChecksumAsync(file, cancellationToken);
+        return await File.ReadAllBytesAsync(file, cancellationToken);
+    }
+
+    private static async Task VerifyChecksumAsync(string file, CancellationToken cancellationToken)
+    {
         var sidecar = file + ".sha256";
-        if (File.Exists(sidecar))
-        {
-            var expected = (await File.ReadAllTextAsync(sidecar, cancellationToken)).Trim();
-            var actual = Convert.ToHexStringLower(SHA256.HashData(bytes));
-            if (!string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException($"'{Path.GetFileName(file)}' failed its checksum; refusing to use it.");
-        }
-        return bytes;
+        if (!File.Exists(sidecar))
+            throw new InvalidOperationException($"'{Path.GetFileName(file)}' has no checksum; refusing to restore an unverified recovery artifact.");
+        var expected = (await File.ReadAllTextAsync(sidecar, cancellationToken)).Trim();
+        await using var stream = File.OpenRead(file);
+        var actual = Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, cancellationToken));
+        if (!string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException($"'{Path.GetFileName(file)}' failed its checksum; refusing to use it.");
     }
 
     private static void DeleteWithChecksum(string file)

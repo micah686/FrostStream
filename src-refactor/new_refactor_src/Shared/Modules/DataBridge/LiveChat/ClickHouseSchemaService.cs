@@ -14,7 +14,8 @@ namespace DataBridge.LiveChat;
 /// </summary>
 public sealed partial class ClickHouseSchemaService(
     ClickHouseAccess clickHouse,
-    ILogger<ClickHouseSchemaService> logger) : IHostedService
+    ILogger<ClickHouseSchemaService> logger,
+    Shared.Deployment.LiveChatInitializationStatus status) : IHostedService
 {
     private static readonly TimeSpan ConnectRetryDelay = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromMinutes(2);
@@ -24,12 +25,14 @@ public sealed partial class ClickHouseSchemaService(
         try
         {
             await ApplySchemaAsync(cancellationToken);
+            status.Set(Shared.Deployment.OptionalIntegrationState.Ready);
         }
         catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
         {
             // Live chat is optional, so a broken ClickHouse must not take DataBridge down with
             // it — WebAPI waits on DataBridge, so throwing here would 502 the whole site. Chat
             // ingest and queries will fail loudly until it recovers; everything else runs.
+            status.Set(Shared.Deployment.OptionalIntegrationState.Failed);
             logger.LogWarning(ex,
                 "ClickHouse schema setup failed. Live chat replay will be unavailable until ClickHouse " +
                 "is reachable and DataBridge is restarted; the rest of FrostStream is unaffected.");
@@ -92,6 +95,11 @@ public sealed partial class ClickHouseSchemaService(
             {
                 await using var connection = clickHouse.CreateConnection();
                 await connection.OpenAsync(cancellationToken);
+                // OpenAsync configures this HTTP driver without a network round-trip.
+                // Probe a real query before allowing schema DDL to race server startup.
+                await using var probe = connection.CreateCommand();
+                probe.CommandText = "SELECT 1";
+                await probe.ExecuteScalarAsync(cancellationToken);
                 return;
             }
             catch (Exception ex) when (DateTimeOffset.UtcNow < deadline)

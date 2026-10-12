@@ -19,13 +19,18 @@ public sealed class UnifiedSearchConsumerService(
     ISearchReader search,
     SearchStatus status,
     IServiceScopeFactory scopeFactory,
-    ILogger<UnifiedSearchConsumerService> logger) : SubscriptionBackgroundService
+    ILogger<UnifiedSearchConsumerService> logger,
+    Shared.Deployment.LiveChatInitializationStatus? liveChatStatus = null) : SubscriptionBackgroundService
 {
     private const string MediaQueryBy = "title,description,account_name,tags,categories,genres,artists";
     private const string MediaQueryByWeights = "4,2,2,1,1,1,1";
 
     protected override async Task RegisterSubscriptionsAsync(CancellationToken stoppingToken)
     {
+        await SubscribeAsync<Shared.Deployment.IntegrationStatusRequest>(messageBus, Shared.Deployment.IntegrationStatusSubjects.Status,
+            context => context.RespondAsync(new Shared.Deployment.IntegrationStatusSnapshot(status.Current.State,
+                liveChatStatus?.State ?? Shared.Deployment.OptionalIntegrationState.Disabled)), queueGroup: SearchSubjects.QueueGroup,
+            cancellationToken: stoppingToken);
         await SubscribeAsync<SearchStatusRequest>(messageBus, SearchSubjects.Status,
             context => context.RespondAsync(status.Current), queueGroup: SearchSubjects.QueueGroup,
             cancellationToken: stoppingToken);

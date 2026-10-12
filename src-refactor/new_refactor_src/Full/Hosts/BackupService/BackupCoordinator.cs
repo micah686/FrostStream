@@ -248,7 +248,7 @@ internal sealed class BackupCoordinator(
             record.Label,
             record.TargetTime,
             options.PgDataPath,
-            immediateTarget: false,
+            immediateTarget: record.TargetTime is null,
             progress,
             cancellationToken);
         progress.Report("Restore finished. Start the postgres container to begin recovery.");

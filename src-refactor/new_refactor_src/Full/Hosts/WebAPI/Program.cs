@@ -18,6 +18,7 @@ public class Program
         builder.AddFullSecurity();
         builder.AddWebAPIModule();
         builder.AddFullBackupClient();
+        builder.Services.AddHealthChecks().AddCheck<FullReadinessHealthCheck>("application-handlers");
         var app = builder.Build();
         app.MapWebAPIModule();
         app.MapDefaultEndpoints();

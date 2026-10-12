@@ -34,7 +34,13 @@ public static class StartClickHouse
             .WithEnvironment("CLICKHOUSE_USER", User)
             .WithEnvironment("CLICKHOUSE_PASSWORD", password)
             // Internal-only: the compose export keeps this off the host network.
-            .WithHttpEndpoint(port: Ports.ClickHouse, targetPort: 8123, name: "http");
+            .WithHttpEndpoint(port: Ports.ClickHouse, targetPort: 8123, name: "http")
+            .WithPackagedLimits("2g", "2");
+        server.PublishAsDockerComposeService((_, service) => service.Healthcheck = new()
+        {
+            Test = ["CMD", "wget", "-qO-", "http://localhost:8123/ping"],
+            Interval = "10s", Timeout = "5s", Retries = 12, StartPeriod = "30s"
+        });
 
         return new ClickHouseResources(server, server.GetEndpoint("http"), password);
     }

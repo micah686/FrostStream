@@ -350,6 +350,45 @@ public sealed class SqliteBackupServiceClientTests
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
     }
 
+    [Test]
+    public async Task Offline_Command_Recovers_Secrets_And_Refuses_Overwrite_Or_Tampering()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "phase6-recovery-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var factory = new SqliteConnectionFactory(new(PersistenceProvider.Sqlite, Path.Combine(root, "db"), 5));
+            new SqliteSchemaInitializer(factory, NodaTime.SystemClock.Instance).Initialize();
+            var keys = new LocalSecretStoreOptions(Path.Combine(root, "keys"));
+            await new SqliteSecretStore(factory, keys).WriteAsync("recover", new Dictionary<string,string> { ["value"] = "original" });
+            var job = await CreateClient(factory, root, Path.Combine(root, "backups"), keys).CreateAsync(new(null, "full"));
+            var snapshot = Path.Combine(root, "backups", job.Label!);
+            var target = Path.Combine(root, "recovered");
+            var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>
+            {
+                ["Recovery:Snapshot"] = snapshot, ["Recovery:Destination"] = target
+            }).Build();
+            (await SqliteRecoveryCommand.RunAsync(configuration)).ShouldBeTrue();
+            var restored = new SqliteConnectionFactory(new(PersistenceProvider.Sqlite, Path.Combine(target, "core.sqlite"), 5));
+            (await new SqliteSecretStore(restored, new(Path.Combine(target, "core.sqlite.keys"))).ReadAsync("recover"))!["value"].ShouldBe("original");
+            using (var connection = restored.OpenConnection())
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "SELECT invalidated FROM search_index_state";
+                Convert.ToInt64(command.ExecuteScalar()).ShouldBe(1L);
+            }
+            await Should.ThrowAsync<IOException>(() => SqliteRecoveryCommand.RunAsync(configuration));
+            configuration["Recovery:Destination"] = snapshot + ".keys/nested";
+            await Should.ThrowAsync<IOException>(() => SqliteRecoveryCommand.RunAsync(configuration));
+            Directory.Exists(configuration["Recovery:Destination"]).ShouldBeFalse();
+            configuration["Recovery:Destination"] = Path.Combine(root, "tampered");
+            await File.AppendAllTextAsync(snapshot, "corrupt");
+            await Should.ThrowAsync<InvalidDataException>(() => SqliteRecoveryCommand.RunAsync(configuration));
+            Directory.Exists(configuration["Recovery:Destination"]).ShouldBeFalse();
+            Directory.GetDirectories(root, ".recovery-*").ShouldBeEmpty();
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
     private static SqliteBackupServiceClient CreateClient(SqliteConnectionFactory factory, string root, string backupDirectory, LocalSecretStoreOptions? secrets = null)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>

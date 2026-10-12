@@ -14,6 +14,20 @@ namespace UnitTests.Backups;
 public sealed class OpenBaoPairingTests
 {
     [Test]
+    public async Task Snapshot_Without_Checksum_Is_Rejected_Before_Contacting_OpenBao()
+    {
+        var root = NewRoot();
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(root, "openbao"));
+            await File.WriteAllTextAsync(Path.Combine(root, "openbao", "label.raft-snapshot"), "unverified");
+            var error = await Should.ThrowAsync<InvalidOperationException>(() => NewPairing(root).RestoreSnapshotAsync("label", default));
+            error.Message.ShouldContain("checksum");
+        }
+        finally { CleanUp(root); }
+    }
+
+    [Test]
     public async Task HasExport_And_HasSnapshotExport_Reflect_Independent_Files()
     {
         var root = NewRoot();

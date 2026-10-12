@@ -1,3 +1,5 @@
+> Phase 6 supersedes the historical startup instructions below. Full now uses a checksummed fresh-install M098 catalog; Lite runs the reviewed v1 baseline and v2–v4 steps with its local adapters. See [current packaging and recovery](../../../../Phase6/README.md).
+
 # Schema evolution and download restart closure (Phase 2f)
 
 Phase 2 persistence is complete. Full uses PostgreSQL and its existing Cleipnir store; Lite can initialize and use SQLite persistence and the shared startup/repository/workflow code. Ordinary Lite host startup still requires **Phase 3's local infrastructure adapters**. The transport guard remains; no NATS-backed fallback is installed for Lite.
