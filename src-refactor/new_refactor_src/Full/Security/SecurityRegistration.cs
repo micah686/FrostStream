@@ -36,7 +36,7 @@ public static class SecurityRegistration
         var authOptions = builder.Configuration
             .GetSection(FrostStreamAuthOptions.SectionName)
             .Get<FrostStreamAuthOptions>() ?? new FrostStreamAuthOptions();
-        WebApiHardening.ValidateStartup(authOptions, false, builder.Environment.IsProduction());
+        WebApiHardening.ValidateStartup(authOptions, builder.Environment.IsProduction());
         var fga = builder.Configuration.GetSection(OpenFgaOptions.SectionName).Get<OpenFgaOptions>() ?? new();
         if (!Uri.TryCreate(fga.Endpoint, UriKind.Absolute, out var endpoint) || (endpoint.Scheme != "http" && endpoint.Scheme != "https"))
             throw new InvalidOperationException("OpenFga:Endpoint must be an absolute HTTP(S) URI for Full.");

@@ -8,9 +8,6 @@
   <ItemGroup>
     <ProjectReference Include="../../../Shared/Persistence/Persistence.csproj" />
     <PackageReference Include="Cleipnir.Flows.PostgresSql" />
-    <PackageReference Include="FluentMigrator" />
-    <PackageReference Include="FluentMigrator.Runner.Core" />
-    <PackageReference Include="FluentMigrator.Runner.Postgres" />
     <PackageReference Include="Npgsql.DependencyInjection" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime" />

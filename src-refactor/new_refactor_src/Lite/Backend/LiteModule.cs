@@ -19,14 +19,13 @@ public static class LiteModule
     public static IHostApplicationBuilder ConfigureLiteHost(this IHostApplicationBuilder builder)
     {
         builder.Configuration["Deployment:Mode"] ??= "Lite";
-        builder.Configuration["Persistence:Sqlite:Enabled"] ??= "true";
         builder.Configuration["MediaProcessor:MaxConcurrentProcesses"] ??= "1";
         var tools = Path.Combine(AppContext.BaseDirectory, "tools");
         builder.Configuration["MediaProcessor:FfmpegPath"] ??= Path.Combine(tools, OperatingSystem.IsWindows() ? "ffmpeg.exe" : "ffmpeg");
         builder.Configuration["MediaProcessor:FfprobePath"] ??= Path.Combine(tools, OperatingSystem.IsWindows() ? "ffprobe.exe" : "ffprobe");
-        if (DeploymentOptions.FromConfiguration(builder.Configuration).Mode != DeploymentMode.Lite ||
-            !builder.Configuration.GetValue<bool>("Persistence:Sqlite:Enabled"))
-            throw new InvalidOperationException("The Lite host requires Deployment:Mode=Lite and Persistence:Sqlite:Enabled=true.");
+        if (DeploymentOptions.FromConfiguration(builder.Configuration).Mode != DeploymentMode.Lite)
+            throw new InvalidOperationException("The Lite host requires Deployment:Mode=Lite.");
+        PersistenceOptions.FromConfiguration(builder.Configuration, builder.Environment.ContentRootPath);
         return builder;
     }
 
@@ -42,9 +41,9 @@ public static class LiteModule
         builder.Services.AddSingleton<ApplicationStartupGate>();
         builder.Services.AddSingleton<LiteReadinessState>();
         builder.Services.AddHealthChecks().AddCheck<LiteReadinessHealthCheck>("lite-readiness");
-        builder.Services.AddSingleton<DataBridge.Messaging.SingleUserOwnerSeederService>();
+        builder.Services.AddSingleton<FrostStream.Lite.Infrastructure.Identity.LocalAdministratorSeeder>();
         builder.Services.AddSingleton(new ApplicationInitializationStep("local owner", 30,
-            (sp, ct) => sp.GetRequiredService<DataBridge.Messaging.SingleUserOwnerSeederService>().StartAsync(ct)));
+            (sp, ct) => sp.GetRequiredService<FrostStream.Lite.Infrastructure.Identity.LocalAdministratorSeeder>().InitializeAsync(ct)));
         builder.AddDataBridgeModule();
         builder.Services.AddSingleton<MediaProcessor.Storage.IMediaProcessorStorageClient, MediaProcessor.Storage.LocalMediaProcessorStorageClient>();
         builder.AddMediaProcessorModule();

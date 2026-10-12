@@ -6,27 +6,17 @@ namespace AppHost;
 
 public static partial class Helpers
 {
-    /// <summary>
-    /// Generate local TLS certs for NATS websockets
-    /// </summary>
-    /// <param name="certificatePath"></param>
-    /// <param name="keyPath"></param>
+    /// <summary>Configure the required Full identity authority.</summary>
     internal static IResourceBuilder<T> WithAuthAuthority<T>(
         this IResourceBuilder<T> resource,
         string name,
-        bool singleUserMode,
         AuthentikResources authentik)
         where T : IResourceWithEnvironment
     {
-        if (singleUserMode)
-            return resource.WithEnvironment(name, "");
-
         if (!string.IsNullOrWhiteSpace(authentik.ConfiguredAuthority))
             return resource.WithEnvironment(name, authentik.ConfiguredAuthority);
 
-        return authentik.Authority is null
-            ? resource.WithEnvironment(name, "")
-            : resource.WithEnvironment(name, authentik.Authority);
+        return resource.WithEnvironment(name, authentik.Authority);
     }
 
     internal static void EnsureNatsWebSocketTlsCertificates(string certificatePath, string keyPath)

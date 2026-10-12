@@ -19,9 +19,6 @@
     <PackageVersion Include="DotNetEnv" Version="3.2.0" />
     <PackageVersion Include="EFCore.NamingConventions" Version="10.0.1" />
     <PackageVersion Include="FCastSenderSDKDotnet" Version="0.1.0" />
-    <PackageVersion Include="FluentMigrator" Version="8.0.1" />
-    <PackageVersion Include="FluentMigrator.Runner.Core" Version="8.0.1" />
-    <PackageVersion Include="FluentMigrator.Runner.Postgres" Version="8.0.1" />
     <PackageVersion Include="FluentStorage" Version="8.0.22" />
     <PackageVersion Include="FluentStorage.AWS" Version="8.0.23" />
     <PackageVersion Include="FluentStorage.Azure.Blobs" Version="8.0.22" />

@@ -29,7 +29,7 @@ This document is the immediate deliverable. Installing dependencies, creating te
 - Automate casting UI with controlled device responses and supplement it with real-device release checks.
 - Use real application backends for end-to-end journeys; isolate third-party Internet services from required CI.
 - Preserve existing backend tests and deployment verification. Browser coverage supplements them.
-- Full requires Authentik and OpenFGA. Former Full single-user settings require startup rejection coverage beginning in Phase 2.
+- Full requires Authentik and OpenFGA. Former Full single-user settings are rejected at startup.
 
 ## 2. Current state and sources of truth
 
@@ -263,7 +263,7 @@ Verify visible fields, required/optional values, secret handling, submitted payl
 | L-REQUESTS | Mutations avoid Full-specific CSRF/login requests; validation and other HTTP failures still reach the UI. |
 | L-PERSISTENCE | Saved settings, playlists, notes, completed media, and terminal jobs remain correct after process restart with the same SQLite file. |
 | L-DURABLE-WORK | Real SQLite queue/workflow processing drives download/import UI; restart/abrupt interruption displays the reconciled outcome; explicit retry creates a new run as intended. |
-| L-DEPENDENCIES | Local Worker/MediaProcessor/Quartz behavior works with Typesense through Phase 4 and embedded Lucene from Phase 5, plus configured optional services; observe that Full-only services are not contacted. |
+| L-DEPENDENCIES | Local Worker/MediaProcessor/Quartz behavior works with embedded Lucene, plus configured optional services; observe that Full-only services are not contacted. |
 | L-BACKUP-CAPABILITIES | SQLite snapshot wording; full/verification supported; differential, PITR, and deep-verification actions absent; schedules omit unsupported types. |
 | L-BACKUP-VERIFY | Create snapshot via UI; see completed result; verify it; corrupt only an owned fixture recovery set and verify useful failure presentation. |
 | L-RESTORE | Back up known records and a secret-dependent configuration, mutate them, stop Lite, restore snapshot plus complete key ring using documented offline steps, restart, then verify restored records and secret-dependent behavior in the UI. |
@@ -473,8 +473,10 @@ Before handing off this plan, compare its route patterns with the current reposi
 
 ## Architecture refactor verification overlay
 
-All implementation and fixtures live under `src-refactor/new_refactor_src/`; paths above are relative to that directory. The working baseline preserves existing behavior until the corresponding phase changes it. Full single-user acceptance tests are historical characterization, never a target compatibility requirement. Phase 2 replaces them with rejection of `SINGLE_USER_MODE` and `Auth:SingleUserMode`, required Authentik/OpenFGA configuration, real login, allow/deny and user isolation. Current Full integration identities are controlled; they do not prove real Authentik browser login.
+Implementation and fixtures live under `src-refactor/new_refactor_src/`. Run the commands in that directory's `README.md`. The `Refactor boundaries and installations` workflow enforces transitive edition isolation, provider-neutral shared code, lower-layer dependency direction and executable-host boundaries. Deliberate violation tests verify enforcement. CI checks the reviewed project/API inventory and immutable baseline resources; it never updates them automatically.
 
-Phase 0 evidence and outstanding gates are tracked in `Phase0/CHECKLIST.md`. Phase 4 introduces common provider search contracts, including notes isolation, every scope/filter/sort, paging, totals and deletion. Phase 5 runs the same contracts against Lucene and removes Lite Typesense fixtures. Relevance-score equality is excluded. Add durable index-intent replay, concurrent rebuild activation, failed rebuild preservation, corruption/restart and rebuild-status UI coverage.
+Full rejects every former single-user setting, including false values. Full HTTP fixtures use explicit identity configuration, controlled signed JWTs and real OpenFGA. PostgreSQL fixtures initialize the production fresh-install baseline, without historical migration replay. Lite fixtures use SQLite, local transport/secrets/identity and Lucene; no Lite fixture configures Typesense. Shared search contracts cover scopes, filters, sorts, paging, totals, private notes and deletion across providers. Relevance-score equality is excluded. Durability tests cover replay, concurrent activation, failed rebuild preservation and process/disk failure.
 
-Dependency and host boundaries are enforced incrementally against the Phase 0 inventory; do not accept new violations. Fresh installations use owned disposable state. No old-data migration or mixed-version rollout suite is required. Laptop measurements must include FFmpeg children, containers and filesystem cache; passing on a larger development machine does not satisfy the 8 GB gate.
+CI runs backend unit/integration suites sequentially, limiting each to four concurrent tests, then frontend access/backup tests, type checks and production build. Its installation matrix builds fresh Lite and Full artifacts with live chat disabled/enabled and probes readiness, capabilities and search/schema initialization. Every installation owns new state. No old-data adoption or mixed-version rollout is supported.
+
+Historical phase reports retain recovery and resource evidence. Real Authentik browser login, external HTTPS, the broader planned browser matrix and physical 8 GB laptop measurements remain separate acceptance gates. Passing controlled identity tests or benchmarks on a larger development machine does not satisfy those gates. Laptop measurements must include FFmpeg children, containers and filesystem cache.

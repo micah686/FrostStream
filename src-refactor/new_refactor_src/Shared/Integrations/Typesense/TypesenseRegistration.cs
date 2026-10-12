@@ -5,16 +5,20 @@ using Microsoft.Extensions.DependencyInjection;
 using Shared.Deployment;
 using Typesense.Setup;
 namespace FrostStream.Integrations.Typesense;
-/// <summary>Temporary Lite dependency, isolated until Phase 5 supplies embedded search.</summary>
+/// <summary>Full search provider registration; shared modules depend on provider-neutral contracts.</summary>
 public static class TypesenseRegistration
 {
     public static IHostApplicationBuilder AddTypesenseIntegration(this IHostApplicationBuilder builder)
     {
+        var node = BuildTypesenseNode(builder.Configuration);
+        var apiKey = builder.Configuration["Typesense:ApiKey"];
+        if (string.IsNullOrWhiteSpace(apiKey))
+            throw new InvalidOperationException("Typesense:ApiKey is required for Full search.");
         if (!builder.Services.TryAddModule(typeof(TypesenseRegistration))) return builder;
         builder.Services.AddTypesenseClient(config =>
         {
-            config.Nodes = [BuildTypesenseNode(builder.Configuration)];
-            config.ApiKey = builder.Configuration["Typesense:ApiKey"] ?? "froststream-dev-key";
+            config.Nodes = [node];
+            config.ApiKey = apiKey;
         });
         builder.Services.AddSingleton<TypesenseGenerationRouter>();
         builder.Services.AddSingleton<ISearchReader, TypesenseSearchReader>();
@@ -27,20 +31,15 @@ public static class TypesenseRegistration
     }
     private static Node BuildTypesenseNode(IConfiguration configuration)
     {
-        var url = configuration["Typesense:Url"] ?? configuration.GetConnectionString("typesense");
-        if (!string.IsNullOrWhiteSpace(url))
-        {
-            var uri = new Uri(url, UriKind.Absolute);
-            var port = uri.IsDefaultPort
-                ? (uri.Scheme == Uri.UriSchemeHttps ? "443" : "80")
-                : uri.Port.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            var additionalPath = uri.AbsolutePath == "/" ? string.Empty : uri.AbsolutePath.TrimEnd('/');
-            return new Node(uri.Host, port, uri.Scheme, additionalPath);
-        }
-
-        return new Node(
-            configuration["Typesense:Host"] ?? "localhost",
-            configuration["Typesense:Port"] ?? "24010",
-            configuration["Typesense:Protocol"] ?? "http");
+        foreach (var alias in new[] { "ConnectionStrings:typesense", "Typesense:Host", "Typesense:Port", "Typesense:Protocol" })
+            if (configuration[alias] is not null)
+                throw new InvalidOperationException($"{alias} is obsolete. Configure Typesense:Url.");
+        var url = configuration["Typesense:Url"];
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            throw new InvalidOperationException("Typesense:Url must be an absolute HTTP(S) URL.");
+        var port = uri.Port.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var additionalPath = uri.AbsolutePath == "/" ? string.Empty : uri.AbsolutePath.TrimEnd('/');
+        return new Node(uri.Host, port, uri.Scheme, additionalPath);
     }
 }

@@ -17,7 +17,7 @@ def generate(edition, output, live_chat=False, frontend_port=None):
         raise ValueError('Output already exists; choose a new installation directory.')
     output.mkdir(parents=True, mode=0o700)
     template = ROOT / ('Lite/AppHost/lite-development.env' if edition == 'Lite' else 'Shared/Hosting/AppHostCommon/aspire-development.env')
-    lines = [line for line in template.read_text().splitlines() if line.split('=', 1)[0] not in OBSOLETE]
+    lines = template.read_text().splitlines()
     values = {'FROSTSTREAM_DEV_TOOLS': 'false', 'LIVE_CHAT_ENABLED': str(live_chat).lower(),
               'FROSTSTREAM_STORAGE_ROOT': str(output/'data'), 'FROSTSTREAM_BACKUP_ROOT': str(output/'backups'),
               'FROSTSTREAM_OPENBAO_BOOTSTRAP_ROOT': str(output/'openbao-bootstrap'), 'Deployment__Mode': edition}
@@ -36,9 +36,10 @@ def generate(edition, output, live_chat=False, frontend_port=None):
     source = output/'installation.env'
     source.write_text(text); source.chmod(0o600)
     env = dict(os.environ, FROSTSTREAM_ENV_FILE=str(source), FROSTSTREAM_PROFILE_ENV_OUTPUT=str(output/'.env.private'), FROSTSTREAM_COMPOSE_OUTPUT_KIND='profile')
-    # Explicitly remove inherited obsolete switches as well as template entries.
+    # Fail rather than silently ignore an incompatible inherited identity setting.
     for name in OBSOLETE | {'Auth__SingleUserMode', 'Auth__AllowSingleUserModeInProduction'}:
-        env.pop(name, None)
+        if edition == 'Full' and name in env:
+            raise ValueError(f'{name} is obsolete and forbidden in Full')
     project = 'AppHostLite' if edition == 'Lite' else 'AppHostFull'
     with (output/'publish.log').open('w') as log:
         subprocess.run(['aspire', 'publish', '--apphost', str(ROOT/edition/'AppHost'/f'{project}.csproj'), '-o', str(output), '--non-interactive', '--nologo'], cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT, check=True)

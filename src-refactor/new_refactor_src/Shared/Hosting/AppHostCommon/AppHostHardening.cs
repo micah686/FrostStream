@@ -1,7 +1,6 @@
 namespace AppHost;
 
 public sealed record AppHostHardeningOptions(
-    bool SingleUserMode,
     bool IsProduction,
     bool EnableHttps,
     bool RequireHttpsMetadata,
@@ -17,13 +16,7 @@ public sealed record AppHostHardeningOptions(
 
 public static class AppHostHardening
 {
-    // private const string DevOpenBaoToken = "froststream-dev-root";
-    // private const string DevTypesenseApiKey = "froststream-dev-key";
-    // private const string DevOpenFgaApiToken = "froststream-dev-openfga-token-change-me";
-    // private const string DevAuthentikClientSecret = "froststream-dev-client-secret";
-    // private const string DevAuthentikBootstrapPassword = "froststream-dev-admin";
-
-    public static AppHostHardeningOptions Read(bool singleUserMode)
+    public static AppHostHardeningOptions Read(bool lite = false)
     {
         var isProduction = IsTruthy(Environment.GetEnvironmentVariable("FROSTSTREAM_PRODUCTION")) ||
             string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Production", StringComparison.OrdinalIgnoreCase) ||
@@ -31,11 +24,10 @@ public static class AppHostHardening
 
         var enableHttps = IsTruthy(Environment.GetEnvironmentVariable("ENABLE_HTTPS"));
         var requireHttpsMetadata = ReadBool("AUTH_REQUIRE_HTTPS_METADATA", enableHttps);
-        var enableFgaAuthenticatedEndpoints = !singleUserMode &&
+        var enableFgaAuthenticatedEndpoints = !lite &&
             ReadBool("ENABLE_FGA_AUTHENTICATED_ENDPOINTS", isProduction);
 
         return new AppHostHardeningOptions(
-            singleUserMode,
             isProduction,
             enableHttps,
             requireHttpsMetadata,
@@ -61,23 +53,18 @@ public static class AppHostHardening
 
         var errors = new List<string>();
 
-        if (!lite && options.SingleUserMode && !IsTruthy(Environment.GetEnvironmentVariable("AUTH_ALLOW_SINGLE_USER_MODE_IN_PRODUCTION")))
-        {
-            errors.Add("SINGLE_USER_MODE is not allowed when FROSTSTREAM_PRODUCTION=true unless AUTH_ALLOW_SINGLE_USER_MODE_IN_PRODUCTION=true.");
-        }
-
         if (!lite && !options.EnableHttps)
         {
             errors.Add("ENABLE_HTTPS=true is required when FROSTSTREAM_PRODUCTION=true.");
         }
 
-        if (!options.SingleUserMode &&
+        if (!lite &&
             string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("AUTHENTIK_AUTHORITY")))
         {
             errors.Add("AUTHENTIK_AUTHORITY must be set to the external HTTPS issuer URL in production.");
         }
 
-        if (!options.SingleUserMode &&
+        if (!lite &&
             !IsHttps(Environment.GetEnvironmentVariable("AUTHENTIK_AUTHORITY")))
         {
             errors.Add("AUTHENTIK_AUTHORITY must use https:// in production.");
@@ -95,7 +82,7 @@ public static class AppHostHardening
             RequireStrongSecret(errors, "CLICKHOUSE_PASSWORD", Environment.GetEnvironmentVariable("CLICKHOUSE_PASSWORD"), 16);
         }
 
-        if (!options.SingleUserMode)
+        if (!lite)
         {
             RequireStrongSecret(errors, "AUTHENTIK_SECRET_KEY", Environment.GetEnvironmentVariable("AUTHENTIK_SECRET_KEY"),  32);
             RequireStrongSecret(errors, "AUTHENTIK_CLIENT_SECRET", Environment.GetEnvironmentVariable("AUTHENTIK_CLIENT_SECRET"), 32);

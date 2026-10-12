@@ -2,7 +2,6 @@ using DataBridge.Data;
 using DataBridge.Messaging;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
-using FluentMigrator.Runner;
 using IntegrationTests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -892,17 +891,11 @@ public sealed class DownloadJobsRepositoryTests
         private async Task RunMigrationsAsync()
         {
             var services = new ServiceCollection();
-            services
-                .AddFluentMigratorCore()
-                .ConfigureRunner(runner => runner
-                    .AddPostgres()
-                    .WithGlobalConnectionString(ConnectionString)
-                    .ScanIn(typeof(DownloadRequestedIngressService).Assembly).For.Migrations());
+            global::DataBridge.Persistence.Postgres.PostgresPersistenceRegistration.AddPostgresSchema(services, ConnectionString);
 
             await using var provider = services.BuildServiceProvider();
             using var scope = provider.CreateScope();
-            var runner = scope.ServiceProvider.GetRequiredService<IMigrationRunner>();
-            runner.MigrateUp();
+            scope.ServiceProvider.GetRequiredService<global::DataBridge.Persistence.IApplicationSchemaInitializer>().Initialize();
         }
 
         private async Task WaitForPostgresAsync()

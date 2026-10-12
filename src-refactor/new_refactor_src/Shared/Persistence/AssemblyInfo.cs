@@ -1,7 +1,5 @@
 using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("DataBridge")]
-[assembly: InternalsVisibleTo("WebAPI")]
-[assembly: InternalsVisibleTo("FrostStream.Full.Security")]
 [assembly: InternalsVisibleTo("FrostStream.Full.Persistence.Postgres")]
 [assembly: InternalsVisibleTo("FrostStream.Lite.Infrastructure")]
 [assembly: InternalsVisibleTo("UnitTests")]

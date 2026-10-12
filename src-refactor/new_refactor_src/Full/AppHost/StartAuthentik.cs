@@ -1,21 +1,13 @@
 namespace AppHost;
 
-/// <summary>
-/// Resources produced by <see cref="StartAuthentik"/>.
-/// <para>
-/// <see cref="ClientId"/>, <see cref="ClientSecret"/> and <see cref="ConfiguredAuthority"/> are
-/// always populated — the web API and auth-tester need the OIDC client details in both single-
-/// and multi-user mode. <see cref="Server"/> and <see cref="Authority"/> are only populated when
-/// authentik is actually running (multi-user mode); they are <c>null</c> in single-user mode.
-/// </para>
-/// </summary>
+/// <summary>Required identity resources for the Full composition.</summary>
 public sealed record AuthentikResources(
     string ClientId,
     IResourceBuilder<ParameterResource> ClientSecret,
     string? ConfiguredAuthority,
-    IResourceBuilder<ContainerResource>? Server,
-    ReferenceExpression? Authority,
-    IResourceBuilder<ParameterResource>? ApiToken);
+    IResourceBuilder<ContainerResource> Server,
+    ReferenceExpression Authority,
+    IResourceBuilder<ParameterResource> ApiToken);
 
 public static class StartAuthentik
 {
@@ -29,8 +21,7 @@ public static class StartAuthentik
         PostgresResources postgres,
         AppHostHardeningOptions hardening)
     {
-        // Client details and an optional externally-configured authority are needed regardless
-        // of mode, so they are resolved before the single-user early-out below.
+        // An external issuer can override the authority advertised by this deployment.
         var configuredAuthority = Environment.GetEnvironmentVariable("AUTHENTIK_AUTHORITY");
         var clientSecret = builder.AddParameter(
             "authentik-client-secret",

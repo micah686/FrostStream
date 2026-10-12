@@ -19,7 +19,7 @@ public sealed class FrostStreamUserConfiguration : IEntityTypeConfiguration<Fros
         builder.Property(x => x.Preferences).HasColumnName("preferences").HasPersistenceType("jsonb");
         // The app always sets CreatedAt from the injected clock on insert, so EF persists that value
         // verbatim and echoes it back (no store-generated readback dance). The DB column keeps its own
-        // CURRENT_TIMESTAMP default (FluentMigrator) as a safety net for any non-EF inserts.
+        // CURRENT_TIMESTAMP default (baseline) as a safety net for any non-EF inserts.
         builder.Property(x => x.CreatedAt)
             .HasColumnName("created_at")
             .HasPersistenceType("timestamp with time zone")

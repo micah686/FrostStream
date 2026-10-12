@@ -97,9 +97,6 @@
       "packages": [
         "Cleipnir.Flows.PostgresSql",
         "EFCore.NamingConventions",
-        "FluentMigrator",
-        "FluentMigrator.Runner.Core",
-        "FluentMigrator.Runner.Postgres",
         "Npgsql.DependencyInjection",
         "Npgsql.EntityFrameworkCore.PostgreSQL",
         "Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime"
@@ -441,9 +438,6 @@
     "DotNetEnv": "3.2.0",
     "EFCore.NamingConventions": "10.0.1",
     "FCastSenderSDKDotnet": "0.1.0",
-    "FluentMigrator": "8.0.1",
-    "FluentMigrator.Runner.Core": "8.0.1",
-    "FluentMigrator.Runner.Postgres": "8.0.1",
     "FluentStorage": "8.0.22",
     "FluentStorage.AWS": "8.0.23",
     "FluentStorage.Azure.Blobs": "8.0.22",

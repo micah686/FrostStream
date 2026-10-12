@@ -21,7 +21,7 @@ public sealed class AuthController(
     [EndpointDescription("Returns only the active FrostStream authentication mode. The endpoint intentionally exposes no identity-provider authority, audience, client secret, token endpoint, or refresh details.")]
     public ActionResult<AuthConfigResponse> GetConfig()
     {
-        var singleUserMode = AuthMode.IsSingleUserMode(configuration);
+        var singleUserMode = (Shared.Deployment.DeploymentOptions.FromConfiguration(configuration).Mode == Shared.Deployment.DeploymentMode.Lite);
         return Ok(new AuthConfigResponse
         {
             Mode = singleUserMode ? "single-user" : "multi-user"
@@ -60,7 +60,7 @@ public sealed class AuthController(
 
         return Ok(new AuthMeResponse
         {
-            Mode = AuthMode.IsSingleUserMode(configuration) ? "single-user" : "multi-user",
+            Mode = (Shared.Deployment.DeploymentOptions.FromConfiguration(configuration).Mode == Shared.Deployment.DeploymentMode.Lite) ? "single-user" : "multi-user",
             Authenticated = true,
             Profile = new AuthProfileResponse
             {

@@ -23,6 +23,19 @@ namespace UnitTests.Deployment;
 public sealed class SqliteBackupServiceClientTests
 {
     [Test]
+    public void Rejects_Obsolete_Backup_Path_Even_When_Canonical_Path_Is_Present()
+    {
+        var root = Path.GetTempPath();
+        var configuration = new ConfigurationManager();
+        configuration["Backup:Directory"] = Path.Combine(root, "backups");
+        configuration["Persistence:Sqlite:BackupPath"] = Path.Combine(root, "old-backups");
+        var factory = new SqliteConnectionFactory(new(PersistenceProvider.Sqlite, Path.Combine(root, "test.sqlite"), 5));
+        Should.Throw<InvalidOperationException>(() => new SqliteBackupServiceClient(
+            factory, configuration, new TestHostEnvironment(root), new(Path.Combine(root, "keys"))))
+            .Message.ShouldContain("obsolete");
+    }
+
+    [Test]
     public async Task Creates_Online_Full_Snapshot_And_Verifies_It()
     {
         var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));

@@ -13,10 +13,9 @@ public sealed record PersistenceOptions(PersistenceProvider Provider, string Sql
     public static PersistenceOptions FromConfiguration(IConfiguration configuration, string contentRoot)
     {
         var mode = DeploymentOptions.FromConfiguration(configuration).Mode;
-        var enabled = configuration.GetValue<bool>("Persistence:Sqlite:Enabled");
-        if (enabled && mode != DeploymentMode.Lite)
-            throw new InvalidOperationException("Persistence:Sqlite:Enabled requires Deployment:Mode=Lite. Full uses PostgreSQL.");
-        if (!enabled)
+        if (configuration["Persistence:Sqlite:Enabled"] is not null)
+            throw new InvalidOperationException("Persistence:Sqlite:Enabled is obsolete. The edition determines its database provider.");
+        if (mode == DeploymentMode.Full)
             return new(PersistenceProvider.Postgres, DefaultSqlitePath, 5);
 
         var path = configuration["Persistence:Sqlite:Path"] ?? DefaultSqlitePath;

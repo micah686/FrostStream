@@ -55,7 +55,7 @@ if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FROSTSTREAM_BA
 builder.Configuration.AddEnvironmentVariables();
 compose.WithDashboard(Helpers.DevelopmentToolsEnabled);
 
-var hardening = AppHostHardening.Read(singleUserMode: true);
+var hardening = AppHostHardening.Read(lite: true);
 AppHostHardening.Validate(hardening, lite: true);
 var sharedStorageRoot = ResolveStorageRoot(builder);
 var potProvider = StartPotProvider.Start(builder);

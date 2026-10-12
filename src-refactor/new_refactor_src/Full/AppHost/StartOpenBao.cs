@@ -55,7 +55,6 @@ public static class StartOpenBao
             set -eu
 
             bootstrap_file="/bootstrap/init.env"
-            legacy_bootstrap_file="/openbao/file/.bootstrap/init.env"
 
             write_bootstrap_file() {
               temp_file="${bootstrap_file}.tmp"
@@ -67,22 +66,8 @@ public static class StartOpenBao
             until bao operator init -status >/dev/null 2>&1 || [ "$?" -eq 2 ]; do sleep 1; done
             if bao operator init -status >/dev/null 2>&1; then
               if [ ! -f "$bootstrap_file" ]; then
-                if [ -f "$legacy_bootstrap_file" ]; then
-                  echo 'openbao-bootstrap: migrating recovery material from the data volume'
-                  temp_file="${bootstrap_file}.tmp"
-                  umask 077
-                  cat "$legacy_bootstrap_file" > "$temp_file"
-                  mv "$temp_file" "$bootstrap_file"
-                  rm -f "$legacy_bootstrap_file"
-                  rmdir /openbao/file/.bootstrap 2>/dev/null || true
-                else
-                  echo 'openbao-bootstrap: vault is initialized but /bootstrap/init.env is missing; restore it from backup before starting dependent services' >&2
-                  exit 1
-                fi
-              elif [ -f "$legacy_bootstrap_file" ]; then
-                echo 'openbao-bootstrap: removing legacy recovery material from the data volume'
-                rm -f "$legacy_bootstrap_file"
-                rmdir /openbao/file/.bootstrap 2>/dev/null || true
+                echo 'openbao-bootstrap: vault is initialized but /bootstrap/init.env is missing; restore it from backup before starting dependent services' >&2
+                exit 1
               fi
               echo 'openbao-bootstrap: using existing initialization'
             else

@@ -22,7 +22,6 @@ public sealed class SearchActivationBarrierTests
         {
             var builder = Host.CreateApplicationBuilder(); builder.Logging.ClearProviders();
             builder.Configuration["Deployment:Mode"] = "Lite";
-            builder.Configuration["Persistence:Sqlite:Enabled"] = "true";
             builder.Configuration["Persistence:Sqlite:Path"] = Path.Combine(directory, "test.db");
             builder.AddLitePersistence(); builder.AddLuceneSearch();
             using var host = builder.Build(); host.InitializeDataBridge();

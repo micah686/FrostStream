@@ -30,7 +30,6 @@ public sealed class LiteSchedulerTests
         Quartz.Diagnostics.LogProvider.SetLogProvider(NullLoggerFactory.Instance);
         var builder = Host.CreateApplicationBuilder();
         builder.Configuration["Deployment:Mode"] = "Lite";
-        builder.Configuration["Persistence:Sqlite:Enabled"] = "true";
         builder.Configuration["Persistence:Sqlite:Path"] = path;
         if (Shared.Deployment.DeploymentOptions.FromConfiguration(builder.Configuration).Mode == Shared.Deployment.DeploymentMode.Lite) builder.AddLitePersistence().AddLiteMessaging().AddLiteSecretStore().AddLiteBackupClient().AddLiteStagedStorage(); else builder.AddFullPersistence();
         builder.Services.AddScoped<IScheduledTasksRepository, ScheduledTasksRepository>();

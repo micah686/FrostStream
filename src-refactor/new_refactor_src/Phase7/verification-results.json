@@ -1,0 +1,68 @@
+{
+  "date": "2026-10-11",
+  "platform": "Linux x64; rootless Podman API with Docker Compose 5.6.0",
+  "unit": {
+    "total": 629,
+    "failed": 0,
+    "succeeded": 629,
+    "skipped": 0
+  },
+  "integration": {
+    "total": 88,
+    "failed": 0,
+    "succeeded": 88,
+    "skipped": 0
+  },
+  "backendTestConcurrency": 4,
+  "unitExternalProviders": [
+    "PostgreSQL 18.3",
+    "Typesense 30.2"
+  ],
+  "architectureViolationTests": 27,
+  "projects": 33,
+  "frontend": {
+    "accessTests": 5,
+    "backupTests": 2,
+    "typeCheckErrors": 0,
+    "typeCheckWarnings": 0,
+    "productionBuild": "passed"
+  },
+  "cleanInstallProfiles": [
+    {
+      "edition": "Lite",
+      "liveChat": false,
+      "services": 3,
+      "runtimeProbed": true,
+      "passed": true
+    },
+    {
+      "edition": "Full",
+      "liveChat": false,
+      "services": 19,
+      "runtimeProbed": true,
+      "passed": true
+    },
+    {
+      "edition": "Lite",
+      "liveChat": true,
+      "services": 4,
+      "runtimeProbed": true,
+      "passed": true
+    },
+    {
+      "edition": "Full",
+      "liveChat": true,
+      "services": 20,
+      "runtimeProbed": true,
+      "passed": true
+    }
+  ],
+  "baselineIntegrity": "passed; immutable resources unchanged",
+  "scopeLimits": [
+    "Hosted GitHub Actions workflow added; equivalent commands executed locally",
+    "Physical 8 GB benchmark remains open",
+    "Real Authentik browser login and external HTTPS remain open",
+    "Broader planned browser matrix remains separate work"
+  ],
+  "reruns": "An unconstrained concurrent backend/container-build run encountered one search RPC timeout and one Podman port collision. Separate final runs with maximum-parallel-tests=4 passed completely."
+}

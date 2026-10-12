@@ -11,13 +11,15 @@ public static class StartLite
         IResourceBuilder<ContainerResource> potProvider,
         ClickHouseResources clickHouse)
     {
+        if (builder.Configuration["Persistence:Sqlite:BackupPath"] is not null)
+            throw new InvalidOperationException("Persistence:Sqlite:BackupPath is obsolete. Configure Backup:Directory.");
         var publish = builder.ExecutionContext.IsPublishMode;
         var root = publish ? "/data" : storageRoot;
         var databasePath = builder.Configuration["Persistence:Sqlite:Path"] ?? Path.Combine(root, "core.sqlite");
         var database = builder.AddParameter("lite-database-path", databasePath,
             publishValueAsDefault: true);
         var backups = builder.AddParameter("lite-backup-directory",
-            builder.Configuration["Backup:Directory"] ?? builder.Configuration["Persistence:Sqlite:BackupPath"] ?? Path.Combine(root, "backups"),
+            builder.Configuration["Backup:Directory"] ?? Path.Combine(root, "backups"),
             publishValueAsDefault: true);
         var keys = builder.AddParameter("lite-keys-path",
             builder.Configuration["Secrets:Local:KeyRingPath"] ?? Path.Combine(root, "keys"),
@@ -26,7 +28,6 @@ public static class StartLite
             .WithEnvironment("Search__Lucene__Path", publish ? "/search" : storageRoot + "-search")
             .WithEnvironment("Deployment__Mode", "Lite")
             .WithEnvironment("DOTNET_GCHeapHardLimitPercent", "40")
-            .WithEnvironment("Persistence__Sqlite__Enabled", "true")
             .WithEnvironment("Persistence__Sqlite__Path", database)
             .WithEnvironment("Backup__Directory", backups)
             .WithEnvironment("Secrets__Local__KeyRingPath", keys)

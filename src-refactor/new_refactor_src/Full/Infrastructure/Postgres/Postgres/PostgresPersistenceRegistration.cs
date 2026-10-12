@@ -1,5 +1,4 @@
 using DataBridge.Data;
-using FluentMigrator.Runner;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -44,13 +43,11 @@ public static class PostgresPersistenceRegistration
                         .MapEnum<PlaylistState>("playlist_state", "jobs"))
                 .UseSnakeCaseNamingConvention());
 
-        services
-            .AddFluentMigratorCore()
-            .ConfigureRunner(runnerBuilder => runnerBuilder
-                .AddPostgres()
-                .WithGlobalConnectionString(connectionString)
-                .ScanIn(typeof(PostgresPersistenceRegistration).Assembly).For.Migrations());
+        services.AddPostgresSchema(connectionString);
+    }
 
+    public static void AddPostgresSchema(this IServiceCollection services, string connectionString)
+    {
         services.AddSingleton(_ => new NpgsqlDataSourceBuilder(connectionString).Build());
         services.AddScoped<IApplicationSchemaInitializer, PostgresSchemaInitializer>();
     }

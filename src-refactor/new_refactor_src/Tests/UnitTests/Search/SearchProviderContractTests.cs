@@ -16,7 +16,7 @@ using TUnit.Core;
 namespace UnitTests.Search;
 
 /// <summary>Always exercises embedded Lite; opt into Full with an owned disposable Typesense instance.</summary>
-[NotInParallel("Phase4Typesense")]
+[NotInParallel("SearchProviderContracts")]
 public sealed class SearchProviderContractTests
 {
     [Test]
@@ -26,18 +26,20 @@ public sealed class SearchProviderContractTests
         foreach (var edition in new[] { "Lite", "Full" })
         {
             if (edition == "Full" && string.IsNullOrWhiteSpace(url)) continue;
-            var directory = Path.Combine(Path.GetTempPath(), "phase5-contract-" + Guid.NewGuid().ToString("N"));
+            var directory = Path.Combine(Path.GetTempPath(), "search-contract-" + Guid.NewGuid().ToString("N"));
             try
             {
             var builder = Host.CreateApplicationBuilder();
             builder.Logging.ClearProviders();
             builder.Configuration["Deployment:Mode"] = edition;
-            builder.Configuration["Typesense:Url"] = url;
-            builder.Configuration["Typesense:ApiKey"] = "phase4-test-key";
-            if (edition == "Full") builder.AddTypesenseIntegration();
+            if (edition == "Full")
+            {
+                builder.Configuration["Typesense:Url"] = url;
+                builder.Configuration["Typesense:ApiKey"] = "phase4-test-key";
+                builder.AddTypesenseIntegration();
+            }
             else
             {
-                builder.Configuration["Persistence:Sqlite:Enabled"] = "true";
                 builder.Configuration["Persistence:Sqlite:Path"] = Path.Combine(directory, "test.db");
                 builder.Configuration["Search:Lucene:Path"] = Path.Combine(directory, "search");
                 builder.AddLuceneSearch();
@@ -108,16 +110,12 @@ public sealed class SearchProviderContractTests
     [Test]
     public async Task Failed_Or_Canceled_Rebuild_Retains_Search_And_Reports_Degraded_Status()
     {
-        var url = Environment.GetEnvironmentVariable("FROSTSTREAM_TEST_TYPESENSE");
-        var directory = Path.Combine(Path.GetTempPath(), "phase4-" + Guid.NewGuid().ToString("N"));
+        var directory = Path.Combine(Path.GetTempPath(), "search-rebuild-" + Guid.NewGuid().ToString("N"));
         try
         {
             var builder = Host.CreateApplicationBuilder(); builder.Logging.ClearProviders();
             builder.Configuration["Deployment:Mode"] = "Lite";
-            builder.Configuration["Persistence:Sqlite:Enabled"] = "true";
             builder.Configuration["Persistence:Sqlite:Path"] = Path.Combine(directory, "test.db");
-            builder.Configuration["Typesense:Url"] = url;
-            builder.Configuration["Typesense:ApiKey"] = "phase4-test-key";
             builder.AddLitePersistence(); builder.AddLuceneSearch();
             var source = Substitute.For<IMediaDocumentQuery>();
             builder.Services.AddSingleton(source);

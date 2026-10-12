@@ -1,18 +1,36 @@
-# FrostStream refactor working tree
+# FrostStream architecture
 
-This is the self-contained Phase 0 working baseline. Run all commands here. No project or linked source depends on the old repository `src/` or the reference copy. `Phase0/source-map.json` records the mechanical relocation. Assembly names, namespaces, feature implementations and provider choices are preserved.
+Run commands from this directory. The solution is self-contained; projects and linked source never depend on the original repository `src/` tree.
 
-The requested Shared/Lite/Full/Frontend structure is present. Reserved directories have README files explaining their future extraction. Shared/Modules still contain the original executables; Full/Hosts shells and provider isolation are Phase 1/2 work. A directory name does not imply the target dependency rules already hold.
+Shared contracts, core, persistence and application modules implement product behavior once. Lite composes those modules in one executable with SQLite, durable local messaging, encrypted local secrets, local administrator identity and embedded Lucene. Full composes separate executable hosts with PostgreSQL, NATS, OpenBao, Authentik/OpenFGA and Typesense. ClickHouse is optional in both compositions. Shared code references provider-neutral contracts; executable hosts select edition adapters.
 
-Prerequisites: .NET 10, Node >=22, pnpm 10.28.1, Python 3, FFmpeg/FFprobe, a Docker-compatible engine, and Aspire CLI for profile generation. `Phase0/check-compose.py` additionally requires the pinned `Phase0/requirements.txt` dependency. Rootless Podman fixtures use `DOCKER_HOST=unix:///run/user/$(id -u)/podman/podman.sock` and `TESTCONTAINERS_RYUK_DISABLED=true`.
+| Directory | Responsibility |
+| --- | --- |
+| `Shared/Contracts` | Implementation-independent application contracts |
+| `Shared/Core` | Common domain, messaging, identity and search abstractions |
+| `Shared/Persistence` | EF model, repositories, query catalog and schema resources |
+| `Shared/Modules` | Reusable API, DataBridge, Worker, MediaProcessor and Scheduler libraries |
+| `Lite/Infrastructure` | SQLite, local transport/secrets/identity/recovery and Lucene adapters |
+| `Lite/Backend` | Single-process composition and ordered lifecycle |
+| `Full/Infrastructure`, `Full/Security` | Full transport/secrets, PostgreSQL and identity adapters |
+| `Full/Hosts` | Thin executable composition roots |
+| `Shared/Integrations/Typesense` | Full DataBridge's isolated search adapter |
+| `Frontend` | One capability-driven UI for both editions |
+
+`Deployment:Mode` is resolved at startup. Lite owns SQLite and Full owns PostgreSQL; the former `Persistence:Sqlite:Enabled` opt-in is rejected. Full rejects former single-user switches, including false values. Full security belongs only to the WebAPI host. Typesense belongs only to Full DataBridge. Libraries cannot reference executable hosts, shared code cannot depend on edition implementations, and Lite's restored package graph cannot contain Full SDKs. Module registration markers enforce idempotent registration and are part of the lifecycle contract.
+
+Prerequisites: .NET 10, Node 22 or newer, pnpm 10.28.1, Python 3, FFmpeg/FFprobe and a Docker-compatible engine. Package generation also needs Aspire CLI 13.4.6 and `python3 -m pip install -r Phase0/requirements.txt`. For rootless Podman, configure `DOCKER_HOST` for its API socket and `TESTCONTAINERS_RYUK_DISABLED=true`. Full installation checks require Docker Compose with working completed-job dependencies.
 
 ```sh
 dotnet build FrostStream.slnx -m:1
 python3 Phase0/verify.py
 python3 Phase0/test_verify.py
-bash Phase0/run-checkpoint.sh unit
-bash Phase0/run-checkpoint.sh lite
-bash Phase0/run-checkpoint.sh full
+python3 Phase2/test_boundaries.py
+python3 Phase7/test_boundaries.py
+python3 Phase7/verify-boundaries.py --require-restored
+python3 Phase6/verify-baselines.py
+dotnet run --no-build --project Tests/UnitTests/UnitTests.csproj -- --maximum-parallel-tests 4
+dotnet run --no-build --project Tests/IntegrationTests/IntegrationTests/IntegrationTests.csproj -- --maximum-parallel-tests 4
 cd Frontend
 pnpm install --frozen-lockfile
 pnpm test:access
@@ -21,26 +39,6 @@ pnpm check
 pnpm build
 ```
 
-The `full` checkpoint runs real OpenFGA with controlled JWT identities. It does not certify Authentik login or a complete Full deployment. Lite fixtures exercise real local persistence, processing, HTTP playback and embedded Lucene, with deterministic Internet acquisition. Each fixture owns fresh temporary state; retries do not reuse an installation. Do not run the old repository's destructive smoke/reset scripts against developer state.
+The backend suites exercise real local storage/workflows/search, NATS, PostgreSQL and OpenFGA. Set `FROSTSTREAM_TEST_POSTGRES` to a disposable administrator connection string and `FROSTSTREAM_TEST_TYPESENSE` to a disposable Typesense URL with key `phase4-test-key` to enable the extra cross-provider contracts. Full HTTP tests use controlled JWT signing with real OpenFGA; they do not certify a real Authentik browser login or an external HTTPS deployment.
 
-```sh
-# From this directory; generates private fresh-install inputs, then Compose without starting it.
-python3 Phase0/prepare-environment.py Lite
-python3 Phase0/prepare-environment.py Full
-bash Phase0/publish-profile.sh Lite
-bash Phase0/publish-profile.sh Full
-python3 Phase0/check-compose.py Lite Full
-```
-
-Generated profiles are under `Lite/docker-compose/` and `Full/docker-compose/`. These commands refuse to overwrite an existing fixture. If publishing fails, inspect and retry the logged Aspire command against that owned output. No automated cleanup deletes volumes. Full's baseline volumes have explicit names: packaged install/restore validation requires a dedicated disposable container engine. Generation/path validation is distinct from booting a clean packaged installation. Lite generates three services: backend, frontend and POT provider. Optional live chat adds ClickHouse. Embedded Lucene uses a separate rebuildable search volume; Full retains Typesense. Lite publishes the frontend on loopback by default. Set `LITE_TRUSTED_LAN=true` only when every reachable client should have local Admin access. See `Phase5/README.md` for search recovery, configuration and measured validation.
-
-```sh
-python3 Phase0/generate-corpus.py .phase0/corpus
-python3 Phase0/measure.py --output .phase0/results/lite-resources.json --label lite-development --seconds 600 -- \
-  dotnet run --no-build --project Tests/IntegrationTests/IntegrationTests/IntegrationTests.csproj -- \
-  --treenode-filter '/*/IntegrationTests.Lite/*/*'
-```
-
-Generated corpus JSONL is input for future provider seeders, not evidence that the large corpus has been indexed. Search parser characterization runs from `Phase0/search-corpus.json`. Read `Phase0/CHECKLIST.md`, `Phase0/EVALUATION.md`, and the reconciled `TESTS_PLAN.MD` before declaring Phase 0's acceptance gates complete.
-
-Phase 6 adds private fresh-install package generation, packaged recovery commands and startup probes. Use [Phase6/README.md](Phase6/README.md) for installation, data ownership, resource limits and both recovery procedures. The historical Phase 0 profile scripts remain characterization tools.
+See [installation and recovery](Phase6/README.md), [search durability and resource evidence](Phase5/README.md), [current testing strategy](TESTS_PLAN.MD) and [final boundary enforcement](Phase7/README.md). Phase 0–6 reports retain historical evidence; current operating instructions are the Phase 6 guide and this page. Hashed schema resources remain immutable, including inert historical capture metadata; no migration runner or old-database adoption path ships.

@@ -1,3 +1,4 @@
+using DataBridge.Persistence;
 using Shared.Deployment;
 using System.Net;
 using System.Net.Http.Json;
@@ -167,14 +168,15 @@ public sealed class LiteHostStartupTests
     }
 
     [Test]
-    public void Dedicated_Lite_Host_Defaults_To_SQLite_And_Rejects_Full_Or_Disabled_SQLite()
+    public void Dedicated_Lite_Host_Defaults_To_SQLite_And_Rejects_Full_Or_Obsolete_Selector()
     {
         var builder = Host.CreateApplicationBuilder();
         builder.ConfigureLiteHost();
         builder.Configuration["Deployment:Mode"].ShouldBe("Lite");
-        builder.Configuration["Persistence:Sqlite:Enabled"].ShouldBe("true");
+        PersistenceOptions.FromConfiguration(builder.Configuration, builder.Environment.ContentRootPath).Provider.ShouldBe(PersistenceProvider.Sqlite);
         builder.Configuration["Persistence:Sqlite:Enabled"] = "false";
         Should.Throw<InvalidOperationException>(() => builder.ConfigureLiteHost());
+        builder.Configuration["Persistence:Sqlite:Enabled"] = null;
         builder.Configuration["Deployment:Mode"] = "Full";
         Should.Throw<InvalidOperationException>(() => builder.ConfigureLiteHost());
     }

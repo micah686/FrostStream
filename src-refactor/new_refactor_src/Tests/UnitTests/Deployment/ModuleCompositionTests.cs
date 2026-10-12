@@ -41,7 +41,6 @@ public sealed class ModuleCompositionTests
     {
         var builder = Builder();
         builder.Configuration["Deployment:Mode"] = "Lite";
-        builder.Configuration["Persistence:Sqlite:Enabled"] = "true";
         var dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
         builder.Configuration["Persistence:Sqlite:Path"] = Path.Combine(dir, "test.db");
         try
@@ -110,7 +109,6 @@ public sealed class ModuleCompositionTests
     {
         var builder = Builder();
         builder.Configuration["Deployment:Mode"] = "Lite";
-        builder.Configuration["Persistence:Sqlite:Enabled"] = "true";
         DeploymentOptions.FromConfiguration(builder.Configuration).Mode.ShouldBe(DeploymentMode.Lite);
         builder.AddLiteModules();
         await using var provider = builder.Services.BuildServiceProvider();

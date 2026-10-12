@@ -215,7 +215,7 @@ public sealed class PendingIndexTests
             }
             else
             {
-                builder.Configuration["Deployment:Mode"] = "Lite"; builder.Configuration["Persistence:Sqlite:Enabled"] = "true";
+                builder.Configuration["Deployment:Mode"] = "Lite";
                 builder.Configuration["Persistence:Sqlite:Path"] = Path.Combine(directory, "test.db"); builder.AddLitePersistence();
             }
             Host = builder.Build(); Host.InitializeDataBridge();

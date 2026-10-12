@@ -23,8 +23,9 @@ public sealed class SqliteBackupServiceClient : IBackupServiceClient
         LocalSecretStoreOptions secrets)
     {
         this.connectionFactory = connectionFactory;
+        if (configuration["Persistence:Sqlite:BackupPath"] is not null)
+            throw new InvalidOperationException("Persistence:Sqlite:BackupPath is obsolete. Configure Backup:Directory.");
         var configuredDirectory = configuration["Backup:Directory"]
-            ?? configuration["Persistence:Sqlite:BackupPath"]
             ?? DefaultBackupDirectory;
         backupDirectory = Path.GetFullPath(configuredDirectory, environment.ContentRootPath);
         keyRingPath = Path.TrimEndingDirectorySeparator(secrets.KeyRingPath);

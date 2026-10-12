@@ -24,9 +24,10 @@ class EditionBoundaryTests(unittest.TestCase):
     def test_security_is_only_for_api_host(self):
         graph = {'Full/Hosts/Worker/WorkerHost.csproj': project(['Full/Security/Security.csproj']), 'Full/Security/Security.csproj': project()}
         with self.assertRaisesRegex(ValueError, 'only the Full WebAPI'): check(graph, self.root)
-    def test_typesense_exception_is_isolated_and_allowed_for_lite(self):
+    def test_lite_cannot_depend_on_typesense_adapter(self):
         graph = {'Lite/Backend/Lite.csproj': project(['Shared/Integrations/Typesense/Typesense.csproj']), 'Shared/Integrations/Typesense/Typesense.csproj': project(packages=['Typesense'])}
-        check(graph, self.root)
+        with self.assertRaisesRegex(ValueError, "forbidden SDK"):
+            check(graph, self.root)
     def test_restored_transitive_sdk_fails_even_without_declared_reference(self):
         assets = self.root/'Lite/Backend/obj/project.assets.json'; assets.parent.mkdir(parents=True)
         assets.write_text(json.dumps({'libraries': {'NATS.Client.Core/2.0': {}}}))

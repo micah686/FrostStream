@@ -7,44 +7,11 @@ namespace UnitTests.WebAPI;
 public sealed class WebApiHardeningTests
 {
     [Test]
-    public void Production_Single_User_Mode_Fails_By_Default()
-    {
-        var exception = Should.Throw<InvalidOperationException>(() =>
-            WebApiHardening.ValidateStartup(
-                new FrostStreamAuthOptions(),
-                singleUserMode: true,
-                isProduction: true));
-
-        exception.Message.ShouldContain("Full requires Authentik");
-    }
-
-    [Test]
-    public void Production_Single_User_Mode_Rejects_Former_Override()
-    {
-        Should.Throw<InvalidOperationException>(() =>
-            WebApiHardening.ValidateStartup(
-                new FrostStreamAuthOptions(),
-                singleUserMode: true,
-                isProduction: true));
-    }
-
-    [Test]
-    public void Development_Single_User_Mode_Is_Rejected()
-    {
-        Should.Throw<InvalidOperationException>(() =>
-            WebApiHardening.ValidateStartup(
-                new FrostStreamAuthOptions(),
-                singleUserMode: true,
-                isProduction: false));
-    }
-
-    [Test]
     public void Multi_User_Mode_Requires_Bff_Settings()
     {
         var exception = Should.Throw<InvalidOperationException>(() =>
             WebApiHardening.ValidateStartup(
                 new FrostStreamAuthOptions { Authority = "https://auth.example.test" },
-                singleUserMode: false,
                 isProduction: false));
 
         exception.Message.ShouldContain("Auth:PublicOrigin");
@@ -56,7 +23,6 @@ public sealed class WebApiHardeningTests
         Should.NotThrow(() =>
             WebApiHardening.ValidateStartup(
                 ValidMultiUserOptions(),
-                singleUserMode: false,
                 isProduction: false));
     }
 
@@ -74,7 +40,7 @@ public sealed class WebApiHardeningTests
         };
 
         var exception = Should.Throw<InvalidOperationException>(() =>
-            WebApiHardening.ValidateStartup(options, singleUserMode: false, isProduction: false));
+            WebApiHardening.ValidateStartup(options, isProduction: false));
 
         exception.Message.ShouldContain("Auth:PublicAuthority");
     }
@@ -94,7 +60,7 @@ public sealed class WebApiHardeningTests
         };
 
         var exception = Should.Throw<InvalidOperationException>(() =>
-            WebApiHardening.ValidateStartup(options, singleUserMode: false, isProduction: true));
+            WebApiHardening.ValidateStartup(options, isProduction: true));
 
         exception.Message.ShouldContain("Auth:SecureCookies");
     }

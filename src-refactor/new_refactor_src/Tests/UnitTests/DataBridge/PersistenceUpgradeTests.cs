@@ -4,7 +4,6 @@ using DataBridge.Persistence;
 using DataBridge.Persistence.Postgres;
 using DataBridge.Persistence.Schema;
 using DataBridge.Persistence.Sqlite;
-using FluentMigrator.Runner;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,43 +19,35 @@ namespace UnitTests.DataBridge;
 public sealed class PersistenceUpgradeTests
 {
     private static readonly Instant Now = Instant.FromUtc(2026,10,3,12,0);
-    private sealed class LegacyPostgresInitializer(IMigrationRunner runner) : IApplicationSchemaInitializer
-    { public void Initialize(CancellationToken ct = default) { ct.ThrowIfCancellationRequested(); runner.MigrateUp(97); } }
     private static DownloadRequested Request() => new() { JobId=Guid.NewGuid(), CorrelationId=Guid.NewGuid(), SourceUrl="https://test", StorageKey="default", RequestedBy="alice", MessageId=Guid.NewGuid(), OperationKey="upgrade", OccurredAt=Now };
 
     [Test]
-    public async Task Upgrade_From_Released_Sqlite_V1_And_Postgres_M097_Preserves_Application_And_Workflow_Data()
+    public async Task Upgrade_From_Sqlite_V1_Preserves_Application_And_Workflow_Data()
     {
-        foreach (var postgres in string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FROSTSTREAM_TEST_POSTGRES")) ? new[] {false} : new[] {false,true})
+        await using var f = await Fixture.Create(false,builder =>
         {
-            await using var f = await Fixture.Create(postgres,builder =>
-            {
-                if (postgres) builder.Services.AddScoped<IApplicationSchemaInitializer,LegacyPostgresInitializer>();
-                else builder.Services.AddScoped<IApplicationSchemaInitializer>(sp => new SqliteSchemaInitializer(sp.GetRequiredService<SqliteConnectionFactory>(),sp.GetRequiredService<IClock>(),[]));
-            });
-            var request=Request(); var repo=new DownloadFlowV2Repository(f.Db,new FixedClock(Now),NullDownloadJobStateNotifier.Instance);
-            var run=(await repo.CreateInitialRunAsync(request,true)).ShouldNotBeNull();
-            var store=await WorkflowPersistenceTests.Store(f);
-            var type=await store.TypeStore.InsertOrGetStoredType(new("upgrade-workflow"));
-            var id=new Cleipnir.ResilientFunctions.Storage.StoredId(type,Cleipnir.ResilientFunctions.Storage.StoredInstance.Create("instance"));
-            await store.CreateFunction(id,new("instance"),[1,2,3],0,0,0,null);
-            await f.Db.Database.ExecuteSqlRawAsync(postgres ? "UPDATE scheduling.scheduled_tasks SET enabled=false WHERE key='channel-scan-refresh'" : "UPDATE scheduling_scheduled_tasks SET enabled=0 WHERE key='channel-scan-refresh'");
-            using var scope=f.ScopeFactory.CreateScope();
-            if (postgres) scope.ServiceProvider.GetRequiredService<IMigrationRunner>().MigrateUp();
-            else new SqliteSchemaInitializer(scope.ServiceProvider.GetRequiredService<SqliteConnectionFactory>(),new FixedClock(Now)).Initialize();
-            if (postgres) scope.ServiceProvider.GetRequiredService<IMigrationRunner>().MigrateUp();
-            else new SqliteSchemaInitializer(scope.ServiceProvider.GetRequiredService<SqliteConnectionFactory>(),new FixedClock(Now)).Initialize();
-            (await f.Db.DownloadJobs.AsNoTracking().SingleAsync()).CurrentRunId.ShouldBe(run.RunId);
-            (await f.Db.DownloadJobHistory.CountAsync()).ShouldBe(1);
-            (await (await WorkflowPersistenceTests.Store(f)).GetFunction(id))!.Parameter.ShouldBe([1,2,3]);
-            (await repo.ReconcileForStartupAsync()).GenerationStartedAt.ShouldBe(Now+Duration.FromTicks(10));
-            await using var connection=await f.Database.OpenConnectionAsync();
-            await using var command=connection.CreateCommand();
-            command.CommandText=postgres ? "SELECT MAX(\"Version\") FROM \"VersionInfo\"" : "SELECT MAX(version) FROM froststream_schema_versions";
-            Convert.ToInt64(await command.ExecuteScalarAsync()).ShouldBe(postgres ? 98L : 4L);
-            command.CommandText=postgres ? "SELECT enabled FROM scheduling.scheduled_tasks WHERE key='channel-scan-refresh'" : "SELECT enabled FROM scheduling_scheduled_tasks WHERE key='channel-scan-refresh'";
-            Convert.ToBoolean(await command.ExecuteScalarAsync()).ShouldBeFalse();
-        }
+            builder.Services.AddScoped<IApplicationSchemaInitializer>(sp => new SqliteSchemaInitializer(sp.GetRequiredService<SqliteConnectionFactory>(),sp.GetRequiredService<IClock>(),[]));
+        });
+        var request=Request(); var repo=new DownloadFlowV2Repository(f.Db,new FixedClock(Now),NullDownloadJobStateNotifier.Instance);
+        var run=(await repo.CreateInitialRunAsync(request,true)).ShouldNotBeNull();
+        var store=await WorkflowPersistenceTests.Store(f);
+        var type=await store.TypeStore.InsertOrGetStoredType(new("upgrade-workflow"));
+        var id=new Cleipnir.ResilientFunctions.Storage.StoredId(type,Cleipnir.ResilientFunctions.Storage.StoredInstance.Create("instance"));
+        await store.CreateFunction(id,new("instance"),[1,2,3],0,0,0,null);
+        await f.Db.Database.ExecuteSqlRawAsync("UPDATE scheduling_scheduled_tasks SET enabled=0 WHERE key='channel-scan-refresh'");
+        using var scope=f.ScopeFactory.CreateScope();
+        new SqliteSchemaInitializer(scope.ServiceProvider.GetRequiredService<SqliteConnectionFactory>(),new FixedClock(Now)).Initialize();
+        new SqliteSchemaInitializer(scope.ServiceProvider.GetRequiredService<SqliteConnectionFactory>(),new FixedClock(Now)).Initialize();
+        (await f.Db.DownloadJobs.AsNoTracking().SingleAsync()).CurrentRunId.ShouldBe(run.RunId);
+        (await f.Db.DownloadJobHistory.CountAsync()).ShouldBe(1);
+        (await (await WorkflowPersistenceTests.Store(f)).GetFunction(id))!.Parameter.ShouldBe([1,2,3]);
+        (await repo.ReconcileForStartupAsync()).GenerationStartedAt.ShouldBe(Now+Duration.FromTicks(10));
+        await using var connection=await f.Database.OpenConnectionAsync();
+        await using var command=connection.CreateCommand();
+        command.CommandText="SELECT MAX(version) FROM froststream_schema_versions";
+        Convert.ToInt64(await command.ExecuteScalarAsync()).ShouldBe(4L);
+        command.CommandText="SELECT enabled FROM scheduling_scheduled_tasks WHERE key='channel-scan-refresh'";
+        Convert.ToBoolean(await command.ExecuteScalarAsync()).ShouldBeFalse();
     }
 
     [Test]

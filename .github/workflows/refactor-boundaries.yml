@@ -1,0 +1,97 @@
+name: Refactor boundaries and installations
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: src-refactor/new_refactor_src
+    services:
+      postgres:
+        image: postgres:18.3
+        env:
+          POSTGRES_PASSWORD: boundary-test-password
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      typesense:
+        image: typesense/typesense:30.2
+        env:
+          TYPESENSE_API_KEY: phase4-test-key
+          TYPESENSE_DATA_DIR: /tmp
+        ports: ['8108:8108']
+    env:
+      FROSTSTREAM_TEST_POSTGRES: Host=127.0.0.1;Port=5432;Database=postgres;Username=postgres;Password=boundary-test-password
+      FROSTSTREAM_TEST_TYPESENSE: http://127.0.0.1:8108
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: src-refactor/new_refactor_src/global.json
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: dotnet build FrostStream.slnx -m:1 --nologo
+      - name: Enforce inventory, dependencies and baseline integrity
+        run: |
+          python3 Phase0/verify.py
+          python3 Phase0/test_verify.py
+          python3 Phase2/test_boundaries.py
+          python3 Phase7/test_boundaries.py
+          python3 Phase7/verify-boundaries.py --require-restored
+          python3 Phase6/verify-baselines.py
+      - name: Shared, Lite and Full backend suites
+        run: |
+          dotnet run --no-build --project Tests/UnitTests/UnitTests.csproj -- --minimum-expected-tests 1 --maximum-parallel-tests 4
+          dotnet run --no-build --project Tests/IntegrationTests/IntegrationTests/IntegrationTests.csproj -- --minimum-expected-tests 1 --maximum-parallel-tests 4
+      - name: Frontend suites and production build
+        working-directory: src-refactor/new_refactor_src/Frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm test:access
+          pnpm test:backups
+          pnpm check
+          pnpm build
+  installations:
+    needs: checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        edition: [Lite, Full]
+        chat: ['', '--live-chat']
+    defaults:
+      run:
+        working-directory: src-refactor/new_refactor_src
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: src-refactor/new_refactor_src/global.json
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned packaging tools
+        run: |
+          curl -fsSL https://aspire.dev/install.sh -o "$RUNNER_TEMP/install-aspire.sh"
+          bash "$RUNNER_TEMP/install-aspire.sh" --version 13.4.6
+          echo "$HOME/.aspire/bin" >> "$GITHUB_PATH"
+          python3 -m pip install -r Phase0/requirements.txt
+      - name: Build and probe an empty installation
+        run: python3 Phase7/verify-install.py '${{ matrix.edition }}' ${{ matrix.chat }}

@@ -1,8 +1,8 @@
 namespace AppHost;
 
 public sealed record OpenFgaResources(
-    IResourceBuilder<ContainerResource>? Server,
-    EndpointReference? Endpoint);
+    IResourceBuilder<ContainerResource> Server,
+    EndpointReference Endpoint);
 
 public static class StartOpenFga
 {

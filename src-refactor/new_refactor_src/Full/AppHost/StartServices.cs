@@ -115,7 +115,7 @@ public static class StartServices
             publishValueAsDefault: false);
         var publicAuthority = builder.AddParameter(
             "authentik-public-authority",
-            FrontendPublicAuthAuthority(hardening),
+            FrontendPublicAuthAuthority(),
             publishValueAsDefault: false);
 
         var webApiUrls = hardening.EnableHttps
@@ -207,27 +207,18 @@ public static class StartServices
             }
         }, createIfNotExists: false);
 
-        webapi = webapi.WithAuthAuthority("Auth__Authority", hardening.SingleUserMode, authentik);
+        webapi = webapi.WithAuthAuthority("Auth__Authority", authentik);
 
-        if (!hardening.SingleUserMode && authentik.Server is { } authentikServer && openFga.Server is not null && openFga.Endpoint is not null)
-        {
-            webapi = webapi
-                .WithEnvironment("OpenFga__Endpoint", openFga.Endpoint)
-                .WithEnvironment("Authentik__ApiUrl", authentikServer.GetEndpoint("http"))
-                .WaitFor(authentikServer)
-                .WithComposeDependencyCondition("authentik", "service_healthy")
-                .WaitFor(openFga.Server);
+        webapi = webapi
+            .WithEnvironment("OpenFga__Endpoint", openFga.Endpoint)
+            .WithEnvironment("Authentik__ApiUrl", authentik.Server.GetEndpoint("http"))
+            .WithEnvironment("Authentik__ApiToken", authentik.ApiToken)
+            .WaitFor(authentik.Server)
+            .WithComposeDependencyCondition("authentik", "service_healthy")
+            .WaitFor(openFga.Server);
 
-            if (authentik.ApiToken is { } authentikApiToken)
-            {
-                webapi = webapi.WithEnvironment("Authentik__ApiToken", authentikApiToken);
-            }
-
-            if (hardening.EnableFgaAuthenticatedEndpoints)
-            {
-                webapi = webapi.WithEnvironment("OpenFga__ApiToken", hardening.OpenFgaApiToken);
-            }
-        }
+        if (hardening.EnableFgaAuthenticatedEndpoints)
+            webapi = webapi.WithEnvironment("OpenFga__ApiToken", hardening.OpenFgaApiToken);
 
         return webapi;
     }
@@ -330,13 +321,8 @@ public static class StartServices
     }
     
     
-    private static string FrontendPublicAuthAuthority(AppHostHardeningOptions hardening)
+    private static string FrontendPublicAuthAuthority()
     {
-        if (hardening.SingleUserMode)
-        {
-            return "";
-        }
-
         return Environment.GetEnvironmentVariable("AUTHENTIK_PUBLIC_AUTHORITY")
                ?? Environment.GetEnvironmentVariable("AUTHENTIK_AUTHORITY")
                ?? $"http://localhost:{Ports.Authentik}/application/o/froststream/";

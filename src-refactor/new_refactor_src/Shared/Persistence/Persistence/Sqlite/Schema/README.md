@@ -1,26 +1,12 @@
-> Phase 6 supersedes the historical startup instructions below. Full now uses a checksummed fresh-install M098 catalog; Lite runs the reviewed v1 baseline and v2–v4 steps with its local adapters. See [current packaging and recovery](../../../../../Phase6/README.md).
-
 # SQLite application baseline v1
 
 The baseline represents Full's application catalog after unchanged PostgreSQL migrations 1–97. Capture used a fresh, disposable PostgreSQL 18.3 database; the normalized manifest has 82 application tables, 66 foreign keys, 16 application check constraints and 96 non-primary indexes. All 45 EF entity tables and their column names match the catalog. The remaining tables include metadata graphs, policies, watch/likes, statistics, provider circuits and live-chat markers. Removed maintenance features and Cleipnir runtime tables are absent from the final application catalog.
 
-`001-baseline.sql` is embedded alongside `postgres-v97-manifest.json`. SQLite applies it with the seeds and a row in `froststream_schema_versions` in one immediate writer transaction. The version is **1**, independently of PostgreSQL's version **97**. Repeated initialization preserves existing data and edits. Unknown/newer histories, a changed baseline checksum and unversioned databases containing tables are rejected. Version tracking does not repair a manually damaged schema. Current initialization appends application v2 after this immutable baseline and initializes workflow v1 independently. Future changes require appended migrations; see the [upgrade and restart contract](../../Schema/README.md).
+`001-baseline.sql` is embedded alongside `postgres-v97-manifest.json`. SQLite applies it with the seeds and a row in `froststream_schema_versions` in one immediate writer transaction. The version is **1**, independently of PostgreSQL's version **97**. Repeated initialization preserves existing data and edits. Unknown/newer histories, a changed baseline checksum and unversioned databases containing tables are rejected. Version tracking does not repair a manually damaged schema. Current initialization appends application v2–v4 after this immutable baseline and initializes workflow v1 independently. Future changes require appended migrations; see the [upgrade and restart contract](../../Schema/README.md).
 
-## Initialize an experimental Lite database
+## Initialize Lite
 
-From the repository root:
-
-```sh
-dotnet run --project Lite/Backend/Lite.csproj --no-launch-profile -- \
-  --Deployment:Mode=Lite \
-  --Persistence:Sqlite:Enabled=true \
-  --Persistence:Sqlite:Path=/tmp/froststream-lite/core.sqlite \
-  --Persistence:InitializeOnly=true
-```
-
-Run the same command again to verify repeatability. `Persistence:Sqlite:Path` defaults to `/data/core.sqlite`; relative paths resolve against the host content root. It must name a persistent file, not `:memory:` or a SQLite URI. `Persistence:Sqlite:BusyTimeoutSeconds` defaults to 5 and accepts 1–60. The same keys can be supplied with environment variables, e.g. `Persistence__Sqlite__Enabled=true`.
-
-Initialization-only composition registers the selected database, runs migrations and exits without starting application services or an HTTP listener. It works with Full/PostgreSQL too, which is useful for disposable catalog capture. Normal startup remains on PostgreSQL unless SQLite is explicitly selected. Selecting SQLite in Full is a configuration error. Phase 2 persistence, workflows and restart reconciliation are complete. Normal Lite startup still requires Phase 3 local infrastructure adapters. Core repository contracts are documented in [the query adapters](../../Queries/README.md).
+The Lite host selects SQLite from its edition and runs schema initialization before runtime services. `Persistence:Sqlite:Enabled` is obsolete and rejected. `Persistence:Sqlite:Path` defaults to `/data/core.sqlite`; relative paths resolve against the host content root. It must be a persistent file, not `:memory:` or a SQLite URI. `Persistence:Sqlite:BusyTimeoutSeconds` defaults to 5 and accepts 1–60. Full uses its embedded fresh-install PostgreSQL baseline. See [packaging and recovery](../../../../../Phase6/README.md).
 
 ## Connection and storage rules
 
@@ -31,11 +17,11 @@ Raw connections use `SqliteConnectionFactory`. EF opens and reopens use its setu
 - GUIDs are lowercase 32-hex TEXT. JSON is TEXT with `json_valid` checks. VARCHAR limits, enum membership, booleans and GUID format are enforced with SQLite checks in addition to translated application checks.
 - Instants are signed INTEGER Unix microseconds, floored for values between microsecond boundaries, including before the epoch. Metadata timestamps without a PostgreSQL timezone are mapped to the same integer UTC representation for the shared raw adapters. Date-only values remain ISO date TEXT. Repository/query behavior is covered by the [2c adapters](../../Queries/README.md).
 - Database-generated time defaults use integer epoch arithmetic at SQLite's millisecond clock resolution. Application-supplied values retain microsecond precision. These defaults do not round-trip all of PostgreSQL's generated microsecond clock precision; callers needing it must supply a shared-clock value.
-- Active seeds include default local storage and ten schedules. Captured numeric IDs are retained; creation/update times are supplied by `IClock`, and next-due times are computed from each seed's Quartz cron and timezone. No timestamp from the disposable database is shipped. Backup schedule adaptation remains later scope; these schedules cannot execute through the initialization-only host.
+- Active seeds include default local storage and ten schedules. Captured numeric IDs are retained; creation/update times are supplied by `IClock`, and next-due times are computed from each seed's Quartz cron and timezone. No timestamp from the disposable database is shipped. Lite backup schedules use its local snapshot adapter.
 
 ## Reproduce and check the artifacts
 
-First initialize an **empty disposable PostgreSQL database** with `Persistence:InitializeOnly=true`, `Deployment:Mode=Full` and its `ConnectionStrings:froststreamdb`. Do not use a production database. Then configure psql's `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, and authentication environment for that disposable database:
+The v97 manifest below is a frozen historical input; current Full initializes the v98 catalog and cannot reproduce that cutoff. Do not regenerate the v97 manifest from current Full. For current baseline integrity run `python3 Phase6/verify-baselines.py`. Historical capture used an **empty disposable PostgreSQL database** with `Persistence:InitializeOnly=true`, `Deployment:Mode=Full` and its `ConnectionStrings:froststreamdb`. Do not use a production database. Then configure psql's `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, and authentication environment for that disposable database:
 
 ```sh
 python3 SPLIT_PLAN/tools/export_postgres_manifest.py --output /tmp/postgres-v97-manifest.json

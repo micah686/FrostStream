@@ -448,6 +448,8 @@ Rollback for this fresh-install effort means reverting the phase and recreating 
 
 ### Phase 7 — Remove transitional paths and enforce boundaries
 
+**Implementation status (2026-10-11):** Historical PostgreSQL migration replay/SDKs, the SQLite opt-in selector, obsolete backup/Typesense aliases, legacy OpenBao bootstrap adoption, Full single-user composition branches, compatibility helpers and stale boundary documentation are removed in `new_refactor_src`. Fixtures use the production fresh-install baseline and explicit Full JWT/OpenFGA identity. Final dependency/source checks and deliberate violation tests are wired into `.github/workflows/refactor-boundaries.yml`, together with backend/UI checks and a four-profile clean-install matrix. Local validation passes 629 unit tests, 88 integration tests, 27 architecture tests, frontend tests/check/build and all four fresh packages; see `new_refactor_src/Phase7/README.md`. Hosted CI execution, real Authentik browser/external HTTPS acceptance and the physical 8 GB benchmark remain separate verification areas.
+
 **Work:** Remove obsolete selectors/markers, old configuration aliases, unused adapters, duplicate helpers, stale Full single-user code, and transitional Typesense references. Update architecture/test documentation and enforce dependency rules in CI.
 
 **Exit gate:** No transitional paths remain; both clean-install profiles and required backend/UI suites pass; new boundary violations fail CI.

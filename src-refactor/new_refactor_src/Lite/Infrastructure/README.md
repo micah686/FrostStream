@@ -1,3 +1,5 @@
-# Reserved boundary
+# Lite/Infrastructure
 
-Phase 0 preserves the existing composition. Extraction into this boundary starts in Phase 1/2; this directory does not claim an implemented library or host.
+Lite adapters provide SQLite persistence, durable in-process messaging, encrypted local secrets, local administrator identity, offline recovery and embedded Lucene search. The Lite executable composes these with all shared application modules. Full SDKs are forbidden in its restored dependency graph.
+
+See [architecture and verification](../../README.md).

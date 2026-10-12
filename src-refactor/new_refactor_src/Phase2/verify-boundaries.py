@@ -5,8 +5,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'Phase0'))
 import verify
 ROOT = verify.ROOT
-FULL_SDK = re.compile(r'^(?:Npgsql(?:\.|$)|NATS\.|Conduit\.NATS|VaultSharp|Typesense|Cleipnir\.Flows\.PostgresSql|FluentMigrator)', re.I)
-PROVIDER_SDK = re.compile(r'^(?:Npgsql(?:\.|$)|NATS\.|Conduit\.NATS|VaultSharp|Typesense|Microsoft\.Data\.Sqlite|Microsoft\.EntityFrameworkCore\.Sqlite|Cleipnir\.Flows\.PostgresSql|FluentMigrator)', re.I)
+FULL_SDK = re.compile(r'^(?:Npgsql(?:\.|$)|NATS\.|Conduit\.NATS|VaultSharp|Typesense|Cleipnir\.Flows\.PostgresSql|FluentMigrator|Microsoft\.AspNetCore\.Authentication\.(?:JwtBearer|OpenIdConnect))', re.I)
+PROVIDER_SDK = re.compile(r'^(?:Npgsql(?:\.|$)|NATS\.|Conduit\.NATS|VaultSharp|Typesense|Microsoft\.Data\.Sqlite|Microsoft\.EntityFrameworkCore\.Sqlite|Cleipnir\.Flows\.PostgresSql|FluentMigrator|Lucene\.Net|Microsoft\.AspNetCore\.Authentication\.(?:JwtBearer|OpenIdConnect))', re.I)
 
 def check(graph, root=ROOT, require_restored=False):
     errors = []

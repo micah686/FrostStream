@@ -618,7 +618,6 @@ public sealed class CoreRepositoryPersistenceTests
             {
                 dir = Path.Combine(Path.GetTempPath(), "froststream-core-" + Guid.NewGuid().ToString("N"));
                 builder.Configuration["Deployment:Mode"] = "Lite";
-                builder.Configuration["Persistence:Sqlite:Enabled"] = "true";
                 builder.Configuration["Persistence:Sqlite:Path"] = Path.Combine(dir, "core.db");
             }
             if (Shared.Deployment.DeploymentOptions.FromConfiguration(builder.Configuration).Mode == Shared.Deployment.DeploymentMode.Lite) builder.AddLitePersistence().AddLiteMessaging().AddLiteSecretStore().AddLiteBackupClient().AddLiteStagedStorage(); else builder.AddFullPersistence();

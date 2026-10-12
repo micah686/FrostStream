@@ -2,10 +2,8 @@ namespace WebAPI.Auth;
 
 public static class WebApiHardening
 {
-    public static void ValidateStartup(FrostStreamAuthOptions options, bool singleUserMode, bool isProduction)
+    public static void ValidateStartup(FrostStreamAuthOptions options, bool isProduction)
     {
-        if (singleUserMode) throw new InvalidOperationException("Full requires Authentik; single-user mode is forbidden.");
-
         Require(options.Authority, "Auth:Authority");
         Require(options.PublicOrigin, "Auth:PublicOrigin");
         Require(options.ClientId, "Auth:ClientId");
