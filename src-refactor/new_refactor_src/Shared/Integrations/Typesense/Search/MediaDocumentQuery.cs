@@ -75,6 +75,19 @@ public sealed class MediaDocumentQuery(ApplicationDatabase dataSource) : IMediaD
         return new DocumentBatch<CaptionDocument>(items, nextLastId == 0 ? lastId : nextLastId);
     }
 
+    public async Task<DocumentBatch<CommentDocument>> GetCommentsForMediaBatchAsync(Guid mediaGuid, long lastId, int pageSize, CancellationToken ct = default)
+    {
+        await using var command = CreateCommentsCommand("WHERE mc.media_guid=@media_guid AND mc.id>@last_id ORDER BY mc.id LIMIT @page_size");
+        command.Parameters.AddWithValue("@media_guid", mediaGuid); command.Parameters.AddWithValue("@last_id", lastId); command.Parameters.AddWithValue("@page_size", Math.Clamp(pageSize, 1, 128));
+        var (items, next) = await ReadCommentDocumentsAsync(command, ct); return new(items, next == 0 ? lastId : next);
+    }
+    public async Task<DocumentBatch<CaptionDocument>> GetCaptionsForMediaBatchAsync(Guid mediaGuid, long lastId, int pageSize, CancellationToken ct = default)
+    {
+        await using var command = CreateCaptionsCommand("WHERE mc.media_guid=@media_guid AND mc.id>@last_id ORDER BY mc.id LIMIT @page_size");
+        command.Parameters.AddWithValue("@media_guid", mediaGuid); command.Parameters.AddWithValue("@last_id", lastId); command.Parameters.AddWithValue("@page_size", Math.Clamp(pageSize, 1, 16));
+        var (items, next) = await ReadCaptionDocumentsAsync(command, ct); return new(items, next == 0 ? lastId : next);
+    }
+
     private DbCommand CreateMediaCommand(string whereClause)
         => dataSource.CreateCommand(dataSource.Sql("MediaDocumentQuery.CreateMediaCommand.1", whereClause));
 

@@ -120,7 +120,7 @@ public sealed class LiteHostStartupTests
             unsupportedSchedule.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
             (await unsupportedSchedule.Content.ReadAsStringAsync(timeout.Token)).ShouldContain("Differential backup schedules are not supported");
             var hosted = app.Services.GetServices<IHostedService>().ToList();
-            app.Services.GetServices<ApplicationInitializationStep>().Count().ShouldBe(5);
+            app.Services.GetServices<ApplicationInitializationStep>().Count().ShouldBe(6);
             hosted.OfType<LiteRuntimeLifecycle>().Count().ShouldBe(1);
             var scheduler = await app.Services.GetRequiredService<ISchedulerFactory>().GetScheduler(timeout.Token);
             scheduler.Status.ShouldBe(SchedulerStatus.Running);

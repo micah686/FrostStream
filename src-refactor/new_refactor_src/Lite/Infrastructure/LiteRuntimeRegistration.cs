@@ -6,6 +6,7 @@ using FrostStream.ApplicationContracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Configuration;
 using Shared.Backups;
 using Shared.Deployment;
 using Shared.Messaging.Adapters;
@@ -19,7 +20,15 @@ public static class LiteRuntimeRegistration
     {
         RequireLite(builder);
         builder.Services.AddLocalApplicationTransport(builder.Configuration);
+        var options = builder.Configuration.GetSection("Messaging:Local:Queue").Get<LocalQueueOptions>() ?? new();
+        options.Validate();
+        builder.Services.TryAddSingleton(options);
         builder.Services.TryAddSingleton<SqliteDurableTransport>();
+        if (builder.Services.TryAddModule(typeof(LocalQueueMaintenance)))
+        {
+            builder.Services.AddSingleton(new ApplicationInitializationStep("local queue", 25, (sp, ct) => sp.GetRequiredService<SqliteDurableTransport>().InitializeAsync(ct)));
+            builder.Services.AddHostedService<LocalQueueMaintenance>();
+        }
         builder.Services.TryAddSingleton<IDurableJobPublisher>(sp => sp.GetRequiredService<SqliteDurableTransport>());
         builder.Services.TryAddSingleton<IDurableJobConsumer>(sp => sp.GetRequiredService<SqliteDurableTransport>());
         builder.Services.TryAddSingleton<IWorkerJobRoutes>(sp => sp.GetRequiredService<SqliteDurableTransport>());

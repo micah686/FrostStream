@@ -9,6 +9,8 @@ namespace DataBridge.Search;
 
 public sealed class MetadataRebuildCoordinator(
     IServiceScopeFactory scopeFactory,
+    TypesenseWriterGate writerGate,
+    DataBridge.Persistence.Indexing.PendingIndexStore pendingIndex,
     ITypesenseIndexService indexService,
     CaptionDocumentHydrator captionDocumentHydrator,
     IHostApplicationLifetime applicationLifetime,
@@ -58,8 +60,10 @@ public sealed class MetadataRebuildCoordinator(
 
     private async Task RunRebuildAsync(string reason, CancellationToken ct)
     {
+        await writerGate.Semaphore.WaitAsync(ct);
         try
         {
+            await pendingIndex.InvalidateAsync(ct);
             logger.LogInformation("Starting Typesense metadata rebuild. Reason: {Reason}", reason);
             await indexService.RecreateAllCollectionsAsync(ct);
 
@@ -85,6 +89,7 @@ public sealed class MetadataRebuildCoordinator(
                 $"Typesense metadata rebuild failed: {ex.Message}",
                 cancellationToken: ct);
         }
+        finally { writerGate.Semaphore.Release(); }
     }
 
     private async Task RebuildMediaAsync(IMediaDocumentQuery query, CancellationToken ct)

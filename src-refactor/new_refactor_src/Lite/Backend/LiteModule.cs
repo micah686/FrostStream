@@ -20,6 +20,7 @@ public static class LiteModule
     {
         builder.Configuration["Deployment:Mode"] ??= "Lite";
         builder.Configuration["Persistence:Sqlite:Enabled"] ??= "true";
+        builder.Configuration["MediaProcessor:MaxConcurrentProcesses"] ??= "1";
         var tools = Path.Combine(AppContext.BaseDirectory, "tools");
         builder.Configuration["MediaProcessor:FfmpegPath"] ??= Path.Combine(tools, OperatingSystem.IsWindows() ? "ffmpeg.exe" : "ffmpeg");
         builder.Configuration["MediaProcessor:FfprobePath"] ??= Path.Combine(tools, OperatingSystem.IsWindows() ? "ffprobe.exe" : "ffprobe");

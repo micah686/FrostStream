@@ -10,6 +10,10 @@ public interface IMediaDocumentQuery
 
     Task<IReadOnlyList<CaptionDocument>> GetCaptionsByMediaGuidAsync(Guid mediaGuid, CancellationToken ct = default);
 
+    Task<DocumentBatch<CommentDocument>> GetCommentsForMediaBatchAsync(Guid mediaGuid, long lastId, int pageSize, CancellationToken ct = default);
+
+    Task<DocumentBatch<CaptionDocument>> GetCaptionsForMediaBatchAsync(Guid mediaGuid, long lastId, int pageSize, CancellationToken ct = default);
+
     Task<DocumentBatch<MediaDocument>> GetMediaBatchAsync(long lastId, int pageSize, CancellationToken ct = default);
 
     Task<DocumentBatch<CommentDocument>> GetCommentBatchAsync(long lastId, int pageSize, CancellationToken ct = default);

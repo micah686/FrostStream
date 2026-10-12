@@ -36,6 +36,8 @@ public static class LitePersistenceRegistration
         {
             ct.ThrowIfCancellationRequested(); return sp.GetRequiredService<SqliteFunctionStore>().Initialize().WaitAsync(ct);
         }));
+        builder.Services.AddScoped<DataBridge.Persistence.Indexing.IIndexSchemaInitializer, PendingIndexSchema>();
+        builder.Services.AddSingleton<DataBridge.Persistence.Indexing.PendingIndexStore>();
         builder.Services.AddSchemaInitialization();
         return builder;
     }

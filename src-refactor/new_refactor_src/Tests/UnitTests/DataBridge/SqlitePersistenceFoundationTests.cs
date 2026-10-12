@@ -54,11 +54,11 @@ public sealed class SqlitePersistenceFoundationTests
         using var fixture = new DatabaseFixture();
         fixture.Host.Services.GetService<IMigrationRunner>().ShouldBeNull();
         fixture.Host.Services.GetService<NpgsqlDataSource>().ShouldBeNull();
-        fixture.Host.Services.GetServices<IHostedService>().ShouldBeEmpty();
         var builder = Host.CreateApplicationBuilder();
         builder.Configuration["Deployment:Mode"] = "Lite";
         builder.Configuration["Persistence:Sqlite:Enabled"] = "true";
         builder.AddLitePersistence();
+        builder.Services.ShouldNotContain(d => d.ServiceType == typeof(IHostedService));
         builder.Services.ShouldNotContain(d => d.ServiceType == typeof(FrostStream.ApplicationContracts.IDurableJobPublisher));
         builder.Services.ShouldNotContain(d => d.ServiceType == typeof(Shared.Secrets.ISecretStore));
         builder.Services.ShouldNotContain(d => d.ServiceType == typeof(Shared.Backups.IBackupServiceClient));
@@ -102,7 +102,7 @@ public sealed class SqlitePersistenceFoundationTests
         using var manifest = JsonDocument.Parse(SqliteBaseline.ManifestJson);
         var tables = manifest.RootElement.GetProperty("tables").EnumerateArray().ToArray();
         tables.Length.ShouldBe(82);
-        Scalar(connection, "SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'cleipnir_%'")
+        Scalar(connection, "SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'cleipnir_%' AND name <> 'search_pending_index'")
             .ShouldBe(86L); // Baseline, startup boundary, staged objects, local secrets, and history.
         foreach (var table in tables)
         {

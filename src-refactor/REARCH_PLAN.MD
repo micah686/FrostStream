@@ -408,6 +408,8 @@ Rollback for this fresh-install effort means reverting the phase and recreating 
 
 ### Phase 3 — Reliable and bounded local runtime
 
+**Status:** Implemented in `new_refactor_src/`. Local delivery claims and retention use indexed, bounded pages, subject-specific wake-ups and idle backoff, explicit concurrency limits, fenced leases, retained terminal failures and deduplication markers. Both providers persist revisioned index intent in source transactions; a bounded Typesense worker applies it and retains failures/deletions for retry. Media child processes have shared limits and cancellation cleanup. See [Phase 3 implementation](new_refactor_src/Phase3/README.md) and [verification evidence](new_refactor_src/Phase3/verification-results.json). Full deployment and reference-machine measurements still belong to the open Phase 0 gates.
+
 **Work:** Add indexed/bounded queue claims, wake-up/backoff behavior, retention, terminal retry handling, and concurrency controls. Introduce transactional pending-index work and neutral route definitions. Adapt current indexing to consume durable intent without replacing business workflows.
 
 **Exit gate:** Idle polling cost stays bounded; crash/redelivery/deduplication/retention tests pass; index intent survives database commit and process failure; no handler executes inside a long database transaction.

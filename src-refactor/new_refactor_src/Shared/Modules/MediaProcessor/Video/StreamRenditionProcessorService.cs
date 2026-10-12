@@ -32,11 +32,11 @@ public sealed class StreamRenditionProcessorService(
         => consumer.ConsumePullAsync<StreamRenditionEncodeRequested>(
             stream: Stream,
             consumer: ConsumerName.From(BackgroundJobsTopology.MediaProcessorStreamRenditionConsumer),
-            handler: HandleAsync,
+            handler: context => HandleAsync(context, stoppingToken),
             options: null,
             cancellationToken: stoppingToken);
 
-    private async Task HandleAsync(IDurableMessageContext<StreamRenditionEncodeRequested> context)
+    private async Task HandleAsync(IDurableMessageContext<StreamRenditionEncodeRequested> context, CancellationToken cancellationToken)
     {
         var request = context.Message;
         var workRoot = Path.Combine(options.Value.TempRoot, "hls-" + request.RenditionId.ToString("N"));
@@ -55,7 +55,7 @@ public sealed class StreamRenditionProcessorService(
                 StreamRenditionSubjects.Claim,
                 new StreamRenditionClaimRequest { RenditionId = request.RenditionId },
                 DataBridgeTimeout,
-                CancellationToken.None);
+                cancellationToken);
 
             if (claim?.Success != true || claim.Item is null)
             {
@@ -73,10 +73,10 @@ public sealed class StreamRenditionProcessorService(
                 item.SourceVersion);
 
             await progress.PhaseAsync(RenditionProgressPhases.FetchingSource);
-            await storageClient.DownloadToFileAsync(item.SourceStorageKey, item.SourceStoragePath, inputPath, CancellationToken.None);
+            await storageClient.DownloadToFileAsync(item.SourceStorageKey, item.SourceStoragePath, inputPath, cancellationToken);
 
             await progress.PhaseAsync(RenditionProgressPhases.Probing);
-            var probe = await ffmpeg.ProbeAsync(inputPath, CancellationToken.None);
+            var probe = await ffmpeg.ProbeAsync(inputPath, cancellationToken);
             if (!probe.HasVideo)
                 throw new InvalidOperationException("Source media has no video track; request an audio rendition instead.");
 
@@ -86,7 +86,7 @@ public sealed class StreamRenditionProcessorService(
                 BuildHlsArgs(inputPath, hlsRoot, probe),
                 hlsRoot,
                 frame => reporter.ReportFfmpeg(RenditionProgressPhases.Encoding, frame, probe.DurationSeconds),
-                CancellationToken.None);
+                cancellationToken);
 
             var manifestPath = Path.Combine(hlsRoot, ManifestFileName);
             var manifestInfo = new FileInfo(manifestPath);
@@ -107,7 +107,7 @@ public sealed class StreamRenditionProcessorService(
             {
                 var file = uploadFiles[i];
                 totalSizeBytes += new FileInfo(file).Length;
-                await storageClient.UploadFromFileAsync(file, item.OutputStorageKey, $"{outputBase}/{Path.GetFileName(file)}", CancellationToken.None);
+                await storageClient.UploadFromFileAsync(file, item.OutputStorageKey, $"{outputBase}/{Path.GetFileName(file)}", cancellationToken);
                 await progress.PhaseAsync(RenditionProgressPhases.Uploading, percent: (i + 1) * 100d / uploadFiles.Count);
             }
 
@@ -121,7 +121,7 @@ public sealed class StreamRenditionProcessorService(
                     DurationSeconds = probe.DurationSeconds
                 },
                 DataBridgeTimeout,
-                CancellationToken.None);
+                cancellationToken);
 
             logger.LogInformation(
                 "Stream rendition encode completed for {RenditionId} StorageKey {StorageKey} StoragePath {StoragePath} SizeBytes {SizeBytes} (video: {VideoCodec}, audio: {AudioCodec}).",

@@ -161,6 +161,7 @@ public static class DataBridgeModule
     {
         using var scope = app.Services.CreateScope();
         scope.ServiceProvider.GetRequiredService<IApplicationSchemaInitializer>().Initialize(cancellationToken);
+        scope.ServiceProvider.GetService<DataBridge.Persistence.Indexing.IIndexSchemaInitializer>()?.Initialize();
         cancellationToken.ThrowIfCancellationRequested();
         scope.ServiceProvider.GetRequiredService<IWorkflowStoreFactory>().Create().Initialize().GetAwaiter().GetResult();
     }

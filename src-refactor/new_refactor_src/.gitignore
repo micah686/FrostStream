@@ -10,3 +10,5 @@
 Full/AppHost/configs/nats/certs/
 **/__pycache__/
 .phase2/
+
+.phase3/

@@ -30,11 +30,11 @@ public sealed class AudioRenditionProcessorService(
         => consumer.ConsumePullAsync<AudioRenditionEncodeRequested>(
             stream: Stream,
             consumer: ConsumerName.From(BackgroundJobsTopology.MediaProcessorAudioRenditionConsumer),
-            handler: HandleAsync,
+            handler: context => HandleAsync(context, stoppingToken),
             options: null,
             cancellationToken: stoppingToken);
 
-    private async Task HandleAsync(IDurableMessageContext<AudioRenditionEncodeRequested> context)
+    private async Task HandleAsync(IDurableMessageContext<AudioRenditionEncodeRequested> context, CancellationToken cancellationToken)
     {
         var request = context.Message;
         var workRoot = Path.Combine(options.Value.TempRoot, "audio-" + request.RenditionId.ToString("N"));
@@ -56,7 +56,7 @@ public sealed class AudioRenditionProcessorService(
                 AudioRenditionSubjects.Claim,
                 new AudioRenditionClaimRequest { RenditionId = request.RenditionId },
                 DataBridgeTimeout,
-                CancellationToken.None);
+                cancellationToken);
 
             if (claim?.Success != true || claim.Item is null)
             {
@@ -74,10 +74,10 @@ public sealed class AudioRenditionProcessorService(
                 item.SourceVersion);
 
             await progress.PhaseAsync(RenditionProgressPhases.FetchingSource);
-            await storageClient.DownloadToFileAsync(item.SourceStorageKey, item.SourceStoragePath, inputPath, CancellationToken.None);
+            await storageClient.DownloadToFileAsync(item.SourceStorageKey, item.SourceStoragePath, inputPath, cancellationToken);
 
             await progress.PhaseAsync(RenditionProgressPhases.Probing);
-            var probe = await ffmpeg.ProbeAsync(inputPath, CancellationToken.None);
+            var probe = await ffmpeg.ProbeAsync(inputPath, cancellationToken);
             if (!probe.HasAudio)
                 throw new InvalidOperationException("Source media has no audio track to encode.");
 
@@ -86,7 +86,7 @@ public sealed class AudioRenditionProcessorService(
                 $"-hide_banner -y -i {FfmpegRunner.Quote(inputPath)} -vn -c:a libopus -b:a {options.Value.OpusBitrate} {FfmpegRunner.Quote(outputPath)}",
                 workingDirectory: null,
                 frame => reporter.ReportFfmpeg(RenditionProgressPhases.Encoding, frame, probe.DurationSeconds),
-                CancellationToken.None);
+                cancellationToken);
 
             var outputInfo = new FileInfo(outputPath);
             if (!outputInfo.Exists || outputInfo.Length == 0)
@@ -97,14 +97,14 @@ public sealed class AudioRenditionProcessorService(
                 BuildHlsArgs(outputPath, hlsRoot, manifestPath),
                 hlsRoot,
                 frame => reporter.ReportFfmpeg(RenditionProgressPhases.Packaging, frame, probe.DurationSeconds),
-                CancellationToken.None);
+                cancellationToken);
 
             var manifestInfo = new FileInfo(manifestPath);
             if (!manifestInfo.Exists || manifestInfo.Length == 0)
                 throw new InvalidOperationException("ffmpeg completed without producing an HLS manifest.");
 
             await progress.PhaseAsync(RenditionProgressPhases.Uploading, percent: 0);
-            await storageClient.UploadFromFileAsync(outputPath, item.OutputStorageKey, item.OutputStoragePath, CancellationToken.None);
+            await storageClient.UploadFromFileAsync(outputPath, item.OutputStorageKey, item.OutputStoragePath, cancellationToken);
 
             var outputBasePath = StorageDirectory(item.OutputStoragePath);
             var hlsBasePath = CombineStoragePath(outputBasePath, "hls");
@@ -113,11 +113,11 @@ public sealed class AudioRenditionProcessorService(
             {
                 var file = hlsFiles[i];
                 var storagePath = CombineStoragePath(hlsBasePath, Path.GetFileName(file));
-                await storageClient.UploadFromFileAsync(file, item.OutputStorageKey, storagePath, CancellationToken.None);
+                await storageClient.UploadFromFileAsync(file, item.OutputStorageKey, storagePath, cancellationToken);
                 await progress.PhaseAsync(RenditionProgressPhases.Uploading, percent: (i + 1) * 100d / (hlsFiles.Count + 1));
             }
 
-            var hash = await FfmpegRunner.ComputeXxHash128Async(outputPath, CancellationToken.None);
+            var hash = await FfmpegRunner.ComputeXxHash128Async(outputPath, cancellationToken);
             var totalSizeBytes = Directory.EnumerateFiles(hlsRoot)
                 .Select(path => new FileInfo(path).Length)
                 .Sum() + outputInfo.Length;
@@ -132,7 +132,7 @@ public sealed class AudioRenditionProcessorService(
                     DurationSeconds = probe.DurationSeconds
                 },
                 DataBridgeTimeout,
-                CancellationToken.None);
+                cancellationToken);
 
             logger.LogInformation(
                 "Audio rendition encode completed for {RenditionId} StorageKey {StorageKey} StoragePath {StoragePath} SizeBytes {SizeBytes}.",

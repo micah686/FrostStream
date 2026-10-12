@@ -8,6 +8,7 @@ public static class SchemaInitializationRegistration
         {
             using var scope = sp.CreateScope();
             scope.ServiceProvider.GetRequiredService<IApplicationSchemaInitializer>().Initialize(ct);
+            scope.ServiceProvider.GetService<DataBridge.Persistence.Indexing.IIndexSchemaInitializer>()?.Initialize();
             return Task.CompletedTask;
         }));
 }

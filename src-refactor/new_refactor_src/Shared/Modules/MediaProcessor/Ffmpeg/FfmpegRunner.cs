@@ -32,6 +32,11 @@ public sealed record FfmpegProgress
 /// <summary>Runs ffmpeg/ffprobe as child processes for the rendition services.</summary>
 public sealed class FfmpegRunner(IOptions<MediaProcessorOptions> options, ILogger<FfmpegRunner> logger)
 {
+    private readonly SemaphoreSlim processSlots = new(ValidateLimit(options.Value.MaxConcurrentProcesses));
+    private int activeProcesses;
+    public int ActiveProcesses => Volatile.Read(ref activeProcesses);
+    private static int ValidateLimit(int value) => value is >= 1 and <= 16 ? value : throw new ArgumentOutOfRangeException(nameof(value));
+
     public Task RunFfmpegAsync(string args, string? workingDirectory, CancellationToken cancellationToken)
         => RunFfmpegAsync(args, workingDirectory, onProgress: null, cancellationToken);
 
@@ -140,7 +145,15 @@ public sealed class FfmpegRunner(IOptions<MediaProcessorOptions> options, ILogge
            disposition.TryGetProperty("attached_pic", out var attachedPic) &&
            attachedPic.TryGetInt32(out var value) && value == 1;
 
-    private static async Task<(int ExitCode, string Stdout, string Stderr)> RunProcessAsync(
+    private async Task<(int ExitCode, string Stdout, string Stderr)> RunProcessAsync(string fileName, string args, string? workingDirectory, Action<string>? onStdoutLine, CancellationToken cancellationToken)
+    {
+        await processSlots.WaitAsync(cancellationToken);
+        Interlocked.Increment(ref activeProcesses);
+        try { return await RunProcessCoreAsync(fileName, args, workingDirectory, onStdoutLine, cancellationToken); }
+        finally { Interlocked.Decrement(ref activeProcesses); processSlots.Release(); }
+    }
+
+    private static async Task<(int ExitCode, string Stdout, string Stderr)> RunProcessCoreAsync(
         string fileName,
         string args,
         string? workingDirectory,
@@ -163,11 +176,29 @@ public sealed class FfmpegRunner(IOptions<MediaProcessorOptions> options, ILogge
 
         process.Start();
         var stdoutTask = onStdoutLine is null
-            ? process.StandardOutput.ReadToEndAsync(cancellationToken)
+            ? ReadTailAsync(process.StandardOutput, cancellationToken)
             : PumpLinesAsync(process.StandardOutput, onStdoutLine, cancellationToken);
-        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
-        await process.WaitForExitAsync(cancellationToken);
+        var stderrTask = ReadTailAsync(process.StandardError, cancellationToken);
+        try { await process.WaitForExitAsync(cancellationToken); }
+        catch (OperationCanceledException)
+        {
+            try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
+            await process.WaitForExitAsync(CancellationToken.None);
+            try { await Task.WhenAll(stdoutTask, stderrTask); } catch (OperationCanceledException) { }
+            throw;
+        }
         return (process.ExitCode, await stdoutTask, await stderrTask);
+    }
+
+    private static async Task<string> ReadTailAsync(StreamReader reader, CancellationToken ct)
+    {
+        const int limit = 65536;
+        var text = new System.Text.StringBuilder(); var buffer = new char[4096]; int count;
+        while ((count = await reader.ReadAsync(buffer.AsMemory(), ct)) > 0)
+        {
+            text.Append(buffer, 0, count); if (text.Length > limit) text.Remove(0, text.Length - limit);
+        }
+        return text.ToString();
     }
 
     private static async Task<string> PumpLinesAsync(StreamReader reader, Action<string> onLine, CancellationToken cancellationToken)

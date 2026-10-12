@@ -22,7 +22,9 @@ public static class MediaProcessorModule
 
 
         builder.Services.AddOptions<MediaProcessorOptions>()
-            .Bind(builder.Configuration.GetSection(MediaProcessorOptions.SectionName));
+            .Bind(builder.Configuration.GetSection(MediaProcessorOptions.SectionName))
+            .Validate(options => options.MaxConcurrentProcesses is >= 1 and <= 16, "MediaProcessor:MaxConcurrentProcesses must be between 1 and 16.")
+            .ValidateOnStart();
         builder.Services.AddSingleton<IClock>(SystemClock.Instance);
         builder.Services.AddKeyedSingleton<IBackgroundRunReporter>("media-processor", (sp, _) => new BackgroundRunReporter(
             sp.GetRequiredService<FrostStream.ApplicationContracts.IMessageBus>(),

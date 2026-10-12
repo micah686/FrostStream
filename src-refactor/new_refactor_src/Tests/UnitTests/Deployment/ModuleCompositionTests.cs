@@ -53,7 +53,7 @@ public sealed class ModuleCompositionTests
                 .Select(d => d.ImplementationType).ToList();
             hostedTypes.ShouldNotContain(typeof(Quartz.QuartzHostedService));
             builder.Services.Where(d => d.ServiceType == typeof(ApplicationInitializationStep)).Select(d => (ApplicationInitializationStep)d.ImplementationInstance!)
-                .Select(step => step.Order).Order().ShouldBe(new[] { 10, 20, 30, 40, 50 });
+                .Select(step => step.Order).Order().ShouldBe(new[] { 10, 20, 25, 30, 40, 50 });
             builder.Services.ShouldNotContain(d => d.ServiceType == typeof(ITopologySource));
             builder.Services.ShouldNotContain(d => d.ServiceType == typeof(NATS.Client.Core.INatsConnection));
             builder.Services.ShouldNotContain(d => d.ServiceType == typeof(Npgsql.NpgsqlDataSource));

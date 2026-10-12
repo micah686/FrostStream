@@ -2,6 +2,8 @@ namespace MediaProcessor;
 
 public sealed class MediaProcessorOptions
 {
+    public int MaxConcurrentProcesses { get; init; } = 2;
+
     public const string SectionName = "MediaProcessor";
 
     public string WebApiBaseUrl { get; init; } = "http://localhost:25200";

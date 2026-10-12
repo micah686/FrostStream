@@ -33,15 +33,17 @@ public sealed partial class CaptionDocumentHydrator(
 
     public async Task<IReadOnlyList<CaptionDocument>> HydrateAsync(
         IReadOnlyList<CaptionDocument> captions,
-        CancellationToken ct = default)
+        CancellationToken ct = default, bool requireComplete = false)
     {
         if (captions.Count == 0)
             return captions;
 
-        return await Task.WhenAll(captions.Select(caption => HydrateAsync(caption, ct)));
+        var result = new List<CaptionDocument>(captions.Count);
+        foreach (var caption in captions) result.Add(await HydrateAsync(caption, ct, requireComplete));
+        return result;
     }
 
-    private async Task<CaptionDocument> HydrateAsync(CaptionDocument caption, CancellationToken ct)
+    private async Task<CaptionDocument> HydrateAsync(CaptionDocument caption, CancellationToken ct, bool requireComplete)
     {
         var extension = Path.GetExtension(caption.StoragePath).ToLowerInvariant();
         if (extension is not (".vtt" or ".srt" or ".ass" or ".ssa"))
@@ -54,20 +56,33 @@ public sealed partial class CaptionDocumentHydrator(
             if (stream is null)
             {
                 logger.LogWarning("Caption sidecar was missing while indexing {StorageKey}:{StoragePath}.", caption.StorageKey, caption.StoragePath);
+                if (requireComplete) throw new IOException("Caption sidecar is missing or oversized: " + caption.StoragePath);
                 return caption;
             }
 
             if (stream.CanSeek && stream.Length > MaximumCaptionBytes)
             {
                 logger.LogWarning("Skipping oversized caption sidecar {StorageKey}:{StoragePath}.", caption.StorageKey, caption.StoragePath);
+                if (requireComplete) throw new IOException("Caption sidecar is missing or oversized: " + caption.StoragePath);
                 return caption;
             }
 
             using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, bufferSize: 81920, leaveOpen: false);
-            var content = await reader.ReadToEndAsync(ct);
+            var buffer = new char[8192];
+            var contentBuilder = new StringBuilder();
+            var bytes = 0;
+            int length;
+            while ((length = await reader.ReadAsync(buffer.AsMemory(), ct)) > 0)
+            {
+                bytes += Encoding.UTF8.GetByteCount(buffer, 0, length);
+                if (bytes > MaximumCaptionBytes) throw new IOException("Caption sidecar exceeds the indexing limit.");
+                contentBuilder.Append(buffer, 0, length);
+            }
+            var content = contentBuilder.ToString();
             if (Encoding.UTF8.GetByteCount(content) > MaximumCaptionBytes)
             {
                 logger.LogWarning("Skipping oversized caption sidecar {StorageKey}:{StoragePath}.", caption.StorageKey, caption.StoragePath);
+                if (requireComplete) throw new IOException("Caption sidecar is missing or oversized: " + caption.StoragePath);
                 return caption;
             }
 
@@ -75,6 +90,7 @@ public sealed partial class CaptionDocumentHydrator(
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
+            if (requireComplete) throw;
             logger.LogWarning(ex, "Unable to read caption sidecar for Typesense indexing {StorageKey}:{StoragePath}.", caption.StorageKey, caption.StoragePath);
             return caption;
         }
