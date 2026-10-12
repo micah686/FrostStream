@@ -19,6 +19,11 @@ public static class StreamRenditionSubjects
     public const string ProcessorsQueueGroup = "databridge-stream-renditions";
 }
 
+public static class StreamRenditionErrorMessages
+{
+    public const string AudioOnlySource = "Source media has no video track; request an audio rendition instead.";
+}
+
 /// <summary>
 /// JetStream job asking MediaProcessor to produce the stream/casting HLS rendition
 /// (H.264 + AAC segments) for one stored media version.

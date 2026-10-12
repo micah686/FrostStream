@@ -78,7 +78,7 @@ public sealed class StreamRenditionProcessorService(
             await progress.PhaseAsync(RenditionProgressPhases.Probing);
             var probe = await ffmpeg.ProbeAsync(inputPath, cancellationToken);
             if (!probe.HasVideo)
-                throw new InvalidOperationException("Source media has no video track; request an audio rendition instead.");
+                throw new InvalidOperationException(StreamRenditionErrorMessages.AudioOnlySource);
 
             Directory.CreateDirectory(hlsRoot);
             var reporter = progress;

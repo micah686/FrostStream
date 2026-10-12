@@ -46,7 +46,8 @@ public sealed class StreamRenditionRepository(DataBridgeDbContext db, IClock clo
 
         if (existing is not null)
         {
-            if (existing.Status == StreamRenditionStatus.Failed)
+            if (existing.Status == StreamRenditionStatus.Failed &&
+                !string.Equals(existing.ErrorMessage, StreamRenditionErrorMessages.AudioOnlySource, StringComparison.Ordinal))
             {
                 existing.Status = StreamRenditionStatus.Pending;
                 existing.ErrorMessage = null;

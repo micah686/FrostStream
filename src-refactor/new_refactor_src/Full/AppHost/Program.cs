@@ -3,6 +3,7 @@ using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
 using DotNetEnv;
 using Microsoft.Extensions.Configuration;
+using System.Security.Cryptography;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
@@ -67,6 +68,13 @@ var clickHouse = StartClickHouse.Start(builder);
 
 var openBaoToken = builder.AddParameter("openbao-token", hardening.OpenBaoToken,
     publishValueAsDefault: false, secret: true);
+var mediaProcessorStorageToken = builder.AddParameter(
+    "media-processor-storage-token",
+    string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("MEDIA_PROCESSOR_STORAGE_TOKEN"))
+        ? Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
+        : Environment.GetEnvironmentVariable("MEDIA_PROCESSOR_STORAGE_TOKEN")!,
+    publishValueAsDefault: false,
+    secret: true);
 var nats = StartNats.Start(builder);
 var postgres = StartPostgres.Start(builder, hardening, sharedStorageRoot);
 var openBaoResources = StartOpenBao.Start(builder, sharedStorageRoot, openBaoToken);
@@ -74,7 +82,7 @@ var authentik = StartAuthentik.Start(builder, postgres, hardening);
 var openFga = StartOpenFga.Start(builder, postgres, hardening);
 var backupService = StartBackupService.Start(builder, sharedStorageRoot, nats, postgres, openBaoResources, openBaoToken);
 StartServices.Wire(builder, hardening, sharedStorageRoot, nats, postgres, openBaoResources,
-    openBaoToken, typesense, typesenseApiKey, authentik, openFga, potProvider, backupService, clickHouse);
+    openBaoToken, mediaProcessorStorageToken, typesense, typesenseApiKey, authentik, openFga, potProvider, backupService, clickHouse);
 builder.Build().Run();
 
 static string ResolveStorageRoot(IDistributedApplicationBuilder builder)

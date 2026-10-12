@@ -15,6 +15,7 @@ public static class StartServices
         PostgresResources postgres,
         OpenBaoResources openBaoResources,
         IResourceBuilder<ParameterResource> openBaoToken,
+        IResourceBuilder<ParameterResource> mediaProcessorStorageToken,
         IResourceBuilder<ContainerResource> typesense,
         IResourceBuilder<ParameterResource> typesenseApiKey,
         AuthentikResources authentik,
@@ -26,9 +27,9 @@ public static class StartServices
         var openBao = openBaoResources.Server;
         var webApiEndpointName = hardening.EnableHttps ? "https" : "http";
         var databridge = WireDataBridge(builder, hardening, sharedStorageRoot, nats, postgres, openBaoResources, openBaoToken, typesense, typesenseApiKey, potProvider, clickHouse);
-        var webapi = WireWebApi(builder, hardening, sharedStorageRoot, nats, databridge, openBaoResources, openBaoToken, authentik, openFga, backupService, webApiEndpointName, clickHouse);
+        var webapi = WireWebApi(builder, hardening, sharedStorageRoot, nats, databridge, openBaoResources, openBaoToken, mediaProcessorStorageToken, authentik, openFga, backupService, webApiEndpointName, clickHouse);
         WireWorker(builder, hardening, sharedStorageRoot, nats, openBaoResources, openBaoToken, clickHouse);
-        WireMediaProcessor(builder, nats, databridge, webapi, webApiEndpointName);
+        WireMediaProcessor(builder, nats, databridge, webapi, webApiEndpointName, mediaProcessorStorageToken);
         WireScheduler(builder, nats, databridge, backupService);
         //WireAuthTester(builder, hardening, webapi, authentik, webApiEndpointName);
         StartFrontend.Wire(builder, webapi, webApiEndpointName);
@@ -96,6 +97,7 @@ public static class StartServices
         IResourceBuilder<ProjectResource> databridge,
         OpenBaoResources openBaoResources,
         IResourceBuilder<ParameterResource> openBaoToken,
+        IResourceBuilder<ParameterResource> mediaProcessorStorageToken,
         AuthentikResources authentik,
         OpenFgaResources openFga,
         IResourceBuilder<ContainerResource> backupService,
@@ -141,6 +143,7 @@ public static class StartServices
             })
             .WithEnvironment("OpenBao__Address", openBao.GetEndpoint("http"))
             .WithEnvironment("OpenBao__Token", openBaoToken)
+            .WithEnvironment("MediaProcessorStorage__Token", mediaProcessorStorageToken)
             .WithEnvironment(ctx => ctx.EnvironmentVariables["FROSTSTREAM_STORAGE_ROOT"] =
                 ctx.ExecutionContext.IsRunMode ? sharedStorageRoot : ContainerStorageRoot)
             .WithEnvironment("Auth__Audience", Environment.GetEnvironmentVariable("AUTHENTIK_API_AUDIENCE") ?? "froststream-api")
@@ -261,7 +264,8 @@ public static class StartServices
         IResourceBuilder<NatsServerResource> nats,
         IResourceBuilder<ProjectResource> databridge,
         IResourceBuilder<ProjectResource> webapi,
-        string webApiEndpointName)
+        string webApiEndpointName,
+        IResourceBuilder<ParameterResource> mediaProcessorStorageToken)
     {
         // Rendition claims/completions still go through DataBridge over NATS. Media bytes move
         // through WebAPI's internal HTTP storage endpoints, so MediaProcessor needs neither a
@@ -270,6 +274,7 @@ public static class StartServices
         builder.AddProject<Projects.MediaProcessorHost>("mediaprocessor")
             .WithReference(nats).WaitFor(nats)
             .WithEnvironment("MediaProcessor__WebApiBaseUrl", webapi.GetEndpoint(webApiEndpointName))
+            .WithEnvironment("MediaProcessor__StorageApiToken", mediaProcessorStorageToken)
             .WaitFor(databridge)
             .WaitFor(webapi)
             .PublishAsDockerFile(c => c

@@ -28,7 +28,7 @@ public sealed class MediaStreamController(
     [EnableCors(MediaCors.Policy)]
     [Endpoint(EndpointIds.MediaHlsManifest)]
     [EndpointSummary("Get an HLS playlist for a media item")]
-    [EndpointDescription("Returns an HLS media playlist for a media item, rewriting segment URLs through FrostStream so authorized clients can fetch the generated HLS assets. By default the stream/casting-friendly H.264/AAC video rendition is served; with audio=true the opus audio-only rendition is served instead. Missing renditions are queued through MediaProcessor and the endpoint returns 202 while they are prepared; prepare=false suppresses queueing.")]
+    [EndpointDescription("Returns an HLS media playlist for a media item, rewriting segment URLs through FrostStream so authorized clients can fetch the generated HLS assets. By default the stream/casting-friendly H.264/AAC video rendition is served, falling back to an opus audio-only rendition when the source has no video track; with audio=true the audio-only rendition is selected directly. Missing renditions are queued through MediaProcessor and the endpoint returns 202 while they are prepared; prepare=false suppresses queueing.")]
     public async Task<IActionResult> GetManifest(
         Guid mediaGuid,
         [FromQuery] bool audio = false,
@@ -41,6 +41,17 @@ public sealed class MediaStreamController(
         {
             return await GetVideoManifestAsync(mediaGuid, storageKey, sourceVersion, prepare, cancellationToken);
         }
+
+        return await GetAudioManifestAsync(mediaGuid, storageKey, sourceVersion, prepare, cancellationToken);
+    }
+
+    private async Task<IActionResult> GetAudioManifestAsync(
+        Guid mediaGuid,
+        string? storageKey,
+        int? sourceVersion,
+        bool prepare,
+        CancellationToken cancellationToken)
+    {
 
         if (await accessChecker.CheckWatchAccessAsync(User, mediaGuid, cancellationToken) is { } denied)
         {
@@ -97,6 +108,12 @@ public sealed class MediaStreamController(
 
         if (rendition!.Status != StreamRenditionStatus.Ready)
         {
+            if (rendition.Status == StreamRenditionStatus.Failed &&
+                string.Equals(rendition.ErrorMessage, StreamRenditionErrorMessages.AudioOnlySource, StringComparison.Ordinal))
+            {
+                return await GetAudioManifestAsync(mediaGuid, storageKey, sourceVersion, prepare, cancellationToken);
+            }
+
             return Accepted(new
             {
                 rendition.RenditionId,

@@ -19,6 +19,7 @@ public sealed class MediaProcessorStorageClient(
         CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, BuildBlobUri(storageKey, storagePath));
+        AddServiceToken(request);
         using var response = await httpClient.SendAsync(
             request,
             HttpCompletionOption.ResponseHeadersRead,
@@ -48,6 +49,7 @@ public sealed class MediaProcessorStorageClient(
         {
             Content = content
         };
+        AddServiceToken(request);
         using var response = await httpClient.SendAsync(
             request,
             HttpCompletionOption.ResponseHeadersRead,
@@ -68,6 +70,15 @@ public sealed class MediaProcessorStorageClient(
                 .Select(Uri.EscapeDataString));
 
         return new Uri(baseUri, $"api/internal/media-storage/{Uri.EscapeDataString(storageKey)}/{escapedPath}");
+    }
+
+    private void AddServiceToken(HttpRequestMessage request)
+    {
+        var token = options.Value.StorageApiToken;
+        if (string.IsNullOrWhiteSpace(token))
+            throw new InvalidOperationException("MediaProcessor:StorageApiToken must be configured for Full storage transfers.");
+
+        request.Headers.Add("X-FrostStream-Service-Token", token);
     }
 
     private async Task EnsureSuccessAsync(HttpResponseMessage response, string message, CancellationToken cancellationToken)

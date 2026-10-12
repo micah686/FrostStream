@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
@@ -25,6 +26,8 @@ using WebAPI.Features.Media.Casting;
 
 using Shared.Deployment;
 using Microsoft.Extensions.Hosting;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace FrostStream.Full.Security;
 public static class SecurityRegistration
@@ -240,6 +243,25 @@ public static class SecurityRegistration
         builder.Services.AddScoped<IAuthorizationHandler, FrostStreamPermissionHandler>();
         builder.Services.AddScoped<ISessionSynchronizationService, SessionSynchronizationService>();
         builder.Services.AddAuthorization(AuthPolicies.AddFrostStreamPolicies);
+        var mediaProcessorStorageToken = builder.Configuration["MediaProcessorStorage:Token"];
+        if (string.IsNullOrWhiteSpace(mediaProcessorStorageToken))
+            throw new InvalidOperationException("MediaProcessorStorage:Token is required for Full WebAPI storage transfers.");
+        var expectedStorageToken = Encoding.UTF8.GetBytes(mediaProcessorStorageToken);
+        builder.Services.AddAuthorization(options => options.AddPolicy("MediaProcessorStorage", policy =>
+            policy.RequireAssertion(context =>
+            {
+                var httpContext = context.Resource switch
+                {
+                    HttpContext requestContext => requestContext,
+                    AuthorizationFilterContext filterContext => filterContext.HttpContext,
+                    _ => null
+                };
+                if (httpContext is null) return false;
+
+                var supplied = Encoding.UTF8.GetBytes(httpContext.Request.Headers["X-FrostStream-Service-Token"].ToString());
+                return supplied.Length == expectedStorageToken.Length &&
+                    CryptographicOperations.FixedTimeEquals(supplied, expectedStorageToken);
+            })));
         builder.Services.AddAntiforgery(options =>
         {
             options.Cookie.Name = BffAuthenticationDefaults.AntiforgeryCookieName;

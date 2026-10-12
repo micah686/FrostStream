@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Shared.Storage;
 
@@ -8,6 +9,7 @@ namespace WebAPI.Features.Media.Controllers;
 /// source and rendition bytes move over HTTP streams and WebAPI performs the FluentStorage I/O.
 /// </summary>
 [ApiController]
+[Authorize(Policy = "MediaProcessorStorage")]
 [Route("api/internal/media-storage")]
 public sealed class MediaStorageTransferController(
     IStoreProvider blobStorageProvider,
