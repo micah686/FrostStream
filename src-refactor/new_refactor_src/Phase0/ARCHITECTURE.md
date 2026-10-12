@@ -1,3 +1,5 @@
+> Historical Phase 0 inventory. Phase 5 now uses embedded Lucene in Lite, removes its Typesense dependency, and generates three services (four with optional ClickHouse), with loopback frontend publishing. Current evidence: `../Phase5/README.md`. The observations below describe the captured baseline.
+
 # Phase 0 architecture and boundary baseline
 
 `dependency-baseline.json` now captures 27 project declarations after Phase 1 (22 in the initial Phase 0 inventory), direct references, package names, pinned central package versions, and route attributes from 34 API source files. `lite-resolved-dependencies.json` captures the historical Phase 0 Lite transitive graph. Route attributes are source evidence, not a claim that every route was requested. `verify.py` fails on external/missing project references, external/missing compile links, cycles, forbidden executable boundaries, or drift from the reviewed source graph/API snapshot.

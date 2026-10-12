@@ -102,7 +102,7 @@ public sealed class SqlitePersistenceFoundationTests
         using var manifest = JsonDocument.Parse(SqliteBaseline.ManifestJson);
         var tables = manifest.RootElement.GetProperty("tables").EnumerateArray().ToArray();
         tables.Length.ShouldBe(82);
-        Scalar(connection, "SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'cleipnir_%' AND name <> 'search_pending_index'")
+        Scalar(connection, "SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'cleipnir_%' AND name NOT IN ('search_pending_index','search_index_state','search_rebuild_replay')")
             .ShouldBe(86L); // Baseline, startup boundary, staged objects, local secrets, and history.
         foreach (var table in tables)
         {

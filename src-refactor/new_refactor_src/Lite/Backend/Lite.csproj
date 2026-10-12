@@ -12,4 +12,4 @@
     <ProjectReference Include="../../Shared/Modules/Api/WebAPI.csproj" />
     <ProjectReference Include="../../Shared/Modules/Worker/Worker.csproj" />
   </ItemGroup>
-<ItemGroup><ProjectReference Include="../../Shared/Integrations/Typesense/Typesense.csproj" /></ItemGroup></Project>
+</Project>

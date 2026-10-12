@@ -78,6 +78,8 @@
     <PackageVersion Include="Testcontainers.Nats" Version="4.15.0" />
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.15.0" />
     <PackageVersion Include="TUnit" Version="1.66.16" />
+    <PackageVersion Include="Lucene.Net" Version="4.8.0-beta00018" />
+    <PackageVersion Include="Lucene.Net.Analysis.Common" Version="4.8.0-beta00018" />
     <PackageVersion Include="Typesense" Version="8.5.0" />
     <PackageVersion Include="VaultSharp" Version="1.17.5.1" />
     <PackageVersion Include="Vogen" Version="8.0.7" />

@@ -13,6 +13,9 @@ internal sealed class PendingIndexSchema(DataBridgeDbContext db) : DataBridge.Pe
     {
         using var transaction = db.Database.BeginTransaction();
         db.Database.ExecuteSqlRaw("""
+            CREATE TABLE IF NOT EXISTS search_index_state(id INTEGER PRIMARY KEY CHECK(id=1),invalidated INTEGER NOT NULL);
+            INSERT OR IGNORE INTO search_index_state(id,invalidated) VALUES(1,1);
+            CREATE TABLE IF NOT EXISTS search_rebuild_replay(media_guid TEXT PRIMARY KEY,revision BIGINT NOT NULL);
             CREATE TABLE IF NOT EXISTS search_pending_index(
                 media_guid TEXT PRIMARY KEY, revision BIGINT NOT NULL DEFAULT 1, applied BIGINT NOT NULL DEFAULT 0,
                 available BIGINT NOT NULL DEFAULT 0, lease_until BIGINT NOT NULL DEFAULT 0, token TEXT,

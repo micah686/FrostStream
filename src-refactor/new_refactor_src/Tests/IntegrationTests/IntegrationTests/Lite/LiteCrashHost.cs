@@ -16,15 +16,15 @@ internal static class LiteCrashHost
     {
         if (arguments.Length == 0 || arguments[0] != "--lite-crash-host")
             return await MicrosoftTestingPlatformApplication.RunAsync(arguments);
-        await RunAsync(arguments[1], arguments[2], int.Parse(arguments[3], System.Globalization.CultureInfo.InvariantCulture));
+        await RunAsync(arguments[1], int.Parse(arguments[2], System.Globalization.CultureInfo.InvariantCulture));
         return 0;
     }
 
 #pragma warning restore TUnit0034
 
-    private static async Task RunAsync(string directory, string typesenseUrl, int forbiddenPort)
+    private static async Task RunAsync(string directory, int forbiddenPort)
     {
-        var builder = LiteRuntimeFixture.Builder(directory, typesenseUrl, forbiddenPort);
+        var builder = LiteRuntimeFixture.Builder(directory, forbiddenPort);
         var downloader = LiteRuntimeFixture.CreateDownloader(Path.Combine(directory, "fixture.mp4"), async (_, token) =>
         {
             await File.WriteAllTextAsync(Path.Combine(directory, "acquisition-started"), "running", token);
@@ -36,7 +36,8 @@ internal static class LiteCrashHost
         app.MapWebAPIModule();
         await app.InitializeApplicationAsync();
         await app.StartAsync();
-        await File.WriteAllTextAsync(Path.Combine(directory, "child-address"), app.Urls.Single());
+        await File.WriteAllTextAsync(Path.Combine(directory, "child-address.tmp"), app.Urls.Single());
+        File.Move(Path.Combine(directory, "child-address.tmp"), Path.Combine(directory, "child-address"), true);
         await app.WaitForShutdownAsync();
     }
 }

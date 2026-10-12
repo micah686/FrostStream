@@ -4,6 +4,5 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("FrostStream.Full.Security")]
 [assembly: InternalsVisibleTo("FrostStream.Full.Persistence.Postgres")]
 [assembly: InternalsVisibleTo("FrostStream.Lite.Infrastructure")]
-[assembly: InternalsVisibleTo("FrostStream.Integrations.Typesense")]
 [assembly: InternalsVisibleTo("UnitTests")]
 [assembly: InternalsVisibleTo("IntegrationTests")]

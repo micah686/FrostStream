@@ -2,7 +2,7 @@
 
 | Scenario | Executable evidence | Observable result |
 | --- | --- | --- |
-| Download/process/playback/search | Tests/IntegrationTests/IntegrationTests/Lite/LiteRuntimeTests.cs: Download_Import_Processing_Playback_Search_Scheduling_And_Progress_Through_One_Host | Submitted job completes, durable duplicate does not create another run, history/progress arrives, original bytes and HTTP range match, actual HLS segments stream, Typesense returns indexed media. |
+| Download/process/playback/search | Tests/IntegrationTests/IntegrationTests/Lite/LiteRuntimeTests.cs: Download_Import_Processing_Playback_Search_Scheduling_And_Progress_Through_One_Host | Submitted job completes, durable duplicate does not create another run, history/progress arrives, original bytes and HTTP range match, actual HLS segments stream, Embedded Lucene returns indexed media (updated in Phase 5). |
 | Import/persistence/scheduling | Same real Lite test | Incoming/staged object scan, metadata edit/inclusion, commit/finalize, actual probing/upload; schedule hydration and completed media survive restart. |
 | Lite identity/provider isolation at runtime | Same real Lite test and Tests/UnitTests/WebAPI/Auth/LiteBackendAccessTests.cs | Automatic Admin, protected endpoint access, actual Lite capabilities, no attempted connections to removed infrastructure canary. |
 | Stop/restart | Stop_Cancels_Worker_And_Restart_Fences_Interrupted_Run | Stopped work stays stopped; a new run requires explicit retry. |

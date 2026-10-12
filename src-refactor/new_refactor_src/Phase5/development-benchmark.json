@@ -1,0 +1,30 @@
+{
+  "scope": "Development Lucene-only synthetic corpus; not an 8 GB full-system acceptance run",
+  "runtime": ".NET 10.0.0",
+  "architecture": "X64",
+  "logicalCpus": 16,
+  "hostMemory": "MemTotal:       31941932 kB",
+  "counts": {
+    "Media": 10000,
+    "Comments": 250000,
+    "Captions": 100000
+  },
+  "corpusBytes": 156697230,
+  "indexBytes": 41986726,
+  "ramBufferMiB": 16,
+  "indexingSeconds": 18.4814678,
+  "reopenSeconds": 3.0772498,
+  "incrementalMilliseconds": 3.4332,
+  "warmSearchP50Milliseconds": 2.5689,
+  "warmSearchP95Milliseconds": 2.799,
+  "warmSearchP99Milliseconds": 3.2743,
+  "peakProcessRssBytes": 237785088,
+  "measurementsNotIncluded": [
+    "8 GB physical machine",
+    "cold filesystem cache",
+    "15-minute idle",
+    "60-minute combined download/transcode/index",
+    "frontend/POT/FFmpeg memory",
+    "search disk full"
+  ]
+}

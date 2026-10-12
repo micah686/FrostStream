@@ -132,7 +132,6 @@
       "executable": true,
       "references": [
         "Lite/Infrastructure/Infrastructure.csproj",
-        "Shared/Integrations/Typesense/Typesense.csproj",
         "Shared/Modules/Api/WebAPI.csproj",
         "Shared/Modules/DataBridge/DataBridge.csproj",
         "Shared/Modules/MediaProcessor/MediaProcessor.csproj",
@@ -151,6 +150,8 @@
       "packages": [
         "Cleipnir.Flows",
         "EFCore.NamingConventions",
+        "Lucene.Net",
+        "Lucene.Net.Analysis.Common",
         "Microsoft.EntityFrameworkCore.Sqlite"
       ]
     },
@@ -409,6 +410,7 @@
         "Full/Security/Security.csproj",
         "Lite/Backend/Lite.csproj",
         "Shared/Core/Shared.csproj",
+        "Shared/Integrations/Typesense/Typesense.csproj",
         "Shared/Modules/Api/WebAPI.csproj",
         "Shared/Modules/DataBridge/DataBridge.csproj",
         "Shared/Modules/Scheduler/Scheduler.csproj",
@@ -497,6 +499,8 @@
     "Testcontainers.Nats": "4.15.0",
     "Testcontainers.PostgreSql": "4.15.0",
     "TUnit": "1.66.16",
+    "Lucene.Net": "4.8.0-beta00018",
+    "Lucene.Net.Analysis.Common": "4.8.0-beta00018",
     "Typesense": "8.5.0",
     "VaultSharp": "1.17.5.1",
     "Vogen": "8.0.7",
@@ -845,6 +849,7 @@
       "source": "Shared/Modules/Api/Features/Search/Controllers/SearchController.cs",
       "attributes": [
         "[Route(\"api/search\")]",
+        "[HttpGet(\"status\")]",
         "[HttpGet(\"similar/{mediaGuid:guid}\")]"
       ]
     },

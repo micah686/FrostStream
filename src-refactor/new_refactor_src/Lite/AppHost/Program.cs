@@ -38,7 +38,7 @@ var compose = builder.AddDockerComposeEnvironment("aspire-docker-demo")
 // variables inherited from the shell.
 var devEnvFile = Path.GetFullPath(
     Environment.GetEnvironmentVariable("FROSTSTREAM_ENV_FILE") ??
-    Path.Combine(builder.AppHostDirectory, "..", "..", "Shared", "Hosting", "AppHostCommon", "aspire-development.env"));
+    Path.Combine(builder.AppHostDirectory, "lite-development.env"));
 if (File.Exists(devEnvFile))
 {
     Env.Load(devEnvFile);
@@ -58,13 +58,10 @@ compose.WithDashboard(Helpers.DevelopmentToolsEnabled);
 var hardening = AppHostHardening.Read(singleUserMode: true);
 AppHostHardening.Validate(hardening, lite: true);
 var sharedStorageRoot = ResolveStorageRoot(builder);
-var typesenseApiKey = builder.AddParameter("typesense-api-key", hardening.TypesenseApiKey,
-    publishValueAsDefault: false, secret: true);
-var typesense = StartTypesense.Start(builder, typesenseApiKey);
 var potProvider = StartPotProvider.Start(builder);
 var clickHouse = StartClickHouse.Start(builder);
 
-StartLite.Start(builder, sharedStorageRoot, typesense, typesenseApiKey, potProvider, clickHouse);
+StartLite.Start(builder, sharedStorageRoot, potProvider, clickHouse);
 
 builder.Build().Run();
 

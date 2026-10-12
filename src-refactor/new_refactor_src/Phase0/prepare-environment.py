@@ -8,7 +8,7 @@ folder=ROOT/'.phase0/installations'/a.edition
 folder.mkdir(parents=True,exist_ok=True)
 output=folder/'fixture.env'
 if output.exists():p.error(f'{output} exists; use a new checkout for another clean install')
-text=(ROOT/'Shared/Hosting/AppHostCommon/aspire-development.env').read_text()
+text=(ROOT/('Lite/AppHost/lite-development.env' if a.edition=='Lite' else 'Shared/Hosting/AppHostCommon/aspire-development.env')).read_text()
 values={'FROSTSTREAM_DEV_TOOLS':'false','LIVE_CHAT_ENABLED':'false','FROSTSTREAM_STORAGE_ROOT':str(folder/'data'),'FROSTSTREAM_BACKUP_ROOT':str(folder/'backups'),'FROSTSTREAM_OPENBAO_BOOTSTRAP_ROOT':str(folder/'openbao-bootstrap'),'Deployment__Mode':a.edition}
 for line in text.splitlines():
     match=re.match(r'([A-Z][A-Z0-9_]+)=',line)

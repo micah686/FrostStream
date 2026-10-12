@@ -1,4 +1,5 @@
 <script lang="ts">
+  import SearchStatusBanner from '#lib/components/SearchStatusBanner.svelte';
   import { goto } from '$app/navigation';
   import { page as pageState } from '$app/state';
   import { Select } from '#lib/components/ui/index.js';
@@ -180,6 +181,8 @@
 <svelte:head>
   <title>{similarGuid ? 'Similar videos · Search' : query ? `${query} · Search` : 'Search'} · FrostStream</title>
 </svelte:head>
+
+<SearchStatusBanner />
 
 <section aria-labelledby="search-title">
   <div class="flex flex-wrap items-start justify-between gap-4">

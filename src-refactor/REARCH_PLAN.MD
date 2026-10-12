@@ -428,6 +428,8 @@ Rollback for this fresh-install effort means reverting the phase and recreating 
 
 ### Phase 5 — Embedded Lite search and service removal
 
+**Implementation status (2026-10-11):** Embedded Lucene, durable generation/replay, restore invalidation, status UI, and three-service Lite composition are implemented in `new_refactor_src`. Unit, Lite workflow, provider contract, disk-full/process-kill, packaged smoke, and ARM64 publication evidence is recorded in `new_refactor_src/Phase5/README.md`. The physical 8 GB laptop benchmark and Phase 0 threshold approval remain open; Phase 5’s hardware acceptance exit gate is not yet satisfied.
+
 **Work:** Implement Lucene query translation/index writing, feature parity, durable commit/replay, generation rebuilds, and operational status. Switch Lite composition to Lucene. Remove Typesense from Lite AppHost, generated Compose, environment settings, publish dependencies, fixtures, and documentation.
 
 **Exit gate:** Lite runs with backend/frontend/POT only; optional ClickHouse adds one container. All shared search features pass. Missing/corrupt index rebuild and concurrent update tests pass. The laptop benchmark meets the Phase 0 acceptance thresholds.

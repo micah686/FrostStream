@@ -25,3 +25,5 @@ FROSTSTREAM_TEST_TYPESENSE=http://127.0.0.1:24104 \
 ```
 
 `TypesenseContractTests` opts into real-server tests when `FROSTSTREAM_TEST_TYPESENSE` is set. Without it, the external-server scenarios are not exercised. Both edition adapter configurations run the same real query/writer contract and shared handlers; no Full deployment or real Authentik/NATS/PostgreSQL end-to-end coverage is implied by those tests. Fixtures use an owned server and replace its active alias, so do not point them at an application instance. They exercise advanced filters, Unicode, browsing/paging/sorts, scopes, parent content matches, deduplication, private-note isolation/filtering, related media, comment/caption listings, deletion, status, partial import failure, restart routing, rebuild failure/cancellation, and pending mutation/deletion replay.
+
+Phase 5 supersedes the temporary Lite Typesense exception: Lite now uses embedded Lucene and Full retains Typesense. See `../Phase5/README.md` for current composition and verification.

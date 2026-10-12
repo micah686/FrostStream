@@ -1,5 +1,5 @@
 using FrostStream.Lite.Infrastructure;
-using FrostStream.Integrations.Typesense;
+using FrostStream.Lite.Infrastructure.Search;
 using DataBridge;
 using DataBridge.Persistence;
 using Shared.Deployment;
@@ -51,7 +51,7 @@ public static class LiteModule
         builder.AddWorkerModule();
         builder.AddWebAPIModule();
         builder.AddSchedulerModule();
-        builder.AddTypesenseIntegration();
+        builder.AddLuceneSearch();
         builder.Services.AddHostedService<LiteRuntimeLifecycle>();
         return builder;
     }

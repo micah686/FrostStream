@@ -13,7 +13,6 @@ COPY Shared/Modules/Scheduler/ Shared/Modules/Scheduler/
 COPY Shared/Modules/Api/ Shared/Modules/Api/
 COPY Shared/Modules/Worker/ Shared/Modules/Worker/
 COPY Shared/Persistence/ Shared/Persistence/
-COPY Shared/Integrations/Typesense/ Shared/Integrations/Typesense/
 COPY Lite/Infrastructure/ Lite/Infrastructure/
 COPY Lite/Backend/ Lite/Backend/
 RUN dotnet publish Lite/Backend/Lite.csproj -c Release -o /app

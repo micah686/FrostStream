@@ -57,6 +57,13 @@ public sealed class SqliteBackupServiceClient : IBackupServiceClient
             using (var destination = OpenDestination(temporaryPath))
             {
                 source.BackupDatabase(destination);
+                // Derived search files are not restored with authoritative recovery sets.
+                // Mark the snapshot itself so restart cannot reuse a newer retained index.
+                using (var invalidate = destination.CreateCommand())
+                {
+                    invalidate.CommandText = "CREATE TABLE IF NOT EXISTS search_index_state(id INTEGER PRIMARY KEY CHECK(id=1),invalidated INTEGER NOT NULL); INSERT INTO search_index_state(id,invalidated) VALUES(1,1) ON CONFLICT(id) DO UPDATE SET invalidated=1;";
+                    invalidate.ExecuteNonQuery();
+                }
                 using var journal = destination.CreateCommand();
                 journal.CommandText = "PRAGMA journal_mode=DELETE;";
                 if (!string.Equals(journal.ExecuteScalar() as string, "delete", StringComparison.OrdinalIgnoreCase))

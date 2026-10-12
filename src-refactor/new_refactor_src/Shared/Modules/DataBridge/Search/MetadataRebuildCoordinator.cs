@@ -16,7 +16,8 @@ public sealed class MetadataRebuildCoordinator(
     CaptionDocumentHydrator captionDocumentHydrator,
     IHostApplicationLifetime applicationLifetime,
     INotificationDispatcher notificationDispatcher,
-    ILogger<MetadataRebuildCoordinator> logger) : IMetadataRebuildCoordinator
+    ILogger<MetadataRebuildCoordinator> logger,
+    ISearchActivationBarrier? activationBarrier = null) : IMetadataRebuildCoordinator
 {
     private const int BatchSize = 500;
     private int _isRunning;
@@ -66,6 +67,7 @@ public sealed class MetadataRebuildCoordinator(
         try
         {
             await pendingIndex.InvalidateAsync(ct);
+            if (activationBarrier is not null) await pendingIndex.ResetRebuildReplayAsync(ct);
             logger.LogInformation("Starting search metadata rebuild. Reason: {Reason}", reason);
             status.Set(SearchState.Building);
             await using var generation = await indexService.CreateGenerationAsync(ct);
@@ -77,22 +79,52 @@ public sealed class MetadataRebuildCoordinator(
                 await RebuildCaptionsAsync(query, generation.Writer, ct);
             });
 
-            // Replay durable intent into the replacement without acknowledging it. Any mutation
-            // racing this pass remains pending and is applied to the activated generation.
             await scopeFactory.WithScopedAsync<IMediaDocumentQuery>(async query =>
             {
                 using var worker = new PendingIndexWorker(pendingIndex, query, generation.Writer, captionDocumentHydrator,
                     writerGate, Microsoft.Extensions.Logging.Abstractions.NullLogger<PendingIndexWorker>.Instance);
-                string cursor = "";
-                while (true)
+                async Task ReplayAsync(bool checkpoints, CancellationToken replayCt)
                 {
-                    var batch = await pendingIndex.GetPendingBatchAsync(cursor, BatchSize, ct);
-                    if (batch.Count == 0) break;
-                    foreach (var work in batch) await worker.ApplyAsync(work, ct);
-                    cursor = batch[^1].MediaGuid;
+                    string cursor = "";
+                    while (true)
+                    {
+                        var batch = activationBarrier is null
+                            ? await pendingIndex.GetPendingBatchAsync(cursor, BatchSize, replayCt)
+                            : await pendingIndex.GetRebuildChangesAsync(cursor, BatchSize, replayCt);
+                        if (batch.Count == 0) break;
+                        foreach (var work in batch)
+                        {
+                            await worker.ApplyAsync(work, replayCt);
+                            if (checkpoints) await pendingIndex.RecordRebuildReplayAsync(work, replayCt);
+                        }
+                        cursor = batch[^1].MediaGuid;
+                    }
+                }
+                if (activationBarrier is null)
+                {
+                    await ReplayAsync(false, ct);
+                    await generation.ActivateAsync(ct);
+                }
+                else
+                {
+                    // Persist replay cursors outside the barrier. At most 128 changed media
+                    // are replayed while SQLite writes are blocked; WAL reads continue.
+                    var activated = false;
+                    for (var attempt = 0; attempt < 10 && !activated; attempt++)
+                    {
+                        await ReplayAsync(true, ct);
+                        await activationBarrier.RunAsync(async token =>
+                        {
+                            if ((await pendingIndex.GetRebuildChangesAsync("", 129, token)).Count > 128) return;
+                            await ReplayAsync(false, token);
+                            await generation.ActivateAsync(token);
+                            activated = true;
+                        }, ct);
+                    }
+                    if (!activated) throw new InvalidOperationException("Search rebuild could not reach a bounded activation window; previous index retained.");
+                    await pendingIndex.ResetRebuildReplayAsync(ct);
                 }
             });
-            await generation.ActivateAsync(ct);
             status.Set(SearchState.Ready);
             logger.LogInformation("Finished search metadata rebuild.");
         }
@@ -158,7 +190,7 @@ public sealed class MetadataRebuildCoordinator(
 
         while (true)
         {
-            var batch = await query.GetCaptionBatchAsync(lastId, BatchSize, ct);
+            var batch = await query.GetCaptionBatchAsync(lastId, 1, ct);
             if (batch.Documents.Count == 0)
                 break;
 

@@ -73,6 +73,26 @@ public sealed class PendingIndexStore(ApplicationDatabase database)
         while (await reader.ReadAsync(ct)) result.Add(new(reader.GetString(0), reader.GetInt64(1), ""));
         return result;
     }
+    public async Task ResetRebuildReplayAsync(CancellationToken ct)
+    {
+        await using var command = database.CreateCommand("DELETE FROM search_rebuild_replay");
+        await command.ExecuteNonQueryAsync(ct);
+    }
+    public async Task<IReadOnlyList<IndexWork>> GetRebuildChangesAsync(string after, int limit, CancellationToken ct)
+    {
+        await using var command = database.CreateCommand("SELECT p.media_guid,p.revision FROM search_pending_index p LEFT JOIN search_rebuild_replay r ON r.media_guid=p.media_guid WHERE p.revision>COALESCE(r.revision,0) AND p.media_guid>@after ORDER BY p.media_guid LIMIT @limit");
+        command.Parameters.AddWithValue("@after", after); command.Parameters.AddWithValue("@limit", Math.Clamp(limit,1,500));
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        var result = new List<IndexWork>();
+        while (await reader.ReadAsync(ct)) result.Add(new(reader.GetString(0),reader.GetInt64(1),""));
+        return result;
+    }
+    public async Task RecordRebuildReplayAsync(IndexWork work, CancellationToken ct)
+    {
+        await using var command = database.CreateCommand("INSERT INTO search_rebuild_replay(media_guid,revision) VALUES(@id,@revision) ON CONFLICT(media_guid) DO UPDATE SET revision=@revision");
+        command.Parameters.AddWithValue("@id", work.MediaGuid); command.Parameters.AddWithValue("@revision", work.Revision);
+        await command.ExecuteNonQueryAsync(ct);
+    }
     public async Task RequestAsync(Guid mediaGuid,CancellationToken ct=default) {
         await using var command=database.CreateCommand("INSERT INTO search_pending_index(media_guid,revision) VALUES(@id,1) ON CONFLICT(media_guid) DO UPDATE SET revision=search_pending_index.revision+1,available=0,attempts=0,last_error=NULL");
         command.Parameters.AddWithValue("@id",mediaGuid.ToString("N")); await command.ExecuteNonQueryAsync(ct);

@@ -5,7 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'Phase0'))
 import verify
 ROOT = verify.ROOT
-FULL_SDK = re.compile(r'^(?:Npgsql(?:\.|$)|NATS\.|Conduit\.NATS|VaultSharp|Cleipnir\.Flows\.PostgresSql|FluentMigrator)', re.I)
+FULL_SDK = re.compile(r'^(?:Npgsql(?:\.|$)|NATS\.|Conduit\.NATS|VaultSharp|Typesense|Cleipnir\.Flows\.PostgresSql|FluentMigrator)', re.I)
 PROVIDER_SDK = re.compile(r'^(?:Npgsql(?:\.|$)|NATS\.|Conduit\.NATS|VaultSharp|Typesense|Microsoft\.Data\.Sqlite|Microsoft\.EntityFrameworkCore\.Sqlite|Cleipnir\.Flows\.PostgresSql|FluentMigrator)', re.I)
 
 def check(graph, root=ROOT, require_restored=False):
@@ -48,7 +48,7 @@ def check(graph, root=ROOT, require_restored=False):
                 errors.append(f'Lite restored graph: forbidden dependency {name}')
     elif require_restored: errors.append('Restore Lite/Backend before checking its transitive package graph')
     if errors: raise ValueError('\n'.join(sorted(set(errors))))
-    return {'projects': len(graph), 'lite_restored_graph_checked': assets.exists(), 'typesense_exception': 'Shared/Integrations/Typesense'}
+    return {'projects': len(graph), 'lite_restored_graph_checked': assets.exists(), 'typesense_exception': False}
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(); parser.add_argument('--require-restored', action='store_true'); args = parser.parse_args()

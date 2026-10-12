@@ -22,6 +22,7 @@
     </ItemGroup>
 
     <ItemGroup>
+        <ProjectReference Include="../../Shared/Integrations/Typesense/Typesense.csproj" />
         <ProjectReference Include="../../Lite/Backend/Lite.csproj" />
         <ProjectReference Include="../../Full/Hosts/BackupService/BackupService.csproj" />
         <ProjectReference Include="../../Shared/Modules/DataBridge/DataBridge.csproj" />

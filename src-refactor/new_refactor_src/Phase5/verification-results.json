@@ -1,0 +1,94 @@
+{
+  "date": "2026-10-11",
+  "solutionBuild": {
+    "passed": true,
+    "warnings": [
+      "Existing ASPIRE010 warnings for both AppHosts"
+    ]
+  },
+  "unitTests": {
+    "passed": 617,
+    "failed": 0,
+    "optionalBenchmarkAndDiskFullRequireEnvironment": true
+  },
+  "liteRuntimeTests": {
+    "passed": 3,
+    "failed": 0,
+    "externalSearchService": false,
+    "recovery": [
+      "missing index",
+      "corrupt index",
+      "database snapshot restored with newer search volume"
+    ]
+  },
+  "realSearchProviderContracts": {
+    "passed": 2,
+    "providers": [
+      "Lucene.Net",
+      "Typesense 30.2"
+    ]
+  },
+  "diskFull": {
+    "passed": true,
+    "filesystem": "isolated 1 MiB tmpfs"
+  },
+  "processKillDurability": {
+    "passed": true
+  },
+  "frontendTypeCheck": {
+    "errors": 0,
+    "warnings": 0
+  },
+  "arm64Publication": {
+    "passed": true,
+    "typesensePresent": false,
+    "runtimeExecuted": false
+  },
+  "defaultCompose": {
+    "services": [
+      "lite",
+      "frontend",
+      "pot-provider"
+    ],
+    "frontendLoopback": true,
+    "separateSearchVolume": true
+  },
+  "optionalCompose": {
+    "services": [
+      "lite",
+      "frontend",
+      "pot-provider",
+      "clickhouse"
+    ],
+    "explicitTrustedLanBinding": true,
+    "runtimeExecuted": false
+  },
+  "packagedSmoke": {
+    "passed": true,
+    "searchState": "Ready"
+  },
+  "boundaries": {
+    "passed": true
+  },
+  "phase0VerifierTests": {
+    "passed": 10
+  },
+  "hardwareAcceptance": {
+    "complete": false,
+    "open": [
+      "Physical 8 GB machine",
+      "Approved Phase 0 acceptance thresholds",
+      "Cold cache and idle measurements",
+      "60-minute combined workload including FFmpeg, containers and filesystem cache"
+    ]
+  },
+  "sourceGraphInventory": {
+    "passed": true,
+    "reviewedChanges": [
+      "Lite drops Typesense reference",
+      "Lite Infrastructure adds pinned Lucene packages",
+      "Unit tests directly reference retained Full Typesense adapter",
+      "Existing Phase 4 search status endpoint included in inventory"
+    ]
+  }
+}

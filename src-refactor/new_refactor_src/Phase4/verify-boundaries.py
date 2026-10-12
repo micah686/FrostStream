@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Enforce the complete search boundary while Lite retains its temporary Typesense adapter."""
+"""Enforce the complete search boundary with edition-owned search providers."""
 import json
 import re
 import subprocess
@@ -18,4 +18,4 @@ for folder in ('Shared/Core', 'Shared/Contracts', 'Shared/Persistence', 'Shared/
             errors.append(str(source.relative_to(ROOT)))
 if errors:
     sys.exit('Search provider coupling in shared code:\n' + '\n'.join(errors))
-print(json.dumps({'search_boundary': 'passed', 'provider': 'Typesense', 'lite_exception_retained': True}))
+print(json.dumps({'search_boundary': 'passed', 'full_provider': 'Typesense', 'lite_exception_retained': False}))

@@ -21,7 +21,7 @@ pnpm check
 pnpm build
 ```
 
-The `full` checkpoint runs real OpenFGA with controlled JWT identities. It does not certify Authentik login or a complete Full deployment. Lite fixtures exercise real local persistence, processing, HTTP playback and Typesense, with deterministic Internet acquisition. Each fixture owns fresh temporary state and containers; retries do not reuse an installation. Do not run the old repository's destructive smoke/reset scripts against developer state.
+The `full` checkpoint runs real OpenFGA with controlled JWT identities. It does not certify Authentik login or a complete Full deployment. Lite fixtures exercise real local persistence, processing, HTTP playback and embedded Lucene, with deterministic Internet acquisition. Each fixture owns fresh temporary state; retries do not reuse an installation. Do not run the old repository's destructive smoke/reset scripts against developer state.
 
 ```sh
 # From this directory; generates private fresh-install inputs, then Compose without starting it.
@@ -32,7 +32,7 @@ bash Phase0/publish-profile.sh Full
 python3 Phase0/check-compose.py Lite Full
 ```
 
-Generated profiles are under `Lite/docker-compose/` and `Full/docker-compose/`. These commands refuse to overwrite an existing fixture. If publishing fails, inspect and retry the logged Aspire command against that owned output. No automated cleanup deletes volumes. Full's baseline volumes have explicit names: packaged install/restore validation requires a dedicated disposable container engine. Generation/path validation is distinct from booting a clean packaged installation. Lite currently generates four services including Typesense; the three-service Lucene target starts in Phase 5. The baseline frontend binds all interfaces; use a private test machine until the planned loopback packaging change.
+Generated profiles are under `Lite/docker-compose/` and `Full/docker-compose/`. These commands refuse to overwrite an existing fixture. If publishing fails, inspect and retry the logged Aspire command against that owned output. No automated cleanup deletes volumes. Full's baseline volumes have explicit names: packaged install/restore validation requires a dedicated disposable container engine. Generation/path validation is distinct from booting a clean packaged installation. Lite generates three services: backend, frontend and POT provider. Optional live chat adds ClickHouse. Embedded Lucene uses a separate rebuildable search volume; Full retains Typesense. Lite publishes the frontend on loopback by default. Set `LITE_TRUSTED_LAN=true` only when every reachable client should have local Admin access. See `Phase5/README.md` for search recovery, configuration and measured validation.
 
 ```sh
 python3 Phase0/generate-corpus.py .phase0/corpus

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import SearchStatusBanner from '#lib/components/SearchStatusBanner.svelte';
   import { requiresLogin } from '#lib/frontendAccess.js';
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
@@ -367,6 +368,8 @@
 <svelte:head>
   <title>Library · FrostStream</title>
 </svelte:head>
+
+<SearchStatusBanner />
 
 <section aria-labelledby="library-title">
   <div class="flex flex-wrap items-start justify-between gap-4">

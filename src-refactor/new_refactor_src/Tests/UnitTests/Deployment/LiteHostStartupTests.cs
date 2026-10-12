@@ -14,7 +14,6 @@ using NSubstitute;
 using Quartz;
 using Shared.Auth;
 using Shared.Backups;
-using Typesense;
 using WebAPI;
 using YtDlpSharpLib.Provisioning;
 using Shouldly;
@@ -34,11 +33,6 @@ public sealed class LiteHostStartupTests
         builder.ConfigureLiteHost();
         builder.AddServiceDefaults();
         builder.AddLiteModules();
-        builder.Services.Replace(ServiceDescriptor.Singleton(Substitute.For<ITypesenseClient>()));
-        var index = Substitute.For<ISearchIndexWriter>();
-        index.GetDocumentCountAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(1);
-        index.MediaCollectionHasFieldAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(true);
-        builder.Services.Replace(ServiceDescriptor.Singleton(index));
         return builder;
     }
 

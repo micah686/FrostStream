@@ -3,6 +3,7 @@ using DataBridge.Messaging;
 using DataBridge.Persistence.Indexing;
 using DataBridge.Search;
 using FrostStream.Integrations.Typesense;
+using FrostStream.Lite.Infrastructure.Search;
 using FrostStream.Lite.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -14,23 +15,33 @@ using TUnit.Core;
 
 namespace UnitTests.Search;
 
-/// <summary>Opt-in real-server contract. Run against an owned disposable Typesense instance.</summary>
+/// <summary>Always exercises embedded Lite; opt into Full with an owned disposable Typesense instance.</summary>
 [NotInParallel("Phase4Typesense")]
-public sealed class TypesenseContractTests
+public sealed class SearchProviderContractTests
 {
     [Test]
     public async Task Both_Editions_Use_Typed_Search_And_Preserve_Active_Generations()
     {
         var url = Environment.GetEnvironmentVariable("FROSTSTREAM_TEST_TYPESENSE");
-        if (string.IsNullOrWhiteSpace(url)) return;
         foreach (var edition in new[] { "Lite", "Full" })
         {
+            if (edition == "Full" && string.IsNullOrWhiteSpace(url)) continue;
+            var directory = Path.Combine(Path.GetTempPath(), "phase5-contract-" + Guid.NewGuid().ToString("N"));
+            try
+            {
             var builder = Host.CreateApplicationBuilder();
             builder.Logging.ClearProviders();
             builder.Configuration["Deployment:Mode"] = edition;
             builder.Configuration["Typesense:Url"] = url;
             builder.Configuration["Typesense:ApiKey"] = "phase4-test-key";
-            builder.AddTypesenseIntegration();
+            if (edition == "Full") builder.AddTypesenseIntegration();
+            else
+            {
+                builder.Configuration["Persistence:Sqlite:Enabled"] = "true";
+                builder.Configuration["Persistence:Sqlite:Path"] = Path.Combine(directory, "test.db");
+                builder.Configuration["Search:Lucene:Path"] = Path.Combine(directory, "search");
+                builder.AddLuceneSearch();
+            }
             using var host = builder.Build();
             var writer = host.Services.GetRequiredService<ISearchIndexWriter>();
             var reader = host.Services.GetRequiredService<ISearchReader>();
@@ -75,17 +86,22 @@ public sealed class TypesenseContractTests
                 await Should.ThrowAsync<InvalidOperationException>(() => failed.Writer.BulkImportMediaAsync([first with { Title = null! }]));
             }
             (await reader.SearchAsync<MediaDocument>(SearchCollection.Media, new("*", "title"))).Found.ShouldBe(2);
+            if (edition == "Full")
+            {
             // A fresh router simulates restart and resolves all collections from the single alias.
             var router = new TypesenseGenerationRouter(host.Services.GetRequiredService<Typesense.ITypesenseClient>());
             (await router.LoadAsync(default)).ShouldBeTrue();
             var restarted = new TypesenseSearchReader(host.Services.GetRequiredService<Typesense.ITypesenseClient>(), router);
             (await restarted.SearchAsync<CaptionDocument>(SearchCollection.Captions, new("captionphrase", "text"))).Found.ShouldBe(1);
+            }
             await writer.DeleteMediaByGuidAsync(first.Id);
             await writer.DeleteCommentsByMediaGuidAsync(first.Id);
             await writer.DeleteCaptionsByMediaGuidAsync(first.Id);
             (await reader.SearchAsync<MediaDocument>(SearchCollection.Media, new("*", "title"))).Found.ShouldBe(1);
             (await reader.SearchAsync<CommentDocument>(SearchCollection.Comments, new("*", "text"))).Found.ShouldBe(0);
             (await reader.SearchAsync<CaptionDocument>(SearchCollection.Captions, new("*", "text"))).Found.ShouldBe(0);
+            }
+            finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); }
         }
     }
 
@@ -93,7 +109,6 @@ public sealed class TypesenseContractTests
     public async Task Failed_Or_Canceled_Rebuild_Retains_Search_And_Reports_Degraded_Status()
     {
         var url = Environment.GetEnvironmentVariable("FROSTSTREAM_TEST_TYPESENSE");
-        if (string.IsNullOrWhiteSpace(url)) return;
         var directory = Path.Combine(Path.GetTempPath(), "phase4-" + Guid.NewGuid().ToString("N"));
         try
         {
@@ -103,7 +118,7 @@ public sealed class TypesenseContractTests
             builder.Configuration["Persistence:Sqlite:Path"] = Path.Combine(directory, "test.db");
             builder.Configuration["Typesense:Url"] = url;
             builder.Configuration["Typesense:ApiKey"] = "phase4-test-key";
-            builder.AddLitePersistence(); builder.AddTypesenseIntegration();
+            builder.AddLitePersistence(); builder.AddLuceneSearch();
             var source = Substitute.For<IMediaDocumentQuery>();
             builder.Services.AddSingleton(source);
             using var host = builder.Build(); host.InitializeDataBridge();
@@ -118,7 +133,7 @@ public sealed class TypesenseContractTests
             var coordinator = new MetadataRebuildCoordinator(host.Services.GetRequiredService<IServiceScopeFactory>(),
                 new SearchWriterGate(), host.Services.GetRequiredService<PendingIndexStore>(), writer, status,
                 new CaptionDocumentHydrator(Substitute.For<Shared.Storage.IStoreProvider>(), NullLogger<CaptionDocumentHydrator>.Instance),
-                Substitute.For<IHostApplicationLifetime>(), Substitute.For<INotificationDispatcher>(), NullLogger<MetadataRebuildCoordinator>.Instance);
+                Substitute.For<IHostApplicationLifetime>(), Substitute.For<INotificationDispatcher>(), NullLogger<MetadataRebuildCoordinator>.Instance, host.Services.GetRequiredService<ISearchActivationBarrier>());
             source.GetMediaBatchAsync(Arg.Any<long>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
                 .Returns(Task.FromException<DocumentBatch<MediaDocument>>(new IOException("source failed")));
             await Should.ThrowAsync<IOException>(() => coordinator.RebuildAsync("test failure"));
