@@ -1,0 +1,67 @@
+{
+  "scope": "Real Full browser OIDC, session revocation and private playlist isolation; distributed real media checks on standard Docker Compose 5.6.0",
+  "passed": false,
+  "checks": [
+    "Anonymous Full session returns 401",
+    "alice: real Authentik OIDC login and session after reload",
+    "bob: real Authentik OIDC login and session after reload",
+    "Private playlists are isolated in lists, direct reads and mutations in both directions, including Admin identities",
+    "CSRF enforced; logout revokes session and rejects replay of the old cookie"
+  ],
+  "cleanup": [
+    {
+      "resource": "identity",
+      "status": 204
+    },
+    {
+      "resource": "identity",
+      "status": 204
+    }
+  ],
+  "media": {
+    "passed": false,
+    "checks": [
+      "Real HTTP acquisition via yt-dlp, durable NATS job, worker processing and DataBridge persistence",
+      "Original SHA-256 and HTTP 206 range passed for ed026740-17d8-4165-b9b5-d9264dc39362",
+      "Distributed incoming scan, metadata edit, FFprobe and commit/finalize",
+      "Original SHA-256 and HTTP 206 range passed for 5f25afb6-9cb7-4fbf-8406-f7e9b5a42713"
+    ],
+    "failures": [
+      {
+        "stage": "downloadPlayback",
+        "message": "HLS rendition failed: Downloading 'phase0-860d2549-452d-420e-829b-a989a6b21cec:archives/ed02674017d84165b9b5d9264dc39362/v5/media.mp4' failed."
+      },
+      {
+        "stage": "importPlayback",
+        "message": "HLS rendition failed: Downloading 'phase0-860d2549-452d-420e-829b-a989a6b21cec:archives/5f25afb69cb74fbf8406f7e9b5a42713/v1/phase0-import.mp4' failed."
+      }
+    ],
+    "timings": {
+      "downloadMilliseconds": 5034.180511999999,
+      "ed026740-17d8-4165-b9b5-d9264dc39362:originalAndRange": {
+        "elapsedMilliseconds": 32.530179999999746,
+        "originalBytes": 2257003,
+        "sha256": "fef8434b755505ec18479aea0f7260dd072c53e28235e281dd79cbdebbcd496f"
+      },
+      "importMilliseconds": 6116.58979,
+      "5f25afb6-9cb7-4fbf-8406-f7e9b5a42713:originalAndRange": {
+        "elapsedMilliseconds": 38.11261200000081,
+        "originalBytes": 2716046,
+        "sha256": "794a66c428e61bc214ed0b231e50526aa5ee899f9ddea4880cf776e200592f4c"
+      }
+    },
+    "sourceSha256": "fef8434b755505ec18479aea0f7260dd072c53e28235e281dd79cbdebbcd496f",
+    "jobId": "0ab06423-a634-40a6-8975-5549b77045ac",
+    "sessionId": "6518eb66-74ae-4b44-9e57-8d5a05c9f74f",
+    "mediaGuid": "ed026740-17d8-4165-b9b5-d9264dc39362",
+    "importedMediaGuid": "5f25afb6-9cb7-4fbf-8406-f7e9b5a42713",
+    "freshImportDatabaseConfirmation": {
+      "status": "completed",
+      "totalItems": 1,
+      "importedItems": 1,
+      "alreadyImportedItems": 0
+    },
+    "rootCauseEvidence": "MediaProcessor logs: internal media-storage source GET returned 401 for both downloaded and imported sources. Controller inherits deny-all fallback; client sends no service credentials."
+  },
+  "date": "2026-10-11"
+}

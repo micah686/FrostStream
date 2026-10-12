@@ -1,0 +1,93 @@
+{
+  "date": "2026-10-11",
+  "project": "froststream-phase0-standard-v5",
+  "provider": "Docker Compose 5.6.0 against rootless Podman API",
+  "standardUpWithoutOrderedWorkaround": true,
+  "startupExitCode": 0,
+  "readinessProbe": "Phase6/check-package.py Full passed frontend/API/capabilities/search readiness",
+  "realOidcEvidence": "full-media-verification.json",
+  "services": [
+    {
+      "name": "froststream-phase0-standard-v5-nats-1",
+      "status": "Up 18 minutes"
+    },
+    {
+      "name": "froststream-phase0-standard-v5-pot-provider-1",
+      "status": "Up 18 minutes"
+    },
+    {
+      "name": "froststream-phase0-standard-v5-backup-init-1",
+      "status": "Exited (0) 18 minutes ago"
+    },
+    {
+      "name": "froststream-phase0-standard-v5-postgres-1",
+      "status": "Up 18 minutes (healthy)"
+    },
+    {
+      "name": "froststream-phase0-standard-v5-postgres-init-1",
+      "status": "Exited (0) 17 minutes ago"
+    },
+    {
+      "name": "froststream-phase0-standard-v5-typesense-1",
+      "status": "Up 18 minutes"
+    },
+    {
+      "name": "froststream-phase0-standard-v5-openfga-migrate-1",
+      "status": "Exited (0) 17 minutes ago"
+    },
+    {
+      "name": "froststream-phase0-standard-v5-openbao-1",
+      "status": "Up 18 minutes (healthy)"
+    },
+    {
+      "name": "froststream-phase0-standard-v5-authentik-1",
+      "status": "Up 17 minutes (healthy)"
+    },
+    {
+      "name": "froststream-phase0-standard-v5-openfga-1",
+      "status": "Up 17 minutes"
+    },
+    {
+      "name": "froststream-phase0-standard-v5-openbao-bootstrap-1",
+      "status": "Exited (0) 17 minutes ago"
+    },
+    {
+      "name": "froststream-phase0-standard-v5-authentik-worker-1",
+      "status": "Up 17 minutes"
+    },
+    {
+      "name": "froststream-phase0-standard-v5-worker-1",
+      "status": "Up 17 minutes"
+    },
+    {
+      "name": "froststream-phase0-standard-v5-databridge-1",
+      "status": "Up 17 minutes"
+    },
+    {
+      "name": "froststream-phase0-standard-v5-backupservice-1",
+      "status": "Up 17 minutes (healthy)"
+    },
+    {
+      "name": "froststream-phase0-standard-v5-webapi-1",
+      "status": "Up 17 minutes"
+    },
+    {
+      "name": "froststream-phase0-standard-v5-scheduler-1",
+      "status": "Up 17 minutes"
+    },
+    {
+      "name": "froststream-phase0-standard-v5-mediaprocessor-1",
+      "status": "Up 17 minutes"
+    },
+    {
+      "name": "froststream-phase0-standard-v5-frontend-1",
+      "status": "Up 17 minutes (healthy)"
+    }
+  ],
+  "passed": true,
+  "limitations": [
+    "Docker Engine is not installed; Docker Compose was tested against the Podman API.",
+    "Installed podman-compose 1.6.0 still fails completed initializer dependencies.",
+    "Startup health does not imply distributed HLS works."
+  ]
+}

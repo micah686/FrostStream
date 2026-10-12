@@ -12,6 +12,8 @@ const { values } = parseArgs({ options: {
   'playwright-module': { type: 'string' }, 'env-file': { type: 'string' },
   output: { type: 'string' }, origin: { type: 'string', default: 'http://localhost:25000' },
   'identity-origin': { type: 'string', default: 'http://localhost:25100' },
+  'media-url': { type: 'string' }, 'media-file': { type: 'string' },
+  'import-media-file': { type: 'string' },
 }});
 for (const key of ['playwright-module', 'env-file', 'output']) assert(values[key], `Missing --${key}`);
 for (const key of ['origin', 'identity-origin']) {
@@ -24,7 +26,7 @@ const env = Object.fromEntries(readFileSync(values['env-file'], 'utf8').split('\
     return [line.slice(0, i), line.slice(i + 1).replace(/^(['"])(.*)\1$/, '$2')];
   }));
 assert(env.AUTHENTIK_BOOTSTRAP_TOKEN, 'Missing fixture bootstrap token');
-const report = { scope: 'Real Full browser OIDC, session revocation and private playlist isolation', passed: false, checks: [], cleanup: [] };
+const report = { scope: 'Real Full browser OIDC, session revocation and private playlist isolation' + (values['media-url'] ? '; distributed media acquisition/import/original/range/HLS checks' : ''), passed: false, checks: [], cleanup: [] };
 const browser = await chromium.launch({ headless: true });
 const admin = await request.newContext({ baseURL: values['identity-origin'], extraHTTPHeaders: { Authorization: `Bearer ${env.AUTHENTIK_BOOTSTRAP_TOKEN}` } });
 const users = [], playlists = [], actors = {};
@@ -81,6 +83,12 @@ try {
     record(`${label}: real Authentik OIDC login and session after reload`);
   }
   const { alice, bob } = actors;
+  if (values['media-url']) {
+    assert(values['media-file'], '--media-file is required with --media-url');
+    const { verifyMedia } = await import('./check-full-media.mjs');
+    report.media = await verifyMedia(alice, values.origin, values['media-url'], values['media-file'], values['import-media-file']);
+    if (report.media.passed) record('Distributed Full download, import, original/range and HLS playback');
+  }
   const aliceId = await createPlaylist(alice, `Phase 0 Alice ${suffix}`);
   const bobId = await createPlaylist(bob, `Phase 0 Bob ${suffix}`);
   for (const [actor, otherId] of [[alice, bobId], [bob, aliceId]]) {
@@ -101,7 +109,8 @@ try {
   try { await expectStatus(await replay.get(`${values.origin}/api/auth/me`), 401, 'revoked cookie replay'); }
   finally { await replay.dispose(); }
   record('CSRF enforced; logout revokes session and rejects replay of the old cookie');
-  report.passed = true;
+  report.passed = report.media?.passed ?? true;
+  if (!report.passed) process.exitCode = 1;
 } catch (error) {
   // Avoid Playwright call logs, URLs with authorization codes, tokens and passwords.
   report.error = error instanceof assert.AssertionError ? error.message : `Browser/API operation failed (${error.name})`;

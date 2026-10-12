@@ -1,0 +1,130 @@
+{
+  "project": "froststream-phase0-standard-v5",
+  "requestedSeconds": 900,
+  "elapsedSeconds": 900.044629608,
+  "peakContainerMemoryBytes": 2820670000.0,
+  "minimumHostAvailableBytes": 13140393984,
+  "limitations": [
+    "Container memory uses engine/cgroup accounting and includes children; it is not process RSS.",
+    "Host filesystem cache is recorded, not attributed exclusively to FrostStream.",
+    "CPU percentages are engine-reported; Podman may average over container lifetime.",
+    "Development hardware; this does not certify physical 8 GB acceptance."
+  ],
+  "date": "2026-10-11",
+  "scope": "15-minute Full activity/inactivity interval; includes browser/media checks and failed HLS, followed by inactivity. Not a clean full-system idle acceptance run.",
+  "sampleCount": 180,
+  "hostMemoryBytes": 32708530176,
+  "hostCachedBytes": {
+    "minimum": 9631014912,
+    "maximum": 12463566848
+  },
+  "containerCpuSeconds": 58.920186,
+  "containerCpuPercentOneCore": 6.546677436350075,
+  "finalContainers": [
+    {
+      "name": "froststream-phase0-standard-v5-nats-1",
+      "memoryBytes": 27920000.0,
+      "cpuPercent": 0.1,
+      "cpuTime": "1.407528s",
+      "pids": "21"
+    },
+    {
+      "name": "froststream-phase0-standard-v5-pot-provider-1",
+      "memoryBytes": 66379999.99999999,
+      "cpuPercent": 0.06,
+      "cpuTime": "803.106ms",
+      "pids": "7"
+    },
+    {
+      "name": "froststream-phase0-standard-v5-postgres-1",
+      "memoryBytes": 155000000.0,
+      "cpuPercent": 1.86,
+      "cpuTime": "25.022893s",
+      "pids": "37"
+    },
+    {
+      "name": "froststream-phase0-standard-v5-typesense-1",
+      "memoryBytes": 353800000.0,
+      "cpuPercent": 0.12,
+      "cpuTime": "1.679025s",
+      "pids": "567"
+    },
+    {
+      "name": "froststream-phase0-standard-v5-openbao-1",
+      "memoryBytes": 40080000.0,
+      "cpuPercent": 0.82,
+      "cpuTime": "11.005312s",
+      "pids": "23"
+    },
+    {
+      "name": "froststream-phase0-standard-v5-authentik-1",
+      "memoryBytes": 790600000.0,
+      "cpuPercent": 5.22,
+      "cpuTime": "1m10.086631s",
+      "pids": "30"
+    },
+    {
+      "name": "froststream-phase0-standard-v5-openfga-1",
+      "memoryBytes": 41450000.0,
+      "cpuPercent": 0.21,
+      "cpuTime": "2.810288s",
+      "pids": "21"
+    },
+    {
+      "name": "froststream-phase0-standard-v5-authentik-worker-1",
+      "memoryBytes": 299200000.0,
+      "cpuPercent": 2.12,
+      "cpuTime": "27.54466s",
+      "pids": "32"
+    },
+    {
+      "name": "froststream-phase0-standard-v5-worker-1",
+      "memoryBytes": 259100000.00000003,
+      "cpuPercent": 1.15,
+      "cpuTime": "15.331153s",
+      "pids": "16"
+    },
+    {
+      "name": "froststream-phase0-standard-v5-databridge-1",
+      "memoryBytes": 286600000.0,
+      "cpuPercent": 1.24,
+      "cpuTime": "16.640592s",
+      "pids": "18"
+    },
+    {
+      "name": "froststream-phase0-standard-v5-backupservice-1",
+      "memoryBytes": 87710000.0,
+      "cpuPercent": 0.22,
+      "cpuTime": "2.90282s",
+      "pids": "33"
+    },
+    {
+      "name": "froststream-phase0-standard-v5-webapi-1",
+      "memoryBytes": 163200000.0,
+      "cpuPercent": 0.76,
+      "cpuTime": "9.909855s",
+      "pids": "33"
+    },
+    {
+      "name": "froststream-phase0-standard-v5-scheduler-1",
+      "memoryBytes": 51810000.0,
+      "cpuPercent": 0.08,
+      "cpuTime": "1.070881s",
+      "pids": "32"
+    },
+    {
+      "name": "froststream-phase0-standard-v5-mediaprocessor-1",
+      "memoryBytes": 68030000.0,
+      "cpuPercent": 0.13,
+      "cpuTime": "1.649567s",
+      "pids": "16"
+    },
+    {
+      "name": "froststream-phase0-standard-v5-frontend-1",
+      "memoryBytes": 29680000.0,
+      "cpuPercent": 0.06,
+      "cpuTime": "800.475ms",
+      "pids": "7"
+    }
+  ]
+}

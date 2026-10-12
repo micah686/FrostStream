@@ -17,8 +17,9 @@ Status: baseline implementation and local regression checkpoint delivered; full 
 - [x] Packaged Full startup on an initially empty engine using isolated project state and the documented Podman ordering workaround; all 19 service/initializer states verified.
 - [x] Real Authentik browser OIDC login/session flow, two-user private-playlist isolation and logout/cookie revocation; passed twice with fresh identities against real Full services.
 - [x] Second empty-state Full installation with unused project volumes and isolated backup/vault-bootstrap bind roots; all 19 service states and real two-user OIDC/private-playlist/logout checks pass.
-- [ ] Standard Full Compose startup without the Podman workaround and distributed Full download/import/playback.
-- [ ] Index the large corpus and measure full/incremental indexing, warm/cold search, idle activity, playback and combined workloads.
+- [x] Standard Full Compose startup without the ordered Podman workaround: Docker Compose 5.6.0 against the Podman API; 19 service states and real frontend/API/search/OIDC checks pass. Installed podman-compose 1.6.0 still fails. See CURRENT-VERIFICATION.md.
+- [ ] Distributed Full download/import/playback: real download, fresh import and byte/range playback pass; HLS fails because MediaProcessor receives HTTP 401 from internal storage. See CURRENT-VERIFICATION.md.
+- [ ] Index the large corpus and measure full/incremental indexing, warm/cold search, idle activity, playback and combined workloads. Current-code synthetic Lucene measurements and Full media/resource observations are in CURRENT-VERIFICATION.md; Full corpus ingestion, verified cold cache and successful combined workloads remain open.
 - [ ] Measure on the specified 8 GB machine including container memory, FFmpeg children and filesystem cache; confirm acceptance thresholds against measurements.
 
 Known defects/differences: see ARCHITECTURE.md and EVALUATION.md. Keep Phase 0 open until remaining measurements, deployment and Full media gates pass. Do not infer acceptance from generated Compose, directory layout, mocked responses, or the development-machine resource sample.

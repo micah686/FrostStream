@@ -1,5 +1,7 @@
 # Packaged Phase 0 verification — 2026-10-10
 
+Current-code re-verification on 2026-10-11: standard Docker Compose 5.6.0 startup passes against the Podman API; podman-compose still fails. Distributed download/fresh import and original/range playback pass, but both HLS paths fail on internal storage HTTP 401. See [CURRENT-VERIFICATION.md](CURRENT-VERIFICATION.md) for scope, measurements and reproduction. The sections below retain the earlier baseline evidence.
+
 The continuation built and ran the copied candidate packages on an initially empty rootless Podman engine. Projects are named `froststream-phase0-lite`, `froststream-phase0-lite-repeat` and `froststream-phase0-full`. These names isolate container/volume state. Full's backup and vault-bootstrap bind directories remain under `Full/docker-compose/`. No existing installation or volume was reset. Raw reports are in ignored `.phase0/results/`; the portable summary is in verification-results.json.
 
 Lite's frontend serves HTML, forwards actual API requests, reports Lite/SQLite capabilities and authenticates the local Admin with the `admins` group. The checker rejects HTML returned for an API path, so a SPA fallback cannot produce a passing API result. These checks passed on two separate empty-state installations and after restarting the first backend. These are startup/authentication smoke checks, not packaged media execution or search-readiness measurements. Existing real-media Lite integration evidence remains separate.

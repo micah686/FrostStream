@@ -1,5 +1,7 @@
 # Implementation evaluation — 2026-10-10
 
+Latest current-code verification: [CURRENT-VERIFICATION.md](CURRENT-VERIFICATION.md). Standard Docker Compose 5.6.0 startup passes against the Podman API without ordered startup. Real distributed download/fresh import and original/range playback pass; HLS fails on internal storage HTTP 401. Large-corpus full-system acceptance remains open. Historical results below retain their original scope.
+
 Continuation on 2026-10-11 closed the second empty-state Full installation gate using the documented Podman workaround. A new project with new named volumes and separate backup/vault-bootstrap bind roots passed all 19 final service states and real Authentik two-user browser/private-playlist/logout checks. The fresh-install runner now rejects reused state and restores project-specific bind roots on retained-state startup; 15 tooling tests pass. Standard Full Compose startup, distributed Full media and performance/reference-hardware gates remain open. See PACKAGED.md for commands and evidence.
 
 The Phase 0 working baseline is implemented and locally verified. Packaged Lite startup/restart, Full startup with a documented Podman workaround, and real Authentik browser sessions/private-playlist isolation are verified, including a second empty-state Full installation. Phase 0's complete exit gate is **not yet satisfied**: packaged Full media workflows, standard Full Compose startup and the measured 8 GB performance acceptance remain open. See PACKAGED.md and CHECKLIST.md.
