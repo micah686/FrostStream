@@ -34,7 +34,7 @@ dotnet Tests/IntegrationTests/IntegrationTests/bin/Debug/net10.0/IntegrationTest
 python3 tooling/installation/check-compose.py
 ```
 
-Publish verification refuses an existing output directory so stale files cannot pass; use `--output .phase1/publish-repeat` for a new run. Engine paths in the commands above describe this machine's rootless Podman setup. The existing Phase 0 fixture preparation, profile publication and packaged browser check also apply to these hosts. Fresh package projects for this phase are `froststream-phase0-full-phase1` and `froststream-phase0-lite-phase1`; the runner's required prefix preserves its disposable-project guard.
+Publish verification refuses an existing output directory so stale files cannot pass; use `--output .artifacts/publish/reusable-hosts-repeat` for a new run. Engine paths in the commands above describe this machine's rootless Podman setup. The existing Phase 0 fixture preparation, profile publication and packaged browser check also apply to these hosts. Fresh package projects for this phase are `froststream-install-full-phase1` and `froststream-install-lite-phase1`; the runner's required prefix preserves its disposable-project guard.
 
 Phase 0's unresolved standard Compose provider failure, distributed Full media characterization and reference-hardware/performance gates remain open. A Phase 1 host extraction does not supply those missing measurements or claim new Full media coverage.
 
@@ -54,4 +54,4 @@ Phase 0's unresolved standard Compose provider failure, distributed Full media c
 | Fresh packaged Lite | Standard Compose startup, frontend/API/capabilities/local Admin passed |
 | Fresh packaged Full | All 19 service states and real Authentik two-user login/private playlists/logout passed using the existing Podman workaround |
 
-Portable results are in `../verification/evidence/phase-1-verification-results.json`. Raw evidence remains in ignored `.phase0/results/` and `.phase1/publish/`. Both packaged verification stacks were stopped with their volumes and bind state retained. The reference tree and `REARCH_PLAN.MD` were not modified.
+Portable results are in `../verification/evidence/phase-1-verification-results.json`. Raw evidence remains in ignored `.artifacts/test-results/` and `.artifacts/publish/reusable-hosts/`. Both packaged verification stacks were stopped with their volumes and bind state retained. The reference tree and `REARCH_PLAN.MD` were not modified.

@@ -12,7 +12,7 @@ parser.add_argument('--project', required=True)
 parser.add_argument('--seconds', type=int, required=True)
 parser.add_argument('--output', type=Path, required=True)
 args = parser.parse_args()
-if not re.fullmatch(r'froststream-phase0-[a-z0-9-]+', args.project) or args.seconds <= 0:
+if not re.fullmatch(r'froststream-install-[a-z0-9-]+', args.project) or args.seconds <= 0:
     parser.error('Use a disposable Phase 0 project and a positive duration')
 containers = subprocess.check_output(['docker', 'ps', '--filter', f'label=com.docker.compose.project={args.project}', '--format', '{{.Names}}'], text=True).splitlines()
 if not containers:

@@ -4,7 +4,7 @@ import argparse, os, re, secrets
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2]
 p=argparse.ArgumentParser();p.add_argument('edition',choices=['Lite','Full']);a=p.parse_args()
-folder=ROOT/'.phase0/installations'/a.edition
+folder=ROOT/'.artifacts/installations'/a.edition
 folder.mkdir(parents=True,exist_ok=True)
 output=folder/'fixture.env'
 if output.exists():p.error(f'{output} exists; use a new checkout for another clean install')
@@ -19,5 +19,5 @@ for key,value in values.items():
     else:text+='\n'+key+'='+value+'\n'
 fd=os.open(output,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
 with os.fdopen(fd,'w') as f:f.write(text)
-(folder/'OWNED_BY_PHASE0').write_text('Fresh disposable installation; no cleanup of global named volumes is authorized.\n')
+(folder/'OWNED_BY_FROSTSTREAM').write_text('Fresh disposable installation; no cleanup of global named volumes is authorized.\n')
 print(output)

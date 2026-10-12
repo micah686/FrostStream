@@ -42,7 +42,7 @@
       "scope": "Podman workaround required; distributed media not exercised",
       "emptyStateInstallations": 2,
       "secondEmptyStateInstallation": {
-        "project": "froststream-phase0-full-repeat",
+        "project": "froststream-install-full-repeat",
         "freshStatePreflight": true,
         "isolatedBackupAndVaultBootstrapBinds": true,
         "finalServiceStates": 19,
@@ -59,7 +59,7 @@
     "Large-corpus indexing/search/combined-workload measurements",
     "Measured thresholds on actual 8 GB reference hardware"
   ],
-  "continuationEvidence": "PACKAGED.md; raw reports in ignored .phase0/results/",
+  "continuationEvidence": "PACKAGED.md; raw reports in ignored .artifacts/test-results/",
   "currentCodeVerification": {
     "report": "../current-validation.md",
     "standardCompose": {

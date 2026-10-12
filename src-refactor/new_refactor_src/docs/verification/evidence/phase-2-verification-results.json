@@ -100,15 +100,15 @@
     "Distributed Full media, large-corpus workload measurements and specified 8 GB machine acceptance remain open Phase 0 gates."
   ],
   "evidence": {
-    "publish": ".phase2/publish-final/verification.json",
-    "publishedDependencies": ".phase2/publish-final/edition-verification.json",
-    "unit": ".phase0/results/phase2-unit-final-composition/",
-    "postgresPersistence": ".phase0/results/phase2-postgres-final/",
-    "lite": ".phase0/results/phase2-lite-final/",
-    "fullControlled": ".phase0/results/phase2-full-auth/",
-    "http": ".phase0/results/phase2-http/",
-    "fullStartup": ".phase0/results/phase2-full-startup.json",
-    "fullBrowser": ".phase0/results/phase2-authentik.json",
-    "liteStartup": ".phase0/results/phase2-lite-startup-final.json"
+    "publish": ".artifacts/publish/edition-boundaries-final/verification.json",
+    "publishedDependencies": ".artifacts/publish/edition-boundaries-final/edition-verification.json",
+    "unit": ".artifacts/test-results/phase2-unit-final-composition/",
+    "postgresPersistence": ".artifacts/test-results/phase2-postgres-final/",
+    "lite": ".artifacts/test-results/phase2-lite-final/",
+    "fullControlled": ".artifacts/test-results/phase2-full-auth/",
+    "http": ".artifacts/test-results/phase2-http/",
+    "fullStartup": ".artifacts/test-results/phase2-full-startup.json",
+    "fullBrowser": ".artifacts/test-results/phase2-authentik.json",
+    "liteStartup": ".artifacts/test-results/phase2-lite-startup-final.json"
   }
 }

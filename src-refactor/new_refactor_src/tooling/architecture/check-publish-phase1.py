@@ -11,7 +11,7 @@ MODULES = ['WebAPI', 'DataBridge', 'Worker', 'MediaProcessor', 'Scheduler']
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--output', type=Path, default=ROOT / '.phase1/publish')
+    parser.add_argument('--output', type=Path, default=ROOT / '.artifacts/publish/reusable-hosts')
     args = parser.parse_args()
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)

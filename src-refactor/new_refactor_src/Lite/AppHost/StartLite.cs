@@ -25,7 +25,7 @@ public static class StartLite
             builder.Configuration["Secrets:Local:KeyRingPath"] ?? Path.Combine(root, "keys"),
             publishValueAsDefault: true);
         var lite = builder.AddProject<Projects.Lite>("lite", launchProfileName: null)
-            .WithEnvironment("Search__Lucene__Path", publish ? "/search" : storageRoot + "-search")
+            .WithEnvironment("Search__Lucene__Path", publish ? "/search" : Path.Combine(storageRoot, "search-index"))
             .WithEnvironment("Deployment__Mode", "Lite")
             .WithEnvironment("DOTNET_GCHeapHardLimitPercent", "40")
             .WithEnvironment("Persistence__Sqlite__Path", database)

@@ -91,15 +91,15 @@
     "Phase 0 standard Full Compose, distributed Full media, large-corpus workloads and specified 8 GB machine acceptance remain open."
   ],
   "evidence": {
-    "unit": ".phase0/results/phase3-unit-verified-final/",
-    "postgresAndSqlite": ".phase0/results/phase3-postgres-verified/",
-    "lite": ".phase0/results/phase3-lite-verified/",
-    "fullControlled": ".phase0/results/phase3-full-auth/",
-    "http": ".phase0/results/phase3-http/",
-    "idle": ".phase0/results/phase3-idle-verified.json",
-    "publish": ".phase3/publish-verified/verification.json",
-    "publishedDependencies": ".phase3/publish-verified/edition-verification.json",
-    "packagedLite": ".phase0/results/phase3-lite-startup-final.json",
-    "packagedLiteRestart": ".phase0/results/phase3-lite-restart.json"
+    "unit": ".artifacts/test-results/phase3-unit-verified-final/",
+    "postgresAndSqlite": ".artifacts/test-results/phase3-postgres-verified/",
+    "lite": ".artifacts/test-results/phase3-lite-verified/",
+    "fullControlled": ".artifacts/test-results/phase3-full-auth/",
+    "http": ".artifacts/test-results/phase3-http/",
+    "idle": ".artifacts/test-results/phase3-idle-verified.json",
+    "publish": ".artifacts/publish/reliable-runtime-verified/verification.json",
+    "publishedDependencies": ".artifacts/publish/reliable-runtime-verified/edition-verification.json",
+    "packagedLite": ".artifacts/test-results/phase3-lite-startup-final.json",
+    "packagedLiteRestart": ".artifacts/test-results/phase3-lite-restart.json"
   }
 }

@@ -4,7 +4,7 @@ These checks exercise the current implementation after Phases 1–7, not the his
 
 ## Lite local storage path
 
-Lite's AppHost development default is `.phase0/data` (a hidden directory). Packaged Lite previously declared `/data` as a project-scoped named volume even though the generator created `<installation>/data`, leaving that visible folder unused. The AppHost now bind-mounts the configured `FROSTSTREAM_STORAGE_ROOT` at `/data`; the generated package resolves it to `<installation>/data`. A fresh profile rendered `LITE_BINDMOUNT_0` to that exact absolute path, passed the package checker, and a container write/remove probe confirmed host-visible write access. `data/archives/` contains downloaded originals; `data/incoming/` is the import staging folder. SQLite and backups also live under `data/`; Lucene stays separately mounted at `/search`.
+Lite's AppHost development default is the visible `data/` folder at the checkout root. Packaged Lite previously declared `/data` as a project-scoped named volume even though the generator created `<installation>/data`, leaving that visible folder unused. The AppHost now bind-mounts the configured `FROSTSTREAM_STORAGE_ROOT` at `/data`; the generated package resolves it to `<installation>/data`. A fresh profile rendered `LITE_BINDMOUNT_0` to that exact absolute path, passed the package checker, and a container write/remove probe confirmed host-visible write access. `data/archives/` contains downloaded originals; `data/incoming/` is the import staging folder. SQLite and backups also live under `data/`; development Lucene data is `data/search-index/`, while packaged Compose keeps it separately mounted at `/search`.
 
 This change applies to newly generated Compose profiles. Existing Compose files still mount their old named volume. Existing installation data must be copied from that volume into its matching installation `data/` folder before switching its Compose file, so SQLite, keys, backups and archived media stay together. Retained Phase 0/6/7 Lite volumes inspected during this check contained SQLite/application files and no `.mp4`, `.mkv` or `.webm` videos. No retained volume was modified or removed.
 
@@ -41,24 +41,24 @@ The 900.04-second container interval collected 180 samples: peak aggregate conta
 Reproduction from `new_refactor_src` (private package files are not committed):
 
 ```sh
-python3 tooling/installation/package.py Full .phase0/froststream-phase0-standard-v5 --frontend-port 25000
+python3 tooling/installation/package.py Full .artifacts/packages/froststream-install-standard-v5 --frontend-port 25000
 DOCKER_HOST=unix:///run/user/1000/podman/podman.sock /tmp/frost-docker-compose \
-  -p froststream-phase0-standard-v5 -f .phase0/froststream-phase0-standard-v5/docker-compose.yaml up -d --build
-python3 tooling/installation/check-package.py Full .phase0/froststream-phase0-standard-v5 --base-url http://127.0.0.1:25000
+  -p froststream-install-standard-v5 -f .artifacts/packages/froststream-install-standard-v5/docker-compose.yaml up -d --build
+python3 tooling/installation/check-package.py Full .artifacts/packages/froststream-install-standard-v5 --base-url http://127.0.0.1:25000
 # Generate two distinct FFmpeg videos, serve fixture.mp4 on port 25333,
 # and copy import.mp4 to the owned worker's /app/incoming/phase0-import.mp4.
 node tooling/installation/check-authentik.mjs --playwright-module /tmp/frost-phase0-browser/node_modules/playwright/index.mjs \
-  --env-file .phase0/froststream-phase0-standard-v5/.env \
+  --env-file .artifacts/packages/froststream-install-standard-v5/.env \
   --media-url http://host.containers.internal:25333/fixture.mp4 \
   --media-file /tmp/frost-phase0-media/fixture.mp4 --import-media-file /tmp/frost-phase0-media/import.mp4 \
-  --output .phase0/results/standard-v5-media-distinct.json
+  --output .artifacts/test-results/standard-v5-media-distinct.json
 FROSTSTREAM_LUCENE_BENCHMARK_REPORT=/tmp/frost-phase0-corpus-expanded.json \
 FROSTSTREAM_BENCHMARK_IDLE_SECONDS=900 dotnet run --no-build --project Tests/UnitTests/UnitTests.csproj \
   -- --treenode-filter '/*/*/LuceneBenchmarkTests/*'
-python3 tooling/performance/measure-containers.py --project froststream-phase0-standard-v5 --seconds 900 \
-  --output .phase0/results/standard-v5-resources.json
+python3 tooling/performance/measure-containers.py --project froststream-install-standard-v5 --seconds 900 \
+  --output .artifacts/test-results/standard-v5-resources.json
 ```
 
-The media checker exits nonzero when either HLS check fails, while retaining the successful independent checks and cleaning up browser identities/playlists. Fixture media/storage records remain in the disposable installation for inspection. Raw private build/start logs and resource samples remain under ignored `.phase0/` or `/tmp/`.
+The media checker exits nonzero when either HLS check fails, while retaining the successful independent checks and cleaning up browser identities/playlists. Fixture media/storage records remain in the disposable installation for inspection. Raw private build/start logs and resource samples remain under ignored `.artifacts/` or `/tmp/`.
 
 After verification, the owned Full stack and fixture HTTP server were stopped. Compose containers were removed without deleting named volumes or bind data. Source architecture verification, the benchmark build/test, JavaScript/Python syntax checks and scoped whitespace checks passed. The Full media checkpoint deliberately remains nonzero because of the observed HLS failures.

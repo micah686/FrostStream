@@ -54,10 +54,10 @@ FFmpeg and ffprobe share a process semaphore. Lite defaults to one child; Full d
 ```bash
 python3 tooling/architecture/verify.py
 python3 tooling/architecture/verify-final-boundaries.py --require-restored
-FROSTSTREAM_PHASE3_IDLE_REPORT="$PWD/.phase0/results/phase3-idle.json" bash tooling/installation/run-checkpoint.sh unit
+FROSTSTREAM_PHASE3_IDLE_REPORT="$PWD/.artifacts/test-results/phase3-idle.json" bash tooling/installation/run-checkpoint.sh unit
 bash tooling/installation/run-checkpoint.sh lite
 bash tooling/installation/run-checkpoint.sh full
-python3 tooling/architecture/check-publish-all.py --output .phase3/publish
+python3 tooling/architecture/check-publish-all.py --output .artifacts/publish/reliable-runtime
 ```
 
 Setting `FROSTSTREAM_TEST_POSTGRES` to a disposable PostgreSQL admin connection enables the same persistence, trigger, revision and killed-writer tests on both providers. See `../verification/evidence/phase-3-verification-results.json` for completed evidence. The idle probe measurement is a controlled single-consumer check, not a full deployment resource benchmark. Phase 0's standard Full Compose, distributed Full media, large-corpus and specified 8 GB machine gates remain open.

@@ -49,6 +49,6 @@ bash tooling/installation/run-checkpoint.sh full
 python3 tooling/architecture/check-publish-all.py
 ```
 
-`verify-provider-boundaries.py` checks project closure, SDK imports, Full-security ownership, and Lite's actual restored transitive graph. The publish check inspects six fresh published outputs, dependency manifests, module DLLs, and host-owned settings. Outputs and private fixtures belong under ignored `.phase2/`; regression artifacts remain under `.phase0/results/phase2-*`.
+`verify-provider-boundaries.py` checks project closure, SDK imports, Full-security ownership, and Lite's actual restored transitive graph. The publish check inspects six fresh published outputs, dependency manifests, module DLLs, and host-owned settings. Outputs and private fixtures belong under ignored `.artifacts/`; regression artifacts remain under `.artifacts/test-results/phase2-*`.
 
 See `../verification/evidence/phase-2-verification-results.json` for completed checks. Phase 0's outstanding standard Full Compose, large-corpus, distributed media, and 8 GB hardware gates remain separate; Phase 2 verification does not claim those benchmarks are complete.

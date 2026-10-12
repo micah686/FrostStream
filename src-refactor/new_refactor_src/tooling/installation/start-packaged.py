@@ -20,18 +20,18 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def fresh_environment(project, containers, volumes, root=ROOT):
     """Refuse retained state before creating project-specific writable bind roots."""
-    if not re.fullmatch(r'froststream-phase0-[a-z0-9-]+', project):
+    if not re.fullmatch(r'froststream-install-[a-z0-9-]+', project):
         raise ValueError('Invalid disposable project name')
     if any(name.startswith(project + '_') or name.startswith(project + '-')
            for name in [*containers, *volumes]):
         raise ValueError('Fresh installation requires a project with no existing containers or volumes')
-    folder = root / '.phase0/installations' / project
+    folder = root / '.artifacts/installations' / project
     folder.mkdir(mode=0o700, parents=True, exist_ok=False)
     overrides = {'FROSTSTREAM_BACKUP_ROOT': str(folder / 'backups'),
                  'FROSTSTREAM_OPENBAO_BOOTSTRAP_ROOT': str(folder / 'openbao-bootstrap')}
     for path in overrides.values():
         Path(path).mkdir(mode=0o700)
-    (folder / 'OWNED_BY_PHASE0').write_text('Fresh disposable installation; retain state after verification.\n')
+    (folder / 'OWNED_BY_FROSTSTREAM').write_text('Fresh disposable installation; retain state after verification.\n')
     return overrides
 
 
@@ -58,8 +58,8 @@ def main():
     parser.add_argument('--verify-only', action='store_true', help='Inspect an existing Phase 0 stack without recreating containers')
     parser.add_argument('--fresh', action='store_true', help='Require unused project/volumes and create isolated backup/bootstrap bind roots')
     args = parser.parse_args()
-    if not re.fullmatch(r'froststream-phase0-[a-z0-9-]+', args.project):
-        parser.error('Only froststream-phase0-* disposable projects are supported')
+    if not re.fullmatch(r'froststream-install-[a-z0-9-]+', args.project):
+        parser.error('Only froststream-install-* disposable projects are supported')
     if args.timeout <= 0:
         parser.error('--timeout must be positive')
     if args.fresh and args.verify_only:
@@ -90,8 +90,8 @@ def main():
             report['freshInstallation'] = {'preflightPassed': True, 'bindRoots': overrides,
                                            'namedVolumes': 'Unused project namespace verified before startup'}
         else:
-            folder = ROOT / '.phase0/installations' / args.project
-            if (folder / 'OWNED_BY_PHASE0').is_file():
+            folder = ROOT / '.artifacts/installations' / args.project
+            if (folder / 'OWNED_BY_FROSTSTREAM').is_file():
                 overrides = {'FROSTSTREAM_BACKUP_ROOT': str(folder / 'backups'),
                              'FROSTSTREAM_OPENBAO_BOOTSTRAP_ROOT': str(folder / 'openbao-bootstrap')}
                 environment.update(overrides)
@@ -105,7 +105,7 @@ def main():
             service = {key: value for key, value in services[name].items() if key != 'depends_on'}
             view = {key: value for key, value in definition.items() if key != 'services'}
             view['services'] = {name: service}
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', prefix='.phase0-start-',
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', prefix='froststream-start-',
                                              dir=compose.parent) as temporary:
                 yaml.safe_dump(view, temporary)
                 temporary.flush()

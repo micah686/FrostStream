@@ -15,14 +15,9 @@ Shared/Hosting/AppHostCommon/
 Frontend/static/.gitkeep
 
 App/*App/docker-compose/
-
-.phase0/
 **/docker-compose/
 Tests/
 tooling/
-
 **/TestResults/
-.phase1/
-.phase2/
-
-.phase3/
+data/
+.artifacts/

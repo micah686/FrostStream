@@ -47,12 +47,12 @@
     "Phase 0 standard Full Compose, distributed Full media and performance/reference-hardware gates remain open."
   ],
   "evidence": {
-    "publish": ".phase1/publish/verification.json",
-    "fullStartup": ".phase0/results/phase1-full-startup.json",
-    "fullBrowser": ".phase0/results/phase1-full-auth.json",
-    "liteStartup": ".phase0/results/phase1-lite-startup.json",
-    "unit": ".phase0/results/phase1-unit/",
-    "lite": ".phase0/results/lite/",
-    "fullControlled": ".phase0/results/full/"
+    "publish": ".artifacts/publish/reusable-hosts/verification.json",
+    "fullStartup": ".artifacts/test-results/phase1-full-startup.json",
+    "fullBrowser": ".artifacts/test-results/phase1-full-auth.json",
+    "liteStartup": ".artifacts/test-results/phase1-lite-startup.json",
+    "unit": ".artifacts/test-results/phase1-unit/",
+    "lite": ".artifacts/test-results/lite/",
+    "fullControlled": ".artifacts/test-results/full/"
   }
 }

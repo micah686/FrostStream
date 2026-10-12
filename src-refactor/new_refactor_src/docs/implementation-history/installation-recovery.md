@@ -7,15 +7,15 @@ All commands below run from `new_refactor_src`. These are fresh installations, n
 Prerequisites: .NET 10, Aspire CLI, Python 3 with `tooling/installation/requirements.txt`, a Docker-compatible engine and Docker Compose. Generated files build the checked-out Dockerfiles; retain this checkout and its configuration files. Private `.env` and `installation.env` contain newly generated credentials. Keep their directory private and retain both files. The generated Full profile is a local development installation with real Authentik/OpenFGA, not certification of external HTTPS identity configuration.
 
 ```sh
-python3 tooling/installation/package.py Lite .phase0/my-lite
-python3 tooling/installation/package.py Full .phase0/my-full
+python3 tooling/installation/package.py Lite .artifacts/my-lite
+python3 tooling/installation/package.py Full .artifacts/my-full
 # Optional live chat; creates one additional ClickHouse service.
-python3 tooling/installation/package.py Lite .phase0/my-chat-lite --live-chat
+python3 tooling/installation/package.py Lite .artifacts/my-chat-lite --live-chat
 # A custom host frontend port still maps to container port 25000.
-python3 tooling/installation/package.py Lite .phase0/another-lite --frontend-port 25107
+python3 tooling/installation/package.py Lite .artifacts/another-lite --frontend-port 25107
 
-docker compose -p my-lite -f .phase0/my-lite/docker-compose.yaml up -d --build
-python3 tooling/installation/check-package.py Lite .phase0/my-lite --base-url http://127.0.0.1:25000
+docker compose -p my-lite -f .artifacts/my-lite/docker-compose.yaml up -d --build
+python3 tooling/installation/check-package.py Lite .artifacts/my-lite --base-url http://127.0.0.1:25000
 ```
 
 Full uses 19 services with live chat off and 20 with it on, including one-shot initialization jobs. Lite uses 3 or 4. Optional ClickHouse exposes its own health probe. Backends wait for container start and probe an actual query with bounded retries; an unhealthy optional store can reach a Failed schema state without blocking the main application indefinitely. The frontend's `/healthz` reports frontend liveness; `/readyz` proxies application `/health`. Production hosts expose `/health` and `/alive`. Full readiness requires a reply from DataBridge handlers; Lite readiness requires reconciliation, handler registration and scheduler startup. `/api/search/status` reports search separately. `/api/system/integrations` reports search and live-chat **schema startup** state; it is not a continuous ClickHouse availability monitor. A failed optional schema does not bring down the main application.
@@ -31,12 +31,12 @@ SQLite preserves its checksummed application v1 catalog and explicit v2–v4 ste
 Schema-only initialization is available in both packaged backends:
 
 ```sh
-docker compose -p my-lite -f .phase0/my-lite/docker-compose.yaml run --rm --no-deps lite --Persistence:InitializeOnly=true
+docker compose -p my-lite -f .artifacts/my-lite/docker-compose.yaml run --rm --no-deps lite --Persistence:InitializeOnly=true
 # Full needs its PostgreSQL service and initialized databases first.
-docker compose -p my-full -f .phase0/my-full/docker-compose.yaml run --rm --no-deps databridge --Persistence:InitializeOnly=true
+docker compose -p my-full -f .artifacts/my-full/docker-compose.yaml run --rm --no-deps databridge --Persistence:InitializeOnly=true
 ```
 
-Fresh Lite defaults are `/data/core.sqlite`, `/data/keys`, `/data/backups`, incoming media under `/data/incoming`, and search under `/search`. In packaged Lite, `/data` bind-mounts to the generated installation's local `data/` directory (for example `.phase0/my-lite/data`); archived media is stored below `data/archives/`. `.phase0` is hidden in many file browsers, so enable “show hidden files” or open that path directly. When running the AppHost in development mode outside Compose, the default is `new_refactor_src/.phase0/data`; set `FROSTSTREAM_STORAGE_ROOT` to choose another absolute local folder. The rebuildable search index remains in its separate project-scoped named volume. Explicit database/key paths remain configurable. Full persistent stores remain project-scoped named volumes, with separate backup/bootstrap bind roots per installation.
+Fresh Lite defaults are `/data/core.sqlite`, `/data/keys`, `/data/backups`, incoming media under `/data/incoming`, and the packaged search index under `/search`. In packaged Lite, `/data` bind-mounts to the generated installation's local `data/` directory (for example `.artifacts/my-lite/data`); archived media is stored below `data/archives/`. When running either AppHost in development mode, the default is `new_refactor_src/data`: downloads go to `data/archives/`, imports to `data/incoming/`, and SQLite, keys, and backups sit directly under that root. Lite's rebuildable Lucene index is `data/search-index/`. In a generated Compose installation, the installation's own `data/` is bind-mounted at `/data` and the search index stays in a separate project-scoped volume. Set `FROSTSTREAM_STORAGE_ROOT` to choose another absolute local folder. Explicit database/key paths remain configurable. Full persistent stores remain project-scoped named volumes, with separate backup/bootstrap bind roots per installation.
 
 ## Resource defaults
 
@@ -65,10 +65,10 @@ Store a second copy of recovery sets and bootstrap material outside the machine 
 Stop the backend and preserve the original installation. Mount the snapshot, complete key backup and manifest at their original sibling paths. The command verifies checksums, SQLite integrity/foreign keys and actual secret decryption without generating substitute keys. It copies into private staging, verifies the staged bytes again, invalidates derived search and publishes the database/key directory together. Existing destinations are rejected. An interrupted command can leave a private `.recovery-*` staging directory; never point the application at staging.
 
 ```sh
-docker compose -p my-lite -f .phase0/my-lite/docker-compose.yaml stop lite
-docker compose -p my-lite -f .phase0/my-lite/docker-compose.yaml run --rm --no-deps lite \
+docker compose -p my-lite -f .artifacts/my-lite/docker-compose.yaml stop lite
+docker compose -p my-lite -f .artifacts/my-lite/docker-compose.yaml run --rm --no-deps lite \
   --Recovery:Snapshot=/data/backups/LABEL.sqlite --Recovery:VerifyOnly=true
-docker compose -p my-lite -f .phase0/my-lite/docker-compose.yaml run --rm --no-deps lite \
+docker compose -p my-lite -f .artifacts/my-lite/docker-compose.yaml run --rm --no-deps lite \
   --Recovery:Snapshot=/data/backups/LABEL.sqlite --Recovery:Destination=/data/recovered
 ```
 
@@ -96,12 +96,12 @@ dotnet run --project Tests/UnitTests/UnitTests.csproj
 # Real PostgreSQL tests create/drop their own isolated databases.
 FROSTSTREAM_TEST_POSTGRES='Host=...;Database=postgres;Username=...;Password=...' \
   dotnet run --project Tests/UnitTests/UnitTests.csproj
-python3 tooling/recovery/verify-lite-recovery.py .phase0/disposable-lite --project froststream-phase6-lite --output /tmp/lite-recovery.json
-python3 tooling/recovery/verify-full-recovery.py .phase0/disposable-full --project froststream-phase6-full --output /tmp/full-recovery.json
-python3 tooling/installation/check-package.py Lite .phase0/disposable-chat-lite --live-chat --base-url http://127.0.0.1:25107
-python3 tooling/recovery/verify-optional-degradation.py .phase0/disposable-chat-lite --project froststream-phase6-chat --base-url http://127.0.0.1:25107 --output /tmp/chat-degradation.json
+python3 tooling/recovery/verify-lite-recovery.py .artifacts/disposable-lite --project froststream-phase6-lite --output /tmp/lite-recovery.json
+python3 tooling/recovery/verify-full-recovery.py .artifacts/disposable-full --project froststream-phase6-full --output /tmp/full-recovery.json
+python3 tooling/installation/check-package.py Lite .artifacts/disposable-chat-lite --live-chat --base-url http://127.0.0.1:25107
+python3 tooling/recovery/verify-optional-degradation.py .artifacts/disposable-chat-lite --project froststream-phase6-chat --base-url http://127.0.0.1:25107 --output /tmp/chat-degradation.json
 # After the Full recovery fixture has created its paired snapshot:
-python3 tooling/recovery/verify-fresh-vault.py .phase0/disposable-full --output /tmp/fresh-vault.json
+python3 tooling/recovery/verify-fresh-vault.py .artifacts/disposable-full --output /tmp/fresh-vault.json
 # Use --podman-unshare with rootless Podman to read private uid-mapped backup files.
 ```
 

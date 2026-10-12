@@ -4,7 +4,7 @@ umask 077
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 edition="${1:-}"
 case "$edition" in Lite) project=AppHostLite;; Full) project=AppHostFull;; *) echo 'Usage: publish-profile.sh Lite|Full' >&2; exit 2;; esac
-source_env="$root/.phase0/installations/$edition/fixture.env"
+source_env="$root/.artifacts/installations/$edition/fixture.env"
 [[ -f "$source_env" ]] || { echo 'Run tooling/installation/prepare-environment.py for this edition first.' >&2; exit 1; }
 output="$root/$edition/docker-compose"
 [[ ! -e "$output" ]] || { echo 'Refusing to overwrite an existing Compose fixture.' >&2; exit 1; }

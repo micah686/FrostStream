@@ -4,7 +4,7 @@ import argparse, json, re, subprocess, sys
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('--output', type=Path, default=ROOT/'.phase2/publish')
+parser.add_argument('--output', type=Path, default=ROOT/'.artifacts/publish/edition-boundaries')
 args = parser.parse_args()
 subprocess.run([sys.executable, str(ROOT/'tooling/architecture/check-publish-phase1.py'), '--output', str(args.output)], check=True)
 report = {'passed': False, 'hosts': []}

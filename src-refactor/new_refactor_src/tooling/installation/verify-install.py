@@ -16,8 +16,8 @@ parser.add_argument('--live-chat', action='store_true')
 parser.add_argument('--compose-executable', help='Standalone Docker Compose executable (for Podman API engines)')
 parser.add_argument('--frontend-port', type=int, default=25000)
 args = parser.parse_args()
-project = 'froststream-phase7-' + args.edition.lower() + '-' + uuid.uuid4().hex[:12]
-output = ROOT / '.phase0' / project
+project = 'froststream-install-' + args.edition.lower() + '-' + uuid.uuid4().hex[:12]
+output = ROOT / '.artifacts' / 'packages' / project
 runpy.run_path(str(ROOT / 'tooling/installation/package.py'))['generate'](args.edition, output, args.live_chat, args.frontend_port)
 compose = ([args.compose_executable] if args.compose_executable else ['docker', 'compose']) + ['-p', project, '-f', str(output/'docker-compose.yaml')]
 checker = [sys.executable, str(ROOT/'tooling/installation/check-package.py'), args.edition, str(output)]

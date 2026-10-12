@@ -3,12 +3,10 @@
 **/node_modules/
 **/.svelte-kit/
 **/build/
-.phase0/
-.phase1/
 **/docker-compose/
 **/TestResults/
 Full/AppHost/configs/nats/certs/
 **/__pycache__/
-.phase2/
 
-.phase3/
+data/
+.artifacts/

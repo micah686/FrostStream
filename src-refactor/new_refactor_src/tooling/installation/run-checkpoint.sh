@@ -10,10 +10,10 @@ case "$profile" in
   full) project=Tests/IntegrationTests/IntegrationTests/IntegrationTests.csproj; filter='/*/IntegrationTests.Auth/*/*';;
   *) echo 'Usage: run-checkpoint.sh unit|lite|full' >&2; exit 2;;
 esac
-mkdir -p .phase0/results
+mkdir -p "$root/.artifacts/test-results/$profile"
 # Build separately to bound MSBuild parallelism on the laptop profile.
 dotnet build "$project" -m:1 --nologo
 python3 tooling/architecture/verify-provider-boundaries.py --require-restored
-test_args=(--maximum-parallel-tests "${FROSTSTREAM_TEST_PARALLELISM:-4}" --results-directory "$root/.phase0/results/$profile")
+test_args=(--maximum-parallel-tests "${FROSTSTREAM_TEST_PARALLELISM:-4}" --results-directory "$root/.artifacts/test-results/$profile")
 if [[ -n "$filter" ]]; then test_args+=(--treenode-filter "$filter"); fi
 dotnet run --no-build --project "$project" -- "${test_args[@]}"

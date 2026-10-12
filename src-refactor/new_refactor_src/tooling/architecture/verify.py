@@ -5,7 +5,7 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 ROOT = Path(__file__).resolve().parents[2]
 SNAPSHOT = ROOT / 'tooling/architecture/dependency-baseline.json'
-SKIP = {'bin', 'obj', 'node_modules', '.svelte-kit', '.phase0'}
+SKIP = {'bin', 'obj', 'node_modules', '.svelte-kit', '.artifacts', 'data'}
 def files(pattern):
     return sorted(p for p in ROOT.rglob(pattern) if not SKIP.intersection(p.relative_to(ROOT).parts))
 def inventory():
