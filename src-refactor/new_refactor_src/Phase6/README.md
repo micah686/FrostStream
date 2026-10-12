@@ -36,7 +36,7 @@ docker compose -p my-lite -f .phase0/my-lite/docker-compose.yaml run --rm --no-d
 docker compose -p my-full -f .phase0/my-full/docker-compose.yaml run --rm --no-deps databridge --Persistence:InitializeOnly=true
 ```
 
-Fresh Lite defaults are `/data/core.sqlite`, `/data/keys`, `/data/backups`, incoming media under `/data/incoming`, and search under `/search`. Explicit database/key paths remain configurable. Source configuration no longer emits obsolete Full single-user switches. The fresh-install generator scopes named volumes to the Compose project and creates distinct backup/bootstrap bind roots per installation.
+Fresh Lite defaults are `/data/core.sqlite`, `/data/keys`, `/data/backups`, incoming media under `/data/incoming`, and search under `/search`. In packaged Lite, `/data` bind-mounts to the generated installation's local `data/` directory (for example `.phase0/my-lite/data`); archived media is stored below `data/archives/`. `.phase0` is hidden in many file browsers, so enable “show hidden files” or open that path directly. When running the AppHost in development mode outside Compose, the default is `new_refactor_src/.phase0/data`; set `FROSTSTREAM_STORAGE_ROOT` to choose another absolute local folder. The rebuildable search index remains in its separate project-scoped named volume. Explicit database/key paths remain configurable. Full persistent stores remain project-scoped named volumes, with separate backup/bootstrap bind roots per installation.
 
 ## Resource defaults
 

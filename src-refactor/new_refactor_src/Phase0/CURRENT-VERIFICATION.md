@@ -2,6 +2,12 @@
 
 These checks exercise the current implementation after Phases 1–7, not the historical Phase 0 binaries. Phase 0 acceptance remains open.
 
+## Lite local storage path
+
+Lite's AppHost development default is `.phase0/data` (a hidden directory). Packaged Lite previously declared `/data` as a project-scoped named volume even though the generator created `<installation>/data`, leaving that visible folder unused. The AppHost now bind-mounts the configured `FROSTSTREAM_STORAGE_ROOT` at `/data`; the generated package resolves it to `<installation>/data`. A fresh profile rendered `LITE_BINDMOUNT_0` to that exact absolute path, passed the package checker, and a container write/remove probe confirmed host-visible write access. `data/archives/` contains downloaded originals; `data/incoming/` is the import staging folder. SQLite and backups also live under `data/`; Lucene stays separately mounted at `/search`.
+
+This change applies to newly generated Compose profiles. Existing Compose files still mount their old named volume. Existing installation data must be copied from that volume into its matching installation `data/` folder before switching its Compose file, so SQLite, keys, backups and archived media stay together. Retained Phase 0/6/7 Lite volumes inspected during this check contained SQLite/application files and no `.mp4`, `.mkv` or `.webm` videos. No retained volume was modified or removed.
+
 Standard Full startup **passes with Docker Compose 5.6.0 against the rootless Podman API**. The normal `up -d --build` command started a new project with new named volumes and separate backup/bootstrap bind directories. All 15 long-lived services ran, the four initializers exited zero, and all five explicit health checks were healthy. Frontend/API capabilities, search readiness, real two-user Authentik OIDC sessions, private-playlist isolation and logout/revocation passed. No dependency removal, `--in-pod=false`, or ordered single-service startup was used. Docker Engine itself is unavailable and was not tested.
 
 The installed `docker compose` command still invokes podman-compose 1.6.0. Its standard startup reproduced the completed-initializer/native dependency failure and stalled. That owned startup process was terminated after the failure; its runner removed the disposable containers and retained volumes. This provider remains incompatible with the standard package.

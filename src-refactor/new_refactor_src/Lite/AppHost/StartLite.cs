@@ -44,7 +44,9 @@ public static class StartLite
             .PublishAsDockerFile(c => c
                 .WithDockerfile(Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "..")), "Lite/Backend/Dockerfile")
                 .WithImage("localhost/froststream-lite", "latest")
-                .WithVolume("froststream-lite-data", "/data")
+                // Keep authoritative media, SQLite, incoming files and backups in the configured
+                // host directory so a packaged Lite install is visible and straightforward to back up.
+                .WithBindMount(storageRoot, "/data")
                 .WithVolume("froststream-lite-search", "/search"))
             .WithLocalComposeBuild("localhost/froststream-lite:latest", "Lite/Backend/Dockerfile")
             .WithPackagedLimits("4g", "4");
