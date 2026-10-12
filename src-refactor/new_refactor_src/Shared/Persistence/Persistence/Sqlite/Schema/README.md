@@ -6,7 +6,7 @@ The baseline represents Full's application catalog after unchanged PostgreSQL mi
 
 ## Initialize Lite
 
-The Lite host selects SQLite from its edition and runs schema initialization before runtime services. `Persistence:Sqlite:Enabled` is obsolete and rejected. `Persistence:Sqlite:Path` defaults to `/data/core.sqlite`; relative paths resolve against the host content root. It must be a persistent file, not `:memory:` or a SQLite URI. `Persistence:Sqlite:BusyTimeoutSeconds` defaults to 5 and accepts 1–60. Full uses its embedded fresh-install PostgreSQL baseline. See [packaging and recovery](../../../../../Phase6/README.md).
+The Lite host selects SQLite from its edition and runs schema initialization before runtime services. `Persistence:Sqlite:Enabled` is obsolete and rejected. `Persistence:Sqlite:Path` defaults to `/data/core.sqlite`; relative paths resolve against the host content root. It must be a persistent file, not `:memory:` or a SQLite URI. `Persistence:Sqlite:BusyTimeoutSeconds` defaults to 5 and accepts 1–60. Full uses its embedded fresh-install PostgreSQL baseline. See [packaging and recovery](../../../../../docs/implementation-history/installation-recovery.md).
 
 ## Connection and storage rules
 
@@ -21,7 +21,7 @@ Raw connections use `SqliteConnectionFactory`. EF opens and reopens use its setu
 
 ## Reproduce and check the artifacts
 
-The v97 manifest below is a frozen historical input; current Full initializes the v98 catalog and cannot reproduce that cutoff. Do not regenerate the v97 manifest from current Full. For current baseline integrity run `python3 Phase6/verify-baselines.py`. Historical capture used an **empty disposable PostgreSQL database** with `Persistence:InitializeOnly=true`, `Deployment:Mode=Full` and its `ConnectionStrings:froststreamdb`. Do not use a production database. Then configure psql's `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, and authentication environment for that disposable database:
+The v97 manifest below is a frozen historical input; current Full initializes the v98 catalog and cannot reproduce that cutoff. Do not regenerate the v97 manifest from current Full. For current baseline integrity run `python3 tooling/recovery/verify-baselines.py`. Historical capture used an **empty disposable PostgreSQL database** with `Persistence:InitializeOnly=true`, `Deployment:Mode=Full` and its `ConnectionStrings:froststreamdb`. Do not use a production database. Then configure psql's `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, and authentication environment for that disposable database:
 
 ```sh
 python3 SPLIT_PLAN/tools/export_postgres_manifest.py --output /tmp/postgres-v97-manifest.json

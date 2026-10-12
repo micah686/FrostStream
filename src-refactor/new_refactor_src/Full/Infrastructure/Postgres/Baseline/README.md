@@ -4,4 +4,4 @@
 
 The legacy `VersionInfo` rows document the capture cutoff; normal initialization uses `froststream_installation_baseline` version/checksum and does not replay old migrations. The complete SQL resource is hashed before use. Baseline DDL/seeds/checksum are one transaction, serialized with an advisory lock. Populated unmarked databases and changed/unknown baseline histories are rejected. This is a fresh-install boundary; no migration from previous phases is promised.
 
-Real PostgreSQL unit contracts verify initialization, repeatability, preserved edits and checksum rejection. Packaged Full recovery verifies that this catalog survives physical pgBackRest backup/restore. See `Phase6/README.md` for operational scope and recovery.
+Real PostgreSQL unit contracts verify initialization, repeatability, preserved edits and checksum rejection. Packaged Full recovery verifies that this catalog survives physical pgBackRest backup/restore. See `docs/implementation-history/README.md` for operational scope and recovery.

@@ -48,4 +48,4 @@ pnpm check
 
 Phase 3i validation: 572 shared unit tests, 116 DataBridge tests with both providers enabled, 3 Lite end-to-end tests, 85 Full integration tests, and 5 frontend access/navigation tests passed. Frontend type checking reported no errors or warnings. Backup implementation, deployment packaging, and release remain Phase 4 work.
 
-Phase 5 validation: 617 unit tests and all 3 Lite runtime tests passed. See `Phase5/README.md` for provider contracts, durability fault tests, packaged smoke checks and outstanding hardware acceptance.
+Phase 5 validation: 617 unit tests and all 3 Lite runtime tests passed. See `docs/implementation-history/README.md` for provider contracts, durability fault tests, packaged smoke checks and outstanding hardware acceptance.

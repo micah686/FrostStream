@@ -19,16 +19,16 @@ Shared contracts, core, persistence and application modules implement product be
 
 `Deployment:Mode` is resolved at startup. Lite owns SQLite and Full owns PostgreSQL; the former `Persistence:Sqlite:Enabled` opt-in is rejected. Full rejects former single-user switches, including false values. Full security belongs only to the WebAPI host. Typesense belongs only to Full DataBridge. Libraries cannot reference executable hosts, shared code cannot depend on edition implementations, and Lite's restored package graph cannot contain Full SDKs. Module registration markers enforce idempotent registration and are part of the lifecycle contract.
 
-Prerequisites: .NET 10, Node 22 or newer, pnpm 10.28.1, Python 3, FFmpeg/FFprobe and a Docker-compatible engine. Package generation also needs Aspire CLI 13.4.6 and `python3 -m pip install -r Phase0/requirements.txt`. For rootless Podman, configure `DOCKER_HOST` for its API socket and `TESTCONTAINERS_RYUK_DISABLED=true`. Full installation checks require Docker Compose with working completed-job dependencies.
+Prerequisites: .NET 10, Node 22 or newer, pnpm 10.28.1, Python 3, FFmpeg/FFprobe and a Docker-compatible engine. Package generation also needs Aspire CLI 13.4.6 and `python3 -m pip install -r tooling/installation/requirements.txt`. For rootless Podman, configure `DOCKER_HOST` for its API socket and `TESTCONTAINERS_RYUK_DISABLED=true`. Full installation checks require Docker Compose with working completed-job dependencies.
 
 ```sh
 dotnet build FrostStream.slnx -m:1
-python3 Phase0/verify.py
-python3 Phase0/test_verify.py
-python3 Phase2/test_boundaries.py
-python3 Phase7/test_boundaries.py
-python3 Phase7/verify-boundaries.py --require-restored
-python3 Phase6/verify-baselines.py
+python3 tooling/architecture/verify.py
+python3 tooling/architecture/test_verify.py
+python3 tooling/architecture/test_provider_boundaries.py
+python3 tooling/architecture/test_final_boundaries.py
+python3 tooling/architecture/verify-provider-boundaries.py --require-restored
+python3 tooling/recovery/verify-baselines.py
 dotnet run --no-build --project Tests/UnitTests/UnitTests.csproj -- --maximum-parallel-tests 4
 dotnet run --no-build --project Tests/IntegrationTests/IntegrationTests/IntegrationTests.csproj -- --maximum-parallel-tests 4
 cd Frontend
@@ -41,4 +41,4 @@ pnpm build
 
 The backend suites exercise real local storage/workflows/search, NATS, PostgreSQL and OpenFGA. Set `FROSTSTREAM_TEST_POSTGRES` to a disposable administrator connection string and `FROSTSTREAM_TEST_TYPESENSE` to a disposable Typesense URL with key `phase4-test-key` to enable the extra cross-provider contracts. Full HTTP tests use controlled JWT signing with real OpenFGA; they do not certify a real Authentik browser login or an external HTTPS deployment.
 
-See [installation and recovery](Phase6/README.md), [search durability and resource evidence](Phase5/README.md), [current testing strategy](TESTS_PLAN.MD) and [final boundary enforcement](Phase7/README.md). Phase 0–6 reports retain historical evidence; current operating instructions are the Phase 6 guide and this page. Hashed schema resources remain immutable, including inert historical capture metadata; no migration runner or old-database adoption path ships.
+See [installation and recovery](docs/implementation-history/installation-recovery.md), [search durability and resource evidence](docs/implementation-history/embedded-lite-search.md), [current testing strategy](TESTS_PLAN.MD) and [final boundary enforcement](docs/implementation-history/final-boundaries.md). Implementation reports retain historical evidence; current operating instructions are the installation and recovery guide and this page. Hashed schema resources remain immutable, including inert historical capture metadata; no migration runner or old-database adoption path ships.

@@ -37,6 +37,6 @@
     </ItemGroup>
 
   <ItemGroup>
-    <None Include="../../Phase0/search-corpus.json" Link="search-corpus.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="TestData/search-corpus.json" Link="search-corpus.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 <ItemGroup><ProjectReference Include="../../Full/Infrastructure/Postgres/Persistence.Postgres.csproj" /><ProjectReference Include="../../Full/Security/Security.csproj" /></ItemGroup></Project>

@@ -19,12 +19,10 @@ App/*App/docker-compose/
 .phase0/
 **/docker-compose/
 Tests/
-Phase0/
+tooling/
+
 **/TestResults/
 .phase1/
 .phase2/
-Phase1/
-Phase2/
 
 .phase3/
-Phase3/

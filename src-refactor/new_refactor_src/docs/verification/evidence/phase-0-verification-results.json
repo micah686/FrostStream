@@ -1,0 +1,109 @@
+{
+  "phase": 0,
+  "implementation": "baseline delivered",
+  "acceptance": "open",
+  "date": "2026-10-11",
+  "passed": {
+    "unit": 585,
+    "lite": 3,
+    "liteRepeat": 3,
+    "fullControlledAuth": 17,
+    "architectureGuardTests": 5,
+    "composeProfiles": [
+      "Lite",
+      "Full"
+    ],
+    "frontend": [
+      "test:access",
+      "test:backups",
+      "check",
+      "build"
+    ],
+    "fullControlledAuthRepeat": 17,
+    "phase0ToolingTests": 15,
+    "packagedLite": {
+      "freshInstallSmoke": true,
+      "secondEmptyStateSmoke": true,
+      "backendRestartSmoke": true,
+      "scope": "Frontend/API/capabilities/local Admin; not packaged media workflows"
+    },
+    "packagedFull": {
+      "applicationImagesBuilt": true,
+      "orderedStartup": true,
+      "finalServiceStates": 19,
+      "realAuthentikBrowserRuns": 3,
+      "privatePlaylistIsolation": "Bidirectional list/read/write isolation for fresh Admin identities",
+      "sessionChecks": [
+        "Session survives browser reload",
+        "Anonymous 401",
+        "Logout CSRF 403",
+        "Logout and old-cookie replay 401"
+      ],
+      "scope": "Podman workaround required; distributed media not exercised",
+      "emptyStateInstallations": 2,
+      "secondEmptyStateInstallation": {
+        "project": "froststream-phase0-full-repeat",
+        "freshStatePreflight": true,
+        "isolatedBackupAndVaultBootstrapBinds": true,
+        "finalServiceStates": 19,
+        "realAuthentikBrowser": true,
+        "privatePlaylistIsolation": true,
+        "sessionRevocation": true,
+        "stateReuseRejected": true,
+        "engineWorkaroundRequired": true
+      }
+    }
+  },
+  "openGates": [
+    "Distributed packaged Full download/import/playback",
+    "Large-corpus indexing/search/combined-workload measurements",
+    "Measured thresholds on actual 8 GB reference hardware"
+  ],
+  "continuationEvidence": "PACKAGED.md; raw reports in ignored .phase0/results/",
+  "currentCodeVerification": {
+    "report": "../current-validation.md",
+    "standardCompose": {
+      "provider": "Docker Compose 5.6.0 against rootless Podman API",
+      "passed": true,
+      "orderedWorkaround": false,
+      "services": 19,
+      "longLivedServices": 15,
+      "successfulInitializers": 4,
+      "healthyServices": 5,
+      "frontendApiSearchReadiness": true,
+      "realAuthentikBrowser": true,
+      "podmanCompose1.6.0": "failed: completed initializer dependency handling"
+    },
+    "distributedMedia": {
+      "download": true,
+      "freshImport": true,
+      "originalSha256AndRanges": true,
+      "hls": false,
+      "blocker": "MediaProcessor internal storage GET returns HTTP 401; controller inherits deny-all fallback and client has no service authentication",
+      "combinedWorkload": "not run: required transcode path fails"
+    },
+    "hardware": "32 GB development host; physical 8 GB gate remains open",
+    "corpus": {
+      "evidence": "current-corpus-measurement.json",
+      "documents": 360000,
+      "provider": "embedded Lucene synthetic fixture; not Full DB/Typesense ingestion",
+      "fullIndexSeconds": 18.5866109,
+      "incrementalUpsertMilliseconds": 3.4259,
+      "warmP95Milliseconds": 2.8011,
+      "advisoryEvictionSearchP95Milliseconds": 3.0192,
+      "initializedIndexIdleSeconds": 900,
+      "idleCpuPercentOneCore": 0.013121111297721932,
+      "verifiedColdCache": false
+    },
+    "containerResources": {
+      "elapsedSeconds": 900.044629608,
+      "sampleCount": 180,
+      "peakContainerMemoryBytes": 2820670000.0,
+      "minimumHostAvailableBytes": 13140393984,
+      "containerCpuSeconds": 58.920186,
+      "containerCpuPercentOneCore": 6.546677436350075,
+      "evidence": "current-resource-measurement.json",
+      "scope": "15-minute Full activity/inactivity interval; includes browser/media checks and failed HLS, followed by inactivity. Not a clean full-system idle acceptance run."
+    }
+  }
+}
