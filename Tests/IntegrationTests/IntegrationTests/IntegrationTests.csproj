@@ -22,15 +22,16 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\..\src\App\LiteApp\Lite\Lite.csproj" />
-        <ProjectReference Include="..\..\..\src\App\SharedApp\DataBridge\DataBridge.csproj" />
-        <ProjectReference Include="..\..\..\src\App\SharedApp\WebAPI\WebAPI.csproj" />
-        <ProjectReference Include="..\..\..\src\App\SharedApp\Worker\Worker.csproj" />
+        <ProjectReference Include="../../../Full/Hosts/WebAPI/WebAPIHost.csproj" />
+        <ProjectReference Include="../../../Lite/Backend/Lite.csproj" />
+        <ProjectReference Include="../../../Shared/Modules/DataBridge/DataBridge.csproj" />
+        <ProjectReference Include="../../../Shared/Modules/Api/WebAPI.csproj" />
+        <ProjectReference Include="../../../Shared/Modules/Worker/Worker.csproj" />
     </ItemGroup>
 
     <ItemGroup>
-      <Folder Include="Infrastructure\" />
-      <Folder Include="Storage\" />
+      <Folder Include="Infrastructure" />
+      <Folder Include="Storage" />
     </ItemGroup>
 
-</Project>
+<ItemGroup><ProjectReference Include="../../../Full/Infrastructure/Postgres/Persistence.Postgres.csproj" /><ProjectReference Include="../../../Full/Security/Security.csproj" /></ItemGroup></Project>

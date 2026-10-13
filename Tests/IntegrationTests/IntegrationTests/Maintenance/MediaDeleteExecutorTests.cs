@@ -1,3 +1,5 @@
+using FrostStream.Lite.Infrastructure;
+using FrostStream.Full.Infrastructure;
 using DataBridge.Persistence;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -5,7 +7,6 @@ using DataBridge.Messaging;
 using DataBridge.Search;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
-using FluentMigrator.Runner;
 using FrostStream.ApplicationContracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -209,8 +210,8 @@ public sealed class MediaDeleteExecutorTests
 
         private IHost? applicationHost;
 
-        public MediaDeleteExecutor CreateExecutor(IMessageBus messageBus, ITypesenseIndexService searchIndex)
-            => new(new ApplicationDatabase(DataSource), messageBus, searchIndex,
+        public MediaDeleteExecutor CreateExecutor(IMessageBus messageBus, ISearchIndexWriter searchIndex)
+            => new(new ApplicationDatabase(new global::DataBridge.Persistence.Postgres.PostgresConnectionFactory(DataSource)), messageBus, searchIndex,
                 applicationHost!.Services.GetRequiredService<IServiceScopeFactory>(), NullLogger<MediaDeleteExecutor>.Instance);
 
         private string ConnectionString =>
@@ -241,7 +242,7 @@ public sealed class MediaDeleteExecutorTests
             var builder = Host.CreateApplicationBuilder();
             builder.Logging.ClearProviders();
             builder.Configuration["ConnectionStrings:froststreamdb"] = ConnectionString;
-            builder.AddDataBridgePersistence();
+            if (Shared.Deployment.DeploymentOptions.FromConfiguration(builder.Configuration).Mode == Shared.Deployment.DeploymentMode.Lite) builder.AddLitePersistence().AddLiteMessaging().AddLiteSecretStore().AddLiteBackupClient().AddLiteStagedStorage(); else builder.AddFullPersistence();
             applicationHost = builder.Build();
             _initialized = true;
         }
@@ -358,17 +359,11 @@ public sealed class MediaDeleteExecutorTests
         private async Task RunMigrationsAsync()
         {
             var services = new ServiceCollection();
-            services
-                .AddFluentMigratorCore()
-                .ConfigureRunner(runner => runner
-                    .AddPostgres()
-                    .WithGlobalConnectionString(ConnectionString)
-                    .ScanIn(typeof(MediaDeleteExecutor).Assembly).For.Migrations());
+            global::DataBridge.Persistence.Postgres.PostgresPersistenceRegistration.AddPostgresSchema(services, ConnectionString);
 
             await using var provider = services.BuildServiceProvider();
             using var scope = provider.CreateScope();
-            var runner = scope.ServiceProvider.GetRequiredService<IMigrationRunner>();
-            runner.MigrateUp();
+            scope.ServiceProvider.GetRequiredService<global::DataBridge.Persistence.IApplicationSchemaInitializer>().Initialize();
         }
 
         private async Task WaitForPostgresAsync()
@@ -427,7 +422,7 @@ public sealed class MediaDeleteExecutorTests
         }
     }
 
-    private sealed class RecordingSearchIndex : ITypesenseIndexService
+    private sealed class RecordingSearchIndex : ISearchIndexWriter
     {
         public List<string> DeletedMedia { get; } = [];
         public List<string> DeletedComments { get; } = [];
@@ -457,7 +452,7 @@ public sealed class MediaDeleteExecutorTests
 
         public Task<bool> MediaCollectionHasFieldAsync(string fieldName, CancellationToken ct = default) => throw new NotSupportedException();
 
-        public Task RecreateAllCollectionsAsync(CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<ISearchGeneration> CreateGenerationAsync(CancellationToken ct = default) => throw new NotSupportedException();
 
         public Task UpsertMediaAsync(MediaDocument document, CancellationToken ct = default) => throw new NotSupportedException();
 

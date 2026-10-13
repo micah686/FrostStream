@@ -26,7 +26,7 @@ namespace IntegrationTests.WebApiHttp;
 public sealed class WebApiHttpTests
 {
     [Test]
-    public async Task Capabilities_Are_Available_Without_Login_And_Reflect_Single_User_Controls()
+    public async Task Capabilities_Are_Available_Without_Login_And_Reflect_Lite_Controls()
     {
         using var factory = new TestWebApiFactory();
         using var client = factory.CreateClient();
@@ -35,13 +35,13 @@ public sealed class WebApiHttpTests
         response.Headers.CacheControl!.NoStore.ShouldBeTrue();
         var capabilities = await response.Content.ReadFromJsonAsync<Shared.Deployment.SystemCapabilities>();
         capabilities.ShouldNotBeNull();
-        capabilities.DeploymentMode.ShouldBe("Full");
+        capabilities.DeploymentMode.ShouldBe("Lite");
         capabilities.AccessManagement.Enabled.ShouldBeFalse();
         capabilities.Backups.Full.ShouldBeTrue();
     }
 
     [Test]
-    public void Access_Control_Routes_Are_Not_Registered_In_Single_User_Mode()
+    public void Access_Control_Routes_Are_Not_Registered_In_Lite()
     {
         using var factory = new TestWebApiFactory();
 
@@ -177,7 +177,7 @@ public sealed class WebApiHttpTests
     }
 }
 
-internal sealed class TestWebApiFactory : WebApplicationFactory<global::WebAPI.Program>
+internal sealed class TestWebApiFactory : WebApplicationFactory<global::Lite.Program>
 {
     public static readonly Instant Now = Instant.FromUtc(2026, 6, 3, 15, 0);
 
@@ -193,6 +193,8 @@ internal sealed class TestWebApiFactory : WebApplicationFactory<global::WebAPI.P
         builder.ConfigureTestServices(services =>
         {
             services.RemoveAll<IHostedService>();
+            // These are HTTP contract tests; real persistence/lifecycle coverage is in LiteRuntimeTests.
+            services.RemoveAll<Shared.Deployment.ApplicationInitializationStep>();
             services.RemoveAll<IDurableJobPublisher>();
             services.RemoveAll<IMessageBus>();
             services.RemoveAll<ISecretStore>();

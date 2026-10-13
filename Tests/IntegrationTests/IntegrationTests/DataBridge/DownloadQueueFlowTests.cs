@@ -4,7 +4,6 @@ using DataBridge.Data;
 using DataBridge.Messaging;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
-using FluentMigrator.Runner;
 using FrostStream.ApplicationContracts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -306,12 +305,7 @@ public sealed class DownloadQueueFlowTests
                     .UseSnakeCaseNamingConvention();
             });
 
-            builder.Services
-                .AddFluentMigratorCore()
-                .ConfigureRunner(runner => runner
-                    .AddPostgres()
-                    .WithGlobalConnectionString(ConnectionString)
-                    .ScanIn(typeof(DownloadQueueConsumerService).Assembly).For.Migrations());
+            global::DataBridge.Persistence.Postgres.PostgresPersistenceRegistration.AddPostgresSchema(builder.Services, ConnectionString);
 
             // Provision the production download.> stream so the queue subjects live under JetStream
             // subject capture exactly like the live stack (core request/reply must still work).
@@ -320,7 +314,7 @@ public sealed class DownloadQueueFlowTests
                 options.Url = _natsContainer.GetConnectionString();
                 options.EnableTopologyProvisioning = true;
             });
-            builder.Services.AddNatsTopologySource<DownloadTopology>();
+            builder.Services.AddNatsTopologySource<FrostStream.Full.Infrastructure.NatsDownloadTopology>();
 
             builder.Services.AddSingleton<IDownloadJobStateNotifier, DownloadJobStateNotifier>();
             builder.Services.AddScoped<IDownloadJobsRepository, DownloadJobsRepository>();
@@ -330,8 +324,7 @@ public sealed class DownloadQueueFlowTests
             _host = builder.Build();
             using (var scope = _host.Services.CreateScope())
             {
-                var runner = scope.ServiceProvider.GetRequiredService<IMigrationRunner>();
-                runner.MigrateUp();
+                scope.ServiceProvider.GetRequiredService<global::DataBridge.Persistence.IApplicationSchemaInitializer>().Initialize();
             }
 
             await _host.StartAsync();

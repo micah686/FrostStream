@@ -1,3 +1,5 @@
+using FrostStream.Lite.Infrastructure;
+using FrostStream.Full.Infrastructure;
 using System.Data.Common;
 using DataBridge;
 using DataBridge.Data;
@@ -288,7 +290,7 @@ public sealed class CoreRepositoryPersistenceTests
         await f.Db.SaveChangesAsync();
         var bus = Substitute.For<IMessageBus>();
         bus.RequestAsync<DeleteMediaFileRequest, DeleteMediaFileResponse>(Arg.Any<string>(), Arg.Any<DeleteMediaFileRequest>(), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>()).Returns(new DeleteMediaFileResponse { Success = true });
-        var search = Substitute.For<ITypesenseIndexService>();
+        var search = Substitute.For<ISearchIndexWriter>();
         var executor = new MediaDeleteExecutor(f.Database, bus, search, f.ScopeFactory, NullLogger<MediaDeleteExecutor>.Instance);
         (await executor.DeleteMediaAsync(Guid.NewGuid())).ErrorCode.ShouldBe("not_found");
         (await executor.DeleteMediaAsync(media)).ErrorCode.ShouldBe("conflict");
@@ -616,10 +618,9 @@ public sealed class CoreRepositoryPersistenceTests
             {
                 dir = Path.Combine(Path.GetTempPath(), "froststream-core-" + Guid.NewGuid().ToString("N"));
                 builder.Configuration["Deployment:Mode"] = "Lite";
-                builder.Configuration["Persistence:Sqlite:Enabled"] = "true";
                 builder.Configuration["Persistence:Sqlite:Path"] = Path.Combine(dir, "core.db");
             }
-            builder.AddDataBridgePersistence();
+            if (Shared.Deployment.DeploymentOptions.FromConfiguration(builder.Configuration).Mode == Shared.Deployment.DeploymentMode.Lite) builder.AddLitePersistence().AddLiteMessaging().AddLiteSecretStore().AddLiteBackupClient().AddLiteStagedStorage(); else builder.AddFullPersistence();
             configure?.Invoke(builder);
             var host = builder.Build();
             host.InitializeDataBridge();

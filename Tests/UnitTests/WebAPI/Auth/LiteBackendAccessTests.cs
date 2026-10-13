@@ -1,3 +1,6 @@
+using FrostStream.Full.Infrastructure;
+using FrostStream.Lite.Infrastructure;
+using FrostStream.Full.Security;
 using System.Net;
 using System.Security.Claims;
 using FrostStream.ApplicationContracts;
@@ -29,6 +32,7 @@ public sealed class LiteBackendAccessTests
         builder.Configuration["Auth:SingleUserMode"] = "false";
         builder.Configuration["Auth:Authority"] = "https://invalid.example";
         builder.Configuration["Auth:AllowSingleUserModeInProduction"] = "false";
+        builder.AddLiteIdentity();
         builder.AddWebAPIModule();
         builder.Services.RemoveAll<IHostedService>();
         await using var app = builder.Build();
@@ -74,10 +78,14 @@ public sealed class LiteBackendAccessTests
     public async Task Full_Retains_Fallback_Role_And_Resource_Protection()
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = Environments.Development });
-        builder.Configuration["Auth:SingleUserMode"] = "false";
+        builder.Configuration["OpenFga:Endpoint"] = "http://localhost:8080";
         builder.Configuration["Auth:Authority"] = "https://identity.example";
         builder.Configuration["Auth:PublicOrigin"] = "http://localhost";
         builder.Configuration["Auth:ClientSecret"] = "test-secret";
+        builder.AddFullMessaging();
+        Shared.Secrets.ServiceCollectionExtensions.AddOpenBaoSecretStore(builder.Services, builder.Configuration);
+        builder.AddFullBackupClient();
+        builder.AddFullSecurity();
         builder.AddWebAPIModule();
         await using var app = builder.Build();
         using var scope = app.Services.CreateScope();

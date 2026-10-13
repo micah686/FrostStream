@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
@@ -22,17 +22,21 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\src\App\LiteApp\Lite\Lite.csproj" />
-        <ProjectReference Include="..\..\src\App\FullApp\BackupService\BackupService.csproj" />
-        <ProjectReference Include="..\..\src\App\SharedApp\DataBridge\DataBridge.csproj" />
-        <ProjectReference Include="..\..\src\App\SharedApp\Scheduler\Scheduler.csproj" />
-        <ProjectReference Include="..\..\src\App\SharedApp\Shared\Shared.csproj" />
-        <ProjectReference Include="..\..\src\App\SharedApp\Worker\Worker.csproj" />
-        <ProjectReference Include="..\..\src\App\SharedApp\WebAPI\WebAPI.csproj" />
+        <ProjectReference Include="../../Shared/Integrations/Typesense/Typesense.csproj" />
+        <ProjectReference Include="../../Lite/Backend/Lite.csproj" />
+        <ProjectReference Include="../../Full/Hosts/BackupService/BackupService.csproj" />
+        <ProjectReference Include="../../Shared/Modules/DataBridge/DataBridge.csproj" />
+        <ProjectReference Include="../../Shared/Modules/Scheduler/Scheduler.csproj" />
+        <ProjectReference Include="../../Shared/Core/Shared.csproj" />
+        <ProjectReference Include="../../Shared/Modules/Worker/Worker.csproj" />
+        <ProjectReference Include="../../Shared/Modules/Api/WebAPI.csproj" />
     </ItemGroup>
 
     <ItemGroup>
-      <Folder Include="Storage\" />
+      <Folder Include="Storage" />
     </ItemGroup>
 
-</Project>
+  <ItemGroup>
+    <None Include="TestData/search-corpus.json" Link="search-corpus.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+<ItemGroup><ProjectReference Include="../../Full/Infrastructure/Postgres/Persistence.Postgres.csproj" /><ProjectReference Include="../../Full/Security/Security.csproj" /></ItemGroup></Project>

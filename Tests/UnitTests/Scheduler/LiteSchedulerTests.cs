@@ -1,3 +1,6 @@
+using Shared.Deployment;
+using FrostStream.Lite.Infrastructure;
+using FrostStream.Full.Infrastructure;
 using DataBridge;
 using DataBridge.Data;
 using DataBridge.Messaging;
@@ -24,18 +27,24 @@ public sealed class LiteSchedulerTests
     private static IHost BuildHost(string path)
     {
         // Quartz keeps its logging provider globally; simulated restarts must detach the disposed host.
-        Quartz.Logging.LogContext.SetCurrentLogProvider(NullLoggerFactory.Instance);
+        Quartz.Diagnostics.LogProvider.SetLogProvider(NullLoggerFactory.Instance);
         var builder = Host.CreateApplicationBuilder();
         builder.Configuration["Deployment:Mode"] = "Lite";
-        builder.Configuration["Persistence:Sqlite:Enabled"] = "true";
         builder.Configuration["Persistence:Sqlite:Path"] = path;
-        builder.AddDataBridgePersistence();
+        if (Shared.Deployment.DeploymentOptions.FromConfiguration(builder.Configuration).Mode == Shared.Deployment.DeploymentMode.Lite) builder.AddLitePersistence().AddLiteMessaging().AddLiteSecretStore().AddLiteBackupClient().AddLiteStagedStorage(); else builder.AddFullPersistence();
         builder.Services.AddScoped<IScheduledTasksRepository, ScheduledTasksRepository>();
         builder.Services.AddHostedService<ScheduleCrudConsumerService>();
         builder.AddSchedulerModule();
         var host = builder.Build();
         host.InitializeDataBridge();
         return host;
+    }
+
+    private static async Task StartReadySteps(IHost host, CancellationToken ct)
+    {
+        await Task.WhenAll(host.Services.GetServices<IHostedService>().OfType<IApplicationHandlerInitialization>()
+            .Select(handler => handler.RegistrationCompleted)).WaitAsync(ct);
+        foreach (var step in host.Services.GetServices<IApplicationReadyStep>()) await step.StartAsync(ct);
     }
 
     private static async Task Eventually(Func<Task<bool>> condition, CancellationToken token)
@@ -74,52 +83,54 @@ public sealed class LiteSchedulerTests
                         dispatched.TrySetResult(context.Message);
                     }, cancellationToken: consumerStop.Token);
                 await host.StartAsync(timeout.Token);
+                await StartReadySteps(host, timeout.Token);
                 var message = await dispatched.Task.WaitAsync(timeout.Token);
                 message.ScheduleKey.ShouldBe("test-interval");
                 message.TaskType.ShouldBe(TaskTypeRegistry.DatabaseMaintenance);
                 message.IdempotencyKey.ShouldStartWith("db-maintenance:test-interval:");
                 var scheduler = await host.Services.GetRequiredService<ISchedulerFactory>().GetScheduler(timeout.Token);
-                scheduler.IsStarted.ShouldBeTrue();
-                (await scheduler.CheckExists(JobKeys.ForSchedule("test-disabled"), timeout.Token)).ShouldBeFalse();
+                scheduler.Status.ShouldBe(SchedulerStatus.Running);
+                (await scheduler.Exists(JobKeys.ForSchedule("test-disabled"), timeout.Token)).ShouldBeFalse();
                 await Eventually(async () =>
                 {
                     using var scope = host.Services.CreateScope();
                     return (await scope.ServiceProvider.GetRequiredService<IScheduledTasksRepository>().GetByKeyAsync("test-interval", timeout.Token))!.LastRunStatus == ScheduleRunStatus.InProgress;
                 }, timeout.Token);
                 await host.StopAsync(timeout.Token);
-                scheduler.IsShutdown.ShouldBeTrue();
+                scheduler.Status.ShouldBe(SchedulerStatus.Shutdown);
                 consumerStop.Cancel();
                 try { await consumer; } catch (OperationCanceledException) { }
             }
             using (var restarted = BuildHost(Path.Combine(dir, "test.db")))
             {
                 await restarted.StartAsync(timeout.Token);
+                await StartReadySteps(restarted, timeout.Token);
                 var scheduler = await restarted.Services.GetRequiredService<ISchedulerFactory>().GetScheduler(timeout.Token);
                 var cron = (await scheduler.GetTrigger(TriggerKeys.ForSchedule("test-cron"), timeout.Token)).ShouldBeAssignableTo<Quartz.ICronTrigger>()!;
                 cron.TimeZone.Id.ShouldBe("America/Los_Angeles");
-                cron.MisfireInstruction.ShouldBe(MisfireInstruction.CronTrigger.DoNothing);
+                cron.MisfireInstruction.ShouldBe(CronTriggerMisfireInstruction.DoNothing);
                 var interval = (await scheduler.GetTrigger(TriggerKeys.ForSchedule("test-interval"), timeout.Token)).ShouldBeAssignableTo<Quartz.ISimpleTrigger>()!;
                 interval.RepeatInterval.ShouldBe(TimeSpan.FromHours(1));
-                interval.MisfireInstruction.ShouldBe(MisfireInstruction.SimpleTrigger.RescheduleNextWithRemainingCount);
+                interval.MisfireInstruction.ShouldBe(SimpleTriggerMisfireInstruction.NextWithRemainingCount);
                 var bus = restarted.Services.GetRequiredService<IMessageBus>();
                 var disabled = await bus.RequestAsync<ScheduleUpdateRequestMessage, ScheduleOperationResponseMessage>(ScheduleSubjects.Update,
                     new() { Key = "test-interval", TaskType = TaskTypeRegistry.DatabaseMaintenance, IntervalSeconds = 3600, Enabled = false }, TimeSpan.FromSeconds(5), timeout.Token);
                 disabled.ShouldNotBeNull().Success.ShouldBeTrue();
-                await Eventually(async () => !await scheduler.CheckExists(JobKeys.ForSchedule("test-interval"), timeout.Token), timeout.Token);
+                await Eventually(async () => !await scheduler.Exists(JobKeys.ForSchedule("test-interval"), timeout.Token), timeout.Token);
                 var created = await bus.RequestAsync<ScheduleCreateRequestMessage, ScheduleOperationResponseMessage>(ScheduleSubjects.Create,
                     new() { Key = "test-new", TaskType = TaskTypeRegistry.ChannelScanRefresh, Cron = "0 0 0 1 1 ?", Enabled = true }, TimeSpan.FromSeconds(5), timeout.Token);
                 created.ShouldNotBeNull().Success.ShouldBeTrue();
-                await Eventually(() => scheduler.CheckExists(JobKeys.ForSchedule("test-new"), timeout.Token), timeout.Token);
+                await Eventually(async () => await scheduler.Exists(JobKeys.ForSchedule("test-new"), timeout.Token), timeout.Token);
                 var deleted = await bus.RequestAsync<ScheduleDeleteRequestMessage, ScheduleOperationResponseMessage>(ScheduleSubjects.Delete,
                     new() { Key = "test-new" }, TimeSpan.FromSeconds(5), timeout.Token);
                 deleted.ShouldNotBeNull().Success.ShouldBeTrue();
-                await Eventually(async () => !await scheduler.CheckExists(JobKeys.ForSchedule("test-new"), timeout.Token), timeout.Token);
+                await Eventually(async () => !await scheduler.Exists(JobKeys.ForSchedule("test-new"), timeout.Token), timeout.Token);
                 await restarted.StopAsync(timeout.Token);
             }
         }
         finally
         {
-            Quartz.Logging.LogContext.SetCurrentLogProvider(NullLoggerFactory.Instance);
+            Quartz.Diagnostics.LogProvider.SetLogProvider(NullLoggerFactory.Instance);
             if (Directory.Exists(dir)) Directory.Delete(dir, true);
         }
     }
@@ -149,10 +160,15 @@ public sealed class LiteSchedulerTests
             return definitions.Task;
         });
         var hydration = new ScheduleHydrationService(client, factory, Substitute.For<IQuartzJobRegistrar>(), NullLogger<ScheduleHydrationService>.Instance);
-        var startup = new LiteSchedulerStartupService(provider, factory, hydration, NullLogger<LiteSchedulerStartupService>.Instance);
+        var startup = new LiteSchedulerStartupService(factory, hydration, NullLogger<LiteSchedulerStartupService>.Instance);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         await delayed.StartAsync(timeout.Token);
-        var starting = startup.StartAsync(timeout.Token);
+        async Task StartWhenRegistered()
+        {
+            await delayed.RegistrationCompleted.WaitAsync(timeout.Token);
+            await ((IApplicationReadyStep)startup).StartAsync(timeout.Token);
+        }
+        var starting = StartWhenRegistered();
         starting.IsCompleted.ShouldBeFalse();
         await scheduler.DidNotReceive().Start(Arg.Any<CancellationToken>());
         delayed.Release.TrySetResult();
@@ -168,7 +184,7 @@ public sealed class LiteSchedulerTests
         delayed.Dispose();
         client.ListActiveSchedulesAsync(Arg.Any<CancellationToken>()).Returns(new ScheduleOperationResponseMessage { Success = false });
         scheduler.ClearReceivedCalls();
-        await Should.ThrowAsync<InvalidOperationException>(() => startup.StartAsync(timeout.Token));
+        await Should.ThrowAsync<InvalidOperationException>(() => ((IApplicationReadyStep)startup).StartAsync(timeout.Token));
         await scheduler.DidNotReceive().Start(Arg.Any<CancellationToken>());
         await scheduler.Received().Shutdown(false, Arg.Any<CancellationToken>());
     }

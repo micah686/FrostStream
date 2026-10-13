@@ -4,7 +4,6 @@ using DataBridge.Data;
 using DataBridge.Messaging;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
-using FluentMigrator.Runner;
 using FrostStream.ApplicationContracts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -159,12 +158,7 @@ public sealed class CookieProfileStackFixture : IAsyncDisposable
                 .UseSnakeCaseNamingConvention();
         });
 
-        builder.Services
-            .AddFluentMigratorCore()
-            .ConfigureRunner(runner => runner
-                .AddPostgres()
-                .WithGlobalConnectionString(PostgresConnectionString)
-                .ScanIn(typeof(CookieProfileConsumerService).Assembly).For.Migrations());
+        global::DataBridge.Persistence.Postgres.PostgresPersistenceRegistration.AddPostgresSchema(builder.Services, PostgresConnectionString);
 
         builder.Services.AddNatsApplicationTransport().AddNats(options =>
         {
@@ -177,8 +171,7 @@ public sealed class CookieProfileStackFixture : IAsyncDisposable
         _dataBridgeHost = builder.Build();
         using (var scope = _dataBridgeHost.Services.CreateScope())
         {
-            var runner = scope.ServiceProvider.GetRequiredService<IMigrationRunner>();
-            runner.MigrateUp();
+            scope.ServiceProvider.GetRequiredService<global::DataBridge.Persistence.IApplicationSchemaInitializer>().Initialize();
         }
 
         await _dataBridgeHost.StartAsync();

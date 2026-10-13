@@ -1,10 +1,13 @@
+using IntegrationTests.Auth;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.TestHost;
+using System.Net.Http.Headers;
 using static Conduit.NATS.ServiceCollectionExtensions;
 using Shared.Messaging.Adapters;
 using DataBridge.Data;
 using DataBridge.Messaging;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
-using FluentMigrator.Runner;
 using FrostStream.ApplicationContracts;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -47,6 +50,7 @@ public sealed class StorageStackFixture(SaveChangesInterceptor? interceptor = nu
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly SaveChangesInterceptor? _interceptor = interceptor;
 
+    private readonly OpenFgaStackFixture _identity = new();
     private IHost? _dataBridgeHost;
     private StorageWebApplicationFactory? _webAppFactory;
     private HttpClient? _client;
@@ -91,12 +95,15 @@ public sealed class StorageStackFixture(SaveChangesInterceptor? interceptor = nu
 
             await StartDataBridgeAsync();
 
-            _webAppFactory = new StorageWebApplicationFactory(NatsUrl, SecretStore);
+            await _identity.InitializeAsync();
+            await _identity.TupleWriter.SyncUserGroupsAsync("storage-admin", [OpenFgaStackFixture.AdminGroup]);
+            _webAppFactory = new StorageWebApplicationFactory(NatsUrl, SecretStore, _identity);
             _client = _webAppFactory.CreateClient(new WebApplicationFactoryClientOptions
             {
                 BaseAddress = new Uri("https://localhost")
             });
 
+            _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _webAppFactory.Tokens.Issue("storage-admin", OpenFgaStackFixture.AdminGroup));
             _initialized = true;
         }
         finally
@@ -151,12 +158,7 @@ public sealed class StorageStackFixture(SaveChangesInterceptor? interceptor = nu
             }
         });
 
-        builder.Services
-            .AddFluentMigratorCore()
-            .ConfigureRunner(runner => runner
-                .AddPostgres()
-                .WithGlobalConnectionString(PostgresConnectionString)
-                .ScanIn(typeof(StorageCrudConsumerService).Assembly).For.Migrations());
+        global::DataBridge.Persistence.Postgres.PostgresPersistenceRegistration.AddPostgresSchema(builder.Services, PostgresConnectionString);
 
         builder.Services.AddNatsApplicationTransport().AddNats(options =>
         {
@@ -169,8 +171,7 @@ public sealed class StorageStackFixture(SaveChangesInterceptor? interceptor = nu
         _dataBridgeHost = builder.Build();
         using (var scope = _dataBridgeHost.Services.CreateScope())
         {
-            var runner = scope.ServiceProvider.GetRequiredService<IMigrationRunner>();
-            runner.MigrateUp();
+            scope.ServiceProvider.GetRequiredService<global::DataBridge.Persistence.IApplicationSchemaInitializer>().Initialize();
         }
 
         await _dataBridgeHost.StartAsync();
@@ -298,6 +299,7 @@ public sealed class StorageStackFixture(SaveChangesInterceptor? interceptor = nu
             _dataBridgeHost.Dispose();
         }
 
+        await _identity.DisposeAsync();
         await _postgresContainer.DisposeAsync();
         await _natsContainer.DisposeAsync();
         _gate.Dispose();
@@ -333,11 +335,22 @@ public sealed class StorageStackFixture(SaveChangesInterceptor? interceptor = nu
 
     private sealed class StorageWebApplicationFactory(
         string natsUrl,
-        ISecretStore secretStore) : WebApplicationFactory<WebAPI.Program>
+        ISecretStore secretStore, OpenFgaStackFixture identity) : WebApplicationFactory<FrostStream.Full.WebAPI.Program>
     {
+        public TestTokenIssuer Tokens { get; } = new();
         protected override void ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder)
         {
             builder.UseEnvironment("Development");
+            builder.UseSetting("Auth:Authority", "https://authentik.test/application/o/froststream/");
+            builder.UseSetting("Auth:PublicOrigin", "https://frontend.test");
+            builder.UseSetting("Auth:ClientId", "froststream-bff");
+            builder.UseSetting("Auth:ClientSecret", "integration-test-secret");
+            builder.UseSetting("Auth:Scopes", "openid profile email groups offline_access");
+            builder.UseSetting("Auth:Audience", TestTokenIssuer.Audience);
+            builder.UseSetting("OpenFga:Endpoint", identity.Endpoint);
+            builder.UseSetting("OpenFga:StoreId", identity.StoreId);
+            builder.UseSetting("OpenFga:AuthorizationModelId", identity.ModelId);
+            builder.UseSetting("OpenFga:AutoProvision", "false");
             builder.UseSetting("ConnectionStrings:nats", natsUrl);
             builder.UseSetting("NATS:Url", natsUrl);
             builder.ConfigureAppConfiguration((_, configBuilder) =>
@@ -348,8 +361,12 @@ public sealed class StorageStackFixture(SaveChangesInterceptor? interceptor = nu
                     ["NATS:Url"] = natsUrl
                 });
             });
-            builder.ConfigureServices(services =>
+            builder.ConfigureTestServices(services =>
             {
+                // This fixture exercises HTTP, NATS, PostgreSQL and real OpenFGA. Identity
+                // provisioning is owned by the fixture; JWT signing is controlled locally.
+                services.RemoveAll<IHostedService>();
+                services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, Tokens.Configure);
                 services.RemoveAll<ISecretStore>();
                 services.AddSingleton(secretStore);
             });

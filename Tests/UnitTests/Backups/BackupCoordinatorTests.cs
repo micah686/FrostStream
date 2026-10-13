@@ -97,7 +97,17 @@ public sealed class BackupCoordinatorTests
         harness.Runner.RestoreCalls.ShouldBe(1);
         harness.Runner.LastRestoreLabel.ShouldBe(Harness.NewestLabel);
         harness.Runner.LastRestoreTarget.ShouldBe(target);
+        harness.Runner.LastRestoreImmediate.ShouldBeFalse();
         harness.Runner.LastRestorePgData.ShouldBe(harness.Options.PgDataPath);
+    }
+
+    [Test]
+    public async Task Snapshot_Restore_Stops_At_Backup_Consistency_Instead_Of_Replaying_Later_Wal()
+    {
+        await using var harness = await Harness.StartAsync();
+        var job = await harness.Coordinator.QueueRestoreAsync(Harness.NewestLabel, null, default);
+        (await harness.Coordinator.WaitAsync(job.JobId, default)).Status.ShouldBe("completed");
+        harness.Runner.LastRestoreImmediate.ShouldBeTrue();
     }
 
     private sealed class Harness : IAsyncDisposable
@@ -159,6 +169,7 @@ public sealed class BackupCoordinatorTests
         public string? LastRestoreLabel { get; private set; }
         public DateTimeOffset? LastRestoreTarget { get; private set; }
         public string? LastRestorePgData { get; private set; }
+        public bool LastRestoreImmediate { get; private set; }
 
         public override Task<PgBackRestStanzaInfo?> InfoAsync(CancellationToken cancellationToken)
             => Task.FromResult<PgBackRestStanzaInfo?>(new PgBackRestStanzaInfo
@@ -194,6 +205,7 @@ public sealed class BackupCoordinatorTests
             LastRestoreLabel = label;
             LastRestoreTarget = targetTime;
             LastRestorePgData = pgDataPath;
+            LastRestoreImmediate = immediateTarget;
             return Task.CompletedTask;
         }
     }

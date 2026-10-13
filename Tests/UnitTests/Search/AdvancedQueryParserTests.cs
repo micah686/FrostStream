@@ -25,7 +25,7 @@ public sealed class AdvancedQueryParserTests
 
         parsed.HasFreeText.ShouldBeFalse();
         parsed.EffectiveQuery.ShouldBe("*");
-        parsed.FilterParts.ShouldContain("(video_codec:=`h264` || audio_codec:=`h264`)");
+        parsed.FilterParts.Select(TypesenseSearchReader.Translate).ShouldContain("(video_codec:=`h264` || audio_codec:=`h264`)");
         await Task.CompletedTask;
     }
 
@@ -35,7 +35,7 @@ public sealed class AdvancedQueryParserTests
         var parsed = AdvancedQueryParser.Parse("channel:LinusTechTips graphics card");
 
         parsed.FreeText.ShouldBe("graphics card");
-        parsed.FilterParts.ShouldContain("(account_handle:=`LinusTechTips` || account_name:=`LinusTechTips`)");
+        parsed.FilterParts.Select(TypesenseSearchReader.Translate).ShouldContain("(account_handle:=`LinusTechTips` || account_name:=`LinusTechTips`)");
         await Task.CompletedTask;
     }
 
@@ -44,7 +44,7 @@ public sealed class AdvancedQueryParserTests
     {
         var parsed = AdvancedQueryParser.Parse("channel:\"Linus Tech Tips\"");
 
-        parsed.FilterParts.ShouldContain("(account_handle:=`Linus Tech Tips` || account_name:=`Linus Tech Tips`)");
+        parsed.FilterParts.Select(TypesenseSearchReader.Translate).ShouldContain("(account_handle:=`Linus Tech Tips` || account_name:=`Linus Tech Tips`)");
         await Task.CompletedTask;
     }
 
@@ -63,9 +63,9 @@ public sealed class AdvancedQueryParserTests
     {
         var parsed = AdvancedQueryParser.Parse("resolution:1080p hdr:true audio:5.1");
 
-        parsed.FilterParts.ShouldContain("resolution_label:=`1080p`");
-        parsed.FilterParts.ShouldContain("hdr_type:!=`SDR`");
-        parsed.FilterParts.ShouldContain("audio_channels:=6");
+        parsed.FilterParts.Select(TypesenseSearchReader.Translate).ShouldContain("resolution_label:=`1080p`");
+        parsed.FilterParts.Select(TypesenseSearchReader.Translate).ShouldContain("hdr_type:!=`SDR`");
+        parsed.FilterParts.Select(TypesenseSearchReader.Translate).ShouldContain("audio_channels:=6");
         await Task.CompletedTask;
     }
 
@@ -75,9 +75,9 @@ public sealed class AdvancedQueryParserTests
         var parsed = AdvancedQueryParser.Parse("after:2023 duration:>600 views:>10000");
 
         // 2023-01-01T00:00:00Z
-        parsed.FilterParts.ShouldContain("release_date_unix:>1672531200");
-        parsed.FilterParts.ShouldContain("duration_seconds:>600");
-        parsed.FilterParts.ShouldContain("view_count:>10000");
+        parsed.FilterParts.Select(TypesenseSearchReader.Translate).ShouldContain("release_date_unix:>1672531200");
+        parsed.FilterParts.Select(TypesenseSearchReader.Translate).ShouldContain("duration_seconds:>600");
+        parsed.FilterParts.Select(TypesenseSearchReader.Translate).ShouldContain("view_count:>10000");
         await Task.CompletedTask;
     }
 
@@ -86,7 +86,7 @@ public sealed class AdvancedQueryParserTests
     {
         var parsed = AdvancedQueryParser.Parse("duration:600");
 
-        parsed.FilterParts.ShouldContain("duration_seconds:>=600");
+        parsed.FilterParts.Select(TypesenseSearchReader.Translate).ShouldContain("duration_seconds:>=600");
         await Task.CompletedTask;
     }
 
@@ -95,7 +95,7 @@ public sealed class AdvancedQueryParserTests
     {
         var parsed = AdvancedQueryParser.Parse("codec:h265");
 
-        parsed.FilterParts.ShouldContain("(video_codec:=`hevc` || audio_codec:=`hevc`)");
+        parsed.FilterParts.Select(TypesenseSearchReader.Translate).ShouldContain("(video_codec:=`hevc` || audio_codec:=`hevc`)");
         await Task.CompletedTask;
     }
 
@@ -104,7 +104,7 @@ public sealed class AdvancedQueryParserTests
     {
         var parsed = AdvancedQueryParser.Parse("platform:youtube tag:gaming");
 
-        parsed.FilterBy.ShouldBe("platform:=`youtube` && tags:=`gaming`");
+        TypesenseSearchReader.Translate(parsed.Filter).ShouldBe("(platform:=`youtube` && tags:=`gaming`)");
         await Task.CompletedTask;
     }
 }

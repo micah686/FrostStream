@@ -12,8 +12,8 @@ public sealed class EndpointMetadataTests
     [Test]
     public void Every_Controller_Endpoint_Has_Detailed_OpenApi_Metadata()
     {
-        var endpoints = typeof(global::WebAPI.Program).Assembly
-            .GetTypes()
+        var endpoints = new[] { typeof(global::WebAPI.WebAPIModule).Assembly, typeof(FrostStream.Full.Security.SecurityRegistration).Assembly }
+            .SelectMany(assembly => assembly.GetTypes())
             .Where(type => !type.IsAbstract && typeof(ControllerBase).IsAssignableFrom(type))
             .SelectMany(type => type.GetMethods(
                 BindingFlags.Instance |

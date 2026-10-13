@@ -1,3 +1,5 @@
+using DataBridge.Persistence;
+using Shared.Deployment;
 using System.Net;
 using System.Net.Http.Json;
 using DataBridge.Data;
@@ -13,7 +15,6 @@ using NSubstitute;
 using Quartz;
 using Shared.Auth;
 using Shared.Backups;
-using Typesense;
 using WebAPI;
 using YtDlpSharpLib.Provisioning;
 using Shouldly;
@@ -24,7 +25,7 @@ public sealed class LiteHostStartupTests
 {
     private static WebApplicationBuilder Builder(string directory)
     {
-        Quartz.Logging.LogContext.SetCurrentLogProvider(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
+        Quartz.Diagnostics.LogProvider.SetLogProvider(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = Environments.Production });
         builder.Logging.ClearProviders();
         builder.Configuration["Persistence:Sqlite:Path"] = Path.Combine(directory, "test.db");
@@ -33,11 +34,6 @@ public sealed class LiteHostStartupTests
         builder.ConfigureLiteHost();
         builder.AddServiceDefaults();
         builder.AddLiteModules();
-        builder.Services.Replace(ServiceDescriptor.Singleton(Substitute.For<ITypesenseClient>()));
-        var index = Substitute.For<ITypesenseIndexService>();
-        index.GetDocumentCountAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(1);
-        index.MediaCollectionHasFieldAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(true);
-        builder.Services.Replace(ServiceDescriptor.Singleton(index));
         return builder;
     }
 
@@ -65,6 +61,7 @@ public sealed class LiteHostStartupTests
             app.Urls.Add("http://127.0.0.1:0");
             app.MapWebAPIModule();
             app.MapHealthChecks("/health").AllowAnonymous();
+            await app.InitializeApplicationAsync(timeout.Token);
             var starting = app.StartAsync(timeout.Token);
             await called.Task.WaitAsync(timeout.Token);
             starting.IsCompleted.ShouldBeFalse();
@@ -118,12 +115,12 @@ public sealed class LiteHostStartupTests
             unsupportedSchedule.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
             (await unsupportedSchedule.Content.ReadAsStringAsync(timeout.Token)).ShouldContain("Differential backup schedules are not supported");
             var hosted = app.Services.GetServices<IHostedService>().ToList();
-            hosted.OfType<LiteSchemaInitializationService>().Count().ShouldBe(1);
-            hosted.OfType<LiteReadinessService>().Count().ShouldBe(1);
+            app.Services.GetServices<ApplicationInitializationStep>().Count().ShouldBe(6);
+            hosted.OfType<LiteRuntimeLifecycle>().Count().ShouldBe(1);
             var scheduler = await app.Services.GetRequiredService<ISchedulerFactory>().GetScheduler(timeout.Token);
-            scheduler.IsStarted.ShouldBeTrue();
-            (await scheduler.CheckExists(new JobKey("backup-full", "scheduled-tasks"), timeout.Token)).ShouldBeTrue();
-            (await scheduler.CheckExists(new JobKey("backup-diff", "scheduled-tasks"), timeout.Token)).ShouldBeFalse();
+            scheduler.Status.ShouldBe(SchedulerStatus.Running);
+            (await scheduler.Exists(new JobKey("backup-full", "scheduled-tasks"), timeout.Token)).ShouldBeTrue();
+            (await scheduler.Exists(new JobKey("backup-diff", "scheduled-tasks"), timeout.Token)).ShouldBeFalse();
             await app.Services.GetRequiredService<global::Scheduler.MaintenanceTasks.IBackupScheduler>()
                 .QueueBackupAsync(new("backup-full", "backup-full", NodaTime.SystemClock.Instance.GetCurrentInstant(), "test-backup-full", 0, false), timeout.Token);
             var snapshots = (await client.GetFromJsonAsync<global::WebAPI.Features.Backups.Models.BackupRepositoryResponse>("/api/global/backups", timeout.Token)).ShouldNotBeNull();
@@ -137,11 +134,11 @@ public sealed class LiteHostStartupTests
             (await app.Services.GetRequiredService<Shared.Secrets.ISecretStore>().ReadAsync("host-backup-secret", timeout.Token)).ShouldNotBeNull()["value"].ShouldBe("persisted-credential");
             await app.StopAsync(timeout.Token);
             app.Services.GetRequiredService<LiteReadinessState>().IsReady.ShouldBeFalse();
-            scheduler.IsShutdown.ShouldBeTrue();
+            scheduler.Status.ShouldBe(SchedulerStatus.Shutdown);
         }
         finally
         {
-            Quartz.Logging.LogContext.SetCurrentLogProvider(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
+            Quartz.Diagnostics.LogProvider.SetLogProvider(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
             if (Directory.Exists(dir)) Directory.Delete(dir, true);
         }
     }
@@ -157,27 +154,29 @@ public sealed class LiteHostStartupTests
             ReplaceDownloader(builder, Task.FromException<BinaryDownloadResult>(new InvalidOperationException("binary initialization failed")));
             await using var app = builder.Build();
             app.Urls.Add("http://127.0.0.1:0");
+            await app.InitializeApplicationAsync(timeout.Token);
             await Should.ThrowAsync<InvalidOperationException>(() => app.StartAsync(timeout.Token));
             app.Services.GetRequiredService<LiteReadinessState>().IsReady.ShouldBeFalse();
-            (await app.Services.GetRequiredService<ISchedulerFactory>().GetScheduler(timeout.Token)).IsStarted.ShouldBeFalse();
+            (await app.Services.GetRequiredService<ISchedulerFactory>().GetScheduler(timeout.Token)).Status.ShouldNotBe(SchedulerStatus.Running);
             await app.StopAsync(timeout.Token);
         }
         finally
         {
-            Quartz.Logging.LogContext.SetCurrentLogProvider(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
+            Quartz.Diagnostics.LogProvider.SetLogProvider(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
             if (Directory.Exists(dir)) Directory.Delete(dir, true);
         }
     }
 
     [Test]
-    public void Dedicated_Lite_Host_Defaults_To_SQLite_And_Rejects_Full_Or_Disabled_SQLite()
+    public void Dedicated_Lite_Host_Defaults_To_SQLite_And_Rejects_Full_Or_Obsolete_Selector()
     {
         var builder = Host.CreateApplicationBuilder();
         builder.ConfigureLiteHost();
         builder.Configuration["Deployment:Mode"].ShouldBe("Lite");
-        builder.Configuration["Persistence:Sqlite:Enabled"].ShouldBe("true");
+        PersistenceOptions.FromConfiguration(builder.Configuration, builder.Environment.ContentRootPath).Provider.ShouldBe(PersistenceProvider.Sqlite);
         builder.Configuration["Persistence:Sqlite:Enabled"] = "false";
         Should.Throw<InvalidOperationException>(() => builder.ConfigureLiteHost());
+        builder.Configuration["Persistence:Sqlite:Enabled"] = null;
         builder.Configuration["Deployment:Mode"] = "Full";
         Should.Throw<InvalidOperationException>(() => builder.ConfigureLiteHost());
     }

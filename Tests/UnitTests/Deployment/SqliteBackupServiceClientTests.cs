@@ -23,6 +23,19 @@ namespace UnitTests.Deployment;
 public sealed class SqliteBackupServiceClientTests
 {
     [Test]
+    public void Rejects_Obsolete_Backup_Path_Even_When_Canonical_Path_Is_Present()
+    {
+        var root = Path.GetTempPath();
+        var configuration = new ConfigurationManager();
+        configuration["Backup:Directory"] = Path.Combine(root, "backups");
+        configuration["Persistence:Sqlite:BackupPath"] = Path.Combine(root, "old-backups");
+        var factory = new SqliteConnectionFactory(new(PersistenceProvider.Sqlite, Path.Combine(root, "test.sqlite"), 5));
+        Should.Throw<InvalidOperationException>(() => new SqliteBackupServiceClient(
+            factory, configuration, new TestHostEnvironment(root), new(Path.Combine(root, "keys"))))
+            .Message.ShouldContain("obsolete");
+    }
+
+    [Test]
     public async Task Creates_Online_Full_Snapshot_And_Verifies_It()
     {
         var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
@@ -346,6 +359,45 @@ public sealed class SqliteBackupServiceClientTests
             Directory.EnumerateFileSystemEntries(Path.Combine(root, "backups")).ShouldBeEmpty();
             File.Exists(Path.Combine(root, "db")).ShouldBeTrue();
             (await new SqliteSecretStore(factory, new(preservedKeys)).ReadAsync("secret")).ShouldNotBeNull()["value"].ShouldBe("preserved");
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    [Test]
+    public async Task Offline_Command_Recovers_Secrets_And_Refuses_Overwrite_Or_Tampering()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "phase6-recovery-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var factory = new SqliteConnectionFactory(new(PersistenceProvider.Sqlite, Path.Combine(root, "db"), 5));
+            new SqliteSchemaInitializer(factory, NodaTime.SystemClock.Instance).Initialize();
+            var keys = new LocalSecretStoreOptions(Path.Combine(root, "keys"));
+            await new SqliteSecretStore(factory, keys).WriteAsync("recover", new Dictionary<string,string> { ["value"] = "original" });
+            var job = await CreateClient(factory, root, Path.Combine(root, "backups"), keys).CreateAsync(new(null, "full"));
+            var snapshot = Path.Combine(root, "backups", job.Label!);
+            var target = Path.Combine(root, "recovered");
+            var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>
+            {
+                ["Recovery:Snapshot"] = snapshot, ["Recovery:Destination"] = target
+            }).Build();
+            (await SqliteRecoveryCommand.RunAsync(configuration)).ShouldBeTrue();
+            var restored = new SqliteConnectionFactory(new(PersistenceProvider.Sqlite, Path.Combine(target, "core.sqlite"), 5));
+            (await new SqliteSecretStore(restored, new(Path.Combine(target, "core.sqlite.keys"))).ReadAsync("recover"))!["value"].ShouldBe("original");
+            using (var connection = restored.OpenConnection())
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "SELECT invalidated FROM search_index_state";
+                Convert.ToInt64(command.ExecuteScalar()).ShouldBe(1L);
+            }
+            await Should.ThrowAsync<IOException>(() => SqliteRecoveryCommand.RunAsync(configuration));
+            configuration["Recovery:Destination"] = snapshot + ".keys/nested";
+            await Should.ThrowAsync<IOException>(() => SqliteRecoveryCommand.RunAsync(configuration));
+            Directory.Exists(configuration["Recovery:Destination"]).ShouldBeFalse();
+            configuration["Recovery:Destination"] = Path.Combine(root, "tampered");
+            await File.AppendAllTextAsync(snapshot, "corrupt");
+            await Should.ThrowAsync<InvalidDataException>(() => SqliteRecoveryCommand.RunAsync(configuration));
+            Directory.Exists(configuration["Recovery:Destination"]).ShouldBeFalse();
+            Directory.GetDirectories(root, ".recovery-*").ShouldBeEmpty();
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
     }

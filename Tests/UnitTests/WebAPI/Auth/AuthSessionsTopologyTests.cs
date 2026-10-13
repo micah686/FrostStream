@@ -10,7 +10,7 @@ public sealed class AuthSessionsTopologyTests
     [Test]
     public void Browser_Sessions_Use_A_Bounded_File_Backed_Kv_Bucket()
     {
-        var bucket = new AuthSessionsTopology().GetBuckets().ShouldHaveSingleItem();
+        var bucket = new FrostStream.Full.Infrastructure.NatsAuthSessionsTopology().GetBuckets().ShouldHaveSingleItem();
 
         bucket.Name.Value!.ShouldBe(AuthSessionsTopology.BucketNameValue);
         bucket.StorageType.ShouldBe(StorageType.File);

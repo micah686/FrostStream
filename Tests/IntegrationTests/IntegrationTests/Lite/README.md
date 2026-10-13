@@ -7,15 +7,16 @@ dotnet run --project Tests/IntegrationTests/IntegrationTests/IntegrationTests.cs
   --treenode-filter '/*/IntegrationTests.Lite/*/*'
 ```
 
-Requirements: .NET 10, a Docker-compatible container engine, and `ffmpeg`/`ffprobe` on PATH. For rootless Podman, set `DOCKER_HOST` to its socket and `TESTCONTAINERS_RYUK_DISABLED=true`; the fixtures explicitly dispose their containers. The suite creates a disposable Typesense 30.1 container for each test. It does not start NATS, PostgreSQL, OpenBao, Authentik, OpenFGA, or a backup service for Lite.
+Requirements: .NET 10 and `ffmpeg`/`ffprobe` on PATH. Lite fixtures require no container engine or external search service. They own temporary SQLite, Lucene, storage, backup and secret directories.
 
-The fixture runs the production Lite composition on a real loopback HTTP listener with SQLite, encrypted local secrets, shared filesystem storage, durable workflows, Worker, MediaProcessor, and Quartz. Only Internet acquisition (`IYtDlpClient`) and binary provisioning are replaced. The input video is generated with real FFmpeg; probing, hashing, upload, processing, playback, indexing, and search use production implementations. These tests do not verify third-party Internet downloads or browser rendering.
+The fixture runs the production Lite composition on a real loopback HTTP listener with SQLite, encrypted local secrets, shared filesystem storage, durable workflows, Worker, MediaProcessor, Quartz, and embedded Lucene. Only Internet acquisition (`IYtDlpClient`) and binary provisioning are replaced. The input video is generated with real FFmpeg; probing, hashing, upload, processing, playback, indexing, and search use production implementations. These tests do not verify third-party Internet downloads or browser rendering.
 
 The tests cover:
 
-- Concurrent HTTP storage writes; download submission, metadata, acquisition, upload, finalization, application-level duplicate delivery, progress fan-out, original/range playback, rendition SSE, real HLS processing and segment delivery, and real Typesense search.
+- Concurrent HTTP storage writes; download submission, metadata, acquisition, upload, finalization, application-level duplicate delivery, progress fan-out, original/range playback, rendition SSE, real HLS processing and segment delivery, and real embedded Lucene search.
 - Incoming-file scan, staged scan-object ingestion, metadata edits, inclusion, real FFprobe, commit, hash/upload/finalization, scheduled database maintenance, persisted scheduling, and completed media surviving restart.
 - Automatic Admin access, a new explicitly authorized endpoint without permission metadata, and a TCP canary that counts any attempted connections to removed infrastructure.
+- Missing/corrupt search directory recovery and database snapshot restore invalidation, with authoritative media retained and orphaned derived documents removed.
 - Worker cancellation, a stopped run surviving restart, and explicit creation of a new run.
 - Abrupt termination of a separate Lite process during acquisition, startup reconciliation, expired inbox redelivery, stale execution fencing, and explicit retry. The test advances the crashed inbox lease's expiry to avoid waiting its two-minute TTL.
 
@@ -40,9 +41,11 @@ The Full suites also include namespaces `IntegrationTests.Storage`, `Integration
 Frontend access/navigation verification:
 
 ```sh
-cd src/App/SharedApp/Frontend
+cd Frontend
 pnpm test:access
 pnpm check
 ```
 
 Phase 3i validation: 572 shared unit tests, 116 DataBridge tests with both providers enabled, 3 Lite end-to-end tests, 85 Full integration tests, and 5 frontend access/navigation tests passed. Frontend type checking reported no errors or warnings. Backup implementation, deployment packaging, and release remain Phase 4 work.
+
+Phase 5 validation: 617 unit tests and all 3 Lite runtime tests passed. See `docs/implementation-history/README.md` for provider contracts, durability fault tests, packaged smoke checks and outstanding hardware acceptance.

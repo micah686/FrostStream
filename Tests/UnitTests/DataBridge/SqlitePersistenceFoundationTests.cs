@@ -1,10 +1,11 @@
+using FrostStream.Lite.Infrastructure;
+using FrostStream.Full.Infrastructure;
 using System.Diagnostics;
 using System.Text.Json;
 using DataBridge;
 using DataBridge.Data;
 using DataBridge.Persistence;
 using DataBridge.Persistence.Sqlite;
-using FluentMigrator.Runner;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -22,19 +23,32 @@ namespace UnitTests.DataBridge;
 public sealed class SqlitePersistenceFoundationTests
 {
     [Test]
-    public void Selection_Requires_Explicit_Lite_OptIn_And_Validates_File_And_Busy_Budget()
+    [Arguments("Lite", "true")]
+    [Arguments("Lite", "false")]
+    [Arguments("Full", "true")]
+    [Arguments("Full", "false")]
+    public void Obsolete_Sqlite_OptIn_Is_Rejected_For_Both_Editions(string edition, string value)
+    {
+        var configuration = new ConfigurationManager();
+        configuration["Deployment:Mode"] = edition;
+        configuration["Persistence:Sqlite:Enabled"] = value;
+        Should.Throw<InvalidOperationException>(() => PersistenceOptions.FromConfiguration(configuration, Path.GetTempPath()))
+            .Message.ShouldContain("obsolete");
+    }
+
+    [Test]
+    public void Edition_Selects_Provider_And_Validates_File_And_Busy_Budget()
     {
         var configuration = new ConfigurationManager();
         var root = Path.GetTempPath();
         PersistenceOptions.FromConfiguration(configuration, root).Provider.ShouldBe(PersistenceProvider.Postgres);
         configuration["Deployment:Mode"] = "Lite";
-        PersistenceOptions.FromConfiguration(configuration, root).Provider.ShouldBe(PersistenceProvider.Postgres);
-        configuration["Persistence:Sqlite:Enabled"] = "true";
+        PersistenceOptions.FromConfiguration(configuration, root).Provider.ShouldBe(PersistenceProvider.Sqlite);
         PersistenceOptions.FromConfiguration(configuration, root).SqlitePath.ShouldBe(PersistenceOptions.DefaultSqlitePath);
         configuration["Persistence:Sqlite:Path"] = "dev/core.sqlite";
         PersistenceOptions.FromConfiguration(configuration, root).SqlitePath.ShouldBe(Path.Combine(root, "dev/core.sqlite"));
         configuration["Deployment:Mode"] = "Full";
-        Should.Throw<InvalidOperationException>(() => PersistenceOptions.FromConfiguration(configuration, root));
+        PersistenceOptions.FromConfiguration(configuration, root).Provider.ShouldBe(PersistenceProvider.Postgres);
         configuration["Deployment:Mode"] = "Lite";
         configuration["Persistence:Sqlite:Path"] = ":memory:";
         Should.Throw<InvalidOperationException>(() => PersistenceOptions.FromConfiguration(configuration, root));
@@ -50,12 +64,16 @@ public sealed class SqlitePersistenceFoundationTests
     public void Initialization_Only_Registers_Selected_Database_And_Runtime_Can_Select_Sqlite()
     {
         using var fixture = new DatabaseFixture();
-        fixture.Host.Services.GetService<IMigrationRunner>().ShouldBeNull();
+        fixture.Host.Services.GetRequiredService<IApplicationSchemaInitializer>().GetType().Name.ShouldBe("SqliteSchemaInitializer");
         fixture.Host.Services.GetService<NpgsqlDataSource>().ShouldBeNull();
-        fixture.Host.Services.GetServices<IHostedService>().ShouldBeEmpty();
         var builder = Host.CreateApplicationBuilder();
         builder.Configuration["Deployment:Mode"] = "Lite";
-        builder.Configuration["Persistence:Sqlite:Enabled"] = "true";
+        builder.AddLitePersistence();
+        builder.Services.ShouldNotContain(d => d.ServiceType == typeof(IHostedService));
+        builder.Services.ShouldNotContain(d => d.ServiceType == typeof(FrostStream.ApplicationContracts.IDurableJobPublisher));
+        builder.Services.ShouldNotContain(d => d.ServiceType == typeof(Shared.Secrets.ISecretStore));
+        builder.Services.ShouldNotContain(d => d.ServiceType == typeof(Shared.Backups.IBackupServiceClient));
+        builder.AddLiteMessaging().AddLiteSecretStore().AddLiteBackupClient().AddLiteStagedStorage();
         builder.AddDataBridgeModule();
         builder.Services.ShouldContain(d => d.ServiceType == typeof(FrostStream.ApplicationContracts.IDurableJobPublisher));
         builder.Services.ShouldNotContain(d => d.ServiceType == typeof(NpgsqlDataSource));
@@ -95,7 +113,7 @@ public sealed class SqlitePersistenceFoundationTests
         using var manifest = JsonDocument.Parse(SqliteBaseline.ManifestJson);
         var tables = manifest.RootElement.GetProperty("tables").EnumerateArray().ToArray();
         tables.Length.ShouldBe(82);
-        Scalar(connection, "SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'cleipnir_%'")
+        Scalar(connection, "SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'cleipnir_%' AND name NOT IN ('search_pending_index','search_index_state','search_rebuild_replay')")
             .ShouldBe(86L); // Baseline, startup boundary, staged objects, local secrets, and history.
         foreach (var table in tables)
         {
@@ -218,14 +236,13 @@ public sealed class SqlitePersistenceFoundationTests
         await using var sqlite = sqliteScope.ServiceProvider.GetRequiredService<DataBridgeDbContext>();
         var builder = Host.CreateApplicationBuilder();
         builder.Configuration["Deployment:Mode"] = "Full";
-        builder.Configuration["Persistence:Sqlite:Enabled"] = "false";
         builder.Configuration["ConnectionStrings:froststreamdb"] = "Host=localhost;Database=phase2b_model_only;Username=postgres;Password=unused";
-        builder.AddDataBridgePersistence();
+        if (Shared.Deployment.DeploymentOptions.FromConfiguration(builder.Configuration).Mode == Shared.Deployment.DeploymentMode.Lite) builder.AddLitePersistence().AddLiteMessaging().AddLiteSecretStore().AddLiteBackupClient().AddLiteStagedStorage(); else builder.AddFullPersistence();
         using var postgresHost = builder.Build();
         using var postgresScope = postgresHost.Services.CreateScope();
         using var postgres = postgresScope.ServiceProvider.GetRequiredService<DataBridgeDbContext>();
         postgres.Database.ProviderName.ShouldBe("Npgsql.EntityFrameworkCore.PostgreSQL");
-        postgresHost.Services.GetRequiredService<IMigrationRunner>().ShouldNotBeNull();
+        postgresHost.Services.GetRequiredService<IApplicationSchemaInitializer>().GetType().Name.ShouldBe("PostgresSchemaInitializer");
         postgres.Model.FindEntityType(typeof(DownloadJobEntity))!.GetSchema().ShouldBe("jobs");
         postgres.Model.FindEntityType(typeof(DownloadJobEntity))!.FindProperty(nameof(DownloadJobEntity.Status))!
             .GetColumnType().ShouldBe("jobs.download_job_status");
@@ -347,11 +364,10 @@ public sealed class SqlitePersistenceFoundationTests
         {
             var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder();
             builder.Configuration["Deployment:Mode"] = "Lite";
-            builder.Configuration["Persistence:Sqlite:Enabled"] = "true";
             builder.Configuration["Persistence:Sqlite:Path"] = Path.Combine(directory, "nested", "core.sqlite");
             builder.Configuration["Persistence:Sqlite:BusyTimeoutSeconds"] = busyTimeoutSeconds.ToString();
             builder.Logging.ClearProviders();
-            builder.AddDataBridgePersistence();
+            if (Shared.Deployment.DeploymentOptions.FromConfiguration(builder.Configuration).Mode == Shared.Deployment.DeploymentMode.Lite) builder.AddLitePersistence().AddLiteMessaging().AddLiteSecretStore().AddLiteBackupClient().AddLiteStagedStorage(); else builder.AddFullPersistence();
             builder.Services.AddSingleton<IClock>(new FixedClock(DataBridgeTestHelpers.Now));
             Host = builder.Build();
         }

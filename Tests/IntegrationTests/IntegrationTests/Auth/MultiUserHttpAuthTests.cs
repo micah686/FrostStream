@@ -141,27 +141,17 @@ public class MultiUserHttpAuthTests
 }
 
 /// <summary>
-/// Hosts <see cref="global::WebAPI.Program"/> in multi-user mode pointed at the live OpenFGA store,
+/// Hosts <see cref="global::FrostStream.Full.WebAPI.Program"/> in multi-user mode pointed at the live OpenFGA store,
 /// swaps NATS/secrets for in-process fakes, and validates RS256 tokens against an injected test key.
 /// </summary>
 internal sealed class MultiUserWebApiFactory(string openFgaEndpoint, string storeId, string modelId)
-    : WebApplicationFactory<global::WebAPI.Program>
+    : WebApplicationFactory<global::FrostStream.Full.WebAPI.Program>
 {
     public TestTokenIssuer Tokens { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
-
-        // Turn single-user mode OFF for this test host only — the same way AppHost.cs flips it when
-        // launched with SINGLE_USER_MODE=false: it stamps the SINGLE_USER_MODE master switch and the
-        // derived Auth__SingleUserMode flag onto the WebAPI process (AuthMode checks both). We set the
-        // equivalent host settings here instead of real environment variables on purpose: this stays
-        // scoped to THIS WebApplicationFactory, so it never leaks into the single-user integration
-        // tests sharing this process, and normal `dotnet run` / AppHost dev use keeps single-user on
-        // (appsettings.Development.json still defaults Auth:SingleUserMode=true).
-        builder.UseSetting("SINGLE_USER_MODE", "false");
-        builder.UseSetting("Auth:SingleUserMode", "false");
 
         // A non-blank authority is required by Program; the test token issuer overrides JwtBearer so
         // the authority is never actually contacted.

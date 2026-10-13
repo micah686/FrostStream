@@ -1,3 +1,4 @@
+using Shared.Deployment;
 using System.Diagnostics;
 using System.Net.Http.Json;
 using System.Net;
@@ -5,8 +6,6 @@ using System.Net.Sockets;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using DataBridge.Data;
-using DotNet.Testcontainers.Builders;
-using DotNet.Testcontainers.Containers;
 using Lite;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
@@ -29,15 +28,13 @@ using YtDlpSharpLib.Provisioning;
 
 namespace IntegrationTests.Lite;
 
-/// <summary>The production five-module host, with real SQLite, Typesense, storage, and FFmpeg.
+/// <summary>The production five-module host, with real SQLite, embedded Lucene, storage, and FFmpeg.
 /// Only Internet acquisition and binary provisioning are replaced with deterministic inputs.</summary>
 internal sealed class LiteRuntimeFixture : IAsyncDisposable
 {
     public string DirectoryPath { get; } = Path.Combine(Path.GetTempPath(), $"froststream-lite-e2e-{Guid.NewGuid():N}");
     public string Incoming => Path.Combine(DirectoryPath, "incoming");
     public string Video => Path.Combine(DirectoryPath, "fixture.mp4");
-    public string TypesenseUrl { get; private set; } = "";
-    private IContainer? typesense;
     private readonly TcpListener removedInfrastructure = new(IPAddress.Loopback, 0);
     private readonly CancellationTokenSource monitorStop = new();
     private Task? monitor;
@@ -64,11 +61,6 @@ internal sealed class LiteRuntimeFixture : IAsyncDisposable
         monitor = MonitorConnectionsAsync();
         Directory.CreateDirectory(Incoming);
         await CreateVideoAsync(Video, token);
-        typesense = new ContainerBuilder("typesense/typesense:30.1")
-            .WithCommand("--data-dir=/tmp", "--api-key=lite-test")
-            .WithPortBinding(8108, true).Build();
-        await typesense.StartAsync(token);
-        TypesenseUrl = $"http://{typesense.Hostname}:{typesense.GetMappedPublicPort(8108)}";
         await StartHostAsync(token);
         await SendAsync(HttpMethod.Post, "/api/storage/local/create", new
         {
@@ -76,9 +68,9 @@ internal sealed class LiteRuntimeFixture : IAsyncDisposable
         }, token);
     }
 
-    internal static WebApplicationBuilder Builder(string directory, string typesenseUrl, int forbiddenPort = 1)
+    internal static WebApplicationBuilder Builder(string directory, int forbiddenPort = 1)
     {
-        Quartz.Logging.LogContext.SetCurrentLogProvider(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
+        Quartz.Diagnostics.LogProvider.SetLogProvider(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = Environments.Production });
         builder.Logging.ClearProviders();
         // Useful on a failure, without leaking credentials or depending on external infrastructure.
@@ -86,8 +78,8 @@ internal sealed class LiteRuntimeFixture : IAsyncDisposable
         builder.Logging.SetMinimumLevel(LogLevel.Warning);
         builder.Configuration["Persistence:Sqlite:Path"] = Path.Combine(directory, "application.db");
         builder.Configuration["Worker:IncomingRoot"] = Path.Combine(directory, "incoming");
-        builder.Configuration["Typesense:Url"] = typesenseUrl;
-        builder.Configuration["Typesense:ApiKey"] = "lite-test";
+        builder.Configuration["Backup:Directory"] = Path.Combine(directory, "backups");
+        builder.Configuration["Search:Lucene:Path"] = Path.Combine(directory, "search");
         builder.Configuration["MediaProcessor:FfmpegPath"] = "ffmpeg";
         builder.Configuration["MediaProcessor:FfprobePath"] = "ffprobe";
         builder.Configuration["MediaProcessor:TempRoot"] = Path.Combine(directory, "processing");
@@ -110,7 +102,7 @@ internal sealed class LiteRuntimeFixture : IAsyncDisposable
 
     private async Task StartHostAsync(CancellationToken token)
     {
-        var builder = Builder(DirectoryPath, TypesenseUrl, ((IPEndPoint)removedInfrastructure.LocalEndpoint).Port);
+        var builder = Builder(DirectoryPath, ((IPEndPoint)removedInfrastructure.LocalEndpoint).Port);
         Downloader = CreateDownloader(Video, (url, cancellation) => BeforeDownload?.Invoke(url, cancellation) ?? Task.CompletedTask);
         builder.Services.Replace(ServiceDescriptor.Singleton(Downloader));
         App = builder.Build();
@@ -119,6 +111,7 @@ internal sealed class LiteRuntimeFixture : IAsyncDisposable
         App.MapGet("/api/e2e/new-feature", (Microsoft.AspNetCore.Http.HttpContext context) => context.User.Identity!.Name)
             .RequireAuthorization("future-policy-without-permission-metadata");
         App.MapHealthChecks("/health").AllowAnonymous();
+        await App.InitializeApplicationAsync(token);
         await App.StartAsync(token);
         Client = new HttpClient { BaseAddress = new Uri(App.Urls.Single()) };
     }
@@ -233,8 +226,7 @@ internal sealed class LiteRuntimeFixture : IAsyncDisposable
     {
         Client?.Dispose();
         if (App is not null) { await App.StopAsync(); await App.DisposeAsync(); }
-        Quartz.Logging.LogContext.SetCurrentLogProvider(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
-        if (typesense is not null) await typesense.DisposeAsync();
+        Quartz.Diagnostics.LogProvider.SetLogProvider(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
         monitorStop.Cancel();
         if (monitor is not null) await monitor;
         removedInfrastructure.Stop();

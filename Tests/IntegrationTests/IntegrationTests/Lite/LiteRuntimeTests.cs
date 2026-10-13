@@ -149,7 +149,37 @@ public sealed class LiteRuntimeTests
             (await fixture.ReadAsync<DownloadQueueJobDto>($"/api/downloads/queue/{jobId}", token)).Status.ShouldBe(DownloadJobStatus.Completed);
             (await fixture.ReadAsync<JsonElement>("/api/auth/me", token)).ToString().ShouldContain("Admin");
             var scheduler = await fixture.App.Services.GetRequiredService<ISchedulerFactory>().GetScheduler(token);
-            (await scheduler.CheckExists(new JobKey("e2e-maintenance", "scheduled-tasks"), token)).ShouldBeTrue();
+            (await scheduler.Exists(new JobKey("e2e-maintenance", "scheduled-tasks"), token)).ShouldBeTrue();
+            // Rebuild derived search from real SQLite projections after index loss or corruption.
+            foreach (var damage in new[] { "missing", "corrupt" })
+            {
+                await fixture.StopHostAsync(token);
+                var searchPath = Path.Combine(fixture.DirectoryPath, "search");
+                if (damage == "missing") Directory.Delete(searchPath, true);
+                else
+                {
+                    using var searchManifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(searchPath, "active.json")));
+                    var generation = searchManifest.RootElement.GetProperty("Generation").GetString()!;
+                    File.WriteAllBytes(Directory.GetFiles(Path.Combine(searchPath, "g-" + generation), "segments_*").Single(), [0, 1, 2]);
+                }
+                await fixture.ResumeHostAsync(token);
+                var result = await fixture.ReadAsync<JsonElement>("/api/search?q=deterministic&scope=metadata", token);
+                result.GetProperty("items").EnumerateArray().Any(hit => hit.GetProperty("media").GetProperty("mediaGuid").GetGuid() == guid).ShouldBeTrue(damage);
+                (await fixture.ReadAsync<JsonElement>("/api/search/status", token)).GetProperty("state").GetString().ShouldBe("Ready");
+            }
+            await fixture.App.Services.GetRequiredService<Shared.Secrets.ISecretStore>().WriteAsync("restore-probe", new Dictionary<string, string> { ["value"] = "retained" }, token);
+            var backup = await fixture.App.Services.GetRequiredService<Shared.Backups.IBackupServiceClient>().CreateAsync(new("index restore invalidation", "full"), token);
+            await fixture.App.Services.GetRequiredService<global::DataBridge.Search.ISearchIndexWriter>().UpsertMediaAsync(new global::DataBridge.Search.MediaDocument
+            {
+                Id = Guid.NewGuid().ToString("N"), Title = "orphanafterbackup", Platform = "youtube", AccountName = "Orphan", AccountHandle = "orphan"
+            }, token);
+            await fixture.StopHostAsync(token);
+            var databasePath = Path.Combine(fixture.DirectoryPath, "application.db");
+            foreach (var suffix in new[] { "-wal", "-shm" }) if (File.Exists(databasePath + suffix)) File.Delete(databasePath + suffix);
+            File.Copy(Path.Combine(fixture.DirectoryPath, "backups", backup.Label!), databasePath, true);
+            await fixture.ResumeHostAsync(token);
+            (await fixture.ReadAsync<JsonElement>("/api/search?q=orphanafterbackup&scope=metadata", token)).GetProperty("items").GetArrayLength().ShouldBe(0);
+            (await fixture.ReadAsync<JsonElement>("/api/search?q=deterministic&scope=metadata", token)).GetProperty("items").GetArrayLength().ShouldBeGreaterThan(0);
             fixture.RemovedInfrastructureConnections.ShouldBe(0);
         }
         finally { fixture.App.Services.GetRequiredService<DownloadQueueHub>().Unsubscribe(queueEvents.Id); }
@@ -199,7 +229,7 @@ public sealed class LiteRuntimeTests
             StartInfo = new ProcessStartInfo("dotnet") { RedirectStandardOutput = true, RedirectStandardError = true }
         };
         foreach (var argument in new[] { typeof(LiteRuntimeTests).Assembly.Location, "--lite-crash-host", fixture.DirectoryPath,
-                     fixture.TypesenseUrl, fixture.ForbiddenPort.ToString(System.Globalization.CultureInfo.InvariantCulture) })
+                     fixture.ForbiddenPort.ToString(System.Globalization.CultureInfo.InvariantCulture) })
             child.StartInfo.ArgumentList.Add(argument);
         child.Start();
         var output = child.StandardOutput.ReadToEndAsync(token);

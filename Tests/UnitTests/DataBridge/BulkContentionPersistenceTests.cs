@@ -337,7 +337,7 @@ public sealed class BulkContentionPersistenceTests
                 await db.SaveChangesAsync();
                 return (DeleteMediaFileResponse?)new DeleteMediaFileResponse { Success = true };
             });
-        var search = Substitute.For<ITypesenseIndexService>();
+        var search = Substitute.For<ISearchIndexWriter>();
         var executor = new MediaDeleteExecutor(f.Database, bus, search, f.ScopeFactory, NullLogger<MediaDeleteExecutor>.Instance);
         var response = await executor.DeleteMediaAsync(media);
         response.ErrorCode.ShouldBe("conflict");
