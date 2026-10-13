@@ -1,0 +1,41 @@
+<Solution>
+  <Folder Name="/ExternalLibs/">
+    <Project Path="src/Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj" />
+    <Project Path="src/Shared/Integrations/Vendor/YtDlpSharpLib/ConsoleDownloader/ConsoleDownloader.csproj" />
+    <Project Path="src/Shared/Integrations/Vendor/YtDlpSharpLib/YtDlpSharpLib/YtDlpSharpLib.csproj" />
+  </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="src/Tests/IntegrationTests/IntegrationTests/IntegrationTests.csproj" />
+    <Project Path="src/Tests/UnitTests/UnitTests.csproj" />
+  </Folder>
+  <Folder Name="/Core/">
+    <Project Path="src/Shared/Contracts/ApplicationContracts.csproj" />
+    <Project Path="src/Shared/Core/Shared.csproj" />
+    <Project Path="src/Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj" />
+    <Project Path="src/Shared/Integrations/StorageExtensions/StorageExtensions.csproj" />
+    <Project Path="src/Shared/Integrations/Typesense/Typesense.csproj" />
+    <Project Path="src/Shared/Modules/Api/WebAPI.csproj" />
+    <Project Path="src/Shared/Modules/DataBridge/DataBridge.csproj" />
+    <Project Path="src/Shared/Modules/MediaProcessor/MediaProcessor.csproj" />
+    <Project Path="src/Shared/Modules/Scheduler/Scheduler.csproj" />
+    <Project Path="src/Shared/Modules/Worker/Worker.csproj" />
+    <Project Path="src/Shared/Persistence/Persistence.csproj" />
+  </Folder>
+  <Folder Name="/Full/">
+    <Project Path="src/Full/AppHost/AppHostFull.csproj" />
+    <Project Path="src/Full/Hosts/BackupService/BackupService.csproj" />
+    <Project Path="src/Full/Hosts/WebAPI/WebAPIHost.csproj" />
+    <Project Path="src/Full/Hosts/DataBridge/DataBridgeHost.csproj" />
+    <Project Path="src/Full/Hosts/Worker/WorkerHost.csproj" />
+    <Project Path="src/Full/Hosts/MediaProcessor/MediaProcessorHost.csproj" />
+    <Project Path="src/Full/Hosts/Scheduler/SchedulerHost.csproj" />
+    <Project Path="src/Full/Infrastructure/Infrastructure.csproj" />
+    <Project Path="src/Full/Infrastructure/Postgres/Persistence.Postgres.csproj" />
+    <Project Path="src/Full/Security/Security.csproj" />
+  </Folder>
+  <Folder Name="/Lite/">
+    <Project Path="src/Lite/AppHost/AppHostLite.csproj" />
+    <Project Path="src/Lite/Backend/Lite.csproj" />
+    <Project Path="src/Lite/Infrastructure/Infrastructure.csproj" />
+  </Folder>
+</Solution>
