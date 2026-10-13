@@ -10,3 +10,4 @@ Full/AppHost/configs/nats/certs/
 
 data/
 .artifacts/
+.idea/
