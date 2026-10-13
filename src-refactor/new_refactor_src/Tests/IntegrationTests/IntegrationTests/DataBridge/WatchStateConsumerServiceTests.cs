@@ -1,0 +1,505 @@
+using DataBridge.Persistence;
+using DataBridge.Messaging;
+using DotNet.Testcontainers.Builders;
+using DotNet.Testcontainers.Containers;
+using FrostStream.ApplicationContracts;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using NodaTime;
+using Npgsql;
+using Shared.Messaging;
+using Shouldly;
+using TUnit.Core;
+
+namespace IntegrationTests.DataBridge;
+
+public sealed class WatchStateConsumerServiceTests
+{
+    private static readonly PostgresFixture Fixture = new();
+    private static readonly SemaphoreSlim Gate = new(1, 1);
+
+    static WatchStateConsumerServiceTests()
+    {
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => Fixture.DisposeAsync().AsTask().GetAwaiter().GetResult();
+    }
+
+    [Before(Test)]
+    public async Task ResetAsync()
+    {
+        await Gate.WaitAsync();
+        await Fixture.InitializeAsync();
+        await Fixture.ResetAsync();
+    }
+
+    [After(Test)]
+    public void Release()
+    {
+        Gate.Release();
+    }
+
+    [Test]
+    public async Task Upsert_Can_Mark_Unwatched_For_One_User_Without_Clearing_Another_User()
+    {
+        var mediaGuid = Guid.NewGuid();
+        await Fixture.SeedMediaAsync(mediaGuid);
+
+        var bus = new FakeMessageBus();
+        var service = Fixture.CreateService(bus);
+        await service.StartAsync(CancellationToken.None);
+            await WaitForSubscriptionsAsync(bus, expected: 8);
+
+        try
+        {
+            var firstUserWatched = await UpsertAsync(bus, "reader-a", mediaGuid, completed: true);
+            var secondUserWatched = await UpsertAsync(bus, "reader-b", mediaGuid, completed: true);
+
+            firstUserWatched.Success.ShouldBeTrue();
+            firstUserWatched.State!.Completed.ShouldBeTrue();
+            firstUserWatched.State.WatchedAt.ShouldNotBeNull();
+            secondUserWatched.Success.ShouldBeTrue();
+            secondUserWatched.State!.Completed.ShouldBeTrue();
+
+            var firstUserUnwatched = await UpsertAsync(bus, "reader-a", mediaGuid, completed: false);
+            firstUserUnwatched.Success.ShouldBeTrue();
+            firstUserUnwatched.State!.Completed.ShouldBeFalse();
+            firstUserUnwatched.State.WatchedAt.ShouldBeNull();
+
+            var firstUserState = await GetAsync(bus, "reader-a", mediaGuid);
+            var secondUserState = await GetAsync(bus, "reader-b", mediaGuid);
+
+            firstUserState.Success.ShouldBeTrue();
+            firstUserState.State!.Completed.ShouldBeFalse();
+            firstUserState.State.WatchedAt.ShouldBeNull();
+            secondUserState.Success.ShouldBeTrue();
+            secondUserState.State!.Completed.ShouldBeTrue();
+            secondUserState.State.WatchedAt.ShouldNotBeNull();
+        }
+        finally
+        {
+            await service.StopAsync(CancellationToken.None);
+        }
+    }
+
+    [Test]
+    public async Task History_List_Includes_InProgress_And_Completed_For_User()
+    {
+        var firstMediaGuid = Guid.NewGuid();
+        var secondMediaGuid = Guid.NewGuid();
+        await Fixture.SeedMediaWithMetadataAsync(firstMediaGuid, "First video");
+        await Fixture.SeedMediaWithMetadataAsync(secondMediaGuid, "Second video");
+
+        var bus = new FakeMessageBus();
+        var service = Fixture.CreateService(bus);
+        await service.StartAsync(CancellationToken.None);
+        await WaitForSubscriptionsAsync(bus, expected: 8);
+
+        try
+        {
+            await UpsertAsync(bus, "reader-a", firstMediaGuid, completed: false);
+            await UpsertAsync(bus, "reader-a", secondMediaGuid, completed: true);
+            await UpsertAsync(bus, "reader-b", Guid.NewGuid(), completed: false);
+
+            var response = await bus.InvokeAsync<WatchStateHistoryListRequest, WatchStateHistoryListResponse>(
+                WatchStateSubjects.ListHistory,
+                new WatchStateHistoryListRequest
+                {
+                    OwnerSubject = "reader-a",
+                    Page = 1,
+                    PageSize = 10
+                });
+
+            response.Success.ShouldBeTrue();
+            response.TotalCount.ShouldBe(2);
+            response.Items.Select(x => x.Media.MediaGuid).OrderBy(x => x).ShouldBe(
+                new[] { firstMediaGuid, secondMediaGuid }.OrderBy(x => x));
+        }
+        finally
+        {
+            await service.StopAsync(CancellationToken.None);
+        }
+    }
+
+    [Test]
+    public async Task Likes_Are_Private_And_Listable_Per_User()
+    {
+        var firstMediaGuid = Guid.NewGuid();
+        var secondMediaGuid = Guid.NewGuid();
+        await Fixture.SeedMediaWithMetadataAsync(firstMediaGuid, "First liked video");
+        await Fixture.SeedMediaWithMetadataAsync(secondMediaGuid, "Second liked video");
+
+        var bus = new FakeMessageBus();
+        var service = Fixture.CreateService(bus);
+        await service.StartAsync(CancellationToken.None);
+        await WaitForSubscriptionsAsync(bus, expected: 8);
+
+        try
+        {
+            var firstLike = await LikeAsync(bus, "reader-a", firstMediaGuid);
+            var secondLike = await LikeAsync(bus, "reader-b", secondMediaGuid);
+
+            firstLike.Success.ShouldBeTrue();
+            firstLike.State!.Liked.ShouldBeTrue();
+            secondLike.Success.ShouldBeTrue();
+
+            var readerAList = await bus.InvokeAsync<MediaLikeListRequest, MediaLikeListResponse>(
+                MediaLikeSubjects.List,
+                new MediaLikeListRequest
+                {
+                    OwnerSubject = "reader-a",
+                    Page = 1,
+                    PageSize = 10
+                });
+
+            readerAList.Success.ShouldBeTrue();
+            readerAList.TotalCount.ShouldBe(1);
+            readerAList.Items.Single().Media.MediaGuid.ShouldBe(firstMediaGuid);
+
+            var unlike = await UnlikeAsync(bus, "reader-a", firstMediaGuid);
+            unlike.Success.ShouldBeTrue();
+            unlike.State!.Liked.ShouldBeFalse();
+
+            var readerBState = await bus.InvokeAsync<MediaLikeStateRequest, MediaLikeStateResponse>(
+                MediaLikeSubjects.Get,
+                new MediaLikeStateRequest
+                {
+                    OwnerSubject = "reader-b",
+                    MediaGuid = secondMediaGuid
+                });
+            readerBState.Success.ShouldBeTrue();
+            readerBState.State!.Liked.ShouldBeTrue();
+        }
+        finally
+        {
+            await service.StopAsync(CancellationToken.None);
+        }
+    }
+
+    [Test]
+    public async Task Persisted_Policy_Denies_Media_Provider_And_Age_Axes_Then_Deletes_Cleanly()
+    {
+        var mediaGuid = Guid.NewGuid();
+        await Fixture.SeedMediaForAccessPolicyAsync(mediaGuid, "youtube", ageLimit: 18);
+        var executor = Fixture.CreateAccessPolicyExecutor();
+        var policy = new AccessPolicyDto
+        {
+            PolicyId = Guid.NewGuid(),
+            Name = "Restricted media smoke test",
+            Enabled = true,
+            MediaGuids = [mediaGuid],
+            Providers = ["youtube"],
+            AgeThresholds = [18],
+            Assignments =
+            [
+                new AccessPolicyAssignmentDto { Type = "group", Id = "restricted" }
+            ]
+        };
+
+        await executor.SaveAsync(policy, CancellationToken.None);
+
+        var denied = await executor.EvaluateAsync(
+            mediaGuid,
+            userSubject: "reader-a",
+            userGroups: ["restricted"],
+            bypassGroups: [],
+            CancellationToken.None);
+
+        denied.IsAllowed.ShouldBeFalse();
+        denied.Decisions.Where(decision => decision.Axis is "media" or "provider" or "age")
+            .ShouldAllBe(decision => !decision.Allowed);
+        denied.Decisions.ShouldContain(decision => decision.Axis == "media" && decision.Resource == mediaGuid.ToString());
+        denied.Decisions.ShouldContain(decision => decision.Axis == "provider" && decision.Resource == "youtube");
+        denied.Decisions.ShouldContain(decision => decision.Axis == "age" && decision.Resource == "18");
+
+        (await executor.DeleteAsync(policy.PolicyId, CancellationToken.None)).ShouldBeTrue();
+        var allowedAfterDelete = await executor.EvaluateAsync(
+            mediaGuid,
+            userSubject: "reader-a",
+            userGroups: ["restricted"],
+            bypassGroups: [],
+            CancellationToken.None);
+        allowedAfterDelete.IsAllowed.ShouldBeTrue();
+    }
+
+    private static Task<WatchStateResponse> UpsertAsync(
+        FakeMessageBus bus,
+        string ownerSubject,
+        Guid mediaGuid,
+        bool completed)
+        => bus.InvokeAsync<WatchStateUpsertRequest, WatchStateResponse>(
+            WatchStateSubjects.Upsert,
+            new WatchStateUpsertRequest
+            {
+                OwnerSubject = ownerSubject,
+                MediaGuid = mediaGuid,
+                PositionSeconds = completed ? 200 : 0,
+                DurationSeconds = 200,
+                Completed = completed
+            });
+
+    private static Task<WatchStateResponse> GetAsync(FakeMessageBus bus, string ownerSubject, Guid mediaGuid)
+        => bus.InvokeAsync<WatchStateGetRequest, WatchStateResponse>(
+            WatchStateSubjects.Get,
+            new WatchStateGetRequest
+            {
+                OwnerSubject = ownerSubject,
+                MediaGuid = mediaGuid
+            });
+
+    private static Task<MediaLikeStateResponse> LikeAsync(FakeMessageBus bus, string ownerSubject, Guid mediaGuid)
+        => bus.InvokeAsync<MediaLikeStateRequest, MediaLikeStateResponse>(
+            MediaLikeSubjects.Like,
+            new MediaLikeStateRequest
+            {
+                OwnerSubject = ownerSubject,
+                MediaGuid = mediaGuid
+            });
+
+    private static Task<MediaLikeStateResponse> UnlikeAsync(FakeMessageBus bus, string ownerSubject, Guid mediaGuid)
+        => bus.InvokeAsync<MediaLikeStateRequest, MediaLikeStateResponse>(
+            MediaLikeSubjects.Unlike,
+            new MediaLikeStateRequest
+            {
+                OwnerSubject = ownerSubject,
+                MediaGuid = mediaGuid
+            });
+
+    private static async Task WaitForSubscriptionsAsync(FakeMessageBus bus, int expected)
+    {
+        for (var attempt = 0; attempt < 50; attempt++)
+        {
+            if (bus.Subscriptions.Count == expected)
+            {
+                return;
+            }
+
+            await Task.Delay(10);
+        }
+
+        throw new TimeoutException("Consumer did not register subscriptions in time.");
+    }
+
+    private sealed class PostgresFixture : IAsyncDisposable
+    {
+        private readonly IContainer _postgresContainer = new ContainerBuilder("postgres:17")
+            .WithEnvironment("POSTGRES_DB", "froststream_watch_state_tests")
+            .WithEnvironment("POSTGRES_USER", "postgres")
+            .WithEnvironment("POSTGRES_PASSWORD", "postgres")
+            .WithPortBinding(5432, true)
+            .Build();
+
+        private NpgsqlDataSource? _dataSource;
+        private bool _initialized;
+
+        public Instant Now { get; } = Instant.FromUtc(2026, 6, 4, 12, 0);
+
+        private string ConnectionString =>
+            new NpgsqlConnectionStringBuilder
+            {
+                Host = _postgresContainer.Hostname,
+                Port = _postgresContainer.GetMappedPublicPort(5432),
+                Database = "froststream_watch_state_tests",
+                Username = "postgres",
+                Password = "postgres",
+                SearchPath = "storage,downloads,jobs,media,maintenance,metadata,auth,public"
+            }.ConnectionString;
+
+        private NpgsqlDataSource DataSource => _dataSource ?? throw new InvalidOperationException("Fixture not initialized.");
+
+        public WatchStateConsumerService CreateService(FakeMessageBus bus)
+            => new(bus, new ApplicationDatabase(new global::DataBridge.Persistence.Postgres.PostgresConnectionFactory(DataSource)), new FixedClock(Now), NullLogger<WatchStateConsumerService>.Instance);
+
+        public AccessPolicyExecutor CreateAccessPolicyExecutor() => new(new ApplicationDatabase(new global::DataBridge.Persistence.Postgres.PostgresConnectionFactory(DataSource)));
+
+        public async Task InitializeAsync()
+        {
+            if (_initialized)
+            {
+                return;
+            }
+
+            await _postgresContainer.StartAsync();
+            await WaitForPostgresAsync();
+            await RunMigrationsAsync();
+
+            _dataSource = new NpgsqlDataSourceBuilder(ConnectionString).Build();
+            _initialized = true;
+        }
+
+        public async Task ResetAsync()
+        {
+            await using var command = DataSource.CreateCommand("TRUNCATE TABLE media RESTART IDENTITY CASCADE;");
+            await command.ExecuteNonQueryAsync();
+        }
+
+        public async Task SeedMediaAsync(Guid mediaGuid)
+        {
+            await using var command = DataSource.CreateCommand(
+                "INSERT INTO media (media_guid, created_at) VALUES (@media_guid, @created_at);");
+            command.Parameters.AddWithValue("media_guid", mediaGuid);
+            command.Parameters.AddWithValue("created_at", Now.ToDateTimeOffset());
+            await command.ExecuteNonQueryAsync();
+        }
+
+        public async Task SeedMediaWithMetadataAsync(Guid mediaGuid, string title)
+        {
+            await SeedMediaAsync(mediaGuid);
+            await using var command = DataSource.CreateCommand("""
+                WITH account_row AS (
+                    INSERT INTO metadata.accounts (platform, account_name, account_handle)
+                    VALUES ('youtube', 'Test Creator', 'test-creator')
+                    ON CONFLICT (platform, account_handle)
+                    DO UPDATE SET account_name = EXCLUDED.account_name
+                    RETURNING id
+                )
+                INSERT INTO metadata.media_metadata
+                    (media_guid, account_id, metadata_scrape_date, title, was_live)
+                SELECT @media_guid, id, @metadata_scrape_date, @title, false
+                FROM account_row;
+                """);
+            command.Parameters.AddWithValue("media_guid", mediaGuid);
+            command.Parameters.AddWithValue("metadata_scrape_date", Now.ToDateTimeOffset());
+            command.Parameters.AddWithValue("title", title);
+            await command.ExecuteNonQueryAsync();
+        }
+
+        public async Task SeedMediaForAccessPolicyAsync(Guid mediaGuid, string provider, int ageLimit)
+        {
+            await SeedMediaWithMetadataAsync(mediaGuid, "Restricted video");
+            await using (var metadata = DataSource.CreateCommand(
+                             "UPDATE metadata.media_metadata SET age_limit = @age_limit WHERE media_guid = @media_guid;"))
+            {
+                metadata.Parameters.AddWithValue("age_limit", ageLimit);
+                metadata.Parameters.AddWithValue("media_guid", mediaGuid);
+                await metadata.ExecuteNonQueryAsync();
+            }
+
+            await using var source = DataSource.CreateCommand("""
+                INSERT INTO media.media_source_versions (provider, source_media_id, media_guid)
+                VALUES (@provider, @source_media_id, @media_guid);
+                """);
+            source.Parameters.AddWithValue("provider", provider);
+            source.Parameters.AddWithValue("source_media_id", $"source-{mediaGuid:N}");
+            source.Parameters.AddWithValue("media_guid", mediaGuid);
+            await source.ExecuteNonQueryAsync();
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            if (_dataSource is not null)
+            {
+                await _dataSource.DisposeAsync();
+            }
+
+            await _postgresContainer.DisposeAsync();
+        }
+
+        private async Task RunMigrationsAsync()
+        {
+            var services = new ServiceCollection();
+            global::DataBridge.Persistence.Postgres.PostgresPersistenceRegistration.AddPostgresSchema(services, ConnectionString);
+
+            await using var provider = services.BuildServiceProvider();
+            using var scope = provider.CreateScope();
+            scope.ServiceProvider.GetRequiredService<global::DataBridge.Persistence.IApplicationSchemaInitializer>().Initialize();
+        }
+
+        private async Task WaitForPostgresAsync()
+        {
+            for (var attempt = 0; attempt < 30; attempt++)
+            {
+                try
+                {
+                    await using var connection = new NpgsqlConnection(ConnectionString);
+                    await connection.OpenAsync();
+                    await connection.CloseAsync();
+                    return;
+                }
+                catch
+                {
+                    await Task.Delay(500);
+                }
+            }
+
+            throw new TimeoutException("PostgreSQL container did not become reachable in time.");
+        }
+    }
+
+    private sealed class FixedClock(Instant now) : IClock
+    {
+        public Instant GetCurrentInstant() => now;
+    }
+
+    private sealed class FakeMessageBus : IMessageBus
+    {
+        private readonly Dictionary<string, SubscriptionRegistration> _subscriptions = new(StringComparer.Ordinal);
+
+        public IReadOnlyDictionary<string, SubscriptionRegistration> Subscriptions => _subscriptions;
+
+        public Task PublishAsync<T>(string subject, T message, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task PublishAsync<T>(string subject, T message, MessageHeaders? headers, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task<ISubscription> SubscribeAsync<T>(
+            string subject,
+            Func<IMessageContext<T>, Task> handler,
+            string? queueGroup = null,
+            CancellationToken cancellationToken = default)
+        {
+            var subscription = new FakeSubscription();
+            _subscriptions[subject] = new SubscriptionRegistration(
+                subscription,
+                async message =>
+                {
+                    var context = new FakeMessageContext<T>(subject, (T)message);
+                    await handler(context);
+                    return context.Response;
+                });
+
+            return Task.FromResult<ISubscription>(subscription);
+        }
+
+        public Task<TResponse?> RequestAsync<TRequest, TResponse>(
+            string subject,
+            TRequest request,
+            TimeSpan timeout,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException("Use InvokeAsync in tests.");
+
+        public async Task<TResponse> InvokeAsync<TRequest, TResponse>(string subject, TRequest request)
+        {
+            var subscription = _subscriptions[subject];
+            var response = await subscription.Handler(request!);
+            return (TResponse)response!;
+        }
+
+        public sealed record SubscriptionRegistration(
+            FakeSubscription Subscription,
+            Func<object, Task<object?>> Handler);
+    }
+
+    private sealed class FakeSubscription : ISubscription
+    {
+        public Guid Id { get; } = Guid.NewGuid();
+
+        public Task StopAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class FakeMessageContext<T>(string subject, T message) : IMessageContext<T>
+    {
+        public T Message { get; } = message;
+        public string Subject { get; } = subject;
+        public MessageHeaders Headers { get; } = MessageHeaders.Empty;
+        public string? ReplyTo { get; } = null;
+        public object? Response { get; private set; }
+
+        public Task RespondAsync<TResponse>(TResponse response, CancellationToken cancellationToken = default)
+        {
+            Response = response;
+            return Task.CompletedTask;
+        }
+    }
+}

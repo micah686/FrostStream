@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <NoWarn>NU1901</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="../../Hosting/ServiceDefaults/ServiceDefaults.csproj" />
+      <ProjectReference Include="../../Core/Shared.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <EmbeddedResource Include="LiveChat/Schema/*.sql" />
+    </ItemGroup>
+
+
+    <ItemGroup>
+      <PackageReference Include="ClickHouse.Driver" />
+      <PackageReference Include="Cleipnir.Flows" />
+      <PackageReference Include="FluentStorage" />
+      <PackageReference Include="NodaTime.Serialization.SystemTextJson" />
+      <!-- Version pin, not a code dependency. Npgsql.EntityFrameworkCore.PostgreSQL 10.0.3 asks for
+           EF Relational 10.0.4; this lifts it to match the EF Core 10.0.10 that Shared pins, so the
+           two halves of EF stay on the same patch level. -->
+      <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+      <!-- Version pin, not a code dependency. The Polly.Extensions/Polly.RateLimiting that arrive
+           via ServiceDefaults -> Microsoft.Extensions.Http.Resilience ask for Polly.Core 8.4.2, and
+           FluentStorage.FTP/SFTP ask for 8.4.0; this lifts the whole graph to 8.7.0. No source file
+           in this project uses Polly directly. -->
+      <PackageReference Include="Polly.Core" />
+      <PackageReference Include="Quartz" />
+      <PackageReference Include="RecurPixel.Notify.Sdk" />
+      <PackageReference Include="System.IO.Hashing" />
+
+    </ItemGroup>
+
+<ItemGroup><ProjectReference Include="../../Persistence/Persistence.csproj" /></ItemGroup></Project>

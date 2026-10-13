@@ -1,0 +1,11 @@
+{
+  "scope": "Packaged Full PostgreSQL physical backup + paired OpenBao Raft recovery",
+  "passed": true,
+  "liveChatEnabled": true,
+  "postgresPostBackupMutationRemoved": true,
+  "openBaoPostBackupMutationRemoved": true,
+  "standaloneRestoreUi": true,
+  "restoreUiInternalApiBlocked": true,
+  "applicationReadinessDetectsMissingHandlers": true,
+  "searchRebuildRequestedAfterRestore": true
+}

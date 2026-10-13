@@ -1,0 +1,8 @@
+{
+  "scope": "Packaged Lite fresh install, restart, snapshot + key-ring recovery with retained search volume",
+  "passed": true,
+  "secretValidatedByRecoveryCommand": true,
+  "postSnapshotMutationRemoved": true,
+  "existingDestinationRejected": true,
+  "searchState": "Ready"
+}

@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>FrostStream.Full.Persistence.Postgres</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../Shared/Persistence/Persistence.csproj" />
+    <PackageReference Include="Cleipnir.Flows.PostgresSql" />
+    <PackageReference Include="Npgsql.DependencyInjection" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime" />
+    <PackageReference Include="EFCore.NamingConventions" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Baseline/001-baseline.sql" LogicalName="FrostStream.Postgres.Baseline.sql" />
+  </ItemGroup>
+</Project>

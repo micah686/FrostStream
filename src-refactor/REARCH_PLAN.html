@@ -1,0 +1,664 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="FrostStream Lite and Full architecture review and phased refactor proposal.">
+<title>FrostStream — Architecture Review &amp; Refactor Plan</title>
+<style>
+:root{color-scheme:light;--ink:#17283b;--muted:#586b7e;--paper:#f4f7fa;--card:#fff;--line:#d9e2eb;--accent:#087e8b;--accent-soft:#e6f4f4;--code:#eef3f7;--shadow:0 18px 55px #17324d12}*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:1.5rem}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.72 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}.hero{background:radial-gradient(ellipse at 88% 8%,#2d93a252,transparent 34%),linear-gradient(135deg,#102a43,#173e59 62%,#176b75);color:#f6fbff;padding:4.5rem max(1.4rem,calc((100vw - 1100px)/2)) 3.5rem}.eyebrow{text-transform:uppercase;letter-spacing:.16em;font-size:.75rem;font-weight:750;color:#93e3dc}.hero h1{font-size:clamp(2.2rem,5vw,4.2rem);line-height:1.08;letter-spacing:-.045em;max-width:850px;margin:.8rem 0 1.2rem}.hero p{max-width:760px;color:#d3e5ef;font-size:1.06rem;margin:0}.meta{display:flex;flex-wrap:wrap;gap:.6rem;margin-top:1.7rem}.meta span{border:1px solid #ffffff42;background:#ffffff12;border-radius:999px;padding:.35rem .75rem;font-size:.8rem}.layout{max-width:1200px;margin:2.5rem auto;padding:0 1.25rem;display:grid;grid-template-columns:250px minmax(0,1fr);gap:2rem;align-items:start}.toc{position:sticky;top:1.25rem;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:1.15rem;box-shadow:var(--shadow);max-height:calc(100vh - 2.5rem);overflow:auto}.toc h2{font-size:.75rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin:0 0 .7rem}.toc a{display:flex;gap:.65rem;text-decoration:none;color:#40576b;font-size:.82rem;line-height:1.35;padding:.45rem .3rem;border-radius:6px}.toc a:hover{background:var(--accent-soft);color:var(--accent)}.toc a span{font-variant-numeric:tabular-nums;color:var(--accent);font-weight:750}.document{min-width:0;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:clamp(1.3rem,4vw,3.25rem);box-shadow:var(--shadow)}.document h1{font-size:1.35rem;color:var(--muted);margin:0 0 1.5rem}.document h2{margin:3.25rem 0 1rem;padding-top:1.3rem;border-top:1px solid var(--line);font-size:1.7rem;line-height:1.25;letter-spacing:-.025em}.document h2:first-of-type{margin-top:0}.document h3{font-size:1.18rem;margin:2rem 0 .6rem}.document p,.document li{color:#354b60}.document strong{color:#1b3348}.document a{color:#087e8b;text-underline-offset:3px}.document blockquote{margin:1.2rem 0;padding:.8rem 1.1rem;border-left:4px solid var(--accent);background:var(--accent-soft);border-radius:0 8px 8px 0}.document blockquote p{margin:.25rem 0}.document table{width:100%;border-collapse:collapse;display:block;overflow-x:auto;margin:1.3rem 0;font-size:.9rem}.document th,.document td{text-align:left;vertical-align:top;padding:.7rem .8rem;border:1px solid var(--line);min-width:115px}.document th{background:#edf4f7;color:#20394e}.document tr:nth-child(even) td{background:#fafcfd}.document code{font: .88em ui-monospace,SFMono-Regular,Consolas,monospace;background:var(--code);padding:.12em .34em;border-radius:4px;overflow-wrap:anywhere}.document pre{overflow:auto;background:#14283b;color:#e4f1f7;padding:1rem 1.15rem;border-radius:9px;line-height:1.55}.document pre code{background:none;padding:0;color:inherit;overflow-wrap:normal}.document hr{border:0;border-top:1px solid var(--line);margin:2rem 0}.footer{max-width:1200px;margin:0 auto 2rem;padding:0 1.25rem;color:var(--muted);font-size:.8rem}.backtop{position:fixed;right:1.25rem;bottom:1.25rem;border-radius:999px;background:#173e59;color:white!important;text-decoration:none;padding:.65rem .9rem;box-shadow:var(--shadow);font-size:.8rem}@media(max-width:850px){.layout{grid-template-columns:1fr;margin:1.2rem auto}.toc{position:static;max-height:none}.toc nav{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:.1rem}.hero{padding-top:3rem;padding-bottom:2.6rem}}@media(max-width:520px){body{font-size:15px}.document{padding:1.1rem;border-radius:10px}.hero{padding-left:1.15rem;padding-right:1.15rem}.layout{padding:0 .7rem}.document h2{font-size:1.45rem}.backtop{right:.7rem;bottom:.7rem}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}@media print{body{background:white;color:black;font-size:10pt}.hero{background:white;color:black;padding:0 0 1rem;border-bottom:2px solid #176b75}.hero p{color:#333}.eyebrow{color:#176b75}.meta span{border-color:#aaa;color:#333;background:none}.layout{display:block;max-width:none;margin:0;padding:0}.toc,.backtop{display:none}.document{box-shadow:none;border:0;padding:0}.document h2{break-after:avoid}.document table,.document pre{break-inside:avoid}.document a{color:inherit;text-decoration:underline}.footer{display:none}}
+</style>
+</head>
+<body id="top">
+<header class="hero"><div class="eyebrow">FrostStream · Architecture</div><h1>Architecture review &amp; phased refactor plan</h1><p>A practical path to a shared application core with distinct Lite and Full deployment compositions—preserving existing product behavior and avoiding a rewrite.</p><div class="meta"><span>Proposal</span><span>Reviewed 2026-10-10</span><span>10 sections</span></div></header>
+<div class="layout"><aside class="toc" aria-label="Table of contents"><h2>In this plan</h2><nav><a href="#section-1"><span>01</span>Recommendation</a>
+<a href="#section-2"><span>02</span>Current architecture review</a>
+<a href="#section-3"><span>03</span>Target projects and dependency rules</a>
+<a href="#section-4"><span>04</span>Deployment and data ownership</a>
+<a href="#section-5"><span>05</span>Embedded search and the common search boundary</a>
+<a href="#section-6"><span>06</span>Local runtime, persistence, and lifecycle</a>
+<a href="#section-7"><span>07</span>Identity, API behavior, and capabilities</a>
+<a href="#section-8"><span>08</span>Implementation phases</a>
+<a href="#section-9"><span>09</span>Verification strategy and acceptance gates</a>
+<a href="#section-10"><span>10</span>Completion criteria and implementation discipline</a></nav></aside><main class="document"><h1>FrostStream Architecture Review and Phased Refactor</h1>
+<p>Status: <strong>Architecture proposal. The application refactor described here is not implemented by creating this document.</strong></p>
+<p>Reviewed: 2026-10-10. Audience: engineers implementing the Lite and Full deployments.</p>
+<h2 id="section-1">1. Recommendation</h2>
+<p>Keep one implementation of FrostStream&#39;s application features, organized into reusable class-library modules. Compose those modules into one Lite backend process or several Full service processes through separate, thin executable hosts.</p>
+<p>The current application already has much of the required behavior. Retain its controllers, repositories, workflows, media processing, storage integrations, and frontend. Refactor the boundaries around them: process startup, infrastructure registration, search, authentication, persistence providers, and durable work.</p>
+<p>The desired shared base is a set of focused libraries, not a new catch-all <code>Shared</code> project. Lite and Full are deployment compositions, not forks of the product. Full still needs multiple executable hosts even though it is one edition.</p>
+<p>The immediate deliverable is this repository-root <code>REARCH_PLAN.MD</code>. Each implementation phase below is subsequent work that can be undertaken separately.</p>
+<h3>Confirmed requirements</h3>
+<table>
+<thead>
+<tr>
+<th>Decision</th>
+<th>Target</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Installation compatibility</td>
+<td>Fresh installations only. No existing data, account, or configuration migration is required. Breaking changes are acceptable.</td>
+</tr>
+<tr>
+<td>Refactor scope</td>
+<td>Reuse application behavior and code; avoid an application or frontend rewrite.</td>
+</tr>
+<tr>
+<td>Lite hardware</td>
+<td>An 8 GB laptop, with conservative background-work defaults.</td>
+</tr>
+<tr>
+<td>Lite backend</td>
+<td>One .NET application containing API, DataBridge, Worker, MediaProcessor, and Scheduler functionality.</td>
+</tr>
+<tr>
+<td>Lite supporting containers</td>
+<td>Separate frontend, POT provider, and optional ClickHouse. SQLite and Lucene are embedded, not containers.</td>
+</tr>
+<tr>
+<td>Lite identity</td>
+<td>One local Admin identity; no multiple accounts, registration, external login, or account switching.</td>
+</tr>
+<tr>
+<td>Lite network exposure</td>
+<td>Published frontend bound to loopback by default; trusted-LAN access requires an explicit opt-in.</td>
+</tr>
+<tr>
+<td>Full identity</td>
+<td>Authentik-based multi-user authentication only, with OpenFGA authorization. Remove Full single-user mode.</td>
+</tr>
+<tr>
+<td>Full infrastructure</td>
+<td>Preserve Typesense, NATS, PostgreSQL, OpenBao, Authentik, OpenFGA, BackupService, and separate application services.</td>
+</tr>
+<tr>
+<td>Lite search</td>
+<td>Embedded Lucene.Net with a separate rebuildable index directory.</td>
+</tr>
+<tr>
+<td>Search parity</td>
+<td>Same user-facing search capabilities; provider-specific relevance ranking may differ.</td>
+</tr>
+<tr>
+<td>Phase cutovers</td>
+<td>Short maintenance windows and recreating development/test databases are acceptable.</td>
+</tr>
+</tbody></table>
+<p>The separate Lucene directory supersedes the initial suggestion of a second SQLite search database. Search remains physically separate from authoritative application data without introducing a second database or a custom Lucene storage layer.</p>
+<h3>Non-goals</h3>
+<ul>
+<li>Rewriting the Svelte frontend, every controller, or every repository.</li>
+<li>Replacing EF Core, the workflow engine, yt-dlp, FFmpeg, or existing storage integrations as part of this refactor.</li>
+<li>Adding another broker, more production microservices, event sourcing, or a generic repository framework.</li>
+<li>Converting existing installations, preserving old configuration aliases, or supporting mixed-version rolling upgrades.</li>
+<li>Claiming that search performance or memory use has improved before measurement.</li>
+</ul>
+<h2 id="section-2">2. Current architecture review</h2>
+<p>These findings come from static inspection of the current repository. They are not load-test results or evidence that every listed risk is an observed production failure.</p>
+<h3>What is already useful</h3>
+<ul>
+<li>Lite already has its own executable and Aspire AppHost, and combines the same application modules used by Full.</li>
+<li>Application contracts separate request/event dispatch and durable jobs from their implementations.</li>
+<li>Local dispatch, SQLite workflows, SQLite durable transport, encrypted local secrets, and SQLite recovery already exist.</li>
+<li>Repository operations already have explicit PostgreSQL and SQLite variants.</li>
+<li>The frontend already consumes a capabilities endpoint and shares its pages between editions.</li>
+<li>Runtime tests already exercise real Lite persistence, indexing, media processing, and interrupted-job behavior.</li>
+</ul>
+<p>These are foundations to retain, not systems to replace wholesale.</p>
+<h3>Findings and recommended corrections</h3>
+<table>
+<thead>
+<tr>
+<th>Priority</th>
+<th>Finding and evidence</th>
+<th>Consequence</th>
+<th>Correction</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>High</td>
+<td><a href="src/App/LiteApp/Lite/Lite.csproj">Lite.csproj</a> references the executable service projects and removes competing appsettings during build/publish.</td>
+<td>Reusable functionality and process packaging are coupled.</td>
+<td>Extract class libraries and give each executable ownership of its own settings and entry point.</td>
+</tr>
+<tr>
+<td>High</td>
+<td><a href="src/App/SharedApp/Shared/Shared.csproj">Shared.csproj</a> includes Conduit.NATS and VaultSharp; DataBridge carries both database providers and Typesense.</td>
+<td>Runtime registration suppression does not provide dependency isolation for Lite.</td>
+<td>Move provider implementations and SDK dependencies into infrastructure projects.</td>
+</tr>
+<tr>
+<td>High</td>
+<td><a href="src/App/LiteApp/Lite/LiteModule.cs">LiteModule.cs</a> removes/reinserts scheduler services; <a href="src/App/LiteApp/Lite/LiteStartupServices.cs">LiteStartupServices.cs</a> initializes schema in a constructor.</td>
+<td>Correctness depends on DI registration and construction order.</td>
+<td>Introduce explicit initialization and readiness stages; keep constructors free of I/O.</td>
+</tr>
+<tr>
+<td>High</td>
+<td><a href="src/App/SharedApp/Shared/Deployment/ModuleRegistration.cs">ModuleRegistration.cs</a> suppresses NATS registration through markers while individual modules still configure NATS.</td>
+<td>Modules choose process infrastructure that should belong to hosts.</td>
+<td>Select providers once in the composition root, then register modules against those interfaces.</td>
+</tr>
+<tr>
+<td>High</td>
+<td><a href="src/App/SharedApp/DataBridge/Search/MetadataListConsumerService.cs">MetadataListConsumerService.cs</a>, unified search, captions, and other consumers directly use Typesense.</td>
+<td>Replacing only <code>/api/search</code> would leave Lite library browsing dependent on Typesense.</td>
+<td>Introduce a search boundary covering all search-backed surfaces.</td>
+</tr>
+<tr>
+<td>High</td>
+<td><a href="src/App/SharedApp/DataBridge/Search/AdvancedQueryParser.cs">AdvancedQueryParser.cs</a> emits Typesense filter clauses.</td>
+<td>User query parsing cannot be reused by a different search engine cleanly.</td>
+<td>Parse into a typed query model and translate separately per provider.</td>
+</tr>
+<tr>
+<td>High</td>
+<td><a href="src/App/SharedApp/DataBridge/Search/TypesenseSyncConsumerService.cs">TypesenseSyncConsumerService.cs</a> consumes transient messages and logs indexing errors without durable retry.</td>
+<td>A committed record change can be missing from the index until another update or rebuild.</td>
+<td>Persist indexing intent with the record mutation and retry idempotently.</td>
+</tr>
+<tr>
+<td>High</td>
+<td><a href="src/App/SharedApp/DataBridge/Messaging/SqliteDurableTransport.cs">SqliteDurableTransport.cs</a> polls every 100 ms, materializes candidate messages before subject filtering, and enters a write transaction to discover work. No pruning path was found for its message/inbox tables.</td>
+<td>Idle consumers and growing history can add avoidable SQLite contention, allocations, and disk growth.</td>
+<td>Bounded route-aware claims, wake-up signals, backoff, and explicit retention.</td>
+</tr>
+<tr>
+<td>Medium</td>
+<td><a href="src/App/SharedApp/Shared/Auth/AuthMode.cs">AuthMode.cs</a> permits Full single-user mode through flags.</td>
+<td>There are more identity modes than the requested product supports.</td>
+<td>Make edition identity behavior explicit and reject obsolete Full single-user settings.</td>
+</tr>
+<tr>
+<td>Medium</td>
+<td><a href="src/App/SharedApp/DataBridge/Persistence/PersistenceRegistration.cs">PersistenceRegistration.cs</a> also registers secrets, backups, staged storage, durable transport, and workflows.</td>
+<td>A persistence registration method owns unrelated runtime responsibilities.</td>
+<td>Split registrations by responsibility and compose them in the host.</td>
+</tr>
+<tr>
+<td>Medium</td>
+<td><a href="src/App/SharedApp/DataBridge/Search/MetadataRebuildCoordinator.cs">MetadataRebuildCoordinator.cs</a> recreates active collections before repopulating them.</td>
+<td>Rebuild failures can leave search unavailable or incomplete.</td>
+<td>Build replacement generations and activate only after validation/catch-up.</td>
+</tr>
+</tbody></table>
+<p>The highest-value work is improving composition, search independence, reliable index maintenance, and the Lite queue. A large directory rename without these changes would provide little architectural benefit.</p>
+<h2 id="section-3">3. Target projects and dependency rules</h2>
+<h3>Logical layout</h3>
+<pre><code class="language-text">Shared/
+  Contracts/
+  Core/
+  Persistence/
+  Integrations/
+  Modules/
+    Api/
+    DataBridge/
+    Worker/
+    MediaProcessor/
+    Scheduler/
+
+Lite/
+  Infrastructure/
+  Backend/
+  AppHost/
+
+Full/
+  Infrastructure/
+  Security/
+  Hosts/
+    WebAPI/
+    DataBridge/
+    Worker/
+    MediaProcessor/
+    Scheduler/
+    BackupService/
+  AppHost/
+
+Frontend/
+</code></pre>
+<p>This is the target logical structure, not a requirement to move every file in the first phase. Convert existing projects where possible. Keep namespaces and assembly/resource identities stable during mechanical extraction when it reduces unrelated compiler and test churn; rename only after the new boundaries work.</p>
+<h3>Responsibilities</h3>
+<table>
+<thead>
+<tr>
+<th>Project/group</th>
+<th>Owns</th>
+<th>Must not own</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Contracts</td>
+<td>Request/reply messages, DTOs, events, infrastructure ports, and provider-independent job route definitions.</td>
+<td>Host configuration, vendor clients, concrete repositories, DI provider selection.</td>
+</tr>
+<tr>
+<td>Core</td>
+<td>Shared application concepts, validation, policies, and value types.</td>
+<td>A grab bag of adapters, deployment flags, or service startup.</td>
+</tr>
+<tr>
+<td>Persistence</td>
+<td>Shared EF model/configuration, repositories, database operations, and provider extension points.</td>
+<td>Concrete PostgreSQL/SQLite connection setup, external infrastructure, or edition selection.</td>
+</tr>
+<tr>
+<td>Integrations</td>
+<td>Reusable media-tool and storage implementations, plus configured optional live-chat integration.</td>
+<td>Full identity/security or process composition.</td>
+</tr>
+<tr>
+<td>Modules</td>
+<td>Existing feature behavior and handlers organized by current service responsibility.</td>
+<td>Selecting a database, transport, search engine, or authentication edition.</td>
+</tr>
+<tr>
+<td>Lite.Infrastructure</td>
+<td>SQLite provider and workflows, local dispatcher/queue, local secrets, snapshots, local identity, and Lucene.</td>
+<td>Full-only SDKs or contacting removed services.</td>
+</tr>
+<tr>
+<td>Full.Infrastructure</td>
+<td>PostgreSQL, NATS, Typesense, OpenBao, remote service clients, and backup integration.</td>
+<td>Registering every Full dependency for every process indiscriminately.</td>
+</tr>
+<tr>
+<td>Full.Security</td>
+<td>Authentik/BFF/OpenFGA implementation and Full-only account/access-management endpoints.</td>
+<td>Lite identity or authentication fallbacks.</td>
+</tr>
+<tr>
+<td>Hosts/AppHosts</td>
+<td>Entry points, options binding, provider registration, lifecycle, endpoints, health, and deployment wiring.</td>
+<td>Business rules or duplicate implementations of application features.</td>
+</tr>
+<tr>
+<td>Frontend</td>
+<td>One UI using stable application APIs and capabilities.</td>
+<td>Direct access to infrastructure or inferring providers from session mode.</td>
+</tr>
+</tbody></table>
+<p>Maintain a small number of projects aligned with actual dependency boundaries. An adapter family can start as a folder inside its infrastructure project. Extract another project when it is necessary to prevent a forbidden transitive dependency or support independent composition, not merely because a class has an interface.</p>
+<h3>Allowed dependency direction</h3>
+<ul>
+<li>Hosts reference modules and the required infrastructure/integrations.</li>
+<li>Modules use Contracts/Core, plus shared Persistence where existing data operations belong.</li>
+<li>Infrastructure implements ports declared in shared contracts or module boundaries; modules never reference those implementations.</li>
+<li>Integrations implement ports; hosts register them. Do not create a cycle by making a module reference an integration that references that same module.</li>
+<li>Contracts/Core have no references to executable projects or vendor infrastructure SDKs.</li>
+<li>No executable references another executable.</li>
+<li>Full.Security is used by the Full WebAPI host only; other Full services receive trusted request context through application contracts.</li>
+<li>Provider-neutral Persistence must not require Npgsql, SQLite, Typesense, NATS, or VaultSharp to compile. Move provider model configuration and dialect selection behind explicit extensions.</li>
+<li>Lite&#39;s final transitive dependency graph excludes NATS, PostgreSQL, Typesense, VaultSharp, Authentik, and OpenFGA implementations.</li>
+</ul>
+<p>Keep the shared EF context and operation-specific repositories. There is no need to redesign every entity into a new domain model or replace explicit SQL with a generic abstraction. Database entities/configuration move into Persistence; shared message DTOs should not expose EF tracking or provider types.</p>
+<h3>Transitional dependency exception</h3>
+<p>Before embedded search is ready, both editions may continue using Typesense behind the new search interface. Keep that adapter in an isolated library so temporarily referencing it from Lite does not pull in the entire Full infrastructure/security graph. Record this as the single temporary search dependency exception and remove it during Phase 5. The final architecture has no Lite Typesense dependency.</p>
+<h2 id="section-4">4. Deployment and data ownership</h2>
+<table>
+<thead>
+<tr>
+<th>Responsibility</th>
+<th>Lite</th>
+<th>Full</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>API/data/workers/media/scheduling</td>
+<td>One backend process</td>
+<td>Separate service processes</td>
+</tr>
+<tr>
+<td>Frontend</td>
+<td>Separate container</td>
+<td>Separate container</td>
+</tr>
+<tr>
+<td>Application database</td>
+<td>SQLite file</td>
+<td>PostgreSQL</td>
+</tr>
+<tr>
+<td>Request/reply</td>
+<td>In-process dispatcher</td>
+<td>NATS</td>
+</tr>
+<tr>
+<td>Transient events</td>
+<td>Bounded in-process dispatch</td>
+<td>NATS core messaging</td>
+</tr>
+<tr>
+<td>Durable work</td>
+<td>SQLite queue and workflow store</td>
+<td>JetStream and PostgreSQL workflow store</td>
+</tr>
+<tr>
+<td>Search</td>
+<td>Embedded Lucene index</td>
+<td>Typesense</td>
+</tr>
+<tr>
+<td>Secrets</td>
+<td>Encrypted local values and persistent key ring</td>
+<td>OpenBao</td>
+</tr>
+<tr>
+<td>Account authentication</td>
+<td>Fixed local Admin</td>
+<td>Authentik</td>
+</tr>
+<tr>
+<td>Authorization</td>
+<td>Local Admin policy</td>
+<td>OpenFGA</td>
+</tr>
+<tr>
+<td>Backups</td>
+<td>In-process SQLite recovery sets</td>
+<td>BackupService/pgBackRest with vault pairing</td>
+</tr>
+<tr>
+<td>POT provider</td>
+<td>Container</td>
+<td>Container</td>
+</tr>
+<tr>
+<td>Live-chat archive</td>
+<td>Optional ClickHouse</td>
+<td>Optional ClickHouse</td>
+</tr>
+</tbody></table>
+<p>Lite normally has three containers: backend, frontend, and POT provider. Enabling live-chat archival adds ClickHouse. SQLite and Lucene run inside the backend and use persistent storage; they are not additional services.</p>
+<p>The POT provider remains part of the YouTube acquisition integration. Cookie profiles and their secrets remain owned by the application secret-store path rather than being conflated with the POT provider.</p>
+<h3>Full service responsibilities</h3>
+<ul>
+<li>WebAPI owns the HTTP boundary, browser sessions, authentication/authorization, and frontend event connections.</li>
+<li>DataBridge owns application records, orchestration, repository mutations, and search projection coordination.</li>
+<li>Worker owns acquisition/import execution and worker-local storage access.</li>
+<li>MediaProcessor owns encoding and media-derived artifacts.</li>
+<li>Scheduler owns scheduling triggers; it invokes application operations through contracts.</li>
+<li>BackupService remains an independently reachable recovery service, including when the rest of Full is stopped.</li>
+</ul>
+<p>Retain one DataBridge/control-plane instance initially and preserve independent Worker/MediaProcessor scaling. Do not add direct database access to other services just because Lite co-locates them. Lite composes the same responsibility boundaries in one process.</p>
+<h3>Lite storage layout</h3>
+<table>
+<thead>
+<tr>
+<th>Location</th>
+<th>Contents</th>
+<th>Recovery classification</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/data/froststream.db</code></td>
+<td>Application records, workflow/queue state, encrypted secret values, and pending-index work.</td>
+<td>Authoritative; include in application snapshots.</td>
+</tr>
+<tr>
+<td><code>/data/keys/</code></td>
+<td>Complete persistent encryption key ring.</td>
+<td>Required with encrypted data; retain all needed keys.</td>
+</tr>
+<tr>
+<td><code>/data/backups/</code></td>
+<td>Snapshot recovery sets and manifests.</td>
+<td>Recovery artifacts.</td>
+</tr>
+<tr>
+<td><code>/search/</code></td>
+<td>Lucene index generations, schema metadata, and derived checkpoints.</td>
+<td>Rebuildable; separate volume/mount from authoritative data.</td>
+</tr>
+<tr>
+<td>Configured media storage</td>
+<td>Downloaded/imported media and retained source sidecars.</td>
+<td>Authoritative media; separate backup policy.</td>
+</tr>
+<tr>
+<td>Configured incoming/temp roots</td>
+<td>Import input and bounded processing scratch space.</td>
+<td>Classify retained input separately from disposable scratch files.</td>
+</tr>
+</tbody></table>
+<p>Do not create a second SQLite database just for authoritative queue/workflow state. Keeping authoritative state together supports consistent recovery and transactional writes. It does not automatically make independently opened transactions atomic; operations that must commit together must explicitly share the transaction.</p>
+<p>Search can be deleted and rebuilt from application records and retained source files. It is excluded from mandatory snapshots. Database backups do not imply that media bytes or ClickHouse archives are included; their backup responsibilities must be documented separately.</p>
+<h2 id="section-5">5. Embedded search and the common search boundary</h2>
+<h3>Engine choice</h3>
+<p>Use Lucene.Net directly behind FrostStream interfaces for the initial Lite implementation. This gives explicit control of query translation, buffering, commit completion, backpressure, and rebuild activation. Examine is a reasonable alternative wrapper, but is not needed in the initial design and will not be added as a second parallel abstraction.</p>
+<p>Examine wraps Lucene.Net and documents asynchronous indexing behavior; Lucene&#39;s normal filesystem directory and writer APIs provide the storage/lifecycle required here. Keep both libraries&#39; types out of application contracts. <a href="https://shazwazza.github.io/Examine/">Examine overview</a>, <a href="https://shazwazza.github.io/Examine/articles/indexing.html">Examine indexing</a>, <a href="https://lucenenet.apache.org/docs/4.8.0-beta00017/api/core/Lucene.Net.Store.FSDirectory.html">Lucene filesystem directory</a>, <a href="https://lucenenet.apache.org/docs/4.8.0-beta00017/api/core/Lucene.Net.Index.IndexWriter.html">Lucene writer</a>.</p>
+<p>Lucene.Net&#39;s published line uses prerelease version labels. Pin a verified compatible package set, including required analysis/query/highlighting packages, and run .NET 10/Linux architecture checks before integrating it. Do not infer production suitability or performance solely from the package label. <a href="https://lucenenet.apache.org/">Apache Lucene.Net project</a>.</p>
+<p>SQLite FTS5 was considered because it offers a separate SQLite full-text database, but the selected requirement is richer embedded Lucene search with feature parity. No FTS5 fallback, custom SQLite-backed Lucene Directory, or extra search database is planned. <a href="https://www.sqlite.org/fts5.html">SQLite FTS5</a>.</p>
+<h3>Application-facing interfaces</h3>
+<table>
+<thead>
+<tr>
+<th>Interface/type</th>
+<th>Responsibility</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>ISearchQueryService</code></td>
+<td>Browse/filter/sort media, search text/content, suggestions, and related-media results.</td>
+</tr>
+<tr>
+<td><code>ISearchIndexWriter</code></td>
+<td>Idempotent replace/upsert/delete and explicit durable completion for a batch.</td>
+</tr>
+<tr>
+<td><code>ISearchProjectionSource</code></td>
+<td>Read authoritative index documents in bounded batches, including retained caption/comment content.</td>
+</tr>
+<tr>
+<td><code>ISearchMaintenance</code></td>
+<td>Status, schema/generation validation, rebuild progress, and activation.</td>
+</tr>
+<tr>
+<td>Typed search query</td>
+<td>Free text, recognized filters, scope, sorting, and pagination independent of backend syntax.</td>
+</tr>
+</tbody></table>
+<p>Keep existing HTTP endpoints/DTOs when their shape remains useful. A clean internal interface does not require changing every frontend call. Add operational search state only where needed for the UI to explain unavailable/rebuilding search.</p>
+<p>Parse the current advanced-search syntax into typed filters. Provider translators generate Typesense filters or Lucene queries; raw Typesense filter strings no longer leave its adapter. Preserve quoted values, aliases, range/date operators, and documented treatment of unknown tokens. Use parameter/typed query construction rather than string concatenation of unchecked user input.</p>
+<h3>Parity contract</h3>
+<p>Both providers must support:</p>
+<ul>
+<li>Library and channel media browsing, filters, sorting, and paging.</li>
+<li>Search over current metadata fields and advanced operators.</li>
+<li>Caption/subtitle and comment matches that identify their parent media and match reason.</li>
+<li>Applicable owner-scoped private-note matches.</li>
+<li>Suggestions, related/similar media, and supported result snippets/highlights.</li>
+<li>Correct scoping, deduplication, missing/deleted records, and stable secondary ordering for pagination.</li>
+</ul>
+<p>The common query layer defines response semantics. Provider-specific relevance scores/order may differ; authorization, filters, supported scopes, and paging must not silently change. Characterize existing behavior and distinguish intentional fixes from accidental regressions rather than reproducing every current implementation quirk.</p>
+<p>Authorization remains authoritative outside the search index. Trusted request identity is supplied by the API boundary. Private content must not leak through hits, snippets, counts, or suggestions; an index hit is never proof that the caller may read the object. Full account/permission tests must exercise the actual response, including totals.</p>
+<h3>Reliable index updates</h3>
+<ol>
+<li>Persist indexing intent in the same database transaction as the application mutation it describes.</li>
+<li>Track/coalesce pending work by entity and desired revision. Capture enough identity for deletions after the source row is gone.</li>
+<li>A bounded worker loads current authoritative content and idempotently replaces or removes its indexed representation.</li>
+<li>Confirm the provider&#39;s durable completion before marking that revision applied. Queue acceptance or an in-memory refresh is insufficient.</li>
+<li>Acknowledge only the revision processed; a newer mutation arriving during indexing must remain pending.</li>
+<li>Retry failures with bounded backoff and expose persistent failures. Duplicate execution after a crash must be harmless.</li>
+</ol>
+<p>Retain deletion intent until all affected media/comment/caption index documents are removed. Do not mark work complete just because an HTTP response or transient event was sent. Full may signal workers through NATS, but the authoritative pending-work record prevents a lost signal from losing an update.</p>
+<h3>Index lifecycle and rebuilds</h3>
+<ul>
+<li>Use one writer owner per Lite index and bounded batches. Share readers/searchers according to the library lifecycle rather than opening a writer per request.</li>
+<li>Build a replacement generation without clearing the currently valid generation.</li>
+<li>Record mutations during the build and catch them up before activation. Use a short write barrier at the end to establish a consistent activation point; maintenance windows are permitted.</li>
+<li>Activate the validated generation atomically and retain the previous generation until the replacement is confirmed usable.</li>
+<li>A failed/canceled rebuild retains the old usable generation. Incomplete new generations are disposable.</li>
+<li>Missing/corrupt/incompatible indexes trigger a rebuild from authoritative records and sidecars.</li>
+<li>Restore invalidates derived search state; rebuild or validate it before declaring search ready.</li>
+<li>Distinguish capabilities from health: search remains a supported feature while its status is <code>building</code>, <code>ready</code>, <code>degraded</code>, or <code>failed</code>.</li>
+</ul>
+<p>Non-search application operations should remain available during index rebuild. Search-dependent library pages must explicitly show rebuilding/degraded state, not pretend that an empty or partial index is an empty collection. Existing valid search may continue during replacement builds.</p>
+<h2 id="section-6">6. Local runtime, persistence, and lifecycle</h2>
+<h3>Persistence extraction</h3>
+<p>Preserve the shared EF model, repository operations, and explicit provider SQL. Move concrete connection factories, schema setup, provider mappings, migrations, and transaction-specific behavior into the appropriate infrastructure implementation.</p>
+<p>Introduce narrow provider extension points for model configuration, operation SQL, connections, and mutation execution where needed. Avoid inventing a universal database abstraction. Shared feature code may continue using EF/repository APIs; it must stop choosing a provider based on deployment flags.</p>
+<p>Fresh-install schema baselines can be consolidated after extraction. Keep schema changes separate from host moves and search cutover so failures remain attributable. No old-schema compatibility layer or account ownership conversion is needed.</p>
+<h3>SQLite durable work</h3>
+<p>Retain existing durable-job and workflow semantics initially. Replace the queue&#39;s expensive work-discovery behavior behind its interface:</p>
+<ul>
+<li>Represent known routes/consumer deliveries so pending-work selection can use indexed predicates instead of loading all messages and filtering them in managed memory.</li>
+<li>Claim only a bounded batch in a short transaction; run handlers outside that transaction.</li>
+<li>Use local wake-up signals for new work and a bounded fallback poll for delayed retries/expired leases. Back off when idle.</li>
+<li>Keep explicit leases, lease renewal, acknowledgment, deduplication, and retry limits.</li>
+<li>Record terminal failures and expose them for inspection/retry rather than retrying poison messages forever.</li>
+<li>Delete completed delivery records only after all required consumers have finished. Keep deduplication markers for at least the maximum supported retry/redelivery period; retention must never remove active work.</li>
+<li>Keep application job history separate from transport retention so pruning queue rows does not erase user-facing history.</li>
+</ul>
+<p>The provider implementation must preserve current startup reconciliation and explicit retry semantics. An interrupted download must not unexpectedly become an automatically resumed download as a side effect of changing transport.</p>
+<p>Use SQLite WAL and bounded write transactions on appropriate local storage. WAL improves read/write coexistence but does not provide multiple simultaneous writers; resource control is still required. <a href="https://www.sqlite.org/wal.html">SQLite WAL documentation</a>.</p>
+<h3>Explicit initialization</h3>
+<p>Hosts own a deterministic sequence:</p>
+<ol>
+<li>Validate edition configuration, paths, permissions, and required dependencies.</li>
+<li>Initialize application schema and workflow storage before resolving components that use them.</li>
+<li>Establish local identity where applicable and reconcile interrupted work.</li>
+<li>Register application request/event handlers and await handler readiness.</li>
+<li>Open the valid search generation or start a bounded rebuild with an explicit status.</li>
+<li>Release durable execution and hydrate/start scheduling.</li>
+<li>Report application readiness; expose search/integration status separately.</li>
+</ol>
+<p>Keep constructors and DI registration free of schema writes, network calls, and process-lifetime changes. Prevent workflow watchdogs/consumers from running before reconciliation. Hosted-service startup must not deadlock waiting for a later service to release a gate; the host&#39;s coordinator owns stage progression.</p>
+<p>Shutdown stops new work, cancels/drains bounded execution, preserves retryable work, commits acknowledged index work, and disposes readers/writers/connections. The host, not Worker or MediaProcessor modules, selects process lifetime.</p>
+<h3>Laptop defaults and measurement</h3>
+<p>Initial defaults are one concurrent transcode, two concurrent downloads, one bounded index writer, bounded caches/batches, and lower-priority maintenance indexing during heavy media work. Make limits configurable without changing edition identity or adding Full infrastructure.</p>
+<p>Bind the frontend&#39;s published port to loopback by default. Backend/POT/optional ClickHouse remain on the private deployment network. Trusted-LAN opt-in must state that every reachable client has the same Lite Admin privileges; it does not enable an account system.</p>
+<p>Measure, rather than promise, laptop performance. Use a fixed reference workload with 10,000 media records, 100,000 caption documents, and 250,000 comments, plus generated media for actual processing. Record corpus byte sizes, hardware, index size, and warm/cold state so results are reproducible. This is a benchmark fixture, not a product library-size limit.</p>
+<p>Measure fresh/steady startup, idle CPU and database activity, search latency, full/incremental indexing, playback, and combined download/transcode/index workloads. Include FFmpeg child processes, container memory, and filesystem cache. Track optional ClickHouse separately. Phase 0 establishes measured thresholds and Phase 5 must demonstrate stable operation on an 8 GB machine without unbounded growth or out-of-memory failures.</p>
+<h2 id="section-7">7. Identity, API behavior, and capabilities</h2>
+<h3>Lite</h3>
+<p>Keep a stable internal owner identity so playlists, notes, preferences, and other user-scoped features can reuse shared code. This internal identity is not a user-management feature. No registration, external login, sign-out, account switching, or access-management routes are exposed as supported Lite operations.</p>
+<p>Local identity and authorization are installed explicitly by the Lite host. Avoid generic configuration that could accidentally enable a Full login flow or provision OpenFGA. Shared endpoints ask the selected authorization implementation instead of embedding edition branches.</p>
+<h3>Full</h3>
+<p>Remove <code>SINGLE_USER_MODE</code> and <code>Auth:SingleUserMode</code> as supported Full behavior. Reject obsolete flags with a clear configuration error rather than silently downgrading authentication. Missing required Authentik/OpenFGA configuration fails startup.</p>
+<p>Authentik is the account authentication authority. Preserve BFF browser login/session behavior and Authentik-issued bearer credentials as needed. Existing scoped cast/podcast delivery tokens remain delegation mechanisms for specific resources, not alternate account systems. Keep their issuer, scope, and permission checks separate from user login.</p>
+<p>Full.Security owns account/access-management endpoints and implementations. Registration in the Full API host is explicit; Lite does not load this assembly. Tests may use controlled identities internally, but production Full composition must not expose a single-user/test-auth bypass.</p>
+<h3>Frontend and public capabilities</h3>
+<p>Use one frontend build. Hosts derive capabilities from the actual registered edition/providers, including supported backup operations and optional integrations. Do not infer Lite from a session mode or server URL.</p>
+<p>Retain current routes and DTOs where practical to minimize frontend changes. Add provider-neutral search features/provider identity and operational status only where useful to display correct UI. Full-only administration follows capabilities; server-side authorization remains mandatory regardless of hidden controls.</p>
+<h2 id="section-8">8. Implementation phases</h2>
+<p>Every phase ends with clean-install configurations and a passing regression checkpoint. Phase completion means its behavior and exit gates work, not just that files have moved. Break each phase into reviewable changes; separate mechanical extraction from behavior changes.</p>
+<p>Rollback for this fresh-install effort means reverting the phase and recreating owned development/test state. There is no promise of binary or database compatibility with previous phases. Maintenance windows are acceptable; do not build rolling-upgrade infrastructure for this project.</p>
+<h3>Phase 0 — Baseline, contracts, and verification</h3>
+<p><strong>Work:</strong> Capture current service/dependency graphs, important workflows, API/search behavior, and resource measurements. Establish repeatable clean Lite/Full installations and critical characterization tests. Update the testing strategy for the new target: Full single-user becomes rejection coverage; Lite Lucene replaces Lite Typesense once Phase 5 lands.</p>
+<p><strong>Deliverables:</strong> Architecture/dependency rules, clean environment fixtures, search behavior corpus, measured laptop baseline/acceptance thresholds, and a phase checklist aligned with <a href="TESTS_PLAN.MD">TESTS_PLAN.MD</a>.</p>
+<p><strong>Exit gate:</strong> Download/import/playback and edition authentication run repeatably. Existing differences and defects are named; tests do not encode accidental behavior as an unchangeable requirement.</p>
+<p><strong>Safe stopping point:</strong> No architectural behavior changes yet; the baseline supports the following extractions.</p>
+<h3>Phase 1 — Reusable libraries and thin hosts</h3>
+<p><strong>Work:</strong> Convert reusable WebAPI/DataBridge/Worker/MediaProcessor/Scheduler functionality to class libraries. Create/move Full executable shells and preserve the combined Lite executable. Move appsettings, process lifetime, and endpoint composition to hosts. Update project references, Docker builds, AppHosts, and tests together.</p>
+<p><strong>Exit gate:</strong> No executable-to-executable references; no appsettings output-removal workaround; both fresh deployments retain characterized behavior.</p>
+<p><strong>Safe stopping point:</strong> Clear process boundaries even while some provider registration remains temporarily in modules.</p>
+<h3>Phase 2 — Explicit edition infrastructure and identity</h3>
+<p><strong>Work:</strong> Extract provider-specific implementation/registration, slim shared dependencies, move Full security out of shared API, replace registration-order manipulation with lifecycle coordination, and remove Full single-user behavior.</p>
+<p><strong>Exit gate:</strong> Lite cannot register NATS/PostgreSQL/OpenBao/Full security and no longer depends on their SDKs. The isolated Typesense adapter remains the documented temporary exception. Full requires Authentik and rejects single-user configuration. Initialization/shutdown/restart tests pass.</p>
+<p><strong>Safe stopping point:</strong> Both editions remain functional with explicit composition. Lite still uses Typesense until the embedded provider is ready.</p>
+<h3>Phase 3 — Reliable and bounded local runtime</h3>
+<p><strong>Work:</strong> Add indexed/bounded queue claims, wake-up/backoff behavior, retention, terminal retry handling, and concurrency controls. Introduce transactional pending-index work and neutral route definitions. Adapt current indexing to consume durable intent without replacing business workflows.</p>
+<p><strong>Exit gate:</strong> Idle polling cost stays bounded; crash/redelivery/deduplication/retention tests pass; index intent survives database commit and process failure; no handler executes inside a long database transaction.</p>
+<p><strong>Safe stopping point:</strong> Improved laptop runtime and reliable indexing while the existing Typesense provider is still active.</p>
+<h3>Phase 4 — Complete search boundary, retaining Typesense</h3>
+<p><strong>Work:</strong> Extract typed query parsing, common result semantics, projection sourcing, maintenance/status, and a Typesense adapter. Move every direct Typesense consumer, including library browsing, comments, captions, and related media, behind the boundary.</p>
+<p><strong>Exit gate:</strong> Both deployments pass search contract tests using Typesense through the new interfaces. Shared modules no longer consume Typesense query/result/schema types. Rebuild failure does not clear a valid active index.</p>
+<p><strong>Safe stopping point:</strong> A provider-independent search subsystem; Full is already on its intended engine.</p>
+<h3>Phase 5 — Embedded Lite search and service removal</h3>
+<p><strong>Work:</strong> Implement Lucene query translation/index writing, feature parity, durable commit/replay, generation rebuilds, and operational status. Switch Lite composition to Lucene. Remove Typesense from Lite AppHost, generated Compose, environment settings, publish dependencies, fixtures, and documentation.</p>
+<p><strong>Exit gate:</strong> Lite runs with backend/frontend/POT only; optional ClickHouse adds one container. All shared search features pass. Missing/corrupt index rebuild and concurrent update tests pass. The laptop benchmark meets the Phase 0 acceptance thresholds.</p>
+<p><strong>Safe stopping point:</strong> The intended lightweight product deployment exists, without Typesense or the other Full services.</p>
+<h3>Phase 6 — Fresh-install packaging and recovery</h3>
+<p><strong>Work:</strong> Consolidate fresh-install schema baselines/configuration, finalize volumes and resource defaults, document ownership of media/chat backups, validate optional integrations, and verify both editions&#39; recovery procedures and readiness reporting.</p>
+<p><strong>Exit gate:</strong> Clean install, restart, Lite snapshot/key-ring recovery, Full PostgreSQL/OpenBao recovery, and live-chat on/off profiles pass from the packaged artifacts.</p>
+<p><strong>Safe stopping point:</strong> Deployment and recovery match the target architecture, with measured operating guidance.</p>
+<h3>Phase 7 — Remove transitional paths and enforce boundaries</h3>
+<p><strong>Work:</strong> Remove obsolete selectors/markers, old configuration aliases, unused adapters, duplicate helpers, stale Full single-user code, and transitional Typesense references. Update architecture/test documentation and enforce dependency rules in CI.</p>
+<p><strong>Exit gate:</strong> No transitional paths remain; both clean-install profiles and required backend/UI suites pass; new boundary violations fail CI.</p>
+<p><strong>Safe stopping point:</strong> Refactor complete. Future features are implemented once and exercised in both compositions.</p>
+<h2 id="section-9">9. Verification strategy and acceptance gates</h2>
+<p>Use the existing backend tests and the broader UI strategy in <a href="TESTS_PLAN.MD">TESTS_PLAN.MD</a>. Add checks alongside each phase; do not wait for the final phase to discover composition failures.</p>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Required scenarios</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Architecture</td>
+<td>No cycles or executable references; host-only composition; no vendor types leaking through search/contracts; final Lite package graph excludes Full SDKs.</td>
+</tr>
+<tr>
+<td>Persistence</td>
+<td>Clean SQLite/PostgreSQL initialization; repository/SQL parity; correct transaction boundaries; concurrent writes; fresh baseline validation.</td>
+</tr>
+<tr>
+<td>Lite lifecycle</td>
+<td>Deterministic startup/readiness, shutdown, idle behavior, queue contention, leases, duplicate delivery, retries, pruning, crash reconciliation, explicit new run after interruption.</td>
+</tr>
+<tr>
+<td>Full identity</td>
+<td>Real Authentik login, OpenFGA allow/deny, private-data isolation, required configuration checks, rejection of all former single-user configuration paths.</td>
+</tr>
+<tr>
+<td>Search parity</td>
+<td>All scopes/advanced filters/sorts; Unicode/quotes/ranges; paging and deduplication; related media; private-note visibility; missing/deleted documents and correct totals.</td>
+</tr>
+<tr>
+<td>Index durability</td>
+<td>Database commit followed by lost signal; failure before/after index commit; duplicate work; new mutation during indexing; deleted source; backlog recovery after restart.</td>
+</tr>
+<tr>
+<td>Rebuild</td>
+<td>Concurrent mutation, activation boundary, cancellation, missing/corrupt index, incompatible schema, disk full, and failed rebuild preserving the old valid generation.</td>
+</tr>
+<tr>
+<td>Product workflows</td>
+<td>Real download/import/process/index/search/playback; playlists/notes/preferences; schedules; capability-dependent frontend behavior.</td>
+</tr>
+<tr>
+<td>Recovery</td>
+<td>Lite SQLite plus complete key-ring restore; Full PostgreSQL/OpenBao restore; invalidation/rebuild of derived search; media/chat recovery scope stated accurately.</td>
+</tr>
+<tr>
+<td>Deployment</td>
+<td>Candidate package clean installs on supported architectures; Lite three-container default; no attempted connections to removed infrastructure; optional ClickHouse truly optional.</td>
+</tr>
+<tr>
+<td>Laptop performance</td>
+<td>Measured memory/CPU/latency and sustained bounded growth in idle/indexing/playback/combined workloads on the specified reference machine.</td>
+</tr>
+</tbody></table>
+<p>Do not treat relevance-score equality as search parity. Test the required results, filters, isolation, and common response contract; document ranking differences. Do not treat a mocked successful operation as end-to-end infrastructure coverage.</p>
+<h3>Changes required to the earlier testing plan</h3>
+<p>The previous test plan describes the current application&#39;s capabilities as well as future test work. This architecture proposal supersedes its following assumptions:</p>
+<ul>
+<li>Replace the Full single-user compatibility project/cases with startup rejection and Authentik-only Full coverage.</li>
+<li>Replace Lite Typesense fixture/dependency expectations with Lucene after Phase 5.</li>
+<li>Add common provider search contracts, durable index intent, index-generation recovery, and rebuild status UI cases.</li>
+<li>Add transitive dependency/host-boundary checks and Lite resource tests.</li>
+<li>Treat fresh installation and owned disposable state as the refactor&#39;s rollout model; do not add old-data migration testing.</li>
+</ul>
+<p>The current documentation deliverable does not modify <code>TESTS_PLAN.MD</code>; Phase 0 reconciles that document and its implementation work explicitly.</p>
+<h2 id="section-10">10. Completion criteria and implementation discipline</h2>
+<p>The architecture refactor is complete when:</p>
+<ul>
+<li>Lite has one .NET backend and the specified supporting containers, with embedded SQLite and Lucene.</li>
+<li>Full retains its service separation/infrastructure and supports Authentik accounts only.</li>
+<li>Shared modules contain one implementation of each application feature and select no edition infrastructure.</li>
+<li>Lite&#39;s dependency graph and runtime connections contain no Full-only provider implementation.</li>
+<li>All search-backed UI areas work on both providers; the Lucene index is independently rebuildable.</li>
+<li>Index intent is durable, deletion/retry behavior is correct, and rebuilds do not discard a valid working generation.</li>
+<li>Local queue, media execution, and indexing have bounded resource behavior validated on the laptop target.</li>
+<li>Startup/shutdown/recovery ordering is explicit and independently tested.</li>
+<li>Fresh install and documented recovery work from packaged artifacts for both editions.</li>
+<li>Transitional configuration, registration hacks, and stale documentation are removed.</li>
+</ul>
+<p>Keep changes reviewable: one boundary or behavior change at a time, followed by its exit gate. Do not combine a host extraction, database redesign, workflow replacement, and search cutover into one change. Fresh-install freedom removes compatibility obligations; it does not require redesigning working business logic.</p>
+<p>Creating this document completes the architecture-review/proposal deliverable. It does not execute the phases, provision environments, reset data, install libraries, or implement the refactor.</p>
+</main></div>
+<div class="footer">Generated from <a href="REARCH_PLAN.MD">REARCH_PLAN.MD</a> · Self-contained HTML; styles and content are embedded.</div><a class="backtop" href="#top" aria-label="Back to top">↑ Top</a>
+</body>
+</html>

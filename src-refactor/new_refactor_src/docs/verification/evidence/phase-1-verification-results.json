@@ -1,0 +1,58 @@
+{
+  "phase": 1,
+  "date": "2026-10-11",
+  "status": "implemented and verified against characterized baseline",
+  "passed": {
+    "solutionBuild": {
+      "errors": 0,
+      "warnings": [
+        "Two inherited ASPIRE010 CLI-bundle environment warnings"
+      ]
+    },
+    "unit": 585,
+    "liteMediaRestartCrash": 3,
+    "fullControlledAuthentication": 17,
+    "webApiHttp": 6,
+    "phaseTooling": 20,
+    "publishedCompositionRoots": 6,
+    "composeProfiles": [
+      "Lite",
+      "Full"
+    ],
+    "applicationImages": [
+      "Lite",
+      "WebAPI",
+      "DataBridge",
+      "Worker",
+      "MediaProcessor",
+      "Scheduler"
+    ],
+    "packagedFull": {
+      "freshState": true,
+      "finalServiceStates": 19,
+      "realAuthentikBrowser": true,
+      "privatePlaylistIsolation": true,
+      "logoutSessionRevocation": true,
+      "engineWorkaroundRequired": true
+    },
+    "packagedLite": {
+      "freshState": true,
+      "standardComposeStartup": true,
+      "frontendApiCapabilities": true,
+      "localAdmin": true
+    }
+  },
+  "limitations": [
+    "One unit readiness timeout during concurrent builds; isolated retry and final full 585-test run passed.",
+    "Phase 0 standard Full Compose, distributed Full media and performance/reference-hardware gates remain open."
+  ],
+  "evidence": {
+    "publish": ".artifacts/publish/reusable-hosts/verification.json",
+    "fullStartup": ".artifacts/test-results/phase1-full-startup.json",
+    "fullBrowser": ".artifacts/test-results/phase1-full-auth.json",
+    "liteStartup": ".artifacts/test-results/phase1-lite-startup.json",
+    "unit": ".artifacts/test-results/phase1-unit/",
+    "lite": ".artifacts/test-results/lite/",
+    "fullControlled": ".artifacts/test-results/full/"
+  }
+}

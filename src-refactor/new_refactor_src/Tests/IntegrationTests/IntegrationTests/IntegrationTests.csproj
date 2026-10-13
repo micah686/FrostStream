@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <StartupObject>IntegrationTests.Lite.LiteCrashHost</StartupObject>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+        <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+        <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+        <PackageReference Include="Microsoft.Testing.Extensions.Retry" />
+        <PackageReference Include="NSubstitute" />
+        <PackageReference Include="Shouldly" />
+        <PackageReference Include="Testcontainers.Nats" />
+        <PackageReference Include="Testcontainers.PostgreSql" />
+        <PackageReference Include="TUnit" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../../../Full/Hosts/WebAPI/WebAPIHost.csproj" />
+        <ProjectReference Include="../../../Lite/Backend/Lite.csproj" />
+        <ProjectReference Include="../../../Shared/Modules/DataBridge/DataBridge.csproj" />
+        <ProjectReference Include="../../../Shared/Modules/Api/WebAPI.csproj" />
+        <ProjectReference Include="../../../Shared/Modules/Worker/Worker.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Infrastructure" />
+      <Folder Include="Storage" />
+    </ItemGroup>
+
+<ItemGroup><ProjectReference Include="../../../Full/Infrastructure/Postgres/Persistence.Postgres.csproj" /><ProjectReference Include="../../../Full/Security/Security.csproj" /></ItemGroup></Project>

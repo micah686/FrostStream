@@ -1,0 +1,486 @@
+using FrostStream.ApplicationContracts;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using NodaTime;
+using NSubstitute;
+using Shared.Messaging;
+using Shouldly;
+using TUnit.Core;
+using WebAPI.Features.Metadata.Controllers;
+using WebAPI.Features.Metadata.Models;
+
+namespace UnitTests.WebAPI;
+
+public sealed class MetadataControllerTests
+{
+    private static readonly Instant Now = Instant.FromUtc(2026, 6, 3, 17, 0);
+
+    [Test]
+    public async Task List_Sends_Filter_Request_And_Returns_Paged_Response()
+    {
+        var bus = Substitute.For<IMessageBus>();
+        var controller = CreateController(bus);
+        var item = CreateCard(Guid.NewGuid());
+
+        bus.RequestAsync<MetadataListRequestMessage, MetadataListResponseMessage>(
+                MetadataSubjects.List,
+                Arg.Is<MetadataListRequestMessage>(x => x != null &&
+                    x.PageSize == 12 &&
+                    x.Page == 3 &&
+                    x.SortBy == "title" &&
+                    x.SortOrder == "asc" &&
+                    x.Platform == "youtube" &&
+                    x.AccountId == 10 &&
+                    x.Tag == "music" &&
+                    x.Category == "education" &&
+                    x.Genre == "documentary" &&
+                    x.CaptionLanguage == "en"),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new MetadataListResponseMessage
+            {
+                Success = true,
+                Items = [item],
+                Page = 3,
+                TotalCount = 30,
+                HasMore = true
+            });
+
+        var result = await controller.List(
+            pageSize: 12,
+            page: 3,
+            sortBy: "title",
+            sortOrder: "asc",
+            platform: "youtube",
+            accountId: 10,
+            tag: "music",
+            category: "education",
+            genre: "documentary",
+            captionLanguage: "en",
+            cancellationToken: CancellationToken.None);
+
+        var payload = result.Result!.ShouldBeOfType<OkObjectResult>().Value
+            .ShouldBeOfType<PagedMetadataResponse<MetadataCardDto>>();
+        payload.Items.Single().MediaGuid.ShouldBe(item.MediaGuid);
+        payload.Page.ShouldBe(3);
+        payload.TotalCount.ShouldBe(30);
+        payload.HasMore.ShouldBeTrue();
+    }
+
+    [Test]
+    public async Task Get_Maps_NotFound_And_Invalid_Service_Response()
+    {
+        var mediaGuid = Guid.NewGuid();
+
+        var notFound = await GetWith(mediaGuid, new MetadataGetResponseMessage
+        {
+            Success = false,
+            ErrorCode = "not_found",
+            ErrorMessage = "missing"
+        });
+        notFound.Result!.ShouldBeOfType<NotFoundObjectResult>().Value!.ShouldBe("missing");
+
+        var invalid = await GetWith(mediaGuid, new MetadataGetResponseMessage { Success = true, Item = null });
+        invalid.Result!.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status502BadGateway);
+    }
+
+    [Test]
+    public async Task GetTechnical_Returns_Item()
+    {
+        var bus = Substitute.For<IMessageBus>();
+        var controller = CreateController(bus);
+        var mediaGuid = Guid.NewGuid();
+
+        bus.RequestAsync<MetadataTechnicalRequestMessage, MetadataTechnicalResponseMessage>(
+                MetadataSubjects.GetTechnical,
+                Arg.Is<MetadataTechnicalRequestMessage>(x => x != null && x.MediaGuid == mediaGuid),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new MetadataTechnicalResponseMessage
+            {
+                Success = true,
+                Item = new MetadataTechnicalDto { MediaGuid = mediaGuid, DurationTicks = 100 }
+            });
+
+        var result = await controller.GetTechnical(mediaGuid, CancellationToken.None);
+
+        result.Result!.ShouldBeOfType<OkObjectResult>().Value
+            .ShouldBeOfType<MetadataTechnicalDto>().DurationTicks.ShouldBe(100);
+    }
+
+    [Test]
+    public async Task ListVersions_Returns_Count_When_Requested()
+    {
+        var bus = Substitute.For<IMessageBus>();
+        var controller = CreateController(bus);
+        var mediaGuid = Guid.NewGuid();
+
+        bus.RequestAsync<MetadataVersionsRequestMessage, MetadataVersionsResponseMessage>(
+                MetadataSubjects.Versions,
+                Arg.Is<MetadataVersionsRequestMessage>(x => x != null && x.MediaGuid == mediaGuid && x.CountOnly),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new MetadataVersionsResponseMessage
+            {
+                Success = true,
+                TotalCount = 3,
+                Items = []
+            });
+
+        var result = await controller.ListVersions(mediaGuid, countOnly: true, CancellationToken.None);
+
+        result.Result!.ShouldBeOfType<OkObjectResult>().Value!.ShouldBe(3);
+    }
+
+    [Test]
+    public async Task ListVersions_Returns_Array_By_Default()
+    {
+        var bus = Substitute.For<IMessageBus>();
+        var controller = CreateController(bus);
+        var mediaGuid = Guid.NewGuid();
+        var version = new MetadataVersionDto
+        {
+            MediaGuid = mediaGuid,
+            VersionNum = 2,
+            StorageKey = "default",
+            StoragePath = "media/x/v2.webm",
+            ContentHashXxh128 = "abcd",
+            IngestOrigin = "download"
+        };
+
+        bus.RequestAsync<MetadataVersionsRequestMessage, MetadataVersionsResponseMessage>(
+                MetadataSubjects.Versions,
+                Arg.Is<MetadataVersionsRequestMessage>(x => x != null && x.MediaGuid == mediaGuid && !x.CountOnly),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new MetadataVersionsResponseMessage
+            {
+                Success = true,
+                TotalCount = 1,
+                Items = [version]
+            });
+
+        var result = await controller.ListVersions(mediaGuid, cancellationToken: CancellationToken.None);
+
+        var payload = result.Result!.ShouldBeOfType<OkObjectResult>().Value
+            .ShouldBeOfType<MetadataVersionsResponse>();
+        payload.TotalCount.ShouldBe(1);
+        payload.Versions.Single().VersionNum.ShouldBe(2);
+    }
+
+    [Test]
+    public async Task ListComments_Sends_Query_And_Returns_Paged_Response()
+    {
+        var bus = Substitute.For<IMessageBus>();
+        var controller = CreateController(bus);
+        var mediaGuid = Guid.NewGuid();
+        var comment = new CommentDto
+        {
+            CommentId = "comment-1",
+            Text = "hello",
+            CommentTimestamp = Now,
+            Account = CreateAccountCard()
+        };
+
+        bus.RequestAsync<MetadataCommentsListRequestMessage, MetadataCommentsListResponseMessage>(
+                MetadataSubjects.CommentsList,
+                Arg.Is<MetadataCommentsListRequestMessage>(x => x != null &&
+                    x.MediaGuid == mediaGuid &&
+                    x.PageSize == 10 &&
+                    x.Page == 4 &&
+                    x.Query == "hello" &&
+                    x.ParentCommentId == "parent" &&
+                    x.SortBy == "like_count" &&
+                    x.SortOrder == "asc"),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new MetadataCommentsListResponseMessage
+            {
+                Success = true,
+                Items = [comment],
+                Page = 4,
+                TotalCount = 9,
+                HasMore = true
+            });
+
+        var result = await controller.ListComments(
+            mediaGuid,
+            pageSize: 10,
+            page: 4,
+            q: "hello",
+            parentId: "parent",
+            sortBy: "like_count",
+            sortOrder: "asc",
+            cancellationToken: CancellationToken.None);
+
+        result.Result!.ShouldBeOfType<OkObjectResult>().Value
+            .ShouldBeOfType<PagedMetadataResponse<CommentDto>>()
+            .Items.Single().CommentId.ShouldBe("comment-1");
+    }
+
+    [Test]
+    public async Task Captions_Accounts_And_Taxonomy_Map_Success_Responses()
+    {
+        var bus = Substitute.For<IMessageBus>();
+        var controller = CreateController(bus);
+        var mediaGuid = Guid.NewGuid();
+
+        bus.RequestAsync<MetadataCaptionsListRequestMessage, MetadataCaptionsListResponseMessage>(
+                MetadataSubjects.CaptionsList,
+                Arg.Is<MetadataCaptionsListRequestMessage>(x => x != null &&
+                    x.MediaGuid == mediaGuid &&
+                    x.LanguageCode == "en" &&
+                    x.CaptionType == "manual"),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new MetadataCaptionsListResponseMessage
+            {
+                Success = true,
+                Items = [new CaptionDto { LanguageCode = "en", CaptionType = "manual", StoragePath = "captions/en.vtt" }],
+                TotalCount = 1
+            });
+        bus.RequestAsync<MetadataAccountsListRequestMessage, MetadataAccountsListResponseMessage>(
+                MetadataSubjects.AccountsList,
+                Arg.Is<MetadataAccountsListRequestMessage>(x => x != null &&
+                    x.PageSize == 7 &&
+                    x.After == "cursor" &&
+                    x.Platform == "youtube"),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new MetadataAccountsListResponseMessage
+            {
+                Success = true,
+                Items = [new AccountSummaryDto { AccountId = 1, Platform = "youtube", AccountName = "Creator", AccountHandle = "@creator" }],
+                NextCursor = "next",
+                HasMore = true
+            });
+        bus.RequestAsync<MetadataTaxonomyListRequestMessage, MetadataTaxonomyListResponseMessage>(
+                MetadataSubjects.TaxonomyTagsList,
+                Arg.Is<MetadataTaxonomyListRequestMessage>(x => x != null &&
+                    x.PageSize == 9 &&
+                    x.PageOffset == 18 &&
+                    x.Search == "tag"),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new MetadataTaxonomyListResponseMessage
+            {
+                Success = true,
+                Items = [new TaxonomyItemDto { Name = "tag", MediaCount = 3 }],
+                Total = 1
+            });
+
+        var captions = await controller.ListCaptions(mediaGuid, "en", "manual", CancellationToken.None);
+        captions.Result!.ShouldBeOfType<OkObjectResult>().Value
+            .ShouldBeOfType<MetadataListResponse<CaptionDto>>().TotalCount.ShouldBe(1);
+
+        var accounts = await controller.ListAccounts(7, "cursor", "youtube", CancellationToken.None);
+        accounts.Result!.ShouldBeOfType<OkObjectResult>().Value
+            .ShouldBeOfType<AccountListResponse>().NextCursor.ShouldBe("next");
+
+        var tags = await controller.ListTags(9, 18, "tag", CancellationToken.None);
+        tags.Result!.ShouldBeOfType<OkObjectResult>().Value
+            .ShouldBeOfType<TaxonomyListResponse>().Total.ShouldBe(1);
+    }
+
+    [Test]
+    public async Task List_Returns_503_When_Bus_Throws()
+    {
+        var bus = Substitute.For<IMessageBus>();
+        var controller = CreateController(bus);
+
+        bus.RequestAsync<MetadataListRequestMessage, MetadataListResponseMessage>(
+                Arg.Any<string>(),
+                Arg.Any<MetadataListRequestMessage>(),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Task.FromException<MetadataListResponseMessage?>(
+                new InvalidOperationException("nats unavailable")));
+
+        var result = await controller.List(cancellationToken: CancellationToken.None);
+
+        result.Result!.ShouldBeOfType<ObjectResult>().StatusCode.ShouldBe(StatusCodes.Status503ServiceUnavailable);
+    }
+
+    [Test]
+    public async Task Account_And_AccountMedia_Send_Expected_Requests()
+    {
+        var bus = Substitute.For<IMessageBus>();
+        var controller = CreateController(bus);
+
+        bus.RequestAsync<MetadataAccountGetRequestMessage, MetadataAccountGetResponseMessage>(
+                MetadataSubjects.AccountsGet,
+                Arg.Is<MetadataAccountGetRequestMessage>(x => x != null && x.AccountId == 22),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new MetadataAccountGetResponseMessage
+            {
+                Success = true,
+                Item = new AccountDto { AccountId = 22, Platform = "youtube", AccountName = "Creator", AccountHandle = "@creator" }
+            });
+        bus.RequestAsync<MetadataListRequestMessage, MetadataListResponseMessage>(
+                MetadataSubjects.AccountsMediaList,
+                Arg.Is<MetadataListRequestMessage>(x => x != null &&
+                    x.AccountId == 22 &&
+                    x.PageSize == 6 &&
+                    x.Page == 2 &&
+                    x.SortBy == "title" &&
+                    x.SortOrder == "asc"),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new MetadataListResponseMessage
+            {
+                Success = true,
+                Items = [CreateCard(Guid.NewGuid())],
+                Page = 2,
+                TotalCount = 1
+            });
+
+        var account = await controller.GetAccount(22, CancellationToken.None);
+        account.Result!.ShouldBeOfType<OkObjectResult>().Value!.ShouldBeOfType<AccountDto>().AccountId.ShouldBe(22);
+
+        var media = await controller.ListAccountMedia(22, 6, 2, "title", "asc", CancellationToken.None);
+        media.Result!.ShouldBeOfType<OkObjectResult>().Value
+            .ShouldBeOfType<PagedMetadataResponse<MetadataCardDto>>()
+            .Items.Single().Title.ShouldBe("Video");
+    }
+
+    [Test]
+    public async Task RefreshAccountAssets_Gets_Account_And_Publishes_Channel_Asset_Refresh()
+    {
+        var bus = Substitute.For<IMessageBus>();
+        var publisher = Substitute.For<IDurableJobPublisher>();
+        var controller = CreateController(bus, publisher);
+
+        bus.RequestAsync<MetadataAccountGetRequestMessage, MetadataAccountGetResponseMessage>(
+                MetadataSubjects.AccountsGet,
+                Arg.Is<MetadataAccountGetRequestMessage>(x => x != null && x.AccountId == 22),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new MetadataAccountGetResponseMessage
+            {
+                Success = true,
+                Item = new AccountDto
+                {
+                    AccountId = 22,
+                    Platform = "youtube",
+                    AccountName = "Creator",
+                    AccountHandle = "@creator",
+                    AccountUrl = "https://example.test/@creator"
+                }
+            });
+
+        var result = await controller.RefreshAccountAssets(22, force: true, CancellationToken.None);
+
+        result.ShouldBeOfType<AcceptedResult>().Value!.ShouldNotBeNull();
+        await publisher.Received(1).PublishAsync(
+            BackgroundJobSubjects.ChannelAssetRefreshRequest,
+            Arg.Is<ChannelAssetRefreshRequested>(x => x != null &&
+                x.ScheduleKey == "manual" &&
+                x.TaskType == "channel_asset_refresh" &&
+                x.DueWindowUtc == Now &&
+                x.OccurredAt == Now &&
+                x.TargetAccountId == 22 &&
+                x.TargetSourceId == null &&
+                x.Force),
+            Arg.Is<string>(x => x != null && x.StartsWith("manual-account:22:", StringComparison.Ordinal)),
+            null,
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task RefreshAccountAssets_Returns_400_When_Account_Has_No_Url()
+    {
+        var bus = Substitute.For<IMessageBus>();
+        var publisher = Substitute.For<IDurableJobPublisher>();
+        var controller = CreateController(bus, publisher);
+
+        bus.RequestAsync<MetadataAccountGetRequestMessage, MetadataAccountGetResponseMessage>(
+                MetadataSubjects.AccountsGet,
+                Arg.Any<MetadataAccountGetRequestMessage>(),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new MetadataAccountGetResponseMessage
+            {
+                Success = true,
+                Item = new AccountDto { AccountId = 22, Platform = "youtube", AccountName = "Creator", AccountHandle = "@creator" }
+            });
+
+        var result = await controller.RefreshAccountAssets(22, force: false, CancellationToken.None);
+
+        result.ShouldBeOfType<BadRequestObjectResult>();
+        await publisher.DidNotReceiveWithAnyArgs().PublishAsync(
+            default!,
+            Arg.Any<ChannelAssetRefreshRequested>(),
+            default,
+            default,
+            default);
+    }
+
+    [Test]
+    public async Task RefreshAccountAssets_Returns_404_When_Account_Missing()
+    {
+        var bus = Substitute.For<IMessageBus>();
+        var controller = CreateController(bus);
+
+        bus.RequestAsync<MetadataAccountGetRequestMessage, MetadataAccountGetResponseMessage>(
+                MetadataSubjects.AccountsGet,
+                Arg.Any<MetadataAccountGetRequestMessage>(),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new MetadataAccountGetResponseMessage
+            {
+                Success = false,
+                ErrorCode = "not_found",
+                ErrorMessage = "missing"
+            });
+
+        var result = await controller.RefreshAccountAssets(22, force: false, CancellationToken.None);
+
+        result.ShouldBeOfType<NotFoundObjectResult>();
+    }
+
+    private static async Task<ActionResult<MetadataDetailDto>> GetWith(
+        Guid mediaGuid,
+        MetadataGetResponseMessage response)
+    {
+        var bus = Substitute.For<IMessageBus>();
+        var controller = CreateController(bus);
+        bus.RequestAsync<MetadataGetRequestMessage, MetadataGetResponseMessage>(
+                MetadataSubjects.Get,
+                Arg.Is<MetadataGetRequestMessage>(x => x != null && x.MediaGuid == mediaGuid),
+                Arg.Any<TimeSpan>(),
+                Arg.Any<CancellationToken>())
+            .Returns(response);
+
+        return await controller.Get(mediaGuid, CancellationToken.None);
+    }
+
+    private static MetadataController CreateController(IMessageBus bus, IDurableJobPublisher? publisher = null)
+    {
+        var clock = Substitute.For<IClock>();
+        clock.GetCurrentInstant().Returns(Now);
+
+        return new MetadataController(
+            bus,
+            publisher ?? Substitute.For<IDurableJobPublisher>(),
+            clock,
+            Substitute.For<ILogger<MetadataController>>());
+    }
+
+    private static MetadataCardDto CreateCard(Guid mediaGuid) => new()
+    {
+        MediaGuid = mediaGuid,
+        Title = "Video",
+        ReleaseDate = Now,
+        Account = CreateAccountCard()
+    };
+
+    private static MetadataAccountCardDto CreateAccountCard() => new()
+    {
+        AccountId = 1,
+        Platform = "youtube",
+        AccountName = "Creator",
+        AccountHandle = "@creator"
+    };
+}

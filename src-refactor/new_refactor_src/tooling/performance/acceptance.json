@@ -1,0 +1,8 @@
+{
+  "status": "provisional budgets; require measured 8 GB reference-machine approval before Phase 5 exit",
+  "referenceWorkload": {"media":10000,"captions":100000,"comments":250000,"concurrentDownloads":2,"concurrentTranscodes":1},
+  "requiredMeasurements": ["fresh startup", "steady restart", "idle 15 minutes", "warm/cold search p50/p95/p99", "full indexing", "incremental indexing", "playback", "combined download/transcode/index 60 minutes"],
+  "provisionalBudgets": {"totalSystemMemoryGiB":8,"minimumAvailableMemoryMiB":512,"idleApplicationCpuPercentOneCore":5,"warmSearchP95Milliseconds":500,"coldSearchP95Milliseconds":2000,"readySeconds":120},
+  "hardGates": ["No OOM or failed media jobs", "No unbounded growth in RSS, index backlog, queue history or scratch files", "Include FFmpeg children, frontend/POT containers and filesystem cache", "Record optional ClickHouse separately", "Search is ready before latency sampling; do not count empty/rebuilding responses as successes"],
+  "measuredLaptopBaseline": null
+}

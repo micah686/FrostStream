@@ -1,0 +1,6 @@
+{
+  "passed": true,
+  "unreachableChatSchemaState": "Failed",
+  "applicationReadinessDuringChatFailure": "Healthy",
+  "restoredChatSchemaState": "Ready"
+}

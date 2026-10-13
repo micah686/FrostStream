@@ -1,0 +1,44 @@
+{
+  "scope": "Development Lucene-only synthetic corpus; not an 8 GB full-system acceptance run",
+  "runtime": ".NET 10.0.0",
+  "architecture": "X64",
+  "logicalCpus": 16,
+  "hostMemory": "MemTotal:       31941924 kB",
+  "counts": {
+    "Media": 10000,
+    "Comments": 250000,
+    "Captions": 100000
+  },
+  "corpusBytes": 156697230,
+  "indexBytes": 41986726,
+  "ramBufferMiB": 16,
+  "indexingSeconds": 18.5866109,
+  "reopenSeconds": 3.0691837,
+  "incrementalMilliseconds": 3.4259,
+  "warmSearchP50Milliseconds": 2.5648,
+  "warmSearchP95Milliseconds": 2.8011,
+  "warmSearchP99Milliseconds": 3.6868,
+  "coldSearch": {
+    "samples": 20,
+    "p50Milliseconds": 1.321,
+    "p95Milliseconds": 3.0192,
+    "p99Milliseconds": 4.3774,
+    "method": "Linux POSIX_FADV_DONTNEED before opening service; query timed after initialization; metadata caches remain warm; advisory eviction is not guaranteed"
+  },
+  "idle": {
+    "requestedSeconds": 900,
+    "elapsedSeconds": 899.9999872,
+    "processCpuSeconds": 0.11808999999999514,
+    "percentOneCore": 0.013121111297721932
+  },
+  "peakProcessRssBytes": 277381120,
+  "measurementsNotIncluded": [
+    "8 GB physical machine",
+    "verified cold filesystem and metadata cache",
+    "full-system idle",
+    "60-minute combined download/transcode/index",
+    "frontend/POT/FFmpeg memory",
+    "search disk full"
+  ],
+  "date": "2026-10-11"
+}

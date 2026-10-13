@@ -1,0 +1,41 @@
+<Solution>
+  <Folder Name="/ExternalLibs/">
+    <Project Path="Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj" />
+    <Project Path="Shared/Integrations/Vendor/YtDlpSharpLib/ConsoleDownloader/ConsoleDownloader.csproj" />
+    <Project Path="Shared/Integrations/Vendor/YtDlpSharpLib/YtDlpSharpLib/YtDlpSharpLib.csproj" />
+  </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="Tests/IntegrationTests/IntegrationTests/IntegrationTests.csproj" />
+    <Project Path="Tests/UnitTests/UnitTests.csproj" />
+  </Folder>
+  <Folder Name="/Core/">
+    <Project Path="Shared/Contracts/ApplicationContracts.csproj" />
+    <Project Path="Shared/Core/Shared.csproj" />
+    <Project Path="Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj" />
+    <Project Path="Shared/Integrations/StorageExtensions/StorageExtensions.csproj" />
+    <Project Path="Shared/Integrations/Typesense/Typesense.csproj" />
+    <Project Path="Shared/Modules/Api/WebAPI.csproj" />
+    <Project Path="Shared/Modules/DataBridge/DataBridge.csproj" />
+    <Project Path="Shared/Modules/MediaProcessor/MediaProcessor.csproj" />
+    <Project Path="Shared/Modules/Scheduler/Scheduler.csproj" />
+    <Project Path="Shared/Modules/Worker/Worker.csproj" />
+    <Project Path="Shared/Persistence/Persistence.csproj" />
+  </Folder>
+  <Folder Name="/Full/">
+    <Project Path="Full/AppHost/AppHostFull.csproj" />
+    <Project Path="Full/Hosts/BackupService/BackupService.csproj" />
+    <Project Path="Full/Hosts/WebAPI/WebAPIHost.csproj" />
+    <Project Path="Full/Hosts/DataBridge/DataBridgeHost.csproj" />
+    <Project Path="Full/Hosts/Worker/WorkerHost.csproj" />
+    <Project Path="Full/Hosts/MediaProcessor/MediaProcessorHost.csproj" />
+    <Project Path="Full/Hosts/Scheduler/SchedulerHost.csproj" />
+    <Project Path="Full/Infrastructure/Infrastructure.csproj" />
+    <Project Path="Full/Infrastructure/Postgres/Persistence.Postgres.csproj" />
+    <Project Path="Full/Security/Security.csproj" />
+  </Folder>
+  <Folder Name="/Lite/">
+    <Project Path="Lite/AppHost/AppHostLite.csproj" />
+    <Project Path="Lite/Backend/Lite.csproj" />
+    <Project Path="Lite/Infrastructure/Infrastructure.csproj" />
+  </Folder>
+</Solution>

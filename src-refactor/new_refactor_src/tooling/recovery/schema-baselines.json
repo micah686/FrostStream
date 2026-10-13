@@ -1,0 +1,24 @@
+{
+  "full": {
+    "baselineVersion": 1,
+    "historicalMigrationCutoff": 98,
+    "sqlSha256": "F6682A61BD2CA0AE6F8D5A6DF9AA633DE33BF89C0E8839BB5A755ECBC8085DC5",
+    "workflowSchemaOwner": "Pinned Cleipnir PostgreSQL store"
+  },
+  "lite": {
+    "applicationVersions": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "baselineSqlSha256": "3EC3B133F48B4E97D8467126D1047563C4244FAA86727196E7666189DF7FDFC4",
+    "workflowVersion": 1,
+    "additionalInitialization": [
+      "local durable transport",
+      "search intent and projection triggers"
+    ],
+    "seedManifestSha256": "58040687C8EFE550BBC482002118CA92D3453E2450C90923E3B244CAC2A55CB0"
+  },
+  "rollout": "Fresh owned installations; no old-database migration"
+}

@@ -1,0 +1,32 @@
+{
+  "scope": "packaged Lite frontend/API/authentication smoke only",
+  "passed": true,
+  "checks": [
+    {
+      "path": "/",
+      "status": 200,
+      "contentType": "text/html"
+    },
+    {
+      "path": "/healthz",
+      "status": 200,
+      "contentType": "text/html"
+    },
+    {
+      "path": "/api/system/capabilities",
+      "status": 200,
+      "contentType": "application/json"
+    },
+    {
+      "path": "/api/auth/me",
+      "status": 200,
+      "contentType": "application/json"
+    },
+    {
+      "path": "/api/auth/config",
+      "status": 200,
+      "contentType": "application/json"
+    }
+  ],
+  "elapsedSeconds": 0.008
+}

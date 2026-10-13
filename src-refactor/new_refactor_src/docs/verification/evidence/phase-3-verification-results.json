@@ -1,0 +1,105 @@
+{
+  "phase": 3,
+  "date": "2026-10-11",
+  "status": "implemented and verified against characterized baseline",
+  "passed": {
+    "solutionBuild": {
+      "errors": 0,
+      "warnings": [
+        "Two inherited ASPIRE010 CLI-bundle environment warnings"
+      ]
+    },
+    "unit": 607,
+    "postgresAndSqlitePersistence": 123,
+    "liteMediaSearchRestartCrash": 3,
+    "fullControlledAuthentication": 17,
+    "webApiHttp": 6,
+    "phaseTooling": {
+      "phase0": 20,
+      "phase2": 8,
+      "phase3": 2
+    },
+    "sourceAndRestoredDependencyGuard": {
+      "projects": 33,
+      "passed": true
+    },
+    "publishedHosts": [
+      {
+        "host": "Lite",
+        "fullSecurity": false,
+        "postgres": false,
+        "typesense": true,
+        "dependencyCount": 172
+      },
+      {
+        "host": "WebAPI",
+        "fullSecurity": true,
+        "postgres": false,
+        "typesense": false,
+        "dependencyCount": 119
+      },
+      {
+        "host": "DataBridge",
+        "fullSecurity": false,
+        "postgres": true,
+        "typesense": true,
+        "dependencyCount": 202
+      },
+      {
+        "host": "Worker",
+        "fullSecurity": false,
+        "postgres": false,
+        "typesense": false,
+        "dependencyCount": 134
+      },
+      {
+        "host": "MediaProcessor",
+        "fullSecurity": false,
+        "postgres": false,
+        "typesense": false,
+        "dependencyCount": 120
+      },
+      {
+        "host": "Scheduler",
+        "fullSecurity": false,
+        "postgres": false,
+        "typesense": false,
+        "dependencyCount": 103
+      }
+    ],
+    "idleQueue": {
+      "idleSeconds": 5.5001971,
+      "readProbes": 8,
+      "writeClaims": 0,
+      "consumers": 1,
+      "maxIdleSeconds": 5
+    },
+    "packagedLite": {
+      "standardComposeStartup": true,
+      "freshProjectState": true,
+      "finalImageVerified": true,
+      "image": "924c40d39459f64ff9b3a839499cf9445351df2c65dd27d45aefe7c0a06f4ad0",
+      "retainedStateRestart": true,
+      "frontendReadinessCapabilitiesAndAdmin": true
+    }
+  },
+  "limitations": [
+    "Idle measurement covers one controlled consumer over 5.5 seconds; it is not a full deployment or 8 GB hardware benchmark.",
+    "The existing Typesense rebuild remains destructive; atomic replacement generations are Phase 4/5 work. Durable invalidation and replay are now preserved.",
+    "The planned single DataBridge/control-plane owner is retained; the rebuild writer gate is local to that owner.",
+    "Unrouted messages and terminal failures are retained for operator inspection/retry rather than discarded automatically.",
+    "Phase 0 standard Full Compose, distributed Full media, large-corpus workloads and specified 8 GB machine acceptance remain open."
+  ],
+  "evidence": {
+    "unit": ".artifacts/test-results/phase3-unit-verified-final/",
+    "postgresAndSqlite": ".artifacts/test-results/phase3-postgres-verified/",
+    "lite": ".artifacts/test-results/phase3-lite-verified/",
+    "fullControlled": ".artifacts/test-results/phase3-full-auth/",
+    "http": ".artifacts/test-results/phase3-http/",
+    "idle": ".artifacts/test-results/phase3-idle-verified.json",
+    "publish": ".artifacts/publish/reliable-runtime-verified/verification.json",
+    "publishedDependencies": ".artifacts/publish/reliable-runtime-verified/edition-verification.json",
+    "packagedLite": ".artifacts/test-results/phase3-lite-startup-final.json",
+    "packagedLiteRestart": ".artifacts/test-results/phase3-lite-restart.json"
+  }
+}

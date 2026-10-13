@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "encoding": "UTF-8",
+  "seed": 0,
+  "files": {
+    "media.jsonl": {
+      "records": 10000,
+      "bytes": 2422060,
+      "sha256": "1df0b53aee47e659b81b247cd1038e269eda68d62ff8076448ed8b7ae027fd3b"
+    },
+    "captions.jsonl": {
+      "records": 100000,
+      "bytes": 14800000,
+      "sha256": "be66911defdd1f15031da3e6b58dc26affca1bc58ee074aa077920ae2b63ae05"
+    },
+    "comments.jsonl": {
+      "records": 250000,
+      "bytes": 37000000,
+      "sha256": "8a680144aef386e735f945cc31648efc6746c748c947bb24033b94c2de553e61"
+    }
+  }
+}
