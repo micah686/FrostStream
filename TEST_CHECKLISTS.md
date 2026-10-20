@@ -54,7 +54,7 @@ Implementation order: fixture/discovery foundations → Core units/contracts →
 | [Frontend supporting component integration tests](#suite-ui-i) | 0 | 2 | 0 |
 | [Frontend Core — E2E against both editions](#suite-ui-core-e) | 0 | 0 | 45 |
 | [Frontend Full — E2E](#suite-ui-full-e) | 0 | 0 | 14 |
-| [Frontend Lite — E2E](#suite-ui-lite-e) | 0 | 0 | 8 |
+| [Frontend Lite — E2E](#suite-ui-lite-e) | 2 | 0 | 6 |
 | [Frontend optional integrations and device E2E](#suite-ui-opt-e) | 0 | 0 | 8 |
 | [System acceptance exercised as integration tests](#suite-accept-i) | 0 | 7 | 0 |
 | **Total (232 checklist items; parameter variants add executions)** | **67** | **90** | **75** |
@@ -955,23 +955,23 @@ All scenarios below require the shared fixture/validation rules in the guide as 
 
 <a id="ui-lite-e-001"></a>
 
-- [ ] **[UI-LITE-E-001](TEST_IMPLEMENTATION_GUIDE.md#ui-lite-e-001)** — E2E · Lite · P0 — Immediate local Admin session.
+- [x] **[UI-LITE-E-001](TEST_IMPLEMENTATION_GUIDE.md#ui-lite-e-001)** — E2E · Lite · P0 — Immediate local Admin session. Evidence: [Lite E2E run record](src/Frontend/tests/e2e/lite/evidence.md#ui-lite-e-001).
 
 <a id="ui-lite-e-002"></a>
 
-- [ ] **[UI-LITE-E-002](TEST_IMPLEMENTATION_GUIDE.md#ui-lite-e-002)** — E2E · Lite · P0 — Access-management controls unavailable.
+- [x] **[UI-LITE-E-002](TEST_IMPLEMENTATION_GUIDE.md#ui-lite-e-002)** — E2E · Lite · P0 — Access-management controls unavailable. Evidence: [Lite E2E run record](src/Frontend/tests/e2e/lite/evidence.md#ui-lite-e-002).
 
 <a id="ui-lite-e-003"></a>
 
-- [ ] **[UI-LITE-E-003](TEST_IMPLEMENTATION_GUIDE.md#ui-lite-e-003)** — E2E · Lite · P0 — Shared admin features stay available.
+- [ ] **[UI-LITE-E-003](TEST_IMPLEMENTATION_GUIDE.md#ui-lite-e-003)** — E2E · Lite · P0 — Shared admin features stay available. Run evidence: [Lite E2E run record](src/Frontend/tests/e2e/lite/evidence.md#ui-lite-e-003); route availability passed, feature workflows remain unverified.
 
 <a id="ui-lite-e-004"></a>
 
-- [ ] **[UI-LITE-E-004](TEST_IMPLEMENTATION_GUIDE.md#ui-lite-e-004)** — E2E · Lite · P0 — Lite backup options and help.
+- [ ] **[UI-LITE-E-004](TEST_IMPLEMENTATION_GUIDE.md#ui-lite-e-004)** — E2E · Lite · P0 — Lite backup options and help. Run evidence: [Lite E2E run record](src/Frontend/tests/e2e/lite/evidence.md#ui-lite-e-004); snapshot/verification passed, all backup types and restore controls remain unverified.
 
 <a id="ui-lite-e-005"></a>
 
-- [ ] **[UI-LITE-E-005](TEST_IMPLEMENTATION_GUIDE.md#ui-lite-e-005)** — E2E · Lite · P0 — Lite failure does not launch external login.
+- [ ] **[UI-LITE-E-005](TEST_IMPLEMENTATION_GUIDE.md#ui-lite-e-005)** — E2E · Lite · P0 — Lite failure does not launch external login. Run evidence: [Lite E2E run record](src/Frontend/tests/e2e/lite/evidence.md#ui-lite-e-005); session proxy failure/recovery passed, Lite host startup failure remains unverified.
 
 <a id="ui-lite-e-006"></a>
 
