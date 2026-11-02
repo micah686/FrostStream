@@ -36,7 +36,7 @@ jobs:
       FROSTSTREAM_TEST_TYPESENSE: http://127.0.0.1:8108
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
       - name: Install media tools
@@ -47,7 +47,7 @@ jobs:
         run: dotnet run --no-build --project src/Tests/UnitTests/UnitTests.csproj --configuration Release -- --minimum-expected-tests 1 --maximum-parallel-tests 4 --results-directory "$RUNNER_TEMP/unit-results"
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: unit-results
           path: ${{ runner.temp }}/unit-results/
@@ -67,7 +67,7 @@ jobs:
             project: src/Lite/AppHost/AppHostLite.csproj
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
       - name: Install media tools
@@ -86,7 +86,7 @@ jobs:
         run: dotnet run --no-build --project src/Tests/IntegrationTests/IntegrationTests/IntegrationTests.csproj --configuration Release -- --minimum-expected-tests 1 --maximum-parallel-tests 4 --treenode-filter '/*/IntegrationTests.Lite/*/*' --results-directory "$RUNNER_TEMP/integration-results"
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: integration-results-${{ matrix.edition }}
           path: ${{ runner.temp }}/integration-results/
