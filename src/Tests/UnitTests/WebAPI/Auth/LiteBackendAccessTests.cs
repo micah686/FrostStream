@@ -82,6 +82,7 @@ public sealed class LiteBackendAccessTests
         builder.Configuration["Auth:Authority"] = "https://identity.example";
         builder.Configuration["Auth:PublicOrigin"] = "http://localhost";
         builder.Configuration["Auth:ClientSecret"] = "test-secret";
+        builder.Configuration["MediaProcessorStorage:Token"] = "test-storage-token";
         builder.AddFullMessaging();
         Shared.Secrets.ServiceCollectionExtensions.AddOpenBaoSecretStore(builder.Services, builder.Configuration);
         builder.AddFullBackupClient();

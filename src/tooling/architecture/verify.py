@@ -68,7 +68,9 @@ def inventory():
             attrs=re.findall(r'\[(?:Route|HttpGet|HttpPost|HttpPut|HttpPatch|HttpDelete)\([^\n]*',p.read_text(encoding='utf-8-sig'))
             if attrs: routes.append({'source':p.relative_to(ROOT).as_posix(),'attributes':attrs})
     if errors: raise ValueError('\n'.join(errors))
-    central = ET.parse(ROOT / 'Directory.Packages.props').getroot()
+    # Source inventory is rooted at src/, while NuGet's central props file is at
+    # the repository root.
+    central = ET.parse(ROOT.parent / 'Directory.Packages.props').getroot()
     versions = {el.attrib['Include']:el.attrib['Version'] for el in central.iter('PackageVersion')}
     return {'projects':graph,'centralPackageVersions':versions,'apiRouteAttributes':routes}
 def main():
