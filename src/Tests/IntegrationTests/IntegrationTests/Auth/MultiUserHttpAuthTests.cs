@@ -160,6 +160,7 @@ internal sealed class MultiUserWebApiFactory(string openFgaEndpoint, string stor
         builder.UseSetting("Auth:PublicAuthority", "https://authentik.test/application/o/froststream/");
         builder.UseSetting("Auth:ClientId", "froststream-bff");
         builder.UseSetting("Auth:ClientSecret", "integration-test-secret");
+        builder.UseSetting("MediaProcessorStorage:Token", "integration-test-storage-token");
         builder.UseSetting("Auth:Scopes", "openid profile email groups offline_access");
         builder.UseSetting("Auth:Audience", TestTokenIssuer.Audience);
         builder.UseSetting("Auth:RequireHttpsMetadata", "false");
