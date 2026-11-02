@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using FrostStream.ApplicationContracts;
 using NodaTime;
 using Shared.Messaging;
 using Shared.Secrets;
@@ -97,7 +98,9 @@ public static class WorkerModule
         // BackgroundService starts).
         builder.Services.AddHostedService<StartupService>();
         builder.Services.AddSingleton<MediaToolsUpdateManager>();
+        builder.Services.AddSingleton<IMediaToolsUpdater>(sp => sp.GetRequiredService<MediaToolsUpdateManager>());
         builder.Services.AddHostedService<MediaToolsRefreshService>();
+        builder.Services.AddHostedService<MediaToolsUpdateConsumerService>();
         builder.Services.AddHostedService<WorkerHeartbeatService>();
 
         // POT shim: starts after StartupService; its constructor publishes the loopback base URL.

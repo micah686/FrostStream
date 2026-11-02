@@ -7,6 +7,7 @@
     Database,
     FileInput,
     KeyRound,
+    Wrench,
     Server,
     Tag
   } from '@lucide/svelte';
@@ -27,6 +28,7 @@
     { label: 'Metadata', icon: Tag, href: '/admin/metadata' },
     { label: 'Import', icon: FileInput, href: '/admin/import' },
     { label: 'Workers', icon: Server, href: '/admin/workers' },
+    { label: 'Media tools', icon: Wrench, href: '/admin/media-tools' },
     { label: 'Access control', icon: KeyRound, href: '/admin/access-control' },
     { label: 'Backups', icon: CloudUpload, href: '/admin/backups' },
     { label: 'Schedules', icon: Clock, href: '/admin/schedules' }

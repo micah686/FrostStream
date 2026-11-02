@@ -636,8 +636,24 @@ public sealed class CoreRepositoryPersistenceTests
         }
         public async ValueTask DisposeAsync()
         {
-            scope.Dispose(); host.Dispose();
-            if (directory is not null) Directory.Delete(directory, true);
+            scope.Dispose();
+            await host.StopAsync();
+            host.Dispose();
+            if (directory is not null)
+            {
+                for (var attempt = 0; ; attempt++)
+                {
+                    try
+                    {
+                        Directory.Delete(directory, true);
+                        break;
+                    }
+                    catch (IOException) when (attempt < 5)
+                    {
+                        await Task.Delay(100 * (attempt + 1));
+                    }
+                }
+            }
             if (adminConnection is not null)
             {
                 await using var connection = new NpgsqlConnection(adminConnection);
