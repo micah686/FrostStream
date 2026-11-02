@@ -61,6 +61,7 @@ public static class EndpointIds
     public const string ImportsSessionsCleanup = "imports.sessions.cleanup";
     public const string ImportsIncomingBrowse = "imports.incoming.browse";
     public const string WorkersList = "workers.list";
+    public const string MediaToolsUpdate = "media-tools.update";
 
     // Storage
     public const string StorageLocalCreate = "storage.local.create";
@@ -303,6 +304,7 @@ public static class EndpointCatalog
         new(EndpointIds.ImportsSessionsCleanup, Bundles.Downloading),
         new(EndpointIds.ImportsIncomingBrowse, Bundles.Downloading),
         new(EndpointIds.WorkersList, Bundles.Management),
+        new(EndpointIds.MediaToolsUpdate, Bundles.Management),
 
         new(EndpointIds.StorageLocalCreate, Bundles.Storage),
         new(EndpointIds.StorageLocalUpdate, Bundles.Storage),

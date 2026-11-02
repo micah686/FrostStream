@@ -2,12 +2,13 @@ using System.Globalization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using FrostStream.ApplicationContracts;
 using YtDlpSharpLib.Provisioning;
 
 namespace Worker.Services;
 
 /// <summary>Refreshes the media toolset from its release sources at a configurable interval.</summary>
-public sealed class MediaToolsUpdateManager
+public sealed class MediaToolsUpdateManager : IMediaToolsUpdater
 {
     private readonly SemaphoreSlim gate = new(1, 1);
     private readonly IYtDlpBinaryDownloader downloader;
@@ -73,6 +74,25 @@ public sealed class MediaToolsUpdateManager
         {
             gate.Release();
         }
+    }
+
+    public async Task UpdateNowAsync(CancellationToken cancellationToken)
+    {
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            var ffmpegManagedByImage = new FileInfo(Path.Combine(toolsDirectory, YtDlpPaths.FfmpegFileName)).LinkTarget is not null;
+            var ffprobeManagedByImage = new FileInfo(Path.Combine(toolsDirectory, YtDlpPaths.FfprobeFileName)).LinkTarget is not null;
+            await downloader.DownloadAllAsync(new BinaryDownloadOptions
+            {
+                Directory = toolsDirectory, SkipExisting = false, DownloadYtDlp = true,
+                DownloadFfmpeg = !ffmpegManagedByImage, DownloadFfprobe = !ffprobeManagedByImage,
+                DownloadDeno = true, DownloadBgUtilPlugin = false
+            }, ct: cancellationToken);
+            await File.WriteAllTextAsync(Path.Combine(toolsDirectory, ".last-media-tools-refresh"),
+                DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture), cancellationToken);
+        }
+        finally { gate.Release(); }
     }
 }
 
