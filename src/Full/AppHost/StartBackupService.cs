@@ -29,9 +29,11 @@ public static class StartBackupService
             secret: true);
 
         var pgBackRestConf = Path.Combine(builder.AppHostDirectory, "configs", "pgbackrest", "pgbackrest.conf");
-        var context = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", ".."));
+        // The central package/build props live at the repository root; Dockerfile source
+        // paths are rooted under src/.
+        var context = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "..", ".."));
         var service = builder
-            .AddDockerfile("backupservice", context, "Full/Hosts/BackupService/Dockerfile")
+            .AddDockerfile("backupservice", context, "src/Full/Hosts/BackupService/Dockerfile")
             .WithHttpEndpoint(port: Ports.BackupService, targetPort: 8080, name: "http")
             // Host-published restore wizard; usable while everything except this container is down.
             .WithHttpEndpoint(port: Ports.BackupRestoreUi, targetPort: 8081, name: "restore-ui")
@@ -80,8 +82,8 @@ public static class StartBackupService
             compose.PullPolicy = "build";
             compose.Build = new Aspire.Hosting.Docker.Resources.ServiceNodes.Build
             {
-                Context = "../..",
-                Dockerfile = "Full/Hosts/BackupService/Dockerfile"
+                Context = "../../..",
+                Dockerfile = "src/Full/Hosts/BackupService/Dockerfile"
             };
             compose.Healthcheck = new()
             {
