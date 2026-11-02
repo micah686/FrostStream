@@ -35,8 +35,8 @@ jobs:
       FROSTSTREAM_TEST_POSTGRES: Host=127.0.0.1;Port=5432;Database=postgres;Username=postgres;Password=test-password
       FROSTSTREAM_TEST_TYPESENSE: http://127.0.0.1:8108
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
       - name: Install media tools
@@ -47,7 +47,7 @@ jobs:
         run: dotnet run --no-build --project src/Tests/UnitTests/UnitTests.csproj --configuration Release -- --minimum-expected-tests 1 --maximum-parallel-tests 4 --results-directory "$RUNNER_TEMP/unit-results"
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: unit-results
           path: ${{ runner.temp }}/unit-results/
@@ -66,8 +66,8 @@ jobs:
           - edition: Lite
             project: src/Lite/AppHost/AppHostLite.csproj
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
       - name: Install media tools
@@ -86,7 +86,7 @@ jobs:
         run: dotnet run --no-build --project src/Tests/IntegrationTests/IntegrationTests/IntegrationTests.csproj --configuration Release -- --minimum-expected-tests 1 --maximum-parallel-tests 4 --treenode-filter '/*/IntegrationTests.Lite/*/*' --results-directory "$RUNNER_TEMP/integration-results"
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: integration-results-${{ matrix.edition }}
           path: ${{ runner.temp }}/integration-results/
@@ -100,11 +100,11 @@ jobs:
       run:
         working-directory: src/Frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v6
         with:
           version: 10.28.1
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
           cache: pnpm
