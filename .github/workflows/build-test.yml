@@ -35,7 +35,7 @@ jobs:
       FROSTSTREAM_TEST_POSTGRES: Host=127.0.0.1;Port=5432;Database=postgres;Username=postgres;Password=test-password
       FROSTSTREAM_TEST_TYPESENSE: http://127.0.0.1:8108
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
@@ -66,7 +66,7 @@ jobs:
           - edition: Lite
             project: src/Lite/AppHost/AppHostLite.csproj
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
@@ -100,11 +100,11 @@ jobs:
       run:
         working-directory: src/Frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v6
         with:
           version: 10.28.1
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
           cache: pnpm
