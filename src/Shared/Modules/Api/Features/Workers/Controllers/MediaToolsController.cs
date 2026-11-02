@@ -19,6 +19,7 @@ public sealed class MediaToolsController(
     [HttpPost("update")]
     [Endpoint(EndpointIds.MediaToolsUpdate)]
     [EndpointSummary("Update media tools")]
+    [EndpointDescription("Requests the configured download worker to refresh yt-dlp, Deno, FFmpeg, and ffprobe binaries from their release sources. Returns the worker result or a service-unavailable response when no worker can complete the update.")]
     public async Task<ActionResult<MediaToolsUpdateResponse>> Update(CancellationToken cancellationToken)
     {
         try
