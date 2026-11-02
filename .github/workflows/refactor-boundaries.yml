@@ -10,9 +10,6 @@ jobs:
   checks:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    defaults:
-      run:
-        working-directory: src-refactor/new_refactor_src
     services:
       postgres:
         image: postgres:18.3
@@ -35,7 +32,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
-          global-json-file: src-refactor/new_refactor_src/global.json
+          global-json-file: global.json
       - uses: pnpm/action-setup@v4
         with:
           version: 10.28.1
@@ -46,18 +43,18 @@ jobs:
       - run: dotnet build FrostStream.slnx -m:1 --nologo
       - name: Enforce inventory, dependencies and baseline integrity
         run: |
-          python3 Phase0/verify.py
-          python3 Phase0/test_verify.py
-          python3 Phase2/test_boundaries.py
-          python3 Phase7/test_boundaries.py
-          python3 Phase7/verify-boundaries.py --require-restored
-          python3 Phase6/verify-baselines.py
+          python3 src/tooling/architecture/verify.py
+          python3 src/tooling/architecture/test_verify.py
+          python3 src/tooling/architecture/test_provider_boundaries.py
+          python3 src/tooling/architecture/test_final_boundaries.py
+          python3 src/tooling/architecture/verify-final-boundaries.py
+          python3 src/tooling/recovery/verify-baselines.py
       - name: Shared, Lite and Full backend suites
         run: |
-          dotnet run --no-build --project Tests/UnitTests/UnitTests.csproj -- --minimum-expected-tests 1 --maximum-parallel-tests 4
-          dotnet run --no-build --project Tests/IntegrationTests/IntegrationTests/IntegrationTests.csproj -- --minimum-expected-tests 1 --maximum-parallel-tests 4
+          dotnet run --no-build --project src/Tests/UnitTests/UnitTests.csproj -- --minimum-expected-tests 1 --maximum-parallel-tests 4
+          dotnet run --no-build --project src/Tests/IntegrationTests/IntegrationTests/IntegrationTests.csproj -- --minimum-expected-tests 1 --maximum-parallel-tests 4
       - name: Frontend suites and production build
-        working-directory: src-refactor/new_refactor_src/Frontend
+        working-directory: src/Frontend
         run: |
           pnpm install --frozen-lockfile
           pnpm test:access
@@ -73,14 +70,11 @@ jobs:
       matrix:
         edition: [Lite, Full]
         chat: ['', '--live-chat']
-    defaults:
-      run:
-        working-directory: src-refactor/new_refactor_src
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
-          global-json-file: src-refactor/new_refactor_src/global.json
+          global-json-file: global.json
       - uses: pnpm/action-setup@v4
         with:
           version: 10.28.1
@@ -92,6 +86,6 @@ jobs:
           curl -fsSL https://aspire.dev/install.sh -o "$RUNNER_TEMP/install-aspire.sh"
           bash "$RUNNER_TEMP/install-aspire.sh" --version 13.4.6
           echo "$HOME/.aspire/bin" >> "$GITHUB_PATH"
-          python3 -m pip install -r Phase0/requirements.txt
+          python3 -m pip install -r src/tooling/installation/requirements.txt
       - name: Build and probe an empty installation
-        run: python3 Phase7/verify-install.py '${{ matrix.edition }}' ${{ matrix.chat }}
+        run: python3 src/tooling/installation/verify-install.py '${{ matrix.edition }}' ${{ matrix.chat }}

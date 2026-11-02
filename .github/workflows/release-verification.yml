@@ -25,10 +25,10 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Shared API, repositories, workflows, auth and recovery
         run: |
-          dotnet run --project Tests/UnitTests -c Release -- --minimum-expected-tests 1 --results-directory "$RUNNER_TEMP/unit-results"
-          dotnet run --project Tests/IntegrationTests/IntegrationTests -c Release -- --minimum-expected-tests 1 --results-directory "$RUNNER_TEMP/integration-results"
+          dotnet run --project src/Tests/UnitTests/UnitTests.csproj -c Release -- --minimum-expected-tests 1 --results-directory "$RUNNER_TEMP/unit-results"
+          dotnet run --project src/Tests/IntegrationTests/IntegrationTests/IntegrationTests.csproj -c Release -- --minimum-expected-tests 1 --results-directory "$RUNNER_TEMP/integration-results"
       - name: Shared frontend access and type checks
-        working-directory: src/App/SharedApp/Frontend
+        working-directory: src/Frontend
         run: |
           pnpm install --frozen-lockfile
           pnpm check

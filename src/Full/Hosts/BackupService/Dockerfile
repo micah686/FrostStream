@@ -1,28 +1,28 @@
-# Build from src/: docker build -f Full/Hosts/BackupService/Dockerfile .
+# Build from the repository root: docker build -f src/Full/Hosts/BackupService/Dockerfile .
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 COPY Directory.Packages.props ./
-COPY Shared/Contracts/ Shared/Contracts/
-COPY Shared/Core/Shared.csproj Shared/Core/
-COPY Shared/Integrations/StorageExtensions/StorageExtensions.csproj Shared/Integrations/StorageExtensions/
-COPY Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj Shared/Hosting/ServiceDefaults/
-COPY Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/
-COPY Shared/Integrations/Vendor/YtDlpSharpLib/YtDlpSharpLib/YtDlpSharpLib.csproj Shared/Integrations/Vendor/YtDlpSharpLib/YtDlpSharpLib/
-COPY Full/Hosts/BackupService/BackupService.csproj Full/Hosts/BackupService/
-COPY Full/Infrastructure/ Full/Infrastructure/
-RUN dotnet restore Full/Hosts/BackupService/BackupService.csproj
+COPY src/Shared/Contracts/ src/Shared/Contracts/
+COPY src/Shared/Core/Shared.csproj src/Shared/Core/
+COPY src/Shared/Integrations/StorageExtensions/StorageExtensions.csproj src/Shared/Integrations/StorageExtensions/
+COPY src/Shared/Hosting/ServiceDefaults/ServiceDefaults.csproj src/Shared/Hosting/ServiceDefaults/
+COPY src/Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/Conduit.NATS.csproj src/Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/
+COPY src/Shared/Integrations/Vendor/YtDlpSharpLib/YtDlpSharpLib/YtDlpSharpLib.csproj src/Shared/Integrations/Vendor/YtDlpSharpLib/YtDlpSharpLib/
+COPY src/Full/Hosts/BackupService/BackupService.csproj src/Full/Hosts/BackupService/
+COPY src/Full/Infrastructure/ src/Full/Infrastructure/
+RUN dotnet restore src/Full/Hosts/BackupService/BackupService.csproj
 
-COPY Shared/Core/ Shared/Core/
-COPY Shared/Integrations/StorageExtensions/ Shared/Integrations/StorageExtensions/
-COPY Shared/Hosting/ServiceDefaults/ Shared/Hosting/ServiceDefaults/
-COPY Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/ Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/
-COPY Shared/Integrations/Vendor/YtDlpSharpLib/YtDlpSharpLib/ Shared/Integrations/Vendor/YtDlpSharpLib/YtDlpSharpLib/
-COPY Full/Hosts/BackupService/ Full/Hosts/BackupService/
+COPY src/Shared/Core/ src/Shared/Core/
+COPY src/Shared/Integrations/StorageExtensions/ src/Shared/Integrations/StorageExtensions/
+COPY src/Shared/Hosting/ServiceDefaults/ src/Shared/Hosting/ServiceDefaults/
+COPY src/Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/ src/Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/
+COPY src/Shared/Integrations/Vendor/YtDlpSharpLib/YtDlpSharpLib/ src/Shared/Integrations/Vendor/YtDlpSharpLib/YtDlpSharpLib/
+COPY src/Full/Hosts/BackupService/ src/Full/Hosts/BackupService/
 # No --no-restore: this project's Razor components pull in Static Web Assets (blazor.web.js),
 # and that pipeline needs a restore pass with the real source present — the earlier csproj-only
 # restore (kept for Docker layer caching on the NuGet fetch) leaves its manifest empty otherwise.
-RUN dotnet publish Full/Hosts/BackupService/BackupService.csproj -c Release -o /app
+RUN dotnet publish src/Full/Hosts/BackupService/BackupService.csproj -c Release -o /app
 
 # Base on the matching PostgreSQL image so pgbackrest, pg_ctl, psql, and pg_isready are
 # version-matched with the server (deep verify starts a throwaway postgres from the restored

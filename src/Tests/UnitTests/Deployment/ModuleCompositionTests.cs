@@ -146,6 +146,7 @@ public sealed class ModuleCompositionTests
         full.Configuration["Auth:ClientId"] = "test";
         full.Configuration["Auth:ClientSecret"] = "test";
         full.Configuration["Auth:Scopes"] = "openid profile offline_access";
+        full.Configuration["MediaProcessorStorage:Token"] = "test-storage-token";
         full.AddFullMessaging();
         Shared.Secrets.ServiceCollectionExtensions.AddOpenBaoSecretStore(full.Services, full.Configuration);
         full.AddFullBackupClient();
